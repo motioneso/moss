@@ -826,8 +826,8 @@ export async function resolveSportsSourceInput(
 }
 
 /**
- * #2211 A subreddit is read as itself: about.json for the title, description, and icon, then the
- * public new-posts listing for the sample linked articles. Every assignment target shares the
+ * #2211 A subreddit is read through its newest-posts Atom feed, which carries both the identity
+ * (category term, title) and the sample linked articles in one call. Every assignment target shares the
  * one listing URL, exactly as a feed does. A saved subreddit's authority must still be reddit.com
  * pinned to www.reddit.com, or the row is treated as tampered.
  */
@@ -856,7 +856,7 @@ async function resolveSubredditInput(
   }
   const read = await readSubreddit(fetch, name);
   if (!read.ok) return { status: "rejected", reason: read.reason };
-  const displayName = subredditNameFromUrl(read.listingUrl) ?? read.about.displayName;
+  const displayName = subredditNameFromUrl(read.listingUrl) ?? read.subreddit.displayName;
   const checkedAt = new Date().toISOString();
   const samples: SportsRecipeItem[] = read.headlines
     .slice(0, REDDIT_PREVIEW_SAMPLES)
@@ -878,7 +878,7 @@ async function resolveSubredditInput(
       validationFingerprint: createHash("sha256").update(read.listingUrl).digest("hex"),
       recipe: null,
       recipeFingerprint: null,
-      iconUrl: read.about.iconUrl,
+      iconUrl: read.subreddit.iconUrl,
       confirmedFetchHosts: [...REDDIT_FETCH_HOSTS],
       checkedAt,
       samples,

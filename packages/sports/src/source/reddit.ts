@@ -1,43 +1,50 @@
-// #2211 Subreddit sources: input detection, Reddit's public JSON listing/about parsing, and the
-// post-to-headline filter. Pure functions plus one fetch helper built on the Sports safe-fetch
-// port; no Reddit API keys, no OAuth, no HTML scraping
-// (docs/superpowers/specs/2026-09-03-sports-subreddit-sources-and-source-icons.md).
-
-import { sanitizeFeedText } from "@moss/news";
+/**
+ * #2211 Subreddit sources. A subreddit is read through its public Atom feed,
+ * `https://www.reddit.com/r/{name}/new.rss`, and every entry whose "[link]" anchor points out to a
+ * publisher becomes a headline for that article. Ben's ruling (2026-09-03): use the .rss feed, not
+ * the JSON listing. Reddit answers 403 "blocked by network security" for new.json and about.json
+ * from a self-hosted box whatever the User-Agent, while the feed answers 200. No API keys, no
+ * OAuth, no Reddit HTML scraping.
+ */
+import { isPublicFeedDocument, sanitizeFeedText } from "@moss/news";
 
 import type { SportsSafeFetchPort, SportsWebRequestHop } from "./discovery.js";
 import { publisherIdentity } from "./publisher-identity.js";
 
 export const REDDIT_CANONICAL_DOMAIN = "reddit.com";
 export const REDDIT_FETCH_HOSTS: readonly string[] = ["www.reddit.com"];
+/** Image hosts a stored community icon may point at. Kept for the icon route; the Atom feed only
+ *  carries Reddit's generic icon, so confirm stores null today. */
 export const REDDIT_ICON_HOSTS: readonly string[] = [
   "styles.redditmedia.com",
   "b.thumbs.redditmedia.com"
 ];
-export const REDDIT_CONTENT_TYPES: readonly string[] = ["application/json"];
+export const REDDIT_CONTENT_TYPES: readonly string[] = [
+  "application/atom+xml",
+  "application/rss+xml",
+  "application/xml",
+  "text/xml"
+];
 export const REDDIT_ACCEPT_HEADERS: Readonly<Record<string, string>> = {
-  accept: "application/json"
+  accept: "application/atom+xml, application/rss+xml, application/xml;q=0.9, text/xml;q=0.8"
 };
-/** Reddit throttles generic agents; the composition root sends this on the two Reddit calls. */
+/** Reddit throttles generic agents; the composition root sends this on the feed call. */
 export const REDDIT_USER_AGENT = "Moss/1.0 (self-hosted personal dashboard)";
 export const REDDIT_MAX_RESPONSE_BYTES = 1_000_000;
 export const REDDIT_MAX_HEADLINES = 40;
 export const REDDIT_PREVIEW_SAMPLES = 10;
-export const REDDIT_LISTING_LIMIT = 50;
 export const REDDIT_RATE_LIMIT_MESSAGE =
   "Reddit is rate limiting Moss. Headlines resume automatically.";
 export const REDDIT_AUTH_REQUIRED_MESSAGE = "This subreddit is private or restricted.";
 
 const SUBREDDIT_NAME = /^[A-Za-z0-9_]{3,21}$/;
 const SHORT_FORM = /^\/?r\/([^/\s?#]+)\/?$/i;
-const URL_FORM = /^(?:https?:\/\/)?(?:www\.|old\.)?reddit\.com\/r\/([^/\s?#]+)(?:[/?#].*)?$/i;
+const URL_FORM =
+  /^(?:https?:\/\/)?(?:www\.|old\.)?reddit\.com\/r\/([^/\s?#.]+)(?:\.rss)?(?:[/?#].*)?$/i;
 
 /** Hosts whose links point back into Reddit rather than out to a publisher. */
 const REDDIT_INTERNAL_HOSTS = new Set([
   "reddit.com",
-  "www.reddit.com",
-  "old.reddit.com",
-  "new.reddit.com",
   "redd.it",
   "i.redd.it",
   "v.redd.it",
@@ -49,9 +56,9 @@ export type SubredditInput =
   | { readonly kind: "invalid" };
 
 /**
- * `r/Name`, `/r/Name`, and `https://(www.|old.)reddit.com/r/Name[/...]`. A Reddit-shaped input
- * whose name breaks Reddit's rules answers `invalid` so it never reaches the publication path;
- * anything that is not Reddit-shaped answers null.
+ * `r/Name`, `/r/Name`, and `https://(www.|old.)reddit.com/r/Name[.rss][/...]`. A Reddit-shaped
+ * input whose name breaks Reddit's rules answers `invalid` so it never reaches the publication
+ * path; anything that is not Reddit-shaped answers null.
  */
 export function parseSubredditInput(raw: string): SubredditInput | null {
   const trimmed = raw.trim();
@@ -65,15 +72,12 @@ export function redditSubredditUrl(name: string): string {
   return `https://www.reddit.com/r/${name}/`;
 }
 
+/** Newest-first feed. The plain `/r/{name}.rss` is Reddit's "hot" order and mixes dates. */
 export function redditListingUrl(name: string): string {
-  return `https://www.reddit.com/r/${name}/new.json?limit=${REDDIT_LISTING_LIMIT}`;
+  return `https://www.reddit.com/r/${name}/new.rss`;
 }
 
-export function redditAboutUrl(name: string): string {
-  return `https://www.reddit.com/r/${name}/about.json`;
-}
-
-/** The subreddit name inside a saved listing/homepage URL, or null for a non-Reddit URL. */
+/** The subreddit name inside a saved feed/homepage URL, or null for a non-Reddit URL. */
 export function subredditNameFromUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   const parsed = parseSubredditInput(url);
@@ -107,25 +111,43 @@ export interface RedditLinkedHeadline {
   readonly publisherDomain: string;
 }
 
-export interface RedditSubredditAbout {
+export interface RedditSubredditInfo {
+  /** Reddit's own casing of the name, from the feed's category term. */
   readonly displayName: string;
   readonly title: string;
   readonly description: string;
+  /** Always null today: the Atom feed only carries Reddit's generic icon. */
   readonly iconUrl: string | null;
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
+export interface RedditFeed {
+  readonly subreddit: RedditSubredditInfo;
+  readonly headlines: RedditLinkedHeadline[];
 }
 
-function parseJson(body: string): unknown {
-  try {
-    return JSON.parse(body) as unknown;
-  } catch {
-    return undefined;
-  }
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+/** Text of one XML element: CDATA unwrapped, entities decoded. Null when absent. */
+function elementText(xml: string, tag: string): string | null {
+  const match = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, "i").exec(xml);
+  if (!match) return null;
+  const inner = match[1] ?? "";
+  const cdata = /^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/.exec(inner);
+  return decodeEntities(cdata ? (cdata[1] ?? "") : inner);
+}
+
+function attribute(xml: string, tag: string, name: string): string | null {
+  const match = new RegExp(`<${tag}\\b[^>]*\\s${name}="([^"]*)"`, "i").exec(xml);
+  return match ? decodeEntities(match[1] ?? "") : null;
 }
 
 function publisherFromLink(url: URL): { label: string; domain: string } | null {
@@ -137,24 +159,25 @@ function publisherFromLink(url: URL): { label: string; domain: string } | null {
   return { label: domain, domain };
 }
 
+/** The href of the anchor whose text is "[link]" inside the entry's HTML content. */
+export function redditOutboundLink(contentHtml: string): string | null {
+  const match = /<a\s[^>]*href="([^"]+)"[^>]*>\s*\[link\]\s*<\/a>/i.exec(contentHtml);
+  return match ? decodeEntities(match[1] ?? "") : null;
+}
+
 /**
- * A post is a headline only when it links out: not a self post, not stickied, not a crosspost,
- * hint absent or "link", and the link host is a publisher rather than Reddit or its media hosts.
+ * An Atom entry is a headline only when its "[link]" anchor points out to a publisher rather
+ * than back into Reddit or its media hosts. Self posts, images, videos, and galleries all link
+ * to Reddit, so the one host rule covers the spec's whole skip list.
  */
-export function redditPostToHeadline(post: unknown): RedditLinkedHeadline | null {
-  const data = asRecord(post);
-  if (!data) return null;
-  if (data.is_self === true || data.stickied === true) return null;
-  if (Array.isArray(data.crosspost_parent_list) && data.crosspost_parent_list.length > 0) {
-    return null;
-  }
-  if (typeof data.crosspost_parent === "string" && data.crosspost_parent.length > 0) return null;
-  const hint = data.post_hint;
-  if (hint !== undefined && hint !== null && hint !== "link") return null;
-  if (typeof data.url !== "string" || typeof data.title !== "string") return null;
+export function redditEntryToHeadline(entryXml: string): RedditLinkedHeadline | null {
+  const content = elementText(entryXml, "content") ?? elementText(entryXml, "summary") ?? "";
+  const rawLink = redditOutboundLink(content);
+  const rawTitle = elementText(entryXml, "title");
+  if (!rawLink || !rawTitle) return null;
   let url: URL;
   try {
-    url = new URL(data.url);
+    url = new URL(rawLink);
   } catch {
     return null;
   }
@@ -162,19 +185,12 @@ export function redditPostToHeadline(post: unknown): RedditLinkedHeadline | null
   if (url.username || url.password) return null;
   const publisher = publisherFromLink(url);
   if (!publisher) return null;
-  const title = sanitizeFeedText(data.title, 500);
+  const title = sanitizeFeedText(rawTitle, 500);
   if (!title) return null;
-  const created = typeof data.created_utc === "number" ? data.created_utc : null;
-  const publishedAt =
-    created !== null && Number.isFinite(created) && created > 0
-      ? new Date(created * 1000).toISOString()
-      : null;
-  const id =
-    typeof data.name === "string" && data.name
-      ? data.name
-      : typeof data.id === "string" && data.id
-        ? `t3_${data.id}`
-        : url.toString();
+  const stamp = elementText(entryXml, "published") ?? elementText(entryXml, "updated");
+  const parsed = stamp ? Date.parse(stamp) : Number.NaN;
+  const publishedAt = Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  const id = elementText(entryXml, "id")?.trim() || url.toString();
   return {
     id,
     title,
@@ -185,90 +201,46 @@ export function redditPostToHeadline(post: unknown): RedditLinkedHeadline | null
   };
 }
 
-/** `new.json` body to at most `limit` linked-article headlines, newest first as Reddit orders. */
-export function parseRedditListing(
+/**
+ * The feed body to the subreddit's identity plus at most `limit` linked-article headlines, in
+ * feed order. Not an Atom feed (an HTML block page, an RSS channel from elsewhere) answers not ok.
+ */
+export function parseRedditFeed(
   body: string,
+  fallbackName: string,
   limit = REDDIT_MAX_HEADLINES
-): { ok: true; headlines: RedditLinkedHeadline[] } | { ok: false } {
-  const root = asRecord(parseJson(body));
-  const data = asRecord(root?.data);
-  if (root?.kind !== "Listing" || !data || !Array.isArray(data.children)) return { ok: false };
+): { ok: true; feed: RedditFeed } | { ok: false } {
+  if (!isPublicFeedDocument(body) || !/<feed\b/i.test(body)) return { ok: false };
+  const entryPattern = /<entry\b[^>]*>([\s\S]*?)<\/entry>/gi;
+  const firstEntry = entryPattern.exec(body);
+  const head = firstEntry ? body.slice(0, firstEntry.index) : body;
+  const term = attribute(head, "category", "term");
+  const displayName = term && SUBREDDIT_NAME.test(term) ? term : fallbackName;
+  const subreddit: RedditSubredditInfo = {
+    displayName,
+    title: sanitizeFeedText(elementText(head, "title") ?? "", 120),
+    description: sanitizeFeedText(elementText(head, "subtitle") ?? "", 300),
+    iconUrl: null
+  };
   const headlines: RedditLinkedHeadline[] = [];
   const seen = new Set<string>();
-  for (const child of data.children) {
-    const record = asRecord(child);
-    if (record?.kind !== "t3") continue;
-    const headline = redditPostToHeadline(record.data);
+  entryPattern.lastIndex = 0;
+  for (let match = entryPattern.exec(body); match; match = entryPattern.exec(body)) {
+    const headline = redditEntryToHeadline(match[1] ?? "");
     if (!headline || seen.has(headline.url)) continue;
     seen.add(headline.url);
     headlines.push(headline);
     if (headlines.length >= limit) break;
   }
-  return { ok: true, headlines };
-}
-
-function decodeEntities(value: string): string {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-/** Query string and HTML entities stripped; only Reddit's own image hosts over HTTPS survive. */
-export function redditIconUrlFromAbout(about: Record<string, unknown>): string | null {
-  for (const key of ["community_icon", "icon_img"]) {
-    const raw = about[key];
-    if (typeof raw !== "string" || raw.length === 0) continue;
-    let url: URL;
-    try {
-      url = new URL(decodeEntities(raw));
-    } catch {
-      continue;
-    }
-    if (url.protocol !== "https:" || !REDDIT_ICON_HOSTS.includes(url.hostname.toLowerCase())) {
-      continue;
-    }
-    url.search = "";
-    url.hash = "";
-    return url.toString();
-  }
-  return null;
-}
-
-/** `about.json` for a real subreddit is a `t5` node; anything else means it does not exist. */
-export function parseRedditAbout(
-  body: string,
-  fallbackName: string
-): { ok: true; about: RedditSubredditAbout } | { ok: false; reason: "not_found" } {
-  const root = asRecord(parseJson(body));
-  const data = asRecord(root?.data);
-  if (root?.kind !== "t5" || !data) return { ok: false, reason: "not_found" };
-  const displayName =
-    typeof data.display_name === "string" && SUBREDDIT_NAME.test(data.display_name)
-      ? data.display_name
-      : fallbackName;
-  return {
-    ok: true,
-    about: {
-      displayName,
-      title: sanitizeFeedText(typeof data.title === "string" ? data.title : "", 120),
-      description: sanitizeFeedText(
-        typeof data.public_description === "string" ? data.public_description : "",
-        300
-      ),
-      iconUrl: redditIconUrlFromAbout(data)
-    }
-  };
+  return { ok: true, feed: { subreddit, headlines } };
 }
 
 export type RedditFailureReason = "not_found" | "auth_required" | "rate_limited" | "unreachable";
 
 /**
- * Reddit answers 404 for a banned or missing subreddit, 403 for a private or quarantined one,
- * and 429 when throttling. A refused redirect (Reddit sends unknown names to search) is also
- * "not found"; every other failure is a plain outage.
+ * Reddit answers 404 for a banned or missing subreddit, 403 for a private or quarantined one (and
+ * for a network-security block), and 429 when throttling. A refused redirect (Reddit sends unknown
+ * names to search) is also "not found"; every other failure is a plain outage.
  */
 export function redditFailureReason(failure: {
   readonly reason: string;
@@ -310,28 +282,27 @@ export function redditFetchOptions(url: string, options?: { readonly signal?: Ab
 export type ReadSubredditResult =
   | {
       readonly ok: true;
-      readonly about: RedditSubredditAbout;
+      readonly subreddit: RedditSubredditInfo;
       readonly headlines: readonly RedditLinkedHeadline[];
       readonly listingUrl: string;
     }
   | { readonly ok: false; readonly reason: RedditFailureReason };
 
-/** Preview-time read: about.json for identity, then new.json for the sample headlines. */
+/** One feed call carries identity and headlines; there is no separate about call any more. */
 export async function readSubreddit(
   fetch: SportsSafeFetchPort,
   name: string,
   options?: { readonly signal?: AbortSignal }
 ): Promise<ReadSubredditResult> {
-  const aboutUrl = redditAboutUrl(name);
-  const aboutResponse = await fetch(aboutUrl, redditFetchOptions(aboutUrl, options));
-  if (!aboutResponse.ok) return { ok: false, reason: redditFailureReason(aboutResponse) };
-  const about = parseRedditAbout(aboutResponse.body, name);
-  if (!about.ok) return { ok: false, reason: about.reason };
-
-  const listingUrl = redditListingUrl(about.about.displayName);
-  const listingResponse = await fetch(listingUrl, redditFetchOptions(listingUrl, options));
-  if (!listingResponse.ok) return { ok: false, reason: redditFailureReason(listingResponse) };
-  const listing = parseRedditListing(listingResponse.body);
-  if (!listing.ok) return { ok: false, reason: "unreachable" };
-  return { ok: true, about: about.about, headlines: listing.headlines, listingUrl };
+  const requestUrl = redditListingUrl(name);
+  const response = await fetch(requestUrl, redditFetchOptions(requestUrl, options));
+  if (!response.ok) return { ok: false, reason: redditFailureReason(response) };
+  const parsed = parseRedditFeed(response.body, name);
+  if (!parsed.ok) return { ok: false, reason: "not_found" };
+  return {
+    ok: true,
+    subreddit: parsed.feed.subreddit,
+    headlines: parsed.feed.headlines,
+    listingUrl: redditListingUrl(parsed.feed.subreddit.displayName)
+  };
 }

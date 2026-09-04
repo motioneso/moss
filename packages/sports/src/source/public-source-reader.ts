@@ -19,7 +19,7 @@ import {
   type SportsRuntimeTargetResult
 } from "./repository.js";
 import {
-  parseRedditListing,
+  parseRedditFeed,
   REDDIT_ACCEPT_HEADERS,
   REDDIT_CONTENT_TYPES,
   REDDIT_RATE_LIMIT_MESSAGE,
@@ -73,7 +73,7 @@ interface RequestAssignment {
 
 interface RequestGroup {
   readonly identity: string;
-  /** #2211 a subreddit listing is parsed as Reddit JSON, everything else as a feed or recipe. */
+  /** #2211 a subreddit feed is parsed as Reddit Atom, everything else as a feed or recipe. */
   readonly kind: "feed" | "scrape" | "reddit";
   readonly url: string;
   readonly headers: Readonly<Record<string, string>>;
@@ -562,10 +562,10 @@ export class SportsPublicSourceReader {
               fromCache: false
             };
       } else if (group.kind === "reddit") {
-        const listing = parseRedditListing(response.body);
+        const listing = parseRedditFeed(response.body, "");
         outcome = listing.ok
           ? {
-              items: listing.headlines.map((headline) => ({
+              items: listing.feed.headlines.map((headline) => ({
                 id: stableId(headline.url),
                 title: headline.title,
                 url: headline.url,
@@ -584,7 +584,7 @@ export class SportsPublicSourceReader {
               items: cacheHit?.value ?? [],
               state: "unsupported",
               reason: "unsupported_response",
-              message: "Reddit did not return a readable post listing.",
+              message: "Reddit did not return a readable post feed.",
               checkedAt,
               fromCache: false
             };

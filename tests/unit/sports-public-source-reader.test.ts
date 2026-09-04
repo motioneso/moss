@@ -541,7 +541,7 @@ describe("SportsPublicSourceReader", () => {
 });
 
 describe("SportsPublicSourceReader subreddit sources (#2211)", () => {
-  const listingUrl = "https://www.reddit.com/r/nfl/new.json?limit=50";
+  const listingUrl = "https://www.reddit.com/r/nfl/new.rss";
   const subreddit: SportsRuntimeSource = {
     ...runtimeSource({ id: "nfl", recipe: null, feedUrl: listingUrl, hosts: ["www.reddit.com"] }),
     label: "r/nfl",
@@ -557,38 +557,29 @@ describe("SportsPublicSourceReader subreddit sources (#2211)", () => {
       }
     ]
   };
-  const listing = JSON.stringify({
-    kind: "Listing",
-    data: {
-      children: [
-        {
-          kind: "t3",
-          data: {
-            name: "t3_a",
-            title: "Chiefs sign a new kicker",
-            url: "https://www.espn.com/nfl/story/1",
-            is_self: false,
-            created_utc: 1_757_000_000
-          }
-        },
-        {
-          kind: "t3",
-          data: {
-            name: "t3_b",
-            title: "Game thread",
-            is_self: true,
-            url: "https://www.reddit.com/r/nfl/comments/b/"
-          }
-        }
-      ]
-    }
-  });
+  const escape = (html: string) =>
+    html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const redditEntry = (id: string, title: string, link: string | null) =>
+    `<entry><category term="nfl" label="r/nfl"/><content type="html">${escape(
+      `submitted by <a href="https://www.reddit.com/user/fan">/u/fan</a>` +
+        (link ? ` <a href="${link}">[link]</a>` : "") +
+        ` <a href="https://www.reddit.com/r/nfl/comments/${id}/">[comments]</a>`
+    )}</content><id>t3_${id}</id><link href="https://www.reddit.com/r/nfl/comments/${id}/" />` +
+    `<updated>2025-09-04T14:13:20+00:00</updated><published>2025-09-04T14:13:20+00:00</published>` +
+    `<title>${title}</title></entry>`;
+  const listing =
+    `<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">` +
+    `<category term="nfl" label="r/nfl"/><title>NFL</title>` +
+    redditEntry("a", "Chiefs sign a new kicker", "https://www.espn.com/nfl/story/1") +
+    redditEntry("b", "Game thread", null) +
+    `</feed>`;
 
-  it("reads the listing as Reddit JSON and credits each headline to the linked publisher", async () => {
+  it("reads the feed as Reddit Atom and credits each headline to the linked publisher", async () => {
     const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
       expect(url).toBe(listingUrl);
       expect(options?.allowedHosts).toEqual(["www.reddit.com"]);
-      expect(options?.allowedContentTypes).toEqual(["application/json"]);
+      expect(options?.allowedContentTypes).toContain("application/atom+xml");
+      expect(options?.allowedContentTypes).not.toContain("application/json");
       expect(options?.userAgent).toMatch(/^Moss\//);
       expect(await permitInitialRequest(url, options)).toBe(true);
       expect(
@@ -597,7 +588,7 @@ describe("SportsPublicSourceReader subreddit sources (#2211)", () => {
           redirectCount: 1
         })
       ).toBe(false);
-      return success(url, listing);
+      return success(url, listing, "application/atom+xml; charset=UTF-8");
     });
     const { reader, persisted } = makeReader([subreddit], fetch);
     const result = await reader.refresh(actor);
@@ -611,7 +602,7 @@ describe("SportsPublicSourceReader subreddit sources (#2211)", () => {
       publisherLabel: "espn.com",
       publisherDomain: "espn.com",
       sportKey: "football",
-      publishedAt: new Date(1_757_000_000 * 1000).toISOString()
+      publishedAt: "2025-09-04T14:13:20.000Z"
     });
     expect(persisted[0]?.[0]).toMatchObject({
       healthState: "healthy",
@@ -641,10 +632,10 @@ describe("SportsPublicSourceReader subreddit sources (#2211)", () => {
     });
   });
 
-  it("treats a non-listing body as an unsupported response", async () => {
+  it("treats a non-feed body as an unsupported response", async () => {
     const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
       await permitInitialRequest(url, options);
-      return success(url, '{"kind":"t5","data":{}}');
+      return success(url, "<html><body>blocked by network security</body></html>");
     });
     const { reader, persisted } = makeReader([subreddit], fetch);
     await reader.refresh(actor);

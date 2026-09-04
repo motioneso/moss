@@ -25,7 +25,7 @@ page recipe. Two gaps surfaced in the 2026-09-03 live session on Settings > Modu
 
 1. **Subreddits are a third retrieval method for a custom Sports source.** The user types
    `r/Name`, `/r/Name`, or a reddit.com subreddit URL into the same Add a source box. Moss reads
-   the subreddit's public new-posts listing and turns every post that links out to an article into a
+   the subreddit's public newest-posts feed and turns every post that links out to an article into a
    headline for that article. Self posts, images, videos, polls, crossposts to other subreddits, and
    posts that only link back to Reddit are skipped. The subreddit is scoped to followed teams and
    leagues with the same coverage picker as a publication, has the same health states, and shows up
@@ -33,8 +33,8 @@ page recipe. Two gaps surfaced in the 2026-09-03 live session on Settings > Modu
    offered as standalone sources (Ben, 2026-09-03).
 2. **Source icons are served through our own server, strictly as images.** A new owner-only route
    returns the icon bytes for one of the caller's custom sources. For a publication it is the
-   site's favicon; for a subreddit it is the community icon. The server only accepts responses whose
-   bytes are a real raster image, never HTML or SVG, and caches them. The settings list and the
+   site's favicon; a subreddit has none today, so it shows the newspaper glyph. The server only accepts
+   responses whose bytes are a real raster image, never HTML or SVG, and caches them. The settings list and the
    preview card show the icon, falling back to the neutral newspaper glyph when there is none.
 
 ## User Stories
@@ -57,22 +57,27 @@ page recipe. Two gaps surfaced in the 2026-09-03 live session on Settings > Modu
   `/r/Name`, and `https://(www.|old.)reddit.com/r/Name[/...]` before the publication path runs.
   Subreddit names are validated against Reddit's rules (3 to 21 characters, letters, digits,
   underscore). Anything else falls through to the existing publication flow unchanged.
-- **Reading uses Reddit's public JSON listing**, `https://www.reddit.com/r/{name}/new.json?limit=50`,
-  plus `https://www.reddit.com/r/{name}/about.json` for the title, description, and community icon.
-  Both go through the existing Sports safe-fetch port with the host allowlist pinned to
-  `www.reddit.com`, JSON added to the accepted content types for these two calls only, a one
-  megabyte cap, and a descriptive User-Agent (Reddit throttles generic agents). No Reddit API keys,
-  no OAuth, no scraping of Reddit HTML. Reddit's RSS is not used because its entries link to the
-  thread, not the article.
-- **A post becomes a headline only when it links out.** Keep a post when `is_self` is false, the
-  link host is not reddit.com, redd.it, i.redd.it, v.redd.it, or preview.redd.it, `post_hint` is
-  absent or `link`, and the post is not stickied. Headline fields: title from the post title, url
-  from the post's outbound link, publishedAt from `created_utc`, publisherLabel and publisherDomain
-  from the outbound link host (registrable domain, "www." stripped), summary null, imageUrl null,
-  origin `custom`, sourceId the subreddit source id. At most 40 headlines per refresh.
+- **Reading uses Reddit's public Atom feed**, `https://www.reddit.com/r/{name}/new.rss`. Ben's
+  ruling, 2026-09-03: "for subreddits, add .rss at the end. so https://www.reddit.com/r/LiverpoolFC.rss
+  for example." The JSON listing and `about.json` were tried first and Reddit answers 403 "blocked
+  by network security" for both from the dev box whatever the User-Agent, while the feed answers 200. The plain `.rss` is Reddit's "hot" order and mixes dates, so the `/new.rss` form is used for
+  newest first. The one call goes through the existing Sports safe-fetch port with the host
+  allowlist pinned to `www.reddit.com`, Atom and XML content types, a one megabyte cap, and a
+  descriptive User-Agent (Reddit throttles generic agents). No `about.json` call, no Reddit API
+  keys, no OAuth, no scraping of Reddit HTML. The feed carries the title, subtitle, and the
+  subreddit's display casing (the `<category term>`), so identity needs no second request.
+- **A post becomes a headline only when it links out.** Each entry's content is HTML ending in
+  "submitted by ... [link] [comments]"; the outbound article URL is the href of the anchor whose
+  text is `[link]`. Keep the entry when that URL is http(s) and its host is not reddit.com,
+  redd.it, i.redd.it, v.redd.it, or preview.redd.it. Self posts, images, videos, galleries, and
+  polls all link back to Reddit, so that one rule covers them. Headline fields: title from the
+  entry title, url from the outbound link, publishedAt from `published` (or `updated`),
+  publisherLabel and publisherDomain from the outbound link host (registrable domain, "www."
+  stripped), summary null, imageUrl null, origin `custom`, sourceId the subreddit source id. At most
+  40 headlines per refresh.
 - **Persistence reuses the custom sources table.** A new migration (never edit an applied file)
   widens `retrieval_method` to allow `'reddit'`, sets `recipe_status = 'feed'` semantics for it
-  (no recipe columns, like a feed), and stores the listing URL in `feed_url`. `canonical_domain` is
+  (no recipe columns, like a feed), and stores the feed URL in `feed_url`. `canonical_domain` is
   `reddit.com`; `label` is `r/Name` (Reddit's display name casing); `homepage_url` is the subreddit
   URL; `confirmed_fetch_hosts` is `["www.reddit.com"]`. Assignments carry the listing URL as
   `target_url`. The duplicate check compares the lower-cased subreddit name so `r/nfl` and
@@ -80,7 +85,7 @@ page recipe. Two gaps surfaced in the 2026-09-03 live session on Settings > Modu
 - **Preview and confirm are the existing two-phase flow.** The candidate carries the subreddit
   title as its label and up to ten sample linked-article headlines. Rejections use the existing
   reasons: `unreachable` for network or 5xx, `invalid_input` for a malformed name, `not_found`
-  (new) when the listing 404s or `about.json` reports the subreddit does not exist, and
+  (new) when the feed 404s or the body is not an Atom feed, and
   `auth_required` health when Reddit returns 403 for a private or quarantined subreddit. A 429
   maps to health `failing` with reason `rate_limited` and the message "Reddit is rate limiting
   Moss. Headlines resume automatically." The content-policy verdict runs on the subreddit's own
@@ -90,8 +95,8 @@ page recipe. Two gaps surfaced in the 2026-09-03 live session on Settings > Modu
   branch next to feed and scrape, inside the same ten-minute cache, concurrency bound, request
   budget, and deadline. No new scheduler.
 - **UI stays in the one Add a source box.** The placeholder becomes `theathletic.com or r/nfl`, the
-  hint under it mentions subreddits, and the preview card and list row show the community icon
-  through the icon route. Nothing else on the pane changes.
+  hint under it mentions subreddits, and the preview card and list row show the newspaper glyph
+  for a subreddit. Nothing else on the pane changes.
 - **App map.** The Sports manifest's settings entry and the sources feature description gain the
   subreddit capability, the new route is declared, and the migration is listed with the module's
   data tables. Same PR.
@@ -107,10 +112,12 @@ page recipe. Two gaps surfaced in the 2026-09-03 live session on Settings > Modu
   bytes are ICO, PNG, JPEG, GIF, or WebP. HTML, SVG, and anything else are treated as "no icon". The
   page's `<link rel="icon">` is deliberately not parsed in this slice: Ben ruled icons are pulled
   "strictly as images", and most sports publishers serve `/favicon.ico`.
-- **Subreddit icon.** The `community_icon` or `icon_img` URL from `about.json`, saved on the source
-  row at confirm time in a new nullable `icon_url` column (same migration), fetched by the route
-  with the host pinned to Reddit's image hosts (`styles.redditmedia.com`, `b.thumbs.redditmedia.com`)
-  under the same byte and type rules.
+- **Subreddit icon.** None today. The Atom feed's `<icon>` is Reddit's generic logo, not the
+  community's, and `about.json` (which carries the community icon) is blocked with 403 from the dev
+  box (2026-09-03). The nullable `icon_url` column (same migration) stays and is stored as null, so
+  the row shows the newspaper glyph. If a reliable image URL becomes available the route already
+  pins it to Reddit's image hosts (`styles.redditmedia.com`, `b.thumbs.redditmedia.com`) under the
+  same byte and type rules.
 - **Caching and failure.** A small bounded in-process cache keyed by source id: hits for 24 hours,
   misses for one hour. The route answers 200 with the sniffed content type, `Cache-Control:
 private, max-age=86400`, and `X-Content-Type-Options: nosniff`; a miss answers 404. The client
@@ -120,16 +127,16 @@ private, max-age=86400`, and `X-Content-Type-Options: nosniff`; a miss answers 4
 
 ## Testing Decisions
 
-- Unit: subreddit input detection (accepted and rejected forms); post filtering (self, media,
-  reddit-internal links, stickied, crossposts dropped; linked articles kept with the right
-  publisher domain); health mapping for 403, 404, 429, 5xx; duplicate detection by lower-cased
+- Unit: subreddit input detection (accepted and rejected forms); entry filtering (self, media,
+  reddit-internal links, entries without a [link] anchor dropped; linked articles kept with the
+  right publisher domain); health mapping for 403, 404, 429, 5xx; duplicate detection by lower-cased
   name; icon magic-byte sniffing accepts the five raster types and rejects HTML and SVG.
 - Repository and migration: the widened constraint accepts `reddit`, rejects unknown values, and
   a reddit row with recipe columns is rejected.
 - Settings UI: adding `r/nfl` renders a preview card with sample linked articles and the same
   coverage picker; the row shows the icon and falls back to the glyph on image error.
-- Browser (existing sports settings spec): one journey adding a subreddit against a stubbed Reddit
-  listing, confirming, and seeing the row.
+- Browser (existing sports settings spec): one journey adding a subreddit against a stubbed
+  preview, confirming, and seeing the row.
 - Live proof on dev, recorded on PR #2210: add a real subreddit scoped to a followed team, see its
   linked-article headlines on Today, see icons on the source rows.
 
@@ -143,7 +150,7 @@ private, max-age=86400`, and `X-Content-Type-Options: nosniff`; a miss answers 4
 
 ## Further Notes
 
-- Reddit's unauthenticated JSON endpoints are a courtesy, not a contract. The health reason
+- Reddit's public feeds are a courtesy, not a contract. The health reason
   `rate_limited` and the descriptive User-Agent are the mitigations; if Reddit closes the door, the
   row reads "Having trouble" and nothing else in Sports is affected.
 - The icon route is the first Sports endpoint returning bytes rather than JSON; it follows the News

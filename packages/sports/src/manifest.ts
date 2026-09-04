@@ -120,7 +120,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.source_icons",
       description:
-        "Each custom news source in Sports settings shows its own icon next to its name: a publication's favicon or a subreddit's community icon. When no icon is available, a neutral newspaper symbol is shown instead."
+        "Each custom news source in Sports settings shows its own icon next to its name: a publication's favicon. Subreddits and any source without a usable icon show a neutral newspaper symbol instead."
     },
     {
       id: "sports.subreddit_sources",

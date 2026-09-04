@@ -48,7 +48,7 @@ export type SportsIconFetchPort = (
 export interface SportsIconSourceRecord {
   readonly id: string;
   readonly canonicalDomain: string;
-  /** #2211 a subreddit's community icon saved at confirm time; null for publications. */
+  /** #2211 an optional image URL saved at confirm time; null for publications and, today, for subreddits. */
   readonly iconUrl: string | null;
 }
 

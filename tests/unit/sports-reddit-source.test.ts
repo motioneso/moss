@@ -8,52 +8,65 @@ import {
   type SportsSafeFetchPort
 } from "../../packages/sports/src/source/discovery.js";
 import {
-  parseRedditListing,
+  parseRedditFeed,
   parseSubredditInput,
   readSubreddit,
+  redditEntryToHeadline,
   redditFailureReason,
-  redditIconUrlFromAbout,
-  redditPostToHeadline,
   sportsSourceIdentityKey
 } from "../../packages/sports/src/source/reddit.js";
 
 const db = {} as DataContextDb;
 const ai = {} as NewsAiPort;
 
-const ABOUT_URL = "https://www.reddit.com/r/nfl/about.json";
-const ABOUT_URL_UPPER = "https://www.reddit.com/r/NFL/about.json";
-const LISTING_URL = "https://www.reddit.com/r/nfl/new.json?limit=50";
+const FEED_URL = "https://www.reddit.com/r/nfl/new.rss";
+const FEED_URL_UPPER = "https://www.reddit.com/r/NFL/new.rss";
 
-const about = JSON.stringify({
-  kind: "t5",
-  data: {
-    display_name: "nfl",
-    title: "NFL: National Football League Discussion",
-    public_description: "The place for NFL news.",
-    community_icon:
-      "https://styles.redditmedia.com/t5_2qmg3/styles/communityIcon_abc.png?width=256&amp;s=deadbeef",
-    icon_img: ""
-  }
-});
-
-function post(overrides: Record<string, unknown>) {
-  return {
-    kind: "t3",
-    data: {
-      id: "abc123",
-      name: "t3_abc123",
-      title: "Chiefs sign a new kicker",
-      url: "https://www.espn.com/nfl/story/_/id/1/chiefs-sign-kicker",
-      is_self: false,
-      stickied: false,
-      created_utc: 1_757_000_000,
-      ...overrides
-    }
-  };
+interface EntryOverrides {
+  readonly id?: string;
+  readonly title?: string;
+  readonly link?: string | null;
+  readonly published?: string | null;
+  readonly content?: string;
 }
 
-function listing(children: unknown[]) {
-  return JSON.stringify({ kind: "Listing", data: { children } });
+/** One Atom entry the way Reddit writes it: escaped HTML content ending in the [link] anchor. */
+function entry(overrides: EntryOverrides = {}): string {
+  const id = overrides.id ?? "t3_abc123";
+  const title = overrides.title ?? "Chiefs sign a new kicker";
+  const link =
+    overrides.link === undefined
+      ? "https://www.espn.com/nfl/story/_/id/1/chiefs-sign-kicker"
+      : overrides.link;
+  const thread = `https://www.reddit.com/r/nfl/comments/${id.slice(3)}/thread/`;
+  const html =
+    overrides.content ??
+    `<!-- SC_OFF --><div class="md"><p>Body</p></div><!-- SC_ON --> submitted by <a href="https://www.reddit.com/user/fan"> /u/fan </a> <br/>` +
+      (link === null ? "" : ` <span><a href="${link}">[link]</a></span>`) +
+      ` <span><a href="${thread}">[comments]</a></span>`;
+  const escaped = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const published =
+    overrides.published === undefined ? "2025-09-04T14:13:20+00:00" : overrides.published;
+  return (
+    `<entry><author><name>/u/fan</name></author><category term="nfl" label="r/nfl"/>` +
+    `<content type="html">${escaped}</content><id>${id}</id><link href="${thread}" />` +
+    (published ? `<updated>${published}</updated><published>${published}</published>` : "") +
+    `<title>${title}</title></entry>`
+  );
+}
+
+function feed(entries: string[], head?: { term?: string; title?: string }): string {
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">` +
+    `<category term="${head?.term ?? "nfl"}" label="r/${head?.term ?? "nfl"}"/>` +
+    `<updated>2025-09-04T14:13:20+00:00</updated><icon>https://www.redditstatic.com/icon.png/</icon>` +
+    `<id>/r/nfl/new.rss</id><link rel="self" href="${FEED_URL}" type="application/atom+xml" />` +
+    `<link rel="alternate" href="https://www.reddit.com/r/nfl/new" type="text/html" />` +
+    `<subtitle>The place for NFL news.</subtitle>` +
+    `<title>${head?.title ?? "NFL: National Football League Discussion"}</title>` +
+    entries.join("") +
+    `</feed>`
+  );
 }
 
 type FetchResult = Awaited<ReturnType<SportsSafeFetchPort>>;
@@ -64,12 +77,12 @@ function fetchMap(entries: Record<string, FetchResult>): SportsSafeFetchPort {
   );
 }
 
-function okJson(url: string, body: string): FetchResult {
+function okAtom(url: string, body: string): FetchResult {
   return {
     ok: true,
     status: 200,
     finalUrl: url,
-    contentType: "application/json",
+    contentType: "application/atom+xml; charset=UTF-8",
     body,
     truncated: false
   };
@@ -106,48 +119,81 @@ describe("subreddit input detection", () => {
   });
 });
 
-describe("subreddit post filtering", () => {
+describe("subreddit entry filtering", () => {
   it("keeps a linked article and credits the registrable publisher domain", () => {
-    expect(redditPostToHeadline(post({}).data)).toEqual({
+    expect(redditEntryToHeadline(entry())).toEqual({
       id: "t3_abc123",
       title: "Chiefs sign a new kicker",
       url: "https://www.espn.com/nfl/story/_/id/1/chiefs-sign-kicker",
-      publishedAt: new Date(1_757_000_000 * 1000).toISOString(),
+      publishedAt: "2025-09-04T14:13:20.000Z",
       publisherLabel: "espn.com",
       publisherDomain: "espn.com"
     });
   });
 
-  it.each([
-    ["self post", { is_self: true, url: "https://www.reddit.com/r/nfl/comments/abc123/x/" }],
-    ["stickied post", { stickied: true }],
-    ["image", { post_hint: "image", url: "https://i.redd.it/abc.png" }],
-    ["video", { post_hint: "hosted:video", url: "https://v.redd.it/abc" }],
-    ["reddit-internal link", { url: "https://www.reddit.com/r/other/comments/xyz/" }],
-    ["short reddit link", { url: "https://redd.it/xyz" }],
-    ["preview host", { url: "https://preview.redd.it/abc.jpg" }],
-    ["crosspost", { crosspost_parent_list: [{ id: "parent" }] }],
-    ["rich media hint", { post_hint: "rich:video", url: "https://www.youtube.com/watch?v=1" }],
-    ["non-http link", { url: "ftp://files.example/report" }]
-  ])("drops a %s", (_label, overrides) => {
-    expect(redditPostToHeadline(post(overrides).data)).toBeNull();
+  it("decodes entities in the outbound link and tolerates a missing date", () => {
+    expect(
+      redditEntryToHeadline(entry({ link: "https://news.example/story?a=1&b=2", published: null }))
+    ).toMatchObject({ url: "https://news.example/story?a=1&b=2", publishedAt: null });
   });
 
-  it("caps a listing at forty linked articles and dedupes repeated links", () => {
-    const children = Array.from({ length: 60 }, (_, index) =>
-      post({
-        id: `p${index}`,
-        name: `t3_p${index}`,
-        url: `https://news.example/story/${index % 50}`
-      })
+  it.each([
+    ["self post", { link: "https://www.reddit.com/r/nfl/comments/abc123/x/" }],
+    ["entry without a [link] anchor", { link: null }],
+    ["image", { link: "https://i.redd.it/abc.png" }],
+    ["video", { link: "https://v.redd.it/abc" }],
+    ["reddit-internal link", { link: "https://www.reddit.com/r/other/comments/xyz/" }],
+    ["short reddit link", { link: "https://redd.it/xyz" }],
+    ["preview host", { link: "https://preview.redd.it/abc.jpg" }],
+    ["non-http link", { link: "ftp://files.example/report" }],
+    ["entry with no title", { title: "" }]
+  ])("drops a %s", (_label, overrides) => {
+    expect(redditEntryToHeadline(entry(overrides))).toBeNull();
+  });
+
+  it("caps a feed at forty linked articles and dedupes repeated links", () => {
+    const entries = Array.from({ length: 60 }, (_, index) =>
+      entry({ id: `t3_p${index}`, link: `https://news.example/story/${index % 50}` })
     );
-    const parsed = parseRedditListing(listing(children));
-    expect(parsed.ok && parsed.headlines).toHaveLength(40);
-    expect(parseRedditListing(listing([post({}), post({})]))).toMatchObject({
+    const parsed = parseRedditFeed(feed(entries), "nfl");
+    expect(parsed.ok && parsed.feed.headlines).toHaveLength(40);
+    expect(parseRedditFeed(feed([entry(), entry()]), "nfl")).toMatchObject({
       ok: true,
-      headlines: [{ id: "t3_abc123" }]
+      feed: { headlines: [{ id: "t3_abc123" }] }
     });
-    expect(parseRedditListing('{"kind":"t5"}')).toEqual({ ok: false });
+  });
+
+  it("takes the subreddit's casing and title from the feed head, or the typed name", () => {
+    expect(
+      parseRedditFeed(feed([], { term: "LiverpoolFC", title: "Liverpool FC" }), "liverpoolfc")
+    ).toEqual({
+      ok: true,
+      feed: {
+        subreddit: {
+          displayName: "LiverpoolFC",
+          title: "Liverpool FC",
+          description: "The place for NFL news.",
+          iconUrl: null
+        },
+        headlines: []
+      }
+    });
+    const noTerm = feed([]).replace(/<category[^>]*\/>/, "");
+    expect(parseRedditFeed(noTerm, "nfl")).toMatchObject({
+      ok: true,
+      feed: { subreddit: { displayName: "nfl" } }
+    });
+  });
+
+  it("refuses anything that is not an Atom feed", () => {
+    expect(parseRedditFeed('{"kind":"Listing"}', "nfl")).toEqual({ ok: false });
+    expect(parseRedditFeed("<html><body>blocked</body></html>", "nfl")).toEqual({ ok: false });
+    expect(
+      parseRedditFeed(
+        '<?xml version="1.0"?><rss version="2.0"><channel><title>x</title></channel></rss>',
+        "nfl"
+      )
+    ).toEqual({ ok: false });
   });
 });
 
@@ -173,12 +219,12 @@ describe("subreddit identity and icon", () => {
     const lower = sportsSourceIdentityKey({
       retrievalMethod: "reddit",
       canonicalDomain: "reddit.com",
-      feedUrl: "https://www.reddit.com/r/nfl/new.json?limit=50"
+      feedUrl: "https://www.reddit.com/r/nfl/new.rss"
     });
     const upper = sportsSourceIdentityKey({
       retrievalMethod: "reddit",
       canonicalDomain: "reddit.com",
-      feedUrl: "https://www.reddit.com/r/NFL/new.json?limit=50"
+      feedUrl: "https://www.reddit.com/r/NFL/new.rss"
     });
     expect(lower).toBe(upper);
     expect(lower).toBe("reddit:nfl");
@@ -197,105 +243,78 @@ describe("subreddit identity and icon", () => {
       })
     ).not.toBe(lower);
   });
-
-  it("strips the query and entities from the community icon and refuses foreign hosts", () => {
-    expect(
-      redditIconUrlFromAbout({
-        community_icon:
-          "https://styles.redditmedia.com/t5_x/styles/communityIcon_a.png?width=256&amp;s=1"
-      })
-    ).toBe("https://styles.redditmedia.com/t5_x/styles/communityIcon_a.png");
-    expect(
-      redditIconUrlFromAbout({
-        community_icon: "",
-        icon_img: "https://b.thumbs.redditmedia.com/x.png"
-      })
-    ).toBe("https://b.thumbs.redditmedia.com/x.png");
-    expect(redditIconUrlFromAbout({ community_icon: "https://evil.example/icon.png" })).toBeNull();
-    expect(
-      redditIconUrlFromAbout({ community_icon: "http://styles.redditmedia.com/x.png" })
-    ).toBeNull();
-    expect(redditIconUrlFromAbout({})).toBeNull();
-  });
 });
 
 describe("reading a subreddit", () => {
-  it("pins both calls to www.reddit.com with JSON only, a byte cap, and a descriptive agent", async () => {
-    const fetch = fetchMap({
-      [ABOUT_URL_UPPER]: okJson(ABOUT_URL_UPPER, about),
-      [LISTING_URL]: okJson(LISTING_URL, listing([post({})]))
-    });
+  it("makes one feed call pinned to www.reddit.com with Atom types, a byte cap, and a descriptive agent", async () => {
+    const fetch = fetchMap({ [FEED_URL_UPPER]: okAtom(FEED_URL_UPPER, feed([entry()])) });
     const result = await readSubreddit(fetch, "NFL");
     expect(result).toMatchObject({
       ok: true,
-      listingUrl: LISTING_URL,
-      about: { displayName: "nfl", title: "NFL: National Football League Discussion" },
+      listingUrl: FEED_URL,
+      subreddit: {
+        displayName: "nfl",
+        title: "NFL: National Football League Discussion",
+        iconUrl: null
+      },
       headlines: [{ publisherDomain: "espn.com" }]
     });
-    expect(fetch).toHaveBeenCalledTimes(2);
-    for (const call of vi.mocked(fetch).mock.calls) {
-      const options = call[1];
-      expect(options?.allowedHosts).toEqual(["www.reddit.com"]);
-      expect(options?.allowedContentTypes).toEqual(["application/json"]);
-      expect(options?.maxBytes).toBe(1_000_000);
-      expect(options?.rejectOversizedResponses).toBe(true);
-      expect(options?.userAgent).toMatch(/^Moss\//);
-      expect(options?.requestHeaders).toEqual({ accept: "application/json" });
-      const guard = options?.beforeRequest;
-      expect(await guard?.({ url: new URL(call[0]), redirectCount: 0 })).toBe(true);
-      expect(
-        await guard?.({ url: new URL("https://www.reddit.com/search?q=nfl"), redirectCount: 1 })
-      ).toBe(false);
-      expect(
-        await guard?.({ url: new URL("https://old.reddit.com/r/nfl/about.json"), redirectCount: 0 })
-      ).toBe(false);
-    }
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(fetch).mock.calls[0];
+    const options = call?.[1];
+    expect(options?.allowedHosts).toEqual(["www.reddit.com"]);
+    expect(options?.allowedContentTypes).toEqual([
+      "application/atom+xml",
+      "application/rss+xml",
+      "application/xml",
+      "text/xml"
+    ]);
+    expect(options?.maxBytes).toBe(1_000_000);
+    expect(options?.rejectOversizedResponses).toBe(true);
+    expect(options?.userAgent).toMatch(/^Moss\//);
+    expect(options?.requestHeaders?.accept).toMatch(/^application\/atom\+xml/);
+    const guard = options?.beforeRequest;
+    expect(await guard?.({ url: new URL(FEED_URL_UPPER), redirectCount: 0 })).toBe(true);
+    expect(
+      await guard?.({ url: new URL("https://www.reddit.com/search?q=nfl"), redirectCount: 1 })
+    ).toBe(false);
+    expect(
+      await guard?.({ url: new URL("https://old.reddit.com/r/NFL/new.rss"), redirectCount: 0 })
+    ).toBe(false);
   });
 
-  it("reports a missing subreddit whether Reddit answers 404 or a non-subreddit body", async () => {
+  it("reports a missing subreddit whether Reddit answers 404 or a non-feed body", async () => {
     expect(
       await readSubreddit(
-        fetchMap({ [ABOUT_URL]: { ok: false, reason: "http_error", status: 404 } }),
+        fetchMap({ [FEED_URL]: { ok: false, reason: "http_error", status: 404 } }),
         "nfl"
       )
     ).toEqual({ ok: false, reason: "not_found" });
     expect(
-      await readSubreddit(
-        fetchMap({ [ABOUT_URL]: okJson(ABOUT_URL, '{"kind":"Listing","data":{}}') }),
-        "nfl"
-      )
+      await readSubreddit(fetchMap({ [FEED_URL]: okAtom(FEED_URL, "<html>blocked</html>") }), "nfl")
     ).toEqual({ ok: false, reason: "not_found" });
   });
 });
 
 describe("resolveSportsSourceInput for a subreddit", () => {
+  const body = feed([
+    entry(),
+    entry({ id: "t3_self1", link: "https://www.reddit.com/r/nfl/comments/self1/x/" }),
+    entry({
+      id: "t3_two",
+      title: "Bills extend their coach",
+      link: "https://theathletic.com/nfl/bills-coach"
+    })
+  ]);
   const deps = () => ({
     fetch: fetchMap({
-      [ABOUT_URL]: okJson(ABOUT_URL, about),
-      [ABOUT_URL_UPPER]: okJson(ABOUT_URL_UPPER, about),
-      [LISTING_URL]: okJson(
-        LISTING_URL,
-        listing([
-          post({}),
-          post({
-            id: "self1",
-            name: "t3_self1",
-            is_self: true,
-            url: "https://www.reddit.com/r/nfl/comments/self1/x/"
-          }),
-          post({
-            id: "two",
-            name: "t3_two",
-            title: "Bills extend their coach",
-            url: "https://theathletic.com/nfl/bills-coach"
-          })
-        ])
-      )
+      [FEED_URL]: okAtom(FEED_URL, body),
+      [FEED_URL_UPPER]: okAtom(FEED_URL_UPPER, body)
     }),
     ai
   });
 
-  it("builds a reddit candidate with the listing URL as the one target for every scope", async () => {
+  it("builds a reddit candidate with the feed URL as the one target for every scope", async () => {
     const result = await resolveSportsSourceInput(db, deps(), {
       rawUrl: "r/NFL",
       targets: [
@@ -313,11 +332,11 @@ describe("resolveSportsSourceInput for a subreddit", () => {
         label: "r/nfl",
         canonicalDomain: "reddit.com",
         homepageUrl: "https://www.reddit.com/r/nfl/",
-        feedUrl: LISTING_URL,
+        feedUrl: FEED_URL,
         retrievalMethod: "reddit",
         recipe: null,
         recipeFingerprint: null,
-        iconUrl: "https://styles.redditmedia.com/t5_2qmg3/styles/communityIcon_abc.png",
+        iconUrl: null,
         confirmedFetchHosts: ["www.reddit.com"],
         sampleCount: 2,
         samples: [
@@ -325,8 +344,8 @@ describe("resolveSportsSourceInput for a subreddit", () => {
           { headline: "Bills extend their coach" }
         ],
         targets: [
-          { targetUrl: LISTING_URL, parameters: {} },
-          { targetUrl: LISTING_URL, parameters: {} }
+          { targetUrl: FEED_URL, parameters: {} },
+          { targetUrl: FEED_URL, parameters: {} }
         ]
       }
     });
@@ -340,7 +359,7 @@ describe("resolveSportsSourceInput for a subreddit", () => {
   ] as const)("rejects with %s", async (reason, failure) => {
     const result = await resolveSportsSourceInput(
       db,
-      { fetch: fetchMap({ [ABOUT_URL]: failure }), ai },
+      { fetch: fetchMap({ [FEED_URL]: failure }), ai },
       { rawUrl: "r/nfl" }
     );
     expect(result).toEqual({ status: "rejected", reason });
@@ -357,7 +376,7 @@ describe("resolveSportsSourceInput for a subreddit", () => {
 
   it("refuses a saved row whose authority is not reddit pinned to www.reddit.com", async () => {
     const result = await resolveSportsSourceInput(db, deps(), {
-      rawUrl: LISTING_URL,
+      rawUrl: FEED_URL,
       persistedAuthority: {
         canonicalDomain: "reddit.com",
         recipeJson: null,
