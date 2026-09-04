@@ -15,7 +15,11 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ChatArchiveSettingsResponse, MeResponse } from "@moss/shared";
+import type {
+  ChatArchiveSettingsResponse,
+  GetChatModelOverrideSettingsResponse,
+  MeResponse
+} from "@moss/shared";
 
 const personaGet = vi.fn(async () => ({
   persona: { assistantName: "Moss", personaText: "Be direct and a little dry." }
@@ -26,16 +30,18 @@ const personaPut = vi.fn(
   })
 );
 
-const chatModelOverrideGet = vi.fn(async () => ({
-  settings: {
-    overrideEnabled: false,
-    currentOverrideModelId: null,
-    effectiveOverrideModelId: null,
-    defaultModel: null,
-    selectedModel: null,
-    selectableOverrideModels: []
-  }
-}));
+const chatModelOverrideGet = vi.fn(
+  async (): Promise<GetChatModelOverrideSettingsResponse> => ({
+    settings: {
+      overrideEnabled: false,
+      currentOverrideModelId: null,
+      effectiveOverrideModelId: null,
+      defaultModel: null,
+      selectedModel: null,
+      selectableOverrideModels: []
+    }
+  })
+);
 
 vi.mock("../../apps/web/src/api/client.js", () => ({
   getPersonaSettings: () => personaGet(),
@@ -182,7 +188,22 @@ describe("Transcription setup note", () => {
         overrideEnabled: false,
         currentOverrideModelId: null,
         effectiveOverrideModelId: null,
-        defaultModel: { id: "m1", providerDisplayName: "Anthropic", providerModelId: "claude" },
+        defaultModel: {
+          id: "m1",
+          providerConfigId: "p1",
+          providerKind: "anthropic",
+          providerDisplayName: "Anthropic",
+          providerStatus: "active",
+          providerModelId: "claude",
+          displayName: "Claude",
+          capabilities: ["chat"],
+          status: "active",
+          tier: "interactive",
+          allowUserOverride: true,
+          origin: "discovered",
+          createdAt: "2026-09-04T00:00:00.000Z",
+          updatedAt: "2026-09-04T00:00:00.000Z"
+        },
         selectedModel: null,
         selectableOverrideModels: []
       }

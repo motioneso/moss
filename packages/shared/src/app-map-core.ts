@@ -87,7 +87,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "assistant",
     label: "Assistant & AI",
     description:
-      "Choose assistant behavior, persona dials, response style (concise, balanced, or detailed), and model routing available to this user.",
+      "Choose assistant behavior, persona dials, response style (concise, balanced, or detailed), and model routing available to this user. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > Assistant & AI) to turn on the microphone in chat.",
     path: "/settings?section=assistant",
     scope: "user"
   },
