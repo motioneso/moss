@@ -194,6 +194,68 @@ describe("sports photo store (#2237)", () => {
     expect(await store.read(actor, "0".repeat(32))).toBeNull();
   });
 
+  it("shrinks a large photo but never enlarges a small one", async () => {
+    const big = "https://example.com/big.jpg";
+    const small = "https://example.com/small.jpg";
+    const { port } = fetchPortReturning(
+      new Map([
+        [big, await jpeg(3000, 1500)],
+        [small, await jpeg(300, 200)]
+      ])
+    );
+    const store = new SportsPhotoStore({ vault, fetchBytes: port });
+
+    const shrunk = await store.ensure(actor, "source-a", big);
+    const untouched = await store.ensure(actor, "source-a", small);
+
+    expect(shrunk).toEqual(expect.objectContaining({ width: 1280, height: 640 }));
+    expect(untouched).toEqual(expect.objectContaining({ width: 300, height: 200 }));
+  });
+
+  it("rejects an oversized body and writes nothing to the folder", async () => {
+    const url = "https://example.com/huge.jpg";
+    const oversized = Buffer.concat([
+      await jpeg(400, 300),
+      Buffer.alloc(3 * 1024 * 1024, 0x20)
+    ]);
+    const { port } = fetchPortReturning(new Map([[url, oversized]]));
+    const store = new SportsPhotoStore({ vault, fetchBytes: port });
+
+    expect(await store.ensure(actor, "source-a", url)).toBeNull();
+    expect(await storedFiles("user-a")).toHaveLength(0);
+  });
+
+  it("gives the download no more time than the refresh has left", async () => {
+    const url = "https://example.com/slow.jpg";
+    const timeouts: (number | undefined)[] = [];
+    const port: SportsIconFetchPort = async (_url, options) => {
+      timeouts.push(options?.timeoutMs);
+      return { ok: false, reason: "timeout" };
+    };
+    const store = new SportsPhotoStore({ vault, fetchBytes: port });
+
+    await store.ensure(actor, "source-a", url, { timeBudgetMs: 1_200 });
+    await store.ensure(actor, "source-a", url, { timeBudgetMs: 30_000 });
+    const refused = await store.ensure(actor, "source-a", url, { timeBudgetMs: 0 });
+
+    expect(timeouts).toEqual([1_200, 5_000]);
+    expect(refused).toBeNull();
+  });
+
+  it("treats a copy whose image file has been deleted as missing and fetches it again", async () => {
+    const url = "https://example.com/photo.jpg";
+    const { port, calls } = fetchPortReturning(new Map([[url, await jpeg(900, 600)]]));
+    const store = new SportsPhotoStore({ vault, fetchBytes: port });
+    const stored = await store.ensure(actor, "source-a", url);
+
+    await rm(join(baseDir, "user-a", "sports", "photos", `${stored!.key}.webp`));
+    const again = await store.ensure(actor, "source-a", url);
+
+    expect(calls).toHaveLength(2);
+    expect(again?.key).toBe(stored!.key);
+    expect(await storedFiles("user-a")).toContain(`${stored!.key}.webp`);
+  });
+
   it("records which stored copy a headline serves, per owner", async () => {
     const { port } = fetchPortReturning(new Map());
     const store = new SportsPhotoStore({ vault, fetchBytes: port });

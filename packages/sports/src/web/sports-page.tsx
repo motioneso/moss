@@ -71,7 +71,7 @@ function demoteEarlyGameday(data: SportsOverviewResponse): OverviewHero {
   // a live game off the page.
   const games = hero.games.filter((entry) => stillInWindow(entry.game));
   if (games.length > 0) return { mode: "gameday", games };
-  return { mode: "story", headline: data.topStories[0] ?? null };
+  return { mode: "story", headline: leadWidePhotoFirst(data.topStories)[0] ?? null };
 }
 
 export function hasLiveGame(data: SportsOverviewResponse | undefined): boolean {

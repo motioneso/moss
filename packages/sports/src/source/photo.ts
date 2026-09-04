@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 
 import { Parser } from "htmlparser2";
-import { getDomain } from "tldts";
 
 /**
  * #2237 slice 1 — the deterministic photo pass for custom-source stories (spec decisions 1-3).
@@ -226,14 +225,15 @@ function isPublicHostname(hostname: string): boolean {
   return host.includes(".");
 }
 
+/**
+ * The publisher's own host or a subdomain of it, and nothing else. A shared registrable domain is
+ * deliberately not enough: sports.example.com and ads.example.com are different sites as far as a
+ * photo candidate is concerned, and accepting the whole domain would let any sibling host through.
+ */
 function sameSite(photoHost: string, publisherHost: string): boolean {
   const photo = photoHost.toLowerCase();
   const publisher = publisherHost.toLowerCase();
-  if (photo === publisher) return true;
-  if (photo.endsWith(`.${publisher}`) || publisher.endsWith(`.${photo}`)) return true;
-  const photoDomain = getDomain(photo);
-  const publisherDomain = getDomain(publisher);
-  return photoDomain !== null && photoDomain === publisherDomain;
+  return photo === publisher || photo.endsWith(`.${publisher}`);
 }
 
 function declaresTrackingPixel(url: URL): boolean {

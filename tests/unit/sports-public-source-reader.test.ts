@@ -152,11 +152,21 @@ function makeReader(
  */
 class PhotoStoreDouble {
   readonly stored: string[] = [];
+  readonly budgets: (number | undefined)[] = [];
   readonly links = new Map<string, string>();
   swept: ReadonlySet<string> | null = null;
+  /** Set to make every download attempt fail, as a permanently broken image would. */
+  alwaysFails = false;
 
-  async ensure(_access: AccessContext, sourceId: string, photoUrl: string) {
+  async ensure(
+    _access: AccessContext,
+    sourceId: string,
+    photoUrl: string,
+    options: { readonly timeBudgetMs?: number } = {}
+  ) {
     this.stored.push(photoUrl);
+    this.budgets.push(options.timeBudgetMs);
+    if (this.alwaysFails) return null;
     return { key: `key-${this.stored.length}`, width: 1280, height: 720, bytes: 4096 };
   }
 
@@ -783,6 +793,90 @@ describe("the photo pass (#2237)", () => {
 
     expect(photos.stored).toEqual([]);
     expect(result.headlines[0]?.imageUrl).toBeNull();
+  });
+
+  it("opens no article page when under three seconds of the refresh budget remain", async () => {
+    let clock = Date.parse("2026-09-04T10:00:00.000Z");
+    let pageFetches = 0;
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      if (url.endsWith("sports.xml")) {
+        // The feed itself was slow: 9.5 seconds of the twelve-second budget are already gone.
+        clock += 9_500;
+        return success(
+          url,
+          feedBody(
+            `<item><guid>feed-1</guid><title>Story</title><link>https://publisher.example/story</link></item>`
+          ),
+          "text/plain"
+        );
+      }
+      pageFetches += 1;
+      return success(
+        url,
+        `<html><head><meta property="og:image" content="https://publisher.example/s.jpg"></head></html>`,
+        "text/html"
+      );
+    });
+    const photos = new PhotoStoreDouble();
+    const { reader } = makeReader([feedSource()], fetch, { photos, now: () => clock });
+
+    const result = await reader.refresh(actor);
+
+    expect(pageFetches).toBe(0);
+    expect(photos.stored).toEqual([]);
+    // The story is still returned; only its photo is missing.
+    expect(result.headlines).toHaveLength(1);
+    expect(result.headlines[0]?.imageUrl).toBeNull();
+  });
+
+  it("never gives a download more time than the refresh has left, and skips it once time is up", async () => {
+    const item =
+      `<item><guid>feed-1</guid><title>Story</title><link>https://publisher.example/story</link>` +
+      `<media:content url="https://publisher.example/story.jpg" medium="image" width="1200"/></item>`;
+
+    async function budgetAfterFeedDelay(delayMs: number): Promise<(number | undefined)[]> {
+      let clock = Date.parse("2026-09-04T10:00:00.000Z");
+      const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+        if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+        clock += delayMs;
+        return success(url, feedBody(item), "text/plain");
+      });
+      const photos = new PhotoStoreDouble();
+      const { reader } = makeReader([feedSource()], fetch, { photos, now: () => clock });
+      await reader.refresh(actor);
+      return photos.budgets;
+    }
+
+    // Plenty of time left: the store still caps itself at its own five-second limit.
+    expect(await budgetAfterFeedDelay(500)).toEqual([11_500]);
+    // Almost none left: the download is told exactly how little it may take.
+    expect(await budgetAfterFeedDelay(11_600)).toEqual([400]);
+    // None left at all: no download is attempted.
+    expect(await budgetAfterFeedDelay(12_500)).toEqual([]);
+  });
+
+  it("does not download the same broken photo again on the next refresh", async () => {
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      return success(
+        url,
+        feedBody(
+          `<item><guid>feed-1</guid><title>Story</title><link>https://publisher.example/story</link>` +
+            `<media:content url="https://publisher.example/broken.jpg" medium="image" width="1200"/></item>`
+        ),
+        "text/plain"
+      );
+    });
+    const photos = new PhotoStoreDouble();
+    photos.alwaysFails = true;
+    const { reader } = makeReader([feedSource()], fetch, { photos });
+
+    await reader.refresh(actor);
+    const second = await reader.refresh(actor);
+
+    expect(photos.stored).toEqual(["https://publisher.example/broken.jpg"]);
+    expect(second.headlines[0]?.imageUrl).toBeNull();
   });
 
   it("fetches at most six article pages for one source in a refresh", async () => {

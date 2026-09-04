@@ -8,6 +8,7 @@ import {
   listVaultFiles,
   readVaultFile,
   readVaultFileBytes,
+  vaultFileExists,
   writeVaultFile,
   writeVaultFileBytes
 } from "@moss/vault";
@@ -133,9 +134,16 @@ export class SportsPhotoStore {
     access: AccessContext,
     sourceId: string,
     photoUrl: string,
-    opts: { readonly signal?: AbortSignal } = {}
+    opts: { readonly signal?: AbortSignal; readonly timeBudgetMs?: number } = {}
   ): Promise<StoredPhoto | null> {
     if (opts.signal?.aborted) return null;
+    // The refresh deadline outranks the per-download cap: a download may never be given more time
+    // than the whole refresh has left, or a slow host pushes the refresh past its own deadline.
+    const timeoutMs = Math.min(
+      SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS,
+      opts.timeBudgetMs ?? SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS
+    );
+    if (timeoutMs <= 0) return null;
     const key = photoKey(sourceId, photoUrl);
     let host: string;
     try {
@@ -145,14 +153,16 @@ export class SportsPhotoStore {
     }
     return this.dependencies.vault.withVaultContext(access, async (ctx) => {
       const existing = await this.readSidecar(ctx, key);
-      if (existing) {
+      // The sidecar alone does not prove the copy is servable — the image itself may have been
+      // deleted underneath us — so a sidecar without its image is treated as no copy at all.
+      if (existing && (await vaultFileExists(ctx, webpPath(key)))) {
         return { key, width: existing.width, height: existing.height, bytes: existing.bytes };
       }
       const fetched = await this.dependencies.fetchBytes(photoUrl, {
         allowedHosts: [host],
         maxBytes: SPORTS_PHOTO_MAX_DOWNLOAD_BYTES,
         rejectOversizedResponses: true,
-        timeoutMs: SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS
+        timeoutMs
       });
       if (!fetched.ok || fetched.truncated) return null;
       if (fetched.body.byteLength > SPORTS_PHOTO_MAX_DOWNLOAD_BYTES) return null;

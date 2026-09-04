@@ -55,6 +55,14 @@ export type SportsPublicSourceHeadline = CustomSourceHeadline & {
 const MAX_ARTICLE_PAGE_FETCHES = 6;
 const PHOTO_DEADLINE_MARGIN_MS = 3_000;
 const ARTICLE_PAGE_CONTENT_TYPES = ["text/html", "application/xhtml+xml"];
+/** A failed photo is not retried for as long as its story could still be served from the cache. */
+const PHOTO_FAILURE_TTL_MS = HEADLINE_TTL_MS + DEFAULT_STALE_RETENTION_MS;
+const PHOTO_FAILURE_MAX_ENTRIES = 2_000;
+
+/** Newlines cannot occur in a user id, a source id or a URL, so this join is unambiguous. */
+function photoFailureKey(actorUserId: string, sourceId: string, photoUrl: string): string {
+  return `${actorUserId}\n${sourceId}\n${photoUrl}`;
+}
 
 interface ReaderDataContext {
   withDataContext<T>(
@@ -313,6 +321,8 @@ export class SportsPublicSourceReader {
   private readonly cache: DatasetCache;
   private readonly now: () => number;
   private readonly sleep: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
+  /** Photo attempt key to the time its "do not retry" memory expires. Insertion-ordered. */
+  private readonly photoFailures = new Map<string, number>();
 
   constructor(private readonly dependencies: PublicSourceReaderDependencies) {
     this.repository = dependencies.repository ?? new SportsSourcesRepository();
@@ -397,6 +407,14 @@ export class SportsPublicSourceReader {
     );
     if (!held) return null;
     try {
+      // Waiting for the slot can itself consume most of what was left, so the deadline margin is
+      // checked again here rather than only before the wait.
+      if (
+        context.signal?.aborted ||
+        this.now() + PHOTO_DEADLINE_MARGIN_MS >= context.deadline
+      ) {
+        return null;
+      }
       const response = await this.dependencies.fetch(articleUrl, {
         allowedHosts: [publisherHost],
         allowedContentTypes: ARTICLE_PAGE_CONTENT_TYPES,
@@ -420,10 +438,29 @@ export class SportsPublicSourceReader {
    * Downloads and stores each story's photo into this owner's vault, then records which stored
    * copy each headline id serves. Returns the copies keyed by feed item id.
    */
+  private isRememberedPhotoFailure(key: string): boolean {
+    const expiresAt = this.photoFailures.get(key);
+    if (expiresAt === undefined) return false;
+    if (expiresAt > this.now()) return true;
+    this.photoFailures.delete(key);
+    return false;
+  }
+
+  private rememberPhotoFailure(key: string): void {
+    this.photoFailures.delete(key);
+    this.photoFailures.set(key, this.now() + PHOTO_FAILURE_TTL_MS);
+    while (this.photoFailures.size > PHOTO_FAILURE_MAX_ENTRIES) {
+      const oldest = this.photoFailures.keys().next();
+      if (oldest.done) break;
+      this.photoFailures.delete(oldest.value);
+    }
+  }
+
   private async storePhotos(
     accessContext: AccessContext,
     pair: RequestAssignment,
     items: readonly ExtractedHeadline[],
+    deadline: number,
     signal?: AbortSignal
   ): Promise<Map<string, StoredPhoto>> {
     const stored = new Map<string, StoredPhoto>();
@@ -431,13 +468,25 @@ export class SportsPublicSourceReader {
     if (!photos) return stored;
     for (const item of items) {
       if (!item.photoUrl) continue;
+      // A photo that already failed is not tried again while the story is still cached: without
+      // this, a permanently broken image is re-downloaded on every single refresh.
+      const failureKey = photoFailureKey(accessContext.actorUserId, pair.source.id, item.photoUrl);
+      if (this.isRememberedPhotoFailure(failureKey)) continue;
+      const timeBudgetMs = deadline - this.now();
+      if (timeBudgetMs <= 0) continue;
       let copy: StoredPhoto | null;
       try {
-        copy = await photos.ensure(accessContext, pair.source.id, item.photoUrl, { signal });
+        copy = await photos.ensure(accessContext, pair.source.id, item.photoUrl, {
+          ...(signal ? { signal } : {}),
+          timeBudgetMs
+        });
       } catch {
         copy = null;
       }
-      if (!copy) continue;
+      if (!copy) {
+        this.rememberPhotoFailure(failureKey);
+        continue;
+      }
       stored.set(item.id, copy);
       photos.linkHeadline(
         accessContext.actorUserId,
@@ -605,7 +654,7 @@ export class SportsPublicSourceReader {
       items: readonly ExtractedHeadline[],
       checkedAt: Date | null
     ): Promise<void> => {
-      const stored = await this.storePhotos(accessContext, pair, items, options.signal);
+      const stored = await this.storePhotos(accessContext, pair, items, deadline, options.signal);
       for (const copy of stored.values()) keptPhotoKeys.add(copy.key);
       headlines.push(...publicHeadlines(pair, items, checkedAt, stored));
     };

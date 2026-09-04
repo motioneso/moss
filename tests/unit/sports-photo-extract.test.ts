@@ -112,6 +112,15 @@ describe("sports photo candidate rules (#2237)", () => {
     );
   });
 
+  it("rejects a sibling host that merely shares the publisher's parent domain", () => {
+    expect(
+      isUsablePhotoCandidate("https://other.example.com/a.jpg", { publisherHost: "sports.example.com" })
+    ).toBe(false);
+    expect(
+      isUsablePhotoCandidate("https://example.com/a.jpg", { publisherHost: "sports.example.com" })
+    ).toBe(false);
+  });
+
   it("rejects plain http, credentials in the URL, and an address literal", () => {
     expect(isUsablePhotoCandidate("http://example.com/a.jpg", { publisherHost })).toBe(false);
     expect(isUsablePhotoCandidate("https://u:p@example.com/a.jpg", { publisherHost })).toBe(false);
