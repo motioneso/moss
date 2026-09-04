@@ -30,15 +30,15 @@ export function topicCreateErrorMessage(error: unknown): string {
 
 /**
  * #975 Task 9 flipped the writes live, so this gate now renders ONLY when a prerequisite is
- * missing, pointing at Assistant settings. Relocated from index.tsx (#990) — also used there
+ * missing, pointing at AI providers settings. Relocated from index.tsx (#990) — also used there
  * for the "Publications you add" section, so it must stay exported.
  */
 export function PrereqGate(props: { readonly requirement: string }) {
   return (
     <span className="nw-set__gate">
       {props.requirement}{" "}
-      <a className="nw-set__gatelink" href="/settings?section=assistant">
-        Set it up in Assistant settings
+      <a className="nw-set__gatelink" href="/settings?section=aiproviders">
+        Set it up in AI providers
       </a>
       .
     </span>

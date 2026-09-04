@@ -219,7 +219,7 @@ describe("NewsSettings personalization sections (#953)", () => {
     expect(
       (html.match(/class="jds-btn jds-btn--secondary jds-btn--sm" disabled=""/g) ?? []).length
     ).toBe(2);
-    expect(html).toContain("/settings?section=assistant");
+    expect(html).toContain("/settings?section=aiproviders");
     // The exclusion form stays fully live without any AI prerequisite.
     expect(html).toContain('class="jds-btn jds-btn--primary jds-btn--sm"');
     expect(html).not.toContain('class="jds-btn jds-btn--primary jds-btn--sm" disabled=""');
@@ -232,7 +232,7 @@ describe("NewsSettings personalization sections (#953)", () => {
     expect(html).toContain('id="nw-addsource-input"');
     expect(html).toContain('id="nw-addtopic-label"');
     // With prerequisites satisfied there is nothing to set up.
-    expect(html).not.toContain("/settings?section=assistant");
+    expect(html).not.toContain("/settings?section=aiproviders");
   });
 
   it("renders stored verified sources and described topics read-only", () => {
@@ -591,7 +591,7 @@ describe("NewsSettings adversarial content renders as inert text (#975 council r
     // Both PrereqGates (sources + topics sections) render under allOff; every href must be
     // the one static settings link and nothing else.
     expect(hrefs.length).toBeGreaterThan(0);
-    expect([...new Set(hrefs)]).toEqual(["/settings?section=assistant"]);
+    expect([...new Set(hrefs)]).toEqual(["/settings?section=aiproviders"]);
     expect(hrefs.some((href) => /^(javascript|data):/i.test(href))).toBe(false);
   });
 });
