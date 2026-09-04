@@ -57,12 +57,12 @@ page recipe. Two gaps surfaced in the 2026-09-03 live session on Settings > Modu
   `/r/Name`, and `https://(www.|old.)reddit.com/r/Name[/...]` before the publication path runs.
   Subreddit names are validated against Reddit's rules (3 to 21 characters, letters, digits,
   underscore). Anything else falls through to the existing publication flow unchanged.
-- **Reading uses Reddit's public Atom feed**, `https://www.reddit.com/r/{name}/new.rss`. Ben's
+- **Reading uses Reddit's public Atom feed**, `https://www.reddit.com/r/{name}/hot.rss`. Ben's
   ruling, 2026-09-03: "for subreddits, add .rss at the end. so https://www.reddit.com/r/LiverpoolFC.rss
   for example." The JSON listing and `about.json` were tried first and Reddit answers 403 "blocked
-  by network security" for both from the dev box whatever the User-Agent, while the feed answers 200. The plain `.rss` is Reddit's "hot" order and mixes dates, so the `/new.rss` form is used for
-  newest first. The one call goes through the existing Sports safe-fetch port with the host
-  allowlist pinned to `www.reddit.com`, Atom and XML content types, a one megabyte cap, and a
+  by network security" for both from the dev box whatever the User-Agent, while the feed answers 200. Ben ruled (2026-09-03) that subreddits sort by Reddit's "hot"
+  order, so the `/hot.rss` form is used; `/new.rss` would be newest-first. The call goes through
+  the existing Sports safe-fetch port with the host allowlist pinned to `www.reddit.com`, Atom and XML content types, a one megabyte cap, and a
   descriptive User-Agent (Reddit throttles generic agents). No `about.json` call, no Reddit API
   keys, no OAuth, no scraping of Reddit HTML. The feed carries the title, subtitle, and the
   subreddit's display casing (the `<category term>`), so identity needs no second request.

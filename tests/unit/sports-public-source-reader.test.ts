@@ -541,7 +541,7 @@ describe("SportsPublicSourceReader", () => {
 });
 
 describe("SportsPublicSourceReader subreddit sources (#2211)", () => {
-  const listingUrl = "https://www.reddit.com/r/nfl/new.rss";
+  const listingUrl = "https://www.reddit.com/r/nfl/hot.rss";
   const subreddit: SportsRuntimeSource = {
     ...runtimeSource({ id: "nfl", recipe: null, feedUrl: listingUrl, hosts: ["www.reddit.com"] }),
     label: "r/nfl",

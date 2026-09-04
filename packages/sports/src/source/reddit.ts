@@ -1,6 +1,6 @@
 /**
  * #2211 Subreddit sources. A subreddit is read through its public Atom feed,
- * `https://www.reddit.com/r/{name}/new.rss`, and every entry whose "[link]" anchor points out to a
+ * `https://www.reddit.com/r/{name}/hot.rss`, and every entry whose "[link]" anchor points out to a
  * publisher becomes a headline for that article. Ben's ruling (2026-09-03): use the .rss feed, not
  * the JSON listing. Reddit answers 403 "blocked by network security" for new.json and about.json
  * from a self-hosted box whatever the User-Agent, while the feed answers 200. No API keys, no
@@ -72,9 +72,9 @@ export function redditSubredditUrl(name: string): string {
   return `https://www.reddit.com/r/${name}/`;
 }
 
-/** Newest-first feed. The plain `/r/{name}.rss` is Reddit's "hot" order and mixes dates. */
+/** Reddit's "hot" order (Ben, 2026-09-03: sort subreddits by hot). `/new.rss` would be newest-first. */
 export function redditListingUrl(name: string): string {
-  return `https://www.reddit.com/r/${name}/new.rss`;
+  return `https://www.reddit.com/r/${name}/hot.rss`;
 }
 
 /** The subreddit name inside a saved feed/homepage URL, or null for a non-Reddit URL. */

@@ -19,8 +19,8 @@ import {
 const db = {} as DataContextDb;
 const ai = {} as NewsAiPort;
 
-const FEED_URL = "https://www.reddit.com/r/nfl/new.rss";
-const FEED_URL_UPPER = "https://www.reddit.com/r/NFL/new.rss";
+const FEED_URL = "https://www.reddit.com/r/nfl/hot.rss";
+const FEED_URL_UPPER = "https://www.reddit.com/r/NFL/hot.rss";
 
 interface EntryOverrides {
   readonly id?: string;
@@ -60,7 +60,7 @@ function feed(entries: string[], head?: { term?: string; title?: string }): stri
     `<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">` +
     `<category term="${head?.term ?? "nfl"}" label="r/${head?.term ?? "nfl"}"/>` +
     `<updated>2025-09-04T14:13:20+00:00</updated><icon>https://www.redditstatic.com/icon.png/</icon>` +
-    `<id>/r/nfl/new.rss</id><link rel="self" href="${FEED_URL}" type="application/atom+xml" />` +
+    `<id>/r/nfl/hot.rss</id><link rel="self" href="${FEED_URL}" type="application/atom+xml" />` +
     `<link rel="alternate" href="https://www.reddit.com/r/nfl/new" type="text/html" />` +
     `<subtitle>The place for NFL news.</subtitle>` +
     `<title>${head?.title ?? "NFL: National Football League Discussion"}</title>` +
@@ -219,12 +219,12 @@ describe("subreddit identity and icon", () => {
     const lower = sportsSourceIdentityKey({
       retrievalMethod: "reddit",
       canonicalDomain: "reddit.com",
-      feedUrl: "https://www.reddit.com/r/nfl/new.rss"
+      feedUrl: "https://www.reddit.com/r/nfl/hot.rss"
     });
     const upper = sportsSourceIdentityKey({
       retrievalMethod: "reddit",
       canonicalDomain: "reddit.com",
-      feedUrl: "https://www.reddit.com/r/NFL/new.rss"
+      feedUrl: "https://www.reddit.com/r/NFL/hot.rss"
     });
     expect(lower).toBe(upper);
     expect(lower).toBe("reddit:nfl");
@@ -279,7 +279,7 @@ describe("reading a subreddit", () => {
       await guard?.({ url: new URL("https://www.reddit.com/search?q=nfl"), redirectCount: 1 })
     ).toBe(false);
     expect(
-      await guard?.({ url: new URL("https://old.reddit.com/r/NFL/new.rss"), redirectCount: 0 })
+      await guard?.({ url: new URL("https://old.reddit.com/r/NFL/hot.rss"), redirectCount: 0 })
     ).toBe(false);
   });
 

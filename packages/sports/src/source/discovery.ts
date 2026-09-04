@@ -125,7 +125,7 @@ export type VerifiedSportsSourceCandidate = VerifiedSportsSourceCandidateBase &
         readonly recipeFingerprint: string;
       }
     | {
-        /** #2211 the subreddit's public new-posts listing URL. */
+        /** #2211 the subreddit's public hot-posts feed URL. */
         readonly feedUrl: string;
         readonly retrievalMethod: "reddit";
         readonly recipe: null;
