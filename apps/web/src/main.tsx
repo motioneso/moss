@@ -47,7 +47,12 @@ if (import.meta.env.DEV) {
     const mount = document.createElement("div");
     mount.id = "agentation-root";
     document.body.appendChild(mount);
-    const agentationEndpoint = `http://${window.location.hostname}:4747`;
+    // On an https page the browser blocks a plain http note server (mixed content). The dev
+    // tailnet exposes the same server over https on 4748 (`tailscale serve --https=4748`).
+    const agentationEndpoint =
+      window.location.protocol === "https:"
+        ? `https://${window.location.hostname}:4748`
+        : `http://${window.location.hostname}:4747`;
     createRoot(mount).render(<Agentation endpoint={agentationEndpoint} onCopy={legacyCopy} />);
   });
 }
