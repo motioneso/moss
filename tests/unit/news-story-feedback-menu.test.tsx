@@ -168,4 +168,62 @@ describe("News story feedback menu", () => {
     const updatedData = client.getQueryData<NewsOverviewResponse>(newsQueryKeys.overview);
     expect(updatedData?.topStories.map((h) => h.id)).toEqual(["1", "2"]);
   });
+
+  it("refills the carousel from the ranked pool after two hero stories are dismissed", async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ feedback: {} }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ranked = Array.from({ length: 8 }, (_, index) => makeHeadline(String(index + 1)));
+    const top = ranked.slice(0, 6);
+    const initialData: NewsOverviewResponse = {
+      topStories: top,
+      rankedStories: ranked,
+      sourceGroups: [
+        {
+          sourceKey: "wire",
+          sourceLabel: "Wire",
+          homepageUrl: "https://example.com",
+          headlines: ranked
+        }
+      ],
+      activeTopics: [],
+      enabledSources: [{ sourceKey: "wire", label: "Wire" }],
+      degraded: false
+    };
+    client.setQueryData(newsQueryKeys.overview, initialData);
+
+    async function dismiss(headline: NewsHeadline) {
+      let renderer!: ReactTestRenderer;
+      await act(async () => {
+        renderer = create(
+          createElement(
+            QueryClientProvider,
+            { client },
+            createElement(StoryFeedbackMenu, { headline, surface: "news" })
+          )
+        );
+      });
+      await act(async () => button(renderer, `Feedback for ${headline.title}`).props.onClick());
+      await act(async () => button(renderer, "Less like this").props.onClick());
+      const textarea = renderer.root.findByType("textarea");
+      await act(async () => textarea.props.onChange({ target: { value: "Not interesting" } }));
+      const form = renderer.root.findByType("form");
+      await act(async () => {
+        form.props.onSubmit({ preventDefault: vi.fn() });
+        await Promise.resolve();
+      });
+    }
+
+    // Dismiss two of the six hero stories. The carousel can show five slides, and six ranked
+    // candidates are still left over, so it should refill back up to five instead of draining.
+    await dismiss(ranked[0]!);
+    await dismiss(ranked[1]!);
+
+    const updatedData = client.getQueryData<NewsOverviewResponse>(newsQueryKeys.overview);
+    expect(updatedData?.topStories).toHaveLength(5);
+    expect(updatedData?.topStories.some((h) => h.id === "1" || h.id === "2")).toBe(false);
+  });
 });

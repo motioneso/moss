@@ -67,7 +67,7 @@ export function composeMosaic(pool: readonly NewsHeadline[]): MosaicPlan {
 
 // Same rotation idiom as sports' quiet-day hero (packages/sports/src/web/sports-news.tsx):
 // five slides max, slow crossfade, hover/focus pauses, reduced motion disables auto-advance.
-const CAROUSEL_CAP = 5;
+export const CAROUSEL_CAP = 5;
 const CAROUSEL_ADVANCE_MS = 7000;
 
 function kicker(headline: NewsHeadline): string {
