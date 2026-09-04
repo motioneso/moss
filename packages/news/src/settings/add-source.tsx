@@ -23,6 +23,8 @@ import { ConnectPublisherForm } from "./connect-publisher.js";
  */
 const PREVIEW_REJECTION_COPY: Record<string, string> = {
   policy: "That publication isn't allowed by the content policy.",
+  redirected:
+    "That site redirects somewhere else, so we can't add it. Try the address it sends you to.",
   invalid_input: "That doesn't look like a publication we can check — try a homepage link.",
   unreachable: "We couldn't reach that site. Check the address and try again.",
   not_https: "Only HTTPS links or bare domains are accepted."
