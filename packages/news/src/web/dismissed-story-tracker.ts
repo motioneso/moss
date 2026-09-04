@@ -12,6 +12,11 @@ export function markStoryDismissed(feedbackRef: string): void {
   dismissedFeedbackRefs.add(feedbackRef);
 }
 
+/** Call after a saved dismissal is successfully removed so the story can appear again. */
+export function clearStoryDismissed(feedbackRef: string): void {
+  dismissedFeedbackRefs.delete(feedbackRef);
+}
+
 export function isStoryDismissed(feedbackRef: string | undefined): boolean {
   return feedbackRef !== undefined && dismissedFeedbackRefs.has(feedbackRef);
 }
