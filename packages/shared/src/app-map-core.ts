@@ -86,7 +86,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "assistant",
     label: "Assistant & AI",
-    description: "Choose assistant behavior and model routing available to this user.",
+    description:
+      "Choose assistant behavior, persona dials, response style (concise, balanced, or detailed), and model routing available to this user.",
     path: "/settings?section=assistant",
     scope: "user"
   },

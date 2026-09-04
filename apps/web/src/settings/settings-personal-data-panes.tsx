@@ -49,11 +49,7 @@ import { GOOGLE_CONNECT_SUCCESS_QUERY_KEYS } from "../connectors/use-google-conn
 import { getConnectorAccountHealth, isConnectorSyncInFlight } from "./settings-connector-sync";
 import { GoogleConnect } from "./settings-google-connect";
 import { ImapConnect } from "./settings-imap-connect";
-import {
-  BriefingSettings,
-  ChatSettingsView,
-  NotificationSettings
-} from "./settings-module-subviews";
+import { BriefingSettings, NotificationSettings } from "./settings-module-subviews";
 import { useFeedback } from "./settings-feedback";
 import { resolveModuleSettingsDeepLink } from "./module-settings-deep-link";
 import { ModulePreferencesSettings } from "./settings-module-preferences";
@@ -528,12 +524,12 @@ function SourcesPane() {
 
 /* ------------------------------------------------------------- Modules */
 
-const CONFIG_IDS = new Set(["briefings", "chat", "notifications"]);
+const CONFIG_IDS = new Set(["briefings", "notifications"]);
 const CAT_BY_ID: Record<string, string> = { knowledge: "memory" };
 const CONTRIBUTED_SETTINGS_MODULE_IDS = new Set(
   MODULE_SETTINGS_SURFACES.filter((surface) => surface.hasEntry).map((surface) => surface.moduleId)
 );
-type ModuleSub = "briefings" | "chat" | "notifications";
+type ModuleSub = "briefings" | "notifications";
 type ModuleSettingsView = ModuleSub | { readonly moduleId: string };
 
 function hasImplementedModuleSettings(module: SettingsModule): boolean {
@@ -592,7 +588,6 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
   };
 
   if (view === "briefings") return <BriefingSettings onBack={closeModule} />;
-  if (view === "chat") return <ChatSettingsView onBack={closeModule} onCat={onSelectSection} />;
   if (view === "notifications")
     return (
       <NotificationSettings
