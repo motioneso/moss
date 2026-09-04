@@ -141,8 +141,8 @@ async function fetchApiKeyModels(
     if (!response.ok) return [];
     // #874 HIGH-2: inferModel returns null for pure speech-to-text models (dropped from assistant
     // discovery); filter them out so only assistant-bindable models reach the admin UI.
-    return extractModelIds(input.providerKind, await response.json())
-      .map((id) => inferModel(id, input.providerKind))
+    return extractModelEntries(input.providerKind, await response.json())
+      .map((entry) => inferModel(entry.id, input.providerKind, entry.releasedAt))
       .filter((model): model is AiProviderDiscoveredModelDto => model !== null);
   } catch {
     return [];
@@ -178,19 +178,46 @@ function doFetch(input: ModelDiscoveryInput, apiKey: string): Promise<Response> 
   }
 }
 
-function extractModelIds(providerKind: AiProviderKind, json: unknown): string[] {
+interface DiscoveredModelEntry {
+  readonly id: string;
+  /** ISO 8601 release date when the provider's list carries one. */
+  readonly releasedAt: string | null;
+}
+
+/**
+ * Anthropic lists `created_at` (ISO string); OpenAI-compatible lists `created` (unix seconds).
+ * Anything unparseable is null so a provider that omits the field simply has no release order.
+ */
+function readReleasedAt(item: Record<string, unknown>): string | null {
+  const iso = item.created_at;
+  if (typeof iso === "string") {
+    const parsed = new Date(iso);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  const epoch = item.created;
+  if (typeof epoch === "number" && Number.isFinite(epoch) && epoch > 0) {
+    return new Date(epoch * 1000).toISOString();
+  }
+  return null;
+}
+
+function extractModelEntries(providerKind: AiProviderKind, json: unknown): DiscoveredModelEntry[] {
   if (!json || typeof json !== "object") return [];
 
   const data = (json as { data?: unknown }).data;
   if (Array.isArray(data)) {
-    let ids = data
-      .map((item) => (item && typeof item === "object" ? (item as { id?: unknown }).id : null))
-      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    let entries = data
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+      .filter(
+        (item): item is Record<string, unknown> & { id: string } =>
+          typeof item.id === "string" && item.id.length > 0
+      )
+      .map((item) => ({ id: item.id, releasedAt: readReleasedAt(item) }));
     if (providerKind === "anthropic") {
       // Include only current claude- models; exclude legacy snapshot versions (contain ":")
-      ids = ids.filter((id) => id.includes("claude-") && !id.includes(":"));
+      entries = entries.filter((entry) => entry.id.includes("claude-") && !entry.id.includes(":"));
     }
-    return ids;
+    return entries;
   }
 
   const models = (json as { models?: unknown }).models;
@@ -201,7 +228,8 @@ function extractModelIds(providerKind: AiProviderKind, json: unknown): string[] 
           ? (item as { name: string }).name.replace(/^models\//, "")
           : null
       )
-      .filter((id): id is string => Boolean(id));
+      .filter((id): id is string => Boolean(id))
+      .map((id) => ({ id, releasedAt: null }));
   }
   return [];
 }
@@ -241,7 +269,8 @@ function inferTierFromModelId(providerKind: AiProviderKind, modelId: string): Ai
 
 function inferModel(
   providerModelId: string,
-  providerKind: AiProviderKind
+  providerKind: AiProviderKind,
+  releasedAt: string | null = null
 ): AiProviderDiscoveredModelDto | null {
   const lower = providerModelId.toLowerCase();
 
@@ -262,5 +291,5 @@ function inferModel(
     capabilities.push("vision");
   }
   const tier = inferTierFromModelId(providerKind, providerModelId);
-  return { providerModelId, displayName: providerModelId, capabilities, tier };
+  return { providerModelId, displayName: providerModelId, capabilities, tier, releasedAt };
 }

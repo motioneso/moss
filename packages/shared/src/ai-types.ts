@@ -132,6 +132,11 @@ export interface AiProviderDiscoveredModelDto {
   readonly displayName: string;
   readonly capabilities: readonly AiModelCapability[];
   readonly tier: AiModelTier;
+  /**
+   * The model's release date (ISO 8601) when the provider's list carries one (Anthropic
+   * `created_at`, OpenAI-compatible `created`). The tier ladder prefers the newest release.
+   */
+  readonly releasedAt?: string | null;
 }
 
 /**

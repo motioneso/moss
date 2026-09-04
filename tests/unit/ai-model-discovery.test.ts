@@ -100,6 +100,45 @@ describe("CLI model discovery (#2208)", () => {
     expect(result.fromFallback).toBe(false);
   });
 
+  it("keeps each model's release date from an API-key provider's list", async () => {
+    const service = new ModelDiscoveryService();
+    const anthropic = await service.discoverModels("anthropic-api", {
+      providerKind: "anthropic",
+      authMethod: "api_key",
+      baseUrl: null,
+      credential: { apiKey: "sk-test" },
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              { id: "claude-sonnet-5", created_at: "2026-05-01T00:00:00Z" },
+              { id: "claude-sonnet-4-5-20250929", created_at: "2025-09-29T00:00:00Z" },
+              { id: "claude-sonnet-4-6" }
+            ]
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )) as typeof globalThis.fetch
+    });
+    expect(anthropic.models.map((model) => [model.providerModelId, model.releasedAt])).toEqual([
+      ["claude-sonnet-5", "2026-05-01T00:00:00.000Z"],
+      ["claude-sonnet-4-5-20250929", "2025-09-29T00:00:00.000Z"],
+      ["claude-sonnet-4-6", null]
+    ]);
+
+    const openai = await service.discoverModels("openai-api", {
+      providerKind: "openai-compatible",
+      authMethod: "api_key",
+      baseUrl: null,
+      credential: { apiKey: "sk-test" },
+      fetch: (async () =>
+        new Response(JSON.stringify({ data: [{ id: "gpt-5.6", created: 1_780_000_000 }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })) as typeof globalThis.fetch
+    });
+    expect(openai.models[0]?.releasedAt).toBe(new Date(1_780_000_000 * 1000).toISOString());
+  });
+
   it("never invents models for an API-key provider whose discovery fails", async () => {
     const service = new ModelDiscoveryService();
     const result = await service.discoverModels("api", {
