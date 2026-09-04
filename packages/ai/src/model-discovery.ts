@@ -123,7 +123,7 @@ export class ModelDiscoveryService {
       };
     }
     const models = result.models
-      .map((model) => inferModel(model.id, providerKind, model.releasedAt ?? null))
+      .map((model) => inferModel(model.id, providerKind, model.releasedAt ?? null, { isCli: true }))
       .filter((model): model is AiProviderDiscoveredModelDto => model !== null);
     return { models };
   }
@@ -267,10 +267,47 @@ function inferTierFromModelId(providerKind: AiProviderKind, modelId: string): Ai
   return "interactive";
 }
 
+/**
+ * Whether a model has a built-in web search tool from its own provider (#2228). CLI providers
+ * shell out to a local login and never expose a search tool through this integration, so they
+ * are excluded regardless of the underlying vendor.
+ */
+export function inferWebSearchCapability(
+  providerKind: AiProviderKind,
+  providerModelId: string,
+  isCli = false
+): boolean {
+  if (isCli || providerKind === "ollama" || providerKind === "custom") return false;
+  const id = providerModelId.toLowerCase();
+
+  if (providerKind === "anthropic") {
+    const match = /claude-(\d+)(?:-(\d+))?/.exec(id);
+    if (!match) return false;
+    const major = Number(match[1]);
+    const minor = match[2] !== undefined ? Number(match[2]) : 0;
+    return major > 3 || (major === 3 && minor >= 5);
+  }
+
+  if (providerKind === "openai-compatible") {
+    if (id.startsWith("gpt-4o") || id.startsWith("gpt-4.1")) return true;
+    if (/^o\d/.test(id)) return true;
+    return false;
+  }
+
+  if (providerKind === "google") {
+    const match = /gemini-(\d+)/.exec(id);
+    if (!match) return false;
+    return Number(match[1]) >= 2;
+  }
+
+  return false;
+}
+
 function inferModel(
   providerModelId: string,
   providerKind: AiProviderKind,
-  releasedAt: string | null = null
+  releasedAt: string | null = null,
+  options?: { readonly isCli?: boolean }
 ): AiProviderDiscoveredModelDto | null {
   const lower = providerModelId.toLowerCase();
 
@@ -289,6 +326,9 @@ function inferModel(
   const capabilities: AiModelCapability[] = ["chat", "tool-use", "json", "summarization"];
   if (lower.includes("vision") || lower.includes("image") || lower.includes("gemini")) {
     capabilities.push("vision");
+  }
+  if (inferWebSearchCapability(providerKind, providerModelId, options?.isCli ?? false)) {
+    capabilities.push("web-search");
   }
   const tier = inferTierFromModelId(providerKind, providerModelId);
   return { providerModelId, displayName: providerModelId, capabilities, tier, releasedAt };
