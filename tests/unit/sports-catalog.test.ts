@@ -50,9 +50,49 @@ describe("sports catalog", () => {
         "uefa.champions",
         "uru.1",
         "usa.1",
-        "ven.1"
+        "usa.nwsl",
+        "ven.1",
+        "wnba",
+        "ncaaf",
+        "ncaam",
+        "ncaaw",
+        "ncaa-baseball",
+        "ncaa-hockey"
       ].sort()
     );
+  });
+  it("adds women's pro and major college leagues as ESPN record leagues (Ben, 2026-09-03)", () => {
+    const expected: Record<string, [string, string, string]> = {
+      wnba: ["basketball", "wnba", "Basketball"],
+      ncaaf: ["football", "college-football", "Football"],
+      ncaam: ["basketball", "mens-college-basketball", "Basketball"],
+      ncaaw: ["basketball", "womens-college-basketball", "Basketball"],
+      "ncaa-baseball": ["baseball", "college-baseball", "Baseball"],
+      "ncaa-hockey": ["hockey", "mens-college-hockey", "Hockey"]
+    };
+    for (const [key, [espnSport, espnLeague, sportLabel]] of Object.entries(expected)) {
+      const entry = catalogEntry(key);
+      expect(entry?.espnSport).toBe(espnSport);
+      expect(entry?.espnLeague).toBe(espnLeague);
+      expect(entry?.sportLabel).toBe(sportLabel);
+      // Region-less so the settings checklist lists them directly under the sport heading.
+      expect(entry?.regionLabel).toBeNull();
+      expect(entry?.standingsShape).toBe("record");
+      expect(entry?.kind).toBe("league");
+    }
+    // Only the WNBA slug resolves on ESPN's league-logo path; the college slugs all 404.
+    expect(catalogEntry("wnba")?.logoUrl).toContain("/wnba.png");
+    for (const key of ["ncaaf", "ncaam", "ncaaw", "ncaa-baseball", "ncaa-hockey"]) {
+      expect(catalogEntry(key)?.logoUrl).toBeUndefined();
+    }
+    // NWSL sits with MLS under United States in the Soccer group.
+    const nwsl = catalogEntry("usa.nwsl");
+    expect(nwsl?.espnSport).toBe("soccer");
+    expect(nwsl?.regionLabel).toBe("United States");
+    expect(nwsl?.standingsShape).toBe("table");
+    expect(nwsl?.confederation).toBe("CONCACAF");
+    // ESPN serves no standings for these, so they must stay out of the catalog.
+    for (const key of ["pwhl", "wpbl", "nba-g-league"]) expect(catalogEntry(key)).toBeUndefined();
   });
   it("groups the new top flights into their confederations (#907 slice 3)", () => {
     expect(catalogEntry("bra.1")?.confederation).toBe("CONMEBOL");
