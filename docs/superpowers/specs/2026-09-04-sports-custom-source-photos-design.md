@@ -16,6 +16,23 @@ spec mirrors), and the source icon work shipped in PR 2211.
 photos from custom sources. You can have Moss inspect the source and make modifications locally
 if possible."
 
+## What you will get
+
+1. As a user, I can see the publisher's photo on stories from my own added sources, in the hero carousel, the Today news band, and the story list, the same as ESPN stories.
+2. As a user, I get those photos without doing anything: Moss reads them from the feed or the article page during the normal refresh.
+3. As a user, I can see a big photo lead the hero carousel when its story is one of the top stories.
+4. As a user, I can still see a small photo in the smaller story slots instead of a blank.
+5. As a user, I can see on each source row in Sports settings whether photos are working, none were found, checking, preview ready, or stopped working.
+6. As a user, I can press Find photos on a source with no photos and have Moss look at the site for me.
+7. As a user, I can look at a preview of a few stories with the photos Moss found before anything is saved.
+8. As a user, I can press Use these photos to keep them, or Not right to keep nothing.
+9. As a user, I can press Stop using Moss's photos on a source and go back to the plain feed photos.
+10. As a user, I get a clear message and a link to Assistant settings if Find photos needs a chat model I have not set up.
+11. As a user, I do not have to babysit a source: if its photos stop appearing, Moss looks again on its own and only tells me if it still finds nothing.
+12. As a user, I can ask Moss in chat why a source has no pictures, or ask it to find photos for a source, and it does the same thing the buttons do.
+13. As a user, my photos are copies kept on my own box, so a page load never fetches from the publisher and the publisher never sees my browsing.
+14. As a user, old photo copies are cleaned up on their own and removed when I remove the source.
+
 ## Context
 
 A Sports story gets a photo in exactly one place today: the ESPN reader picks the header image
