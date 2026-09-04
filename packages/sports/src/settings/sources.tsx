@@ -211,7 +211,6 @@ export function AddSourceFlow(props: {
   function reset() {
     setPreview(null);
     setSelectedTargets(new Map());
-    setExactTargetUrls(new Map());
     setAuthorizationAccepted(false);
     confirmMutation.reset();
   }
