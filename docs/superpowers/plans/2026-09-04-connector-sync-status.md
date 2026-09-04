@@ -18,31 +18,31 @@ are written against the compiler by the build agent.
 
 ## 1. Seams check (every capability the plan leans on, cited from the tree)
 
-| Capability | Where it is | Verdict |
-|---|---|---|
-| Sync summary columns on the account row | `packages/connectors/sql/0099_connector_health_metadata.sql:2-11` adds `last_sync_started_at`, `last_sync_finished_at`, `last_sync_status` (check constraint), `last_sync_error`, `last_sync_counts` | exists |
-| Writers of those columns | `packages/connectors/src/repository.ts:223` `markSyncStarted`, `:245` `markSyncFinished(scopedDb, accountId, {finishedAt, status, error, counts})` | exists; both gain a `trigger` and the previous-run copy |
-| Owner-only reads and the admin-safe view | `repository.ts:116` `listAccounts`, `:122` `listAdminSafeAccounts` | exists; admin view not widened |
-| Google sync job, queue names, continuation | `packages/connectors/src/sync-jobs.ts:31-33` (`connectors.google-sync`, continuation queue, 840 s expiry) | exists |
-| IMAP sync job | `packages/connectors/src/imap-sync-jobs.ts:19` queue, `:60` `runImapSync`, `:162` worker registration | exists |
-| Schedules, both every 15 minutes | `google-schedule.ts:7` `GOOGLE_SYNC_CRON`, `:31` singleton key = actor; `imap-schedule.ts:7` `IMAP_SYNC_CRON`, `:32` singleton key = account id | exists; next-run helper is new |
-| Manual Google sync route and its dedupe | `packages/connectors/src/routes.ts:174-197` `POST /api/connectors/google/sync`, `sendJob` with `singletonKey: actorUserId`, null job id means deduped | exists; kept for compatibility |
-| Metadata-only enqueue | `packages/jobs/src/pg-boss.ts:157` `sendJob` runs `assertMetadataOnlyPayload` | exists |
-| Job state read with the root connection | `packages/jobs/src/pg-boss.ts:168` `hasInFlightJob(rootDb, queueName, actorUserId): Promise<boolean>` | exists but returns only a boolean. **The status route needs the newest job's state and creation time.** A sibling helper is added in the same file (see slice 2); this is the one platform gap. |
-| Sync counts shape | `packages/shared/src/connectors-api.ts:12` `ConnectorSyncCounts`; producer `packages/connectors/src/google-sync-phases.ts:40-42` | exists; **no counter for deferred AI extraction.** `:418` logs "google-sync email unit deferred for retry" but only `escalations` (`:383`) is counted. Slice 1 adds `emailDeferred`. |
-| Feature grants (which abilities an account feeds) | `packages/connectors/src/feature-grants.ts:16` `ConnectorFeature = "email" \| "calendar"`, `:73` `resolveEffectiveGrants` | exists; the capability map keys off these two features |
-| Assistant tool declaration shape | `packages/connectors/src/manifest.ts:200-215` (`assistantTools[]` with `name`, `description`, `permissionId`, `risk`, `inputSchema`, `outputSchema`, `execute(scopedDb, input, ctx)`) | exists |
-| Permission ids | `manifest.ts:91` `connectors.view`, `:98` `connectors.manage`, `:105` `connectors.admin` | exists |
-| Manifest `features` / `errors` / `remediations` precedent | `packages/news/src/manifest.ts:490`, `packages/ai/src/manifest.ts:119` | exists |
-| Route must be declared in the manifest or the server refuses to start | memory `route-must-be-declared-in-a-manifest`; connectors `manifest.ts:69-192` lists routes with `permissionId` | exists |
-| Web pane and its in-flight refresh | `apps/web/src/settings/settings-personal-data-panes.tsx:99` `AccountRow`, `:232` `ConnectedPane`, `:243-247` `refetchInterval` 2 s while `isConnectorSyncInFlight` | exists. **There is no Sync now button in this pane today** (grep for `google/sync` in `apps/web/src` finds nothing). The button is net-new UI. |
-| Current wording table | `apps/web/src/settings/settings-connector-sync.ts:3-20` (`ConnectorAccountHealth`, `isConnectorSyncInFlight`, `getConnectorAccountHealth`) | exists; becomes an adapter over the shared module |
-| A Today banner that reads freshness and warns | `apps/web/src/today/today-page.tsx:740` `BriefingStaleBanner`, defined in `apps/web/src/today/briefing-freshness.tsx:60` | exists; the "Not working right now" block follows this pattern |
-| App map core entries | `packages/shared/src/app-map-core.ts:125-131` `connected`; the `today` entry in the same file | exists |
-| Migration numbering | highest across `packages/*/sql` and `infra/postgres/migrations` is `0213_sports_reddit_sources.sql` | next is `0214` |
-| Playwright e2e with a mocked API | `tests/e2e/settings-modules.spec.ts:1-20` (`mockApi` with `connectorAccounts`), `tests/e2e/mock-connectors-api.ts` | exists |
-| Live e2e against the dev instance | `tests/live/` | exists |
-| Test precedents | `tests/unit/connectors-feature-grants.test.ts`, `tests/unit/connectors-freshness.test.ts`, `tests/integration/connectors-imap-routes.test.ts`, `tests/integration/connectors-sync-wedge.test.ts` | exists |
+| Capability                                                            | Where it is                                                                                                                                                                                          | Verdict                                                                                                                                                                                         |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sync summary columns on the account row                               | `packages/connectors/sql/0099_connector_health_metadata.sql:2-11` adds `last_sync_started_at`, `last_sync_finished_at`, `last_sync_status` (check constraint), `last_sync_error`, `last_sync_counts` | exists                                                                                                                                                                                          |
+| Writers of those columns                                              | `packages/connectors/src/repository.ts:223` `markSyncStarted`, `:245` `markSyncFinished(scopedDb, accountId, {finishedAt, status, error, counts})`                                                   | exists; both gain a `trigger` and the previous-run copy                                                                                                                                         |
+| Owner-only reads and the admin-safe view                              | `repository.ts:116` `listAccounts`, `:122` `listAdminSafeAccounts`                                                                                                                                   | exists; admin view not widened                                                                                                                                                                  |
+| Google sync job, queue names, continuation                            | `packages/connectors/src/sync-jobs.ts:31-33` (`connectors.google-sync`, continuation queue, 840 s expiry)                                                                                            | exists                                                                                                                                                                                          |
+| IMAP sync job                                                         | `packages/connectors/src/imap-sync-jobs.ts:19` queue, `:60` `runImapSync`, `:162` worker registration                                                                                                | exists                                                                                                                                                                                          |
+| Schedules, both every 15 minutes                                      | `google-schedule.ts:7` `GOOGLE_SYNC_CRON`, `:31` singleton key = actor; `imap-schedule.ts:7` `IMAP_SYNC_CRON`, `:32` singleton key = account id                                                      | exists; next-run helper is new                                                                                                                                                                  |
+| Manual Google sync route and its dedupe                               | `packages/connectors/src/routes.ts:174-197` `POST /api/connectors/google/sync`, `sendJob` with `singletonKey: actorUserId`, null job id means deduped                                                | exists; kept for compatibility                                                                                                                                                                  |
+| Metadata-only enqueue                                                 | `packages/jobs/src/pg-boss.ts:157` `sendJob` runs `assertMetadataOnlyPayload`                                                                                                                        | exists                                                                                                                                                                                          |
+| Job state read with the root connection                               | `packages/jobs/src/pg-boss.ts:168` `hasInFlightJob(rootDb, queueName, actorUserId): Promise<boolean>`                                                                                                | exists but returns only a boolean. **The status route needs the newest job's state and creation time.** A sibling helper is added in the same file (see slice 2); this is the one platform gap. |
+| Sync counts shape                                                     | `packages/shared/src/connectors-api.ts:12` `ConnectorSyncCounts`; producer `packages/connectors/src/google-sync-phases.ts:40-42`                                                                     | exists; **no counter for deferred AI extraction.** `:418` logs "google-sync email unit deferred for retry" but only `escalations` (`:383`) is counted. Slice 1 adds `emailDeferred`.            |
+| Feature grants (which abilities an account feeds)                     | `packages/connectors/src/feature-grants.ts:16` `ConnectorFeature = "email" \| "calendar"`, `:73` `resolveEffectiveGrants`                                                                            | exists; the capability map keys off these two features                                                                                                                                          |
+| Assistant tool declaration shape                                      | `packages/connectors/src/manifest.ts:200-215` (`assistantTools[]` with `name`, `description`, `permissionId`, `risk`, `inputSchema`, `outputSchema`, `execute(scopedDb, input, ctx)`)                | exists                                                                                                                                                                                          |
+| Permission ids                                                        | `manifest.ts:91` `connectors.view`, `:98` `connectors.manage`, `:105` `connectors.admin`                                                                                                             | exists                                                                                                                                                                                          |
+| Manifest `features` / `errors` / `remediations` precedent             | `packages/news/src/manifest.ts:490`, `packages/ai/src/manifest.ts:119`                                                                                                                               | exists                                                                                                                                                                                          |
+| Route must be declared in the manifest or the server refuses to start | memory `route-must-be-declared-in-a-manifest`; connectors `manifest.ts:69-192` lists routes with `permissionId`                                                                                      | exists                                                                                                                                                                                          |
+| Web pane and its in-flight refresh                                    | `apps/web/src/settings/settings-personal-data-panes.tsx:99` `AccountRow`, `:232` `ConnectedPane`, `:243-247` `refetchInterval` 2 s while `isConnectorSyncInFlight`                                   | exists. **There is no Sync now button in this pane today** (grep for `google/sync` in `apps/web/src` finds nothing). The button is net-new UI.                                                  |
+| Current wording table                                                 | `apps/web/src/settings/settings-connector-sync.ts:3-20` (`ConnectorAccountHealth`, `isConnectorSyncInFlight`, `getConnectorAccountHealth`)                                                           | exists; becomes an adapter over the shared module                                                                                                                                               |
+| A Today banner that reads freshness and warns                         | `apps/web/src/today/today-page.tsx:740` `BriefingStaleBanner`, defined in `apps/web/src/today/briefing-freshness.tsx:60`                                                                             | exists; the "Not working right now" block follows this pattern                                                                                                                                  |
+| App map core entries                                                  | `packages/shared/src/app-map-core.ts:125-131` `connected`; the `today` entry in the same file                                                                                                        | exists                                                                                                                                                                                          |
+| Migration numbering                                                   | highest across `packages/*/sql` and `infra/postgres/migrations` is `0213_sports_reddit_sources.sql`                                                                                                  | next is `0214`                                                                                                                                                                                  |
+| Playwright e2e with a mocked API                                      | `tests/e2e/settings-modules.spec.ts:1-20` (`mockApi` with `connectorAccounts`), `tests/e2e/mock-connectors-api.ts`                                                                                   | exists                                                                                                                                                                                          |
+| Live e2e against the dev instance                                     | `tests/live/`                                                                                                                                                                                        | exists                                                                                                                                                                                          |
+| Test precedents                                                       | `tests/unit/connectors-feature-grants.test.ts`, `tests/unit/connectors-freshness.test.ts`, `tests/integration/connectors-imap-routes.test.ts`, `tests/integration/connectors-sync-wedge.test.ts`     | exists                                                                                                                                                                                          |
 
 Open questions with owners:
 
@@ -108,15 +108,52 @@ never a message.
 `connectors-api.ts` types):
 
 ```ts
-export type ConnectorSyncExplainCode = "revoked" | "syncing" | "queued" | "waiting-for-worker" | "sign-in-expired"
-  | "connection-error" | "partial" | "capped" | "first-run-pending" | "synced" | "not-scheduled";
-export interface ConnectorSyncExplainInput { /* exactly the fields in the spec's Explanations section */ }
-export interface ConnectorSyncExplained { code; tone: "forest" | "amber" | "red" | "neutral"; label; summary; reason; next; canReconnect; canSyncNow }
-export function explainConnectorSync(input: ConnectorSyncExplainInput, now: Date): ConnectorSyncExplained;
+export type ConnectorSyncExplainCode =
+  | "revoked"
+  | "syncing"
+  | "queued"
+  | "waiting-for-worker"
+  | "sign-in-expired"
+  | "connection-error"
+  | "partial"
+  | "capped"
+  | "first-run-pending"
+  | "synced"
+  | "not-scheduled";
+export interface ConnectorSyncExplainInput {
+  /* exactly the fields in the spec's Explanations section */
+}
+export interface ConnectorSyncExplained {
+  code;
+  tone: "forest" | "amber" | "red" | "neutral";
+  label;
+  summary;
+  reason;
+  next;
+  canReconnect;
+  canSyncNow;
+}
+export function explainConnectorSync(
+  input: ConnectorSyncExplainInput,
+  now: Date
+): ConnectorSyncExplained;
 export const WAITING_FOR_WORKER_GRACE_MS = 120_000;
-export interface ConnectorCapability { ability: string; dependsOn: "calendar-phase" | "email-phase" | "email-phase+assistant"; staleAfterMs: number }
-export interface NotWorkingEntry { ability: string; since: string | null; reason: string; fix: { label: string; path: string } }
-export function deriveNotWorking(map: readonly ConnectorCapability[], facts: ConnectorSyncExplainInput, now: Date): NotWorkingEntry[];
+export interface ConnectorCapability {
+  ability: string;
+  dependsOn: "calendar-phase" | "email-phase" | "email-phase+assistant";
+  staleAfterMs: number;
+}
+export interface NotWorkingEntry {
+  ability: string;
+  since: string | null;
+  reason: string;
+  fix: { label: string; path: string };
+}
+export function deriveNotWorking(
+  map: readonly ConnectorCapability[],
+  facts: ConnectorSyncExplainInput,
+  now: Date
+): NotWorkingEntry[];
 ```
 
 Capability maps are static exports: `GOOGLE_CAPABILITIES` in `packages/connectors/src/google-capabilities.ts`
@@ -160,8 +197,16 @@ The integration test runs only through the `verify-gate` skill (`scripts/run-gat
 **Jobs helper** `packages/jobs/src/pg-boss.ts`:
 
 ```ts
-export interface NewestJobState { readonly jobId: string; readonly state: "created" | "retry" | "active"; readonly createdAt: Date }
-export async function newestInFlightJob(rootDb: Kysely<MossDatabase>, queueName: string, singletonKey: string): Promise<NewestJobState | null>;
+export interface NewestJobState {
+  readonly jobId: string;
+  readonly state: "created" | "retry" | "active";
+  readonly createdAt: Date;
+}
+export async function newestInFlightJob(
+  rootDb: Kysely<MossDatabase>,
+  queueName: string,
+  singletonKey: string
+): Promise<NewestJobState | null>;
 ```
 
 **Next-run helpers:** `google-schedule.ts` and `imap-schedule.ts` each export
@@ -186,7 +231,12 @@ same jobs helper: `hasSchedule(rootDb, queueName, singletonKey): Promise<boolean
 A pure assembler `packages/connectors/src/sync-status.ts`:
 
 ```ts
-export function buildSyncStatus(input: { account: ConnectorAccountSafeRow; pending: NewestJobState | null; scheduled: boolean; now: Date }): ConnectorSyncStatusDto;
+export function buildSyncStatus(input: {
+  account: ConnectorAccountSafeRow;
+  pending: NewestJobState | null;
+  scheduled: boolean;
+  now: Date;
+}): ConnectorSyncStatusDto;
 ```
 
 so the route, the tool, and the tests share one function.

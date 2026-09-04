@@ -242,19 +242,19 @@ explainConnectorSync(input: {
 
 Wording table (the source of truth for tests):
 
-| code | label | reason / next |
-|---|---|---|
-| synced | Synced | "Last run 12 minutes ago: 3 calendar events, 40 emails." / "Next check at 14:45." |
-| partial | Partial sync | error-code sentence below / "The next run will retry what failed." |
-| capped | More to fetch | "Stopped at the message cap; 148 emails so far." / "Continues automatically in the next run." |
-| sign-in-expired | Sign-in expired | "Google no longer accepts the saved sign-in." / "Press Reconnect." |
-| connection-error | Connection error | provider-agnostic sentence / "Press Reconnect, or check the server can reach the provider." |
-| syncing | Syncing | null / "Started 20 seconds ago." |
-| queued | Queued | null / "Waiting for the background worker to pick it up." |
-| waiting-for-worker | Waiting for worker | "Queued 41 minutes ago and not picked up." / "The background worker may not be running." |
-| first-run-pending | First sync pending | null / "Scheduled for 14:45." |
-| not-scheduled | Not scheduled | null / "Reconnect to schedule syncing." |
-| revoked | Revoked | null / null |
+| code               | label              | reason / next                                                                                 |
+| ------------------ | ------------------ | --------------------------------------------------------------------------------------------- |
+| synced             | Synced             | "Last run 12 minutes ago: 3 calendar events, 40 emails." / "Next check at 14:45."             |
+| partial            | Partial sync       | error-code sentence below / "The next run will retry what failed."                            |
+| capped             | More to fetch      | "Stopped at the message cap; 148 emails so far." / "Continues automatically in the next run." |
+| sign-in-expired    | Sign-in expired    | "Google no longer accepts the saved sign-in." / "Press Reconnect."                            |
+| connection-error   | Connection error   | provider-agnostic sentence / "Press Reconnect, or check the server can reach the provider."   |
+| syncing            | Syncing            | null / "Started 20 seconds ago."                                                              |
+| queued             | Queued             | null / "Waiting for the background worker to pick it up."                                     |
+| waiting-for-worker | Waiting for worker | "Queued 41 minutes ago and not picked up." / "The background worker may not be running."      |
+| first-run-pending  | First sync pending | null / "Scheduled for 14:45."                                                                 |
+| not-scheduled      | Not scheduled      | null / "Reconnect to schedule syncing."                                                       |
+| revoked            | Revoked            | null / null                                                                                   |
 
 Error-code sentences: `auth-error` "The provider rejected the saved sign-in."; `calendar-error`
 "Calendar could not be read."; `calendar-item-error` "Some calendar events could not be saved.";
@@ -309,11 +309,11 @@ grace period is a constant in the connectors package, not a setting.
 
 Each provider module exports a declared, static map. Google's:
 
-| ability (user words) | depends on | stale after |
-|---|---|---|
-| Calendar on the Calendar screen and Today is current | calendar phase succeeded | 1 hour since the last good calendar phase |
-| Tasks and follow-ups are created from new email | email phase succeeded and the assistant's mail-reading step ran | 1 hour since the last good email phase |
-| Moss can answer about recent email | email phase succeeded | 1 hour |
+| ability (user words)                                 | depends on                                                      | stale after                               |
+| ---------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------- |
+| Calendar on the Calendar screen and Today is current | calendar phase succeeded                                        | 1 hour since the last good calendar phase |
+| Tasks and follow-ups are created from new email      | email phase succeeded and the assistant's mail-reading step ran | 1 hour since the last good email phase    |
+| Moss can answer about recent email                   | email phase succeeded                                           | 1 hour                                    |
 
 IMAP declares the two email abilities only. A provider with no calendar declares no calendar
 line, so nothing about calendars is ever shown for it.
@@ -331,15 +331,15 @@ list of:
 
 Rules for deriving the list, tested one per row:
 
-| situation | not working |
-|---|---|
+| situation                                                                | not working                                                                                                           |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | calendar phase failed, or no good calendar phase within the stale window | "Calendar is out of date since 2 pm", reason from the error code or "the sync has not run", fix Reconnect or Sync now |
-| email phase failed, or no good email phase within the stale window | "Tasks are not being created from email" and "Moss cannot see recent email", same reason and fix |
-| email phase good but the assistant's mail-reading step was deferred | "Tasks are not being created from email", reason "the assistant's Claude login has expired", fix Assistant settings |
-| sign-in expired | every ability in the map, reason "Google no longer accepts the saved sign-in", fix Reconnect |
-| waiting for worker past the grace period | every ability whose stale window has passed, reason "the background worker has not picked up the sync", fix Sync now |
-| partial run, next run will retry, stale window not passed | nothing |
-| revoked account | nothing (the user chose this) |
+| email phase failed, or no good email phase within the stale window       | "Tasks are not being created from email" and "Moss cannot see recent email", same reason and fix                      |
+| email phase good but the assistant's mail-reading step was deferred      | "Tasks are not being created from email", reason "the assistant's Claude login has expired", fix Assistant settings   |
+| sign-in expired                                                          | every ability in the map, reason "Google no longer accepts the saved sign-in", fix Reconnect                          |
+| waiting for worker past the grace period                                 | every ability whose stale window has passed, reason "the background worker has not picked up the sync", fix Sync now  |
+| partial run, next run will retry, stale window not passed                | nothing                                                                                                               |
+| revoked account                                                          | nothing (the user chose this)                                                                                         |
 
 Each line is one sentence in the form "<ability>, since <time>, because <reason>." followed by
 the fix link. The `since` time is the finish of the last good phase, shown in the user's time
