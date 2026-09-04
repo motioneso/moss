@@ -170,10 +170,60 @@ async function mockSportsSettings(
     });
   });
 
+  // #2211 custom sources added through the two-phase preview/confirm flow, kept in memory.
+  const customSources: Array<Record<string, unknown>> = [];
   await page.route("**/api/sports/sources", (route) => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON() as { canonicalDomain: string };
+      const source = {
+        kind: "custom",
+        id: `source-${customSources.length + 1}`,
+        label: body.canonicalDomain === "reddit.com" ? "r/nfl" : body.canonicalDomain,
+        canonicalDomain: body.canonicalDomain,
+        homepageUrl: `https://${body.canonicalDomain}/`,
+        feedUrl: null,
+        retrievalMethod: body.canonicalDomain === "reddit.com" ? "reddit" : "feed",
+        enabled: true,
+        healthState: "healthy",
+        healthReasonCode: null,
+        healthMessage: null,
+        lastCheckedAt: new Date().toISOString(),
+        lastSuccessAt: new Date().toISOString(),
+        recipeStatus: "feed",
+        assignedFollowIds: [],
+        assignments: [],
+        createdAt: new Date().toISOString()
+      };
+      customSources.push(source);
+      return fulfillJson(route, { source });
+    }
     sourceReads += 1;
-    return fulfillJson(route, { sources: [espn] });
+    return fulfillJson(route, { sources: [espn, ...customSources] });
   });
+
+  await page.route("**/api/sports/sources/preview", (route) => {
+    const body = route.request().postDataJSON() as { url: string };
+    if (!/^\/?r\/nfl$/i.test(body.url.trim())) {
+      return fulfillJson(route, { status: "rejected", reason: "invalid_input" });
+    }
+    return fulfillJson(route, {
+      status: "ok",
+      confirmationId: "confirmation-nfl",
+      authorizationAcknowledgement: "I confirm this public source.",
+      candidate: {
+        label: "r/nfl",
+        canonicalDomain: "reddit.com",
+        homepageUrl: "https://www.reddit.com/r/nfl/",
+        retrievalMethod: "reddit",
+        sampleCount: 2,
+        confirmedFetchHosts: ["www.reddit.com"],
+        sampleHeadlines: ["Chiefs sign a new kicker", "Bills extend their coach"],
+        targets: []
+      }
+    });
+  });
+
+  await page.route("**/api/sports/sources/*/icon", (route) => route.fulfill({ status: 404 }));
 
   await page.route("**/api/sports/sources/espn/coverage", (route) => {
     const body = route.request().postDataJSON() as UpdateSportsEspnCoverageRequest;
@@ -415,6 +465,33 @@ test.describe("Sports settings follow picker (#989)", () => {
     expect(sportsApi.sourceReads()).toBeGreaterThan(1);
   });
 
+  test("adding a subreddit previews its linked articles, confirms, and shows the row (#2211)", async ({
+    page
+  }) => {
+    await mockApi(page, {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: [],
+      notifications: [],
+      tasks: []
+    });
+    await mockSportsSettings(page);
+    await gotoSportsSettings(page);
+
+    await page.getByRole("button", { name: "Add a source" }).click();
+    const input = page.getByPlaceholder("theathletic.com or r/nfl");
+    await input.fill("r/nfl");
+    await page.getByRole("button", { name: "Check" }).click();
+
+    await expect(page.getByText("Chiefs sign a new kicker")).toBeVisible();
+    await expect(page.getByText("Bills extend their coach")).toBeVisible();
+    await page.getByText("I confirm this public source.").click();
+    await page.getByRole("button", { name: "Add this source" }).click();
+
+    await expect(page.getByText("Source added.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove r/nfl" })).toBeVisible();
+  });
+
   test("saved leagues and follows assemble into one keyboard-accessible standings picker", async ({
     page
   }) => {
@@ -429,7 +506,15 @@ test.describe("Sports settings follow picker (#989)", () => {
     await mockSportsSettings(page);
     await gotoSportsSettings(page);
 
-    const standingsSettings = page.getByRole("region", { name: "Standings leagues" });
+    const standingsSettings = page.getByRole("region", { name: "Configure standings" });
+    // The section starts collapsed (Ben, 2026-09-03); open it before measuring the picker.
+    await standingsSettings.getByRole("button", { name: /Configure standings/ }).click();
+    // The design system hides the real checkbox input, so visibility and clicks go by label text.
+    // Sport groups start collapsed (Ben, 2026-09-04); open the ones the test ticks.
+    for (const sport of [/^Football/, /^Basketball/, /^Baseball/]) {
+      await standingsSettings.getByRole("button", { name: sport }).click();
+    }
+    await expect(standingsSettings.getByText("NFL", { exact: true })).toBeVisible();
     for (const width of [320, 375, 414, 768]) {
       await page.setViewportSize({ width, height: 844 });
       const geometry = await standingsSettings.evaluate((element) => {
@@ -447,20 +532,32 @@ test.describe("Sports settings follow picker (#989)", () => {
       expect(geometry.scroll).toBeLessThanOrEqual(geometry.client + 1);
     }
     await page.setViewportSize({ width: 390, height: 844 });
-    const selectedLeagues = standingsSettings.getByRole("listbox", { name: "Selected leagues" });
-    await selectedLeagues.selectOption(["nba", "mlb"]);
-    await standingsSettings.getByRole("button", { name: "Remove selected leagues" }).click();
-    await expect(selectedLeagues.getByRole("option", { name: "NBA" })).toHaveCount(0);
-    await expect(selectedLeagues.getByRole("option", { name: "MLB" })).toHaveCount(0);
+    // Every league is a checkbox that saves as soon as it changes.
+    await standingsSettings.getByText("NBA", { exact: true }).click();
+    await expect(standingsSettings.getByRole("checkbox", { name: "NBA" })).not.toBeChecked();
+    await standingsSettings.getByText("MLB", { exact: true }).click();
+    await expect(standingsSettings.getByRole("checkbox", { name: "MLB" })).not.toBeChecked();
     await page.getByRole("searchbox", { name: "Find a team or league" }).fill("lakers");
     await page.getByRole("button", { name: "Follow Los Angeles Lakers" }).click();
 
     await page.reload();
-    await expect(selectedLeagues.getByRole("option", { name: "NFL" })).toHaveCount(1);
-    await expect(selectedLeagues.getByRole("option", { name: "Premier League" })).toHaveCount(1);
-    const availableLeagues = standingsSettings.getByRole("listbox", { name: "Available leagues" });
-    await expect(availableLeagues.getByRole("option", { name: "NBA" })).toHaveCount(1);
-    await expect(availableLeagues.getByRole("option", { name: "MLB" })).toHaveCount(1);
+    await standingsSettings.getByRole("button", { name: /Configure standings/ }).click();
+    for (const sport of [/^Football/, /^Basketball/, /^Baseball/]) {
+      await standingsSettings.getByRole("button", { name: sport }).click();
+    }
+    await expect(standingsSettings.getByRole("checkbox", { name: "NFL" })).toBeChecked();
+    await expect(standingsSettings.getByRole("checkbox", { name: "NBA" })).not.toBeChecked();
+    await expect(standingsSettings.getByRole("checkbox", { name: "MLB" })).not.toBeChecked();
+    // Soccer leagues sit under their country; the country row opens on click (Ben, 2026-09-03).
+    await expect(standingsSettings.getByText("Premier League", { exact: true })).toBeHidden();
+    // Sports collapse too (Ben, 2026-09-04): open Soccer, then England.
+    await standingsSettings.getByRole("button", { name: /^Soccer/ }).click();
+    await standingsSettings.getByRole("button", { name: /England/ }).click();
+    await expect(standingsSettings.getByText("Premier League", { exact: true })).toBeVisible();
+    await expect(standingsSettings.getByRole("checkbox", { name: "Premier League" })).toBeChecked();
+    await expect(
+      standingsSettings.getByRole("checkbox", { name: "All England leagues" })
+    ).toBeChecked();
 
     await page.goto("/sports");
     const picker = page.getByRole("button", { name: "Select standings league" });

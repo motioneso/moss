@@ -15,6 +15,8 @@ export type { CardPadding, CardProps } from "./card.js";
 export { CategoryDot } from "./category-dot.js";
 export type { CategoryDotProps } from "./category-dot.js";
 export { Chip } from "./chip.js";
+export { Combobox } from "./combobox.js";
+export type { ComboboxOption, ComboboxProps } from "./combobox.js";
 export type { ChipProps } from "./chip.js";
 export { DayCell } from "./day-cell.js";
 export type { DayCellProps } from "./day-cell.js";

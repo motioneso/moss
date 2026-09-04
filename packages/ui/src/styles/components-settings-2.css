@@ -749,20 +749,63 @@
 .vselect__rw {
   color: var(--text-subtle);
 }
-.theme-row {
+.theme-card {
   border: var(--border-w) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
+  transition: var(--transition-control);
 }
-.theme-row.is-active {
+.theme-card:hover {
+  border-color: var(--border-strong);
+}
+.theme-card.is-active {
   border-color: var(--accent);
-  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
 }
-.theme-row__select {
-  border: 0;
-  background: transparent;
-  color: var(--text);
+.theme-card.is-editing {
+  border-color: var(--accent);
+  border-style: dashed;
+}
+.theme-card__name {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
   font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+.theme-thumb {
+  background: var(--paper);
+  border: var(--border-w) solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.theme-thumb__card {
+  background: var(--surface);
+  border: var(--border-w) solid var(--line-subtle);
+  border-radius: var(--radius-xs);
+}
+.theme-thumb__line {
+  border-radius: var(--radius-pill);
+}
+.theme-thumb__line--ink {
+  background: var(--ink);
+}
+.theme-thumb__line--soft {
+  background: var(--ink-3);
+}
+.theme-thumb__accent {
+  background: var(--accent);
+  border-radius: var(--radius-xs);
+}
+.theme-thumb__gold {
+  background: var(--gold);
+  border-radius: var(--radius-pill);
+}
+.theme-editor__foot {
+  border-top: var(--border-w) solid var(--border-subtle);
+}
+.theme-slot-group__hint {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 .theme-token {
   border: var(--border-w) solid var(--border);
@@ -814,6 +857,58 @@
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   color: var(--ink-3);
+}
+.theme-preview__card {
+  background: var(--surface);
+  border: var(--border-w) solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+.theme-preview__cardtitle {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+}
+.theme-preview__cardline {
+  background: var(--surface-3);
+  border-radius: var(--radius-pill);
+}
+.theme-preview__gold {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--gold);
+}
+.theme-preview__link {
+  color: var(--accent);
+  font-weight: var(--weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.theme-preview__link:hover {
+  color: var(--accent-hover);
+}
+.theme-preview__rowtitle {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+.theme-preview__rowmeta {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.theme-preview__callout {
+  background: var(--accent-soft);
+  color: var(--accent-soft-fg);
+  border: var(--border-w) solid var(--accent-soft-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+.theme-preview__callouttitle {
+  font-weight: var(--weight-semibold);
 }
 .mdl__edit-btn,
 .mdl__toggle-btn,

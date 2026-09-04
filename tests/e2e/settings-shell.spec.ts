@@ -67,7 +67,9 @@ test("desktop shell renders grouped IA, merged panes, and history-aware mode cha
     "Your data",
     "Danger zone"
   ]) {
-    await expect(page.getByText(section, { exact: true })).toBeVisible();
+    // .first(): the Weather group also has a "Location" field label, so the exact-text match
+    // can resolve to two elements; the group title is the first in document order.
+    await expect(page.getByText(section, { exact: true }).first()).toBeVisible();
   }
 
   await nav.getByRole("button", { name: "Modules" }).click();

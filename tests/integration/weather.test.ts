@@ -228,7 +228,7 @@ describe("weather integration", () => {
       expect(data.icon).toBe("sun");
       expect(data.condition).toBe("Clear sky");
       expect(data.location).toBe("San Francisco, US");
-      expect(data.unit).toBe("metric");
+      expect(data.unit).toBe("imperial");
       expect(data.humidity).toBe(50);
       expect(data.dewPoint).toBe(10);
       expect(data.windSpeed).toBe(8);
@@ -274,17 +274,17 @@ describe("weather integration", () => {
         srv.inject({ method: "GET", url: "/api/weather/today", headers: { cookie } });
 
       await saveLocation({ lat: 37.77, lon: -122.42, label: "San Francisco, US" });
-      expect((await getToday()).json<GetWeatherTodayResponse>().data?.unit).toBe("metric");
-      expect(String(fakeFetch.mock.calls[0]?.[0] ?? "")).toContain("temperature_unit=celsius");
+      expect((await getToday()).json<GetWeatherTodayResponse>().data?.unit).toBe("imperial");
+      expect(String(fakeFetch.mock.calls[0]?.[0] ?? "")).toContain("temperature_unit=fahrenheit");
 
       await srv.inject({
         method: "PUT",
         url: "/api/me/weather-unit",
         headers: { cookie, "content-type": "application/json" },
-        payload: { unit: "imperial" }
+        payload: { unit: "metric" }
       });
-      expect((await getToday()).json<GetWeatherTodayResponse>().data?.unit).toBe("imperial");
-      expect(String(fakeFetch.mock.calls[1]?.[0] ?? "")).toContain("temperature_unit=fahrenheit");
+      expect((await getToday()).json<GetWeatherTodayResponse>().data?.unit).toBe("metric");
+      expect(String(fakeFetch.mock.calls[1]?.[0] ?? "")).toContain("temperature_unit=celsius");
 
       await saveLocation({ lat: 51.5074, lon: -0.1278, label: "London, UK" });
       expect((await getToday()).json<GetWeatherTodayResponse>().data?.location).toBe("London, UK");

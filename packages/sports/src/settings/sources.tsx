@@ -1,16 +1,17 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Note } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
 import type {
   CompetitionRef,
+  PreviewSportsSourceAssignmentsResponse,
   SportsBuiltinSourceDto,
   SportsCustomSourceDto,
   SportsFollowDto,
   SportsSourceAssignmentTarget,
   TeamRef
 } from "@moss/shared";
-import { Check, CircleAlert } from "lucide-react";
+import { Check, CircleAlert, Newspaper, Plus } from "lucide-react";
 
 import {
   confirmSportsSourceAssignments,
@@ -36,11 +37,30 @@ import { SourceAssignmentPicker, sourceTargetDisplayLabel } from "./source-assig
    contributing to one shared front page. */
 
 const PREVIEW_REJECTION_COPY: Record<string, string> = {
-  policy: "That publication isn't allowed by the content policy.",
+  policy:
+    "That site redirects somewhere else, so we can't add it. Try the address it sends you to.",
   invalid_input: "That doesn't look like a publication we can check — try a homepage link.",
   unreachable: "We couldn't reach that site. Check the address and try again.",
-  not_https: "Only HTTPS links or bare domains are accepted."
+  not_https: "Only HTTPS links or bare domains are accepted.",
+  not_found: "That subreddit doesn't exist.",
+  auth_required: "That subreddit is private or restricted, so Moss can't read it.",
+  rate_limited: "Reddit is rate limiting Moss. Try again in a few minutes.",
+  stale_source: "That publication has changed since it was added. Remove it and add it again."
 };
+
+/** The edit-coverage flow said "could not be verified" whatever the reason (Ben, 2026-09-04). */
+function assignmentPreviewFailureCopy(result: PreviewSportsSourceAssignmentsResponse): string {
+  if (result.status === "rejected") {
+    return (
+      (result.reason ? PREVIEW_REJECTION_COPY[result.reason] : undefined) ??
+      "Those assignments could not be verified."
+    );
+  }
+  if (result.status === "unavailable") {
+    return "Updating coverage needs a configured JSON-capable AI model.";
+  }
+  return "Those assignments could not be verified.";
+}
 
 const HEALTH_BADGE: Record<
   SportsCustomSourceDto["healthState"],
@@ -53,6 +73,36 @@ const HEALTH_BADGE: Record<
   auth_required: { tone: "red", label: "Needs login" },
   disabled: { tone: "neutral", label: "Disabled" }
 };
+
+/* ESPN's own mark, served from a host the module already allows in the web CSP img-src.
+   Custom sources get their publication favicon through the module's own icon route (#2211),
+   which fetches server-side because arbitrary publisher hosts are blocked by the CSP. */
+const ESPN_LOGO_URL = "https://a.espncdn.com/i/espn/espn_logos/espn_red.png";
+
+export function sportsSourceIconUrl(sourceId: string): string {
+  return `/api/sports/sources/${encodeURIComponent(sourceId)}/icon`;
+}
+
+function SourceIcon(props: { logoUrl?: string | null }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const logoUrl = props.logoUrl && props.logoUrl !== failedUrl ? props.logoUrl : null;
+  return (
+    <span className="sp-src__item-icon" aria-hidden="true">
+      {logoUrl ? (
+        <img
+          src={logoUrl}
+          alt=""
+          aria-hidden="true"
+          width={24}
+          height={24}
+          onError={() => setFailedUrl(logoUrl)}
+        />
+      ) : (
+        <Newspaper size={16} />
+      )}
+    </span>
+  );
+}
 
 function SourceError(props: { children: string }) {
   return (
@@ -108,9 +158,16 @@ export function AddSourceFlow(props: {
   const [selectedTargets, setSelectedTargets] = useState<Map<string, SportsSourceAssignmentTarget>>(
     new Map()
   );
-  const [exactTargetUrls, setExactTargetUrls] = useState<Map<string, string>>(new Map());
   const [authorizationAccepted, setAuthorizationAccepted] = useState(false);
   const [added, setAdded] = useState(false);
+  // The preview card lands below the fold once coverage is picked; bring it into view when it
+  // appears (Ben, 2026-09-03).
+  const candidateRef = useRef<HTMLDivElement | null>(null);
+  const showCandidate = preview?.status === "ok" && Boolean(preview.candidate);
+  useEffect(() => {
+    if (showCandidate)
+      candidateRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }, [showCandidate]);
 
   const invalidate = () =>
     void queryClient.invalidateQueries({ queryKey: sportsQueryKeys.sources });
@@ -129,7 +186,6 @@ export function AddSourceFlow(props: {
       setInput("");
       setPreview(null);
       setSelectedTargets(new Map());
-      setExactTargetUrls(new Map());
       setAuthorizationAccepted(false);
       setAdded(true);
       invalidate();
@@ -144,12 +200,8 @@ export function AddSourceFlow(props: {
     setPreview(null);
     previewMutation.mutate({
       url: trimmed,
-      assignments: [...selectedTargets].map(([key, target]) => ({
-        target,
-        ...(exactTargetUrls.get(key)?.trim()
-          ? { exactTargetUrl: exactTargetUrls.get(key)!.trim() }
-          : {})
-      }))
+      // One text box only: coverage ticks decide the scope, none ticked means general (Ben, 2026-09-03).
+      assignments: [...selectedTargets.values()].map((target) => ({ target }))
     });
   }
 
@@ -176,7 +228,6 @@ export function AddSourceFlow(props: {
   function reset() {
     setPreview(null);
     setSelectedTargets(new Map());
-    setExactTargetUrls(new Map());
     setAuthorizationAccepted(false);
     confirmMutation.reset();
   }
@@ -223,7 +274,7 @@ export function AddSourceFlow(props: {
             className="jds-input"
             type="text"
             value={input}
-            placeholder="theathletic.com"
+            placeholder="theathletic.com or r/nfl"
             disabled={busy}
             onChange={(event) => {
               setInput(event.target.value);
@@ -236,83 +287,77 @@ export function AddSourceFlow(props: {
         </div>
       </form>
 
-      <p className="sp-src__hint">Coverage (optional — leave blank to add unassigned):</p>
-      <SourceAssignmentPicker
-        follows={props.follows}
-        competitionsByKey={props.competitionsByKey}
-        teamsByCompetition={props.teamsByCompetition}
-        selected={new Set(selectedTargets.keys())}
-        onToggle={toggleTarget}
-        disabled={busy}
-        idPrefix="sp-addsource-assign"
-      />
-      {[...selectedTargets].map(([key, target]) => {
-        const id = `sp-target-${key}`;
-        return (
-          <label key={key} className="sp-src__label" htmlFor={id}>
-            Exact target URL for{" "}
-            {sourceTargetDisplayLabel(
-              target,
-              props.follows,
-              props.competitionsByKey,
-              props.teamsByCompetition
-            )}{" "}
-            (optional)
-            <input
-              id={id}
-              className="jds-input"
-              type="url"
-              placeholder="https://publisher.example/team-or-league-news"
-              value={exactTargetUrls.get(key) ?? ""}
-              disabled={busy}
-              onChange={(event) => {
-                const value = event.target.value;
-                setExactTargetUrls((current) => new Map(current).set(key, value));
-                setPreview(null);
-                setAuthorizationAccepted(false);
-              }}
-            />
-          </label>
-        );
-      })}
-
+      {/* Coverage stays hidden until a publication is entered (Ben, 2026-09-03). */}
+      {input.trim() ? (
+        <>
+          <p className="sp-src__hint">Coverage (optional. Leave blank to add unassigned):</p>
+          <SourceAssignmentPicker
+            follows={props.follows}
+            competitionsByKey={props.competitionsByKey}
+            teamsByCompetition={props.teamsByCompetition}
+            selected={new Set(selectedTargets.keys())}
+            onToggle={toggleTarget}
+            disabled={busy}
+            idPrefix="sp-addsource-assign"
+          />
+        </>
+      ) : null}
       {errorMessage ? <SourceError>{errorMessage}</SourceError> : null}
 
       {preview?.status === "ok" && preview.candidate ? (
-        <div className="sp-src__candidate">
+        <div
+          ref={candidateRef}
+          className="sp-src__candidate jds-card jds-card--sunken jds-card--pad-lg"
+        >
           {preview.duplicateOfSourceId ? (
-            <Note>That publication is already one of your custom sources.</Note>
-          ) : null}
-          <p className="sp-src__candidate-label">{preview.candidate.label}</p>
-          {preview.candidate.sampleHeadlines.map((headline) => (
-            <p key={headline} className="sp-src__hint">
-              {headline}
+            <p className="sp-src__dupe" role="status">
+              <CircleAlert size={16} aria-hidden="true" />
+              <span>
+                <b>Already added.</b> {preview.candidate.label} is one of your custom sources, so
+                there is nothing to add. Edit its coverage in the list above instead.
+              </span>
             </p>
-          ))}
-          {preview.candidate.targets.length > 0 ? (
-            <ul className="sp-src__assignments" aria-label="Coverage">
-              {preview.candidate.targets.map((target) => (
-                <li key={sportsSourceTargetKey(target.target)}>
-                  <AssignmentIdentity
-                    target={target.target}
-                    label={target.label}
-                    follows={props.follows}
-                    teamsByCompetition={props.teamsByCompetition}
-                  />
-                </li>
-              ))}
-            </ul>
           ) : null}
-          {preview.candidate.targets.map((target) => (
-            <div key={`samples-${sportsSourceTargetKey(target.target)}`}>
-              {target.sampleHeadlines.map((headline) => (
-                <p key={headline} className="sp-src__hint">
-                  {headline}
-                </p>
-              ))}
+          <div className="sp-src__candidate-head">
+            <SourceIcon
+              logoUrl={
+                preview.duplicateOfSourceId
+                  ? sportsSourceIconUrl(preview.duplicateOfSourceId)
+                  : null
+              }
+            />
+            <p className="sp-src__candidate-label">{preview.candidate.label}</p>
+            <span className="jds-badge jds-badge--neutral jds-badge--pill">Preview</span>
+          </div>
+          {preview.candidate.sampleHeadlines.length > 0 ? (
+            <div className="sp-src__candidate-block">
+              <p className="jds-eyebrow">Sample headlines</p>
+              <ul className="sp-src__candidate-list">
+                {preview.candidate.sampleHeadlines.map((headline) => (
+                  <li key={headline}>{headline}</li>
+                ))}
+              </ul>
             </div>
-          ))}
-          {preview.authorizationAcknowledgement ? (
+          ) : null}
+          {preview.candidate.targets.length > 0 ? (
+            <div className="sp-src__candidate-block">
+              <p className="jds-eyebrow">Coverage</p>
+              <ul className="sp-src__assignments" aria-label="Coverage">
+                {preview.candidate.targets.map((target) => (
+                  <li key={sportsSourceTargetKey(target.target)}>
+                    <AssignmentIdentity
+                      target={target.target}
+                      label={target.label}
+                      follows={props.follows}
+                      teamsByCompetition={props.teamsByCompetition}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {/* Per-coverage sample headlines duplicated the block above; dropped (Ben, 2026-09-03). */}
+          {preview.authorizationAcknowledgement && !preview.duplicateOfSourceId ? (
             <label className="jds-check sp-src__check">
               <input
                 type="checkbox"
@@ -327,15 +372,13 @@ export function AddSourceFlow(props: {
             </label>
           ) : null}
           <div className="sp-src__addrow">
-            <Button
-              size="sm"
-              disabled={busy || !authorizationAccepted || Boolean(preview.duplicateOfSourceId)}
-              onClick={confirm}
-            >
-              {confirmMutation.isPending ? "Adding…" : "Add this source"}
-            </Button>
+            {preview.duplicateOfSourceId ? null : (
+              <Button size="sm" disabled={busy || !authorizationAccepted} onClick={confirm}>
+                {confirmMutation.isPending ? "Adding…" : "Add this source"}
+              </Button>
+            )}
             <Button variant="secondary" size="sm" disabled={busy} onClick={reset}>
-              Cancel
+              {preview.duplicateOfSourceId ? "Close" : "Cancel"}
             </Button>
           </div>
         </div>
@@ -375,6 +418,8 @@ export function SportsSourcesSection(props: {
     result: Awaited<ReturnType<typeof previewSportsSourceRecipe>>;
   } | null>(null);
   const [recipeAuthorizationAccepted, setRecipeAuthorizationAccepted] = useState(false);
+  // The add form stays out of the way until the user asks for it (Ben, 2026-09-03).
+  const [addingSource, setAddingSource] = useState(false);
 
   const invalidate = () =>
     void queryClient.invalidateQueries({ queryKey: sportsQueryKeys.sources });
@@ -467,11 +512,13 @@ export function SportsSourcesSection(props: {
 
   return (
     <section className="sp-src" aria-label="Sports news sources">
-      <p className="sp-src__kicker">News sources</p>
-      <p className="sp-src__hint">
-        Choose which sports, leagues, and teams each source covers. Matching publishers are mixed
-        together in Sports news.
-      </p>
+      <div className="sp-src__head">
+        <h2 className="jds-section-title">News sources</h2>
+        <p className="jds-section-sub">
+          Choose which sports, leagues, and teams each source covers. Matching publishers are mixed
+          together in Sports news.
+        </p>
+      </div>
       {sourcesQuery.isError ? (
         <SourceError>Could not load your sports news sources. Try again.</SourceError>
       ) : null}
@@ -482,6 +529,7 @@ export function SportsSourcesSection(props: {
             <li className="sp-src__item">
               <div className="sp-src__item-row">
                 <div className="sp-src__identity">
+                  <SourceIcon logoUrl={ESPN_LOGO_URL} />
                   <span className="sp-src__item-label">{espn.label}</span>
                   <Badge tone="steel">Built-in</Badge>
                 </div>
@@ -572,19 +620,22 @@ export function SportsSourcesSection(props: {
               <li key={source.id} className="sp-src__item">
                 <div className="sp-src__item-row">
                   <div className="sp-src__identity">
+                    <SourceIcon logoUrl={sportsSourceIconUrl(source.id)} />
                     <span className="sp-src__item-label">{source.label}</span>
                     {badge ? <Badge tone={badge.tone}>{badge.label}</Badge> : null}
                   </div>
                   <div className="sp-src__actions">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      aria-label={`Retry ${source.label}`}
-                      disabled={recoveryBusy}
-                      onClick={() => retryMutation.mutate(source.id)}
-                    >
-                      {retrying ? "Checking…" : "Retry"}
-                    </Button>
+                    {source.healthState === "healthy" ? null : (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        aria-label={`Retry ${source.label}`}
+                        disabled={recoveryBusy}
+                        onClick={() => retryMutation.mutate(source.id)}
+                      >
+                        {retrying ? "Checking…" : "Retry"}
+                      </Button>
+                    )}
                     {showRebuild ? (
                       <Button
                         variant="secondary"
@@ -809,7 +860,9 @@ export function SportsSourcesSection(props: {
                     ) : null}
                     {assignmentPreview?.sourceId === source.id &&
                     assignmentPreview.result.status !== "ok" ? (
-                      <SourceError>Those assignments could not be verified.</SourceError>
+                      <SourceError>
+                        {assignmentPreviewFailureCopy(assignmentPreview.result)}
+                      </SourceError>
                     ) : null}
                     {assignmentPreviewMutation.isError || assignmentConfirmMutation.isError ? (
                       <SourceError>Could not update assignments. Try again.</SourceError>
@@ -832,12 +885,26 @@ export function SportsSourcesSection(props: {
         <SourceError>Could not rebuild that source. Try again.</SourceError>
       ) : null}
       <div className="sp-src__add-section">
-        <p className="sp-src__subheading">Add a source</p>
-        <AddSourceFlow
-          follows={props.follows}
-          competitionsByKey={props.competitionsByKey}
-          teamsByCompetition={props.teamsByCompetition}
-        />
+        {addingSource ? (
+          <>
+            <div className="sp-src__add-head">
+              <p className="sp-src__subheading">Add a source</p>
+              <Button variant="secondary" size="sm" onClick={() => setAddingSource(false)}>
+                Close
+              </Button>
+            </div>
+            <AddSourceFlow
+              follows={props.follows}
+              competitionsByKey={props.competitionsByKey}
+              teamsByCompetition={props.teamsByCompetition}
+            />
+          </>
+        ) : (
+          <Button variant="secondary" size="sm" onClick={() => setAddingSource(true)}>
+            <Plus size={14} aria-hidden="true" />
+            Add a source
+          </Button>
+        )}
       </div>
     </section>
   );

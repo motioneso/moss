@@ -4,17 +4,22 @@
  */
 
 .sp-src {
-  margin-top: var(--space-5);
+  margin-top: var(--space-6);
 }
 
-.sp-src__kicker {
-  margin: 0 0 var(--space-3);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-caps);
+/* Section head matches the other Sports settings sections (jds-section-title + jds-section-sub). */
+.sp-src__head {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-4);
+}
+.sp-src__head > * {
+  margin: 0;
 }
 
 .sp-src__hint {
-  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  margin: var(--space-2) 0 var(--space-3);
+  font-size: var(--text-sm);
   line-height: 1.5;
   color: var(--text-subtle);
 }
@@ -59,7 +64,8 @@
 }
 
 .sp-src__item-label {
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
 }
 
 .sp-src__actions {
@@ -94,9 +100,22 @@
   border-top: var(--border-w) solid var(--border-subtle);
 }
 
+.sp-src__add-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.sp-src__add-head > .sp-src__subheading {
+  margin-bottom: 0;
+}
+
 .sp-src__subheading {
   margin: 0 0 var(--space-3);
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
 }
 
 .sp-src__addflow {
@@ -110,6 +129,8 @@
 .sp-src__label {
   display: block;
   margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
 }
 
 .sp-src__label > .jds-input {
@@ -147,15 +168,91 @@
   margin-top: 0.15em;
 }
 
+/* Duplicate-publication notice: same shape as the error strip, caution tone, no add button. */
+.sp-src__dupe {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-w) solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  color: var(--warn-fg);
+  line-height: 1.45;
+}
+
+.sp-src__dupe svg {
+  flex: none;
+  margin-top: 0.15em;
+}
+
+.sp-src__dupe b {
+  font-weight: var(--weight-semibold);
+}
+
+.sp-src__item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: var(--border-w) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-subtle);
+}
+
+.sp-src__item-icon img {
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: contain;
+}
+
 .sp-src__candidate {
+  display: grid;
+  gap: var(--space-3);
   margin: var(--space-3) 0 0;
-  padding-top: var(--space-3);
-  border-top: var(--border-w) solid var(--border-subtle);
+}
+
+.sp-src__candidate-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .sp-src__candidate-label {
   margin: 0;
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.sp-src__candidate-block {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.sp-src__candidate-block > .jds-eyebrow {
+  margin: 0;
+}
+
+.sp-src__candidate-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.sp-src__candidate .sp-src__assignments {
+  margin: 0;
+}
+
+.sp-src__candidate .sp-src__check {
+  padding: 0;
 }
 
 .sp-src__assign {
@@ -178,9 +275,23 @@
   border: 0;
 }
 
+.sp-src__assign-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sp-src__assign-item {
+  margin: 0;
+  padding: 0;
+}
+
 .sp-src__assign-legend {
   margin-bottom: var(--space-1);
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
 }
 
 .sp-src__assignments {
@@ -195,6 +306,7 @@
 .sp-src__check {
   width: 100%;
   padding: var(--space-1) 0;
+  font-size: var(--text-sm);
 }
 
 .sp-src__assignment-identity {

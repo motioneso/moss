@@ -8,7 +8,7 @@ import type {
   WeatherUnit
 } from "@moss/shared";
 import { formatInZone } from "@moss/shared";
-import { Button } from "@moss/ui";
+import { Button, Combobox, type ComboboxOption } from "@moss/ui";
 import { Check, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -78,6 +78,13 @@ const SUPPORTED_TIME_ZONES = Intl.supportedValuesOf("timeZone")
     };
   })
   .sort((a, b) => a.offsetMinutes - b.offsetMinutes || a.timeZone.localeCompare(b.timeZone));
+
+// Searchable picker options: "(UTC-08:00) America/Los_Angeles" also matches "los angeles".
+export const TIME_ZONE_OPTIONS: readonly ComboboxOption[] = SUPPORTED_TIME_ZONES.map((zone) => ({
+  value: zone.timeZone,
+  label: zone.label,
+  keywords: zone.timeZone.replace(/[_/]/g, " ")
+}));
 
 const DEFAULT_QUIET_HOURS: QuietHoursSettingsDto = {
   enabled: false,
@@ -255,7 +262,7 @@ export function ProfilePane({ me }: PaneProps) {
     queryFn: getWeatherUnitSettings,
     retry: false
   });
-  const weatherUnit: WeatherUnit = weatherUnitQuery.data?.unit ?? "metric";
+  const weatherUnit: WeatherUnit = weatherUnitQuery.data?.unit ?? "imperial";
   const weatherUnitMutation = useMutation({
     mutationFn: putWeatherUnitSettings,
     onSuccess: (data) => {
@@ -312,18 +319,15 @@ export function ProfilePane({ me }: PaneProps) {
         <div className="fld">
           <div className="fld__lbl">Time zone</div>
           <div className="fld__row">
-            <Select
+            <Combobox
               value={locale.timezone}
               aria-label="Time zone"
+              options={TIME_ZONE_OPTIONS}
               disabled={localeQuery.isLoading || localeMutation.isPending}
-              onChange={(event) => updateLocale({ timezone: event.currentTarget.value })}
-            >
-              {SUPPORTED_TIME_ZONES.map((zone) => (
-                <option key={zone.timeZone} value={zone.timeZone}>
-                  {zone.label}
-                </option>
-              ))}
-            </Select>
+              searchPlaceholder="Search time zones"
+              emptyText="No time zone matches."
+              onChange={(timezone) => updateLocale({ timezone })}
+            />
           </div>
         </div>
         <div className="fld">
@@ -364,11 +368,30 @@ export function ProfilePane({ me }: PaneProps) {
 
       <Group
         title="Weather"
-        desc="Search for a place to use instead of approximate timezone-based detection."
+        desc="Temperatures on Today and in the briefing, and the place they are for."
       >
+        <Row
+          name="Unit"
+          desc={`Temperatures are shown in ${weatherUnit === "imperial" ? "Fahrenheit" : "Celsius"}.`}
+          control={
+            <Segmented
+              ariaLabel="Unit"
+              value={weatherUnit}
+              options={[
+                { value: "imperial", label: "Fahrenheit", disabled: weatherUnitBusy },
+                { value: "metric", label: "Celsius", disabled: weatherUnitBusy }
+              ]}
+              onChange={(unit) => weatherUnitMutation.mutate(unit)}
+            />
+          }
+        />
         <Field
-          label="Search for a place"
-          hint="Choose a result to save it as your weather location."
+          label="Location"
+          hint={
+            weatherLocation
+              ? `Using ${weatherLocation.label}.`
+              : "Worked out from your time zone. Search for a place to use instead."
+          }
         >
           <input
             className="jds-input"
@@ -385,19 +408,24 @@ export function ProfilePane({ me }: PaneProps) {
               }
             }}
           />
-        </Field>
-        <Row
-          name="Search"
-          control={
+          <Button
+            size="sm"
+            disabled={!weatherLocationSearch.trim() || weatherLocationSearchMutation.isPending}
+            onClick={() => weatherLocationSearchMutation.mutate(weatherLocationSearch.trim())}
+          >
+            Search
+          </Button>
+          {weatherLocation ? (
             <Button
+              variant="quiet"
               size="sm"
-              disabled={!weatherLocationSearch.trim() || weatherLocationSearchMutation.isPending}
-              onClick={() => weatherLocationSearchMutation.mutate(weatherLocationSearch.trim())}
+              disabled={weatherLocationMutation.isPending}
+              onClick={clearWeatherLocation}
             >
-              Search
+              Use automatic
             </Button>
-          }
-        />
+          ) : null}
+        </Field>
         {weatherLocationSearchMutation.data?.candidates.map((candidate) => (
           <Row
             key={`${candidate.lat}:${candidate.lon}`}
@@ -413,41 +441,6 @@ export function ProfilePane({ me }: PaneProps) {
             }
           />
         ))}
-        <Row
-          name="Manual override"
-          desc={
-            weatherLocation
-              ? `Currently using ${weatherLocation.label}.`
-              : "Using automatic timezone-based location."
-          }
-          control={
-            <div style={{ display: "flex", gap: 8 }}>
-              <Button
-                variant="quiet"
-                size="sm"
-                disabled={!weatherLocation || weatherLocationMutation.isPending}
-                onClick={clearWeatherLocation}
-              >
-                Clear override
-              </Button>
-            </div>
-          }
-        />
-        <Row
-          name="Unit"
-          desc={`Weather temperatures are shown in ${weatherUnit === "imperial" ? "Fahrenheit" : "Celsius"}.`}
-          control={
-            <Segmented
-              ariaLabel="Unit"
-              value={weatherUnit}
-              options={[
-                { value: "metric", label: "Celsius", disabled: weatherUnitBusy },
-                { value: "imperial", label: "Fahrenheit", disabled: weatherUnitBusy }
-              ]}
-              onChange={(unit) => weatherUnitMutation.mutate(unit)}
-            />
-          }
-        />
       </Group>
 
       <Group

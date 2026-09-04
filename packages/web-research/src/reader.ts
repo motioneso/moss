@@ -49,6 +49,7 @@ function isRedirect(status: number): boolean {
 }
 
 const ALLOWED_REQUEST_HEADERS = new Set(["accept", "accept-language"]);
+const USER_AGENT_SHAPE = /^[\x20-\x7e]{1,200}$/;
 
 function normalizeRequestHeaders(
   headers: Readonly<Record<string, string>> | undefined
@@ -206,6 +207,8 @@ export interface FetchWebResourceOptions {
   readonly allowedHosts?: readonly string[];
   readonly method?: WebRequestMethod;
   readonly requestHeaders?: Readonly<Record<string, string>>;
+  /** Replaces the default User-Agent for this request; printable ASCII, at most 200 chars. */
+  readonly userAgent?: string;
   readonly allowedContentTypes?: readonly string[];
   readonly beforeRequest?: (hop: FetchWebResourceHop) => boolean | void | Promise<boolean | void>;
   readonly robots?: RobotsGate;
@@ -272,8 +275,15 @@ async function fetchWebResourceWithBody<TBody>(
     : undefined;
   const method = options.method ?? "GET";
   if (method !== "GET" && method !== "HEAD") return { ok: false, reason: "blocked" };
-  const requestHeaders = normalizeRequestHeaders(options.requestHeaders);
-  if (!requestHeaders) return { ok: false, reason: "blocked" };
+  const normalizedHeaders = normalizeRequestHeaders(options.requestHeaders);
+  if (!normalizedHeaders) return { ok: false, reason: "blocked" };
+  if (options.userAgent !== undefined && !USER_AGENT_SHAPE.test(options.userAgent)) {
+    return { ok: false, reason: "blocked" };
+  }
+  const requestHeaders: Readonly<Record<string, string>> =
+    options.userAgent === undefined
+      ? normalizedHeaders
+      : { ...normalizedHeaders, "user-agent": options.userAgent };
   const allowedContentTypes = options.allowedContentTypes
     ? new Set(options.allowedContentTypes.map((value) => value.toLowerCase()))
     : undefined;

@@ -336,7 +336,7 @@ function FeaturedStoryBand(props: { story: Headline; onStoryChanged: StoryFeedba
   const { story } = props;
   const [broken, setBroken] = useState(false);
   return (
-    <>
+    <div className="sp-scorebar__storywrap sp-fbhost">
       <a className="sp-scorebar__story" href={story.url} target="_blank" rel="noreferrer">
         {story.imageUrl && !broken ? (
           <img
@@ -358,7 +358,7 @@ function FeaturedStoryBand(props: { story: Headline; onStoryChanged: StoryFeedba
         surface="sports"
         onChanged={props.onStoryChanged}
       />
-    </>
+    </div>
   );
 }
 

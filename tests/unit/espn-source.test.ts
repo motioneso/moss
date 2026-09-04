@@ -187,6 +187,57 @@ describe("EspnDatasetAdapter", () => {
     expect(table.sections[0]?.rows.map((r) => r.rank)).toEqual([1, 2]);
   });
 
+  // College football ?level=3 entries carry "wins" and an "overall" record string but no
+  // "losses"/"winPercent" stat at all (verified live 2026-09-03); the parser must read the
+  // record string or every FBS team shows as undefeated.
+  it("reads losses from the overall record when ESPN omits the losses stat (college football)", async () => {
+    const payload = {
+      name: "NCAA Football",
+      children: [
+        {
+          name: "Big Ten Conference",
+          standings: {
+            entries: [
+              {
+                team: { abbreviation: "OSU", displayName: "Ohio State Buckeyes" },
+                stats: [
+                  { name: "wins", value: 10, displayValue: "10" },
+                  { name: "overall", displayValue: "10-2" }
+                ]
+              },
+              {
+                team: { abbreviation: "PSU", displayName: "Penn State Nittany Lions" },
+                stats: [{ name: "overall", displayValue: "9-3-1" }]
+              }
+            ]
+          }
+        }
+      ]
+    };
+    const table = (await fetchDataset(
+      "standings",
+      { competitionKey: "ncaaf" },
+      okFetch(payload)
+    )) as {
+      sections: { label: string | null; rows: Record<string, unknown>[] }[];
+    };
+    expect(table.sections.map((s) => s.label)).toEqual(["Big Ten Conference"]);
+    expect(table.sections[0]?.rows[0]).toMatchObject({
+      teamKey: "osu",
+      wins: 10,
+      losses: 2,
+      draws: null,
+      winPercent: 10 / 12
+    });
+    expect(table.sections[0]?.rows[1]).toMatchObject({
+      teamKey: "psu",
+      wins: 9,
+      losses: 3,
+      draws: 1,
+      winPercent: 9.5 / 13
+    });
+  });
+
   it("parses news into Headline[]", async () => {
     const headlines = (await fetchDataset(
       "headlines",
