@@ -9,8 +9,13 @@ import { newsQueryKeys } from "./query-keys.js";
 import { createNewsStoryFeedback } from "./story-feedback-client.js";
 import "./story-feedback.css";
 
-function withoutStory(data: NewsOverviewResponse, targetRef: string): NewsOverviewResponse {
-  const keep = (headline: NewsHeadline) => headline.feedbackRef !== targetRef;
+function withoutStory(
+  data: NewsOverviewResponse,
+  targetRef: string,
+  headlineId?: string
+): NewsOverviewResponse {
+  const keep = (headline: NewsHeadline) =>
+    headline.feedbackRef !== targetRef && (headlineId ? headline.id !== headlineId : true);
   return {
     ...data,
     topStories: data.topStories.filter(keep),
@@ -44,11 +49,12 @@ function StoryFeedbackMenuWithTarget(props: {
   const mutation = useMutation({
     mutationFn: (input: { kind: "more_like_this" | "less_like_this"; reason?: string }) =>
       createNewsStoryFeedback({ targetRef: targetRef!, surface: props.surface, ...input }),
-    onSuccess: () => {
-      queryClient.setQueryData<NewsOverviewResponse>(newsQueryKeys.overview, (current) =>
-        current && targetRef ? withoutStory(current, targetRef) : current
-      );
-      void queryClient.invalidateQueries({ queryKey: newsQueryKeys.overview });
+    onSuccess: (_result, variables) => {
+      if (variables.kind === "less_like_this") {
+        queryClient.setQueryData<NewsOverviewResponse>(newsQueryKeys.overview, (current) =>
+          current ? withoutStory(current, targetRef, props.headline.id) : current
+        );
+      }
       void queryClient.invalidateQueries({ queryKey: newsQueryKeys.feedback });
       setReasonOpen(false);
       setReason("");
