@@ -164,7 +164,7 @@ export function StandingsLeaguesSection(props: {
                     <span className="jds-check__box">
                       <Check size={13} aria-hidden="true" />
                     </span>
-                    <span className="jds-label">{sport.label}</span>
+                    <span className="sp-standings-tree__sport-label">{sport.label}</span>
                   </label>
                   <span className="jds-badge jds-badge--steel">
                     {sportChosen.length} of {sportCompetitions.length}
@@ -264,7 +264,7 @@ function LeagueCheck(props: {
   readonly onToggle: (competitionKey: string, checked: boolean) => void;
 }) {
   return (
-    <label className="jds-check sp-standings-tree__check">
+    <label className="jds-check sp-standings-tree__check sp-standings-tree__league">
       <input
         type="checkbox"
         value={props.competition.competitionKey}

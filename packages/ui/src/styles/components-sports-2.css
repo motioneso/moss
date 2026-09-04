@@ -786,6 +786,14 @@
 .sp-standings-settings__toggle:hover > svg {
   color: var(--text);
 }
+/* Configure standings type hierarchy: sport heading > country row > league row. */
+.sp-standings-tree__sport-label {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+.sp-standings-tree__league > span:last-child {
+  font-weight: var(--weight-regular);
+}
 .sp-standings-tree__toggle {
   border: 0;
   background: transparent;

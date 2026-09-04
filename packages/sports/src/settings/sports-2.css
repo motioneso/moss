@@ -281,9 +281,6 @@
   display: grid;
   gap: var(--space-2);
 }
-.sp-standings-tree__sport > .sp-standings-tree__row .jds-label {
-  margin: 0;
-}
 .sp-standings-tree__region {
   display: grid;
   gap: var(--space-2);
