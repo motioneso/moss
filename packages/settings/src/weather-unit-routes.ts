@@ -62,7 +62,7 @@ export function registerWeatherUnitRoutes(
 }
 
 function normalizeWeatherUnit(value: unknown): WeatherUnit {
-  return value === "imperial" ? "imperial" : DEFAULT_WEATHER_UNIT;
+  return value === "metric" || value === "imperial" ? value : DEFAULT_WEATHER_UNIT;
 }
 
 function sanitizeWeatherUnit(value: unknown): WeatherUnit {

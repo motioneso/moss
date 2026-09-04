@@ -85,7 +85,7 @@ export class WeatherService {
     const raw = await this.dataContext.withDataContext(accessContext, (scopedDb) =>
       this.preferencesRepo.get(scopedDb, WEATHER_UNIT_KEY)
     );
-    return raw === "imperial" ? "imperial" : DEFAULT_WEATHER_UNIT;
+    return raw === "metric" || raw === "imperial" ? raw : DEFAULT_WEATHER_UNIT;
   }
 
   private async resolveLocation(
