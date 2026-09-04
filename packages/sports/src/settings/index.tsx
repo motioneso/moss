@@ -67,8 +67,8 @@ function StoryPreferencesSection() {
 
   return (
     <section className="sp-feedback-settings" aria-label="Story preferences">
-      <h2 className="sp-feedback-settings__title">Story preferences</h2>
-      <p className="sp-feedback-settings__note">
+      <h2 className="jds-section-title sp-feedback-settings__title">Story preferences</h2>
+      <p className="jds-section-sub sp-feedback-settings__note">
         A major story about a subject you asked to see less of may still appear.
       </p>
       {feedbackQuery.isError ? <Note>Could not load story preferences. Try again.</Note> : null}
@@ -825,7 +825,6 @@ export default function SportsSettings() {
         title="Sports"
         desc="Follow competitions or teams to see them on your Sports page and in briefings."
       />
-      <StandingsLeaguesSection competitions={competitions} />
       <FollowedSummary
         follows={follows}
         competitionsByKey={competitionsByKey}
@@ -899,6 +898,7 @@ export default function SportsSettings() {
         teamsByCompetition={teamsByCompetition}
       />
       <StoryPreferencesSection />
+      <StandingsLeaguesSection competitions={competitions} />
     </>
   );
 }

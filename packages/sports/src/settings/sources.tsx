@@ -467,11 +467,13 @@ export function SportsSourcesSection(props: {
 
   return (
     <section className="sp-src" aria-label="Sports news sources">
-      <p className="sp-src__kicker">News sources</p>
-      <p className="sp-src__hint">
-        Choose which sports, leagues, and teams each source covers. Matching publishers are mixed
-        together in Sports news.
-      </p>
+      <div className="sp-src__head">
+        <h2 className="jds-section-title">News sources</h2>
+        <p className="jds-section-sub">
+          Choose which sports, leagues, and teams each source covers. Matching publishers are mixed
+          together in Sports news.
+        </p>
+      </div>
       {sourcesQuery.isError ? (
         <SourceError>Could not load your sports news sources. Try again.</SourceError>
       ) : null}

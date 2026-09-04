@@ -208,10 +208,13 @@
   margin-top: var(--space-6);
 }
 
+/* Standings leagues (Ben 2026-09-03): last section of the pane, collapsed behind a header row.
+   The heading itself is the toggle; a count badge and a preview of the chosen leagues keep the
+   collapsed row informative. */
 .sp-standings-settings {
   display: grid;
   gap: var(--space-3);
-  margin-bottom: var(--space-6);
+  margin-top: var(--space-6);
 }
 .sp-standings-settings__head {
   display: grid;
@@ -219,6 +222,32 @@
 }
 .sp-standings-settings__head > * {
   margin: 0;
+}
+.sp-standings-settings__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.sp-standings-settings__toggle > svg {
+  flex: none;
+}
+.sp-standings-settings__preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+.sp-standings-settings__panel {
+  display: grid;
+  gap: var(--space-3);
+}
+.sp-standings-settings__panel[hidden] {
+  display: none;
 }
 .sp-standings-transfer {
   display: grid;

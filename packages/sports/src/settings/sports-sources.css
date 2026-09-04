@@ -7,14 +7,19 @@
   margin-top: var(--space-5);
 }
 
-.sp-src__kicker {
-  margin: 0 0 var(--space-3);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-caps);
+/* Section head matches the other Sports settings sections (jds-section-title + jds-section-sub). */
+.sp-src__head {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-4);
+}
+.sp-src__head > * {
+  margin: 0;
 }
 
 .sp-src__hint {
   margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  font-size: var(--text-sm);
   line-height: 1.5;
   color: var(--text-subtle);
 }
@@ -59,7 +64,8 @@
 }
 
 .sp-src__item-label {
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
 }
 
 .sp-src__actions {
@@ -96,7 +102,8 @@
 
 .sp-src__subheading {
   margin: 0 0 var(--space-3);
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
 }
 
 .sp-src__addflow {
@@ -110,6 +117,8 @@
 .sp-src__label {
   display: block;
   margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
 }
 
 .sp-src__label > .jds-input {
@@ -180,7 +189,8 @@
 
 .sp-src__assign-legend {
   margin-bottom: var(--space-1);
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
 }
 
 .sp-src__assignments {
@@ -195,6 +205,7 @@
 .sp-src__check {
   width: 100%;
   padding: var(--space-1) 0;
+  font-size: var(--text-sm);
 }
 
 .sp-src__assignment-identity {

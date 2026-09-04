@@ -772,3 +772,25 @@
   font-size: var(--text-2xs);
   color: var(--text-subtle);
 }
+
+/* Standings leagues settings (Ben 2026-09-03): the heading is a collapse toggle; its chevron sits
+   faint until hovered. The native multi-select lists take the pane surface, not browser white. */
+.sp-standings-settings__toggle {
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+.sp-standings-settings__toggle > svg {
+  color: var(--text-faint);
+}
+.sp-standings-settings__toggle:hover > svg {
+  color: var(--text);
+}
+.sp-standings-transfer .jds-select[multiple] {
+  color-scheme: dark;
+  background: var(--surface);
+  color: var(--text);
+}
+.sp-standings-transfer .jds-select[multiple] optgroup {
+  color: var(--text-subtle);
+}
