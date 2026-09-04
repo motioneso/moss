@@ -178,7 +178,14 @@
   text-align: left;
   align-items: flex-start;
 }
+/* #2253: text-overflow doesn't reliably ellipsis a flex column's own list-item box in Chromium —
+   the row clips the name at its edge with no dots. A block-level span inside the li is the
+   standard fix: the span, not the li, gets the width-constrained ellipsis treatment. */
 .sp-tk__scorers li {
+  min-width: 0;
+}
+.sp-tk__scorers li > span {
+  display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -489,7 +496,13 @@
   text-align: left;
   align-items: flex-start;
 }
+/* #2253: same Chromium flex/ellipsis fix as .sp-tk__scorers above — the span inside each li
+   carries the width-constrained ellipsis, not the li itself. */
 .sp-feat__scorers li {
+  min-width: 0;
+}
+.sp-feat__scorers li > span {
+  display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

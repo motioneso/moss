@@ -387,22 +387,33 @@ function FeaturedTeamCard(props: {
                     crestUrl: rm.opponentCrestUrl,
                     scorers: rm.opponentScorers
                   };
+            // #2253: reserve the space on BOTH outer sides whenever either team has scorer data,
+            // so a one-sided list (or hockey's frequent single-team gap) doesn't pull the crests
+            // off center — but render neither, as before, on the far more common game with no
+            // scorer data at all.
+            const hasScorers = Boolean(home.scorers || away.scorers);
             return (
               <div className="sp-feat__result">
-                {home.scorers ? (
+                {hasScorers ? (
                   <ul className="sp-feat__scorers sp-feat__scorers--home">
-                    {home.scorers.map((s) => (
-                      <li key={s}>{s}</li>
+                    {(home.scorers ?? []).map((s) => (
+                      <li key={s}>
+                        <span>{s}</span>
+                      </li>
                     ))}
                   </ul>
                 ) : null}
                 <Crest name={home.name} crestUrl={home.crestUrl} size="sm" />
-                <p className="sp-feat__score">{rm.scoreText}</p>
+                <p className="sp-feat__score">
+                  {`${rm.resultLabel} ${rm.homeScore}–${rm.awayScore}`}
+                </p>
                 <Crest name={away.name} crestUrl={away.crestUrl} size="sm" />
-                {away.scorers ? (
+                {hasScorers ? (
                   <ul className="sp-feat__scorers sp-feat__scorers--away">
-                    {away.scorers.map((s) => (
-                      <li key={s}>{s}</li>
+                    {(away.scorers ?? []).map((s) => (
+                      <li key={s}>
+                        <span>{s}</span>
+                      </li>
                     ))}
                   </ul>
                 ) : null}
@@ -557,22 +568,32 @@ export function TickerTeam(props: {
                       crestUrl: rm.opponentCrestUrl,
                       scorers: rm.opponentScorers
                     };
+              // #2253: same fix as FeaturedTeamCard above — reserve both outer slots whenever
+              // either side has scorer data, so a one-sided list doesn't drag the crests off
+              // center; render neither when the game has no scorer data at all.
+              const hasScorers = Boolean(home.scorers || away.scorers);
               return (
                 <div className="sp-tk__result">
-                  {home.scorers ? (
+                  {hasScorers ? (
                     <ul className="sp-tk__scorers sp-tk__scorers--home">
-                      {home.scorers.map((s) => (
-                        <li key={s}>{s}</li>
+                      {(home.scorers ?? []).map((s) => (
+                        <li key={s}>
+                          <span>{s}</span>
+                        </li>
                       ))}
                     </ul>
                   ) : null}
                   <Crest name={home.name} crestUrl={home.crestUrl} size="sm" />
-                  <span className="sp-tk__score">{rm.scoreText}</span>
+                  <span className="sp-tk__score">
+                    {`${rm.resultLabel} ${rm.homeScore}–${rm.awayScore}`}
+                  </span>
                   <Crest name={away.name} crestUrl={away.crestUrl} size="sm" />
-                  {away.scorers ? (
+                  {hasScorers ? (
                     <ul className="sp-tk__scorers sp-tk__scorers--away">
-                      {away.scorers.map((s) => (
-                        <li key={s}>{s}</li>
+                      {(away.scorers ?? []).map((s) => (
+                        <li key={s}>
+                          <span>{s}</span>
+                        </li>
                       ))}
                     </ul>
                   ) : null}

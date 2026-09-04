@@ -145,6 +145,19 @@ function tallyScorers(names: readonly string[]): readonly string[] {
 
 type EspnScoringDetails = NonNullable<NonNullable<EspnEvent["competitions"]>[number]["details"]>;
 
+// Every ESPN soccer play type.text that counts as a goal — not just the plain "Goal" label.
+// Verified live against ESPN's January 4, 2026 Everton-Brentford scoreboard (#2253): matching
+// only "Goal" silently dropped headers, volleys, penalties and own goals, which each arrive under
+// their own type text rather than the generic one.
+const SOCCER_GOAL_TYPES = new Set([
+  "Goal",
+  "Header",
+  "Volley",
+  "Penalty - Scored",
+  "Penalty",
+  "Own Goal"
+]);
+
 // Soccer: `competitions[0].details` is a complete list of scoring plays (one entry per goal,
 // verified live against ESPN's API). Filter to actual goals for the given team, then tally.
 function soccerScorers(
@@ -152,7 +165,7 @@ function soccerScorers(
   teamId: string | undefined
 ): readonly string[] | null {
   const names = (details ?? [])
-    .filter((d) => d?.type?.text === "Goal" && d?.team?.id === teamId)
+    .filter((d) => SOCCER_GOAL_TYPES.has(d?.type?.text ?? "") && d?.team?.id === teamId)
     .flatMap((d) => d?.athletesInvolved ?? [])
     .map((a) => a?.shortName ?? a?.displayName)
     .filter((name): name is string => name != null);

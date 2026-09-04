@@ -96,6 +96,63 @@ describe("EspnDatasetAdapter", () => {
     expect(games[0]?.away.scorers).toEqual(["Z. Benson"]);
   });
 
+  it("counts headers, volleys, penalties and own goals as goals, not just plain 'Goal' (#2253)", async () => {
+    // Mirrors ESPN's Jan 4 2026 Everton-Brentford scoreboard, where a "Goal"-only filter dropped
+    // both Everton scorers and one of Brentford's three Thiago goals.
+    const event = {
+      id: "1",
+      date: "2026-01-04T00:00:00Z",
+      competitions: [
+        {
+          competitors: [
+            { homeAway: "home", team: { id: "100", abbreviation: "EVE" } },
+            { homeAway: "away", team: { id: "200", abbreviation: "BRE" } }
+          ],
+          status: { type: { state: "post", detail: "Full Time" } },
+          details: [
+            {
+              type: { text: "Header" },
+              team: { id: "100" },
+              athletesInvolved: [{ shortName: "D. Calvert-Lewin" }]
+            },
+            {
+              type: { text: "Penalty - Scored" },
+              team: { id: "100" },
+              athletesInvolved: [{ shortName: "J. Garner" }]
+            },
+            {
+              type: { text: "Goal" },
+              team: { id: "200" },
+              athletesInvolved: [{ shortName: "Thiago" }]
+            },
+            {
+              type: { text: "Volley" },
+              team: { id: "200" },
+              athletesInvolved: [{ shortName: "Thiago" }]
+            },
+            {
+              type: { text: "Own Goal" },
+              team: { id: "200" },
+              athletesInvolved: [{ shortName: "Thiago" }]
+            },
+            {
+              type: { text: "Goal" },
+              team: { id: "200" },
+              athletesInvolved: [{ shortName: "M. Collins" }]
+            }
+          ]
+        }
+      ]
+    };
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "eng.1", day: "2026-01-04" },
+      okFetch({ events: [event] })
+    )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
+    expect(games[0]?.home.scorers).toEqual(["D. Calvert-Lewin", "J. Garner"]);
+    expect(games[0]?.away.scorers).toEqual(["Thiago (3)", "M. Collins"]);
+  });
+
   it("parses hockey goal leaders into each side's scorers", async () => {
     const event = {
       id: "1",

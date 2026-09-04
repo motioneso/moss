@@ -323,12 +323,15 @@ describe("sports routes", () => {
     // The regression: pre-fix this was undefined (stripped on serialize), not just null.
     expect(dalCard.resultMatch).not.toBeNull();
     expect(dalCard.resultMatch).toBeDefined();
-    expect(dalCard.resultMatch.scoreText).toMatch(/^[WL]\s\d+.\d+$/); // "L 3–9" (en-dash)
+    expect(dalCard.resultMatch.resultLabel).toMatch(/^[WDL]$/);
+    expect(dalCard.resultMatch.homeScore).toBe(3);
+    expect(dalCard.resultMatch.awayScore).toBe(9);
     expect(dalCard.resultMatch.opponentCrestUrl).toBe(
       "https://a.espncdn.com/i/teamlogos/nfl/500/gb.png"
     );
-    // Belt-and-suspenders: the score text is actually present in the raw wire body.
-    expect(res.body).toContain(dalCard.resultMatch.scoreText);
+    // Belt-and-suspenders: the scores are actually present in the raw wire body, not stripped.
+    expect(res.body).toContain(`"homeScore":${dalCard.resultMatch.homeScore}`);
+    expect(res.body).toContain(`"awayScore":${dalCard.resultMatch.awayScore}`);
     await app.close();
   });
 
