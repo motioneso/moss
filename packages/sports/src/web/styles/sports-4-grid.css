@@ -159,7 +159,9 @@
      the crests and score packed against the left edge. Centring the row itself keeps
      that group in the middle whether both, one, or neither team has scorer data. */
   justify-content: center;
-  gap: var(--space-2);
+  /* #2253 round 2: a tighter gap than the rest of the card on purpose — every pixel spent
+     between the logos and the score is a pixel the scorer names lose on a narrow card. */
+  gap: var(--space-1);
 }
 /* Goal-scorer names either side of the two crests (home list hugs the home crest on its outer
    side, away list hugs the away crest on its outer side). flex:1 lets the two lists absorb the
@@ -173,6 +175,8 @@
   gap: 2px;
   flex: 1;
   min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
 }
 /* #2253: align with text-align, NOT align-items. A column flex container sizes its
    items to their content on the cross axis, so align-items: flex-end made each name's
@@ -187,18 +191,19 @@
   text-align: left;
   align-items: stretch;
 }
-/* #2253: text-overflow doesn't reliably ellipsis a flex column's own list-item box in Chromium —
-   the row clips the name at its edge with no dots. A block-level span inside the li is the
-   standard fix: the span, not the li, gets the width-constrained ellipsis treatment. */
+/* #2253 round 2: a scorer name must stay readable, not get cut to "Isa…". On the narrow
+   /sports strip these columns are only ~70px wide, and one-line-plus-dots ate even the short
+   target line ("Isak 6, 8"). Names now wrap onto a second line at caption size instead, and
+   `overflow-wrap: break-word` is the last-resort guard that keeps a single very long word inside
+   the card rather than pushing the logos off centre. */
 .sp-tk__scorers li {
   min-width: 0;
   max-width: 100%;
 }
 .sp-tk__scorers li > span {
   display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 /* Lead-story headline (V3 mockup 2026-07-09): the card's editorial anchor, so it's set bold in
    text color at reading size — no longer the muted --text-xs caption the pre-V3 inline-thumb
@@ -489,7 +494,8 @@
      the crests and score packed against the left edge. Centring the row itself keeps
      that group in the middle whether both, one, or neither team has scorer data. */
   justify-content: center;
-  gap: var(--space-2);
+  /* #2253 round 2: same tighter gap as .sp-tk__result — the scorer names need that width. */
+  gap: var(--space-1);
 }
 /* Goal-scorer names either side of the two crests — same pattern as .sp-tk__scorers above. */
 .sp-feat__scorers {
@@ -501,6 +507,8 @@
   gap: 2px;
   flex: 1;
   min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
 }
 /* #2253: align with text-align, NOT align-items. A column flex container sizes its
    items to their content on the cross axis, so align-items: flex-end made each name's
@@ -515,17 +523,16 @@
   text-align: left;
   align-items: stretch;
 }
-/* #2253: same Chromium flex/ellipsis fix as .sp-tk__scorers above — the span inside each li
-   carries the width-constrained ellipsis, not the li itself. */
+/* #2253 round 2: same readable-name treatment as .sp-tk__scorers above — wrap rather than
+   trim, with a last-resort break so one long word can't shove the logos off centre. */
 .sp-feat__scorers li {
   min-width: 0;
   max-width: 100%;
 }
 .sp-feat__scorers li > span {
   display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 .sp-feat__score {
   margin: 0;

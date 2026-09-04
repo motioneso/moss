@@ -50,7 +50,7 @@ describe("EspnDatasetAdapter", () => {
     expect(games[0]?.away.scorers).toBeNull();
   });
 
-  it("parses soccer scoring plays into each side's tallied goal scorers", async () => {
+  it("parses soccer scoring plays into each side's goal scorers with their minutes", async () => {
     const event = {
       id: "1",
       date: "2026-01-04T00:00:00Z",
@@ -65,16 +65,19 @@ describe("EspnDatasetAdapter", () => {
             {
               type: { text: "Goal" },
               team: { id: "100" },
+              clock: { displayValue: "6'" },
               athletesInvolved: [{ shortName: "A. Isak" }]
             },
             {
               type: { text: "Goal" },
               team: { id: "100" },
+              clock: { displayValue: "8'" },
               athletesInvolved: [{ shortName: "A. Isak" }]
             },
             {
               type: { text: "Goal" },
               team: { id: "200" },
+              clock: { displayValue: "90'+2'" },
               athletesInvolved: [{ shortName: "Z. Benson" }]
             },
             // Non-goal scoring plays (e.g. a card) must not be counted as a scorer.
@@ -92,8 +95,9 @@ describe("EspnDatasetAdapter", () => {
       { competitionKey: "usa.1", day: "2026-01-04" },
       okFetch({ events: [event] })
     )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
-    expect(games[0]?.home.scorers).toEqual(["A. Isak (2)"]);
-    expect(games[0]?.away.scorers).toEqual(["Z. Benson"]);
+    // Ben's target line, #2253: one row per scorer, every minute they scored in.
+    expect(games[0]?.home.scorers).toEqual(["A. Isak 6, 8"]);
+    expect(games[0]?.away.scorers).toEqual(["Z. Benson 90+2"]);
   });
 
   it("counts every goal ESPN flags, whatever the play is labelled (#2253)", async () => {
@@ -105,8 +109,8 @@ describe("EspnDatasetAdapter", () => {
       { competitionKey: "eng.1", day: "2026-01-04" },
       okFetch(fixture("eng1-scoreboard-20260104-everton-brentford.json"))
     )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
-    expect(games[0]?.home.scorers).toEqual(["Beto", "T. Barry"]);
-    expect(games[0]?.away.scorers).toEqual(["I. Thiago (3)", "N. Collins"]);
+    expect(games[0]?.home.scorers).toEqual(["Beto 66", "T. Barry 90+1"]);
+    expect(games[0]?.away.scorers).toEqual(["I. Thiago 11, 51, 88", "N. Collins 50"]);
   });
 
   it("ignores cards and other non-scoring plays in the same list", async () => {

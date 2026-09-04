@@ -82,6 +82,9 @@ interface EspnEvent {
       // and substitutions.
       readonly scoringPlay?: boolean;
       readonly team?: { readonly id?: string };
+      // Minute of the goal, e.g. "11'" or "90'+1'" (verified in the saved Everton-Brentford
+      // response) — rendered after the scorer's name as "I. Thiago 11, 51, 88".
+      readonly clock?: { readonly displayValue?: string };
       readonly athletesInvolved?: readonly {
         readonly shortName?: string;
         readonly displayName?: string;
@@ -135,16 +138,31 @@ function mapState(state: string | undefined): GameSummary["state"] {
   return "pre";
 }
 
-// Groups a flat list of scorer names into "Name" once, or "Name (2)" for a repeat scorer,
-// preserving first-appearance order.
-function tallyScorers(names: readonly string[]): readonly string[] {
-  const counts = new Map<string, number>();
-  for (const name of names) {
-    counts.set(name, (counts.get(name) ?? 0) + 1);
+// ESPN writes a goal's minute as "11'" or, in added time, "90'+1'". Ben's target line is
+// "Isak 6, 8", so the apostrophes come off and added time keeps its plus ("90+1").
+function goalMinute(displayValue: string | undefined): string | null {
+  const trimmed = (displayValue ?? "").replace(/'/g, "").trim();
+  return /^\d/.test(trimmed) ? trimmed : null;
+}
+
+// One line per scorer, with every minute they scored in: "Isak 6, 8". A goal whose minute the
+// provider left out falls back to the repeat-count form, so a name is never dropped.
+function tallyScorersWithMinutes(
+  goals: readonly { readonly name: string; readonly minute: string | null }[]
+): readonly string[] {
+  const byName = new Map<string, string[]>();
+  const missingMinutes = new Map<string, number>();
+  for (const goal of goals) {
+    const minutes = byName.get(goal.name) ?? [];
+    if (goal.minute != null) minutes.push(goal.minute);
+    else missingMinutes.set(goal.name, (missingMinutes.get(goal.name) ?? 0) + 1);
+    byName.set(goal.name, minutes);
   }
-  return Array.from(counts.entries()).map(([name, count]) =>
-    count > 1 ? `${name} (${count})` : name
-  );
+  return Array.from(byName.entries()).map(([name, minutes]) => {
+    if (minutes.length > 0) return `${name} ${minutes.join(", ")}`;
+    const count = missingMinutes.get(name) ?? 1;
+    return count > 1 ? `${name} (${count})` : name;
+  });
 }
 
 type EspnScoringDetails = NonNullable<NonNullable<EspnEvent["competitions"]>[number]["details"]>;
@@ -167,12 +185,16 @@ function soccerScorers(
   details: EspnScoringDetails | undefined,
   teamId: string | undefined
 ): readonly string[] | null {
-  const names = (details ?? [])
+  const goals = (details ?? [])
     .filter((d) => isSoccerGoal(d) && d?.team?.id === teamId)
-    .flatMap((d) => d?.athletesInvolved ?? [])
-    .map((a) => a?.shortName ?? a?.displayName)
-    .filter((name): name is string => name != null);
-  return names.length === 0 ? null : tallyScorers(names);
+    .flatMap((d) =>
+      (d?.athletesInvolved ?? []).map((a) => ({
+        name: a?.shortName ?? a?.displayName,
+        minute: goalMinute(d?.clock?.displayValue)
+      }))
+    )
+    .filter((goal): goal is { name: string; minute: string | null } => goal.name != null);
+  return goals.length === 0 ? null : tallyScorersWithMinutes(goals);
 }
 
 // Hockey: each competitor carries ESPN's own "goals" leaders category. This is ESPN's "goal

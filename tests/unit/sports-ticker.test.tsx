@@ -151,8 +151,10 @@ describe("SportsTicker", () => {
 
   it("renders a finished game as both crests + result, dropping the 'vs' text (annotation #2)", () => {
     // Ben 2026-07-08 /sports #2: when resultMatch is present the score slot leads with both
-    // teams' crests and shows just "L 3–9" — the crests carry the identity, so the cheap
-    // "L 3–9 vs Blue Jays" text no longer appears. sr-only keeps both team names reachable.
+    // teams' crests and shows just the bare score — the crests carry the identity, so the cheap
+    // "L 3–9 vs Blue Jays" text no longer appears, and (#2253 round 2) the W/L letter is gone
+    // from the visible row too: the form pips already say who won. sr-only keeps both team
+    // names and the result word reachable.
     const html = render([
       card({
         status: "today",
@@ -171,7 +173,9 @@ describe("SportsTicker", () => {
       })
     ]);
     expect(html).toContain("sp-feat__result");
-    expect(html).toContain("L 9–3");
+    expect(html).toContain(">9–3<");
+    expect(html).not.toContain("L 9–3");
+    expect(html).toContain("lost");
     expect(html).toContain("sp-sronly");
     expect(html).toContain("Toronto Blue Jays"); // sr-only opponent name (SSR splits the "vs " prefix)
     // the cheap combined text tail is gone
@@ -182,7 +186,7 @@ describe("SportsTicker", () => {
 
   it("keeps the score in home-left order when the followed team plays away (#2253)", () => {
     // The followed team (Minnesota) is away and lost 1–3. The crests always draw home-left,
-    // away-right, so the score must read "L 3–1" (home's number first), not "L 1–3" (the
+    // away-right, so the score must read "3–1" (home's number first), not "1–3" (the
     // followed team's own number first) — the old bug put the numbers on the wrong side of a
     // score that read correctly for the crests.
     const html = render([
@@ -203,8 +207,8 @@ describe("SportsTicker", () => {
         }
       })
     ]);
-    expect(html).toContain("L 3–1");
-    expect(html).not.toContain("L 1–3");
+    expect(html).toContain(">3–1<");
+    expect(html).not.toContain("1–3");
   });
 
   it("renders goal scorers on each team's outer side for a finished soccer/hockey game", () => {
@@ -371,8 +375,8 @@ describe("TickerTeam", () => {
         }
       })
     );
-    expect(html).toContain("L 3–1");
-    expect(html).not.toContain("L 1–3");
+    expect(html).toContain(">3–1<");
+    expect(html).not.toContain("1–3");
   });
 
   it("still reserves both scorer slots when only one team has scorer data (#2253)", () => {

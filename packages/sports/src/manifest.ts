@@ -135,7 +135,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.result_scorers",
       description:
-        "A finished soccer or hockey game on Today and on Sports shows both team logos with the score between them, home team on the left, and who scored beside each logo. Hockey can list one fewer name than goals, a gap in the provider's data."
+        "A finished soccer or hockey game on Today and on Sports shows both team logos with the score between them, home team on the left, and who scored beside each logo: the home team's scorers on the far left and the away team's on the far right. Soccer scorers carry the minutes they scored in, as in Isak 6, 8. Hockey has no minutes and can list one fewer name than goals, a gap in the provider's data."
     }
   ],
   navigation: [
