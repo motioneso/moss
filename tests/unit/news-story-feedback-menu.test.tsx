@@ -7,6 +7,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NewsHeadline, NewsOverviewResponse } from "@moss/shared";
 import { StoryFeedbackMenu } from "../../packages/news/src/web/story-feedback-menu.js";
 import { newsQueryKeys } from "../../packages/news/src/web/query-keys.js";
+import { resetDismissedStoriesForTests } from "../../packages/news/src/web/dismissed-story-tracker.js";
+
+afterEach(() => resetDismissedStoriesForTests());
 
 function makeHeadline(id: string, feedbackRef = `news:${id}`): NewsHeadline {
   return {
@@ -225,5 +228,95 @@ describe("News story feedback menu", () => {
     const updatedData = client.getQueryData<NewsOverviewResponse>(newsQueryKeys.overview);
     expect(updatedData?.topStories).toHaveLength(5);
     expect(updatedData?.topStories.some((h) => h.id === "1" || h.id === "2")).toBe(false);
+  });
+});
+
+describe("Independent delayed refresh", () => {
+  it("keeps dismissal gone when an earlier overview request arrives late", async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ feedback: {} }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const h1 = makeHeadline("1");
+    const h2 = makeHeadline("2");
+    const initialData: NewsOverviewResponse = {
+      topStories: [h1, h2],
+      rankedStories: [h1, h2],
+      sourceGroups: [
+        {
+          sourceKey: "wire",
+          sourceLabel: "Wire",
+          homepageUrl: "https://example.com",
+          headlines: [h1, h2]
+        }
+      ],
+      activeTopics: [],
+      enabledSources: [{ sourceKey: "wire", label: "Wire" }],
+      degraded: false
+    };
+    client.setQueryData(newsQueryKeys.overview, initialData);
+    let releaseOverview!: (response: Response) => void;
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          releaseOverview = resolve;
+        })
+    );
+    const { getNewsOverview } = await import("../../packages/news/src/web/news-client.js");
+    const pendingRefresh = client.fetchQuery({
+      queryKey: newsQueryKeys.overview,
+      queryFn: getNewsOverview
+    });
+    await Promise.resolve();
+
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(StoryFeedbackMenu, { headline: h1, surface: "news" })
+        )
+      );
+    });
+
+    // Open menu and select less_like_this
+    await act(async () => button(renderer, "Feedback for Story 1").props.onClick());
+    await act(async () => button(renderer, "Less like this").props.onClick());
+
+    // Enter reason and submit form
+    const textarea = renderer.root.findByType("textarea");
+    await act(async () => textarea.props.onChange({ target: { value: "Not interesting" } }));
+    const form = renderer.root.findByType("form");
+    await act(async () => {
+      form.props.onSubmit({ preventDefault: vi.fn() });
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/me/usefulness-feedback",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          targetKind: "news_story",
+          targetRef: "news:1",
+          surface: "news",
+          kind: "less_like_this",
+          reason: "Not interesting"
+        })
+      })
+    );
+
+    const updatedData = client.getQueryData<NewsOverviewResponse>(newsQueryKeys.overview);
+    expect(updatedData?.topStories.map((h) => h.id)).toEqual(["2"]);
+    expect(updatedData?.rankedStories?.map((h) => h.id)).toEqual(["2"]);
+    expect(updatedData?.sourceGroups[0]?.headlines.map((h) => h.id)).toEqual(["2"]);
+    releaseOverview(new Response(JSON.stringify(initialData), { status: 200 }));
+    await pendingRefresh;
+    expect(
+      client.getQueryData<NewsOverviewResponse>(newsQueryKeys.overview)?.topStories.map((h) => h.id)
+    ).toEqual(["2"]);
   });
 });
