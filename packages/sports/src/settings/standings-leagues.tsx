@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ChangeEvent } from "react";
-import { Note, Select } from "@moss/settings-ui";
+import { useState } from "react";
+import { Note } from "@moss/settings-ui";
 import type { CompetitionRef } from "@moss/shared";
-import { Button } from "@moss/module-web-sdk";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { Check, ChevronDown, ChevronRight } from "lucide-react";
 
 import { sportsQueryKeys } from "../web/query-keys.js";
 import {
@@ -18,8 +17,7 @@ export function StandingsLeaguesSection(props: {
   // Collapsed by default (Ben 2026-09-03): this is a rarely-touched preference, so it sits at the
   // bottom of the pane behind a header row and only opens on request.
   const [open, setOpen] = useState(false);
-  const [availableHighlights, setAvailableHighlights] = useState<readonly string[]>([]);
-  const [selectedHighlights, setSelectedHighlights] = useState<readonly string[]>([]);
+  const [expandedRegions, setExpandedRegions] = useState<ReadonlySet<string>>(new Set());
   const preferencesQuery = useQuery({
     queryKey: sportsQueryKeys.standingsPreferences,
     queryFn: getSportsStandingsPreferences
@@ -29,8 +27,6 @@ export function StandingsLeaguesSection(props: {
       updateSportsStandingsPreferences({ selectedCompetitionKeys }),
     onSuccess: (response) => {
       queryClient.setQueryData(sportsQueryKeys.standingsPreferences, response);
-      setAvailableHighlights([]);
-      setSelectedHighlights([]);
     }
   });
   const saved = preferencesQuery.data?.selectedCompetitionKeys;
@@ -39,14 +35,9 @@ export function StandingsLeaguesSection(props: {
       ? props.competitions.map((competition) => competition.competitionKey)
       : saved
   );
-  const availableCompetitions = props.competitions.filter(
-    (competition) => !selected.has(competition.competitionKey)
-  );
   const selectedCompetitions = props.competitions.filter((competition) =>
     selected.has(competition.competitionKey)
   );
-  const readHighlights = (event: ChangeEvent<HTMLSelectElement>) =>
-    Array.from(event.currentTarget.selectedOptions, (option) => option.value);
   const save = (next: ReadonlySet<string>) => {
     mutation.mutate(
       props.competitions
@@ -54,10 +45,18 @@ export function StandingsLeaguesSection(props: {
         .filter((key) => next.has(key))
     );
   };
-  const add = () => save(new Set([...selected, ...availableHighlights]));
-  const remove = () => {
+  const toggleLeague = (competitionKey: string, checked: boolean) => {
     const next = new Set(selected);
-    for (const competitionKey of selectedHighlights) next.delete(competitionKey);
+    if (checked) next.add(competitionKey);
+    else next.delete(competitionKey);
+    save(next);
+  };
+  const toggleRegion = (competitions: readonly CompetitionRef[], allChosen: boolean) => {
+    const next = new Set(selected);
+    for (const competition of competitions) {
+      if (allChosen) next.delete(competition.competitionKey);
+      else next.add(competition.competitionKey);
+    }
     save(next);
   };
   const disabled = preferencesQuery.isPending || mutation.isPending;
@@ -113,80 +112,92 @@ export function StandingsLeaguesSection(props: {
           </p>
         ) : null}
         <div
-          className="sp-standings-transfer jds-card jds-card--sunken jds-card--pad-lg"
+          className="sp-standings-tree jds-card jds-card--sunken jds-card--pad-lg"
           role="group"
           aria-labelledby="sp-standings-settings-title"
           aria-disabled={disabled}
           aria-busy={mutation.isPending}
         >
-          <div className="sp-standings-transfer__column">
-            <label className="jds-label" htmlFor="sp-standings-available">
-              Available leagues
-            </label>
-            <Select
-              id="sp-standings-available"
-              aria-label="Available leagues"
-              aria-describedby="sp-standings-available-count"
-              multiple
-              size={8}
-              disabled={disabled}
-              value={availableHighlights}
-              onChange={(event) => setAvailableHighlights(readHighlights(event))}
-            >
-              <CompetitionOptions
-                competitions={availableCompetitions}
-                emptyLabel="All leagues selected"
-              />
-            </Select>
-            <span className="jds-hint" id="sp-standings-available-count">
-              {availableCompetitions.length} available
-            </span>
-          </div>
-          <div className="sp-standings-transfer__actions">
-            <Button
-              variant="secondary"
-              size="sm"
-              aria-label="Add selected leagues"
-              disabled={disabled || availableHighlights.length === 0}
-              onClick={add}
-            >
-              Add →
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              aria-label="Remove selected leagues"
-              disabled={disabled || selectedHighlights.length === 0}
-              onClick={remove}
-            >
-              ← Remove
-            </Button>
-          </div>
-          <div className="sp-standings-transfer__column">
-            <label className="jds-label" htmlFor="sp-standings-selected">
-              Selected leagues
-            </label>
-            <Select
-              id="sp-standings-selected"
-              aria-label="Selected leagues"
-              aria-describedby="sp-standings-selected-count"
-              multiple
-              size={8}
-              disabled={disabled}
-              value={selectedHighlights}
-              onChange={(event) => setSelectedHighlights(readHighlights(event))}
-            >
-              <CompetitionOptions
-                competitions={selectedCompetitions}
-                emptyLabel="No leagues selected"
-              />
-            </Select>
-            <span className="jds-hint" id="sp-standings-selected-count">
-              {selectedCompetitions.length} selected
-            </span>
-          </div>
+          {groupCompetitions(props.competitions).map((sport) => (
+            <div className="sp-standings-tree__sport" key={sport.label}>
+              <div className="jds-label">{sport.label}</div>
+              {sport.leagues.map((competition) => (
+                <LeagueCheck
+                  competition={competition}
+                  checked={selected.has(competition.competitionKey)}
+                  disabled={disabled}
+                  onToggle={toggleLeague}
+                  key={competition.competitionKey}
+                />
+              ))}
+              {sport.regions.map((region) => {
+                const regionId = `sp-standings-region-${slug(sport.label)}-${slug(region.label)}`;
+                const chosen = region.competitions.filter((competition) =>
+                  selected.has(competition.competitionKey)
+                );
+                const all = chosen.length === region.competitions.length;
+                const expanded = expandedRegions.has(regionId);
+                return (
+                  <div className="sp-standings-tree__region" key={region.label}>
+                    <div className="sp-standings-tree__row">
+                      <label className="jds-check sp-standings-tree__check">
+                        <input
+                          type="checkbox"
+                          aria-label={`All ${region.label} leagues`}
+                          checked={all}
+                          disabled={disabled}
+                          ref={(input) => {
+                            if (input) input.indeterminate = chosen.length > 0 && !all;
+                          }}
+                          onChange={() => toggleRegion(region.competitions, all)}
+                        />
+                        <span className="jds-check__box">
+                          <Check size={13} aria-hidden="true" />
+                        </span>
+                      </label>
+                      <button
+                        type="button"
+                        className="sp-standings-tree__toggle"
+                        aria-expanded={expanded}
+                        aria-controls={regionId}
+                        onClick={() =>
+                          setExpandedRegions((cur) => {
+                            const next = new Set(cur);
+                            if (next.has(regionId)) next.delete(regionId);
+                            else next.add(regionId);
+                            return next;
+                          })
+                        }
+                      >
+                        {expanded ? (
+                          <ChevronDown size={16} aria-hidden="true" />
+                        ) : (
+                          <ChevronRight size={16} aria-hidden="true" />
+                        )}
+                        <span>{region.label}</span>
+                        <span className="jds-badge jds-badge--steel">
+                          {chosen.length} of {region.competitions.length}
+                        </span>
+                      </button>
+                    </div>
+                    <div id={regionId} className="sp-standings-tree__leagues" hidden={!expanded}>
+                      {region.competitions.map((competition) => (
+                        <LeagueCheck
+                          competition={competition}
+                          checked={selected.has(competition.competitionKey)}
+                          disabled={disabled}
+                          onToggle={toggleLeague}
+                          key={competition.competitionKey}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
           {mutation.isPending ? (
-            <span className="jds-hint sp-standings-transfer__status" role="status">
+            <span className="jds-hint" role="status">
               Saving league choices…
             </span>
           ) : null}
@@ -196,27 +207,59 @@ export function StandingsLeaguesSection(props: {
   );
 }
 
-function CompetitionOptions(props: {
-  readonly competitions: readonly CompetitionRef[];
-  readonly emptyLabel: string;
+function LeagueCheck(props: {
+  readonly competition: CompetitionRef;
+  readonly checked: boolean;
+  readonly disabled: boolean;
+  readonly onToggle: (competitionKey: string, checked: boolean) => void;
 }) {
-  if (props.competitions.length === 0) return <option disabled>{props.emptyLabel}</option>;
-  const groups = new Map<string, CompetitionRef[]>();
-  for (const competition of props.competitions) {
-    const label = competition.regionLabel
-      ? `${competition.sportLabel} — ${competition.regionLabel}`
-      : competition.sportLabel;
-    const group = groups.get(label) ?? [];
-    group.push(competition);
-    groups.set(label, group);
+  return (
+    <label className="jds-check sp-standings-tree__check">
+      <input
+        type="checkbox"
+        value={props.competition.competitionKey}
+        checked={props.checked}
+        disabled={props.disabled}
+        onChange={(event) =>
+          props.onToggle(props.competition.competitionKey, event.currentTarget.checked)
+        }
+      />
+      <span className="jds-check__box">
+        <Check size={13} aria-hidden="true" />
+      </span>
+      <span>{props.competition.label}</span>
+    </label>
+  );
+}
+
+interface SportGroup {
+  readonly label: string;
+  // Leagues with no region (NFL, NBA, ...) list directly under the sport.
+  readonly leagues: CompetitionRef[];
+  // Soccer leagues sit under their country, collapsed until opened (Ben, 2026-09-03).
+  readonly regions: { readonly label: string; readonly competitions: CompetitionRef[] }[];
+}
+
+function groupCompetitions(competitions: readonly CompetitionRef[]): SportGroup[] {
+  const sports = new Map<string, SportGroup>();
+  for (const competition of competitions) {
+    const sport = sports.get(competition.sportLabel) ?? {
+      label: competition.sportLabel,
+      leagues: [],
+      regions: []
+    };
+    if (competition.regionLabel === null) {
+      sport.leagues.push(competition);
+    } else {
+      const region = sport.regions.find((entry) => entry.label === competition.regionLabel);
+      if (region) region.competitions.push(competition);
+      else sport.regions.push({ label: competition.regionLabel, competitions: [competition] });
+    }
+    sports.set(competition.sportLabel, sport);
   }
-  return Array.from(groups, ([label, competitions]) => (
-    <optgroup label={label} key={label}>
-      {competitions.map((competition) => (
-        <option value={competition.competitionKey} key={competition.competitionKey}>
-          {competition.label}
-        </option>
-      ))}
-    </optgroup>
-  ));
+  return Array.from(sports.values());
+}
+
+function slug(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }

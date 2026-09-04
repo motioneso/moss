@@ -774,7 +774,7 @@
 }
 
 /* Standings leagues settings (Ben 2026-09-03): the heading is a collapse toggle; its chevron sits
-   faint until hovered. The native multi-select lists take the pane surface, not browser white. */
+   faint until hovered. Country rows in the checklist reuse the same chevron treatment. */
 .sp-standings-settings__toggle {
   border: 0;
   background: transparent;
@@ -786,11 +786,14 @@
 .sp-standings-settings__toggle:hover > svg {
   color: var(--text);
 }
-.sp-standings-transfer .jds-select[multiple] {
-  color-scheme: dark;
-  background: var(--surface);
-  color: var(--text);
+.sp-standings-tree__toggle {
+  border: 0;
+  background: transparent;
+  color: inherit;
 }
-.sp-standings-transfer .jds-select[multiple] optgroup {
-  color: var(--text-subtle);
+.sp-standings-tree__toggle > svg {
+  color: var(--text-faint);
+}
+.sp-standings-tree__toggle:hover > svg {
+  color: var(--text);
 }

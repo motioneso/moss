@@ -38,32 +38,40 @@ test("saves a curated league set and uses the keyboard picker on Sports", async 
   const settings = page.getByRole("group", { name: "Configure standings" });
   await expect(settings).toBeVisible();
   const keptLabels = new Set(["NFL", "Premier League", "MLB"]);
-  const selectedLeagues = settings.getByRole("listbox", { name: "Selected leagues" });
-  const selectedOptions = await selectedLeagues.locator("option").evaluateAll((options) =>
-    options.map((option) => ({
-      label: option.textContent?.trim() ?? "",
-      value: (option as HTMLOptionElement).value
-    }))
-  );
-  const removedValues = selectedOptions
-    .filter((option) => !keptLabels.has(option.label))
-    .map((option) => option.value);
-  expect(removedValues.length).toBeGreaterThan(0);
-  await selectedLeagues.selectOption(removedValues);
-  const saved = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === "/api/sports/standings-preferences" &&
-      response.request().method() === "PUT"
-  );
-  await settings.getByRole("button", { name: "Remove selected leagues" }).click();
-  expect((await saved).ok(), "saving curated standings leagues").toBe(true);
+  // Soccer leagues sit under collapsed country rows; open every country so each league checkbox
+  // is reachable, then untick everything outside the kept set. Each change saves on its own.
+  const countryRows = settings.getByRole("button", { expanded: false });
+  while ((await countryRows.count()) > 0) await countryRows.first().click();
+  const leagueNames = await settings
+    .locator("label.sp-standings-tree__check:has(input:not([aria-label])) > span:last-child")
+    .allTextContents();
+  expect(leagueNames.length).toBeGreaterThan(keptLabels.size);
+  let removed = 0;
+  for (const name of leagueNames) {
+    if (keptLabels.has(name)) continue;
+    const box = settings.getByRole("checkbox", { name, exact: true });
+    if (!(await box.isChecked())) continue;
+    const saved = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/sports/standings-preferences" &&
+        response.request().method() === "PUT"
+    );
+    // The real input is visually hidden by the design system, so click the label text.
+    await settings.getByText(name, { exact: true }).click();
+    await expect(box).not.toBeChecked();
+    expect((await saved).ok(), `saving after unticking ${name}`).toBe(true);
+    removed += 1;
+  }
+  expect(removed).toBeGreaterThan(0);
 
   await page.reload();
+  await page.getByRole("button", { name: /Configure standings/ }).click();
   await expect(settings).toBeVisible();
-  await expect(selectedLeagues.getByRole("option")).toHaveCount(keptLabels.size);
+  await settings.getByRole("button", { name: /England/ }).click();
   for (const name of keptLabels) {
-    await expect(selectedLeagues.getByRole("option", { name, exact: true })).toHaveCount(1);
+    await expect(settings.getByRole("checkbox", { name, exact: true })).toBeChecked();
   }
+  await expect(settings.getByRole("checkbox", { name: "NBA", exact: true })).not.toBeChecked();
   console.log("[live proof] Sports Settings persisted NFL, Premier League, and MLB only");
 
   await page.goto(`${requireBaseURL()}/sports`);

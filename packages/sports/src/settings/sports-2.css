@@ -1,5 +1,5 @@
 /* Hallmark · component: standings transfer · tone: Moss editorial utility · palette: existing
-   Moss tokens · fingerprint: native dual-list transfer · pre-emit critique: P5 H5 E4 S5 R5 V4
+   Moss tokens · fingerprint: grouped checklist tree · pre-emit critique: P5 H5 E4 S5 R5 V4
    · contrast: pass (40–41) · tokens: pass (48) · mobile: pass (34, 49–57) */
 /* Sports settings follow-picker (packages/sports/src/settings/index.tsx). Separate file from
    sports-1.css purely for the 1000-line file-size gate (sports-1.css has no headroom); imported
@@ -267,43 +267,50 @@
 .sp-standings-settings__panel[hidden] {
   display: none;
 }
-.sp-standings-transfer {
+.sp-standings-tree {
   display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.sp-standings-tree__sport {
+  display: grid;
+  gap: var(--space-2);
+}
+.sp-standings-tree__region {
+  display: grid;
+  gap: var(--space-2);
+}
+.sp-standings-tree__row {
+  display: flex;
+  align-items: center;
   gap: var(--space-3);
   min-width: 0;
 }
-.sp-standings-transfer__column {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: var(--space-2);
-  min-width: 0;
-}
-.sp-standings-transfer__column .jds-selectwrap,
-.sp-standings-transfer__column .jds-select {
-  min-width: 0;
-  height: 100%;
-}
-.sp-standings-transfer__actions {
-  display: flex;
+.sp-standings-tree__check {
   align-items: center;
-  justify-content: center;
+}
+.sp-standings-tree__toggle {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  padding: var(--space-1) 0;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
 }
-.sp-standings-transfer__status {
-  text-align: center;
+.sp-standings-tree__toggle > svg {
+  flex: none;
 }
-@media (min-width: 48rem) {
-  .sp-standings-transfer {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    align-items: stretch;
-  }
-  .sp-standings-transfer__actions {
-    flex-direction: column;
-  }
-  .sp-standings-transfer__status {
-    grid-column: 1 / -1;
-  }
+/* Indent the leagues under a country past the country checkbox and chevron. */
+.sp-standings-tree__leagues {
+  display: grid;
+  gap: var(--space-2);
+  padding-left: calc(19px + var(--space-3) + 16px + var(--space-2));
+}
+.sp-standings-tree__leagues[hidden] {
+  display: none;
 }
 .sp-feedback-settings__title,
 .sp-feedback-settings__note {

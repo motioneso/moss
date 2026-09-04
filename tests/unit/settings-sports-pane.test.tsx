@@ -112,19 +112,23 @@ describe("SportsSettings", () => {
     expect(html).toContain("Configure standings");
     expect(html).toContain("Football");
     expect(html).toContain("England");
-    let selectedList = html.match(
-      /<select[^>]*aria-label="Selected leagues"[\s\S]*?<\/select>/
-    )?.[0];
-    expect(selectedList).toContain('value="nfl"');
-    expect(selectedList).toContain('value="epl"');
+    const leagueBox = (markup: string, key: string) =>
+      markup.match(new RegExp(`<input[^>]*value="${key}"[^>]*>`))?.[0] ?? "";
+    expect(leagueBox(html, "nfl")).toContain('checked=""');
+    // Soccer leagues sit under their country and stay hidden until the row is opened.
+    expect(leagueBox(html, "epl")).toContain('checked=""');
+    expect(html).toContain('aria-label="All England leagues"');
+    expect(html).toMatch(
+      /aria-expanded="false"[^>]*aria-controls="sp-standings-region-soccer-england"/
+    );
 
     client.setQueryData(sportsQueryKeys.standingsPreferences, {
       selectedCompetitionKeys: []
     });
     html = renderWithQuery(client);
-    selectedList = html.match(/<select[^>]*aria-label="Selected leagues"[\s\S]*?<\/select>/)?.[0];
-    expect(selectedList).toContain("No leagues selected");
-    expect(selectedList).not.toContain('value="nfl"');
+    expect(leagueBox(html, "nfl")).not.toContain('checked=""');
+    expect(leagueBox(html, "epl")).not.toContain('checked=""');
+    expect(html).toContain(">0<!-- --> of <!-- -->2<");
   });
 
   it("renders only active Sports story preferences with stored story details", () => {

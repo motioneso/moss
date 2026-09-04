@@ -432,9 +432,8 @@ test.describe("Sports settings follow picker (#989)", () => {
     const standingsSettings = page.getByRole("region", { name: "Configure standings" });
     // The section starts collapsed (Ben, 2026-09-03); open it before measuring the picker.
     await standingsSettings.getByRole("button", { name: /Configure standings/ }).click();
-    await expect(
-      standingsSettings.getByRole("listbox", { name: "Selected leagues" })
-    ).toBeVisible();
+    // The design system hides the real checkbox input, so visibility and clicks go by label text.
+    await expect(standingsSettings.getByText("NFL", { exact: true })).toBeVisible();
     for (const width of [320, 375, 414, 768]) {
       await page.setViewportSize({ width, height: 844 });
       const geometry = await standingsSettings.evaluate((element) => {
@@ -452,21 +451,27 @@ test.describe("Sports settings follow picker (#989)", () => {
       expect(geometry.scroll).toBeLessThanOrEqual(geometry.client + 1);
     }
     await page.setViewportSize({ width: 390, height: 844 });
-    const selectedLeagues = standingsSettings.getByRole("listbox", { name: "Selected leagues" });
-    await selectedLeagues.selectOption(["nba", "mlb"]);
-    await standingsSettings.getByRole("button", { name: "Remove selected leagues" }).click();
-    await expect(selectedLeagues.getByRole("option", { name: "NBA" })).toHaveCount(0);
-    await expect(selectedLeagues.getByRole("option", { name: "MLB" })).toHaveCount(0);
+    // Every league is a checkbox that saves as soon as it changes.
+    await standingsSettings.getByText("NBA", { exact: true }).click();
+    await expect(standingsSettings.getByRole("checkbox", { name: "NBA" })).not.toBeChecked();
+    await standingsSettings.getByText("MLB", { exact: true }).click();
+    await expect(standingsSettings.getByRole("checkbox", { name: "MLB" })).not.toBeChecked();
     await page.getByRole("searchbox", { name: "Find a team or league" }).fill("lakers");
     await page.getByRole("button", { name: "Follow Los Angeles Lakers" }).click();
 
     await page.reload();
     await standingsSettings.getByRole("button", { name: /Configure standings/ }).click();
-    await expect(selectedLeagues.getByRole("option", { name: "NFL" })).toHaveCount(1);
-    await expect(selectedLeagues.getByRole("option", { name: "Premier League" })).toHaveCount(1);
-    const availableLeagues = standingsSettings.getByRole("listbox", { name: "Available leagues" });
-    await expect(availableLeagues.getByRole("option", { name: "NBA" })).toHaveCount(1);
-    await expect(availableLeagues.getByRole("option", { name: "MLB" })).toHaveCount(1);
+    await expect(standingsSettings.getByRole("checkbox", { name: "NFL" })).toBeChecked();
+    await expect(standingsSettings.getByRole("checkbox", { name: "NBA" })).not.toBeChecked();
+    await expect(standingsSettings.getByRole("checkbox", { name: "MLB" })).not.toBeChecked();
+    // Soccer leagues sit under their country; the country row opens on click (Ben, 2026-09-03).
+    await expect(standingsSettings.getByText("Premier League", { exact: true })).toBeHidden();
+    await standingsSettings.getByRole("button", { name: /England/ }).click();
+    await expect(standingsSettings.getByText("Premier League", { exact: true })).toBeVisible();
+    await expect(standingsSettings.getByRole("checkbox", { name: "Premier League" })).toBeChecked();
+    await expect(
+      standingsSettings.getByRole("checkbox", { name: "All England leagues" })
+    ).toBeChecked();
 
     await page.goto("/sports");
     const picker = page.getByRole("button", { name: "Select standings league" });
