@@ -114,7 +114,8 @@ export const newsModuleManifest = {
     {
       id: "news",
       label: "News",
-      description: "Read personalized headlines from enabled sources.",
+      description:
+        'Read personalized headlines from enabled sources. Marking a story "less like this" removes it right away and refills its spot from other stories already loaded, so the carousel stays full instead of shrinking.',
       path: "/news",
       icon: "newspaper",
       order: 34,
