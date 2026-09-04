@@ -60,8 +60,9 @@ depends on a module's tables would break module isolation, and it would drag a f
 trip into every keystroke. A single row keyed by user is the simplest thing that survives
 navigation, reloads, and other devices.
 
-A later slice may add a "Save to notes" action that hands the current text to the notes module
-through its public `notesCreate` tool. That is additive and is not in the first build.
+Ben's ruling 2026-09-04: one pad, stored inside the app by default, plus an optional
+checkbox that also mirrors the pad into a "Scratchpad" note in the user's Notes folder. See
+decision 9 for how the mirror works and which side wins.
 
 ### 2. Markdown text is the stored format; the editor is a thin layer over it
 
@@ -150,6 +151,36 @@ another user's scratchpad. Scratchpad text never goes into job payloads, logs, o
 usefulness-feedback capture. It reaches Moss only through the read tool at the moment of a
 request, the same way any tool result does.
 
+### 9. Optional mirror to a "Scratchpad" note in the Notes folder
+
+A checkbox, "Also keep a copy in my Notes folder", off by default. When ticked, every
+successful autosave also writes the whole pad to a note called `Scratchpad.md` at the top of
+the user's notes folder, through the notes module's public `notesCreate` tool in overwrite mode.
+The scratchpad never imports the notes module's code or reads its tables; it calls the declared
+tool as the user, with the user's own `notes.create` permission.
+
+Conflict rule: the app copy wins. The note is a mirror, not a second editor. If the note file is
+edited outside the app, that edit lives until the next autosave, which overwrites it. The
+scratchpad never reads the note back. This is stated in the checkbox's help text so nobody is
+surprised: "The app copy is the master. Edits made to the note file are replaced on the next
+save."
+
+Why app-wins and not merge: a two-way merge between a database row and a file that the notes
+sync job rewrites on its own schedule is exactly the kind of quiet data loss this feature exists
+to avoid. One direction, always the same direction, is predictable.
+
+The checkbox is shown greyed out with "Set up a notes folder first" (linking to the notes
+module's settings) until the notes module reports a configured folder. That signal comes from
+the notes module's public status, never from its tables; if no such status is declared today,
+the sync slice adds it to the notes manifest as a public API.
+
+The mirror write is best effort: if it fails, the pad still saves, the status word stays
+"Saved", and a small "Copy to Notes failed" line appears under it with the reason the notes tool
+gave. Unticking the box stops future writes and leaves the existing note alone.
+
+The checkbox lives in two places that read and write the same setting: the pad's own menu
+(three-dot button in the panel header) and Settings, in a new "Scratchpad" section.
+
 ## Open Questions for Ben
 
 1. Both open at once on desktop: when chat and the scratchpad are both open, should the
@@ -174,6 +205,7 @@ CREATE TABLE app.scratchpads (
   user_id     uuid PRIMARY KEY REFERENCES app.users(id) ON DELETE CASCADE,
   body        text NOT NULL DEFAULT '',
   revision    integer NOT NULL DEFAULT 1,
+  sync_to_notes boolean NOT NULL DEFAULT false,
   updated_at  timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT scratchpads_body_size CHECK (length(body) <= 64000)
 );
@@ -216,7 +248,14 @@ type ScratchpadGetResponse = {
   revision: number;        // 0 when no row exists yet
   updatedAt: string | null;
   maxChars: 64000;
+  syncToNotes: boolean;
+  notesFolderConfigured: boolean;   // from the notes module's public status
 };
+
+// PATCH /api/scratchpad/settings
+type ScratchpadSettingsRequest = { syncToNotes: boolean };
+type ScratchpadSettingsResponse = { syncToNotes: boolean };
+// 409 { code: "scratchpad_notes_folder_missing" } when turning it on without a folder
 
 // PUT /api/scratchpad
 type ScratchpadPutRequest = { body: string; revision: number };
@@ -234,6 +273,11 @@ PUT is an upsert: revision 0 with no row inserts; otherwise it is
 `UPDATE ... WHERE user_id = $1 AND revision = $2` and a zero row count is a 409. Append is a
 single statement that concatenates on the server so two appends cannot lose each other.
 
+After any successful PUT or append, if `sync_to_notes` is true, the service calls the notes
+module's public `notesCreate` tool with path `Scratchpad.md`, the full body, and overwrite on.
+Failures are returned in the save response as `notesMirror: { ok: false, reason }` and never
+fail the save itself.
+
 ### Web
 
 - `apps/web/src/shell/app-shell.tsx`: add `scratchpadOpen` state, the pencil button (Lucide
@@ -241,7 +285,11 @@ single statement that concatenates on the server so two appends cannot lose each
   chat button inside `.topbar-actions`, the shortcut, and one `ScratchpadPanel` render outside
   the routed page.
 - `apps/web/src/scratchpad/scratchpad-panel.tsx`: header (pencil mark, "Scratchpad", status
-  word, close button), the editor, footer with the character count and a "Copy" quiet button.
+  word, three-dot menu button, close button), the editor, footer with the character count and a
+  "Copy" quiet button. The menu is the `jds` menu primitive with one checkbox item, "Also keep a
+  copy in my Notes folder", and an "Open Settings" item.
+- Settings: a new "Scratchpad" section (`/settings?section=scratchpad`) with the same checkbox
+  and its help text, built from the existing settings-ui field and card primitives.
 - `apps/web/src/scratchpad/use-scratchpad.ts`: load once, debounce saves, conflict state,
   in-memory body so navigation never loses text.
 - `apps/web/src/scratchpad/scratchpad-editor.tsx`: lazy-loaded CodeMirror wrapper; theme from
@@ -256,6 +304,9 @@ single statement that concatenates on the server so two appends cannot lose each
   `CORE_APP_SCREENS` (label "Scratchpad", description "Your one private notepad, open from the
   pencil in the top bar or Ctrl/Cmd + Shift + .", path `/?scratchpad=open`, scope `user`). The
   path opens the app with the panel open so Moss can send the user there.
+- App map settings: add a `scratchpad` entry to `CORE_APP_SETTINGS` (label "Scratchpad",
+  description "Choose whether your scratchpad is also kept as a note in your Notes folder",
+  path `/settings?section=scratchpad`, scope `user`).
 - Tools: `scratchpadRead` and `scratchpadAppend` declared alongside the other core tools with
   the descriptions above. Both act as the requesting user through the normal access context and
   call the same service functions as the routes.
@@ -264,7 +315,8 @@ single statement that concatenates on the server so two appends cannot lose each
 
 ### Testing
 
-- Unit: revision conflict, size limit, append onto a list item vs onto prose, empty-row read.
+- Unit: revision conflict, size limit, append onto a list item vs onto prose, empty-row read,
+  mirror write called only when the setting is on, mirror failure does not fail the save.
 - RLS test: user A cannot read or update user B's row through the app role; admin cannot either.
 - Web e2e (Playwright): open from the button, type, navigate to another page, panel still open
   with text; reload, text persists; shortcut toggles; phone viewport shows the full-screen sheet;
@@ -284,7 +336,7 @@ drawer's twin.
 | [Moss]  Today                                              [ pencil ] [ chat ]   |
 +----------------------------------------------------------------------------------+
 | Sidebar |  Page content ...                       +-----------------------------+ |
-|         |                                         | (/) Scratchpad     Saved  x | |
+|         |                                         | (/) Scratchpad  Saved ... x | |
 | Today   |                                         |-----------------------------| |
 | Notes   |                                         | # Errands                   | |
 | Sports  |                                         | - eggs                      | |
@@ -303,6 +355,41 @@ drawer's twin.
 Panel geometry is the chat drawer's: fixed, top 72px, right 18px, bottom 18px, width 404px.
 Header uses the same mark / name / status layout as `.chatd__head`; the status word is
 "Saved", "Saving...", "Changed elsewhere" (with a Reload link) or "Not saved" in the error tone.
+
+### Pad menu open (three-dot button)
+
+```
++-----------------------------+
+| (/) Scratchpad  Saved ... x |
+|          +------------------------------------------+
+|          | [x] Also keep a copy in my Notes folder  |
+|          |     The app copy is the master. Edits    |
+|          |     made to the note file are replaced   |
+|          |     on the next save.                    |
+|          |------------------------------------------|
+|          | Open Settings                            |
+|          +------------------------------------------+
+| - eggs                      |
+```
+
+When no notes folder is configured the checkbox is disabled and the help line reads
+"Set up a notes folder first" with a link to the Notes settings.
+
+### Settings, Scratchpad section
+
+```
++-----------------------------------------------------------------+
+| Settings > Scratchpad                                           |
+|-----------------------------------------------------------------|
+| Notes folder copy                                               |
+| [x] Also keep a copy in my Notes folder                         |
+|     Writes the whole pad to a note called "Scratchpad" every    |
+|     time it saves. The app copy is the master. Edits made to    |
+|     the note file are replaced on the next save.                |
+|                                                                 |
+| Shortcut   Ctrl/Cmd + Shift + .                                 |
++-----------------------------------------------------------------+
+```
 
 ### Desktop, both open (screens wider than 1100px)
 
@@ -357,7 +444,12 @@ the scratchpad text stays in memory and is there when the user comes back.
 - A second user cannot read the first user's row through the API or the database app role.
 - 64,001 characters is rejected by the server; the count turns amber before that.
 - Shortcut toggles from any page and the command palette lists it.
-- App map entry present; `pnpm check:design-tokens` clean; live-path proof recorded on the PR.
+- With the Notes copy ticked, a save produces or updates `Scratchpad.md` in the notes folder
+  with the same text; editing that file by hand and saving the pad again overwrites the file.
+- The checkbox is disabled with a clear message when no notes folder is configured; the pad
+  menu and the Settings section always show the same value.
+- App map entries present (screen and setting); `pnpm check:design-tokens` clean; live-path
+  proof recorded on the PR.
 
 ## Hard Invariants honored
 
@@ -365,11 +457,13 @@ the scratchpad text stays in memory and is there when the user comes back.
 - Private by default: no sharing surface at all.
 - Secrets never escape: no secrets involved; body never enters logs or job payloads.
 - Metadata-only job payloads: no jobs.
-- Vault I/O: none; this is a database row, not a vault file.
+- Vault I/O: the pad itself is a database row. The optional Notes copy is written by the notes
+  module's own tool, which already goes through `VaultContext`; the scratchpad never touches
+  the filesystem.
 - AccessContext unchanged: tools and routes use the existing actor id.
 - Provider-agnostic AI: tools are declared capabilities; no model named.
-- Module isolation: core feature, own table; the later notes hand-off uses the notes public
-  tool only.
+- Module isolation: core feature, own table; the Notes copy uses the notes module's declared
+  `notesCreate` tool and public status only, never its code or tables.
 - Never edit an applied migration: new file 0177.
 - No new required settings or env vars; nothing to configure.
 - App map updated in the same PR as the button.
@@ -383,14 +477,20 @@ the scratchpad text stays in memory and is there when the user comes back.
    sheet. Uses a plain textarea inside the panel so the slice stands on its own.
 3. **Editor.** Swap the textarea for the lazy-loaded CodeMirror Markdown editor with the token
    theme; character count and amber threshold; design-token check.
-4. **Moss tools and live proof.** `scratchpadRead`, `scratchpadAppend`, list-item append rule,
-   panel refresh after append, the "Moss added a line" toast, live-path proof on dev, merge.
+4. **Moss tools.** `scratchpadRead`, `scratchpadAppend`, list-item append rule, panel refresh
+   after append, the "Moss added a line" toast.
+5. **Notes copy and live proof.** The `sync_to_notes` column and settings route, the mirror
+   write through `notesCreate`, the notes-folder-configured status (adding it to the notes
+   manifest if missing), the pad menu checkbox, the Settings section, the app map settings entry,
+   live-path proof on dev of typing, a Moss append, and the note file updating, then merge.
 
-Slices 2 to 4 share one worktree and one PR per the 2026-08-25 ruling; slice 1 can be its own PR
-since it ships nothing visible.
+Slices 2 to 5 share one worktree and one PR per the 2026-08-25 ruling; slice 1 can be its own PR
+since it ships nothing visible. The `sync_to_notes` column ships in slice 1's migration so no
+second migration is needed.
 
 ## Self-review
 
-- Every screen the feature ships has a mockup above (desktop, both-open, phone).
+- Every screen the feature ships has a mockup above (desktop, pad menu, Settings section,
+  both-open, phone).
 - Nothing here requires a hand-edited settings file.
 - The only judgement calls left are the four open questions; none blocks slice 1.
