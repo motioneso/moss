@@ -43,6 +43,9 @@ const MAX_PUBLISHER_REDIRECT_HOPS = 5;
 const SAME_OWNER_ALIAS_GROUPS: readonly (readonly string[])[] = [];
 
 function redirectNoteFor(fromDomain: string, toDomain: string): string {
+  if (fromDomain === toDomain) {
+    return `We followed the address you gave to ${toDomain}'s homepage, so that is the page we will use.`;
+  }
   return `${fromDomain} sends visitors to ${toDomain}, so that is the site we will follow.`;
 }
 
@@ -169,18 +172,31 @@ function finalDomainRejection(
 }
 
 /**
- * Whether a fetch that landed on a different domain than requested can still be trusted as
- * that publisher's own move, and if so, the note to show the user. Deterministic only — no
- * model call (Ben, 2026-09-04).
+ * Whether a fetch can still be trusted as that publisher's own move, and if so, whether the
+ * address actually changed and the note to show the user for it. Deterministic only — no model
+ * call (Ben, 2026-09-04). `requestedUrl` is the exact address this particular fetch was asked
+ * for, so a same-domain move (a www prefix, or a specific page sent to its own homepage) is
+ * still recognized as a move even though ownership never changed.
  */
 function evaluatePublisherRedirect(
   fetched: NewsSafeFetchResult,
+  requestedUrl: string,
   requestedDomain: string,
   exclusions: readonly string[]
-): { accepted: true; note: string | null } | { accepted: false; reason: "policy" | "redirected" } {
+):
+  | { accepted: true; redirected: boolean; note: string | null }
+  | { accepted: false; reason: "policy" | "redirected" } {
   const outcome = finalDomainRejection(fetched.finalUrl, requestedDomain, exclusions);
-  if (outcome === null) return { accepted: true, note: null };
   if (outcome === "policy") return { accepted: false, reason: "policy" };
+
+  if (outcome === null) {
+    if (fetched.finalUrl === requestedUrl) return { accepted: true, redirected: false, note: null };
+    // Same registrable domain (including a subdomain move like adding "www"), but the address
+    // itself changed — still a real move, just one that never changed ownership.
+    const finalDomain = normalizePublisherDomain(fetched.finalUrl);
+    const toDomain = finalDomain.ok ? finalDomain.domain : requestedDomain;
+    return { accepted: true, redirected: true, note: redirectNoteFor(requestedDomain, toDomain) };
+  }
 
   // outcome === "redirected": a genuine cross-domain redirect. Accept only if every check passes.
   const finalDomain = normalizePublisherDomain(fetched.finalUrl);
@@ -203,7 +219,11 @@ function evaluatePublisherRedirect(
     return { accepted: false, reason: "redirected" };
   }
 
-  return { accepted: true, note: redirectNoteFor(requestedDomain, finalDomain.domain) };
+  return {
+    accepted: true,
+    redirected: true,
+    note: redirectNoteFor(requestedDomain, finalDomain.domain)
+  };
 }
 
 export async function resolveSourceInput(
@@ -280,7 +300,8 @@ async function verifyPublisher(
   if (!requestedDomain.ok) {
     return { status: "failed", result: { status: "rejected", reason: "invalid_input" } };
   }
-  const fetched = await deps.fetch(new URL(rawUrl).toString());
+  const requestedUrl = new URL(rawUrl).toString();
+  const fetched = await deps.fetch(requestedUrl);
   if (!fetched.ok) {
     return {
       status: "failed",
@@ -288,11 +309,20 @@ async function verifyPublisher(
     };
   }
   const fetchedUrl = new URL(fetched.finalUrl);
-  const redirectDecision = evaluatePublisherRedirect(fetched, requestedDomain.domain, exclusions);
+  const redirectDecision = evaluatePublisherRedirect(
+    fetched,
+    requestedUrl,
+    requestedDomain.domain,
+    exclusions
+  );
   if (!redirectDecision.accepted) {
     return { status: "failed", result: { status: "rejected", reason: redirectDecision.reason } };
   }
-  const redirectNote = redirectDecision.note;
+  // Whether ANY move away from the exact address the user gave has happened yet, across both
+  // this fetch and (below) a same-site page-to-homepage move. Once true, the model is never
+  // called for this source — see the allowModelCall use below (Ben, 2026-09-04).
+  let redirected = redirectDecision.redirected;
+  let redirectNote = redirectDecision.note;
   let homepageUrl = new URL("/", fetchedUrl).toString();
   let homepageBody = fetched.body;
   let feedUrl: string | null = null;
@@ -325,13 +355,27 @@ async function verifyPublisher(
           result: { status: "rejected", reason: mapFetchFailure(homepage.reason) }
         };
       }
-      const expectedHomepage = normalizePublisherDomain(homepageUrl);
-      const homepageRejection = expectedHomepage.ok
-        ? finalDomainRejection(homepage.finalUrl, expectedHomepage.domain, exclusions)
-        : "redirected";
-      if (homepageRejection) {
-        return { status: "failed", result: { status: "rejected", reason: homepageRejection } };
+      // The page named this homepage itself (its own canonical or og:url tag), so checking the
+      // fetch result against that same self-declared address would always pass. The address the
+      // user actually typed is the only thing worth checking ownership against.
+      const homepageDecision = evaluatePublisherRedirect(
+        homepage,
+        homepageUrl,
+        requestedDomain.domain,
+        exclusions
+      );
+      if (!homepageDecision.accepted) {
+        return {
+          status: "failed",
+          result: { status: "rejected", reason: homepageDecision.reason }
+        };
       }
+      redirected = true;
+      const finalHomepageDomain = normalizePublisherDomain(homepage.finalUrl);
+      redirectNote = redirectNoteFor(
+        requestedDomain.domain,
+        finalHomepageDomain.ok ? finalHomepageDomain.domain : requestedDomain.domain
+      );
       homepageUrl = new URL("/", homepage.finalUrl).toString();
       homepageBody = homepage.body;
     }
@@ -373,7 +417,7 @@ async function verifyPublisher(
     // A followed redirect must stay fully rule-based end to end — no model call anywhere on
     // that path. An unseen domain reads as "unavailable" rather than invoking the model
     // (Ben, 2026-09-04, review of PR 2246).
-    { allowModelCall: redirectNote === null }
+    { allowModelCall: !redirected }
   );
   if (policy.verdict === "unavailable") {
     return { status: "failed", result: { status: "unavailable" } };
