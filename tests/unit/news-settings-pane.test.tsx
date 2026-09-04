@@ -204,7 +204,7 @@ function renderPersonalizationState(state: "pending" | "error"): string {
 describe("NewsSettings personalization sections (#953)", () => {
   it("renders all three new sections alongside the untouched curated controls", () => {
     const html = render(personalization());
-    expect(html).toContain("Publications you add");
+    expect(html).toContain("Add source");
     expect(html).toContain("Topics across the web");
     expect(html).toContain("Excluded publishers");
     // Curated V1 controls unchanged.
@@ -263,6 +263,7 @@ describe("NewsSettings personalization sections (#953)", () => {
         ]
       })
     );
+    expect(html).toContain("Publications you add");
     expect(html).toContain("The Atlantic");
     expect(html).toContain("theatlantic.com");
     expect(html).toContain("Watches");

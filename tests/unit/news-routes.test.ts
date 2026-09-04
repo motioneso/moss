@@ -309,6 +309,7 @@ describe("news routes (#897)", () => {
     expect(body.enabledSources).toEqual([
       { sourceKey: "bbc", label: "BBC News" },
       { sourceKey: "guardian", label: "The Guardian" },
+      { sourceKey: "ap", label: "AP News" },
       { sourceKey: "npr", label: "NPR" }
     ]);
     expect(body.activeTopics).toEqual(["technology"]);
@@ -337,7 +338,7 @@ describe("news routes (#897)", () => {
     const res = await app.inject({ method: "GET", url: "/api/news/catalog" });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
-    expect(body.sources).toHaveLength(8);
+    expect(body.sources).toHaveLength(9);
     expect(body.topics).toHaveLength(8);
     const bbc = body.sources.find((s: { sourceKey: string }) => s.sourceKey === "bbc");
     // Serialization guard: the settings pane disables topic chips per source off this array.

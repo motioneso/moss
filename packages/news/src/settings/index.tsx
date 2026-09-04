@@ -323,8 +323,7 @@ export default function NewsSettings() {
   const credentialBySourceId = new Map<string, NewsSourceCredentialStatusDto>(
     (credentialsQuery.data?.credentials ?? []).map((entry) => [entry.sourceId, entry])
   );
-  const connectedSources = customSources.filter((source) => credentialBySourceId.has(source.id));
-  const customOnlySources = customSources.filter((source) => !credentialBySourceId.has(source.id));
+
   const customTopics = personalization?.customTopics ?? [];
   const exclusions = personalization?.sourceExclusions ?? [];
   const personalizationReady = personalizationQuery.isSuccess;
@@ -645,53 +644,32 @@ export default function NewsSettings() {
           ) : null}
         </div>
 
-        <div className="nw-set__group">
-          <div className="nw-set__group-head">
-            <h3 className="nw-set__subheading">
-              <span>Connected publishers</span>
-              <Badge tone="neutral">{connectedSources.length}</Badge>
-            </h3>
-          </div>
-          <p className="nw-set__hint">
-            Publishers connected with your own access key.
-          </p>
-          {personalizationReady && connectedSources.length > 0 ? (
-            <ul className="nw-set__list">
-              {connectedSources.map(renderCustomSourceRow)}
-            </ul>
-          ) : (
-            <p className="nw-set__hint">No connected publishers yet.</p>
-          )}
-        </div>
-
-        <div className="nw-set__group">
-          <div className="nw-set__group-head">
-            <h3 className="nw-set__subheading">
-              <span>Publications you add</span>
-              <Badge tone="neutral">{customOnlySources.length}</Badge>
-            </h3>
-          </div>
-          <p className="nw-set__hint">
-            Publications you add yourself, verified before they join your feed.
-          </p>
-          {personalizationReady && availability ? (
-            <p className="nw-set__prereq">
-              <Badge tone={availability.aiConfigured ? "pine" : "amber"} dot>
-                AI model {availability.aiConfigured ? "ready" : "needed"}
-              </Badge>
-              <Badge tone={availability.webSearchConfigured ? "pine" : "amber"} dot>
-                Web search {availability.webSearchConfigured ? "ready" : "needed"}
-              </Badge>
+        {personalizationReady && customSources.length > 0 ? (
+          <div className="nw-set__group">
+            <div className="nw-set__group-head">
+              <h3 className="nw-set__subheading">
+                <span>Publications you add</span>
+                <Badge tone="neutral">{customSources.length}</Badge>
+              </h3>
+            </div>
+            <p className="nw-set__hint">
+              Publications you add yourself, verified before they join your feed.
             </p>
-          ) : null}
-          {personalizationReady && customOnlySources.length > 0 ? (
+            {availability ? (
+              <p className="nw-set__prereq">
+                <Badge tone={availability.aiConfigured ? "pine" : "amber"} dot>
+                  AI model {availability.aiConfigured ? "ready" : "needed"}
+                </Badge>
+                <Badge tone={availability.webSearchConfigured ? "pine" : "amber"} dot>
+                  Web search {availability.webSearchConfigured ? "ready" : "needed"}
+                </Badge>
+              </p>
+            ) : null}
             <ul className="nw-set__list">
-              {customOnlySources.map(renderCustomSourceRow)}
+              {customSources.map(renderCustomSourceRow)}
             </ul>
-          ) : (
-            <p className="nw-set__hint">No custom publications added yet.</p>
-          )}
-        </div>
+          </div>
+        ) : null}
 
         {/* #2008: what happened to a publisher key. The key form closes as soon as the request
             succeeds, so this is the only place a "Connected" sentence can actually be read. */}

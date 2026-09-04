@@ -77,6 +77,25 @@ export const NEWS_CATALOG: readonly NewsSourceEntry[] = [
     imageHosts: ["i.guim.co.uk"]
   },
   {
+    sourceKey: "ap",
+    label: "AP News",
+    homepageUrl: "https://apnews.com",
+    defaultEnabled: true,
+    topFeedUrl: "https://openrss.org/feed/apnews.com",
+    topicFeeds: {
+      world: "https://openrss.org/feed/apnews.com/world-news",
+      us: "https://openrss.org/feed/apnews.com/us-news",
+      politics: "https://openrss.org/feed/apnews.com/politics",
+      business: "https://openrss.org/feed/apnews.com/business",
+      technology: "https://openrss.org/feed/apnews.com/technology",
+      science: "https://openrss.org/feed/apnews.com/science",
+      health: "https://openrss.org/feed/apnews.com/health",
+      culture: "https://openrss.org/feed/apnews.com/entertainment"
+    },
+    feedHosts: ["openrss.org"],
+    imageHosts: ["dims.apnews.com", "assets.apnews.com"]
+  },
+  {
     sourceKey: "nytimes",
     label: "The New York Times",
     homepageUrl: "https://www.nytimes.com",
