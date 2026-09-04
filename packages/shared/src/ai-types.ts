@@ -146,7 +146,11 @@ export interface AiProviderDiscoveredModelDto {
  */
 export type AiCliModelListFailure = "unsupported" | "not_logged_in" | "error";
 export type AiCliModelListResult =
-  | { readonly status: "ok"; readonly models: readonly { readonly id: string }[] }
+  | {
+      readonly status: "ok";
+      /** `releasedAt`: ISO 8601 release date when the vendor's list carries one (0214). */
+      readonly models: readonly { readonly id: string; readonly releasedAt?: string | null }[];
+    }
   | { readonly status: AiCliModelListFailure; readonly message?: string };
 
 export interface AiDiscoverModelsItemDto extends AiProviderDiscoveredModelDto {

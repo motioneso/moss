@@ -123,7 +123,7 @@ export class ModelDiscoveryService {
       };
     }
     const models = result.models
-      .map((model) => inferModel(model.id, providerKind))
+      .map((model) => inferModel(model.id, providerKind, model.releasedAt ?? null))
       .filter((model): model is AiProviderDiscoveredModelDto => model !== null);
     return { models };
   }

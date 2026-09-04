@@ -17,7 +17,7 @@ describe("CLI model discovery (#2208)", () => {
     const lister = vi.fn<CliModelLister>().mockResolvedValue({
       status: "ok",
       models: [
-        { id: "claude-fable-5-1" },
+        { id: "claude-fable-5-1", releasedAt: "2026-06-01T00:00:00.000Z" },
         { id: "claude-opus-4-8" },
         { id: "claude-sonnet-4-6" },
         { id: "claude-haiku-4-5-20251001" }
@@ -26,6 +26,12 @@ describe("CLI model discovery (#2208)", () => {
     const service = new ModelDiscoveryService({ cliModelLister: lister });
 
     const first = await service.discoverModels("claude", cliInput("anthropic"));
+    expect(
+      first.models.find((model) => model.providerModelId === "claude-fable-5-1")?.releasedAt
+    ).toBe("2026-06-01T00:00:00.000Z");
+    expect(
+      first.models.find((model) => model.providerModelId === "claude-opus-4-8")?.releasedAt
+    ).toBeNull();
     expect(first.fromFallback).toBe(false);
     expect(first.fromCache).toBe(false);
     expect(first.reason).toBeUndefined();

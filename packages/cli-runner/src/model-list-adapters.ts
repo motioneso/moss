@@ -63,13 +63,31 @@ export function stripAnthropicTokenPrefix(raw: string): string {
 
 /** Keep only current claude- ids; legacy snapshot versions contain ":". */
 export function filterAnthropicModelIds(json: unknown): string[] {
+  return filterAnthropicModels(json).map((model) => model.id);
+}
+
+/**
+ * Current claude- models with the release date Anthropic lists as `created_at` (0214: the api's
+ * tier ladder prefers the newest release). A missing or unparseable date is null.
+ */
+export function filterAnthropicModels(
+  json: unknown
+): { readonly id: string; readonly releasedAt: string | null }[] {
   if (!json || typeof json !== "object") return [];
   const data = (json as { data?: unknown }).data;
   if (!Array.isArray(data)) return [];
   return data
-    .map((item) => (item && typeof item === "object" ? (item as { id?: unknown }).id : null))
-    .filter((id): id is string => typeof id === "string" && id.length > 0)
-    .filter((id) => id.includes("claude-") && !id.includes(":"));
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .filter(
+      (item): item is Record<string, unknown> & { id: string } =>
+        typeof item.id === "string" && item.id.length > 0
+    )
+    .filter((item) => item.id.includes("claude-") && !item.id.includes(":"))
+    .map((item) => {
+      const parsed = typeof item.created_at === "string" ? new Date(item.created_at) : null;
+      const releasedAt = parsed && !Number.isNaN(parsed.getTime()) ? parsed.toISOString() : null;
+      return { id: item.id, releasedAt };
+    });
 }
 
 /** Keep only listable codex models (`visibility === "list"`); the id is the `slug`. */
@@ -168,7 +186,7 @@ const anthropicAdapter: ModelListAdapter = async (deps) => {
     "anthropic-beta": "oauth-2025-04-20"
   });
   if (!outcome.ok) return outcome.result;
-  return { status: "ok", models: filterAnthropicModelIds(outcome.json).map((id) => ({ id })) };
+  return { status: "ok", models: filterAnthropicModels(outcome.json) };
 };
 
 /** `<homeBase>/.codex/auth.json` — the file the codex CLI writes at login. */
