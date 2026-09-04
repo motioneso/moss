@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MoreHorizontal, ThumbsDown, ThumbsUp } from "lucide-react";
-import { Menu } from "@moss/module-web-sdk";
+import { Button, Menu } from "@moss/module-web-sdk";
 import type { FeedbackSurface } from "@moss/shared";
 import { STORY_FEEDBACK_REASON_MAX_LENGTH } from "@moss/shared";
 
@@ -125,12 +125,12 @@ export function StoryFeedbackMenu(props: StoryFeedbackMenuProps) {
             </p>
           ) : null}
           <div className="sp-feedback__actions">
-            <button type="button" onClick={closeEditor}>
+            <Button variant="quiet" size="sm" onClick={closeEditor}>
               Cancel
-            </button>
-            <button type="button" onClick={saveReason}>
-              Save
-            </button>
+            </Button>
+            <Button size="sm" onClick={saveReason} disabled={pending}>
+              {pending ? "Saving..." : "Save"}
+            </Button>
           </div>
         </div>
       ) : null}
