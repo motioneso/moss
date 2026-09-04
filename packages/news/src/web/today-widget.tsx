@@ -45,7 +45,7 @@ export function NewsTodayWidget(): ReactNode {
       <div className="jds-brief__title">Top stories</div>
       {/* Lead story — broadsheet treatment. Photo (when present), source tag, display headline,
           and a one-line dek clamped so a long summary can't push the brief list off the fold. */}
-      <div className="nw-twlead-wrap">
+      <div className="nw-twlead-wrap nw-fbhost">
         <a className="nw-twlead" href={lead.url} target="_blank" rel="noreferrer">
           {lead.imageUrl ? (
             <img className="nw-twlead__photo" src={lead.imageUrl} alt="" loading="lazy" />
@@ -60,7 +60,7 @@ export function NewsTodayWidget(): ReactNode {
         <ul className="nw-twlist">
           {rest.map((headline) => (
             <li className="nw-twlist__item" key={headline.id}>
-              <div className="nw-twlist__row">
+              <div className="nw-twlist__row nw-fbhost">
                 <a className="nw-twlist__link" href={headline.url} target="_blank" rel="noreferrer">
                   <span className="nw-twlist__tag">{headline.sourceLabel}</span>
                   <span className="nw-twlist__title">{headline.title}</span>

@@ -193,8 +193,10 @@ test("edits and removes a Less like this preference in Sports Settings", async (
   await signIn(page, { email: UAT_SECOND_OWNER_EMAIL, password: UAT_SECOND_OWNER_PASSWORD });
 
   await page.goto(`${requireBaseURL()}/settings?section=modules&module=sports`);
+  // With no saved preferences the section is not rendered at all (Ben, 2026-09-03).
   const secondOwnerPreferences = page.locator('section[aria-label="Story preferences"]');
-  await expect(secondOwnerPreferences).toBeVisible();
+  await expect(page.getByRole("heading", { name: "News sources" })).toBeVisible();
+  await expect(secondOwnerPreferences).toHaveCount(0);
   await expect(
     secondOwnerPreferences.getByText("Too much from the Today desk", { exact: true })
   ).toHaveCount(0);

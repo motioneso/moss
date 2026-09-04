@@ -74,7 +74,13 @@ interface EspnStandingsEntry {
     readonly displayName?: string;
   };
   readonly note?: { readonly description?: string; readonly color?: string } | null;
-  readonly stats?: readonly { readonly name?: string; readonly value?: number }[];
+  // `displayValue` is read only for the "overall" record stat ("10-2" / "10-2-1") — see
+  // overallRecord below.
+  readonly stats?: readonly {
+    readonly name?: string;
+    readonly value?: number;
+    readonly displayValue?: string;
+  }[];
 }
 
 // --- Helpers -------------------------------------------------------------------------------
@@ -165,8 +171,30 @@ function normalizeNoteColor(color: string | undefined): string | null {
   return /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(hex) ? hex : null;
 }
 
+// College football standings (?level=3, verified live 2026-09-03) carry a "wins" stat but NO
+// "losses", "ties" or "winPercent" stats — the only place the losses live is the "overall"
+// record string ("1-0", "10-2-1"). Without this fallback every FBS team reads as undefeated.
+// Pro leagues carry the numeric stats and never reach the fallback.
+function overallRecord(
+  stats: EspnStandingsEntry["stats"]
+): { wins: number; losses: number; ties: number | null } | null {
+  const text = stats?.find((s) => s.name === "overall")?.displayValue;
+  const match = text ? /^(\d+)-(\d+)(?:-(\d+))?$/.exec(text.trim()) : null;
+  if (!match) return null;
+  return {
+    wins: Number(match[1]),
+    losses: Number(match[2]),
+    ties: match[3] === undefined ? null : Number(match[3])
+  };
+}
+
 function toStandingsRow(entry: EspnStandingsEntry, index: number): StandingsRow {
   const teamKey = (entry.team?.abbreviation ?? entry.team?.id ?? "").toLowerCase();
+  const overall = overallRecord(entry.stats);
+  const wins = statValue(entry.stats, "wins") ?? overall?.wins ?? 0;
+  const losses = statValue(entry.stats, "losses") ?? overall?.losses ?? 0;
+  const draws = statValue(entry.stats, "ties") ?? overall?.ties ?? null;
+  const played = wins + losses + (draws ?? 0);
   return {
     teamKey,
     name: entry.team?.displayName ?? teamKey,
@@ -176,10 +204,12 @@ function toStandingsRow(entry: EspnStandingsEntry, index: number): StandingsRow 
     // every card (live feedback mraxrdxr, mraz6m43).
     rank: statValue(entry.stats, "rank") ?? index + 1,
     points: statValue(entry.stats, "points") ?? null,
-    wins: statValue(entry.stats, "wins") ?? 0,
-    losses: statValue(entry.stats, "losses") ?? 0,
-    draws: statValue(entry.stats, "ties") ?? null,
-    winPercent: statValue(entry.stats, "winPercent") ?? null,
+    wins,
+    losses,
+    draws,
+    winPercent:
+      statValue(entry.stats, "winPercent") ??
+      (overall && played > 0 ? (wins + (draws ?? 0) / 2) / played : null),
     qualifies: entry.note != null,
     qualificationNote: entry.note?.description ?? null,
     qualificationColor: normalizeNoteColor(entry.note?.color)
@@ -234,9 +264,13 @@ export interface EspnHeadlinesParams {
 async function listTeams(fetchFn: typeof fetch, params: EspnTeamsParams): Promise<SourceTeamRef[]> {
   const { competitionKey } = params;
   const { sport, league } = resolve(competitionKey);
+  // ESPN pages the teams list at 50 by default. Pro leagues fit, but the college leagues added
+  // for #2210 run to hundreds (college-football answers 760, mens-college-basketball 362, verified
+  // live 2026-09-03), and the default page started at "Abilene Christian", so Alabama, Ohio State
+  // and every other major program were unfollowable. Ask for everything in one page.
   const data = (await fetchJson(
     fetchFn,
-    `${SITE_BASE}/${sport}/${league}/teams`,
+    `${SITE_BASE}/${sport}/${league}/teams?limit=1000`,
     `${league} teams`
   )) as {
     sports?: readonly {
