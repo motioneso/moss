@@ -125,7 +125,10 @@ export function registerAiProviderValidationRoutes(
           fromFallback: result.fromFallback,
           cacheExpiresAt: result.cacheExpiresAt
             ? new Date(result.cacheExpiresAt).toISOString()
-            : null
+            : null,
+          // #2208: surface why a CLI provider listed nothing so Settings can say so in plain English.
+          ...(result.reason !== undefined ? { reason: result.reason } : {}),
+          ...(result.message !== undefined ? { message: result.message } : {})
         };
       } catch (error) {
         return handleRouteError(error, reply);

@@ -60,6 +60,8 @@ import {
   type RpcLaunchParams,
   type RpcLaunchResult,
   type RpcListLiveSessionsResult,
+  type RpcListProviderModelsParams,
+  type RpcListProviderModelsResult,
   type RpcMethod,
   type RpcOk,
   type PersistentRuntimeLaunchConfig,
@@ -397,6 +399,16 @@ export class RpcConnection {
 
   cancelLogin(params: RpcCancelLoginParams): Promise<RpcCancelLoginResult> {
     return this.call<RpcCancelLoginResult>("cancelLogin", undefined, params);
+  }
+
+  /**
+   * #2208 listProviderModels — NON-SESSION, like probeProvider. The runner asks the provider's
+   * vendor for its live model list with the credential it already holds; ONLY ids come back.
+   * Every non-ok outcome (not logged in, unsupported, vendor failure) is a normal result, not an
+   * `RpcErr`. Server-bounded at 5 s per vendor call, so no client deadline is applied here.
+   */
+  listProviderModels(params: RpcListProviderModelsParams): Promise<RpcListProviderModelsResult> {
+    return this.call<RpcListProviderModelsResult>("listProviderModels", undefined, params);
   }
 
   /** Tear down the connection (process shutdown). Idempotent. */

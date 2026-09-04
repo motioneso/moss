@@ -27,6 +27,7 @@ import {
   type RpcKillParams,
   type RpcKillTerminalParams,
   type RpcLaunchParams,
+  type RpcListProviderModelsParams,
   type RpcOk,
   type RpcOpenTerminalParams,
   type RpcPollLoginParams,
@@ -401,6 +402,13 @@ async function invoke(
       const provider = (req.params as RpcInstallProviderParams).provider;
       if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
       return host.installProvider(provider);
+    }
+    case "listProviderModels": {
+      // #2208: non-session; kind guard ⇒ bad_request. Every other outcome (not logged in,
+      // unsupported, vendor failure) is a normal RpcOk result, never an RpcErr.
+      const provider = (req.params as RpcListProviderModelsParams).provider;
+      if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
+      return host.listProviderModels(provider);
     }
     case "beginLogin": {
       // login-contract §L.2.2: kind guard FIRST (bad_request). The catalog/adapter-blocked gate

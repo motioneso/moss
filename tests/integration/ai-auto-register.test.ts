@@ -5,11 +5,11 @@ import pg from "pg";
 import {
   AiAutoRegisterService,
   AiRepository,
-  CLI_STATIC_MODELS,
   ModelDiscoveryService,
   createAiSecretCipher,
   type AiSecretCipher
 } from "@moss/ai";
+import type { AiCliModelListResult, AiProviderKind } from "@moss/shared";
 import { DataContextRunner, createDatabase, type AccessContext, type MossDatabase } from "@moss/db";
 import { SettingsRepository } from "@moss/settings";
 
@@ -18,6 +18,18 @@ import { buildOnboardingLogin } from "../../packages/module-registry/src/onboard
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
+
+// #2208: CLI providers no longer ship a typed-in model list — discovery asks the cli-runner for the
+// vendor's live ids. These tests stand in for that runner with a fixed answer per provider kind, so
+// the reconcile behaviour (natural-key upsert, prune, sentinel kept) is exercised without a socket.
+const STUB_CLI_MODELS: Partial<Record<AiProviderKind, readonly string[]>> = {
+  anthropic: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+  "openai-compatible": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6"]
+};
+const stubCliModelLister = async (provider: AiProviderKind): Promise<AiCliModelListResult> => {
+  const ids = STUB_CLI_MODELS[provider];
+  return ids ? { status: "ok", models: ids.map((id) => ({ id })) } : { status: "unsupported" };
+};
 
 describe("AI auto-register default chat model on login (#367)", () => {
   let appDb: Kysely<MossDatabase>;
@@ -38,7 +50,11 @@ describe("AI auto-register default chat model on login (#367)", () => {
     dataContext = new DataContextRunner(appDb);
     repository = new AiRepository();
     cipher = createAiSecretCipher();
-    service = new AiAutoRegisterService({ repository, cipher });
+    service = new AiAutoRegisterService({
+      repository,
+      cipher,
+      modelDiscovery: new ModelDiscoveryService({ cliModelLister: stubCliModelLister })
+    });
   });
 
   afterAll(async () => {
@@ -196,14 +212,13 @@ describe("AI auto-register default chat model on login (#367)", () => {
         tier: "economy"
       });
 
-      const changedDiscovery = new ModelDiscoveryService();
-      changedDiscovery.discoverModels = async () => ({
-        models: CLI_STATIC_MODELS.anthropic!.filter(
-          (model) => model.providerModelId !== bound.provider_model_id
-        ),
-        fromCache: false,
-        fromFallback: true,
-        cacheExpiresAt: null
+      const changedDiscovery = new ModelDiscoveryService({
+        cliModelLister: async () => ({
+          status: "ok",
+          models: STUB_CLI_MODELS.anthropic!.filter((id) => id !== bound.provider_model_id).map(
+            (id) => ({ id })
+          )
+        })
       });
       await discoverAndPersistModels(
         db,

@@ -450,7 +450,10 @@ export const aiDiscoverModelsResponseSchema = {
   properties: {
     models: { type: "array", items: aiDiscoverModelsItemSchema },
     fromFallback: { type: "boolean" },
-    cacheExpiresAt: { type: "string", nullable: true }
+    cacheExpiresAt: { type: "string", nullable: true },
+    // #2208: why a CLI provider listed nothing (absent when the list is authoritative).
+    reason: { type: "string", enum: ["unsupported", "not_logged_in", "error", "unavailable"] },
+    message: { type: "string" }
   }
 } as const;
 

@@ -1,49 +1,119 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { CLI_STATIC_MODELS, DEFAULT_CHAT_MODELS, ModelDiscoveryService } from "@moss/ai";
+import { DEFAULT_CHAT_MODELS, ModelDiscoveryService, type CliModelLister } from "@moss/ai";
 
-describe("CLI model discovery (#982/#869)", () => {
-  it("curates active-ready Codex ids with service tiers", async () => {
-    const result = await new ModelDiscoveryService().discoverModels("codex", {
-      providerKind: "openai-compatible",
-      authMethod: "cli",
-      baseUrl: null,
-      credential: { cli: true }
+// #2208: CLI providers no longer ship a typed-in model list. Discovery asks the cli-runner (the
+// injected lister) for the vendor's live ids and infers tiers from the id text; anything other
+// than an `ok` answer yields no models plus a `reason` the routes surface.
+describe("CLI model discovery (#2208)", () => {
+  const cliInput = (providerKind: "anthropic" | "openai-compatible" | "google") => ({
+    providerKind,
+    authMethod: "cli" as const,
+    baseUrl: null,
+    credential: { cli: true }
+  });
+
+  it("maps the runner's ids through the tier heuristics and caches the answer for an hour", async () => {
+    const lister = vi.fn<CliModelLister>().mockResolvedValue({
+      status: "ok",
+      models: [
+        { id: "claude-fable-5-1" },
+        { id: "claude-opus-4-8" },
+        { id: "claude-sonnet-4-6" },
+        { id: "claude-haiku-4-5-20251001" }
+      ]
+    });
+    const service = new ModelDiscoveryService({ cliModelLister: lister });
+
+    const first = await service.discoverModels("claude", cliInput("anthropic"));
+    expect(first.fromFallback).toBe(false);
+    expect(first.fromCache).toBe(false);
+    expect(first.reason).toBeUndefined();
+    expect(typeof first.cacheExpiresAt).toBe("number");
+    expect(
+      Object.fromEntries(first.models.map((model) => [model.providerModelId, model.tier]))
+    ).toEqual({
+      "claude-fable-5-1": "reasoning",
+      "claude-opus-4-8": "reasoning",
+      "claude-sonnet-4-6": "interactive",
+      "claude-haiku-4-5-20251001": "economy"
     });
 
-    expect(CLI_STATIC_MODELS["openai-compatible"]).toBeDefined();
+    const second = await service.discoverModels("claude", cliInput("anthropic"));
+    expect(second.fromCache).toBe(true);
+    expect(second.models).toEqual(first.models);
+    expect(lister).toHaveBeenCalledTimes(1);
+    expect(lister).toHaveBeenCalledWith("anthropic");
+  });
+
+  it("infers Codex service tiers from the published suffixes", async () => {
+    const service = new ModelDiscoveryService({
+      cliModelLister: async () => ({
+        status: "ok",
+        models: [
+          { id: "gpt-5.6-sol" },
+          { id: "gpt-5.6-terra" },
+          { id: "gpt-5.6-luna" },
+          { id: "gpt-5.6" }
+        ]
+      })
+    });
+    const result = await service.discoverModels("codex", cliInput("openai-compatible"));
     expect(
       Object.fromEntries(result.models.map((model) => [model.providerModelId, model.tier]))
-    ).toMatchObject({
+    ).toEqual({
       "gpt-5.6-sol": "reasoning",
       "gpt-5.6-terra": "interactive",
-      "gpt-5.6-luna": "economy"
+      "gpt-5.6-luna": "economy",
+      "gpt-5.6": "interactive"
     });
   });
 
-  // #2028 — Google chat works now, so the Gemini models have to be listed. Before this, a signed-in
-  // Google account offered nothing to pick and no default model was created on sign-in.
-  it("curates Gemini ids with the tiers their names announce", async () => {
-    const result = await new ModelDiscoveryService().discoverModels("gemini", {
-      providerKind: "google",
-      authMethod: "cli",
-      baseUrl: null,
-      credential: { cli: true }
-    });
+  it.each([
+    ["not_logged_in", "Log in first"],
+    ["unsupported", "this provider cannot list its models yet"],
+    ["error", "model list request failed with HTTP 500"]
+  ] as const)("returns no models with reason %s and never caches it", async (status, message) => {
+    const lister = vi.fn<CliModelLister>().mockResolvedValue({ status, message });
+    const service = new ModelDiscoveryService({ cliModelLister: lister });
 
-    expect(CLI_STATIC_MODELS.google).toBeDefined();
-    expect(
-      Object.fromEntries(result.models.map((model) => [model.providerModelId, model.tier]))
-    ).toMatchObject({
-      "gemini-3.1-pro-preview": "reasoning",
-      "gemini-3-pro-preview": "reasoning",
-      "gemini-3-flash-preview": "economy",
-      "gemini-2.5-pro": "reasoning",
-      "gemini-2.5-flash": "economy",
-      "gemini-2.5-flash-lite": "economy"
+    const result = await service.discoverModels("gemini", cliInput("google"));
+    expect(result).toEqual({
+      models: [],
+      fromCache: false,
+      fromFallback: false,
+      cacheExpiresAt: null,
+      reason: status,
+      message
     });
-    // Every Gemini model reads pictures, so chat can accept an attached image on any of them.
-    for (const model of result.models) expect(model.capabilities).toContain("vision");
+    await service.discoverModels("gemini", cliInput("google"));
+    expect(lister).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports unavailable when no lister is wired (host-dev / in-process path)", async () => {
+    const result = await new ModelDiscoveryService().discoverModels(
+      "claude",
+      cliInput("anthropic")
+    );
+    expect(result.models).toEqual([]);
+    expect(result.reason).toBe("unavailable");
+    expect(result.fromFallback).toBe(false);
+  });
+
+  it("never invents models for an API-key provider whose discovery fails", async () => {
+    const service = new ModelDiscoveryService();
+    const result = await service.discoverModels("api", {
+      providerKind: "anthropic",
+      authMethod: "api_key",
+      baseUrl: null,
+      credential: { apiKey: "sk-test" },
+      fetch: (async () => {
+        throw new Error("network disabled");
+      }) as typeof globalThis.fetch
+    });
+    expect(result.models).toEqual([]);
+    expect(result.fromFallback).toBe(false);
+    expect(result.reason).toBeUndefined();
   });
 
   it("registers a Gemini default model that rides the account's own model", () => {

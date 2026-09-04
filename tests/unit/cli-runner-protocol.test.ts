@@ -223,6 +223,41 @@ describe("serveConnection (§3.4/§3.7)", () => {
     expect(ok.result).toEqual({ sessionKeys: ["alice"] });
   });
 
+  // #2208: the model-list verb is non-session (no sessionKey) and every non-ok outcome is a normal
+  // RpcOk result; only an unknown provider kind is a bad_request.
+  it("listProviderModels dispatches non-session and returns the host's result verbatim", async () => {
+    const host = fakeHost();
+    const spy = vi
+      .spyOn(host, "listProviderModels")
+      .mockResolvedValue({ status: "ok", models: [{ id: "claude-fable-5-1" }] });
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
+
+    channel.feed(
+      encodeFrame({
+        t: "req",
+        id: 21,
+        method: "listProviderModels",
+        params: { provider: "anthropic" }
+      })
+    );
+    await new Promise((r) => setTimeout(r, 5));
+
+    const ok = channel.decodeAll().find((f) => (f as RpcOk).id === 21) as RpcOk;
+    expect(ok.t).toBe("ok");
+    expect(ok.result).toEqual({ status: "ok", models: [{ id: "claude-fable-5-1" }] });
+    expect(spy).toHaveBeenCalledWith("anthropic");
+
+    channel.feed(
+      encodeFrame({ t: "req", id: 22, method: "listProviderModels", params: { provider: "agy" } })
+    );
+    await new Promise((r) => setTimeout(r, 5));
+    const err = channel.decodeAll().find((f) => (f as RpcErr).id === 22) as RpcErr;
+    expect(err.error.code).toBe("bad_request");
+    expect(channel.closed).toBe(false);
+  });
+
   it("a readNew with an out-of-range afterOffset returns bad_request WITHOUT closing", async () => {
     const channel = new FakeChannel();
     serveConnection(channel, deps());

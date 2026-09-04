@@ -130,6 +130,16 @@ export interface AiProviderDiscoveredModelDto {
   readonly tier: AiModelTier;
 }
 
+/**
+ * #2208: the outcome of asking a CLI provider's vendor for its live model list. `ok` carries ids
+ * only — never a credential. The same shape crosses the api <-> cli-runner socket (rpc-contract)
+ * and feeds `ModelDiscoveryService` for `auth_method = "cli"` providers.
+ */
+export type AiCliModelListFailure = "unsupported" | "not_logged_in" | "error";
+export type AiCliModelListResult =
+  | { readonly status: "ok"; readonly models: readonly { readonly id: string }[] }
+  | { readonly status: AiCliModelListFailure; readonly message?: string };
+
 export interface AiDiscoverModelsItemDto extends AiProviderDiscoveredModelDto {
   readonly fromCache: boolean;
   readonly fromFallback: boolean;
@@ -139,6 +149,13 @@ export interface AiDiscoverModelsResponse {
   readonly models: readonly AiDiscoverModelsItemDto[];
   readonly fromFallback: boolean;
   readonly cacheExpiresAt: string | null;
+  /**
+   * #2208: present ONLY when a CLI provider's live list could not be fetched — why there are no
+   * models (`not_logged_in`, `unsupported`, `error`, or `unavailable` when no runner is wired).
+   */
+  readonly reason?: AiCliModelListFailure | "unavailable";
+  /** Plain-English detail for `reason`; never carries a secret. */
+  readonly message?: string;
 }
 
 export interface AiAssistantToolDto {

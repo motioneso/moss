@@ -18,7 +18,7 @@
  * CLIs live in the cli-runner container); absent ⇒ the login routes fail closed (500).
  */
 
-import type { AiAutoRegisterPort } from "@moss/ai";
+import type { AiAutoRegisterPort, CliModelLister } from "@moss/ai";
 import { CliChatUnavailableError, type RpcConnection } from "@moss/chat";
 import { LOGIN_ADAPTERS } from "@moss/cli-runner";
 import type { AiProviderKind } from "@moss/db";
@@ -32,6 +32,34 @@ import type {
   SettingsRepository
 } from "@moss/settings";
 import type { OnboardingProviderKind } from "@moss/shared";
+
+const UNAVAILABLE_MESSAGE = "Provider login is currently unavailable. Please try again.";
+
+/**
+ * #2208: the model-list port `ModelDiscoveryService` calls for `auth_method = "cli"` providers.
+ * Same socket, same lazy connection, same unavailable → 503 mapping as the login seam. Every
+ * non-ok outcome (not logged in / unsupported / vendor error) is a normal result the discovery
+ * service turns into a `reason`; only a MISSING or DOWN runner throws (HTTP 503, retryable).
+ * `undefined` when the socket fork is off (host-dev / in-process) ⇒ discovery reports `unavailable`.
+ */
+export function buildCliModelLister(deps: {
+  readonly enabled: boolean;
+  readonly getConnection: () => RpcConnection | undefined;
+}): CliModelLister | undefined {
+  if (!deps.enabled) return undefined;
+  return async (provider) => {
+    const conn = deps.getConnection();
+    if (!conn) throw new HttpError(503, UNAVAILABLE_MESSAGE);
+    try {
+      // AiProviderKind is a superset (ollama/custom) of the wire kind; the runner rejects the
+      // extras with bad_request, and no CLI provider of those kinds can exist (routes gate them).
+      return await conn.listProviderModels({ provider: provider as OnboardingProviderKind });
+    } catch (error) {
+      if (error instanceof CliChatUnavailableError) throw new HttpError(503, UNAVAILABLE_MESSAGE);
+      throw error;
+    }
+  };
+}
 
 /** Map an RPC login result onto the route's outcome shape (omit absent optionals). */
 function mapOutcome(r: {
