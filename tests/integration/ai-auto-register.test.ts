@@ -248,7 +248,7 @@ describe("AI auto-register default chat model on login (#367)", () => {
     });
   });
 
-  it("clean-slate reconcile removes stale/manual concrete rows but preserves sentinel", async () => {
+  it("reconcile keeps hand-added rows and the sentinel while re-listing discovered ids (#2208)", async () => {
     await dataContext.withDataContext(adminCtx(), (db) =>
       service.ensureDefaultChatModel(db, "anthropic")
     );
@@ -272,12 +272,16 @@ describe("AI auto-register default chat model on login (#367)", () => {
       await service.ensureDefaultChatModel(db, "anthropic");
     });
 
+    // #2208: createModel writes origin = manual, and reconcile prunes only discovered rows, so
+    // both hand-added rows survive alongside the freshly listed ids and the sentinel.
     const models = await dataContext.withDataContext(adminCtx(), (db) => repository.listModels(db));
     expect(models.map((row) => row.provider_model_id).sort()).toEqual([
       "claude-haiku-4-5-20251001",
       "claude-opus-4-8",
       "claude-sonnet-4-6",
-      "default"
+      "default",
+      "manual-model",
+      "stale-static"
     ]);
     expect(models.find((row) => row.provider_model_id === "default")?.status).toBe("active");
   });
