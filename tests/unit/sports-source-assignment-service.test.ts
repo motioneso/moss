@@ -613,6 +613,48 @@ describe("SportsSourceService recipe recovery", () => {
     );
   });
 
+  it("adds coverage to a subreddit source without calling Reddit", async () => {
+    // #2211 (Ben, 2026-09-04): editing coverage on r/buffalobills right after adding it hit
+    // Reddit's rate limit. Every subreddit target reads the one stored feed, so no fetch is needed.
+    const feedUrl = "https://www.reddit.com/r/buffalobills/hot.rss";
+    const redditBaseline: SportsSourceBaseline = {
+      ...baseline,
+      source: {
+        ...baseline.source,
+        label: "r/buffalobills",
+        canonicalDomain: "reddit.com",
+        homepageUrl: "https://www.reddit.com/r/buffalobills/",
+        feedUrl,
+        retrievalMethod: "reddit",
+        assignedFollowIds: [],
+        assignments: []
+      },
+      confirmedFetchHosts: ["www.reddit.com"],
+      assignments: []
+    };
+    const { service, fetch, replaceAssignments } = setup(redditBaseline);
+    const db = {} as DataContextDb;
+    const preview = await service.previewAssignments(db, "owner-1", sourceId, {
+      assignments: [{ target: { kind: "sport", sportKey: "football" } }]
+    });
+
+    expect(preview).toMatchObject({
+      status: "ok",
+      candidate: {
+        retrievalMethod: "reddit",
+        targets: [{ target: { kind: "sport", sportKey: "football" }, targetUrl: feedUrl }]
+      }
+    });
+    await confirm(service, db, preview);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(replaceAssignments).toHaveBeenCalledWith(
+      db,
+      sourceId,
+      [],
+      [expect.objectContaining({ targetUrl: feedUrl })]
+    );
+  });
+
   it("rebuilds a legacy apex source when discovery resolves its www host", async () => {
     const legacyBaseline: SportsSourceBaseline = {
       ...baseline,

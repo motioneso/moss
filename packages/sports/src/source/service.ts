@@ -301,7 +301,26 @@ export class SportsSourceService {
     }
 
     let discovered: VerifiedSportsSourceCandidate | null = null;
-    if (requestedTargets.length > 0) {
+    // #2211 Every subreddit target reads the one feed the row already stores, so a coverage change
+    // needs no Reddit call. Calling anyway tripped Reddit's rate limit right after adding the
+    // source and the edit failed (Ben, 2026-09-04). A pinned exact URL still goes through discovery.
+    let sameFeedTargets: VerifiedSportsSourceTarget[] = [];
+    if (
+      requestedTargets.length > 0 &&
+      baseline.source.retrievalMethod === "reddit" &&
+      baseline.source.feedUrl &&
+      !requestedTargets.some((target) => target.exactTargetUrl)
+    ) {
+      const feedUrl = baseline.source.feedUrl;
+      const checkedAt = baseline.source.lastCheckedAt ?? baseline.source.createdAt;
+      sameFeedTargets = requestedTargets.map((target) => ({
+        ...target,
+        targetUrl: feedUrl,
+        parameters: {},
+        samples: [],
+        checkedAt
+      }));
+    } else if (requestedTargets.length > 0) {
       const result = await resolveSportsSourceInput(scopedDb, this.dependencies.discovery, {
         rawUrl: baseline.source.feedUrl ?? baseline.source.homepageUrl,
         targets: requestedTargets,
@@ -323,8 +342,9 @@ export class SportsSourceService {
       discovered = result.candidate;
     }
 
+    const verifiedTargets = [...(discovered?.targets ?? []), ...sameFeedTargets];
     const discoveredByTargetKey = new Map(
-      (discovered?.targets ?? []).map((target) => [sportsSourceTargetKey(target.target), target])
+      verifiedTargets.map((target) => [sportsSourceTargetKey(target.target), target])
     );
     const targets: VerifiedSportsSourceTarget[] = [];
     for (const assignment of input.assignments) {
@@ -378,7 +398,7 @@ export class SportsSourceService {
       baseline,
       candidate,
       reusedAssignmentIds: [...reused.values()].map((assignment) => assignment.id),
-      verifiedTargets: discovered?.targets ?? [],
+      verifiedTargets,
       authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
       createdAt: Date.now()
     });

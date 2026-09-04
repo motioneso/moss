@@ -4,6 +4,7 @@ import { Badge, Note } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
 import type {
   CompetitionRef,
+  PreviewSportsSourceAssignmentsResponse,
   SportsBuiltinSourceDto,
   SportsCustomSourceDto,
   SportsFollowDto,
@@ -42,8 +43,25 @@ const PREVIEW_REJECTION_COPY: Record<string, string> = {
   not_https: "Only HTTPS links or bare domains are accepted.",
   not_found: "That subreddit doesn't exist.",
   auth_required: "That subreddit is private or restricted, so Moss can't read it.",
-  rate_limited: "Reddit is rate limiting Moss. Try again in a few minutes."
+  rate_limited: "Reddit is rate limiting Moss. Try again in a few minutes.",
+  stale_source: "That publication has changed since it was added. Remove it and add it again."
 };
+
+/** The edit-coverage flow said "could not be verified" whatever the reason (Ben, 2026-09-04). */
+function assignmentPreviewFailureCopy(
+  result: PreviewSportsSourceAssignmentsResponse
+): string | null {
+  if (result.status === "rejected") {
+    return (
+      (result.reason ? PREVIEW_REJECTION_COPY[result.reason] : undefined) ??
+      "Those assignments could not be verified."
+    );
+  }
+  if (result.status === "unavailable") {
+    return "Updating coverage needs a configured JSON-capable AI model.";
+  }
+  return null;
+}
 
 const HEALTH_BADGE: Record<
   SportsCustomSourceDto["healthState"],
@@ -846,7 +864,9 @@ export function SportsSourcesSection(props: {
                     ) : null}
                     {assignmentPreview?.sourceId === source.id &&
                     assignmentPreview.result.status !== "ok" ? (
-                      <SourceError>Those assignments could not be verified.</SourceError>
+                      <SourceError>
+                        {assignmentPreviewFailureCopy(assignmentPreview.result)}
+                      </SourceError>
                     ) : null}
                     {assignmentPreviewMutation.isError || assignmentConfirmMutation.isError ? (
                       <SourceError>Could not update assignments. Try again.</SourceError>
