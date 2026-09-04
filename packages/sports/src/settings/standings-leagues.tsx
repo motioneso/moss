@@ -78,7 +78,7 @@ export function StandingsLeaguesSection(props: {
             ) : (
               <ChevronRight size={16} aria-hidden="true" />
             )}
-            <span>Standings leagues</span>
+            <span>Configure standings</span>
             <span className="jds-badge jds-badge--steel">
               {selectedCompetitions.length} of {props.competitions.length}
             </span>

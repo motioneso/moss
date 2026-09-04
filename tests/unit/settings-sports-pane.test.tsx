@@ -109,7 +109,7 @@ describe("SportsSettings", () => {
     client.setQueryData(CATALOG_KEY, { competitions: TWO_LEAGUES, degraded: false });
     client.setQueryData(FOLLOWS_KEY, { follows: [] });
     let html = renderWithQuery(client);
-    expect(html).toContain("Standings leagues");
+    expect(html).toContain("Configure standings");
     expect(html).toContain("Football");
     expect(html).toContain("England");
     let selectedList = html.match(

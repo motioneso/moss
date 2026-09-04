@@ -34,8 +34,8 @@ test("saves a curated league set and uses the keyboard picker on Sports", async 
 
   await page.goto(`${requireBaseURL()}/settings?section=modules&module=sports`);
   // The section starts collapsed; open it from its heading first.
-  await page.getByRole("button", { name: /Standings leagues/ }).click();
-  const settings = page.getByRole("group", { name: "Standings leagues" });
+  await page.getByRole("button", { name: /Configure standings/ }).click();
+  const settings = page.getByRole("group", { name: "Configure standings" });
   await expect(settings).toBeVisible();
   const keptLabels = new Set(["NFL", "Premier League", "MLB"]);
   const selectedLeagues = settings.getByRole("listbox", { name: "Selected leagues" });
