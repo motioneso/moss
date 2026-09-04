@@ -1,0 +1,22 @@
+{
+  "name": "@moss/scratchpad",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run packages/scratchpad/src/__tests__"
+  },
+  "dependencies": {
+    "@moss/db": "workspace:*",
+    "@moss/module-sdk": "workspace:*",
+    "@moss/settings": "workspace:*",
+    "@moss/shared": "workspace:*",
+    "@moss/structured-state": "workspace:*",
+    "fastify": "^5.8.5",
+    "kysely": "^0.29.2"
+  }
+}
