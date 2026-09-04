@@ -30,6 +30,10 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   getPersonaSettings: () => personaGet(),
   putPersonaSettings: (body: unknown) => personaPut(body as never),
   previewPersona: vi.fn(),
+  // Response style moved into this pane from the retired Chat settings page (#2222); give it the
+  // default so the picker renders without a network call.
+  getChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" } })),
+  putChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" } })),
   // ChatModel and YoloMode (siblings inside AssistantPane) run their own queries; give them inert
   // responses so they render without erroring and stay out of the way of the assertion.
   getChatModelOverrideSettings: vi.fn(async () => ({
