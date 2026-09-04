@@ -50,6 +50,13 @@ import { Button } from "@moss/ui";
 
 type PersonaState = PersonaDraft;
 
+const RESPONSE_STYLE_EXAMPLE_HINT: Record<ChatResponseStyle, string> = {
+  concise: 'Concise example: "Yes, the meeting moved to 3pm."',
+  balanced: 'Balanced example: "Yes, the meeting moved to 3pm because Sam had a conflict."',
+  detailed:
+    'Detailed example: "Yes, the meeting moved to 3pm because Sam had a conflict. I also nudged the two people after it by 15 minutes so nothing overlaps."'
+};
+
 const DEFAULT_DESCRIPTION =
   "Be direct and a little dry: skip the pep talks. Hold me to commitments I've actually made, but ease off when I've had a rough day. Lead with what matters and keep it short.";
 const DEFAULT_PERSONA_DIALS = {
@@ -238,7 +245,7 @@ function Persona({ who }: { readonly who: string }) {
       <Choice
         key={responseStyle}
         label="Response style"
-        hint="Saved default for how long chat answers are."
+        hint={RESPONSE_STYLE_EXAMPLE_HINT[responseStyle]}
         value={cap(responseStyle)}
         options={["Concise", "Balanced", "Detailed"]}
         onChange={(v) =>
