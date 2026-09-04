@@ -9,6 +9,7 @@ export interface GeneratedSettingsSurface {
   readonly moduleName: string;
   readonly id: string;
   readonly label: string;
+  readonly description: string;
   readonly path: string;
   readonly scope: Scope;
   readonly order: number | null;
@@ -76,6 +77,7 @@ export function scanModuleSettings(options: ScanOptions): ScanResult {
         moduleName: manifest.name,
         id: surface.id,
         label: surface.label,
+        description: surface.description,
         path: surface.path,
         scope: surface.scope,
         order: surface.order ?? null,
@@ -251,6 +253,7 @@ interface ParsedManifest {
 interface ParsedSurface {
   readonly id: string;
   readonly label: string;
+  readonly description: string;
   readonly path: string;
   readonly scope: Scope;
   readonly order?: number;
@@ -392,6 +395,7 @@ function readSurface(
   return {
     id,
     label,
+    description: readStringProperty(item, "description", constants) ?? "",
     path,
     scope,
     order: readNumberProperty(item, "order"),

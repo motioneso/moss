@@ -54,9 +54,14 @@ import { useFeedback } from "./settings-feedback";
 import { resolveModuleSettingsDeepLink } from "./module-settings-deep-link";
 import { ModulePreferencesSettings } from "./settings-module-preferences";
 import {
+  CAT_BY_ID,
+  CONFIG_IDS,
+  contributedSettingsModuleIds,
+  hasImplementedModuleSettings
+} from "./settings-module-availability";
+import {
   settingsModuleControlModel,
-  visibleConfigurableModules,
-  type SettingsModule
+  visibleConfigurableModules
 } from "./settings-module-view-model";
 import { moduleDescription, readError, type PaneProps } from "./settings-types";
 import {
@@ -524,28 +529,9 @@ function SourcesPane() {
 
 /* ------------------------------------------------------------- Modules */
 
-const CONFIG_IDS = new Set(["briefings", "notifications"]);
-const CAT_BY_ID: Record<string, string> = { knowledge: "memory" };
-const CONTRIBUTED_SETTINGS_MODULE_IDS = new Set(
-  MODULE_SETTINGS_SURFACES.filter((surface) => surface.hasEntry).map((surface) => surface.moduleId)
-);
+const CONTRIBUTED_SETTINGS_MODULE_IDS = contributedSettingsModuleIds(MODULE_SETTINGS_SURFACES);
 type ModuleSub = "briefings" | "notifications";
 type ModuleSettingsView = ModuleSub | { readonly moduleId: string };
-
-function hasImplementedModuleSettings(module: SettingsModule): boolean {
-  if (CONFIG_IDS.has(module.id)) return true;
-  if (CAT_BY_ID[module.id]) return true;
-  // #1725: declared switches are a settings destination, so a required module that has them
-  // keeps its row (same #986 rule that keeps rows for contributed surfaces below).
-  if (module.hasPreferences) return true;
-  // #1759: credential slots the user fills are a settings destination in their own right. A
-  // module can declare them and no switches at all, and then this is its only reason to have a row.
-  if (module.hasUserCredentials) return true;
-  return (
-    CONTRIBUTED_SETTINGS_MODULE_IDS.has(module.id) &&
-    Boolean(findModuleSettingsEntrySurface(module.id, MODULE_SETTINGS_SURFACES))
-  );
-}
 
 function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
   const queryClient = useQueryClient();
@@ -621,9 +607,8 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
     );
   }
 
-  const modules = visibleConfigurableModules(
-    myQuery.data?.modules ?? [],
-    hasImplementedModuleSettings
+  const modules = visibleConfigurableModules(myQuery.data?.modules ?? [], (module) =>
+    hasImplementedModuleSettings(module, MODULE_SETTINGS_SURFACES)
   );
   const byName = (a: (typeof modules)[number], b: (typeof modules)[number]) =>
     a.name.localeCompare(b.name);

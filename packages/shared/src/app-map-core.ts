@@ -57,7 +57,7 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     id: "settings",
     label: "Settings",
     description:
-      "Personal and admin settings. A search box on the top bar matches section names, descriptions and common setting words and jumps to that section.",
+      "Personal and admin settings. A search box on the top bar matches section names, descriptions and common setting words, and also matches the name and description of every installed module's own settings (for example News), jumping straight to that module's settings when picked.",
     path: "/settings",
     scope: "user"
   }
