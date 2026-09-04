@@ -77,6 +77,9 @@ export const NEWS_CATALOG: readonly NewsSourceEntry[] = [
     imageHosts: ["i.guim.co.uk"]
   },
   {
+    // AP News publishes no public first-party RSS feed (its page source declares index.rss,
+    // which returns HTTP 401 Invalid client credentials). Uses Open RSS (openrss.org) as a
+    // third-party feed provider for top headlines and topic desks.
     sourceKey: "ap",
     label: "AP News",
     homepageUrl: "https://apnews.com",
