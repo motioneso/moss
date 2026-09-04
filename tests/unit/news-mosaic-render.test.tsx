@@ -16,6 +16,7 @@ function headline(overrides: Partial<NewsHeadline> = {}): NewsHeadline {
     url: "https://example.com/1",
     publishedAt: "2026-07-19T12:00:00.000Z",
     imageUrl: null,
+    faviconUrl: null,
     summary: "A summary.",
     sourceKey: "bbc",
     sourceLabel: "BBC News",
