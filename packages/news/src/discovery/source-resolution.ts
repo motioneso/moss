@@ -33,8 +33,38 @@ const KNOWN_LINK_SHORTENERS = new Set([
 
 const MAX_PUBLISHER_REDIRECT_HOPS = 5;
 
+/**
+ * Curated groups of registrable domains a human has separately confirmed are the same
+ * publisher (for example a full rebrand onto an unrelated domain name). Empty until an entry
+ * is added by hand — a page merely describing itself as its own address is not evidence of
+ * common ownership with the domain the user typed, so it is never enough on its own (Ben,
+ * 2026-09-04, review of PR 2246).
+ */
+const SAME_OWNER_ALIAS_GROUPS: readonly (readonly string[])[] = [];
+
 function redirectNoteFor(fromDomain: string, toDomain: string): string {
   return `${fromDomain} sends visitors to ${toDomain}, so that is the site we will follow.`;
+}
+
+/** Whether every domain-matching rule in this file considers `a` and `b` the same registrable
+ *  domain or a hand-confirmed alias of it. Exported for direct unit testing of the alias rule. */
+export function isKnownSameOwnerAlias(
+  groups: readonly (readonly string[])[],
+  a: string,
+  b: string
+): boolean {
+  return groups.some(
+    (group) =>
+      group.some((domain) => samePublisherIdentity(domain, a)) &&
+      group.some((domain) => samePublisherIdentity(domain, b))
+  );
+}
+
+function isLinkShortenerDomain(domain: string): boolean {
+  for (const shortener of KNOWN_LINK_SHORTENERS) {
+    if (samePublisherIdentity(shortener, domain)) return true;
+  }
+  return false;
 }
 
 export type SourceResolutionResult =
@@ -160,27 +190,18 @@ function evaluatePublisherRedirect(
     return { accepted: false, reason: "redirected" };
   }
 
-  if (KNOWN_LINK_SHORTENERS.has(finalDomain.domain) || KNOWN_LINK_SHORTENERS.has(requestedDomain)) {
+  if (isLinkShortenerDomain(finalDomain.domain) || isLinkShortenerDomain(requestedDomain)) {
     return { accepted: false, reason: "redirected" };
   }
 
-  const selfClaimUrl = isFeed(fetched.contentType, fetched.body)
-    ? null
-    : htmlMetadata(fetched.body).canonicalUrl;
-  if (selfClaimUrl) {
-    let claimedDomain: ReturnType<typeof normalizePublisherDomain>;
-    try {
-      claimedDomain = normalizePublisherDomain(new URL(selfClaimUrl, fetched.finalUrl).toString());
-    } catch {
-      return { accepted: false, reason: "redirected" };
-    }
-    if (!claimedDomain.ok || !samePublisherIdentity(finalDomain.domain, claimedDomain.domain)) {
-      return { accepted: false, reason: "redirected" };
-    }
+  // A page describing itself as its own address proves nothing about the domain the user
+  // typed — any site's own canonical or og:url tag names itself. The only accepted move onto
+  // a genuinely different registrable domain is one a human has separately confirmed and
+  // added to SAME_OWNER_ALIAS_GROUPS above; without that, the move is refused rather than
+  // trusted on the destination's say-so.
+  if (!isKnownSameOwnerAlias(SAME_OWNER_ALIAS_GROUPS, requestedDomain, finalDomain.domain)) {
+    return { accepted: false, reason: "redirected" };
   }
-  // else: no canonical/og:url tag present — fall back to the existing headline/feed
-  // verification further down in verifyPublisher, which must pass anyway (empty headlines
-  // already produces a "unreachable" rejection there).
 
   return { accepted: true, note: redirectNoteFor(requestedDomain, finalDomain.domain) };
 }
@@ -348,7 +369,11 @@ async function verifyPublisher(
       canonicalDomain: domain.domain,
       description: metadata.description,
       sampleHeadlines: headlines.map((item) => item.headline)
-    }
+    },
+    // A followed redirect must stay fully rule-based end to end — no model call anywhere on
+    // that path. An unseen domain reads as "unavailable" rather than invoking the model
+    // (Ben, 2026-09-04, review of PR 2246).
+    { allowModelCall: redirectNote === null }
   );
   if (policy.verdict === "unavailable") {
     return { status: "failed", result: { status: "unavailable" } };

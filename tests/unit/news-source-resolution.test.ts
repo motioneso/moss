@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { DataContextDb } from "@moss/db";
 
 import type { NewsAiPort, NewsSafeFetchPort } from "../../packages/news/src/discovery/ports.js";
-import { resolveSourceInput } from "../../packages/news/src/discovery/source-resolution.js";
+import {
+  isKnownSameOwnerAlias,
+  resolveSourceInput
+} from "../../packages/news/src/discovery/source-resolution.js";
 
 const db = {} as DataContextDb;
 const feed = `<rss><channel><item><title>A consequential headline today</title><link>https://one.example/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
@@ -47,6 +50,24 @@ function fetchMap(
 }
 
 const noSearch = { search: vi.fn(async () => ({ results: [] })) };
+
+describe("isKnownSameOwnerAlias", () => {
+  const groups = [["old.example", "new.example"], ["another.example"]];
+
+  it("matches two domains placed in the same hand-confirmed group, in either order", () => {
+    expect(isKnownSameOwnerAlias(groups, "old.example", "new.example")).toBe(true);
+    expect(isKnownSameOwnerAlias(groups, "new.example", "old.example")).toBe(true);
+  });
+
+  it("also matches a subdomain of a group member", () => {
+    expect(isKnownSameOwnerAlias(groups, "www.old.example", "new.example")).toBe(true);
+  });
+
+  it("does not match domains from different groups, or an empty group list", () => {
+    expect(isKnownSameOwnerAlias(groups, "old.example", "another.example")).toBe(false);
+    expect(isKnownSameOwnerAlias([], "old.example", "new.example")).toBe(false);
+  });
+});
 
 describe("resolveSourceInput", () => {
   it("resolves a direct feed URL and carries validation evidence", async () => {
@@ -433,8 +454,12 @@ describe("resolveSourceInput", () => {
     }
   });
 
-  it("accepts a cross-domain redirect whose page claims itself, and uses the final site", async () => {
-    const redirectsToOwnDomain: NewsSafeFetchPort = async (url) => {
+  // A page describing itself as its own address is not proof it is owned by the site the user
+  // typed. Before this fix, any final site that labeled itself correctly was accepted — so a
+  // publisher's own open-redirect link could be pointed at a completely unrelated site and Moss
+  // would offer that unrelated site as the "real" publisher. This must now be refused.
+  it("refuses a cross-domain redirect to an unrelated site, even if that site claims itself", async () => {
+    const redirectsToUnrelatedSite: NewsSafeFetchPort = async (url) => {
       if (url === "https://old.example/") {
         return {
           ok: true,
@@ -449,25 +474,67 @@ describe("resolveSourceInput", () => {
       throw new Error(`unexpected fetch: ${url}`);
     };
 
-    const result = await resolveSourceInput(
-      db,
-      { fetch: redirectsToOwnDomain, search: noSearch, ai: ai(), repo: repo() },
-      { raw: "https://old.example", hasWebSearch: false }
-    );
-    expect(result).toMatchObject({
-      status: "ok",
-      candidates: [
-        {
-          canonicalDomain: "new.example",
-          homepageUrl: "https://new.example/"
-        }
-      ]
-    });
-    if (result.status === "ok") {
-      const note = result.candidates[0].redirectNote;
-      expect(note).toEqual(expect.stringContaining("old.example"));
-      expect(note).toEqual(expect.stringContaining("new.example"));
-    }
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsToUnrelatedSite, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  // Same open-redirect shape as above, but with no self-claiming tag at all — confirms the
+  // refusal does not depend on what the destination page says about itself.
+  it("refuses a cross-domain redirect to an unrelated site with no self-claim either", async () => {
+    const redirectsToUnrelatedSite: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://new.example/",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsToUnrelatedSite, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  // A shortener disguised behind the usual "www" prefix must still be caught — the old code
+  // matched the shortener set by exact domain string only.
+  it("rejects a redirect to a link shortener even behind a www prefix", async () => {
+    const redirectsToWwwShortener: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://www.bit.ly/abc123",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<title>Redirect</title><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsToWwwShortener, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
   });
 
   it("rejects a redirect to a known link shortener", async () => {
