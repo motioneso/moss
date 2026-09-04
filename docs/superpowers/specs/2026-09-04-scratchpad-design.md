@@ -5,6 +5,24 @@
 - Task issue: [#2236](https://github.com/motioneso/moss/issues/2236)
 - Related: chat drawer (`apps/web/src/chat/chat-drawer.tsx`), notes module (`packages/notes`)
 
+## What you will get
+
+1. As a user, I can open a small notepad from a pencil button in the top bar, on every page.
+2. As a user, I can open and close it with Cmd/Ctrl + Shift + S, and change that key in Settings.
+3. As a user, I can type in it and move between pages or reload without losing a word.
+4. As a user, I can see "Saved" or "Saving" so I know my text is safe.
+5. As a user, I can keep the notepad and the chat drawer open at once on a desktop; the one I opened last sits on top.
+6. As a phone user, I get the notepad as a full-screen sheet, and opening chat closes it.
+7. As a user, I can make bullet lists, numbered lists and checkboxes that continue when I press Enter.
+8. As a user, I can indent and outdent lines with Tab and Shift+Tab, or with small buttons on my phone.
+9. As a user, I can make text bold or italic with Cmd/Ctrl + B and Cmd/Ctrl + I.
+10. As a user, I can ask Moss "what is on my scratchpad" and it reads it back.
+11. As a user, I can tell Moss "add milk to my scratchpad" and the line appears while I watch.
+12. As a user, I am never surprised by Moss rewriting or deleting my notes; it can only add lines.
+13. As a user, I can tick one box to also keep a copy as a "Scratchpad" note in my Notes folder.
+14. As a user, I get a clear "Changed elsewhere" notice instead of a silent overwrite if I edit in two tabs.
+15. As a user, my notepad is private: no other user, and no admin, can read it.
+
 ## Context
 
 Ben asked for a scratchpad: a small notepad window that opens from a pencil button in the top
