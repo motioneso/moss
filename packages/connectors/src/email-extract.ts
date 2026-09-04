@@ -189,17 +189,20 @@ export interface EmailSignals {
 }
 
 /**
- * A message is treated as a machine-issued sign-in code only when all three of the signals
+ * A message is treated as a machine-issued sign-in code only when all four of the signals
  * below hold at once. Each one on its own is common in ordinary mail — a friend sends a door
  * code, a shop mails a discount code, a no-reply address sends a statement — and earlier
  * keyword-only versions of this check hid real messages because of that. Adding more keywords
  * makes it worse, not better; the strength here comes from requiring the combination.
  *
  *   1. the sender looks automated (a no-reply / notifications / security style mailbox),
- *   2. one line of the subject or the first lines names a sign-in, login, account-verification,
- *      two-step or security code,
- *   3. that same line carries a short code standing on its own, and says nothing about a door,
- *      an order, a booking or a coupon that would explain the number some other way.
+ *   2. the subject itself names a sign-in, login, account-verification, one-time, two-step or
+ *      security code. Real sign-in mail from Google, Apple, Microsoft, banks and shops puts the
+ *      code in the subject; door codes, vouchers and tracking numbers do not, so the body on
+ *      its own never qualifies,
+ *   3. the subject or the opening of the body carries a short code standing on its own,
+ *   4. nothing anywhere in the subject or the whole body points at a door, a stay, an order,
+ *      a delivery, a booking or a money-off code, which would explain the number another way.
  */
 
 /**
@@ -259,12 +262,14 @@ const SIGN_IN_CODE_PHRASES = [
 const OTP_WORD = /\botp\b/;
 
 /**
- * Words that mean a nearby number belongs to something other than a sign-in: a physical lock,
- * an order, a booking, a coupon. When one of these shares a line with the code phrase, the
- * line is not evidence of a sign-in code, however the phrase is worded.
+ * Words that mean a short number in the message belongs to something other than signing in:
+ * a physical lock, a stay, an order, a delivery, a booking or a money-off code. If one of them
+ * appears anywhere in the subject or the whole body, the message is never treated as a sign-in
+ * code email, however its subject is worded. A reviewer can move wording to another line, so
+ * the whole message is read, not one line of it.
  */
-const NOT_A_SIGN_IN_NUMBER =
-  /\b(?:door|doors|apartment|apt|flat|gate|gates|lock|locks|keypad|garage|entry|entrance|building|unit|room|suite|locker|safe|order|orders|tracking|invoice|reference|booking|reservation|ticket|discount|coupon|promo|voucher|wifi|wi-fi|pin\s+for\s+the\s+door)\b/;
+const NOT_A_SIGN_IN_MESSAGE =
+  /\b(?:door|doors|apartment|apartments|apt|flat|room|rooms|gate|gates|lock|locks|keypad|garage|entry|entrance|building|locker|check[\s-]?in|check[\s-]?out|checkout|order|orders|tracking|parcel|package|delivery|deliveries|shipment|shipping|courier|booking|bookings|reservation|reservations|voucher|vouchers|coupon|coupons|discount|discounts|promo|promotion|promotions)\b/;
 
 /**
  * A short code standing on its own: four to eight digits, or six to eight letters and digits
@@ -277,7 +282,8 @@ const STANDALONE_CANDIDATE =
 /** Four digits that read as a calendar year are a date, not a secret. */
 const READS_AS_A_YEAR = /^(?:19|20)\d{2}$/;
 
-/** How much of the body counts as "the first lines" for this pre-check. */
+/** How much of the body is searched for the code itself. Excluded wording is looked for in
+ * the whole body, however long it is. */
 const OTP_CHECK_BODY_CHARS = 500;
 
 /** The address part of a From header, lower-cased: "Google <no-reply@x.com>" -> no-reply@x.com */
@@ -311,25 +317,27 @@ function hasDeliverableCode(text: string): boolean {
   return false;
 }
 
+/** True when the subject line itself announces a sign-in, verification or two-step code. */
+function subjectNamesASignInCode(subject: string): boolean {
+  return SIGN_IN_CODE_PHRASES.some((phrase) => subject.includes(phrase)) || OTP_WORD.test(subject);
+}
+
 /**
  * Deterministic pre-check, run before any model call. It is true only when an automated sender
- * writes a line that both names a sign-in code and carries the code itself, with nothing on
- * that line pointing at a door, an order or a booking instead. Splitting on lines is what makes
- * "your door passcode is 482910" and "we are changing how security codes are delivered in 2026"
- * come through: the first names the wrong kind of code, the second carries only a year.
+ * announces a sign-in code in the subject, a short code that is not a year is present, and
+ * nothing in the whole message points at a door, a stay, an order, a delivery, a booking or a
+ * money-off code. That is why "your apartment check-in instructions" and "your discount
+ * voucher" come through even when they carry a one-time passcode, and why "we are changing how
+ * security codes are delivered in 2026" comes through as well: it carries only a year.
  * Never logs the sender, subject or body it inspects — callers must not either.
  */
 export function looksLikeOneTimeCodeEmail(message: OneTimeCodeEmailInput): boolean {
   if (!looksAutomatedSender(message.from)) return false;
-  const text = `${message.subject}\n${message.body.slice(0, OTP_CHECK_BODY_CHARS)}`.toLowerCase();
-  for (const line of text.split(/[\n\r]+/)) {
-    const namesASignInCode =
-      SIGN_IN_CODE_PHRASES.some((phrase) => line.includes(phrase)) || OTP_WORD.test(line);
-    if (!namesASignInCode) continue;
-    if (NOT_A_SIGN_IN_NUMBER.test(line)) continue;
-    if (hasDeliverableCode(line)) return true;
-  }
-  return false;
+  const subject = message.subject.toLowerCase();
+  if (!subjectNamesASignInCode(subject)) return false;
+  const body = message.body.toLowerCase();
+  if (NOT_A_SIGN_IN_MESSAGE.test(`${subject}\n${body}`)) return false;
+  return hasDeliverableCode(`${subject}\n${body.slice(0, OTP_CHECK_BODY_CHARS)}`);
 }
 
 export function otpSkippedResult(): EmailExtractResult {

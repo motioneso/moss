@@ -31,10 +31,12 @@ function fixture(overrides: Partial<ParsedEmail>): ParsedEmail {
 }
 
 /**
- * The skip is deliberately three separate signals ANDed together: an automated sender, a
- * phrase naming a sign-in / verification / one-time / security code, and a short code standing
- * on its own. Any one of them alone appears in ordinary mail all the time, so the negatives
- * below are the real specification: they are the messages a person actually wants to see.
+ * The skip is deliberately four separate signals ANDed together: an automated sender, a subject
+ * line that itself names a sign-in / verification / one-time / security code, a short code
+ * standing on its own, and nothing anywhere in the message about a door, a stay, an order, a
+ * delivery, a booking or a money-off code. Any one signal alone appears in ordinary mail all
+ * the time, so the negatives below are the real specification: they are the messages a person
+ * actually wants to see.
  */
 describe("looksLikeOneTimeCodeEmail: ordinary mail is never skipped", () => {
   const negatives: Array<[string, { from: string; subject: string; body: string }]> = [
@@ -127,6 +129,30 @@ describe("looksLikeOneTimeCodeEmail: ordinary mail is never skipped", () => {
       }
     ],
     [
+      "an automated message whose subject never mentions a code",
+      {
+        from: "noreply@service.example.invalid",
+        subject: "Please review your account",
+        body: "Verification code: 123456\n\nThis code expires in 15 minutes."
+      }
+    ],
+    [
+      "apartment check-in instructions carrying a one-time passcode",
+      {
+        from: "notifications@hotel.example.invalid",
+        subject: "Your apartment check-in instructions",
+        body: "Your one-time passcode is 482910.\nUse it at the apartment door. Please bring photo ID."
+      }
+    ],
+    [
+      "a discount voucher carrying a single-use code",
+      {
+        from: "no-reply@shop.example.invalid",
+        subject: "Your discount voucher",
+        body: "Your single-use code is 482910.\nApply this discount at checkout before Sunday."
+      }
+    ],
+    [
       "a person forwarding their own sign-in code text",
       {
         from: "mum@example.invalid",
@@ -157,7 +183,7 @@ describe("looksLikeOneTimeCodeEmail: automated sign-in code mail is skipped", ()
       "a GitHub style device verification",
       {
         from: "noreply@github.com",
-        subject: "[GitHub] Please verify your device",
+        subject: "[GitHub] Your verification code",
         body: "Verification code: 123456\n\nThis code expires in 15 minutes."
       }
     ],
@@ -183,6 +209,30 @@ describe("looksLikeOneTimeCodeEmail: automated sign-in code mail is skipped", ()
         from: "otp@auth.example.invalid",
         subject: "Your OTP",
         body: "Your OTP is 482910. It expires in ten minutes."
+      }
+    ],
+    [
+      "a Microsoft account single-use code",
+      {
+        from: "Microsoft account team <account-security-noreply@accountprotection.microsoft.com>",
+        subject: "Microsoft account single-use code",
+        body: "Please use this code to sign in: 748219. If you did not request it, ignore this."
+      }
+    ],
+    [
+      "a high-street bank log-in code",
+      {
+        from: "no.reply@notifications.examplebank.co.uk",
+        subject: "774411 is your log-in code",
+        body: "Use 774411 to log in to online banking. We will never phone you to ask for it."
+      }
+    ],
+    [
+      "a shop account sign-in code",
+      {
+        from: "no-reply@account.exampleshop.invalid",
+        subject: "Your Example Shop sign-in code",
+        body: "Enter 391847 to sign in to your Example Shop account. It expires in 10 minutes."
       }
     ],
     [
@@ -233,7 +283,7 @@ describe("one-time-code emails skip the model call", () => {
       fixture({
         externalId: "otp-2",
         from: "noreply@github.com",
-        subject: "[GitHub] Please verify your device",
+        subject: "[GitHub] Your verification code",
         body: "Verification code: 654321"
       })
     ];
@@ -424,6 +474,24 @@ describe("reviewer examples, end to end through extractEmailSignals", () => {
       false
     ],
     [
+      "apartment check-in instructions whose passcode sits on its own line",
+      {
+        from: "notifications@hotel.example.invalid",
+        subject: "Your apartment check-in instructions",
+        body: "Your one-time passcode is 482910.\nUse it at the apartment door. Please bring photo ID."
+      },
+      false
+    ],
+    [
+      "a discount voucher whose code sits on its own line",
+      {
+        from: "no-reply@shop.example.invalid",
+        subject: "Your discount voucher",
+        body: "Your single-use code is 482910.\nApply this discount at checkout before Sunday."
+      },
+      false
+    ],
+    [
       "a bank notice about how security codes will be delivered in a future year",
       {
         from: "no-reply@bank.example.invalid",
@@ -440,6 +508,24 @@ describe("reviewer examples, end to end through extractEmailSignals", () => {
         from: "Google <no-reply@accounts.google.com>",
         subject: "Your Google verification code",
         body: "482910 is your Google verification code. Do not share it with anyone."
+      },
+      true
+    ],
+    [
+      "a realistic bank log-in code",
+      {
+        from: "no.reply@notifications.examplebank.co.uk",
+        subject: "774411 is your log-in code",
+        body: "Use 774411 to log in to online banking. We will never phone you to ask for it."
+      },
+      true
+    ],
+    [
+      "a realistic shop account sign-in code",
+      {
+        from: "no-reply@account.exampleshop.invalid",
+        subject: "Your Example Shop sign-in code",
+        body: "Enter 391847 to sign in to your Example Shop account. It expires in 10 minutes."
       },
       true
     ],

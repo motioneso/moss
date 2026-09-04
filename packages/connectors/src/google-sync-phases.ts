@@ -212,6 +212,84 @@ export async function runGoogleCalendarPhase(context: PhaseContext): Promise<str
   return nextCursor;
 }
 
+/** What the sync already knows about a saved message, from the email store's sync markers. */
+export interface SavedEmailMarker {
+  readonly historyId: string | null;
+  readonly hasSummary: boolean;
+  readonly hasCompleteTriage: boolean;
+}
+
+export interface SortFetchedEmailsInput {
+  readonly parsedMessages: readonly ParsedEmail[];
+  readonly seen: ReadonlyMap<string, SavedEmailMarker>;
+  readonly persistEmail: (parsed: ParsedEmail, extracted: EmailExtractResult) => Promise<unknown>;
+  readonly progress: Pick<PhaseProgress, "emailUpserted" | "emailFailures" | "errors">;
+  readonly onFailure: (error: unknown) => void;
+}
+
+/**
+ * Decide what happens to each fetched message and save it at most once.
+ *
+ * A sign-in code message is decided first, before the unchanged check, and saved a single time
+ * with the fixed "skipped" marker. Deciding first is what catches a message that already
+ * carries a full saved analysis from before this filter existed: otherwise it would be left
+ * alone as "unchanged" and keep showing up in Today. Everything else keeps the old behaviour —
+ * an unchanged message is not written at all, and a changed or new one is saved once with an
+ * empty analysis and queued for the model in the order it was fetched.
+ */
+export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<{
+  readonly pending: ParsedEmail[];
+  readonly unchangedKeys: string[];
+  readonly otpKeys: string[];
+}> {
+  const pending: ParsedEmail[] = [];
+  const unchangedKeys: string[] = [];
+  const otpKeys: string[] = [];
+  const fail = (error: unknown): void => {
+    input.progress.emailFailures += 1;
+    if (!input.progress.errors.includes("email-message-error")) {
+      input.progress.errors.push("email-message-error");
+    }
+    input.onFailure(error);
+  };
+  for (const parsed of input.parsedMessages) {
+    const prior = input.seen.get(parsed.externalId);
+    const unchanged = Boolean(
+      parsed.historyId &&
+        prior?.historyId === parsed.historyId &&
+        prior.hasSummary &&
+        prior.hasCompleteTriage
+    );
+    if (looksLikeOneTimeCodeEmail(parsed)) {
+      try {
+        await input.persistEmail(parsed, otpSkippedResult());
+        if (!unchanged) input.progress.emailUpserted += 1;
+        otpKeys.push(parsed.externalId);
+      } catch (error) {
+        fail(error);
+      }
+      continue;
+    }
+    if (unchanged) {
+      unchangedKeys.push(parsed.externalId);
+      continue;
+    }
+    try {
+      await input.persistEmail(parsed, { summary: null, signals: {} });
+      input.progress.emailUpserted += 1;
+      pending.push(parsed);
+    } catch (error) {
+      fail(error);
+    }
+  }
+  pending.sort(
+    (left, right) =>
+      right.receivedAt.localeCompare(left.receivedAt) ||
+      left.externalId.localeCompare(right.externalId)
+  );
+  return { pending, unchangedKeys, otpKeys };
+}
+
 export async function runGoogleEmailPhase(
   context: PhaseContext,
   phase: "email-current-day" | "email"
@@ -307,52 +385,12 @@ export async function runGoogleEmailPhase(
         }
       }
     }
-    const pending: ParsedEmail[] = [];
-    const unchangedKeys: string[] = [];
-    const otpKeys: string[] = [];
-    for (const parsed of parsedMessages) {
-      const prior = seen.get(parsed.externalId);
-      if (
-        parsed.historyId &&
-        prior?.historyId === parsed.historyId &&
-        prior.hasSummary &&
-        prior.hasCompleteTriage
-      ) {
-        // A message can carry a full saved analysis from before this filter existed. Re-check
-        // it here so an already-analyzed sign-in code email loses that analysis instead of
-        // being left alone as "unchanged" — otherwise it would keep showing up in Today.
-        if (looksLikeOneTimeCodeEmail(parsed)) {
-          try {
-            await persistEmail(parsed, otpSkippedResult());
-            otpKeys.push(parsed.externalId);
-          } catch (error) {
-            context.progress.emailFailures += 1;
-            if (!context.progress.errors.includes("email-message-error")) {
-              context.progress.errors.push("email-message-error");
-            }
-            context.logger.warn(
-              {
-                stage: "email-message",
-                name: (error as Error).name,
-                status: (error as { statusCode?: number }).statusCode ?? null
-              },
-              "google-sync email message failed"
-            );
-          }
-        } else {
-          unchangedKeys.push(parsed.externalId);
-        }
-        continue;
-      }
-      try {
-        await persistEmail(parsed, { summary: null, signals: {} });
-        context.progress.emailUpserted += 1;
-        pending.push(parsed);
-      } catch (error) {
-        context.progress.emailFailures += 1;
-        if (!context.progress.errors.includes("email-message-error")) {
-          context.progress.errors.push("email-message-error");
-        }
+    const { pending, unchangedKeys, otpKeys } = await sortFetchedEmails({
+      parsedMessages,
+      seen,
+      persistEmail,
+      progress: context.progress,
+      onFailure: (error) => {
         context.logger.warn(
           {
             stage: "email-message",
@@ -362,42 +400,12 @@ export async function runGoogleEmailPhase(
           "google-sync email message failed"
         );
       }
-    }
-    pending.sort(
-      (left, right) =>
-        right.receivedAt.localeCompare(left.receivedAt) ||
-        left.externalId.localeCompare(right.externalId)
-    );
-    // One-time-code / two-factor emails are routed around the model call entirely (never sent
-    // to the model, never logged) and persisted with a fixed "skipped" marker before batching,
-    // so the batches below — and the closeScope index that finalizes a scoped CLI session on
-    // the last real batch — only ever cover messages that actually go to the model.
+    });
+    // Skipped messages never reach the model call (never sent, never logged), so the batches
+    // below — and the closeScope index that finalizes a scoped CLI session on the last real
+    // batch — only ever cover messages that actually go to the model.
     let processed = 0;
-    const modelPending: ParsedEmail[] = [];
-    for (const parsed of pending) {
-      if (looksLikeOneTimeCodeEmail(parsed)) {
-        try {
-          await persistEmail(parsed, otpSkippedResult());
-          otpKeys.push(parsed.externalId);
-        } catch (error) {
-          context.progress.emailFailures += 1;
-          if (!context.progress.errors.includes("email-message-error")) {
-            context.progress.errors.push("email-message-error");
-          }
-          context.logger.warn(
-            {
-              stage: "email-message",
-              name: (error as Error).name,
-              status: (error as { statusCode?: number }).statusCode ?? null
-            },
-            "google-sync email message failed"
-          );
-        }
-      } else {
-        modelPending.push(parsed);
-      }
-    }
-    const batches = modelPending.map((message) => [message]);
+    const batches = pending.map((message) => [message]);
     for (const [batchIndex, batch] of batches.entries()) {
       let batchResults: EmailExtractResult[];
       try {
@@ -460,7 +468,7 @@ export async function runGoogleEmailPhase(
           batchIndex,
           batchSize: batch.length,
           processed,
-          total: modelPending.length
+          total: pending.length
         },
         "google-sync email extraction progress"
       );

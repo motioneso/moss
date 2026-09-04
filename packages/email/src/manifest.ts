@@ -68,9 +68,9 @@ export const emailModuleManifest = {
     {
       id: "email.skip-sign-in-code-emails",
       description:
-        "An automated email that hands you a sign-in code, on one line with the code itself, " +
-        "stays out of briefings and tasks, even if it was saved earlier. Mail from a person, " +
-        "and door, order, booking or discount codes, come through as normal."
+        "An automated email whose subject says it carries a sign-in code, and does, stays out " +
+        "of briefings and tasks, even if saved earlier. Mail from a person, and anything " +
+        "about a door, stay, order, delivery, booking or discount, comes through."
     }
   ],
   permissions: [
