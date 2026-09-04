@@ -10,7 +10,7 @@ import type {
   SportsSourceAssignmentTarget,
   TeamRef
 } from "@moss/shared";
-import { Check, CircleAlert } from "lucide-react";
+import { Check, CircleAlert, Plus } from "lucide-react";
 
 import {
   confirmSportsSourceAssignments,
@@ -397,6 +397,8 @@ export function SportsSourcesSection(props: {
     result: Awaited<ReturnType<typeof previewSportsSourceRecipe>>;
   } | null>(null);
   const [recipeAuthorizationAccepted, setRecipeAuthorizationAccepted] = useState(false);
+  // The add form stays out of the way until the user asks for it (Ben, 2026-09-03).
+  const [addingSource, setAddingSource] = useState(false);
 
   const invalidate = () =>
     void queryClient.invalidateQueries({ queryKey: sportsQueryKeys.sources });
@@ -856,12 +858,26 @@ export function SportsSourcesSection(props: {
         <SourceError>Could not rebuild that source. Try again.</SourceError>
       ) : null}
       <div className="sp-src__add-section">
-        <p className="sp-src__subheading">Add a source</p>
-        <AddSourceFlow
-          follows={props.follows}
-          competitionsByKey={props.competitionsByKey}
-          teamsByCompetition={props.teamsByCompetition}
-        />
+        {addingSource ? (
+          <>
+            <div className="sp-src__add-head">
+              <p className="sp-src__subheading">Add a source</p>
+              <Button variant="secondary" size="sm" onClick={() => setAddingSource(false)}>
+                Close
+              </Button>
+            </div>
+            <AddSourceFlow
+              follows={props.follows}
+              competitionsByKey={props.competitionsByKey}
+              teamsByCompetition={props.teamsByCompetition}
+            />
+          </>
+        ) : (
+          <Button variant="secondary" size="sm" onClick={() => setAddingSource(true)}>
+            <Plus size={14} aria-hidden="true" />
+            Add a source
+          </Button>
+        )}
       </div>
     </section>
   );
