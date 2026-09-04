@@ -333,6 +333,11 @@ import {
   registerNotesJobWorkers
 } from "@moss/notes";
 import {
+  registerScratchpadRoutes,
+  scratchpadModuleManifest,
+  scratchpadModuleSqlMigrationDirectory
+} from "@moss/scratchpad";
+import {
   FeedbackTargetVerifierRegistry,
   buildStoryTargetContext,
   createStoryFeedbackTargetVerifier,
@@ -2230,6 +2235,16 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             })
           );
         }
+      })
+  },
+  {
+    manifest: scratchpadModuleManifest,
+    sqlMigrationDirectories: [scratchpadModuleSqlMigrationDirectory],
+    queueDefinitions: [],
+    registerRoutes: (server, deps) =>
+      registerScratchpadRoutes(server, {
+        dataContext: deps.dataContext,
+        resolveAccessContext: deps.resolveAccessContext
       })
   },
   {
