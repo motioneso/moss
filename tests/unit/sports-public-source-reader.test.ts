@@ -4,6 +4,7 @@ import type { AccessContext, DataContextDb } from "@moss/db";
 import { isPublicFeedDocument } from "@moss/news";
 
 import type { SportsSafeFetchPort } from "../../packages/sports/src/source/discovery.js";
+import type { SportsPhotoStore } from "../../packages/sports/src/source/photo-store.js";
 import { SportsPublicSourceReader } from "../../packages/sports/src/source/public-source-reader.js";
 import { validateSportsSourceRecipe } from "../../packages/sports/src/source/recipe.js";
 import type {
@@ -113,7 +114,11 @@ function success(
 function makeReader(
   sources: readonly SportsRuntimeSource[],
   fetch: SportsSafeFetchPort,
-  options: { now?: () => number; sleep?: () => Promise<void> } = {}
+  options: {
+    now?: () => number;
+    sleep?: () => Promise<void>;
+    photos?: PhotoStoreDouble;
+  } = {}
 ) {
   const persisted: SportsRuntimeTargetResult[][] = [];
   const repository = {
@@ -135,9 +140,34 @@ function makeReader(
     repository,
     fetch,
     now: options.now,
-    sleep: options.sleep
+    sleep: options.sleep,
+    ...(options.photos ? { photos: options.photos as unknown as SportsPhotoStore } : {})
   });
   return { reader, repository, persisted };
+}
+
+/**
+ * #2237 stands in for the vault-backed photo store: it records every photo URL it was asked to
+ * store, so a test can assert which candidate the reader chose without touching a filesystem.
+ */
+class PhotoStoreDouble {
+  readonly stored: string[] = [];
+  readonly links = new Map<string, string>();
+  swept: ReadonlySet<string> | null = null;
+
+  async ensure(_access: AccessContext, sourceId: string, photoUrl: string) {
+    this.stored.push(photoUrl);
+    return { key: `key-${this.stored.length}`, width: 1280, height: 720, bytes: 4096 };
+  }
+
+  linkHeadline(actorUserId: string, headlineId: string, key: string): void {
+    this.links.set(`${actorUserId} ${headlineId}`, key);
+  }
+
+  async sweep(_access: AccessContext, keepKeys: ReadonlySet<string>) {
+    this.swept = keepKeys;
+    return { removed: 0 };
+  }
 }
 
 async function permitInitialRequest(
@@ -662,5 +692,188 @@ describe("public feed structure validation", () => {
     expect(isPublicFeedDocument(`<rss><evil /></rss>`)).toBe(false);
     expect(isPublicFeedDocument(`<document><channel /></document>`)).toBe(false);
     expect(isPublicFeedDocument(`<rss><channel></rss>`)).toBe(false);
+  });
+});
+
+describe("the photo pass (#2237)", () => {
+  const feedSource = () =>
+    runtimeSource({
+      id: "feed",
+      recipe: null,
+      feedUrl: "https://feeds.publisher.example/sports.xml",
+      hosts: ["feeds.publisher.example"]
+    });
+
+  function feedBody(items: string): string {
+    return `<rss><channel>${items}</channel></rss>`;
+  }
+
+  it("uses the feed's own media tag and serves the photo from our own address", async () => {
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      return success(
+        url,
+        feedBody(
+          `<item><guid>feed-1</guid><title>Story</title><link>https://publisher.example/story</link>` +
+            `<media:content url="https://publisher.example/story.jpg" medium="image" width="1200"/></item>`
+        ),
+        "text/plain"
+      );
+    });
+    const photos = new PhotoStoreDouble();
+    const { reader } = makeReader([feedSource()], fetch, { photos });
+
+    const result = await reader.refresh(actor);
+
+    expect(photos.stored).toEqual(["https://publisher.example/story.jpg"]);
+    expect(result.headlines[0]?.imageUrl).toBe(
+      `/api/sports/headlines/${encodeURIComponent(result.headlines[0]!.id)}/photo`
+    );
+    expect(result.headlines[0]?.imageWidth).toBe(1280);
+    // Only the feed itself was fetched: a usable feed photo makes the article page unnecessary.
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the article page's share image when the feed has no photo", async () => {
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      if (url.endsWith("sports.xml")) {
+        return success(
+          url,
+          feedBody(
+            `<item><guid>feed-1</guid><title>Story</title><link>https://publisher.example/story</link></item>`
+          ),
+          "text/plain"
+        );
+      }
+      return success(
+        url,
+        `<html><head><meta property="og:image" content="https://publisher.example/share.jpg"></head></html>`,
+        "text/html"
+      );
+    });
+    const photos = new PhotoStoreDouble();
+    const { reader } = makeReader([feedSource()], fetch, { photos });
+
+    const result = await reader.refresh(actor);
+
+    expect(photos.stored).toEqual(["https://publisher.example/share.jpg"]);
+    expect(result.headlines[0]?.imageUrl).not.toBeNull();
+  });
+
+  it("ignores a photo hosted somewhere unrelated to the publisher", async () => {
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      if (url.endsWith("sports.xml")) {
+        return success(
+          url,
+          feedBody(
+            `<item><guid>feed-1</guid><title>Story</title><link>https://publisher.example/story</link>` +
+              `<media:content url="https://tracker.elsewhere.test/pixel.jpg" medium="image"/></item>`
+          ),
+          "text/plain"
+        );
+      }
+      return success(url, `<html><head></head></html>`, "text/html");
+    });
+    const photos = new PhotoStoreDouble();
+    const { reader } = makeReader([feedSource()], fetch, { photos });
+
+    const result = await reader.refresh(actor);
+
+    expect(photos.stored).toEqual([]);
+    expect(result.headlines[0]?.imageUrl).toBeNull();
+  });
+
+  it("fetches at most six article pages for one source in a refresh", async () => {
+    const items = Array.from(
+      { length: 9 },
+      (_unused, index) =>
+        `<item><guid>feed-${index}</guid><title>Story ${index}</title>` +
+        `<link>https://publisher.example/story-${index}</link></item>`
+    ).join("");
+    let pageFetches = 0;
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      if (url.endsWith("sports.xml")) return success(url, feedBody(items), "text/plain");
+      pageFetches += 1;
+      return success(
+        url,
+        `<html><head><meta property="og:image" content="https://publisher.example/s.jpg"></head></html>`,
+        "text/html"
+      );
+    });
+    const photos = new PhotoStoreDouble();
+    const { reader } = makeReader([feedSource()], fetch, { photos });
+
+    const result = await reader.refresh(actor);
+
+    expect(pageFetches).toBe(6);
+    expect(result.headlines).toHaveLength(9);
+  });
+
+  it("still returns headlines when every photo attempt fails", async () => {
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      if (url.endsWith("sports.xml")) {
+        return success(
+          url,
+          feedBody(
+            `<item><guid>feed-1</guid><title>Story</title><link>https://publisher.example/story</link></item>`
+          ),
+          "text/plain"
+        );
+      }
+      throw new Error("the publisher hung up");
+    });
+    const photos = new PhotoStoreDouble();
+    const { reader } = makeReader([feedSource()], fetch, { photos });
+
+    const result = await reader.refresh(actor);
+
+    expect(result.headlines).toHaveLength(1);
+    expect(result.headlines[0]?.imageUrl).toBeNull();
+  });
+
+  it("tells the store which copies this refresh still uses", async () => {
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      return success(
+        url,
+        feedBody(
+          `<item><guid>feed-1</guid><title>Story</title><link>https://publisher.example/story</link>` +
+            `<media:content url="https://publisher.example/story.jpg" medium="image"/></item>`
+        ),
+        "text/plain"
+      );
+    });
+    const photos = new PhotoStoreDouble();
+    const { reader } = makeReader([feedSource()], fetch, { photos });
+
+    const { headlines } = await reader.refresh(actor);
+
+    expect(photos.swept).not.toBeNull();
+    expect([...(photos.swept ?? [])]).toEqual(["key-1"]);
+    expect([...photos.links.keys()]).toEqual([`user-a ${headlines[0]!.id}`]);
+  });
+
+  it("leaves every story without a photo when no store is wired in", async () => {
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      return success(
+        url,
+        feedBody(
+          `<item><guid>feed-1</guid><title>Story</title><link>https://publisher.example/story</link>` +
+            `<media:content url="https://publisher.example/story.jpg" medium="image"/></item>`
+        ),
+        "text/plain"
+      );
+    });
+    const { reader } = makeReader([feedSource()], fetch);
+
+    const result = await reader.refresh(actor);
+
+    expect(result.headlines[0]?.imageUrl).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

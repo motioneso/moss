@@ -7,6 +7,13 @@ import { isPublicFeedDocument, parsePublicFeedItems } from "@moss/news";
 import { catalogEntry } from "./catalog.js";
 import type { SportsSafeFetchPort, SportsWebRequestHop } from "./discovery.js";
 import {
+  extractFeedPhoto,
+  extractShareImage,
+  isUsablePhotoCandidate,
+  parseFeedPhotoItems
+} from "./photo.js";
+import type { SportsPhotoStore, StoredPhoto } from "./photo-store.js";
+import {
   expandSportsSourceRecipe,
   extractSportsSourceRecipe,
   validateSportsSourceRecipe,
@@ -40,9 +47,14 @@ const MAX_RETRY_AFTER_MS = 5_000;
 const HEADLINE_TTL_MS = 10 * 60 * 1000;
 
 export type SportsPublicSourceHeadline = CustomSourceHeadline & {
-  readonly imageUrl: null;
+  readonly imageUrl: string | null;
   readonly sportKey: SportsRuntimeSource["assignments"][number]["scope"]["sportKey"];
 };
+
+/** #2237 the deterministic photo pass' budget, per source, per refresh. */
+const MAX_ARTICLE_PAGE_FETCHES = 6;
+const PHOTO_DEADLINE_MARGIN_MS = 3_000;
+const ARTICLE_PAGE_CONTENT_TYPES = ["text/html", "application/xhtml+xml"];
 
 interface ReaderDataContext {
   withDataContext<T>(
@@ -55,6 +67,8 @@ interface PublicSourceReaderDependencies {
   readonly dataContext: ReaderDataContext;
   readonly repository?: SportsSourcesRepository;
   readonly fetch: SportsSafeFetchPort;
+  /** #2237 omitted in tests that do not exercise photos; the pass is skipped entirely then. */
+  readonly photos?: SportsPhotoStore;
   readonly cache?: DatasetCache;
   readonly now?: () => number;
   readonly sleep?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
@@ -92,6 +106,11 @@ interface ExtractedHeadline {
   /** #2211 set for a subreddit's linked article: the real publisher, not the subreddit. */
   readonly publisherLabel?: string;
   readonly publisherDomain?: string;
+  /**
+   * #2237 the publisher's own photo URL, never a per-owner key: this item is cached across every
+   * owner who follows the same source, so an owner-specific value here would leak between vaults.
+   */
+  readonly photoUrl?: string | null;
 }
 
 interface RequestOutcome {
@@ -255,30 +274,38 @@ function recipeItems(items: readonly SportsRecipeItem[], requestUrl: string): Ex
 function publicHeadlines(
   pair: RequestAssignment,
   items: readonly ExtractedHeadline[],
-  checkedAt: Date | null
+  checkedAt: Date | null,
+  photos: ReadonlyMap<string, StoredPhoto> = new Map()
 ): SportsPublicSourceHeadline[] {
   const { source, assignment } = pair;
   const competitionKey = assignment.scope.kind === "sport" ? null : assignment.scope.competitionKey;
   const fallbackTime = (checkedAt ?? new Date(0)).toISOString();
-  return items.map((item) => ({
-    origin: "custom",
-    sourceId: source.id,
-    id: `${source.id}:${item.id}`,
-    sportKey: assignment.scope.sportKey,
-    competitionKey,
-    competitionLabel:
-      assignment.scope.kind === "sport"
-        ? SPORTS_SPORT_LABELS[assignment.scope.sportKey]
-        : (catalogEntry(assignment.scope.competitionKey)?.label ?? assignment.scope.competitionKey),
-    title: item.title,
-    url: item.url,
-    publishedAt: item.publishedAt ?? fallbackTime,
-    imageUrl: null,
-    summary: item.summary,
-    teamKeys: assignment.scope.kind === "team" ? [assignment.scope.teamKey] : [],
-    publisherLabel: item.publisherLabel ?? source.label,
-    publisherDomain: item.publisherDomain ?? source.canonicalDomain
-  }));
+  return items.map((item) => {
+    const headlineId = `${source.id}:${item.id}`;
+    const photo = photos.get(item.id) ?? null;
+    return {
+      origin: "custom" as const,
+      sourceId: source.id,
+      id: headlineId,
+      sportKey: assignment.scope.sportKey,
+      competitionKey,
+      competitionLabel:
+        assignment.scope.kind === "sport"
+          ? SPORTS_SPORT_LABELS[assignment.scope.sportKey]
+          : (catalogEntry(assignment.scope.competitionKey)?.label ??
+            assignment.scope.competitionKey),
+      title: item.title,
+      url: item.url,
+      publishedAt: item.publishedAt ?? fallbackTime,
+      imageUrl: photo ? `/api/sports/headlines/${encodeURIComponent(headlineId)}/photo` : null,
+      imageWidth: photo?.width ?? null,
+      imageHeight: photo?.height ?? null,
+      summary: item.summary,
+      teamKeys: assignment.scope.kind === "team" ? [assignment.scope.teamKey] : [],
+      publisherLabel: item.publisherLabel ?? source.label,
+      publisherDomain: item.publisherDomain ?? source.canonicalDomain
+    };
+  });
 }
 
 export class SportsPublicSourceReader {
@@ -292,6 +319,133 @@ export class SportsPublicSourceReader {
     this.cache = dependencies.cache ?? new DatasetCache({ maxEntries: 500 });
     this.now = dependencies.now ?? Date.now;
     this.sleep = dependencies.sleep ?? defaultSleep;
+  }
+
+  /**
+   * #2237 the deterministic photo pass: the feed's own media tag first, then the article page's
+   * share image. Every failure here is swallowed — a story without a photo is still a story, and
+   * a photo must never cost the reader its headlines.
+   */
+  private async attachPhotoUrls(
+    group: RequestGroup,
+    items: readonly ExtractedHeadline[],
+    feedBody: string | null,
+    context: {
+      readonly deadline: number;
+      readonly signal?: AbortSignal;
+      readonly domainLimiter: DomainConcurrencyLimiter;
+      readonly pageBudget: Map<string, number>;
+    }
+  ): Promise<readonly ExtractedHeadline[]> {
+    const feedPhotos = new Map<string, string>();
+    if (feedBody !== null) {
+      for (const parsed of parseFeedPhotoItems(feedBody)) {
+        if (!parsed.link) continue;
+        const found = extractFeedPhoto(parsed);
+        if (found) feedPhotos.set(parsed.link, found.url);
+      }
+    }
+    const sourceIds = new Set(group.assignments.map((pair) => pair.source.id));
+    const withPhotos: ExtractedHeadline[] = [];
+    for (const item of items) {
+      let publisherHost: string;
+      try {
+        publisherHost = new URL(item.url).hostname.toLowerCase();
+      } catch {
+        withPhotos.push(item);
+        continue;
+      }
+      const fromFeed = feedPhotos.get(item.url);
+      if (fromFeed && isUsablePhotoCandidate(fromFeed, { publisherHost })) {
+        withPhotos.push({ ...item, photoUrl: fromFeed });
+        continue;
+      }
+      const budgetLeft = [...sourceIds].every(
+        (sourceId) => (context.pageBudget.get(sourceId) ?? 0) < MAX_ARTICLE_PAGE_FETCHES
+      );
+      if (
+        !budgetLeft ||
+        context.signal?.aborted ||
+        this.now() + PHOTO_DEADLINE_MARGIN_MS >= context.deadline
+      ) {
+        withPhotos.push(item);
+        continue;
+      }
+      for (const sourceId of sourceIds) {
+        context.pageBudget.set(sourceId, (context.pageBudget.get(sourceId) ?? 0) + 1);
+      }
+      const shareUrl = await this.fetchShareImage(item.url, publisherHost, context);
+      withPhotos.push(shareUrl ? { ...item, photoUrl: shareUrl } : item);
+    }
+    return withPhotos;
+  }
+
+  private async fetchShareImage(
+    articleUrl: string,
+    publisherHost: string,
+    context: {
+      readonly deadline: number;
+      readonly signal?: AbortSignal;
+      readonly domainLimiter: DomainConcurrencyLimiter;
+    }
+  ): Promise<string | null> {
+    const held = await context.domainLimiter.acquireAll(
+      [publisherHost],
+      context.deadline,
+      this.now,
+      context.signal
+    );
+    if (!held) return null;
+    try {
+      const response = await this.dependencies.fetch(articleUrl, {
+        allowedHosts: [publisherHost],
+        allowedContentTypes: ARTICLE_PAGE_CONTENT_TYPES,
+        maxBytes: MAX_RESPONSE_BYTES,
+        rejectOversizedResponses: true,
+        timeoutMs: Math.min(FETCH_TIMEOUT_MS, Math.max(1, context.deadline - this.now())),
+        signal: context.signal
+      });
+      if (!response.ok) return null;
+      const found = extractShareImage(response.body, response.finalUrl);
+      if (!found) return null;
+      return isUsablePhotoCandidate(found.url, { publisherHost }) ? found.url : null;
+    } catch {
+      return null;
+    } finally {
+      for (const host of held) context.domainLimiter.release(host);
+    }
+  }
+
+  /**
+   * Downloads and stores each story's photo into this owner's vault, then records which stored
+   * copy each headline id serves. Returns the copies keyed by feed item id.
+   */
+  private async storePhotos(
+    accessContext: AccessContext,
+    pair: RequestAssignment,
+    items: readonly ExtractedHeadline[],
+    signal?: AbortSignal
+  ): Promise<Map<string, StoredPhoto>> {
+    const stored = new Map<string, StoredPhoto>();
+    const photos = this.dependencies.photos;
+    if (!photos) return stored;
+    for (const item of items) {
+      if (!item.photoUrl) continue;
+      let copy: StoredPhoto | null;
+      try {
+        copy = await photos.ensure(accessContext, pair.source.id, item.photoUrl, { signal });
+      } catch {
+        copy = null;
+      }
+      if (!copy) continue;
+      stored.set(item.id, copy);
+      photos.linkHeadline(
+        accessContext.actorUserId,
+        `${pair.source.id}:${item.id}`,
+        copy.key
+      );
+    }
+    return stored;
   }
 
   async refresh(
@@ -443,6 +597,18 @@ export class SportsPublicSourceReader {
     const pending = [...groups.values()];
     const running = new Set<Promise<void>>();
     const domainLimiter = new DomainConcurrencyLimiter();
+    const pageBudget = new Map<string, number>();
+    const keptPhotoKeys = new Set<string>();
+
+    const pushHeadlines = async (
+      pair: RequestAssignment,
+      items: readonly ExtractedHeadline[],
+      checkedAt: Date | null
+    ): Promise<void> => {
+      const stored = await this.storePhotos(accessContext, pair, items, options.signal);
+      for (const copy of stored.values()) keptPhotoKeys.add(copy.key);
+      headlines.push(...publicHeadlines(pair, items, checkedAt, stored));
+    };
 
     const run = async (group: RequestGroup): Promise<void> => {
       const cacheHit = options.bypassCache
@@ -450,7 +616,7 @@ export class SportsPublicSourceReader {
         : this.cache.get<readonly ExtractedHeadline[]>(group.identity, this.now());
       if (cacheHit?.fresh) {
         for (const pair of group.assignments) {
-          headlines.push(...publicHeadlines(pair, cacheHit.value, null));
+          await pushHeadlines(pair, cacheHit.value, null);
         }
         return;
       }
@@ -623,6 +789,17 @@ export class SportsPublicSourceReader {
           )
         };
       }
+      if (outcome.state === "healthy" && this.dependencies.photos) {
+        outcome = {
+          ...outcome,
+          items: await this.attachPhotoUrls(
+            group,
+            outcome.items,
+            group.kind === "feed" && response.ok ? response.body : null,
+            { deadline, signal: options.signal, domainLimiter, pageBudget }
+          )
+        };
+      }
       if (outcome.state === "healthy") {
         const cachedAt = this.now();
         this.cache.set(
@@ -635,7 +812,7 @@ export class SportsPublicSourceReader {
         degraded = true;
       }
       for (const pair of group.assignments) {
-        headlines.push(...publicHeadlines(pair, outcome.items, outcome.checkedAt));
+        await pushHeadlines(pair, outcome.items, outcome.checkedAt);
         if (!outcome.fromCache) {
           results.push({
             sourceId: pair.source.id,
@@ -665,6 +842,14 @@ export class SportsPublicSourceReader {
       }
       if (running.size > 0 && (!scheduled || running.size >= MAX_CONCURRENCY)) {
         await Promise.race(running);
+      }
+    }
+
+    if (this.dependencies.photos) {
+      try {
+        await this.dependencies.photos.sweep(accessContext, keptPhotoKeys);
+      } catch {
+        // Housekeeping only: an unswept copy expires on the next refresh.
       }
     }
 

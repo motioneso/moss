@@ -131,6 +131,11 @@ export const sportsModuleManifest = {
       id: "sports.story_feedback",
       description:
         "Rate a sports story with More like this or Less like this from the dots that appear in its top-right corner while it is hovered or focused, on Today and on Sports. Less like this asks for a reason and hides the story."
+    },
+    {
+      id: "sports.source_photos",
+      description:
+        "Stories from your own sources show a photo when the feed, a saved rule, or the article's share image provides one."
     }
   ],
   navigation: [
@@ -313,6 +318,11 @@ export const sportsModuleManifest = {
     {
       method: "GET",
       path: "/api/sports/sources/:sourceId/icon",
+      permissionId: "sports.view"
+    },
+    {
+      method: "GET",
+      path: "/api/sports/headlines/:headlineId/photo",
       permissionId: "sports.view"
     }
   ],
