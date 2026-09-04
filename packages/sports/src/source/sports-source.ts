@@ -9,13 +9,22 @@ export interface SourceTeamRef extends TeamRef {
   /** Provider-side team id — joins news team tags to catalog teams. Never serialized. */
   readonly sourceTeamId: string | null;
 }
-export type EspnSourceHeadline = Headline & {
+/**
+ * The wire type always carries a photo size, but a source that never finds one should not have to
+ * spell out two nulls, so these two are optional on the way in. `toPublicHeadline` fills them.
+ */
+type SourceHeadlineBase = Omit<Headline, "imageWidth" | "imageHeight"> & {
+  readonly imageWidth?: number | null;
+  readonly imageHeight?: number | null;
+};
+
+export type EspnSourceHeadline = SourceHeadlineBase & {
   readonly origin: "espn";
   /** Provider-side team ids tagged on the article; the service resolves these to teamKeys. */
   readonly sourceTeamIds: readonly string[];
 };
 
-export type CustomSourceHeadline = Headline & {
+export type CustomSourceHeadline = SourceHeadlineBase & {
   readonly origin: "custom";
   readonly sourceId: string;
 };

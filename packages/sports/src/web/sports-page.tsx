@@ -71,7 +71,7 @@ function demoteEarlyGameday(data: SportsOverviewResponse): OverviewHero {
   // a live game off the page.
   const games = hero.games.filter((entry) => stillInWindow(entry.game));
   if (games.length > 0) return { mode: "gameday", games };
-  return { mode: "story", headline: data.topStories[0] ?? null };
+  return { mode: "story", headline: leadWidePhotoFirst(data.topStories)[0] ?? null };
 }
 
 export function hasLiveGame(data: SportsOverviewResponse | undefined): boolean {
@@ -194,7 +194,7 @@ export function SportsPage() {
             />
           ) : (
             <HeroCarousel
-              headlines={data.topStories}
+              headlines={leadWidePhotoFirst(data.topStories)}
               hiddenStoryRefs={hiddenStoryRefs}
               onStoryChanged={onStoryChanged}
             />
@@ -304,7 +304,7 @@ function SportsSkeleton() {
 // headline about this matchup from the overview payload. Honest data only — if no headline
 // mentions either team, no band renders. Prefers the service's teamKeys join; falls back to
 // scanning titles for a team name, since some sources emit empty teamKeys.
-function findFeaturedStory(
+export function findFeaturedStory(
   game: GameSummary,
   overview: SportsOverviewResponse,
   hiddenStoryRefs?: ReadonlySet<string>
@@ -324,12 +324,31 @@ function findFeaturedStory(
     ...overview.topStories,
     ...overview.leagueNews.flatMap((group) => group.headlines)
   ].filter((headline) => aboutThisGame(headline) && !hiddenStoryRefs?.has(headline.storyRef ?? ""));
+  // #2237: prefer a wide photo inside the candidates already narrowed to this game, then fall
+  // through to the original picture-and-summary order, so a day with no wide photo is unchanged.
+  const wideEnough = (h: Headline) => (h.imageWidth ?? 0) >= LEAD_MIN_PHOTO_WIDTH;
   return (
+    candidates.find((h) => wideEnough(h) && h.summary) ??
+    candidates.find(wideEnough) ??
     candidates.find((h) => h.imageUrl && h.summary) ??
     candidates.find((h) => h.imageUrl) ??
     candidates[0] ??
     null
   );
+}
+
+// #2237: a wide photo fills the split hero's art column; a narrow one leaves it letterboxed.
+// So within the stories that already earned the carousel, one with a wide photo leads. This is
+// a preference inside a chosen set, never a filter: the order is otherwise untouched, and a day
+// with no wide photo leads with exactly the story it would have led with before.
+const LEAD_MIN_PHOTO_WIDTH = 800;
+
+export function leadWidePhotoFirst(headlines: readonly Headline[]): readonly Headline[] {
+  const index = headlines.findIndex((headline) => (headline.imageWidth ?? 0) >= LEAD_MIN_PHOTO_WIDTH);
+  if (index <= 0) return headlines;
+  const chosen = headlines[index];
+  if (!chosen) return headlines;
+  return [chosen, ...headlines.filter((_, position) => position !== index)];
 }
 
 function FeaturedStoryBand(props: { story: Headline; onStoryChanged: StoryFeedbackChange }) {

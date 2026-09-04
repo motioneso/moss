@@ -46,6 +46,8 @@ import { SPORTS_CATALOG, catalogEntry } from "./source/catalog.js";
 import { type SportsDiscoveryBrowserPort, type SportsSafeFetchPort } from "./source/discovery.js";
 import { SportsEspnCoverageRepository } from "./source/espn-coverage-repository.js";
 import { registerSportsSourceIconRoute, type SportsIconFetchPort } from "./source/icon-route.js";
+import { registerSportsHeadlinePhotoRoute } from "./source/photo-route.js";
+import type { SportsPhotoStore } from "./source/photo-store.js";
 import { SportsSourcesRepository } from "./source/repository.js";
 import type { SportsPublicSourceReader } from "./source/public-source-reader.js";
 import { createSportsPreviewStore } from "./source/preview-store.js";
@@ -108,6 +110,8 @@ export interface SportsRoutesDependencies {
   readonly sourceService?: SportsSourceService;
   /** Optional injection point for tests; defaults to a private in-memory store. */
   readonly previews?: SportsSourcePreviewStore;
+  /** #2237 the owner's stored story photos; absent means the photo route always answers 404. */
+  readonly photos?: SportsPhotoStore;
 }
 
 export function registerSportsRoutes(
@@ -140,7 +144,8 @@ export function registerSportsRoutes(
       discovery: dependencies.discovery,
       resolveTeams: async (competitionKey) => (await service.getLeagueTeams(competitionKey)).teams,
       dataContext: dependencies.dataContext,
-      reader: dependencies.publicSourceReader
+      reader: dependencies.publicSourceReader,
+      ...(dependencies.photos ? { photos: dependencies.photos } : {})
     });
 
   server.get(
@@ -343,6 +348,15 @@ export function registerSportsRoutes(
     }
   );
 
+  // Always registered: the manifest declares this route, and a declared route with no handler
+  // fails the boot-time route-coverage assertion.
+  registerSportsHeadlinePhotoRoute(server, {
+    dataContext: dependencies.dataContext,
+    resolveAccessContext: dependencies.resolveAccessContext,
+    repository: sourcesRepository,
+    ...(dependencies.photos ? { photos: dependencies.photos } : {})
+  });
+
   registerSportsSourceIconRoute(server, {
     dataContext: dependencies.dataContext,
     resolveAccessContext: dependencies.resolveAccessContext,
@@ -515,7 +529,7 @@ export function registerSportsRoutes(
         const accessContext = await dependencies.resolveAccessContext(request);
         const { id } = request.params as { id: string };
         const deleted = await dependencies.dataContext.withDataContext(accessContext, (db) =>
-          sourceService.removeSource(db, id)
+          sourceService.removeSource(db, id, accessContext)
         );
         return { deleted };
       } catch (error) {

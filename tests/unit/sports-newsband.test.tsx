@@ -18,6 +18,8 @@ function headline(over: Partial<Headline> = {}): Headline {
     url: "https://www.espn.com/nfl/story/_/id/4567",
     publishedAt: "2026-07-07T12:00:00.000Z",
     imageUrl: "https://a.espncdn.com/photo/cowboys.jpg",
+    imageWidth: null,
+    imageHeight: null,
     summary: "Dallas wrapped up the division on Sunday.",
     teamKeys: [],
     publisherLabel: "ESPN",
