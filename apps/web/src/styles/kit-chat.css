@@ -215,7 +215,7 @@
 
 .chatd-msg:hover .feedback-menu--corner,
 .chatd-msg:focus-within .feedback-menu--corner,
-.feedback-menu--corner:has(.feedback-menu__details[open]),
+.feedback-menu--corner:has(.jds-menu__trigger[aria-expanded="true"]),
 .feedback-menu--corner.is-saved {
   opacity: 1;
 }
@@ -226,56 +226,9 @@
   }
 }
 
-.feedback-menu--corner .feedback-menu__list {
-  left: auto;
-  right: 0;
-}
-
-.feedback-menu__details {
-  position: relative;
-}
-
-.feedback-menu__trigger {
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  list-style: none;
-}
-
-.feedback-menu__trigger::-webkit-details-marker {
-  display: none;
-}
-
-.feedback-menu__list {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 6px);
-  left: 0;
-  min-width: 150px;
-  padding: 5px;
-}
-
-.chatd-msg--me .feedback-menu__list {
-  left: auto;
-  right: 0;
-}
-
-.feedback-menu__list button,
 .feedback-menu__status button {
   font: inherit;
   cursor: pointer;
-}
-
-.feedback-menu__list button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 8px;
-  text-align: left;
 }
 
 .feedback-menu__status {
@@ -344,19 +297,29 @@
   text-align: left;
   font: inherit;
   padding: 12px 10px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: var(--transition-control);
+}
+
+.chatd-sess__row.is-selected {
+  background: var(--surface-active);
+  border: 1px solid var(--accent-soft-border);
 }
 
 .chatd-sess__ic {
   display: inline-flex;
   padding-top: 2px;
   flex: none;
+  color: var(--text-faint);
 }
 
 .chatd-sess__main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .chatd-sess__title {
@@ -365,13 +328,25 @@
   text-overflow: ellipsis;
 }
 
+.chatd-sess__preview {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
 .chatd-sess__when {
   flex: none;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
 }
 
 .chatd-sess__hd {
   letter-spacing: 0.07em;
   text-transform: uppercase;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
   padding: 4px 10px 8px;
 }
 

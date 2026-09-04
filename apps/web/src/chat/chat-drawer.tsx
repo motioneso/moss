@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Clock, MessageSquareText, ShieldOff, SquarePen, X } from "lucide-react";
 import { type UIEvent, useCallback, useEffect, useRef, useState } from "react";
 
+import { EmptyState as JdsEmptyState } from "@moss/ui";
+
 import { BrandMark } from "../shell/brand-mark";
 
 import {
@@ -35,6 +37,7 @@ import { ConnectProviderEmpty } from "./connect-provider-empty";
 import { Thread } from "./message-row";
 import { buildChatSeeds } from "./seeds";
 import { isNoActiveChatModelError } from "../onboarding/chat-availability";
+import { sortThreadsByRecency } from "./thread-recency";
 import {
   shouldEndPrivateChatOnStreamDisconnect,
   type ChatRecordKind,
@@ -562,7 +565,7 @@ export function ChatDrawer(props: {
           {showHistory ? (
             <HistoryList
               selectedThreadId={reviewThreadId}
-              threads={threadsQuery.data?.threads ?? []}
+              threads={sortThreadsByRecency(threadsQuery.data?.threads ?? [])}
               onSelect={(id) => {
                 setReviewThreadId(id);
                 setShowHistory(false);
@@ -711,6 +714,7 @@ function HistoryList(props: {
     readonly id: string;
     readonly title: string;
     readonly updatedAt: string;
+    readonly lastMessagePreview: string | null;
   }[];
   readonly selectedThreadId: string | null;
   readonly onSelect: (threadId: string) => void;
@@ -718,7 +722,14 @@ function HistoryList(props: {
 }) {
   const locale = useUserLocale();
   if (props.threads.length === 0) {
-    return <div className="chatd-sess chatd-sess--empty">No past conversations yet.</div>;
+    return (
+      <div className="chatd-sess chatd-sess--empty">
+        <JdsEmptyState
+          icon={<MessageSquareText size={18} aria-hidden="true" />}
+          title="No past conversations yet."
+        />
+      </div>
+    );
   }
   return (
     <div className="chatd-sess">
@@ -736,8 +747,11 @@ function HistoryList(props: {
           </span>
           <span className="chatd-sess__main">
             <span className="chatd-sess__title">{thread.title}</span>
+            {thread.lastMessagePreview ? (
+              <span className="chatd-sess__preview">{thread.lastMessagePreview}</span>
+            ) : null}
           </span>
-          <span className="chatd-sess__when">{formatShortDate(thread.updatedAt, locale)}</span>
+          <span className="chatd-sess__when">{relativeThreadTime(thread.updatedAt, locale)}</span>
         </button>
       ))}
     </div>
@@ -826,9 +840,14 @@ function safeActivityKind(kind: string): ChatRecordKind {
   return "status";
 }
 
-function formatShortDate(value: string, locale: LocaleSettingsDto): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
+function relativeThreadTime(value: string, locale: LocaleSettingsDto): string {
+  const then = new Date(value).getTime();
+  if (Number.isNaN(then)) return "";
+  const mins = Math.round((Date.now() - then) / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
   return formatDate(value, locale, { month: "short", day: "numeric" });
 }
 

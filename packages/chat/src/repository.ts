@@ -32,13 +32,25 @@ export interface CreateChatThreadInput {
  * removed in the retire-legacy-chat-model change.
  */
 export class ChatRepository {
-  async listThreads(scopedDb: DataContextDb, surface?: ChatSurface): Promise<ChatThread[]> {
+  async listThreads(
+    scopedDb: DataContextDb,
+    surface?: ChatSurface
+  ): Promise<(ChatThread & { readonly lastMessageBody: string | null })[]> {
     assertDataContextDb(scopedDb);
     const chatSurface = normalizeChatSurface(surface);
 
     return scopedDb.db
       .selectFrom("app.chat_threads")
-      .selectAll()
+      .selectAll("app.chat_threads")
+      .select((eb) =>
+        eb
+          .selectFrom("app.chat_messages")
+          .select("body")
+          .whereRef("app.chat_messages.thread_id", "=", "app.chat_threads.id")
+          .orderBy("created_at", "desc")
+          .limit(1)
+          .as("lastMessageBody")
+      )
       .where("incognito", "=", false)
       .where("surface", "=", chatSurface)
       .orderBy("last_active_at", "desc")

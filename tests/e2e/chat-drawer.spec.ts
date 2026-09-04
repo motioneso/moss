@@ -578,7 +578,8 @@ test("History hides the ordinary composer seeds while open", async ({ page }) =>
         title: "Old chat",
         incognito: false,
         createdAt: "2026-07-01T00:00:00.000Z",
-        updatedAt: "2026-07-01T00:00:00.000Z"
+        updatedAt: "2026-07-01T00:00:00.000Z",
+        lastMessagePreview: null
       }
     ],
     connectorAccounts: [],

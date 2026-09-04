@@ -35,6 +35,8 @@ export interface ChatThreadDto {
   readonly incognito: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** First line of the most recent message in the thread, for a list preview. */
+  readonly lastMessagePreview: string | null;
 }
 
 export interface ChatModelRouteMetadataDto {
