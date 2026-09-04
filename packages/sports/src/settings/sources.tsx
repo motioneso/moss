@@ -236,16 +236,21 @@ export function AddSourceFlow(props: {
         </div>
       </form>
 
-      <p className="sp-src__hint">Coverage (optional — leave blank to add unassigned):</p>
-      <SourceAssignmentPicker
-        follows={props.follows}
-        competitionsByKey={props.competitionsByKey}
-        teamsByCompetition={props.teamsByCompetition}
-        selected={new Set(selectedTargets.keys())}
-        onToggle={toggleTarget}
-        disabled={busy}
-        idPrefix="sp-addsource-assign"
-      />
+      {/* Coverage stays hidden until a publication is entered (Ben, 2026-09-03). */}
+      {input.trim() ? (
+        <>
+          <p className="sp-src__hint">Coverage (optional. Leave blank to add unassigned):</p>
+          <SourceAssignmentPicker
+            follows={props.follows}
+            competitionsByKey={props.competitionsByKey}
+            teamsByCompetition={props.teamsByCompetition}
+            selected={new Set(selectedTargets.keys())}
+            onToggle={toggleTarget}
+            disabled={busy}
+            idPrefix="sp-addsource-assign"
+          />
+        </>
+      ) : null}
       {[...selectedTargets].map(([key, target]) => {
         const id = `sp-target-${key}`;
         return (

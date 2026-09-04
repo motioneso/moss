@@ -13,6 +13,7 @@ import SportsSettings, {
   SearchResults
 } from "../../packages/sports/src/settings/index.js";
 import { AddSourceFlow, SportsSourcesSection } from "../../packages/sports/src/settings/sources.js";
+import { SourceAssignmentPicker } from "../../packages/sports/src/settings/source-assignment-picker.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
 const CATALOG_KEY = ["sports", "catalog"] as const;
@@ -294,6 +295,29 @@ describe("SportsSettings", () => {
   });
 
   it("uses the shared checkbox primitive for source assignments", () => {
+    const html = renderToString(
+      createElement(SourceAssignmentPicker, {
+        follows: [
+          {
+            id: "22222222-2222-2222-2222-222222222222",
+            competitionKey: "nfl",
+            teamKey: null,
+            createdAt: "2026-08-24T12:00:00.000Z"
+          }
+        ],
+        competitionsByKey: new Map(),
+        teamsByCompetition: new Map(),
+        selected: new Set<string>(),
+        onToggle: () => {},
+        idPrefix: "sp-test-assign"
+      })
+    );
+
+    expect(html).toContain('class="jds-check sp-src__check"');
+    expect(html).toContain('class="jds-check__box"');
+  });
+
+  it("add-source coverage picker stays hidden until a publication is entered (Ben, 2026-09-03)", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const html = renderToString(
       createElement(
@@ -314,8 +338,9 @@ describe("SportsSettings", () => {
       )
     );
 
-    expect(html).toContain('class="jds-check sp-src__check"');
-    expect(html).toContain('class="jds-check__box"');
+    expect(html).toContain('id="sp-addsource-input"');
+    expect(html).not.toContain("sp-addsource-assign");
+    expect(html).not.toContain("Coverage (optional");
   });
 
   it("empty-query view starts with browse leagues collapsed, not the full catalog", () => {
