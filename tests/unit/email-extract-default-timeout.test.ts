@@ -73,10 +73,21 @@ describe("email extraction default call budget", () => {
   it("degrades to a no-confidence result once the 120-second default is reached", async () => {
     const deps: EmailExtractDeps = { runChat: slowRunChat() };
 
-    const pending = extractEmailSignals(MESSAGE, deps);
-    await vi.advanceTimersByTimeAsync(DEFAULT_EMAIL_LLM_TIMEOUT_MS);
+    let settled = false;
+    const pending = extractEmailSignals(MESSAGE, deps).then((result) => {
+      settled = true;
+      return result;
+    });
+
+    // Proves the budget is actually 120 seconds, not a shorter value with the exported constant
+    // left at 120000: a run still 1ms short of the deadline must still be waiting.
+    await vi.advanceTimersByTimeAsync(DEFAULT_EMAIL_LLM_TIMEOUT_MS - 1);
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
     const result = await pending;
 
+    expect(settled).toBe(true);
     expect(result.signals.confidence).toBe(0);
     expect(result.summary).toBeNull();
   });

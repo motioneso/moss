@@ -397,7 +397,11 @@ export class GoogleApiClient {
       // handleRouteError propagates Error.message to HTTP responses (oauth.ts:122).
       const reason = await extractGoogleErrorReason(response);
       this.logger.error({ statusCode: response.status, api, reason }, "Google API call failed");
-      throw new GoogleApiError(`Google ${api} returned ${response.status}`, response.status, reason);
+      throw new GoogleApiError(
+        `Google ${api} returned ${response.status}`,
+        response.status,
+        reason
+      );
     }
     return (await response.json()) as T;
   }
@@ -422,7 +426,11 @@ export class GoogleApiClient {
       // handleRouteError propagates Error.message to HTTP responses (oauth.ts:122).
       const reason = await extractGoogleErrorReason(response);
       this.logger.error({ statusCode: response.status, api, reason }, "Google API call failed");
-      throw new GoogleApiError(`Google ${api} returned ${response.status}`, response.status, reason);
+      throw new GoogleApiError(
+        `Google ${api} returned ${response.status}`,
+        response.status,
+        reason
+      );
     }
     return (await response.json()) as T;
   }
@@ -447,7 +455,11 @@ export class GoogleApiClient {
       // handleRouteError propagates Error.message to HTTP responses (oauth.ts:122).
       const reason = await extractGoogleErrorReason(response);
       this.logger.error({ statusCode: response.status, api, reason }, "Google API call failed");
-      throw new GoogleApiError(`Google ${api} returned ${response.status}`, response.status, reason);
+      throw new GoogleApiError(
+        `Google ${api} returned ${response.status}`,
+        response.status,
+        reason
+      );
     }
     return (await response.json()) as T;
   }

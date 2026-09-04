@@ -152,6 +152,12 @@ export type RpcMethod =
   | "submit"
   | "cancelSubmit"
   | "readNew"
+  // Structured one-shot calls (email extraction and other scoped structured callers, review B4
+  // follow-up): "launch" is reused for the structured launch (see RpcLaunchParams.schema) because
+  // its result shape already matches; submit/read need their own methods because their param/result
+  // shapes differ from the ordinary chat submit/readNew (no attemptId, no TranscriptRecord[]).
+  | "submitStructured"
+  | "readStructured"
   | "isAlive"
   | "interrupt"
   | "purgeTranscripts" // per-session (sessionKey required) — #744 private-chat transcript purge over RPC
@@ -312,6 +318,14 @@ export interface RpcLaunchParams {
   /** #1554 — `chat.persistent_idle_reap_minutes`, same live-read-per-launch contract; the
    *  cli-runner's idle-reap timer re-reads it on every tick. */
   readonly persistentIdleReapMinutes?: number;
+  /**
+   * Review B4 follow-up — present only for a structured one-shot call (e.g. email extraction via
+   * `CliStructuredAdapter`). Mirrors `CliStructuredEngine.launchStructured`'s `schema` param
+   * (cli-structured-adapter.ts). When present, cli-runner calls the built engine's
+   * `launchStructured(...)` instead of `launch(...)`; `RpcLaunchResult` already matches that
+   * method's `{offset}` return shape, so "launch" is reused rather than adding a new method.
+   */
+  readonly schema?: Record<string, unknown>;
 }
 
 /**
@@ -374,6 +388,33 @@ export interface RpcReadNewResult {
   /** New offset = jsonl.length (UTF-16 code units, §3.3). Pass back as afterOffset next poll. */
   readonly offset: number;
   /** True once the engine detects end-of-turn for the provider (transcript-reader completion). */
+  readonly complete: boolean;
+}
+
+/**
+ * Review B4 follow-up — params/result for method "submitStructured". Mirrors
+ * `CliStructuredEngine.submitStructured` (cli-structured-adapter.ts): a plain text turn, no
+ * attemptId (a structured session is one caller, one turn at a time; the ordinary submit's
+ * idempotency ledger does not apply).
+ */
+export interface RpcSubmitStructuredParams {
+  readonly text: string;
+}
+export interface RpcSubmitStructuredResult {
+  readonly ok: true;
+}
+
+/**
+ * Review B4 follow-up — params/result for method "readStructured". Mirrors
+ * `CliStructuredEngine.readStructured` (cli-structured-adapter.ts): unlike readNew, this returns
+ * raw accumulated text (not TranscriptRecord[]).
+ */
+export interface RpcReadStructuredParams {
+  readonly afterOffset: number;
+}
+export interface RpcReadStructuredResult {
+  readonly text?: string;
+  readonly offset: number;
   readonly complete: boolean;
 }
 
