@@ -175,8 +175,6 @@
   gap: 2px;
   flex: 1;
   min-width: 0;
-  font-size: var(--text-xs);
-  line-height: var(--leading-snug);
 }
 /* #2253: align with text-align, NOT align-items. A column flex container sizes its
    items to their content on the cross axis, so align-items: flex-end made each name's
@@ -507,8 +505,6 @@
   gap: 2px;
   flex: 1;
   min-width: 0;
-  font-size: var(--text-xs);
-  line-height: var(--leading-snug);
 }
 /* #2253: align with text-align, NOT align-items. A column flex container sizes its
    items to their content on the cross axis, so align-items: flex-end made each name's
