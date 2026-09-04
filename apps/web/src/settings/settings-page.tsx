@@ -25,7 +25,7 @@ import {
 import { Fragment, lazy, Suspense, useEffect, useState, type ComponentType } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { MODULE_SETTINGS_SURFACES } from "virtual:moss-module-settings";
+import { MODULE_SETTINGS_SURFACES, MODULE_SETTING_KEYWORDS } from "virtual:moss-module-settings";
 
 import { SettingsSearch, type SettingsSearchItem } from "./settings-search";
 
@@ -435,7 +435,8 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const moduleSearchItems = buildModuleSettingsSearchItems(
     myModulesQuery.data?.modules ?? [],
     MODULE_SETTINGS_SURFACES,
-    assistantName
+    assistantName,
+    MODULE_SETTING_KEYWORDS
   );
   const searchItems: SettingsSearchItem[] = [...sectionSearchItems, ...moduleSearchItems];
 
