@@ -81,10 +81,11 @@ describe("planSourceToggle: enabling (#897)", () => {
 
   it("pins every enabled default BEFORE the first include so nothing silently disappears", () => {
     const ops = planSourceToggle("nytimes", NEWS_CATALOG, []);
-    // Defaults (bbc, guardian, npr) pinned in catalog order, then the toggled source.
+    // Defaults (bbc, guardian, ap, npr) pinned in catalog order, then the toggled source.
     expect(ops).toEqual([
       { op: "create", kind: "source", key: "bbc" },
       { op: "create", kind: "source", key: "guardian" },
+      { op: "create", kind: "source", key: "ap" },
       { op: "create", kind: "source", key: "npr" },
       { op: "create", kind: "source", key: "nytimes" }
     ] satisfies PrefOp[]);
@@ -96,6 +97,7 @@ describe("planSourceToggle: enabling (#897)", () => {
     const ops = planSourceToggle("nytimes", NEWS_CATALOG, [excludeGuardian]);
     expect(ops).toEqual([
       { op: "create", kind: "source", key: "bbc" },
+      { op: "create", kind: "source", key: "ap" },
       { op: "create", kind: "source", key: "npr" },
       { op: "create", kind: "source", key: "nytimes" }
     ] satisfies PrefOp[]);

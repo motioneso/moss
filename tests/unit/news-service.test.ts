@@ -262,9 +262,9 @@ describe("NewsService personalized snapshot overview", () => {
 });
 
 describe("resolveEffectivePrefs (#897)", () => {
-  it("with no prefs, serves the catalog defaults (bbc, guardian, npr)", () => {
+  it("with no prefs, serves the catalog defaults (bbc, guardian, ap, npr)", () => {
     const { sources, topics } = resolveEffectivePrefs([]);
-    expect(sources.map((s) => s.sourceKey)).toEqual(["bbc", "guardian", "npr"]);
+    expect(sources.map((s) => s.sourceKey)).toEqual(["bbc", "guardian", "ap", "npr"]);
     expect(topics).toEqual([]);
   });
 
@@ -276,7 +276,7 @@ describe("resolveEffectivePrefs (#897)", () => {
   it("excludes beat both defaults and includes", () => {
     expect(
       resolveEffectivePrefs([pref("source_exclude", "guardian")]).sources.map((s) => s.sourceKey)
-    ).toEqual(["bbc", "npr"]);
+    ).toEqual(["bbc", "ap", "npr"]);
     expect(
       resolveEffectivePrefs([
         pref("source", "nytimes"),
@@ -326,6 +326,7 @@ describe("NewsService.getOverview (#897)", () => {
     expect(calls).toEqual([
       { sourceKey: "bbc", topicKey: null },
       { sourceKey: "guardian", topicKey: null },
+      { sourceKey: "ap", topicKey: null },
       { sourceKey: "npr", topicKey: null }
     ]);
   });
@@ -342,9 +343,10 @@ describe("NewsService.getOverview (#897)", () => {
       })
     );
     await service.getOverview(userA);
-    // guardian + npr both map politics; bbc must not be fetched at all for it.
+    // guardian + ap + npr map politics; bbc must not be fetched at all for it.
     expect(calls).toEqual([
       { sourceKey: "guardian", topicKey: "politics" },
+      { sourceKey: "ap", topicKey: "politics" },
       { sourceKey: "npr", topicKey: "politics" }
     ]);
   });
@@ -370,8 +372,8 @@ describe("NewsService.getOverview (#897)", () => {
       makeDeps({ getFeed: async () => [item({ id: "same-id", url: "https://example.com/x" })] })
     );
     const overview = await service.getOverview(userA);
-    // bbc, guardian, npr each contribute their copy.
-    expect(overview.topStories).toHaveLength(3);
+    // bbc, guardian, ap, npr each contribute their copy.
+    expect(overview.topStories).toHaveLength(4);
   });
 
   it("enriches headlines with source identity and the human topic label", async () => {
@@ -400,6 +402,7 @@ describe("NewsService.getOverview (#897)", () => {
     expect(overview.enabledSources).toEqual([
       { sourceKey: "bbc", label: "BBC News" },
       { sourceKey: "guardian", label: "The Guardian" },
+      { sourceKey: "ap", label: "AP News" },
       { sourceKey: "npr", label: "NPR" }
     ]);
   });
@@ -423,7 +426,7 @@ describe("NewsService.getOverview (#897)", () => {
     );
     const overview = await service.getOverview(userA);
     expect(overview.degraded).toBe(true);
-    expect(overview.sourceGroups.map((g) => g.sourceKey)).toEqual(["bbc", "npr"]);
+    expect(overview.sourceGroups.map((g) => g.sourceKey)).toEqual(["bbc", "ap", "npr"]);
   });
 
   it("reports activeTopics so the page can render the topic filter state", async () => {
@@ -448,9 +451,9 @@ describe("NewsService exclusion filtering (#953 Slice 1)", () => {
       })
     );
     const overview = await service.getOverview(userA);
-    expect(calls).toEqual(["guardian", "npr"]);
-    expect(overview.sourceGroups.map((g) => g.sourceKey)).toEqual(["guardian", "npr"]);
-    expect(overview.enabledSources.map((s) => s.sourceKey)).toEqual(["guardian", "npr"]);
+    expect(calls).toEqual(["guardian", "ap", "npr"]);
+    expect(overview.sourceGroups.map((g) => g.sourceKey)).toEqual(["guardian", "ap", "npr"]);
+    expect(overview.enabledSources.map((s) => s.sourceKey)).toEqual(["guardian", "ap", "npr"]);
   });
 
   it("drops composed headlines whose article hostname matches an exclusion via ANOTHER feed", async () => {
@@ -537,9 +540,9 @@ describe("NewsService exclusion filtering (#953 Slice 1)", () => {
 });
 
 describe("NewsService.getCatalog (#897)", () => {
-  it("lists all 8 curated sources with their per-source topic coverage", () => {
+  it("lists all 9 curated sources with their per-source topic coverage", () => {
     const catalog = new NewsService(makeDeps()).getCatalog();
-    expect(catalog.sources).toHaveLength(8);
+    expect(catalog.sources).toHaveLength(9);
     expect(catalog.topics).toHaveLength(8);
     const bbc = catalog.sources.find((s) => s.sourceKey === "bbc");
     expect(bbc?.defaultEnabled).toBe(true);

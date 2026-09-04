@@ -73,7 +73,9 @@ test("saves story feedback and manages it from News Settings", async ({ page }) 
   expect((await lessResponse).status()).toBe(201);
 
   await page.goto(`${baseURL()}/settings?section=modules&module=news`);
-  const feedback = page.locator('section[aria-label="News story feedback"]');
+  const feedback = page.locator(
+    'section[aria-label="Story preferences"], section[aria-label="News story feedback"]'
+  );
   await expect(feedback).toBeVisible();
   const row = feedback.locator("li").filter({ hasText: lessHeadline });
   await expect(row).toContainText("Less like this");
