@@ -365,6 +365,9 @@ export default function NewsSettings() {
       : null);
 
   const topicsNeedAttention = customTopics.some((topic) => topic.validationStatus !== "approved");
+  const sourcesNeedAttention = customSources.some(
+    (source) => source.validationStatus !== "approved" || source.healthStatus !== "healthy"
+  );
 
   // One owner-wide revalidation job covers sources AND topics, but the button renders inside
   // whichever section is actually showing amber/red badges so the action sits next to the
@@ -393,14 +396,12 @@ export default function NewsSettings() {
   );
 
   const renderCustomSourceRow = (source: (typeof customSources)[number]) => {
-    const removing =
-      removeSourceMutation.isPending && removeSourceMutation.variables === source.id;
+    const removing = removeSourceMutation.isPending && removeSourceMutation.variables === source.id;
     // #2008: present only for a source that was connected with a key.
     const credential = credentialBySourceId.get(source.id);
     const badge = credential ? credentialStatusBadge(credential.status) : null;
     const checked = credential ? lastCheckedLabel(credential.lastValidatedAt) : null;
-    const isUnhealthy =
-      source.validationStatus !== "approved" || source.healthStatus !== "healthy";
+    const isUnhealthy = source.validationStatus !== "approved" || source.healthStatus !== "healthy";
 
     return (
       <li key={source.id} className="nw-set__item">
@@ -485,11 +486,7 @@ export default function NewsSettings() {
             >
               {revokeCredentialMutation.isPending ? "Revoking…" : "Yes, revoke"}
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setRevokingSourceId(null)}
-            >
+            <Button variant="secondary" size="sm" onClick={() => setRevokingSourceId(null)}>
               Keep it
             </Button>
           </span>
@@ -538,9 +535,7 @@ export default function NewsSettings() {
           <div className="nw-set__group-head">
             <h3 className="nw-set__subheading">
               <span>Topics from your publications</span>
-              {topics.length > 0 ? (
-                <Badge tone="neutral">{topics.length}</Badge>
-              ) : null}
+              {topics.length > 0 ? <Badge tone="neutral">{topics.length}</Badge> : null}
             </h3>
           </div>
           <p className="nw-set__hint">
@@ -570,9 +565,7 @@ export default function NewsSettings() {
           <div className="nw-set__group-head">
             <h3 className="nw-set__subheading">
               <span>Topics across the web</span>
-              {customTopics.length > 0 ? (
-                <Badge tone="neutral">{customTopics.length}</Badge>
-              ) : null}
+              {customTopics.length > 0 ? <Badge tone="neutral">{customTopics.length}</Badge> : null}
             </h3>
           </div>
           <p className="nw-set__hint">
@@ -665,9 +658,7 @@ export default function NewsSettings() {
                 </Badge>
               </p>
             ) : null}
-            <ul className="nw-set__list">
-              {customSources.map(renderCustomSourceRow)}
-            </ul>
+            <ul className="nw-set__list">{customSources.map(renderCustomSourceRow)}</ul>
           </div>
         ) : null}
 
@@ -677,12 +668,12 @@ export default function NewsSettings() {
         {personalizationReady && removeSourceMutation.isError ? (
           <Note>Could not remove that source. Try again.</Note>
         ) : null}
-        {revalidateMutation.isSuccess ? (
+        {sourcesNeedAttention && revalidateMutation.isSuccess ? (
           <span className="nw-set__gate" role="status">
             Revalidation queued — statuses update after the next check.
           </span>
         ) : null}
-        {revalidateMutation.isError ? (
+        {sourcesNeedAttention && revalidateMutation.isError ? (
           <span className="nw-set__exerr" role="alert">
             Could not queue revalidation. Try again.
           </span>
@@ -745,7 +736,8 @@ export default function NewsSettings() {
             </h3>
           </div>
           <p className="nw-set__hint">
-            Excluded publishers never appear anywhere in News, Today, or briefings. Removing one returns it to neutral.
+            Excluded publishers never appear anywhere in News, Today, or briefings. Removing one
+            returns it to neutral.
           </p>
           {personalizationReady ? (
             <form className="nw-set__exform" onSubmit={submitExclusion}>

@@ -122,7 +122,8 @@ export function StoryFeedbackSettings() {
       <div className="nw-set__head">
         <h2 className="jds-section-title">Story preferences</h2>
         <p className="jds-section-sub">
-          What shapes your News: major stories about subjects you asked to see less of may still appear.
+          What shapes your News: major stories about subjects you asked to see less of may still
+          appear.
         </p>
       </div>
       <ul className="nw-set__list">
