@@ -80,6 +80,44 @@ describe("news discovery policy validation", () => {
     }
   });
 
+  // A followed publisher redirect must stay fully rule-based, with no model call anywhere on
+  // that path. When told not to ask the model, an unseen domain reads as "unavailable" instead.
+  it("never asks the model when told not to, and reports an unseen domain as unavailable", async () => {
+    const ai = aiReturning({ allowed: true, category: "news_publisher" });
+    await expect(
+      decideSourcePolicy(
+        db,
+        { ai, repo: repo() },
+        {
+          canonicalDomain: "example.com",
+          description: "A newsroom",
+          sampleHeadlines: ["A real headline"]
+        },
+        { allowModelCall: false }
+      )
+    ).resolves.toEqual({ verdict: "unavailable" });
+    expect(ai.generateJson).not.toHaveBeenCalled();
+  });
+
+  // The same "no model call" instruction must not block a domain that was already vetted and
+  // cached from an earlier, ordinary (model-allowed) source add.
+  it("still uses a cached verdict when told not to ask the model", async () => {
+    const ai = aiReturning({ allowed: true, category: "news_publisher" });
+    await expect(
+      decideSourcePolicy(
+        db,
+        { ai, repo: repo("approved") },
+        {
+          canonicalDomain: "example.com",
+          description: "A newsroom",
+          sampleHeadlines: ["A real headline"]
+        },
+        { allowModelCall: false }
+      )
+    ).resolves.toEqual({ verdict: "approved", fingerprint: "fp" });
+    expect(ai.generateJson).not.toHaveBeenCalled();
+  });
+
   it("validates topics against their own category and defaults closed", async () => {
     await expect(
       validateTopic(

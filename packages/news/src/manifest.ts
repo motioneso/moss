@@ -494,7 +494,10 @@ export const newsModuleManifest = {
     },
     {
       id: "news.add_source",
-      description: "Find a publisher by URL or name and add it to personalized News.",
+      description:
+        "Find a publisher by URL or name and add it to personalized News. A forward to the " +
+        "same publisher's own site is followed, with a note naming the switch. A forward to " +
+        "an unrelated site is refused; try that address directly instead.",
       requires: newsAddSourceRequirement,
       remediations: [
         {
@@ -515,6 +518,14 @@ export const newsModuleManifest = {
           class: "transient",
           description:
             "Source discovery is temporarily unavailable; retry or contact an administrator."
+        },
+        {
+          code: "news.add_source.redirect_refused",
+          class: "validation",
+          description:
+            "The address given forwards to a different site Moss cannot confirm is the same " +
+            "publisher, so the move is refused. The user is told to try the address it forwards " +
+            "to directly, as its own address."
         }
       ]
     }
