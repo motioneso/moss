@@ -164,6 +164,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "models yet', 'The sign-in helper is not running', or 'Could not reach the provider') and an " +
       "Add model button (type in a model by hand; such rows show a * after the id, the footer " +
       "reads '* Manually added', and they survive refreshes and re-logins). Each model row has " +
+      "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
+      "is struck through), " +
       "a minus button (disable) and a trash button (remove after confirmation; the provider's " +
       "default entry cannot be removed). The Models section collapses from its header.",
     path: "/settings?section=aiproviders",

@@ -212,6 +212,21 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
 }
+/* The Chat tag is a toggle: on reads as an accent chip, off dims to show chat is disabled. */
+.cap--toggle {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.cap--toggle:hover {
+  border-color: var(--accent);
+}
+.cap--toggle.cap--off {
+  color: var(--ink-3);
+  background: transparent;
+  border-color: var(--border-subtle);
+  text-decoration: line-through;
+}
 .prov__synced {
   font-size: 11px;
   color: var(--text-faint);
