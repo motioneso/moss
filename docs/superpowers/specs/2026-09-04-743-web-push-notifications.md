@@ -71,7 +71,7 @@ Push has been a visible `Coming soon` promise since #735. Ben asked to build it 
   Owner-only policies for the app role; worker role SELECT and UPDATE/DELETE of `failure_count`,
   `last_used_at`, `disabled_at` and row deletion.
 - `app.push_signing_key`: single-row table (`id` fixed), `public_key` (base64url),
-  `private_key_ciphertext`, `created_at`. Readable by app and worker roles; insert only through
+  `private_key_ciphertext`, `subject`, `created_at`. Readable by app and worker roles; insert only through
   the generate-once path, guarded by a unique constraint on the fixed id so two racing enables
   produce one key.
 
@@ -90,8 +90,9 @@ Push has been a visible `Coming soon` promise since #735. Ben asked to build it 
   `recipientUserId:releaseAt`, start-after = `releaseAt`) when it is deferred.
 - Worker `notifications.push.deliver`: loads the notification inside the recipient's data
   context, builds the capped payload, sends to every non-disabled subscription of the recipient
-  with the `web-push` library (VAPID `sub` = instance public URL from existing instance config,
-  falling back to `mailto:` with no address exposed). 404 / 410 delete the row; other failures
+  with the `web-push` library. The VAPID subject is the https origin of the request that first
+  generated the key pair, stored with it (`subject` column); there is no instance public URL
+  setting today and none is added. 404 / 410 delete the row; other failures
   increment `failure_count`, and five in a row set `disabled_at`. A success resets the count.
 - Worker `notifications.push.summary`: counts the recipient's unread notifications with
   `deferred_until` in `(releaseAt - quietHoursLength, releaseAt]` and sends one push
