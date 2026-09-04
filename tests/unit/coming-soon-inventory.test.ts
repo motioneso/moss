@@ -60,8 +60,8 @@ describe("coming-soon tracker contract", () => {
     expect(auditPaneSource).not.toMatch(/\bcoming\b(?!Issue)/);
   });
 
-  it("maps Push notifications to #743", () => {
-    expect(notificationsSource).toMatch(/name="Push"[\s\S]{0,160}comingIssue=\{743\}/);
+  it("no longer marks Push notifications as coming soon (#743 shipped)", () => {
+    expect(notificationsSource).not.toMatch(/name="Push"[\s\S]{0,160}comingIssue/);
   });
 
   it("has no unlabeled coming-soon or standalone Soon markers in onboarding", () => {

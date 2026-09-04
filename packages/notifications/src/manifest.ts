@@ -2,9 +2,12 @@ import { fileURLToPath } from "node:url";
 
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
+  deletePushSubscriptionResponseSchema,
   listNotificationsResponseSchema,
   markAllNotificationsReadResponseSchema,
-  markNotificationReadResponseSchema
+  markNotificationReadResponseSchema,
+  pushConfigResponseSchema,
+  registerPushSubscriptionResponseSchema
 } from "@moss/shared";
 
 import { notificationsListVisibleExecute } from "./tools.js";
@@ -21,9 +24,11 @@ import { notificationsListVisibleExecute } from "./tools.js";
  *   producer path in V1. The repository API exposes no recipient/actor override.
  * - It is **not** a generic cross-user or system-broadcast mechanism. There is no
  *   "share", "broadcast", or "send-to" surface.
- * - V1 covers **no** external push / email / SMS delivery. The only delivery surface is
- *   the in-app bell + the GET /api/notifications route + the
- *   `notifications.listVisible` assistant tool.
+ * - V1 covered no external delivery. #743 / #2227 add opt-in web push as a second, additive
+ *   delivery surface (fan-out only, never a replacement): the in-app bell + the GET
+ *   /api/notifications route + the `notifications.listVisible` assistant tool remain the
+ *   baseline, and a user can additionally register this browser for push notifications from
+ *   Settings → Notifications. See `docs/superpowers/specs/2026-09-04-743-web-push-notifications.md`.
  * - The briefings worker is the reference producer path (see
  *   `packages/briefings/src/jobs.ts`): it calls `NotificationsRepository.create`
  *   inside `withDataContext` with a metadata-only payload.
@@ -72,6 +77,17 @@ export const notificationsModuleManifest = {
   // No sidebar nav entry: notifications are reached via the topbar bell (AppShell), which
   // links to /notifications and shows the unread badge. The route + APIs remain registered.
   navigation: [],
+  settings: [
+    {
+      id: "notifications.push",
+      label: "Push notifications",
+      description:
+        "Turn on push notifications for this browser and manage which devices receive them.",
+      path: "/settings?section=modules&module=notifications",
+      scope: "user",
+      permissionId: "notifications.update"
+    }
+  ],
   permissions: [
     {
       id: "notifications.view",
@@ -121,6 +137,24 @@ export const notificationsModuleManifest = {
       method: "PATCH",
       path: "/api/notifications/read-all",
       responseSchema: markAllNotificationsReadResponseSchema,
+      permissionId: "notifications.update"
+    },
+    {
+      method: "GET",
+      path: "/api/notifications/push/config",
+      responseSchema: pushConfigResponseSchema,
+      permissionId: "notifications.view"
+    },
+    {
+      method: "POST",
+      path: "/api/notifications/push/subscriptions",
+      responseSchema: registerPushSubscriptionResponseSchema,
+      permissionId: "notifications.update"
+    },
+    {
+      method: "DELETE",
+      path: "/api/notifications/push/subscriptions/:id",
+      responseSchema: deletePushSubscriptionResponseSchema,
       permissionId: "notifications.update"
     }
   ],
