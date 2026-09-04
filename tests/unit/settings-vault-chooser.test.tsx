@@ -57,4 +57,19 @@ describe("VaultChooser trust boundaries", () => {
     expect(shouldShowNotesRootRecovery(new ApiError(503, "Notes roots unavailable"), 0)).toBe(true);
     expect(shouldShowNotesRootRecovery(new ApiError(500, "unexpected"), 0)).toBe(false);
   });
+
+  it("presents the list as available folders, not as mapped folders", () => {
+    const html = renderChooser("notes");
+    expect(html).toContain("Available folders");
+    expect(html).not.toContain("Mapped folders");
+    expect(html).not.toContain("mapped");
+  });
+
+  it("shows a closed info affordance explaining how a folder becomes available", () => {
+    const html = renderChooser("notes");
+    expect(html).toContain("How a folder becomes available");
+    expect(html).toContain('aria-expanded="false"');
+    // The explanation itself only renders once the info affordance is opened.
+    expect(html).not.toContain("whoever manages this server");
+  });
 });
