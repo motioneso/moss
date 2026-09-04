@@ -169,13 +169,14 @@ describe("toFeedItems: body-image extraction hardening (PR 2251 review)", () => 
   });
 
   it("reads the actual picture address, not a lazy-loading attribute with 'src' in its name", () => {
-    // A naive "word-boundary src" match also fires inside "data-src" (the "-" counts as a
-    // boundary), so when a lazy-loading attribute is written before the real one, it can win.
+    // The lazy-loading attribute is written AFTER the real one, which is the order that broke:
+    // a greedy "<img[^>]*src=" match runs to the LAST "src" in the tag, and "data-src" contains
+    // one, so the placeholder won.
     const xml = rss(`    <item>
-      <title>Lazy-loading attribute before the real picture address</title>
+      <title>Lazy-loading attribute after the real picture address</title>
       <link>https://example.com/lazy</link>
       <content:encoded><![CDATA[
-        <img data-src="https://unlisted.example/placeholder.gif" src="https://npr.brightspotcdn.com/real.jpg">
+        <img src="https://npr.brightspotcdn.com/real.jpg" data-src="https://unlisted.example/placeholder.gif">
       ]]></content:encoded>
     </item>`);
     expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
@@ -204,15 +205,18 @@ describe("toFeedItems: body-image extraction hardening (PR 2251 review)", () => 
   });
 
   it("decodes an escaped address one layer only, not twice", () => {
-    // The feed text (not CDATA) is XML-escaped once around HTML that itself HTML-escapes the
-    // "&" in the query string, so the address should come out with one literal "&", not none.
+    // The address holds an escaped escape: "&amp;lt;" must come out as the four characters
+    // "&lt;", not as a "<". A decoder that replaces "&amp;" first and then hunts for "&lt;" in
+    // its own output collapses both layers and produces "%3C" in the finished address.
     const xml = rss(`    <item>
-      <title>Doubly-escaped query string</title>
+      <title>Escaped escape in the query string</title>
       <link>https://example.com/double-escape</link>
-      <description>&lt;img src="https://npr.brightspotcdn.com/real.jpg?a=1&amp;amp;b=2" width="800" height="450"&gt;</description>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/real.jpg?q=&amp;lt;x" width="800" height="450">
+      ]]></content:encoded>
     </item>`);
     expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe(
-      "https://npr.brightspotcdn.com/real.jpg?a=1&b=2"
+      "https://npr.brightspotcdn.com/real.jpg?q=&lt;x"
     );
   });
 
@@ -228,22 +232,115 @@ describe("toFeedItems: body-image extraction hardening (PR 2251 review)", () => 
     expect(toFeedItems(xml, npr)[0]?.imageUrl).toBeNull();
   });
 
+  it("skips a one-pixel image whose size is written without quotation marks", () => {
+    const xml = rss(`    <item>
+      <title>Unquoted one-pixel size</title>
+      <link>https://example.com/unquoted-pixel</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/t.gif" width=1 height=1>
+        <img src="https://npr.brightspotcdn.com/real.jpg" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
+  });
+
+  it("skips an image explicitly marked zero pixels wide and tall", () => {
+    const xml = rss(`    <item>
+      <title>Zero-sized image</title>
+      <link>https://example.com/zero</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/z.gif" width="0" height="0">
+        <img src="https://npr.brightspotcdn.com/real.jpg" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
+  });
+
+  it("skips an image served from a view-counting host and keeps looking", () => {
+    const xml = rss(`    <item>
+      <title>Counting host before the real picture</title>
+      <link>https://example.com/counting-host</link>
+      <content:encoded><![CDATA[
+        <img src="https://pixel.example.com/p.gif">
+        <img src="https://npr.brightspotcdn.com/real.jpg" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
+  });
+
+  it("skips an address whose query string carries an impression identifier", () => {
+    const xml = rss(`    <item>
+      <title>Impression identifier in the query string</title>
+      <link>https://example.com/impression</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/i.gif?impression=abc123">
+        <img src="https://npr.brightspotcdn.com/real.jpg" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
+  });
+
+  it("reads a picture tag written in capital letters", () => {
+    const xml = rss(`    <item>
+      <title>Capitalised picture tag</title>
+      <link>https://example.com/uppercase</link>
+      <content:encoded><![CDATA[
+        <IMG SRC="https://npr.brightspotcdn.com/real.jpg" WIDTH="800" HEIGHT="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
+  });
+
+  it("reads a picture address written without quotation marks", () => {
+    const xml = rss(`    <item>
+      <title>Unquoted picture address</title>
+      <link>https://example.com/unquoted-src</link>
+      <content:encoded><![CDATA[
+        <img src=https://npr.brightspotcdn.com/real.jpg width=800 height=450>
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
+  });
+
+  it("reads a single-quoted, reordered picture tag that spans several lines", () => {
+    const xml = rss(`    <item>
+      <title>Multi-line picture tag</title>
+      <link>https://example.com/multiline</link>
+      <content:encoded><![CDATA[
+        <img
+          width=1
+          height=1
+          src='https://npr.brightspotcdn.com/s.gif'>
+        <img
+          width='800'
+          alt='A real picture'
+          src='https://npr.brightspotcdn.com/real.jpg'
+          height='450'>
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
+  });
+
   it("does not slow down on a large body full of unterminated picture tags (linear scan)", () => {
     // Each fragment has an unterminated "<img" with no closing '>'. The previous single regex
     // re-scanned the remaining text on every attempt; the reviewer measured 1.8s at this size
     // (80,000 characters) from that one cause alone. 500ms is a wide, non-flaky margin.
-    const fragment = '<img src="https://npr.brightspotcdn.com/x.jpg" alt="unterminated ';
-    const bigBody = fragment.repeat(1200); // ~78,000 characters, no real closing tag
+    // No picture address anywhere in the body, so the timing assertion is what separates the
+    // two implementations: the old pattern re-scanned the rest of the text from every "<img"
+    // before giving up, and both implementations end up with no picture.
+    const fragment = '<img data-role="hero" alt="unterminated ';
+    const bigBody = fragment.repeat(7500); // ~300,000 characters, no closing angle bracket
     const xml = rss(`    <item>
       <title>Malformed body</title>
       <link>https://example.com/malformed</link>
+      <description>A short plain summary, so this check times picture extraction only.</description>
       <content:encoded><![CDATA[${bigBody}]]></content:encoded>
     </item>`);
     const start = performance.now();
     const items = toFeedItems(xml, npr);
     const elapsedMs = performance.now() - start;
-    expect(items[0]?.imageUrl).toBeNull();
     expect(elapsedMs).toBeLessThan(500);
+    expect(items[0]?.imageUrl).toBeNull();
   });
 });
 
