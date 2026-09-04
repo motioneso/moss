@@ -30,65 +30,174 @@ function fixture(overrides: Partial<ParsedEmail>): ParsedEmail {
   };
 }
 
-describe("looksLikeOneTimeCodeEmail", () => {
-  const positives: Array<[string, string, string]> = [
-    ["a verification code phrase", "Your verification code", "Use 482910 to finish signing in."],
-    ["a login code phrase", "Login code", "123456 is your login code."],
-    ["a two-factor phrase", "Two-factor authentication required", "Enter the code we texted you."],
-    ["a passcode phrase", "Your one-time passcode", "Passcode: 9081"],
-    ["a bare 2FA mention", "2FA code", "Your 2FA code is 774411."],
-    ["a code word next to a short number", "Sign in", "482910 is your code. Do not share it."],
-    ["a confirm-sign-in phrase", "Confirm your sign-in", "We noticed a new sign-in attempt."],
-    ["an OTP mention", "Your OTP", "Your OTP is 482910. It expires in ten minutes."]
-  ];
-
-  for (const [label, subject, body] of positives) {
-    it(`matches ${label}`, () => {
-      expect(looksLikeOneTimeCodeEmail(subject, body)).toBe(true);
-    });
-  }
-
-  const negatives: Array<[string, string, string]> = [
+/**
+ * The skip is deliberately three separate signals ANDed together: an automated sender, a
+ * phrase naming a sign-in / verification / one-time / security code, and a short code standing
+ * on its own. Any one of them alone appears in ordinary mail all the time, so the negatives
+ * below are the real specification: they are the messages a person actually wants to see.
+ */
+describe("looksLikeOneTimeCodeEmail: ordinary mail is never skipped", () => {
+  const negatives: Array<[string, { from: string; subject: string; body: string }]> = [
     [
-      "an ordinary email that merely contains a number",
-      "Your order has shipped",
-      "Order #482910 has shipped and should arrive Thursday."
+      "a door code from a friend",
+      {
+        from: "sarah.jones@example.invalid",
+        subject: "Dinner Saturday",
+        body: "The door code is 482910. Please bring dessert and come round about seven."
+      }
     ],
     [
-      "a normal request with no code language",
-      "Q2 numbers",
-      "Could you send the Q2 numbers by Friday afternoon?"
+      "a shop newsletter offering a discount code",
+      {
+        from: "no-reply@shop.example.invalid",
+        subject: "20% off this weekend only",
+        body: "Your discount code is 123456. Use it on your next order before Sunday."
+      }
     ],
     [
-      "a newsletter",
-      "August product newsletter",
-      "Read our latest product news and customer stories."
+      "a parcel tracking notice",
+      {
+        from: "tracking@parcels.example.invalid",
+        subject: "Your parcel is on its way",
+        body: "Tracking number 482910 should arrive Thursday. Track it any time online."
+      }
     ],
     [
-      "an appointment confirmation without a code",
-      "Your appointment is confirmed",
-      "This confirms your appointment for next Tuesday at 10 AM."
+      "a dinner invitation whose menu word contains the OTP letters",
+      {
+        from: "dave@example.invalid",
+        subject: "Friday plans",
+        body: "Please book the hotpot restaurant for Friday, table for 6 at 7pm."
+      }
     ],
     [
-      "a confirm request with an unrelated number",
-      "Invoice due",
-      "Please confirm invoice 482910 by Friday."
+      "a colleague asking for the wifi code",
+      {
+        from: "priya@work.example.invalid",
+        subject: "Wifi",
+        body: "What is the wifi code for the meeting room? I think it is 48291086 but it fails."
+      }
     ],
     [
-      "a verify request with an unrelated number",
-      "Budget review",
-      "Please verify the 2026 budget before Monday."
+      "a receipt carrying an order number",
+      {
+        from: "receipts@shop.example.invalid",
+        subject: "Your receipt",
+        body: "Thanks for your order. Order number 482910, total 42.50, shipping Thursday."
+      }
+    ],
+    [
+      "a request to confirm an invoice",
+      {
+        from: "finance@work.example.invalid",
+        subject: "Invoice due",
+        body: "Please confirm invoice 482910 by Friday."
+      }
+    ],
+    [
+      "a request to verify a budget",
+      {
+        from: "cfo@work.example.invalid",
+        subject: "Budget review",
+        body: "Please verify the 2026 budget before Monday."
+      }
     ],
     [
       "a request to turn two-factor on for a team, not a code delivery",
-      "Security rollout",
-      "Please enable two-factor authentication for the team by Friday."
+      {
+        from: "it@work.example.invalid",
+        subject: "Security rollout",
+        body: "Please enable two-factor authentication for the team by Friday."
+      }
+    ],
+    [
+      "an automated sender with a code phrase but no code standing alone",
+      {
+        from: "no-reply@accounts.example.invalid",
+        subject: "About your security code",
+        body: "We are changing how security codes are delivered from next month."
+      }
+    ],
+    [
+      "an automated sender with a short number but no code phrase",
+      {
+        from: "no-reply@billing.example.invalid",
+        subject: "Statement ready",
+        body: "Your statement 482910 is ready to view in your account."
+      }
+    ],
+    [
+      "a person forwarding their own sign-in code text",
+      {
+        from: "mum@example.invalid",
+        subject: "Can you help?",
+        body: "It says my verification code is 482910 but the website will not take it."
+      }
     ]
   ];
 
-  for (const [label, subject, body] of negatives) {
-    it(`does not match ${label}`, () => {
-      expect(looksLikeOneTimeCodeEmail(subject, body)).toBe(false);
+  for (const [label, message] of negatives) {
+    it(`does not skip ${label}`, () => {
+      expect(looksLikeOneTimeCodeEmail(message)).toBe(false);
+    });
+  }
+});
+
+describe("looksLikeOneTimeCodeEmail: automated sign-in code mail is skipped", () => {
+  const positives: Array<[string, { from: string; subject: string; body: string }]> = [
+    [
+      "a Google style verification code",
+      {
+        from: "Google <no-reply@accounts.google.com>",
+        subject: "Your Google verification code",
+        body: "482910 is your Google verification code. Do not share it with anyone."
+      }
+    ],
+    [
+      "a GitHub style device verification",
+      {
+        from: "noreply@github.com",
+        subject: "[GitHub] Please verify your device",
+        body: "Verification code: 123456\n\nThis code expires in 15 minutes."
+      }
+    ],
+    [
+      "a bank style one-time passcode",
+      {
+        from: "alerts@notifications.examplebank.com",
+        subject: "Your one-time passcode",
+        body: "Your one-time passcode is 774411. We will never ask you for it by phone."
+      }
+    ],
+    [
+      "an Apple style ID verification code",
+      {
+        from: "Apple <no_reply@email.apple.com>",
+        subject: "Your Apple ID verification code",
+        body: "Your Apple ID verification code is: 908134. Do not share it."
+      }
+    ],
+    [
+      "an OTP written as the abbreviation",
+      {
+        from: "otp@auth.example.invalid",
+        subject: "Your OTP",
+        body: "Your OTP is 482910. It expires in ten minutes."
+      }
+    ],
+    [
+      "a letters-and-digits sign-in code",
+      {
+        from: "security@notifications.example.invalid",
+        subject: "Your sign-in code",
+        body: "Enter A4B7C9 to finish signing in. This login code expires in 5 minutes."
+      }
+    ]
+  ];
+
+  for (const [label, message] of positives) {
+    it(`skips ${label}`, () => {
+      expect(looksLikeOneTimeCodeEmail(message)).toBe(true);
     });
   }
 });
@@ -98,8 +207,9 @@ describe("one-time-code emails skip the model call", () => {
     const runChat = vi.fn();
     const deps: EmailExtractDeps = { runChat };
     const parsed = fixture({
-      subject: "Your verification code",
-      body: "Use 482910 to finish signing in. If you did not request this, ignore this email."
+      from: "no-reply@accounts.google.com",
+      subject: "Your Google verification code",
+      body: "482910 is your Google verification code. If you did not request it, ignore this."
     });
 
     const result = await extractEmailSignals(parsed, deps);
@@ -110,19 +220,21 @@ describe("one-time-code emails skip the model call", () => {
     expect(result.signals.actionability).toBeUndefined();
   });
 
-  it("extractEmailSignalsBatch never calls the model for an all-OTP batch", async () => {
+  it("extractEmailSignalsBatch never calls the model for an all-code batch", async () => {
     const runChat = vi.fn();
     const deps: EmailExtractDeps = { runChat };
     const otpMessages = [
       fixture({
         externalId: "otp-1",
-        subject: "Security code",
+        from: "no-reply@accounts.google.com",
+        subject: "Your security code",
         body: "123456 is your security code. It expires in 10 minutes."
       }),
       fixture({
         externalId: "otp-2",
-        subject: "Login code",
-        body: "Your login code is 654321."
+        from: "noreply@github.com",
+        subject: "[GitHub] Please verify your device",
+        body: "Verification code: 654321"
       })
     ];
 
@@ -135,7 +247,7 @@ describe("one-time-code emails skip the model call", () => {
     }
   });
 
-  it("extractEmailSignalsBatch only calls the model for the non-OTP messages, in order", async () => {
+  it("extractEmailSignalsBatch only calls the model for the ordinary messages, in order", async () => {
     // Only one message survives the one-time-code filter here, so extractEmailSignalsBatch
     // takes its single-message path (a plain signals object), not the multi-message batch
     // path (a { results: [...] } wrapper) — see extractEmailSignalsBatch in email-extract.ts.
@@ -144,11 +256,17 @@ describe("one-time-code emails skip the model call", () => {
     }));
     const deps: EmailExtractDeps = { runChat };
     const messages = [
-      fixture({ externalId: "otp-1", subject: "Passcode", body: "Passcode: 5551" }),
+      fixture({
+        externalId: "otp-1",
+        from: "no_reply@email.apple.com",
+        subject: "Your Apple ID verification code",
+        body: "Your Apple ID verification code is: 5551."
+      }),
       fixture({
         externalId: "ordinary-1",
-        subject: "Q2 numbers",
-        body: "Could you send the Q2 numbers by Friday afternoon?"
+        from: "sarah.jones@example.invalid",
+        subject: "Dinner Saturday",
+        body: "The door code is 482910. Please bring dessert."
       })
     ];
 
@@ -167,10 +285,10 @@ describe("a skipped message creates no task", () => {
       id: "cache-otp-1",
       connector_account_id: "account-1",
       owner_user_id: "user-1",
-      sender: "noreply@example.invalid",
+      sender: "no-reply@accounts.google.com",
       recipients: ["ben@example.invalid"],
-      subject: "Your verification code",
-      snippet: "Use 482910 to finish signing in.",
+      subject: "Your Google verification code",
+      snippet: "482910 is your Google verification code.",
       body_excerpt: null,
       received_at: new Date("2026-08-03T12:00:00.000Z"),
       external_id: "otp-msg-1",
@@ -203,13 +321,13 @@ describe("a skipped message creates no task", () => {
   it("a code email saved with a full analysis before this filter existed is still skipped on read", () => {
     // Simulates a row saved before this feature shipped: a real sign-in code email that the
     // model triaged as actionable, with a complete summary and a suggested task already
-    // stored. The subject/body still read as a one-time code, so both the Today filter and
-    // task planning must ignore the stored triage and treat it as skipped.
+    // stored. Sender, phrase and standalone code all still read as a sign-in code, so both
+    // the Today filter and task planning must ignore the stored triage.
     const row = {
       id: "cache-otp-2",
       connector_account_id: "account-1",
       owner_user_id: "user-1",
-      sender: "noreply@example.invalid",
+      sender: "no-reply@accounts.google.com",
       recipients: ["ben@example.invalid"],
       subject: "Your login code",
       snippet: "123456 is your login code. It expires in 10 minutes.",
@@ -247,5 +365,44 @@ describe("a skipped message creates no task", () => {
     });
 
     expect(planned).toEqual([]);
+  });
+
+  it("an ordinary saved message with a door code keeps its summary and its task", () => {
+    const row = {
+      id: "cache-ordinary-1",
+      connector_account_id: "account-1",
+      owner_user_id: "user-1",
+      sender: "sarah.jones@example.invalid",
+      recipients: ["ben@example.invalid"],
+      subject: "Dinner Saturday",
+      snippet: "The door code is 482910. Please bring dessert.",
+      body_excerpt: "The door code is 482910. Please bring dessert.",
+      received_at: new Date("2026-08-03T12:00:00.000Z"),
+      external_id: "ordinary-msg-1",
+      external_metadata: { threadId: "thread-ordinary-1" },
+      summary: "Sarah invited you to dinner on Saturday and asked you to bring dessert.",
+      signals: {
+        confidence: 0.9,
+        actionability: {
+          category: "needs_action",
+          inferredSubject: "Bring dessert to Sarah's on Saturday",
+          suggestedTasks: [{ text: "Buy dessert for Saturday" }]
+        }
+      },
+      created_at: new Date("2026-08-03T12:00:00.000Z"),
+      updated_at: new Date("2026-08-03T12:00:00.000Z")
+    } as unknown as EmailMessage;
+
+    const item = emailContextItemFromCache(
+      row,
+      { connectorAccountId: "account-1", providerId: "google", providerLabel: "Gmail" },
+      null
+    );
+
+    expect(item.actionability).toBe("needs_action");
+    expect(item.summary).toBe(
+      "Sarah invited you to dinner on Saturday and asked you to bring dessert."
+    );
+    expect(item.suggestedTasks.length).toBeGreaterThan(0);
   });
 });

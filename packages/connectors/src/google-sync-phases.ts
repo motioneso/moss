@@ -321,7 +321,7 @@ export async function runGoogleEmailPhase(
         // A message can carry a full saved analysis from before this filter existed. Re-check
         // it here so an already-analyzed sign-in code email loses that analysis instead of
         // being left alone as "unchanged" — otherwise it would keep showing up in Today.
-        if (looksLikeOneTimeCodeEmail(parsed.subject, parsed.body)) {
+        if (looksLikeOneTimeCodeEmail(parsed)) {
           try {
             await persistEmail(parsed, otpSkippedResult());
             otpKeys.push(parsed.externalId);
@@ -375,7 +375,7 @@ export async function runGoogleEmailPhase(
     let processed = 0;
     const modelPending: ParsedEmail[] = [];
     for (const parsed of pending) {
-      if (looksLikeOneTimeCodeEmail(parsed.subject, parsed.body)) {
+      if (looksLikeOneTimeCodeEmail(parsed)) {
         try {
           await persistEmail(parsed, otpSkippedResult());
           otpKeys.push(parsed.externalId);

@@ -152,11 +152,12 @@ function cacheKey(connectorAccountId: string, externalId: string): string {
  * matter how it was saved.
  */
 function otpCheckedTriage(
+  from: string,
   subject: string,
   otpCheckText: string,
   stored: TriageFields
 ): TriageFields {
-  return looksLikeOneTimeCodeEmail(subject, otpCheckText) ? UNTRIAGED : stored;
+  return looksLikeOneTimeCodeEmail({ from, subject, body: otpCheckText }) ? UNTRIAGED : stored;
 }
 
 export function emailContextItemFromCache(
@@ -165,6 +166,7 @@ export function emailContextItemFromCache(
   degradedReason: DegradedReason | null
 ): EmailContextItem {
   const triage = otpCheckedTriage(
+    row.sender,
     row.subject,
     row.body_excerpt ?? row.snippet ?? "",
     triageFromSignals(row.summary, cachedSignals(row))
@@ -308,6 +310,7 @@ async function readAccountLive(
       (!cachedNeedsActionDetails || cachedActionDetailsComplete)
     ) {
       triage = otpCheckedTriage(
+        message.from,
         message.subject,
         message.body,
         triageFromSignals(cachedRow.summary, cachedSignalSet)

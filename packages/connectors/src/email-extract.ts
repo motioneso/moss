@@ -189,58 +189,111 @@ export interface EmailSignals {
 }
 
 /**
- * Phrases that, on their own, mean a message is delivering a one-time login code or a sign-in
- * approval request. Checked against the subject plus the first part of the body only,
- * case-insensitively. Deliberately excludes bare "two-factor"/"2fa" — those also show up in
- * ordinary requests to turn two-factor authentication on ("enable two-factor authentication for
- * the team"), which is not a code delivery. See TWO_FACTOR_NEAR_CODE below for that case.
+ * A message is treated as a machine-issued sign-in code only when all three of the signals
+ * below hold at once. Each one on its own is common in ordinary mail — a friend sends a door
+ * code, a shop mails a discount code, a no-reply address sends a statement — and earlier
+ * keyword-only versions of this check hid real messages because of that. Adding more keywords
+ * makes it worse, not better; the strength here comes from requiring the combination.
+ *
+ *   1. the sender looks automated (a no-reply / notifications / security style mailbox),
+ *   2. the subject or the first lines name a verification, sign-in, one-time or security code,
+ *   3. a short code stands alone somewhere in that same text.
  */
-const OTP_PHRASES = [
+
+/**
+ * Mailbox names that mean "nobody reads replies to this address". Matched as a whole token of
+ * the local part, so "receipts", "tracking", "sarah.jones" and "marketing" do not qualify.
+ */
+const AUTOMATED_LOCAL_PART =
+  /(?:^|[._+-])(?:no[._-]?reply|do[._-]?not[._-]?reply|noreply|notification|notifications|notify|alert|alerts|security|secure|verify|verification|auth|authentication|otp|account|accounts|mailer|automated|autoreply|system)(?:[._+-]|$)/;
+
+/** Sub-domains that only ever carry machine mail, e.g. accounts.google.com. Deliberately short:
+ * a generic "mail." or "email." sub-domain also fronts ordinary human mail. */
+const AUTOMATED_DOMAIN_LABEL = /^(?:accounts?|notifications?|alerts?|auth|secure|security)\./;
+
+/**
+ * Phrases that name a temporary sign-in secret. Each one has to say "code", "passcode" or
+ * "password" — "verify", "confirm" and a bare "two-factor" are left out on purpose, because
+ * they turn up constantly in ordinary requests ("please verify the budget", "please enable
+ * two-factor authentication for the team").
+ */
+const CODE_PHRASES = [
   "verification code",
+  "confirmation code",
   "one-time code",
   "one time code",
   "onetime code",
   "one-time passcode",
+  "one time passcode",
   "one-time password",
+  "one time password",
+  "single-use code",
+  "single use code",
+  "temporary code",
   "security code",
   "login code",
   "log-in code",
+  "log in code",
   "sign-in code",
+  "sign in code",
   "signin code",
-  "passcode",
-  "pass code",
-  "confirm your sign-in",
-  "confirm your sign in",
   "authentication code",
-  "otp"
+  "two-factor code",
+  "two factor code",
+  "2fa code",
+  "passcode"
 ] as const;
 
-/** "two-factor"/"2fa" only counts as a code signal when it sits near the word "code" — e.g.
- * "Your two-factor code is 482910" — not when it just names the security feature, as in
- * "enable two-factor authentication for the team". */
-const TWO_FACTOR_NEAR_CODE =
-  /\b(two-factor|two factor|2fa)\b[\s\S]{0,60}\bcode\b|\bcode\b[\s\S]{0,60}\b(two-factor|two factor|2fa)\b/;
-
-/** The word "code" paired with a nearby 4-8 digit number also reads as a one-time code, even
- * when the message never spells out one of the longer OTP_PHRASES (e.g. "482910 is your
- * code"). Deliberately narrower than before: only the word "code" triggers this, not "verify"
- * or "confirm" — those pair with a nearby number in plenty of ordinary requests ("Please
- * confirm invoice 482910 by Friday", "Please verify the 2026 budget"). */
-const CODE_NEAR_NUMBER = /\bcode\b[^\d]{0,20}\b\d{4,8}\b|\b\d{4,8}\b[^\d]{0,20}\bcode\b/;
-
-/** How much of the body counts as "the first part" for the OTP pre-check. */
-const OTP_CHECK_BODY_CHARS = 500;
+/** The abbreviation only counts as a whole word: "hotpot" and "adopts" must not match. */
+const OTP_WORD = /\botp\b/;
 
 /**
- * Deterministic pre-check, run before any model call: true when the subject or the start of
- * the body reads as a one-time login code or two-factor prompt. Never logs the subject or body
- * it inspects — callers must not either.
+ * A short code standing on its own: four to eight digits, or six to eight letters and digits
+ * mixed. It must not be glued to other letters or digits, so an order number inside a longer
+ * reference, a year in a sentence, or a price will not pass on their own.
  */
-export function looksLikeOneTimeCodeEmail(subject: string, body: string): boolean {
-  const haystack = `${subject}\n${body.slice(0, OTP_CHECK_BODY_CHARS)}`.toLowerCase();
-  if (OTP_PHRASES.some((phrase) => haystack.includes(phrase))) return true;
-  if (TWO_FACTOR_NEAR_CODE.test(haystack)) return true;
-  return CODE_NEAR_NUMBER.test(haystack);
+const STANDALONE_NUMERIC_CODE = /(?<![a-z0-9])\d{4,8}(?![a-z0-9])/;
+const STANDALONE_MIXED_CODE =
+  /(?<![a-z0-9])(?=[a-z0-9]{6,8}(?![a-z0-9]))(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]{6,8}(?![a-z0-9])/;
+
+/** How much of the body counts as "the first lines" for this pre-check. */
+const OTP_CHECK_BODY_CHARS = 500;
+
+/** The address part of a From header, lower-cased: "Google <no-reply@x.com>" -> no-reply@x.com */
+function senderAddress(from: string): string {
+  const angled = /<([^>]+)>/.exec(from);
+  return (angled?.[1] ?? from).trim().toLowerCase();
+}
+
+function looksAutomatedSender(from: string): boolean {
+  const address = senderAddress(from);
+  const at = address.lastIndexOf("@");
+  if (at <= 0) return false;
+  const localPart = address.slice(0, at);
+  const domain = address.slice(at + 1);
+  return AUTOMATED_LOCAL_PART.test(localPart) || AUTOMATED_DOMAIN_LABEL.test(domain);
+}
+
+/** The message fields this pre-check reads. `ParsedEmail` satisfies it structurally. */
+export interface OneTimeCodeEmailInput {
+  readonly from: string;
+  readonly subject: string;
+  readonly body: string;
+}
+
+/**
+ * Deterministic pre-check, run before any model call: true only when an automated sender, a
+ * sign-in code phrase and a standalone short code are all present. Never logs the sender,
+ * subject or body it inspects — callers must not either.
+ */
+export function looksLikeOneTimeCodeEmail(message: OneTimeCodeEmailInput): boolean {
+  if (!looksAutomatedSender(message.from)) return false;
+  const haystack =
+    `${message.subject}\n${message.body.slice(0, OTP_CHECK_BODY_CHARS)}`.toLowerCase();
+  const namesACode =
+    CODE_PHRASES.some((phrase) => haystack.includes(phrase)) || OTP_WORD.test(haystack);
+  if (!namesACode) return false;
+  return STANDALONE_NUMERIC_CODE.test(haystack) || STANDALONE_MIXED_CODE.test(haystack);
 }
 
 export function otpSkippedResult(): EmailExtractResult {
@@ -698,7 +751,7 @@ export async function extractEmailSignalsBatch(
   const toProcess: ParsedEmail[] = [];
   const toProcessIndexes: number[] = [];
   messages.forEach((message, index) => {
-    if (looksLikeOneTimeCodeEmail(message.subject, message.body)) {
+    if (looksLikeOneTimeCodeEmail(message)) {
       results[index] = otpSkippedResult();
     } else {
       toProcess.push(message);
@@ -788,7 +841,7 @@ export async function extractEmailSignals(
   deps: EmailExtractDeps,
   options: EmailExtractOptions = {}
 ): Promise<EmailExtractResult> {
-  if (looksLikeOneTimeCodeEmail(parsed.subject, parsed.body)) return otpSkippedResult();
+  if (looksLikeOneTimeCodeEmail(parsed)) return otpSkippedResult();
 
   const timeoutMs =
     options.callTimeoutMs ??
