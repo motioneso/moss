@@ -27,6 +27,15 @@ import {
   type SportsSourceRecipe
 } from "./recipe.js";
 import { sameSportsPublisher } from "./publisher-identity.js";
+import {
+  parseSubredditInput,
+  readSubreddit,
+  REDDIT_CANONICAL_DOMAIN,
+  REDDIT_FETCH_HOSTS,
+  REDDIT_PREVIEW_SAMPLES,
+  redditSubredditUrl,
+  subredditNameFromUrl
+} from "./reddit.js";
 import { sportsSourceTargetKey } from "./scope.js";
 
 export interface SportsWebRequestHop {
@@ -39,6 +48,8 @@ export type SportsSafeFetchPort = (
   options?: {
     readonly allowedHosts?: readonly string[];
     readonly requestHeaders?: Readonly<Record<string, string>>;
+    /** #2211 Reddit throttles generic agents; only the subreddit calls set this. */
+    readonly userAgent?: string;
     readonly allowedContentTypes?: readonly string[];
     readonly beforeRequest?: (hop: SportsWebRequestHop) => boolean | void | Promise<boolean | void>;
     readonly maxBytes?: number;
@@ -113,14 +124,33 @@ export type VerifiedSportsSourceCandidate = VerifiedSportsSourceCandidateBase &
         readonly recipe: SportsSourceRecipe;
         readonly recipeFingerprint: string;
       }
+    | {
+        /** #2211 the subreddit's public new-posts listing URL. */
+        readonly feedUrl: string;
+        readonly retrievalMethod: "reddit";
+        readonly recipe: null;
+        readonly recipeFingerprint: null;
+        /** Community icon on Reddit's image hosts, for the source-icon route; null when absent. */
+        readonly iconUrl: string | null;
+      }
   );
+
+export type SportsSourceRejectionReason =
+  | "policy"
+  | "invalid_input"
+  | "unreachable"
+  | "not_https"
+  | "unsupported"
+  /** #2211 the subreddit does not exist or is banned. */
+  | "not_found"
+  /** #2211 the subreddit is private or quarantined. */
+  | "auth_required"
+  /** #2211 Reddit throttled the preview read. */
+  | "rate_limited";
 
 export type SportsSourceResolutionResult =
   | { status: "ok"; candidate: VerifiedSportsSourceCandidate }
-  | {
-      status: "rejected";
-      reason: "policy" | "invalid_input" | "unreachable" | "not_https" | "unsupported";
-    }
+  | { status: "rejected"; reason: SportsSourceRejectionReason }
   | { status: "unavailable" };
 
 export interface SportsDiscoveryBrowserPort {
@@ -497,6 +527,12 @@ export async function resolveSportsSourceInput(
 ): Promise<SportsSourceResolutionResult> {
   const targets = input.targets ?? [];
   const raw = input.rawUrl.trim();
+  const subreddit = parseSubredditInput(raw);
+  if (subreddit) {
+    return subreddit.kind === "invalid"
+      ? { status: "rejected", reason: "invalid_input" }
+      : resolveSubredditInput(deps.fetch, subreddit.name, targets, input.persistedAuthority);
+  }
   const requestedDomain = normalizePublisherDomain(raw);
   if (!requestedDomain.ok) {
     return {
@@ -785,6 +821,74 @@ export async function resolveSportsSourceInput(
       targets: recipeResult.targets,
       checkedAt: recipeResult.checkedAt,
       samples: recipeResult.samples
+    }
+  };
+}
+
+/**
+ * #2211 A subreddit is read as itself: about.json for the title, description, and icon, then the
+ * public new-posts listing for the sample linked articles. Every assignment target shares the
+ * one listing URL, exactly as a feed does. A saved subreddit's authority must still be reddit.com
+ * pinned to www.reddit.com, or the row is treated as tampered.
+ */
+async function resolveSubredditInput(
+  fetch: SportsSafeFetchPort,
+  name: string,
+  targets: readonly SportsDiscoveryTarget[],
+  authority:
+    | {
+        readonly canonicalDomain: string;
+        readonly recipeJson: Readonly<Record<string, unknown>> | null;
+        readonly confirmedFetchHosts: readonly string[];
+      }
+    | undefined
+): Promise<SportsSourceResolutionResult> {
+  if (
+    authority &&
+    (authority.canonicalDomain !== REDDIT_CANONICAL_DOMAIN ||
+      authority.recipeJson !== null ||
+      authority.confirmedFetchHosts.some((host) => !REDDIT_FETCH_HOSTS.includes(host)))
+  ) {
+    return { status: "rejected", reason: "unsupported" };
+  }
+  if (targets.some((target) => target.exactTargetUrl)) {
+    return { status: "rejected", reason: "invalid_input" };
+  }
+  const read = await readSubreddit(fetch, name);
+  if (!read.ok) return { status: "rejected", reason: read.reason };
+  const displayName = subredditNameFromUrl(read.listingUrl) ?? read.about.displayName;
+  const checkedAt = new Date().toISOString();
+  const samples: SportsRecipeItem[] = read.headlines
+    .slice(0, REDDIT_PREVIEW_SAMPLES)
+    .map((headline) => ({
+      headline: headline.title,
+      url: headline.url,
+      ...(headline.publishedAt ? { publishedAt: headline.publishedAt } : {})
+    }));
+  return {
+    status: "ok",
+    candidate: {
+      candidateId: randomUUID(),
+      label: `r/${displayName}`,
+      canonicalDomain: REDDIT_CANONICAL_DOMAIN,
+      homepageUrl: redditSubredditUrl(displayName),
+      feedUrl: read.listingUrl,
+      retrievalMethod: "reddit",
+      sampleCount: read.headlines.length,
+      validationFingerprint: createHash("sha256").update(read.listingUrl).digest("hex"),
+      recipe: null,
+      recipeFingerprint: null,
+      iconUrl: read.about.iconUrl,
+      confirmedFetchHosts: [...REDDIT_FETCH_HOSTS],
+      checkedAt,
+      samples,
+      targets: targets.map((target) => ({
+        ...target,
+        targetUrl: read.listingUrl,
+        parameters: {},
+        samples,
+        checkedAt
+      }))
     }
   };
 }

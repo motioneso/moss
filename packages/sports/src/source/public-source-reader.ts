@@ -18,6 +18,14 @@ import {
   type SportsRuntimeSource,
   type SportsRuntimeTargetResult
 } from "./repository.js";
+import {
+  parseRedditListing,
+  REDDIT_ACCEPT_HEADERS,
+  REDDIT_CONTENT_TYPES,
+  REDDIT_RATE_LIMIT_MESSAGE,
+  REDDIT_USER_AGENT,
+  redditHopGuard
+} from "./reddit.js";
 import type { CustomSourceHeadline } from "./sports-source.js";
 import { SPORTS_SPORT_LABELS } from "./scope.js";
 
@@ -65,6 +73,8 @@ interface RequestAssignment {
 
 interface RequestGroup {
   readonly identity: string;
+  /** #2211 a subreddit listing is parsed as Reddit JSON, everything else as a feed or recipe. */
+  readonly kind: "feed" | "scrape" | "reddit";
   readonly url: string;
   readonly headers: Readonly<Record<string, string>>;
   readonly allowedContentTypes: readonly string[];
@@ -79,6 +89,9 @@ interface ExtractedHeadline {
   readonly url: string;
   readonly publishedAt: string | null;
   readonly summary: string;
+  /** #2211 set for a subreddit's linked article: the real publisher, not the subreddit. */
+  readonly publisherLabel?: string;
+  readonly publisherDomain?: string;
 }
 
 interface RequestOutcome {
@@ -184,7 +197,8 @@ function retryDelay(value: string | undefined, now: number): number | null {
 
 function failureState(
   failure: { readonly reason: string; readonly status?: number },
-  budgetDenied: boolean
+  budgetDenied: boolean,
+  kind: RequestGroup["kind"] = "feed"
 ): Pick<RequestOutcome, "state" | "reason" | "message"> {
   if (budgetDenied) {
     return {
@@ -204,7 +218,8 @@ function failureState(
     return {
       state: "failing",
       reason: "rate_limited",
-      message: "The publisher asked Moss to retry later."
+      message:
+        kind === "reddit" ? REDDIT_RATE_LIMIT_MESSAGE : "The publisher asked Moss to retry later."
     };
   }
   if (failure.reason === "blocked" || failure.reason === "not_https") {
@@ -261,8 +276,8 @@ function publicHeadlines(
     imageUrl: null,
     summary: item.summary,
     teamKeys: assignment.scope.kind === "team" ? [assignment.scope.teamKey] : [],
-    publisherLabel: source.label,
-    publisherDomain: source.canonicalDomain
+    publisherLabel: item.publisherLabel ?? source.label,
+    publisherDomain: item.publisherDomain ?? source.canonicalDomain
   }));
 }
 
@@ -349,9 +364,20 @@ export class SportsPublicSourceReader {
         continue;
       }
       let group: Omit<RequestGroup, "assignments">;
-      if (source.retrievalMethod === "feed" && source.feedUrl) {
+      if (source.retrievalMethod === "reddit" && source.feedUrl) {
         group = {
           identity: stableId(`${source.runtimeFingerprint}\0${source.feedUrl}`),
+          kind: "reddit",
+          url: source.feedUrl,
+          headers: REDDIT_ACCEPT_HEADERS,
+          allowedContentTypes: REDDIT_CONTENT_TYPES,
+          allowedHosts: source.confirmedFetchHosts,
+          recipe: null
+        };
+      } else if (source.retrievalMethod === "feed" && source.feedUrl) {
+        group = {
+          identity: stableId(`${source.runtimeFingerprint}\0${source.feedUrl}`),
+          kind: "feed",
           url: source.feedUrl,
           headers: {
             accept:
@@ -395,6 +421,7 @@ export class SportsPublicSourceReader {
         }
         group = {
           identity: expanded.identity,
+          kind: "scrape",
           url: expanded.url,
           headers: expanded.headers,
           allowedContentTypes:
@@ -451,6 +478,7 @@ export class SportsPublicSourceReader {
         }
         return;
       }
+      const redditGuard = group.kind === "reddit" ? redditHopGuard(group.url) : null;
       const beforeRequest = async (hop: SportsWebRequestHop): Promise<boolean> => {
         if (options.signal?.aborted || requestCount >= MAX_REQUESTS) {
           budgetDenied = requestCount >= MAX_REQUESTS;
@@ -459,6 +487,7 @@ export class SportsPublicSourceReader {
         if (hop.url.port || !group.allowedHosts.includes(hop.url.hostname.toLowerCase())) {
           return false;
         }
+        if (redditGuard && !redditGuard(hop)) return false;
         requestCount += 1;
         return true;
       };
@@ -471,6 +500,7 @@ export class SportsPublicSourceReader {
           maxBytes: MAX_RESPONSE_BYTES,
           rejectOversizedResponses: true,
           timeoutMs: Math.min(FETCH_TIMEOUT_MS, Math.max(1, deadline - this.now())),
+          ...(group.kind === "reddit" ? { userAgent: REDDIT_USER_AGENT } : {}),
           signal: options.signal
         });
       let response: Awaited<ReturnType<SportsSafeFetchPort>>;
@@ -498,7 +528,7 @@ export class SportsPublicSourceReader {
       const checkedAt = budgetDenied ? null : new Date(this.now());
       let outcome: RequestOutcome;
       if (!response.ok) {
-        const failure = failureState(response, budgetDenied);
+        const failure = failureState(response, budgetDenied, group.kind);
         outcome = {
           items: cacheHit?.value ?? [],
           ...failure,
@@ -528,6 +558,33 @@ export class SportsPublicSourceReader {
                 extracted.reason === "recipe_drift"
                   ? "The publisher changed the structure used by this source."
                   : "The publisher returned an unsupported response.",
+              checkedAt,
+              fromCache: false
+            };
+      } else if (group.kind === "reddit") {
+        const listing = parseRedditListing(response.body);
+        outcome = listing.ok
+          ? {
+              items: listing.headlines.map((headline) => ({
+                id: stableId(headline.url),
+                title: headline.title,
+                url: headline.url,
+                publishedAt: headline.publishedAt,
+                summary: "",
+                publisherLabel: headline.publisherLabel,
+                publisherDomain: headline.publisherDomain
+              })),
+              state: "healthy",
+              reason: null,
+              message: null,
+              checkedAt,
+              fromCache: false
+            }
+          : {
+              items: cacheHit?.value ?? [],
+              state: "unsupported",
+              reason: "unsupported_response",
+              message: "Reddit did not return a readable post listing.",
               checkedAt,
               fromCache: false
             };

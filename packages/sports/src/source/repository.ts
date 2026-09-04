@@ -8,10 +8,21 @@ import type {
   SportsCustomSourceDto,
   SportsSourceAssignmentTarget,
   SportsSourceAssignmentDto,
-  SportsSourceHealthState
+  SportsSourceHealthState,
+  SportsSourceRetrievalMethod
 } from "@moss/shared";
 
 import type { VerifiedSportsSourceCandidate } from "./discovery.js";
+
+/** Feeds and subreddits (#2211) have no recipe; only a scraped page starts "ready". */
+function recipeStatusFor(candidate: VerifiedSportsSourceCandidate): "feed" | "ready" {
+  return candidate.retrievalMethod === "scrape" ? "ready" : "feed";
+}
+
+/** #2211 only a subreddit carries a stored icon; publications resolve their favicon on demand. */
+function iconUrlFor(candidate: VerifiedSportsSourceCandidate): string | null {
+  return candidate.retrievalMethod === "reddit" ? candidate.iconUrl : null;
+}
 import {
   hasValidSportsSourceTargets,
   isSportsSportKey,
@@ -32,7 +43,7 @@ interface SportsCustomSourceRow {
   canonical_domain: string;
   homepage_url: string;
   feed_url: string | null;
-  retrieval_method: "feed" | "scrape";
+  retrieval_method: SportsSourceRetrievalMethod;
   enabled: boolean;
   health_state: "pending" | "healthy" | "failing" | "unsupported" | "auth_required" | "disabled";
   health_reason_code: string | null;
@@ -79,7 +90,7 @@ export interface SportsRuntimeSource {
   readonly label: string;
   readonly canonicalDomain: string;
   readonly feedUrl: string | null;
-  readonly retrievalMethod: "feed" | "scrape";
+  readonly retrievalMethod: SportsSourceRetrievalMethod;
   readonly enabled: boolean;
   readonly runtimeFingerprint: string;
   readonly recipeJson: Readonly<Record<string, unknown>> | null;
@@ -211,14 +222,16 @@ export class SportsSourcesRepository {
   async findById(
     scopedDb: DataContextDb,
     id: string
-  ): Promise<{ id: string; canonicalDomain: string } | null> {
+  ): Promise<{ id: string; canonicalDomain: string; iconUrl: string | null } | null> {
     assertDataContextDb(scopedDb);
     const row = await scopedDb.db
       .selectFrom("app.sports_custom_sources")
-      .select(["id", "canonical_domain"])
+      .select(["id", "canonical_domain", "icon_url"])
       .where("id", "=", id)
       .executeTakeFirst();
-    return row ? { id: row.id, canonicalDomain: row.canonical_domain } : null;
+    return row
+      ? { id: row.id, canonicalDomain: row.canonical_domain, iconUrl: row.icon_url ?? null }
+      : null;
   }
 
   async list(scopedDb: DataContextDb): Promise<SportsCustomSourceDto[]> {
@@ -398,7 +411,7 @@ export class SportsSourcesRepository {
       if (assignments.length === 0) continue;
       const aggregate = aggregateAssignmentHealth(source.enabled, assignments);
       const recipeStatus =
-        source.retrieval_method === "feed"
+        source.retrieval_method !== "scrape"
           ? "feed"
           : assignments.some((assignment) => assignment.health_reason_code === "recipe_drift")
             ? "drift"
@@ -513,7 +526,8 @@ export class SportsSourcesRepository {
         recipe_json: candidate.recipe === null ? null : { ...candidate.recipe },
         recipe_schema_version: candidate.recipe?.version ?? null,
         recipe_fingerprint: candidate.recipeFingerprint,
-        recipe_status: candidate.retrievalMethod === "feed" ? "feed" : "ready",
+        recipe_status: recipeStatusFor(candidate),
+        icon_url: iconUrlFor(candidate),
         confirmed_fetch_hosts: [...candidate.confirmedFetchHosts],
         authorization_confirmed_at: confirmedAt,
         health_state: "healthy",
@@ -557,11 +571,19 @@ export class SportsSourcesRepository {
       return toDto(row, assignments);
     }
 
-    const existing = await scopedDb.db
-      .selectFrom("app.sports_custom_sources")
-      .select(SOURCE_COLUMNS)
-      .where("canonical_domain", "=", candidate.canonicalDomain)
-      .executeTakeFirstOrThrow();
+    // #2211 a subreddit collides on its listing URL, not on reddit.com, which every subreddit shares.
+    const existing = await (
+      candidate.retrievalMethod === "reddit"
+        ? scopedDb.db
+            .selectFrom("app.sports_custom_sources")
+            .select(SOURCE_COLUMNS)
+            .where("retrieval_method", "=", "reddit")
+            .where(sql`lower(feed_url)`, "=", candidate.feedUrl.toLowerCase())
+        : scopedDb.db
+            .selectFrom("app.sports_custom_sources")
+            .select(SOURCE_COLUMNS)
+            .where("canonical_domain", "=", candidate.canonicalDomain)
+    ).executeTakeFirstOrThrow();
     return toDto(existing, []);
   }
 
@@ -694,7 +716,8 @@ export class SportsSourcesRepository {
         recipe_json: candidate.recipe === null ? null : { ...candidate.recipe },
         recipe_schema_version: candidate.recipe?.version ?? null,
         recipe_fingerprint: candidate.recipeFingerprint,
-        recipe_status: candidate.retrievalMethod === "feed" ? "feed" : "ready",
+        recipe_status: recipeStatusFor(candidate),
+        icon_url: iconUrlFor(candidate),
         confirmed_fetch_hosts: [...candidate.confirmedFetchHosts],
         authorization_confirmed_at: confirmedAt,
         health_state: "healthy",

@@ -782,6 +782,7 @@ function buildSportsDiscoveryPorts(
       options?: {
         readonly allowedHosts?: readonly string[];
         readonly requestHeaders?: Readonly<Record<string, string>>;
+        readonly userAgent?: string;
         readonly allowedContentTypes?: readonly string[];
         readonly beforeRequest?: (hop: {
           readonly url: URL;
@@ -798,6 +799,7 @@ function buildSportsDiscoveryPorts(
         rateLimiter: sportsHostRateLimiter,
         allowedHosts: options?.allowedHosts,
         requestHeaders: options?.requestHeaders,
+        userAgent: options?.userAgent,
         allowedContentTypes: options?.allowedContentTypes,
         beforeRequest: options?.beforeRequest,
         maxBytes: options?.maxBytes,

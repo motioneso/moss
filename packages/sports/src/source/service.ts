@@ -32,6 +32,7 @@ import {
   type VerifiedSportsSourceTarget
 } from "./discovery.js";
 import type { createSportsPreviewStore } from "./preview-store.js";
+import { sportsSourceIdentityKey } from "./reddit.js";
 import type { SportsPublicSourceReader } from "./public-source-reader.js";
 import type { SportsSourceBaseline, SportsSourcesRepository } from "./repository.js";
 import type { SportsEspnCoverageRepository } from "./espn-coverage-repository.js";
@@ -177,9 +178,9 @@ export class SportsSourceService {
     if (result.status !== "ok") return result;
 
     const existing = await this.dependencies.sources.list(scopedDb);
+    const candidateKey = sportsSourceIdentityKey(result.candidate);
     const duplicate =
-      existing.find((source) => source.canonicalDomain === result.candidate.canonicalDomain) ??
-      null;
+      existing.find((source) => sportsSourceIdentityKey(source) === candidateKey) ?? null;
     const confirmationId = this.dependencies.previews.put({
       kind: "new-source",
       ownerUserId,
@@ -223,7 +224,8 @@ export class SportsSourceService {
 
     await this.dependencies.sources.lockOwnerAssignments(scopedDb);
     const existing = await this.dependencies.sources.list(scopedDb);
-    if (existing.some((source) => source.canonicalDomain === preview.candidate.canonicalDomain)) {
+    const previewKey = sportsSourceIdentityKey(preview.candidate);
+    if (existing.some((source) => sportsSourceIdentityKey(source) === previewKey)) {
       throw new SportsSourceRequestError(409, "Source already exists");
     }
     const assignmentCount = await this.dependencies.sources.countAssignments(scopedDb);
@@ -462,7 +464,11 @@ export class SportsSourceService {
       targets
     });
     if (result.status !== "ok") return result;
-    if (!samePublisherIdentity(result.candidate.canonicalDomain, baseline.source.canonicalDomain)) {
+    if (
+      baseline.source.retrievalMethod === "reddit" || result.candidate.retrievalMethod === "reddit"
+        ? sportsSourceIdentityKey(result.candidate) !== sportsSourceIdentityKey(baseline.source)
+        : !samePublisherIdentity(result.candidate.canonicalDomain, baseline.source.canonicalDomain)
+    ) {
       return { status: "rejected", reason: "stale_source" };
     }
     // A rebuild refreshes retrieval, not identity: the same-publisher check above already

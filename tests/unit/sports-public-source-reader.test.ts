@@ -540,6 +540,121 @@ describe("SportsPublicSourceReader", () => {
   });
 });
 
+describe("SportsPublicSourceReader subreddit sources (#2211)", () => {
+  const listingUrl = "https://www.reddit.com/r/nfl/new.json?limit=50";
+  const subreddit: SportsRuntimeSource = {
+    ...runtimeSource({ id: "nfl", recipe: null, feedUrl: listingUrl, hosts: ["www.reddit.com"] }),
+    label: "r/nfl",
+    canonicalDomain: "reddit.com",
+    retrievalMethod: "reddit",
+    assignments: [
+      {
+        id: "assignment-nfl",
+        scope: { kind: "sport", sportKey: "football" },
+        targetUrl: listingUrl,
+        targetParameters: {},
+        previewStatus: "verified"
+      }
+    ]
+  };
+  const listing = JSON.stringify({
+    kind: "Listing",
+    data: {
+      children: [
+        {
+          kind: "t3",
+          data: {
+            name: "t3_a",
+            title: "Chiefs sign a new kicker",
+            url: "https://www.espn.com/nfl/story/1",
+            is_self: false,
+            created_utc: 1_757_000_000
+          }
+        },
+        {
+          kind: "t3",
+          data: {
+            name: "t3_b",
+            title: "Game thread",
+            is_self: true,
+            url: "https://www.reddit.com/r/nfl/comments/b/"
+          }
+        }
+      ]
+    }
+  });
+
+  it("reads the listing as Reddit JSON and credits each headline to the linked publisher", async () => {
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      expect(url).toBe(listingUrl);
+      expect(options?.allowedHosts).toEqual(["www.reddit.com"]);
+      expect(options?.allowedContentTypes).toEqual(["application/json"]);
+      expect(options?.userAgent).toMatch(/^Moss\//);
+      expect(await permitInitialRequest(url, options)).toBe(true);
+      expect(
+        await options?.beforeRequest?.({
+          url: new URL("https://www.reddit.com/search"),
+          redirectCount: 1
+        })
+      ).toBe(false);
+      return success(url, listing);
+    });
+    const { reader, persisted } = makeReader([subreddit], fetch);
+    const result = await reader.refresh(actor);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.headlines).toHaveLength(1);
+    expect(result.headlines[0]).toMatchObject({
+      origin: "custom",
+      sourceId: "nfl",
+      title: "Chiefs sign a new kicker",
+      url: "https://www.espn.com/nfl/story/1",
+      publisherLabel: "espn.com",
+      publisherDomain: "espn.com",
+      sportKey: "football",
+      publishedAt: new Date(1_757_000_000 * 1000).toISOString()
+    });
+    expect(persisted[0]?.[0]).toMatchObject({
+      healthState: "healthy",
+      assignmentId: "assignment-nfl"
+    });
+  });
+
+  it("marks a Reddit rate limit as failing with the Reddit message, and a private subreddit as auth required", async () => {
+    let status = 429;
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      await permitInitialRequest(url, options);
+      return { ok: false, reason: "http_error", status };
+    });
+    const { reader, persisted } = makeReader([subreddit], fetch, { sleep: async () => {} });
+    await reader.refresh(actor);
+    expect(persisted[0]?.[0]).toMatchObject({
+      healthState: "failing",
+      healthReasonCode: "rate_limited",
+      healthMessage: "Reddit is rate limiting Moss. Headlines resume automatically."
+    });
+
+    status = 403;
+    await reader.refresh(actor, { bypassCache: true });
+    expect(persisted.at(-1)?.[0]).toMatchObject({
+      healthState: "auth_required",
+      healthReasonCode: "auth_required"
+    });
+  });
+
+  it("treats a non-listing body as an unsupported response", async () => {
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      await permitInitialRequest(url, options);
+      return success(url, '{"kind":"t5","data":{}}');
+    });
+    const { reader, persisted } = makeReader([subreddit], fetch);
+    await reader.refresh(actor);
+    expect(persisted[0]?.[0]).toMatchObject({
+      healthState: "unsupported",
+      healthReasonCode: "unsupported_response"
+    });
+  });
+});
+
 describe("public feed structure validation", () => {
   it("accepts legal empty RSS and Atom documents independent of item count", () => {
     expect(
