@@ -56,6 +56,8 @@ What is wrong with it today, all observed on the dev instance on 2026-09-04:
 - Keep one source of truth for the human explanations, shared by the screen and the tool.
 - Keep the shape provider-agnostic: Google and IMAP today, any future provider without a
   screen change.
+- Warn outside Settings only when a failure takes away something the user can do, and say
+  exactly what is not working, why, and where to fix it. Never a generic "sync failed".
 - Keep the app map truthful in the same PR.
 
 ## Non-Goals
@@ -67,8 +69,8 @@ What is wrong with it today, all observed on the dev instance on 2026-09-04:
 - Fixing the expired-AI-login problem itself (tracked separately in #2232 and PR 2233). This
   spec only surfaces it as a reason.
 - Cross-user or admin views of run history. The admin metadata pane keeps its current summary.
-- Push notifications or proactive alerts when a sync fails. The status is pull-only in this
-  slice; a proactive hook can build on the run table later.
+- Push notifications or chat interruptions when a sync fails. The Today notice is shown when
+  the screen is opened; a proactive hook can build on the run table later.
 
 ## Resolved Decisions
 
@@ -134,15 +136,26 @@ object as the endpoint for one account or all of the caller's accounts. `connect
 are read-or-benign, so per the standing ruling that installing a module grants normal use, no
 confirmation prompt is required.
 
+### 9. Warn outside Settings only about lost abilities, named one by one
+
+Ben's ruling, 2026-09-04: a notice outside Settings must say what is NOT working, for example
+"Cannot create tasks from email" or "Calendar is out of date since 2 pm", with the reason and a
+fix link. Not "sync failed".
+
+Each provider declares a small capability map: the user-facing abilities it feeds, and which
+sync phase or prerequisite each one depends on. The status code derives a "what is not working"
+list from that map. Today shows one line per lost ability; the settings row shows the same
+sentence; the Moss status tool returns the same list. A failure that takes nothing away (a
+partial run whose next run will catch up, a stale-but-recent calendar) produces no notice
+outside Settings.
+
 ## Open Questions for Ben
 
 1. Twenty runs of history per account, or seven days? Twenty is simpler and enough to see a
    pattern; seven days keeps a quiet account's history longer.
 2. Should Moss be allowed to press Sync now on its own (decision 8), or only report status and
    tell the user to press the button?
-3. When a sync is stuck waiting for the worker, should Today also show a one-line notice, or is
-   the Connected accounts row enough?
-4. Should the deferred AI mail step ("Claude login expired, 12 messages not yet read by Moss")
+3. Should the deferred AI mail step ("Claude login expired, 12 messages not yet read by Moss")
    appear in the sync row with a link to Assistant settings, or stay only in Assistant settings?
    This spec assumes yes, as a reason line with a link.
 
@@ -239,15 +252,19 @@ Shared types in `packages/shared/src/connectors-api.ts`.
   landed: [ { kind: "calendar", label: "Calendar events", count: 23, seeAt: "/calendar" },
             { kind: "email", label: "Emails", count: 148, seeAt: "/today" } ],
   deferredAi: { count, reason: "assistant-login-expired", seeAt: "/settings?section=assistant" } | null,
+  notWorking: [ { ability, since, reason, fix: { label, path } } ],
   runs: [ { startedAt, finishedAt, trigger, status, errorCode, counts } ]   // newest first, max 20
 }
 ```
+
+`GET /api/connectors/sync-status` (permission `connectors.view`): the same object for every
+account the caller owns, without `runs`, for Today and for the tool's all-accounts form.
 
 `POST /api/connectors/accounts/:id/sync` (permission `connectors.manage`, owner only, rate
 limited like the Google route): queues the provider's sync job for that account and returns
 `{ queued: true, jobId }`, or `{ queued: false, reason: "in-flight" | "revoked" }`.
 
-Both routes are declared in the connectors manifest, or the server refuses to start.
+All three routes are declared in the connectors manifest, or the server refuses to start.
 
 The `deferredAi` field is filled from the existing email-extraction deferral count in the run's
 counts (the escalation and retryable-error path already increments a counter) plus the reason
@@ -261,13 +278,75 @@ actor (Google) or the account id (IMAP). State mapping: `active` is `syncing`; `
 `retry` younger than 2 minutes is `queued`; older is `waiting-for-worker`; none is null. The
 grace period is a constant in the connectors package, not a setting.
 
+### Capability map and lost-ability notices
+
+Each provider module exports a declared, static map. Google's:
+
+| ability (user words) | depends on | stale after |
+|---|---|---|
+| Calendar on the Calendar screen and Today is current | calendar phase succeeded | 1 hour since the last good calendar phase |
+| Tasks and follow-ups are created from new email | email phase succeeded and the assistant's mail-reading step ran | 1 hour since the last good email phase |
+| Moss can answer about recent email | email phase succeeded | 1 hour |
+
+IMAP declares the two email abilities only. A provider with no calendar declares no calendar
+line, so nothing about calendars is ever shown for it.
+
+The shared explain module gains a second pure function, `deriveNotWorking`, which takes the
+capability map, the run facts, the pending state, and the deferred AI reason, and returns a
+list of:
+
+```
+{ ability: "Cannot create tasks from email",       // what is not working, Ben's phrasing
+  since: "2026-09-04T14:00:00Z",                    // when it last worked, or null
+  reason: "the assistant's Claude login has expired",
+  fix: { label: "Log the assistant in", path: "/settings?section=assistant" } }
+```
+
+Rules for deriving the list, tested one per row:
+
+| situation | not working |
+|---|---|
+| calendar phase failed, or no good calendar phase within the stale window | "Calendar is out of date since 2 pm", reason from the error code or "the sync has not run", fix Reconnect or Sync now |
+| email phase failed, or no good email phase within the stale window | "Tasks are not being created from email" and "Moss cannot see recent email", same reason and fix |
+| email phase good but the assistant's mail-reading step was deferred | "Tasks are not being created from email", reason "the assistant's Claude login has expired", fix Assistant settings |
+| sign-in expired | every ability in the map, reason "Google no longer accepts the saved sign-in", fix Reconnect |
+| waiting for worker past the grace period | every ability whose stale window has passed, reason "the background worker has not picked up the sync", fix Sync now |
+| partial run, next run will retry, stale window not passed | nothing |
+| revoked account | nothing (the user chose this) |
+
+Each line is one sentence in the form "<ability>, since <time>, because <reason>." followed by
+the fix link. The `since` time is the finish of the last good phase, shown in the user's time
+zone as "since 2 pm" or "since yesterday".
+
+The list is part of the sync-status contract as `notWorking: [...]` and is what Today,
+the settings row, and the Moss tool all read.
+
+**Today.** A new small block at the top of Today, rendered only when any connected account has
+a non-empty `notWorking` list, using the existing Today card styling and a jds Badge with the
+`red` tone. One line per lost ability, deduplicated across accounts, each with its fix link. It
+reads from a new `GET /api/connectors/sync-status` (all of the caller's accounts) so Today makes
+one request. Today is a core screen; the block is declared in the core app-map entry for Today
+in the same PR.
+
+```
+(●) Not working right now
+    Calendar is out of date since 2 pm, because Google no longer accepts the saved sign-in.   Reconnect
+    Tasks are not being created from email since 2 pm, because the assistant's Claude login has expired.   Log the assistant in
+```
+
+**Settings row.** The same sentences appear in the "What failed" area of the expanded row, and
+the first one replaces the summary line while the list is non-empty, so the row and Today never
+disagree.
+
 ### Moss tools and app map
 
 Two tool entries in `packages/connectors/src/manifest.ts` beside the live Gmail and Calendar
 tools:
 
 - `connectors.syncStatus`: input `{ accountId?: string }`, output the sync-status contract for
-  one or all accounts. `risk: "read"`, `permissionId: "connectors.view"`, not external content.
+  one or all accounts, including the `notWorking` list so Moss can say "tasks are not being
+  created from email because the assistant login expired" instead of "sync failed".
+  `risk: "read"`, `permissionId: "connectors.view"`, not external content.
 - `connectors.syncNow`: input `{ accountId: string }`, output the sync route's response.
   `risk: "write"`, `permissionId: "connectors.manage"`.
 
@@ -277,7 +356,9 @@ what the row shows and that Moss can read it), `errors` for `waiting-for-worker`
 `/settings?section=connected` (Reconnect, Sync now) and `/settings?section=assistant` (log the
 assistant in), and the new migration in its migration list. The core app-map entry `connected`
 in `packages/shared/src/app-map-core.ts` gets one extra sentence: each account shows when it
-last synced, what came in, what failed and why, and a Sync now button.
+last synced, what came in, what failed and why, and a Sync now button. The core `today` entry
+gets one sentence: Today lists any ability that is not working because a connected account or
+the assistant login has a problem, with a link to fix it.
 
 ### Settings screen
 
@@ -309,10 +390,12 @@ Expanded row:
        Calendar events   23   See them on Calendar and Today
        Emails           148   Used by email actions on Today and when you ask Moss about mail
 
-     What failed
+     What is not working
+       Tasks are not being created from email since 2 pm, because the assistant's Claude
+       login has expired.   Log the assistant in
+
+     What failed in the last run
        26 messages could not be read; usually Google refused them one at a time.
-       12 emails are waiting for Moss to read them: the assistant's Claude login has expired.
-       Log the assistant in  ->  Assistant settings
 
      What happens next
        Stopped at the message cap. Continues automatically in the next run, at 14:45.
@@ -362,13 +445,19 @@ Pressing Sync now shows the existing toast pattern: "Sync queued" on success, or
   `canSyncNow` false.
 - Integration: per-account sync route queues a Google job for a Google account and an IMAP job
   for an IMAP account, and refuses while a lineage is in flight.
+- Unit: `deriveNotWorking` against the rules table, including the "partial but not stale"
+  case producing an empty list and the IMAP map producing no calendar line.
+- Web: Today shows the block only when a list is non-empty, one line per ability, deduplicated
+  across two accounts with the same lost ability.
 - Tool: `connectors.syncStatus` returns the same object as the route for the same actor and
   refuses another user's account id.
 - Web: pane renders each code's label, summary, and next line; Details toggles the runs list;
   Sync now disabled while queued or syncing.
 - Live-path proof on dev, recorded on the PR: stop the worker, connect or Sync now, watch the
   row reach Waiting for worker; start the worker, watch it run and show counts and the runs
-  list; ask Moss "is my calendar up to date" and see it quote the same status.
+  list; expire the assistant login and see "Tasks are not being created from email" on Today
+  with the Assistant settings link; ask Moss "is my calendar up to date" and see it quote the
+  same status and the same not-working line.
 
 ## Exit criteria
 
@@ -380,6 +469,11 @@ Pressing Sync now shows the existing toast pattern: "Sync queued" on success, or
 - Sync now exists for Google and IMAP accounts, is disabled while a run is queued or in flight,
   and gives a toast either way.
 - The last 20 runs per account are visible under Details.
+- Outside Settings, the only sync-related notice is the Today block, it appears only when an
+  ability is lost, and each line names the ability, the time it stopped, the reason, and a fix
+  link. No generic "sync failed" text exists anywhere in the product.
+- Today, the settings row, and the Moss tool produce byte-identical not-working sentences for
+  the same facts.
 - `connectors.syncStatus` and `connectors.syncNow` are declared in the manifest and return the
   same facts as the screen, using the same sentences.
 - Human wording exists in exactly one module, and the web health mapping no longer contains its
@@ -404,13 +498,15 @@ Pressing Sync now shows the existing toast pattern: "Sync queued" on success, or
 ## Slice plan (one session each, shared worktree and PR)
 
 1. **Record and explain.** Migration, repository functions, job code writes run rows, shared
-   explain module with the wording table and unit tests. The web pane switches to the shared
+   explain module with the wording table, the capability maps, `deriveNotWorking`, and unit
+   tests. The web pane switches to the shared
    module with no visible change yet. Gate green.
 2. **Status and control.** Sync-status route with worker detection and next-run time,
    per-account sync route, both Moss tools, manifest features/errors/remediations, app-map
    sentence, integration and tool tests.
-3. **Screen and proof.** Expandable row, runs list, Sync now, authored CSS, web tests, then the
-   live-path proof on dev including the stopped-worker case, recorded on the PR.
+3. **Screen and proof.** Expandable row, runs list, Sync now, the Today block, authored CSS,
+   web tests, then the live-path proof on dev including the stopped-worker and expired-login
+   cases, recorded on the PR.
 
 ## Self-review
 
@@ -419,5 +515,8 @@ Pressing Sync now shows the existing toast pattern: "Sync queued" on success, or
 - The worker state is derived from job age, which the API can already read, so no new
   background writer or setting is introduced.
 - Content never enters the status path; only counts and codes.
-- Open questions are ones only Ben can settle (retention, Moss pressing Sync now, Today notice,
-  AI deferral placement); none block slice 1.
+- Notices outside Settings follow Ben's 2026-09-04 ruling: only for a lost ability, naming the
+  ability, the time, the reason, and a fix; derived from a declared map, not hand-written per
+  screen.
+- Open questions are ones only Ben can settle (retention, Moss pressing Sync now, AI deferral
+  placement); none block slice 1.
