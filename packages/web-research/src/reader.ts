@@ -228,6 +228,7 @@ export interface FetchWebResourceSuccess<TBody> {
   readonly body: TBody;
   readonly truncated: boolean;
   readonly bytesRead: number;
+  readonly hopCount: number;
 }
 
 export type FetchWebResourceFailure = {
@@ -486,7 +487,8 @@ async function fetchWebResourceWithBody<TBody>(
         contentType,
         body,
         truncated,
-        bytesRead
+        bytesRead,
+        hopCount: redirects
       };
     }
     return { ok: false, reason: "network" };

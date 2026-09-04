@@ -196,6 +196,7 @@ export interface NewsSourcePreviewCandidate {
   readonly homepageUrl: string;
   readonly retrievalMethod: "feed" | "scrape";
   readonly sampleCount: number;
+  readonly redirectNote?: string;
 }
 
 export interface NewsSourcePreviewResponse {
@@ -726,7 +727,8 @@ export const previewNewsSourceSchema = {
               canonicalDomain: { type: "string" },
               homepageUrl: { type: "string" },
               retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
-              sampleCount: { type: "number" }
+              sampleCount: { type: "number" },
+              redirectNote: { type: "string" }
             }
           }
         },
