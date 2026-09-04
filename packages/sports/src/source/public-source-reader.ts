@@ -473,6 +473,11 @@ export class SportsPublicSourceReader {
     const photos = this.dependencies.photos;
     if (!photos) return stored;
     for (const item of items) {
+      // Past the deadline every remaining story is certain to be skipped, and each call still
+      // does folder and file work before reaching the store's own check, so stop here instead.
+      // The margin is deliberately not applied: inside it a copy we already hold is still worth
+      // returning, and that costs no network.
+      if (signal?.aborted || deadline - this.now() <= 0) break;
       if (!item.photoUrl) continue;
       // A photo that already failed is not tried again while the story is still cached: without
       // this, a permanently broken image is re-downloaded on every single refresh.

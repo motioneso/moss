@@ -344,6 +344,23 @@ describe("sports photo store (#2237)", () => {
     expect(store.keyForHeadline("user-a", "source-a:item-1")).toBeNull();
   });
 
+  it("forgets a copy whose image file has vanished, the moment it tries to serve it", async () => {
+    const url = "https://example.com/photo.jpg";
+    const { port } = fetchPortReturning(new Map([[url, await jpeg(900, 600)]]));
+    const store = new SportsPhotoStore({ vault, fetchBytes: port });
+    const dropped: string[] = [];
+    store.onCopyRemoved((key) => dropped.push(key));
+    const stored = photoOf(await store.ensure(actor, "source-a", url));
+    store.linkHeadline("user-a", "source-a:item-1", stored!.key);
+
+    await rm(join(baseDir, "user-a", "sports", "photos", `${stored!.key}.webp`));
+    const served = await store.read(actor, stored!.key);
+
+    expect(served).toBeNull();
+    expect(dropped).toEqual([stored!.key]);
+    expect(store.keyForHeadline("user-a", "source-a:item-1")).toBeNull();
+  });
+
   it("records which stored copy a headline serves, per owner", async () => {
     const { port } = fetchPortReturning(new Map());
     const store = new SportsPhotoStore({ vault, fetchBytes: port });

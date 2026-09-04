@@ -1,14 +1,19 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it, vi } from "vitest";
 
 import type { AccessContext, DataContextDb } from "@moss/db";
 import { isPublicFeedDocument } from "@moss/news";
+import { VaultContextRunner } from "@moss/vault";
 
 import type { SportsSafeFetchPort } from "../../packages/sports/src/source/discovery.js";
 import {
   SPORTS_PHOTO_DEADLINE_MARGIN_MS,
   SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS,
-  type EnsurePhotoResult,
-  type SportsPhotoStore
+  SportsPhotoStore,
+  type EnsurePhotoResult
 } from "../../packages/sports/src/source/photo-store.js";
 import { SportsPublicSourceReader } from "../../packages/sports/src/source/public-source-reader.js";
 import { validateSportsSourceRecipe } from "../../packages/sports/src/source/recipe.js";
@@ -160,13 +165,13 @@ function makeReader(
  */
 class PhotoStoreDouble {
   readonly stored: string[] = [];
+  /** Every call, including ones that decline: proves the reader stops asking once time is up. */
+  attempts = 0;
   readonly budgets: number[] = [];
   readonly links = new Map<string, string>();
   swept: ReadonlySet<string> | null = null;
   /** Set to make every download attempt fail, as a permanently broken image would. */
   alwaysFails = false;
-  /** Called with the time the download was allowed, so a test can make one really take that long. */
-  onDownload: ((allowedMs: number) => Promise<void>) | null = null;
 
   async ensure(
     _access: AccessContext,
@@ -179,12 +184,12 @@ class PhotoStoreDouble {
   ): Promise<EnsurePhotoResult> {
     // Mirrors the real store: the safety margin is applied to the time left at the moment the
     // download would start, and the download is capped at the store's own limit.
+    this.attempts += 1;
     const remaining = options.remainingMs?.() ?? SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS;
     if (remaining <= SPORTS_PHOTO_DEADLINE_MARGIN_MS) return { outcome: "skipped" };
     const allowed = Math.min(SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS, remaining);
     this.stored.push(photoUrl);
     this.budgets.push(allowed);
-    await this.onDownload?.(allowed);
     if (this.alwaysFails) return { outcome: "unusable" };
     return {
       outcome: "stored",
@@ -880,9 +885,32 @@ describe("the photo pass (#2237)", () => {
     expect(await budgetAfterFeedDelay(12_500)).toEqual([]);
   });
 
-  it("finishes the refresh inside its deadline even when a photo download hangs", async () => {
+  it("stops asking the photo store anything once the deadline has passed", async () => {
     const items = Array.from(
-      { length: 4 },
+      { length: 5 },
+      (_unused, index) =>
+        `<item><guid>feed-${index}</guid><title>Story ${index}</title>` +
+        `<link>https://publisher.example/story-${index}</link>` +
+        `<media:content url="https://publisher.example/${index}.jpg" medium="image" width="1200"/></item>`
+    ).join("");
+    let clock = Date.parse("2026-09-04T10:00:00.000Z");
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      clock += 12_500;
+      return success(url, feedBody(items), "text/plain");
+    });
+    const photos = new PhotoStoreDouble();
+    const { reader } = makeReader([feedSource()], fetch, { photos, now: () => clock });
+
+    const result = await reader.refresh(actor);
+
+    expect(photos.attempts).toBe(0);
+    expect(result.headlines).toHaveLength(5);
+  });
+
+  it("finishes the refresh inside its deadline even when every photo download hangs", async () => {
+    const items = Array.from(
+      { length: 6 },
       (_unused, index) =>
         `<item><guid>feed-${index}</guid><title>Story ${index}</title>` +
         `<link>https://publisher.example/story-${index}</link>` +
@@ -894,19 +922,41 @@ describe("the photo pass (#2237)", () => {
       if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
       return success(url, feedBody(items), "text/plain");
     });
-    const photos = new PhotoStoreDouble();
-    // Every download uses every millisecond it was given and then gives up, as a hung host would.
-    photos.onDownload = async (allowedMs) => {
-      clock += allowedMs;
-      photos.alwaysFails = true;
-    };
-    const { reader } = makeReader([feedSource()], fetch, { photos, now: () => clock });
 
-    const result = await reader.refresh(actor);
+    const baseDir = await mkdtemp(join(tmpdir(), "sports-photos-reader-"));
+    try {
+      let downloads = 0;
+      // The host accepts the request and then says nothing at all: this promise never settles on
+      // its own, so only the store's own time limit can end the call.
+      const photos = new SportsPhotoStore({
+        vault: new VaultContextRunner(baseDir),
+        fetchBytes: () => {
+          downloads += 1;
+          return new Promise(() => undefined);
+        },
+        now: () => new Date(clock),
+        // Waiting is simulated: the clock jumps forward by exactly as long as the store was
+        // prepared to wait, so the test proves the limit without really sitting there.
+        delay: async (ms) => {
+          clock += ms;
+        }
+      });
+      const { reader } = makeReader([feedSource()], fetch, {
+        photos: photos as unknown as PhotoStoreDouble,
+        now: () => clock
+      });
 
-    expect(clock - started).toBeLessThanOrEqual(REFRESH_DEADLINE_MS);
-    expect(photos.stored.length).toBeLessThan(4);
-    expect(result.headlines).toHaveLength(4);
+      const result = await reader.refresh(actor);
+
+      expect(clock - started).toBeLessThanOrEqual(REFRESH_DEADLINE_MS);
+      // It gave up on the hung host and moved on, rather than trying all six or hanging on one.
+      expect(downloads).toBeGreaterThan(0);
+      expect(downloads).toBeLessThan(6);
+      expect(result.headlines).toHaveLength(6);
+      expect(result.headlines.every((headline) => headline.imageUrl === null)).toBe(true);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
   });
 
   it("does not download the same broken photo again on the next refresh", async () => {

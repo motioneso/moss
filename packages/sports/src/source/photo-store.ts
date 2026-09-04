@@ -62,6 +62,8 @@ export interface SportsPhotoStoreDependencies {
   readonly fetchBytes: SportsIconFetchPort;
   readonly now?: () => Date;
   readonly limits?: Partial<SportsPhotoLimits>;
+  /** Waits the given time. Injectable so a test can prove the timeout without really waiting. */
+  readonly delay?: (ms: number) => Promise<void>;
 }
 
 interface PhotoSidecar {
@@ -134,12 +136,19 @@ function parseSidecar(raw: string): PhotoSidecar | null {
 export class SportsPhotoStore {
   private readonly limits: SportsPhotoLimits;
   private readonly now: () => Date;
+  private readonly delay: (ms: number) => Promise<void>;
   /** `<actor id>\0<headline id>` to photo key, so the route can join without a second table. */
   private readonly headlineKeys = new Map<string, string>();
   private readonly removalListeners: PhotoRemovalListener[] = [];
 
   constructor(private readonly dependencies: SportsPhotoStoreDependencies) {
     this.now = dependencies.now ?? (() => new Date());
+    this.delay =
+      dependencies.delay ??
+      ((ms) =>
+        new Promise((resolve) => {
+          setTimeout(resolve, ms).unref();
+        }));
     this.limits = {
       maxCopiesPerOwner: dependencies.limits?.maxCopiesPerOwner ?? DEFAULT_MAX_COPIES_PER_OWNER,
       maxBytesPerOwner: dependencies.limits?.maxBytesPerOwner ?? DEFAULT_MAX_BYTES_PER_OWNER,
@@ -183,12 +192,17 @@ export class SportsPhotoStore {
       if (opts.signal?.aborted) return SKIPPED;
       if (remaining <= SPORTS_PHOTO_DEADLINE_MARGIN_MS) return SKIPPED;
       const timeoutMs = Math.min(SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS, remaining);
-      const fetched = await this.dependencies.fetchBytes(photoUrl, {
-        allowedHosts: [host],
-        maxBytes: SPORTS_PHOTO_MAX_DOWNLOAD_BYTES,
-        rejectOversizedResponses: true,
-        timeoutMs
-      });
+      // The budget is enforced here, not merely passed down: a host that accepts the connection
+      // and then says nothing would otherwise hold the whole refresh open for as long as it liked.
+      const fetched = await Promise.race([
+        this.dependencies.fetchBytes(photoUrl, {
+          allowedHosts: [host],
+          maxBytes: SPORTS_PHOTO_MAX_DOWNLOAD_BYTES,
+          rejectOversizedResponses: true,
+          timeoutMs
+        }),
+        this.delay(timeoutMs).then(() => ({ ok: false, reason: "timeout" }) as const)
+      ]);
       if (opts.signal?.aborted) return SKIPPED;
       if (!fetched.ok) {
         // A timeout under a budget shortened by the refresh deadline is the deadline's doing, not
@@ -257,6 +271,10 @@ export class SportsPhotoStore {
       try {
         bytes = await readVaultFileBytes(ctx, webpPath(key));
       } catch {
+        // The image is gone, which only happens if something removed it behind our back. Treat
+        // it exactly like a removal so the story stops pointing at it and nobody keeps serving
+        // stale bytes from memory. Cheaper than checking the disk on every request.
+        this.announceRemoval(key);
         return null;
       }
       const sidecar = await this.readSidecar(ctx, key);
