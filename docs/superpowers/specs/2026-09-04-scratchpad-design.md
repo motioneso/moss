@@ -316,9 +316,14 @@ fail the save itself.
   chat button inside `.topbar-actions`, the shortcut, and one `ScratchpadPanel` render outside
   the routed page.
 - `apps/web/src/scratchpad/scratchpad-panel.tsx`: header (pencil mark, "Scratchpad", status
-  word, three-dot menu button, close button), the editor, footer with the character count and a
-  "Copy" quiet button. The menu is the `jds` menu primitive with one checkbox item, "Also keep a
-  copy in my Notes folder", and an "Open Settings" item.
+  word, "Ask Moss" button, three-dot menu button, close button), the editor, footer with the
+  character count. The "Ask Moss" button is a very small quiet icon button showing only a
+  question mark (title "Ask Moss about this"). It is hidden until the pointer hovers over the
+  pad; on touch screens, which have no hover, it shows while the pad has focus. Pressing it
+  opens the chat drawer with the pad text prefilled as an editable message; nothing is sent
+  until the user sends it. Ruled by Ben 2026-09-04. The menu is the `jds` menu primitive with a
+  checkbox item, "Also keep a copy in my Notes folder", a "Copy all" item, a "Clear" item
+  (confirmed in a `jds` dialog first) and an "Open Settings" item.
 - Settings: a new "Scratchpad" section (`/settings?section=scratchpad`) with the same checkbox
   and its help text, and the keyboard shortcut field with a reset link, built from the existing
   settings-ui field and card primitives.
@@ -379,7 +384,7 @@ drawer's twin.
 | Sports  |                                                                        |
 | ...     |                                                                        |
 |         |                                  +----------------------------------+  |
-|         |                                  | (/) Scratchpad     Saved  ...  x |  |
+|         |                                  | (/) Scratchpad   Saved  ? ...  x |  |
 |         |                                  |----------------------------------|  |
 |         |                                  | # Errands                        |  |
 |         |                                  | - eggs                           |  |
@@ -389,7 +394,7 @@ drawer's twin.
 |         |                                  |                                  |  |
 |         |                                  |----------------------------------|  |
 |         |                                  | [-] [1.] [x] [<] [>] [B] [I]     |  |
-|         |                                  | 74 / 64,000               [Copy] |  |
+|         |                                  | 74 / 64,000                      |  |
 |         |                                  +----------------------------------+  |
 +----------------------------------------------------------------------------------+
 ```
@@ -397,19 +402,24 @@ drawer's twin.
 Panel is fixed, bottom 18px, right 18px, 340px wide, 420px tall, and can be dragged taller
 from its top edge (height remembered in the browser). Header uses the same mark / name /
 status layout as `.chatd__head`; the status word is "Saved", "Saving...", "Changed elsewhere"
-(with a Reload link) or "Not saved" in the error tone. The toolbar row is quiet icon buttons:
-bullet, numbered, checkbox, outdent, indent, bold, italic.
+(with a Reload link) or "Not saved" in the error tone. The "?" is the Ask Moss button: it is
+only drawn while the pointer is over the pad (or, on touch, while the pad has focus), so the
+header normally reads "(/) Scratchpad   Saved   ...  x". The toolbar row is quiet icon
+buttons: bullet, numbered, checkbox, outdent, indent, bold, italic.
 
 ### Pad menu open (three-dot button)
 
 ```
 +-----------------------------+
-| (/) Scratchpad  Saved ... x |
+| (/) Scratchpad  Saved ? ... x |
 |          +------------------------------------------+
 |          | [x] Also keep a copy in my Notes folder  |
 |          |     The app copy is the master. Edits    |
 |          |     made to the note file are replaced   |
 |          |     on the next save.                    |
+|          |------------------------------------------|
+|          | Copy all                                 |
+|          | Clear...                                 |
 |          |------------------------------------------|
 |          | Open Settings                            |
 |          +------------------------------------------+
@@ -417,7 +427,9 @@ bullet, numbered, checkbox, outdent, indent, bold, italic.
 ```
 
 When no notes folder is configured the checkbox is disabled and the help line reads
-"Set up a notes folder first" with a link to the Notes settings.
+"Set up a notes folder first" with a link to the Notes settings. "Clear..." opens a confirm
+dialog before emptying the pad. "Ask Moss about this" is not a menu item: it is the hover-only
+"?" button in the header (Ben, 2026-09-04).
 
 ### Settings, Scratchpad section
 

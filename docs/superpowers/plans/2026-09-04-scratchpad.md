@@ -313,14 +313,26 @@ Live proof: a short clip or two screenshots of a bulleted list being made with T
 
 Builds: the panel refreshes the store when a chat turn used `scratchpad.append` (listen to the same
 chat event the drawer already emits for completed tool calls, or refetch on drawer close if none
-exists; the builder checks and records which), the pad menu (`jds-menu`: "Ask Moss about this",
-"Copy all", "Clear", the latter confirmed with `jds-dialog`), and the manifest `features` entries.
+exists; the builder checks and records which), the pad menu (`jds-menu`: the Notes checkbox,
+"Copy all", "Clear" confirmed with `jds-dialog`, "Open Settings"), the "Ask Moss" button, and the
+manifest `features` entries.
+
+"Ask Moss" (Ben's ruling, 2026-09-04): a very small quiet `jds-icon-button` in the pad header
+showing only a question mark, title "Ask Moss about this". Hidden until the pointer hovers over the
+pad (`.scratch:hover .scratch__ask { opacity: 1 }`); on touch screens, which have no hover, it shows
+while the pad has focus (`.scratch:focus-within`). Pressing it opens the chat drawer with the pad
+text prefilled as an editable draft message; nothing is sent by the button. The shell already owns
+`chatOpen`, so the panel calls a shell callback `openChatWithDraft(text)`; the builder checks whether
+ChatDrawer accepts an initial draft and adds a prop if not.
 
 Tests:
 
 - e2e: after a mocked chat reply that reports a scratchpad append, the panel shows the new line
   without reload.
 - e2e: "Clear" asks first; cancel keeps the text; confirm sends PUT with empty body.
+- e2e: the "?" button is not visible until the pointer hovers the pad; hovering shows it; pressing
+  it opens the chat drawer with the pad text in the message box and no message sent (the mock chat
+  endpoint records zero sends). Fails if the button is always shown, or if it sends by itself.
 - Unit: manifest `features` cover every exit criterion in the spec (a test that lists them).
 
 Live proof: Moss appends from the chat drawer and the open pad updates.
@@ -355,9 +367,9 @@ with the same text.
    confirmation on overwrite (`packages/notes/src/manifest.ts:131`) and no helper exists to run a
    tool from a route. Recommendation: (a). Decision owner: Ben or the main session, before slice 5.
    Slices 1-4 do not depend on it.
-2. **Does "Ask Moss about this" open the chat drawer with the pad text quoted, or just open the
-   drawer?** Recommendation: open the drawer with a prefilled message "Here is my scratchpad: ..."
-   that the user can edit before sending. Owner: Ben. Slice 4.
+2. **Resolved (Ben, 2026-09-04).** "Ask Moss about this" is a hover-only question-mark button in
+   the pad header, not a menu item; it opens the chat drawer with the pad text prefilled as an
+   editable message and sends nothing itself. Folded into slice 4.
 3. **Migration number.** 0214 assumed; other lanes are merging today. The builder re-checks in
    slice 1 and renames before the first commit.
 
@@ -372,3 +384,6 @@ with the same text.
 - 2026-09-04 Ben: app storage, with an optional checkbox to mirror to a Scratchpad note in the
   Notes folder.
 - 2026-09-04 Ben: "cool, specs approved, lets get those started".
+- 2026-09-04 Ben: Ask Moss is a tiny hover-only "?" button (focus-shown on touch), opens chat with
+  the pad text as an editable draft, never sends by itself; the menu keeps Copy all, Clear and the
+  Notes checkbox.
