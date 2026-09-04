@@ -183,7 +183,14 @@ export async function generateStructured(
         continue;
       }
       deps.logger?.warn(
-        { service: input.service, name: error instanceof Error ? error.name : "UnknownError" },
+        {
+          service: input.service,
+          name: error instanceof Error ? error.name : "UnknownError",
+          // #2229: the error name alone ("CliChatUnavailableError") hid why a source preview kept
+          // failing. The message is already redacted (see #981 credential handling above this
+          // catch), so it is safe to log alongside the name.
+          message: error instanceof Error ? error.message : undefined
+        },
         "ai.structured provider error"
       );
       return { ok: false, error: "provider_error" };
