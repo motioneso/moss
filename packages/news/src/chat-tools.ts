@@ -144,6 +144,8 @@ function describeResolutionFailure(result: SourceResolutionResult): string {
     switch (result.reason) {
       case "policy":
         return "That publisher is not allowed by content policy.";
+      case "redirected":
+        return "That address redirects to a different site; try the address it sends you to.";
       case "invalid_input":
         return "That doesn't look like a news publisher URL or name.";
       case "not_https":

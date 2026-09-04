@@ -176,7 +176,7 @@ describe("resolveSourceInput", () => {
         { fetch: homepageRedirect, search: noSearch, ai: ai(), repo: repo() },
         { raw: "https://one.example/article", hasWebSearch: false }
       )
-    ).resolves.toMatchObject({ status: "rejected", reason: "policy" });
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
 
     const feedRedirect = vi.fn<NewsSafeFetchPort>(async (url) => ({
       ok: true as const,
@@ -318,7 +318,7 @@ describe("resolveSourceInput", () => {
         { fetch: redirectsToMetadataService, search: noSearch, ai: ai(), repo: repo() },
         { raw: "https://publisher.example", hasWebSearch: false }
       )
-    ).resolves.toMatchObject({ status: "rejected", reason: "policy" });
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
   });
 
   // #1265 ALSO-1: same-host mutations that samePublisherIdentity can't catch on its own — the
@@ -354,7 +354,7 @@ describe("resolveSourceInput", () => {
           { raw: "https://publisher.example", hasWebSearch: false }
         ),
         `finalUrl=${finalUrl}`
-      ).resolves.toMatchObject({ status: "rejected", reason: "policy" });
+      ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
     }
   });
 });

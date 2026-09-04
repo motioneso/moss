@@ -18,7 +18,11 @@ import type { VerifiedSourceCandidate } from "./preview-store.js";
 export type SourceResolutionResult =
   | { status: "ok"; candidates: [VerifiedSourceCandidate] }
   | { status: "ambiguous"; candidates: VerifiedSourceCandidate[] }
-  | { status: "rejected"; reason: "policy" | "invalid_input" | "unreachable" | "not_https" }
+  | {
+      status: "rejected";
+      /** `redirected`: the address led to a different site (not a policy call). */
+      reason: "policy" | "redirected" | "invalid_input" | "unreachable" | "not_https";
+    }
   | { status: "unavailable" };
 
 type ResolutionRepo = Pick<
@@ -75,16 +79,22 @@ function samePublisherIdentity(left: string, right: string): boolean {
   );
 }
 
-function acceptedFinalDomain(
+/**
+ * Why the fetched address cannot stand in for the requested publisher, or null when it can.
+ * An excluded final domain is a policy call; landing on another site is just a redirect, and
+ * the user should be told that rather than blamed for a policy breach (Ben, 2026-09-04).
+ */
+function finalDomainRejection(
   finalUrl: string,
   expectedDomain: string,
   exclusions: readonly string[]
-): string | null {
+): "policy" | "redirected" | null {
   const normalized = normalizePublisherDomain(finalUrl);
-  if (!normalized.ok || !samePublisherIdentity(expectedDomain, normalized.domain)) return null;
-  return exclusions.some((excluded) => publisherDomainMatches(excluded, normalized.domain))
-    ? null
-    : normalized.domain;
+  if (!normalized.ok) return "redirected";
+  if (exclusions.some((excluded) => publisherDomainMatches(excluded, normalized.domain))) {
+    return "policy";
+  }
+  return samePublisherIdentity(expectedDomain, normalized.domain) ? null : "redirected";
 }
 
 export async function resolveSourceInput(
@@ -166,8 +176,13 @@ async function verifyPublisher(
     return { status: "failed", result: { status: "rejected", reason: "unreachable" } };
   }
   const fetchedUrl = new URL(fetched.finalUrl);
-  if (!acceptedFinalDomain(fetched.finalUrl, requestedDomain.domain, exclusions)) {
-    return { status: "failed", result: { status: "rejected", reason: "policy" } };
+  const fetchedRejection = finalDomainRejection(
+    fetched.finalUrl,
+    requestedDomain.domain,
+    exclusions
+  );
+  if (fetchedRejection) {
+    return { status: "failed", result: { status: "rejected", reason: fetchedRejection } };
   }
   let homepageUrl = new URL("/", fetchedUrl).toString();
   let homepageBody = fetched.body;
@@ -187,10 +202,10 @@ async function verifyPublisher(
       }
     }
     const canonical = normalizePublisherDomain(homepageUrl);
-    if (
-      !canonical.ok ||
-      exclusions.some((domain) => publisherDomainMatches(domain, canonical.domain))
-    ) {
+    if (!canonical.ok) {
+      return { status: "failed", result: { status: "rejected", reason: "redirected" } };
+    }
+    if (exclusions.some((domain) => publisherDomainMatches(domain, canonical.domain))) {
       return { status: "failed", result: { status: "rejected", reason: "policy" } };
     }
     if (fetchedUrl.toString() !== homepageUrl) {
@@ -199,11 +214,11 @@ async function verifyPublisher(
         return { status: "failed", result: { status: "rejected", reason: "unreachable" } };
       }
       const expectedHomepage = normalizePublisherDomain(homepageUrl);
-      if (
-        !expectedHomepage.ok ||
-        !acceptedFinalDomain(homepage.finalUrl, expectedHomepage.domain, exclusions)
-      ) {
-        return { status: "failed", result: { status: "rejected", reason: "policy" } };
+      const homepageRejection = expectedHomepage.ok
+        ? finalDomainRejection(homepage.finalUrl, expectedHomepage.domain, exclusions)
+        : "redirected";
+      if (homepageRejection) {
+        return { status: "failed", result: { status: "rejected", reason: homepageRejection } };
       }
       homepageUrl = new URL("/", homepage.finalUrl).toString();
       homepageBody = homepage.body;
@@ -214,7 +229,7 @@ async function verifyPublisher(
       const expectedFeed = normalizePublisherDomain(homepageUrl);
       if (
         !expectedFeed.ok ||
-        !acceptedFinalDomain(feedResponse.finalUrl, expectedFeed.domain, exclusions)
+        finalDomainRejection(feedResponse.finalUrl, expectedFeed.domain, exclusions)
       ) {
         continue;
       }
