@@ -124,7 +124,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "connected",
     label: "Connected accounts",
-    description: "Connect external accounts and review their status.",
+    description:
+      "Connect external accounts and review their status. Add an email account by typing its address; Yahoo Mail, Proton Mail, iCloud and Fastmail addresses are recognised and get their mail server settings and app-password instructions filled in, other addresses choose the mail service by hand.",
     path: "/settings?section=connected",
     scope: "user"
   },

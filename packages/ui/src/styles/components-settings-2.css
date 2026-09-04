@@ -552,7 +552,8 @@
 .onb-cred__in .ic {
   color: var(--text-faint);
 }
-.onb-cred__in input {
+.onb-cred__in input,
+.onb-cred__in select {
   border: 0;
   background: transparent;
   outline: none;
