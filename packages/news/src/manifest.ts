@@ -485,6 +485,13 @@ export const newsModuleManifest = {
   ],
   features: [
     {
+      id: "news.story_pictures",
+      description:
+        "Show a picture with a story. If a publisher's feed doesn't name one (such as NPR), News " +
+        "looks in the story's own text instead. The address must be on that publisher's approved " +
+        "list, and a tracking image is never shown as story art."
+    },
+    {
       id: "news.add_source",
       description: "Find a publisher by URL or name and add it to personalized News.",
       requires: newsAddSourceRequirement,
