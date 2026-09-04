@@ -132,6 +132,11 @@ export interface AiProviderDiscoveredModelDto {
   readonly displayName: string;
   readonly capabilities: readonly AiModelCapability[];
   readonly tier: AiModelTier;
+  /**
+   * The model's release date (ISO 8601) when the provider's list carries one (Anthropic
+   * `created_at`, OpenAI-compatible `created`). The tier ladder prefers the newest release.
+   */
+  readonly releasedAt?: string | null;
 }
 
 /**
@@ -141,7 +146,11 @@ export interface AiProviderDiscoveredModelDto {
  */
 export type AiCliModelListFailure = "unsupported" | "not_logged_in" | "error";
 export type AiCliModelListResult =
-  | { readonly status: "ok"; readonly models: readonly { readonly id: string }[] }
+  | {
+      readonly status: "ok";
+      /** `releasedAt`: ISO 8601 release date when the vendor's list carries one (0214). */
+      readonly models: readonly { readonly id: string; readonly releasedAt?: string | null }[];
+    }
   | { readonly status: AiCliModelListFailure; readonly message?: string };
 
 export interface AiDiscoverModelsItemDto extends AiProviderDiscoveredModelDto {

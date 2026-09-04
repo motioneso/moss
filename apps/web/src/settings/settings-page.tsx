@@ -398,9 +398,17 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const Pane = activeSection.Pane;
 
   const setActiveSection = (id: PersonalSectionId | AdminSectionId) => {
-    const next = adminMode
-      ? coerceSettingsSectionId(ADMIN_SECTIONS, id)
-      : coerceSettingsSectionId(PERSONAL_SECTIONS, id);
+    // A link from a personal pane may target an admin section (Chat settings' "Set up" points at
+    // AI providers). Resolve across both lists so the URL carries the real id and the mode follows
+    // it; coercing against the current mode's list silently landed on its first entry.
+    const personal = PERSONAL_SECTIONS.find((section) => section.id === id)?.id;
+    const admin = isAdmin ? ADMIN_SECTIONS.find((section) => section.id === id)?.id : undefined;
+    const next =
+      personal ??
+      admin ??
+      (adminMode
+        ? coerceSettingsSectionId(ADMIN_SECTIONS, id)
+        : coerceSettingsSectionId(PERSONAL_SECTIONS, id));
     setSearchParams({ section: next });
   };
 
