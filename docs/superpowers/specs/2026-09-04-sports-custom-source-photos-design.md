@@ -53,8 +53,9 @@ that fetches the image, checks its bytes, and caches it. Photos need the same tr
 - When the deterministic pass finds nothing usable for a source, the owner can ask Moss to
   inspect the source and propose a per-source photo recipe. The proposal is verified on the
   server, shown as a preview with real sample photos, and only saved when the owner accepts it.
-- Photos are served through a host-checked, size-capped, cached proxy so the browser never
-  loads from an arbitrary host and the publisher is never hotlinked on every page view.
+- Moss keeps its own resized copy of each story photo on the box, in the owner's vault, and
+  serves that copy. The browser never loads from the publisher, and the publisher is fetched
+  once per photo, not once per page view. Ben's ruling, 2026-09-04.
 - The owner can see per source, in Sports settings, whether photos are working and what to do
   when they are not.
 - Moss can explain all of this and run the propose, preview, and accept steps from chat.
@@ -62,9 +63,11 @@ that fetches the image, checks its bytes, and caches it. Photos need the same tr
 ## Non-Goals
 
 - No change to how ESPN stories get their photos.
-- No image storage on disk or in the database. The cache is in memory and bounded, exactly like
-  the icon cache. A photo that falls out of the cache is fetched again.
-- No image editing, cropping, or re-encoding beyond what the browser does with object-fit.
+- No original-size copies. Moss stores one resized copy per photo and nothing else; if a larger
+  rendition is ever wanted it is fetched and resized again.
+- No photo bytes in the database. The database holds the path key and metadata only.
+- No cropping or editing. The stored copy is scaled down to fit, never cropped; the hero crops
+  with object-fit at display time as it does today.
 - No photo for a story whose source has no verified way to get one. The blank warm block stays
   as the fallback; it is the existing designed empty state.
 - No model-driven changes to how a source's headlines are read. A photo recipe only adds a
@@ -127,22 +130,60 @@ WebP, or GIF magic bytes, be at most 2 MB, and decode to at least 300 by 200 pix
 header alone. A failed bytes check is cached as a miss so the browser is not sent back to the
 same broken image, and the story is shown without a photo.
 
-### 4. Serving the photo
+### 4. Storing and serving the photo
 
-A new route, `GET /api/sports/headlines/:headlineId/photo`, mirrors the source icon route.
+Moss keeps a resized copy of every story photo it shows and serves that copy. It never hotlinks
+the publisher and never serves the publisher's bytes straight through. Ben ruled this on
+2026-09-04.
 
-- It looks up the story in the owner's current headline cache under RLS, so the photo URL that
-  gets fetched is one the server chose, never one from the browser.
-- It fetches through the safe-fetch layer with the allowlist from decision 3, a 2 MB cap and a
-  5 second timeout, checks the bytes, and returns the image with a long browser cache header.
-- An in-memory cache holds fetched photos: 96 entries or 48 MB, whichever fills first, hits
-  kept for 24 hours and misses for 1 hour. Photos are larger than icons so the entry cap is
-  lower and the byte cap higher.
-- The story DTO's photo field becomes that proxy path rather than the publisher URL. ESPN
-  stories keep their direct CDN URLs, which the browser is already allowed to load.
+**The stored copy.** When a candidate passes the checks in decision 3, the server downloads it
+once through the safe-fetch layer with a 2 MB cap and a 5 second timeout, checks the bytes, and
+writes one rendition:
 
-The publisher's server sees at most one fetch per photo per cache lifetime from Moss, never
-one per page view, and never a request with the user's cookies or identity.
+- scaled down to fit inside 1280 by 720 pixels, never scaled up, aspect ratio kept, no crop
+- encoded as WebP at quality 80, which keeps a typical hero photo under 150 KB
+- animated GIFs are flattened to their first frame
+- the resize is done with the `sharp` library, added as a direct dependency of the sports
+  package; it is already present in the lockfile as a dependency of the embeddings library, so
+  no new native build is introduced
+
+**Where it lives.** Copies go in the owner's vault through `VaultContext`, the same way chat
+attachments do, never through raw file access:
+
+```
+<vault root for the owner>/sports/photos/<photo key>.webp
+<vault root for the owner>/sports/photos/<photo key>.json
+```
+
+The photo key is a hash of the source id and the publisher's photo URL, so two stories sharing
+one photo share one copy and a photo URL from another owner's source never collides. The
+sidecar JSON records the source id, the publisher URL, the fetched-at time, the last-served
+time, the stored width and height, and the byte size. Files are written with the vault's
+owner-only permissions, so a copy is readable by its owner's requests only. There is no
+existing media store in the codebase to reuse; the chat attachments layout is the precedent.
+
+**Retention and eviction.** A copy is kept while its story is still in the owner's headline
+cache and for 14 days after it was last served, whichever is longer. A sweep runs at the end of
+each source refresh for that owner and removes copies past their retention. Each owner's photo
+folder is also capped at 200 copies or 40 MB; when either cap is hit the sweep removes the
+least recently served first. Removing a source removes its copies in the same request. Deleting
+the owner's account removes the vault root, which takes the photos with it, exactly as it does
+for attachments.
+
+**Serving.** A new route, `GET /api/sports/headlines/:headlineId/photo`, resolves the story in
+the owner's headline cache under RLS, opens the copy through `VaultContext` for that owner,
+touches its last-served time, and returns it with a long browser cache header and a content
+hash as the entity tag. A story whose copy is missing is served a 404 and queued for re-fetch
+on the next refresh. The story DTO's photo field becomes that route's path. ESPN stories keep
+their direct CDN URLs, which the browser is already allowed to load; they are outside this
+spec.
+
+A small in-memory cache in front of the route holds the last 32 served files or 16 MB so a busy
+Sports page does not reread the disk for every visitor of the same owner. That cache is a
+convenience only; the vault copy is the record.
+
+The publisher's server sees one fetch per photo from Moss for as long as the copy is kept,
+never one per page view, and never a request with the user's cookies or identity.
 
 ### 5. The photo recipe
 
@@ -224,13 +265,14 @@ The two model-related strings are:
 1. "Finding photos needs a configured chat model." through the existing prerequisite gate.
 2. "Moss could not find a reliable photo on this source."
 
-### 8. Attribution and hotlinking
+### 8. Attribution and the stored copy
 
 The photo is the publisher's. Moss already shows the publisher label and links every story to
 its article, which is the attribution the share-image convention expects; publishers put the
-image in og:image so that link previews show it. The proxy fetches each photo once per cache
-lifetime with a plain user agent, so the publisher is not hotlinked per view. Moss stores no
-photo bytes durably and never crops out a watermark or caption.
+image in og:image so that link previews show it. Moss fetches each photo once with a plain user
+agent and keeps a reduced private copy for the owner's own reading, the same footing as a
+browser cache or a feed reader's thumbnail. The copy is never cropped, never shown outside the
+owner's account, never exported, and is removed on the schedule in decision 4.
 
 A photo recipe can only point at the publisher's own pages and hosts, so Moss never pulls
 photos from a third-party site the owner did not add.
@@ -261,16 +303,20 @@ photo URL or null. The story type's photo field changes from always-null to null
 
 The ESPN reader is untouched.
 
-### Photo proxy route
+### Photo store and route
 
-`source/photo-route.ts` mirrors `source/icon-route.ts`: same dependency shape, same safe-fetch
-port, its own cache limits from decision 4, and a bytes check that reads image dimensions from
-the JPEG, PNG, WebP, and GIF headers. It resolves the headline id against the owner's cached
-headlines through the existing data context, so an id from another user resolves to nothing.
+`source/photo-store.ts` owns the vault copy: download through the safe-fetch port, bytes check,
+resize with `sharp` to the rendition in decision 4, write of the WebP and its sidecar through
+`VaultContext`, the retention sweep, and per-source removal. It takes a `VaultContextRunner`
+exactly as the chat attachments service does and never touches the filesystem outside it.
 
-Composition in the sports module wiring registers the route and passes the same safe-fetch
-port the icon route uses, with the module's built-in image host list plus the source's own host
-allowlist.
+`source/photo-route.ts` mirrors `source/icon-route.ts` for its dependency shape and access
+resolution: it resolves the headline id against the owner's cached headlines through the data
+context, so an id from another user resolves to nothing, then reads the copy from the store.
+
+Composition in the sports module wiring registers the route and passes the same safe-fetch port
+the icon route uses, with the module's built-in image host list plus the source's own host
+allowlist, and the vault runner already available to the composition root.
 
 ### Recipe proposal and verification
 
@@ -317,7 +363,7 @@ Additions to `packages/shared/src/sports-sources-api.ts`:
   returns the updated source DTO.
 - `DELETE /api/sports/sources/:id/photos` removes an accepted recipe and resets status to
   `none`.
-- `GET /api/sports/headlines/:headlineId/photo` returns image bytes or 404.
+- `GET /api/sports/headlines/:headlineId/photo` returns the owner's stored WebP copy or 404.
 
 All four are declared in the manifest's routes with the `sports.sources` permission for the
 three recipe routes and `sports.view` for the photo route. The story DTO's `imageUrl` field is
@@ -401,8 +447,13 @@ the story has one. The empty warm block remains the empty state.
 - Unit tests for the image header reader across the four formats plus a truncated body.
 - Reader tests proving the fetch budget: 6 page fetches per source, 2 per host in flight, no
   fetch when the deadline is near, and headline output unaffected by a failed photo fetch.
-- Route tests for the proxy: another user's headline id is a 404, an allowlist miss is a 404,
-  an oversized body is cached as a miss, and a hit returns the browser cache header.
+- Store tests with a temporary vault root: a 2000 by 1500 JPEG lands as a 1280 by 960 WebP,
+  a 640 by 480 PNG is not scaled up, an animated GIF is flattened, an oversized body is
+  recorded as a miss with no file written, two stories with one photo URL share one file, the
+  sweep removes copies past 14 days and trims to the caps by last-served time, and removing a
+  source removes its copies.
+- Route tests: another user's headline id is a 404, a missing copy is a 404, and a hit returns
+  the browser cache header and entity tag.
 - Recipe tests: shape validation rejects long selectors, pseudo-elements, unlisted attributes,
   and hosts outside the allowlist; verify requires two of three; the model's raw object is never
   written to the row; accept with a stale or foreign handle fails.
@@ -417,8 +468,10 @@ the story has one. The empty warm block remains the empty state.
 - A story from a feed source with a media tag, a scraped source with an og:image, and a
   subreddit post linking to an article page all show the publisher's photo in the hero, the
   Today news band, and the story list thumbnail on a live dev instance.
-- No photo is ever loaded in the browser from a host outside the module's image allowlist plus
-  the source's own host allowlist; every custom-source photo goes through the proxy.
+- No custom-source photo is ever loaded in the browser from the publisher; every one is served
+  from the owner's vault copy, which is at most 1280 by 720 WebP.
+- The vault copy is readable only through the owner's requests, is removed with its source,
+  and the per-owner folder never exceeds the retention rule and caps in decision 4.
 - A refresh with every photo fetch failing still delivers headlines within the existing
   deadline.
 - Find photos on a source with no usable photo produces a server-verified preview with real
@@ -434,7 +487,10 @@ the story has one. The empty warm block remains the empty state.
 ## Hard Invariants honored
 
 - **Private by default.** Recipes, statuses, and counters live on owner-only rows under FORCE
-  RLS. The photo route resolves headline ids inside the owner's data context.
+  RLS. The photo route resolves headline ids inside the owner's data context, and the stored
+  copies live in that owner's vault with owner-only permissions.
+- **Vault I/O goes through VaultContext.** The photo store takes the vault runner and never
+  uses raw file access.
 - **Secrets never escape.** The proposal prompt carries a host and public page text only. No
   credentials, preferences, other sources, or user identity. Logs record hosts and reason codes,
   not page bodies.
@@ -454,10 +510,11 @@ the story has one. The empty warm block remains the empty state.
 
 Each slice fits one agent session and lands on the same branch and PR.
 
-1. **Deterministic extraction and the proxy.** `source/photo.ts` with the feed and share-image
-   parsers and candidate rules, the reader changes, the photo route with its cache and header
-   reader, composition wiring, unit and route tests. After this slice custom-source stories
-   with media tags or share images show photos end to end. No schema change.
+1. **Deterministic extraction, the vault copy, and the route.** `source/photo.ts` with the
+   feed and share-image parsers and candidate rules, the reader changes, the photo store with
+   its resize, sidecar, sweep and removal, the route, composition wiring, the `sharp`
+   dependency, unit, store and route tests. After this slice custom-source stories with media
+   tags or share images show photos end to end from the owner's vault. No schema change.
 2. **Storage, status, and settings row.** The migration, repository methods, `photoStatus` in
    the DTO and list tool, drift counting in the refresh, the status text on the row, and the
    manifest feature entry. No model yet.
@@ -476,5 +533,6 @@ Each slice fits one agent session and lands on the same branch and PR.
   publisher cannot slow headlines.
 - The proxy's allowlist is the union of built-in image hosts and the source's saved hosts, so a
   recipe cannot widen where photos come from.
-- No News change, no shared image service, and no storage of image bytes were added to fill a
-  gap outside the note.
+- The stored copy is bounded in three ways at once: dimensions, per-owner count and bytes, and
+  age since last served. Nothing accumulates without a sweep.
+- No News change and no shared image service were added to fill a gap outside the note.
