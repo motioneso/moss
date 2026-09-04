@@ -375,10 +375,6 @@ function ChatModel() {
               desc={`${defaultModel.providerDisplayName} · ${defaultModel.providerModelId} — Managed by admin.`}
             />
           )}
-          <Note>
-            Providers, credentials and which model handles each kind of work live in{" "}
-            <b>Admin → Assistant &amp; AI</b>. A transcription model enables the microphone in chat.
-          </Note>
         </>
       ) : (
         <div className="ai-empty">
