@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Note } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
@@ -10,7 +10,7 @@ import type {
   SportsSourceAssignmentTarget,
   TeamRef
 } from "@moss/shared";
-import { Check, CircleAlert, Plus } from "lucide-react";
+import { Check, CircleAlert, Newspaper, Plus } from "lucide-react";
 
 import {
   confirmSportsSourceAssignments,
@@ -53,6 +53,23 @@ const HEALTH_BADGE: Record<
   auth_required: { tone: "red", label: "Needs login" },
   disabled: { tone: "neutral", label: "Disabled" }
 };
+
+/* ESPN's own mark, served from a host the module already allows in the web CSP img-src.
+   Publisher favicons for custom sources would need a server-side fetch (arbitrary hosts are
+   blocked by the CSP in production), so custom rows carry a neutral newspaper glyph. */
+const ESPN_LOGO_URL = "https://a.espncdn.com/i/espn/espn_logos/espn_red.png";
+
+function SourceIcon(props: { logoUrl?: string | null }) {
+  return (
+    <span className="sp-src__item-icon" aria-hidden="true">
+      {props.logoUrl ? (
+        <img src={props.logoUrl} alt="" aria-hidden="true" width={24} height={24} />
+      ) : (
+        <Newspaper size={16} />
+      )}
+    </span>
+  );
+}
 
 function SourceError(props: { children: string }) {
   return (
@@ -111,6 +128,14 @@ export function AddSourceFlow(props: {
   const [exactTargetUrls, setExactTargetUrls] = useState<Map<string, string>>(new Map());
   const [authorizationAccepted, setAuthorizationAccepted] = useState(false);
   const [added, setAdded] = useState(false);
+  // The preview card lands below the fold once coverage is picked; bring it into view when it
+  // appears (Ben, 2026-09-03).
+  const candidateRef = useRef<HTMLDivElement | null>(null);
+  const showCandidate = preview?.status === "ok" && Boolean(preview.candidate);
+  useEffect(() => {
+    if (showCandidate)
+      candidateRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }, [showCandidate]);
 
   const invalidate = () =>
     void queryClient.invalidateQueries({ queryKey: sportsQueryKeys.sources });
@@ -284,11 +309,21 @@ export function AddSourceFlow(props: {
       {errorMessage ? <SourceError>{errorMessage}</SourceError> : null}
 
       {preview?.status === "ok" && preview.candidate ? (
-        <div className="sp-src__candidate jds-card jds-card--sunken jds-card--pad-lg">
+        <div
+          ref={candidateRef}
+          className="sp-src__candidate jds-card jds-card--sunken jds-card--pad-lg"
+        >
           {preview.duplicateOfSourceId ? (
-            <Note>That publication is already one of your custom sources.</Note>
+            <p className="sp-src__dupe" role="status">
+              <CircleAlert size={16} aria-hidden="true" />
+              <span>
+                <b>Already added.</b> {preview.candidate.label} is one of your custom sources, so
+                there is nothing to add. Edit its coverage in the list above instead.
+              </span>
+            </p>
           ) : null}
           <div className="sp-src__candidate-head">
+            <SourceIcon />
             <p className="sp-src__candidate-label">{preview.candidate.label}</p>
             <span className="jds-badge jds-badge--neutral jds-badge--pill">Preview</span>
           </div>
@@ -319,22 +354,8 @@ export function AddSourceFlow(props: {
               </ul>
             </div>
           ) : null}
-          {preview.candidate.targets
-            .filter((target) => target.sampleHeadlines.length > 0)
-            .map((target) => (
-              <div
-                key={`samples-${sportsSourceTargetKey(target.target)}`}
-                className="sp-src__candidate-block"
-              >
-                <p className="jds-eyebrow">{target.label}</p>
-                <ul className="sp-src__candidate-list">
-                  {target.sampleHeadlines.map((headline) => (
-                    <li key={headline}>{headline}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          {preview.authorizationAcknowledgement ? (
+          {/* Per-coverage sample headlines duplicated the block above; dropped (Ben, 2026-09-03). */}
+          {preview.authorizationAcknowledgement && !preview.duplicateOfSourceId ? (
             <label className="jds-check sp-src__check">
               <input
                 type="checkbox"
@@ -349,15 +370,13 @@ export function AddSourceFlow(props: {
             </label>
           ) : null}
           <div className="sp-src__addrow">
-            <Button
-              size="sm"
-              disabled={busy || !authorizationAccepted || Boolean(preview.duplicateOfSourceId)}
-              onClick={confirm}
-            >
-              {confirmMutation.isPending ? "Adding…" : "Add this source"}
-            </Button>
+            {preview.duplicateOfSourceId ? null : (
+              <Button size="sm" disabled={busy || !authorizationAccepted} onClick={confirm}>
+                {confirmMutation.isPending ? "Adding…" : "Add this source"}
+              </Button>
+            )}
             <Button variant="secondary" size="sm" disabled={busy} onClick={reset}>
-              Cancel
+              {preview.duplicateOfSourceId ? "Close" : "Cancel"}
             </Button>
           </div>
         </div>
@@ -508,6 +527,7 @@ export function SportsSourcesSection(props: {
             <li className="sp-src__item">
               <div className="sp-src__item-row">
                 <div className="sp-src__identity">
+                  <SourceIcon logoUrl={ESPN_LOGO_URL} />
                   <span className="sp-src__item-label">{espn.label}</span>
                   <Badge tone="steel">Built-in</Badge>
                 </div>
@@ -598,6 +618,7 @@ export function SportsSourcesSection(props: {
               <li key={source.id} className="sp-src__item">
                 <div className="sp-src__item-row">
                   <div className="sp-src__identity">
+                    <SourceIcon />
                     <span className="sp-src__item-label">{source.label}</span>
                     {badge ? <Badge tone={badge.tone}>{badge.label}</Badge> : null}
                   </div>

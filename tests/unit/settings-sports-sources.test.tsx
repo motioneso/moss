@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CompetitionRef, SportsFollowDto, TeamRef } from "@moss/shared";
 
 import { SourceAssignmentPicker } from "../../packages/sports/src/settings/source-assignment-picker.js";
-import { SportsSourcesSection } from "../../packages/sports/src/settings/sources.js";
+import { AddSourceFlow, SportsSourcesSection } from "../../packages/sports/src/settings/sources.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
 const NFL: CompetitionRef = {
@@ -365,5 +365,93 @@ describe("Sports source coverage settings", () => {
     expect(text).toContain("All NFL");
     expect(text).toContain("Soccer");
     expect(text).not.toContain(fotmobFeedUrl);
+  });
+});
+
+describe("Sports add-source preview card", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function previewWith(overrides: Record<string, unknown>) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              status: "ok",
+              confirmationId: "confirmation-1",
+              authorizationAcknowledgement: "I confirm this public source.",
+              candidate: {
+                label: "FotMob",
+                canonicalDomain: "fotmob.com",
+                homepageUrl: "https://fotmob.com/",
+                retrievalMethod: "feed",
+                sampleCount: 1,
+                confirmedFetchHosts: ["fotmob.com"],
+                sampleHeadlines: ["Shared headline"],
+                targets: [
+                  {
+                    target: { kind: "sport", sportKey: "soccer" },
+                    label: "Soccer",
+                    scope: "sport",
+                    targetUrl: fotmobFeedUrl,
+                    sampleHeadlines: ["Per-coverage headline"]
+                  }
+                ]
+              },
+              ...overrides
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          )
+      )
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(AddSourceFlow, {
+            follows: FOLLOWS,
+            competitionsByKey: COMPETITIONS,
+            teamsByCompetition: TEAMS
+          })
+        )
+      );
+    });
+    const input = renderer.root
+      .findAllByType("input")
+      .find((candidate) => candidate.props.id === "sp-addsource-input");
+    act(() => input?.props.onChange({ target: { value: "fotmob.com" } }));
+    const form = renderer.root.findByType("form");
+    await act(async () => form.props.onSubmit({ preventDefault() {} }));
+    return renderer;
+  }
+
+  it("shows sample headlines once, without the per-coverage repeats", async () => {
+    const renderer = await previewWith({});
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Shared headline");
+    expect(text).not.toContain("Per-coverage headline");
+    expect(text).toContain("I confirm this public source.");
+    expect(
+      renderer.root
+        .findAllByType("button")
+        .some((button) => renderedText(button.props.children) === "Add this source")
+    ).toBe(true);
+  });
+
+  it("makes a duplicate publication obvious and hides the add controls", async () => {
+    const renderer = await previewWith({ duplicateOfSourceId: fotmobSourceId });
+    const notice = renderer.root.findAllByProps({ role: "status" })[0];
+    expect(notice?.props.className).toBe("sp-src__dupe");
+    expect(renderedText(notice)).toContain("Already added");
+    const buttons = renderer.root
+      .findAllByType("button")
+      .map((b) => renderedText(b.props.children));
+    expect(buttons).not.toContain("Add this source");
+    expect(buttons).toContain("Close");
+    expect(renderedText(renderer.toJSON())).not.toContain("I confirm this public source.");
   });
 });
