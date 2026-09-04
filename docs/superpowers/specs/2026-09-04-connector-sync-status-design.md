@@ -12,6 +12,33 @@
 settings pane in `apps/web/src/settings/settings-personal-data-panes.tsx`, and the health
 mapping in `apps/web/src/settings/settings-connector-sync.ts`.
 
+## What you will get
+
+A one-minute check that this is what was asked for. Each line is a thing a user can do or see.
+
+1. As a user, I can open Connected accounts and see, for each account, when it last synced and
+   whether that run worked, without reading a code.
+2. As a user, I can see what came in on the last run by kind (for example "23 calendar events,
+   148 emails") and a link to where each kind shows up in the app.
+3. As a user, I can see what failed on the last run in plain words, with the likely reason and
+   what to do about it.
+4. As a user, I can see the run before the last one, so I notice when things got worse.
+5. As a user, I can see when the next sync is due, or "Not scheduled" when there is none.
+6. As a user, I can press Sync now on any account, Google or a mail server, and watch the row
+   update until it finishes.
+7. As a user, I can tell the difference between "a sync is running", "a sync is queued but the
+   background worker has not picked it up", and "nothing has run yet".
+8. As a user, I only see a warning outside Settings when something I use has stopped working,
+   and it names the thing: "Cannot create tasks from email", not "sync failed".
+9. As a user, that warning tells me why and links me to the screen where I can fix it.
+10. As a user, I can ask Moss "is my mail up to date?" or "why is my calendar stale?" and get
+    the same facts and the same sentences the settings screen shows.
+11. As a user, I can ask Moss to sync an account now and it does, without a confirmation prompt.
+12. As a user, I never see an email subject, a sender, an event title, or a login secret in any
+    status message or Moss answer about sync.
+13. As a user, when I add a new kind of account later, the same status row works for it without a
+    new screen.
+
 ## Context
 
 Every connected account (Google, IMAP) is synced by a background job. Google runs every 15
