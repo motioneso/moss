@@ -223,7 +223,7 @@ export interface EmailExtractDeps {
 }
 
 export interface EmailExtractOptions {
-  /** Per-LLM-call timeout in ms (bounds sync latency; default from env, then 20s). */
+  /** Per-LLM-call timeout in ms (bounds sync latency; default from env, then DEFAULT_EMAIL_LLM_TIMEOUT_MS). */
   readonly callTimeoutMs?: number;
   /** Metadata-only telemetry factory; the worker supplies job and batch attribution. */
   readonly telemetry?: (batchIndex: number, batchSize: number) => StructuredTelemetry;
@@ -234,6 +234,14 @@ export interface EmailExtractOptions {
 
 export const EMAIL_EXTRACT_BATCH_MAX_ITEMS = 48;
 export const EMAIL_EXTRACT_BATCH_MAX_PROMPT_BYTES = 48_000;
+
+/**
+ * Default per-call budget (ms) when `JARVIS_EMAIL_LLM_TIMEOUT_MS` is unset. The one-shot engine
+ * that now serves every structured email-extraction call (review B4) can take longer than 20
+ * seconds to start a fresh process and answer, so a 20-second budget timed out every batch. 120
+ * seconds gives that engine room to start and reply under normal load.
+ */
+export const DEFAULT_EMAIL_LLM_TIMEOUT_MS = 120_000;
 
 /** Reject a chat call that exceeds the budget so one slow model can't stall the whole sync. */
 async function withTimeout<T>(
@@ -625,7 +633,10 @@ export async function extractEmailSignalsBatch(
 ): Promise<EmailExtractResult[]> {
   const timeoutMs =
     options.callTimeoutMs ??
-    Number(resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ?? "20000");
+    Number(
+      resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ??
+        String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
+    );
   const extracted: EmailExtractResult[] = [];
 
   for (const [batchIndex, batch] of partitionEmailExtractionBatches(messages).entries()) {
@@ -708,7 +719,10 @@ export async function extractEmailSignals(
 ): Promise<EmailExtractResult> {
   const timeoutMs =
     options.callTimeoutMs ??
-    Number(resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ?? "20000");
+    Number(
+      resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ??
+        String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
+    );
 
   const prompt = buildPrompt(parsed);
   let result: EmailExtractResult;
