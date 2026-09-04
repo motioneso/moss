@@ -703,13 +703,18 @@ const newsHostRateLimiter = createHostRateLimiter();
 
 function buildNewsDiscoveryPorts(
   logger?: Pick<FastifyBaseLogger, "info" | "warn">,
-  engineFactory?: ChatEngineFactory
+  // #2229: takes the already-built adapter, not a raw engine factory. The route path must pass
+  // deps.createCliStructuredAdapter (built from structuredChatEngineFactory, which resolves
+  // correctly on both the socket and in-process paths) rather than building a new adapter from
+  // deps.chatEngineFactory — that raw late-bound bridge never resolves on the socket path, so
+  // every one-shot structured call (source preview) threw "not resolved yet". The worker path
+  // keeps its own default (no live chat engine involved there).
+  createCliStructuredAdapter: ReturnType<
+    typeof createCliStructuredAdapterFactory
+  > = createCliStructuredAdapterFactory()
 ) {
   const repository = new AiRepository();
   const cipher = createAiSecretCipher();
-  // #982/#869/#981: module-registry is the composition boundary importing both ai's port and chat's
-  // CLI implementation. Resolve one shared transport factory; packages/ai never imports chat.
-  const createCliStructuredAdapter = createCliStructuredAdapterFactory(engineFactory);
   return {
     fetch: (url: string) =>
       fetchWebResource(url, {
@@ -2121,7 +2126,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       configureNewsBriefingService(datasetClient);
       const discovery = buildNewsDiscoveryPorts(
         createModuleLogger(server.log, "news"),
-        deps.chatEngineFactory
+        deps.createCliStructuredAdapter
       );
       const previewOverride = buildUatNewsPreviewOverride();
       registerNewsRoutes(server, {
