@@ -66,10 +66,10 @@ export interface Headline {
   readonly url: string;
   readonly publishedAt: string;
   readonly imageUrl: string | null; // first "header" image, else first image, else null
-  // Pixel size of the stored copy behind `imageUrl` (#2237). Optional: only a custom-source story
-  // whose photo Moss has already downloaded and resized knows its own dimensions.
-  readonly imageWidth?: number | null;
-  readonly imageHeight?: number | null;
+  // Pixel size of the stored copy behind `imageUrl` (#2237). Always present: null where the photo
+  // size is not known, so a reader never has to distinguish "absent" from "unknown".
+  readonly imageWidth: number | null;
+  readonly imageHeight: number | null;
   readonly summary: string; // short article blurb from the source; "" when absent (#840)
   readonly teamKeys: readonly string[]; // filled by the service join (Task 4); source emits []
   readonly publisherLabel: string;
@@ -434,6 +434,8 @@ const headlineSchema = {
     "url",
     "publishedAt",
     "imageUrl",
+    "imageWidth",
+    "imageHeight",
     "summary",
     "teamKeys",
     "publisherLabel",
@@ -451,9 +453,8 @@ const headlineSchema = {
     url: { type: "string" },
     publishedAt: { type: "string" },
     imageUrl: { type: ["string", "null"] },
-    // Optional for the same reason as `body` below, and declared here for the same reason: a key
-    // this schema does not know is stripped on the wire, so the lead-story preference for a wide
-    // photo would never see a width (#2237).
+    // Always emitted, null when unknown (#2237). A key this schema does not know is stripped on
+    // the wire, so the lead-story preference for a wide photo would never see a width.
     imageWidth: { type: ["number", "null"] },
     imageHeight: { type: ["number", "null"] },
     summary: { type: "string" },

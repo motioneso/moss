@@ -135,7 +135,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.source_photos",
       description:
-        "Stories from your own sources show a photo when the feed, a saved rule, or the article's share image provides one."
+        "Stories from your own sources show a photo when the source's feed supplies one, or when the article page offers the picture it uses for sharing."
     }
   ],
   navigation: [

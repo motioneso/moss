@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type Route } from "@playwright/test";
 import type { Headline, SportsOverviewResponse } from "@moss/shared";
 
 import { mockApi } from "./mock-api.js";
@@ -9,6 +9,22 @@ import { registerMockSportsRoutes, sportsOverviewFixture } from "./mock-sports-a
 
 const NARROW_STORY_ID = "source-a:narrow";
 const WIDE_STORY_ID = "source-a:wide";
+
+// A real 64x36 WebP, so the browser can actually decode it and the test can assert that a picture
+// appeared on screen rather than only that an attribute was set.
+const PHOTO_BYTES = Buffer.from(
+  "UklGRkoAAABXRUJQVlA4ID4AAACQAwCdASpAACQAPrVaqE+nJSOiIqgA4BaJZwB2AAAqNMY4fBmAAP7kAX/4hd7G2///G8eBXkuyE114hhAAAA==",
+  "base64"
+);
+
+async function fulfilWithPhoto(route: Route): Promise<void> {
+  await route.fulfill({
+    status: 200,
+    contentType: "image/webp",
+    headers: { "cache-control": "private, max-age=604800, immutable" },
+    body: PHOTO_BYTES
+  });
+}
 
 function customStory(id: string, title: string, width: number): Headline {
   return {
@@ -57,12 +73,7 @@ test.describe("Sports custom-source photos (#2237)", () => {
     await registerMockSportsRoutes(page, overviewWithPhotos);
     await page.route("**/api/sports/headlines/*/photo", async (route) => {
       requested.push(new URL(route.request().url()).pathname);
-      await route.fulfill({
-        status: 200,
-        contentType: "image/webp",
-        headers: { "cache-control": "private, max-age=604800, immutable" },
-        body: Buffer.from("RIFF0000WEBPVP8 mock", "latin1")
-      });
+      await fulfilWithPhoto(route);
     });
 
     await gotoSports(page);
@@ -72,6 +83,11 @@ test.describe("Sports custom-source photos (#2237)", () => {
       "src",
       `/api/sports/headlines/${encodeURIComponent(WIDE_STORY_ID)}/photo`
     );
+    // The picture really decoded and rendered, not just an address on an element.
+    await expect(photo).toBeVisible();
+    await expect
+      .poll(async () => photo.evaluate((image: HTMLImageElement) => image.naturalWidth))
+      .toBe(64);
     // Same origin: the browser asked Moss for the bytes, never the publisher.
     await expect
       .poll(() => requested.length, { message: "the photo route was never called" })
@@ -88,13 +104,7 @@ test.describe("Sports custom-source photos (#2237)", () => {
       tasks: []
     });
     await registerMockSportsRoutes(page, overviewWithPhotos);
-    await page.route("**/api/sports/headlines/*/photo", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "image/webp",
-        body: Buffer.from("RIFF0000WEBPVP8 mock", "latin1")
-      })
-    );
+    await page.route("**/api/sports/headlines/*/photo", fulfilWithPhoto);
 
     await gotoSports(page);
 
