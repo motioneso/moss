@@ -181,6 +181,61 @@ export interface EmailSignals {
   readonly importance?: "low" | "normal" | "high";
   readonly confidence?: number;
   readonly truncated?: boolean;
+  /** Set when the deterministic pre-check recognized a one-time-code email and skipped the
+   * model call entirely. No `actionability` is ever attached to a skipped message, so it is
+   * already invisible to the Today briefing filter and to suggested-task creation, both of
+   * which require an inferred subject that a skipped message never gets. */
+  readonly skipped?: "otp";
+}
+
+/**
+ * Phrases that, on their own, mean a message is a one-time login code or two-factor prompt.
+ * Checked against the subject plus the first part of the body only, case-insensitively.
+ */
+const OTP_PHRASES = [
+  "verification code",
+  "one-time code",
+  "one time code",
+  "onetime code",
+  "one-time passcode",
+  "security code",
+  "two-factor",
+  "two factor",
+  "2fa",
+  "login code",
+  "log-in code",
+  "sign-in code",
+  "signin code",
+  "passcode",
+  "pass code",
+  "confirm your sign-in",
+  "confirm your sign in",
+  "authentication code"
+] as const;
+
+/** A weaker trigger word paired with a nearby 4-8 digit code also reads as a one-time code,
+ * even when the message never spells out one of the longer OTP_PHRASES (e.g. "482910 is your
+ * code"). The proximity window keeps this from firing on an ordinary email that just happens
+ * to mention "verify" and a number somewhere far apart. */
+const WEAK_TRIGGER_NEAR_CODE =
+  /\b(code|verify|verification|confirm)\b[^\d]{0,20}\b\d{4,8}\b|\b\d{4,8}\b[^\d]{0,20}\b(code|verify|verification|confirm)\b/;
+
+/** How much of the body counts as "the first part" for the OTP pre-check. */
+const OTP_CHECK_BODY_CHARS = 500;
+
+/**
+ * Deterministic pre-check, run before any model call: true when the subject or the start of
+ * the body reads as a one-time login code or two-factor prompt. Never logs the subject or body
+ * it inspects — callers must not either.
+ */
+export function looksLikeOneTimeCodeEmail(subject: string, body: string): boolean {
+  const haystack = `${subject}\n${body.slice(0, OTP_CHECK_BODY_CHARS)}`.toLowerCase();
+  if (OTP_PHRASES.some((phrase) => haystack.includes(phrase))) return true;
+  return WEAK_TRIGGER_NEAR_CODE.test(haystack);
+}
+
+export function otpSkippedResult(): EmailExtractResult {
+  return { summary: null, signals: { skipped: "otp", confidence: 0 } };
 }
 
 export interface EmailExtractResult {
@@ -626,9 +681,24 @@ export async function extractEmailSignalsBatch(
   const timeoutMs =
     options.callTimeoutMs ??
     Number(resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ?? "20000");
+  // Callers are expected to have already routed one-time-code messages to otpSkippedResult()
+  // themselves (see google-sync-phases.ts) rather than pass them in here: this function's
+  // closeScope option finalizes a scoped CLI session keyed to the *call*, and a call whose
+  // only message got silently skipped would never fire that close and would leak the session.
+  const results: EmailExtractResult[] = new Array(messages.length);
+  const toProcess: ParsedEmail[] = [];
+  const toProcessIndexes: number[] = [];
+  messages.forEach((message, index) => {
+    if (looksLikeOneTimeCodeEmail(message.subject, message.body)) {
+      results[index] = otpSkippedResult();
+    } else {
+      toProcess.push(message);
+      toProcessIndexes.push(index);
+    }
+  });
   const extracted: EmailExtractResult[] = [];
 
-  for (const [batchIndex, batch] of partitionEmailExtractionBatches(messages).entries()) {
+  for (const [batchIndex, batch] of partitionEmailExtractionBatches(toProcess).entries()) {
     const telemetry = options.telemetry?.(batchIndex, batch.length);
     try {
       if (batch.length === 1) {
@@ -698,7 +768,10 @@ export async function extractEmailSignalsBatch(
       throw new EmailExtractRetryableError(retryableReason(error));
     }
   }
-  return extracted;
+  toProcessIndexes.forEach((originalIndex, i) => {
+    results[originalIndex] = extracted[i]!;
+  });
+  return results;
 }
 
 export async function extractEmailSignals(
@@ -706,6 +779,8 @@ export async function extractEmailSignals(
   deps: EmailExtractDeps,
   options: EmailExtractOptions = {}
 ): Promise<EmailExtractResult> {
+  if (looksLikeOneTimeCodeEmail(parsed.subject, parsed.body)) return otpSkippedResult();
+
   const timeoutMs =
     options.callTimeoutMs ??
     Number(resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ?? "20000");

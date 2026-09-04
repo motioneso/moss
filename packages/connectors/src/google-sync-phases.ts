@@ -10,6 +10,8 @@ import {
   EmailExtractNeedsConfigurationError,
   EmailExtractRetryableError,
   extractEmailSignalsBatch,
+  looksLikeOneTimeCodeEmail,
+  otpSkippedResult,
   type EmailExtractResult,
   type ParsedEmail
 } from "./email-extract.js";
@@ -342,8 +344,37 @@ export async function runGoogleEmailPhase(
         right.receivedAt.localeCompare(left.receivedAt) ||
         left.externalId.localeCompare(right.externalId)
     );
+    // One-time-code / two-factor emails are routed around the model call entirely (never sent
+    // to the model, never logged) and persisted with a fixed "skipped" marker before batching,
+    // so the batches below — and the closeScope index that finalizes a scoped CLI session on
+    // the last real batch — only ever cover messages that actually go to the model.
     let processed = 0;
-    const batches = pending.map((message) => [message]);
+    const otpKeys: string[] = [];
+    const modelPending: ParsedEmail[] = [];
+    for (const parsed of pending) {
+      if (looksLikeOneTimeCodeEmail(parsed.subject, parsed.body)) {
+        try {
+          await persistEmail(parsed, otpSkippedResult());
+          otpKeys.push(parsed.externalId);
+        } catch (error) {
+          context.progress.emailFailures += 1;
+          if (!context.progress.errors.includes("email-message-error")) {
+            context.progress.errors.push("email-message-error");
+          }
+          context.logger.warn(
+            {
+              stage: "email-message",
+              name: (error as Error).name,
+              status: (error as { statusCode?: number }).statusCode ?? null
+            },
+            "google-sync email message failed"
+          );
+        }
+      } else {
+        modelPending.push(parsed);
+      }
+    }
+    const batches = modelPending.map((message) => [message]);
     for (const [batchIndex, batch] of batches.entries()) {
       let batchResults: EmailExtractResult[];
       try {
@@ -401,11 +432,18 @@ export async function runGoogleEmailPhase(
       await projectKeys(projectedKeys);
       processed += batch.length;
       context.logger.info(
-        { stage: phase, batchIndex, batchSize: batch.length, processed, total: pending.length },
+        {
+          stage: phase,
+          batchIndex,
+          batchSize: batch.length,
+          processed,
+          total: modelPending.length
+        },
         "google-sync email extraction progress"
       );
     }
     await projectKeys(unchangedKeys);
+    await projectKeys(otpKeys);
   } catch (error) {
     if (error instanceof EmailExtractRetryableError) {
       if (!extractionScope) throw error;

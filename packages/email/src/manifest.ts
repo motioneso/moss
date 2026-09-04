@@ -107,7 +107,8 @@ export const emailModuleManifest = {
           name: "Capture tasks",
           description:
             "Turn emails into tasks when they imply an action. Suggested by default; " +
-            "auto modes are opt-in per user.",
+            "auto modes are opt-in per user. Login and verification code emails are always " +
+            "left out, so a temporary sign-in code never turns into a task or a briefing item.",
           default: "default-on"
         },
         {
