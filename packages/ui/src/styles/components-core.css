@@ -290,7 +290,9 @@
   color: var(--text-muted);
   border-color: var(--border);
 }
-.jds-badge--forest {
+.jds-badge--forest,
+.jds-badge--pine {
+  /* "pine" is the tone name @moss/settings-ui's Badge exposes; it maps onto the forest colours. */
   background: var(--forest-soft);
   color: var(--forest-ink);
 }

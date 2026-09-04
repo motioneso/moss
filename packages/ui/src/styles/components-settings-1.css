@@ -280,6 +280,7 @@
 .modrow__link {
   border: 0;
   background: transparent;
+  font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 600;
   color: var(--accent-fg);

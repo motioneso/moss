@@ -174,7 +174,7 @@
 .pane__desc {
   line-height: 1.55;
   margin: 8px 0 0;
-  max-width: 72ch;
+  /* No measure cap: Ben wants pane intros to use the full pane width (2026-09-03). */
 }
 
 .pane__card {
@@ -271,6 +271,15 @@
   padding: 1px 5px;
 }
 
-.appearance-theme-mode {
-  margin-bottom: var(--space-4);
+/* ---- Top bar: settings search ---- */
+.set2__search {
+  flex: 1 1 240px;
+  max-width: 380px;
+  margin-left: auto;
+}
+.set2__search .jds-combobox__option {
+  justify-content: space-between;
+}
+.set2__search-group {
+  flex: 0 0 auto;
 }

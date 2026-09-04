@@ -233,6 +233,26 @@ const validateSchema = new Ajv({ allErrors: true, strict: true }).compile(
   SPORTS_SOURCE_RECIPE_SCHEMA
 );
 
+/**
+ * The structured-output seam (#915 D6) refuses `pattern` / `propertyNames` keywords and requires an
+ * object root, so the AI is handed this relaxed copy. Every proposal is still checked against the
+ * strict schema above before it is used.
+ */
+export function structuredOutputSchemaFrom(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(structuredOutputSchemaFrom);
+  if (!schema || typeof schema !== "object") return schema;
+  return Object.fromEntries(
+    Object.entries(schema)
+      .filter(([key]) => key !== "pattern" && key !== "propertyNames")
+      .map(([key, value]) => [key, structuredOutputSchemaFrom(value)])
+  );
+}
+
+export const SPORTS_SOURCE_RECIPE_AI_SCHEMA = structuredOutputSchemaFrom({
+  type: "object",
+  ...SPORTS_SOURCE_RECIPE_SCHEMA
+}) as Record<string, unknown>;
+
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") {

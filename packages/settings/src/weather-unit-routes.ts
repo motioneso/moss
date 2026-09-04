@@ -14,7 +14,7 @@ import type { ProfilePreferencesPort } from "./preferences-port.js";
 import { handleSettingsRouteError } from "./route-error.js";
 
 const WEATHER_UNIT_PREFERENCE_KEY = "weather-unit";
-const DEFAULT_WEATHER_UNIT: WeatherUnit = "metric";
+const DEFAULT_WEATHER_UNIT: WeatherUnit = "imperial";
 
 interface WeatherUnitRoutesDependencies {
   readonly dataContext: DataContextRunner;
@@ -62,7 +62,7 @@ export function registerWeatherUnitRoutes(
 }
 
 function normalizeWeatherUnit(value: unknown): WeatherUnit {
-  return value === "imperial" ? "imperial" : DEFAULT_WEATHER_UNIT;
+  return value === "metric" || value === "imperial" ? value : DEFAULT_WEATHER_UNIT;
 }
 
 function sanitizeWeatherUnit(value: unknown): WeatherUnit {

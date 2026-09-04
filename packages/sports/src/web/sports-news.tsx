@@ -58,7 +58,7 @@ function HeroSlide({
       aria-roledescription="slide"
       aria-hidden={!active}
     >
-      <div className="sp-hero sp-hero--story sp-hero--split">
+      <div className="sp-hero sp-hero--story sp-hero--split sp-fbhost">
         {headline.imageUrl ? (
           <img
             className="sp-photo sp-photo--herostory sp-photo--img"
@@ -114,14 +114,15 @@ function HeroSlide({
           >
             Continue reading<span aria-hidden="true"> →</span>
           </a>
-          {active ? (
-            <StoryFeedbackMenu
-              storyRef={headline.storyRef}
-              surface="sports"
-              onChanged={onStoryChanged}
-            />
-          ) : null}
         </div>
+        {/* Feedback dots sit in the hero's top-right corner and show on hover (.sp-fbhost). */}
+        {active ? (
+          <StoryFeedbackMenu
+            storyRef={headline.storyRef}
+            surface="sports"
+            onChanged={onStoryChanged}
+          />
+        ) : null}
       </div>
     </article>
   );
@@ -237,7 +238,7 @@ export function LatestColumn(props: {
       <p className="sp-col__kicker">Top stories</p>
       <ol className="sp-latest__list">
         {headlines.slice(0, 6).map((headline) => (
-          <li className="sp-latest__item" key={storyKey(headline)}>
+          <li className="sp-latest__item sp-fbhost" key={storyKey(headline)}>
             <a className="sp-hl" href={headline.url} target="_blank" rel="noreferrer">
               {headline.imageUrl ? (
                 <img className="sp-hl__thumb" src={headline.imageUrl} alt="" loading="lazy" />
@@ -295,7 +296,7 @@ function NewsArticle({
     .filter(Boolean)
     .join(" ");
   return (
-    <article className={className}>
+    <article className={`${className} sp-fbhost`}>
       {headline.imageUrl ? (
         <img className="sp-newsband__img" src={headline.imageUrl} alt="" loading="lazy" />
       ) : null}
@@ -330,7 +331,7 @@ function FeatureArticle({
   // shows it centered at its natural size on a plate — never enlarged past its own pixels.
   const [isLogo, setIsLogo] = useState(false);
   return (
-    <article className="sp-newsband__feature">
+    <article className="sp-newsband__feature sp-fbhost">
       {headline.imageUrl ? (
         <div className={`sp-newsband__imgframe${isLogo ? " sp-newsband__imgframe--logo" : ""}`}>
           <img
@@ -373,12 +374,8 @@ function FeatureArticle({
         <a className="sp-newsband__more" href={headline.url} target="_blank" rel="noreferrer">
           Continue reading →
         </a>
-        <StoryFeedbackMenu
-          storyRef={headline.storyRef}
-          surface="sports"
-          onChanged={onStoryChanged}
-        />
       </div>
+      <StoryFeedbackMenu storyRef={headline.storyRef} surface="sports" onChanged={onStoryChanged} />
     </article>
   );
 }
@@ -474,7 +471,7 @@ export function NewsBand({
           <p className="sp-newsband__briefslabel">In brief</p>
           <ul className="sp-newsband__brieflist">
             {briefs.map(({ headline }) => (
-              <li className="sp-newsband__brief" key={storyKey(headline)}>
+              <li className="sp-newsband__brief sp-fbhost" key={storyKey(headline)}>
                 <a
                   className="sp-newsband__brieflink"
                   href={headline.url}

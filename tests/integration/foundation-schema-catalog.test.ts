@@ -381,7 +381,8 @@ describe("MVP foundation schema catalog", () => {
         // #2175 Task 7 — audit outcome widened to record suppressed/refused calls.
         { version: "0211", name: "0211_moss_audit_log_outcome_widen_suppressed_refused.sql" },
         // #2208 — model rows record whether discovery or a person added them.
-        { version: "0212", name: "0212_ai_configured_models_origin.sql" }
+        { version: "0212", name: "0212_ai_configured_models_origin.sql" },
+        { version: "0213", name: "0213_sports_reddit_sources.sql" }
       ]);
     } finally {
       await client.end();

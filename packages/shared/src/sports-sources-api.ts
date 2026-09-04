@@ -13,6 +13,13 @@ export type SportsSourceHealthState =
   | "disabled";
 
 export type SportsSourceRecipeStatus = "feed" | "ready" | "missing" | "drift";
+/** #2211: `reddit` reads a subreddit's public new-posts listing; recipe-less like `feed`. */
+export type SportsSourceRetrievalMethod = "feed" | "scrape" | "reddit";
+export const SPORTS_SOURCE_RETRIEVAL_METHODS: readonly SportsSourceRetrievalMethod[] = [
+  "feed",
+  "scrape",
+  "reddit"
+];
 export type SportsSourceTargetPreviewStatus = "pending" | "verified" | "recipe_missing";
 export const SPORTS_SOURCE_ASSIGNMENT_LIMIT = 20;
 
@@ -49,7 +56,7 @@ export interface SportsCustomSourceDto {
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
   readonly feedUrl: string | null;
-  readonly retrievalMethod: "feed" | "scrape";
+  readonly retrievalMethod: SportsSourceRetrievalMethod;
   readonly enabled: boolean;
   readonly healthState: SportsSourceHealthState;
   readonly healthReasonCode: string | null;
@@ -116,7 +123,7 @@ export interface PreviewSportsSourceCandidate {
   readonly label: string;
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
-  readonly retrievalMethod: "feed" | "scrape";
+  readonly retrievalMethod: SportsSourceRetrievalMethod;
   readonly sampleCount: number;
   readonly confirmedFetchHosts: readonly string[];
   readonly sampleHeadlines: readonly string[];
@@ -252,7 +259,7 @@ const sportsCustomSourceDtoSchema = {
     canonicalDomain: { type: "string", minLength: 1, maxLength: 253 },
     homepageUrl: { type: "string", maxLength: 2048, pattern: "^https://.+$" },
     feedUrl: { type: ["string", "null"], maxLength: 2048, pattern: "^https://.+$" },
-    retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
+    retrievalMethod: { type: "string", enum: SPORTS_SOURCE_RETRIEVAL_METHODS },
     enabled: { type: "boolean" },
     healthState: sportsSourceHealthSchema,
     healthReasonCode: { type: ["string", "null"], maxLength: 64 },
@@ -392,7 +399,7 @@ export const previewSportsSourceSchema = {
             label: { type: "string" },
             canonicalDomain: { type: "string" },
             homepageUrl: { type: "string" },
-            retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
+            retrievalMethod: { type: "string", enum: SPORTS_SOURCE_RETRIEVAL_METHODS },
             sampleCount: { type: "number" },
             confirmedFetchHosts: {
               type: "array",

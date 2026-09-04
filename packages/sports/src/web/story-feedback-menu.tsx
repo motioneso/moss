@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MoreHorizontal, ThumbsDown, ThumbsUp } from "lucide-react";
-import { Menu } from "@moss/module-web-sdk";
+import { Button, Menu } from "@moss/module-web-sdk";
 import type { FeedbackSurface } from "@moss/shared";
 import { STORY_FEEDBACK_REASON_MAX_LENGTH } from "@moss/shared";
 
@@ -104,7 +104,11 @@ export function StoryFeedbackMenu(props: StoryFeedbackMenuProps) {
         }}
       />
       {editing ? (
-        <div className="sp-feedback__editor" role="dialog" aria-label="Why less like this?">
+        <div
+          className="sp-feedback__editor jds-card jds-card--raised jds-card--pad-sm"
+          role="dialog"
+          aria-label="Why less like this?"
+        >
           <label className="sp-feedback__label" htmlFor={`feedback-reason-${storyRef}`}>
             Why less like this?
           </label>
@@ -121,17 +125,20 @@ export function StoryFeedbackMenu(props: StoryFeedbackMenuProps) {
             </p>
           ) : null}
           <div className="sp-feedback__actions">
-            <button type="button" onClick={closeEditor}>
+            <Button variant="quiet" size="sm" onClick={closeEditor}>
               Cancel
-            </button>
-            <button type="button" onClick={saveReason}>
-              Save
-            </button>
+            </Button>
+            <Button size="sm" onClick={saveReason} disabled={pending}>
+              {pending ? "Saving..." : "Save"}
+            </Button>
           </div>
         </div>
       ) : null}
       {!editing && saved ? (
-        <span className="sp-feedback__saved" role="status">
+        <span
+          className="sp-feedback__saved jds-card jds-card--raised jds-card--pad-sm"
+          role="status"
+        >
           Saved
         </span>
       ) : null}
