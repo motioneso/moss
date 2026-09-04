@@ -688,10 +688,7 @@ describe("fetchWebResource", () => {
           headers: { location: "https://www.bare.example/robots.txt" }
         });
       }
-      if (
-        request.url.hostname === "www.bare.example" &&
-        request.url.pathname === "/robots.txt"
-      ) {
+      if (request.url.hostname === "www.bare.example" && request.url.pathname === "/robots.txt") {
         return new Response("User-agent: *\nAllow: /", { status: 200 });
       }
       return new Response("the page", { status: 200 });

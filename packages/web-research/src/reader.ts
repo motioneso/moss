@@ -270,11 +270,7 @@ async function fetchRobotsFileFollowingRedirects(
 ): Promise<{ status: number; body: string } | null> {
   const maxBytes = options.maxBytes ?? DEFAULT_WEB_RESEARCH_CONFIG.maxDownloadBytes;
   let current = robotsUrl;
-  for (
-    let redirects = 0;
-    redirects <= DEFAULT_WEB_RESEARCH_CONFIG.redirectLimit;
-    redirects += 1
-  ) {
+  for (let redirects = 0; redirects <= DEFAULT_WEB_RESEARCH_CONFIG.redirectLimit; redirects += 1) {
     const robotsSafe = await abortable(
       validateHttpUrl(current.toString(), options.resolveHost),
       controller.signal
