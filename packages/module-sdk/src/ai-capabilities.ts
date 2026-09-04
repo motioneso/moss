@@ -10,7 +10,8 @@ export type AiModelCapability =
   | "json"
   | "vision"
   | "summarization"
-  | "transcription";
+  | "transcription"
+  | "web-search";
 
 export const AI_MODEL_CAPABILITIES: readonly AiModelCapability[] = [
   "chat",
@@ -18,5 +19,6 @@ export const AI_MODEL_CAPABILITIES: readonly AiModelCapability[] = [
   "json",
   "vision",
   "summarization",
-  "transcription"
+  "transcription",
+  "web-search"
 ];
