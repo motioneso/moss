@@ -27,6 +27,7 @@ import {
   setInstanceDefaultProvider,
   testAiProvider,
   updateAiModel,
+  deleteAiModel,
   updateAiProvider
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
@@ -112,6 +113,7 @@ function ProviderCard(props: {
     model: AiConfiguredModelDto,
     status: "active" | "disabled"
   ) => void;
+  readonly onModelDelete: (model: AiConfiguredModelDto) => void;
   // #870/H1 Slice 1: instance-default flag + setter. The default provider is the one that resolves
   // the model for every mode-bound service; exactly one provider carries it instance-wide.
   readonly isInstanceDefault: boolean;
@@ -300,6 +302,7 @@ function ProviderCard(props: {
         models={props.models}
         onModelOverride={props.onModelOverride}
         onModelStatusChange={props.onModelStatusChange}
+        onModelDelete={props.onModelDelete}
       />
 
       {/* #1059 — rendered outside .prov__edit so opening the terminal never depends on the
@@ -569,6 +572,15 @@ export function AiProvidersPane() {
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
+  // #2208 follow-up: Remove on a model row deletes it for good (after the confirm below).
+  const modelDeleteMutation = useMutation({
+    mutationFn: (model: AiConfiguredModelDto) => deleteAiModel(model.id),
+    onSuccess: () => {
+      void invalidate();
+      toast("Model removed", { icon: <Trash2 size={17} /> });
+    },
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
   // #870/H1 Slice 1: the instance-default provider supplies the model for every mode-bound service
   // (Chat/Voice on a tier). Exactly one provider holds the flag instance-wide — the backend clears
   // any prior default in the same statement (partial unique index enforces the singleton), so the
@@ -665,6 +677,16 @@ export function AiProvidersPane() {
                 }
                 onModelStatusChange={(model, status) =>
                   modelStatusMutation.mutate({ model, status })
+                }
+                onModelDelete={(model) =>
+                  confirm({
+                    title: `Remove ${model.providerModelId}?`,
+                    description:
+                      "The model is deleted from this provider. Any work bound to it falls back to another model.",
+                    confirmLabel: "Remove",
+                    danger: true,
+                    onConfirm: () => modelDeleteMutation.mutate(model)
+                  })
                 }
                 isInstanceDefault={provider.isInstanceDefault}
                 onSetInstanceDefault={() => instanceDefaultMutation.mutate(provider.id)}

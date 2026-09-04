@@ -269,6 +269,8 @@ test("configures chat and email extraction models through settings", async ({ pa
   // old Discover/picker surfaces no longer exist. #2208 brought back "Refresh models" and
   // "Add model" as explicit per-provider actions; the Model id field only appears once
   // Add model is opened.
+  // The Models section starts collapsed; its header toggles the list.
+  await page.getByRole("button", { name: /^Models · \d+$/ }).click();
   await expect(page.locator(".mdl__id", { hasText: "gpt-4o" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Discover", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Add", exact: true })).toHaveCount(0);

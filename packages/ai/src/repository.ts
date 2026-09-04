@@ -643,6 +643,22 @@ export class AiRepository {
     await query.execute();
   }
 
+  /**
+   * #2208 follow-up: remove one model row for good. Never deletes the `default` sentinel, so a
+   * CLI provider always keeps its "launch with no --model" entry. Returns the deleted id, or
+   * undefined when no deletable row matched (missing, or the sentinel).
+   */
+  async deleteModel(scopedDb: DataContextDb, modelId: string): Promise<string | undefined> {
+    assertDataContextDb(scopedDb);
+    const deleted = await scopedDb.db
+      .deleteFrom("app.ai_configured_models")
+      .where("id", "=", modelId)
+      .where("provider_model_id", "!=", "default")
+      .returning("id")
+      .executeTakeFirst();
+    return deleted?.id;
+  }
+
   async updateModel(
     scopedDb: DataContextDb,
     modelId: string,

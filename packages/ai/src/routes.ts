@@ -41,6 +41,7 @@ import {
   resolveAiAssistantActionRouteSchema,
   revokeAiProviderConfigRouteSchema,
   updateAiConfiguredModelRouteSchema,
+  deleteAiConfiguredModelRouteSchema,
   updateAiProviderConfigRouteSchema,
   type AiAssistantToolBlockedReason,
   type AiAssistantActionDto,
@@ -441,6 +442,46 @@ export function registerAiRoutes(
         }
 
         return { model: serializeModel(model, accessContext.actorUserId) };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  // #2208 follow-up: the Remove button on a model row. The provider's `default` sentinel is kept
+  // (400) so a CLI provider can always launch without --model.
+  server.delete<{ Params: IdParams }>(
+    "/api/ai/models/:id",
+    { schema: deleteAiConfiguredModelRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const outcome = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            await assertInstanceAdmin(repository, scopedDb, accessContext.actorUserId);
+            const existing = (await repository.listModels(scopedDb)).find(
+              (row) => row.id === request.params.id
+            );
+            if (!existing) {
+              return { kind: "missing" as const };
+            }
+            if (existing.provider_model_id === "default") {
+              return { kind: "sentinel" as const };
+            }
+            const id = await repository.deleteModel(scopedDb, request.params.id);
+            return id ? { kind: "deleted" as const, id } : { kind: "missing" as const };
+          }
+        );
+        if (outcome.kind === "missing") {
+          return reply.code(404).send({ error: "AI model config not found" });
+        }
+        if (outcome.kind === "sentinel") {
+          return reply
+            .code(400)
+            .send({ error: "The provider's default entry cannot be removed; disable it instead" });
+        }
+        return { id: outcome.id };
       } catch (error) {
         return handleRouteError(error, reply);
       }

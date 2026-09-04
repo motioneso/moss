@@ -146,6 +146,7 @@ import type {
   UpdateBriefingDefinitionResponse,
   UpdateAiConfiguredModelRequest,
   UpdateAiConfiguredModelResponse,
+  DeleteAiConfiguredModelResponse,
   UpdateAiProviderConfigRequest,
   UpdateAiProviderConfigResponse,
   UpdateMedicationRequest,
@@ -1148,6 +1149,13 @@ export async function updateAiModel(
   return requestJson<UpdateAiConfiguredModelResponse>(`/api/ai/models/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: input
+  });
+}
+
+// #2208 follow-up: Remove on a model row.
+export async function deleteAiModel(id: string): Promise<DeleteAiConfiguredModelResponse> {
+  return requestJson<DeleteAiConfiguredModelResponse>(`/api/ai/models/${encodeURIComponent(id)}`, {
+    method: "DELETE"
   });
 }
 

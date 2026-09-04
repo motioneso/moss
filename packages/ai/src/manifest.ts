@@ -8,6 +8,7 @@ import {
   createAiProviderConfigRequestSchema,
   createAiProviderConfigResponseSchema,
   deleteAiServiceBindingResponseSchema,
+  deleteAiConfiguredModelResponseSchema,
   discoverAiProviderModelsResponseSchema,
   getAiSummaryResponseSchema,
   getChatModelOverrideSettingsResponseSchema,
@@ -161,7 +162,23 @@ export const aiModuleManifest = {
       id: "ai.add_model_by_hand",
       description:
         "Add model: type a model id, display name, tier, and capabilities under a provider. The " +
-        "row is tagged 'Added by hand' and is never removed by Refresh models or a re-login."
+        "row shows a * after its id (the list footer reads '* Manually added') and is never " +
+        "removed by Refresh models or a re-login."
+    },
+    {
+      id: "ai.remove_model",
+      description:
+        "Remove model: the trash button on a model row deletes it after a confirmation; the " +
+        "minus button only disables it. The provider's default entry cannot be removed. The " +
+        "Models section of each provider card collapses from its header.",
+      errors: [
+        {
+          code: "ai.remove_model.sentinel",
+          class: "validation",
+          description:
+            "Shown as 'The provider's default entry cannot be removed; disable it instead'."
+        }
+      ]
     }
   ],
   permissions: [
@@ -281,6 +298,13 @@ export const aiModuleManifest = {
       path: "/api/ai/models/:id",
       requestSchema: updateAiConfiguredModelRequestSchema,
       responseSchema: updateAiConfiguredModelResponseSchema,
+      permissionId: "ai.manage"
+    },
+    {
+      // #2208 follow-up: Remove on a model row; the `default` sentinel is refused.
+      method: "DELETE",
+      path: "/api/ai/models/:id",
+      responseSchema: deleteAiConfiguredModelResponseSchema,
       permissionId: "ai.manage"
     },
     {

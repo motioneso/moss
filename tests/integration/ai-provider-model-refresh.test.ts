@@ -237,6 +237,74 @@ describe("AI provider model refresh (#2208)", () => {
     );
     expect((await refresh(providerId)).statusCode).toBe(400);
   });
+
+  describe("DELETE /api/ai/models/:id (#2208 follow-up)", () => {
+    async function remove(modelId: string, session: string = ids.sessionA) {
+      return server.inject({
+        method: "DELETE",
+        url: `/api/ai/models/${modelId}`,
+        headers: { authorization: `Bearer ${session}` }
+      });
+    }
+
+    async function addManual(providerId: string, providerModelId: string): Promise<string> {
+      return dataContext.withDataContext(userContext(ids.userA), async (db) => {
+        const row = await repository.createModel(db, {
+          providerConfigId: providerId,
+          providerModelId,
+          displayName: providerModelId,
+          capabilities: ["chat"]
+        });
+        return row.id;
+      });
+    }
+
+    it("removes a hand-added model for good", async () => {
+      const providerId = await createCliProvider();
+      const modelId = await addManual(providerId, "claude-hand-added");
+
+      const response = await remove(modelId);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ id: modelId });
+      expect(await storedModelIds(providerId)).toEqual(["default"]);
+    });
+
+    it("removes a discovered model too", async () => {
+      const providerId = await createCliProvider();
+      listerAnswer = { status: "ok", models: [{ id: "claude-fable-5-1" }] };
+      expect((await refresh(providerId)).statusCode).toBe(200);
+      const models = await dataContext.withDataContext(userContext(ids.userA), (db) =>
+        repository.listModels(db)
+      );
+      const discovered = models.find((m) => m.provider_model_id === "claude-fable-5-1");
+
+      expect((await remove(discovered!.id)).statusCode).toBe(200);
+      expect(await storedModelIds(providerId)).toEqual(["default"]);
+    });
+
+    it("refuses to remove the provider's default entry", async () => {
+      const providerId = await createCliProvider();
+      const models = await dataContext.withDataContext(userContext(ids.userA), (db) =>
+        repository.listModels(db)
+      );
+      const sentinel = models.find((m) => m.provider_model_id === "default");
+
+      const response = await remove(sentinel!.id);
+
+      expect(response.statusCode).toBe(400);
+      expect(await storedModelIds(providerId)).toEqual(["default"]);
+    });
+
+    it("requires an instance admin and 404s an unknown id", async () => {
+      const providerId = await createCliProvider();
+      const modelId = await addManual(providerId, "claude-hand-added");
+
+      expect((await remove(modelId, ids.sessionB)).statusCode).toBe(403);
+      expect(await storedModelIds(providerId)).toEqual(["claude-hand-added", "default"]);
+      expect((await remove("00000000-0000-0000-0000-000000000000")).statusCode).toBe(404);
+    });
+  });
 });
 
 function userContext(actorUserId: string): AccessContext {

@@ -763,6 +763,31 @@ export const updateAiConfiguredModelRouteSchema = {
   }
 } as const;
 
+// #2208 follow-up: admin delete of one model row. The provider's `default` sentinel is refused.
+export const deleteAiConfiguredModelResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id"],
+  properties: {
+    id: { type: "string" }
+  }
+} as const;
+
+export interface DeleteAiConfiguredModelResponse {
+  id: string;
+}
+
+export const deleteAiConfiguredModelRouteSchema = {
+  params: idParamsSchema,
+  response: {
+    200: deleteAiConfiguredModelResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    404: errorResponseSchema
+  }
+} as const;
+
 export const lookupAiCapabilityRouteRouteSchema = {
   params: aiCapabilityParamsSchema,
   response: {
