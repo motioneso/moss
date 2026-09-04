@@ -114,7 +114,10 @@ export const newsModuleManifest = {
     {
       id: "news",
       label: "News",
-      description: "Read personalized headlines from enabled sources.",
+      description:
+        "Read personalized headlines from enabled sources. Today's story list shows each " +
+        "publisher's small icon next to its headlines; hovering an icon shows the publisher's " +
+        "name, and if an icon fails to load, the publisher's name is shown instead.",
       path: "/news",
       icon: "newspaper",
       order: 34,

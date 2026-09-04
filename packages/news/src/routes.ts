@@ -287,6 +287,8 @@ export function registerNewsRoutes(
 
   registerNewsFaviconRoute(server, {
     resolveAccessContext: dependencies.resolveAccessContext,
-    fetchImage: dependencies.discovery.image
+    fetchImage: dependencies.discovery.image,
+    dataContext: dependencies.dataContext,
+    customSources: personalization
   });
 }

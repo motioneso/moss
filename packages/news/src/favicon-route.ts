@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
-import type { AccessContext } from "@moss/db";
+import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError, handleRouteError } from "@moss/module-sdk";
 
 import type { NewsImageFetchPort } from "./discovery/ports.js";
+import { NEWS_HOMEPAGE_HOSTS, NEWS_IMAGE_HOSTS } from "./source/catalog.js";
 
 export const NEWS_FAVICON_MAX_BYTES = 256 * 1024;
 const NEWS_FAVICON_CACHE_MAX_ENTRIES = 128;
@@ -21,9 +22,43 @@ interface CachedFavicon {
   readonly body: Uint8Array;
 }
 
+/** Just enough of the personalization repository to check the requester's own saved sources. */
+export interface NewsFaviconCustomSourcePort {
+  listCustomSources(
+    scopedDb: DataContextDb
+  ): Promise<readonly { readonly canonicalDomain: string }[]>;
+}
+
 interface NewsFaviconRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly fetchImage: NewsImageFetchPort;
+  readonly dataContext: DataContextRunner;
+  readonly customSources: NewsFaviconCustomSourcePort;
+}
+
+const STATIC_APPROVED_HOSTS = new Set(
+  [...NEWS_HOMEPAGE_HOSTS, ...NEWS_IMAGE_HOSTS].map((host) => host.toLowerCase())
+);
+
+/**
+ * An icon is only ever fetched for a host this actor is entitled to see attributed on their own
+ * screen: a source in the built-in catalog, a host one of those sources declares its images come
+ * from, or a custom source this same signed-in user has saved for themselves. Anything else is
+ * refused before any network request is made — the blocker this closes (gpt-6-astra, PR 2252):
+ * without it, any signed-in caller could ask the server to fetch and serve back an icon from an
+ * arbitrary public site.
+ */
+async function isApprovedPublisherHost(
+  domain: string,
+  accessContext: AccessContext,
+  dependencies: Pick<NewsFaviconRouteDependencies, "dataContext" | "customSources">
+): Promise<boolean> {
+  const lower = domain.toLowerCase();
+  if (STATIC_APPROVED_HOSTS.has(lower)) return true;
+  const customDomains = await dependencies.dataContext.withDataContext(accessContext, (db) =>
+    dependencies.customSources.listCustomSources(db)
+  );
+  return customDomains.some((source) => source.canonicalDomain.toLowerCase() === lower);
 }
 
 function hasPrefix(body: Uint8Array, bytes: readonly number[]): boolean {
@@ -104,16 +139,18 @@ export function registerNewsFaviconRoute(
     },
     async (request, reply) => {
       try {
-        // A publisher's site is public, so unlike the personalized image route this needs no
-        // per-article lookup — it just needs to know the requester is a signed-in actor.
-        await dependencies.resolveAccessContext(request);
+        const accessContext = await dependencies.resolveAccessContext(request);
         const { domain } = request.params as { domain: string };
+
+        if (!(await isApprovedPublisherHost(domain, accessContext, dependencies))) {
+          throw new HttpError(404, "Favicon not found");
+        }
 
         const fromCache = cached(domain);
         if (fromCache) return sendFavicon(reply, fromCache);
 
         const faviconUrl = `https://${domain}/favicon.ico`;
-        const fetched = await dependencies.fetchImage(faviconUrl, NEWS_FAVICON_MAX_BYTES);
+        const fetched = await dependencies.fetchImage(faviconUrl, NEWS_FAVICON_MAX_BYTES, [domain]);
         if (!fetched.ok || fetched.truncated || fetched.body.byteLength > NEWS_FAVICON_MAX_BYTES) {
           throw new HttpError(404, "Favicon not found");
         }

@@ -1,13 +1,14 @@
 import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
 
-import type { AccessContext } from "@moss/db";
+import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 
 import {
   NEWS_FAVICON_MAX_BYTES,
   registerNewsFaviconRoute,
-  sniffedFaviconType
+  sniffedFaviconType,
+  type NewsFaviconCustomSourcePort
 } from "../../packages/news/src/favicon-route.js";
 import type { NewsImageFetchPort } from "../../packages/news/src/discovery/ports.js";
 
@@ -21,9 +22,29 @@ const signatures = [
   ["image/gif", new TextEncoder().encode("GIF89a")]
 ] as const;
 
+// None of the routes under test here exercise the publisher-restriction check itself (that has
+// its own test below), so this stands in for "the requester saved every domain these tests use
+// as a custom source" — every domain the rest of this file requests is pre-approved.
+const genericApprovedDomains = [
+  "example.com",
+  ...Array.from({ length: 200 }, (_, index) => `site-${index}.example`)
+];
+const allDomainsApproved: NewsFaviconCustomSourcePort = {
+  listCustomSources: async () =>
+    genericApprovedDomains.map((canonicalDomain) => ({ canonicalDomain }))
+};
+const noCustomSources: NewsFaviconCustomSourcePort = {
+  listCustomSources: async () => []
+};
+const dataContext = {
+  withDataContext: async (_accessContext: AccessContext, run: (db: DataContextDb) => unknown) =>
+    run({} as DataContextDb)
+} as unknown as DataContextRunner;
+
 function buildApp(input: {
   fetchImage?: NewsImageFetchPort;
   resolveAccessContext?: () => Promise<AccessContext>;
+  customSources?: NewsFaviconCustomSourcePort;
 }) {
   const app = Fastify();
   registerNewsFaviconRoute(app, {
@@ -35,7 +56,9 @@ function buildApp(input: {
         contentType: "image/x-icon",
         body: ico,
         truncated: false
-      }))
+      })),
+    dataContext,
+    customSources: input.customSources ?? allDomainsApproved
   });
   return app;
 }
@@ -156,6 +179,48 @@ describe("news favicon route", () => {
     await app.inject({ method: "GET", url: "/api/news/favicon/site-0.example" });
 
     expect(fetches).toBe(22);
+    await app.close();
+  });
+
+  it("refuses a domain that is not an approved publisher, before any download is attempted", async () => {
+    let downloadAttempted = false;
+    const app = buildApp({
+      fetchImage: async () => {
+        downloadAttempted = true;
+        return { ok: true, contentType: "image/x-icon", body: ico, truncated: false };
+      },
+      customSources: noCustomSources
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/news/favicon/not-a-registered-publisher.example"
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(downloadAttempted).toBe(false);
+    await app.close();
+  });
+
+  it("serves a favicon for a domain the requesting user saved as a custom source", async () => {
+    const app = buildApp({
+      customSources: {
+        listCustomSources: async () => [{ canonicalDomain: "readers-own-source.example" }]
+      },
+      fetchImage: async () => ({
+        ok: true,
+        contentType: "image/x-icon",
+        body: ico,
+        truncated: false
+      })
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/news/favicon/readers-own-source.example"
+    });
+
+    expect(response.statusCode).toBe(200);
     await app.close();
   });
 
