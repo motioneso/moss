@@ -674,8 +674,28 @@ button.theme-swatch {
 .theme-preview__actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
   margin-top: var(--space-2);
+}
+.theme-preview__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.theme-preview__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.theme-preview__card .jds-divider {
+  margin: 0;
+}
+.theme-preview__callout {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
 }
 @media (max-width: 900px) {
   .theme-editor {

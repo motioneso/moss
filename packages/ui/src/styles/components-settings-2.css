@@ -879,6 +879,37 @@
   font-weight: var(--weight-semibold);
   color: var(--gold);
 }
+.theme-preview__link {
+  color: var(--accent);
+  font-weight: var(--weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.theme-preview__link:hover {
+  color: var(--accent-hover);
+}
+.theme-preview__rowtitle {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+.theme-preview__rowmeta {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.theme-preview__callout {
+  background: var(--accent-soft);
+  color: var(--accent-soft-fg);
+  border: var(--border-w) solid var(--accent-soft-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+.theme-preview__callouttitle {
+  font-weight: var(--weight-semibold);
+}
 .mdl__edit-btn,
 .mdl__toggle-btn,
 .mdl__delete-btn {

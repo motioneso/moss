@@ -20,8 +20,8 @@ import {
 import type { AestheticThemeTokenKey, AestheticThemeTokens } from "@moss/shared";
 import { AESTHETIC_THEME_TOKEN_KEYS } from "@moss/shared";
 import { useFeedback } from "./settings-feedback";
-import { Badge, Field, Group, Note, PaneHead, Row } from "./settings-ui";
-import { Button, Segmented } from "@moss/ui";
+import { Field, Group, Note, PaneHead, Row } from "./settings-ui";
+import { Badge, Button, Divider, Segmented } from "@moss/ui";
 
 interface DraftTheme {
   readonly id: string;
@@ -394,15 +394,51 @@ export function AppearancePane() {
               <div className="theme-preview" style={tokensToCssVars(draft.tokens)}>
                 <div className="theme-preview__eyebrow">Preview</div>
                 <h3>Daily plan</h3>
-                <p>Paper, ink, line, and accent update here before saving.</p>
+                <p>
+                  Paper, ink, line, and accent update here before saving.{" "}
+                  <a className="theme-preview__link" href="#preview" onClick={preventNav}>
+                    Read the notes
+                  </a>
+                </p>
+                <div className="theme-preview__badges">
+                  <Badge tone="forest" dot>
+                    On track
+                  </Badge>
+                  <Badge tone="amber">2 due</Badge>
+                  <Badge outline>Draft</Badge>
+                </div>
                 <div className="theme-preview__card">
                   <span className="theme-preview__cardtitle">Surface card</span>
+                  <div className="theme-preview__row">
+                    <span className="theme-preview__rowtitle">Morning review</span>
+                    <span className="theme-preview__rowmeta">9:00</span>
+                  </div>
+                  <Divider />
+                  <div className="theme-preview__row">
+                    <span className="theme-preview__rowtitle">Call the vet</span>
+                    <span className="theme-preview__rowmeta">Done</span>
+                  </div>
+                  <Divider />
                   <span className="theme-preview__cardline" />
                   <span className="theme-preview__cardline theme-preview__cardline--short" />
                 </div>
+                <input
+                  className="jds-input jds-input--sm"
+                  type="text"
+                  readOnly
+                  aria-label="Preview input"
+                  value="Add a task"
+                />
                 <div className="theme-preview__actions">
                   <Button size="sm">Primary action</Button>
+                  <Button size="sm" variant="quiet">
+                    Quiet
+                  </Button>
                   <span className="theme-preview__gold">Gold note</span>
+                </div>
+                <div className="theme-preview__callout">
+                  <span className="theme-preview__callouttitle">Accent note</span>
+                  <span>Soft accent fills and their ink, drawn from the accent ramp.</span>
                 </div>
               </div>
               <div className="theme-ramp" aria-label="Generated accent ramp">
@@ -567,6 +603,10 @@ export function slugifyThemeId(name: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
   return slug || `theme-${Date.now().toString(36)}`;
+}
+
+function preventNav(event: React.MouseEvent<HTMLAnchorElement>): void {
+  event.preventDefault();
 }
 
 export function tokensToCssVars(tokens: AestheticThemeTokens): Record<string, string> {
