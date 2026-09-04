@@ -99,14 +99,17 @@ describe("news discovery source preview (#2229)", () => {
 
     const fakeServer = { log: fakeLogger(), post: vi.fn(), get: vi.fn() };
 
-    registration!.registerRoutes!(fakeServer as never, {
-      rootDb: {} as never,
-      dataContext: {} as never,
-      resolveAccessContext: async () => ({}) as AccessContext,
-      boss: {} as never,
-      chatEngineFactory: brokenChatEngineFactory,
-      createCliStructuredAdapter: workingCreateCliStructuredAdapter as never
-    } as never);
+    registration!.registerRoutes!(
+      fakeServer as never,
+      {
+        rootDb: {} as never,
+        dataContext: {} as never,
+        resolveAccessContext: async () => ({}) as AccessContext,
+        boss: {} as never,
+        chatEngineFactory: brokenChatEngineFactory,
+        createCliStructuredAdapter: workingCreateCliStructuredAdapter as never
+      } as never
+    );
 
     const discovery = newsRoutesCapture.discovery as {
       ai: {
