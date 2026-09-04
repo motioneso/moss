@@ -16,9 +16,26 @@ import type {
   NewsAiPort,
   NewsSafeFetchFailure,
   NewsSafeFetchPort,
+  NewsSafeFetchResult,
   NewsWebSearchPort
 } from "./ports.js";
 import type { VerifiedSourceCandidate } from "./preview-store.js";
+
+const KNOWN_LINK_SHORTENERS = new Set([
+  "bit.ly",
+  "t.co",
+  "tinyurl.com",
+  "goo.gl",
+  "ow.ly",
+  "buff.ly",
+  "lnkd.in"
+]);
+
+const MAX_PUBLISHER_REDIRECT_HOPS = 5;
+
+function redirectNoteFor(fromDomain: string, toDomain: string): string {
+  return `${fromDomain} sends visitors to ${toDomain}, so that is the site we will follow.`;
+}
 
 export type SourceResolutionResult =
   | { status: "ok"; candidates: [VerifiedSourceCandidate] }
@@ -121,6 +138,53 @@ function finalDomainRejection(
   return samePublisherIdentity(expectedDomain, normalized.domain) ? null : "redirected";
 }
 
+/**
+ * Whether a fetch that landed on a different domain than requested can still be trusted as
+ * that publisher's own move, and if so, the note to show the user. Deterministic only — no
+ * model call (Ben, 2026-09-04).
+ */
+function evaluatePublisherRedirect(
+  fetched: NewsSafeFetchResult,
+  requestedDomain: string,
+  exclusions: readonly string[]
+): { accepted: true; note: string | null } | { accepted: false; reason: "policy" | "redirected" } {
+  const outcome = finalDomainRejection(fetched.finalUrl, requestedDomain, exclusions);
+  if (outcome === null) return { accepted: true, note: null };
+  if (outcome === "policy") return { accepted: false, reason: "policy" };
+
+  // outcome === "redirected": a genuine cross-domain redirect. Accept only if every check passes.
+  const finalDomain = normalizePublisherDomain(fetched.finalUrl);
+  if (!finalDomain.ok) return { accepted: false, reason: "redirected" };
+
+  if ((fetched.hopCount ?? 0) > MAX_PUBLISHER_REDIRECT_HOPS) {
+    return { accepted: false, reason: "redirected" };
+  }
+
+  if (KNOWN_LINK_SHORTENERS.has(finalDomain.domain) || KNOWN_LINK_SHORTENERS.has(requestedDomain)) {
+    return { accepted: false, reason: "redirected" };
+  }
+
+  const selfClaimUrl = isFeed(fetched.contentType, fetched.body)
+    ? null
+    : htmlMetadata(fetched.body).canonicalUrl;
+  if (selfClaimUrl) {
+    let claimedDomain: ReturnType<typeof normalizePublisherDomain>;
+    try {
+      claimedDomain = normalizePublisherDomain(new URL(selfClaimUrl, fetched.finalUrl).toString());
+    } catch {
+      return { accepted: false, reason: "redirected" };
+    }
+    if (!claimedDomain.ok || !samePublisherIdentity(finalDomain.domain, claimedDomain.domain)) {
+      return { accepted: false, reason: "redirected" };
+    }
+  }
+  // else: no canonical/og:url tag present — fall back to the existing headline/feed
+  // verification further down in verifyPublisher, which must pass anyway (empty headlines
+  // already produces a "unreachable" rejection there).
+
+  return { accepted: true, note: redirectNoteFor(requestedDomain, finalDomain.domain) };
+}
+
 export async function resolveSourceInput(
   scopedDb: DataContextDb,
   deps: {
@@ -203,14 +267,11 @@ async function verifyPublisher(
     };
   }
   const fetchedUrl = new URL(fetched.finalUrl);
-  const fetchedRejection = finalDomainRejection(
-    fetched.finalUrl,
-    requestedDomain.domain,
-    exclusions
-  );
-  if (fetchedRejection) {
-    return { status: "failed", result: { status: "rejected", reason: fetchedRejection } };
+  const redirectDecision = evaluatePublisherRedirect(fetched, requestedDomain.domain, exclusions);
+  if (!redirectDecision.accepted) {
+    return { status: "failed", result: { status: "rejected", reason: redirectDecision.reason } };
   }
+  const redirectNote = redirectDecision.note;
   let homepageUrl = new URL("/", fetchedUrl).toString();
   let homepageBody = fetched.body;
   let feedUrl: string | null = null;
@@ -305,7 +366,8 @@ async function verifyPublisher(
       feedUrl,
       retrievalMethod: feedUrl ? "feed" : "scrape",
       sampleCount: headlines.length,
-      validationFingerprint: policy.fingerprint
+      validationFingerprint: policy.fingerprint,
+      redirectNote
     }
   };
 }

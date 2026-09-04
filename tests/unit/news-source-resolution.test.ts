@@ -432,4 +432,121 @@ describe("resolveSourceInput", () => {
       ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
     }
   });
+
+  it("accepts a cross-domain redirect whose page claims itself, and uses the final site", async () => {
+    const redirectsToOwnDomain: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://new.example/",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<title>New Example</title><link rel="canonical" href="https://new.example/"><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    const result = await resolveSourceInput(
+      db,
+      { fetch: redirectsToOwnDomain, search: noSearch, ai: ai(), repo: repo() },
+      { raw: "https://old.example", hasWebSearch: false }
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      candidates: [
+        {
+          canonicalDomain: "new.example",
+          homepageUrl: "https://new.example/"
+        }
+      ]
+    });
+    if (result.status === "ok") {
+      const note = result.candidates[0].redirectNote;
+      expect(note).toEqual(expect.stringContaining("old.example"));
+      expect(note).toEqual(expect.stringContaining("new.example"));
+    }
+  });
+
+  it("rejects a redirect to a known link shortener", async () => {
+    const redirectsToShortener: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://bit.ly/abc123",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<title>Redirect</title><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsToShortener, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  it("rejects a redirect whose own canonical link points to yet another domain", async () => {
+    const redirectsThenClaimsElsewhere: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://new.example/",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<link rel="canonical" href="https://third.example/"><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsThenClaimsElsewhere, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  it("still resolves an ordinary same-domain www redirect with no note", async () => {
+    const wwwRedirect: NewsSafeFetchPort = async (url) => {
+      if (url === "https://example.com/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://www.example.com/",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<title>Example</title><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    const result = await resolveSourceInput(
+      db,
+      { fetch: wwwRedirect, search: noSearch, ai: ai(), repo: repo() },
+      { raw: "https://example.com", hasWebSearch: false }
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      candidates: [{ canonicalDomain: "www.example.com" }]
+    });
+    if (result.status === "ok") {
+      expect(result.candidates[0].redirectNote).toBeNull();
+    }
+  });
 });
