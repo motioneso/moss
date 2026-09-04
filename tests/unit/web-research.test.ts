@@ -675,6 +675,33 @@ describe("fetchWebResource", () => {
     ).resolves.toMatchObject({ ok: false, reason: "robots" });
   });
 
+  // Bug: a bare domain that redirects everything to its www address (including robots.txt
+  // itself) used to fail the robots check, because the check only looked at the raw robots.txt
+  // response and a redirect is neither "allowed" nor "not found". It should follow the redirect
+  // and read robots.txt from wherever it actually ends up, the same way a browser would.
+  it("follows a redirect on robots.txt so a bare domain that redirects to its www address still works", async () => {
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    setWebHttpTransportForTests(async (request) => {
+      if (request.url.hostname === "bare.example" && request.url.pathname === "/robots.txt") {
+        return new Response(null, {
+          status: 301,
+          headers: { location: "https://www.bare.example/robots.txt" }
+        });
+      }
+      if (
+        request.url.hostname === "www.bare.example" &&
+        request.url.pathname === "/robots.txt"
+      ) {
+        return new Response("User-agent: *\nAllow: /", { status: 200 });
+      }
+      return new Response("the page", { status: 200 });
+    });
+
+    await expect(
+      fetchWebResource("https://bare.example/story", { robots: createRobotsGate() })
+    ).resolves.toMatchObject({ ok: true, body: "the page" });
+  });
+
   it("maps rate limits, truncation, and timeout", async () => {
     setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
     setWebHttpTransportForTests(async () => new Response("abcdef", { status: 200 }));

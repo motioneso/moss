@@ -152,6 +152,8 @@ function describeResolutionFailure(result: SourceResolutionResult): string {
         return "Publisher sites must be reachable over HTTPS.";
       case "unreachable":
         return "Could not reach or verify that publisher.";
+      case "blocked":
+        return "That publisher's site does not allow automatic access, so it can't be added.";
     }
   }
   return "Source discovery is currently unavailable — try again later.";
