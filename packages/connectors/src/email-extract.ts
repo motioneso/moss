@@ -189,8 +189,11 @@ export interface EmailSignals {
 }
 
 /**
- * Phrases that, on their own, mean a message is a one-time login code or two-factor prompt.
- * Checked against the subject plus the first part of the body only, case-insensitively.
+ * Phrases that, on their own, mean a message is delivering a one-time login code or a sign-in
+ * approval request. Checked against the subject plus the first part of the body only,
+ * case-insensitively. Deliberately excludes bare "two-factor"/"2fa" — those also show up in
+ * ordinary requests to turn two-factor authentication on ("enable two-factor authentication for
+ * the team"), which is not a code delivery. See TWO_FACTOR_NEAR_CODE below for that case.
  */
 const OTP_PHRASES = [
   "verification code",
@@ -198,10 +201,8 @@ const OTP_PHRASES = [
   "one time code",
   "onetime code",
   "one-time passcode",
+  "one-time password",
   "security code",
-  "two-factor",
-  "two factor",
-  "2fa",
   "login code",
   "log-in code",
   "sign-in code",
@@ -210,15 +211,22 @@ const OTP_PHRASES = [
   "pass code",
   "confirm your sign-in",
   "confirm your sign in",
-  "authentication code"
+  "authentication code",
+  "otp"
 ] as const;
 
-/** A weaker trigger word paired with a nearby 4-8 digit code also reads as a one-time code,
- * even when the message never spells out one of the longer OTP_PHRASES (e.g. "482910 is your
- * code"). The proximity window keeps this from firing on an ordinary email that just happens
- * to mention "verify" and a number somewhere far apart. */
-const WEAK_TRIGGER_NEAR_CODE =
-  /\b(code|verify|verification|confirm)\b[^\d]{0,20}\b\d{4,8}\b|\b\d{4,8}\b[^\d]{0,20}\b(code|verify|verification|confirm)\b/;
+/** "two-factor"/"2fa" only counts as a code signal when it sits near the word "code" — e.g.
+ * "Your two-factor code is 482910" — not when it just names the security feature, as in
+ * "enable two-factor authentication for the team". */
+const TWO_FACTOR_NEAR_CODE =
+  /\b(two-factor|two factor|2fa)\b[\s\S]{0,60}\bcode\b|\bcode\b[\s\S]{0,60}\b(two-factor|two factor|2fa)\b/;
+
+/** The word "code" paired with a nearby 4-8 digit number also reads as a one-time code, even
+ * when the message never spells out one of the longer OTP_PHRASES (e.g. "482910 is your
+ * code"). Deliberately narrower than before: only the word "code" triggers this, not "verify"
+ * or "confirm" — those pair with a nearby number in plenty of ordinary requests ("Please
+ * confirm invoice 482910 by Friday", "Please verify the 2026 budget"). */
+const CODE_NEAR_NUMBER = /\bcode\b[^\d]{0,20}\b\d{4,8}\b|\b\d{4,8}\b[^\d]{0,20}\bcode\b/;
 
 /** How much of the body counts as "the first part" for the OTP pre-check. */
 const OTP_CHECK_BODY_CHARS = 500;
@@ -231,7 +239,8 @@ const OTP_CHECK_BODY_CHARS = 500;
 export function looksLikeOneTimeCodeEmail(subject: string, body: string): boolean {
   const haystack = `${subject}\n${body.slice(0, OTP_CHECK_BODY_CHARS)}`.toLowerCase();
   if (OTP_PHRASES.some((phrase) => haystack.includes(phrase))) return true;
-  return WEAK_TRIGGER_NEAR_CODE.test(haystack);
+  if (TWO_FACTOR_NEAR_CODE.test(haystack)) return true;
+  return CODE_NEAR_NUMBER.test(haystack);
 }
 
 export function otpSkippedResult(): EmailExtractResult {

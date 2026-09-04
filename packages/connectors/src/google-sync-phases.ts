@@ -309,6 +309,7 @@ export async function runGoogleEmailPhase(
     }
     const pending: ParsedEmail[] = [];
     const unchangedKeys: string[] = [];
+    const otpKeys: string[] = [];
     for (const parsed of parsedMessages) {
       const prior = seen.get(parsed.externalId);
       if (
@@ -317,7 +318,30 @@ export async function runGoogleEmailPhase(
         prior.hasSummary &&
         prior.hasCompleteTriage
       ) {
-        unchangedKeys.push(parsed.externalId);
+        // A message can carry a full saved analysis from before this filter existed. Re-check
+        // it here so an already-analyzed sign-in code email loses that analysis instead of
+        // being left alone as "unchanged" — otherwise it would keep showing up in Today.
+        if (looksLikeOneTimeCodeEmail(parsed.subject, parsed.body)) {
+          try {
+            await persistEmail(parsed, otpSkippedResult());
+            otpKeys.push(parsed.externalId);
+          } catch (error) {
+            context.progress.emailFailures += 1;
+            if (!context.progress.errors.includes("email-message-error")) {
+              context.progress.errors.push("email-message-error");
+            }
+            context.logger.warn(
+              {
+                stage: "email-message",
+                name: (error as Error).name,
+                status: (error as { statusCode?: number }).statusCode ?? null
+              },
+              "google-sync email message failed"
+            );
+          }
+        } else {
+          unchangedKeys.push(parsed.externalId);
+        }
         continue;
       }
       try {
@@ -349,7 +373,6 @@ export async function runGoogleEmailPhase(
     // so the batches below — and the closeScope index that finalizes a scoped CLI session on
     // the last real batch — only ever cover messages that actually go to the model.
     let processed = 0;
-    const otpKeys: string[] = [];
     const modelPending: ParsedEmail[] = [];
     for (const parsed of pending) {
       if (looksLikeOneTimeCodeEmail(parsed.subject, parsed.body)) {

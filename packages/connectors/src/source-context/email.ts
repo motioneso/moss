@@ -8,6 +8,7 @@ import type { ImapConnectionSecret } from "../imap-secret.js";
 import { buildEmailActionLink } from "./email-action-links.js";
 import {
   extractEmailSignals,
+  looksLikeOneTimeCodeEmail,
   type EmailExtractDeps,
   type EmailSignals,
   type ParsedEmail
@@ -144,12 +145,30 @@ function cacheKey(connectorAccountId: string, externalId: string): string {
   return JSON.stringify([connectorAccountId, externalId]);
 }
 
+/**
+ * A message saved before the one-time-code filter existed can still carry a full saved
+ * analysis. Re-checking here, on every read, catches that old data even when nothing has
+ * re-synced it — so a sign-in code email can never surface in Today or task planning, no
+ * matter how it was saved.
+ */
+function otpCheckedTriage(
+  subject: string,
+  otpCheckText: string,
+  stored: TriageFields
+): TriageFields {
+  return looksLikeOneTimeCodeEmail(subject, otpCheckText) ? UNTRIAGED : stored;
+}
+
 export function emailContextItemFromCache(
   row: EmailMessage,
   meta: SourceAccountMeta,
   degradedReason: DegradedReason | null
 ): EmailContextItem {
-  const triage = triageFromSignals(row.summary, cachedSignals(row));
+  const triage = otpCheckedTriage(
+    row.subject,
+    row.body_excerpt ?? row.snippet ?? "",
+    triageFromSignals(row.summary, cachedSignals(row))
+  );
   return {
     messageKey: row.external_id,
     account: meta,
@@ -288,7 +307,11 @@ async function readAccountLive(
       cachedActionability &&
       (!cachedNeedsActionDetails || cachedActionDetailsComplete)
     ) {
-      triage = triageFromSignals(cachedRow.summary, cachedSignalSet);
+      triage = otpCheckedTriage(
+        message.subject,
+        message.body,
+        triageFromSignals(cachedRow.summary, cachedSignalSet)
+      );
     } else if (triageBudget > 0) {
       triageBudget -= 1;
       const extracted = await extractEmailSignals(message, extractDeps);

@@ -38,7 +38,8 @@ describe("looksLikeOneTimeCodeEmail", () => {
     ["a passcode phrase", "Your one-time passcode", "Passcode: 9081"],
     ["a bare 2FA mention", "2FA code", "Your 2FA code is 774411."],
     ["a code word next to a short number", "Sign in", "482910 is your code. Do not share it."],
-    ["a confirm-sign-in phrase", "Confirm your sign-in", "We noticed a new sign-in attempt."]
+    ["a confirm-sign-in phrase", "Confirm your sign-in", "We noticed a new sign-in attempt."],
+    ["an OTP mention", "Your OTP", "Your OTP is 482910. It expires in ten minutes."]
   ];
 
   for (const [label, subject, body] of positives) {
@@ -67,6 +68,21 @@ describe("looksLikeOneTimeCodeEmail", () => {
       "an appointment confirmation without a code",
       "Your appointment is confirmed",
       "This confirms your appointment for next Tuesday at 10 AM."
+    ],
+    [
+      "a confirm request with an unrelated number",
+      "Invoice due",
+      "Please confirm invoice 482910 by Friday."
+    ],
+    [
+      "a verify request with an unrelated number",
+      "Budget review",
+      "Please verify the 2026 budget before Monday."
+    ],
+    [
+      "a request to turn two-factor on for a team, not a code delivery",
+      "Security rollout",
+      "Please enable two-factor authentication for the team by Friday."
     ]
   ];
 
@@ -173,6 +189,55 @@ describe("a skipped message creates no task", () => {
 
     expect(item.actionability).toBe("unknown");
     expect(item.inferredSubject ?? null).toBeNull();
+    expect(item.suggestedTasks).toEqual([]);
+
+    const planned = planEmailTasks({
+      mode: "suggest",
+      now: "2026-08-03T12:10:00.000Z",
+      items: [item]
+    });
+
+    expect(planned).toEqual([]);
+  });
+
+  it("a code email saved with a full analysis before this filter existed is still skipped on read", () => {
+    // Simulates a row saved before this feature shipped: a real sign-in code email that the
+    // model triaged as actionable, with a complete summary and a suggested task already
+    // stored. The subject/body still read as a one-time code, so both the Today filter and
+    // task planning must ignore the stored triage and treat it as skipped.
+    const row = {
+      id: "cache-otp-2",
+      connector_account_id: "account-1",
+      owner_user_id: "user-1",
+      sender: "noreply@example.invalid",
+      recipients: ["ben@example.invalid"],
+      subject: "Your login code",
+      snippet: "123456 is your login code. It expires in 10 minutes.",
+      body_excerpt: "123456 is your login code. It expires in 10 minutes.",
+      received_at: new Date("2026-08-03T12:00:00.000Z"),
+      external_id: "otp-msg-2",
+      external_metadata: { threadId: "thread-otp-2" },
+      summary: "A login code was sent.",
+      signals: {
+        confidence: 0.9,
+        actionability: {
+          category: "needs_action",
+          inferredSubject: "Enter your login code",
+          suggestedTasks: [{ text: "Enter the login code 123456" }]
+        }
+      },
+      created_at: new Date("2026-08-03T12:00:00.000Z"),
+      updated_at: new Date("2026-08-03T12:00:00.000Z")
+    } as unknown as EmailMessage;
+
+    const item = emailContextItemFromCache(
+      row,
+      { connectorAccountId: "account-1", providerId: "google", providerLabel: "Gmail" },
+      null
+    );
+
+    expect(item.actionability).toBe("unknown");
+    expect(item.summary).toBeNull();
     expect(item.suggestedTasks).toEqual([]);
 
     const planned = planEmailTasks({

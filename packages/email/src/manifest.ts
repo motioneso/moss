@@ -64,6 +64,15 @@ export const emailModuleManifest = {
       entry: "./settings"
     }
   ],
+  features: [
+    {
+      id: "email.skip-sign-in-code-emails",
+      description:
+        "A message delivering a temporary sign-in code (one-time code, login code, two-factor " +
+        "code) is left out of briefings and never turns into a task, even if it was saved " +
+        "before this check existed."
+    }
+  ],
   permissions: [
     {
       id: "email.view",
@@ -107,8 +116,7 @@ export const emailModuleManifest = {
           name: "Capture tasks",
           description:
             "Turn emails into tasks when they imply an action. Suggested by default; " +
-            "auto modes are opt-in per user. Login and verification code emails are always " +
-            "left out, so a temporary sign-in code never turns into a task or a briefing item.",
+            "auto modes are opt-in per user.",
           default: "default-on"
         },
         {
