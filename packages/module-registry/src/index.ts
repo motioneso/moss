@@ -722,12 +722,13 @@ function buildNewsDiscoveryPorts(
         robots: newsRobotsGate,
         rateLimiter: newsHostRateLimiter
       }),
-    image: (url: string, maxBytes: number) =>
+    image: (url: string, maxBytes: number, allowedHosts?: readonly string[]) =>
       fetchWebResourceBytes(url, {
         requireHttps: true,
         robots: newsRobotsGate,
         rateLimiter: newsHostRateLimiter,
-        maxBytes
+        maxBytes,
+        ...(allowedHosts ? { allowedHosts } : {})
       }),
     search: {
       async search(

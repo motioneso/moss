@@ -699,6 +699,36 @@ describe("fetchWebResource", () => {
     ).resolves.toMatchObject({ ok: true, body: "the page" });
   });
 
+  // Bug (PR 2252, second review round): the site's own rules file (robots.txt) followed
+  // redirects without checking the allowed-host list, so a publisher could point its rules file
+  // at an unapproved site and this request would still go fetch it. Every hop of that fetch must
+  // be checked the same way the page fetch itself is checked.
+  it("refuses a site rules file that redirects to a host outside the allowed list", async () => {
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    let calledUnapprovedHost = false;
+    setWebHttpTransportForTests(async (request) => {
+      if (request.url.hostname === "publisher.example" && request.url.pathname === "/robots.txt") {
+        return new Response(null, {
+          status: 301,
+          headers: { location: "https://not-approved.example/robots.txt" }
+        });
+      }
+      if (request.url.hostname === "not-approved.example") {
+        calledUnapprovedHost = true;
+        return new Response("User-agent: *\nAllow: /", { status: 200 });
+      }
+      return new Response("the page", { status: 200 });
+    });
+
+    await expect(
+      fetchWebResource("https://publisher.example/story", {
+        robots: createRobotsGate(),
+        allowedHosts: ["publisher.example"]
+      })
+    ).resolves.toMatchObject({ ok: false, reason: "robots" });
+    expect(calledUnapprovedHost).toBe(false);
+  });
+
   it("maps rate limits, truncation, and timeout", async () => {
     setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
     setWebHttpTransportForTests(async () => new Response("abcdef", { status: 200 }));
