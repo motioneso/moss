@@ -426,7 +426,6 @@ export function SettingsPage({ me }: SettingsPageProps) {
     <FeedbackProvider>
       <div className="set2">
         <div className="set2__bar">
-          <SettingsSearch items={searchItems} onSelect={(id) => setSearchParams({ section: id })} />
           {isAdmin ? (
             <Segmented
               value={mode === "admin" ? "admin" : "personal"}
@@ -440,6 +439,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
           ) : (
             <span />
           )}
+          <SettingsSearch items={searchItems} onSelect={(id) => setSearchParams({ section: id })} />
         </div>
 
         <div className="set2__grid">

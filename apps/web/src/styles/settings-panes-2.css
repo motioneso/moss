@@ -362,6 +362,16 @@
   letter-spacing: 0.03em;
   padding: 2px 6px;
 }
+.cap--toggle {
+  cursor: pointer;
+  transition:
+    opacity 120ms,
+    background 120ms,
+    color 120ms;
+}
+.cap--toggle.cap--off {
+  opacity: 0.55;
+}
 .prov__synced {
   display: flex;
   align-items: center;

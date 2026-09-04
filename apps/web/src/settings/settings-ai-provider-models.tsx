@@ -14,7 +14,6 @@ import { Button } from "@moss/ui";
 import { refreshAiProviderModels } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { readError } from "./settings-types.js";
-import { Switch } from "./settings-ui.js";
 import { AddModelForm, CAP_SHORT, EditModelForm, TIERS } from "./settings-ai-edit-model-form.js";
 import type {
   AiConfiguredModelDto,
@@ -49,7 +48,6 @@ function ModelLine(props: {
   const { model } = props;
   const isSentinel = model.providerModelId === "default";
   const tier = TIERS[model.tier];
-  const isChatModel = model.capabilities.includes("chat");
   const isDisabled = model.status === "disabled";
   return (
     <div className={`mdl${isDisabled ? " mdl--disabled" : ""}`}>
@@ -68,19 +66,32 @@ function ModelLine(props: {
         {tier.label}
       </span>
       <div className="mdl__caps">
-        {model.capabilities.map((c) => (
-          <span className="cap" key={c}>
-            {CAP_SHORT[c] ?? c}
-          </span>
-        ))}
+        {model.capabilities.map((c) =>
+          c === "chat" ? (
+            /* The Chat tag is the switch: pressed means users may pick this model for chat;
+               off dims the tag (Ben, 2026-09-04: "make this a toggle ... noticeably dim"). */
+            <button
+              type="button"
+              key={c}
+              className={`cap cap--toggle${model.allowUserOverride ? "" : " cap--off"}`}
+              aria-pressed={model.allowUserOverride}
+              aria-label={`Chat for ${model.displayName}`}
+              title={
+                model.allowUserOverride
+                  ? "Chat is on for this model. Click to turn it off."
+                  : "Chat is off for this model. Click to turn it on."
+              }
+              onClick={() => props.onOverrideChange(model, !model.allowUserOverride)}
+            >
+              {CAP_SHORT[c] ?? c}
+            </button>
+          ) : (
+            <span className="cap" key={c}>
+              {CAP_SHORT[c] ?? c}
+            </span>
+          )
+        )}
       </div>
-      {isChatModel ? (
-        <Switch
-          ariaLabel={`${model.displayName} available for user chat override`}
-          checked={model.allowUserOverride}
-          onChange={(allowed) => props.onOverrideChange(model, allowed)}
-        />
-      ) : null}
       <button
         type="button"
         className={`mdl__edit-btn${props.isEditing ? " is-active" : ""}`}
