@@ -602,15 +602,17 @@ export function SportsSourcesSection(props: {
                     {badge ? <Badge tone={badge.tone}>{badge.label}</Badge> : null}
                   </div>
                   <div className="sp-src__actions">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      aria-label={`Retry ${source.label}`}
-                      disabled={recoveryBusy}
-                      onClick={() => retryMutation.mutate(source.id)}
-                    >
-                      {retrying ? "Checking…" : "Retry"}
-                    </Button>
+                    {source.healthState === "healthy" ? null : (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        aria-label={`Retry ${source.label}`}
+                        disabled={recoveryBusy}
+                        onClick={() => retryMutation.mutate(source.id)}
+                      >
+                        {retrying ? "Checking…" : "Retry"}
+                      </Button>
+                    )}
                     {showRebuild ? (
                       <Button
                         variant="secondary"

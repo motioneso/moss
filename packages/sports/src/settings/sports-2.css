@@ -93,6 +93,17 @@
 /* Search-first picker additions (#688): search input, followed-teams summary
    chip row, collapsible browse group header. Token-only, appended. */
 
+/* "Following" section head: same title + sub pairing as News sources and Standings leagues so
+   the three sections of the pane read as one family (Ben's whole-pane review, 2026-09-03). */
+.sp-follow__head {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-4);
+}
+.sp-follow__head > * {
+  margin: 0;
+}
+
 .sp-search {
   margin-bottom: 14px;
 }

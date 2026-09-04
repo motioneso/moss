@@ -1,4 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Note, PaneHead } from "@moss/settings-ui";
 import type {
@@ -826,8 +827,14 @@ export default function SportsSettings() {
     <>
       <PaneHead
         title="Sports"
-        desc="Follow competitions or teams to see them on your Sports page and in briefings."
+        desc="Choose what you follow, where your sports news comes from, and which standings you can browse."
       />
+      <div className="sp-follow__head">
+        <h2 className="jds-section-title">Following</h2>
+        <p className="jds-section-sub">
+          Follow competitions or teams to see them on your Sports page and in briefings.
+        </p>
+      </div>
       <FollowedSummary
         follows={follows}
         competitionsByKey={competitionsByKey}
@@ -868,6 +875,11 @@ export default function SportsSettings() {
             aria-controls="sp-browse-panel"
             onClick={() => setBrowseOpen((open) => !open)}
           >
+            {browseOpen ? (
+              <ChevronDown size={16} aria-hidden="true" />
+            ) : (
+              <ChevronRight size={16} aria-hidden="true" />
+            )}
             Browse leagues
           </button>
           {browseOpen ? (
