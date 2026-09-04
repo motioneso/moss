@@ -45,6 +45,7 @@ import {
 import { SPORTS_CATALOG, catalogEntry } from "./source/catalog.js";
 import { type SportsDiscoveryBrowserPort, type SportsSafeFetchPort } from "./source/discovery.js";
 import { SportsEspnCoverageRepository } from "./source/espn-coverage-repository.js";
+import { registerSportsSourceIconRoute, type SportsIconFetchPort } from "./source/icon-route.js";
 import { SportsSourcesRepository } from "./source/repository.js";
 import type { SportsPublicSourceReader } from "./source/public-source-reader.js";
 import { createSportsPreviewStore } from "./source/preview-store.js";
@@ -94,6 +95,8 @@ export interface SportsRoutesDependencies {
     readonly fetch: SportsSafeFetchPort;
     readonly ai: NewsAiPort;
     readonly browser?: SportsDiscoveryBrowserPort;
+    /** #2211 byte fetch for publication favicons; absent means every icon lookup is a miss. */
+    readonly fetchBytes?: SportsIconFetchPort;
   };
   /** Optional injection point for tests; defaults to a real `SportsSourcesRepository`. */
   readonly sourcesRepository?: SportsSourcesRepository;
@@ -339,6 +342,15 @@ export function registerSportsRoutes(
       }
     }
   );
+
+  registerSportsSourceIconRoute(server, {
+    dataContext: dependencies.dataContext,
+    resolveAccessContext: dependencies.resolveAccessContext,
+    repository: sourcesRepository,
+    fetchBytes:
+      dependencies.discovery.fetchBytes ?? (async () => ({ ok: false, reason: "blocked" })),
+    now: dependencies.now
+  });
 
   server.put(
     "/api/sports/sources/espn/coverage",

@@ -5,6 +5,7 @@ import {
   type LazyExoticComponent,
   type ReactNode
 } from "react";
+import { ArrowLeft } from "lucide-react";
 
 import type { GeneratedSettingsSurface } from "./scanner.js";
 import type { ModuleSettingsSurfaceProps } from "./index.js";
@@ -115,7 +116,8 @@ export function ModuleSettingsErrorFallback(props: {
 
 function RouterBackButton(props: { readonly onBack: () => void }) {
   return (
-    <button type="button" className="modrow__link" onClick={props.onBack}>
+    <button type="button" className="gflow__back" onClick={props.onBack}>
+      <ArrowLeft size={15} aria-hidden="true" />
       Back to modules
     </button>
   );

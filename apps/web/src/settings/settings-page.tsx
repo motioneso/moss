@@ -25,6 +25,8 @@ import {
 import { Fragment, lazy, Suspense, useEffect, useState, type ComponentType } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
+import { SettingsSearch, type SettingsSearchItem } from "./settings-search";
+
 import { useAssistantName } from "../api/use-assistant-name";
 import { FeedbackProvider } from "./settings-feedback";
 import { ProfilePane } from "./settings-personal-panes";
@@ -308,6 +310,38 @@ const ADMIN_GROUPS = [
 ] as const satisfies readonly SettingsSectionGroup<SettingsSection<AdminSectionId>>[];
 export const ADMIN_SECTIONS = flattenSettingsGroups<SettingsSection<AdminSectionId>>(ADMIN_GROUPS);
 
+/* Words a user might type into the settings search that the section label and
+   description do not already carry. Keep truthful to what each pane shows. */
+const SECTION_KEYWORDS: Record<string, readonly string[]> = {
+  profile: [
+    "display name",
+    "name",
+    "time zone",
+    "timezone",
+    "date format",
+    "clock",
+    "weather",
+    "temperature",
+    "fahrenheit",
+    "celsius",
+    "location",
+    "quiet hours",
+    "do not disturb",
+    "sessions",
+    "sign out",
+    "export",
+    "download data",
+    "delete account"
+  ],
+  appearance: ["theme", "dark mode", "light mode", "colours", "colors", "palette"],
+  assistant: ["model", "ai", "provider", "assistant name", "personality", "voice"],
+  people: ["users", "invite", "roles", "admin", "members"],
+  aiproviders: ["api key", "openai", "anthropic", "ollama", "model", "provider"],
+  instmods: ["install", "modules", "uninstall", "update"],
+  audit: ["log", "history", "who did what"],
+  host: ["server", "domain", "url", "backup", "advanced"]
+};
+
 interface SettingsPageProps {
   readonly me: MeResponse;
 }
@@ -375,10 +409,24 @@ export function SettingsPage({ me }: SettingsPageProps) {
     setSearchParams({ section: nextMode === "admin" ? categoryAdmin : categoryPersonal });
   };
 
+  const searchItems: SettingsSearchItem[] = [
+    ...PERSONAL_GROUPS,
+    ...(isAdmin ? ADMIN_GROUPS : [])
+  ].flatMap((group) =>
+    group.sections.map((section) => ({
+      id: section.id,
+      label: section.label,
+      description: section.description,
+      group: group.label === ASSISTANT_NAME_GROUP_LABEL ? assistantName : group.label,
+      keywords: SECTION_KEYWORDS[section.id] ?? []
+    }))
+  );
+
   return (
     <FeedbackProvider>
       <div className="set2">
         <div className="set2__bar">
+          <SettingsSearch items={searchItems} onSelect={(id) => setSearchParams({ section: id })} />
           {isAdmin ? (
             <Segmented
               value={mode === "admin" ? "admin" : "personal"}

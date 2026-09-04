@@ -95,32 +95,45 @@ export function SportsTodayWidget(): ReactNode {
       {lead ? (
         <>
           <div className="jds-brief__title">Top stories</div>
-          <a className="sp-lead" href={lead.url} target="_blank" rel="noreferrer">
-            {lead.imageUrl ? (
-              <img className="sp-lead__photo" src={lead.imageUrl} alt="" loading="lazy" />
-            ) : null}
-            <span className="sp-lead__tag">
-              {lead.competitionLabel} · {lead.publisherLabel}
-            </span>
-            <span className="sp-lead__title">{lead.title}</span>
-            {lead.summary ? <span className="sp-lead__dek">{lead.summary}</span> : null}
-          </a>
-          <StoryFeedbackMenu storyRef={lead.storyRef} surface="today" onChanged={onStoryChanged} />
+          {/* Feedback dots sit in the story's top-right corner (over the photo when there is one)
+              and only appear while the story is hovered or focused — same placement as the News
+              desk (Ben 2026-09-03: "the dots hovering on the image like news does in the top
+              right ... only show up when the user hovers over that story"). .sp-fbhost carries
+              the hover rule; see sports-4-grid.css. */}
+          <div className="sp-lead-wrap sp-fbhost">
+            <a className="sp-lead" href={lead.url} target="_blank" rel="noreferrer">
+              {lead.imageUrl ? (
+                <img className="sp-lead__photo" src={lead.imageUrl} alt="" loading="lazy" />
+              ) : null}
+              <span className="sp-lead__tag">
+                {lead.competitionLabel} · {lead.publisherLabel}
+              </span>
+              <span className="sp-lead__title">{lead.title}</span>
+              {lead.summary ? <span className="sp-lead__dek">{lead.summary}</span> : null}
+            </a>
+            <StoryFeedbackMenu
+              storyRef={lead.storyRef}
+              surface="today"
+              onChanged={onStoryChanged}
+            />
+          </div>
           {briefs.length > 0 ? (
             <ul className="sp-brief">
               {briefs.map((story) => (
                 <li className="sp-brief__item" key={story.storyRef}>
-                  <a className="sp-brief__link" href={story.url} target="_blank" rel="noreferrer">
-                    <span className="sp-brief__tag">
-                      {story.competitionLabel} · {story.publisherLabel}
-                    </span>
-                    <span className="sp-brief__title">{story.title}</span>
-                  </a>
-                  <StoryFeedbackMenu
-                    storyRef={story.storyRef}
-                    surface="today"
-                    onChanged={onStoryChanged}
-                  />
+                  <div className="sp-brief__row sp-fbhost">
+                    <a className="sp-brief__link" href={story.url} target="_blank" rel="noreferrer">
+                      <span className="sp-brief__tag">
+                        {story.competitionLabel} · {story.publisherLabel}
+                      </span>
+                      <span className="sp-brief__title">{story.title}</span>
+                    </a>
+                    <StoryFeedbackMenu
+                      storyRef={story.storyRef}
+                      surface="today"
+                      onChanged={onStoryChanged}
+                    />
+                  </div>
                 </li>
               ))}
             </ul>

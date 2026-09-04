@@ -139,6 +139,7 @@
 }
 
 .chatd-msg {
+  position: relative;
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr);
   column-gap: 10px;
@@ -194,6 +195,40 @@
 
 .chatd-msg--me .feedback-menu {
   align-self: flex-end;
+}
+
+/* Note 3 — assistant feedback sits in the message's top-right corner and only shows on
+   hover / keyboard focus, while its menu is open, or after a choice was saved. Pointer-less
+   devices cannot hover, so they always see it. Opacity (not display) keeps it tabbable. */
+.chatd-msg:not(.chatd-msg--me) .chatd-bubble {
+  padding-right: 34px;
+}
+
+.feedback-menu--corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.chatd-msg:hover .feedback-menu--corner,
+.chatd-msg:focus-within .feedback-menu--corner,
+.feedback-menu--corner:has(.feedback-menu__details[open]),
+.feedback-menu--corner.is-saved {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .feedback-menu--corner {
+    opacity: 1;
+  }
+}
+
+.feedback-menu--corner .feedback-menu__list {
+  left: auto;
+  right: 0;
 }
 
 .feedback-menu__details {
@@ -427,6 +462,32 @@
 
 .chatd-peek {
   margin-bottom: 16px;
+}
+
+/* Note 1 — the per-turn "Thinking..." line: plain caption text, no pill, indented to the
+   reply column (26px avatar + 10px gap). Stays in the thread after the reply lands. */
+.chatd-peek--quiet {
+  margin: 0 0 10px 36px;
+}
+
+.chatd-peek__summary--quiet {
+  display: inline-flex;
+  gap: 5px;
+  padding: 2px 0;
+}
+
+.chatd-peek__summary--quiet .chatd-peek__chev {
+  margin-left: 0;
+}
+
+.chatd-peek--quiet .chatd-peek__body {
+  padding: 6px 0 2px;
+}
+
+/* Note 2 — a status update rendered inline in the thread, same column as the reply. */
+.chatd-status {
+  margin: 0 0 10px 36px;
+  line-height: 1.5;
 }
 
 .chatd-peek__summary {

@@ -13,6 +13,7 @@ import SportsSettings, {
   SearchResults
 } from "../../packages/sports/src/settings/index.js";
 import { AddSourceFlow, SportsSourcesSection } from "../../packages/sports/src/settings/sources.js";
+import { SourceAssignmentPicker } from "../../packages/sports/src/settings/source-assignment-picker.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
 const CATALOG_KEY = ["sports", "catalog"] as const;
@@ -108,22 +109,26 @@ describe("SportsSettings", () => {
     client.setQueryData(CATALOG_KEY, { competitions: TWO_LEAGUES, degraded: false });
     client.setQueryData(FOLLOWS_KEY, { follows: [] });
     let html = renderWithQuery(client);
-    expect(html).toContain("Standings leagues");
+    expect(html).toContain("Configure standings");
     expect(html).toContain("Football");
     expect(html).toContain("England");
-    let selectedList = html.match(
-      /<select[^>]*aria-label="Selected leagues"[\s\S]*?<\/select>/
-    )?.[0];
-    expect(selectedList).toContain('value="nfl"');
-    expect(selectedList).toContain('value="epl"');
+    const leagueBox = (markup: string, key: string) =>
+      markup.match(new RegExp(`<input[^>]*value="${key}"[^>]*>`))?.[0] ?? "";
+    expect(leagueBox(html, "nfl")).toContain('checked=""');
+    // Soccer leagues sit under their country and stay hidden until the row is opened.
+    expect(leagueBox(html, "epl")).toContain('checked=""');
+    expect(html).toContain('aria-label="All England leagues"');
+    expect(html).toMatch(
+      /aria-expanded="false"[^>]*aria-controls="sp-standings-region-soccer-england"/
+    );
 
     client.setQueryData(sportsQueryKeys.standingsPreferences, {
       selectedCompetitionKeys: []
     });
     html = renderWithQuery(client);
-    selectedList = html.match(/<select[^>]*aria-label="Selected leagues"[\s\S]*?<\/select>/)?.[0];
-    expect(selectedList).toContain("No leagues selected");
-    expect(selectedList).not.toContain('value="nfl"');
+    expect(leagueBox(html, "nfl")).not.toContain('checked=""');
+    expect(leagueBox(html, "epl")).not.toContain('checked=""');
+    expect(html).toContain(">0<!-- --> of <!-- -->2<");
   });
 
   it("renders only active Sports story preferences with stored story details", () => {
@@ -294,6 +299,29 @@ describe("SportsSettings", () => {
   });
 
   it("uses the shared checkbox primitive for source assignments", () => {
+    const html = renderToString(
+      createElement(SourceAssignmentPicker, {
+        follows: [
+          {
+            id: "22222222-2222-2222-2222-222222222222",
+            competitionKey: "nfl",
+            teamKey: null,
+            createdAt: "2026-08-24T12:00:00.000Z"
+          }
+        ],
+        competitionsByKey: new Map(),
+        teamsByCompetition: new Map(),
+        selected: new Set<string>(),
+        onToggle: () => {},
+        idPrefix: "sp-test-assign"
+      })
+    );
+
+    expect(html).toContain('class="jds-check sp-src__check"');
+    expect(html).toContain('class="jds-check__box"');
+  });
+
+  it("add-source coverage picker stays hidden until a publication is entered (Ben, 2026-09-03)", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const html = renderToString(
       createElement(
@@ -314,8 +342,9 @@ describe("SportsSettings", () => {
       )
     );
 
-    expect(html).toContain('class="jds-check sp-src__check"');
-    expect(html).toContain('class="jds-check__box"');
+    expect(html).toContain('id="sp-addsource-input"');
+    expect(html).not.toContain("sp-addsource-assign");
+    expect(html).not.toContain("Coverage (optional");
   });
 
   it("empty-query view starts with browse leagues collapsed, not the full catalog", () => {
@@ -761,7 +790,7 @@ describe("BrowseGroups", () => {
 describe("followControlState", () => {
   it("inactive team: visible and aria-label both read 'Follow {team}'", () => {
     expect(followControlState("team", "Arsenal", false, null)).toEqual({
-      visible: "Follow Arsenal",
+      visible: "",
       ariaLabel: "Follow Arsenal"
     });
   });

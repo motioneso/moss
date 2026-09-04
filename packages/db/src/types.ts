@@ -1301,7 +1301,7 @@ export interface SportsCustomSourcesTable {
   canonical_domain: string;
   homepage_url: string;
   feed_url: string | null;
-  retrieval_method: "feed" | "scrape";
+  retrieval_method: "feed" | "scrape" | "reddit";
   enabled: ColumnType<boolean, boolean | undefined, boolean>;
   health_state: ColumnType<
     SportsSourceHealthState,
@@ -1328,6 +1328,8 @@ export interface SportsCustomSourcesTable {
   >;
   confirmed_fetch_hosts: string[];
   authorization_confirmed_at: TimestampColumn;
+  /** #2211 (0213): a subreddit's community icon URL on Reddit's image hosts; null for publications. */
+  icon_url: ColumnType<string | null, string | null | undefined, string | null>;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }

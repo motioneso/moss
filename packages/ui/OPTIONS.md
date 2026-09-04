@@ -58,6 +58,10 @@ _No enum or boolean props._
 - **toggle** (optional boolean flag)
 - **selected** (optional boolean flag)
 
+## combobox
+
+- **disabled** (optional boolean flag)
+
 ## day-cell
 
 - **out** (optional boolean flag)
