@@ -20,6 +20,10 @@ export interface ScanResult {
   readonly surfaces: readonly GeneratedSettingsSurface[];
   readonly components: Readonly<Record<string, string>>;
   readonly manifestFiles: readonly string[];
+  // Search keywords per module: every settings page's label and help text, plus the label and
+  // help text of every on/off switch the manifest declares (`preferences`) — the same text the
+  // settings screens actually render, so the search box stays in sync with them automatically.
+  readonly settingKeywords: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface GeneratedWebRoute {
@@ -54,6 +58,7 @@ export function scanModuleSettings(options: ScanOptions): ScanResult {
   const components: Record<string, string> = {};
   const manifestFiles: string[] = [];
   const seenPaths = new Map<string, string>();
+  const settingKeywords: Record<string, string[]> = {};
 
   for (const pkg of listModulePackages(options.rootDir)) {
     const manifestFile = join(pkg.dir, "src", "manifest.ts");
@@ -62,6 +67,8 @@ export function scanModuleSettings(options: ScanOptions): ScanResult {
 
     const manifest = readManifest(manifestFile);
     if (!manifest) continue;
+
+    const keywords = (settingKeywords[manifest.id] ??= []);
 
     for (const surface of manifest.settings) {
       const owner = seenPaths.get(surface.path);
@@ -83,18 +90,26 @@ export function scanModuleSettings(options: ScanOptions): ScanResult {
         order: surface.order ?? null,
         hasEntry: Boolean(surface.entry)
       });
+      keywords.push(surface.label);
+      if (surface.description) keywords.push(surface.description);
 
       if (surface.entry) {
         components[manifest.id] =
           `lazy(() => import("${pkg.name}/${normalizeEntry(surface.entry)}"))`;
       }
     }
+
+    for (const preference of manifest.preferences) {
+      keywords.push(preference.label);
+      if (preference.description) keywords.push(preference.description);
+    }
   }
 
   return {
     surfaces: surfaces.sort((a, b) => a.moduleId.localeCompare(b.moduleId)),
     components,
-    manifestFiles
+    manifestFiles,
+    settingKeywords
   };
 }
 
@@ -111,6 +126,7 @@ export function emitVirtualModule(result: ScanResult): string {
     `export const MODULE_SETTINGS_COMPONENTS = {`,
     componentEntries,
     `};`,
+    `export const MODULE_SETTING_KEYWORDS = ${JSON.stringify(result.settingKeywords, null, 2)};`,
     ``
   ].join("\n");
 }
@@ -248,6 +264,7 @@ interface ParsedManifest {
   readonly id: string;
   readonly name: string;
   readonly settings: readonly ParsedSurface[];
+  readonly preferences: readonly ParsedPreference[];
 }
 
 interface ParsedSurface {
@@ -258,6 +275,11 @@ interface ParsedSurface {
   readonly scope: Scope;
   readonly order?: number;
   readonly entry?: string;
+}
+
+interface ParsedPreference {
+  readonly label: string;
+  readonly description?: string;
 }
 
 function readManifest(manifestFile: string): ParsedManifest | null {
@@ -280,12 +302,16 @@ function readManifest(manifestFile: string): ParsedManifest | null {
       const id = readStringProperty(initializer, "id", constants);
       const name = readStringProperty(initializer, "name", constants);
       if (!id || !name) continue;
+      const preferences = readArrayProperty(initializer, "preferences") ?? [];
       return {
         id,
         name,
         settings: settings
           .map((item) => readSurface(item, constants))
-          .filter((surface): surface is ParsedSurface => Boolean(surface))
+          .filter((surface): surface is ParsedSurface => Boolean(surface)),
+        preferences: preferences
+          .map((item) => readPreference(item, constants))
+          .filter((preference): preference is ParsedPreference => Boolean(preference))
       };
     }
   }
@@ -401,6 +427,17 @@ function readSurface(
     order: readNumberProperty(item, "order"),
     entry: readStringProperty(item, "entry", constants)
   };
+}
+
+function readPreference(
+  node: ts.Expression,
+  constants: ReadonlyMap<string, string>
+): ParsedPreference | null {
+  const item = unwrap(node);
+  if (!ts.isObjectLiteralExpression(item)) return null;
+  const label = readStringProperty(item, "label", constants);
+  if (!label) return null;
+  return { label, description: readStringProperty(item, "description", constants) };
 }
 
 function readStringProperty(
