@@ -8,6 +8,7 @@ import {
   type AiAssistantActionRisk,
   type AiAssistantActionStatus,
   type AiAuthMethod,
+  type AiConfiguredModelOrigin,
   type AiConfiguredModelsTable,
   type AiModelStatus,
   type AiModelTier,
@@ -116,6 +117,9 @@ export interface AiConfiguredModelSafeRow {
   readonly status: AiModelStatus;
   readonly tier: AiModelTier;
   readonly allow_user_override: boolean;
+  // #2208: 'manual' rows come from POST /api/ai/models and survive discovery; 'discovered' rows
+  // are reconciled against the provider's live list.
+  readonly origin: AiConfiguredModelOrigin;
   readonly created_at: Date;
   readonly updated_at: Date;
 }
@@ -551,6 +555,8 @@ export class AiRepository {
         status: input.status ?? "active",
         tier: input.tier ?? "interactive",
         allow_user_override: input.allowUserOverride ?? true,
+        // #2208: an admin typed this row in; discovery must never prune it.
+        origin: "manual",
         created_at: now,
         updated_at: now
       })
@@ -600,6 +606,7 @@ export class AiRepository {
           // their personal chat model without an admin first flipping the flag. Admin can still lock
           // a specific model non-overridable via updateModel.
           allow_user_override: true,
+          origin: "discovered",
           created_at: now,
           updated_at: now
         })
@@ -614,9 +621,10 @@ export class AiRepository {
   }
 
   /**
-   * #982/#869/#1083 F2: CLI reconciliation removes stale/manual concrete rows but preserves the
-   * `default` sentinel and discovered natural keys. Keeping unchanged rows preserves their UUIDs,
-   * custom state, and UUID-backed service bindings without a migration.
+   * #982/#869/#1083 F2 + #2208: CLI reconciliation removes stale DISCOVERED rows but preserves the
+   * `default` sentinel, every `manual` row (added by hand through POST /api/ai/models), and the
+   * discovered natural keys still on the vendor's list. Keeping unchanged rows preserves their
+   * UUIDs, custom state, and UUID-backed service bindings without a migration.
    */
   async deleteModelsForProviderExceptSentinel(
     scopedDb: DataContextDb,
@@ -627,7 +635,8 @@ export class AiRepository {
     let query = scopedDb.db
       .deleteFrom("app.ai_configured_models")
       .where("provider_config_id", "=", providerConfigId)
-      .where("provider_model_id", "!=", "default");
+      .where("provider_model_id", "!=", "default")
+      .where("origin", "=", "discovered");
     if (providerModelIdsToPreserve.length > 0) {
       query = query.where("provider_model_id", "not in", [...providerModelIdsToPreserve]);
     }
@@ -1902,6 +1911,7 @@ export class AiRepository {
         "models.status as status",
         "models.tier as tier",
         "models.allow_user_override as allow_user_override",
+        "models.origin as origin",
         "models.created_at as created_at",
         "models.updated_at as updated_at"
       ])

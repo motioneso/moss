@@ -138,6 +138,7 @@ import type {
   GetTerminalStatusResponse,
   SetTerminalPasswordResponse,
   RequestTerminalTicketResponse,
+  RefreshAiProviderModelsResponse,
   TestAiProviderConfigResponse,
   LookupAiCapabilityRouteResponse,
   TranscribeAudioResponse,
@@ -1102,6 +1103,16 @@ export async function discoverAiProviderModels(
 ): Promise<DiscoverAiProviderModelsResponse> {
   return requestJson<DiscoverAiProviderModelsResponse>(
     `/api/ai/providers/${encodeURIComponent(id)}/discover-models`,
+    { method: "POST" }
+  );
+}
+
+// #2208: admin "Refresh models" — re-discover one provider's list and persist it.
+export async function refreshAiProviderModels(
+  id: string
+): Promise<RefreshAiProviderModelsResponse> {
+  return requestJson<RefreshAiProviderModelsResponse>(
+    `/api/ai/providers/${encodeURIComponent(id)}/models/refresh`,
     { method: "POST" }
   );
 }

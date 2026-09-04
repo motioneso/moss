@@ -1,8 +1,14 @@
 import type { DataContextDb } from "@moss/db";
 import type { AiAuthMethod, AiProviderKind } from "@moss/shared";
 
-import type { ModelDiscoveryService } from "./model-discovery.js";
+import type { ModelDiscoveryReason, ModelDiscoveryService } from "./model-discovery.js";
 import type { AiRepository } from "./repository.js";
+
+/** #2208: what the refresh route reports back — why nothing changed, when that is the case. */
+export interface DiscoverAndPersistModelsOutcome {
+  readonly reason?: ModelDiscoveryReason;
+  readonly message?: string;
+}
 
 export interface DiscoverAndPersistModelsInput {
   readonly actorUserId: string;
@@ -16,8 +22,8 @@ export interface DiscoverAndPersistModelsInput {
 /**
  * #982/#869 D2/D6: one discovery path for create, update, login-ready, and list self-heal.
  * CLI providers whose vendor answered (#2208: the runner's live list, `reason` absent) are
- * reconciled by natural key: rows absent from the new list are removed, unchanged rows keep their
- * ids, and the #367 sentinel survives. A failed, unsupported, or unavailable CLI list changes
+ * reconciled by natural key: DISCOVERED rows absent from the new list are removed, unchanged rows
+ * keep their ids, `manual` rows (added by hand) and the #367 sentinel survive. A failed, unsupported, or unavailable CLI list changes
  * NOTHING (no deletes on a bad call). API-key providers keep insert-only behavior because their
  * live `/models` response must not erase admin choices.
  */
@@ -25,7 +31,7 @@ export async function discoverAndPersistModels(
   scopedDb: DataContextDb,
   input: DiscoverAndPersistModelsInput,
   deps: { readonly repository: AiRepository; readonly modelDiscovery: ModelDiscoveryService }
-): Promise<void> {
+): Promise<DiscoverAndPersistModelsOutcome> {
   const discovered = await deps.modelDiscovery.discoverModels(
     `${input.actorUserId}:${input.providerId}`,
     {
@@ -37,7 +43,12 @@ export async function discoverAndPersistModels(
   );
   // #2208: only a list the vendor actually returned may replace rows. `reason` set ⇒ the runner
   // could not list (not logged in / unsupported / error / no runner) ⇒ touch nothing.
-  if (discovered.reason !== undefined) return;
+  if (discovered.reason !== undefined) {
+    return {
+      reason: discovered.reason,
+      ...(discovered.message !== undefined ? { message: discovered.message } : {})
+    };
+  }
   const replaceCliModels = input.authMethod === "cli";
   const models = discovered.models.map((model) => ({ ...model, status: "active" as const }));
 
@@ -50,4 +61,5 @@ export async function discoverAndPersistModels(
   }
 
   await deps.repository.upsertDiscoveredModels(scopedDb, input.providerId, models);
+  return {};
 }

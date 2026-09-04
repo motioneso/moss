@@ -3,9 +3,7 @@ import {
   Activity,
   KeyRound,
   MinusCircle,
-  Pencil,
   Plus,
-  RefreshCw,
   GitCommitHorizontal,
   LogIn,
   Terminal,
@@ -36,7 +34,8 @@ import { useAssistantName } from "../api/use-assistant-name";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 import { Badge, Field, Group, Note, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
-import { EditModelForm } from "./settings-ai-edit-model-form";
+import { MODEL_TIERS, TIERS } from "./settings-ai-edit-model-form";
+import { ProviderModels } from "./settings-ai-provider-models";
 import { TerminalModal } from "./terminal-modal";
 import {
   ProviderLoginDialog,
@@ -73,23 +72,6 @@ const PROVIDER_CATALOG: readonly {
   { label: "Custom", kind: "custom", authMethod: "api_key" }
 ];
 
-const CAP_SHORT: Record<AiModelCapability, string> = {
-  chat: "Chat",
-  "tool-use": "Tools",
-  json: "JSON",
-  vision: "Vision",
-  summarization: "Summary",
-  transcription: "Voice"
-};
-
-const TIERS: Record<AiModelTier, { label: string; hint: string }> = {
-  reasoning: { label: "Reasoning", hint: "Deepest and slowest. Hard planning and judgment." },
-  interactive: { label: "Interactive", hint: "Fast and balanced. The everyday default." },
-  economy: { label: "Economy", hint: "Cheapest and quickest. Light, high-volume work." }
-};
-
-const MODEL_TIERS: readonly AiModelTier[] = ["reasoning", "interactive", "economy"];
-
 // Chat and the strict email-extraction background service share the existing binding control. Voice
 // stays on its dedicated endpoint; other worker capabilities remain automatic.
 const SERVICE_ROWS: readonly {
@@ -116,62 +98,6 @@ const SERVICE_ROWS: readonly {
 
 /* ----------------------------------------------------------- Provider card */
 
-function ModelLine(props: {
-  readonly model: AiConfiguredModelDto;
-  readonly isEditing: boolean;
-  readonly onEdit: () => void;
-  readonly onOverrideChange: (model: AiConfiguredModelDto, allowed: boolean) => void;
-  readonly onStatusChange: (model: AiConfiguredModelDto, status: "active" | "disabled") => void;
-}) {
-  const { model } = props;
-  const tier = TIERS[model.tier];
-  const isChatModel = model.capabilities.includes("chat");
-  const isDisabled = model.status === "disabled";
-  return (
-    <div className={`mdl${isDisabled ? " mdl--disabled" : ""}`}>
-      <div className="mdl__id">
-        {model.providerModelId}
-        {isDisabled ? <span className="mdl__off">off</span> : null}
-      </div>
-      <span className={`tier tier--${model.tier}`} title={tier.hint}>
-        {tier.label}
-      </span>
-      <div className="mdl__caps">
-        {model.capabilities.map((c) => (
-          <span className="cap" key={c}>
-            {CAP_SHORT[c] ?? c}
-          </span>
-        ))}
-      </div>
-      {isChatModel ? (
-        <Switch
-          ariaLabel={`${model.displayName} available for user chat override`}
-          checked={model.allowUserOverride}
-          onChange={(allowed) => props.onOverrideChange(model, allowed)}
-        />
-      ) : null}
-      <button
-        type="button"
-        className={`mdl__edit-btn${props.isEditing ? " is-active" : ""}`}
-        title="Edit model"
-        aria-label={`Edit ${model.displayName}`}
-        onClick={props.onEdit}
-      >
-        <Pencil size={12} aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="mdl__toggle-btn"
-        title={isDisabled ? "Enable model" : "Disable model"}
-        aria-label={isDisabled ? `Enable ${model.displayName}` : `Disable ${model.displayName}`}
-        onClick={() => props.onStatusChange(model, isDisabled ? "active" : "disabled")}
-      >
-        <MinusCircle size={12} aria-hidden="true" />
-      </button>
-    </div>
-  );
-}
-
 function ProviderCard(props: {
   readonly provider: AiProviderConfigDto;
   readonly models: readonly AiConfiguredModelDto[];
@@ -194,7 +120,6 @@ function ProviderCard(props: {
 }) {
   const { provider } = props;
   const { toast } = useFeedback();
-  const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const [baseUrl, setBaseUrl] = useState(provider.baseUrl ?? "");
   const [apiKey, setApiKey] = useState("");
   // #1059 — a CLI-auth provider has no API key to credential-test; its Test action opens
@@ -370,40 +295,13 @@ function ProviderCard(props: {
         </div>
       ) : null}
 
-      <div className="prov__models">
-        <div className="prov__modelshd">
-          <span>Models · {props.models.length}</span>
-        </div>
-        <div className="prov__modellist">
-          {props.models.length ? (
-            props.models.map((m) => (
-              <div key={m.id}>
-                <ModelLine
-                  model={m}
-                  isEditing={editingModelId === m.id}
-                  onEdit={() => setEditingModelId((cur) => (cur === m.id ? null : m.id))}
-                  onOverrideChange={props.onModelOverride}
-                  onStatusChange={props.onModelStatusChange}
-                />
-                {editingModelId === m.id ? (
-                  <EditModelForm model={m} onClose={() => setEditingModelId(null)} />
-                ) : null}
-              </div>
-            ))
-          ) : (
-            <div className="prov__synced" style={{ marginTop: 0 }}>
-              Models appear here automatically when the provider connects.
-            </div>
-          )}
-        </div>
-        {/* #982/#869 Lane B: discovery is automatic; manual REST escape hatches remain server-side. */}
-        {props.models.length ? (
-          <div className="prov__synced">
-            <RefreshCw size={11} aria-hidden="true" />
-            Registered for {provider.displayName}.
-          </div>
-        ) : null}
-      </div>
+      <ProviderModels
+        provider={provider}
+        models={props.models}
+        onModelOverride={props.onModelOverride}
+        onModelStatusChange={props.onModelStatusChange}
+      />
+
       {/* #1059 — rendered outside .prov__edit so opening the terminal never depends on the
           card's edit-mode toggle; ProviderCard already destructures `provider` at the top. */}
       {terminalOpen ? (

@@ -29,12 +29,14 @@ describe("discoverAndPersistModels (#2208)", () => {
     async (status) => {
       const repository = fakeRepository();
       const modelDiscovery = new ModelDiscoveryService({
-        cliModelLister: async () => ({ status })
+        cliModelLister: async () => ({ status, message: "detail" })
       });
-      await discoverAndPersistModels(scopedDb, input, {
+      const outcome = await discoverAndPersistModels(scopedDb, input, {
         repository: repository as never,
         modelDiscovery
       });
+      // #2208 slice 4: the refresh route reports this back to Settings.
+      expect(outcome).toEqual({ reason: status, message: "detail" });
       expect(repository.deleteModelsForProviderExceptSentinel).not.toHaveBeenCalled();
       expect(repository.upsertDiscoveredModels).not.toHaveBeenCalled();
     }
@@ -58,10 +60,11 @@ describe("discoverAndPersistModels (#2208)", () => {
         models: [{ id: "claude-fable-5-1" }, { id: "claude-haiku-4-5-20251001" }]
       })
     });
-    await discoverAndPersistModels(scopedDb, input, {
+    const outcome = await discoverAndPersistModels(scopedDb, input, {
       repository: repository as never,
       modelDiscovery
     });
+    expect(outcome).toEqual({});
     expect(repository.deleteModelsForProviderExceptSentinel).toHaveBeenCalledWith(
       scopedDb,
       "prov-1",

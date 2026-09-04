@@ -22,6 +22,7 @@ import {
   listAiAssistantToolsResponseSchema,
   listAiConfiguredModelsResponseSchema,
   listAiProviderConfigsResponseSchema,
+  refreshAiProviderModelsResponseSchema,
   lookupAiCapabilityRouteResponseSchema,
   putAiServiceBindingRequestSchema,
   putAiServiceBindingResponseSchema,
@@ -81,7 +82,10 @@ export const aiModuleManifest = {
       "sql/0148_jarvis_error_log_worker_insert.sql",
       // #874 — `purpose` discriminator ('assistant'|'voice') + one-voice partial unique index so the
       // Voice(STT) endpoint reuses the AI provider/model tables without bleeding into chat routing.
-      "sql/0150_ai_provider_purpose.sql"
+      "sql/0150_ai_provider_purpose.sql",
+      // #2208 — `origin` ('discovered'|'manual') so discovery prunes only its own rows and never a
+      // model an admin added by hand.
+      "sql/0212_ai_configured_models_origin.sql"
     ],
     migrationDirectories: ["packages/ai/sql"],
     ownedTables: [
@@ -101,6 +105,63 @@ export const aiModuleManifest = {
       scope: "user",
       order: 40,
       permissionId: "ai.manage"
+    }
+  ],
+  // #2208: Moss's app map for the Providers card's model controls (Settings > Assistant & AI).
+  features: [
+    {
+      id: "ai.refresh_provider_models",
+      description:
+        "Refresh models: ask a provider for its current model list and store it. Discovered rows " +
+        "that vanished from the list are removed; rows added by hand and the provider's default " +
+        "entry are kept. A failed refresh changes nothing.",
+      remediations: [
+        {
+          id: "ai.refresh_provider_models.log_in",
+          description: "Log in to the provider with its Log in button, then refresh again.",
+          path: "/settings?section=aiproviders"
+        },
+        {
+          id: "ai.refresh_provider_models.add_by_hand",
+          description: "Use Add model on the provider card to type in the model you need.",
+          path: "/settings?section=aiproviders"
+        }
+      ],
+      errors: [
+        {
+          code: "ai.refresh_provider_models.not_logged_in",
+          class: "prerequisite",
+          remediationRef: "ai.refresh_provider_models.log_in",
+          description: "Shown as 'Not logged in': the provider has no stored sign-in to ask with."
+        },
+        {
+          code: "ai.refresh_provider_models.unsupported",
+          class: "prerequisite",
+          remediationRef: "ai.refresh_provider_models.add_by_hand",
+          description:
+            "Shown as 'This provider cannot list its models yet': no live list exists for this " +
+            "provider kind (Google/Gemini today)."
+        },
+        {
+          code: "ai.refresh_provider_models.unavailable",
+          class: "transient",
+          description:
+            "Shown as 'The sign-in helper is not running': the service that holds provider " +
+            "logins is not connected; start it or contact an administrator."
+        },
+        {
+          code: "ai.refresh_provider_models.error",
+          class: "transient",
+          description:
+            "Shown as 'Could not reach the provider': the vendor did not answer; retry later."
+        }
+      ]
+    },
+    {
+      id: "ai.add_model_by_hand",
+      description:
+        "Add model: type a model id, display name, tier, and capabilities under a provider. The " +
+        "row is tagged 'Added by hand' and is never removed by Refresh models or a re-login."
     }
   ],
   permissions: [
@@ -193,6 +254,13 @@ export const aiModuleManifest = {
       method: "GET",
       path: "/api/ai/providers/:id/models/discover",
       responseSchema: aiDiscoverModelsResponseSchema,
+      permissionId: "ai.manage"
+    },
+    {
+      // #2208: admin "Refresh models" — re-discover one provider's list and persist it.
+      method: "POST",
+      path: "/api/ai/providers/:id/models/refresh",
+      responseSchema: refreshAiProviderModelsResponseSchema,
       permissionId: "ai.manage"
     },
     {

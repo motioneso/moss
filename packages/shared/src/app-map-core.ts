@@ -157,7 +157,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "aiproviders",
     label: "Assistant & AI",
-    description: "Configure instance AI providers, models, and bindings.",
+    description:
+      "Configure instance AI providers, models, and bindings. Each provider card lists its models " +
+      "with a Refresh models button (asks the provider for its current list; the line under the " +
+      "list then reads 'Refreshed: N models', 'Not logged in', 'This provider cannot list its " +
+      "models yet', 'The sign-in helper is not running', or 'Could not reach the provider') and an " +
+      "Add model button (type in a model by hand; such rows are tagged 'Added by hand' and survive " +
+      "refreshes and re-logins).",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },

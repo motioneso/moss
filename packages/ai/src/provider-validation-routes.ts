@@ -5,13 +5,16 @@ import { HttpError, handleRouteError as handleModuleRouteError } from "@moss/mod
 import {
   aiDiscoverModelsRouteSchema,
   discoverAiProviderModelsRouteSchema,
+  refreshAiProviderModelsRouteSchema,
   testAiProviderConfigRouteSchema
 } from "@moss/shared";
 
 import type { AiSecretCipher } from "./crypto.js";
+import { discoverAndPersistModels } from "./discover-and-persist-models.js";
 import type { ModelDiscoveryService } from "./model-discovery.js";
 import { discoverProviderModels, testProviderCredential } from "./provider-validation.js";
 import type { AiRepository } from "./repository.js";
+import { serializeModel } from "./serialize-model.js";
 
 interface IdParams {
   readonly id: string;
@@ -129,6 +132,55 @@ export function registerAiProviderValidationRoutes(
           // #2208: surface why a CLI provider listed nothing so Settings can say so in plain English.
           ...(result.reason !== undefined ? { reason: result.reason } : {}),
           ...(result.message !== undefined ? { message: result.message } : {})
+        };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  // #2208: admin "Refresh models". Drops the cached list, asks the vendor again (CLI providers go
+  // through the runner), persists the answer, and returns the provider's rows as now stored.
+  // When the list could not be fetched nothing changes and `reason` says why.
+  server.post<{ Params: IdParams }>(
+    "/api/ai/providers/:id/models/refresh",
+    { schema: refreshAiProviderModelsRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const result = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const provider = await loadTestableProvider(
+              dependencies,
+              scopedDb,
+              accessContext,
+              request.params.id
+            );
+            dependencies.modelDiscovery.invalidate(accessContext.actorUserId, provider.id);
+            const outcome = await discoverAndPersistModels(
+              scopedDb,
+              {
+                actorUserId: accessContext.actorUserId,
+                providerId: provider.id,
+                providerKind: provider.provider_kind,
+                authMethod: provider.auth_method,
+                baseUrl: provider.base_url,
+                credential: dependencies.secretCipher.decryptJson(provider.encrypted_credential)
+              },
+              { repository: dependencies.repository, modelDiscovery: dependencies.modelDiscovery }
+            );
+            const models = (await dependencies.repository.listModels(scopedDb)).filter(
+              (model) => model.provider_config_id === provider.id
+            );
+            return { models, outcome };
+          }
+        );
+
+        return {
+          models: result.models.map((model) => serializeModel(model, accessContext.actorUserId)),
+          ...(result.outcome.reason !== undefined ? { reason: result.outcome.reason } : {}),
+          ...(result.outcome.message !== undefined ? { message: result.outcome.message } : {})
         };
       } catch (error) {
         return handleRouteError(error, reply);

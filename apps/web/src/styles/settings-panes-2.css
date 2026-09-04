@@ -712,3 +712,14 @@
 .memory-facts-empty {
   padding: 10px 16px;
 }
+/* #2208: "Refresh models" / "Add model" beside the Models header; "Added by hand" tag on a row. */
+.prov__modelacts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.mdl__origin {
+  margin-left: 6px;
+}

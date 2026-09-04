@@ -8,6 +8,9 @@ export type AiProviderStatus = "active" | "error" | "disabled" | "revoked";
 export type AiAuthMethod = "cli" | "api_key";
 export type AiProviderExecutionMode = "interactive" | "non_interactive";
 export type AiModelStatus = "active" | "disabled";
+// #2208: who created a model row. `manual` rows (POST /api/ai/models) survive discovery refreshes;
+// `discovered` rows are pruned when the provider's live list no longer carries them.
+export type AiConfiguredModelOrigin = "discovered" | "manual";
 
 // #1110: tier/capability are canonical on @moss/module-sdk (module manifests need them for
 // AI requirement declarations); re-exported here so existing @moss/shared consumers don't churn.
@@ -66,6 +69,7 @@ export interface AiConfiguredModelDto {
   readonly status: AiModelStatus;
   readonly tier: AiModelTier;
   readonly allowUserOverride: boolean;
+  readonly origin: AiConfiguredModelOrigin;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -143,6 +147,15 @@ export type AiCliModelListResult =
 export interface AiDiscoverModelsItemDto extends AiProviderDiscoveredModelDto {
   readonly fromCache: boolean;
   readonly fromFallback: boolean;
+}
+
+/** #2208: result of POST /api/ai/providers/:id/models/refresh. */
+export interface RefreshAiProviderModelsResponse {
+  /** The provider's stored model rows after the refresh (unchanged when `reason` is set). */
+  readonly models: readonly AiConfiguredModelDto[];
+  /** Present only when a CLI provider's live list could not be fetched; nothing was changed. */
+  readonly reason?: AiCliModelListFailure | "unavailable";
+  readonly message?: string;
 }
 
 export interface AiDiscoverModelsResponse {

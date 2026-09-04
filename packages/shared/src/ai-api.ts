@@ -32,6 +32,12 @@ export const aiModelTierSchema = {
   enum: ["reasoning", "interactive", "economy"]
 } as const;
 
+// #2208: who created the row (discovery vs admin by hand).
+export const aiConfiguredModelOriginSchema = {
+  type: "string",
+  enum: ["discovered", "manual"]
+} as const;
+
 export const aiModelCapabilitySchema = {
   type: "string",
   enum: ["chat", "tool-use", "json", "vision", "summarization", "transcription"]
@@ -116,6 +122,7 @@ const aiConfiguredModelSchema = {
     "status",
     "tier",
     "allowUserOverride",
+    "origin",
     "createdAt",
     "updatedAt"
   ],
@@ -131,6 +138,7 @@ const aiConfiguredModelSchema = {
     status: aiModelStatusSchema,
     tier: aiModelTierSchema,
     allowUserOverride: { type: "boolean" },
+    origin: aiConfiguredModelOriginSchema,
     createdAt: { type: "string" },
     updatedAt: { type: "string" }
   }
@@ -457,6 +465,20 @@ export const aiDiscoverModelsResponseSchema = {
   }
 } as const;
 
+// #2208: POST /api/ai/providers/:id/models/refresh — re-run discovery for one provider and
+// persist the result; answers with the provider's rows as now stored plus why a CLI provider
+// listed nothing (same `reason` vocabulary as the discover route).
+export const refreshAiProviderModelsResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["models"],
+  properties: {
+    models: { type: "array", items: aiConfiguredModelSchema },
+    reason: { type: "string", enum: ["unsupported", "not_logged_in", "error", "unavailable"] },
+    message: { type: "string" }
+  }
+} as const;
+
 export const listAiConfiguredModelsResponseSchema = {
   type: "object",
   additionalProperties: false,
@@ -694,6 +716,17 @@ export const aiDiscoverModelsRouteSchema = {
   params: idParamsSchema,
   response: {
     200: aiDiscoverModelsResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    404: errorResponseSchema
+  }
+} as const;
+
+export const refreshAiProviderModelsRouteSchema = {
+  params: idParamsSchema,
+  response: {
+    200: refreshAiProviderModelsResponseSchema,
     400: errorResponseSchema,
     401: errorResponseSchema,
     403: errorResponseSchema,

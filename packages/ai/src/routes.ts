@@ -48,7 +48,6 @@ import {
   type AiAssistantToolDto,
   type AiAssistantToolInvocationDto,
   type AiAuthMethod,
-  type AiConfiguredModelDto,
   type AiModelCapability,
   type AiModelStatus,
   type AiModelTier,
@@ -89,6 +88,8 @@ import { registerModuleBuildRoutes } from "./module-build-routes.js";
 import { registerProviderVisibilityRoutes } from "./provider-visibility-routes.js";
 import { createAiSecretCipher, type AiSecretCipher } from "./crypto.js";
 import { discoverAndPersistModels } from "./discover-and-persist-models.js";
+import { serializeModel } from "./serialize-model.js";
+export { serializeModel } from "./serialize-model.js";
 import { ModelDiscoveryService } from "./model-discovery.js";
 import { registerAiProviderValidationRoutes } from "./provider-validation-routes.js";
 import {
@@ -101,7 +102,6 @@ import {
   NotAGenericProviderError,
   type AiAssistantActionRequestSafeRow,
   type ChatModelOverrideSettings,
-  type AiConfiguredModelSafeRow,
   type AiProviderConfigSafeRow
 } from "./repository.js";
 
@@ -954,29 +954,6 @@ export async function serializeProvider(
     revokedAt: toIsoString(provider.revoked_at),
     createdAt: serializeDate(provider.created_at),
     updatedAt: serializeDate(provider.updated_at)
-  };
-}
-
-export function serializeModel(
-  model: AiConfiguredModelSafeRow,
-  actorUserId: string
-): AiConfiguredModelDto {
-  const isOwner = model.owner_user_id === actorUserId;
-  const displayProviderName = isOwner ? model.provider_display_name : "Instance default";
-  return {
-    id: model.id,
-    providerConfigId: isOwner ? model.provider_config_id : null,
-    providerKind: isOwner ? model.provider_kind : null,
-    providerDisplayName: displayProviderName,
-    providerStatus: model.provider_status,
-    providerModelId: isOwner ? model.provider_model_id : null,
-    displayName: model.display_name,
-    capabilities: model.capabilities.map(parseCapability),
-    status: model.status,
-    tier: model.tier,
-    allowUserOverride: model.allow_user_override,
-    createdAt: serializeDate(model.created_at),
-    updatedAt: serializeDate(model.updated_at)
   };
 }
 
