@@ -430,6 +430,11 @@ test.describe("Sports settings follow picker (#989)", () => {
     await gotoSportsSettings(page);
 
     const standingsSettings = page.getByRole("region", { name: "Standings leagues" });
+    // The section starts collapsed (Ben, 2026-09-03); open it before measuring the picker.
+    await standingsSettings.getByRole("button", { name: /Standings leagues/ }).click();
+    await expect(
+      standingsSettings.getByRole("listbox", { name: "Selected leagues" })
+    ).toBeVisible();
     for (const width of [320, 375, 414, 768]) {
       await page.setViewportSize({ width, height: 844 });
       const geometry = await standingsSettings.evaluate((element) => {
@@ -456,6 +461,7 @@ test.describe("Sports settings follow picker (#989)", () => {
     await page.getByRole("button", { name: "Follow Los Angeles Lakers" }).click();
 
     await page.reload();
+    await standingsSettings.getByRole("button", { name: /Standings leagues/ }).click();
     await expect(selectedLeagues.getByRole("option", { name: "NFL" })).toHaveCount(1);
     await expect(selectedLeagues.getByRole("option", { name: "Premier League" })).toHaveCount(1);
     const availableLeagues = standingsSettings.getByRole("listbox", { name: "Available leagues" });
