@@ -588,6 +588,64 @@
 .sp-brief__title {
   line-height: 1.4;
 }
+/* Story feedback overlay (Ben 2026-09-03). A .sp-fbhost wraps one story (the lead, or one brief
+   row) and parks the feedback dots in its top-right corner, over the photo when there is one, on
+   the same line as the text otherwise — never on a line of their own. The dots are hidden until
+   the story is hovered or holds focus, and stay while the menu or the reason editor is open, so a
+   page full of stories does not show a row of "..." everywhere. Pointer-less devices (touch) have
+   no hover, so they always show the dots. Mirrors the News desk's .nw-feedback placement without
+   depending on it (module isolation). */
+.sp-fbhost {
+  position: relative;
+}
+.sp-fbhost > .sp-feedback {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  margin-top: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.sp-fbhost:hover > .sp-feedback,
+.sp-fbhost:focus-within > .sp-feedback,
+.sp-fbhost > .sp-feedback:has([aria-expanded="true"]),
+.sp-fbhost > .sp-feedback:has(.sp-feedback__editor) {
+  opacity: 1;
+}
+@media (hover: none) {
+  .sp-fbhost > .sp-feedback {
+    opacity: 1;
+  }
+}
+/* Inside a host the reason editor and the Saved/error notes float below the dots instead of
+   flowing inline, so opening them never reflows the story. */
+.sp-fbhost > .sp-feedback {
+  flex-direction: column;
+  align-items: flex-end;
+}
+/* The editor and the Saved note are jds-card--raised (the visual comes from the primitive; this
+   sheet only places them). */
+.sp-fbhost .sp-feedback__editor {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: min(19rem, calc(100vw - 3rem));
+}
+.sp-fbhost .sp-feedback__saved {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  white-space: nowrap;
+  padding: var(--space-1) var(--space-2);
+}
+.sp-fbhost > .sp-feedback > .sp-feedback__error {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  white-space: nowrap;
+}
+
 /* "Your teams" subhead: a mono-caps section label with a top keyline that splits the followed
    cards off from the world-of-sport stories above (Ben: "before we see the your teams section"). */
 .sp-tksub {

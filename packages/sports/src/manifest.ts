@@ -115,6 +115,13 @@ export const sportsModuleManifest = {
       "app.sports_headline_prefs"
     ]
   },
+  features: [
+    {
+      id: "sports.story_feedback",
+      description:
+        "Rate a sports story with More like this or Less like this from the dots that appear in its top-right corner while it is hovered or focused, on Today and on Sports. Less like this asks for a reason and hides the story."
+    }
+  ],
   navigation: [
     {
       id: "sports",

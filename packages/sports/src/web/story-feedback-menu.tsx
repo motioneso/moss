@@ -104,7 +104,11 @@ export function StoryFeedbackMenu(props: StoryFeedbackMenuProps) {
         }}
       />
       {editing ? (
-        <div className="sp-feedback__editor" role="dialog" aria-label="Why less like this?">
+        <div
+          className="sp-feedback__editor jds-card jds-card--raised jds-card--pad-sm"
+          role="dialog"
+          aria-label="Why less like this?"
+        >
           <label className="sp-feedback__label" htmlFor={`feedback-reason-${storyRef}`}>
             Why less like this?
           </label>
@@ -131,7 +135,10 @@ export function StoryFeedbackMenu(props: StoryFeedbackMenuProps) {
         </div>
       ) : null}
       {!editing && saved ? (
-        <span className="sp-feedback__saved" role="status">
+        <span
+          className="sp-feedback__saved jds-card jds-card--raised jds-card--pad-sm"
+          role="status"
+        >
           Saved
         </span>
       ) : null}
