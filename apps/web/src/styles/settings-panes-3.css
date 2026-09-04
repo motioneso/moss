@@ -187,10 +187,14 @@
   flex: none;
   display: inline-flex;
 }
-.onb-cred__in input {
+.onb-cred__in input,
+.onb-cred__in select {
   flex: 1;
   min-width: 0;
   font: inherit;
+}
+.onb-cred__field .onb-cred__hint {
+  display: block;
 }
 .onb-cred__ok {
   flex: none;
