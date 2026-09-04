@@ -1,7 +1,7 @@
 # Scratchpad: a persistent Markdown notepad beside the chat drawer
 
 - Date: 2026-09-04
-- Status: draft; Ben answered decisions 1, 2, 3, 5 and 9 on 2026-09-04, one question left
+- Status: ready for build; all open questions answered by Ben on 2026-09-04
 - Task issue: [#2236](https://github.com/motioneso/moss/issues/2236)
 - Related: chat drawer (`apps/web/src/chat/chat-drawer.tsx`), notes module (`packages/notes`)
 
@@ -45,6 +45,9 @@ over the page on desktop and fills the screen on phone. The scratchpad follows t
 - Moss editing or deleting existing scratchpad text. Append only (see decision 6).
 - Real-time collaboration or two-browser live sync. Last write wins, with a conflict guard.
 - A rich WYSIWYG editor with tables, images, or embeds.
+- A card or preview on the Today screen. Ben's ruling 2026-09-04: the scratchpad is a pocket
+  notebook you pull out when you need it, not something on display. It lives only behind the
+  pencil button and the shortcut. Moss can still read it at any time (decision 6).
 
 ## Resolved Decisions
 
@@ -196,12 +199,10 @@ The checkbox lives in two places that read and write the same setting: the pad's
 
 ## Open Questions for Ben
 
-Answered 2026-09-04 and folded in above: placement beside the chat drawer (decision 3),
-shortcut and its Settings field (decision 5), editor choice (decision 2), one pad with the
-optional Notes copy (decisions 1 and 9).
-
-1. Should the scratchpad also appear in the Today screen as a small card (read-only preview,
-   click to open)? Not in this spec; easy to add later if wanted.
+None left. Answered 2026-09-04 and folded in above: one pad with the optional Notes copy
+(decisions 1 and 9), editor choice (decision 2), placement beside the chat drawer (decision 3),
+shortcut and its Settings field (decision 5), and no Today card (Non-Goals). Moss reading the
+pad on request stays in (decision 6).
 
 ## Architecture
 
@@ -530,4 +531,4 @@ migration so no second migration is needed.
 - Every screen the feature ships has a mockup above (desktop, pad menu, Settings section,
   both-open, phone).
 - Nothing here requires a hand-edited settings file.
-- One open question left (a Today card); it does not block any slice.
+- No open questions remain; every slice can start.
