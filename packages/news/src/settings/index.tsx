@@ -527,11 +527,11 @@ export default function NewsSettings() {
         desc="Pick the publications your front page draws from, and optionally narrow it to the topics you follow. These choices also shape news in briefings."
       />
 
-      <section className="nw-set" aria-label="News topics">
+      <section className="nw-set" aria-label="Topics">
         <div className="nw-set__head">
           <h2 className="jds-section-title">Topics</h2>
           <p className="jds-section-sub">
-            Follow desks from your publications or describe interests across the web.
+            Follow desks from your publications or describe interests and exclusions across the web.
           </p>
         </div>
 
@@ -577,7 +577,7 @@ export default function NewsSettings() {
             </h3>
           </div>
           <p className="nw-set__hint">
-            Freeform topics in your own words, discovered across the web, not just your publications.
+            Freeform topics in your own words, including guidance on what to include or leave out.
           </p>
           {personalizationReady ? (
             <DescribeTopics
@@ -590,11 +590,11 @@ export default function NewsSettings() {
         </div>
       </section>
 
-      <section className="nw-set" aria-label="News sources">
+      <section className="nw-set" aria-label="Publishers">
         <div className="nw-set__head">
-          <h2 className="jds-section-title">Sources</h2>
+          <h2 className="jds-section-title">Publishers</h2>
           <p className="jds-section-sub">
-            Choose built-in publications or add your own to shape your front page.
+            Choose built-in publications, connect accounts, add your own, or exclude domains.
           </p>
         </div>
 
@@ -758,79 +758,82 @@ export default function NewsSettings() {
             </div>
           )}
         </div>
+
+        <div className="nw-set__group">
+          <div className="nw-set__group-head">
+            <h3 className="nw-set__subheading">
+              <span>Excluded publishers</span>
+              <Badge tone="neutral">{exclusions.length}</Badge>
+            </h3>
+          </div>
+          <p className="nw-set__hint">
+            Excluded publishers never appear anywhere in News, Today, or briefings. Removing one returns it to neutral.
+          </p>
+          {personalizationReady ? (
+            <form className="nw-set__exform" onSubmit={submitExclusion}>
+              <label className="nw-set__exlabel" htmlFor="nw-exclusion-input">
+                Publisher domain or HTTPS link
+              </label>
+              <div className="nw-set__exrow">
+                <input
+                  id="nw-exclusion-input"
+                  className="jds-input"
+                  type="text"
+                  value={exclusionInput}
+                  placeholder="example.com"
+                  disabled={addExclusionMutation.isPending}
+                  aria-describedby={exclusionError ? "nw-exclusion-error" : undefined}
+                  onChange={(event) => {
+                    setExclusionInput(event.target.value);
+                    // Stale validation copy beside fresh input reads as a new failure — clear it.
+                    setExclusionValidation(null);
+                  }}
+                />
+                <Button type="submit" size="sm" disabled={addExclusionMutation.isPending}>
+                  Add
+                </Button>
+              </div>
+            </form>
+          ) : null}
+          {personalizationReady && exclusionError ? (
+            <p id="nw-exclusion-error" className="nw-set__exerr" role="alert">
+              {exclusionError}
+            </p>
+          ) : null}
+          {personalizationReady && exclusions.length > 0 ? (
+            <ul className="nw-set__list">
+              {exclusions.map((exclusion) => {
+                const removing =
+                  removeExclusionMutation.isPending &&
+                  removeExclusionMutation.variables === exclusion.id;
+                return (
+                  <li key={exclusion.id} className="nw-set__item">
+                    <div className="nw-set__item-row">
+                      <span className="nw-set__item-label">{exclusion.canonicalDomain}</span>
+                      <div className="nw-set__actions">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          aria-label={`Remove ${exclusion.canonicalDomain}`}
+                          disabled={removing}
+                          onClick={() => removeExclusionMutation.mutate(exclusion.id)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          {personalizationReady && removeExclusionMutation.isError ? (
+            <Note>Could not remove that exclusion. Try again.</Note>
+          ) : null}
+        </div>
       </section>
 
       <StoryFeedbackSettings />
-
-      <section className="nw-set" aria-label="Excluded publishers">
-        <div className="nw-set__head">
-          <h2 className="jds-section-title">Excluded publishers</h2>
-          <p className="jds-section-sub">
-            Excluded publishers never appear anywhere in News, Today, or briefings.
-          </p>
-        </div>
-        {personalizationReady ? (
-          <form className="nw-set__exform" onSubmit={submitExclusion}>
-            <label className="nw-set__exlabel" htmlFor="nw-exclusion-input">
-              Publisher domain or HTTPS link
-            </label>
-            <div className="nw-set__exrow">
-              <input
-                id="nw-exclusion-input"
-                className="jds-input"
-                type="text"
-                value={exclusionInput}
-                placeholder="example.com"
-                disabled={addExclusionMutation.isPending}
-                aria-describedby={exclusionError ? "nw-exclusion-error" : undefined}
-                onChange={(event) => {
-                  setExclusionInput(event.target.value);
-                  // Stale validation copy beside fresh input reads as a new failure — clear it.
-                  setExclusionValidation(null);
-                }}
-              />
-              <Button type="submit" size="sm" disabled={addExclusionMutation.isPending}>
-                Add
-              </Button>
-            </div>
-          </form>
-        ) : null}
-        {personalizationReady && exclusionError ? (
-          <p id="nw-exclusion-error" className="nw-set__exerr" role="alert">
-            {exclusionError}
-          </p>
-        ) : null}
-        {personalizationReady && exclusions.length > 0 ? (
-          <ul className="nw-set__list">
-            {exclusions.map((exclusion) => {
-              const removing =
-                removeExclusionMutation.isPending &&
-                removeExclusionMutation.variables === exclusion.id;
-              return (
-                <li key={exclusion.id} className="nw-set__item">
-                  <div className="nw-set__item-row">
-                    <span className="nw-set__item-label">{exclusion.canonicalDomain}</span>
-                    <div className="nw-set__actions">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        aria-label={`Remove ${exclusion.canonicalDomain}`}
-                        disabled={removing}
-                        onClick={() => removeExclusionMutation.mutate(exclusion.id)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
-        {personalizationReady && removeExclusionMutation.isError ? (
-          <Note>Could not remove that exclusion. Try again.</Note>
-        ) : null}
-      </section>
 
       {error ? <Note>Could not load or save news preferences. Try again.</Note> : null}
     </>

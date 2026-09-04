@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type ReactElement } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Tag } from "lucide-react";
 import { Badge } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
 import type { NewsCustomTopicDto, NewsPersonalizationAvailabilityDto } from "@moss/shared";
@@ -90,12 +91,14 @@ export function DescribeTopics(props: {
     void queryClient.invalidateQueries({ queryKey: newsQueryKeys.overview });
   };
 
+  const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [guidance, setGuidance] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   function resetForm() {
+    setAdding(false);
     setEditingId(null);
     setLabel("");
     setGuidance("");
@@ -131,6 +134,7 @@ export function DescribeTopics(props: {
   function startEdit(topic: NewsCustomTopicDto) {
     createMutation.reset();
     updateMutation.reset();
+    setAdding(false);
     setEditingId(topic.id);
     const values = describedTopicFormValues(topic);
     setLabel(values.label);
@@ -184,6 +188,9 @@ export function DescribeTopics(props: {
               <li key={topic.id} className="nw-set__item">
                 <div className="nw-set__item-row">
                   <div className="nw-set__identity">
+                    <span className="nw-set__item-icon" aria-hidden="true">
+                      <Tag size={16} />
+                    </span>
                     <span className="nw-set__item-label">{topic.label}</span>
                     {topic.guidance ? (
                       <span className="nw-set__item-meta">{topic.guidance}</span>
@@ -206,7 +213,7 @@ export function DescribeTopics(props: {
                       variant="secondary"
                       size="sm"
                       aria-label={`Remove ${topic.label}`}
-                      disabled={removing}
+                      disabled={pending || removing}
                       onClick={() => removeMutation.mutate(topic.id)}
                     >
                       Remove
@@ -226,57 +233,78 @@ export function DescribeTopics(props: {
         </p>
       ) : null}
       {props.needsAttention ? props.retryRow() : null}
-      {props.availability?.freeformTopicsEnabled ? (
-        <form className="nw-set__exform" onSubmit={submit}>
-          <label className="nw-set__exlabel" htmlFor="nw-addtopic-label">
-            Topic in your own words
-          </label>
-          <div className="nw-set__exrow">
-            <input
-              id="nw-addtopic-label"
-              className="jds-input"
-              type="text"
-              value={label}
-              placeholder="mechanical watches"
-              disabled={pending}
-              onChange={(event) => {
-                setLabel(event.target.value);
-                setStatusMessage(null);
-              }}
-            />
-          </div>
-          <label className="nw-set__exlabel" htmlFor="nw-addtopic-guidance">
-            Optional guidance — what to include or leave out
-          </label>
-          <div className="nw-set__exrow">
-            <input
-              id="nw-addtopic-guidance"
-              className="jds-input"
-              type="text"
-              value={guidance}
-              placeholder="not smartwatches"
-              disabled={pending}
-              onChange={(event) => {
-                setGuidance(event.target.value);
-                setStatusMessage(null);
-              }}
-            />
-            <Button type="submit" size="sm" disabled={pending || !label.trim()}>
-              {createMutation.isPending
-                ? "Checking…"
-                : updateMutation.isPending
-                  ? "Saving…"
-                  : editingId
-                    ? "Save changes"
-                    : "Add topic"}
+      {adding || editingId ? (
+        <div className="nw-set__candidate jds-card jds-card--sunken jds-card--pad-lg">
+          <div className="nw-set__add-head">
+            <h4 className="nw-set__eyebrow">{editingId ? "Edit topic" : "Add a topic"}</h4>
+            <Button variant="secondary" size="sm" aria-expanded={true} onClick={cancelEdit}>
+              Close
             </Button>
-            {editingId ? (
+          </div>
+          <form className="nw-set__exform" onSubmit={submit}>
+            <label className="nw-set__exlabel" htmlFor="nw-addtopic-label">
+              Topic in your own words
+            </label>
+            <div className="nw-set__exrow">
+              <input
+                id="nw-addtopic-label"
+                className="jds-input"
+                type="text"
+                value={label}
+                placeholder="mechanical watches"
+                disabled={pending}
+                onChange={(event) => {
+                  setLabel(event.target.value);
+                  setStatusMessage(null);
+                }}
+              />
+            </div>
+            <label className="nw-set__exlabel" htmlFor="nw-addtopic-guidance">
+              Optional guidance — what to include or leave out
+            </label>
+            <div className="nw-set__exrow">
+              <input
+                id="nw-addtopic-guidance"
+                className="jds-input"
+                type="text"
+                value={guidance}
+                placeholder="not smartwatches"
+                disabled={pending}
+                onChange={(event) => {
+                  setGuidance(event.target.value);
+                  setStatusMessage(null);
+                }}
+              />
+              <Button type="submit" size="sm" disabled={pending || !label.trim()}>
+                {createMutation.isPending
+                  ? "Checking…"
+                  : updateMutation.isPending
+                    ? "Saving…"
+                    : editingId
+                      ? "Save changes"
+                      : "Add topic"}
+              </Button>
               <Button variant="secondary" size="sm" disabled={pending} onClick={cancelEdit}>
                 Cancel
               </Button>
-            ) : null}
-          </div>
-        </form>
+            </div>
+          </form>
+        </div>
+      ) : props.availability?.freeformTopicsEnabled ? (
+        <div className="nw-set__add-section">
+          <Button
+            variant="secondary"
+            size="sm"
+            aria-expanded={false}
+            onClick={() => {
+              resetForm();
+              setAdding(true);
+            }}
+          >
+            <Plus size={14} aria-hidden="true" />
+            Add a topic
+          </Button>
+        </div>
       ) : (
         <div className="nw-set__addrow">
           <Button variant="secondary" size="sm" disabled>

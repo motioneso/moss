@@ -230,7 +230,7 @@ describe("NewsSettings personalization sections (#953)", () => {
     // The Slice-1 closed-write placeholders are gone — real forms render instead.
     expect(html).not.toContain("Coming soon");
     expect(html).toContain("Add a source");
-    expect(html).toContain('id="nw-addtopic-label"');
+    expect(html).toContain("Add a topic");
     // With prerequisites satisfied there is nothing to set up.
     expect(html).not.toContain("/settings?section=assistant");
   });

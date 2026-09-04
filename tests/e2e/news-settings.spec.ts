@@ -182,6 +182,7 @@ test("described topics: empty state, create via Enter, edit, and remove", async 
   await expect(page.getByText("News still uses your selected publications.")).toBeVisible();
 
   // Create via Enter from the label input (no explicit button click).
+  await page.getByRole("button", { name: "Add a topic" }).click();
   const labelInput = page.getByLabel("Topic in your own words");
   const guidanceInput = page.getByLabel("Optional guidance — what to include or leave out");
   await labelInput.fill("Watches");
@@ -305,6 +306,7 @@ test("topic success waits for the refreshed row before announcing completion", a
   });
 
   await page.goto("/settings?section=modules&module=news");
+  await page.getByRole("button", { name: "Add a topic" }).click();
   const labelInput = page.getByLabel("Topic in your own words");
   await labelInput.fill("Watches");
   await page.getByLabel("Optional guidance — what to include or leave out").fill("mechanical only");
@@ -367,6 +369,7 @@ test("create and edit errors stay local when switching modes or canceling", asyn
   await page.goto("/settings?section=modules&module=news");
   await expect(page.getByRole("heading", { name: "News" })).toBeVisible();
 
+  await page.getByRole("button", { name: "Add a topic" }).click();
   const labelInput = page.getByLabel("Topic in your own words");
 
   // Failed create retains input, then entering edit clears create-only feedback.
@@ -382,9 +385,10 @@ test("create and edit errors stay local when switching modes or canceling", asyn
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByRole("alert")).toContainText("content policy");
   await page.getByRole("button", { name: "Cancel" }).click();
-  await expect(labelInput).toHaveValue("");
   await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.getByRole("button", { name: "Add a topic" }).click();
+  await expect(labelInput).toHaveValue("");
 });
 
 test("retry validation queues owner-wide revalidation and surfaces queued/error feedback", async ({
