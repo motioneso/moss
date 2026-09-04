@@ -38,6 +38,7 @@ documented exception that this spec removes.
 ## Design
 
 ### 1. cli-runner: new non-session RPC `listProviderModels`
+
 - Params `{ provider: RpcProviderKind }`; result
   `{ status: "ok", models: readonly { id: string }[] } | { status: "unsupported" | "not_logged_in" | "error", message?: string }`.
 - One adapter per provider kind in a new `packages/cli-runner/src/model-list-adapters.ts`,
@@ -47,6 +48,7 @@ documented exception that this spec removes.
   types), `packages/cli-runner/src/connection.ts` dispatch, and the client `RpcConnection`.
 
 ### 2. API: discovery for `auth_method = "cli"` asks the runner
+
 - `ModelDiscoveryService` gains an optional `cliModelLister` dependency
   (`(provider) => Promise<ListProviderModelsResult>`), injected from the onboarding-login seam in
   `packages/module-registry` (same socket, same lazy connection, same 503 mapping).
@@ -60,6 +62,7 @@ documented exception that this spec removes.
   are fine; lists of ids are not.
 
 ### 3. Persistence: discovered vs manual rows, no more wiping
+
 - New migration in `packages/ai/sql/` (next number after the current latest): add
   `origin text not null default 'discovered' check (origin in ('discovered','manual'))` to
   `app.ai_configured_models`. Rows created through `POST /api/ai/models` are `manual`; discovery
@@ -70,6 +73,7 @@ documented exception that this spec removes.
 - Existing rows are `discovered` by default, which matches how they were created.
 
 ### 4. Settings UI (admin, Providers card)
+
 - **Refresh models** button on each provider's model list: `POST /api/ai/providers/:id/models/refresh`
   (new route; admin-only; invalidates the discovery cache then runs `discoverAndPersistModels`;
   returns the provider's models plus the discovery `reason`). Show a one-line result under the
@@ -82,11 +86,13 @@ documented exception that this spec removes.
   (`packages/shared/src/app-map-core.ts`) for the two new controls and the refresh outcome text.
 
 ### Out of scope
+
 - Gemini model listing (follow-up issue).
 - Short-name aliases (`fable`, `opus`): unnecessary once real ids are discovered, and would be
   another typed-in list.
 
 ## Verification
+
 - Unit: adapters (token parsing incl. the `KEY=` prefix, header shapes, visibility filter, timeout),
   discovery service with a stubbed lister, persist logic (manual survives, discovered pruned,
   failed call changes nothing).

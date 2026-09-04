@@ -108,9 +108,7 @@ export class ModelDiscoveryService {
   }
 
   /** #2208: CLI providers have no HTTP `/models`; the runner asks the vendor with the stored login. */
-  private async fetchCliModels(
-    providerKind: AiProviderKind
-  ): Promise<{
+  private async fetchCliModels(providerKind: AiProviderKind): Promise<{
     models: AiProviderDiscoveredModelDto[];
     reason?: ModelDiscoveryReason;
     message?: string;
