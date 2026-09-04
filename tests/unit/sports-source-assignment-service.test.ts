@@ -382,7 +382,7 @@ describe("SportsSourceService assignment replacement", () => {
     };
     const generateJson = vi.fn(async () => ({
       ok: true as const,
-      object: [{ targetKey: `follow:${addedFollowId}`, parameters: { teamId: "42" } }]
+      object: { targets: [{ targetKey: `follow:${addedFollowId}`, parameters: { teamId: "42" } }] }
     }));
     const fetch = vi.fn(async (url: string, options?: { allowedHosts?: readonly string[] }) => {
       if (url === "https://publisher.example.com/") {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { assertBoundedStructuredSchema } from "@moss/ai";
 import type { DataContextDb } from "@moss/db";
 import type { NewsAiPort, NewsSafeFetchPort } from "@moss/news";
 
@@ -639,6 +640,88 @@ describe("resolveSportsSourceInput", () => {
     expect(fetch).toHaveBeenCalledWith("https://one.example/api/team/9825/news", {
       allowedHosts: ["one.example"],
       requestHeaders: { accept: "application/json" }
+    });
+  });
+
+  it("hands the structured seam schemas it accepts on every recipe path", async () => {
+    // Regression: nhl.com/ducks (no feed) 500'd because the AI schemas carried `pattern`
+    // keywords and two of them had a non-object root, which the seam refuses before calling
+    // the model.
+    const slottedRecipe = {
+      version: 1,
+      kind: "json",
+      fetchHosts: ["one.example"],
+      request: {
+        urlTemplate: "https://one.example/api/team/{teamId}/news",
+        slots: [{ name: "teamId", location: "path", encoding: "path_segment", maxLength: 32 }],
+        headers: { accept: "application/json" }
+      },
+      scopes: ["team"],
+      itemLimit: 10,
+      extraction: { itemsPath: ["news"], headlinePath: ["title"], normalize: ["trim"] }
+    } as const;
+    const validated = validateSportsSourceRecipe(slottedRecipe);
+    if (!validated.ok) throw new Error("fixture recipe must validate");
+    const target = {
+      target: { kind: "follow" as const, followId: "team-follow" },
+      label: "Arsenal",
+      scope: "team" as const
+    };
+    const mapping = { targetKey: "follow:team-follow", parameters: { teamId: "9825" } };
+    const fetch = fetchMap({
+      "https://one.example/": {
+        body: `<title>One</title><main><a class="story" href="/story"><span class="title">A consequential sports headline today</span></a></main>`
+      },
+      "https://one.example/api/team/9825/news": {
+        body: `{"news":[]}`,
+        contentType: "application/json"
+      }
+    });
+    const schemas: unknown[] = [];
+    const aiReturning = (object: unknown): NewsAiPort => ({
+      fingerprint: async () => null,
+      generateJson: async (_db, input) => {
+        schemas.push(input.schema);
+        assertBoundedStructuredSchema(input.schema);
+        return { ok: true, object };
+      }
+    });
+
+    const plain = await resolveSportsSourceInput(
+      db,
+      { fetch, ai: aiReturning(htmlRecipe) },
+      { rawUrl: "https://one.example" }
+    );
+    const targeted = await resolveSportsSourceInput(
+      db,
+      { fetch, ai: aiReturning({ recipe: slottedRecipe, targets: [mapping] }) },
+      { rawUrl: "https://one.example", targets: [target] }
+    );
+    const fixed = await resolveSportsSourceInput(
+      db,
+      { fetch, ai: aiReturning({ targets: [mapping] }) },
+      {
+        rawUrl: "https://one.example",
+        targets: [target],
+        persistedAuthority: {
+          canonicalDomain: "one.example",
+          recipeJson: slottedRecipe,
+          recipeFingerprint: validated.fingerprint,
+          confirmedFetchHosts: ["one.example"]
+        }
+      }
+    );
+
+    expect(schemas).toHaveLength(3);
+    expect(JSON.stringify(schemas)).not.toContain('"pattern"');
+    expect(plain).toMatchObject({ status: "ok", candidate: { retrievalMethod: "scrape" } });
+    expect(targeted).toMatchObject({
+      status: "ok",
+      candidate: { targets: [{ targetUrl: "https://one.example/api/team/9825/news" }] }
+    });
+    expect(fixed).toMatchObject({
+      status: "ok",
+      candidate: { targets: [{ targetUrl: "https://one.example/api/team/9825/news" }] }
     });
   });
 

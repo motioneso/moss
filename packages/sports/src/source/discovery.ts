@@ -21,7 +21,7 @@ import type { SportsSourceAssignmentTarget } from "@moss/shared";
 import {
   expandSportsSourceRecipe,
   extractSportsSourceRecipe,
-  SPORTS_SOURCE_RECIPE_SCHEMA,
+  SPORTS_SOURCE_RECIPE_AI_SCHEMA,
   validateSportsSourceRecipe,
   type SportsRecipeItem,
   type SportsSourceRecipe
@@ -298,34 +298,42 @@ function discoverFirstPartyCandidateUrls(
   return [...byHost.values()];
 }
 
-const TARGETED_RECIPE_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["recipe", "targets"],
-  properties: {
-    recipe: SPORTS_SOURCE_RECIPE_SCHEMA,
-    targets: {
-      type: "array",
-      maxItems: 20,
-      items: {
+// Parameter names are not pattern-checked here (the structured seam forbids the keyword); the
+// expansion step only accepts keys that name a validated recipe slot.
+const TARGET_MAPPINGS_ARRAY_SCHEMA = {
+  type: "array",
+  maxItems: 20,
+  items: {
+    type: "object",
+    additionalProperties: false,
+    required: ["targetKey", "parameters"],
+    properties: {
+      targetKey: { type: "string", minLength: 1, maxLength: 160 },
+      parameters: {
         type: "object",
-        additionalProperties: false,
-        required: ["targetKey", "parameters"],
-        properties: {
-          targetKey: { type: "string", minLength: 1, maxLength: 160 },
-          parameters: {
-            type: "object",
-            maxProperties: 8,
-            propertyNames: { pattern: "^[A-Za-z][A-Za-z0-9_]*$" },
-            additionalProperties: { type: "string", minLength: 1, maxLength: 128 }
-          }
-        }
+        maxProperties: 8,
+        additionalProperties: { type: "string", minLength: 1, maxLength: 128 }
       }
     }
   }
 } as const;
 
-const TARGET_MAPPINGS_SCHEMA = TARGETED_RECIPE_SCHEMA.properties.targets;
+const TARGETED_RECIPE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["recipe", "targets"],
+  properties: {
+    recipe: SPORTS_SOURCE_RECIPE_AI_SCHEMA,
+    targets: TARGET_MAPPINGS_ARRAY_SCHEMA
+  }
+} as const;
+
+const TARGET_MAPPINGS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["targets"],
+  properties: { targets: TARGET_MAPPINGS_ARRAY_SCHEMA }
+} as const;
 
 function recipePrompt(
   evidence: readonly SportsRecipeEvidence[],
@@ -375,16 +383,18 @@ async function proposeAndReplayRecipe(
     fixedRecipe?.request.slots.length === 0
       ? {
           ok: true as const,
-          object: targets.map((target) => ({
-            targetKey: sportsSourceTargetKey(target.target),
-            parameters: {}
-          }))
+          object: {
+            targets: targets.map((target) => ({
+              targetKey: sportsSourceTargetKey(target.target),
+              parameters: {}
+            }))
+          }
         }
       : await deps.ai.generateJson(scopedDb, {
           schema: fixedRecipe
             ? TARGET_MAPPINGS_SCHEMA
             : targets.length === 0
-              ? SPORTS_SOURCE_RECIPE_SCHEMA
+              ? SPORTS_SOURCE_RECIPE_AI_SCHEMA
               : TARGETED_RECIPE_SCHEMA,
           prompt: recipePrompt(evidence, targets, fixedRecipe),
           maxOutputTokens: 4_000
@@ -410,12 +420,7 @@ async function proposeAndReplayRecipe(
     return { ok: false, reason: "invalid" };
   }
 
-  const mappings =
-    targets.length === 0
-      ? [{ targetKey: "", parameters: {} }]
-      : fixedRecipe
-        ? proposed.object
-        : proposal.targets;
+  const mappings = targets.length === 0 ? [{ targetKey: "", parameters: {} }] : proposal.targets;
   if (!Array.isArray(mappings) || mappings.length !== Math.max(1, targets.length)) {
     return { ok: false, reason: "invalid" };
   }
