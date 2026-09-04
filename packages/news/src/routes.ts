@@ -29,6 +29,7 @@ import type { NewsCredentialCipherPort } from "./credential-cipher-port.js";
 import { NewsCredentialRepository, type NewsCredentialStore } from "./credential-repository.js";
 import type { NewsStoryFeedbackPort } from "./story-feedback-port.js";
 import { registerNewsCredentialRoutes } from "./credential-routes.js";
+import { registerNewsFaviconRoute } from "./favicon-route.js";
 import { registerNewsImageRoute } from "./image-route.js";
 import {
   createEmptyNewsPublisherConnectionPort,
@@ -281,6 +282,11 @@ export function registerNewsRoutes(
     dataContext: dependencies.dataContext,
     resolveAccessContext: dependencies.resolveAccessContext,
     repository: personalization,
+    fetchImage: dependencies.discovery.image
+  });
+
+  registerNewsFaviconRoute(server, {
+    resolveAccessContext: dependencies.resolveAccessContext,
     fetchImage: dependencies.discovery.image
   });
 }

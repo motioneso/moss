@@ -283,6 +283,7 @@ export class NewsService {
         // Dedupe by URL hash WITHIN the source (a story often sits in `top` + a topic feed;
         // no cross-source dedupe in V1 — differing coverage of one event is a feature here).
         const seen = new Set<string>();
+        const faviconUrl = faviconProxyUrl(urlHostname(source.homepageUrl));
         const inputs: RankInput<NewsHeadline>[] = [];
         for (const { plan, items } of feeds) {
           items.forEach((item, feedPosition) => {
@@ -298,7 +299,8 @@ export class NewsService {
                 sourceKey: source.sourceKey,
                 sourceLabel: source.label,
                 topicKey: plan.topicKey,
-                topicLabel: plan.topicKey ? (topicOption(plan.topicKey)?.label ?? null) : null
+                topicLabel: plan.topicKey ? (topicOption(plan.topicKey)?.label ?? null) : null,
+                faviconUrl
               }
             });
           });
@@ -425,6 +427,7 @@ function toPersonalizedHeadline(
     url: article.url,
     publishedAt: article.publishedAt,
     imageUrl: article.imageUrl ? `/api/news/images/${encodeURIComponent(article.id)}` : null,
+    faviconUrl: faviconProxyUrl(article.canonicalDomain),
     summary: article.excerpt ?? ""
   };
 }
@@ -490,6 +493,17 @@ function personalizedSources(
  * WHATWG URL lowercases and punycodes the hostname, matching normalizePublisherDomain's
  * canonical form; the trailing-dot strip mirrors it for FQDN-notation links.
  */
+/**
+ * Same-origin proxy path for a publisher's favicon, keyed by its own domain rather than by
+ * article — the icon is one per publisher, not one per story. Mirrors the image proxy's reason
+ * for existing: browsers never need `img-src` opened up to every publisher's domain, because the
+ * server fetches the file and hands it back from this origin. Null domain means no article/source
+ * URL could be parsed, so there is nothing to fetch a favicon for.
+ */
+function faviconProxyUrl(domain: string | null): string | null {
+  return domain ? `/api/news/favicon/${encodeURIComponent(domain)}` : null;
+}
+
 function urlHostname(url: string): string | null {
   try {
     const hostname = new URL(url).hostname;

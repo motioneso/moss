@@ -287,6 +287,13 @@
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
 }
+.nw-twlist__favicon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  vertical-align: text-bottom;
+  object-fit: contain;
+}
 .nw-twlist__title {
   line-height: 1.4;
 }

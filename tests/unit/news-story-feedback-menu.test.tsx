@@ -20,6 +20,7 @@ function makeHeadline(id: string, feedbackRef = `news:${id}`): NewsHeadline {
     publishedAt: "2026-07-11T10:00:00.000Z",
     summary: "Summary",
     imageUrl: null,
+    faviconUrl: null,
     feedbackRef
   };
 }
