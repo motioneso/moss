@@ -194,7 +194,7 @@ export function SportsPage() {
             />
           ) : (
             <HeroCarousel
-              headlines={data.topStories}
+              headlines={leadWidePhotoFirst(data.topStories)}
               hiddenStoryRefs={hiddenStoryRefs}
               onStoryChanged={onStoryChanged}
             />
@@ -330,6 +330,20 @@ function findFeaturedStory(
     candidates[0] ??
     null
   );
+}
+
+// #2237: a wide photo fills the split hero's art column; a narrow one leaves it letterboxed.
+// So within the stories that already earned the carousel, one with a wide photo leads. This is
+// a preference inside a chosen set, never a filter: the order is otherwise untouched, and a day
+// with no wide photo leads with exactly the story it would have led with before.
+const LEAD_MIN_PHOTO_WIDTH = 800;
+
+export function leadWidePhotoFirst(headlines: readonly Headline[]): readonly Headline[] {
+  const index = headlines.findIndex((headline) => (headline.imageWidth ?? 0) >= LEAD_MIN_PHOTO_WIDTH);
+  if (index <= 0) return headlines;
+  const chosen = headlines[index];
+  if (!chosen) return headlines;
+  return [chosen, ...headlines.filter((_, position) => position !== index)];
 }
 
 function FeaturedStoryBand(props: { story: Headline; onStoryChanged: StoryFeedbackChange }) {

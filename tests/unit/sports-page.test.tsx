@@ -12,7 +12,11 @@ import type {
   StandingsGroup
 } from "@moss/shared";
 
-import { hasLiveGame, SportsPage } from "../../packages/sports/src/web/sports-page.js";
+import {
+  hasLiveGame,
+  leadWidePhotoFirst,
+  SportsPage
+} from "../../packages/sports/src/web/sports-page.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
 // Root suite renders @moss/web components with react-dom/server (no jsdom /
@@ -856,5 +860,40 @@ describe("hasLiveGame (#762)", () => {
       ]
     });
     expect(hasLiveGame(overview)).toBe(true);
+  });
+});
+
+describe("the lead story prefers a wide photo (#2237)", () => {
+  it("moves the first story with a wide photo to the front", () => {
+    const stories = [
+      headline("a", "nfl", "Narrow", { imageUrl: "/a", imageWidth: 400 }),
+      headline("b", "nfl", "No photo"),
+      headline("c", "nfl", "Wide", { imageUrl: "/c", imageWidth: 1280 }),
+      headline("d", "nfl", "Also wide", { imageUrl: "/d", imageWidth: 900 })
+    ];
+
+    expect(leadWidePhotoFirst(stories).map((story) => story.id)).toEqual(["c", "a", "b", "d"]);
+  });
+
+  it("changes nothing when no story has a wide photo, or when the first already does", () => {
+    const narrow = [
+      headline("a", "nfl", "Narrow", { imageUrl: "/a", imageWidth: 400 }),
+      headline("b", "nfl", "No photo")
+    ];
+    expect(leadWidePhotoFirst(narrow)).toBe(narrow);
+
+    const alreadyWide = [
+      headline("a", "nfl", "Wide", { imageUrl: "/a", imageWidth: 1200 }),
+      headline("b", "nfl", "Narrow", { imageUrl: "/b", imageWidth: 300 })
+    ];
+    expect(leadWidePhotoFirst(alreadyWide)).toBe(alreadyWide);
+  });
+
+  it("keeps every story: this is a preference, not a filter", () => {
+    const stories = [
+      headline("a", "nfl", "No photo"),
+      headline("b", "nfl", "Wide", { imageUrl: "/b", imageWidth: 1280 })
+    ];
+    expect(leadWidePhotoFirst(stories)).toHaveLength(2);
   });
 });
