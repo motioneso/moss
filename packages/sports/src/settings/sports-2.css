@@ -272,9 +272,17 @@
   gap: var(--space-4);
   min-width: 0;
 }
+.sp-standings-tree__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
 .sp-standings-tree__sport {
   display: grid;
   gap: var(--space-2);
+}
+.sp-standings-tree__sport > .sp-standings-tree__row .jds-label {
+  margin: 0;
 }
 .sp-standings-tree__region {
   display: grid;

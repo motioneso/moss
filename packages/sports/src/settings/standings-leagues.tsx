@@ -118,84 +118,134 @@ export function StandingsLeaguesSection(props: {
           aria-disabled={disabled}
           aria-busy={mutation.isPending}
         >
-          {groupCompetitions(props.competitions).map((sport) => (
-            <div className="sp-standings-tree__sport" key={sport.label}>
-              <div className="jds-label">{sport.label}</div>
-              {sport.leagues.map((competition) => (
-                <LeagueCheck
-                  competition={competition}
-                  checked={selected.has(competition.competitionKey)}
-                  disabled={disabled}
-                  onToggle={toggleLeague}
-                  key={competition.competitionKey}
-                />
-              ))}
-              {sport.regions.map((region) => {
-                const regionId = `sp-standings-region-${slug(sport.label)}-${slug(region.label)}`;
-                const chosen = region.competitions.filter((competition) =>
-                  selected.has(competition.competitionKey)
-                );
-                const all = chosen.length === region.competitions.length;
-                const expanded = expandedRegions.has(regionId);
-                return (
-                  <div className="sp-standings-tree__region" key={region.label}>
-                    <div className="sp-standings-tree__row">
-                      <label className="jds-check sp-standings-tree__check">
-                        <input
-                          type="checkbox"
-                          aria-label={`All ${region.label} leagues`}
-                          checked={all}
-                          disabled={disabled}
-                          ref={(input) => {
-                            if (input) input.indeterminate = chosen.length > 0 && !all;
-                          }}
-                          onChange={() => toggleRegion(region.competitions, all)}
-                        />
-                        <span className="jds-check__box">
-                          <Check size={13} aria-hidden="true" />
-                        </span>
-                      </label>
-                      <button
-                        type="button"
-                        className="sp-standings-tree__toggle"
-                        aria-expanded={expanded}
-                        aria-controls={regionId}
-                        onClick={() =>
-                          setExpandedRegions((cur) => {
-                            const next = new Set(cur);
-                            if (next.has(regionId)) next.delete(regionId);
-                            else next.add(regionId);
-                            return next;
-                          })
-                        }
-                      >
-                        {expanded ? (
-                          <ChevronDown size={16} aria-hidden="true" />
-                        ) : (
-                          <ChevronRight size={16} aria-hidden="true" />
-                        )}
-                        <span>{region.label}</span>
-                        <span className="jds-badge jds-badge--steel">
-                          {chosen.length} of {region.competitions.length}
-                        </span>
-                      </button>
+          <div className="sp-standings-tree__toolbar">
+            <button
+              type="button"
+              className="jds-btn jds-btn--secondary jds-btn--sm"
+              disabled={disabled || selected.size === props.competitions.length}
+              onClick={() =>
+                save(new Set(props.competitions.map((competition) => competition.competitionKey)))
+              }
+            >
+              Select all
+            </button>
+            <button
+              type="button"
+              className="jds-btn jds-btn--secondary jds-btn--sm"
+              disabled={disabled || selected.size === 0}
+              onClick={() => save(new Set())}
+            >
+              Clear all
+            </button>
+          </div>
+          {groupCompetitions(props.competitions).map((sport) => {
+            const sportCompetitions = [
+              ...sport.leagues,
+              ...sport.regions.flatMap((region) => region.competitions)
+            ];
+            const sportChosen = sportCompetitions.filter((competition) =>
+              selected.has(competition.competitionKey)
+            );
+            const sportAll = sportChosen.length === sportCompetitions.length;
+            return (
+              <div className="sp-standings-tree__sport" key={sport.label}>
+                <div className="sp-standings-tree__row">
+                  <label className="jds-check sp-standings-tree__check">
+                    <input
+                      type="checkbox"
+                      aria-label={`All ${sport.label} leagues`}
+                      checked={sportAll}
+                      disabled={disabled}
+                      ref={(input) => {
+                        if (input) input.indeterminate = sportChosen.length > 0 && !sportAll;
+                      }}
+                      onChange={() => toggleRegion(sportCompetitions, sportAll)}
+                    />
+                    <span className="jds-check__box">
+                      <Check size={13} aria-hidden="true" />
+                    </span>
+                    <span className="jds-label">{sport.label}</span>
+                  </label>
+                  <span className="jds-badge jds-badge--steel">
+                    {sportChosen.length} of {sportCompetitions.length}
+                  </span>
+                </div>
+                {sport.leagues.map((competition) => (
+                  <LeagueCheck
+                    competition={competition}
+                    checked={selected.has(competition.competitionKey)}
+                    disabled={disabled}
+                    onToggle={toggleLeague}
+                    key={competition.competitionKey}
+                  />
+                ))}
+                {sport.regions.map((region) => {
+                  const regionId = `sp-standings-region-${slug(sport.label)}-${slug(region.label)}`;
+                  const chosen = region.competitions.filter((competition) =>
+                    selected.has(competition.competitionKey)
+                  );
+                  const all = chosen.length === region.competitions.length;
+                  const expanded = expandedRegions.has(regionId);
+                  return (
+                    <div className="sp-standings-tree__region" key={region.label}>
+                      <div className="sp-standings-tree__row">
+                        <label className="jds-check sp-standings-tree__check">
+                          <input
+                            type="checkbox"
+                            aria-label={`All ${region.label} leagues`}
+                            checked={all}
+                            disabled={disabled}
+                            ref={(input) => {
+                              if (input) input.indeterminate = chosen.length > 0 && !all;
+                            }}
+                            onChange={() => toggleRegion(region.competitions, all)}
+                          />
+                          <span className="jds-check__box">
+                            <Check size={13} aria-hidden="true" />
+                          </span>
+                        </label>
+                        <button
+                          type="button"
+                          className="sp-standings-tree__toggle"
+                          aria-expanded={expanded}
+                          aria-controls={regionId}
+                          onClick={() =>
+                            setExpandedRegions((cur) => {
+                              const next = new Set(cur);
+                              if (next.has(regionId)) next.delete(regionId);
+                              else next.add(regionId);
+                              return next;
+                            })
+                          }
+                        >
+                          {expanded ? (
+                            <ChevronDown size={16} aria-hidden="true" />
+                          ) : (
+                            <ChevronRight size={16} aria-hidden="true" />
+                          )}
+                          <span>{region.label}</span>
+                          <span className="jds-badge jds-badge--steel">
+                            {chosen.length} of {region.competitions.length}
+                          </span>
+                        </button>
+                      </div>
+                      <div id={regionId} className="sp-standings-tree__leagues" hidden={!expanded}>
+                        {region.competitions.map((competition) => (
+                          <LeagueCheck
+                            competition={competition}
+                            checked={selected.has(competition.competitionKey)}
+                            disabled={disabled}
+                            onToggle={toggleLeague}
+                            key={competition.competitionKey}
+                          />
+                        ))}
+                      </div>
                     </div>
-                    <div id={regionId} className="sp-standings-tree__leagues" hidden={!expanded}>
-                      {region.competitions.map((competition) => (
-                        <LeagueCheck
-                          competition={competition}
-                          checked={selected.has(competition.competitionKey)}
-                          disabled={disabled}
-                          onToggle={toggleLeague}
-                          key={competition.competitionKey}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+                  );
+                })}
+              </div>
+            );
+          })}
           {mutation.isPending ? (
             <span className="jds-hint" role="status">
               Saving league choices…
