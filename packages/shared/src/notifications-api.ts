@@ -161,3 +161,118 @@ export const markAllNotificationsReadRouteSchema = {
     200: markAllNotificationsReadResponseSchema
   }
 } as const;
+
+// --- Web push (#743 / #2227) --------------------------------------------------------------
+
+export interface PushDeviceDto {
+  readonly id: string;
+  readonly label: string | null;
+  readonly createdAt: string;
+  readonly lastUsedAt: string | null;
+  readonly disabledAt: string | null;
+}
+
+export interface PushConfigResponse {
+  readonly publicKey: string;
+  readonly enabledDevices: readonly PushDeviceDto[];
+}
+
+export interface RegisterPushSubscriptionRequest {
+  readonly endpoint: string;
+  readonly keys: {
+    readonly p256dh: string;
+    readonly auth: string;
+  };
+}
+
+export interface RegisterPushSubscriptionResponse {
+  readonly device: PushDeviceDto;
+}
+
+export interface DeletePushSubscriptionResponse {
+  readonly success: boolean;
+}
+
+const pushDeviceDtoSchema = {
+  type: "object",
+  required: ["id", "label", "createdAt", "lastUsedAt", "disabledAt"],
+  properties: {
+    id: { type: "string" },
+    label: nullableStringSchema,
+    createdAt: { type: "string" },
+    lastUsedAt: nullableStringSchema,
+    disabledAt: nullableStringSchema
+  }
+} as const;
+
+export const pushConfigResponseSchema = {
+  type: "object",
+  required: ["publicKey", "enabledDevices"],
+  properties: {
+    publicKey: { type: "string" },
+    enabledDevices: {
+      type: "array",
+      items: pushDeviceDtoSchema
+    }
+  }
+} as const;
+
+export const registerPushSubscriptionRequestSchema = {
+  type: "object",
+  required: ["endpoint", "keys"],
+  properties: {
+    endpoint: { type: "string", minLength: 1 },
+    keys: {
+      type: "object",
+      required: ["p256dh", "auth"],
+      properties: {
+        p256dh: { type: "string", minLength: 1 },
+        auth: { type: "string", minLength: 1 }
+      }
+    }
+  }
+} as const;
+
+export const registerPushSubscriptionResponseSchema = {
+  type: "object",
+  required: ["device"],
+  properties: {
+    device: pushDeviceDtoSchema
+  }
+} as const;
+
+export const deletePushSubscriptionResponseSchema = {
+  type: "object",
+  required: ["success"],
+  properties: {
+    success: { type: "boolean" }
+  }
+} as const;
+
+export const pushSubscriptionParamsSchema = {
+  type: "object",
+  required: ["id"],
+  properties: {
+    id: { type: "string" }
+  }
+} as const;
+
+export const pushConfigRouteSchema = {
+  response: {
+    200: pushConfigResponseSchema
+  }
+} as const;
+
+export const registerPushSubscriptionRouteSchema = {
+  body: registerPushSubscriptionRequestSchema,
+  response: {
+    200: registerPushSubscriptionResponseSchema
+  }
+} as const;
+
+export const deletePushSubscriptionRouteSchema = {
+  params: pushSubscriptionParamsSchema,
+  response: {
+    200: deletePushSubscriptionResponseSchema
+  }
+} as const;
