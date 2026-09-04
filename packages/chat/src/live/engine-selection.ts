@@ -164,13 +164,20 @@ export function createChatEngine(
   opts: ChatEngineSelectionOpts = {}
 ): CliChatEngine | Promise<CliChatEngine> {
   // #1557 Phase 1 / #1558: the persistent adapter is a third engine shape, checked ahead of the
-  // bounded-fallback/tmux fork below (ruling 2 — flag on + provider match wins outright,
-  // independent of `executionMode`). Claude and Codex both build the unconditional-construct
-  // path; the shared warm pool (`persistentPool`) stays Claude-only — its `createRuntime` is
-  // wired Claude-only at the composition roots, out of scope for #1558 (see plan seams note).
+  // bounded-fallback/tmux fork below (ruling 2 — flag on + provider match wins, EXCEPT a caller
+  // that explicitly asked for `executionMode: "non_interactive"` always keeps the bounded print
+  // engine, because that engine is the only one that implements the structured one-shot methods
+  // (`launchStructured`/`submitStructured`/`readStructured`) that scoped structured calls need.
+  // Without this carve-out, turning the flag on breaks every structured caller (e.g. email
+  // extraction) the moment any ordinary chat session enables persistent mode, since the flag is a
+  // single process-wide toggle, not scoped to one call. Claude and Codex both build the
+  // unconditional-construct path otherwise; the shared warm pool (`persistentPool`) stays
+  // Claude-only — its `createRuntime` is wired Claude-only at the composition roots, out of scope
+  // for #1558 (see plan seams note).
   if (
     opts.persistentRuntimeEnabled &&
-    (provider === "anthropic" || provider === "openai-compatible")
+    (provider === "anthropic" || provider === "openai-compatible") &&
+    !isBoundedFallbackEngine(provider, opts.executionMode)
   ) {
     if (opts.persistentPool && provider === "anthropic") {
       return admitPersistentOrFallback(opts.persistentPool, provider, sessionKey, io, opts);

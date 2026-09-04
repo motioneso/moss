@@ -59,12 +59,11 @@ describe("createChatEngine", () => {
   it("falls back to the bounded engine when the pool denies admission", async () => {
     const pool: AdmitCapablePool = { admit: vi.fn(async () => ({ kind: "denied" as const })) };
     const engine = await createChatEngine("anthropic", "session-1", fakeIo(), {
-      executionMode: "non_interactive",
       persistentRuntimeEnabled: true,
       persistentPool: pool
     });
     expect(pool.admit).toHaveBeenCalledTimes(1);
-    expect(engine).toBeInstanceOf(ClaudePrintChatEngine);
+    expect(engine).not.toBeInstanceOf(ClaudePersistentRuntimeEngine);
   });
 
   // #1554 task #5 — an "admitted" result must hand the pool's already-constructed runtime to a
@@ -88,6 +87,25 @@ describe("createChatEngine", () => {
       persistentRuntimeEnabled: false
     });
     expect(engine).not.toBeInstanceOf(Promise);
+  });
+
+  // Regression: email extraction (and every other scoped structured caller) always launches with
+  // executionMode "non_interactive" and needs launchStructured/submitStructured/readStructured,
+  // which only ClaudePrintChatEngine implements. Before this fix, an admitted pool won here even
+  // for a non_interactive call, handing back a ClaudePersistentRuntimeEngine that has no
+  // structured methods — every structured call then failed instantly with "structured-output".
+  it("keeps the bounded print engine for a non_interactive call even when the pool admits", async () => {
+    const runtime = fakeRuntime();
+    const pool: AdmitCapablePool = {
+      admit: vi.fn(async () => ({ kind: "admitted" as const, runtime }))
+    };
+    const engine = await createChatEngine("anthropic", "session-1", fakeIo(), {
+      executionMode: "non_interactive",
+      persistentRuntimeEnabled: true,
+      persistentPool: pool
+    });
+    expect(pool.admit).not.toHaveBeenCalled();
+    expect(engine).toBeInstanceOf(ClaudePrintChatEngine);
   });
 
   // #1558 — the Codex adapter takes the same unconditional-construct path as Claude when the
