@@ -174,7 +174,7 @@
 .pane__desc {
   line-height: 1.55;
   margin: 8px 0 0;
-  max-width: 72ch;
+  /* No measure cap: Ben wants pane intros to use the full pane width (2026-09-03). */
 }
 
 .pane__card {
