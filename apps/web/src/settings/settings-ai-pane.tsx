@@ -160,7 +160,7 @@ function Persona({ who }: { readonly who: string }) {
           aria-label="Assistant name"
         />
       </Field>
-      <Field label="How to set your persona" hint="Switching methods keeps your current draft.">
+      <Field label="How to set your persona">
         <Segmented
           ariaLabel="How to set your persona"
           value={mode}

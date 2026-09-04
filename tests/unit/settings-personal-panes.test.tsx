@@ -41,7 +41,7 @@ describe("ProfilePane merged Account & preferences", () => {
     expect(html).toContain("Location");
     expect(html).toContain(">Weather<");
     expect(html).toContain(
-      "Search for a place to use instead of approximate timezone-based detection."
+      "Temperatures on Today and in the briefing, and the place they are for."
     );
     expect(html).toContain(">Unit<");
     expect(html).toContain(">Member<");
@@ -66,14 +66,21 @@ describe("ProfilePane merged Account & preferences", () => {
     const html = await renderProfilePane({
       location: { label: "Home", lat: 51.5072, lon: -0.1276 }
     });
-    expect(html).toContain("Currently using Home.");
+    expect(html).toContain("Using Home.");
+    expect(html).toContain("Use automatic");
   });
 
-  it("renders every supported time zone and disables unsupported language controls", async () => {
+  it("offers every supported time zone in a searchable picker and disables unsupported language controls", async () => {
+    const { TIME_ZONE_OPTIONS } =
+      await import("../../apps/web/src/settings/settings-personal-panes.js");
+    const offered = new Set(TIME_ZONE_OPTIONS.map((option) => option.value));
+    expect(Intl.supportedValuesOf("timeZone").every((timeZone) => offered.has(timeZone))).toBe(
+      true
+    );
     const html = await renderProfilePane();
-    expect(
-      Intl.supportedValuesOf("timeZone").every((timeZone) => html.includes(`value="${timeZone}"`))
-    ).toBe(true);
+    // Closed picker shows the current zone on its trigger; the list only renders once opened.
+    expect(html).toMatch(/role="combobox"[^>]*aria-label="Time zone"/);
+    expect(html).toContain("America/Los_Angeles");
     expect(html).toMatch(/aria-label="Language &amp; region"[^>]*disabled/);
   });
 
