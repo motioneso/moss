@@ -8,6 +8,11 @@ import type {
   GameSummary
 } from "@moss/shared";
 
+import {
+  shortNameTarget,
+  sideMatchesTarget,
+  type TeamMatchTarget
+} from "./follow-identity.js";
 import { storyRefFields, type StoryRefFor } from "./headline-composition.js";
 import type { SourceHeadline, StandingsTable } from "./source/sports-source.js";
 
@@ -32,20 +37,24 @@ export function joinLabels(labels: readonly string[]): string {
   return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
 }
 
-// A team whose abbreviation collided with another team's (review finding S1, 2026-09-04) gets a
-// teamKey built from the source's numeric id in the team list, but a scoreboard/schedule/standings
-// side for that same team still carries the old, shared abbreviation as ITS teamKey (it comes from
-// a separate fetch with no visibility into the collision). sourceTeamId lets the two line up anyway.
+// A team whose short name collided with another team's (review finding S1, 2026-09-04) gets a
+// teamKey built from that short name plus the source's numeric id, but a scoreboard, schedule or
+// standings row for the same team still carries the old, shared short name as ITS teamKey (it
+// comes from a separate fetch with no visibility into the collision), and an older cached row
+// carries no number at all. `TeamMatchTarget` holds both halves so every mix lines up; a bare
+// string is still accepted and means "this short name and nothing else".
+export type TeamMatchInput = string | TeamMatchTarget;
+
 function sameTeam(
   side: { teamKey: string; sourceTeamId?: string | null },
-  teamKey: string
+  teamKey: TeamMatchInput
 ): boolean {
-  return side.teamKey === teamKey || (side.sourceTeamId != null && side.sourceTeamId === teamKey);
+  return sideMatchesTarget(side, typeof teamKey === "string" ? shortNameTarget(teamKey) : teamKey);
 }
 
 export function findTeamGame(
   games: readonly GameSummary[],
-  teamKey: string
+  teamKey: TeamMatchInput
 ): GameSummary | undefined {
   return games.find((g) => sameTeam(g.home, teamKey) || sameTeam(g.away, teamKey));
 }
@@ -62,7 +71,7 @@ const NEAR_GAME_WINDOW_MS = 12 * 60 * 60 * 1000;
 
 export function currentTeamGame(
   games: readonly GameSummary[],
-  teamKey: string,
+  teamKey: TeamMatchInput,
   now: Date
 ): GameSummary | undefined {
   const mine = games.filter((g) => sideFor(g, teamKey) !== undefined);
@@ -78,10 +87,10 @@ export function currentTeamGame(
  *  priority (#855): a live game anywhere in the group always wins; otherwise the first bundle
  *  (primary-first order) with a qualifying today game keeps it. */
 export function currentGameAcrossGroup(
-  bundles: readonly { scoreboard: readonly GameSummary[]; teamKey: string }[],
+  bundles: readonly { scoreboard: readonly GameSummary[]; teamKey: TeamMatchInput }[],
   now: Date
-): { game: GameSummary; teamKey: string } | undefined {
-  let result: { game: GameSummary; teamKey: string } | undefined;
+): { game: GameSummary; teamKey: TeamMatchInput } | undefined {
+  let result: { game: GameSummary; teamKey: TeamMatchInput } | undefined;
   for (const bundle of bundles) {
     const game = currentTeamGame(bundle.scoreboard, bundle.teamKey, now);
     if (!game) continue;
@@ -92,13 +101,13 @@ export function currentGameAcrossGroup(
   return result;
 }
 
-export function sideFor(game: GameSummary, teamKey: string): GameSide | undefined {
+export function sideFor(game: GameSummary, teamKey: TeamMatchInput): GameSide | undefined {
   if (sameTeam(game.home, teamKey)) return game.home;
   if (sameTeam(game.away, teamKey)) return game.away;
   return undefined;
 }
 
-function opponentFor(game: GameSummary, teamKey: string): GameSide | undefined {
+function opponentFor(game: GameSummary, teamKey: TeamMatchInput): GameSide | undefined {
   if (sameTeam(game.home, teamKey)) return game.away;
   if (sameTeam(game.away, teamKey)) return game.home;
   return undefined;
@@ -106,7 +115,7 @@ function opponentFor(game: GameSummary, teamKey: string): GameSide | undefined {
 
 export function scheduleSideFor(
   schedule: readonly GameSummary[],
-  teamKey: string
+  teamKey: TeamMatchInput
 ): GameSide | undefined {
   for (const game of schedule) {
     const side = sideFor(game, teamKey);
@@ -173,10 +182,13 @@ export function toTeamStories(
 // member competition's own schedule under its own literal teamKey.
 export interface ResolvedGame {
   readonly game: GameSummary;
-  readonly teamKey: string;
+  readonly teamKey: TeamMatchInput;
 }
 
-export function toResolvedGames(schedule: readonly GameSummary[], teamKey: string): ResolvedGame[] {
+export function toResolvedGames(
+  schedule: readonly GameSummary[],
+  teamKey: TeamMatchInput
+): ResolvedGame[] {
   return schedule.map((game) => ({ game, teamKey }));
 }
 
@@ -223,7 +235,7 @@ function resultOf(side: GameSide, opponent: GameSide): "W" | "D" | "L" {
   return side.winner ? "W" : "L";
 }
 
-export function resultLine(game: GameSummary, teamKey: string): string {
+export function resultLine(game: GameSummary, teamKey: TeamMatchInput): string {
   const side = sideFor(game, teamKey);
   const opponent = opponentFor(game, teamKey);
   if (!side || !opponent) return matchupLine(game);
@@ -282,7 +294,10 @@ export function inGamedayWindow(game: GameSummary, now: Date): boolean {
 // standings arrive in labelled sections (NFL/NBA divisions, tournament groups) show the
 // place WITHIN that section ("2nd · NFC East") because that's how those sports are read;
 // flat single-table leagues (soccer) keep the overall line ("#4 · 40 pts").
-export function standingLine(sections: StandingsTable["sections"], teamKey: string): string | null {
+export function standingLine(
+  sections: StandingsTable["sections"],
+  teamKey: TeamMatchInput
+): string | null {
   for (const section of sections) {
     const index = section.rows.findIndex((r) => sameTeam(r, teamKey));
     if (index === -1) continue;
@@ -351,7 +366,7 @@ export function nextMatchAcross(
 // followed-team-first string put the numbers on the wrong side whenever the followed team played
 // away). Returns null when the game has no resolvable two sides (fully degraded source), so the
 // card falls back to the text slot.
-export function resultMatchFor(game: GameSummary, teamKey: string): FollowedResultMatch | null {
+export function resultMatchFor(game: GameSummary, teamKey: TeamMatchInput): FollowedResultMatch | null {
   const side = sideFor(game, teamKey);
   const opponent = opponentFor(game, teamKey);
   if (!side || !opponent) return null;
@@ -371,7 +386,7 @@ export function resultMatchFor(game: GameSummary, teamKey: string): FollowedResu
   };
 }
 
-export function teamFact(game: GameSummary, teamKey: string): string {
+export function teamFact(game: GameSummary, teamKey: TeamMatchInput): string {
   const side = sideFor(game, teamKey);
   const opponent = opponentFor(game, teamKey);
   const name = side?.name ?? teamKey;

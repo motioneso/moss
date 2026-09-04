@@ -7,7 +7,6 @@ import {
   type FollowedLeagueRef,
   type FollowedTeamCard,
   type GamedayGame,
-  type GameSide,
   type GameSummary,
   type IsoDate,
   type OverviewHero,
@@ -73,9 +72,10 @@ import type {
 } from "./source/espn-coverage-repository.js";
 import { sportsNewsCoverageAllows, sportsNewsScopeForFollow } from "./source/scope.js";
 import {
-  matchKeyFor,
+  matchTargetFor,
   resolveFollowIdentity,
-  type ResolvedTeamIdentity
+  type ResolvedTeamIdentity,
+  type TeamMatchTarget
 } from "./follow-identity.js";
 
 /** A compact, non-sensitive today-fact for the daily briefing. */
@@ -231,14 +231,6 @@ interface StoryDetail {
   readonly isOpinion?: boolean;
 }
 
-/** Drops the provider's numeric team id before a game side goes into the response — see the
- *  comment in `buildHero` for why this can't just rely on the response schema to drop it. */
-function withoutSourceTeamId(side: GameSide): GameSide {
-  const { sourceTeamId, ...rest } = side;
-  void sourceTeamId;
-  return rest as GameSide;
-}
-
 /**
  * Every story reference the finished response actually carries, from all five places a story can
  * appear: the story hero, top stories, the league news band, followed team cards and followed
@@ -266,8 +258,8 @@ function shownStoryRefs(overview: SportsOverviewResponse): ReadonlySet<string> {
 interface FollowedTeamBundle {
   readonly follow: ResolvedFollow;
   readonly identity: ResolvedTeamIdentity;
-  /** The identity to match games, schedules and standings rows against — see `matchKeyFor`. */
-  readonly matchKey: string;
+  /** The identity to match games, schedules and standings rows against — see `matchTargetFor`. */
+  readonly matchKey: TeamMatchTarget;
   readonly sourceTeamId: string | null;
   readonly scoreboard: readonly GameSummary[];
   readonly standings: StandingsTable["sections"];
@@ -516,7 +508,8 @@ export class SportsService {
         // name that is no longer unique matching whichever team happens to hold it in this list.
         const identity = identityByFollowId.get(follow.id)!;
         const sourceTeamId = identity.sourceTeamId;
-        const matchKey = matchKeyFor(identity, follow.teamKey);
+        // Non-null: ambiguous follows were filtered out of activeFollowedTeams above.
+        const matchKey = matchTargetFor(identity, follow.teamKey)!;
         const teamScope = sportsNewsScopeForFollow(follow);
         const includeEspnTeamFeed =
           teamScope !== null && sportsNewsCoverageAllows(espnCoverage, follows, teamScope);
@@ -862,6 +855,7 @@ export class SportsService {
       const today = this.today();
       const state: DegradeState = { degraded: false };
       const boards = new Map<string, GameSummary[]>();
+      const teamLists = new Map<string, readonly SourceTeamRef[]>();
       const facts: FollowedFact[] = [];
       for (const follow of follows) {
         const comp = follow.competitionKey;
@@ -878,8 +872,19 @@ export class SportsService {
         }
         const games = boards.get(comp) ?? [];
         if (follow.teamKey) {
-          const game = findTeamGame(games, follow.teamKey);
-          if (game) facts.push({ competitionKey: comp, text: teamFact(game, follow.teamKey) });
+          // The briefing resolves the saved follow against today's team list exactly like the
+          // page does (review finding S1). Reading the saved short name straight off the board,
+          // as this used to, told someone following Pacific Lutheran about Pacific Tigers the
+          // moment both schools answered "PAC". A follow that cannot be told apart is skipped:
+          // the briefing says nothing rather than saying the wrong thing.
+          if (!teamLists.has(comp)) {
+            teamLists.set(comp, await this.teamsFor(comp, state));
+          }
+          const identity = resolveFollowIdentity(follow.teamKey, teamLists.get(comp) ?? []);
+          const target = matchTargetFor(identity, follow.teamKey);
+          if (target === null) continue;
+          const game = findTeamGame(games, target);
+          if (game) facts.push({ competitionKey: comp, text: teamFact(game, target) });
         } else if (games.length > 0) {
           const label = catalogEntry(comp)?.label ?? comp;
           facts.push({
@@ -1219,20 +1224,14 @@ export class SportsService {
     refFor: StoryRefFor | undefined
   ): OverviewHero {
     if (gamedayGames.length > 0) {
+      // The provider's permanent team number now rides along on every game side in the response
+      // schema, the hero included: it is the only thing that keeps the browser's "this is your
+      // team" marking on the right team when two teams share a short name (review finding S1).
       // The hero is the one response field validated against a `oneOf` schema, and
-      // fast-json-stringify's `oneOf` matcher (unlike a plain object schema) rejects an object
-      // with a property the schema doesn't list instead of quietly leaving it out — so the
-      // provider's numeric team id, only ever meant for the server's own team-matching (review
-      // finding S1), has to be removed here rather than left for the schema to drop silently.
-      const games = gamedayGames.map((entry) => ({
-        ...entry,
-        game: {
-          ...entry.game,
-          home: withoutSourceTeamId(entry.game.home),
-          away: withoutSourceTeamId(entry.game.away)
-        }
-      }));
-      return { mode: "gameday", games };
+      // fast-json-stringify's `oneOf` matcher rejects an object carrying a property the schema
+      // does not list — so this field staying listed in `gameSideSchema` is load-bearing, not
+      // cosmetic. The serialization guard in tests/unit/sports-routes.test.ts holds that line.
+      return { mode: "gameday", games: [...gamedayGames] };
     }
     const top = topStories[0];
     return { mode: "story", headline: top ? toPublicHeadline(top, refFor) : null };

@@ -482,7 +482,10 @@ function StandingsTable(props: {
       <tbody>
         {rows.map((row, index) => (
           <tr
-            key={row.teamKey}
+            // Two teams in one table can share a short name (review finding S1), so the short
+            // name alone is not a unique row identity — pair it with the permanent number, and
+            // fall back to the row position when an older cached table carries no number.
+            key={`${row.teamKey}:${row.sourceTeamId ?? index}`}
             className={
               isFollowed(props.followedPairs, group.competitionKey, row.teamKey, row.sourceTeamId)
                 ? "is-you"

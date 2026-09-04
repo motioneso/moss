@@ -45,7 +45,7 @@ describe("SportsService.getOverview team identity (S1)", () => {
       startsAt: "2026-07-01T20:00:00.000Z",
       state: "live" as const,
       statusDetail: "Top 7th",
-      home: side({ teamKey: "129700", shortName: "PAC", name: "Pacific Lutheran Lutes", score: 4 }),
+      home: side({ teamKey: "pac", shortName: "PAC", name: "Pacific Lutheran Lutes", score: 4 }),
       away: side({ teamKey: "opp", shortName: "OPP", name: "Some Opponent", score: 1 })
     };
     const service = new SportsService(
@@ -54,13 +54,13 @@ describe("SportsService.getOverview team identity (S1)", () => {
         source: makeDatasetClient({
           listTeams: async () => [
             pacTeam({
-              teamKey: "129700",
+              teamKey: "pac.129700",
               sourceTeamId: "129700",
               abbreviation: "pac",
               name: "Pacific Lutheran Lutes"
             }),
             pacTeam({
-              teamKey: "413",
+              teamKey: "pac.413",
               sourceTeamId: "413",
               abbreviation: "pac",
               name: "Pacific Tigers"
@@ -92,7 +92,7 @@ describe("SportsService.getOverview team identity (S1)", () => {
     // name "pac" back as teamKey. The old code looked the saved string "129700" up directly
     // against teamKey values on the new list, found nothing, and the follow stopped resolving —
     // no score, no standing, silently dropped from the page.
-    const numericFollow: SportsFollowDto = { ...lutheranFollow, teamKey: "129700" };
+    const numericFollow: SportsFollowDto = { ...lutheranFollow, teamKey: "pac.129700" };
     const lutheranGame = {
       id: "g-lutheran-2",
       competitionKey: "nfl",
@@ -132,12 +132,12 @@ describe("SportsService.getOverview team identity (S1)", () => {
     expect(card?.status).toBe("live");
   });
 
-  it("does not let a team's own short name collide with another team's permanent number when resolving a saved follow", async () => {
-    // A synthetic case from the review: one team's short name is literally the string "413",
-    // which also happens to be another team's permanent number. A saved follow of "413" must
-    // mean the team whose short name is "413", found by an exact match, before the permanent-
-    // number check ever runs. The old plain lookup got this case right by accident (single
-    // string equality on teamKey); this proves the new two-step resolver still gets it right.
+  it("does not let a team's own short name collide with another team's permanent number", async () => {
+    // Straight from the provider's real output for the review's three-team input: Pacific
+    // Lutheran and Pacific Tigers share "PAC" and so carry the short name joined to their own
+    // numbers, while a fourth team really is named "413" — which is also the Tigers' number.
+    // Following the team actually named 413 must land on that team and nothing else. On the old
+    // keys the Tigers' key WAS the bare string "413", so the two teams shared one identity.
     const collisionFollow: SportsFollowDto = { ...lutheranFollow, teamKey: "413" };
     const game413 = {
       id: "g-413",
@@ -150,7 +150,7 @@ describe("SportsService.getOverview team identity (S1)", () => {
         shortName: "413",
         name: "Team 413",
         score: 9,
-        sourceTeamId: "9001"
+        sourceTeamId: "7001"
       }),
       away: side({ teamKey: "opp", shortName: "OPP", name: "Some Opponent", score: 3 })
     };
@@ -160,16 +160,22 @@ describe("SportsService.getOverview team identity (S1)", () => {
         source: makeDatasetClient({
           listTeams: async () => [
             pacTeam({
-              teamKey: "413",
-              sourceTeamId: "9001",
-              abbreviation: "413",
-              name: "Team 413"
+              teamKey: "pac.129700",
+              sourceTeamId: "129700",
+              abbreviation: "pac",
+              name: "Pacific Lutheran Lutes"
             }),
             pacTeam({
-              teamKey: "129700",
+              teamKey: "pac.413",
               sourceTeamId: "413",
               abbreviation: "pac",
               name: "Pacific Tigers"
+            }),
+            pacTeam({
+              teamKey: "413",
+              sourceTeamId: "7001",
+              abbreviation: "413",
+              name: "Team 413"
             })
           ],
           getScoreboard: async () => [game413],
@@ -181,8 +187,113 @@ describe("SportsService.getOverview team identity (S1)", () => {
     );
     const overview = await service.getOverview(userA);
     expect(overview.ambiguousFollows).toEqual([]);
+    expect(overview.followedTeams).toEqual([
+      { competitionKey: "nfl", teamKey: "413", sourceTeamId: "7001" }
+    ]);
     const card = overview.followed.find((c) => c.teamKey === "413");
     expect(card).toBeDefined();
     expect(card?.status).toBe("live");
+  });
+
+  it("still finds a followed team on an older cached game that carries no provider number", async () => {
+    // The team list gives Pacific Lutheran a permanent number, but this game was cached before
+    // the number was stored alongside each side. Matching on the number alone would find nothing
+    // and the card would show no score at all — the failure the reviewer reproduced.
+    const olderCachedGame = {
+      id: "g-old-cache",
+      competitionKey: "nfl",
+      startsAt: "2026-07-01T20:00:00.000Z",
+      state: "live" as const,
+      statusDetail: "Top 7th",
+      home: side({ teamKey: "pac", shortName: "PAC", name: "Pacific Lutheran Lutes", score: 5 }),
+      away: side({ teamKey: "opp", shortName: "OPP", name: "Some Opponent", score: 1 })
+    };
+    const service = new SportsService(
+      makeDeps({
+        follows: [lutheranFollow],
+        source: makeDatasetClient({
+          listTeams: async () => [
+            pacTeam({ teamKey: "pac", sourceTeamId: "129700", name: "Pacific Lutheran Lutes" })
+          ],
+          getScoreboard: async () => [olderCachedGame],
+          getSchedule: async () => [olderCachedGame],
+          getStandings: async () => ({ sections: [] }),
+          getHeadlines: async () => []
+        })
+      })
+    );
+    const overview = await service.getOverview(userA);
+    expect(overview.ambiguousFollows).toEqual([]);
+    const card = overview.followed.find((c) => c.teamKey === "pac");
+    expect(card?.status).toBe("live");
+    expect(card?.primary).toContain("5");
+  });
+});
+
+describe("SportsService.getFollowedFactsForToday team identity (S1)", () => {
+  const tigersGame = {
+    id: "g-tigers",
+    competitionKey: "nfl",
+    startsAt: "2026-07-01T20:00:00.000Z",
+    state: "live" as const,
+    statusDetail: "Top 7th",
+    home: side({
+      teamKey: "pac",
+      shortName: "PAC",
+      name: "Pacific Tigers",
+      score: 7,
+      sourceTeamId: "413"
+    }),
+    away: side({ teamKey: "opp", shortName: "OPP", name: "Some Opponent", score: 2 })
+  };
+
+  function briefingService(follows: SportsFollowDto[]): SportsService {
+    return new SportsService(
+      makeDeps({
+        follows,
+        source: makeDatasetClient({
+          listTeams: async () => [
+            pacTeam({
+              teamKey: "pac.129700",
+              sourceTeamId: "129700",
+              abbreviation: "pac",
+              name: "Pacific Lutheran Lutes"
+            }),
+            pacTeam({
+              teamKey: "pac.413",
+              sourceTeamId: "413",
+              abbreviation: "pac",
+              name: "Pacific Tigers"
+            })
+          ],
+          getScoreboard: async () => [tigersGame],
+          getSchedule: async () => [tigersGame],
+          getStandings: async () => ({ sections: [] }),
+          getHeadlines: async () => []
+        })
+      })
+    );
+  }
+
+  it("says nothing about a saved team it can no longer tell apart, instead of the wrong team", async () => {
+    // Saved as "pac" when only one school answered to it. Today two do, and the only game on the
+    // board is the other school's. The briefing used to read the saved short name straight off
+    // the board and announce Pacific Tigers to someone following Pacific Lutheran.
+    const service = briefingService([lutheranFollow]);
+    const { facts } = await service.getFollowedFactsForToday(
+      {} as never,
+      "00000000-0000-0000-0000-0000000000a1"
+    );
+    expect(facts).toEqual([]);
+  });
+
+  it("still reports the right team's game when the saved follow can be told apart", async () => {
+    const service = briefingService([{ ...lutheranFollow, teamKey: "pac.413" }]);
+    const { facts } = await service.getFollowedFactsForToday(
+      {} as never,
+      "00000000-0000-0000-0000-0000000000a1"
+    );
+    expect(facts).toHaveLength(1);
+    expect(facts[0]?.text).toContain("Pacific Tigers");
   });
 });

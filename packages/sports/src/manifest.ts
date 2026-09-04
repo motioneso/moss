@@ -63,7 +63,8 @@ const ARTICLE_BODY_TTL_MS = 6 * 60 * 60 * 1000;
 
 // Input bound for the two auto-running follow tools' catalog keys (#1265 security QA
 // BLOCKING-1b). Competition keys are lowercase alphanumeric with dots ("nfl", "eng.1"); ESPN team
-// keys are a lowercased abbreviation or a bare numeric id (espn-source.ts `listTeams`). Nothing in
+// keys are a lowercased abbreviation, a numeric id, or the two joined by a dot when a short name
+// is shared by two teams ("pac.413", espn-source.ts `listTeams`). Nothing in
 // either shape can traverse or escape a URL path segment, which is where these values eventually
 // land (espn-source.ts `getSchedule`). This is a schema-level belt only — the service still closes
 // teamKey against the live league roster, and the URL site still percent-encodes.
@@ -125,7 +126,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.subreddit_sources",
       description:
-        "The Add a source box in Sports settings also accepts a subreddit (r/nfl or a reddit.com link). Posts that link out to articles become headlines credited to the real publisher; self posts, media, and posts that only link back into Reddit are skipped. A pinned post is treated the same as any other post: it shows up as a headline only if it links out to an article."
+        "The Add a source box in Sports settings also accepts a subreddit (r/nfl or a reddit.com link). Posts linking out to articles become headlines credited to the real publisher; self posts, media, and Reddit-only links are skipped."
     },
     {
       id: "sports.story_feedback",
@@ -145,7 +146,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.team_identity",
       description:
-        "When two teams share the same short name, Sports tells them apart so a followed team's scores, schedule, and standing always stay attached to the right one, even after the team list changes. If a saved team can no longer be told apart from another team with the same short name, Sports keeps the follow as is rather than guess; unfollow it and follow the intended team again to fix it."
+        "When two teams share a short name, Sports keeps each followed team's scores and standing attached to the right one. If a saved team can no longer be told apart, the Sports page asks which team you meant instead of guessing."
     }
   ],
   navigation: [
@@ -365,7 +366,7 @@ export const sportsModuleManifest = {
     {
       name: "sports.followTeam",
       description:
-        "Follow a team or an entire competition/league (e.g. 'the Yankees' or 'the Premier League'). Resolve the name to a catalog competitionKey (and teamKey for a specific team) via the sports catalog/search first, then call this with the exact keys.",
+        "Follow a team or a whole competition (e.g. 'the Yankees' or 'the Premier League'). Resolve the name to a catalog competitionKey, plus a teamKey for a single team, through the sports catalog or search, then call this with those keys.",
       permissionId: "sports.follow",
       actionFamilyId: "sports_follows",
       risk: "write",

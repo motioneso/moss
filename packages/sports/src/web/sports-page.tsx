@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type {
+  AmbiguousFollowedTeamRef,
   GamedayGame,
   GameSide,
   GameSummary,
@@ -182,6 +183,8 @@ export function SportsPage() {
       {/* The masthead names whichever game is showing, so tabbing to the second live match
           retitles the page with it rather than leaving the header on the lead game. */}
       <PageHeader game={activeGame?.game ?? null} />
+
+      <AmbiguousFollowNotice follows={data.ambiguousFollows} />
 
       {hasFollows ? (
         <>
@@ -643,6 +646,43 @@ function BroadsheetGrid(props: {
       </aside>
     </div>
   );
+}
+
+/* -------------------------------------------- Saved team we can no longer identify */
+
+// A saved team whose short name is now shared by more than one team, with nothing on file to
+// say which one was meant (review finding S1). The page refuses to guess, so without this the
+// card would simply vanish and the person would have no idea why their team stopped appearing.
+// Says what happened, names the teams it could be, and links to the one screen that fixes it.
+function AmbiguousFollowNotice(props: {
+  follows: readonly AmbiguousFollowedTeamRef[] | undefined;
+}) {
+  const follows = props.follows ?? [];
+  if (follows.length === 0) return null;
+  return (
+    <section className="sp-empty" aria-label="Saved teams that need a choice">
+      <div className="sp-empty__inner">
+        <h2 className="sp-empty__title">Which team did you mean?</h2>
+        {follows.map((follow) => (
+          <p className="sp-empty__lede" key={`${follow.competitionKey}:${follow.savedTeamKey}`}>
+            {`More than one team now goes by ${follow.savedTeamKey.toUpperCase()}: `}
+            {joinNames(follow.candidateNames)}
+            {". Scores and standings are on hold for this team until you pick the right one."}
+          </p>
+        ))}
+        <a className="sp-nofollow__btn" href={SETTINGS_HREF}>
+          Pick the right team
+        </a>
+      </div>
+    </section>
+  );
+}
+
+function joinNames(names: readonly string[]): string {
+  if (names.length === 0) return "two different teams";
+  if (names.length === 1) return names[0]!;
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
 }
 
 /* ---------------------------------------------------------------- Empty state */

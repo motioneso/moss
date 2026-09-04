@@ -158,7 +158,7 @@ const dalUpcomingGame: GameSummary = {
   })
 };
 
-function makeSource(overrides: FakeSourceHandlers = {}): DatasetClient {
+export function makeSource(overrides: FakeSourceHandlers = {}): DatasetClient {
   return makeDatasetClient({
     listTeams: async (competitionKey) => [
       {
@@ -187,7 +187,7 @@ interface FakeRepo {
   removed: string[];
 }
 
-function makeRepo(initial: SportsFollowDto[]): FakeRepo {
+export function makeRepo(initial: SportsFollowDto[]): FakeRepo {
   const created: CreateSportsFollowRequest[] = [];
   const removed: string[] = [];
   return {
@@ -210,7 +210,7 @@ function makeRepo(initial: SportsFollowDto[]): FakeRepo {
   };
 }
 
-function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRepo } = {}) {
+export function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRepo } = {}) {
   const repo =
     overrides.repo ??
     makeRepo([
@@ -288,7 +288,14 @@ describe("sports routes", () => {
     expect(withNext).toBeDefined();
     expect(withNext.nextMatch).toHaveProperty("opponentCrestUrl");
     expect(JSON.stringify(body)).not.toContain("sourceTeamIds");
-    expect(JSON.stringify(body)).not.toContain("sourceTeamId");
+    // The reverse guard, for the field the browser needs (review finding S1): the provider's
+    // permanent team number must survive serialization on every shape that carries a team, or
+    // the page cannot keep "this is your team" on the right team once two teams share a short
+    // name. A response schema that omits it drops it silently, which is exactly what happened.
+    expect(body.followedTeams[0]).toHaveProperty("sourceTeamId", "6");
+    expect(body.scoreboard[0].games[0].home).toHaveProperty("sourceTeamId", "6");
+    expect(body.hero.games[0].game.home).toHaveProperty("sourceTeamId", "6");
+    expect(body).toHaveProperty("ambiguousFollows");
     await app.close();
   });
 

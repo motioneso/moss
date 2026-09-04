@@ -473,6 +473,17 @@ describe("EspnDatasetAdapter", () => {
                     displayName: "Solo University",
                     shortDisplayName: "Solo"
                   }
+                },
+                {
+                  // ESPN really does hand out all-digit abbreviations. This team is named "413",
+                  // which is also Pacific Tigers' permanent number — the exact case that made the
+                  // old keys unsafe, because the Tigers' key was the bare number 413 too.
+                  team: {
+                    id: "7001",
+                    abbreviation: "413",
+                    displayName: "Team 413",
+                    shortDisplayName: "413"
+                  }
                 }
               ]
             }
@@ -488,11 +499,21 @@ describe("EspnDatasetAdapter", () => {
     const lutes = teams.find((t) => t.name === "Pacific Lutheran Lutes");
     const tigers = teams.find((t) => t.name === "Pacific Tigers");
     const solo = teams.find((t) => t.name === "Solo University");
-    expect(lutes?.teamKey).toBe("129700");
-    expect(tigers?.teamKey).toBe("413");
-    expect(lutes?.teamKey).not.toBe(tigers?.teamKey);
+    const numeric = teams.find((t) => t.name === "Team 413");
+    // The shared short name stays visible, joined to the provider's permanent number. A bare
+    // number would sit in the same space as every other team's short name, which is how a saved
+    // Tigers follow could end up meaning Team 413.
+    expect(lutes?.teamKey).toBe("pac.129700");
+    expect(tigers?.teamKey).toBe("pac.413");
     // A team with no collision keeps the plain abbreviation it always had.
     expect(solo?.teamKey).toBe("sol");
+    expect(numeric?.teamKey).toBe("413");
+    // The whole point: every team leaves with an identity no other team in the list holds.
+    expect(new Set(teams.map((t) => t.teamKey)).size).toBe(teams.length);
+    // And no team sharing a short name is identified by a bare number, which is what let one
+    // team's number be read as another team's name.
+    expect(tigers?.teamKey).not.toBe(tigers?.sourceTeamId);
+    expect(lutes?.teamKey).not.toBe(lutes?.sourceTeamId);
   });
 
   it("passes the schedule params through to the teams/competition-scoped endpoint", async () => {

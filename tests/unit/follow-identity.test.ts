@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { matchKeyFor, resolveFollowIdentity } from "../../packages/sports/src/follow-identity.js";
+import {
+  matchTargetFor,
+  resolveFollowIdentity,
+  sideMatchesTarget
+} from "../../packages/sports/src/follow-identity.js";
 import type { SourceTeamRef } from "../../packages/sports/src/source/sports-source.js";
 
 // Review finding S1 (2026-09-04): a saved follow only stores one string. Once two teams can share
@@ -98,22 +102,48 @@ describe("resolveFollowIdentity", () => {
   });
 });
 
-describe("matchKeyFor", () => {
-  it("prefers the permanent number so a shared short name on a game or standings row can't attach to the wrong team", () => {
+describe("matchTargetFor", () => {
+  it("matches on the permanent number, so a shared short name on a game row can't attach to the wrong team", () => {
     const teams = [
       team({
-        teamKey: "129700",
+        teamKey: "pac.129700",
         sourceTeamId: "129700",
         abbreviation: "pac",
         name: "Pacific Lutheran Lutes"
       })
     ];
-    const identity = resolveFollowIdentity("129700", teams);
-    expect(matchKeyFor(identity, "129700")).toBe("129700");
+    const identity = resolveFollowIdentity("pac.129700", teams);
+    const target = matchTargetFor(identity, "pac.129700");
+    expect(target?.sourceTeamId).toBe("129700");
+    // The other school's row wears the same short name and its own number.
+    expect(sideMatchesTarget({ teamKey: "pac", sourceTeamId: "413" }, target!)).toBe(false);
+    expect(sideMatchesTarget({ teamKey: "pac", sourceTeamId: "129700" }, target!)).toBe(true);
   });
 
-  it("falls back to the saved value when nothing resolved, rather than throwing away the follow", () => {
-    const identity = resolveFollowIdentity("pac", []);
-    expect(matchKeyFor(identity, "pac")).toBe("pac");
+  it("still matches an older cached row that carries no permanent number", () => {
+    const teams = [
+      team({
+        teamKey: "pac",
+        sourceTeamId: "129700",
+        abbreviation: "pac",
+        name: "Pacific Lutheran Lutes"
+      })
+    ];
+    const target = matchTargetFor(resolveFollowIdentity("pac", teams), "pac");
+    expect(sideMatchesTarget({ teamKey: "pac" }, target!)).toBe(true);
+  });
+
+  it("keeps the saved value when no team list loaded, rather than throwing away the follow", () => {
+    const target = matchTargetFor(resolveFollowIdentity("pac", []), "pac");
+    expect(target?.shortNames).toEqual(["pac"]);
+    expect(target?.verified).toBe(false);
+  });
+
+  it("refuses to match anything for a saved team that can no longer be told apart", () => {
+    const teams = [
+      team({ teamKey: "pac.129700", sourceTeamId: "129700", abbreviation: "pac" }),
+      team({ teamKey: "pac.413", sourceTeamId: "413", abbreviation: "pac" })
+    ];
+    expect(matchTargetFor(resolveFollowIdentity("pac", teams), "pac")).toBeNull();
   });
 });

@@ -24,9 +24,13 @@ const teamRefSchema = {
 const gameSideSchema = {
   type: "object",
   additionalProperties: false,
+  // `sourceTeamId` is NOT in `required`: an older cached game predates the field. It must stay in
+  // `properties` regardless — fast-json-stringify drops any key the schema does not list, which
+  // is how the browser lost its only safe way to tell two teams with the same short name apart.
   required: ["teamKey", "name", "shortName", "crestUrl", "score", "record", "winner", "scorers"],
   properties: {
     teamKey: { type: "string" },
+    sourceTeamId: { type: ["string", "null"] },
     name: { type: "string" },
     shortName: { type: "string" },
     crestUrl: { type: ["string", "null"] },
@@ -55,6 +59,8 @@ const gameSummarySchema = {
 const standingsRowSchema = {
   type: "object",
   additionalProperties: false,
+  // See gameSideSchema: same field, same reason, and likewise kept out of `required` for older
+  // cached standings tables.
   required: [
     "teamKey",
     "name",
@@ -70,6 +76,7 @@ const standingsRowSchema = {
   ],
   properties: {
     teamKey: { type: "string" },
+    sourceTeamId: { type: ["string", "null"] },
     name: { type: "string" },
     rank: { type: "number" },
     points: { type: ["number", "null"] },
@@ -484,6 +491,7 @@ export const sportsOverviewResponseSchema = {
         "leagueNews",
         "standings",
         "followedTeams",
+        "ambiguousFollows",
         "followedLeagues",
         "followedLeagueCards",
         "degraded"
@@ -503,7 +511,23 @@ export const sportsOverviewResponseSchema = {
             required: ["competitionKey", "teamKey"],
             properties: {
               competitionKey: { type: "string" },
-              teamKey: { type: "string" }
+              teamKey: { type: "string" },
+              sourceTeamId: { type: ["string", "null"] }
+            }
+          }
+        },
+        // Saved teams that can no longer be told apart from another team with the same short
+        // name. The page asks the person which one they meant instead of dropping the card.
+        ambiguousFollows: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["competitionKey", "savedTeamKey", "candidateNames"],
+            properties: {
+              competitionKey: { type: "string" },
+              savedTeamKey: { type: "string" },
+              candidateNames: { type: "array", items: { type: "string" } }
             }
           }
         },
