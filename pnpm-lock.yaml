@@ -807,6 +807,9 @@ importers:
       '@moss/proactive-monitoring':
         specifier: workspace:*
         version: link:../proactive-monitoring
+      '@moss/scratchpad':
+        specifier: workspace:*
+        version: link:../scratchpad
       '@moss/settings':
         specifier: workspace:*
         version: link:../settings
@@ -1048,6 +1051,30 @@ importers:
       pg-boss:
         specifier: ^12.18.2
         version: 12.18.2
+
+  packages/scratchpad:
+    dependencies:
+      '@moss/db':
+        specifier: workspace:*
+        version: link:../db
+      '@moss/module-sdk':
+        specifier: workspace:*
+        version: link:../module-sdk
+      '@moss/settings':
+        specifier: workspace:*
+        version: link:../settings
+      '@moss/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@moss/structured-state':
+        specifier: workspace:*
+        version: link:../structured-state
+      fastify:
+        specifier: ^5.8.5
+        version: 5.8.5
+      kysely:
+        specifier: ^0.29.2
+        version: 0.29.2
 
   packages/settings:
     dependencies:
