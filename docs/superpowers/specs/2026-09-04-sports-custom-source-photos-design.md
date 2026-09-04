@@ -99,7 +99,8 @@ a recipe, because the publisher declared it for exactly this use.
 
 ### 2. Fetch budget
 
-Photo lookups piggyback on the existing refresh of a source. They never delay headlines.
+Photo lookups run for every story from every custom source, inside the existing refresh of
+that source. They never delay headlines.
 
 - Feed media tags cost nothing extra; they are read from the feed body already fetched.
 - Article page fetches are capped at 6 per source per refresh and 2 in flight per publisher
@@ -123,11 +124,14 @@ A candidate URL must pass all of these on the server before it is attached to a 
 - The candidate is not a known non-photo: paths that end in `favicon.ico`, contain `logo`,
   `default`, `placeholder`, or `sprite`, or are 1x1 tracking pixels by declared size. The
   bytes check below catches the rest.
-- When a declared width or height exists, at least 300 pixels on the short side. Undeclared
-  sizes are allowed through to the bytes check.
+- When a declared width or height exists, at least 240 pixels on the short side. Undeclared
+  sizes are allowed through to the bytes check. The floor is 240 rather than 300 because
+  several smaller publishers only offer 240 pixel thumbnails in their feeds, and a slightly
+  soft photo in the hero beats a blank block; the story list and the Today band show photos
+  well below hero size anyway.
 
 The bytes check happens when the proxy first fetches the image: it must start with JPEG, PNG,
-WebP, or GIF magic bytes, be at most 2 MB, and decode to at least 300 by 200 pixels from its
+WebP, or GIF magic bytes, be at most 2 MB, and decode to at least 240 by 160 pixels from its
 header alone. A failed bytes check is remembered as a miss for the headline cache's lifetime
 so the same broken image is not fetched again, and the story is shown without a photo.
 
@@ -280,17 +284,16 @@ photos from a third-party site the owner did not add.
 
 ## Open Questions for Ben
 
-1. **Should photo lookups run for a source before it has any accepted coverage assignments?**
-   The safe default in this spec is yes, because the deterministic pass costs at most six page
-   fetches per refresh. Say no if you would rather add a source with no extra fetching until it
-   is assigned to a team or sport.
-2. **Is a 300 pixel short side the right floor?** Below that the hero slot shows visible
-   blur. Some smaller regional publishers only offer 240 pixel thumbnails in their feeds, and
-   this rule would drop them to the blank block. Lowering the floor to 240 keeps those photos
-   at some cost in sharpness.
-3. **When an accepted recipe drifts, should Moss re-propose automatically on the next Find
-   photos press, or first offer Retry with the old recipe?** The spec offers Find photos only;
-   the old recipe stays saved until a new one is accepted.
+None open. Ben ruled on 2026-09-04:
+
+- **Every story gets a photo lookup.** If a story is selected for the page and its source has
+  an image for it, Moss shows it. There is no extra condition on the source; the fetch budget
+  in decision 2 is the only limit.
+- **Store a resized copy on the box**, never hotlink. Decision 4.
+- Ben gave no ruling on the pixel floor or on what to offer when a recipe stops working, so the
+  spec keeps its choices: a 240 pixel short side, chosen in decision 3 so small publishers do
+  not show blank, and Find photos offered straight away when a recipe drifts, with the old
+  recipe kept until a new one is accepted.
 
 ## Architecture
 
@@ -404,12 +407,12 @@ the row after accepting.
 ```
 +--------------------------------------------------------------------------------+
 | [icon] The Athletic          [Healthy]    Photos: none found                     |
-|                                        [Find photos] [Edit coverage] [Remove]   |
+|                                        [Find photos] [Edit]          [Remove]   |
 +--------------------------------------------------------------------------------+
 
 +--------------------------------------------------------------------------------+
 | [icon] The Athletic          [Healthy]    Photos: preview ready                  |
-|                                                    [Edit coverage] [Remove]     |
+|                                                    [Edit]          [Remove]     |
 |  PHOTO PREVIEW                                                                  |
 |  Moss found the lead photo in the article header on 3 of 3 recent stories.      |
 |  +----------+  +----------+  +----------+                                       |
@@ -421,9 +424,12 @@ the row after accepting.
 
 +--------------------------------------------------------------------------------+
 | [icon] The Athletic          [Healthy]    Photos: using Moss's recipe            |
-|                                        [Stop using]  [Edit coverage] [Remove]   |
+|                                        [Stop using]  [Edit]          [Remove]   |
 +--------------------------------------------------------------------------------+
 ```
+
+The Edit button in the sketches is the row's existing button for choosing which teams and
+sports a source feeds; it is shown for position only and is not changed by this spec.
 
 States the row must also render:
 
