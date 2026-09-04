@@ -274,12 +274,12 @@ is not declared will stop the server from starting). Contracts in
 // GET /api/scratchpad
 type ScratchpadGetResponse = {
   body: string;
-  revision: number;        // 0 when no row exists yet
+  revision: number; // 0 when no row exists yet
   updatedAt: string | null;
   maxChars: 64000;
   syncToNotes: boolean;
-  notesFolderConfigured: boolean;   // from the notes module's public status
-  shortcut: string;                 // e.g. "mod+shift+s"
+  notesFolderConfigured: boolean; // from the notes module's public status
+  shortcut: string; // e.g. "mod+shift+s"
 };
 
 // PATCH /api/scratchpad/settings
@@ -404,7 +404,7 @@ from its top edge (height remembered in the browser). Header uses the same mark 
 status layout as `.chatd__head`; the status word is "Saved", "Saving...", "Changed elsewhere"
 (with a Reload link) or "Not saved" in the error tone. The "?" is the Ask Moss button: it is
 only drawn while the pointer is over the pad (or, on touch, while the pad has focus), so the
-header normally reads "(/) Scratchpad   Saved   ...  x". The toolbar row is quiet icon
+header normally reads "(/) Scratchpad Saved ... x". The toolbar row is quiet icon
 buttons: bullet, numbered, checkbox, outdent, indent, bold, italic.
 
 ### Pad menu open (three-dot button)
