@@ -26,6 +26,17 @@ const personaPut = vi.fn(
   })
 );
 
+const chatModelOverrideGet = vi.fn(async () => ({
+  settings: {
+    overrideEnabled: false,
+    currentOverrideModelId: null,
+    effectiveOverrideModelId: null,
+    defaultModel: null,
+    selectedModel: null,
+    selectableOverrideModels: []
+  }
+}));
+
 vi.mock("../../apps/web/src/api/client.js", () => ({
   getPersonaSettings: () => personaGet(),
   putPersonaSettings: (body: unknown) => personaPut(body as never),
@@ -36,16 +47,7 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   putChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" } })),
   // ChatModel and YoloMode (siblings inside AssistantPane) run their own queries; give them inert
   // responses so they render without erroring and stay out of the way of the assertion.
-  getChatModelOverrideSettings: vi.fn(async () => ({
-    settings: {
-      overrideEnabled: false,
-      currentOverrideModelId: null,
-      effectiveOverrideModelId: null,
-      defaultModel: null,
-      selectedModel: null,
-      selectableOverrideModels: []
-    }
-  })),
+  getChatModelOverrideSettings: () => chatModelOverrideGet(),
   putChatModelOverride: vi.fn(),
   getYoloSettings: vi.fn(async () => ({
     instanceEnabled: false,
@@ -153,6 +155,42 @@ describe("Persona save acknowledgement", () => {
 
     const text = renderedText(renderer.toJSON());
     expect(text).toContain("Saved. This is Alfred's current voice.");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe("Response style visibility", () => {
+  it("shows Response style on the default view, without picking guided dials", async () => {
+    const renderer = await renderAssistantPane();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Response style");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe("Transcription setup note", () => {
+  it("tells the reader a transcription model turns on the chat microphone", async () => {
+    chatModelOverrideGet.mockResolvedValueOnce({
+      settings: {
+        overrideEnabled: false,
+        currentOverrideModelId: null,
+        effectiveOverrideModelId: null,
+        defaultModel: { id: "m1", providerDisplayName: "Anthropic", providerModelId: "claude" },
+        selectedModel: null,
+        selectableOverrideModels: []
+      }
+    });
+    const renderer = await renderAssistantPane();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("A transcription model enables the microphone in chat.");
 
     await act(async () => {
       renderer.unmount();
