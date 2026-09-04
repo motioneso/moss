@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TmuxIo } from "@moss/ai";
-import { clearProviderProbeCacheForTests, probeProvider } from "./provider-probe.js";
+import {
+  clearProviderProbeCacheForTests,
+  invalidateProviderProbeCache,
+  probeProvider
+} from "./provider-probe.js";
 
 function fakeRealMergeIo(result: { code: number; stdout: string; stderr?: string }) {
   const calls: Array<{ cmd: string; args: readonly string[]; env?: NodeJS.ProcessEnv }> = [];
@@ -149,6 +153,65 @@ describe("probeProvider anthropic readiness check (#2232)", () => {
     });
 
     expect(calls).toHaveLength(2);
+  });
+
+  it("#2242: forceFresh runs the real check again even while a saved ready answer is still fresh", async () => {
+    const { io, calls } = fakeRealMergeIo({ code: 0, stdout: "OK\n" });
+    const credentialEnv = { CLAUDE_CODE_OAUTH_TOKEN: "tok-a" };
+
+    const first = await probeProvider("anthropic", {
+      io,
+      cliPresent: async () => true,
+      credentialEnv
+    });
+    expect(first).toEqual({ status: "ready" });
+
+    // The login was revoked after that answer was saved — the real call now fails.
+    const { io: revokedIo, calls: revokedCalls } = fakeRealMergeIo({
+      code: 1,
+      stdout: "",
+      stderr: "API Error: 401 invalid bearer token"
+    });
+    const stillCached = await probeProvider("anthropic", {
+      io: revokedIo,
+      cliPresent: async () => true,
+      credentialEnv
+    });
+    // Without forceFresh, the saved answer is trusted — this is the bug: a login that broke
+    // moments ago still reads as fine until the saved answer's window runs out.
+    expect(stillCached).toEqual({ status: "ready" });
+    expect(revokedCalls).toHaveLength(0);
+
+    const fresh = await probeProvider("anthropic", {
+      io: revokedIo,
+      cliPresent: async () => true,
+      credentialEnv,
+      forceFresh: true
+    });
+    expect(fresh).toEqual({ status: "needs_login" });
+    expect(revokedCalls).toHaveLength(1);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("#2242: invalidateProviderProbeCache drops a saved answer so the next check runs for real", async () => {
+    const { io } = fakeRealMergeIo({ code: 0, stdout: "OK\n" });
+    const credentialEnv = { CLAUDE_CODE_OAUTH_TOKEN: "tok-a" };
+    await probeProvider("anthropic", { io, cliPresent: async () => true, credentialEnv });
+
+    invalidateProviderProbeCache("anthropic", credentialEnv);
+
+    const { io: revokedIo, calls: revokedCalls } = fakeRealMergeIo({
+      code: 1,
+      stdout: "",
+      stderr: "API Error: 401 invalid bearer token"
+    });
+    const result = await probeProvider("anthropic", {
+      io: revokedIo,
+      cliPresent: async () => true,
+      credentialEnv
+    });
+    expect(result).toEqual({ status: "needs_login" });
+    expect(revokedCalls).toHaveLength(1);
   });
 });
 

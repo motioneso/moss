@@ -65,8 +65,15 @@ export interface LoginServiceDeps {
   readonly io: TmuxIo;
   /** The validated login-adapter registry (§L.1). A provider absent ⇒ login-blocked. */
   readonly adapters: LoginAdapterRegistry;
-  /** Completion signal: the §4.8 provider auth probe (reused; no token, no replay). */
-  readonly probe: (provider: RpcProviderKind) => Promise<ProbeProviderResult>;
+  /**
+   * Completion signal: the §4.8 provider auth probe (reused; no token, no replay). #2242:
+   * accepts `forceFresh` so an explicit re-login can demand a real check instead of a saved
+   * answer that may have gone stale (a login can be revoked after that answer was saved).
+   */
+  readonly probe: (
+    provider: RpcProviderKind,
+    opts?: { readonly forceFresh?: boolean }
+  ) => Promise<ProbeProviderResult>;
   /** auth/home base for the 0600 paste temp file (§L.6.3). Default /data/cli-auth. */
   readonly homeBase?: string;
   /** Overall login lifetime bound (§L.3.1). A hung browser round-trip MUST NOT freeze the gate. */
@@ -193,8 +200,11 @@ export class LoginService {
       // late — it has already read its settings and painted its menu.
       if (this.deps.prepareProvider) await this.deps.prepareProvider(flow.provider);
 
-      // Already authenticated? (a re-login of a ready provider) — short-circuit.
-      const pre = await this.deps.probe(flow.provider);
+      // Already authenticated? (a re-login of a ready provider) — short-circuit. #2242: this
+      // MUST be a real check (forceFresh), never a saved answer — a person pressing Log in is
+      // explicitly asking to fix a broken login, so a stale "it was fine a moment ago" answer
+      // must never close this screen without ever opening a fresh place to sign in.
+      const pre = await this.deps.probe(flow.provider, { forceFresh: true });
       if (pre.status === "ready") {
         return this.settle(flow, "ready");
       }

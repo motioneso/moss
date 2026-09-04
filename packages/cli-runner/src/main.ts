@@ -205,13 +205,14 @@ export function createCliRunner(
     // Completion signal: the §4.8 provider auth probe (no token, no replay) — same deps the
     // host's probeProvider uses, PLUS the #363 claude-scoped credential env so `auth status`
     // reports loggedIn once the captured token is persisted (settling the flow `ready`).
-    probe: async (provider: RpcProviderKind) =>
+    probe: async (provider: RpcProviderKind, opts?: { readonly forceFresh?: boolean }) =>
       probeProvider(provider as ProviderKind, {
         io,
         cliPresent: (p: ProviderKind) => cliAvailable(p),
         multiplexerUsable: () => tmuxAvailable(),
         credentialEnv: await readProviderCredentialEnv(config.homeBase, provider),
-        homeBase: config.homeBase
+        homeBase: config.homeBase,
+        forceFresh: opts?.forceFresh
       }),
     // (#2027) Seed first-run state on the auth volume BEFORE the login session opens. gemini
     // otherwise stops on its sign-in-method menu and never prints the authorization URL.

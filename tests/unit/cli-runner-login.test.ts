@@ -34,12 +34,17 @@ import {
   listLoginMuxSessionsWithAge
 } from "../../packages/chat/src/live/cli-chat-engine.js";
 import type { ProbeProviderResult } from "../../packages/chat/src/live/cli-chat-engine.js";
+import {
+  clearProviderProbeCacheForTests,
+  probeProvider
+} from "../../packages/chat/src/live/provider-probe.js";
 import type { LoginAdapter } from "../../packages/chat/src/live/login-contract.js";
 import type {
   CatalogEntry,
   ProviderCatalog
 } from "../../packages/chat/src/live/install-contract.js";
 import type { RpcProviderKind } from "../../packages/chat/src/live/rpc-contract.js";
+import type { ProviderKind } from "../../packages/ai/src/index.js";
 
 /** A controllable probe whose status the test flips between calls. */
 function makeProbe(initial: ProbeProviderResult): {
@@ -332,6 +337,48 @@ describe("LoginService flow (§L.2/§L.3)", () => {
     expect(out.status).toBe("awaiting_token");
     expect(f.live.has(`${LOGIN_SESSION_PREFIX}anthropic`)).toBe(true);
     await svc.cancel("anthropic", loginId);
+  });
+
+  it("#2242: an expired login after a cached success still opens a fresh login, not a repeat of the saved answer", async () => {
+    // This wires the REAL check (the same one settings polling and the login screen both use),
+    // saved-answer window and all — a fake that just returns whatever status the test asks for
+    // would pass even with the old bug, because it never actually saves or reuses an answer.
+    clearProviderProbeCacheForTests();
+    const f = makeLoginIo("https://claude.ai/oauth/authorize?code=abc");
+    let claudeAnswer: { code: number; stdout: string; stderr?: string } = {
+      code: 0,
+      stdout: "OK\n"
+    };
+    const io: TmuxIo = {
+      ...f.io,
+      run: (async (cmd: string, args: readonly string[], opts?: { env?: NodeJS.ProcessEnv }) => {
+        if (cmd === "claude") return claudeAnswer;
+        return f.io.run(cmd, args, opts);
+      }) as TmuxIo["run"]
+    };
+    const probe = async (provider: RpcProviderKind, opts?: { readonly forceFresh?: boolean }) =>
+      probeProvider(provider as unknown as ProviderKind, {
+        io,
+        cliPresent: async () => true,
+        forceFresh: opts?.forceFresh
+      });
+    const svc = makeService(io, probe);
+
+    // The login works, and pressing Log in the first time correctly finds it already signed in.
+    const firstLoginId = svc.reserve("anthropic");
+    const firstOut = await svc.start(firstLoginId);
+    expect(firstOut.status).toBe("ready");
+
+    // The login is revoked afterward — a real 401 on the next real call.
+    claudeAnswer = { code: 1, stdout: "", stderr: "API Error: 401 invalid bearer token" };
+
+    // A person presses Log in again, inside the window the earlier "ready" answer would still
+    // be saved for. This must open a real login, not repeat the saved "ready" answer.
+    const secondLoginId = svc.reserve("anthropic");
+    const secondOut = await svc.start(secondLoginId);
+    expect(secondOut.status).toBe("awaiting_token");
+    expect(f.live.has(`${LOGIN_SESSION_PREFIX}anthropic`)).toBe(true);
+    await svc.cancel("anthropic", secondLoginId);
   });
 
   it("startupSweep kills every jarv1s-login-* session (§L.3.4)", async () => {
