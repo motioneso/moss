@@ -12,7 +12,12 @@ import {
   sampleFeedHeadlines
 } from "./feed-discovery.js";
 import { decideSourcePolicy } from "./policy-validation.js";
-import type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "./ports.js";
+import type {
+  NewsAiPort,
+  NewsSafeFetchFailure,
+  NewsSafeFetchPort,
+  NewsWebSearchPort
+} from "./ports.js";
 import type { VerifiedSourceCandidate } from "./preview-store.js";
 
 export type SourceResolutionResult =
@@ -20,10 +25,25 @@ export type SourceResolutionResult =
   | { status: "ambiguous"; candidates: VerifiedSourceCandidate[] }
   | {
       status: "rejected";
-      /** `redirected`: the address led to a different site (not a policy call). */
-      reason: "policy" | "redirected" | "invalid_input" | "unreachable" | "not_https";
+      /** `redirected`: the address led to a different site (not a policy call).
+       *  `blocked`: the site's own robots rules refuse automatic access (not a reachability problem). */
+      reason: "policy" | "redirected" | "invalid_input" | "unreachable" | "not_https" | "blocked";
     }
   | { status: "unavailable" };
+
+/**
+ * Turns a raw fetch failure into the reason shown to the caller. A site that deliberately blocks
+ * automatic access through its robots rules is not "unreachable" — it answered, and said no. Every
+ * other failure (rate limiting, an HTTP error, a bot challenge, a timeout, a network problem) is a
+ * genuine reachability problem and stays "unreachable".
+ */
+function mapFetchFailure(
+  reason: NewsSafeFetchFailure["reason"]
+): "unreachable" | "not_https" | "blocked" {
+  if (reason === "not_https") return "not_https";
+  if (reason === "robots") return "blocked";
+  return "unreachable";
+}
 
 type ResolutionRepo = Pick<
   NewsPersonalizationRepository,
@@ -37,12 +57,13 @@ function htmlMetadata(html: string): {
 } {
   let title = "";
   let inTitle = false;
+  let titleCaptured = false;
   let description = "";
   let canonicalUrl: string | null = null;
   const parser = new Parser({
     onopentag(name, attributes) {
       const tag = name.toLowerCase();
-      if (tag === "title") inTitle = true;
+      if (tag === "title" && !titleCaptured) inTitle = true;
       if (tag === "link" && (attributes.rel ?? "").toLowerCase() === "canonical") {
         canonicalUrl = attributes.href ?? null;
       }
@@ -58,7 +79,10 @@ function htmlMetadata(html: string): {
       if (inTitle) title += text;
     },
     onclosetag(name) {
-      if (name.toLowerCase() === "title") inTitle = false;
+      if (name.toLowerCase() === "title" && inTitle) {
+        inTitle = false;
+        titleCaptured = true;
+      }
     }
   });
   parser.end(html);
@@ -173,7 +197,10 @@ async function verifyPublisher(
   }
   const fetched = await deps.fetch(new URL(rawUrl).toString());
   if (!fetched.ok) {
-    return { status: "failed", result: { status: "rejected", reason: "unreachable" } };
+    return {
+      status: "failed",
+      result: { status: "rejected", reason: mapFetchFailure(fetched.reason) }
+    };
   }
   const fetchedUrl = new URL(fetched.finalUrl);
   const fetchedRejection = finalDomainRejection(
@@ -211,7 +238,10 @@ async function verifyPublisher(
     if (fetchedUrl.toString() !== homepageUrl) {
       const homepage = await deps.fetch(homepageUrl);
       if (!homepage.ok) {
-        return { status: "failed", result: { status: "rejected", reason: "unreachable" } };
+        return {
+          status: "failed",
+          result: { status: "rejected", reason: mapFetchFailure(homepage.reason) }
+        };
       }
       const expectedHomepage = normalizePublisherDomain(homepageUrl);
       const homepageRejection = expectedHomepage.ok

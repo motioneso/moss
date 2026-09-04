@@ -321,6 +321,81 @@ describe("resolveSourceInput", () => {
     ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
   });
 
+  // Bug: a page's little accessibility labels for icons (for example a Facebook or Instagram
+  // icon inside an SVG in the header or footer) each use their own <title> tag. The label parser
+  // used to keep reading every <title> tag it found and glue the text together, so the source
+  // name came out as the real title followed by all of those icon labels run together. It should
+  // only ever use the first title tag in the page.
+  it("uses only the page's own title, not the little icon labels that follow it", async () => {
+    const result = await resolveSourceInput(
+      db,
+      {
+        fetch: fetchMap({
+          "https://one.example/": {
+            body: `<title>The Atlantic</title><svg><title>facebook</title></svg><svg><title>instagram</title></svg><a href="/story">A sufficiently important headline today</a>`
+          }
+        }),
+        search: noSearch,
+        ai: ai(),
+        repo: repo()
+      },
+      { raw: "https://one.example", hasWebSearch: false }
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      candidates: [{ label: "The Atlantic" }]
+    });
+  });
+
+  // Same bug, feed shape: a feed's channel title (the publication's name) is followed by one
+  // title per story item. Adding the feed directly used to glue the channel name and every
+  // headline together into one label.
+  it("uses only a feed's channel title, not the headlines that follow it", async () => {
+    const feedWithChannelAndItemTitles = `<rss><channel><title>Politico</title><item><title>A consequential headline today</title><link>https://one.example/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item><item><title>Another important headline today</title><link>https://one.example/story2</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
+    const result = await resolveSourceInput(
+      db,
+      {
+        fetch: fetchMap({
+          "https://one.example/feed.xml": {
+            body: feedWithChannelAndItemTitles,
+            contentType: "application/rss+xml"
+          }
+        }),
+        search: noSearch,
+        ai: ai(),
+        repo: repo()
+      },
+      { raw: "https://one.example/feed.xml", hasWebSearch: false }
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      candidates: [{ label: "Politico" }]
+    });
+  });
+
+  // Bug: a site can legitimately refuse automatic access through its own robots rules. That is a
+  // deliberate policy choice by the site, not a sign the site is down, so it must be reported
+  // separately from a real reachability problem.
+  it("reports a site's own robots rules as blocked, not as unreachable", async () => {
+    const robotsBlocked: NewsSafeFetchPort = async () => ({ ok: false, reason: "robots" });
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: robotsBlocked, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://one.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "blocked" });
+
+    const networkDown: NewsSafeFetchPort = async () => ({ ok: false, reason: "network" });
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: networkDown, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://one.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "unreachable" });
+  });
+
   // #1265 ALSO-1: same-host mutations that samePublisherIdentity can't catch on its own — the
   // hostname string is identical to the requested domain, so only normalizePublisherDomain's own
   // scheme/port/credentials checks (personalization-domain.ts) stand between this and acceptance.
