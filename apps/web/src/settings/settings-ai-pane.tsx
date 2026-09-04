@@ -219,18 +219,6 @@ function Persona({ who }: { readonly who: string }) {
             onChange={(v) => setDial("directness", v as DirectnessDial)}
           />
           <Choice
-            key={responseStyle}
-            label="Response style"
-            hint="Saved default for how long chat answers are."
-            value={cap(responseStyle)}
-            options={["Concise", "Balanced", "Detailed"]}
-            onChange={(v) =>
-              chatSettingsMutation.mutate({
-                chat: { responseStyle: v.toLowerCase() as ChatResponseStyle }
-              })
-            }
-          />
-          <Choice
             key={`hum${rev}`}
             label="Humor"
             value={p.humor}
@@ -247,6 +235,18 @@ function Persona({ who }: { readonly who: string }) {
           />
         </>
       )}
+      <Choice
+        key={responseStyle}
+        label="Response style"
+        hint="Saved default for how long chat answers are."
+        value={cap(responseStyle)}
+        options={["Concise", "Balanced", "Detailed"]}
+        onChange={(v) =>
+          chatSettingsMutation.mutate({
+            chat: { responseStyle: v.toLowerCase() as ChatResponseStyle }
+          })
+        }
+      />
 
       {previewReply ? (
         <div className="ppv">
@@ -375,6 +375,10 @@ function ChatModel() {
               desc={`${defaultModel.providerDisplayName} · ${defaultModel.providerModelId} — Managed by admin.`}
             />
           )}
+          <Note>
+            Providers, credentials and which model handles each kind of work live in{" "}
+            <b>Admin → Assistant &amp; AI</b>. A transcription model enables the microphone in chat.
+          </Note>
         </>
       ) : (
         <div className="ai-empty">
