@@ -296,7 +296,9 @@ describe("Sports source coverage settings", () => {
     expect(renderedText(renderer.toJSON())).not.toContain(fotmobFeedUrl);
     const error = renderer.root.findAllByProps({ role: "alert" })[0];
     expect(error?.props.className).toBe("sp-src__err");
-    expect(renderedText(error)).toContain("Those assignments could not be verified.");
+    expect(renderedText(error)).toContain(
+      "We couldn't reach that site. Check the address and try again."
+    );
   });
 
   it("shows successful assignment previews as identities without raw feed URLs", async () => {
