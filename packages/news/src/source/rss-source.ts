@@ -262,6 +262,9 @@ const TRACKING_HOST_LABEL_PATTERN =
 const TRACKING_WORD_PATTERN = /^(?:pixel|impression)(?:\.[a-z0-9]+)?$/i;
 const TRACKING_QUERY_KEY_PATTERN = /^(?:pixel|impression)$/i;
 // A style that hides the image outright, or sizes it down to a single pixel.
+// CSS comments are legal anywhere between tokens, so drop them before matching.
+const stripCssComments = (style: string): string => style.replace(/\/\*[\s\S]*?\*\//g, "");
+
 const HIDDEN_STYLE_PATTERN =
   /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden|(?:width|height)\s*:\s*(?:0|1)(?:\.0+)?(?:px)?)\s*(?:!\s*important\s*)?(?:;|$)/i;
 
@@ -275,7 +278,8 @@ function declaredPixelSize(value: string | undefined): number | null {
 
 function isInvisibleImage(attribs: Record<string, string>): boolean {
   if (attribs.hidden !== undefined) return true;
-  if (attribs.style !== undefined && HIDDEN_STYLE_PATTERN.test(attribs.style)) return true;
+  if (attribs.style !== undefined && HIDDEN_STYLE_PATTERN.test(stripCssComments(attribs.style)))
+    return true;
   const width = declaredPixelSize(attribs.width);
   const height = declaredPixelSize(attribs.height);
   return (width !== null && width <= 1) || (height !== null && height <= 1);

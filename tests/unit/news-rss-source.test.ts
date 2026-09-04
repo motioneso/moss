@@ -392,6 +392,7 @@ describe("toFeedItems: body-image extraction hardening (PR 2251 review)", () => 
         <img src="https://npr.brightspotcdn.com/h1.gif" style="display : none ; margin: 0">
         <img src="https://npr.brightspotcdn.com/h2.gif" style="visibility:hidden !important">
         <img src="https://npr.brightspotcdn.com/h3.gif" style="border:0; width: 1px !important;">
+        <img src="https://npr.brightspotcdn.com/h4.gif" style="/* tracker */ display:/**/none">
         <img src="https://npr.brightspotcdn.com/real.jpg" width="800" height="450">
       ]]></content:encoded>
     </item>`);
