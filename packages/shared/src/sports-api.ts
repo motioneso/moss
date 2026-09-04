@@ -20,6 +20,10 @@ export interface GameSide {
   readonly score: number | null; // null pre-game
   readonly record: string | null; // "10-2"
   readonly winner: boolean;
+  // Goal scorers for soccer/hockey, tallied as "Name" or "Name (2)" for a repeat scorer, in
+  // first-appearance order. Null for every other sport, and null pre-game/live (only ever set
+  // by the finished-game render path).
+  readonly scorers: readonly string[] | null;
 }
 
 export interface GameSummary {
@@ -156,14 +160,26 @@ export interface FollowedNextMatch {
 }
 
 // A finished game rendered on the featured strip's score slot. The opponent crest carries the
-// identity (mirroring FollowedNextMatch's crest-leads convention), so `scoreText` is just the
-// result + scores with NO "vs <team>" tail — that trailing text read as cheap next to the rest
-// of the card (Ben 2026-07-08 /sports annotation #2). Set only for a today game that has gone
-// final; live/pre/idle cards leave it null and keep the `primary` string slot.
+// identity (mirroring FollowedNextMatch's crest-leads convention) — no "vs <team>" tail, that
+// trailing text read as cheap next to the rest of the card (Ben 2026-07-08 /sports annotation #2).
+// Set only for a today game that has gone final; live/pre/idle cards leave it null and keep the
+// `primary` string slot.
 export interface FollowedResultMatch {
   readonly opponentName: string; // full name; the crest is the primary identifier, this backs a11y
   readonly opponentCrestUrl: string | null;
-  readonly scoreText: string; // "L 3–9" — result letter + your–their score, opponent via the crest
+  readonly resultLabel: "W" | "D" | "L"; // the followed team's own result, never home/away's
+  // Scores in home/away order, matching the crest layout (home crest left, away crest right) —
+  // NOT "followed team first". A flattened own-then-opponent string here was the #2253 bug: the
+  // client showed the followed team's number first even when the crests had already flipped to
+  // home-first order, so an away follower saw the numbers on the wrong side of the scoreline.
+  readonly homeScore: number;
+  readonly awayScore: number;
+  readonly homeAway: "home" | "away"; // was the followed team home or away
+  // Goal scorers for soccer/hockey, home team's own crest side vs the opponent's, so the client
+  // can lay out both sides' scorers around both crests. Null for every other sport, or when the
+  // provider had no scorer data for this game.
+  readonly ownScorers: readonly string[] | null;
+  readonly opponentScorers: readonly string[] | null;
 }
 
 // One completed game behind a recent-form pip, so the ticker can show the result on hover
@@ -348,7 +364,7 @@ const teamRefSchema = {
 const gameSideSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["teamKey", "name", "shortName", "crestUrl", "score", "record", "winner"],
+  required: ["teamKey", "name", "shortName", "crestUrl", "score", "record", "winner", "scorers"],
   properties: {
     teamKey: { type: "string" },
     name: { type: "string" },
@@ -356,7 +372,8 @@ const gameSideSchema = {
     crestUrl: { type: ["string", "null"] },
     score: { type: ["number", "null"] },
     record: { type: ["string", "null"] },
-    winner: { type: "boolean" }
+    winner: { type: "boolean" },
+    scorers: { type: ["array", "null"], items: { type: "string" } }
   }
 } as const;
 
@@ -601,11 +618,25 @@ const followedTeamCardSchema = {
         {
           type: "object",
           additionalProperties: false,
-          required: ["opponentName", "opponentCrestUrl", "scoreText"],
+          required: [
+            "opponentName",
+            "opponentCrestUrl",
+            "resultLabel",
+            "homeScore",
+            "awayScore",
+            "homeAway",
+            "ownScorers",
+            "opponentScorers"
+          ],
           properties: {
             opponentName: { type: "string" },
             opponentCrestUrl: { type: ["string", "null"] },
-            scoreText: { type: "string" }
+            resultLabel: { type: "string", enum: ["W", "D", "L"] },
+            homeScore: { type: "number" },
+            awayScore: { type: "number" },
+            homeAway: { type: "string", enum: ["home", "away"] },
+            ownScorers: { type: ["array", "null"], items: { type: "string" } },
+            opponentScorers: { type: ["array", "null"], items: { type: "string" } }
           }
         }
       ]

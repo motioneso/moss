@@ -149,10 +149,10 @@ describe("SportsTicker", () => {
     expect(finalHtml).toContain("MIN 24 – 10 DAL");
   });
 
-  it("renders a finished game as opponent crest + result, dropping the 'vs' text (annotation #2)", () => {
-    // Ben 2026-07-08 /sports #2: when resultMatch is present the score slot leads with the
-    // opponent crest and shows just "L 3–9" — the crest carries the identity, so the cheap
-    // "L 3–9 vs Blue Jays" text no longer appears. sr-only keeps the opponent name reachable.
+  it("renders a finished game as both crests + result, dropping the 'vs' text (annotation #2)", () => {
+    // Ben 2026-07-08 /sports #2: when resultMatch is present the score slot leads with both
+    // teams' crests and shows just "L 3–9" — the crests carry the identity, so the cheap
+    // "L 3–9 vs Blue Jays" text no longer appears. sr-only keeps both team names reachable.
     const html = render([
       card({
         status: "today",
@@ -161,16 +161,106 @@ describe("SportsTicker", () => {
         resultMatch: {
           opponentName: "Toronto Blue Jays",
           opponentCrestUrl: null,
-          scoreText: "L 3–9"
+          resultLabel: "L",
+          homeScore: 9,
+          awayScore: 3,
+          homeAway: "away",
+          ownScorers: null,
+          opponentScorers: null
         }
       })
     ]);
     expect(html).toContain("sp-feat__result");
-    expect(html).toContain("L 3–9");
+    expect(html).toContain("L 9–3");
     expect(html).toContain("sp-sronly");
     expect(html).toContain("Toronto Blue Jays"); // sr-only opponent name (SSR splits the "vs " prefix)
     // the cheap combined text tail is gone
     expect(html).not.toContain("L 3–9 vs Blue Jays");
+    // most sports/most games have no scorer data — no scorer list should render at all
+    expect(html).not.toContain("sp-feat__scorers");
+  });
+
+  it("keeps the score in home-left order when the followed team plays away (#2253)", () => {
+    // The followed team (Minnesota) is away and lost 1–3. The crests always draw home-left,
+    // away-right, so the score must read "L 3–1" (home's number first), not "L 1–3" (the
+    // followed team's own number first) — the old bug put the numbers on the wrong side of a
+    // score that read correctly for the crests.
+    const html = render([
+      card({
+        name: "Minnesota Vikings",
+        status: "today",
+        todayGameState: "final",
+        primary: "L 1 – 3",
+        resultMatch: {
+          opponentName: "Dallas FC",
+          opponentCrestUrl: null,
+          resultLabel: "L",
+          homeScore: 3,
+          awayScore: 1,
+          homeAway: "away",
+          ownScorers: null,
+          opponentScorers: null
+        }
+      })
+    ]);
+    expect(html).toContain("L 3–1");
+    expect(html).not.toContain("L 1–3");
+  });
+
+  it("renders goal scorers on each team's outer side for a finished soccer/hockey game", () => {
+    // Home is always on the left (Ben: "home to the left"); scorers sit on that team's outer
+    // side — away team here, so its scorers land in the "--away" list, and the followed team
+    // (home) has its scorers in the "--home" list.
+    const html = render([
+      card({
+        name: "Minnesota Vikings", // followed team, plays home in this fixture
+        status: "today",
+        todayGameState: "final",
+        primary: "MIN 2 – 1 DAL",
+        resultMatch: {
+          opponentName: "Dallas FC",
+          opponentCrestUrl: null,
+          resultLabel: "W",
+          homeScore: 2,
+          awayScore: 1,
+          homeAway: "home",
+          ownScorers: ["A. Isak (2)"],
+          opponentScorers: ["Z. Benson"]
+        }
+      })
+    ]);
+    expect(html).toContain("sp-feat__scorers--home");
+    expect(html).toContain("A. Isak (2)");
+    expect(html).toContain("sp-feat__scorers--away");
+    expect(html).toContain("Z. Benson");
+  });
+
+  it("still reserves both scorer slots when only one team has scorer data (#2253)", () => {
+    // Only the home team has scorer data (e.g. a hockey game with a degraded away list). The
+    // away slot must still render, empty, so the flex space stays symmetric and the crests
+    // don't drift toward the edge.
+    const html = render([
+      card({
+        name: "Minnesota Vikings",
+        status: "today",
+        todayGameState: "final",
+        primary: "MIN 2 – 1 DAL",
+        resultMatch: {
+          opponentName: "Dallas FC",
+          opponentCrestUrl: null,
+          resultLabel: "W",
+          homeScore: 2,
+          awayScore: 1,
+          homeAway: "home",
+          ownScorers: ["A. Isak (2)"],
+          opponentScorers: null
+        }
+      })
+    ]);
+    expect(html).toContain("sp-feat__scorers--home");
+    expect(html).toContain("A. Isak (2)");
+    // the empty away list is still in the markup, reserving its share of the row's width
+    expect(html).toContain("sp-feat__scorers--away");
   });
 
   it("leads with the first story and links the rest — up to three per club (mrb0pk1n)", () => {
@@ -260,5 +350,52 @@ describe("TickerTeam", () => {
     expect(html).toContain("sp-tk__next");
     expect(html).toContain("Green Bay Packers");
     expect(html).not.toContain("sp-next__livetag");
+  });
+
+  it("keeps the score in home-left order when the followed team plays away (#2253)", () => {
+    const html = renderTickerTeam(
+      card({
+        name: "Minnesota Vikings",
+        status: "today",
+        todayGameState: "final",
+        primary: "L 1 – 3",
+        resultMatch: {
+          opponentName: "Dallas FC",
+          opponentCrestUrl: null,
+          resultLabel: "L",
+          homeScore: 3,
+          awayScore: 1,
+          homeAway: "away",
+          ownScorers: null,
+          opponentScorers: null
+        }
+      })
+    );
+    expect(html).toContain("L 3–1");
+    expect(html).not.toContain("L 1–3");
+  });
+
+  it("still reserves both scorer slots when only one team has scorer data (#2253)", () => {
+    const html = renderTickerTeam(
+      card({
+        name: "Minnesota Vikings",
+        status: "today",
+        todayGameState: "final",
+        primary: "MIN 2 – 1 DAL",
+        resultMatch: {
+          opponentName: "Dallas FC",
+          opponentCrestUrl: null,
+          resultLabel: "W",
+          homeScore: 2,
+          awayScore: 1,
+          homeAway: "home",
+          ownScorers: ["A. Isak (2)"],
+          opponentScorers: null
+        }
+      })
+    );
+    expect(html).toContain("sp-tk__scorers--home");
+    expect(html).toContain("A. Isak (2)");
+    expect(html).toContain("sp-tk__scorers--away");
   });
 });

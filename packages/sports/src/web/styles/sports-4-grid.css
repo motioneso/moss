@@ -155,7 +155,50 @@
 .sp-tk__result {
   display: flex;
   align-items: center;
+  /* #2253: with no scorer lists there are no flex:1 spacers to balance the row, so
+     the crests and score packed against the left edge. Centring the row itself keeps
+     that group in the middle whether both, one, or neither team has scorer data. */
+  justify-content: center;
   gap: var(--space-2);
+}
+/* Goal-scorer names either side of the two crests (home list hugs the home crest on its outer
+   side, away list hugs the away crest on its outer side). flex:1 lets the two lists absorb the
+   row's spare width so the crests + score stay visually centered. */
+.sp-tk__scorers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+/* #2253: align with text-align, NOT align-items. A column flex container sizes its
+   items to their content on the cross axis, so align-items: flex-end made each name's
+   list item as wide as the full name — wider than the list — and it spilled out of the
+   row uncut. Stretched items take the list's width, which is what the ellipsis below
+   needs to bite on. */
+.sp-tk__scorers--home {
+  text-align: right;
+  align-items: stretch;
+}
+.sp-tk__scorers--away {
+  text-align: left;
+  align-items: stretch;
+}
+/* #2253: text-overflow doesn't reliably ellipsis a flex column's own list-item box in Chromium —
+   the row clips the name at its edge with no dots. A block-level span inside the li is the
+   standard fix: the span, not the li, gets the width-constrained ellipsis treatment. */
+.sp-tk__scorers li {
+  min-width: 0;
+  max-width: 100%;
+}
+.sp-tk__scorers li > span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* Lead-story headline (V3 mockup 2026-07-09): the card's editorial anchor, so it's set bold in
    text color at reading size — no longer the muted --text-xs caption the pre-V3 inline-thumb
@@ -442,7 +485,47 @@
 .sp-feat__result {
   display: flex;
   align-items: center;
+  /* #2253: with no scorer lists there are no flex:1 spacers to balance the row, so
+     the crests and score packed against the left edge. Centring the row itself keeps
+     that group in the middle whether both, one, or neither team has scorer data. */
+  justify-content: center;
   gap: var(--space-2);
+}
+/* Goal-scorer names either side of the two crests — same pattern as .sp-tk__scorers above. */
+.sp-feat__scorers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+/* #2253: align with text-align, NOT align-items. A column flex container sizes its
+   items to their content on the cross axis, so align-items: flex-end made each name's
+   list item as wide as the full name — wider than the list — and it spilled out of the
+   row uncut. Stretched items take the list's width, which is what the ellipsis below
+   needs to bite on. */
+.sp-feat__scorers--home {
+  text-align: right;
+  align-items: stretch;
+}
+.sp-feat__scorers--away {
+  text-align: left;
+  align-items: stretch;
+}
+/* #2253: same Chromium flex/ellipsis fix as .sp-tk__scorers above — the span inside each li
+   carries the width-constrained ellipsis, not the li itself. */
+.sp-feat__scorers li {
+  min-width: 0;
+  max-width: 100%;
+}
+.sp-feat__scorers li > span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sp-feat__score {
   margin: 0;

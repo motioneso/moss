@@ -131,6 +131,11 @@ export const sportsModuleManifest = {
       id: "sports.story_feedback",
       description:
         "Rate a sports story with More like this or Less like this from the dots that appear in its top-right corner while it is hovered or focused, on Today and on Sports. Less like this asks for a reason and hides the story."
+    },
+    {
+      id: "sports.result_scorers",
+      description:
+        "A finished soccer or hockey game on Today and on Sports shows both team logos with the score between them, home team on the left, and who scored beside each logo. Hockey can list one fewer name than goals, a gap in the provider's data."
     }
   ],
   navigation: [
