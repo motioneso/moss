@@ -264,9 +264,13 @@ export interface EspnHeadlinesParams {
 async function listTeams(fetchFn: typeof fetch, params: EspnTeamsParams): Promise<SourceTeamRef[]> {
   const { competitionKey } = params;
   const { sport, league } = resolve(competitionKey);
+  // ESPN pages the teams list at 50 by default. Pro leagues fit, but the college leagues added
+  // for #2210 run to hundreds (college-football answers 760, mens-college-basketball 362, verified
+  // live 2026-09-03), and the default page started at "Abilene Christian", so Alabama, Ohio State
+  // and every other major program were unfollowable. Ask for everything in one page.
   const data = (await fetchJson(
     fetchFn,
-    `${SITE_BASE}/${sport}/${league}/teams`,
+    `${SITE_BASE}/${sport}/${league}/teams?limit=1000`,
     `${league} teams`
   )) as {
     sports?: readonly {
