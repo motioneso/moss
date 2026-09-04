@@ -67,6 +67,7 @@ test("saves a curated league set and uses the keyboard picker on Sports", async 
   await page.reload();
   await page.getByRole("button", { name: /Configure standings/ }).click();
   await expect(settings).toBeVisible();
+  await settings.getByRole("button", { name: /^Soccer/ }).click();
   await settings.getByRole("button", { name: /England/ }).click();
   for (const name of keptLabels) {
     await expect(settings.getByRole("checkbox", { name, exact: true })).toBeChecked();

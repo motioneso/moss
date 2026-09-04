@@ -298,17 +298,21 @@ describe("standings picker", () => {
     await openPanel();
     expect(leagueBox("NFL").checked).toBe(true);
     expect(leagueBox("NBA").checked).toBe(false);
-    // Soccer leagues sit under a collapsed country row.
+    // Sports collapse like countries do (Ben, 2026-09-04): open Soccer, then England.
     expect(container!.textContent).toContain("England");
-    expect(container!.querySelector<HTMLElement>(".sp-standings-tree__leagues")?.hidden).toBe(true);
-    await act(async () =>
-      Array.from(container!.querySelectorAll("button"))
-        .find((button) => button.textContent?.includes("England"))!
-        .click()
-    );
-    expect(container!.querySelector<HTMLElement>(".sp-standings-tree__leagues")?.hidden).toBe(
-      false
-    );
+    const englandLeagues = () =>
+      container!.querySelector<HTMLElement>("#sp-standings-region-soccer-england");
+    expect(container!.querySelector<HTMLElement>("#sp-standings-sport-soccer")?.hidden).toBe(true);
+    expect(englandLeagues()?.hidden).toBe(true);
+    for (const label of ["Soccer", "England"]) {
+      await act(async () =>
+        Array.from(container!.querySelectorAll("button"))
+          .find((button) => button.textContent?.includes(label))!
+          .click()
+      );
+    }
+    expect(container!.querySelector<HTMLElement>("#sp-standings-sport-soccer")?.hidden).toBe(false);
+    expect(englandLeagues()?.hidden).toBe(false);
     expect(leagueBox("Premier League").checked).toBe(false);
 
     await act(async () => {

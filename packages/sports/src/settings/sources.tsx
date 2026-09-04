@@ -48,9 +48,7 @@ const PREVIEW_REJECTION_COPY: Record<string, string> = {
 };
 
 /** The edit-coverage flow said "could not be verified" whatever the reason (Ben, 2026-09-04). */
-function assignmentPreviewFailureCopy(
-  result: PreviewSportsSourceAssignmentsResponse
-): string | null {
+function assignmentPreviewFailureCopy(result: PreviewSportsSourceAssignmentsResponse): string {
   if (result.status === "rejected") {
     return (
       (result.reason ? PREVIEW_REJECTION_COPY[result.reason] : undefined) ??
@@ -60,7 +58,7 @@ function assignmentPreviewFailureCopy(
   if (result.status === "unavailable") {
     return "Updating coverage needs a configured JSON-capable AI model.";
   }
-  return null;
+  return "Those assignments could not be verified.";
 }
 
 const HEALTH_BADGE: Record<
@@ -286,9 +284,6 @@ export function AddSourceFlow(props: {
             {previewMutation.isPending ? "Checking…" : "Check"}
           </Button>
         </div>
-        <p className="sp-src__hint">
-          A publication's homepage, or a subreddit like r/nfl to pull in the articles it links to.
-        </p>
       </form>
 
       {/* Coverage stays hidden until a publication is entered (Ben, 2026-09-03). */}

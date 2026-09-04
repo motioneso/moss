@@ -510,6 +510,10 @@ test.describe("Sports settings follow picker (#989)", () => {
     // The section starts collapsed (Ben, 2026-09-03); open it before measuring the picker.
     await standingsSettings.getByRole("button", { name: /Configure standings/ }).click();
     // The design system hides the real checkbox input, so visibility and clicks go by label text.
+    // Sport groups start collapsed (Ben, 2026-09-04); open the ones the test ticks.
+    for (const sport of [/^Football/, /^Basketball/, /^Baseball/]) {
+      await standingsSettings.getByRole("button", { name: sport }).click();
+    }
     await expect(standingsSettings.getByText("NFL", { exact: true })).toBeVisible();
     for (const width of [320, 375, 414, 768]) {
       await page.setViewportSize({ width, height: 844 });
@@ -538,11 +542,16 @@ test.describe("Sports settings follow picker (#989)", () => {
 
     await page.reload();
     await standingsSettings.getByRole("button", { name: /Configure standings/ }).click();
+    for (const sport of [/^Football/, /^Basketball/, /^Baseball/]) {
+      await standingsSettings.getByRole("button", { name: sport }).click();
+    }
     await expect(standingsSettings.getByRole("checkbox", { name: "NFL" })).toBeChecked();
     await expect(standingsSettings.getByRole("checkbox", { name: "NBA" })).not.toBeChecked();
     await expect(standingsSettings.getByRole("checkbox", { name: "MLB" })).not.toBeChecked();
     // Soccer leagues sit under their country; the country row opens on click (Ben, 2026-09-03).
     await expect(standingsSettings.getByText("Premier League", { exact: true })).toBeHidden();
+    // Sports collapse too (Ben, 2026-09-04): open Soccer, then England.
+    await standingsSettings.getByRole("button", { name: /^Soccer/ }).click();
     await standingsSettings.getByRole("button", { name: /England/ }).click();
     await expect(standingsSettings.getByText("Premier League", { exact: true })).toBeVisible();
     await expect(standingsSettings.getByRole("checkbox", { name: "Premier League" })).toBeChecked();
