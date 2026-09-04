@@ -37,7 +37,8 @@ import { SourceAssignmentPicker, sourceTargetDisplayLabel } from "./source-assig
    contributing to one shared front page. */
 
 const PREVIEW_REJECTION_COPY: Record<string, string> = {
-  policy: "That publication isn't allowed by the content policy.",
+  policy:
+    "That site redirects somewhere else, so we can't add it. Try the address it sends you to.",
   invalid_input: "That doesn't look like a publication we can check — try a homepage link.",
   unreachable: "We couldn't reach that site. Check the address and try again.",
   not_https: "Only HTTPS links or bare domains are accepted.",
