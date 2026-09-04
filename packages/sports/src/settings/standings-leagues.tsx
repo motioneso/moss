@@ -90,7 +90,10 @@ export function StandingsLeaguesSection(props: {
         {!open && selectedCompetitions.length > 0 ? (
           <p className="sp-standings-settings__preview" aria-hidden="true">
             {selectedCompetitions.slice(0, 6).map((competition) => (
-              <span className="jds-badge jds-badge--neutral jds-badge--pill" key={competition.competitionKey}>
+              <span
+                className="jds-badge jds-badge--neutral jds-badge--pill"
+                key={competition.competitionKey}
+              >
                 {competition.label}
               </span>
             ))}
