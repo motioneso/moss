@@ -24,6 +24,7 @@ import {
   getWeatherUnitSettings,
   putWeatherLocationSettings,
   putWeatherUnitSettings,
+  reverseWeatherLocation,
   searchWeatherLocations
 } from "../api/weather-client";
 import { queryKeys } from "../api/query-keys";
@@ -254,9 +255,31 @@ export function ProfilePane({ me }: PaneProps) {
     mutationFn: searchWeatherLocations,
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
-  const clearWeatherLocation = () => {
-    weatherLocationMutation.mutate(null);
-  };
+  // "Use my location": ask the browser once, name the point, then save it the
+  // same way a searched place is saved. Needs a secure origin (https or localhost).
+  const browserLocationMutation = useMutation({
+    mutationFn: async () => {
+      const position = await readBrowserPosition();
+      const { location } = await reverseWeatherLocation(
+        position.coords.latitude,
+        position.coords.longitude
+      );
+      return putWeatherLocationSettings(location);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.weather.location, data);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.weather.today });
+      weatherLocationSearchMutation.reset();
+      toast(`Weather location saved: ${data.location?.label ?? "your location"}.`, {
+        tone: "ready"
+      });
+    },
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
+  const weatherLocationBusy =
+    weatherLocationMutation.isPending ||
+    weatherLocationSearchMutation.isPending ||
+    browserLocationMutation.isPending;
   const weatherUnitQuery = useQuery({
     queryKey: queryKeys.weather.unit,
     queryFn: getWeatherUnitSettings,
@@ -390,15 +413,22 @@ export function ProfilePane({ me }: PaneProps) {
           hint={
             weatherLocation
               ? `Using ${weatherLocation.label}.`
-              : "Worked out from your time zone. Search for a place to use instead."
+              : "No place chosen yet, so the forecast is for the main city of your time zone."
           }
         >
+          <Button
+            size="sm"
+            disabled={weatherLocationBusy}
+            onClick={() => browserLocationMutation.mutate()}
+          >
+            {browserLocationMutation.isPending ? "Finding you..." : "Use my location"}
+          </Button>
           <input
             className="jds-input"
             value={weatherLocationSearch}
             aria-label="Search for a weather location"
-            placeholder="City, region, or country"
-            disabled={weatherLocationSearchMutation.isPending || weatherLocationMutation.isPending}
+            placeholder="Or search: city, region, or country"
+            disabled={weatherLocationBusy}
             onChange={(event) => {
               setWeatherLocationSearch(event.currentTarget.value);
             }}
@@ -410,21 +440,11 @@ export function ProfilePane({ me }: PaneProps) {
           />
           <Button
             size="sm"
-            disabled={!weatherLocationSearch.trim() || weatherLocationSearchMutation.isPending}
+            disabled={!weatherLocationSearch.trim() || weatherLocationBusy}
             onClick={() => weatherLocationSearchMutation.mutate(weatherLocationSearch.trim())}
           >
             Search
           </Button>
-          {weatherLocation ? (
-            <Button
-              variant="quiet"
-              size="sm"
-              disabled={weatherLocationMutation.isPending}
-              onClick={clearWeatherLocation}
-            >
-              Use automatic
-            </Button>
-          ) : null}
         </Field>
         {weatherLocationSearchMutation.data?.candidates.map((candidate) => (
           <Row
@@ -497,4 +517,32 @@ export function ProfilePane({ me }: PaneProps) {
       <DeleteAccount me={me} />
     </>
   );
+}
+
+function readBrowserPosition(): Promise<GeolocationPosition> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    return Promise.reject(
+      new Error("This browser can't share your location. Search for a place instead.")
+    );
+  }
+  if (typeof window !== "undefined" && !window.isSecureContext) {
+    return Promise.reject(
+      new Error("Location sharing needs a secure (https) address. Search for a place instead.")
+    );
+  }
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      (error) => {
+        reject(
+          new Error(
+            error.code === error.PERMISSION_DENIED
+              ? "Location access was blocked. Allow it in the browser, or search for a place."
+              : "Your location couldn't be found right now. Search for a place instead."
+          )
+        );
+      },
+      { enableHighAccuracy: false, timeout: 15_000, maximumAge: 300_000 }
+    );
+  });
 }

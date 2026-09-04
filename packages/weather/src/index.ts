@@ -7,3 +7,4 @@ export {
   WeatherLocationSearchUnavailableError,
   type GeocodeCandidate
 } from "./open-meteo-geocode.js";
+export { reverseGeocodeLocation } from "./nominatim-reverse.js";

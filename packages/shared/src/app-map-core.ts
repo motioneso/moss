@@ -72,7 +72,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "profile",
     label: "Account & preferences",
     description:
-      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location, quiet hours, sessions, data export and account deletion.",
+      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location (use the browser's location or search for a place), quiet hours, sessions, data export and account deletion.",
     path: "/settings?section=profile",
     scope: "user"
   },

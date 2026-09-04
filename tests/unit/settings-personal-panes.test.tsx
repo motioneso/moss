@@ -67,7 +67,14 @@ describe("ProfilePane merged Account & preferences", () => {
       location: { label: "Home", lat: 51.5072, lon: -0.1276 }
     });
     expect(html).toContain("Using Home.");
-    expect(html).toContain("Use automatic");
+    expect(html).not.toContain("Use automatic");
+  });
+
+  it("offers the browser's location next to the place search", async () => {
+    const html = await renderProfilePane();
+    expect(html).toContain("Use my location");
+    expect(html).toContain("main city of your time zone");
+    expect(html).not.toContain("Worked out from your time zone");
   });
 
   it("offers every supported time zone in a searchable picker and disables unsupported language controls", async () => {
