@@ -342,10 +342,14 @@ export function resultMatchFor(game: GameSummary, teamKey: string): FollowedResu
   const opponent = opponentFor(game, teamKey);
   if (!side || !opponent) return null;
   const result = resultOf(side, opponent);
+  const homeAway = game.home.teamKey === side.teamKey ? "home" : "away";
   return {
     opponentName: opponent.name,
     opponentCrestUrl: opponent.crestUrl,
-    scoreText: `${result} ${side.score ?? 0}–${opponent.score ?? 0}`
+    scoreText: `${result} ${side.score ?? 0}–${opponent.score ?? 0}`,
+    homeAway,
+    ownScorers: side.scorers ?? null,
+    opponentScorers: opponent.scorers ?? null
   };
 }
 

@@ -34,8 +34,8 @@ describe("EspnDatasetAdapter", () => {
       okFetch(fixture("nfl-scoreboard.json"))
     )) as {
       state: string;
-      home: { teamKey: string; score: number | null; winner: boolean };
-      away: { teamKey: string };
+      home: { teamKey: string; score: number | null; winner: boolean; scorers: string[] | null };
+      away: { teamKey: string; scorers: string[] | null };
     }[];
     expect(games.length).toBeGreaterThan(0);
     expect(games[0]?.home.teamKey).toBeTypeOf("string");
@@ -45,6 +45,92 @@ describe("EspnDatasetAdapter", () => {
     expect(games[0]?.away.teamKey).toBe("ne");
     expect(["pre", "live", "final"]).toContain(games[0]?.state);
     expect(games[0]?.state).toBe("final");
+    // NFL carries neither field in a form that maps to "goals" — no scorers for any other sport.
+    expect(games[0]?.home.scorers).toBeNull();
+    expect(games[0]?.away.scorers).toBeNull();
+  });
+
+  it("parses soccer scoring plays into each side's tallied goal scorers", async () => {
+    const event = {
+      id: "1",
+      date: "2026-01-04T00:00:00Z",
+      competitions: [
+        {
+          competitors: [
+            { homeAway: "home", team: { id: "100", abbreviation: "MIN" } },
+            { homeAway: "away", team: { id: "200", abbreviation: "DAL" } }
+          ],
+          status: { type: { state: "post", detail: "Full Time" } },
+          details: [
+            {
+              type: { text: "Goal" },
+              team: { id: "100" },
+              athletesInvolved: [{ shortName: "A. Isak" }]
+            },
+            {
+              type: { text: "Goal" },
+              team: { id: "100" },
+              athletesInvolved: [{ shortName: "A. Isak" }]
+            },
+            {
+              type: { text: "Goal" },
+              team: { id: "200" },
+              athletesInvolved: [{ shortName: "Z. Benson" }]
+            },
+            // Non-goal scoring plays (e.g. a card) must not be counted as a scorer.
+            {
+              type: { text: "Yellow Card" },
+              team: { id: "200" },
+              athletesInvolved: [{ shortName: "X" }]
+            }
+          ]
+        }
+      ]
+    };
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "usa.1", day: "2026-01-04" },
+      okFetch({ events: [event] })
+    )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
+    expect(games[0]?.home.scorers).toEqual(["A. Isak (2)"]);
+    expect(games[0]?.away.scorers).toEqual(["Z. Benson"]);
+  });
+
+  it("parses hockey goal leaders into each side's scorers", async () => {
+    const event = {
+      id: "1",
+      date: "2026-01-04T00:00:00Z",
+      competitions: [
+        {
+          competitors: [
+            {
+              homeAway: "home",
+              team: { id: "100", abbreviation: "DAL" },
+              leaders: [
+                {
+                  name: "goals",
+                  leaders: [
+                    { displayValue: "1", athlete: { shortName: "Z. Benson" } },
+                    { displayValue: "1", athlete: { shortName: "T. Hintz" } }
+                  ]
+                }
+              ]
+            },
+            { homeAway: "away", team: { id: "200", abbreviation: "MIN" } }
+          ],
+          status: { type: { state: "post", detail: "Final" } }
+        }
+      ]
+    };
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "nhl", day: "2026-01-04" },
+      okFetch({ events: [event] })
+    )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
+    // Dallas scored 4 goals in the real game this fixture is modeled on but ESPN's own "goal
+    // leaders" list only carries these two distinct scorers — that gap is expected here.
+    expect(games[0]?.home.scorers).toEqual(["Z. Benson", "T. Hintz"]);
+    expect(games[0]?.away.scorers).toBeNull();
   });
 
   it("throws a typed error on non-200 (caller degrades)", async () => {

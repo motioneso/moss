@@ -118,6 +118,7 @@ function side(overrides: Partial<GameSide> & { teamKey: string; shortName: strin
     score: null,
     record: null,
     winner: false,
+    scorers: null,
     ...overrides
   };
 }

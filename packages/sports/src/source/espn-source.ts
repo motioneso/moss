@@ -56,6 +56,15 @@ interface EspnCompetitor {
     readonly logos?: readonly { readonly href?: string }[];
   };
   readonly records?: readonly { readonly summary?: string }[];
+  // Hockey scoreboard events carry each side's own "goal leaders" here — see hockeyScorers below
+  // for the caveat that this list can be shorter than the actual number of distinct scorers.
+  readonly leaders?: readonly {
+    readonly name?: string;
+    readonly leaders?: readonly {
+      readonly displayValue?: string;
+      readonly athlete?: { readonly shortName?: string; readonly displayName?: string };
+    }[];
+  }[];
 }
 
 interface EspnEvent {
@@ -64,6 +73,16 @@ interface EspnEvent {
   readonly competitions?: readonly {
     readonly competitors?: readonly EspnCompetitor[];
     readonly status?: { readonly type?: { readonly state?: string; readonly detail?: string } };
+    // Soccer scoreboard events carry every scoring play here (one entry per goal) — see
+    // soccerScorers below.
+    readonly details?: readonly {
+      readonly type?: { readonly text?: string };
+      readonly team?: { readonly id?: string };
+      readonly athletesInvolved?: readonly {
+        readonly shortName?: string;
+        readonly displayName?: string;
+      }[];
+    }[];
   }[];
 }
 
@@ -112,7 +131,56 @@ function mapState(state: string | undefined): GameSummary["state"] {
   return "pre";
 }
 
-function toSide(competitor: EspnCompetitor | undefined): GameSide {
+// Groups a flat list of scorer names into "Name" once, or "Name (2)" for a repeat scorer,
+// preserving first-appearance order.
+function tallyScorers(names: readonly string[]): readonly string[] {
+  const counts = new Map<string, number>();
+  for (const name of names) {
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return Array.from(counts.entries()).map(([name, count]) =>
+    count > 1 ? `${name} (${count})` : name
+  );
+}
+
+type EspnScoringDetails = NonNullable<NonNullable<EspnEvent["competitions"]>[number]["details"]>;
+
+// Soccer: `competitions[0].details` is a complete list of scoring plays (one entry per goal,
+// verified live against ESPN's API). Filter to actual goals for the given team, then tally.
+function soccerScorers(
+  details: EspnScoringDetails | undefined,
+  teamId: string | undefined
+): readonly string[] | null {
+  const names = (details ?? [])
+    .filter((d) => d?.type?.text === "Goal" && d?.team?.id === teamId)
+    .flatMap((d) => d?.athletesInvolved ?? [])
+    .map((a) => a?.shortName ?? a?.displayName)
+    .filter((name): name is string => name != null);
+  return names.length === 0 ? null : tallyScorers(names);
+}
+
+// Hockey: each competitor carries ESPN's own "goals" leaders category. This is ESPN's "goal
+// leaders" list, not a full scoring log, and it can be capped shorter than the number of
+// distinct scorers on a team (verified live: Dallas scored 4 goals, only 3 distinct scorers were
+// listed) — so a team with several different scorers may show one fewer name than goals scored.
+// That is a gap in what the provider hands back, not a bug in this parsing.
+function hockeyScorers(leaders: EspnCompetitor["leaders"]): readonly string[] | null {
+  const goals = (leaders ?? []).find((category) => category?.name === "goals");
+  const names = (goals?.leaders ?? [])
+    .map((leader) => {
+      const name = leader?.athlete?.shortName ?? leader?.athlete?.displayName;
+      if (name == null) return null;
+      const count = Number(leader.displayValue);
+      return count > 1 ? `${name} (${count})` : name;
+    })
+    .filter((name): name is string => name != null);
+  return names.length === 0 ? null : names;
+}
+
+function toSide(
+  competitor: EspnCompetitor | undefined,
+  scorers: readonly string[] | null
+): GameSide {
   const team = competitor?.team;
   const teamKey = (team?.abbreviation ?? team?.id ?? "").toLowerCase();
   // Object-shaped scores come from the /schedule endpoint; Number({...}) is NaN, which used to
@@ -131,7 +199,8 @@ function toSide(competitor: EspnCompetitor | undefined): GameSide {
     crestUrl: team?.logo ?? team?.logos?.[0]?.href ?? null,
     score: score === null || Number.isNaN(score) ? null : score,
     record: competitor?.records?.[0]?.summary ?? null,
-    winner: competitor?.winner === true
+    winner: competitor?.winner === true,
+    scorers
   } satisfies GameSide;
 }
 
@@ -141,14 +210,22 @@ function toGame(event: EspnEvent, competitionKey: string): GameSummary {
   const home = competitors.find((c) => c.homeAway === "home") ?? competitors[0];
   const away = competitors.find((c) => c.homeAway === "away") ?? competitors[1];
   const type = competition?.status?.type;
+  // Safe to call here: getScoreboard already calls resolve() on the same competitionKey before
+  // toGame runs, so an unknown key would have thrown there first.
+  const { sport } = resolve(competitionKey);
+  const scorersFor = (c: EspnCompetitor | undefined): readonly string[] | null => {
+    if (sport === "soccer") return soccerScorers(competition?.details, c?.team?.id);
+    if (sport === "hockey") return hockeyScorers(c?.leaders);
+    return null;
+  };
   return {
     id: event.id ?? "",
     competitionKey,
     startsAt: event.date ?? "",
     state: mapState(type?.state),
     statusDetail: type?.detail ?? "",
-    home: toSide(home),
-    away: toSide(away)
+    home: toSide(home, scorersFor(home)),
+    away: toSide(away, scorersFor(away))
   };
 }
 

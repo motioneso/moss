@@ -157,6 +157,32 @@
   align-items: center;
   gap: var(--space-2);
 }
+/* Goal-scorer names either side of the two crests (home list hugs the home crest on its outer
+   side, away list hugs the away crest on its outer side). flex:1 lets the two lists absorb the
+   row's spare width so the crests + score stay visually centered. */
+.sp-tk__scorers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.sp-tk__scorers--home {
+  text-align: right;
+  align-items: flex-end;
+}
+.sp-tk__scorers--away {
+  text-align: left;
+  align-items: flex-start;
+}
+.sp-tk__scorers li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* Lead-story headline (V3 mockup 2026-07-09): the card's editorial anchor, so it's set bold in
    text color at reading size — no longer the muted --text-xs caption the pre-V3 inline-thumb
    layout used. Two-line clamp keeps every card the same height across the grid. */
@@ -443,6 +469,30 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+/* Goal-scorer names either side of the two crests — same pattern as .sp-tk__scorers above. */
+.sp-feat__scorers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.sp-feat__scorers--home {
+  text-align: right;
+  align-items: flex-end;
+}
+.sp-feat__scorers--away {
+  text-align: left;
+  align-items: flex-start;
+}
+.sp-feat__scorers li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sp-feat__score {
   margin: 0;

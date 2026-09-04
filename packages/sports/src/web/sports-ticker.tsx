@@ -364,19 +364,54 @@ function FeaturedTeamCard(props: {
             <span className="sp-feat__lead sp-feat__lead--empty">No recent news</span>
           )
         ) : card.resultMatch ? (
-          // Finished game: lead with the opponent crest and show just "L 3–9" — the crest carries
-          // the opponent's identity so the "vs Blue Jays" text tail (which read as cheap, Ben
-          // 2026-07-08 /sports annotation #2) is gone. Same crest-leads treatment as the Next
-          // footer below. The sr-only name keeps the opponent reachable for screen readers.
-          <div className="sp-feat__result">
-            <Crest
-              name={card.resultMatch.opponentName}
-              crestUrl={card.resultMatch.opponentCrestUrl}
-              size="sm"
-            />
-            <p className="sp-feat__score">{card.resultMatch.scoreText}</p>
-            <span className="sp-sronly">vs {card.resultMatch.opponentName}</span>
-          </div>
+          // Finished game: home team's crest on the left, away team's crest on the right, score
+          // in the middle (Ben: "home to the left"), with each team's goal scorers (soccer and
+          // hockey only — null for every other sport) sitting on that team's outer side. The
+          // crest still carries the opponent's identity visually; the sr-only line keeps both
+          // team names reachable for screen readers.
+          (() => {
+            const rm = card.resultMatch;
+            const home =
+              rm.homeAway === "home"
+                ? { name: card.name, crestUrl: card.crestUrl, scorers: rm.ownScorers }
+                : {
+                    name: rm.opponentName,
+                    crestUrl: rm.opponentCrestUrl,
+                    scorers: rm.opponentScorers
+                  };
+            const away =
+              rm.homeAway === "away"
+                ? { name: card.name, crestUrl: card.crestUrl, scorers: rm.ownScorers }
+                : {
+                    name: rm.opponentName,
+                    crestUrl: rm.opponentCrestUrl,
+                    scorers: rm.opponentScorers
+                  };
+            return (
+              <div className="sp-feat__result">
+                {home.scorers ? (
+                  <ul className="sp-feat__scorers sp-feat__scorers--home">
+                    {home.scorers.map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                <Crest name={home.name} crestUrl={home.crestUrl} size="sm" />
+                <p className="sp-feat__score">{rm.scoreText}</p>
+                <Crest name={away.name} crestUrl={away.crestUrl} size="sm" />
+                {away.scorers ? (
+                  <ul className="sp-feat__scorers sp-feat__scorers--away">
+                    {away.scorers.map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                <span className="sp-sronly">
+                  {home.name} vs {away.name}
+                </span>
+              </div>
+            );
+          })()
         ) : (
           <p className={isScore ? "sp-feat__score" : "sp-feat__matchup"}>
             {card.primary.replace(/\s*·\s*Scheduled$/i, "")}
@@ -498,18 +533,55 @@ export function TickerTeam(props: {
               <span className="sp-tk__newstx sp-tk__newstx--empty">No recent news</span>
             )
           ) : card.resultMatch ? (
-            // Finished game: crest-leads score, same treatment as FeaturedTeamCard on /sports
-            // (#867, #885). The crest carries the opponent identity; the "vs X" text tail is
-            // dropped (Ben /sports annotation #2), sr-only name keeps it reachable.
-            <div className="sp-tk__result">
-              <Crest
-                name={card.resultMatch.opponentName}
-                crestUrl={card.resultMatch.opponentCrestUrl}
-                size="sm"
-              />
-              <span className="sp-tk__score">{card.resultMatch.scoreText}</span>
-              <span className="sp-sronly">vs {card.resultMatch.opponentName}</span>
-            </div>
+            // Finished game: home team's crest on the left, away team's crest on the right, score
+            // in the middle (Ben: "home to the left"), with each team's goal scorers (soccer and
+            // hockey only — null for every other sport) sitting on that team's outer side. Same
+            // treatment as FeaturedTeamCard on /sports (#867, #885). The crest still carries the
+            // opponent's identity visually; the sr-only line keeps both team names reachable for
+            // screen readers.
+            (() => {
+              const rm = card.resultMatch;
+              const home =
+                rm.homeAway === "home"
+                  ? { name: card.name, crestUrl: card.crestUrl, scorers: rm.ownScorers }
+                  : {
+                      name: rm.opponentName,
+                      crestUrl: rm.opponentCrestUrl,
+                      scorers: rm.opponentScorers
+                    };
+              const away =
+                rm.homeAway === "away"
+                  ? { name: card.name, crestUrl: card.crestUrl, scorers: rm.ownScorers }
+                  : {
+                      name: rm.opponentName,
+                      crestUrl: rm.opponentCrestUrl,
+                      scorers: rm.opponentScorers
+                    };
+              return (
+                <div className="sp-tk__result">
+                  {home.scorers ? (
+                    <ul className="sp-tk__scorers sp-tk__scorers--home">
+                      {home.scorers.map((s) => (
+                        <li key={s}>{s}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <Crest name={home.name} crestUrl={home.crestUrl} size="sm" />
+                  <span className="sp-tk__score">{rm.scoreText}</span>
+                  <Crest name={away.name} crestUrl={away.crestUrl} size="sm" />
+                  {away.scorers ? (
+                    <ul className="sp-tk__scorers sp-tk__scorers--away">
+                      {away.scorers.map((s) => (
+                        <li key={s}>{s}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <span className="sp-sronly">
+                    {home.name} vs {away.name}
+                  </span>
+                </div>
+              );
+            })()
           ) : (
             // Matchup lines ("Blue Jays @ Giants") get body type and wrap; score lines stay mono.
             // "· Scheduled" is server noise; the kickoff time lives in the Next footer below

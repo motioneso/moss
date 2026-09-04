@@ -149,10 +149,10 @@ describe("SportsTicker", () => {
     expect(finalHtml).toContain("MIN 24 – 10 DAL");
   });
 
-  it("renders a finished game as opponent crest + result, dropping the 'vs' text (annotation #2)", () => {
-    // Ben 2026-07-08 /sports #2: when resultMatch is present the score slot leads with the
-    // opponent crest and shows just "L 3–9" — the crest carries the identity, so the cheap
-    // "L 3–9 vs Blue Jays" text no longer appears. sr-only keeps the opponent name reachable.
+  it("renders a finished game as both crests + result, dropping the 'vs' text (annotation #2)", () => {
+    // Ben 2026-07-08 /sports #2: when resultMatch is present the score slot leads with both
+    // teams' crests and shows just "L 3–9" — the crests carry the identity, so the cheap
+    // "L 3–9 vs Blue Jays" text no longer appears. sr-only keeps both team names reachable.
     const html = render([
       card({
         status: "today",
@@ -161,7 +161,10 @@ describe("SportsTicker", () => {
         resultMatch: {
           opponentName: "Toronto Blue Jays",
           opponentCrestUrl: null,
-          scoreText: "L 3–9"
+          scoreText: "L 3–9",
+          homeAway: "away",
+          ownScorers: null,
+          opponentScorers: null
         }
       })
     ]);
@@ -171,6 +174,34 @@ describe("SportsTicker", () => {
     expect(html).toContain("Toronto Blue Jays"); // sr-only opponent name (SSR splits the "vs " prefix)
     // the cheap combined text tail is gone
     expect(html).not.toContain("L 3–9 vs Blue Jays");
+    // most sports/most games have no scorer data — no scorer list should render at all
+    expect(html).not.toContain("sp-feat__scorers");
+  });
+
+  it("renders goal scorers on each team's outer side for a finished soccer/hockey game", () => {
+    // Home is always on the left (Ben: "home to the left"); scorers sit on that team's outer
+    // side — away team here, so its scorers land in the "--away" list, and the followed team
+    // (home) has its scorers in the "--home" list.
+    const html = render([
+      card({
+        name: "Minnesota Vikings", // followed team, plays home in this fixture
+        status: "today",
+        todayGameState: "final",
+        primary: "MIN 2 – 1 DAL",
+        resultMatch: {
+          opponentName: "Dallas FC",
+          opponentCrestUrl: null,
+          scoreText: "W 2–1",
+          homeAway: "home",
+          ownScorers: ["A. Isak (2)"],
+          opponentScorers: ["Z. Benson"]
+        }
+      })
+    ]);
+    expect(html).toContain("sp-feat__scorers--home");
+    expect(html).toContain("A. Isak (2)");
+    expect(html).toContain("sp-feat__scorers--away");
+    expect(html).toContain("Z. Benson");
   });
 
   it("leads with the first story and links the rest — up to three per club (mrb0pk1n)", () => {

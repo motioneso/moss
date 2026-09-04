@@ -133,6 +133,7 @@ export function side(
     score: null,
     record: null,
     winner: false,
+    scorers: null,
     ...overrides
   };
 }
@@ -484,7 +485,10 @@ describe("SportsService.getOverview", () => {
       opponentName: "Toronto Blue Jays",
       opponentCrestUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/tor.png",
       // result + scores only; NO "vs Toronto" tail — the crest carries the opponent identity
-      scoreText: "L 3–9"
+      scoreText: "L 3–9",
+      homeAway: "home",
+      ownScorers: null,
+      opponentScorers: null
     });
   });
 
