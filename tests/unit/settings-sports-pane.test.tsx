@@ -790,7 +790,7 @@ describe("BrowseGroups", () => {
 describe("followControlState", () => {
   it("inactive team: visible and aria-label both read 'Follow {team}'", () => {
     expect(followControlState("team", "Arsenal", false, null)).toEqual({
-      visible: "Follow Arsenal",
+      visible: "",
       ariaLabel: "Follow Arsenal"
     });
   });

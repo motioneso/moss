@@ -283,7 +283,9 @@ export function followControlState(
   if (pending === "unfollow") return { visible: "Unfollowing…", ariaLabel: "Unfollowing…" };
   const followLabel =
     variant === "league" ? `Follow all of ${subjectLabel}` : `Follow ${subjectLabel}`;
-  if (!active) return { visible: followLabel, ariaLabel: followLabel };
+  // Team chips carry no "Follow X" text (Ben, 2026-09-03): the chip itself is the control and
+  // the accessible name still says it. The "Following" state text stays.
+  if (!active) return { visible: variant === "team" ? "" : followLabel, ariaLabel: followLabel };
   if (variant === "team") return { visible: "Following", ariaLabel: `Unfollow ${subjectLabel}` };
   return {
     visible: `Following all of ${subjectLabel}`,
@@ -506,7 +508,7 @@ export function SearchResults(props: {
                   <PickCrest name={team.name} shortName={team.shortName} crestUrl={team.crestUrl} />
                   <span className="sp-team__name">{team.shortName || team.name}</span>
                 </span>
-                <span className="sp-team__state">{state.visible}</span>
+                {state.visible ? <span className="sp-team__state">{state.visible}</span> : null}
               </button>
               <ActionError
                 actionState={props.actionState}
@@ -603,7 +605,12 @@ export function BrowseGroups(props: {
                     aria-expanded={expanded}
                     onClick={() => props.onExpand(expanded ? null : competition.competitionKey)}
                   >
-                    {competition.label}
+                    {expanded ? (
+                      <ChevronDown size={16} aria-hidden="true" />
+                    ) : (
+                      <ChevronRight size={16} aria-hidden="true" />
+                    )}
+                    <span>{competition.label}</span>
                   </button>
                   <span className="sp-action-target">
                     <button
@@ -695,7 +702,9 @@ export function BrowseGroups(props: {
                                 />
                                 <span className="sp-team__name">{team.shortName || team.name}</span>
                               </span>
-                              <span className="sp-team__state">{state.visible}</span>
+                              {state.visible ? (
+                                <span className="sp-team__state">{state.visible}</span>
+                              ) : null}
                             </button>
                             <ActionError
                               actionState={props.actionState}
