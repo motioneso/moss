@@ -10,6 +10,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AiProviderConfigDto } from "@moss/shared";
+import type * as ApiClient from "../../apps/web/src/api/client.js";
 
 const beginMock = vi.fn(async () => ({
   loginId: "login-1",
@@ -30,9 +31,7 @@ vi.mock("../../apps/web/src/api/onboarding-connect-client.js", () => ({
 }));
 
 vi.mock("../../apps/web/src/api/client.js", async () => {
-  const actual = await vi.importActual<typeof import("../../apps/web/src/api/client.js")>(
-    "../../apps/web/src/api/client.js"
-  );
+  const actual = await vi.importActual<typeof ApiClient>("../../apps/web/src/api/client.js");
   return {
     ...actual,
     getPersonaSettings: vi.fn(async () => ({ persona: { assistantName: "Moss" } }))
