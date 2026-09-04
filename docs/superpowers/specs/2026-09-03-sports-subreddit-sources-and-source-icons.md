@@ -1,6 +1,6 @@
 # Sports: Subreddit Sources and Source Icons
 
-**Status:** Draft, awaiting Ben's approval
+**Status:** Approved (Ben, 2026-09-03)
 
 **Date:** 2026-09-03
 
