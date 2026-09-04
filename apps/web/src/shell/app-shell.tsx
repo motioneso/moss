@@ -50,18 +50,9 @@ import {
   type ModuleNavigationEntryDto
 } from "@moss/shared";
 
-const KNOWN_MODULES_WITH_SETTINGS = new Set([
-  "calendar",
-  "news",
-  "sports",
-  "tasks",
-  "wellness"
-]);
+const KNOWN_MODULES_WITH_SETTINGS = new Set(["calendar", "news", "sports", "tasks", "wellness"]);
 
-export function hasModuleSettings(
-  moduleId: string,
-  modules: readonly ModuleDto[] = []
-): boolean {
+export function hasModuleSettings(moduleId: string, modules: readonly ModuleDto[] = []): boolean {
   if (KNOWN_MODULES_WITH_SETTINGS.has(moduleId)) return true;
   return modules.some(
     (m) => m.id === moduleId && Array.isArray(m.settings) && m.settings.length > 0
@@ -73,11 +64,7 @@ export function resolveActiveModuleId(pathname: string): string | null {
   if (externalMatch) return externalMatch;
   const route = webRoutes.find((item) => item.match(pathname));
   if (!route) return null;
-  if (
-    route.id !== "today" &&
-    route.id !== "notifications" &&
-    route.id !== "settings"
-  ) {
+  if (route.id !== "today" && route.id !== "notifications" && route.id !== "settings") {
     return route.id;
   }
   return null;

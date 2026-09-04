@@ -6,10 +6,7 @@ import { MemoryRouter } from "react-router";
 
 import type { MeResponse, ModuleDto } from "@moss/shared";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
-import {
-  hasModuleSettings,
-  resolveActiveModuleId
-} from "../../apps/web/src/shell/app-shell.js";
+import { hasModuleSettings, resolveActiveModuleId } from "../../apps/web/src/shell/app-shell.js";
 import { moduleSettingsHref } from "../../apps/web/src/settings/module-settings-deep-link.js";
 
 vi.stubGlobal("localStorage", {
@@ -54,7 +51,9 @@ const MODULES: readonly ModuleDto[] = [
     version: "1.0.0",
     lifecycle: "optional",
     navigation: [{ id: "news", label: "News", path: "/news", icon: "newspaper", order: 34 }],
-    settings: [{ id: "news.prefs", label: "News", path: "/settings/modules/news", scope: "user", order: 34 }]
+    settings: [
+      { id: "news.prefs", label: "News", path: "/settings/modules/news", scope: "user", order: 34 }
+    ]
   },
   {
     id: "sports",
@@ -62,7 +61,15 @@ const MODULES: readonly ModuleDto[] = [
     version: "1.0.0",
     lifecycle: "optional",
     navigation: [{ id: "sports", label: "Sports", path: "/sports", icon: "trophy", order: 35 }],
-    settings: [{ id: "sports.follows", label: "Sports", path: "/settings/modules/sports", scope: "user", order: 35 }]
+    settings: [
+      {
+        id: "sports.follows",
+        label: "Sports",
+        path: "/settings/modules/sports",
+        scope: "user",
+        order: 35
+      }
+    ]
   },
   {
     id: "tasks",
@@ -70,30 +77,60 @@ const MODULES: readonly ModuleDto[] = [
     version: "1.0.0",
     lifecycle: "optional",
     navigation: [{ id: "tasks", label: "Tasks", path: "/tasks", icon: "list", order: 30 }],
-    settings: [{ id: "tasks.settings", label: "Tasks", path: "/settings/modules/tasks", scope: "user", order: 30 }]
+    settings: [
+      {
+        id: "tasks.settings",
+        label: "Tasks",
+        path: "/settings/modules/tasks",
+        scope: "user",
+        order: 30
+      }
+    ]
   },
   {
     id: "calendar",
     name: "Calendar",
     version: "1.0.0",
     lifecycle: "optional",
-    navigation: [{ id: "calendar", label: "Calendar", path: "/calendar", icon: "calendar", order: 31 }],
-    settings: [{ id: "calendar.settings", label: "Calendar", path: "/settings/modules/calendar", scope: "user", order: 31 }]
+    navigation: [
+      { id: "calendar", label: "Calendar", path: "/calendar", icon: "calendar", order: 31 }
+    ],
+    settings: [
+      {
+        id: "calendar.settings",
+        label: "Calendar",
+        path: "/settings/modules/calendar",
+        scope: "user",
+        order: 31
+      }
+    ]
   },
   {
     id: "wellness",
     name: "Wellness",
     version: "1.0.0",
     lifecycle: "optional",
-    navigation: [{ id: "wellness", label: "Wellness", path: "/wellness", icon: "heart", order: 32 }],
-    settings: [{ id: "wellness.settings", label: "Wellness", path: "/settings/modules/wellness", scope: "user", order: 32 }]
+    navigation: [
+      { id: "wellness", label: "Wellness", path: "/wellness", icon: "heart", order: 32 }
+    ],
+    settings: [
+      {
+        id: "wellness.settings",
+        label: "Wellness",
+        path: "/settings/modules/wellness",
+        scope: "user",
+        order: 32
+      }
+    ]
   },
   {
     id: "workshop",
     name: "Workshop",
     version: "1.0.0",
     lifecycle: "optional",
-    navigation: [{ id: "workshop", label: "Workshop", path: "/workshop", icon: "wrench", order: 50 }],
+    navigation: [
+      { id: "workshop", label: "Workshop", path: "/workshop", icon: "wrench", order: 50 }
+    ],
     settings: []
   }
 ];
