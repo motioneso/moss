@@ -21,6 +21,7 @@ function fixture(name: string): string {
 const bbc = sourceEntry("bbc")!;
 const guardian = sourceEntry("guardian")!;
 const verge = sourceEntry("verge")!;
+const npr = sourceEntry("npr")!;
 
 // Minimal synthetic RSS2 builder for edge cases the real fixtures can't exercise (cap, dedupe,
 // hostile hosts) — item bodies are supplied verbatim so tests control every tag.
@@ -104,8 +105,41 @@ describe("toFeedItems: Verge (Atom, whitespace-spread root, link@href)", () => {
     expect(items[0]?.summary.length).toBeGreaterThan(0);
   });
 
-  it("has no artwork (Verge's Atom feed carries no media tags)", () => {
-    for (const item of items) expect(item.imageUrl).toBeNull();
+  it("has no media tags, so artwork comes from the first <img> in the story body", () => {
+    for (const item of items) expect(item.imageUrl).toMatch(/^https:\/\/platform\.theverge\.com\//);
+  });
+});
+
+describe("toFeedItems: NPR (RSS2, no media tags, image comes from the story body)", () => {
+  const items = toFeedItems(fixture("npr-feed.xml"), npr);
+
+  it("parses every item", () => {
+    expect(items).toHaveLength(5);
+  });
+
+  it("picks the first <img> in content:encoded when there is no media tag", () => {
+    expect(items[0]?.title).toBe("Congress returns to a packed agenda this fall");
+    expect(items[0]?.imageUrl).toMatch(/^https:\/\/npr\.brightspotcdn\.com\//);
+  });
+
+  it("falls back to the first <img> in the description when there is no content:encoded", () => {
+    expect(items[1]?.title).toBe("A new exhibit traces the history of jazz in New Orleans");
+    expect(items[1]?.imageUrl).toMatch(/^https:\/\/npr\.brightspotcdn\.com\//);
+  });
+
+  it("drops a body image on a host that isn't on the source's allow-list", () => {
+    expect(items[2]?.title).toBe("Tracker ad served through a compromised syndication partner");
+    expect(items[2]?.imageUrl).toBeNull();
+  });
+
+  it("yields null when the story has no image anywhere", () => {
+    expect(items[3]?.title).toBe("Weather segment with no accompanying artwork");
+    expect(items[3]?.imageUrl).toBeNull();
+  });
+
+  it("prefers a real media tag over an <img> in the story body", () => {
+    expect(items[4]?.title).toBe("Media tag still wins over the body image");
+    expect(items[4]?.imageUrl).toBe("https://media.npr.org/assets/img/2026/09/04/thumb.jpg");
   });
 });
 

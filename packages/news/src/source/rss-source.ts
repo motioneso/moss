@@ -6,6 +6,7 @@ import { sourceEntry, type NewsSourceEntry } from "./catalog.js";
 import {
   SUMMARY_CHAR_CAP,
   TITLE_CHAR_CAP,
+  decodeEntities,
   sanitizeFeedText,
   sanitizeImageUrl,
   sanitizeItemUrl,
@@ -240,6 +241,16 @@ export function isPublicFeedDocument(xml: string): boolean {
   return !invalid && stack.length === 0 && (root === "feed" || (root === "rss" && rssChannel));
 }
 
+// Some feeds (NPR) carry no media:content/media:thumbnail/enclosure at all — the only image is
+// the first <img> in the story's HTML body. A regex is enough for this one shape and keeps the
+// parser streaming/cheap; a full HTML parser would be overkill for pulling one attribute.
+const FIRST_IMG_SRC_PATTERN = /<img\b[^>]*\bsrc\s*=\s*(["'])(.*?)\1/i;
+
+function firstImgSrc(html: string): string | null {
+  const match = FIRST_IMG_SRC_PATTERN.exec(html);
+  return match ? decodeEntities(match[2] ?? "") : null;
+}
+
 function toSanitizedFeedItems(xml: string, imageHosts: readonly string[]): RssFeedItem[] {
   const items: RssFeedItem[] = [];
   const seen = new Set<string>();
@@ -252,12 +263,15 @@ function toSanitizedFeedItems(xml: string, imageHosts: readonly string[]): RssFe
     const title = sanitizeFeedText(raw.title, TITLE_CHAR_CAP);
     if (!title) continue;
     seen.add(id);
+    const imageUrl =
+      sanitizeImageUrl(raw.imageUrl, imageHosts) ??
+      sanitizeImageUrl(firstImgSrc(raw.contentFallback) ?? firstImgSrc(raw.summary), imageHosts);
     items.push({
       id,
       title,
       url,
       publishedAt: sanitizePublishedAt(raw.publishedAt),
-      imageUrl: sanitizeImageUrl(raw.imageUrl, imageHosts),
+      imageUrl,
       summary: sanitizeFeedText(raw.summary || raw.contentFallback, SUMMARY_CHAR_CAP)
     });
   }
