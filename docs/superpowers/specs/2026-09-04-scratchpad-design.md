@@ -1,7 +1,7 @@
 # Scratchpad: a persistent Markdown notepad beside the chat drawer
 
 - Date: 2026-09-04
-- Status: draft, awaiting Ben's answers to the open questions below
+- Status: draft; Ben answered decisions 1, 2, 3, 5 and 9 on 2026-09-04, one question left
 - Task issue: [#2236](https://github.com/motioneso/moss/issues/2236)
 - Related: chat drawer (`apps/web/src/chat/chat-drawer.tsx`), notes module (`packages/notes`)
 
@@ -28,10 +28,9 @@ over the page on desktop and fills the screen on phone. The scratchpad follows t
 - Stays open (and keeps its scroll and cursor) while the user navigates between pages.
 - Saves itself as the user types. No save button. A small status word shows saved / saving /
   failed.
-- Markdown-backed: the stored value is plain Markdown text. The editor shows it with light
-  formatting (headings, bold, lists, checkboxes) and never produces anything that is not
-  Markdown.
-- Keyboard shortcut to toggle it, and the same shortcut works from anywhere in the app.
+- Markdown-backed: the stored value is plain Markdown text. Entry is fast: bullets, numbered
+  lists, indent and outdent, bold and italic, and nothing heavier.
+- Keyboard shortcut to toggle it, working from anywhere in the app, and changeable in Settings.
 - Moss can read the scratchpad and append to it through two declared tools.
 - Works on phone using the same drawer behaviour as chat: full-screen sheet, one thing at a
   time.
@@ -64,43 +63,51 @@ Ben's ruling 2026-09-04: one pad, stored inside the app by default, plus an opti
 checkbox that also mirrors the pad into a "Scratchpad" note in the user's Notes folder. See
 decision 9 for how the mirror works and which side wins.
 
-### 2. Markdown text is the stored format; the editor is a thin layer over it
+### 2. Markdown text is the stored format; the editor is a plain text box with list helpers
 
-The database column is `body text`. Whatever editor is used, the value that goes to the server
-is the Markdown string, and the value that comes back renders the same way in any Markdown
-viewer (including the notes module later).
+Ben's ruling 2026-09-04: fast entry plus light formatting (bullets, indentation and the like),
+and pick the simplest thing that gives that.
 
-Editor candidates, checked 2026-09-04:
+Checked 2026-09-04: the notes module has no editor component of its own (it mirrors files on
+disk and has no web editing screen), and the app carries no editor library today. Every text
+entry in the app is a plain text box. So there is nothing to reuse, and the simplest thing is
+to stay with a plain text box and add a small keystroke helper on top of it.
 
-| Library | Gzipped size | Licence | Notes |
-| --- | --- | --- | --- |
-| Plain `textarea` with a Markdown preview toggle | 0 KB | n/a | No formatting while typing; preview is a second mode. |
-| CodeMirror 6 with the Markdown language pack (`@codemirror/lang-markdown`) | about 130 KB | MIT | Syntax-aware, live heading/bold/list styling, keyboard shortcuts, mobile-friendly, tree-shakeable. Value is always the raw text. |
-| Milkdown (ProseMirror-based Markdown WYSIWYG) | about 300 KB plus plugins | MIT | True WYSIWYG, but heavier, opinionated CSS that fights the design system, and the Markdown round trip can rewrite the user's text. |
-| TipTap with the Markdown extension | about 250 KB | MIT core, some paid extensions | Same WYSIWYG trade-offs as Milkdown; Markdown is an export, not the source of truth. |
+The database column is `body text` holding Markdown. The editor is a standard multi-line text
+box styled from `tokens.css`, plus one small helper (about 150 lines, no dependency) that
+handles:
 
-Recommendation: CodeMirror 6 with the Markdown language pack. It is MIT, the smallest real
-editor that formats as you type, it treats the raw Markdown as the single value, it works on
-phones, and its theme is a handful of CSS variables that map straight onto `tokens.css`. The
-plain textarea is the fallback if bundle size becomes a concern; the API and storage do not
-change between the two.
+- Enter on a line starting with `- `, `* `, `1. ` or `- [ ] ` continues the list on the next
+  line; Enter on an empty list line ends the list.
+- Tab and Shift+Tab indent and outdent the current line or selected lines by two spaces.
+- Ctrl/Cmd + B and Ctrl/Cmd + I wrap the selection in `**` and `_`.
+- A short toolbar under the text: bullet, numbered, checkbox, indent, outdent, bold, italic,
+  as small quiet icon buttons, mainly for phone where Tab does not exist.
 
-Loaded lazily: the editor bundle is fetched the first time the scratchpad opens, not on app
-load.
+What the user sees is the Markdown itself, with the list markers visible. No live preview and
+no rendering while typing. That is a deliberate trade: it keeps the pad instant, keeps the
+bundle at zero extra bytes, and the text pastes cleanly anywhere.
 
-### 3. The window lives in the app shell beside the chat drawer
+Heavier options that were considered and set aside, for the record: CodeMirror 6 with the
+Markdown pack (MIT, about 130 KB gzipped, formats as you type) and Milkdown or TipTap (MIT,
+250 to 300 KB, true WYSIWYG that rewrites the user's Markdown). If Ben later wants headings and
+bold shown as styled text while typing, CodeMirror is the upgrade path; the storage and API do
+not change.
+
+### 3. The window lives in the app shell beside the chat drawer, and it is small
 
 The shell gets a second piece of state, `scratchpadOpen`, next to `chatOpen`. The scratchpad
 panel is rendered exactly once, outside the routed page, so route changes never unmount it.
 Its text lives in a small store in the shell (loaded once, then kept in memory) so it survives
 navigation even mid-save.
 
-On desktop it floats at the same height as the chat drawer, to its left when both are open,
-and takes the chat drawer's spot when chat is closed. Both open at once is allowed on screens
-wider than 1100px. Narrower than that, opening one closes the other.
+Ben's ruling 2026-09-04: the scratchpad is a little notepad-sized panel, not a full drawer. On
+desktop it is 340px wide and 420px tall, anchored bottom right, above the page and above the
+chat drawer's lower corner. The chat drawer and the scratchpad may overlap. Whichever one was
+opened most recently sits on top; clicking into the other brings it forward. Both can stay open.
 
-On phone it is a full-screen sheet, exactly like chat. Ben's ruling from 2026-08: phone chat
-stays a drawer, one thing at a time. Same rule here.
+On phone it is a full-screen sheet, exactly like chat, and opening one closes the other. Ben's
+ruling from 2026-08: phone chat stays a drawer, one thing at a time. Same rule here.
 
 ### 4. Autosave with a conflict guard
 
@@ -110,15 +117,21 @@ stays a drawer, one thing at a time. Same rule here.
 - On conflict the client keeps the user's local text, shows "Changed elsewhere" with a
   "Reload" action, and does not overwrite. This is the only conflict handling in slice 1.
 
-### 5. Keyboard shortcut
+### 5. Keyboard shortcut, changeable in Settings
 
-`Ctrl/Cmd + Shift + .` toggles the scratchpad. It is registered in the same place as the
-command palette shortcut so it works on every page. When the panel opens, focus moves into the
-editor. `Esc` inside the editor closes the panel. The shortcut is also listed in the command
-palette as "Open scratchpad".
+Default `Cmd + Shift + S` on a Mac, `Ctrl + Shift + S` on Windows and Linux. Checked
+2026-09-04: the only app-level modifier shortcut today is Cmd/Ctrl + K for the command palette
+(`apps/web/src/shell/command-palette.tsx`), so this key is free. Ben's ruling 2026-09-04.
 
-Chosen because `Ctrl/Cmd + .` and `Ctrl/Cmd + K` are already taken in the shell and by
-browsers. Confirmed in the open questions in case Ben prefers another key.
+The shortcut is registered in the same key handler as the command palette so it works on every
+page. When the panel opens, focus moves into the text box. `Esc` inside the text box closes the
+panel. The command palette also lists "Open scratchpad" with the current shortcut shown.
+
+The user can change it: the Scratchpad settings section has a shortcut field. Click it, press
+the key combination, and it is recorded. The value is stored per user as a small string such as
+`mod+shift+s` ("mod" means Cmd on Mac and Ctrl elsewhere). The field refuses a combination with
+no modifier, and refuses Cmd/Ctrl + K because the palette owns it. A "Reset to default" link
+puts the default back. The handler reads the stored value, so the change applies immediately.
 
 ### 6. Moss gets a read tool and an append tool, not an edit tool
 
@@ -183,15 +196,11 @@ The checkbox lives in two places that read and write the same setting: the pad's
 
 ## Open Questions for Ben
 
-1. Both open at once on desktop: when chat and the scratchpad are both open, should the
-   scratchpad sit left of chat (recommended, keeps chat where it is today) or should opening one
-   always close the other?
-2. Keyboard shortcut: `Ctrl/Cmd + Shift + .` is the recommendation. Any key you would rather
-   use?
-3. Editor: the recommendation is a real Markdown editor (CodeMirror, about 130 KB, loaded only
-   when the pad first opens). If you would rather keep the app lighter, a plain text box with a
-   preview switch is the fallback and everything else stays the same.
-4. Should the scratchpad also appear in the Today screen as a small card (read-only preview,
+Answered 2026-09-04 and folded in above: placement beside the chat drawer (decision 3),
+shortcut and its Settings field (decision 5), editor choice (decision 2), one pad with the
+optional Notes copy (decisions 1 and 9).
+
+1. Should the scratchpad also appear in the Today screen as a small card (read-only preview,
    click to open)? Not in this spec; easy to add later if wanted.
 
 ## Architecture
@@ -206,6 +215,7 @@ CREATE TABLE app.scratchpads (
   body        text NOT NULL DEFAULT '',
   revision    integer NOT NULL DEFAULT 1,
   sync_to_notes boolean NOT NULL DEFAULT false,
+  shortcut    text NOT NULL DEFAULT 'mod+shift+s',
   updated_at  timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT scratchpads_body_size CHECK (length(body) <= 64000)
 );
@@ -250,12 +260,14 @@ type ScratchpadGetResponse = {
   maxChars: 64000;
   syncToNotes: boolean;
   notesFolderConfigured: boolean;   // from the notes module's public status
+  shortcut: string;                 // e.g. "mod+shift+s"
 };
 
 // PATCH /api/scratchpad/settings
-type ScratchpadSettingsRequest = { syncToNotes: boolean };
-type ScratchpadSettingsResponse = { syncToNotes: boolean };
-// 409 { code: "scratchpad_notes_folder_missing" } when turning it on without a folder
+type ScratchpadSettingsRequest = { syncToNotes?: boolean; shortcut?: string };
+type ScratchpadSettingsResponse = { syncToNotes: boolean; shortcut: string };
+// 409 { code: "scratchpad_notes_folder_missing" } when turning the copy on without a folder
+// 400 { code: "scratchpad_shortcut_invalid" } for no modifier, or a reserved key (mod+k)
 
 // PUT /api/scratchpad
 type ScratchpadPutRequest = { body: string; revision: number };
@@ -289,11 +301,14 @@ fail the save itself.
   "Copy" quiet button. The menu is the `jds` menu primitive with one checkbox item, "Also keep a
   copy in my Notes folder", and an "Open Settings" item.
 - Settings: a new "Scratchpad" section (`/settings?section=scratchpad`) with the same checkbox
-  and its help text, built from the existing settings-ui field and card primitives.
+  and its help text, and the keyboard shortcut field with a reset link, built from the existing
+  settings-ui field and card primitives.
 - `apps/web/src/scratchpad/use-scratchpad.ts`: load once, debounce saves, conflict state,
   in-memory body so navigation never loses text.
-- `apps/web/src/scratchpad/scratchpad-editor.tsx`: lazy-loaded CodeMirror wrapper; theme from
-  `tokens.css` variables only.
+- `apps/web/src/scratchpad/scratchpad-editor.tsx`: the text box, the list and indent key
+  helper, and the small toolbar; styled from `tokens.css` only, no dependency.
+- `apps/web/src/scratchpad/shortcut.ts`: parse and match the stored shortcut string against a
+  key event; shared by the shell handler, the palette label, and the Settings field.
 - `apps/web/src/styles/kit-scratchpad.css`: `.scratch`, `.scratch__head`, `.scratch__body`,
   `.scratch__foot` mirroring `kit-chat.css` (`.chatd`). Phone breakpoint matches chat's.
   All colour, radius, shadow and type from tokens; `pnpm check:design-tokens` must pass.
@@ -302,11 +317,12 @@ fail the save itself.
 
 - App map (`packages/shared/src/app-map-core.ts`): add a `scratchpad` entry to
   `CORE_APP_SCREENS` (label "Scratchpad", description "Your one private notepad, open from the
-  pencil in the top bar or Ctrl/Cmd + Shift + .", path `/?scratchpad=open`, scope `user`). The
+  pencil in the top bar or Cmd/Ctrl + Shift + S", path `/?scratchpad=open`, scope `user`). The
   path opens the app with the panel open so Moss can send the user there.
 - App map settings: add a `scratchpad` entry to `CORE_APP_SETTINGS` (label "Scratchpad",
-  description "Choose whether your scratchpad is also kept as a note in your Notes folder",
-  path `/settings?section=scratchpad`, scope `user`).
+  description "Change the keyboard shortcut that opens your scratchpad, and choose whether it is
+  also kept as a note in your Notes folder", path `/settings?section=scratchpad`, scope `user`).
+  The screen entry's description names the default shortcut, Cmd/Ctrl + Shift + S.
 - Tools: `scratchpadRead` and `scratchpadAppend` declared alongside the other core tools with
   the descriptions above. Both act as the requesting user through the normal access context and
   call the same service functions as the routes.
@@ -316,11 +332,13 @@ fail the save itself.
 ### Testing
 
 - Unit: revision conflict, size limit, append onto a list item vs onto prose, empty-row read,
+  list continuation and indent helper, shortcut parse and reject rules,
   mirror write called only when the setting is on, mirror failure does not fail the save.
 - RLS test: user A cannot read or update user B's row through the app role; admin cannot either.
 - Web e2e (Playwright): open from the button, type, navigate to another page, panel still open
   with text; reload, text persists; shortcut toggles; phone viewport shows the full-screen sheet;
-  chat and scratchpad coexistence rule at wide and narrow widths.
+  chat and scratchpad overlap with the most recently opened on top; on the phone viewport
+  opening chat closes the scratchpad and back again.
 - Live-path proof on the dev instance before merge: type on desktop, ask Moss in chat to add a
   line, see it appear; open on a phone-sized window.
 
@@ -335,26 +353,33 @@ drawer's twin.
 +----------------------------------------------------------------------------------+
 | [Moss]  Today                                              [ pencil ] [ chat ]   |
 +----------------------------------------------------------------------------------+
-| Sidebar |  Page content ...                       +-----------------------------+ |
-|         |                                         | (/) Scratchpad  Saved ... x | |
-| Today   |                                         |-----------------------------| |
-| Notes   |                                         | # Errands                   | |
-| Sports  |                                         | - eggs                      | |
-| ...     |                                         | - milk                      | |
-|         |                                         | - call the dentist 555-0134 | |
-|         |                                         |                             | |
-|         |                                         | Ideas for the sports desk:  | |
-|         |                                         | photos next to each story   | |
-|         |                                         |                             | |
-|         |                                         |-----------------------------| |
-|         |                                         | 214 / 64,000        [Copy]  | |
-|         |                                         +-----------------------------+ |
+| Sidebar |  Page content ...                                                      |
+|         |                                                                        |
+| Today   |                                                                        |
+| Notes   |                                                                        |
+| Sports  |                                                                        |
+| ...     |                                                                        |
+|         |                                  +----------------------------------+  |
+|         |                                  | (/) Scratchpad     Saved  ...  x |  |
+|         |                                  |----------------------------------|  |
+|         |                                  | # Errands                        |  |
+|         |                                  | - eggs                           |  |
+|         |                                  | - milk                           |  |
+|         |                                  |   - the oat kind                 |  |
+|         |                                  | - call the dentist 555-0134      |  |
+|         |                                  |                                  |  |
+|         |                                  |----------------------------------|  |
+|         |                                  | [-] [1.] [x] [<] [>] [B] [I]     |  |
+|         |                                  | 74 / 64,000               [Copy] |  |
+|         |                                  +----------------------------------+  |
 +----------------------------------------------------------------------------------+
 ```
 
-Panel geometry is the chat drawer's: fixed, top 72px, right 18px, bottom 18px, width 404px.
-Header uses the same mark / name / status layout as `.chatd__head`; the status word is
-"Saved", "Saving...", "Changed elsewhere" (with a Reload link) or "Not saved" in the error tone.
+Panel is fixed, bottom 18px, right 18px, 340px wide, 420px tall, and can be dragged taller
+from its top edge (height remembered in the browser). Header uses the same mark / name /
+status layout as `.chatd__head`; the status word is "Saved", "Saving...", "Changed elsewhere"
+(with a Reload link) or "Not saved" in the error tone. The toolbar row is quiet icon buttons:
+bullet, numbered, checkbox, outdent, indent, bold, italic.
 
 ### Pad menu open (three-dot button)
 
@@ -381,37 +406,44 @@ When no notes folder is configured the checkbox is disabled and the help line re
 +-----------------------------------------------------------------+
 | Settings > Scratchpad                                           |
 |-----------------------------------------------------------------|
+| Keyboard shortcut                                               |
+| [ Cmd + Shift + S        ]  Reset to default                    |
+|   Click the field, then press the keys you want.                |
+|                                                                 |
 | Notes folder copy                                               |
 | [x] Also keep a copy in my Notes folder                         |
 |     Writes the whole pad to a note called "Scratchpad" every    |
 |     time it saves. The app copy is the master. Edits made to    |
 |     the note file are replaced on the next save.                |
-|                                                                 |
-| Shortcut   Ctrl/Cmd + Shift + .                                 |
 +-----------------------------------------------------------------+
 ```
 
-### Desktop, both open (screens wider than 1100px)
+### Desktop, both open, scratchpad opened last
 
 ```
 +----------------------------------------------------------------------------------+
 | [Moss]  Today                                              [ pencil*] [ chat* ]  |
 +----------------------------------------------------------------------------------+
-| Sidebar |  Page ...      +-----------------------+ +-------------------------+   |
-|         |                | (/) Scratchpad  Saved x| | (M) Moss              x |   |
-|         |                |-----------------------| |-------------------------|   |
-|         |                | - eggs                | |  Here when you need me  |   |
-|         |                | - milk                | |                         |   |
-|         |                |                       | |  > add milk to my       |   |
-|         |                |                       | |    scratchpad           |   |
-|         |                |                       | |  Added "milk".          |   |
-|         |                |-----------------------| |-------------------------|   |
-|         |                | 32 / 64,000    [Copy] | | [ Ask Moss...        ] |   |
-|         |                +-----------------------+ +-------------------------+   |
+| Sidebar |  Page ...                                +-------------------------+   |
+|         |                                          | (M) Moss              x |   |
+|         |                                          |-------------------------|   |
+|         |                                          |  > add milk to my       |   |
+|         |                                          |    scratchpad           |   |
+|         |                                          |  Added "milk".          |   |
+|         |                            +----------------------------------+    |   |
+|         |                            | (/) Scratchpad     Saved  ...  x |    |   |
+|         |                            |----------------------------------|    |   |
+|         |                            | - eggs                           |    |   |
+|         |                            | - milk                           |    |   |
+|         |                            |----------------------------------|    |   |
+|         |                            | [-] [1.] [x] [<] [>] [B] [I]     |----+   |
+|         |                            | 32 / 64,000               [Copy] |        |
+|         |                            +----------------------------------+        |
 +----------------------------------------------------------------------------------+
 ```
 
-Scratchpad sits at right 440px (chat width plus the gutter). Both buttons show the active state.
+The two overlap. The one opened most recently is on top; clicking into the other brings it
+forward. Both buttons show the active state.
 
 ### Phone
 
@@ -429,8 +461,9 @@ Scratchpad sits at right 440px (chat width plus the gutter). Both buttons show t
 +---------------------------+      +---------------------------+
 ```
 
-Full-screen sheet below 560px, same as chat. Opening chat from inside the sheet swaps to chat;
-the scratchpad text stays in memory and is there when the user comes back.
+Full-screen sheet below 560px, same as chat. The toolbar row sits above the keyboard. Opening
+chat closes the scratchpad sheet, and opening the scratchpad closes chat; the scratchpad text
+stays in memory and is there when the user comes back.
 
 ## Exit Criteria
 
@@ -443,7 +476,10 @@ the scratchpad text stays in memory and is there when the user comes back.
 - "What's on my scratchpad?" in chat reads it back.
 - A second user cannot read the first user's row through the API or the database app role.
 - 64,001 characters is rejected by the server; the count turns amber before that.
-- Shortcut toggles from any page and the command palette lists it.
+- Shortcut toggles from any page and the command palette lists it; changing it in Settings
+  takes effect without a reload and rejects a bare key or Cmd/Ctrl + K.
+- Enter continues a bullet, Tab indents it, Shift+Tab outdents it, on desktop; the toolbar
+  does the same on phone.
 - With the Notes copy ticked, a save produces or updates `Scratchpad.md` in the notes folder
   with the same text; editing that file by hand and saving the pad again overwrites the file.
 - The checkbox is disabled with a clear message when no notes folder is configured; the pad
@@ -475,22 +511,23 @@ the scratchpad text stays in memory and is there when the user comes back.
 2. **Panel and shell wiring.** Button, panel, store, autosave, conflict state, shortcut, command
    palette entry, CSS, app map entry, Playwright tests for open/navigate/reload and the phone
    sheet. Uses a plain textarea inside the panel so the slice stands on its own.
-3. **Editor.** Swap the textarea for the lazy-loaded CodeMirror Markdown editor with the token
-   theme; character count and amber threshold; design-token check.
+3. **Entry helpers and shortcut setting.** The list-continuation and indent key helper, the
+   toolbar, bold and italic keys, character count and amber threshold, the shortcut field in
+   Settings with the parse and reject rules, design-token check.
 4. **Moss tools.** `scratchpadRead`, `scratchpadAppend`, list-item append rule, panel refresh
    after append, the "Moss added a line" toast.
 5. **Notes copy and live proof.** The `sync_to_notes` column and settings route, the mirror
    write through `notesCreate`, the notes-folder-configured status (adding it to the notes
-   manifest if missing), the pad menu checkbox, the Settings section, the app map settings entry,
+   manifest if missing), the pad menu checkbox, the rest of the Settings section, the app map settings entry,
    live-path proof on dev of typing, a Moss append, and the note file updating, then merge.
 
 Slices 2 to 5 share one worktree and one PR per the 2026-08-25 ruling; slice 1 can be its own PR
-since it ships nothing visible. The `sync_to_notes` column ships in slice 1's migration so no
-second migration is needed.
+since it ships nothing visible. The `sync_to_notes` and `shortcut` columns ship in slice 1's
+migration so no second migration is needed.
 
 ## Self-review
 
 - Every screen the feature ships has a mockup above (desktop, pad menu, Settings section,
   both-open, phone).
 - Nothing here requires a hand-edited settings file.
-- The only judgement calls left are the four open questions; none blocks slice 1.
+- One open question left (a Today card); it does not block any slice.
