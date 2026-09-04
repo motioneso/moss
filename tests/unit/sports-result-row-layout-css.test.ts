@@ -20,9 +20,10 @@ describe("finished-game score row layout", () => {
     expect(rule(".sp-feat__result")).toContain("justify-content: center");
   });
 
-  it("shortens a long scorer name with dots instead of letting it leave the row", () => {
-    // A column of names sizes each item to its own text unless the items are stretched, and an
-    // item wider than its list cannot be trimmed, so the name ran out past the card edge.
+  it("wraps a long scorer name instead of trimming it to dots", () => {
+    // Round 2 of #2253: the columns either side of the logos are only about seventy pixels wide
+    // on the Sports page, and one-line-plus-dots cut even the short target line to "Isa…". Names
+    // wrap now; the last-resort break keeps one long word from shoving the logos off centre.
     for (const selector of [
       ".sp-tk__scorers--home",
       ".sp-tk__scorers--away",
@@ -37,9 +38,9 @@ describe("finished-game score row layout", () => {
       expect(rule(selector)).toContain("max-width: 100%");
     }
     for (const selector of [".sp-tk__scorers li > span", ".sp-feat__scorers li > span"]) {
-      expect(rule(selector)).toContain("overflow: hidden");
-      expect(rule(selector)).toContain("text-overflow: ellipsis");
-      expect(rule(selector)).toContain("white-space: nowrap");
+      expect(rule(selector)).toContain("white-space: normal");
+      expect(rule(selector)).toContain("overflow-wrap: break-word");
+      expect(rule(selector)).not.toContain("text-overflow: ellipsis");
     }
   });
 });

@@ -19,6 +19,15 @@ import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-me
 // where a group-stage standing reads as a league position, and for leagues that aren't in
 // progress: "#14 · 0 pts" / "#3 · 0-0" is last season's rank next to a blank record (live
 // feedback mra39rlv; the server now nulls these too, this guards the older prod payload).
+// #2253: the finished-game row shows the bare score ("2–0"), not "W 2–0" — Ben's layout
+// ruling reads left to right as scorers, logo, score, logo, scorers, and the recent-form pips
+// already say whether the team won. The win/draw/loss word survives for screen readers only.
+function resultWord(label: "W" | "D" | "L"): string {
+  if (label === "W") return "won";
+  if (label === "L") return "lost";
+  return "drew";
+}
+
 function standingIsSane(card: FollowedTeamCard): boolean {
   if (!card.standing) return false;
   if (TOURNAMENT_COMPETITIONS.has(card.competitionKey)) return false;
@@ -404,9 +413,7 @@ function FeaturedTeamCard(props: {
                   </ul>
                 ) : null}
                 <Crest name={home.name} crestUrl={home.crestUrl} size="sm" />
-                <p className="sp-feat__score">
-                  {`${rm.resultLabel} ${rm.homeScore}–${rm.awayScore}`}
-                </p>
+                <p className="sp-feat__score">{`${rm.homeScore}–${rm.awayScore}`}</p>
                 <Crest name={away.name} crestUrl={away.crestUrl} size="sm" />
                 {hasScorers ? (
                   <ul className="sp-feat__scorers sp-feat__scorers--away">
@@ -418,7 +425,7 @@ function FeaturedTeamCard(props: {
                   </ul>
                 ) : null}
                 <span className="sp-sronly">
-                  {home.name} vs {away.name}
+                  {home.name} vs {away.name}, {resultWord(rm.resultLabel)}
                 </span>
               </div>
             );
@@ -584,9 +591,7 @@ export function TickerTeam(props: {
                     </ul>
                   ) : null}
                   <Crest name={home.name} crestUrl={home.crestUrl} size="sm" />
-                  <span className="sp-tk__score">
-                    {`${rm.resultLabel} ${rm.homeScore}–${rm.awayScore}`}
-                  </span>
+                  <span className="sp-tk__score">{`${rm.homeScore}–${rm.awayScore}`}</span>
                   <Crest name={away.name} crestUrl={away.crestUrl} size="sm" />
                   {hasScorers ? (
                     <ul className="sp-tk__scorers sp-tk__scorers--away">
@@ -598,7 +603,7 @@ export function TickerTeam(props: {
                     </ul>
                   ) : null}
                   <span className="sp-sronly">
-                    {home.name} vs {away.name}
+                    {home.name} vs {away.name}, {resultWord(rm.resultLabel)}
                   </span>
                 </div>
               );
