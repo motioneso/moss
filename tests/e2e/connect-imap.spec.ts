@@ -38,10 +38,12 @@ test("connects an email account via the settings IMAP flow", async ({ page }) =>
   await page.getByRole("button", { name: "Connected accounts" }).click();
   await page.getByRole("button", { name: "Email (IMAP)" }).click();
 
-  await page.getByRole("button", { name: /Fastmail/ }).click();
-  await expect(page.locator(".gflow__title", { hasText: "Connect Fastmail" })).toBeVisible();
+  // One address-first form: typing a known address picks the mail service for you.
+  await expect(page.locator(".gflow__title", { hasText: "Add an email account" })).toBeVisible();
+  await expect(page.getByLabel("Mail service")).toHaveValue("");
 
   await page.getByLabel("Email address").fill("me@fastmail.com");
+  await expect(page.getByLabel("Mail service")).toHaveValue("imap-fastmail");
   await page.getByLabel("App password").fill("app-password-123");
 
   const connect = page.getByRole("button", { name: "Connect Fastmail" });
@@ -49,7 +51,7 @@ test("connects an email account via the settings IMAP flow", async ({ page }) =>
   await connect.click();
 
   await expect(page.getByRole("heading", { name: "Connected accounts" })).toBeVisible();
-  await expect(page.getByText("Connect Fastmail")).not.toBeVisible();
+  await expect(page.getByText("Add an email account")).not.toBeVisible();
 });
 
 test("reconnect on an IMAP account opens ImapConnect, not GoogleConnect", async ({ page }) => {
@@ -75,6 +77,6 @@ test("reconnect on an IMAP account opens ImapConnect, not GoogleConnect", async 
   await page.getByRole("button", { name: "Connected accounts" }).click();
   await page.getByRole("button", { name: "Reconnect" }).click();
 
-  await expect(page.getByText("Choose an email provider")).toBeVisible();
+  await expect(page.locator(".gflow__title", { hasText: "Add an email account" })).toBeVisible();
   await expect(page.getByText("Connect Google")).not.toBeVisible();
 });

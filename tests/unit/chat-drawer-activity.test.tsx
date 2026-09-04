@@ -37,7 +37,7 @@ describe("chat drawer activity outcomes", () => {
     expect(html).toContain("Approve the seeded workflow action");
   });
 
-  it("renders action outcomes outside Behind the scenes", () => {
+  it("renders action outcomes outside the Thinking steps", () => {
     // #1661: was "Allowed by YOLO". A user's own approval now reports this outcome too, and the
     // record carries nothing that says which, so the verb stops naming a cause it cannot know.
     expect(activityVerb(allowedRecord)).toBe("Allowed");
@@ -51,7 +51,7 @@ describe("chat drawer activity outcomes", () => {
         ]
       })
     );
-    expect(html).toContain("Behind the scenes");
+    expect(html).toContain("Thinking");
     expect(html).toContain("LinkedIn monitoring enabled");
     expect(html.indexOf("LinkedIn monitoring enabled")).toBeGreaterThan(
       html.indexOf("I changed that.")

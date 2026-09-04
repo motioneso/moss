@@ -20,6 +20,7 @@ export * from "./chat-archive-api.js";
 export * from "./chat-settings-api.js";
 export * from "./chat-skills-api.js";
 export * from "./connectors-api.js";
+export * from "./imap-providers.js";
 export * from "./email-api.js";
 export * from "./email-briefing-settings-api.js";
 export * from "./notifications-api.js";
