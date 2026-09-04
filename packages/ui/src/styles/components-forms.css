@@ -131,3 +131,112 @@
   outline: none;
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
+
+/* ---------------------------------------------------------------
+   COMBOBOX — select-shaped trigger, type-to-filter listbox
+   --------------------------------------------------------------- */
+.jds-combobox {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.jds-combobox__trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.jds-combobox__trigger:hover:not(:disabled),
+.jds-combobox__trigger[aria-expanded="true"] {
+  border-color: var(--border-strong);
+}
+.jds-combobox__trigger:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.jds-combobox__trigger:disabled {
+  color: var(--ink-4);
+  cursor: not-allowed;
+}
+.jds-combobox__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.jds-combobox__value--empty {
+  color: var(--ink-4);
+}
+.jds-combobox__chev {
+  display: inline-flex;
+  flex: none;
+  color: var(--ink-4);
+}
+.jds-combobox__pop {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-md);
+}
+.jds-combobox__list {
+  display: flex;
+  flex-direction: column;
+  max-height: 18rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.jds-combobox__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.jds-combobox__option--active {
+  background: var(--surface-3);
+}
+.jds-combobox__option[aria-selected="true"] {
+  color: var(--accent-soft-fg);
+  font-weight: var(--weight-semibold);
+}
+.jds-combobox__option-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.jds-combobox__empty {
+  padding: var(--space-2);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}

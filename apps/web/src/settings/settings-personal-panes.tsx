@@ -8,7 +8,7 @@ import type {
   WeatherUnit
 } from "@moss/shared";
 import { formatInZone } from "@moss/shared";
-import { Button } from "@moss/ui";
+import { Button, Combobox, type ComboboxOption } from "@moss/ui";
 import { Check, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -78,6 +78,13 @@ const SUPPORTED_TIME_ZONES = Intl.supportedValuesOf("timeZone")
     };
   })
   .sort((a, b) => a.offsetMinutes - b.offsetMinutes || a.timeZone.localeCompare(b.timeZone));
+
+// Searchable picker options: "(UTC-08:00) America/Los_Angeles" also matches "los angeles".
+export const TIME_ZONE_OPTIONS: readonly ComboboxOption[] = SUPPORTED_TIME_ZONES.map((zone) => ({
+  value: zone.timeZone,
+  label: zone.label,
+  keywords: zone.timeZone.replace(/[_/]/g, " ")
+}));
 
 const DEFAULT_QUIET_HOURS: QuietHoursSettingsDto = {
   enabled: false,
@@ -312,18 +319,15 @@ export function ProfilePane({ me }: PaneProps) {
         <div className="fld">
           <div className="fld__lbl">Time zone</div>
           <div className="fld__row">
-            <Select
+            <Combobox
               value={locale.timezone}
               aria-label="Time zone"
+              options={TIME_ZONE_OPTIONS}
               disabled={localeQuery.isLoading || localeMutation.isPending}
-              onChange={(event) => updateLocale({ timezone: event.currentTarget.value })}
-            >
-              {SUPPORTED_TIME_ZONES.map((zone) => (
-                <option key={zone.timeZone} value={zone.timeZone}>
-                  {zone.label}
-                </option>
-              ))}
-            </Select>
+              searchPlaceholder="Search time zones"
+              emptyText="No time zone matches."
+              onChange={(timezone) => updateLocale({ timezone })}
+            />
           </div>
         </div>
         <div className="fld">
