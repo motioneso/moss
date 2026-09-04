@@ -621,7 +621,16 @@ export function BrowseGroups(props: {
                         )
                       }
                     >
-                      <span className="sp-whole__lbl">{wholeState.visible}</span>
+                      <span className="sp-whole__lbl">
+                        {/* The league name already heads the row, so the button reads
+                            "Follow all" and every row's button lines up at one width
+                            (Ben, 2026-09-03). The aria-label keeps the full name. */}
+                        {wholePendingHere !== null
+                          ? wholeState.visible
+                          : wholeActive
+                            ? "Following all"
+                            : "Follow all"}
+                      </span>
                     </button>
                     <ActionError
                       actionState={props.actionState}

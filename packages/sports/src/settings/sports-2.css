@@ -183,8 +183,9 @@
 /* .sp-whole normally stretches full-width as a standalone search result row; inside a browse
    row it sits beside .sp-browse__league instead, so it needs to give up that stretch. */
 .sp-browse__row .sp-whole {
-  width: auto;
-  flex: 0 0 auto;
+  width: 9.5rem;
+  flex: 0 0 9.5rem;
+  justify-content: center;
   margin-bottom: 0;
 }
 
