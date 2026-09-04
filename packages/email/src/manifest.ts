@@ -68,10 +68,9 @@ export const emailModuleManifest = {
     {
       id: "email.skip-sign-in-code-emails",
       description:
-        "An automated message delivering a temporary sign-in code (one-time code, login code, " +
-        "two-factor code) is left out of briefings and never turns into a task, even if it " +
-        "was saved before this check existed. A message from a person is never affected, so a " +
-        "door code, a discount code or an order number still comes through as normal."
+        "An automated email that hands you a sign-in code, on one line with the code itself, " +
+        "stays out of briefings and tasks, even if it was saved earlier. Mail from a person, " +
+        "and door, order, booking or discount codes, come through as normal."
     }
   ],
   permissions: [

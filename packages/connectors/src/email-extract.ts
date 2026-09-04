@@ -196,8 +196,10 @@ export interface EmailSignals {
  * makes it worse, not better; the strength here comes from requiring the combination.
  *
  *   1. the sender looks automated (a no-reply / notifications / security style mailbox),
- *   2. the subject or the first lines name a verification, sign-in, one-time or security code,
- *   3. a short code stands alone somewhere in that same text.
+ *   2. one line of the subject or the first lines names a sign-in, login, account-verification,
+ *      two-step or security code,
+ *   3. that same line carries a short code standing on its own, and says nothing about a door,
+ *      an order, a booking or a coupon that would explain the number some other way.
  */
 
 /**
@@ -212,49 +214,68 @@ const AUTOMATED_LOCAL_PART =
 const AUTOMATED_DOMAIN_LABEL = /^(?:accounts?|notifications?|alerts?|auth|secure|security)\./;
 
 /**
- * Phrases that name a temporary sign-in secret. Each one has to say "code", "passcode" or
- * "password" — "verify", "confirm" and a bare "two-factor" are left out on purpose, because
- * they turn up constantly in ordinary requests ("please verify the budget", "please enable
- * two-factor authentication for the team").
+ * Phrases that name a temporary sign-in secret. Each one must both say "code", "passcode" or
+ * "password" AND tie it to signing in, logging in, verifying an account, or two-step
+ * verification. A bare "passcode", "temporary code" or "confirmation code" is deliberately
+ * absent: a hotel mails a door passcode and an airline mails a booking confirmation code, and
+ * those are messages a person wants to see.
  */
-const CODE_PHRASES = [
+const SIGN_IN_CODE_PHRASES = [
   "verification code",
-  "confirmation code",
+  "verification passcode",
   "one-time code",
   "one time code",
   "onetime code",
   "one-time passcode",
   "one time passcode",
+  "onetime passcode",
   "one-time password",
   "one time password",
+  "onetime password",
   "single-use code",
   "single use code",
-  "temporary code",
-  "security code",
+  "single-use passcode",
+  "single use passcode",
   "login code",
   "log-in code",
   "log in code",
+  "signin code",
   "sign-in code",
   "sign in code",
-  "signin code",
+  "login passcode",
+  "sign-in passcode",
+  "sign in passcode",
   "authentication code",
+  "authentication passcode",
+  "security code",
   "two-factor code",
   "two factor code",
-  "2fa code",
-  "passcode"
+  "two-step code",
+  "two step code",
+  "2fa code"
 ] as const;
 
 /** The abbreviation only counts as a whole word: "hotpot" and "adopts" must not match. */
 const OTP_WORD = /\botp\b/;
 
 /**
+ * Words that mean a nearby number belongs to something other than a sign-in: a physical lock,
+ * an order, a booking, a coupon. When one of these shares a line with the code phrase, the
+ * line is not evidence of a sign-in code, however the phrase is worded.
+ */
+const NOT_A_SIGN_IN_NUMBER =
+  /\b(?:door|doors|apartment|apt|flat|gate|gates|lock|locks|keypad|garage|entry|entrance|building|unit|room|suite|locker|safe|order|orders|tracking|invoice|reference|booking|reservation|ticket|discount|coupon|promo|voucher|wifi|wi-fi|pin\s+for\s+the\s+door)\b/;
+
+/**
  * A short code standing on its own: four to eight digits, or six to eight letters and digits
  * mixed. It must not be glued to other letters or digits, so an order number inside a longer
- * reference, a year in a sentence, or a price will not pass on their own.
+ * reference or a price will not pass on their own.
  */
-const STANDALONE_NUMERIC_CODE = /(?<![a-z0-9])\d{4,8}(?![a-z0-9])/;
-const STANDALONE_MIXED_CODE =
-  /(?<![a-z0-9])(?=[a-z0-9]{6,8}(?![a-z0-9]))(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]{6,8}(?![a-z0-9])/;
+const STANDALONE_CANDIDATE =
+  /(?<![a-z0-9])(?:\d{4,8}|(?=[a-z0-9]{6,8}(?![a-z0-9]))(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]{6,8})(?![a-z0-9])/g;
+
+/** Four digits that read as a calendar year are a date, not a secret. */
+const READS_AS_A_YEAR = /^(?:19|20)\d{2}$/;
 
 /** How much of the body counts as "the first lines" for this pre-check. */
 const OTP_CHECK_BODY_CHARS = 500;
@@ -281,19 +302,34 @@ export interface OneTimeCodeEmailInput {
   readonly body: string;
 }
 
+/** True when the text holds a short code that is not a year and not glued to other characters. */
+function hasDeliverableCode(text: string): boolean {
+  STANDALONE_CANDIDATE.lastIndex = 0;
+  for (const match of text.matchAll(STANDALONE_CANDIDATE)) {
+    if (!READS_AS_A_YEAR.test(match[0])) return true;
+  }
+  return false;
+}
+
 /**
- * Deterministic pre-check, run before any model call: true only when an automated sender, a
- * sign-in code phrase and a standalone short code are all present. Never logs the sender,
- * subject or body it inspects — callers must not either.
+ * Deterministic pre-check, run before any model call. It is true only when an automated sender
+ * writes a line that both names a sign-in code and carries the code itself, with nothing on
+ * that line pointing at a door, an order or a booking instead. Splitting on lines is what makes
+ * "your door passcode is 482910" and "we are changing how security codes are delivered in 2026"
+ * come through: the first names the wrong kind of code, the second carries only a year.
+ * Never logs the sender, subject or body it inspects — callers must not either.
  */
 export function looksLikeOneTimeCodeEmail(message: OneTimeCodeEmailInput): boolean {
   if (!looksAutomatedSender(message.from)) return false;
-  const haystack =
-    `${message.subject}\n${message.body.slice(0, OTP_CHECK_BODY_CHARS)}`.toLowerCase();
-  const namesACode =
-    CODE_PHRASES.some((phrase) => haystack.includes(phrase)) || OTP_WORD.test(haystack);
-  if (!namesACode) return false;
-  return STANDALONE_NUMERIC_CODE.test(haystack) || STANDALONE_MIXED_CODE.test(haystack);
+  const text = `${message.subject}\n${message.body.slice(0, OTP_CHECK_BODY_CHARS)}`.toLowerCase();
+  for (const line of text.split(/[\n\r]+/)) {
+    const namesASignInCode =
+      SIGN_IN_CODE_PHRASES.some((phrase) => line.includes(phrase)) || OTP_WORD.test(line);
+    if (!namesASignInCode) continue;
+    if (NOT_A_SIGN_IN_NUMBER.test(line)) continue;
+    if (hasDeliverableCode(line)) return true;
+  }
+  return false;
 }
 
 export function otpSkippedResult(): EmailExtractResult {

@@ -406,3 +406,108 @@ describe("a skipped message creates no task", () => {
     expect(item.suggestedTasks.length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * The reviewer's own examples, run the way a real sync runs them: through extractEmailSignals
+ * with a counting fake model. Each case says whether the message is skipped, and a skipped
+ * message must never reach the model at all.
+ */
+describe("reviewer examples, end to end through extractEmailSignals", () => {
+  const cases: Array<[string, { from: string; subject: string; body: string }, boolean]> = [
+    [
+      "an apartment check-in email carrying a door passcode",
+      {
+        from: "notifications@hotel.example.invalid",
+        subject: "Your apartment check-in instructions",
+        body: "Your door passcode is 482910. Check-in is after 3pm; please bring photo ID."
+      },
+      false
+    ],
+    [
+      "a bank notice about how security codes will be delivered in a future year",
+      {
+        from: "no-reply@bank.example.invalid",
+        subject: "Security code policy update",
+        body:
+          "Starting in 2026, we are changing how security codes are delivered. " +
+          "Please review the new policy."
+      },
+      false
+    ],
+    [
+      "a realistic Google sign-in code",
+      {
+        from: "Google <no-reply@accounts.google.com>",
+        subject: "Your Google verification code",
+        body: "482910 is your Google verification code. Do not share it with anyone."
+      },
+      true
+    ],
+    [
+      "a friend's door code",
+      {
+        from: "sarah.jones@example.invalid",
+        subject: "Dinner Saturday",
+        body: "The door code is 482910. Please bring dessert and come round about seven."
+      },
+      false
+    ],
+    [
+      "an automated discount offer",
+      {
+        from: "no-reply@shop.example.invalid",
+        subject: "20% off this weekend only",
+        body: "Your discount code is 123456. Use it on your next order before Sunday."
+      },
+      false
+    ],
+    [
+      "a parcel tracking number",
+      {
+        from: "tracking@parcels.example.invalid",
+        subject: "Your parcel is on its way",
+        body: "Tracking number 482910 should arrive Thursday. Track it any time online."
+      },
+      false
+    ],
+    [
+      "a hotpot invitation",
+      {
+        from: "dave@example.invalid",
+        subject: "Friday plans",
+        body: "Please book the hotpot restaurant for Friday, table for 6 at 7pm."
+      },
+      false
+    ],
+    [
+      "an ordinary human request",
+      {
+        from: "priya@work.example.invalid",
+        subject: "Wifi",
+        body: "What is the wifi code for the meeting room? I think it is 48291086 but it fails."
+      },
+      false
+    ]
+  ];
+
+  for (const [label, message, skipped] of cases) {
+    it(`${skipped ? "skips" : "analyses"} ${label}`, async () => {
+      expect(looksLikeOneTimeCodeEmail(message)).toBe(skipped);
+
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({ category: "unknown", confidence: 0.4 })
+      }));
+      const deps: EmailExtractDeps = { runChat };
+
+      const result = await extractEmailSignals(fixture(message), deps);
+
+      if (skipped) {
+        expect(runChat).not.toHaveBeenCalled();
+        expect(result).toEqual(otpSkippedResult());
+      } else {
+        expect(runChat).toHaveBeenCalledTimes(1);
+        expect(result.signals.skipped).toBeUndefined();
+      }
+    });
+  }
+});
