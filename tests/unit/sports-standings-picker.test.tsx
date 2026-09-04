@@ -213,6 +213,19 @@ describe("standings picker", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  function openPanel() {
+    return act(async () =>
+      container!.querySelector<HTMLButtonElement>("button.sp-standings-settings__toggle")!.click()
+    );
+  }
+
+  function leagueBox(label: string): HTMLInputElement {
+    const box = Array.from(
+      container!.querySelectorAll<HTMLLabelElement>("label.sp-standings-tree__check")
+    ).find((entry) => entry.textContent === label);
+    return box!.querySelector<HTMLInputElement>("input[type='checkbox']")!;
+  }
+
   it("disables standings settings until a replacement save is confirmed", async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } }
@@ -229,21 +242,14 @@ describe("standings picker", () => {
       vi.fn(async () => pending)
     );
     await renderSettings(client);
-    const selected = container!.querySelector<HTMLSelectElement>(
-      "select[aria-label='Selected leagues']"
-    )!;
-    selected.options[0]!.selected = true;
-    await act(async () => selected.dispatchEvent(new Event("change", { bubbles: true })));
-    await act(async () =>
-      container!
-        .querySelector<HTMLButtonElement>("button[aria-label='Remove selected leagues']")!
-        .click()
-    );
+    await openPanel();
+    await act(async () => leagueBox("NFL").click());
     await vi.waitFor(() =>
-      expect(
-        container!.querySelector(".sp-standings-transfer")?.getAttribute("aria-disabled")
-      ).toBe("true")
+      expect(container!.querySelector(".sp-standings-tree")?.getAttribute("aria-disabled")).toBe(
+        "true"
+      )
     );
+    expect(leagueBox("NBA").disabled).toBe(true);
     await act(async () => {
       resolve(
         new Response(JSON.stringify({ selectedCompetitionKeys: [] }), {
@@ -253,9 +259,9 @@ describe("standings picker", () => {
       );
       await pending;
       await vi.waitFor(() =>
-        expect(
-          container!.querySelector(".sp-standings-transfer")?.getAttribute("aria-disabled")
-        ).toBe("false")
+        expect(container!.querySelector(".sp-standings-tree")?.getAttribute("aria-disabled")).toBe(
+          "false"
+        )
       );
     });
     expect(client.getQueryData(sportsQueryKeys.standingsPreferences)).toEqual({
@@ -263,7 +269,7 @@ describe("standings picker", () => {
     });
   });
 
-  it("curates standings with available and selected multi-select lists", async () => {
+  it("curates standings with a grouped checklist and saves on each tick", async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } }
     });
@@ -281,28 +287,32 @@ describe("standings picker", () => {
       )
     );
     await renderSettings(client);
-
-    const available = container!.querySelector<HTMLSelectElement>(
-      "select[aria-label='Available leagues']"
+    expect(container!.querySelector("select")).toBeNull();
+    // Collapsed by default: the header carries the count, the checklist is hidden.
+    expect(container!.querySelector(".sp-standings-settings__toggle")?.textContent).toContain(
+      "1 of 3"
     );
-    const selected = container!.querySelector<HTMLSelectElement>(
-      "select[aria-label='Selected leagues']"
+    expect(container!.querySelector<HTMLElement>("#sp-standings-settings-panel")?.hidden).toBe(
+      true
     );
-    expect(available?.multiple).toBe(true);
-    expect(selected?.multiple).toBe(true);
-    expect(container!.querySelector("input[type='checkbox']")).toBeNull();
-    expect(Array.from(available!.options, (option) => option.textContent)).toEqual([
-      "NBA",
-      "Premier League"
-    ]);
-    expect(Array.from(selected!.options, (option) => option.textContent)).toEqual(["NFL"]);
+    await openPanel();
+    expect(leagueBox("NFL").checked).toBe(true);
+    expect(leagueBox("NBA").checked).toBe(false);
+    // Soccer leagues sit under a collapsed country row.
+    expect(container!.textContent).toContain("England");
+    expect(container!.querySelector<HTMLElement>(".sp-standings-tree__leagues")?.hidden).toBe(true);
+    await act(async () =>
+      Array.from(container!.querySelectorAll("button"))
+        .find((button) => button.textContent?.includes("England"))!
+        .click()
+    );
+    expect(container!.querySelector<HTMLElement>(".sp-standings-tree__leagues")?.hidden).toBe(
+      false
+    );
+    expect(leagueBox("Premier League").checked).toBe(false);
 
-    available!.options[1]!.selected = true;
-    await act(async () => available!.dispatchEvent(new Event("change", { bubbles: true })));
     await act(async () => {
-      container!
-        .querySelector<HTMLButtonElement>("button[aria-label='Add selected leagues']")!
-        .click();
+      leagueBox("Premier League").click();
       await vi.waitFor(() =>
         expect(client.getQueryData(sportsQueryKeys.standingsPreferences)).toEqual({
           selectedCompetitionKeys: ["nfl", "eng.1"]
@@ -310,6 +320,7 @@ describe("standings picker", () => {
       );
     });
     expect(fetch).toHaveBeenCalledTimes(1);
+    expect(leagueBox("Premier League").checked).toBe(true);
   });
 
   it("keeps the confirmed standings selection after a failed save", async () => {
@@ -330,27 +341,16 @@ describe("standings picker", () => {
       )
     );
     await renderSettings(client);
-    const selected = container!.querySelector<HTMLSelectElement>(
-      "select[aria-label='Selected leagues']"
-    )!;
-    selected.options[0]!.selected = true;
-    await act(async () => selected.dispatchEvent(new Event("change", { bubbles: true })));
+    await openPanel();
     await act(async () => {
-      container!
-        .querySelector<HTMLButtonElement>("button[aria-label='Remove selected leagues']")!
-        .click();
+      leagueBox("NFL").click();
       await new Promise((done) => setTimeout(done, 0));
     });
     expect(container!.querySelector("[role='alert']")?.textContent).toContain(
       "last saved selection is unchanged"
     );
-    expect(
-      Array.from(
-        container!.querySelector<HTMLSelectElement>("select[aria-label='Selected leagues']")!
-          .options,
-        (option) => option.value
-      )
-    ).toEqual(["nfl"]);
+    expect(leagueBox("NFL").checked).toBe(true);
+    expect(leagueBox("NBA").checked).toBe(false);
     expect(client.getQueryData(sportsQueryKeys.standingsPreferences)).toEqual({
       selectedCompetitionKeys: ["nfl"]
     });
