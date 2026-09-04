@@ -487,6 +487,13 @@ button.module-link {
   gap: 0.05rem;
 }
 
+.topbar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .topbar-title {
   font-size: 1.25rem;
   line-height: 1.15;
@@ -501,6 +508,21 @@ button.module-link {
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-subtle);
+}
+
+.topbar-settings-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-subtle);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+.topbar-settings-button:hover {
+  color: var(--text);
+  background: var(--surface-2);
 }
 
 .topbar-actions {

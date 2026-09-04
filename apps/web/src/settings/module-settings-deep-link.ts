@@ -17,3 +17,7 @@ export function resolveModuleSettingsDeepLink(
   }
   return null;
 }
+
+export function moduleSettingsHref(moduleId: string): string {
+  return `/settings?section=modules&module=${encodeURIComponent(moduleId)}`;
+}
