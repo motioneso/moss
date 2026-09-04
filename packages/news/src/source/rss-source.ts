@@ -263,7 +263,7 @@ const TRACKING_WORD_PATTERN = /^(?:pixel|impression)(?:\.[a-z0-9]+)?$/i;
 const TRACKING_QUERY_KEY_PATTERN = /^(?:pixel|impression)$/i;
 // A style that hides the image outright, or sizes it down to a single pixel.
 const HIDDEN_STYLE_PATTERN =
-  /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden|(?:width|height)\s*:\s*(?:0|1)(?:\.0+)?(?:px)?\s*)(?:;|$)/i;
+  /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden|(?:width|height)\s*:\s*(?:0|1)(?:\.0+)?(?:px)?)\s*(?:!\s*important\s*)?(?:;|$)/i;
 
 /** A declared HTML pixel size, or null when the attribute is absent or not a plain number
  *  ("auto", "50%", ""). Only a real number can disqualify an image; junk means "unknown". */

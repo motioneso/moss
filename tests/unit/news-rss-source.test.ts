@@ -384,6 +384,20 @@ describe("toFeedItems: body-image extraction hardening (PR 2251 review)", () => 
     expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
   });
 
+  it("still skips an image hidden by a display style with spaces or a priority marker", () => {
+    const xml = rss(`    <item>
+      <title>Hidden by spaced style</title>
+      <link>https://example.com/hidden-style-spaced</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/h1.gif" style="display : none ; margin: 0">
+        <img src="https://npr.brightspotcdn.com/h2.gif" style="visibility:hidden !important">
+        <img src="https://npr.brightspotcdn.com/h3.gif" style="border:0; width: 1px !important;">
+        <img src="https://npr.brightspotcdn.com/real.jpg" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
+  });
+
   it("keeps a full-size photograph of a running track called track.jpg", () => {
     const xml = rss(`    <item>
       <title>Photograph of a running track</title>
