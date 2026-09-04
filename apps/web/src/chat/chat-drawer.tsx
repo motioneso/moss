@@ -37,7 +37,6 @@ import { ConnectProviderEmpty } from "./connect-provider-empty";
 import { Thread } from "./message-row";
 import { buildChatSeeds } from "./seeds";
 import { isNoActiveChatModelError } from "../onboarding/chat-availability";
-import { sortThreadsByRecency } from "./thread-recency";
 import {
   shouldEndPrivateChatOnStreamDisconnect,
   type ChatRecordKind,
@@ -565,7 +564,7 @@ export function ChatDrawer(props: {
           {showHistory ? (
             <HistoryList
               selectedThreadId={reviewThreadId}
-              threads={sortThreadsByRecency(threadsQuery.data?.threads ?? [])}
+              threads={threadsQuery.data?.threads ?? []}
               onSelect={(id) => {
                 setReviewThreadId(id);
                 setShowHistory(false);
@@ -713,7 +712,7 @@ function HistoryList(props: {
   readonly threads: readonly {
     readonly id: string;
     readonly title: string;
-    readonly updatedAt: string;
+    readonly lastActiveAt: string;
     readonly lastMessagePreview: string | null;
   }[];
   readonly selectedThreadId: string | null;
@@ -751,7 +750,9 @@ function HistoryList(props: {
               <span className="chatd-sess__preview">{thread.lastMessagePreview}</span>
             ) : null}
           </span>
-          <span className="chatd-sess__when">{relativeThreadTime(thread.updatedAt, locale)}</span>
+          <span className="chatd-sess__when">
+            {relativeThreadTime(thread.lastActiveAt, locale)}
+          </span>
         </button>
       ))}
     </div>

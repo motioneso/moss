@@ -47,7 +47,12 @@ export class ChatRepository {
           .selectFrom("app.chat_messages")
           .select("body")
           .whereRef("app.chat_messages.thread_id", "=", "app.chat_threads.id")
+          // A saved turn stores the person's message and the reply at the same
+          // instant, so ties on created_at must break toward the reply — that is
+          // the message the preview should show.
           .orderBy("created_at", "desc")
+          .orderBy(sql<number>`CASE WHEN role = 'user' THEN 0 ELSE 1 END`, "desc")
+          .orderBy("id")
           .limit(1)
           .as("lastMessageBody")
       )

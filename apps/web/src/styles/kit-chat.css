@@ -297,21 +297,14 @@
   text-align: left;
   font: inherit;
   padding: 12px 10px;
-  border-radius: var(--radius-md);
   cursor: pointer;
   transition: var(--transition-control);
-}
-
-.chatd-sess__row.is-selected {
-  background: var(--surface-active);
-  border: 1px solid var(--accent-soft-border);
 }
 
 .chatd-sess__ic {
   display: inline-flex;
   padding-top: 2px;
   flex: none;
-  color: var(--text-faint);
 }
 
 .chatd-sess__main {
@@ -332,21 +325,15 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: var(--text-xs);
-  color: var(--text-subtle);
 }
 
 .chatd-sess__when {
   flex: none;
-  font-size: var(--text-xs);
-  color: var(--text-faint);
 }
 
 .chatd-sess__hd {
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  font-size: var(--text-xs);
-  color: var(--text-faint);
   padding: 4px 10px 8px;
 }
 

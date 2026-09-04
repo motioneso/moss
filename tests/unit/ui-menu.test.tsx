@@ -47,6 +47,9 @@ describe("Menu (feedback menu close behavior)", () => {
     act(() => trigger().click());
     expect(list()).not.toBeNull();
     expect(trigger().getAttribute("aria-expanded")).toBe("true");
+    act(() => trigger().click());
+    expect(list()).toBeNull();
+    expect(trigger().getAttribute("aria-expanded")).toBe("false");
   });
 
   it("closes on an outside pointer press", () => {
@@ -60,7 +63,7 @@ describe("Menu (feedback menu close behavior)", () => {
     expect(trigger().getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("closes on Escape", () => {
+  it("closes on Escape and returns focus to the trigger", () => {
     mount();
     act(() => trigger().click());
     expect(list()).not.toBeNull();
@@ -68,6 +71,26 @@ describe("Menu (feedback menu close behavior)", () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
     expect(list()).toBeNull();
+    expect(document.activeElement).toBe(trigger());
+  });
+
+  it("does not swallow an outside click meant for another control", () => {
+    const outsideClick = vi.fn();
+    const outsideButton = document.createElement("button");
+    outsideButton.addEventListener("click", outsideClick);
+    document.body.appendChild(outsideButton);
+
+    mount();
+    act(() => trigger().click());
+    expect(list()).not.toBeNull();
+    act(() => {
+      outsideButton.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      outsideButton.click();
+    });
+    expect(list()).toBeNull();
+    expect(outsideClick).toHaveBeenCalledOnce();
+
+    outsideButton.remove();
   });
 
   it("stays open on a pointer press inside the menu", () => {

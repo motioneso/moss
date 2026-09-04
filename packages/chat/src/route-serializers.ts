@@ -34,6 +34,7 @@ export function serializeThread(
     incognito: thread.incognito,
     createdAt: toIsoString(thread.created_at),
     updatedAt: toIsoString(thread.updated_at),
+    lastActiveAt: toIsoString(thread.last_active_at),
     lastMessagePreview: firstLinePreview(thread.lastMessageBody)
   };
 }

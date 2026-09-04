@@ -35,6 +35,8 @@ export interface ChatThreadDto {
   readonly incognito: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** When this conversation was last active (a new turn), for ordering and display age. */
+  readonly lastActiveAt: string;
   /** First line of the most recent message in the thread, for a list preview. */
   readonly lastMessagePreview: string | null;
 }
@@ -296,14 +298,25 @@ export interface AnswerProvenanceDereference {
 const chatThreadSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["id", "ownerUserId", "title", "incognito", "createdAt", "updatedAt"],
+  required: [
+    "id",
+    "ownerUserId",
+    "title",
+    "incognito",
+    "createdAt",
+    "updatedAt",
+    "lastActiveAt",
+    "lastMessagePreview"
+  ],
   properties: {
     id: { type: "string" },
     ownerUserId: { type: "string" },
     title: { type: "string" },
     incognito: { type: "boolean" },
     createdAt: { type: "string" },
-    updatedAt: { type: "string" }
+    updatedAt: { type: "string" },
+    lastActiveAt: { type: "string" },
+    lastMessagePreview: { anyOf: [{ type: "string" }, { type: "null" }] }
   }
 } as const;
 
