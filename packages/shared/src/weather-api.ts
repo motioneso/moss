@@ -162,6 +162,35 @@ export const putWeatherLocationRouteSchema = {
 
 export type WeatherLocationCandidateDto = WeatherLocationDto;
 
+export interface ReverseWeatherLocationResponse {
+  readonly location: WeatherLocationDto;
+}
+
+export const reverseWeatherLocationRouteSchema = {
+  querystring: {
+    type: "object",
+    additionalProperties: false,
+    required: ["lat", "lon"],
+    properties: {
+      lat: { type: "number", minimum: -90, maximum: 90 },
+      lon: { type: "number", minimum: -180, maximum: 180 }
+    }
+  },
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["location"],
+      properties: {
+        location: weatherLocationSchema
+      }
+    },
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    502: errorResponseSchema
+  }
+} as const;
+
 export interface SearchWeatherLocationsResponse {
   readonly candidates: readonly WeatherLocationCandidateDto[];
 }

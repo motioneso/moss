@@ -2,10 +2,16 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import type { AccessContext } from "@moss/db";
 import {
+  reverseWeatherLocationRouteSchema,
   searchWeatherLocationsRouteSchema,
+  type ReverseWeatherLocationResponse,
   type SearchWeatherLocationsResponse
 } from "@moss/shared";
-import { searchOpenMeteoLocations, WeatherLocationSearchUnavailableError } from "@moss/weather";
+import {
+  reverseGeocodeLocation,
+  searchOpenMeteoLocations,
+  WeatherLocationSearchUnavailableError
+} from "@moss/weather";
 
 import { handleSettingsRouteError } from "./route-error.js";
 
@@ -36,6 +42,32 @@ export function registerWeatherLocationSearchRoutes(
             return reply
               .status(502)
               .send({ error: "Weather location search is temporarily unavailable" });
+          }
+          throw error;
+        }
+      } catch (error) {
+        return handleSettingsRouteError(error, reply);
+      }
+    }
+  );
+
+  // Browser coordinates from "Use my location" become a named place here; the
+  // client then saves the result through PUT /api/me/weather-location.
+  server.get(
+    "/api/me/weather-location/reverse",
+    { schema: reverseWeatherLocationRouteSchema },
+    async (request, reply) => {
+      try {
+        await dependencies.resolveAccessContext(request);
+        const { lat, lon } = request.query as { lat: number; lon: number };
+        try {
+          const location = await reverseGeocodeLocation(lat, lon, dependencies.fetchFn);
+          return { location } satisfies ReverseWeatherLocationResponse;
+        } catch (error) {
+          if (error instanceof WeatherLocationSearchUnavailableError) {
+            return reply
+              .status(502)
+              .send({ error: "Looking up your location is temporarily unavailable" });
           }
           throw error;
         }

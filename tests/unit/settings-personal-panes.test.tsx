@@ -70,6 +70,13 @@ describe("ProfilePane merged Account & preferences", () => {
     expect(html).toContain("Use automatic");
   });
 
+  it("offers the browser's location next to the place search", async () => {
+    const html = await renderProfilePane();
+    expect(html).toContain("Use my location");
+    expect(html).toContain("main city of your time zone");
+    expect(html).not.toContain("Worked out from your time zone");
+  });
+
   it("offers every supported time zone in a searchable picker and disables unsupported language controls", async () => {
     const { TIME_ZONE_OPTIONS } =
       await import("../../apps/web/src/settings/settings-personal-panes.js");

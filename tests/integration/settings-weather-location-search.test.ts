@@ -5,7 +5,7 @@ import type { Kysely } from "kysely";
 import { createApiServer } from "../../apps/api/src/server.js";
 import { createDatabase, type MossDatabase } from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
-import type { SearchWeatherLocationsResponse } from "@moss/shared";
+import type { ReverseWeatherLocationResponse, SearchWeatherLocationsResponse } from "@moss/shared";
 import {
   connectionStrings,
   resetEmptyFoundationDatabase,
@@ -74,6 +74,41 @@ describe("weather location search routes", () => {
     expect(res.json<SearchWeatherLocationsResponse>().candidates).toEqual([
       { lat: 32.7157, lon: -117.1611, label: "San Diego, California, United States" }
     ]);
+  });
+
+  it("names the browser's coordinates through the reverse lookup without saving anything", async () => {
+    providerResponse = new Response(
+      JSON.stringify({
+        address: { city: "San Diego", state: "California", country: "United States" }
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+    const res = await server.inject({
+      method: "GET",
+      url: "/api/me/weather-location/reverse?lat=32.7157&lon=-117.1611",
+      headers: { cookie: ownerCookie }
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<ReverseWeatherLocationResponse>().location).toEqual({
+      lat: 32.7157,
+      lon: -117.1611,
+      label: "San Diego, California, United States"
+    });
+    const saved = await server.inject({
+      method: "GET",
+      url: "/api/me/weather-location",
+      headers: { cookie: ownerCookie }
+    });
+    expect(saved.json<{ location: unknown }>().location).toBeNull();
+  });
+
+  it("rejects out-of-range coordinates on the reverse lookup", async () => {
+    const res = await server.inject({
+      method: "GET",
+      url: "/api/me/weather-location/reverse?lat=95&lon=0",
+      headers: { cookie: ownerCookie }
+    });
+    expect(res.statusCode).toBe(400);
   });
 
   it("returns ambiguous candidates without saving anything", async () => {
