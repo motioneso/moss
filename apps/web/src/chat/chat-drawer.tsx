@@ -601,6 +601,7 @@ export function ChatDrawer(props: {
               records={effectiveRecords}
               focusActionRequestId={props.focusActionRequestId}
               onActionRequestFocused={props.onActionRequestFocused}
+              working={isWaiting}
             />
           ) : chatRouteQuery.isSuccess && !chatAvailable && !lockedModelUnavailable ? (
             <ConnectProviderEmpty isFounder={props.isFounder} />
