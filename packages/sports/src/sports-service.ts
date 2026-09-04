@@ -7,6 +7,7 @@ import {
   type FollowedLeagueRef,
   type FollowedTeamCard,
   type GamedayGame,
+  type GameSide,
   type GameSummary,
   type IsoDate,
   type OverviewHero,
@@ -223,6 +224,14 @@ interface StoryDetail {
   readonly candidate: StoryRelevanceCandidate;
   readonly hasEditorialEvidence: boolean;
   readonly isOpinion?: boolean;
+}
+
+/** Drops the provider's numeric team id before a game side goes into the response — see the
+ *  comment in `buildHero` for why this can't just rely on the response schema to drop it. */
+function withoutSourceTeamId(side: GameSide): GameSide {
+  const { sourceTeamId, ...rest } = side;
+  void sourceTeamId;
+  return rest as GameSide;
 }
 
 /**
@@ -534,7 +543,8 @@ export class SportsService {
       // news endpoint 400s on a soccer abbreviation slug (EspnHeadlinesParams.sourceTeamId),
       // which would leave a soccer gameday hero with no matchup story at all.
       const teamFeeds = await Promise.all(
-        [game.home.teamKey, game.away.teamKey].map((teamKey) => {
+        [game.home, game.away].map((side) => {
+          const teamKey = side.teamKey;
           const includeEspnTeamFeed =
             heroCompetition !== undefined &&
             sportsNewsCoverageAllows(espnCoverage, follows, {
@@ -549,8 +559,13 @@ export class SportsService {
                 {
                   competitionKey: game.competitionKey,
                   teamKey,
+                  // Prefer the numeric id already on the game side itself — it does not depend
+                  // on finding this exact team by teamKey in the catalog, which can miss for a
+                  // team whose abbreviation collided with another team's (review finding S1).
                   sourceTeamId:
-                    heroTeams.find((team) => team.teamKey === teamKey)?.sourceTeamId ?? null
+                    side.sourceTeamId ??
+                    heroTeams.find((team) => team.teamKey === teamKey)?.sourceTeamId ??
+                    null
                 },
                 [],
                 state
@@ -1152,7 +1167,22 @@ export class SportsService {
     topStories: readonly SourceHeadline[],
     refFor: StoryRefFor | undefined
   ): OverviewHero {
-    if (gamedayGames.length > 0) return { mode: "gameday", games: gamedayGames };
+    if (gamedayGames.length > 0) {
+      // The hero is the one response field validated against a `oneOf` schema, and
+      // fast-json-stringify's `oneOf` matcher (unlike a plain object schema) rejects an object
+      // with a property the schema doesn't list instead of quietly leaving it out — so the
+      // provider's numeric team id, only ever meant for the server's own team-matching (review
+      // finding S1), has to be removed here rather than left for the schema to drop silently.
+      const games = gamedayGames.map((entry) => ({
+        ...entry,
+        game: {
+          ...entry.game,
+          home: withoutSourceTeamId(entry.game.home),
+          away: withoutSourceTeamId(entry.game.away)
+        }
+      }));
+      return { mode: "gameday", games };
+    }
     const top = topStories[0];
     return { mode: "story", headline: top ? toPublicHeadline(top, refFor) : null };
   }

@@ -27,6 +27,7 @@ function liveGame(): GameSummary {
     statusDetail: "Q3 4:12",
     home: {
       teamKey: "min",
+      sourceTeamId: null,
       name: "Minnesota Vikings",
       shortName: "MIN",
       crestUrl: null,
@@ -37,6 +38,7 @@ function liveGame(): GameSummary {
     },
     away: {
       teamKey: "dal",
+      sourceTeamId: null,
       name: "Dallas Cowboys",
       shortName: "DAL",
       crestUrl: null,
@@ -57,6 +59,7 @@ function finalGame(): GameSummary {
     statusDetail: "FT",
     home: {
       teamKey: "nyy",
+      sourceTeamId: null,
       name: "New York Yankees",
       shortName: "NYY",
       crestUrl: null,
@@ -67,6 +70,7 @@ function finalGame(): GameSummary {
     },
     away: {
       teamKey: "bos",
+      sourceTeamId: null,
       name: "Boston Red Sox",
       shortName: "BOS",
       crestUrl: null,
@@ -134,6 +138,7 @@ function standingsGroup(): StandingsGroup {
         rows: [
           {
             teamKey: "ars",
+            sourceTeamId: null,
             name: "Arsenal",
             rank: 1,
             points: 40,
@@ -147,6 +152,7 @@ function standingsGroup(): StandingsGroup {
           },
           {
             teamKey: "liv",
+            sourceTeamId: null,
             name: "Liverpool",
             rank: 2,
             points: 38,
@@ -280,6 +286,7 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
           statusDetail: "7:00 PM",
           home: {
             teamKey: "lal",
+            sourceTeamId: null,
             name: "Los Angeles Lakers",
             shortName: "LAL",
             crestUrl: null,
@@ -290,6 +297,7 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
           },
           away: {
             teamKey: "gsw",
+            sourceTeamId: null,
             name: "Golden State Warriors",
             shortName: "GSW",
             crestUrl: null,

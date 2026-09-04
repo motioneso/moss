@@ -34,6 +34,7 @@ function liveGame(): GameSummary {
     statusDetail: "Q3 4:12",
     home: {
       teamKey: "min",
+      sourceTeamId: null,
       name: "Minnesota Vikings",
       shortName: "MIN",
       crestUrl: null,
@@ -44,6 +45,7 @@ function liveGame(): GameSummary {
     },
     away: {
       teamKey: "dal",
+      sourceTeamId: null,
       name: "Dallas Cowboys",
       shortName: "DAL",
       crestUrl: null,
@@ -89,6 +91,7 @@ function standingsGroup(): StandingsGroup {
         rows: [
           {
             teamKey: "ars",
+            sourceTeamId: null,
             name: "Arsenal",
             rank: 1,
             points: 40,
@@ -381,6 +384,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "min",
+                    sourceTeamId: null,
                     name: "Minnows FC",
                     rank: 5,
                     points: 30,
@@ -420,6 +424,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "nyy",
+                    sourceTeamId: null,
                     name: "New York Yankees",
                     rank: 1,
                     points: 52,
@@ -438,6 +443,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "hou",
+                    sourceTeamId: null,
                     name: "Houston Astros",
                     rank: 1,
                     points: 49,
@@ -492,6 +498,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "ars",
+                    sourceTeamId: null,
                     name: "Arsenal",
                     rank: 1,
                     points: 40,
@@ -529,6 +536,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "ars",
+                    sourceTeamId: null,
                     name: "Arsenal",
                     rank: 1,
                     points: 40,
@@ -542,6 +550,7 @@ describe("SportsPage", () => {
                   },
                   {
                     teamKey: "shf",
+                    sourceTeamId: null,
                     name: "Sheffield Town",
                     rank: 20,
                     points: 22,

@@ -13,6 +13,9 @@ export interface TeamRef {
 
 export interface GameSide {
   readonly teamKey: string;
+  // The source's own numeric team id, kept alongside teamKey so a team whose abbreviation
+  // collides with another team's (see TeamRef.teamKey) can still be matched correctly.
+  readonly sourceTeamId: string | null;
   readonly name: string;
   readonly shortName: string;
   readonly crestUrl: string | null;
@@ -37,6 +40,8 @@ export interface GameSummary {
 
 export interface StandingsRow {
   readonly teamKey: string;
+  // See GameSide.sourceTeamId — same reasoning, standings rows come from a separate fetch too.
+  readonly sourceTeamId: string | null;
   readonly name: string;
   readonly rank: number;
   readonly points: number | null; // soccer

@@ -437,6 +437,64 @@ describe("EspnDatasetAdapter", () => {
     expect(teams[0]?.sourceTeamId).toBe("6");
   });
 
+  // Review finding S1 (2026-09-04): ESPN's college catalog reuses one abbreviation for two
+  // different schools (e.g. Pacific Lutheran and Pacific Tigers both answer "PAC" in NCAA
+  // baseball). On the old code both teams got the same teamKey, so following one silently
+  // returned the other team's games and standings. This proves the two teams now get their own,
+  // separate identity, while a team whose abbreviation is not shared with anyone else in the
+  // same list still gets its plain abbreviation, unchanged.
+  it("gives two teams that share an abbreviation their own separate identity", async () => {
+    const collidingTeams = {
+      sports: [
+        {
+          leagues: [
+            {
+              teams: [
+                {
+                  team: {
+                    id: "129700",
+                    abbreviation: "PAC",
+                    displayName: "Pacific Lutheran Lutes",
+                    shortDisplayName: "Lutes"
+                  }
+                },
+                {
+                  team: {
+                    id: "413",
+                    abbreviation: "PAC",
+                    displayName: "Pacific Tigers",
+                    shortDisplayName: "Tigers"
+                  }
+                },
+                {
+                  team: {
+                    id: "99",
+                    abbreviation: "SOL",
+                    displayName: "Solo University",
+                    shortDisplayName: "Solo"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    };
+    const teams = (await fetchDataset(
+      "teams",
+      { competitionKey: "ncaa-baseball" },
+      okFetch(collidingTeams)
+    )) as { teamKey: string; sourceTeamId: string | null; name: string }[];
+    const lutes = teams.find((t) => t.name === "Pacific Lutheran Lutes");
+    const tigers = teams.find((t) => t.name === "Pacific Tigers");
+    const solo = teams.find((t) => t.name === "Solo University");
+    expect(lutes?.teamKey).toBe("129700");
+    expect(tigers?.teamKey).toBe("413");
+    expect(lutes?.teamKey).not.toBe(tigers?.teamKey);
+    // A team with no collision keeps the plain abbreviation it always had.
+    expect(solo?.teamKey).toBe("sol");
+  });
+
   it("passes the schedule params through to the teams/competition-scoped endpoint", async () => {
     const games = (await fetchDataset(
       "schedule",

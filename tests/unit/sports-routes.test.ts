@@ -114,6 +114,7 @@ const userA: AccessContext = {
 function side(overrides: Partial<GameSide> & { teamKey: string; shortName: string }): GameSide {
   return {
     name: overrides.shortName,
+    sourceTeamId: null,
     crestUrl: null,
     score: null,
     record: null,
@@ -473,6 +474,7 @@ describe("sports routes", () => {
               rows: [
                 {
                   teamKey: "ars",
+                  sourceTeamId: null,
                   name: "Arsenal",
                   rank: 1,
                   points: 40,
@@ -516,6 +518,7 @@ describe("sports routes", () => {
               rows: [
                 {
                   teamKey: "buf",
+                  sourceTeamId: null,
                   name: "Buffalo Bills",
                   rank: 1,
                   points: null,

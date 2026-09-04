@@ -33,6 +33,7 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
         rows: [
           {
             teamKey: "liv",
+            sourceTeamId: null,
             name: "Liverpool",
             rank: 2,
             points: 58,
@@ -55,6 +56,7 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
         rows: [
           {
             teamKey: "livc",
+            sourceTeamId: null,
             name: "Liverpool",
             rank: 1,
             points: 12,

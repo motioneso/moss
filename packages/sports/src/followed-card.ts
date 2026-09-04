@@ -32,11 +32,22 @@ export function joinLabels(labels: readonly string[]): string {
   return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
 }
 
+// A team whose abbreviation collided with another team's (review finding S1, 2026-09-04) gets a
+// teamKey built from the source's numeric id in the team list, but a scoreboard/schedule/standings
+// side for that same team still carries the old, shared abbreviation as ITS teamKey (it comes from
+// a separate fetch with no visibility into the collision). sourceTeamId lets the two line up anyway.
+function sameTeam(
+  side: { teamKey: string; sourceTeamId?: string | null },
+  teamKey: string
+): boolean {
+  return side.teamKey === teamKey || (side.sourceTeamId != null && side.sourceTeamId === teamKey);
+}
+
 export function findTeamGame(
   games: readonly GameSummary[],
   teamKey: string
 ): GameSummary | undefined {
-  return games.find((g) => g.home.teamKey === teamKey || g.away.teamKey === teamKey);
+  return games.find((g) => sameTeam(g.home, teamKey) || sameTeam(g.away, teamKey));
 }
 
 // ESPN's `scoreboard?dates=YYYYMMDD` window can hold two entries for one team: last night's
@@ -82,14 +93,14 @@ export function currentGameAcrossGroup(
 }
 
 export function sideFor(game: GameSummary, teamKey: string): GameSide | undefined {
-  if (game.home.teamKey === teamKey) return game.home;
-  if (game.away.teamKey === teamKey) return game.away;
+  if (sameTeam(game.home, teamKey)) return game.home;
+  if (sameTeam(game.away, teamKey)) return game.away;
   return undefined;
 }
 
 function opponentFor(game: GameSummary, teamKey: string): GameSide | undefined {
-  if (game.home.teamKey === teamKey) return game.away;
-  if (game.away.teamKey === teamKey) return game.home;
+  if (sameTeam(game.home, teamKey)) return game.away;
+  if (sameTeam(game.away, teamKey)) return game.home;
   return undefined;
 }
 
@@ -217,7 +228,7 @@ export function resultLine(game: GameSummary, teamKey: string): string {
   const opponent = opponentFor(game, teamKey);
   if (!side || !opponent) return matchupLine(game);
   const result = resultOf(side, opponent);
-  const preposition = game.home.teamKey === teamKey ? "vs" : "at";
+  const preposition = sameTeam(game.home, teamKey) ? "vs" : "at";
   return `${result} ${side.score ?? 0}–${opponent.score ?? 0} ${preposition} ${opponent.shortName}`;
 }
 
@@ -246,7 +257,7 @@ export function computeFormDetailAcross(
         // one-sided fixture — mirror the old "L" fallback so the letters never change.
         result: side && opponent ? resultOf(side, opponent) : "L",
         opponentName: opponent?.name ?? "Opponent",
-        homeAway: game.home.teamKey === teamKey ? "home" : "away",
+        homeAway: sameTeam(game.home, teamKey) ? "home" : "away",
         score: `${side?.score ?? 0}–${opponent?.score ?? 0}`,
         playedAt: game.startsAt
       };
@@ -273,7 +284,7 @@ export function inGamedayWindow(game: GameSummary, now: Date): boolean {
 // flat single-table leagues (soccer) keep the overall line ("#4 · 40 pts").
 export function standingLine(sections: StandingsTable["sections"], teamKey: string): string | null {
   for (const section of sections) {
-    const index = section.rows.findIndex((r) => r.teamKey === teamKey);
+    const index = section.rows.findIndex((r) => sameTeam(r, teamKey));
     if (index === -1) continue;
     const row = section.rows[index]!;
     // Zero games played = the league isn't in progress; its "rank" is carry-over noise like
@@ -326,7 +337,7 @@ export function nextMatchAcross(
   if (!opponent) return null;
   return {
     opponentName: opponent.name,
-    homeAway: next.game.home.teamKey === next.teamKey ? "home" : "away",
+    homeAway: sameTeam(next.game.home, next.teamKey) ? "home" : "away",
     startsAt: next.game.startsAt,
     // Footer identifies the opponent by crest, not name (live feedback mrawvc48)
     opponentCrestUrl: opponent.crestUrl

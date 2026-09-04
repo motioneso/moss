@@ -129,6 +129,7 @@ export function side(
 ): GameSide {
   return {
     name: overrides.shortName,
+    sourceTeamId: null,
     crestUrl: null,
     score: null,
     record: null,
@@ -208,6 +209,7 @@ const nflStandings: StandingsTable = {
       rows: [
         {
           teamKey: "dal",
+          sourceTeamId: null,
           name: "Dallas Cowboys",
           rank: 1,
           points: null,
