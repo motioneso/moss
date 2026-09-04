@@ -255,9 +255,6 @@ export function ProfilePane({ me }: PaneProps) {
     mutationFn: searchWeatherLocations,
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
-  const clearWeatherLocation = () => {
-    weatherLocationMutation.mutate(null);
-  };
   // "Use my location": ask the browser once, name the point, then save it the
   // same way a searched place is saved. Needs a secure origin (https or localhost).
   const browserLocationMutation = useMutation({
@@ -448,16 +445,6 @@ export function ProfilePane({ me }: PaneProps) {
           >
             Search
           </Button>
-          {weatherLocation ? (
-            <Button
-              variant="quiet"
-              size="sm"
-              disabled={weatherLocationBusy}
-              onClick={clearWeatherLocation}
-            >
-              Use automatic
-            </Button>
-          ) : null}
         </Field>
         {weatherLocationSearchMutation.data?.candidates.map((candidate) => (
           <Row

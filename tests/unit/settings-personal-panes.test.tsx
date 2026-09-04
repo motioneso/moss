@@ -67,7 +67,7 @@ describe("ProfilePane merged Account & preferences", () => {
       location: { label: "Home", lat: 51.5072, lon: -0.1276 }
     });
     expect(html).toContain("Using Home.");
-    expect(html).toContain("Use automatic");
+    expect(html).not.toContain("Use automatic");
   });
 
   it("offers the browser's location next to the place search", async () => {
