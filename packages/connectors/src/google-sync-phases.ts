@@ -425,7 +425,8 @@ export async function runGoogleEmailPhase(
     const logData = {
       stage: "email",
       name: (error as Error).name,
-      status: (error as { statusCode?: number }).statusCode ?? null
+      status: (error as { statusCode?: number }).statusCode ?? null,
+      reason: (error as { reason?: string }).reason ?? null
     };
     if (isNeedsConfig) {
       context.logger.info(
