@@ -98,7 +98,7 @@
 .sp-follow__head {
   display: grid;
   gap: var(--space-1);
-  margin: 0 0 var(--space-4);
+  margin: var(--space-5) 0 var(--space-4);
 }
 .sp-follow__head > * {
   margin: 0;
