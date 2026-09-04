@@ -182,9 +182,15 @@
 }
 /* .sp-whole normally stretches full-width as a standalone search result row; inside a browse
    row it sits beside .sp-browse__league instead, so it needs to give up that stretch. */
-.sp-browse__row .sp-whole {
-  width: 9.5rem;
+/* One shared column width so every row's Follow all button lines up (Ben, 2026-09-03). The
+   width goes on the wrapper: .sp-action-target is a column flexbox, so a flex-basis on the
+   button itself would set its height. */
+.sp-browse__row > .sp-action-target {
   flex: 0 0 9.5rem;
+  width: 9.5rem;
+}
+.sp-browse__row .sp-whole {
+  width: 100%;
   justify-content: center;
   margin-bottom: 0;
 }
