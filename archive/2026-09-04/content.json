@@ -1,0 +1,204 @@
+{
+  "issue": 36,
+  "slug": "2026-09-04",
+  "weekOf": "August 31, 2026",
+  "summary": "Moss can now connect to outside tools and services, Gemini joins chat, and a big batch of settings and sports polish lands alongside a dozen fixes.",
+  "intro": "This was a big one. The headline is a genuinely new capability: Moss can now plug into outside tools and services directly from Settings. Alongside that, Gemini joins the list of chat models, Sports and Settings both got real attention, and a long list of small but noticeable fixes went out. If you only read one section, the fixes at the bottom are worth a skim.",
+  "headline": {
+    "title": "Connect Moss to outside tools and services",
+    "body": [
+      "You can now connect Moss to external services that speak MCP or publish an OpenAPI specification, right from Settings, and put their capabilities to work in chat. This opens Moss up to a much wider range of tools beyond what ships built in.",
+      "The connection screen also got a pass of its own: tools are grouped for easier scanning, each one has its own switch so a call that's meant to repeat isn't mistaken for a duplicate, and if you already had a large connection turned on before grouping existed, Moss tells you so."
+    ],
+    "prs": [
+      2171,
+      2190
+    ]
+  },
+  "sections": [
+    {
+      "title": "New",
+      "items": [
+        {
+          "title": "Chat with Google's Gemini",
+          "body": "Gemini is now a real option for chat, not just a name in a list. Sign in to Google and pick it alongside Claude and Codex.",
+          "prs": [
+            2048
+          ]
+        },
+        {
+          "title": "Tell Sports what you want more or less of",
+          "body": "Sports stories now come with preference controls, and you can review and manage those choices in Sports Settings.",
+          "prs": [
+            2052
+          ]
+        },
+        {
+          "title": "Choose which leagues show up in standings",
+          "body": "Pick which leagues appear in standings and jump straight to the ones connected to teams you follow, including college football, college basketball, WNBA and NWSL, with Select all and Clear all to speed it up.",
+          "prs": [
+            2069,
+            2071,
+            2210
+          ]
+        },
+        {
+          "title": "Ask Moss about its own health",
+          "body": "Moss can now explain its current service health when you ask, and can kick off a news refresh on request.",
+          "prs": [
+            2056
+          ]
+        },
+        {
+          "title": "Approve workflow steps in chat",
+          "body": "You can approve or reject a workflow step directly in chat, and once approved the workflow continues safely.",
+          "prs": [
+            2065
+          ]
+        },
+        {
+          "title": "Add an email account by typing its address",
+          "body": "Connecting an email account now starts with your address instead of picking a provider tile. For Yahoo, Proton, iCloud and Fastmail, Moss fills in the setup instructions and server details for you.",
+          "prs": [
+            2215
+          ]
+        },
+        {
+          "title": "Newly built module abilities show up right away",
+          "body": "When Moss finishes building a module that adds a new chat ability, that ability is available immediately, no restart needed.",
+          "prs": [
+            2101
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Improved",
+      "items": [
+        {
+          "title": "Fresher AI provider models, and no more duplicate sign-ins",
+          "body": "Your list of Claude and ChatGPT models is now pulled from the vendor when you sign in and with a new Refresh models button, so new models show up without waiting for an update. You can also add a model by hand or remove one, and the list can collapse. Signing in to a provider you already had no longer creates a duplicate, and removing your default provider properly hands the default to the next one.",
+          "prs": [
+            2206
+          ]
+        },
+        {
+          "title": "Search box in Settings, and a searchable time zone picker",
+          "body": "Settings now has a search box up top so you can jump straight to what you need, and the time zone picker lets you type to find yours instead of scrolling. Weather settings are tidier, with Fahrenheit as the default, and the Appearance page got a cleaner layout.",
+          "prs": [
+            2212
+          ]
+        },
+        {
+          "title": "Quieter chat while Moss works, tidier feedback",
+          "body": "While Moss is working you now see its status updates right in the chat, with a small collapsible \"Thinking...\" line instead of a busier display. The feedback menu on a reply now tucks into the corner until you hover over it.",
+          "prs": [
+            2214
+          ]
+        },
+        {
+          "title": "Sports desk cleanup",
+          "body": "News sources now show the publication's icon and a coloured health badge, you can open a source to see the articles it links to, and the add-a-source and standings picker forms stay tucked away until you open them. Settings is organized into Following, News sources and Configure standings sections.",
+          "prs": [
+            2210,
+            2057
+          ]
+        },
+        {
+          "title": "The Chat tag is now the on/off switch",
+          "body": "On each AI model row, the Chat tag itself now turns chat access for that model on or off, replacing the separate switch that used to sit next to it.",
+          "prs": [
+            2216
+          ]
+        },
+        {
+          "title": "Activity history shows how long things took",
+          "body": "Your activity history now shows how long each assistant action took, and can tell you when a repeated request was automatically skipped instead of run again.",
+          "prs": [
+            2191
+          ]
+        }
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "text": "Adding a medication shows up immediately, and email sync keeps your contact details even when optional extraction isn't available.",
+      "prs": [
+        2059
+      ]
+    },
+    {
+      "text": "Building a module in the Workshop no longer occasionally submits the build step twice.",
+      "prs": [
+        2060
+      ]
+    },
+    {
+      "text": "The GitHub tile no longer appears when adding a connected account, since GitHub support isn't planned.",
+      "prs": [
+        2070
+      ]
+    },
+    {
+      "text": "The story feedback control no longer appears where it didn't belong, on the Followed-teams strip.",
+      "prs": [
+        2076
+      ]
+    },
+    {
+      "text": "The standings dropdown now updates right away when you follow or unfollow a team.",
+      "prs": [
+        2094
+      ]
+    },
+    {
+      "text": "Visiting a self-hosted Moss server by its numeric network address in Firefox now loads securely instead of sometimes failing.",
+      "prs": [
+        2105
+      ]
+    },
+    {
+      "text": "The small label next to an assistant action now correctly says Executed, Allowed, Failed, or Denied.",
+      "prs": [
+        2116
+      ]
+    },
+    {
+      "text": "Saving or changing notes and memory is more reliable and no longer reports a false failure.",
+      "prs": [
+        2144
+      ]
+    },
+    {
+      "text": "When a note change is blocked for a known, safe reason, Moss now explains why instead of showing a generic failure.",
+      "prs": [
+        2148
+      ]
+    },
+    {
+      "text": "Meals logged with a local time now save on the correct calendar day.",
+      "prs": [
+        2155
+      ]
+    },
+    {
+      "text": "Approving a change now waits for it to actually finish before showing the updated status.",
+      "prs": [
+        2158
+      ]
+    },
+    {
+      "text": "The assistant no longer announces the date and time unprompted at the start of nearly every reply.",
+      "prs": [
+        2186
+      ]
+    },
+    {
+      "text": "Asking the assistant for the time now gets an answer in your own time zone instead of UTC.",
+      "prs": [
+        2192
+      ]
+    }
+  ]
+}
