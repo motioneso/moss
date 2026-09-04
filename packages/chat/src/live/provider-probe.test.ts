@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TmuxIo } from "@moss/ai";
-import { probeProvider } from "./provider-probe.js";
+import { clearProviderProbeCacheForTests, probeProvider } from "./provider-probe.js";
 
 function fakeRealMergeIo(result: { code: number; stdout: string; stderr?: string }) {
   const calls: Array<{ cmd: string; args: readonly string[]; env?: NodeJS.ProcessEnv }> = [];
@@ -17,11 +17,12 @@ function fakeRealMergeIo(result: { code: number; stdout: string; stderr?: string
 describe("probeProvider anthropic HOME isolation", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    clearProviderProbeCacheForTests();
   });
 
   it("overrides ambient HOME even when credentialEnv is an empty object (regression proof)", async () => {
     vi.stubEnv("HOME", "/ambient/leak-sentinel");
-    const { io, calls } = fakeRealMergeIo({ code: 0, stdout: '{"loggedIn":true}' });
+    const { io, calls } = fakeRealMergeIo({ code: 0, stdout: "OK\n" });
 
     await probeProvider("anthropic", {
       io,
@@ -35,7 +36,7 @@ describe("probeProvider anthropic HOME isolation", () => {
   });
 
   it("delivers credentialEnv token keys alongside the HOME override", async () => {
-    const { io, calls } = fakeRealMergeIo({ code: 0, stdout: '{"loggedIn":true}' });
+    const { io, calls } = fakeRealMergeIo({ code: 0, stdout: "OK\n" });
 
     await probeProvider("anthropic", {
       io,
@@ -53,7 +54,7 @@ describe("probeProvider anthropic HOME isolation", () => {
     const io: Pick<TmuxIo, "run"> = {
       run: async (cmd, args, opts) => {
         calls.push({ cmd, args, opts });
-        return { code: 0, stdout: '{"loggedIn":true}' };
+        return { code: 0, stdout: "OK\n" };
       }
     };
 
@@ -62,18 +63,92 @@ describe("probeProvider anthropic HOME isolation", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.opts).toBeUndefined();
   });
+});
 
-  it("still parses status correctly with the new env plumbing in place", async () => {
-    const { io } = fakeRealMergeIo({ code: 0, stdout: '{"loggedIn":true}' });
+describe("probeProvider anthropic readiness check (#2232)", () => {
+  afterEach(() => {
+    clearProviderProbeCacheForTests();
+  });
 
-    const result = await probeProvider("anthropic", {
-      io,
-      cliPresent: async () => true,
-      credentialEnv: { CLAUDE_CODE_OAUTH_TOKEN: "tok" },
-      homeBase: "/isolated/identity"
+  it("runs a real one-shot claude call, not the old auth-status check", async () => {
+    const { io, calls } = fakeRealMergeIo({ code: 0, stdout: "OK\n" });
+
+    const result = await probeProvider("anthropic", { io, cliPresent: async () => true });
+
+    // The old `claude auth status` command only checks that a token FILE is present, never
+    // that the token still works, so a stale token used to read as logged in forever.
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.cmd).toBe("claude");
+    expect(calls[0]?.args).toEqual(["--print", "Reply with exactly OK."]);
+    expect(result).toEqual({ status: "ready" });
+  });
+
+  it("reports needs_login when the token has expired (401 from the real call)", async () => {
+    const { io } = fakeRealMergeIo({
+      code: 1,
+      stdout: "",
+      stderr: "API Error: 401 invalid bearer token"
     });
 
-    expect(result).toEqual({ status: "ready" });
+    const result = await probeProvider("anthropic", { io, cliPresent: async () => true });
+
+    expect(result).toEqual({ status: "needs_login" });
+  });
+
+  it("reports needs_login when the CLI says authentication failed", async () => {
+    const { io } = fakeRealMergeIo({
+      code: 1,
+      stdout: "",
+      stderr: "failed to authenticate with Anthropic"
+    });
+
+    const result = await probeProvider("anthropic", { io, cliPresent: async () => true });
+
+    expect(result).toEqual({ status: "needs_login" });
+  });
+
+  it("reports error, not needs_login, for an unrelated failure", async () => {
+    const { io } = fakeRealMergeIo({ code: 1, stdout: "", stderr: "network timeout" });
+
+    const result = await probeProvider("anthropic", { io, cliPresent: async () => true });
+
+    expect(result).toEqual({ status: "error" });
+  });
+
+  it("caches a ready answer instead of calling claude again within the window", async () => {
+    const { io, calls } = fakeRealMergeIo({ code: 0, stdout: "OK\n" });
+
+    const first = await probeProvider("anthropic", {
+      io,
+      cliPresent: async () => true,
+      credentialEnv: { CLAUDE_CODE_OAUTH_TOKEN: "tok-a" }
+    });
+    const second = await probeProvider("anthropic", {
+      io,
+      cliPresent: async () => true,
+      credentialEnv: { CLAUDE_CODE_OAUTH_TOKEN: "tok-a" }
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(first).toEqual({ status: "ready" });
+    expect(second).toEqual({ status: "ready" });
+  });
+
+  it("a new login token busts the cache instead of replaying the old answer", async () => {
+    const { io, calls } = fakeRealMergeIo({ code: 0, stdout: "OK\n" });
+
+    await probeProvider("anthropic", {
+      io,
+      cliPresent: async () => true,
+      credentialEnv: { CLAUDE_CODE_OAUTH_TOKEN: "tok-old" }
+    });
+    await probeProvider("anthropic", {
+      io,
+      cliPresent: async () => true,
+      credentialEnv: { CLAUDE_CODE_OAUTH_TOKEN: "tok-new" }
+    });
+
+    expect(calls).toHaveLength(2);
   });
 });
 
