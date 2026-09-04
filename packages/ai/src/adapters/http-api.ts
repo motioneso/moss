@@ -4,7 +4,7 @@
  * Implements ChatProviderAdapter (defined in chat-adapter.ts).
  */
 
-import type { GenerateChatInput, ChatProviderAdapter } from "../chat-adapter.js";
+import type { ChatSource, GenerateChatInput, ChatProviderAdapter } from "../chat-adapter.js";
 import {
   buildStructuredRequest,
   extractStructuredResult,
@@ -37,7 +37,9 @@ export class HttpApiAdapter implements ChatProviderAdapter {
     this._baseUrl = opts.baseUrl;
   }
 
-  async generateChat(input: GenerateChatInput): Promise<{ readonly text: string }> {
+  async generateChat(
+    input: GenerateChatInput
+  ): Promise<{ readonly text: string; readonly sources?: readonly ChatSource[] }> {
     input.onActivity?.({ kind: "status", text: "calling api..." });
 
     const { url, headers, body } = this.buildRequest(input);
@@ -54,7 +56,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
     }
 
     const json: unknown = await response.json();
-    return { text: this.extractText(json) };
+    return this.extractResult(json, Boolean(input.nativeSearch));
   }
 
   async generateStructured(
@@ -140,12 +142,34 @@ export class HttpApiAdapter implements ChatProviderAdapter {
             model: modelId,
             // Economy envelope: clamp to the caller's budget when present, else the default.
             max_tokens: input.maxOutputTokens ?? 8192,
-            messages: input.messages.map((m) => ({ role: m.role, content: m.content }))
+            messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
+            ...(input.nativeSearch
+              ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }] }
+              : {})
           }
         };
 
       case "openai-compatible": {
         const base = this._baseUrl ?? "https://api.openai.com";
+        if (input.nativeSearch) {
+          // #2228: built-in web search is only exposed through the Responses API, not
+          // Chat Completions, so this path switches endpoints and body shape.
+          return {
+            url: `${base}/v1/responses`,
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${this.apiKey}`
+            },
+            body: {
+              model: modelId,
+              ...(input.maxOutputTokens !== undefined
+                ? { max_output_tokens: input.maxOutputTokens }
+                : {}),
+              input: input.messages.map((m) => ({ role: m.role, content: m.content })),
+              tools: [{ type: "web_search" }]
+            }
+          };
+        }
         return {
           url: `${base}/v1/chat/completions`,
           headers: {
@@ -181,7 +205,8 @@ export class HttpApiAdapter implements ChatProviderAdapter {
             // No default existed for this provider — only set a cap when the caller asks.
             ...(input.maxOutputTokens !== undefined
               ? { generationConfig: { maxOutputTokens: input.maxOutputTokens } }
-              : {})
+              : {}),
+            ...(input.nativeSearch ? { tools: [{ google_search: {} }] } : {})
           }
         };
       }
@@ -193,32 +218,80 @@ export class HttpApiAdapter implements ChatProviderAdapter {
     }
   }
 
-  private extractText(json: unknown): string {
+  private extractResult(
+    json: unknown,
+    nativeSearch: boolean
+  ): { readonly text: string; readonly sources?: readonly ChatSource[] } {
     switch (this.providerKind) {
       case "anthropic": {
-        // Response: { content: [{ type: "text", text: string }] }
-        const r = json as { content: Array<{ type: string; text: string }> };
-        const textBlock = r.content.find((c) => c.type === "text");
-        if (!textBlock) {
+        // Response: { content: [{ type: "text", text: string, citations?: [...] }] }
+        const r = json as {
+          content: Array<{
+            type: string;
+            text?: string;
+            citations?: Array<{ url?: string; title?: string }>;
+          }>;
+        };
+        const textBlocks = r.content.filter((c) => c.type === "text");
+        if (textBlocks.length === 0) {
           throw new Error("No text block in Anthropic response");
         }
-        return textBlock.text;
+        const text = textBlocks.map((b) => b.text ?? "").join("");
+        const sources = nativeSearch
+          ? dedupeSources(
+              textBlocks.flatMap((b) => b.citations ?? []).map((c) => normalizeSource(c))
+            )
+          : undefined;
+        return { text, ...(sources && sources.length > 0 ? { sources } : {}) };
       }
 
       case "openai-compatible": {
+        if (nativeSearch) {
+          // Responses API: { output: [{ type: "message", content: [{ type: "output_text",
+          // text: string, annotations?: [{ type: "url_citation", url, title }] }] }] }
+          const r = json as {
+            output: Array<{
+              type: string;
+              content?: Array<{
+                type: string;
+                text?: string;
+                annotations?: Array<{ type: string; url?: string; title?: string }>;
+              }>;
+            }>;
+          };
+          const message = r.output?.find((item) => item.type === "message");
+          const textPart = message?.content?.find((c) => c.type === "output_text");
+          if (!textPart) {
+            throw new Error("No output text in OpenAI responses payload");
+          }
+          const citations = (textPart.annotations ?? []).filter(
+            (a) => a.type === "url_citation"
+          );
+          const sources = dedupeSources(citations.map((c) => normalizeSource(c)));
+          return {
+            text: textPart.text ?? "",
+            ...(sources.length > 0 ? { sources } : {})
+          };
+        }
         // Response: { choices: [{ message: { role: string, content: string } }] }
         const r = json as { choices: Array<{ message: { content: string } }> };
         const choice = r.choices[0];
         if (!choice) {
           throw new Error("No choices in OpenAI response");
         }
-        return choice.message.content;
+        return { text: choice.message.content };
       }
 
       case "google": {
-        // Response: { candidates: [{ content: { parts: [{ text: string }] } }] }
+        // Response: { candidates: [{ content: { parts: [{ text: string }] },
+        // groundingMetadata?: { groundingChunks?: [{ web?: { uri, title } }] } }] }
         const r = json as {
-          candidates: Array<{ content: { parts: Array<{ text: string }> } }>;
+          candidates: Array<{
+            content: { parts: Array<{ text: string }> };
+            groundingMetadata?: {
+              groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+            };
+          }>;
         };
         const candidate = r.candidates[0];
         if (!candidate) {
@@ -228,7 +301,15 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         if (!part) {
           throw new Error("No parts in Google response candidate");
         }
-        return part.text;
+        const sources = nativeSearch
+          ? dedupeSources(
+              (candidate.groundingMetadata?.groundingChunks ?? [])
+                .map((chunk) => chunk.web)
+                .filter((web): web is { uri?: string; title?: string } => Boolean(web))
+                .map((web) => normalizeSource({ url: web.uri, title: web.title }))
+            )
+          : [];
+        return { text: part.text, ...(sources.length > 0 ? { sources } : {}) };
       }
 
       default: {
@@ -237,4 +318,20 @@ export class HttpApiAdapter implements ChatProviderAdapter {
       }
     }
   }
+}
+
+function normalizeSource(candidate: { url?: string; title?: string }): ChatSource | null {
+  if (!candidate.url) return null;
+  return { url: candidate.url, title: candidate.title ?? candidate.url };
+}
+
+function dedupeSources(candidates: readonly (ChatSource | null)[]): ChatSource[] {
+  const seen = new Set<string>();
+  const sources: ChatSource[] = [];
+  for (const candidate of candidates) {
+    if (!candidate || seen.has(candidate.url)) continue;
+    seen.add(candidate.url);
+    sources.push(candidate);
+  }
+  return sources;
 }

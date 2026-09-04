@@ -85,6 +85,8 @@ export type GenerateStructuredInput = {
   readonly tierHint?: AiModelTier;
   readonly requireExplicitBinding?: boolean;
   readonly maxOutputTokens?: number;
+  /** #2228: let the model use its own built-in web search tool while producing this result. */
+  readonly nativeSearch?: boolean;
   readonly signal?: AbortSignal;
   readonly telemetry?: StructuredTelemetry;
   readonly priority?: StructuredRunPriority;
@@ -93,7 +95,12 @@ export type GenerateStructuredInput = {
 };
 
 export type GenerateStructuredResult =
-  | { readonly ok: true; readonly object: unknown; readonly usage: StructuredUsage }
+  | {
+      readonly ok: true;
+      readonly object: unknown;
+      readonly usage: StructuredUsage;
+      readonly sources?: readonly { readonly title: string; readonly url: string }[];
+    }
   | {
       readonly ok: false;
       readonly error: "needs_config" | "validation_failed" | "provider_error" | "aborted";
@@ -176,6 +183,7 @@ export async function generateStructured(
         messages,
         schema: input.schema,
         maxOutputTokens,
+        nativeSearch: input.nativeSearch,
         signal: input.signal,
         telemetry: input.telemetry,
         priority: input.priority,
@@ -244,7 +252,8 @@ export async function generateStructured(
         },
         "ai.structured usage"
       );
-      return { ok: true, object: result.rawObject, usage };
+      const sources = "sources" in result ? result.sources : undefined;
+      return { ok: true, object: result.rawObject, usage, ...(sources ? { sources } : {}) };
     }
 
     messages.push({ role: "assistant", content: serialized.slice(0, 4000) });
