@@ -1,6 +1,11 @@
 const CACHE_NAME = "jarv1s-shell-v1";
 const APP_SHELL_URLS = ["/", "/offline.html", "/manifest.webmanifest", "/icons/icon.svg"];
 const IMAGE_RETRY_DELAYS_MS = [250, 1000];
+// register-service-worker.ts registers this script as "/service-worker.js?dev=1" outside
+// production so push notifications can be exercised on a dev instance — the query string
+// is the only signal a service worker script has about how it was registered. Dev mode must
+// never cache the app shell: that would fight Vite's own dev-server asset serving.
+const IS_DEV = Boolean(self.location && /(?:\?|&)dev=1(?:&|$)/.test(self.location.search || ""));
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -27,6 +32,11 @@ async function fetchWithRecovery(request) {
 }
 
 self.addEventListener("install", (event) => {
+  if (IS_DEV) {
+    event.waitUntil(self.skipWaiting());
+    return;
+  }
+
   event.waitUntil(
     caches
       .open(CACHE_NAME)
@@ -58,6 +68,10 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  if (IS_DEV) {
+    return;
+  }
+
   const request = event.request;
   const url = new URL(request.url);
 
@@ -80,4 +94,51 @@ self.addEventListener("fetch", (event) => {
         .catch(() => fetchWithRecovery(request))
     );
   }
+});
+
+// #743 / #2227: web push delivery. The payload is the small JSON shape built by
+// buildPushPayload (packages/notifications/src/push-payload.ts) — title, body and an
+// optional href, nothing else (payload-boundary decision: no metadata, no secrets ever
+// reach the browser's push service).
+self.addEventListener("push", (event) => {
+  if (!event.data) {
+    return;
+  }
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    return;
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/icons/icon.svg",
+      data: { href: payload.href ?? null }
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const href = event.notification.data?.href ?? "/";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const targetUrl = new URL(href, self.location.origin).href;
+      const existing = clients.find((client) => client.url === targetUrl);
+      if (existing) {
+        return existing.focus();
+      }
+
+      const anyWindow = clients[0];
+      if (anyWindow) {
+        return anyWindow.focus().then(() => anyWindow.navigate(targetUrl));
+      }
+
+      return self.clients.openWindow(targetUrl);
+    })
+  );
 });
