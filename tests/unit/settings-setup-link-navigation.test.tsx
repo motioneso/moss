@@ -7,18 +7,19 @@
 //
 // This renders Chat's real settings screen, with its real "Set up" button, wired into the real
 // settings page exactly the way the app wires it (settings-personal-data-panes.tsx passes the
-// page's own section-switch handler straight through as that screen's onCat prop). Only the
-// screen that lists all the other modules is stood in for, so the test does not also have to
-// fake every module's data; the button under test is never touched. This way, restoring the old,
-// broken section-switching code makes the click miss its target and the test catches it, instead
-// of a stand-in button papering over the bug.
+// page's own section-switch handler straight through as that screen's onCat prop), and it lets
+// the real destination screen render. Only the screen that lists all the other modules is stood
+// in for, so the test does not also have to fake every module's data; the button under test is
+// never touched. The checks look at the heading and controls the destination screen actually
+// draws, so the test fails both when the old broken switching code is restored and when the
+// destination screen draws nothing at all.
 // Same jsdom + react-test-renderer pattern as tests/unit/settings-ai-admin-pane.test.tsx (this
 // repo has no @testing-library/react).
 import { createElement } from "react";
 import { MemoryRouter } from "react-router";
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { PaneProps } from "../../apps/web/src/settings/settings-types.js";
 import type * as ClientModule from "../../apps/web/src/api/client.js";
@@ -33,7 +34,11 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => {
     ...actual,
     getChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" } })),
     putChatSettings: vi.fn(),
-    lookupAiCapabilityRoute: vi.fn(async () => ({ route: null }))
+    lookupAiCapabilityRoute: vi.fn(async () => ({ route: null })),
+    listAiProviders: vi.fn(async () => ({ providers: [] })),
+    listAiModels: vi.fn(async () => ({ models: [] })),
+    listAiServiceBindings: vi.fn(async () => ({ bindings: [] })),
+    getChatModelOverrideSettings: vi.fn(async () => ({ settings: { overrideEnabled: false } }))
   };
 });
 
@@ -45,13 +50,6 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => {
 vi.mock("../../apps/web/src/settings/settings-personal-data-panes.js", () => ({
   ModulesPane: ({ onSelectSection }: PaneProps) =>
     createElement(ChatSettingsView, { onBack: () => {}, onCat: onSelectSection })
-}));
-
-// The destination screen is not what this test is about (the bug and the fix are both in how
-// settings-page.tsx picks which section to show, not in what the admin AI section renders), so
-// stub it out to keep the test to the one thing it is checking.
-vi.mock("../../apps/web/src/settings/settings-ai-admin-pane.js", () => ({
-  AiProvidersPane: () => createElement("div", null, "AI providers pane")
 }));
 
 import { ChatSettingsView } from "../../apps/web/src/settings/settings-module-subviews.js";
@@ -88,6 +86,14 @@ const adminMe = {
   hasPasswordCredential: true
 };
 
+// The settings page loads each screen on demand, so the destination screen's code is only
+// fetched the moment the button is pressed. Loading it for the first time takes seconds here,
+// far longer than a test is willing to wait, so warm it up once before any test runs; after that
+// the page gets it immediately, exactly as a real browser does on a second visit.
+beforeAll(async () => {
+  await import("../../apps/web/src/settings/settings-ai-admin-pane.js");
+});
+
 async function flush(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -116,27 +122,43 @@ async function renderModulesFor(
   return renderer;
 }
 
-function clickButtonByText(renderer: ReactTestRenderer, text: string): void {
-  const button = renderer.root
+function nodeText(node: ReactTestInstance | string): string {
+  if (typeof node === "string") return node;
+  return node.children.map(nodeText).join(" ");
+}
+
+function buttonsWithText(renderer: ReactTestRenderer, text: string): ReactTestInstance[] {
+  return renderer.root
     .findAllByType("button")
-    .find((instance) => instance.children.includes(text));
+    .filter((instance) => nodeText(instance).includes(text));
+}
+
+function clickButtonByText(renderer: ReactTestRenderer, text: string): void {
+  const button = buttonsWithText(renderer, text)[0];
   if (!button) throw new Error(`button "${text}" not found`);
   act(() => {
     (button.props.onClick as () => void)();
   });
 }
 
-function pageText(renderer: ReactTestRenderer): string {
-  function collect(node: unknown): string {
-    if (node == null) return "";
-    if (typeof node === "string") return node;
-    if (Array.isArray(node)) return node.map(collect).join(" ");
-    if (typeof node === "object" && "children" in (node as Record<string, unknown>)) {
-      return collect((node as { children: unknown }).children);
-    }
-    return "";
-  }
-  return collect(renderer.toJSON());
+// The heading each settings screen draws for itself, which is what tells us the page really
+// arrived at that screen. The list of categories down the side repeats some of the same words,
+// so reading the whole page would not distinguish "the link landed here" from "the link is
+// listed here".
+function paneHeadings(renderer: ReactTestRenderer): string[] {
+  return renderer.root
+    .findAll((instance) => instance.type === "h2" && instance.props.className === "pane__title", {
+      deep: true
+    })
+    .map((instance) => nodeText(instance).trim());
+}
+
+function paneText(renderer: ReactTestRenderer): string {
+  const panes = renderer.root.findAll(
+    (instance) => typeof instance.type === "string" && instance.props.className === "set2__pane",
+    { deep: true }
+  );
+  return panes.map(nodeText).join(" ");
 }
 
 describe("settings setup link crosses from personal to admin sections (PR 2220)", () => {
@@ -146,15 +168,33 @@ describe("settings setup link crosses from personal to admin sections (PR 2220)"
 
     clickButtonByText(renderer, "Set up");
     await flush();
+    await flush();
 
-    const text = pageText(renderer);
+    // The destination screen really drew itself: its own heading, and its own controls.
+    expect(paneHeadings(renderer)).toEqual(["Assistant & AI"]);
+    expect(paneText(renderer)).toContain("The AI providers this instance runs on");
+    expect(buttonsWithText(renderer, "Add provider").length).toBeGreaterThan(0);
+    expect(
+      renderer.root.findAllByProps({ ariaLabel: "Allow users to override their chat model" }).length
+    ).toBeGreaterThan(0);
+
+    // And the screen the old, broken code fell back to is not the one on show.
+    expect(paneHeadings(renderer)).not.toContain("Account & preferences");
 
     // The admin-only note and admin group labels only render once the page has switched into
-    // admin mode. The old code stayed in personal mode and silently landed on the first
-    // personal section (Account & preferences) instead.
-    expect(text).toContain("You have owner access");
-    expect(text).toContain("AI & extensions");
+    // admin mode.
+    const text = paneText(renderer);
     expect(text).not.toContain("Account & preferences");
+    expect(
+      renderer.root
+        .findAll(
+          (instance) =>
+            typeof instance.type === "string" && instance.props.className === "set2__navnote",
+          { deep: true }
+        )
+        .map(nodeText)
+        .join(" ")
+    ).toContain("You have owner access");
 
     await act(async () => {
       renderer.unmount();
@@ -167,11 +207,17 @@ describe("settings setup link crosses from personal to admin sections (PR 2220)"
 
     clickButtonByText(renderer, "Set up");
     await flush();
+    await flush();
 
-    const text = pageText(renderer);
-
-    expect(text).not.toContain("You have owner access");
-    expect(text).not.toContain("AI & extensions");
+    // The ordinary user stays in personal settings: the admin screen's heading and controls are
+    // nowhere on the page, and the page never claims owner access.
+    expect(paneHeadings(renderer)).toEqual(["Account & preferences"]);
+    expect(paneText(renderer)).not.toContain("The AI providers this instance runs on");
+    expect(buttonsWithText(renderer, "Add provider")).toHaveLength(0);
+    expect(
+      renderer.root.findAllByProps({ ariaLabel: "Allow users to override their chat model" })
+    ).toHaveLength(0);
+    expect(nodeText(renderer.root)).not.toContain("You have owner access");
 
     await act(async () => {
       renderer.unmount();
