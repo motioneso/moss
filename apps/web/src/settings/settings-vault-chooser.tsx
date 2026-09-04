@@ -76,11 +76,17 @@ export function VaultChooser(props: {
         <div className="gflow__introtx">
           <div className="gflow__title">Choose a notes folder</div>
           <div className="gflow__sub">
-            Browsing folders available on the server
-            <InfoTip label="How a folder becomes available">
-              Folders show up here after whoever manages this server adds them to the server setup
-              and restarts it. If the folder you want isn't listed, ask them to add it.
-            </InfoTip>
+            {mode === "notes" ? (
+              <>
+                Browsing folders available on the server
+                <InfoTip label="How a folder becomes available">
+                  Folders show up here after whoever manages this server adds them to the server
+                  setup and restarts it. If the folder you want isn't listed, ask them to add it.
+                </InfoTip>
+              </>
+            ) : (
+              "Browsing folders in your own notes"
+            )}
           </div>
         </div>
       </div>

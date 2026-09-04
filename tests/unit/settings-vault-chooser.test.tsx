@@ -72,4 +72,10 @@ describe("VaultChooser trust boundaries", () => {
     // The explanation itself only renders once the info affordance is opened.
     expect(html).not.toContain("whoever manages this server");
   });
+
+  it("does not offer the server setup explanation for the People folder, which needs no server change", () => {
+    const html = renderChooser("people");
+    expect(html).not.toContain("How a folder becomes available");
+    expect(html).not.toContain("whoever manages this server");
+  });
 });

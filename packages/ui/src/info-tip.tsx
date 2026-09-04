@@ -1,6 +1,8 @@
 import { Info } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { IconButton } from "./icon-button.js";
+
 export interface InfoTipProps {
   readonly label: string;
   readonly children: ReactNode;
@@ -42,18 +44,18 @@ export function InfoTip(props: InfoTipProps) {
 
   return (
     <div className="jds-infotip" ref={ref}>
-      <button
-        type="button"
+      <IconButton
         ref={triggerRef}
-        className="jds-infotip__trigger"
+        size="sm"
+        active={open}
         aria-label={props.label}
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
         <Info size={15} aria-hidden="true" />
-      </button>
+      </IconButton>
       {open ? (
-        <div className="jds-infotip__panel" role="tooltip">
+        <div className="jds-menu__list jds-infotip__panel" role="tooltip">
           {props.children}
         </div>
       ) : null}
