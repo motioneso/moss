@@ -453,6 +453,43 @@ describe("Sports add-source preview card", () => {
     ).toBe(true);
   });
 
+  it("previews a subreddit with its sample linked articles and the same coverage picker", async () => {
+    const renderer = await previewWith({
+      candidate: {
+        label: "r/nfl",
+        canonicalDomain: "reddit.com",
+        homepageUrl: "https://www.reddit.com/r/nfl/",
+        retrievalMethod: "reddit",
+        sampleCount: 2,
+        confirmedFetchHosts: ["www.reddit.com"],
+        sampleHeadlines: ["Chiefs sign a new kicker", "Bills extend their coach"],
+        targets: []
+      }
+    });
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("r/nfl");
+    expect(text).toContain("Chiefs sign a new kicker");
+    expect(text).toContain("Bills extend their coach");
+    expect(text).toContain("Coverage (optional");
+    expect(
+      renderer.root
+        .findAllByType("button")
+        .some((button) => renderedText(button.props.children) === "Add this source")
+    ).toBe(true);
+  });
+
+  it("tells the user plainly when a subreddit does not exist, is private, or is rate limited", async () => {
+    for (const [reason, copy] of [
+      ["not_found", "That subreddit doesn't exist."],
+      ["auth_required", "That subreddit is private or restricted, so Moss can't read it."],
+      ["rate_limited", "Reddit is rate limiting Moss. Try again in a few minutes."]
+    ] as const) {
+      const renderer = await previewWith({ status: "rejected", reason, candidate: undefined });
+      expect(renderedText(renderer.toJSON())).toContain(copy);
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("makes a duplicate publication obvious and hides the add controls", async () => {
     const renderer = await previewWith({ duplicateOfSourceId: fotmobSourceId });
     const notice = renderer.root.findAllByProps({ role: "status" })[0];

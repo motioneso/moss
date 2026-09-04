@@ -170,10 +170,60 @@ async function mockSportsSettings(
     });
   });
 
+  // #2211 custom sources added through the two-phase preview/confirm flow, kept in memory.
+  const customSources: Array<Record<string, unknown>> = [];
   await page.route("**/api/sports/sources", (route) => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON() as { canonicalDomain: string };
+      const source = {
+        kind: "custom",
+        id: `source-${customSources.length + 1}`,
+        label: body.canonicalDomain === "reddit.com" ? "r/nfl" : body.canonicalDomain,
+        canonicalDomain: body.canonicalDomain,
+        homepageUrl: `https://${body.canonicalDomain}/`,
+        feedUrl: null,
+        retrievalMethod: body.canonicalDomain === "reddit.com" ? "reddit" : "feed",
+        enabled: true,
+        healthState: "healthy",
+        healthReasonCode: null,
+        healthMessage: null,
+        lastCheckedAt: new Date().toISOString(),
+        lastSuccessAt: new Date().toISOString(),
+        recipeStatus: "feed",
+        assignedFollowIds: [],
+        assignments: [],
+        createdAt: new Date().toISOString()
+      };
+      customSources.push(source);
+      return fulfillJson(route, { source });
+    }
     sourceReads += 1;
-    return fulfillJson(route, { sources: [espn] });
+    return fulfillJson(route, { sources: [espn, ...customSources] });
   });
+
+  await page.route("**/api/sports/sources/preview", (route) => {
+    const body = route.request().postDataJSON() as { url: string };
+    if (!/^\/?r\/nfl$/i.test(body.url.trim())) {
+      return fulfillJson(route, { status: "rejected", reason: "invalid_input" });
+    }
+    return fulfillJson(route, {
+      status: "ok",
+      confirmationId: "confirmation-nfl",
+      authorizationAcknowledgement: "I confirm this public source.",
+      candidate: {
+        label: "r/nfl",
+        canonicalDomain: "reddit.com",
+        homepageUrl: "https://www.reddit.com/r/nfl/",
+        retrievalMethod: "reddit",
+        sampleCount: 2,
+        confirmedFetchHosts: ["www.reddit.com"],
+        sampleHeadlines: ["Chiefs sign a new kicker", "Bills extend their coach"],
+        targets: []
+      }
+    });
+  });
+
+  await page.route("**/api/sports/sources/*/icon", (route) => route.fulfill({ status: 404 }));
 
   await page.route("**/api/sports/sources/espn/coverage", (route) => {
     const body = route.request().postDataJSON() as UpdateSportsEspnCoverageRequest;
@@ -413,6 +463,33 @@ test.describe("Sports settings follow picker (#989)", () => {
 
     await expect(page.getByText("Inactive for headlines.")).toBeVisible();
     expect(sportsApi.sourceReads()).toBeGreaterThan(1);
+  });
+
+  test("adding a subreddit previews its linked articles, confirms, and shows the row (#2211)", async ({
+    page
+  }) => {
+    await mockApi(page, {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: [],
+      notifications: [],
+      tasks: []
+    });
+    await mockSportsSettings(page);
+    await gotoSportsSettings(page);
+
+    await page.getByRole("button", { name: "Add a source" }).click();
+    const input = page.getByPlaceholder("theathletic.com or r/nfl");
+    await input.fill("r/nfl");
+    await page.getByRole("button", { name: "Check" }).click();
+
+    await expect(page.getByText("Chiefs sign a new kicker")).toBeVisible();
+    await expect(page.getByText("Bills extend their coach")).toBeVisible();
+    await page.getByText("I confirm this public source.").click();
+    await page.getByRole("button", { name: "Add this source" }).click();
+
+    await expect(page.getByText("Source added.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove r/nfl" })).toBeVisible();
   });
 
   test("saved leagues and follows assemble into one keyboard-accessible standings picker", async ({

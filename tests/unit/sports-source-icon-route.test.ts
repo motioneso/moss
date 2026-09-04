@@ -62,7 +62,7 @@ function buildApp(input: {
 }
 
 function record(canonicalDomain = "example.com"): SportsIconSourceRecord {
-  return { id: sourceId, canonicalDomain };
+  return { id: sourceId, canonicalDomain, iconUrl: null };
 }
 
 const url = `/api/sports/sources/${sourceId}/icon`;

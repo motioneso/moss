@@ -103,7 +103,8 @@ export const sportsModuleManifest = {
       "sql/0191_sports_public_source_runtime.sql",
       "sql/0192_sports_legacy_feed_assignments_verified.sql",
       "sql/0193_sports_legacy_feed_assignment_repair.sql",
-      "sql/0196_sports_news_source_scopes.sql"
+      "sql/0196_sports_news_source_scopes.sql",
+      "sql/0213_sports_reddit_sources.sql"
     ],
     migrationDirectories: ["packages/sports/sql"],
     ownedTables: [
@@ -119,7 +120,12 @@ export const sportsModuleManifest = {
     {
       id: "sports.source_icons",
       description:
-        "Each custom news source in Sports settings shows the publication's own icon next to its name, fetched from the publisher's site. When no icon is available, a neutral newspaper symbol is shown instead."
+        "Each custom news source in Sports settings shows its own icon next to its name: a publication's favicon or a subreddit's community icon. When no icon is available, a neutral newspaper symbol is shown instead."
+    },
+    {
+      id: "sports.subreddit_sources",
+      description:
+        "The Add a source box in Sports settings also accepts a subreddit (r/nfl or a reddit.com link). Posts that link out to articles become headlines credited to the real publisher; self posts, media, stickied posts, and crossposts are skipped."
     },
     {
       id: "sports.story_feedback",
@@ -142,7 +148,8 @@ export const sportsModuleManifest = {
     {
       id: "sports.follows",
       label: "Sports",
-      description: "Choose the teams and leagues shown in Sports.",
+      description:
+        "Choose the teams and leagues shown in Sports, and add custom news sources: a publication's homepage or a subreddit such as r/nfl.",
       path: "/settings/modules/sports",
       scope: "user",
       order: 35,
@@ -169,7 +176,7 @@ export const sportsModuleManifest = {
       id: "sports.sources",
       label: "Manage custom sports news sources",
       description:
-        "Add, assign, and remove the active actor's own custom public news sources for sports.",
+        "Add, assign, and remove the active actor's own custom public news sources for sports, including publications and subreddits.",
       scope: "user",
       actions: ["create", "update", "delete"]
     }

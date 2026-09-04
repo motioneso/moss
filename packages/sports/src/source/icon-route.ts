@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError, handleRouteError } from "@moss/module-sdk";
 
+import { REDDIT_ICON_HOSTS } from "./reddit.js";
+
 /**
  * #2211 source icons: a publication's favicon, fetched server-side because the web CSP only
  * allows images from a fixed set of hosts. Modelled on the News article-image route, but the
@@ -46,6 +48,8 @@ export type SportsIconFetchPort = (
 export interface SportsIconSourceRecord {
   readonly id: string;
   readonly canonicalDomain: string;
+  /** #2211 a subreddit's community icon saved at confirm time; null for publications. */
+  readonly iconUrl: string | null;
 }
 
 interface SportsIconSourceRepository {
@@ -94,6 +98,24 @@ export function sportsIconCandidateUrls(canonicalDomain: string): readonly strin
   const urls = [`https://${domain}/favicon.ico`];
   if (!domain.startsWith("www.")) urls.push(`https://www.${domain}/favicon.ico`);
   return urls;
+}
+
+/**
+ * #2211 a stored subreddit icon is used only when it still points at Reddit's image hosts over
+ * HTTPS; anything else falls back to the favicon candidates for the row's domain.
+ */
+export function sportsIconLookupUrls(source: SportsIconSourceRecord): readonly string[] {
+  if (source.iconUrl) {
+    try {
+      const url = new URL(source.iconUrl);
+      if (url.protocol === "https:" && REDDIT_ICON_HOSTS.includes(url.hostname.toLowerCase())) {
+        return [source.iconUrl];
+      }
+    } catch {
+      // fall through to the favicon candidates
+    }
+  }
+  return sportsIconCandidateUrls(source.canonicalDomain);
 }
 
 export function registerSportsSourceIconRoute(
@@ -146,8 +168,8 @@ export function registerSportsSourceIconRoute(
     return entry;
   }
 
-  async function lookupIcon(canonicalDomain: string): Promise<CachedIcon | null> {
-    for (const url of sportsIconCandidateUrls(canonicalDomain)) {
+  async function lookupIcon(source: SportsIconSourceRecord): Promise<CachedIcon | null> {
+    for (const url of sportsIconLookupUrls(source)) {
       const host = new URL(url).hostname;
       const fetched = await dependencies.fetchBytes(url, {
         allowedHosts: [host],
@@ -187,7 +209,7 @@ export function registerSportsSourceIconRoute(
         );
         if (!source) throw new HttpError(404, "Sports source not found");
 
-        const entry = cached(source.id) ?? put(source.id, await lookupIcon(source.canonicalDomain));
+        const entry = cached(source.id) ?? put(source.id, await lookupIcon(source));
         if (!entry.icon) throw new HttpError(404, "Sports source icon not found");
         return reply
           .type(entry.icon.contentType)

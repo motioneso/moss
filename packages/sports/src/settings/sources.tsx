@@ -39,7 +39,10 @@ const PREVIEW_REJECTION_COPY: Record<string, string> = {
   policy: "That publication isn't allowed by the content policy.",
   invalid_input: "That doesn't look like a publication we can check — try a homepage link.",
   unreachable: "We couldn't reach that site. Check the address and try again.",
-  not_https: "Only HTTPS links or bare domains are accepted."
+  not_https: "Only HTTPS links or bare domains are accepted.",
+  not_found: "That subreddit doesn't exist.",
+  auth_required: "That subreddit is private or restricted, so Moss can't read it.",
+  rate_limited: "Reddit is rate limiting Moss. Try again in a few minutes."
 };
 
 const HEALTH_BADGE: Record<
@@ -261,7 +264,7 @@ export function AddSourceFlow(props: {
             className="jds-input"
             type="text"
             value={input}
-            placeholder="theathletic.com"
+            placeholder="theathletic.com or r/nfl"
             disabled={busy}
             onChange={(event) => {
               setInput(event.target.value);
@@ -272,6 +275,9 @@ export function AddSourceFlow(props: {
             {previewMutation.isPending ? "Checking…" : "Check"}
           </Button>
         </div>
+        <p className="sp-src__hint">
+          A publication's homepage, or a subreddit like r/nfl to pull in the articles it links to.
+        </p>
       </form>
 
       {/* Coverage stays hidden until a publication is entered (Ben, 2026-09-03). */}
