@@ -181,6 +181,7 @@ describe("compilePersonalizedNews", () => {
       return {
         seen,
         storyRef: (canonicalUrl: string) => `news:${canonicalUrl}`,
+        listDismissedRefs: async () => new Set(),
         registerTargets: async () => undefined,
         applyRelevance: async (_db, input) => {
           seen.push([...input.candidates]);
