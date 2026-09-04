@@ -59,6 +59,10 @@ import type {
   PutNotificationPreferenceResponse,
   PutNotificationDigestPreferenceRequest,
   PutNotificationDigestPreferenceResponse,
+  PushConfigResponse,
+  RegisterPushSubscriptionRequest,
+  RegisterPushSubscriptionResponse,
+  DeletePushSubscriptionResponse,
   PutQuietHoursSettingsRequest,
   PutQuietHoursSettingsResponse,
   PutPersonaSettingsRequest,
@@ -297,6 +301,26 @@ export async function putNotificationDigestPreference(
       method: "PUT",
       body
     }
+  );
+}
+
+export async function getPushConfig(): Promise<PushConfigResponse> {
+  return requestJson<PushConfigResponse>("/api/notifications/push/config");
+}
+
+export async function registerPushSubscription(
+  body: RegisterPushSubscriptionRequest
+): Promise<RegisterPushSubscriptionResponse> {
+  return requestJson<RegisterPushSubscriptionResponse>("/api/notifications/push/subscriptions", {
+    method: "POST",
+    body
+  });
+}
+
+export async function deletePushSubscription(id: string): Promise<DeletePushSubscriptionResponse> {
+  return requestJson<DeletePushSubscriptionResponse>(
+    `/api/notifications/push/subscriptions/${encodeURIComponent(id)}`,
+    { method: "DELETE" }
   );
 }
 
