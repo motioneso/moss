@@ -618,6 +618,26 @@
     opacity: 1;
   }
 }
+/* Text-only hosts (list rows, card leads): keep the last words clear of the dots so a long
+   headline never runs underneath them. Photo hosts leave the image full-bleed on purpose. */
+.sp-brief__row > .sp-brief__link,
+.sp-tk__lead > .sp-tk__newstx,
+.sp-tk__stories > .sp-fbhost > .sp-tk__storylink,
+.sp-feat__leadwrap > .sp-feat__lead,
+.sp-feat__stories > .sp-fbhost > .sp-feat__storylink,
+.sp-latest__item > .sp-hl,
+.sp-newsband__brief > .sp-newsband__brieflink {
+  padding-right: var(--space-7);
+}
+.sp-tk__stories > .sp-fbhost > .sp-feedback,
+.sp-feat__stories > .sp-fbhost > .sp-feedback,
+.sp-newsband__brief > .sp-feedback,
+.sp-latest__item > .sp-feedback,
+.sp-tk__lead > .sp-feedback,
+.sp-feat__leadwrap > .sp-feedback {
+  top: 0;
+  right: 0;
+}
 /* Inside a host the reason editor and the Saved/error notes float below the dots instead of
    flowing inline, so opening them never reflows the story. */
 .sp-fbhost > .sp-feedback {

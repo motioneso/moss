@@ -342,7 +342,7 @@ function FeaturedTeamCard(props: {
             lead story headline carries it, set in the display face. */}
         {showNews ? (
           lead ? (
-            <>
+            <div className="sp-feat__leadwrap sp-fbhost">
               <a className="sp-feat__lead" href={lead.url} target="_blank" rel="noreferrer">
                 {lead.title}
                 {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
@@ -354,7 +354,7 @@ function FeaturedTeamCard(props: {
                   onChanged={props.onStoryChanged ?? (() => undefined)}
                 />
               ) : null}
-            </>
+            </div>
           ) : (
             // Storyless pre-game/idle card: an honest placeholder, NEVER the matchup — the Next
             // footer already carries the fixture, so echoing card.primary here is the duplication
@@ -385,7 +385,7 @@ function FeaturedTeamCard(props: {
         {secondary.length > 0 ? (
           <ul className="sp-feat__stories">
             {secondary.map((story) => (
-              <li key={story.storyRef}>
+              <li className="sp-fbhost" key={story.storyRef}>
                 <a className="sp-feat__storylink" href={story.url} target="_blank" rel="noreferrer">
                   {story.title}
                   {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
@@ -483,7 +483,7 @@ export function TickerTeam(props: {
         <div className="sp-tk__col">
           {showNews ? (
             lead ? (
-              <>
+              <div className="sp-tk__lead sp-fbhost">
                 <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
                   {lead.title}
                   {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
@@ -493,7 +493,7 @@ export function TickerTeam(props: {
                   surface={surface}
                   onChanged={props.onStoryChanged ?? (() => undefined)}
                 />
-              </>
+              </div>
             ) : (
               <span className="sp-tk__newstx sp-tk__newstx--empty">No recent news</span>
             )
@@ -522,7 +522,7 @@ export function TickerTeam(props: {
             <ul className="sp-tk__stories">
               {/* Old cached stories have no opaque reference, so their feedback menu stays hidden. */}
               {secondary.map((story) => (
-                <li key={story.storyRef}>
+                <li className="sp-fbhost" key={story.storyRef}>
                   <a className="sp-tk__storylink" href={story.url} target="_blank" rel="noreferrer">
                     {story.title}
                     {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
@@ -599,7 +599,7 @@ export function TickerLeague(props: {
         ) : null}
         <div className="sp-tk__col">
           {lead ? (
-            <>
+            <div className="sp-tk__lead sp-fbhost">
               <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
                 {lead.title}
                 {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
@@ -609,14 +609,14 @@ export function TickerLeague(props: {
                 surface={surface}
                 onChanged={props.onStoryChanged ?? (() => undefined)}
               />
-            </>
+            </div>
           ) : (
             <span className="sp-tk__newstx sp-tk__newstx--empty">No recent news</span>
           )}
           {secondary.length > 0 ? (
             <ul className="sp-tk__stories">
               {secondary.map((story) => (
-                <li key={story.storyRef}>
+                <li className="sp-fbhost" key={story.storyRef}>
                   <a className="sp-tk__storylink" href={story.url} target="_blank" rel="noreferrer">
                     {story.title}
                     {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
