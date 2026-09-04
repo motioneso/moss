@@ -2,6 +2,7 @@ import { useCallback, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Newspaper } from "lucide-react";
 import { Note } from "@moss/settings-ui";
+import { Card } from "@moss/ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
 import type {
   MossError,
@@ -195,75 +196,77 @@ export function AddSourceFlow() {
       ) : null}
 
       {candidates.length > 0 ? (
-        <div className="nw-set__candidate jds-card jds-card--sunken jds-card--pad-lg">
-          {preview?.duplicateOfSourceId ? (
-            <Note>That publication is already in your personalized sources.</Note>
-          ) : null}
-          {candidates.length > 1 ? (
-            <p className="nw-set__hint">We found more than one match — pick the right one.</p>
-          ) : null}
-          <ul className="nw-set__list" role={candidates.length > 1 ? "radiogroup" : undefined}>
-            {candidates.map(({ candidate, candidateId }) => (
-              <li key={candidateId} className="nw-set__item">
-                <div className="nw-set__item-row">
-                  {candidates.length > 1 ? (
-                    <input
-                      type="radio"
-                      name="nw-addsource-candidate"
-                      id={`nw-cand-${candidateId}`}
-                      checked={selectedCandidateId === candidateId}
-                      disabled={busy}
-                      onChange={() => setSelectedCandidateId(candidateId)}
-                    />
-                  ) : null}
-                  <div className="nw-set__identity">
-                    <span className="nw-set__item-icon" aria-hidden="true">
-                      <Newspaper size={16} />
-                    </span>
-                    {/* Candidate labels/domains are model/web-derived — always plain text. */}
-                    <label className="nw-set__item-label" htmlFor={`nw-cand-${candidateId}`}>
-                      {candidate.label}
-                    </label>
-                    <span className="nw-set__item-meta">{candidate.canonicalDomain}</span>
+        <div className="nw-set__candidate">
+          <Card sunken padding="lg">
+            {preview?.duplicateOfSourceId ? (
+              <Note>That publication is already in your personalized sources.</Note>
+            ) : null}
+            {candidates.length > 1 ? (
+              <p className="nw-set__hint">We found more than one match — pick the right one.</p>
+            ) : null}
+            <ul className="nw-set__list" role={candidates.length > 1 ? "radiogroup" : undefined}>
+              {candidates.map(({ candidate, candidateId }) => (
+                <li key={candidateId} className="nw-set__item">
+                  <div className="nw-set__item-row">
+                    {candidates.length > 1 ? (
+                      <input
+                        type="radio"
+                        name="nw-addsource-candidate"
+                        id={`nw-cand-${candidateId}`}
+                        checked={selectedCandidateId === candidateId}
+                        disabled={busy}
+                        onChange={() => setSelectedCandidateId(candidateId)}
+                      />
+                    ) : null}
+                    <div className="nw-set__identity">
+                      <span className="nw-set__item-icon" aria-hidden="true">
+                        <Newspaper size={16} />
+                      </span>
+                      {/* Candidate labels/domains are model/web-derived — always plain text. */}
+                      <label className="nw-set__item-label" htmlFor={`nw-cand-${candidateId}`}>
+                        {candidate.label}
+                      </label>
+                      <span className="nw-set__item-meta">{candidate.canonicalDomain}</span>
+                    </div>
                   </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-          {/* The ordinary Add row is always here. A publication that also offers a key
+                </li>
+              ))}
+            </ul>
+            {/* The ordinary Add row is always here. A publication that also offers a key
               connection can still be added as a plain public source, exactly as before. */}
-          <div className="nw-set__addrow">
-            <Button size="sm" disabled={busy || !selectedCandidateId} onClick={confirmSelected}>
-              {confirmMutation.isPending ? "Adding…" : "Add this source"}
-            </Button>
-            <Button variant="secondary" size="sm" disabled={busy} onClick={reset}>
-              Cancel
-            </Button>
-          </div>
-          {/* #2008: the server only puts an offer here when the preview found exactly one
+            <div className="nw-set__addrow">
+              <Button size="sm" disabled={busy || !selectedCandidateId} onClick={confirmSelected}>
+                {confirmMutation.isPending ? "Adding…" : "Add this source"}
+              </Button>
+              <Button variant="secondary" size="sm" disabled={busy} onClick={reset}>
+                Cancel
+              </Button>
+            </div>
+            {/* #2008: the server only puts an offer here when the preview found exactly one
               candidate and that candidate is unmistakably a reviewed publisher's own homepage.
               Any other preview shows the Add row alone and is never asked for a key. */}
-          {preview?.connection ? (
-            <>
-              <p className="nw-set__hint">
-                {preview.connection.publisherName} can also be connected with your own access key,
-                which brings in more of what they publish. That is optional - adding it above works
-                without one.
-              </p>
-              <ConnectPublisherForm
-                offer={preview.connection}
-                mode={{ kind: "connect" }}
-                onBusyChange={handleKeyBusyChange}
-                onDone={(message) => {
-                  setInput("");
-                  setPreview(null);
-                  setSelectedCandidateId(null);
-                  setAdded(message);
-                }}
-                onCancel={reset}
-              />
-            </>
-          ) : null}
+            {preview?.connection ? (
+              <>
+                <p className="nw-set__hint">
+                  {preview.connection.publisherName} can also be connected with your own access key,
+                  which brings in more of what they publish. That is optional - adding it above
+                  works without one.
+                </p>
+                <ConnectPublisherForm
+                  offer={preview.connection}
+                  mode={{ kind: "connect" }}
+                  onBusyChange={handleKeyBusyChange}
+                  onDone={(message) => {
+                    setInput("");
+                    setPreview(null);
+                    setSelectedCandidateId(null);
+                    setAdded(message);
+                  }}
+                  onCancel={reset}
+                />
+              </>
+            ) : null}
+          </Card>
         </div>
       ) : null}
 

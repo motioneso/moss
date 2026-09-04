@@ -907,6 +907,9 @@ importers:
       '@moss/shared':
         specifier: workspace:*
         version: link:../shared
+      '@moss/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.0(react@19.2.7)
