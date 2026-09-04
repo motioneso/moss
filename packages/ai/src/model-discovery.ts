@@ -1,4 +1,10 @@
-import type { AiModelCapability, AiModelTier, AiProviderDiscoveredModelDto } from "@moss/shared";
+import type {
+  AiCliModelListFailure,
+  AiCliModelListResult,
+  AiModelCapability,
+  AiModelTier,
+  AiProviderDiscoveredModelDto
+} from "@moss/shared";
 import type { AiAuthMethod, AiProviderKind } from "@moss/db";
 
 const CACHE_TTL_MS = 3_600_000; // 1 hour
@@ -9,63 +15,19 @@ const MODEL_DISCOVERY_FETCH_TIMEOUT_MS = 5_000;
 
 interface CacheEntry {
   readonly models: AiProviderDiscoveredModelDto[];
-  readonly fromFallback: boolean;
   readonly expiresAt: number;
 }
 
-// Static fallback — no hardcoded model IDs outside this file.
-const ANTHROPIC_STATIC_MODELS: readonly AiProviderDiscoveredModelDto[] = [
-  {
-    providerModelId: "claude-opus-4-8",
-    displayName: "Claude Opus 4.8",
-    capabilities: ["chat", "tool-use", "json", "vision", "summarization"],
-    tier: "reasoning"
-  },
-  {
-    providerModelId: "claude-sonnet-4-6",
-    displayName: "Claude",
-    capabilities: ["chat", "tool-use", "json", "vision", "summarization"],
-    tier: "interactive"
-  },
-  {
-    providerModelId: "claude-haiku-4-5-20251001",
-    displayName: "Claude Haiku 4.5",
-    capabilities: ["chat", "tool-use", "json", "summarization"],
-    tier: "economy"
-  }
-];
+/**
+ * #2208: the port that asks the cli-runner for a CLI provider's live model list (ids only). The
+ * composition root injects it over the runner socket; absent (host-dev / in-process path, unit
+ * tests) ⇒ CLI discovery reports `reason: "unavailable"` and returns no models. There is NO
+ * typed-in fallback list any more: model ids are discovered or entered by hand, never shipped.
+ */
+export type CliModelLister = (provider: AiProviderKind) => Promise<AiCliModelListResult>;
 
-// #982/#869 D7: curated static model lists for installable + loginable CLI providers. A CLI
-// provider has no HTTP `/models` endpoint to query, so discovery returns this list (marked
-// fromFallback — it's not from a live API). Reconciliation inserts these rows active; resolver
-// ordering keeps the `"default"` sentinel first for unpinned chat while concrete ids serve json and
-// explicit pins. Keeping ids here makes Codex list upkeep a one-file data change.
-//   - anthropic (claude CLI): the same concrete ids as the API fallback.
-//   - openai-compatible (codex CLI): current ids from learn.chatgpt.com/docs/models, 2026-07-12.
-//   - google (gemini CLI): current ids the pinned CLI accepts for `--model`, 2026-08-27 (#2028).
-//     These serve an explicit pin and the json/summarization routes; unpinned chat still rides the
-//     `"default"` sentinel and therefore the account's own model.
-export const CLI_STATIC_MODELS: Partial<
-  Record<AiProviderKind, readonly AiProviderDiscoveredModelDto[]>
-> = {
-  anthropic: ANTHROPIC_STATIC_MODELS,
-  "openai-compatible": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6"].map(
-    (id) => inferModel(id, "openai-compatible")!
-  ),
-  google: [
-    "gemini-3.1-pro-preview",
-    "gemini-3-pro-preview",
-    "gemini-3-flash-preview",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite"
-  ].map((id) => inferModel(id, "google")!)
-};
-
-/** #982/#869: only providers backed by curated CLI data are safe to clean-slate reconcile. */
-export function hasCliStaticModels(providerKind: AiProviderKind): boolean {
-  return CLI_STATIC_MODELS[providerKind] !== undefined;
-}
+/** Why CLI discovery returned no models. `unavailable` ⇒ no runner connection on this build. */
+export type ModelDiscoveryReason = AiCliModelListFailure | "unavailable";
 
 export interface ModelDiscoveryInput {
   readonly providerKind: AiProviderKind;
@@ -78,12 +40,30 @@ export interface ModelDiscoveryInput {
 export interface DiscoverModelsResult {
   readonly models: AiProviderDiscoveredModelDto[];
   readonly fromCache: boolean;
+  /** Always false since #2208 removed the static lists; kept so the DTO shape is unchanged. */
   readonly fromFallback: boolean;
   readonly cacheExpiresAt: number | null;
+  /**
+   * #2208: set ONLY when a CLI provider's list could not be fetched (routes surface it in plain
+   * English). Absent ⇒ the list is authoritative for this provider (an API-key provider, or a CLI
+   * provider whose vendor answered `ok`), so persistence may reconcile discovered rows against it.
+   */
+  readonly reason?: ModelDiscoveryReason;
+  /** Plain-English detail from the runner for a failed CLI list; never carries a secret. */
+  readonly message?: string;
+}
+
+export interface ModelDiscoveryServiceDeps {
+  readonly cliModelLister?: CliModelLister;
 }
 
 export class ModelDiscoveryService {
   private readonly cache = new Map<string, CacheEntry>();
+  private readonly cliModelLister: CliModelLister | undefined;
+
+  constructor(deps: ModelDiscoveryServiceDeps = {}) {
+    this.cliModelLister = deps.cliModelLister;
+  }
 
   async discoverModels(
     cacheKey: string,
@@ -95,63 +75,77 @@ export class ModelDiscoveryService {
       return {
         models: cached.models,
         fromCache: true,
-        fromFallback: cached.fromFallback,
+        fromFallback: false,
         cacheExpiresAt: cached.expiresAt
       };
     }
 
-    const { models, fromFallback } = await fetchModels(input);
-    if (!fromFallback) {
-      this.cache.set(cacheKey, { models, fromFallback, expiresAt: now + CACHE_TTL_MS });
+    const fetched =
+      input.authMethod === "cli"
+        ? await this.fetchCliModels(input.providerKind)
+        : { models: await fetchApiKeyModels(input) };
+    if (fetched.reason !== undefined) {
+      return {
+        models: [],
+        fromCache: false,
+        fromFallback: false,
+        cacheExpiresAt: null,
+        reason: fetched.reason,
+        ...(fetched.message !== undefined ? { message: fetched.message } : {})
+      };
     }
+    this.cache.set(cacheKey, { models: fetched.models, expiresAt: now + CACHE_TTL_MS });
     return {
-      models,
+      models: fetched.models,
       fromCache: false,
-      fromFallback,
-      cacheExpiresAt: fromFallback ? null : now + CACHE_TTL_MS
+      fromFallback: false,
+      cacheExpiresAt: now + CACHE_TTL_MS
     };
   }
 
   invalidate(actorUserId: string, providerId: string): void {
     this.cache.delete(`${actorUserId}:${providerId}`);
   }
+
+  /** #2208: CLI providers have no HTTP `/models`; the runner asks the vendor with the stored login. */
+  private async fetchCliModels(providerKind: AiProviderKind): Promise<{
+    models: AiProviderDiscoveredModelDto[];
+    reason?: ModelDiscoveryReason;
+    message?: string;
+  }> {
+    if (!this.cliModelLister) return { models: [], reason: "unavailable" };
+    const result = await this.cliModelLister(providerKind);
+    if (result.status !== "ok") {
+      return {
+        models: [],
+        reason: result.status,
+        ...(result.message !== undefined ? { message: result.message } : {})
+      };
+    }
+    const models = result.models
+      .map((model) => inferModel(model.id, providerKind))
+      .filter((model): model is AiProviderDiscoveredModelDto => model !== null);
+    return { models };
+  }
 }
 
-async function fetchModels(
+/** API-key providers: a failed or credential-less discovery returns [] (no invented ids, #2208). */
+async function fetchApiKeyModels(
   input: ModelDiscoveryInput
-): Promise<{ models: AiProviderDiscoveredModelDto[]; fromFallback: boolean }> {
-  if (input.authMethod === "cli") {
-    // #870/H5: no live endpoint — return the curated static list for this CLI kind (or none).
-    const statics = CLI_STATIC_MODELS[input.providerKind];
-    return statics
-      ? { models: statics.slice(), fromFallback: true }
-      : { models: [], fromFallback: false };
-  }
-
+): Promise<AiProviderDiscoveredModelDto[]> {
   const apiKey = readApiKey(input.credential);
-  if (!apiKey) {
-    return input.providerKind === "anthropic"
-      ? { models: ANTHROPIC_STATIC_MODELS.slice(), fromFallback: true }
-      : { models: [], fromFallback: false };
-  }
+  if (!apiKey) return [];
 
   try {
     const response = await doFetch(input, apiKey);
-    if (!response.ok) {
-      return input.providerKind === "anthropic"
-        ? { models: ANTHROPIC_STATIC_MODELS.slice(), fromFallback: true }
-        : { models: [], fromFallback: false };
-    }
+    if (!response.ok) return [];
     // #874 HIGH-2: inferModel returns null for pure speech-to-text models (dropped from assistant
     // discovery); filter them out so only assistant-bindable models reach the admin UI.
-    const models = extractModelIds(input.providerKind, await response.json())
+    return extractModelIds(input.providerKind, await response.json())
       .map((id) => inferModel(id, input.providerKind))
       .filter((model): model is AiProviderDiscoveredModelDto => model !== null);
-    return { models, fromFallback: false };
   } catch {
-    return input.providerKind === "anthropic"
-      ? { models: ANTHROPIC_STATIC_MODELS.slice(), fromFallback: true }
-      : { models: [], fromFallback: false };
+    return [];
   }
 }
 
@@ -215,14 +209,15 @@ function extractModelIds(providerKind: AiProviderKind, json: unknown): string[] 
 function inferTierFromModelId(providerKind: AiProviderKind, modelId: string): AiModelTier {
   const id = modelId.toLowerCase();
   if (providerKind === "anthropic") {
-    if (id.includes("opus")) return "reasoning";
+    // #2208: Fable is the Mythos-class tier above Opus — the same "slow, careful" slot.
+    if (id.includes("opus") || id.includes("fable")) return "reasoning";
     if (id.includes("sonnet")) return "interactive";
     if (id.includes("haiku")) return "economy";
     return "interactive";
   }
   if (providerKind === "openai-compatible") {
-    // #982/#869 D7: Codex's published suffixes express service tier; keep this inference beside
-    // the curated data so feature routing remains provider-agnostic.
+    // #982/#869 D7: Codex's published suffixes express service tier. Heuristics on the id are
+    // fine (#2208); typed-in lists of ids are not.
     if (id.includes("-sol")) return "reasoning";
     if (id.includes("-terra")) return "interactive";
     if (id.includes("-luna")) return "economy";

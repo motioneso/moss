@@ -683,22 +683,13 @@ describe("AI provider foundation", () => {
     expect(provider.hasCredential).toBe(false);
     // cliAvailable is a boolean (depends on host having 'claude' binary)
     expect(typeof provider.cliAvailable).toBe("boolean");
+    // #2208: no typed-in model list any more. This server has no cli-runner socket, so the live
+    // list is `unavailable` and creating a CLI provider must invent NO model rows.
     const cliModels = await dataContext.withDataContext(userAContext(), (db) =>
       repository.listModels(db)
     );
-    expect(
-      cliModels
-        .filter((model) => model.provider_config_id === provider.id)
-        .map((model) => [model.provider_model_id, model.status])
-    ).toEqual(
-      expect.arrayContaining([
-        ["claude-opus-4-8", "active"],
-        ["claude-sonnet-4-6", "active"],
-        ["claude-haiku-4-5-20251001", "active"]
-      ])
-    );
+    expect(cliModels.filter((model) => model.provider_config_id === provider.id)).toEqual([]);
 
-    // #982/#869 D7: Codex CLI create uses curated statics instead of remaining sentinel-only.
     const codexResponse = await server.inject({
       method: "POST",
       url: "/api/ai/providers",
@@ -713,11 +704,7 @@ describe("AI provider foundation", () => {
     const codexModels = await dataContext.withDataContext(userAContext(), (db) =>
       repository.listModels(db)
     );
-    expect(
-      codexModels
-        .filter((model) => model.provider_config_id === codexId)
-        .map((model) => model.provider_model_id)
-    ).toEqual(expect.arrayContaining(["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]));
+    expect(codexModels.filter((model) => model.provider_config_id === codexId)).toEqual([]);
 
     // Verify api_key default
     const apiKeyResponse = await server.inject({

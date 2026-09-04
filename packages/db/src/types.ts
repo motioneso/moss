@@ -259,6 +259,8 @@ export type AiProviderKind = "openai-compatible" | "anthropic" | "google" | "oll
 export type AiProviderStatus = "active" | "error" | "disabled" | "revoked";
 export type AiModelStatus = "active" | "disabled";
 export type AiModelTier = "reasoning" | "interactive" | "economy";
+// #2208: who created a model row. Discovery may prune only its own ('discovered') rows.
+export type AiConfiguredModelOrigin = "discovered" | "manual";
 export type AiAssistantActionRisk = "write" | "outbound" | "destructive";
 export type AiAssistantActionStatus = "pending" | "confirmed" | "rejected" | "cancelled";
 export type ChatMessageRole = "user" | "assistant";
@@ -501,6 +503,11 @@ export interface AiConfiguredModelsTable {
   status: AiModelStatus;
   tier: AiModelTier;
   allow_user_override: ColumnType<boolean, boolean | undefined, boolean>;
+  origin: ColumnType<
+    AiConfiguredModelOrigin,
+    AiConfiguredModelOrigin | undefined,
+    AiConfiguredModelOrigin
+  >;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }

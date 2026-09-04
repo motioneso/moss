@@ -219,6 +219,16 @@
 .prov__synced svg {
   color: var(--accent-fg);
 }
+/* #2208 follow-up: "* Manually added" under the list, and the collapsible header button. */
+.prov__manualnote {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.prov__modelstoggle {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+}
 .prov__discover-warn {
   font-size: 12px;
   color: var(--warn-fg);
@@ -806,14 +816,16 @@
   color: var(--ink-3);
 }
 .mdl__edit-btn,
-.mdl__toggle-btn {
+.mdl__toggle-btn,
+.mdl__delete-btn {
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--ink-3);
 }
 .mdl__edit-btn:hover,
-.mdl__toggle-btn:hover {
+.mdl__toggle-btn:hover,
+.mdl__delete-btn:hover:not(:disabled) {
   background: var(--surface-2);
   color: var(--text-muted);
 }

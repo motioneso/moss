@@ -376,7 +376,7 @@ import {
 } from "./chat-multiplexer.js";
 import { createNewsCredentialCipherPort } from "./news-credential-cipher.js";
 import { buildOnboardingInstall } from "./onboarding-install.js";
-import { buildOnboardingLogin } from "./onboarding-login.js";
+import { buildCliModelLister, buildOnboardingLogin } from "./onboarding-login.js";
 
 // Declared here (not `apps/api/src/server.ts`, which sets it via an onRequest hook)
 // because module-registry is the composition root every consumer of the field
@@ -609,6 +609,12 @@ export interface BuiltInRouteDependencies {
    * routes fail closed (500).
    */
   readonly onboardingLogin?: OnboardingLoginDependencies;
+  /**
+   * #2208 — the ONE model-discovery service for the ai module's routes, built inside
+   * registerBuiltInApiRoutes with the cli-runner model lister on the socket path. Absent (tests,
+   * host-dev) ⇒ the ai routes build a lister-less service and CLI discovery reports `unavailable`.
+   */
+  readonly aiModelDiscovery?: ModelDiscoveryService;
   /**
    * #917 — boot-time external-module discovery snapshot, built by the API composition root
    * (apps/api discoverExternalModules) and forwarded to the settings module, where the Task 9
@@ -1587,6 +1593,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         resolveActiveModules: deps.resolveActiveModules,
+        // #2208: CLI providers discover models through the cli-runner; share the wired service.
+        ...(deps.aiModelDiscovery ? { modelDiscovery: deps.aiModelDiscovery } : {}),
         // #915 D6: installed set, not actor-filtered enablement.
         listInstalledModuleIds: () => deps.listModuleManifests().map((manifest) => manifest.id),
         tasksCompatibility,
@@ -2767,6 +2775,17 @@ export function registerBuiltInApiRoutes(
   // cli-runner container; no in-process login path). On host-dev / in-process this is undefined ⇒ the
   // login routes fail closed (500). The admin-gated routes are then the SOLE login triggers; #347 stays
   // BLOCKING — login is single-active-user (the §L.6.1 unified exclusivity gate is NOT bypassed).
+  // #2208: CLI providers have no HTTP `/models`; discovery asks the cli-runner over the SAME lazy
+  // socket connection the login seam uses, and the runner asks the vendor with the stored login
+  // (ids only cross the socket). One service instance serves login-ready AND the admin routes so
+  // the 1 h cache is shared. Off the socket path the lister is undefined ⇒ `reason: "unavailable"`.
+  const aiModelDiscovery = new ModelDiscoveryService({
+    cliModelLister: buildCliModelLister({
+      enabled: socketConfigured,
+      getConnection: getRpcConnection
+    })
+  });
+
   const onboardingLogin: OnboardingLoginDependencies | undefined = buildOnboardingLogin({
     enabled: socketConfigured,
     getConnection: getRpcConnection,
@@ -2777,7 +2796,7 @@ export function registerBuiltInApiRoutes(
       repository: new AiRepository(),
       cipher: createAiSecretCipher(),
       // #982/#869 D2: login-ready uses same discovery service semantics as admin connect paths.
-      modelDiscovery: new ModelDiscoveryService()
+      modelDiscovery: aiModelDiscovery
     }),
     logger: { warn: (obj, msg) => server.log.warn(obj, msg) }
   });
@@ -2862,6 +2881,7 @@ export function registerBuiltInApiRoutes(
     onboardingProbes,
     onboardingInstall,
     onboardingLogin,
+    aiModelDiscovery,
     // Surface a setter so the chat runtime (constructed inside registerChatRoutes) can publish the ONE
     // RPC connection it owns back to the probes + the boot lifecycle below. On the RPC path the runtime
     // wires reconcile + the idle reaper onto this connection; here we only need the handle to route

@@ -34,6 +34,7 @@ import {
   type RpcLaunchParams,
   type RpcLaunchResult,
   type RpcKillParams,
+  type RpcListProviderModelsResult,
   type RpcPollLoginResult,
   type RpcProbeProviderResult,
   type RpcProviderKind,
@@ -51,6 +52,7 @@ import type { Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
 import { Mutex } from "./mutex.js";
 import type { InstallService } from "./install-service.js";
 import { LoginBadRequestError, type LoginService } from "./login-service.js";
+import { createCodexVersionReader, listProviderModels } from "./model-list-adapters.js";
 import { ensureProviderLaunchReady } from "./provider-first-run.js";
 import { providerTokenPath, readProviderCredentialEnv } from "./provider-token-store.js";
 import { allocateUidSlot, migrateNeutralDir } from "./uid-allocator.js";
@@ -104,6 +106,11 @@ export interface EngineHostDeps {
    * volume-disjoint and lock-only). Absent ⇒ the login verbs report unavailable on this build.
    */
   readonly loginService?: LoginService;
+  /**
+   * #2208 `listProviderModels`: the vendor HTTP client the model-list adapters call. Absent ⇒
+   * `globalThis.fetch`. Injected by tests so no unit test ever reaches a vendor.
+   */
+  readonly fetch?: typeof globalThis.fetch;
   /**
    * #1554 Decision 3 — the RPC topology's warm persistent-runtime pool + a live reader of
    * `chat.persistent_idle_reap_minutes`, consulted ONLY by {@link CliChatEngineHost.startIdleReapTimer}
@@ -674,6 +681,28 @@ export class CliChatEngineHost {
       homeBase: this.deps.homeBase
     });
     return { status: result.status, message: result.message };
+  }
+
+  // ─── listProviderModels (#2208) — non-session; credential never crosses the socket ───
+
+  /** Built on first use: `codex --version` is read at most once per runner process. */
+  private readCodexVersion: (() => Promise<string | undefined>) | undefined;
+
+  /**
+   * #2208: ask the provider's vendor for its live model list using the credential the runner
+   * already holds on the cli-auth volume. Only ids cross the socket; a missing credential is
+   * `not_logged_in`, a vendor/transport failure is a plain `error`, gemini is `unsupported`.
+   * Not gated by the §L.6.1 exclusivity mutex: it reads a file and makes one HTTPS call, never
+   * touching tmux or the CLI's own state.
+   */
+  async listProviderModels(provider: RpcProviderKind): Promise<RpcListProviderModelsResult> {
+    this.readCodexVersion ??= createCodexVersionReader(this.deps.io);
+    return listProviderModels(provider, {
+      homeBase: this.deps.homeBase,
+      fetch: this.deps.fetch,
+      io: this.deps.io,
+      codexVersion: this.readCodexVersion
+    });
   }
 
   // ─── installProvider (§A.2.4) — delegates to the install service ──────────────

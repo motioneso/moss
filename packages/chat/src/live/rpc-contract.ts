@@ -15,7 +15,7 @@
  * malformed frame and the receiver closes the connection (§3.7).
  */
 
-import type { AiProviderExecutionMode } from "@moss/shared";
+import type { AiCliModelListResult, AiProviderExecutionMode } from "@moss/shared";
 
 import type { TranscriptRecord, ChatRecordKind } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
@@ -163,6 +163,7 @@ export type RpcMethod =
   | "pollLogin" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
   | "submitLoginToken" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
   | "cancelLogin" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
+  | "listProviderModels" // non-session (#2208 live model list from the provider's vendor — ADDITIVE)
   // #1059 owner terminal — additive, never used by the chat runtime
   | "openTerminal"
   | "writeTerminal"
@@ -417,6 +418,17 @@ export interface RpcProbeProviderResult {
   readonly status: "ready" | "needs_login" | "not_installed" | "multiplexer_unavailable" | "error";
   readonly message?: string;
 }
+
+/**
+ * params for method "listProviderModels" (#2208) — instance-wide query, no sessionKey. The runner
+ * reads the provider's stored login credential from the cli-auth volume and asks the vendor for
+ * its live model list; ONLY model ids cross the socket (never the credential, never in `message`).
+ */
+export interface RpcListProviderModelsParams {
+  readonly provider: RpcProviderKind;
+}
+/** result for method "listProviderModels" (#2208) — the shared `AiCliModelListResult` verbatim. */
+export type RpcListProviderModelsResult = AiCliModelListResult;
 
 // #1059 terminal method params/results (interface-pair pattern, mirrors RpcSubmit*). Additive
 // only — no existing method's request/response shape changes.

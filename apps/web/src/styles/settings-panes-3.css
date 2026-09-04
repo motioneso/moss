@@ -557,7 +557,8 @@ button.theme-swatch {
 
 /* ---- Model line: edit + disable/enable buttons (B513) ---- */
 .mdl__edit-btn,
-.mdl__toggle-btn {
+.mdl__toggle-btn,
+.mdl__delete-btn {
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -568,6 +569,10 @@ button.theme-swatch {
   transition:
     background 120ms,
     color 120ms;
+}
+.mdl__delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
 }
 .mdl--disabled .mdl__id {
   text-decoration: line-through;
