@@ -493,6 +493,9 @@ function RailUserMenu(props: {
           <span className="jds-usermenu__nm">{name}</span>
           <span className="jds-usermenu__sub">{props.me.user.email}</span>
         </span>
+        {!open && props.unreadCount > 0 ? (
+          <span className="jds-badge-count">{formatUnreadCount(props.unreadCount)}</span>
+        ) : null}
         <span className="jds-usermenu__chev">
           <ChevronUp size={16} aria-hidden="true" />
         </span>
