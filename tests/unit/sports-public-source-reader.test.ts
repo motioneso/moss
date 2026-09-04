@@ -13,7 +13,8 @@ import {
   SPORTS_PHOTO_DEADLINE_MARGIN_MS,
   SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS,
   SportsPhotoStore,
-  type EnsurePhotoResult
+  type EnsurePhotoResult,
+  type PhotoHostSlot
 } from "../../packages/sports/src/source/photo-store.js";
 import { SportsPublicSourceReader } from "../../packages/sports/src/source/public-source-reader.js";
 import { validateSportsSourceRecipe } from "../../packages/sports/src/source/recipe.js";
@@ -172,6 +173,10 @@ class PhotoStoreDouble {
   swept: ReadonlySet<string> | null = null;
   /** Set to make every download attempt fail, as a permanently broken image would. */
   alwaysFails = false;
+  /** Every publisher host a slot was actually taken for, proving the limiter is wired in. */
+  readonly slotHosts: string[] = [];
+  /** Called before each attempt, so a test can make one source's photo work burn the clock. */
+  beforeEnsure: ((sourceId: string) => void) | null = null;
 
   async ensure(
     _access: AccessContext,
@@ -180,11 +185,20 @@ class PhotoStoreDouble {
     options: {
       readonly signal?: AbortSignal;
       readonly remainingMs?: () => number;
+      readonly hostSlot?: PhotoHostSlot;
     } = {}
   ): Promise<EnsurePhotoResult> {
     // Mirrors the real store: the safety margin is applied to the time left at the moment the
     // download would start, and the download is capped at the store's own limit.
     this.attempts += 1;
+    this.beforeEnsure?.(sourceId);
+    if (options.hostSlot) {
+      const host = new URL(photoUrl).hostname;
+      if (await options.hostSlot.acquire(host)) {
+        this.slotHosts.push(host);
+        options.hostSlot.release(host);
+      }
+    }
     const remaining = options.remainingMs?.() ?? SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS;
     if (remaining <= SPORTS_PHOTO_DEADLINE_MARGIN_MS) return { outcome: "skipped" };
     const allowed = Math.min(SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS, remaining);
@@ -957,6 +971,72 @@ describe("the photo pass (#2237)", () => {
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }
+  });
+
+  it("still returns every source's headlines when other sources have slow photo work", async () => {
+    const slow = ["s1", "s2", "s3", "s4"];
+    const sources = [...slow, "s5"].map((id) =>
+      runtimeSource({
+        id,
+        recipe: null,
+        feedUrl: `https://feeds.publisher.example/${id}.xml`,
+        hosts: ["feeds.publisher.example"]
+      })
+    );
+    let clock = Date.parse("2026-09-04T10:00:00.000Z");
+    const deadlineAt = clock + REFRESH_DEADLINE_MS;
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      // A publisher cannot answer after the refresh has run out of time, so a source that only
+      // gets its turn late comes back with nothing.
+      if (clock >= deadlineAt) return { ok: false, reason: "timeout" };
+      const id = url.slice(url.lastIndexOf("/") + 1, -".xml".length);
+      return success(
+        url,
+        feedBody(
+          `<item><guid>${id}-1</guid><title>Story ${id}</title>` +
+            `<link>https://publisher.example/${id}</link>` +
+            `<media:content url="https://publisher.example/${id}.jpg" medium="image"/></item>`
+        ),
+        "text/plain"
+      );
+    });
+    const photos = new PhotoStoreDouble();
+    // Four seconds of photo work each: enough that four sources exhaust the whole refresh.
+    photos.beforeEnsure = (sourceId) => {
+      if (slow.includes(sourceId)) clock += 4_000;
+    };
+    const { reader } = makeReader(sources, fetch, { photos, now: () => clock });
+
+    const result = await reader.refresh(actor);
+
+    expect([...new Set(result.headlines.map((headline) => headline.sourceId))].sort()).toEqual([
+      "s1",
+      "s2",
+      "s3",
+      "s4",
+      "s5"
+    ]);
+  });
+
+  it("takes a publisher slot for the photo download, not just for the article page", async () => {
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      return success(
+        url,
+        feedBody(
+          `<item><guid>feed-1</guid><title>Story</title><link>https://publisher.example/story</link>` +
+            `<media:content url="https://images.publisher.example/story.jpg" medium="image"/></item>`
+        ),
+        "text/plain"
+      );
+    });
+    const photos = new PhotoStoreDouble();
+    const { reader } = makeReader([feedSource()], fetch, { photos });
+
+    await reader.refresh(actor);
+
+    expect(photos.slotHosts).toEqual(["images.publisher.example"]);
   });
 
   it("does not download the same broken photo again on the next refresh", async () => {

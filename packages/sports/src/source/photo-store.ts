@@ -101,6 +101,17 @@ const SKIPPED = { outcome: "skipped" } as const;
 /** Told the key of every copy the store removes, so callers can drop anything they cached. */
 export type PhotoRemovalListener = (key: string) => void;
 
+/**
+ * A per-publisher slot the download must hold. Supplied by the reader from the same limiter its
+ * article page fetches use, so a photo download counts against the same two-in-flight-per-host
+ * budget instead of opening a parallel one. `acquire` resolves false when the slot never came
+ * free in time.
+ */
+export interface PhotoHostSlot {
+  acquire(host: string): Promise<boolean>;
+  release(host: string): void;
+}
+
 function parseSidecar(raw: string): PhotoSidecar | null {
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -166,7 +177,11 @@ export class SportsPhotoStore {
     access: AccessContext,
     sourceId: string,
     photoUrl: string,
-    opts: { readonly signal?: AbortSignal; readonly remainingMs?: () => number } = {}
+    opts: {
+      readonly signal?: AbortSignal;
+      readonly remainingMs?: () => number;
+      readonly hostSlot?: PhotoHostSlot;
+    } = {}
   ): Promise<EnsurePhotoResult> {
     if (opts.signal?.aborted) return SKIPPED;
     const key = photoKey(sourceId, photoUrl);
@@ -186,23 +201,42 @@ export class SportsPhotoStore {
           photo: { key, width: existing.width, height: existing.height, bytes: existing.bytes }
         };
       }
-      // Measured here, after the reads above, so the number reflects the time that is actually
-      // left when the request goes out rather than when this method was entered.
-      const remaining = opts.remainingMs?.() ?? SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS;
       if (opts.signal?.aborted) return SKIPPED;
-      if (remaining <= SPORTS_PHOTO_DEADLINE_MARGIN_MS) return SKIPPED;
-      const timeoutMs = Math.min(SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS, remaining);
-      // The budget is enforced here, not merely passed down: a host that accepts the connection
-      // and then says nothing would otherwise hold the whole refresh open for as long as it liked.
-      const fetched = await Promise.race([
-        this.dependencies.fetchBytes(photoUrl, {
-          allowedHosts: [host],
-          maxBytes: SPORTS_PHOTO_MAX_DOWNLOAD_BYTES,
-          rejectOversizedResponses: true,
-          timeoutMs
-        }),
-        this.delay(timeoutMs).then(() => ({ ok: false, reason: "timeout" }) as const)
-      ]);
+      // Nothing is worth waiting for a publisher slot if the refresh is already inside its margin.
+      if (
+        (opts.remainingMs?.() ?? SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS) <=
+        SPORTS_PHOTO_DEADLINE_MARGIN_MS
+      ) {
+        return SKIPPED;
+      }
+      if (opts.hostSlot && !(await opts.hostSlot.acquire(host))) return SKIPPED;
+      let fetched: Awaited<ReturnType<SportsIconFetchPort>>;
+      let timeoutMs: number;
+      try {
+        // Re-measured after the wait for the slot, so the number reflects the time that is
+        // actually left at the moment the request goes out. Waiting behind another download on
+        // the same publisher can consume most of what was left.
+        const remaining = opts.remainingMs?.() ?? SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS;
+        if (opts.signal?.aborted) return SKIPPED;
+        if (remaining <= SPORTS_PHOTO_DEADLINE_MARGIN_MS) return SKIPPED;
+        timeoutMs = Math.min(SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS, remaining);
+        // The budget is enforced here, not merely passed down: a host that accepts the connection
+        // and then says nothing would otherwise hold the whole refresh open for as long as it
+        // liked.
+        fetched = await Promise.race([
+          this.dependencies.fetchBytes(photoUrl, {
+            allowedHosts: [host],
+            maxBytes: SPORTS_PHOTO_MAX_DOWNLOAD_BYTES,
+            rejectOversizedResponses: true,
+            timeoutMs
+          }),
+          this.delay(timeoutMs).then(() => ({ ok: false, reason: "timeout" }) as const)
+        ]);
+      } finally {
+        // Released before the decode and the write, which are local work and must not keep another
+        // story waiting on this publisher.
+        opts.hostSlot?.release(host);
+      }
       if (opts.signal?.aborted) return SKIPPED;
       if (!fetched.ok) {
         // A timeout under a budget shortened by the refresh deadline is the deadline's doing, not
@@ -253,18 +287,24 @@ export class SportsPhotoStore {
         height: stored.height,
         bytes: stored.bytes
       };
-      await writeVaultFileBytes(ctx, webpPath(key), encoded.data);
+      // The sidecar goes first on purpose. Every cleanup rule finds a copy by its sidecar, so an
+      // image written without one would be invisible to the caps and to the sweep and would sit
+      // there forever. In this order a half-written copy is a sidecar with no image, which the
+      // caps count, the sweep removes, and `ensure` already treats as no copy at all.
       await writeVaultFile(ctx, sidecarPath(key), JSON.stringify(sidecar));
+      try {
+        await writeVaultFileBytes(ctx, webpPath(key), encoded.data);
+      } catch {
+        await this.removeCopy(ctx, key);
+        return UNUSABLE;
+      }
       await this.trimToCaps(ctx);
       return { outcome: "stored" as const, photo: stored };
     });
   }
 
   /** Reads a stored copy and stamps its last-served time, which is what retention measures. */
-  async read(
-    access: AccessContext,
-    key: string
-  ): Promise<{ bytes: Buffer; etag: string } | null> {
+  async read(access: AccessContext, key: string): Promise<{ bytes: Buffer; etag: string } | null> {
     if (!KEY_RE.test(key)) return null;
     return this.dependencies.vault.withVaultContext(access, async (ctx) => {
       let bytes: Buffer;
@@ -314,10 +354,7 @@ export class SportsPhotoStore {
   }
 
   /** Removes copies past retention, then trims to the per-owner caps (spec decision 4). */
-  async sweep(
-    access: AccessContext,
-    keepKeys: ReadonlySet<string>
-  ): Promise<{ removed: number }> {
+  async sweep(access: AccessContext, keepKeys: ReadonlySet<string>): Promise<{ removed: number }> {
     return this.dependencies.vault.withVaultContext(access, async (ctx) => {
       const entries = await this.listCopies(ctx);
       const cutoff = this.now().getTime() - this.limits.retentionMs;

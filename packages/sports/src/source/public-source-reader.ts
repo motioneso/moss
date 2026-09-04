@@ -15,6 +15,7 @@ import {
 import {
   SPORTS_PHOTO_DEADLINE_MARGIN_MS,
   type EnsurePhotoResult,
+  type PhotoHostSlot,
   type SportsPhotoStore,
   type StoredPhoto
 } from "./photo-store.js";
@@ -415,10 +416,7 @@ export class SportsPublicSourceReader {
     try {
       // Waiting for the slot can itself consume most of what was left, so the deadline margin is
       // checked again here rather than only before the wait.
-      if (
-        context.signal?.aborted ||
-        this.now() + PHOTO_DEADLINE_MARGIN_MS >= context.deadline
-      ) {
+      if (context.signal?.aborted || this.now() + PHOTO_DEADLINE_MARGIN_MS >= context.deadline) {
         return null;
       }
       const response = await this.dependencies.fetch(articleUrl, {
@@ -467,11 +465,19 @@ export class SportsPublicSourceReader {
     pair: RequestAssignment,
     items: readonly ExtractedHeadline[],
     deadline: number,
+    domainLimiter: DomainConcurrencyLimiter,
     signal?: AbortSignal
   ): Promise<Map<string, StoredPhoto>> {
     const stored = new Map<string, StoredPhoto>();
     const photos = this.dependencies.photos;
     if (!photos) return stored;
+    // The same limiter the article page fetches use, so a publisher never sees more than two of
+    // our requests at once whichever kind of request they are.
+    const hostSlot: PhotoHostSlot = {
+      acquire: async (host) =>
+        (await domainLimiter.acquireAll([host], deadline, this.now, signal)) !== null,
+      release: (host) => domainLimiter.release(host.toLowerCase())
+    };
     for (const item of items) {
       // Past the deadline every remaining story is certain to be skipped, and each call still
       // does folder and file work before reaching the store's own check, so stop here instead.
@@ -487,7 +493,8 @@ export class SportsPublicSourceReader {
       try {
         result = await photos.ensure(accessContext, pair.source.id, item.photoUrl, {
           ...(signal ? { signal } : {}),
-          remainingMs: () => deadline - this.now()
+          remainingMs: () => deadline - this.now(),
+          hostSlot
         });
       } catch {
         result = { outcome: "unusable" };
@@ -655,18 +662,56 @@ export class SportsPublicSourceReader {
     const headlines: SportsPublicSourceHeadline[] = [];
     let requestCount = 0;
     const deadline = this.now() + REFRESH_DEADLINE_MS;
-    const pending = [...groups.values()];
-    const running = new Set<Promise<void>>();
     const domainLimiter = new DomainConcurrencyLimiter();
     const pageBudget = new Map<string, number>();
     const keptPhotoKeys = new Set<string>();
+    /**
+     * The photo hunt is deliberately held back until every source has its headlines. Sharing one
+     * four-at-a-time budget between the two meant a source whose photos were slow could hold a
+     * slot long enough for an unrelated healthy source never to be fetched at all, which turned a
+     * photo problem into missing headlines for somebody else.
+     */
+    const photoPhase: Array<{
+      readonly group: RequestGroup;
+      readonly outcome: RequestOutcome;
+      readonly feedBody: string | null;
+      /** A cache hit that was already photo-hunted and cached: do neither again. */
+      readonly reuseCached: boolean;
+    }> = [];
+
+    const runAll = async (tasks: ReadonlyArray<() => Promise<void>>): Promise<void> => {
+      const queue = [...tasks];
+      const running = new Set<Promise<void>>();
+      while (queue.length > 0 || running.size > 0) {
+        let scheduled = false;
+        while (running.size < MAX_CONCURRENCY) {
+          const task = queue.shift();
+          if (!task) break;
+          const promise = task().finally(() => {
+            running.delete(promise);
+          });
+          running.add(promise);
+          scheduled = true;
+        }
+        if (running.size > 0 && (!scheduled || running.size >= MAX_CONCURRENCY)) {
+          await Promise.race(running);
+        }
+      }
+    };
 
     const pushHeadlines = async (
       pair: RequestAssignment,
       items: readonly ExtractedHeadline[],
       checkedAt: Date | null
     ): Promise<void> => {
-      const stored = await this.storePhotos(accessContext, pair, items, deadline, options.signal);
+      const stored = await this.storePhotos(
+        accessContext,
+        pair,
+        items,
+        deadline,
+        domainLimiter,
+        options.signal
+      );
       for (const copy of stored.values()) keptPhotoKeys.add(copy.key);
       headlines.push(...publicHeadlines(pair, items, checkedAt, stored));
     };
@@ -676,9 +721,19 @@ export class SportsPublicSourceReader {
         ? undefined
         : this.cache.get<readonly ExtractedHeadline[]>(group.identity, this.now());
       if (cacheHit?.fresh) {
-        for (const pair of group.assignments) {
-          await pushHeadlines(pair, cacheHit.value, null);
-        }
+        photoPhase.push({
+          group,
+          outcome: {
+            items: cacheHit.value,
+            state: "healthy",
+            reason: null,
+            message: null,
+            checkedAt: null,
+            fromCache: true
+          },
+          feedBody: null,
+          reuseCached: true
+        });
         return;
       }
       let budgetDenied = false;
@@ -850,61 +905,54 @@ export class SportsPublicSourceReader {
           )
         };
       }
-      if (outcome.state === "healthy" && this.dependencies.photos) {
-        outcome = {
-          ...outcome,
-          items: await this.attachPhotoUrls(
-            group,
-            outcome.items,
-            group.kind === "feed" && response.ok ? response.body : null,
-            { deadline, signal: options.signal, domainLimiter, pageBudget }
-          )
-        };
-      }
-      if (outcome.state === "healthy") {
+      if (outcome.state !== "healthy") degraded = true;
+      photoPhase.push({
+        group,
+        outcome,
+        feedBody: group.kind === "feed" && response.ok ? response.body : null,
+        reuseCached: false
+      });
+    };
+
+    const finish = async (entry: (typeof photoPhase)[number]): Promise<void> => {
+      let items = entry.outcome.items;
+      if (!entry.reuseCached && entry.outcome.state === "healthy") {
+        if (this.dependencies.photos) {
+          items = await this.attachPhotoUrls(entry.group, items, entry.feedBody, {
+            deadline,
+            signal: options.signal,
+            domainLimiter,
+            pageBudget
+          });
+        }
         const cachedAt = this.now();
         this.cache.set(
-          group.identity,
-          outcome.items,
+          entry.group.identity,
+          items,
           cachedAt + HEADLINE_TTL_MS,
           cachedAt + HEADLINE_TTL_MS + DEFAULT_STALE_RETENTION_MS
         );
-      } else {
-        degraded = true;
       }
-      for (const pair of group.assignments) {
-        await pushHeadlines(pair, outcome.items, outcome.checkedAt);
-        if (!outcome.fromCache) {
+      for (const pair of entry.group.assignments) {
+        await pushHeadlines(pair, items, entry.outcome.checkedAt);
+        if (!entry.outcome.fromCache) {
           results.push({
             sourceId: pair.source.id,
             assignmentId: pair.assignment.id,
             runtimeFingerprint: pair.source.runtimeFingerprint,
             targetUrl: pair.assignment.targetUrl,
             targetParameters: pair.assignment.targetParameters,
-            healthState: outcome.state,
-            healthReasonCode: outcome.reason,
-            healthMessage: outcome.message,
-            checkedAt: outcome.checkedAt
+            healthState: entry.outcome.state,
+            healthReasonCode: entry.outcome.reason,
+            healthMessage: entry.outcome.message,
+            checkedAt: entry.outcome.checkedAt
           });
         }
       }
     };
 
-    while (pending.length > 0 || running.size > 0) {
-      let scheduled = false;
-      while (running.size < MAX_CONCURRENCY) {
-        const group = pending.shift();
-        if (!group) break;
-        const promise = run(group).finally(() => {
-          running.delete(promise);
-        });
-        running.add(promise);
-        scheduled = true;
-      }
-      if (running.size > 0 && (!scheduled || running.size >= MAX_CONCURRENCY)) {
-        await Promise.race(running);
-      }
-    }
+    await runAll([...groups.values()].map((group) => () => run(group)));
+    await runAll(photoPhase.map((entry) => () => finish(entry)));
 
     if (this.dependencies.photos) {
       try {

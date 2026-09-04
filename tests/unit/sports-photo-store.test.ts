@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -226,10 +226,7 @@ describe("sports photo store (#2237)", () => {
 
   it("rejects an oversized body and writes nothing to the folder", async () => {
     const url = "https://example.com/huge.jpg";
-    const oversized = Buffer.concat([
-      await jpeg(400, 300),
-      Buffer.alloc(3 * 1024 * 1024, 0x20)
-    ]);
+    const oversized = Buffer.concat([await jpeg(400, 300), Buffer.alloc(3 * 1024 * 1024, 0x20)]);
     const { port } = fetchPortReturning(new Map([[url, oversized]]));
     const store = new SportsPhotoStore({ vault, fetchBytes: port });
 
@@ -284,6 +281,107 @@ describe("sports photo store (#2237)", () => {
 
     expect(hurried).toEqual({ outcome: "skipped" });
     expect(unhurried).toEqual({ outcome: "unusable" });
+  });
+
+  it("holds a publisher slot for the download and gives it back afterwards", async () => {
+    const url = "https://images.example.com/photo.jpg";
+    const { port, calls } = fetchPortReturning(new Map([[url, await jpeg(900, 600)]]));
+    const store = new SportsPhotoStore({ vault, fetchBytes: port });
+    const taken: string[] = [];
+    const given: string[] = [];
+
+    const stored = photoOf(
+      await store.ensure(actor, "source-a", url, {
+        hostSlot: {
+          acquire: async (host) => {
+            taken.push(host);
+            // The slot must be held while the download runs, not merely asked for and released.
+            expect(calls).toHaveLength(0);
+            return true;
+          },
+          release: (host) => given.push(host)
+        }
+      })
+    );
+
+    expect(stored).not.toBeNull();
+    expect(taken).toEqual(["images.example.com"]);
+    expect(given).toEqual(["images.example.com"]);
+  });
+
+  it("re-checks the time left after waiting for a busy publisher", async () => {
+    const url = "https://images.example.com/photo.jpg";
+    const { port, calls } = fetchPortReturning(new Map([[url, await jpeg(900, 600)]]));
+    const store = new SportsPhotoStore({ vault, fetchBytes: port });
+    // Ten seconds left on the way in, but waiting for the slot uses nine of them.
+    let remaining = 10_000;
+    const given: string[] = [];
+
+    const result = await store.ensure(actor, "source-a", url, {
+      remainingMs: () => remaining,
+      hostSlot: {
+        acquire: async () => {
+          remaining = 1_000;
+          return true;
+        },
+        release: (host) => given.push(host)
+      }
+    });
+
+    expect(calls).toHaveLength(0);
+    expect(result).toEqual({ outcome: "skipped" });
+    // Still handed back, or the publisher would stay blocked for the rest of the refresh.
+    expect(given).toEqual(["images.example.com"]);
+  });
+
+  it("downloads nothing when the publisher slot never comes free", async () => {
+    const url = "https://images.example.com/photo.jpg";
+    const { port, calls } = fetchPortReturning(new Map([[url, await jpeg(900, 600)]]));
+    const store = new SportsPhotoStore({ vault, fetchBytes: port });
+
+    const result = await store.ensure(actor, "source-a", url, {
+      hostSlot: {
+        acquire: async () => false,
+        release: () => {
+          throw new Error("nothing was taken, so nothing may be given back");
+        }
+      }
+    });
+
+    expect(calls).toHaveLength(0);
+    expect(result).toEqual({ outcome: "skipped" });
+  });
+
+  it("leaves nothing behind when the image itself cannot be written", async () => {
+    const url = "https://example.com/photo.jpg";
+    const { port } = fetchPortReturning(new Map([[url, await jpeg(900, 600)]]));
+    const store = new SportsPhotoStore({ vault, fetchBytes: port });
+    // A folder standing exactly where the image file has to go: the write fails the way a full or
+    // failing disk would, after the description file has already been written.
+    const key = photoKey("source-a", url);
+    await mkdir(join(baseDir, "user-a", "sports", "photos", `${key}.webp`), { recursive: true });
+
+    const result = await store.ensure(actor, "source-a", url);
+
+    expect(result).toEqual({ outcome: "unusable" });
+    // No description file survives, so nothing claims storage the cleanup rules cannot see.
+    expect((await storedFiles("user-a")).filter((name) => name.endsWith(".json"))).toHaveLength(0);
+  });
+
+  it("sweeps away a copy whose image is missing but whose description remains", async () => {
+    const url = "https://example.com/photo.jpg";
+    const { port } = fetchPortReturning(new Map([[url, await jpeg(900, 600)]]));
+    let clock = Date.parse("2026-09-04T10:00:00.000Z");
+    const store = new SportsPhotoStore({ vault, fetchBytes: port, now: () => new Date(clock) });
+    const stored = photoOf(await store.ensure(actor, "source-a", url));
+    // The only shape a half-finished save can leave: a description with no image next to it.
+    await rm(join(baseDir, "user-a", "sports", "photos", `${stored!.key}.webp`));
+
+    clock += 15 * 24 * 60 * 60 * 1000;
+    const swept = await store.sweep(actor, new Set());
+
+    expect(swept.removed).toBe(1);
+    expect(await storedFiles("user-a")).toHaveLength(0);
   });
 
   it("does nothing once the refresh has been cancelled", async () => {
