@@ -125,7 +125,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.subreddit_sources",
       description:
-        "The Add a source box in Sports settings also accepts a subreddit (r/nfl or a reddit.com link). Posts that link out to articles become headlines credited to the real publisher; self posts, media, stickied posts, and crossposts are skipped."
+        "The Add a source box in Sports settings also accepts a subreddit (r/nfl or a reddit.com link). Posts that link out to articles become headlines credited to the real publisher; self posts, media, and posts that only link back into Reddit are skipped. A pinned post is treated the same as any other post: it shows up as a headline only if it links out to an article."
     },
     {
       id: "sports.story_feedback",
