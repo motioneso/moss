@@ -45,10 +45,16 @@ What is wrong with it today, all observed on the dev instance on 2026-09-04:
   asks "why is my calendar out of date" it cannot answer from evidence.
 - Only the latest run survives. A partial run followed by a clean one erases the evidence.
 
+Ben has also asked, separately, for email to do far more than it does today: importance and
+action extraction surfaced on Today, suggested tasks, context for Moss, and a first-connect
+scan and summary. That is its own design, "email intelligence, spec to follow". This spec only
+reports status and must not grow to cover it.
+
 ## Goals
 
 - Show, per account, when the sync last ran, what came in by kind, where that data is visible,
-  what failed and why in plain words, what happens next, and a short history of recent runs.
+  what failed and why in plain words, what happens next, and the run before it so a change for
+  the worse is visible.
 - Make "queued but no worker picked it up" a distinct, visible state, on screen and to Moss.
 - Give the user a Sync now button that works for every provider, with honest feedback.
 - Let Moss read the same status through a tool, and start a sync through a tool, so it can
@@ -68,18 +74,22 @@ What is wrong with it today, all observed on the dev instance on 2026-09-04:
   user needs to understand their own account.
 - Fixing the expired-AI-login problem itself (tracked separately in #2232 and PR 2233). This
   spec only surfaces it as a reason.
-- Cross-user or admin views of run history. The admin metadata pane keeps its current summary.
+- A run history. Ben, 2026-09-04: "Once we process it we can dump it." Only the last run and
+  the one before it are kept.
+- Cross-user or admin views of the previous run. The admin metadata pane keeps its current summary.
 - Push notifications or chat interruptions when a sync fails. The Today notice is shown when
   the screen is opened; a proactive hook can build on the run table later.
 
 ## Resolved Decisions
 
-### 1. Keep a short run history, not just the last result
+### 1. Keep the last run and the one before it, nothing older
 
-A new owner-only table records one row per completed run (a continuation chain counts as one
-run and updates its row). The account row's existing `last_sync_*` columns stay as the summary,
-so the admin-safe view and every current reader keep working unchanged. Retention is the most
-recent 20 runs per account, pruned on write; no time-based sweep is needed.
+Ben's ruling, 2026-09-04: once a run is processed it can be dumped. The account row's existing
+`last_sync_*` columns stay as the summary, so the admin-safe view and every current reader keep
+working unchanged. One new column, `previous_sync` (jsonb), holds a snapshot of the prior
+summary (started, finished, status, error, counts, trigger). When a run finishes, the current
+summary is copied into it before being overwritten. No new table, no prune job, no history
+screen. A continuation chain counts as one run and does not shift the previous snapshot.
 
 ### 2. Explanations live in one shared place
 
@@ -132,9 +142,10 @@ not allowed to read"), not a list.
 
 `connectors.syncStatus` (risk `read`, permission `connectors.view`) returns the same status
 object as the endpoint for one account or all of the caller's accounts. `connectors.syncNow`
-(risk `write`, permission `connectors.manage`) queues a run and returns the queued state. Both
-are read-or-benign, so per the standing ruling that installing a module grants normal use, no
-confirmation prompt is required.
+(risk `write`, permission `connectors.manage`) queues a run and returns the queued state. Ben
+confirmed on 2026-09-04 that Moss may press Sync now itself. Both are read-or-benign, so per
+the standing ruling that installing a module grants normal use, no confirmation prompt is
+required.
 
 ### 9. Warn outside Settings only about lost abilities, named one by one
 
@@ -149,45 +160,34 @@ sentence; the Moss status tool returns the same list. A failure that takes nothi
 partial run whose next run will catch up, a stale-but-recent calendar) produces no notice
 outside Settings.
 
-## Open Questions for Ben
+## Questions Ben has answered (2026-09-04)
 
-1. Twenty runs of history per account, or seven days? Twenty is simpler and enough to see a
-   pattern; seven days keeps a quiet account's history longer.
-2. Should Moss be allowed to press Sync now on its own (decision 8), or only report status and
-   tell the user to press the button?
-3. Should the deferred AI mail step ("Claude login expired, 12 messages not yet read by Moss")
-   appear in the sync row with a link to Assistant settings, or stay only in Assistant settings?
-   This spec assumes yes, as a reason line with a link.
+- Run history: none. Keep the last run and the one before it; dump the rest (decision 1).
+- Moss may press Sync now itself (decision 8).
+- The "N emails are waiting for Moss because the assistant login expired" line stays, with the
+  link to Assistant settings (decision 9 and the capability map). Everything beyond status for
+  email belongs to "email intelligence, spec to follow".
+- Notices outside Settings only for a lost ability, naming what is not working (decision 9).
 
 ## Architecture
 
 ### Storage and repository
 
-New migration in `packages/connectors/sql/` (next free number after 0180) creating
-`app.connector_sync_runs`:
+New migration in `packages/connectors/sql/` (next free number after 0180) adding two nullable
+columns to `app.connector_accounts`: `last_sync_trigger text` (`scheduled`, `manual`, `sweep`)
+and `previous_sync jsonb`, a snapshot of the prior run's summary:
 
-| column | type | notes |
-|---|---|---|
-| id | uuid | primary key |
-| connector_account_id | uuid | references `app.connector_accounts`, cascade delete |
-| owner_user_id | uuid | copied from the account for RLS |
-| trigger | text | `scheduled`, `manual`, `sweep` |
-| started_at | timestamptz | |
-| finished_at | timestamptz | null while in flight |
-| status | app.connector_sync_status | `success`, `partial`, `failed` |
-| error_code | text | null or one of the existing codes |
-| counts | jsonb | same shape as `last_sync_counts` |
-| job_id | text | pg-boss id of the root job, for support |
+```
+{ startedAt, finishedAt, status, errorCode, counts, trigger }
+```
 
-RLS: FORCE ROW LEVEL SECURITY, owner-only select and insert, same pattern as
-`0022_connectors_owner_only.sql`. Index on `(connector_account_id, started_at desc)`. No admin
-policy; the admin pane keeps using the account summary.
+The table's existing owner-only RLS covers both. The admin-safe view is not widened; the admin
+pane keeps the current summary.
 
-Repository additions in `packages/connectors/src/repository.ts`: `recordSyncRunStarted`,
-`recordSyncRunFinished` (upsert by job id, then prune beyond 20), `listSyncRuns(accountId,
-limit)`. `markSyncStarted` and `markSyncFinished` keep writing the summary columns; the job
-code calls both so the two never disagree. Continuations reuse the root run id carried in the
-job's `runId` field, which already exists.
+Repository changes in `packages/connectors/src/repository.ts`: `markSyncStarted` records the
+trigger; `markSyncFinished` first copies the current `last_sync_*` values and trigger into
+`previous_sync` (when a finished run exists), then writes the new summary. Continuations carry
+the root job id in the existing `runId` field and do not touch `previous_sync`.
 
 ### Explanations (shared)
 
@@ -253,12 +253,12 @@ Shared types in `packages/shared/src/connectors-api.ts`.
             { kind: "email", label: "Emails", count: 148, seeAt: "/today" } ],
   deferredAi: { count, reason: "assistant-login-expired", seeAt: "/settings?section=assistant" } | null,
   notWorking: [ { ability, since, reason, fix: { label, path } } ],
-  runs: [ { startedAt, finishedAt, trigger, status, errorCode, counts } ]   // newest first, max 20
+  previousRun: { startedAt, finishedAt, trigger, status, errorCode, counts } | null
 }
 ```
 
 `GET /api/connectors/sync-status` (permission `connectors.view`): the same object for every
-account the caller owns, without `runs`, for Today and for the tool's all-accounts form.
+account the caller owns, without `previousRun`, for Today and for the tool's all-accounts form.
 
 `POST /api/connectors/accounts/:id/sync` (permission `connectors.manage`, owner only, rate
 limited like the Google route): queues the provider's sync job for that account and returns
@@ -400,11 +400,8 @@ Expanded row:
      What happens next
        Stopped at the message cap. Continues automatically in the next run, at 14:45.
 
-     Recent runs
-       14:31  Scheduled   Partial   23 events, 148 emails, 26 failed
-       14:16  Scheduled   Failed    Waiting for worker (not picked up)
-       13:58  Manual      Synced    2 events, 5 emails
-       13:45  Scheduled   Synced    0 events, 3 emails
+     Run before this one
+       14:16  Scheduled   Synced    2 events, 5 emails
 
      [Email access  ◉]  [Calendar access ◉]           [Hide details]  [Sync now]  [Revoke]
 ```
@@ -418,8 +415,9 @@ Waiting-for-worker row:
      Next check at 14:45.                                  [Details]  [Sync now]  [Revoke]
 ```
 
-The runs list is a plain authored list with three fixed columns (time, trigger, result) and one
-free-text column; on a phone the free-text column wraps under the result. Times use the user's
+The previous-run line is one authored row with three fixed columns (time, trigger, result) and
+one free-text column; on a phone the free-text column wraps under the result. It exists so a
+change for the worse is visible next to the current run. Times use the user's
 time zone from Profile, as the rest of settings does. All wording comes from the shared explain
 module; the pane adds no sentences of its own.
 
@@ -428,18 +426,17 @@ Pressing Sync now shows the existing toast pattern: "Sync queued" on success, or
 
 ### Data model and RLS summary
 
-- `app.connector_sync_runs`: owner-only (FORCE RLS, select and insert for the owner; delete for
-  prune runs under the owner scope from the job). No admin policy.
-- `app.connector_accounts`: unchanged.
+- `app.connector_accounts`: two new nullable columns, covered by the existing owner-only
+  policies; not added to the admin-safe view.
 - Job payloads: unchanged shape, metadata only.
 
 ## Testing
 
 - Unit: `explainConnectorSync` against the wording table, one case per code plus the unknown
   error code fallback and the worker grace boundary.
-- Unit: repository prune keeps exactly 20 newest runs; continuation updates the root run row.
-- Integration (gate): Google and IMAP jobs write both the summary columns and a run row with
-  matching status and counts; a failed auth writes `failed` / `auth-error` in both places.
+- Integration (gate): after two Google runs, `previous_sync` equals the first run's summary
+  and the summary columns hold the second; a continuation does not shift it; the same for
+  IMAP; a failed auth writes `failed` / `auth-error` in the summary.
 - Integration: sync-status route returns `waiting-for-worker` for a 3-minute-old created job
   and `queued` for a 30-second-old one; a revoked account returns `not-scheduled` with
   `canSyncNow` false.
@@ -451,11 +448,12 @@ Pressing Sync now shows the existing toast pattern: "Sync queued" on success, or
   across two accounts with the same lost ability.
 - Tool: `connectors.syncStatus` returns the same object as the route for the same actor and
   refuses another user's account id.
-- Web: pane renders each code's label, summary, and next line; Details toggles the runs list;
+- Web: pane renders each code's label, summary, and next line; Details toggles the detail
+  area including the previous-run line;
   Sync now disabled while queued or syncing.
 - Live-path proof on dev, recorded on the PR: stop the worker, connect or Sync now, watch the
-  row reach Waiting for worker; start the worker, watch it run and show counts and the runs
-  list; expire the assistant login and see "Tasks are not being created from email" on Today
+  row reach Waiting for worker; start the worker, watch it run and show counts and the
+  previous-run line; expire the assistant login and see "Tasks are not being created from email" on Today
   with the Assistant settings link; ask Moss "is my calendar up to date" and see it quote the
   same status and the same not-working line.
 
@@ -468,7 +466,7 @@ Pressing Sync now shows the existing toast pattern: "Sync queued" on success, or
   from the screen alone.
 - Sync now exists for Google and IMAP accounts, is disabled while a run is queued or in flight,
   and gives a toast either way.
-- The last 20 runs per account are visible under Details.
+- The run before the current one is visible under Details, and nothing older is stored.
 - Outside Settings, the only sync-related notice is the Today block, it appears only when an
   ability is lost, and each line names the ability, the time it stopped, the reason, and a fix
   link. No generic "sync failed" text exists anywhere in the product.
@@ -484,27 +482,28 @@ Pressing Sync now shows the existing toast pattern: "Sync queued" on success, or
 
 ## Hard invariants honored
 
-- Private by default: run history is owner-only under FORCE RLS; no admin policy.
-- Secrets never escape: run rows, status responses, tool output, and job payloads carry codes,
+- Private by default: the previous-run snapshot sits on the owner-only account row and is not
+  exposed to the admin view.
+- Secrets never escape: snapshots, status responses, tool output, and job payloads carry codes,
   counts, and timestamps only.
 - Metadata-only job payloads: the per-account sync route sends the same payload shapes as today.
 - Provider-agnostic: the status shape, the tools, and the screen know only `providerType` and
   declared data kinds; the AI deferral reason names no model or provider.
 - Module isolation: Calendar and Today are referenced by path in `seeAt`, not by import.
-- Never edit an applied migration: one new file in `packages/connectors/sql/`.
+- Never edit an applied migration: one new file in `packages/connectors/sql/` adding columns.
 - No new required setting or env var: the worker grace period is a constant.
 - App map truthfulness in the same PR.
 
 ## Slice plan (one session each, shared worktree and PR)
 
-1. **Record and explain.** Migration, repository functions, job code writes run rows, shared
-   explain module with the wording table, the capability maps, `deriveNotWorking`, and unit
+1. **Record and explain.** Migration, repository changes for the previous-run snapshot and
+   trigger, shared explain module with the wording table, the capability maps, `deriveNotWorking`, and unit
    tests. The web pane switches to the shared
    module with no visible change yet. Gate green.
 2. **Status and control.** Sync-status route with worker detection and next-run time,
    per-account sync route, both Moss tools, manifest features/errors/remediations, app-map
    sentence, integration and tool tests.
-3. **Screen and proof.** Expandable row, runs list, Sync now, the Today block, authored CSS,
+3. **Screen and proof.** Expandable row, previous-run line, Sync now, the Today block, authored CSS,
    web tests, then the live-path proof on dev including the stopped-worker and expired-login
    cases, recorded on the PR.
 
@@ -518,5 +517,7 @@ Pressing Sync now shows the existing toast pattern: "Sync queued" on success, or
 - Notices outside Settings follow Ben's 2026-09-04 ruling: only for a lost ability, naming the
   ability, the time, the reason, and a fix; derived from a declared map, not hand-written per
   screen.
-- Open questions are ones only Ben can settle (retention, Moss pressing Sync now, AI deferral
-  placement); none block slice 1.
+- All questions raised for Ben were answered on 2026-09-04 and are folded into decisions 1, 8
+  and 9; nothing is left open.
+- Email behaviour beyond status reporting is explicitly left to the separate email
+  intelligence spec.
