@@ -157,14 +157,48 @@
 }
 
 .sp-src__candidate {
+  display: grid;
+  gap: var(--space-3);
   margin: var(--space-3) 0 0;
-  padding-top: var(--space-3);
-  border-top: var(--border-w) solid var(--border-subtle);
+}
+
+.sp-src__candidate-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .sp-src__candidate-label {
   margin: 0;
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.sp-src__candidate-block {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.sp-src__candidate-block > .jds-eyebrow {
+  margin: 0;
+}
+
+.sp-src__candidate-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.sp-src__candidate .sp-src__assignments {
+  margin: 0;
+}
+
+.sp-src__candidate .sp-src__check {
+  padding: 0;
 }
 
 .sp-src__assign {
@@ -185,6 +219,19 @@
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+.sp-src__assign-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sp-src__assign-item {
+  margin: 0;
+  padding: 0;
 }
 
 .sp-src__assign-legend {

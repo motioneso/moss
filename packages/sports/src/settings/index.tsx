@@ -65,6 +65,11 @@ function StoryPreferencesSection() {
     (item) => item.targetKind === "sports_story"
   );
 
+  // Nothing to manage yet: keep the whole section out of the pane (Ben, 2026-09-03).
+  if (!feedbackQuery.isError && feedback.length === 0) {
+    return null;
+  }
+
   return (
     <section className="sp-feedback-settings" aria-label="Story preferences">
       <h2 className="jds-section-title sp-feedback-settings__title">Story preferences</h2>
@@ -72,9 +77,7 @@ function StoryPreferencesSection() {
         A major story about a subject you asked to see less of may still appear.
       </p>
       {feedbackQuery.isError ? <Note>Could not load story preferences. Try again.</Note> : null}
-      {!feedbackQuery.isError && feedback.length === 0 ? (
-        <Note>No saved story preferences.</Note>
-      ) : (
+      {feedbackQuery.isError ? null : (
         <div className="sp-feedback-settings__list">
           {feedback.map((item) => {
             const headline = metadataText(item, "headline") ?? "Saved story";

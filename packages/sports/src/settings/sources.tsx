@@ -284,39 +284,56 @@ export function AddSourceFlow(props: {
       {errorMessage ? <SourceError>{errorMessage}</SourceError> : null}
 
       {preview?.status === "ok" && preview.candidate ? (
-        <div className="sp-src__candidate">
+        <div className="sp-src__candidate jds-card jds-card--sunken jds-card--pad-lg">
           {preview.duplicateOfSourceId ? (
             <Note>That publication is already one of your custom sources.</Note>
           ) : null}
-          <p className="sp-src__candidate-label">{preview.candidate.label}</p>
-          {preview.candidate.sampleHeadlines.map((headline) => (
-            <p key={headline} className="sp-src__hint">
-              {headline}
-            </p>
-          ))}
-          {preview.candidate.targets.length > 0 ? (
-            <ul className="sp-src__assignments" aria-label="Coverage">
-              {preview.candidate.targets.map((target) => (
-                <li key={sportsSourceTargetKey(target.target)}>
-                  <AssignmentIdentity
-                    target={target.target}
-                    label={target.label}
-                    follows={props.follows}
-                    teamsByCompetition={props.teamsByCompetition}
-                  />
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {preview.candidate.targets.map((target) => (
-            <div key={`samples-${sportsSourceTargetKey(target.target)}`}>
-              {target.sampleHeadlines.map((headline) => (
-                <p key={headline} className="sp-src__hint">
-                  {headline}
-                </p>
-              ))}
+          <div className="sp-src__candidate-head">
+            <p className="sp-src__candidate-label">{preview.candidate.label}</p>
+            <span className="jds-badge jds-badge--neutral jds-badge--pill">Preview</span>
+          </div>
+          {preview.candidate.sampleHeadlines.length > 0 ? (
+            <div className="sp-src__candidate-block">
+              <p className="jds-eyebrow">Sample headlines</p>
+              <ul className="sp-src__candidate-list">
+                {preview.candidate.sampleHeadlines.map((headline) => (
+                  <li key={headline}>{headline}</li>
+                ))}
+              </ul>
             </div>
-          ))}
+          ) : null}
+          {preview.candidate.targets.length > 0 ? (
+            <div className="sp-src__candidate-block">
+              <p className="jds-eyebrow">Coverage</p>
+              <ul className="sp-src__assignments" aria-label="Coverage">
+                {preview.candidate.targets.map((target) => (
+                  <li key={sportsSourceTargetKey(target.target)}>
+                    <AssignmentIdentity
+                      target={target.target}
+                      label={target.label}
+                      follows={props.follows}
+                      teamsByCompetition={props.teamsByCompetition}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {preview.candidate.targets
+            .filter((target) => target.sampleHeadlines.length > 0)
+            .map((target) => (
+              <div
+                key={`samples-${sportsSourceTargetKey(target.target)}`}
+                className="sp-src__candidate-block"
+              >
+                <p className="jds-eyebrow">{target.label}</p>
+                <ul className="sp-src__candidate-list">
+                  {target.sampleHeadlines.map((headline) => (
+                    <li key={headline}>{headline}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           {preview.authorizationAcknowledgement ? (
             <label className="jds-check sp-src__check">
               <input
