@@ -1,3 +1,5 @@
+import type { PgBoss } from "pg-boss";
+
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { ChatAttachmentsService } from "@moss/chat";
 import type { MossModuleManifest, ToolResult } from "@moss/module-sdk";
@@ -17,7 +19,7 @@ import {
   type ExternalModuleAiResult,
   type ExternalToolInvoker
 } from "@moss/module-registry/node";
-import { NotificationsRepository } from "@moss/notifications";
+import { NotificationsRepository, createPushQueuePort } from "@moss/notifications";
 import { createModuleCredentialSecretCipher, type SettingsRepository } from "@moss/settings";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
@@ -26,6 +28,7 @@ export function createExternalModuleTools(input: {
   readonly workerDataContext?: DataContextRunner;
   readonly appDataContext: DataContextRunner;
   readonly settingsRepository: SettingsRepository;
+  readonly boss?: PgBoss;
   readonly logger: { warn(data: Record<string, unknown>, message?: string): void };
   // ctx.ai bridge (#932, spec D6): injected from server.ts so module-registry never
   // imports @moss/ai. The queued-jobs path has its own equivalent bridge — see
@@ -48,7 +51,11 @@ export function createExternalModuleTools(input: {
   // registerUpgradeNotifyWorker's own NotificationsRepository construction
   // (apps/worker/src/worker.ts) — a module-posted notification is not deferred
   // by the recipient's quiet hours any more than the system upgrade notice is.
-  const notifications = new NotificationsRepository(undefined, createNotificationPreferencePort());
+  const notifications = new NotificationsRepository(
+    undefined,
+    createNotificationPreferencePort(),
+    input.boss ? createPushQueuePort(input.boss) : undefined
+  );
   const invoke: ExternalToolInvoker = async (module, tool, toolInput, context) => {
     const rpc = createExternalModuleRpcHandler({
       module,

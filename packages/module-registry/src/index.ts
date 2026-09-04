@@ -190,6 +190,13 @@ import type {
 import {
   NotificationsRepository,
   DIGEST_COMPOSE_QUEUE,
+  PUSH_DELIVER_QUEUE,
+  PUSH_SUMMARY_QUEUE,
+  createPushQueuePort,
+  runPushDeliverJob,
+  runPushSummaryJob,
+  type PushDeliverJobPayload,
+  type PushSummaryJobPayload,
   type NotificationPreferencePort,
   runNotificationDigestCompose,
   notificationsModuleManifest,
@@ -1711,7 +1718,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: notificationsModuleManifest,
     sqlMigrationDirectories: [notificationsModuleSqlMigrationDirectory],
-    queueDefinitions: [{ name: DIGEST_COMPOSE_QUEUE, options: { retryLimit: 0 } }],
+    queueDefinitions: [
+      { name: DIGEST_COMPOSE_QUEUE, options: { retryLimit: 0 } },
+      { name: PUSH_DELIVER_QUEUE, options: { retryLimit: 0 } },
+      { name: PUSH_SUMMARY_QUEUE, options: { retryLimit: 0 } }
+    ],
     registerRoutes: registerNotificationsRoutes,
     registerWorkers: async (boss, deps) => [
       await registerDataContextWorker(
@@ -1727,6 +1738,18 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             notificationPreferencePort: createNotificationPreferencePort(),
             sender: createNotificationDigestSender()
           })
+      ),
+      await registerDataContextWorker<PushDeliverJobPayload, void>(
+        boss,
+        PUSH_DELIVER_QUEUE,
+        deps.dataContext,
+        (job, scopedDb) => runPushDeliverJob(job, scopedDb)
+      ),
+      await registerDataContextWorker<PushSummaryJobPayload, void>(
+        boss,
+        PUSH_SUMMARY_QUEUE,
+        deps.dataContext,
+        (job, scopedDb) => runPushSummaryJob(job, scopedDb)
       )
     ]
   },
@@ -1993,7 +2016,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         },
         notificationsRepository: new NotificationsRepository(
           quietHoursPortImpl,
-          createNotificationPreferencePort()
+          createNotificationPreferencePort(),
+          createPushQueuePort(boss)
         ),
         logger: briefingsLogger
       });
@@ -2360,7 +2384,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // owner's per-module notification preference like every other module emitter.
         notificationsRepository: new NotificationsRepository(
           quietHoursPortImpl,
-          createNotificationPreferencePort()
+          createNotificationPreferencePort(),
+          createPushQueuePort(boss)
         ),
         revalidationLogger: {
           info: (fields) => deps.logger?.info(fields, "news revalidation")
