@@ -269,6 +269,9 @@ async function fetchRobotsFileFollowingRedirects(
   options: FetchWebResourceOptions
 ): Promise<{ status: number; body: string } | null> {
   const maxBytes = options.maxBytes ?? DEFAULT_WEB_RESEARCH_CONFIG.maxDownloadBytes;
+  const allowedHosts = options.allowedHosts
+    ? new Set(options.allowedHosts.map((host) => host.toLowerCase()))
+    : undefined;
   let current = robotsUrl;
   for (let redirects = 0; redirects <= DEFAULT_WEB_RESEARCH_CONFIG.redirectLimit; redirects += 1) {
     const robotsSafe = await abortable(
@@ -276,6 +279,7 @@ async function fetchRobotsFileFollowingRedirects(
       controller.signal
     );
     if (!robotsSafe.ok) return null;
+    if (allowedHosts && !allowedHosts.has(robotsSafe.url.hostname.toLowerCase())) return null;
     if (options.rateLimiter) {
       await abortable(options.rateLimiter.acquire(robotsSafe.url.hostname), controller.signal);
     }
