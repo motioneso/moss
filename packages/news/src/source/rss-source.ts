@@ -250,24 +250,23 @@ export function isPublicFeedDocument(xml: string): boolean {
 const BODY_IMAGE_SCAN_CHAR_CAP = 20_000;
 
 // Tracking pixels are invisible by construction, so only unambiguous evidence disqualifies an
-// image: a declared width or height of 0 or 1, a host whose first label exists to count views,
-// a file name that is nothing but tracking words, or a query key that names an impression or a
-// pixel outright. Anything weaker stays accepted. An earlier revision matched a tracking word
-// anywhere in the file name and treated a cache-busting or campaign query key as proof, which
-// threw away real artwork like "google-pixel-10.jpg" and "real.jpg?cb=1720000000".
-const TRACKING_WORD = String.raw`(?:pixel|pixels|pxl|spacer|blank|transparent|1x1|beacon|track|tracker|tracking|trk|count|counter|impression|impressions)`;
-// The whole file-name stem must be tracking words joined by separators: "tracking-pixel" and
-// "1x1" qualify, "google-pixel-10" and "beacon-hill-sunrise" do not.
-const TRACKING_FILENAME_PATTERN = new RegExp(
-  String.raw`^${TRACKING_WORD}(?:[-_.]${TRACKING_WORD})*$`,
-  "i"
-);
+// image: a declared width or height of 0 or 1, a hidden attribute or style, a host whose first
+// label exists to count views, or the whole word "pixel" or "impression" standing alone as a
+// path segment or a query key. Nothing else counts. Earlier revisions matched tracking-sounding
+// words inside a file name or a campaign value, which threw away real photographs called
+// "track.jpg", "beacon.jpg" and "real.jpg?trk=newsletter".
 const TRACKING_HOST_LABEL_PATTERN =
   /^(?:pixel|pixels|px|beacon|track|tracker|tracking|analytics|stats|metrics|collect|counter|imp|impression|log|logs)$/i;
-// Only keys that state the image is a counter. Campaign tags (utm_*) and cache-busting keys
-// (cb, rand) ride along on ordinary artwork addresses too, so they prove nothing.
-const TRACKING_QUERY_KEY_PATTERN =
-  /^(?:pixel|beacon|track|tracking|trk|impression|impressions|imp)$/i;
+// "pixel" or "impression" and nothing else, ignoring a file extension: "/pixel.gif" and
+// "/impression/abc" qualify, "google-pixel-10.jpg" and "pixels-of-history.jpg" do not.
+const TRACKING_WORD_PATTERN = /^(?:pixel|impression)(?:\.[a-z0-9]+)?$/i;
+const TRACKING_QUERY_KEY_PATTERN = /^(?:pixel|impression)$/i;
+// A style that hides the image outright, or sizes it down to a single pixel.
+// CSS comments are legal anywhere between tokens, so drop them before matching.
+const stripCssComments = (style: string): string => style.replace(/\/\*[\s\S]*?\*\//g, "");
+
+const HIDDEN_STYLE_PATTERN =
+  /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden|(?:width|height)\s*:\s*(?:0|1)(?:\.0+)?(?:px)?)\s*(?:!\s*important\s*)?(?:;|$)/i;
 
 /** A declared HTML pixel size, or null when the attribute is absent or not a plain number
  *  ("auto", "50%", ""). Only a real number can disqualify an image; junk means "unknown". */
@@ -279,6 +278,8 @@ function declaredPixelSize(value: string | undefined): number | null {
 
 function isInvisibleImage(attribs: Record<string, string>): boolean {
   if (attribs.hidden !== undefined) return true;
+  if (attribs.style !== undefined && HIDDEN_STYLE_PATTERN.test(stripCssComments(attribs.style)))
+    return true;
   const width = declaredPixelSize(attribs.width);
   const height = declaredPixelSize(attribs.height);
   return (width !== null && width <= 1) || (height !== null && height <= 1);
@@ -293,9 +294,9 @@ function isTrackingAddress(src: string): boolean {
   }
   const firstLabel = url.hostname.split(".")[0] ?? "";
   if (TRACKING_HOST_LABEL_PATTERN.test(firstLabel)) return true;
-  const fileName = url.pathname.slice(url.pathname.lastIndexOf("/") + 1);
-  const stem = fileName.replace(/\.[a-z0-9]+$/i, "");
-  if (TRACKING_FILENAME_PATTERN.test(stem)) return true;
+  for (const segment of url.pathname.split("/")) {
+    if (segment && TRACKING_WORD_PATTERN.test(segment)) return true;
+  }
   for (const key of url.searchParams.keys()) {
     if (TRACKING_QUERY_KEY_PATTERN.test(key)) return true;
   }

@@ -360,16 +360,91 @@ describe("toFeedItems: body-image extraction hardening (PR 2251 review)", () => 
     );
   });
 
-  it("still skips a file named nothing but tracking words", () => {
+  it("still skips a file whose whole name is the word pixel", () => {
     const xml = rss(`    <item>
-      <title>File named only after tracking</title>
-      <link>https://example.com/named-tracker</link>
+      <title>File named only pixel</title>
+      <link>https://example.com/named-pixel</link>
       <content:encoded><![CDATA[
-        <img src="https://npr.brightspotcdn.com/tracking-pixel.gif">
+        <img src="https://npr.brightspotcdn.com/pixel.gif">
         <img src="https://npr.brightspotcdn.com/real.jpg" width="800" height="450">
       ]]></content:encoded>
     </item>`);
     expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
+  });
+
+  it("still skips an image hidden by a display style", () => {
+    const xml = rss(`    <item>
+      <title>Hidden by style</title>
+      <link>https://example.com/hidden-style</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/h.gif" style="display:none">
+        <img src="https://npr.brightspotcdn.com/real.jpg" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
+  });
+
+  it("still skips an image hidden by a display style with spaces or a priority marker", () => {
+    const xml = rss(`    <item>
+      <title>Hidden by spaced style</title>
+      <link>https://example.com/hidden-style-spaced</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/h1.gif" style="display : none ; margin: 0">
+        <img src="https://npr.brightspotcdn.com/h2.gif" style="visibility:hidden !important">
+        <img src="https://npr.brightspotcdn.com/h3.gif" style="border:0; width: 1px !important;">
+        <img src="https://npr.brightspotcdn.com/h4.gif" style="/* tracker */ display:/**/none">
+        <img src="https://npr.brightspotcdn.com/real.jpg" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
+  });
+
+  it("keeps a full-size photograph of a running track called track.jpg", () => {
+    const xml = rss(`    <item>
+      <title>Photograph of a running track</title>
+      <link>https://example.com/running-track</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/track.jpg" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/track.jpg");
+  });
+
+  it("keeps a full-size photograph called beacon.jpg", () => {
+    const xml = rss(`    <item>
+      <title>Photograph of a harbour beacon</title>
+      <link>https://example.com/harbour-beacon</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/beacon.jpg" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/beacon.jpg");
+  });
+
+  it("keeps a full-size photograph whose address carries a campaign tag", () => {
+    const xml = rss(`    <item>
+      <title>Campaign tag on a real photograph</title>
+      <link>https://example.com/campaign-tag</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/real.jpg?trk=newsletter" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe(
+      "https://npr.brightspotcdn.com/real.jpg?trk=newsletter"
+    );
+  });
+
+  it("keeps a full-size photograph whose address carries a tracking campaign value", () => {
+    const xml = rss(`    <item>
+      <title>Tracking campaign value on a real photograph</title>
+      <link>https://example.com/tracking-campaign</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/real.jpg?tracking=newsletter" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe(
+      "https://npr.brightspotcdn.com/real.jpg?tracking=newsletter"
+    );
   });
 
   it("does not slow down on a large body full of unterminated picture tags (linear scan)", () => {
