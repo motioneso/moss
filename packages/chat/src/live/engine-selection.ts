@@ -69,6 +69,17 @@ export interface ChatEngineSelectionOpts {
    * construct (only real for tests / callers that don't yet wire a pool).
    */
   readonly persistentPool?: AdmitCapablePool;
+  /**
+   * Set only by a structured caller (e.g. `CliStructuredAdapter`, which every scoped structured
+   * call — including email extraction — goes through) to say "this call needs
+   * `launchStructured`/`submitStructured`/`readStructured`, which only the bounded print engine
+   * implements." This is a call-boundary signal, not an inference from `executionMode`: ordinary
+   * chat sessions also carry `executionMode: "non_interactive"` (the provider default set by
+   * `AiRepository.createProvider` and migrations 0172/0173), so keying the persistent-runtime
+   * carve-out off execution mode instead of this flag took persistent/warm-pool execution away
+   * from every ordinary Anthropic chat session too (review finding B4).
+   */
+  readonly needsStructuredOutput?: boolean;
 }
 
 /**
@@ -164,20 +175,23 @@ export function createChatEngine(
   opts: ChatEngineSelectionOpts = {}
 ): CliChatEngine | Promise<CliChatEngine> {
   // #1557 Phase 1 / #1558: the persistent adapter is a third engine shape, checked ahead of the
-  // bounded-fallback/tmux fork below (ruling 2 — flag on + provider match wins, EXCEPT a caller
-  // that explicitly asked for `executionMode: "non_interactive"` always keeps the bounded print
-  // engine, because that engine is the only one that implements the structured one-shot methods
-  // (`launchStructured`/`submitStructured`/`readStructured`) that scoped structured calls need.
-  // Without this carve-out, turning the flag on breaks every structured caller (e.g. email
-  // extraction) the moment any ordinary chat session enables persistent mode, since the flag is a
-  // single process-wide toggle, not scoped to one call. Claude and Codex both build the
+  // bounded-fallback/tmux fork below (ruling 2 — flag on + provider match wins, EXCEPT a call that
+  // sets `needsStructuredOutput` always keeps the bounded print engine, because that engine is the
+  // only one that implements the structured one-shot methods (`launchStructured`/
+  // `submitStructured`/`readStructured`) that scoped structured calls need. Without this
+  // carve-out, turning the flag on breaks every structured caller (e.g. email extraction) the
+  // moment any ordinary chat session enables persistent mode, since the flag is a single
+  // process-wide toggle, not scoped to one call. This is deliberately NOT keyed off
+  // `executionMode === "non_interactive"` — that mode is also the ordinary provider default (see
+  // `needsStructuredOutput`'s doc comment), so doing that took persistent/warm-pool execution away
+  // from normal chat too (review finding B4). Claude and Codex both build the
   // unconditional-construct path otherwise; the shared warm pool (`persistentPool`) stays
   // Claude-only — its `createRuntime` is wired Claude-only at the composition roots, out of scope
   // for #1558 (see plan seams note).
   if (
     opts.persistentRuntimeEnabled &&
     (provider === "anthropic" || provider === "openai-compatible") &&
-    !isBoundedFallbackEngine(provider, opts.executionMode)
+    !opts.needsStructuredOutput
   ) {
     if (opts.persistentPool && provider === "anthropic") {
       return admitPersistentOrFallback(opts.persistentPool, provider, sessionKey, io, opts);

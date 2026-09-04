@@ -778,7 +778,9 @@ export class ChatEngineRpcClient implements CliChatEngine {
      * cli-runner root gets current values (the plan's live-reload channel for this topology).
      * Absent ⇒ the launch carries no persistent fields and the runner keeps its boot bootstrap.
      */
-    private readonly readPersistentConfig?: () => Promise<PersistentRuntimeLaunchConfig>
+    private readonly readPersistentConfig?: () => Promise<PersistentRuntimeLaunchConfig>,
+    /** B4: forwarded to `RpcLaunchParams.needsStructuredOutput`. See its doc comment. */
+    private readonly needsStructuredOutput = false
   ) {}
 
   /**
@@ -801,6 +803,7 @@ export class ChatEngineRpcClient implements CliChatEngine {
     const params: RpcLaunchParams = {
       provider: this.provider,
       executionMode: this.executionMode,
+      needsStructuredOutput: this.needsStructuredOutput,
       personaText: opts.personaText ?? "",
       ...(opts.mcpToken !== undefined ? { mcpToken: opts.mcpToken } : {}),
       ...(opts.mcpServerUrl !== undefined ? { mcpServerUrl: opts.mcpServerUrl } : {}),

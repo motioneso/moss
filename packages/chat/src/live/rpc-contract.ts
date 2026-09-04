@@ -262,6 +262,11 @@ export interface RpcLaunchParams {
   /** Selects the CLI + transcript parser. Mirrors CliChatEngine.provider. */
   readonly provider: RpcProviderKind;
   readonly executionMode?: AiProviderExecutionMode;
+  /** #1350/B4: set only by a structured caller. See `ChatEngineSelectionOpts.needsStructuredOutput`
+   *  in engine-selection.ts — this carries the same call-boundary signal across the socket so the
+   *  cli-runner root can't drift from the in-process root on which calls keep the bounded print
+   *  engine regardless of the persistent-runtime flag. */
+  readonly needsStructuredOutput?: boolean;
   /**
    * Rendered persona CONTENT (NOT a path). cli-runner writes it to the persona file under the
    * server-derived neutralDir, then passes that path to the CLI (e.g. --append-system-prompt-file).

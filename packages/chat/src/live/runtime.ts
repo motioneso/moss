@@ -116,7 +116,12 @@ function composeMossPersona(surface: ChatSurface): string {
 export type ChatEngineFactory = (
   provider: ProviderKind,
   sessionKey: string,
-  opts?: { readonly executionMode?: AiProviderExecutionMode }
+  opts?: {
+    readonly executionMode?: AiProviderExecutionMode;
+    /** B4: set only by a structured caller (`CliStructuredAdapter`). See
+     *  `ChatEngineSelectionOpts.needsStructuredOutput` in engine-selection.ts. */
+    readonly needsStructuredOutput?: boolean;
+  }
 ) => CliChatEngine | Promise<CliChatEngine>;
 
 export interface PersonaPreferencesPort {
@@ -202,6 +207,7 @@ export function createRealEngineFactory(
       mux: opts.mux,
       homeBase,
       executionMode: engineOpts?.executionMode,
+      needsStructuredOutput: engineOpts?.needsStructuredOutput,
       // #1557 Phase 1: read from `chat.persistent_runtime.enabled` by the caller
       // (`chat-multiplexer.ts`'s `resolveChatEngineFactory`, the host-dev boot path). The
       // cli-runner RPC root (`engine-host.ts`) never reaches this factory — it calls
@@ -265,7 +271,8 @@ function createRpcEngineFactory(opts: {
       sessionKey,
       connection,
       engineOpts?.executionMode,
-      opts.readPersistentRuntimeConfig
+      opts.readPersistentRuntimeConfig,
+      engineOpts?.needsStructuredOutput
     );
   return { factory, connection };
 }

@@ -384,6 +384,7 @@ export class CliChatEngineHost {
       homeBase: this.deps.homeBase,
       ownsDrain: true,
       executionMode: params.executionMode,
+      needsStructuredOutput: params.needsStructuredOutput,
       // #1554: the pin is lifted — the RPC root selects the persistent adapter when a pool was
       // wired in AND `chat.persistent_runtime.enabled` is currently on. The flag arrives per
       // launch in the RPC params (the plan's live-reload channel for this topology), so flipping
