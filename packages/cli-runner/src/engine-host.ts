@@ -732,6 +732,11 @@ export class CliChatEngineHost {
    * single login slot inside the lock, then start the flow outside it. A blocked/no-adapter
    * provider throws `LoginBadRequestError` (→ bad_request); a chat/login-busy rejection throws
    * `CliChatUnavailableError` (→ unavailable). No wire-contract change.
+   *
+   * #2232: if a login for this SAME provider is already in flight (e.g. two begin requests fired
+   * back to back by a double-mounted dialog), this reports that flow's current status instead of
+   * refusing — the caller sees the login it already started, not an error. A different provider,
+   * or a login only visible as a stray disk session, still gets the busy rejection.
    */
   async beginLogin(provider: RpcProviderKind): Promise<RpcBeginLoginResult> {
     const svc = this.deps.loginService;
@@ -739,7 +744,8 @@ export class CliChatEngineHost {
     if (!svc.hasAdapter(provider)) {
       throw new LoginBadRequestError("provider not loginable: no login adapter");
     }
-    let loginId: string;
+    let loginId: string | undefined;
+    let reuseLoginId: string | undefined;
     const release = await this.admissionMutex.acquire();
     try {
       if (this.deps.singleUser && (await this.currentLiveKeys()).size > 0) {
@@ -747,15 +753,20 @@ export class CliChatEngineHost {
       }
       // One login at a time regardless of the single-user flag (one flow slot, §L.3.1).
       if (await svc.isLoginActive()) {
-        throw new CliChatUnavailableError("a provider login is already in progress");
+        reuseLoginId = svc.activeLoginId(provider);
+        if (reuseLoginId === undefined) {
+          throw new CliChatUnavailableError("a provider login is already in progress");
+        }
+      } else {
+        loginId = svc.reserve(provider); // SYNC slot claim inside the lock (§L.6.1)
       }
-      loginId = svc.reserve(provider); // SYNC slot claim inside the lock (§L.6.1)
     } finally {
       release();
     }
+    if (reuseLoginId !== undefined) return svc.poll(provider, reuseLoginId);
     // Start the flow OUTSIDE the lock (the reservation holds the slot). On any failure the
     // service clears the flow + reaps the session (§L.3.1).
-    return svc.start(loginId);
+    return svc.start(loginId!);
   }
 
   /** §L.2.3 pollLogin — re-derive status (probe + runtime smoke); a stale loginId ⇒ bad_request. */
