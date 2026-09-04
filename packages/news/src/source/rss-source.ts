@@ -6,7 +6,6 @@ import { sourceEntry, type NewsSourceEntry } from "./catalog.js";
 import {
   SUMMARY_CHAR_CAP,
   TITLE_CHAR_CAP,
-  codePointOr,
   sanitizeFeedText,
   sanitizeImageUrl,
   sanitizeItemUrl,
@@ -242,113 +241,89 @@ export function isPublicFeedDocument(xml: string): boolean {
 }
 
 // Some feeds (NPR) carry no media:content/media:thumbnail/enclosure at all — the only image is
-// the first real <img> in the story's HTML body. This is a small hand-rolled scanner, not a
-// single regex: it reads one tag at a time, moving forward through the text and never
-// re-reading what it has already passed, and it stops once the text length cap is hit — a
-// malformed body (e.g. many unclosed "<img" fragments) cannot make it re-scan the same ground
-// twice. A full HTML parser would be overkill for pulling one attribute from one tag shape.
+// the first real <img> in the story's HTML body. The body fragment is read with the same
+// streaming HTML tokenizer the rest of this module already uses, not a regex: hand-written
+// patterns kept both losing valid pictures (uppercase tag names, unquoted values, a tag split
+// across lines, a ">" inside an attribute value) and letting tracking pixels through. The
+// tokenizer is a single forward pass, and the fragment is capped first, so a huge or malformed
+// body costs a bounded amount of work.
 const BODY_IMAGE_SCAN_CHAR_CAP = 20_000;
 
-// A width or height of 0 or 1 is a tracking pixel, not story art; the filename check catches the
-// common placeholder names feeds use even when no size attribute is present.
-const TRACKING_PIXEL_FILENAME_PATTERN = /\b(?:pixel|spacer|blank|transparent|1x1)\b/i;
+// Tracking pixels are invisible by construction. Four independent tells, any one of which
+// disqualifies an image: a declared width or height of 0 or 1, a placeholder-sounding file
+// name, a host whose first label exists to count views, or a query string carrying a campaign
+// or impression identifier rather than an image variant.
+const TRACKING_FILENAME_TOKEN_PATTERN =
+  /(?:^|[^a-z0-9])(?:pixel|pxl|spacer|blank|transparent|1x1|beacon)(?:[^a-z0-9]|$)/i;
+const TRACKING_FILENAME_EXACT_PATTERN = /^(?:track|tracker|tracking|count|counter|hit|event)$/i;
+const TRACKING_HOST_LABEL_PATTERN =
+  /^(?:pixel|pixels|px|beacon|track|tracker|tracking|analytics|stats|metrics|collect|counter|imp|impression|log|logs)$/i;
+const TRACKING_QUERY_KEY_PATTERN =
+  /^(?:utm_[a-z0-9_]+|pixel|beacon|track|tracking|trk|impression|imp|hit|event|cachebuster|cb|rand|rnd)$/i;
 
-const TAG_ATTRIBUTE_PATTERN = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*("([^"]*)"|'([^']*)')/g;
+/** A declared HTML pixel size, or null when the attribute is absent or not a plain number
+ *  ("auto", "50%", ""). Only a real number can disqualify an image; junk means "unknown". */
+function declaredPixelSize(value: string | undefined): number | null {
+  if (value === undefined) return null;
+  const match = /^\s*(\d+)(?:\.\d+)?\s*(?:px)?\s*$/i.exec(value);
+  return match ? Number(match[1]) : null;
+}
 
-/** Reads one HTML tag's attributes, honoring quotes so a quoted ">" can't truncate the tag early. */
-function parseTagAttributes(tagText: string): Map<string, string> {
-  const attrs = new Map<string, string>();
-  TAG_ATTRIBUTE_PATTERN.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = TAG_ATTRIBUTE_PATTERN.exec(tagText))) {
-    const name = match[1]!.toLowerCase();
-    if (!attrs.has(name)) attrs.set(name, match[3] ?? match[4] ?? "");
+function isInvisibleImage(attribs: Record<string, string>): boolean {
+  if (attribs.hidden !== undefined) return true;
+  const width = declaredPixelSize(attribs.width);
+  const height = declaredPixelSize(attribs.height);
+  return (width !== null && width <= 1) || (height !== null && height <= 1);
+}
+
+function isTrackingAddress(src: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(src, "https://feed.invalid/");
+  } catch {
+    return false; // unparseable — the allow-list check downstream rejects it anyway
   }
-  return attrs;
-}
-
-function isTrackingPixel(attrs: Map<string, string>): boolean {
-  const width = Number(attrs.get("width"));
-  const height = Number(attrs.get("height"));
-  if (
-    (Number.isFinite(width) && width > 0 && width <= 1) ||
-    (Number.isFinite(height) && height > 0 && height <= 1)
-  ) {
-    return true;
+  const firstLabel = url.hostname.split(".")[0] ?? "";
+  if (TRACKING_HOST_LABEL_PATTERN.test(firstLabel)) return true;
+  const fileName = url.pathname.slice(url.pathname.lastIndexOf("/") + 1);
+  const stem = fileName.replace(/\.[a-z0-9]+$/i, "");
+  if (TRACKING_FILENAME_TOKEN_PATTERN.test(fileName)) return true;
+  if (TRACKING_FILENAME_EXACT_PATTERN.test(stem)) return true;
+  for (const key of url.searchParams.keys()) {
+    if (TRACKING_QUERY_KEY_PATTERN.test(key)) return true;
   }
-  return TRACKING_PIXEL_FILENAME_PATTERN.test(attrs.get("src") ?? "");
+  return false;
 }
 
-// Decodes only the entities XML/HTML attribute values actually carry, in one non-overlapping
-// pass — unlike the display-text decoder, it never turns a straight apostrophe into a curly one
-// (that would change the address), and because every entity is matched and replaced in the same
-// pass, an already-escaped "&amp;lt;" comes out as the one-layer-decoded "&lt;", not "<".
-const URL_ENTITY_PATTERN = /&(amp|lt|gt|quot|apos|#0*39|#x[0-9a-fA-F]+|#\d+);/g;
-
-function decodeUrlEntities(text: string): string {
-  return text.replace(URL_ENTITY_PATTERN, (whole, body: string) => {
-    switch (body) {
-      case "amp":
-        return "&";
-      case "lt":
-        return "<";
-      case "gt":
-        return ">";
-      case "quot":
-        return '"';
-      case "apos":
-        return "'";
-      default:
-        break;
-    }
-    if (body === "#0" || /^#0*39$/.test(body)) return "'";
-    if (body.startsWith("#x")) return codePointOr(parseInt(body.slice(2), 16), whole);
-    return codePointOr(Number(body.slice(1)), whole);
-  });
-}
-
-/** Finds the end of a tag that started at `from`, treating quoted attribute values as opaque so a
- *  literal ">" inside a quoted value (e.g. alt="9 > 5") doesn't end the tag early. Returns -1 for
- *  an unterminated tag — the caller stops rather than scanning past the cap looking for it. */
-function findTagEnd(text: string, from: number): number {
-  let quote: string | null = null;
-  for (let i = from; i < text.length; i += 1) {
-    const ch = text[i];
-    if (quote) {
-      if (ch === quote) quote = null;
-    } else if (ch === '"' || ch === "'") {
-      quote = ch;
-    } else if (ch === ">") {
-      return i;
-    }
-  }
-  return -1;
-}
-
-/** First real (non-tracking-pixel) <img> address in an HTML fragment, or null. Single forward
- *  pass, bounded by BODY_IMAGE_SCAN_CHAR_CAP, so a malformed body can't make it quadratic. */
+/** First real (non-tracking) <img> address in an HTML fragment, or null. The tokenizer runs in
+ *  HTML mode, so it lower-cases tag and attribute names, accepts unquoted and single-quoted
+ *  values, and decodes each entity exactly once — an already-escaped "&amp;lt;" stays "&lt;"
+ *  rather than collapsing to "<" and changing the address. */
 function firstRealImgSrc(html: string): string | null {
+  if (!html) return null;
   const text =
     html.length > BODY_IMAGE_SCAN_CHAR_CAP ? html.slice(0, BODY_IMAGE_SCAN_CHAR_CAP) : html;
-  let cursor = 0;
-  while (cursor < text.length) {
-    const tagStart = text.indexOf("<img", cursor);
-    if (tagStart === -1) return null;
-    const afterTag = text[tagStart + 4];
-    if (afterTag !== undefined && !/[\s/>]/.test(afterTag)) {
-      // e.g. "<imgur" — not an <img> tag at all; keep scanning past just this false start.
-      cursor = tagStart + 4;
-      continue;
-    }
-    const tagEnd = findTagEnd(text, tagStart + 4);
-    if (tagEnd === -1) return null; // unterminated tag — nothing more to find, stop
-    cursor = tagEnd + 1;
-    const attrs = parseTagAttributes(text.slice(tagStart, tagEnd + 1));
-    if (isTrackingPixel(attrs)) continue;
-    const src = attrs.get("src");
-    if (src) return decodeUrlEntities(src);
+  const picked: { src: string | null } = { src: null };
+  const parser = new Parser(
+    {
+      onopentag(name, attribs) {
+        if (picked.src !== null || name !== "img") return;
+        const src = (attribs.src ?? "").trim();
+        if (!src) return;
+        if (isInvisibleImage(attribs)) return;
+        if (isTrackingAddress(src)) return;
+        picked.src = src;
+      }
+    },
+    { decodeEntities: true }
+  );
+  try {
+    parser.write(text);
+    parser.end();
+  } catch {
+    return picked.src;
   }
-  return null;
+  return picked.src;
 }
 
 function toSanitizedFeedItems(xml: string, imageHosts: readonly string[]): RssFeedItem[] {
