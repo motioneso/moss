@@ -54,7 +54,7 @@ const RESPONSE_STYLE_EXAMPLE_HINT: Record<ChatResponseStyle, string> = {
   concise: 'Concise example: "Yes, the meeting moved to 3pm."',
   balanced: 'Balanced example: "Yes, the meeting moved to 3pm because Sam had a conflict."',
   detailed:
-    'Detailed example: "Yes, the meeting moved to 3pm because Sam had a conflict. I also nudged the two people after it by 15 minutes so nothing overlaps."'
+    'Detailed example: "Yes, the meeting moved to 3pm because Sam had a conflict. Let me know if that new time doesn\'t work for you."'
 };
 
 const DEFAULT_DESCRIPTION =
