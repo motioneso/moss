@@ -367,6 +367,27 @@ export interface NotificationReadsTable {
   read_at: TimestampColumn;
 }
 
+export interface PushSubscriptionsTable {
+  id: string;
+  owner_user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent_label: string | null;
+  created_at: TimestampColumn;
+  last_used_at: NullableTimestampColumn;
+  failure_count: ColumnType<number, number | undefined, number>;
+  disabled_at: NullableTimestampColumn;
+}
+
+export interface PushSigningKeyTable {
+  id: string;
+  public_key: string;
+  private_key_ciphertext: JsonColumn;
+  subject: string;
+  created_at: TimestampColumn;
+}
+
 export interface ConnectorDefinitionsTable {
   provider_id: string;
   provider_type: ConnectorProviderType;
@@ -1460,6 +1481,8 @@ export interface MossDatabase {
   "app.task_preferences": TaskPreferencesTable;
   "app.notifications": NotificationsTable;
   "app.notification_reads": NotificationReadsTable;
+  "app.push_subscriptions": PushSubscriptionsTable;
+  "app.push_signing_key": PushSigningKeyTable;
   "app.connector_definitions": ConnectorDefinitionsTable;
   "app.connector_accounts": ConnectorAccountsTable;
   "app.connector_oauth_pending": ConnectorOauthPendingTable;
@@ -1540,6 +1563,8 @@ export type TaskList = Selectable<TaskListsTable>;
 export type TaskTag = Selectable<TaskTagsTable>;
 export type TaskPreferences = Selectable<TaskPreferencesTable>;
 export type Notification = Selectable<NotificationsTable>;
+export type PushSubscription = Selectable<PushSubscriptionsTable>;
+export type PushSigningKeyRow = Selectable<PushSigningKeyTable>;
 export type ConnectorProvider = Selectable<ConnectorDefinitionsTable>;
 export type CalendarEvent = Selectable<CalendarEventsTable>;
 export type EmailMessage = Selectable<EmailMessagesTable>;

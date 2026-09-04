@@ -1,0 +1,84 @@
+-- Migration 0214: Web push subscriptions and signing key (Issue #743 / #2227)
+
+CREATE TABLE IF NOT EXISTS app.push_subscriptions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
+  endpoint text NOT NULL,
+  p256dh text NOT NULL,
+  auth text NOT NULL,
+  user_agent_label text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  last_used_at timestamptz,
+  failure_count integer NOT NULL DEFAULT 0,
+  disabled_at timestamptz,
+  CONSTRAINT push_subscriptions_owner_endpoint_key UNIQUE (owner_user_id, endpoint)
+);
+
+CREATE INDEX IF NOT EXISTS push_subscriptions_owner_user_id_idx
+  ON app.push_subscriptions(owner_user_id);
+
+CREATE TABLE IF NOT EXISTS app.push_signing_key (
+  id text PRIMARY KEY CHECK (id = 'default'),
+  public_key text NOT NULL,
+  private_key_ciphertext jsonb NOT NULL,
+  subject text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON app.push_subscriptions TO jarvis_app_runtime;
+GRANT SELECT, UPDATE, DELETE ON app.push_subscriptions TO jarvis_worker_runtime;
+
+GRANT SELECT, INSERT ON app.push_signing_key TO jarvis_app_runtime;
+GRANT SELECT ON app.push_signing_key TO jarvis_worker_runtime;
+
+ALTER TABLE app.push_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.push_subscriptions FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE app.push_signing_key ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app.push_signing_key FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS push_subscriptions_select ON app.push_subscriptions;
+CREATE POLICY push_subscriptions_select ON app.push_subscriptions
+  FOR SELECT TO jarvis_app_runtime, jarvis_worker_runtime
+  USING (
+    app.current_actor_user_id() IS NOT NULL
+    AND owner_user_id = app.current_actor_user_id()
+  );
+
+DROP POLICY IF EXISTS push_subscriptions_insert ON app.push_subscriptions;
+CREATE POLICY push_subscriptions_insert ON app.push_subscriptions
+  FOR INSERT TO jarvis_app_runtime
+  WITH CHECK (
+    app.current_actor_user_id() IS NOT NULL
+    AND owner_user_id = app.current_actor_user_id()
+  );
+
+DROP POLICY IF EXISTS push_subscriptions_update ON app.push_subscriptions;
+CREATE POLICY push_subscriptions_update ON app.push_subscriptions
+  FOR UPDATE TO jarvis_app_runtime, jarvis_worker_runtime
+  USING (
+    app.current_actor_user_id() IS NOT NULL
+    AND owner_user_id = app.current_actor_user_id()
+  )
+  WITH CHECK (
+    app.current_actor_user_id() IS NOT NULL
+    AND owner_user_id = app.current_actor_user_id()
+  );
+
+DROP POLICY IF EXISTS push_subscriptions_delete ON app.push_subscriptions;
+CREATE POLICY push_subscriptions_delete ON app.push_subscriptions
+  FOR DELETE TO jarvis_app_runtime, jarvis_worker_runtime
+  USING (
+    app.current_actor_user_id() IS NOT NULL
+    AND owner_user_id = app.current_actor_user_id()
+  );
+
+DROP POLICY IF EXISTS push_signing_key_select ON app.push_signing_key;
+CREATE POLICY push_signing_key_select ON app.push_signing_key
+  FOR SELECT TO jarvis_app_runtime, jarvis_worker_runtime
+  USING (true);
+
+DROP POLICY IF EXISTS push_signing_key_insert ON app.push_signing_key;
+CREATE POLICY push_signing_key_insert ON app.push_signing_key
+  FOR INSERT TO jarvis_app_runtime
+  WITH CHECK (app.current_actor_user_id() IS NOT NULL);
