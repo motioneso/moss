@@ -69,6 +69,18 @@ export interface NotificationPreferencePort {
   isModuleEnabled(scopedDb: DataContextDb, moduleId: string): Promise<boolean>;
 }
 
+/**
+ * Cross-package port: notifications enqueues push delivery jobs without importing
+ * `@moss/jobs` (pg-boss) into the domain layer. The real implementation
+ * (`createPushQueuePort` in `push-jobs.ts`) is injected by the composition root. Absence
+ * (the default) means push is simply not wired for that caller — consistent with
+ * `notificationPreferencePort` being optional above.
+ */
+export interface PushQueuePort {
+  enqueueDeliver(notificationId: string, recipientUserId: string): Promise<void>;
+  enqueueSummary(recipientUserId: string, releaseAt: Date): Promise<void>;
+}
+
 export interface QuietHoursSettings {
   enabled: boolean;
   start: string;
@@ -184,7 +196,8 @@ function validateHref(href: string | null | undefined): string | null {
 export class NotificationsRepository {
   constructor(
     private readonly quietHoursPort?: QuietHoursPort,
-    private readonly notificationPreferencePort?: NotificationPreferencePort
+    private readonly notificationPreferencePort?: NotificationPreferencePort,
+    private readonly pushQueuePort?: PushQueuePort
   ) {}
 
   async listVisible(scopedDb: DataContextDb): Promise<ListNotificationsResult> {
@@ -318,6 +331,19 @@ export class NotificationsRepository {
     // for two unrelated meanings.
     const row = rows.rows[0];
     if (!row) throw new Error("notifications upsert returned no row");
+
+    // Push delivery (#743 / #2227): urgent and never-deferred notifications push
+    // immediately; a deferred one only ever gets one summary push at release time
+    // (Resolved Decision 2), never an individual push. recipient_user_id is always the
+    // acting actor (see CreateNotificationInput docblock), so it is never null here.
+    if (this.pushQueuePort && row.recipient_user_id) {
+      if (deferredUntil) {
+        await this.pushQueuePort.enqueueSummary(row.recipient_user_id, deferredUntil);
+      } else {
+        await this.pushQueuePort.enqueueDeliver(row.id, row.recipient_user_id);
+      }
+    }
+
     return row;
   }
 
