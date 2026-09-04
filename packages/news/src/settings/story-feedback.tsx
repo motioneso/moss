@@ -111,21 +111,25 @@ export function StoryFeedbackSettings() {
   if (query.isPending) return null;
   if (query.isError) return <Note>Could not load your News feedback.</Note>;
   const feedback = query.data.feedback.filter((item) => item.status === "active");
+
+  // Nothing to manage yet: keep the whole section out of the pane, matching Sports.
+  if (feedback.length === 0) {
+    return null;
+  }
+
   return (
-    <section className="nw-set" aria-label="News story feedback">
-      <p className="nw-set__kicker">What shapes your News</p>
-      <p className="nw-set__hint">
-        These choices guide routine stories. Major news can still appear when the evidence is clear.
-      </p>
-      {feedback.length > 0 ? (
-        <ul className="nw-set__list">
-          {feedback.map((item) => (
-            <StoryFeedbackRow key={item.id} feedback={item} />
-          ))}
-        </ul>
-      ) : (
-        <Note>You have not asked News for more or less of a story yet.</Note>
-      )}
+    <section className="nw-set" aria-label="Story preferences">
+      <div className="nw-set__head">
+        <h2 className="jds-section-title">Story preferences</h2>
+        <p className="jds-section-sub">
+          What shapes your News: major stories about subjects you asked to see less of may still appear.
+        </p>
+      </div>
+      <ul className="nw-set__list">
+        {feedback.map((item) => (
+          <StoryFeedbackRow key={item.id} feedback={item} />
+        ))}
+      </ul>
     </section>
   );
 }

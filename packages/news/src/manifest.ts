@@ -125,7 +125,8 @@ export const newsModuleManifest = {
     {
       id: "news.prefs",
       label: "News",
-      description: "Choose news sources, topics, and excluded publishers.",
+      description:
+        "Choose news topics, manage built-in, connected, and custom news sources, story preferences, and excluded publishers.",
       path: "/settings/modules/news",
       scope: "user",
       order: 34,

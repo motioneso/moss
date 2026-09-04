@@ -182,31 +182,37 @@ export function DescribeTopics(props: {
             const removing = removeMutation.isPending && removeMutation.variables === topic.id;
             return (
               <li key={topic.id} className="nw-set__item">
-                <span className="nw-set__item-label">{topic.label}</span>
-                {topic.guidance ? (
-                  <span className="nw-set__item-meta">{topic.guidance}</span>
-                ) : null}
-                {topic.validationStatus !== "approved" ? (
-                  <Badge tone="amber">Needs revalidation</Badge>
-                ) : null}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  aria-label={`Edit ${topic.label}`}
-                  disabled={pending || removing}
-                  onClick={() => startEdit(topic)}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  aria-label={`Remove ${topic.label}`}
-                  disabled={removing}
-                  onClick={() => removeMutation.mutate(topic.id)}
-                >
-                  Remove
-                </Button>
+                <div className="nw-set__item-row">
+                  <div className="nw-set__identity">
+                    <span className="nw-set__item-label">{topic.label}</span>
+                    {topic.guidance ? (
+                      <span className="nw-set__item-meta">{topic.guidance}</span>
+                    ) : null}
+                    {topic.validationStatus !== "approved" ? (
+                      <Badge tone="amber">Needs revalidation</Badge>
+                    ) : null}
+                  </div>
+                  <div className="nw-set__actions">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Edit ${topic.label}`}
+                      disabled={pending || removing}
+                      onClick={() => startEdit(topic)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Remove ${topic.label}`}
+                      disabled={removing}
+                      onClick={() => removeMutation.mutate(topic.id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
               </li>
             );
           })}

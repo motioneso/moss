@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Newspaper, Plus } from "lucide-react";
 import { Badge, formatTimestamp, Note, PaneHead } from "@moss/settings-ui";
 import { Button } from "@moss/module-web-sdk";
 import type {
@@ -196,6 +197,42 @@ export function lastCheckedLabel(isoTimestamp: string | null): string | null {
   return formatted ? `Last checked ${formatted}` : null;
 }
 
+function SourceIcon() {
+  return (
+    <span className="nw-set__item-icon" aria-hidden="true">
+      <Newspaper size={16} />
+    </span>
+  );
+}
+
+function sourceHealthBadge(source: {
+  readonly validationStatus: "approved" | "needs_revalidation" | "rejected";
+  readonly healthStatus:
+    | "healthy"
+    | "authentication_failed"
+    | "temporarily_unavailable"
+    | "disabled"
+    | "unsupported";
+}) {
+  if (source.validationStatus !== "approved") {
+    return <Badge tone="amber">Needs revalidation</Badge>;
+  }
+  switch (source.healthStatus) {
+    case "healthy":
+      return <Badge tone="pine">Healthy</Badge>;
+    case "authentication_failed":
+      return <Badge tone="red">Key rejected</Badge>;
+    case "temporarily_unavailable":
+      return <Badge tone="amber">Temporarily unavailable</Badge>;
+    case "disabled":
+      return <Badge tone="neutral">Disabled</Badge>;
+    case "unsupported":
+      return <Badge tone="amber">Unsupported</Badge>;
+    default:
+      return null;
+  }
+}
+
 export default function NewsSettings() {
   const queryClient = useQueryClient();
   const catalogQuery = useQuery({ queryKey: newsQueryKeys.catalog, queryFn: getNewsCatalog });
@@ -205,6 +242,7 @@ export default function NewsSettings() {
     queryFn: getNewsPersonalization
   });
 
+  const [addingSource, setAddingSource] = useState(false);
   const [exclusionInput, setExclusionInput] = useState("");
   const [exclusionValidation, setExclusionValidation] = useState<string | null>(null);
 
@@ -285,6 +323,8 @@ export default function NewsSettings() {
   const credentialBySourceId = new Map<string, NewsSourceCredentialStatusDto>(
     (credentialsQuery.data?.credentials ?? []).map((entry) => [entry.sourceId, entry])
   );
+  const connectedSources = customSources.filter((source) => credentialBySourceId.has(source.id));
+  const customOnlySources = customSources.filter((source) => !credentialBySourceId.has(source.id));
   const customTopics = personalization?.customTopics ?? [];
   const exclusions = personalization?.sourceExclusions ?? [];
   const personalizationReady = personalizationQuery.isSuccess;
@@ -325,9 +365,6 @@ export default function NewsSettings() {
       ? (addExclusionMutation.error?.message ?? "Could not exclude that publisher.")
       : null);
 
-  const sourcesNeedAttention = customSources.some(
-    (source) => source.validationStatus !== "approved" || source.healthStatus !== "healthy"
-  );
   const topicsNeedAttention = customTopics.some((topic) => topic.validationStatus !== "approved");
 
   // One owner-wide revalidation job covers sources AND topics, but the button renders inside
@@ -356,6 +393,133 @@ export default function NewsSettings() {
     </div>
   );
 
+  const renderCustomSourceRow = (source: (typeof customSources)[number]) => {
+    const removing =
+      removeSourceMutation.isPending && removeSourceMutation.variables === source.id;
+    // #2008: present only for a source that was connected with a key.
+    const credential = credentialBySourceId.get(source.id);
+    const badge = credential ? credentialStatusBadge(credential.status) : null;
+    const checked = credential ? lastCheckedLabel(credential.lastValidatedAt) : null;
+    const isUnhealthy =
+      source.validationStatus !== "approved" || source.healthStatus !== "healthy";
+
+    return (
+      <li key={source.id} className="nw-set__item">
+        <div className="nw-set__item-row">
+          <div className="nw-set__identity">
+            <SourceIcon />
+            <span className="nw-set__item-label">{source.label}</span>
+            <span className="nw-set__item-meta">{source.canonicalDomain}</span>
+            {badge ? <Badge tone={badge.tone}>{badge.label}</Badge> : null}
+            {checked ? <span className="nw-set__item-meta">{checked}</span> : null}
+            {sourceHealthBadge(source)}
+          </div>
+          <div className="nw-set__actions">
+            {isUnhealthy ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                aria-label={`Retry ${source.label}`}
+                disabled={revalidateMutation.isPending}
+                onClick={() => revalidateMutation.mutate()}
+              >
+                {revalidateMutation.isPending ? "Queuing…" : "Retry"}
+              </Button>
+            ) : null}
+            {credential ? (
+              <>
+                {/* Offered only when News still knows where this publisher's key is
+                    sent. Without that, the form could not honestly say where a new key
+                    would go, and the route would refuse it anyway. */}
+                {credential.requestHost ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    aria-label={`Replace key for ${source.label}`}
+                    disabled={replacingSourceId === source.id}
+                    onClick={() => {
+                      setRevokingSourceId(null);
+                      setKeyNotice(null);
+                      setReplacingSourceId(source.id);
+                    }}
+                  >
+                    Replace key
+                  </Button>
+                ) : null}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  aria-label={`Revoke access for ${source.label}`}
+                  disabled={revokeCredentialMutation.isPending}
+                  onClick={() => {
+                    setReplacingSourceId(null);
+                    setKeyNotice(null);
+                    setRevokingSourceId(source.id);
+                  }}
+                >
+                  Revoke access
+                </Button>
+              </>
+            ) : null}
+            <Button
+              variant="secondary"
+              size="sm"
+              aria-label={`Remove ${source.label}`}
+              disabled={removing}
+              onClick={() => removeSourceMutation.mutate(source.id)}
+            >
+              Remove
+            </Button>
+          </div>
+        </div>
+        {credential && revokingSourceId === source.id ? (
+          // Revoking silently stops this source delivering, so it is confirmed once
+          // rather than done on a single click.
+          <span className="nw-set__addrow" role="group">
+            <span className="nw-set__hint">
+              Revoke access for {source.label}? News will stop using this key.
+            </span>
+            <Button
+              size="sm"
+              disabled={revokeCredentialMutation.isPending}
+              onClick={() => revokeCredentialMutation.mutate(source.id)}
+            >
+              {revokeCredentialMutation.isPending ? "Revoking…" : "Yes, revoke"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setRevokingSourceId(null)}
+            >
+              Keep it
+            </Button>
+          </span>
+        ) : null}
+        {credential && credential.requestHost && replacingSourceId === source.id ? (
+          <ConnectPublisherForm
+            offer={{
+              connectionId: credential.connectionId,
+              publisherName: credential.publisherName,
+              // The reviewed connection's own request host, reported by the route.
+              // Never the stored publication domain: the sentence above the box is a
+              // promise about where a secret goes, so it is built from the request.
+              requestHost: credential.requestHost,
+              accessSummary:
+                "Replacing the key keeps this source in your feed. The old key stops working.",
+              termsUrl: null
+            }}
+            mode={{ kind: "replace", sourceId: source.id }}
+            onDone={(message) => {
+              setReplacingSourceId(null);
+              setKeyNotice(message);
+            }}
+            onCancel={() => setReplacingSourceId(null)}
+          />
+        ) : null}
+      </li>
+    );
+  };
+
   return (
     <>
       <PaneHead
@@ -363,221 +527,226 @@ export default function NewsSettings() {
         desc="Pick the publications your front page draws from, and optionally narrow it to the topics you follow. These choices also shape news in briefings."
       />
 
-      <StoryFeedbackSettings />
-
-      <section className="nw-set" aria-label="News sources">
-        <p className="nw-set__kicker">Publications</p>
-        <div className="nw-set__grid">
-          {sources.map((source) => {
-            const state = tileStates.get(source.sourceKey) ?? "off";
-            // An excluded tile is inert: its V1 toggle would silently do nothing (the server
-            // suppresses the domain pre-fetch), so it renders disabled + "Excluded" instead
-            // of a fake On/Off.
-            const excluded = state === "excluded";
-            const active = state === "on";
-            return (
-              <button
-                key={source.sourceKey}
-                type="button"
-                className={`nw-setsrc${active ? " is-active" : ""}${excluded ? " is-excluded" : ""}`}
-                disabled={pending || excluded}
-                aria-pressed={active}
-                onClick={() =>
-                  opsMutation.mutate(planSourceToggle(source.sourceKey, sources, prefs))
-                }
-              >
-                <span className="nw-setsrc__name">{source.label}</span>
-                <span className="nw-setsrc__state">
-                  {excluded ? "Excluded" : active ? "On" : "Off"}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        {anyTileExcluded ? (
-          <Note>
-            Excluded publishers override these toggles — manage them under Excluded publishers
-            below.
-          </Note>
-        ) : null}
-        {!pending && enabledCount === 0 ? (
-          <Note>No sources enabled — your News page will be empty until you turn one on.</Note>
-        ) : null}
-      </section>
-
       <section className="nw-set" aria-label="News topics">
-        <p className="nw-set__kicker">Topics from your publications</p>
-        <p className="nw-set__hint">
-          Narrow your enabled publications to these desks. With none followed you get each
-          publication&rsquo;s general front page.
-        </p>
-        <div className="nw-set__chips">
-          {topics.map((topic: NewsTopicOption) => {
-            const active = followedTopics.has(topic.topicKey);
-            return (
-              <button
-                key={topic.topicKey}
-                type="button"
-                className={`nw-settopic${active ? " is-active" : ""}`}
-                disabled={pending}
-                aria-pressed={active}
-                onClick={() => opsMutation.mutate(planTopicToggle(topic.topicKey, prefs))}
-              >
-                {topic.label}
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="nw-set" aria-label="Personalized sources">
-        <p className="nw-set__kicker">Publications you add</p>
-        <p className="nw-set__hint">
-          Publications you add yourself, verified before they join your feed. Verified sources
-          contribute recent headlines to News and briefings.
-        </p>
-        {personalizationStatus ? <Note>{personalizationStatus}</Note> : null}
-        {personalizationReady && availability ? (
-          <p className="nw-set__prereq">
-            <Badge tone={availability.aiConfigured ? "pine" : "amber"} dot>
-              AI model {availability.aiConfigured ? "ready" : "needed"}
-            </Badge>
-            <Badge tone={availability.webSearchConfigured ? "pine" : "amber"} dot>
-              Web search {availability.webSearchConfigured ? "ready" : "needed"}
-            </Badge>
+        <div className="nw-set__head">
+          <h2 className="jds-section-title">Topics</h2>
+          <p className="jds-section-sub">
+            Follow desks from your publications or describe interests across the web.
           </p>
-        ) : null}
-        {personalizationReady && customSources.length > 0 ? (
-          <ul className="nw-set__list">
-            {customSources.map((source) => {
-              const removing =
-                removeSourceMutation.isPending && removeSourceMutation.variables === source.id;
-              // #2008: present only for a source that was connected with a key.
-              const credential = credentialBySourceId.get(source.id);
-              const badge = credential ? credentialStatusBadge(credential.status) : null;
-              const checked = credential ? lastCheckedLabel(credential.lastValidatedAt) : null;
+        </div>
+
+        <div className="nw-set__group">
+          <div className="nw-set__group-head">
+            <h3 className="nw-set__subheading">
+              <span>Topics from your publications</span>
+              {topics.length > 0 ? (
+                <Badge tone="neutral">{topics.length}</Badge>
+              ) : null}
+            </h3>
+          </div>
+          <p className="nw-set__hint">
+            Narrow your enabled publications to these desks. With none followed you get each
+            publication&rsquo;s general front page.
+          </p>
+          <div className="nw-set__chips">
+            {topics.map((topic: NewsTopicOption) => {
+              const active = followedTopics.has(topic.topicKey);
               return (
-                <li key={source.id} className="nw-set__item">
-                  <span className="nw-set__item-label">{source.label}</span>
-                  <span className="nw-set__item-meta">{source.canonicalDomain}</span>
-                  {badge ? <Badge tone={badge.tone}>{badge.label}</Badge> : null}
-                  {checked ? <span className="nw-set__item-meta">{checked}</span> : null}
-                  {source.validationStatus !== "approved" ? (
-                    <Badge tone="amber">Needs revalidation</Badge>
-                  ) : source.healthStatus === "healthy" ? (
-                    <Badge tone="pine">Healthy</Badge>
-                  ) : source.healthStatus === "authentication_failed" ? (
-                    <Badge tone="red">Key rejected</Badge>
-                  ) : source.healthStatus === "temporarily_unavailable" ? (
-                    <Badge tone="amber">Temporarily unavailable</Badge>
-                  ) : source.healthStatus === "disabled" ? (
-                    <Badge tone="neutral">Disabled</Badge>
-                  ) : source.healthStatus === "unsupported" ? (
-                    <Badge tone="amber">Unsupported</Badge>
-                  ) : null}
-                  {credential ? (
-                    <>
-                      {/* Offered only when News still knows where this publisher's key is
-                          sent. Without that, the form could not honestly say where a new key
-                          would go, and the route would refuse it anyway. */}
-                      {credential.requestHost ? (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          aria-label={`Replace key for ${source.label}`}
-                          disabled={replacingSourceId === source.id}
-                          onClick={() => {
-                            setRevokingSourceId(null);
-                            setKeyNotice(null);
-                            setReplacingSourceId(source.id);
-                          }}
-                        >
-                          Replace key
-                        </Button>
-                      ) : null}
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        aria-label={`Revoke access for ${source.label}`}
-                        disabled={revokeCredentialMutation.isPending}
-                        onClick={() => {
-                          setReplacingSourceId(null);
-                          setKeyNotice(null);
-                          setRevokingSourceId(source.id);
-                        }}
-                      >
-                        Revoke access
-                      </Button>
-                    </>
-                  ) : null}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    aria-label={`Remove ${source.label}`}
-                    disabled={removing}
-                    onClick={() => removeSourceMutation.mutate(source.id)}
-                  >
-                    Remove
-                  </Button>
-                  {credential && revokingSourceId === source.id ? (
-                    // Revoking silently stops this source delivering, so it is confirmed once
-                    // rather than done on a single click.
-                    <span className="nw-set__addrow" role="group">
-                      <span className="nw-set__hint">
-                        Revoke access for {source.label}? News will stop using this key.
-                      </span>
-                      <Button
-                        size="sm"
-                        disabled={revokeCredentialMutation.isPending}
-                        onClick={() => revokeCredentialMutation.mutate(source.id)}
-                      >
-                        {revokeCredentialMutation.isPending ? "Revoking…" : "Yes, revoke"}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setRevokingSourceId(null)}
-                      >
-                        Keep it
-                      </Button>
-                    </span>
-                  ) : null}
-                  {credential && credential.requestHost && replacingSourceId === source.id ? (
-                    <ConnectPublisherForm
-                      offer={{
-                        connectionId: credential.connectionId,
-                        publisherName: credential.publisherName,
-                        // The reviewed connection's own request host, reported by the route.
-                        // Never the stored publication domain: the sentence above the box is a
-                        // promise about where a secret goes, so it is built from the request.
-                        requestHost: credential.requestHost,
-                        accessSummary:
-                          "Replacing the key keeps this source in your feed. The old key stops working.",
-                        termsUrl: null
-                      }}
-                      mode={{ kind: "replace", sourceId: source.id }}
-                      onDone={(message) => {
-                        setReplacingSourceId(null);
-                        setKeyNotice(message);
-                      }}
-                      onCancel={() => setReplacingSourceId(null)}
-                    />
-                  ) : null}
-                </li>
+                <button
+                  key={topic.topicKey}
+                  type="button"
+                  className={`nw-settopic${active ? " is-active" : ""}`}
+                  disabled={pending}
+                  aria-pressed={active}
+                  onClick={() => opsMutation.mutate(planTopicToggle(topic.topicKey, prefs))}
+                >
+                  {topic.label}
+                </button>
               );
             })}
-          </ul>
-        ) : null}
+          </div>
+        </div>
+
+        <div className="nw-set__group">
+          <div className="nw-set__group-head">
+            <h3 className="nw-set__subheading">
+              <span>Topics across the web</span>
+              {customTopics.length > 0 ? (
+                <Badge tone="neutral">{customTopics.length}</Badge>
+              ) : null}
+            </h3>
+          </div>
+          <p className="nw-set__hint">
+            Freeform topics in your own words, discovered across the web, not just your publications.
+          </p>
+          {personalizationReady ? (
+            <DescribeTopics
+              customTopics={customTopics}
+              availability={availability}
+              needsAttention={topicsNeedAttention}
+              retryRow={retryRow}
+            />
+          ) : null}
+        </div>
+      </section>
+
+      <section className="nw-set" aria-label="News sources">
+        <div className="nw-set__head">
+          <h2 className="jds-section-title">Sources</h2>
+          <p className="jds-section-sub">
+            Choose built-in publications or add your own to shape your front page.
+          </p>
+        </div>
+
+        {personalizationStatus ? <Note>{personalizationStatus}</Note> : null}
+
+        <div className="nw-set__group">
+          <div className="nw-set__group-head">
+            <h3 className="nw-set__subheading">
+              <span>Built-in publications</span>
+              <Badge tone="neutral">{sources.length}</Badge>
+            </h3>
+          </div>
+          <div className="nw-set__grid">
+            {sources.map((source) => {
+              const state = tileStates.get(source.sourceKey) ?? "off";
+              // An excluded tile is inert: its V1 toggle would silently do nothing (the server
+              // suppresses the domain pre-fetch), so it renders disabled + "Excluded" instead
+              // of a fake On/Off.
+              const excluded = state === "excluded";
+              const active = state === "on";
+              return (
+                <button
+                  key={source.sourceKey}
+                  type="button"
+                  className={`nw-setsrc${active ? " is-active" : ""}${excluded ? " is-excluded" : ""}`}
+                  disabled={pending || excluded}
+                  aria-pressed={active}
+                  onClick={() =>
+                    opsMutation.mutate(planSourceToggle(source.sourceKey, sources, prefs))
+                  }
+                >
+                  <span className="nw-setsrc__name">{source.label}</span>
+                  <span className="nw-setsrc__state">
+                    {excluded ? "Excluded" : active ? "On" : "Off"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {anyTileExcluded ? (
+            <Note>
+              Excluded publishers override these toggles — manage them under Excluded publishers
+              below.
+            </Note>
+          ) : null}
+          {!pending && enabledCount === 0 ? (
+            <Note>No sources enabled — your News page will be empty until you turn one on.</Note>
+          ) : null}
+        </div>
+
+        <div className="nw-set__group">
+          <div className="nw-set__group-head">
+            <h3 className="nw-set__subheading">
+              <span>Connected publishers</span>
+              <Badge tone="neutral">{connectedSources.length}</Badge>
+            </h3>
+          </div>
+          <p className="nw-set__hint">
+            Publishers connected with your own access key.
+          </p>
+          {personalizationReady && connectedSources.length > 0 ? (
+            <ul className="nw-set__list">
+              {connectedSources.map(renderCustomSourceRow)}
+            </ul>
+          ) : (
+            <p className="nw-set__hint">No connected publishers yet.</p>
+          )}
+        </div>
+
+        <div className="nw-set__group">
+          <div className="nw-set__group-head">
+            <h3 className="nw-set__subheading">
+              <span>Publications you add</span>
+              <Badge tone="neutral">{customOnlySources.length}</Badge>
+            </h3>
+          </div>
+          <p className="nw-set__hint">
+            Publications you add yourself, verified before they join your feed.
+          </p>
+          {personalizationReady && availability ? (
+            <p className="nw-set__prereq">
+              <Badge tone={availability.aiConfigured ? "pine" : "amber"} dot>
+                AI model {availability.aiConfigured ? "ready" : "needed"}
+              </Badge>
+              <Badge tone={availability.webSearchConfigured ? "pine" : "amber"} dot>
+                Web search {availability.webSearchConfigured ? "ready" : "needed"}
+              </Badge>
+            </p>
+          ) : null}
+          {personalizationReady && customOnlySources.length > 0 ? (
+            <ul className="nw-set__list">
+              {customOnlySources.map(renderCustomSourceRow)}
+            </ul>
+          ) : (
+            <p className="nw-set__hint">No custom publications added yet.</p>
+          )}
+        </div>
+
         {/* #2008: what happened to a publisher key. The key form closes as soon as the request
             succeeds, so this is the only place a "Connected" sentence can actually be read. */}
         {keyNotice ? <Note>{keyNotice}</Note> : null}
         {personalizationReady && removeSourceMutation.isError ? (
           <Note>Could not remove that source. Try again.</Note>
         ) : null}
-        {personalizationReady && sourcesNeedAttention ? retryRow() : null}
-        {personalizationReady ? (
-          availability?.customSourceByUrlEnabled ? (
-            <AddSourceFlow />
+        {revalidateMutation.isSuccess ? (
+          <span className="nw-set__gate" role="status">
+            Revalidation queued — statuses update after the next check.
+          </span>
+        ) : null}
+        {revalidateMutation.isError ? (
+          <span className="nw-set__exerr" role="alert">
+            Could not queue revalidation. Try again.
+          </span>
+        ) : null}
+
+        <div className="nw-set__add-section">
+          {addingSource ? (
+            <>
+              <div className="nw-set__add-head">
+                <h3 className="nw-set__subheading">Add a source</h3>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  aria-expanded={true}
+                  onClick={() => setAddingSource(false)}
+                >
+                  Close
+                </Button>
+              </div>
+              {availability?.customSourceByUrlEnabled ? (
+                <AddSourceFlow />
+              ) : (
+                <div className="nw-set__addrow">
+                  <Button variant="secondary" size="sm" disabled>
+                    Add source
+                  </Button>
+                  {availability ? (
+                    <PrereqGate requirement="Adding sources needs an AI model with structured output." />
+                  ) : null}
+                </div>
+              )}
+            </>
+          ) : availability?.customSourceByUrlEnabled ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              aria-expanded={false}
+              onClick={() => setAddingSource(true)}
+            >
+              <Plus size={14} aria-hidden="true" />
+              Add a source
+            </Button>
           ) : (
             <div className="nw-set__addrow">
               <Button variant="secondary" size="sm" disabled>
@@ -587,32 +756,19 @@ export default function NewsSettings() {
                 <PrereqGate requirement="Adding sources needs an AI model with structured output." />
               ) : null}
             </div>
-          )
-        ) : null}
+          )}
+        </div>
       </section>
 
-      <section className="nw-set" aria-label="Topics across the web">
-        <p className="nw-set__kicker">Topics across the web</p>
-        <p className="nw-set__hint">
-          Freeform topics in your own words — like &ldquo;mechanical watches, not
-          smartwatches&rdquo; — discovered across the web, not just your publications.
-        </p>
-        {personalizationReady ? (
-          <DescribeTopics
-            customTopics={customTopics}
-            availability={availability}
-            needsAttention={topicsNeedAttention}
-            retryRow={retryRow}
-          />
-        ) : null}
-      </section>
+      <StoryFeedbackSettings />
 
       <section className="nw-set" aria-label="Excluded publishers">
-        <p className="nw-set__kicker">Excluded publishers</p>
-        <p className="nw-set__hint">
-          Excluded publishers never appear anywhere in News, Today, or briefings — including through
-          topics. Removing one returns it to neutral; it may show up again, but is not preferred.
-        </p>
+        <div className="nw-set__head">
+          <h2 className="jds-section-title">Excluded publishers</h2>
+          <p className="jds-section-sub">
+            Excluded publishers never appear anywhere in News, Today, or briefings.
+          </p>
+        </div>
         {personalizationReady ? (
           <form className="nw-set__exform" onSubmit={submitExclusion}>
             <label className="nw-set__exlabel" htmlFor="nw-exclusion-input">
@@ -652,16 +808,20 @@ export default function NewsSettings() {
                 removeExclusionMutation.variables === exclusion.id;
               return (
                 <li key={exclusion.id} className="nw-set__item">
-                  <span className="nw-set__item-label">{exclusion.canonicalDomain}</span>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    aria-label={`Remove ${exclusion.canonicalDomain}`}
-                    disabled={removing}
-                    onClick={() => removeExclusionMutation.mutate(exclusion.id)}
-                  >
-                    Remove
-                  </Button>
+                  <div className="nw-set__item-row">
+                    <span className="nw-set__item-label">{exclusion.canonicalDomain}</span>
+                    <div className="nw-set__actions">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        aria-label={`Remove ${exclusion.canonicalDomain}`}
+                        disabled={removing}
+                        onClick={() => removeExclusionMutation.mutate(exclusion.id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
                 </li>
               );
             })}

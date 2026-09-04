@@ -521,6 +521,7 @@ test.describe("publisher keys (#2008)", () => {
     });
 
     await page.goto("/settings?section=modules&module=news");
+    await page.getByRole("button", { name: "Add a source" }).click();
     const input = page.getByLabel("Publication homepage or domain");
 
     // An ordinary publication: the existing add path, and no key box anywhere.
@@ -598,6 +599,7 @@ test.describe("publisher keys (#2008)", () => {
     page.on("request", (request) => urls.push(request.url()));
 
     await page.goto("/settings?section=modules&module=news");
+    await page.getByRole("button", { name: "Add a source" }).click();
     await page.getByLabel("Publication homepage or domain").fill("newsapi.org");
     await page.getByRole("button", { name: "Check" }).click();
     await page.getByLabel("Access key").fill(FAKE_KEY);
@@ -847,6 +849,7 @@ test.describe("publisher keys (#2008)", () => {
     });
 
     await page.goto("/settings?section=modules&module=news");
+    await page.getByRole("button", { name: "Add a source" }).click();
     await page.getByLabel("Publication homepage or domain").fill("newsapi.org");
     await page.getByRole("button", { name: "Check" }).click();
     await page.getByLabel("Access key").fill(FAKE_KEY);

@@ -1,23 +1,47 @@
-/* News settings pane. Tokens only — raw colors live in apps/web/src/styles/tokens.css. */
+/* News settings pane. Layout only by contract — visual declarations live in
+   packages/ui/src/styles/components-news.css and tokens.css. */
 
 .nw-set {
+  margin-top: var(--space-6);
+}
+
+.nw-set__head {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-4);
+}
+.nw-set__head > * {
+  margin: 0;
+}
+
+.nw-set__group {
   margin-top: var(--space-5);
 }
 
-.nw-set__kicker {
-  margin: 0 0 var(--space-3);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-caps);
+.nw-set__group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.nw-set__subheading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
 }
 
 .nw-set__hint {
-  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  margin: 0 0 var(--space-3);
   line-height: 1.5;
 }
 
 .nw-set__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
   gap: var(--space-2);
 }
 
@@ -34,9 +58,17 @@
   opacity: 0.6;
   cursor: default;
 }
+.nw-setsrc__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1;
+}
 .nw-setsrc__state {
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
+  flex-shrink: 0;
 }
 
 .nw-set__chips {
@@ -53,8 +85,6 @@
   opacity: 0.6;
   cursor: default;
 }
-
-/* ----- #953 personalization sections ----- */
 
 /* An excluded curated tile is inert — dashed border + muted text reads as "overridden",
    distinct from the plain disabled (pending) state's opacity fade. */
@@ -84,20 +114,59 @@
 
 .nw-set__item {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.nw-set__item-row {
+  display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  width: 100%;
+}
+
+.nw-set__identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.nw-set__item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.nw-set__item-icon img {
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: contain;
+}
+
+.nw-set__item-label {
+  white-space: nowrap;
 }
 
 .nw-set__item-meta {
-  flex: 1;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.nw-set__item > button {
+.nw-set__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   margin-left: auto;
 }
 
@@ -130,7 +199,7 @@
 .nw-set__exrow {
   display: flex;
   gap: var(--space-2);
-  max-width: 28rem;
+  max-width: 36rem;
 }
 
 .nw-set__exrow .jds-input {
@@ -147,6 +216,7 @@
   gap: var(--space-3);
   align-items: flex-start;
   flex-wrap: wrap;
+  padding: var(--space-3);
 }
 .nw-set__feedback-item > div:first-child {
   min-width: 12rem;
@@ -159,7 +229,7 @@
 .nw-set__feedback-edit textarea {
   display: block;
   width: 100%;
-  max-width: 32rem;
+  max-width: 36rem;
   min-height: 4.5rem;
   resize: vertical;
 }
@@ -174,57 +244,61 @@
   margin-top: var(--space-2);
 }
 
-/* ----- #975 Task 9: add-source/topic write flows ----- */
-
-/* Stacked label/row pairs inside one form (topic label + guidance) need breathing room
-   between the first row and the next label. */
+/* Stacked label/row pairs inside one form */
 .nw-set__exrow + .nw-set__exlabel {
   margin-top: var(--space-2);
 }
 
+.nw-set__add-section {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+.nw-set__add-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
 .nw-set__addflow {
-  margin-top: var(--space-2);
+  max-width: 42rem;
 }
 
-.nw-set__candidates {
-  margin: var(--space-2) 0 0;
+.nw-set__candidate {
+  margin-top: var(--space-3);
 }
 
-/* Candidate radios sit inline with the flex row items. */
 .nw-set__item > input[type="radio"] {
   margin: 0;
-  accent-color: var(--accent);
 }
-
-/* ----- #990 described-topic add/edit status regions ----- */
 
 .nw-set__exstatus {
   margin: calc(-1 * var(--space-2)) 0 var(--space-3);
 }
 
 @media (max-width: 40rem) {
-  .nw-set__item {
-    flex-wrap: wrap;
+  .nw-set__identity,
+  .nw-set__actions {
+    flex-basis: 100%;
+  }
+
+  .nw-set__actions {
+    justify-content: flex-start;
+    margin-left: 0;
   }
 
   .nw-set__item-meta {
-    order: 3;
-    flex-basis: 100%;
     overflow: visible;
     white-space: normal;
   }
 
-  .nw-set__item > button {
-    margin-left: 0;
-  }
-
-  .nw-set__item > button:first-of-type {
-    margin-left: auto;
+  .nw-set__exrow {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
-
-/* ----- #2008 publisher key form. Layout only; every colour and size comes from a token or
-   from a shared component, so nothing here can drift from the design system. ----- */
 
 .nw-set__connect {
   display: flex;
@@ -232,7 +306,7 @@
   gap: var(--space-2);
   margin-top: var(--space-3);
   padding: var(--space-3) 0;
-  max-width: 34rem;
+  max-width: 36rem;
 }
 
 .nw-set__connect-name {
@@ -252,3 +326,4 @@
   gap: var(--space-2);
   line-height: 1.5;
 }
+

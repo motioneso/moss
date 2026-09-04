@@ -1,5 +1,6 @@
 import { useCallback, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Newspaper } from "lucide-react";
 import { Note } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
 import type {
@@ -194,7 +195,7 @@ export function AddSourceFlow() {
       ) : null}
 
       {candidates.length > 0 ? (
-        <div className="nw-set__candidates">
+        <div className="nw-set__candidate jds-card jds-card--sunken jds-card--pad-lg">
           {preview?.duplicateOfSourceId ? (
             <Note>That publication is already in your personalized sources.</Note>
           ) : null}
@@ -204,21 +205,28 @@ export function AddSourceFlow() {
           <ul className="nw-set__list" role={candidates.length > 1 ? "radiogroup" : undefined}>
             {candidates.map(({ candidate, candidateId }) => (
               <li key={candidateId} className="nw-set__item">
-                {candidates.length > 1 ? (
-                  <input
-                    type="radio"
-                    name="nw-addsource-candidate"
-                    id={`nw-cand-${candidateId}`}
-                    checked={selectedCandidateId === candidateId}
-                    disabled={busy}
-                    onChange={() => setSelectedCandidateId(candidateId)}
-                  />
-                ) : null}
-                {/* Candidate labels/domains are model/web-derived — always plain text. */}
-                <label className="nw-set__item-label" htmlFor={`nw-cand-${candidateId}`}>
-                  {candidate.label}
-                </label>
-                <span className="nw-set__item-meta">{candidate.canonicalDomain}</span>
+                <div className="nw-set__item-row">
+                  {candidates.length > 1 ? (
+                    <input
+                      type="radio"
+                      name="nw-addsource-candidate"
+                      id={`nw-cand-${candidateId}`}
+                      checked={selectedCandidateId === candidateId}
+                      disabled={busy}
+                      onChange={() => setSelectedCandidateId(candidateId)}
+                    />
+                  ) : null}
+                  <div className="nw-set__identity">
+                    <span className="nw-set__item-icon" aria-hidden="true">
+                      <Newspaper size={16} />
+                    </span>
+                    {/* Candidate labels/domains are model/web-derived — always plain text. */}
+                    <label className="nw-set__item-label" htmlFor={`nw-cand-${candidateId}`}>
+                      {candidate.label}
+                    </label>
+                    <span className="nw-set__item-meta">{candidate.canonicalDomain}</span>
+                  </div>
+                </div>
               </li>
             ))}
           </ul>
