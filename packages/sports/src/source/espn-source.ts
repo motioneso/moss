@@ -77,6 +77,10 @@ interface EspnEvent {
     // soccerScorers below.
     readonly details?: readonly {
       readonly type?: { readonly text?: string };
+      // ESPN's own "this play was a goal" flag. Authoritative: it is true for every goal
+      // variant text ("Goal", "Goal - Header", "Goal - Volley", ...) and false for cards
+      // and substitutions.
+      readonly scoringPlay?: boolean;
       readonly team?: { readonly id?: string };
       readonly athletesInvolved?: readonly {
         readonly shortName?: string;
@@ -145,18 +149,17 @@ function tallyScorers(names: readonly string[]): readonly string[] {
 
 type EspnScoringDetails = NonNullable<NonNullable<EspnEvent["competitions"]>[number]["details"]>;
 
-// Every ESPN soccer play type.text that counts as a goal — not just the plain "Goal" label.
-// Verified live against ESPN's January 4, 2026 Everton-Brentford scoreboard (#2253): matching
-// only "Goal" silently dropped headers, volleys, penalties and own goals, which each arrive under
-// their own type text rather than the generic one.
-const SOCCER_GOAL_TYPES = new Set([
-  "Goal",
-  "Header",
-  "Volley",
-  "Penalty - Scored",
-  "Penalty",
-  "Own Goal"
-]);
+// A scoring play in ESPN's soccer detail list. Match on ESPN's own `scoringPlay` flag rather
+// than on the play's label: verified live against ESPN's January 4, 2026 Everton-Brentford
+// scoreboard (#2253), goals arrive under several labels ("Goal", "Goal - Header",
+// "Goal - Volley", "Goal - Penalty", ...), so any label allowlist silently drops real goals —
+// that game lost both Everton goals and one of Brentford's three. The label prefix is only a
+// fallback for a response that omits the flag; cards and substitutions match neither.
+function isSoccerGoal(detail: EspnScoringDetails[number] | undefined): boolean {
+  if (detail?.scoringPlay === true) return true;
+  if (detail?.scoringPlay === false) return false;
+  return (detail?.type?.text ?? "").startsWith("Goal");
+}
 
 // Soccer: `competitions[0].details` is a complete list of scoring plays (one entry per goal,
 // verified live against ESPN's API). Filter to actual goals for the given team, then tally.
@@ -165,7 +168,7 @@ function soccerScorers(
   teamId: string | undefined
 ): readonly string[] | null {
   const names = (details ?? [])
-    .filter((d) => SOCCER_GOAL_TYPES.has(d?.type?.text ?? "") && d?.team?.id === teamId)
+    .filter((d) => isSoccerGoal(d) && d?.team?.id === teamId)
     .flatMap((d) => d?.athletesInvolved ?? [])
     .map((a) => a?.shortName ?? a?.displayName)
     .filter((name): name is string => name != null);

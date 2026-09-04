@@ -96,9 +96,20 @@ describe("EspnDatasetAdapter", () => {
     expect(games[0]?.away.scorers).toEqual(["Z. Benson"]);
   });
 
-  it("counts headers, volleys, penalties and own goals as goals, not just plain 'Goal' (#2253)", async () => {
-    // Mirrors ESPN's Jan 4 2026 Everton-Brentford scoreboard, where a "Goal"-only filter dropped
-    // both Everton scorers and one of Brentford's three Thiago goals.
+  it("counts every goal ESPN flags, whatever the play is labelled (#2253)", async () => {
+    // The provider's real, saved response for Everton v Brentford on January 4, 2026. Its goals
+    // arrive labelled "Goal", "Goal - Header" and "Goal - Volley"; an earlier label allowlist
+    // dropped both Everton goals and one of Brentford's three from Thiago.
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "eng.1", day: "2026-01-04" },
+      okFetch(fixture("eng1-scoreboard-20260104-everton-brentford.json"))
+    )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
+    expect(games[0]?.home.scorers).toEqual(["Beto", "T. Barry"]);
+    expect(games[0]?.away.scorers).toEqual(["I. Thiago (3)", "N. Collins"]);
+  });
+
+  it("ignores cards and other non-scoring plays in the same list", async () => {
     const event = {
       id: "1",
       date: "2026-01-04T00:00:00Z",
@@ -111,34 +122,16 @@ describe("EspnDatasetAdapter", () => {
           status: { type: { state: "post", detail: "Full Time" } },
           details: [
             {
-              type: { text: "Header" },
-              team: { id: "100" },
-              athletesInvolved: [{ shortName: "D. Calvert-Lewin" }]
-            },
-            {
-              type: { text: "Penalty - Scored" },
+              type: { text: "Yellow Card" },
+              scoringPlay: false,
               team: { id: "100" },
               athletesInvolved: [{ shortName: "J. Garner" }]
             },
             {
-              type: { text: "Goal" },
-              team: { id: "200" },
-              athletesInvolved: [{ shortName: "Thiago" }]
-            },
-            {
-              type: { text: "Volley" },
-              team: { id: "200" },
-              athletesInvolved: [{ shortName: "Thiago" }]
-            },
-            {
-              type: { text: "Own Goal" },
-              team: { id: "200" },
-              athletesInvolved: [{ shortName: "Thiago" }]
-            },
-            {
-              type: { text: "Goal" },
-              team: { id: "200" },
-              athletesInvolved: [{ shortName: "M. Collins" }]
+              type: { text: "Goal - Penalty" },
+              scoringPlay: true,
+              team: { id: "100" },
+              athletesInvolved: [{ shortName: "D. Calvert-Lewin" }]
             }
           ]
         }
@@ -149,8 +142,8 @@ describe("EspnDatasetAdapter", () => {
       { competitionKey: "eng.1", day: "2026-01-04" },
       okFetch({ events: [event] })
     )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
-    expect(games[0]?.home.scorers).toEqual(["D. Calvert-Lewin", "J. Garner"]);
-    expect(games[0]?.away.scorers).toEqual(["Thiago (3)", "M. Collins"]);
+    expect(games[0]?.home.scorers).toEqual(["D. Calvert-Lewin"]);
+    expect(games[0]?.away.scorers).toBeNull();
   });
 
   it("parses hockey goal leaders into each side's scorers", async () => {

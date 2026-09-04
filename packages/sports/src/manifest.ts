@@ -135,7 +135,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.result_scorers",
       description:
-        "A finished soccer or hockey game on Today and on Sports shows both teams' logos side by side (home team on the left) with the score between them, and lists who scored next to each team's logo. Other sports show only the logos and score, with no scorer names. For hockey, a team with several different scorers may show one fewer name than goals scored, because that is a gap in the sports data provider's own list of goal-scorers."
+        "A finished soccer or hockey game on Today and on Sports shows both team logos with the score between them, home team on the left, and who scored beside each logo. Hockey can list one fewer name than goals, a gap in the provider's data."
     }
   ],
   navigation: [
