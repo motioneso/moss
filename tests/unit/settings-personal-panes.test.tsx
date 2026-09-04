@@ -41,7 +41,7 @@ describe("ProfilePane merged Account & preferences", () => {
     expect(html).toContain("Location");
     expect(html).toContain(">Weather<");
     expect(html).toContain(
-      "Search for a place to use instead of approximate timezone-based detection."
+      "Temperatures on Today and in the briefing, and the place they are for."
     );
     expect(html).toContain(">Unit<");
     expect(html).toContain(">Member<");
@@ -66,7 +66,8 @@ describe("ProfilePane merged Account & preferences", () => {
     const html = await renderProfilePane({
       location: { label: "Home", lat: 51.5072, lon: -0.1276 }
     });
-    expect(html).toContain("Currently using Home.");
+    expect(html).toContain("Using Home.");
+    expect(html).toContain("Use automatic");
   });
 
   it("offers every supported time zone in a searchable picker and disables unsupported language controls", async () => {

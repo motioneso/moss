@@ -262,7 +262,7 @@ export function ProfilePane({ me }: PaneProps) {
     queryFn: getWeatherUnitSettings,
     retry: false
   });
-  const weatherUnit: WeatherUnit = weatherUnitQuery.data?.unit ?? "metric";
+  const weatherUnit: WeatherUnit = weatherUnitQuery.data?.unit ?? "imperial";
   const weatherUnitMutation = useMutation({
     mutationFn: putWeatherUnitSettings,
     onSuccess: (data) => {
@@ -368,11 +368,30 @@ export function ProfilePane({ me }: PaneProps) {
 
       <Group
         title="Weather"
-        desc="Search for a place to use instead of approximate timezone-based detection."
+        desc="Temperatures on Today and in the briefing, and the place they are for."
       >
+        <Row
+          name="Unit"
+          desc={`Temperatures are shown in ${weatherUnit === "imperial" ? "Fahrenheit" : "Celsius"}.`}
+          control={
+            <Segmented
+              ariaLabel="Unit"
+              value={weatherUnit}
+              options={[
+                { value: "imperial", label: "Fahrenheit", disabled: weatherUnitBusy },
+                { value: "metric", label: "Celsius", disabled: weatherUnitBusy }
+              ]}
+              onChange={(unit) => weatherUnitMutation.mutate(unit)}
+            />
+          }
+        />
         <Field
-          label="Search for a place"
-          hint="Choose a result to save it as your weather location."
+          label="Location"
+          hint={
+            weatherLocation
+              ? `Using ${weatherLocation.label}.`
+              : "Worked out from your time zone. Search for a place to use instead."
+          }
         >
           <input
             className="jds-input"
@@ -389,19 +408,24 @@ export function ProfilePane({ me }: PaneProps) {
               }
             }}
           />
-        </Field>
-        <Row
-          name="Search"
-          control={
+          <Button
+            size="sm"
+            disabled={!weatherLocationSearch.trim() || weatherLocationSearchMutation.isPending}
+            onClick={() => weatherLocationSearchMutation.mutate(weatherLocationSearch.trim())}
+          >
+            Search
+          </Button>
+          {weatherLocation ? (
             <Button
+              variant="quiet"
               size="sm"
-              disabled={!weatherLocationSearch.trim() || weatherLocationSearchMutation.isPending}
-              onClick={() => weatherLocationSearchMutation.mutate(weatherLocationSearch.trim())}
+              disabled={weatherLocationMutation.isPending}
+              onClick={clearWeatherLocation}
             >
-              Search
+              Use automatic
             </Button>
-          }
-        />
+          ) : null}
+        </Field>
         {weatherLocationSearchMutation.data?.candidates.map((candidate) => (
           <Row
             key={`${candidate.lat}:${candidate.lon}`}
@@ -417,41 +441,6 @@ export function ProfilePane({ me }: PaneProps) {
             }
           />
         ))}
-        <Row
-          name="Manual override"
-          desc={
-            weatherLocation
-              ? `Currently using ${weatherLocation.label}.`
-              : "Using automatic timezone-based location."
-          }
-          control={
-            <div style={{ display: "flex", gap: 8 }}>
-              <Button
-                variant="quiet"
-                size="sm"
-                disabled={!weatherLocation || weatherLocationMutation.isPending}
-                onClick={clearWeatherLocation}
-              >
-                Clear override
-              </Button>
-            </div>
-          }
-        />
-        <Row
-          name="Unit"
-          desc={`Weather temperatures are shown in ${weatherUnit === "imperial" ? "Fahrenheit" : "Celsius"}.`}
-          control={
-            <Segmented
-              ariaLabel="Unit"
-              value={weatherUnit}
-              options={[
-                { value: "metric", label: "Celsius", disabled: weatherUnitBusy },
-                { value: "imperial", label: "Fahrenheit", disabled: weatherUnitBusy }
-              ]}
-              onChange={(unit) => weatherUnitMutation.mutate(unit)}
-            />
-          }
-        />
       </Group>
 
       <Group

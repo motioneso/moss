@@ -52,6 +52,14 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     description: "Review notifications produced by enabled modules.",
     path: "/notifications",
     scope: "user"
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    description:
+      "Personal and admin settings. A search box on the top bar matches section names, descriptions and common setting words and jumps to that section.",
+    path: "/settings",
+    scope: "user"
   }
 ];
 
@@ -63,7 +71,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "profile",
     label: "Account & preferences",
-    description: "Edit personal profile, account, and preference details.",
+    description:
+      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location, quiet hours, sessions, data export and account deletion.",
     path: "/settings?section=profile",
     scope: "user"
   },

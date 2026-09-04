@@ -271,6 +271,15 @@
   padding: 1px 5px;
 }
 
-.appearance-theme-mode {
-  margin-bottom: var(--space-4);
+/* ---- Top bar: settings search ---- */
+.set2__search {
+  flex: 1 1 240px;
+  max-width: 380px;
+  margin-left: auto;
+}
+.set2__search .jds-combobox__option {
+  justify-content: space-between;
+}
+.set2__search-group {
+  flex: 0 0 auto;
 }
