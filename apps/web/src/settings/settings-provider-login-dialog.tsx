@@ -79,6 +79,13 @@ export function ProviderLoginDialog(props: {
   const sessionRef = useRef<{ providerKind: AutomatedLoginProviderKind; loginId: string } | null>(
     null
   );
+  // #2232: React's StrictMode runs the mount effect, its cleanup, then the effect again, all
+  // before the first "begin" request comes back. Without a guard that fires two begin requests
+  // in the same instant — the first gets cancelled by the cleanup, the second is refused by the
+  // server because a login is already active. This ref makes sure only one begin ever starts per
+  // time the dialog is opened; the StrictMode replay just reuses it.
+  const beganRef = useRef(false);
+  const deferredCancelRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const finish = useCallback(() => {
     sessionRef.current = null;
@@ -176,12 +183,27 @@ export function ProviderLoginDialog(props: {
 
   useEffect(() => {
     closedRef.current = false;
-    void beginLogin();
+    // A real remount (this same open, replayed by StrictMode) cancels the deferred cleanup below
+    // instead of letting it fire, so the in-flight or completed begin is kept, not restarted.
+    if (deferredCancelRef.current !== null) {
+      clearTimeout(deferredCancelRef.current);
+      deferredCancelRef.current = null;
+    }
+    if (!beganRef.current) {
+      beganRef.current = true;
+      void beginLogin();
+    }
     return () => {
       closedRef.current = true;
-      const session = sessionRef.current;
-      sessionRef.current = null;
-      if (session) void cancelOnboardingProviderLogin(session);
+      // Delay the actual cancel by a tick: if this was only the StrictMode replay, the effect
+      // above runs again immediately and clears this timer before it fires. If the dialog is
+      // truly unmounting, nothing clears it and the session is cancelled as before.
+      deferredCancelRef.current = setTimeout(() => {
+        deferredCancelRef.current = null;
+        const session = sessionRef.current;
+        sessionRef.current = null;
+        if (session) void cancelOnboardingProviderLogin(session);
+      }, 0);
     };
   }, [beginLogin]);
 
