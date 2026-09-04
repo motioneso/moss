@@ -304,7 +304,7 @@ function SportsSkeleton() {
 // headline about this matchup from the overview payload. Honest data only — if no headline
 // mentions either team, no band renders. Prefers the service's teamKeys join; falls back to
 // scanning titles for a team name, since some sources emit empty teamKeys.
-function findFeaturedStory(
+export function findFeaturedStory(
   game: GameSummary,
   overview: SportsOverviewResponse,
   hiddenStoryRefs?: ReadonlySet<string>
@@ -324,7 +324,12 @@ function findFeaturedStory(
     ...overview.topStories,
     ...overview.leagueNews.flatMap((group) => group.headlines)
   ].filter((headline) => aboutThisGame(headline) && !hiddenStoryRefs?.has(headline.storyRef ?? ""));
+  // #2237: prefer a wide photo inside the candidates already narrowed to this game, then fall
+  // through to the original picture-and-summary order, so a day with no wide photo is unchanged.
+  const wideEnough = (h: Headline) => (h.imageWidth ?? 0) >= LEAD_MIN_PHOTO_WIDTH;
   return (
+    candidates.find((h) => wideEnough(h) && h.summary) ??
+    candidates.find(wideEnough) ??
     candidates.find((h) => h.imageUrl && h.summary) ??
     candidates.find((h) => h.imageUrl) ??
     candidates[0] ??

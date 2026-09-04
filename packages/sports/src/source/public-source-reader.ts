@@ -12,7 +12,12 @@ import {
   isUsablePhotoCandidate,
   parseFeedPhotoItems
 } from "./photo.js";
-import type { SportsPhotoStore, StoredPhoto } from "./photo-store.js";
+import {
+  SPORTS_PHOTO_DEADLINE_MARGIN_MS,
+  type EnsurePhotoResult,
+  type SportsPhotoStore,
+  type StoredPhoto
+} from "./photo-store.js";
 import {
   expandSportsSourceRecipe,
   extractSportsSourceRecipe,
@@ -53,7 +58,8 @@ export type SportsPublicSourceHeadline = CustomSourceHeadline & {
 
 /** #2237 the deterministic photo pass' budget, per source, per refresh. */
 const MAX_ARTICLE_PAGE_FETCHES = 6;
-const PHOTO_DEADLINE_MARGIN_MS = 3_000;
+/** The same margin the photo store applies to its own download, so the two cannot drift apart. */
+const PHOTO_DEADLINE_MARGIN_MS = SPORTS_PHOTO_DEADLINE_MARGIN_MS;
 const ARTICLE_PAGE_CONTENT_TYPES = ["text/html", "application/xhtml+xml"];
 /** A failed photo is not retried for as long as its story could still be served from the cache. */
 const PHOTO_FAILURE_TTL_MS = HEADLINE_TTL_MS + DEFAULT_STALE_RETENTION_MS;
@@ -472,26 +478,27 @@ export class SportsPublicSourceReader {
       // this, a permanently broken image is re-downloaded on every single refresh.
       const failureKey = photoFailureKey(accessContext.actorUserId, pair.source.id, item.photoUrl);
       if (this.isRememberedPhotoFailure(failureKey)) continue;
-      const timeBudgetMs = deadline - this.now();
-      if (timeBudgetMs <= 0) continue;
-      let copy: StoredPhoto | null;
+      let result: EnsurePhotoResult;
       try {
-        copy = await photos.ensure(accessContext, pair.source.id, item.photoUrl, {
+        result = await photos.ensure(accessContext, pair.source.id, item.photoUrl, {
           ...(signal ? { signal } : {}),
-          timeBudgetMs
+          remainingMs: () => deadline - this.now()
         });
       } catch {
-        copy = null;
+        result = { outcome: "unusable" };
       }
-      if (!copy) {
+      // Only a photo we actually learned something bad about is remembered. Running out of
+      // refresh time teaches us nothing, so that photo is tried again on the next refresh.
+      if (result.outcome === "unusable") {
         this.rememberPhotoFailure(failureKey);
         continue;
       }
-      stored.set(item.id, copy);
+      if (result.outcome === "skipped") continue;
+      stored.set(item.id, result.photo);
       photos.linkHeadline(
         accessContext.actorUserId,
         `${pair.source.id}:${item.id}`,
-        copy.key
+        result.photo.key
       );
     }
     return stored;

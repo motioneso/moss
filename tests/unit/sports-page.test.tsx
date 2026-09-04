@@ -13,6 +13,7 @@ import type {
 } from "@moss/shared";
 
 import {
+  findFeaturedStory,
   hasLiveGame,
   leadWidePhotoFirst,
   SportsPage
@@ -125,6 +126,8 @@ function headline(
     url: "https://example.test/" + id,
     publishedAt: "2026-07-01T18:00:00Z",
     imageUrl: null,
+    imageWidth: null,
+    imageHeight: null,
     summary: "",
     teamKeys: [],
     publisherLabel: "ESPN",
@@ -895,5 +898,32 @@ describe("the lead story prefers a wide photo (#2237)", () => {
       headline("b", "nfl", "Wide", { imageUrl: "/b", imageWidth: 1280 })
     ];
     expect(leadWidePhotoFirst(stories)).toHaveLength(2);
+  });
+
+  it("picks a wide photo for the game band too, and falls back when there is none", () => {
+    const game = liveGame();
+    const about = (id: string, overrides: Partial<Headline>) =>
+      headline(id, "nfl", "Vikings hold off the Cowboys", {
+        teamKeys: ["min", "dal"],
+        ...overrides
+      });
+
+    const withWide = makeOverview({
+      topStories: [
+        about("narrow", { imageUrl: "/narrow", imageWidth: 400, summary: "A dek" }),
+        about("wide", { imageUrl: "/wide", imageWidth: 1280 })
+      ],
+      hero: gamedayHero(game)
+    });
+    expect(findFeaturedStory(game, withWide)?.id).toBe("wide");
+
+    const noWide = makeOverview({
+      topStories: [
+        about("plain", { imageUrl: "/plain", imageWidth: 400 }),
+        about("dek", { imageUrl: "/dek", imageWidth: 300, summary: "A dek" })
+      ],
+      hero: gamedayHero(game)
+    });
+    expect(findFeaturedStory(game, noWide)?.id).toBe("dek");
   });
 });

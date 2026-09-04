@@ -25,6 +25,14 @@ import { photoKey, SPORTS_PHOTO_MIN_SHORT_SIDE } from "./photo.js";
 
 export const SPORTS_PHOTO_MAX_DOWNLOAD_BYTES = 2 * 1024 * 1024;
 export const SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS = 5_000;
+/**
+ * No new network call in the photo pass may start with less than this left of the refresh
+ * deadline. The spec's promise is that photo work never delays headlines, and it allows a story
+ * to go out without a photo when the deadline is near, so the answer is to skip, never to squeeze
+ * one more request in. This gates the byte download; the reader gates its article page fetch on
+ * the same number.
+ */
+export const SPORTS_PHOTO_DEADLINE_MARGIN_MS = 3_000;
 export const SPORTS_PHOTO_MAX_WIDTH = 1280;
 export const SPORTS_PHOTO_MAX_HEIGHT = 720;
 
@@ -78,6 +86,19 @@ function sidecarPath(key: string): string {
 
 const KEY_RE = /^[0-9a-f]{32}$/;
 
+export type EnsurePhotoResult =
+  | { readonly outcome: "stored"; readonly photo: StoredPhoto }
+  /** This photo is bad or unavailable. Worth remembering so it is not fetched again. */
+  | { readonly outcome: "unusable" }
+  /** Nothing was learned about the photo — out of time, or cancelled. Try again next refresh. */
+  | { readonly outcome: "skipped" };
+
+const UNUSABLE = { outcome: "unusable" } as const;
+const SKIPPED = { outcome: "skipped" } as const;
+
+/** Told the key of every copy the store removes, so callers can drop anything they cached. */
+export type PhotoRemovalListener = (key: string) => void;
+
 function parseSidecar(raw: string): PhotoSidecar | null {
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -115,6 +136,7 @@ export class SportsPhotoStore {
   private readonly now: () => Date;
   /** `<actor id>\0<headline id>` to photo key, so the route can join without a second table. */
   private readonly headlineKeys = new Map<string, string>();
+  private readonly removalListeners: PhotoRemovalListener[] = [];
 
   constructor(private readonly dependencies: SportsPhotoStoreDependencies) {
     this.now = dependencies.now ?? (() => new Date());
@@ -127,47 +149,57 @@ export class SportsPhotoStore {
 
   /**
    * Downloads, checks, resizes and stores one photo, or returns the copy that already exists.
-   * Null means "no photo for this story" — never a thrown error, because a photo miss must not
-   * cost the caller its headlines.
+   * Never throws: a photo miss must not cost the caller its headlines. "unusable" and "skipped"
+   * are kept apart so the caller can remember a bad photo without remembering one it simply ran
+   * out of time for.
    */
   async ensure(
     access: AccessContext,
     sourceId: string,
     photoUrl: string,
-    opts: { readonly signal?: AbortSignal; readonly timeBudgetMs?: number } = {}
-  ): Promise<StoredPhoto | null> {
-    if (opts.signal?.aborted) return null;
-    // The refresh deadline outranks the per-download cap: a download may never be given more time
-    // than the whole refresh has left, or a slow host pushes the refresh past its own deadline.
-    const timeoutMs = Math.min(
-      SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS,
-      opts.timeBudgetMs ?? SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS
-    );
-    if (timeoutMs <= 0) return null;
+    opts: { readonly signal?: AbortSignal; readonly remainingMs?: () => number } = {}
+  ): Promise<EnsurePhotoResult> {
+    if (opts.signal?.aborted) return SKIPPED;
     const key = photoKey(sourceId, photoUrl);
     let host: string;
     try {
       host = new URL(photoUrl).hostname;
     } catch {
-      return null;
+      return UNUSABLE;
     }
     return this.dependencies.vault.withVaultContext(access, async (ctx) => {
       const existing = await this.readSidecar(ctx, key);
       // The sidecar alone does not prove the copy is servable — the image itself may have been
       // deleted underneath us — so a sidecar without its image is treated as no copy at all.
       if (existing && (await vaultFileExists(ctx, webpPath(key)))) {
-        return { key, width: existing.width, height: existing.height, bytes: existing.bytes };
+        return {
+          outcome: "stored" as const,
+          photo: { key, width: existing.width, height: existing.height, bytes: existing.bytes }
+        };
       }
+      // Measured here, after the reads above, so the number reflects the time that is actually
+      // left when the request goes out rather than when this method was entered.
+      const remaining = opts.remainingMs?.() ?? SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS;
+      if (opts.signal?.aborted) return SKIPPED;
+      if (remaining <= SPORTS_PHOTO_DEADLINE_MARGIN_MS) return SKIPPED;
+      const timeoutMs = Math.min(SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS, remaining);
       const fetched = await this.dependencies.fetchBytes(photoUrl, {
         allowedHosts: [host],
         maxBytes: SPORTS_PHOTO_MAX_DOWNLOAD_BYTES,
         rejectOversizedResponses: true,
         timeoutMs
       });
-      if (!fetched.ok || fetched.truncated) return null;
-      if (fetched.body.byteLength > SPORTS_PHOTO_MAX_DOWNLOAD_BYTES) return null;
+      if (opts.signal?.aborted) return SKIPPED;
+      if (!fetched.ok) {
+        // A timeout under a budget shortened by the refresh deadline is the deadline's doing, not
+        // the photo's, so it stays retryable.
+        const shortened = timeoutMs < SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS;
+        return shortened && fetched.reason === "timeout" ? SKIPPED : UNUSABLE;
+      }
+      if (fetched.truncated) return UNUSABLE;
+      if (fetched.body.byteLength > SPORTS_PHOTO_MAX_DOWNLOAD_BYTES) return UNUSABLE;
       const type = sniffSportsIconType(fetched.body);
-      if (!type || type === "image/x-icon") return null;
+      if (!type || type === "image/x-icon") return UNUSABLE;
       const buffer = Buffer.from(fetched.body);
       let originalWidth: number;
       let originalHeight: number;
@@ -176,7 +208,7 @@ export class SportsPhotoStore {
         const metadata = await sharp(buffer, { animated: false }).metadata();
         originalWidth = metadata.width ?? 0;
         originalHeight = metadata.height ?? 0;
-        if (Math.min(originalWidth, originalHeight) < SPORTS_PHOTO_MIN_SHORT_SIDE) return null;
+        if (Math.min(originalWidth, originalHeight) < SPORTS_PHOTO_MIN_SHORT_SIDE) return UNUSABLE;
         encoded = await sharp(buffer, { animated: false })
           .resize({
             width: SPORTS_PHOTO_MAX_WIDTH,
@@ -187,7 +219,7 @@ export class SportsPhotoStore {
           .webp({ quality: 80 })
           .toBuffer({ resolveWithObject: true });
       } catch {
-        return null;
+        return UNUSABLE;
       }
       const stored: StoredPhoto = {
         key,
@@ -210,7 +242,7 @@ export class SportsPhotoStore {
       await writeVaultFileBytes(ctx, webpPath(key), encoded.data);
       await writeVaultFile(ctx, sidecarPath(key), JSON.stringify(sidecar));
       await this.trimToCaps(ctx);
-      return stored;
+      return { outcome: "stored" as const, photo: stored };
     });
   }
 
@@ -238,6 +270,29 @@ export class SportsPhotoStore {
       const etag = `"${createHash("sha256").update(bytes).digest("hex").slice(0, 32)}"`;
       return { bytes, etag };
     });
+  }
+
+  /**
+   * Stamps a copy's last-served time without reading its bytes, for a caller that served the
+   * photo from its own memory. Without this, a constantly served photo looks untouched to
+   * retention and gets swept while people are still looking at it.
+   */
+  async touch(access: AccessContext, key: string): Promise<void> {
+    if (!KEY_RE.test(key)) return;
+    await this.dependencies.vault.withVaultContext(access, async (ctx) => {
+      const sidecar = await this.readSidecar(ctx, key);
+      if (!sidecar) return;
+      await writeVaultFile(
+        ctx,
+        sidecarPath(key),
+        JSON.stringify({ ...sidecar, lastServedAt: this.now().toISOString() })
+      );
+    });
+  }
+
+  /** Registers a listener told the key of every copy this store removes. */
+  onCopyRemoved(listener: PhotoRemovalListener): void {
+    this.removalListeners.push(listener);
   }
 
   /** Removes copies past retention, then trims to the per-owner caps (spec decision 4). */
@@ -318,6 +373,24 @@ export class SportsPhotoStore {
         await deleteVaultFile(ctx, path);
       } catch {
         // Already gone: a concurrent sweep or a partial write. Nothing to undo.
+      }
+    }
+    this.announceRemoval(key);
+  }
+
+  /**
+   * Drops every story pointing at a removed copy and tells anyone holding its bytes, so a deleted
+   * photo stops being served from someone else's memory.
+   */
+  private announceRemoval(key: string): void {
+    for (const [mapKey, value] of this.headlineKeys) {
+      if (value === key) this.headlineKeys.delete(mapKey);
+    }
+    for (const listener of this.removalListeners) {
+      try {
+        listener(key);
+      } catch {
+        // A listener must never break housekeeping.
       }
     }
   }

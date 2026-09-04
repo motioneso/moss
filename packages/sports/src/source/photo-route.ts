@@ -23,7 +23,10 @@ export interface SportsHeadlinePhotoRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly repository: SportsPhotoSourceRepository;
   /** Absent only where the composition root built no vault runner; every request then 404s. */
-  readonly photos?: Pick<SportsPhotoStore, "read" | "keyForHeadline">;
+  readonly photos?: Pick<
+    SportsPhotoStore,
+    "read" | "keyForHeadline" | "touch" | "onCopyRemoved"
+  >;
 }
 
 export function registerSportsHeadlinePhotoRoute(
@@ -62,6 +65,15 @@ export function registerSportsHeadlinePhotoRoute(
     cacheBytes += entry.bytes.byteLength;
   }
 
+  // A removed copy must stop being served. Cache keys are the owner id and the photo key joined,
+  // so every owner holding that photo is dropped at once.
+  dependencies.photos?.onCopyRemoved((removedKey) => {
+    const suffix = `:${removedKey}`;
+    for (const cacheKey of [...cache.keys()]) {
+      if (cacheKey.endsWith(suffix)) drop(cacheKey);
+    }
+  });
+
   server.get(
     "/api/sports/headlines/:headlineId/photo",
     {
@@ -94,7 +106,11 @@ export function registerSportsHeadlinePhotoRoute(
         if (!key) throw new HttpError(404, "Sports headline photo not found");
 
         const cacheKey = `${accessContext.actorUserId}:${key}`;
-        const stored = cached(cacheKey) ?? (await photos.read(accessContext, key));
+        const hit = cached(cacheKey);
+        // Serving from memory still counts as serving. Without this a popular photo looks
+        // untouched to retention and gets swept while people are still looking at it.
+        if (hit) void photos.touch(accessContext, key).catch(() => undefined);
+        const stored = hit ?? (await photos.read(accessContext, key));
         if (!stored) throw new HttpError(404, "Sports headline photo not found");
         put(cacheKey, stored);
 

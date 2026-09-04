@@ -16,9 +16,11 @@ const key = "a".repeat(32);
 const bytes = Buffer.from("RIFF1234WEBPfake-webp-body");
 const etag = '"deadbeefdeadbeefdeadbeefdeadbeef"';
 
+type RoutePhotos = Pick<SportsPhotoStore, "read" | "keyForHeadline" | "touch" | "onCopyRemoved">;
+
 function buildApp(input: {
   knownSourceId?: string | null;
-  photos?: Pick<SportsPhotoStore, "read" | "keyForHeadline">;
+  photos?: RoutePhotos;
   reads?: string[];
 }) {
   const app = Fastify();
@@ -38,13 +40,12 @@ function buildApp(input: {
   return app;
 }
 
-function store(overrides: Partial<Pick<SportsPhotoStore, "read" | "keyForHeadline">> = {}): Pick<
-  SportsPhotoStore,
-  "read" | "keyForHeadline"
-> {
+function store(overrides: Partial<RoutePhotos> = {}): RoutePhotos {
   return {
     keyForHeadline: (_userId, id) => (id === headlineId ? key : null),
     read: async () => ({ bytes, etag }),
+    touch: async () => undefined,
+    onCopyRemoved: () => undefined,
     ...overrides
   };
 }
@@ -114,6 +115,49 @@ describe("sports headline photo route (#2237)", () => {
     await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
     await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
     expect(reads).toBe(1);
+    await app.close();
+  });
+
+  it("records that a photo was served even when the answer came from memory", async () => {
+    const touched: string[] = [];
+    const app = buildApp({
+      photos: store({
+        touch: async (_access, touchedKey) => {
+          touched.push(touchedKey);
+        }
+      })
+    });
+    await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
+    await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
+    await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
+    expect(touched).toEqual([key, key]);
+    await app.close();
+  });
+
+  it("stops answering from memory once the stored copy has been removed", async () => {
+    const listeners: ((key: string) => void)[] = [];
+    let present = true;
+    let reads = 0;
+    const app = buildApp({
+      photos: store({
+        onCopyRemoved: (listener) => {
+          listeners.push(listener);
+        },
+        read: async () => {
+          reads += 1;
+          return present ? { bytes, etag } : null;
+        }
+      })
+    });
+
+    const first = await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
+    present = false;
+    for (const listener of listeners) listener(key);
+    const second = await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(404);
+    expect(reads).toBe(2);
     await app.close();
   });
 });

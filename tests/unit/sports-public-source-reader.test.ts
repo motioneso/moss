@@ -4,7 +4,12 @@ import type { AccessContext, DataContextDb } from "@moss/db";
 import { isPublicFeedDocument } from "@moss/news";
 
 import type { SportsSafeFetchPort } from "../../packages/sports/src/source/discovery.js";
-import type { SportsPhotoStore } from "../../packages/sports/src/source/photo-store.js";
+import {
+  SPORTS_PHOTO_DEADLINE_MARGIN_MS,
+  SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS,
+  type EnsurePhotoResult,
+  type SportsPhotoStore
+} from "../../packages/sports/src/source/photo-store.js";
 import { SportsPublicSourceReader } from "../../packages/sports/src/source/public-source-reader.js";
 import { validateSportsSourceRecipe } from "../../packages/sports/src/source/recipe.js";
 import type {
@@ -15,6 +20,9 @@ import type {
 import type { SportsNewsScope } from "../../packages/sports/src/source/scope.js";
 
 const actor: AccessContext = { actorUserId: "user-a", requestId: "request-a" };
+
+/** Mirrors the reader's own refresh deadline, which it does not export. */
+const REFRESH_DEADLINE_MS = 12_000;
 
 const jsonRecipe = {
   version: 1,
@@ -152,22 +160,36 @@ function makeReader(
  */
 class PhotoStoreDouble {
   readonly stored: string[] = [];
-  readonly budgets: (number | undefined)[] = [];
+  readonly budgets: number[] = [];
   readonly links = new Map<string, string>();
   swept: ReadonlySet<string> | null = null;
   /** Set to make every download attempt fail, as a permanently broken image would. */
   alwaysFails = false;
+  /** Called with the time the download was allowed, so a test can make one really take that long. */
+  onDownload: ((allowedMs: number) => Promise<void>) | null = null;
 
   async ensure(
     _access: AccessContext,
     sourceId: string,
     photoUrl: string,
-    options: { readonly timeBudgetMs?: number } = {}
-  ) {
+    options: {
+      readonly signal?: AbortSignal;
+      readonly remainingMs?: () => number;
+    } = {}
+  ): Promise<EnsurePhotoResult> {
+    // Mirrors the real store: the safety margin is applied to the time left at the moment the
+    // download would start, and the download is capped at the store's own limit.
+    const remaining = options.remainingMs?.() ?? SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS;
+    if (remaining <= SPORTS_PHOTO_DEADLINE_MARGIN_MS) return { outcome: "skipped" };
+    const allowed = Math.min(SPORTS_PHOTO_DOWNLOAD_TIMEOUT_MS, remaining);
     this.stored.push(photoUrl);
-    this.budgets.push(options.timeBudgetMs);
-    if (this.alwaysFails) return null;
-    return { key: `key-${this.stored.length}`, width: 1280, height: 720, bytes: 4096 };
+    this.budgets.push(allowed);
+    await this.onDownload?.(allowed);
+    if (this.alwaysFails) return { outcome: "unusable" };
+    return {
+      outcome: "stored",
+      photo: { key: `key-${this.stored.length}`, width: 1280, height: 720, bytes: 4096 }
+    };
   }
 
   linkHeadline(actorUserId: string, headlineId: string, key: string): void {
@@ -848,12 +870,43 @@ describe("the photo pass (#2237)", () => {
       return photos.budgets;
     }
 
-    // Plenty of time left: the store still caps itself at its own five-second limit.
-    expect(await budgetAfterFeedDelay(500)).toEqual([11_500]);
-    // Almost none left: the download is told exactly how little it may take.
-    expect(await budgetAfterFeedDelay(11_600)).toEqual([400]);
-    // None left at all: no download is attempted.
+    // Plenty of time left: the download is capped at the store's own five-second limit.
+    expect(await budgetAfterFeedDelay(500)).toEqual([5_000]);
+    // Four seconds left, one above the safety margin: the download gets exactly that.
+    expect(await budgetAfterFeedDelay(8_000)).toEqual([4_000]);
+    // Inside the safety margin: no download is started at all.
+    expect(await budgetAfterFeedDelay(11_600)).toEqual([]);
+    // Past the deadline: still nothing.
     expect(await budgetAfterFeedDelay(12_500)).toEqual([]);
+  });
+
+  it("finishes the refresh inside its deadline even when a photo download hangs", async () => {
+    const items = Array.from(
+      { length: 4 },
+      (_unused, index) =>
+        `<item><guid>feed-${index}</guid><title>Story ${index}</title>` +
+        `<link>https://publisher.example/story-${index}</link>` +
+        `<media:content url="https://publisher.example/${index}.jpg" medium="image" width="1200"/></item>`
+    ).join("");
+    let clock = Date.parse("2026-09-04T10:00:00.000Z");
+    const started = clock;
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
+      return success(url, feedBody(items), "text/plain");
+    });
+    const photos = new PhotoStoreDouble();
+    // Every download uses every millisecond it was given and then gives up, as a hung host would.
+    photos.onDownload = async (allowedMs) => {
+      clock += allowedMs;
+      photos.alwaysFails = true;
+    };
+    const { reader } = makeReader([feedSource()], fetch, { photos, now: () => clock });
+
+    const result = await reader.refresh(actor);
+
+    expect(clock - started).toBeLessThanOrEqual(REFRESH_DEADLINE_MS);
+    expect(photos.stored.length).toBeLessThan(4);
+    expect(result.headlines).toHaveLength(4);
   });
 
   it("does not download the same broken photo again on the next refresh", async () => {
