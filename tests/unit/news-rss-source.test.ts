@@ -321,6 +321,57 @@ describe("toFeedItems: body-image extraction hardening (PR 2251 review)", () => 
     expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
   });
 
+  it("keeps a full-size picture whose address carries a cache-refresh value", () => {
+    const xml = rss(`    <item>
+      <title>Cache-refresh value on a real picture</title>
+      <link>https://example.com/cache-buster</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/real.jpg?cb=1720000000" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe(
+      "https://npr.brightspotcdn.com/real.jpg?cb=1720000000"
+    );
+  });
+
+  it("keeps a full-size picture whose address carries a campaign source value", () => {
+    const xml = rss(`    <item>
+      <title>Campaign source value on a real picture</title>
+      <link>https://example.com/campaign</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/real.jpg?utm_source=newsletter" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe(
+      "https://npr.brightspotcdn.com/real.jpg?utm_source=newsletter"
+    );
+  });
+
+  it("keeps a full-size photograph whose file name merely contains a tracking-sounding word", () => {
+    const xml = rss(`    <item>
+      <title>Phone photograph named after the handset</title>
+      <link>https://example.com/handset</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/google-pixel-10.jpg" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe(
+      "https://npr.brightspotcdn.com/google-pixel-10.jpg"
+    );
+  });
+
+  it("still skips a file named nothing but tracking words", () => {
+    const xml = rss(`    <item>
+      <title>File named only after tracking</title>
+      <link>https://example.com/named-tracker</link>
+      <content:encoded><![CDATA[
+        <img src="https://npr.brightspotcdn.com/tracking-pixel.gif">
+        <img src="https://npr.brightspotcdn.com/real.jpg" width="800" height="450">
+      ]]></content:encoded>
+    </item>`);
+    expect(toFeedItems(xml, npr)[0]?.imageUrl).toBe("https://npr.brightspotcdn.com/real.jpg");
+  });
+
   it("does not slow down on a large body full of unterminated picture tags (linear scan)", () => {
     // Each fragment has an unterminated "<img" with no closing '>'. The previous single regex
     // re-scanned the remaining text on every attempt; the reviewer measured 1.8s at this size

@@ -249,17 +249,25 @@ export function isPublicFeedDocument(xml: string): boolean {
 // body costs a bounded amount of work.
 const BODY_IMAGE_SCAN_CHAR_CAP = 20_000;
 
-// Tracking pixels are invisible by construction. Four independent tells, any one of which
-// disqualifies an image: a declared width or height of 0 or 1, a placeholder-sounding file
-// name, a host whose first label exists to count views, or a query string carrying a campaign
-// or impression identifier rather than an image variant.
-const TRACKING_FILENAME_TOKEN_PATTERN =
-  /(?:^|[^a-z0-9])(?:pixel|pxl|spacer|blank|transparent|1x1|beacon)(?:[^a-z0-9]|$)/i;
-const TRACKING_FILENAME_EXACT_PATTERN = /^(?:track|tracker|tracking|count|counter|hit|event)$/i;
+// Tracking pixels are invisible by construction, so only unambiguous evidence disqualifies an
+// image: a declared width or height of 0 or 1, a host whose first label exists to count views,
+// a file name that is nothing but tracking words, or a query key that names an impression or a
+// pixel outright. Anything weaker stays accepted. An earlier revision matched a tracking word
+// anywhere in the file name and treated a cache-busting or campaign query key as proof, which
+// threw away real artwork like "google-pixel-10.jpg" and "real.jpg?cb=1720000000".
+const TRACKING_WORD = String.raw`(?:pixel|pixels|pxl|spacer|blank|transparent|1x1|beacon|track|tracker|tracking|trk|count|counter|impression|impressions)`;
+// The whole file-name stem must be tracking words joined by separators: "tracking-pixel" and
+// "1x1" qualify, "google-pixel-10" and "beacon-hill-sunrise" do not.
+const TRACKING_FILENAME_PATTERN = new RegExp(
+  String.raw`^${TRACKING_WORD}(?:[-_.]${TRACKING_WORD})*$`,
+  "i"
+);
 const TRACKING_HOST_LABEL_PATTERN =
   /^(?:pixel|pixels|px|beacon|track|tracker|tracking|analytics|stats|metrics|collect|counter|imp|impression|log|logs)$/i;
+// Only keys that state the image is a counter. Campaign tags (utm_*) and cache-busting keys
+// (cb, rand) ride along on ordinary artwork addresses too, so they prove nothing.
 const TRACKING_QUERY_KEY_PATTERN =
-  /^(?:utm_[a-z0-9_]+|pixel|beacon|track|tracking|trk|impression|imp|hit|event|cachebuster|cb|rand|rnd)$/i;
+  /^(?:pixel|beacon|track|tracking|trk|impression|impressions|imp)$/i;
 
 /** A declared HTML pixel size, or null when the attribute is absent or not a plain number
  *  ("auto", "50%", ""). Only a real number can disqualify an image; junk means "unknown". */
@@ -287,8 +295,7 @@ function isTrackingAddress(src: string): boolean {
   if (TRACKING_HOST_LABEL_PATTERN.test(firstLabel)) return true;
   const fileName = url.pathname.slice(url.pathname.lastIndexOf("/") + 1);
   const stem = fileName.replace(/\.[a-z0-9]+$/i, "");
-  if (TRACKING_FILENAME_TOKEN_PATTERN.test(fileName)) return true;
-  if (TRACKING_FILENAME_EXACT_PATTERN.test(stem)) return true;
+  if (TRACKING_FILENAME_PATTERN.test(stem)) return true;
   for (const key of url.searchParams.keys()) {
     if (TRACKING_QUERY_KEY_PATTERN.test(key)) return true;
   }
