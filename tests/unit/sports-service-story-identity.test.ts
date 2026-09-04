@@ -283,7 +283,8 @@ describe("id→url story keying (#858)", () => {
                     name: "Dallas Cowboys",
                     shortName: "Cowboys",
                     crestUrl: null,
-                    sourceTeamId: "6"
+                    sourceTeamId: "6",
+                    abbreviation: "dal"
                   }
                 ]
               : [],
@@ -473,7 +474,8 @@ describe("id→url story keying (#858)", () => {
               name: "Dallas Cowboys",
               shortName: "Cowboys",
               crestUrl: null,
-              sourceTeamId: "6"
+              sourceTeamId: "6",
+              abbreviation: "dal"
             }
           ]
         })

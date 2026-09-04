@@ -10,12 +10,19 @@
 
 import type { Headline, SportsNewsGroup } from "@moss/shared";
 
+// `sourceTeamId` is optional and only meaningful for games and standings rows: those always carry
+// the provider's raw short name as `teamKey`, which stops being a safe match the moment two teams
+// start sharing it (S1). `pairs` is built with both the short-name pair and, for every followed
+// team with a permanent number on file, a second pair keyed by that number — so passing the row's
+// own permanent number here lets a shared short name still find the right followed team.
 export function isFollowed(
   pairs: ReadonlySet<string>,
   competitionKey: string,
-  teamKey: string
+  teamKey: string,
+  sourceTeamId?: string | null
 ): boolean {
-  return pairs.has(`${competitionKey}:${teamKey}`);
+  if (pairs.has(`${competitionKey}:${teamKey}`)) return true;
+  return sourceTeamId != null && pairs.has(`${competitionKey}:${sourceTeamId}`);
 }
 
 // Written-article detector (mrb5reqq "some can have more text (especially if they are a written

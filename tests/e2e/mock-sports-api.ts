@@ -334,12 +334,12 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
   ],
   standings: [standingsGroup()],
   followedTeams: [
-    { competitionKey: "nfl", teamKey: "min" },
-    { competitionKey: "nfl", teamKey: "dal" },
-    { competitionKey: "nba", teamKey: "lal" },
-    { competitionKey: "nba", teamKey: "bos" },
-    { competitionKey: "eng.1", teamKey: "ars" },
-    { competitionKey: "mlb", teamKey: "nyy" }
+    { competitionKey: "nfl", teamKey: "min", sourceTeamId: null },
+    { competitionKey: "nfl", teamKey: "dal", sourceTeamId: null },
+    { competitionKey: "nba", teamKey: "lal", sourceTeamId: null },
+    { competitionKey: "nba", teamKey: "bos", sourceTeamId: null },
+    { competitionKey: "eng.1", teamKey: "ars", sourceTeamId: null },
+    { competitionKey: "mlb", teamKey: "nyy", sourceTeamId: null }
   ],
   followedLeagues: [{ competitionKey: "mlb", competitionLabel: "MLB" }],
   // One active followed-league card (Ben 2026-07-09) so the /today Sports desk exercises the
@@ -385,6 +385,7 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
       ]
     }
   ],
+  ambiguousFollows: [],
   degraded: false
 };
 

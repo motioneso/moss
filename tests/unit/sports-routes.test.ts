@@ -130,7 +130,13 @@ const dalLiveGame: GameSummary = {
   startsAt: "2026-07-01T20:00:00.000Z",
   state: "live",
   statusDetail: "Q3 4:12",
-  home: side({ teamKey: "dal", shortName: "DAL", name: "Dallas Cowboys", score: 21 }),
+  home: side({
+    teamKey: "dal",
+    shortName: "DAL",
+    name: "Dallas Cowboys",
+    score: 21,
+    sourceTeamId: "6"
+  }),
   away: side({ teamKey: "min", shortName: "MIN", name: "Minnesota Vikings", score: 14 })
 };
 
@@ -143,7 +149,7 @@ const dalUpcomingGame: GameSummary = {
   startsAt: "2026-07-05T20:00:00.000Z",
   state: "pre",
   statusDetail: "4:00 PM",
-  home: side({ teamKey: "dal", shortName: "DAL", name: "Dallas Cowboys" }),
+  home: side({ teamKey: "dal", shortName: "DAL", name: "Dallas Cowboys", sourceTeamId: "6" }),
   away: side({
     teamKey: "gb",
     shortName: "GB",
@@ -161,7 +167,8 @@ function makeSource(overrides: FakeSourceHandlers = {}): DatasetClient {
         name: "Dallas Cowboys",
         shortName: "DAL",
         crestUrl: null,
-        sourceTeamId: "6"
+        sourceTeamId: "6",
+        abbreviation: "dal"
       }
     ],
     getScoreboard: async () => [dalLiveGame],
@@ -302,7 +309,13 @@ describe("sports routes", () => {
             startsAt: "2026-07-01T16:00:00.000Z",
             state: "final",
             statusDetail: "Final",
-            home: side({ teamKey: "dal", shortName: "DAL", name: "Dallas Cowboys", score: 3 }),
+            home: side({
+              teamKey: "dal",
+              shortName: "DAL",
+              name: "Dallas Cowboys",
+              score: 3,
+              sourceTeamId: "6"
+            }),
             away: side({
               teamKey: "gb",
               shortName: "GB",

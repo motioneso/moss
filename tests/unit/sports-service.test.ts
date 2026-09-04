@@ -370,7 +370,9 @@ describe("SportsService.getOverview", () => {
   it("emits followed teams as competition-scoped pairs", async () => {
     const service = new SportsService(makeDeps());
     const overview = await service.getOverview(userA);
-    expect(overview.followedTeams).toEqual([{ competitionKey: "nfl", teamKey: "dal" }]);
+    expect(overview.followedTeams).toEqual([
+      { competitionKey: "nfl", teamKey: "dal", sourceTeamId: null }
+    ]);
   });
 
   it("joins provider team tags so a matching headline routes to the team's card", async () => {
@@ -387,7 +389,8 @@ describe("SportsService.getOverview", () => {
               name: "Dallas Cowboys",
               shortName: "Cowboys",
               crestUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/dal.png",
-              sourceTeamId: "6" // matches nflHeadlines[0].sourceTeamIds → resolves to "dal"
+              sourceTeamId: "6", // matches nflHeadlines[0].sourceTeamIds → resolves to "dal"
+              abbreviation: "dal"
             }
           ]
         })
@@ -561,7 +564,8 @@ describe("SportsService.getOverview", () => {
               name: "Dallas Cowboys",
               shortName: "Cowboys",
               crestUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/dal.png",
-              sourceTeamId: "6"
+              sourceTeamId: "6",
+              abbreviation: "dal"
             }
           ]
         })
@@ -629,7 +633,8 @@ describe("SportsService.getOverview", () => {
               name: "Dallas Cowboys",
               shortName: "Cowboys",
               crestUrl: null,
-              sourceTeamId: "6"
+              sourceTeamId: "6",
+              abbreviation: "dal"
             }
           ],
           // league feed carries only an untagged story; the dal feed has the real one
@@ -706,7 +711,8 @@ describe("SportsService.getOverview", () => {
               name: "Dallas Cowboys",
               shortName: "Cowboys",
               crestUrl: null,
-              sourceTeamId: "6"
+              sourceTeamId: "6",
+              abbreviation: "dal"
             }
           ]
         })
@@ -1016,7 +1022,8 @@ describe("SportsService.getCatalog", () => {
                 name: "Dallas Cowboys",
                 shortName: "DAL",
                 crestUrl: null,
-                sourceTeamId: "6"
+                sourceTeamId: "6",
+                abbreviation: "dal"
               }
             ];
           }
@@ -1150,7 +1157,8 @@ const dalTeamRef: SourceTeamRef = {
   name: "Dallas Cowboys",
   shortName: "DAL",
   crestUrl: null,
-  sourceTeamId: "6"
+  sourceTeamId: "6",
+  abbreviation: "dal"
 };
 
 /** A source whose league feed and per-team feed both carry the ordinary story. */

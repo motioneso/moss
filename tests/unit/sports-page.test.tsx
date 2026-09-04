@@ -176,9 +176,10 @@ function makeOverview(overrides: Partial<SportsOverviewResponse> = {}): SportsOv
       }
     ],
     standings: [standingsGroup()],
-    followedTeams: [{ competitionKey: "nfl", teamKey: "min" }],
+    followedTeams: [{ competitionKey: "nfl", teamKey: "min", sourceTeamId: null }],
     followedLeagues: [],
     followedLeagueCards: [],
+    ambiguousFollows: [],
     degraded: false,
     ...overrides
   };
@@ -359,8 +360,8 @@ describe("SportsPage", () => {
     const html = render(
       makeOverview({
         followedTeams: [
-          { competitionKey: "nfl", teamKey: "min" },
-          { competitionKey: "eng.1", teamKey: "ars" }
+          { competitionKey: "nfl", teamKey: "min", sourceTeamId: null },
+          { competitionKey: "eng.1", teamKey: "ars", sourceTeamId: null }
         ]
       })
     );
@@ -368,6 +369,55 @@ describe("SportsPage", () => {
     expect(html).toContain("Premier League");
     expect(html).toContain("W-L");
     expect(html).not.toContain(">#<");
+  });
+
+  // Review finding S1, blocker 3: once a short name is shared by two teams, a followed team's
+  // stored key can become a permanent number (see follow-identity.ts) while the scoreboard and
+  // standings rows for that team keep arriving under the raw, still-shared short name — those
+  // fetches have no way to know about the collision. Marking "you" by comparing keys alone would
+  // silently stop working the moment that happens; it must also try the permanent number.
+  it("still marks a followed team as you when its stored key is a number but the row still carries the shared short name (S1)", () => {
+    const sharedShortNameGame: GameSummary = {
+      id: "g-shared",
+      competitionKey: "nfl",
+      startsAt: "2026-07-01T23:20:00Z",
+      state: "live",
+      statusDetail: "Q3 4:12",
+      home: {
+        teamKey: "pac",
+        sourceTeamId: "401",
+        name: "Pacific Lutheran Lutes",
+        shortName: "PAC",
+        crestUrl: null,
+        score: 21,
+        record: "10-2",
+        winner: true
+      },
+      away: {
+        teamKey: "gb",
+        sourceTeamId: null,
+        name: "Green Bay Packers",
+        shortName: "GB",
+        crestUrl: null,
+        score: 14,
+        record: "8-4",
+        winner: false
+      }
+    };
+    const html = render(
+      makeOverview({
+        hero: gamedayHero(sharedShortNameGame),
+        scoreboard: [
+          { competitionKey: "nfl", competitionLabel: "NFL", games: [sharedShortNameGame] }
+        ],
+        // The saved follow now resolves to the permanent number "401", not the shared short name
+        // "pac" the game row still carries.
+        followedTeams: [{ competitionKey: "nfl", teamKey: "129700", sourceTeamId: "401" }]
+      })
+    );
+    const youIndex = html.indexOf("sp-board__side--you");
+    expect(youIndex).toBeGreaterThan(-1);
+    expect(html.slice(youIndex, youIndex + 200)).toContain("Pacific Lutheran Lutes");
   });
 
   it("does not cross-mark a same-teamKey row in another competition (pair-scoped)", () => {
@@ -515,7 +565,7 @@ describe("SportsPage", () => {
             ]
           }
         ],
-        followedTeams: [{ competitionKey: "eng.1", teamKey: "ars" }]
+        followedTeams: [{ competitionKey: "eng.1", teamKey: "ars", sourceTeamId: null }]
       })
     );
     expect(html).toContain("sp-legend");

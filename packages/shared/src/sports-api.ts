@@ -119,6 +119,18 @@ export interface SportsFollowDto {
 export interface FollowedTeamRef {
   readonly competitionKey: string;
   readonly teamKey: string;
+  // The provider's permanent number for this team, when known. The browser needs this to keep
+  // marking the right team once a short name starts being shared by more than one team (S1).
+  readonly sourceTeamId: string | null;
+}
+
+// A saved follow whose short name is currently shared by more than one team, with no permanent
+// number on file to break the tie (S1). Kept out of every card, score and standings match; the
+// person is asked which team they meant instead of the app guessing.
+export interface AmbiguousFollowedTeamRef {
+  readonly competitionKey: string;
+  readonly savedTeamKey: string;
+  readonly candidateNames: readonly string[];
 }
 
 // A whole-competition follow (teamKey: null on the DTO) — surfaced separately from
@@ -308,6 +320,9 @@ export interface SportsOverviewResponse {
   // Separate from `followedLeagues` (bare refs, for is-you marking): these carry the news+results
   // payload the /today Sports desk renders. Empty when no followed league is in-season.
   readonly followedLeagueCards: readonly FollowedLeagueCard[];
+  // Saved follows that can no longer be told apart from another team (S1); ask the person to
+  // choose. Excluded from `followed`, `scoreboard` and `standings` matching above.
+  readonly ambiguousFollows: readonly AmbiguousFollowedTeamRef[];
   readonly degraded: boolean; // source failed → cached/empty
 }
 

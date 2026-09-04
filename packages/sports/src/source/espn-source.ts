@@ -436,7 +436,8 @@ async function listTeams(fetchFn: typeof fetch, params: EspnTeamsParams): Promis
       name: team?.displayName ?? teamKey,
       shortName: team?.shortDisplayName ?? team?.displayName ?? teamKey,
       crestUrl: team?.logos?.[0]?.href ?? null,
-      sourceTeamId: team?.id ?? null
+      sourceTeamId: team?.id ?? null,
+      abbreviation: abbreviation ?? null
     } satisfies SourceTeamRef;
   });
 }

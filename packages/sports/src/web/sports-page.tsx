@@ -135,10 +135,17 @@ export function SportsPage() {
     });
   }, [data]);
 
-  const followedPairs = useMemo(
-    () => new Set((data?.followedTeams ?? []).map((f) => `${f.competitionKey}:${f.teamKey}`)),
-    [data?.followedTeams]
-  );
+  // A followed team's short name and its permanent number both go in here (S1): a game or
+  // standings row always carries the raw, possibly-shared short name as its own key, so marking
+  // it "you" needs both to be checked. See isFollowed in news-ranking.ts.
+  const followedPairs = useMemo(() => {
+    const pairs = new Set<string>();
+    for (const f of data?.followedTeams ?? []) {
+      pairs.add(`${f.competitionKey}:${f.teamKey}`);
+      if (f.sourceTeamId != null) pairs.add(`${f.competitionKey}:${f.sourceTeamId}`);
+    }
+    return pairs;
+  }, [data?.followedTeams]);
 
   if (!data) {
     return (

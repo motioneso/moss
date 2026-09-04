@@ -97,7 +97,9 @@ function defaultViewKey(
   if (hasConference) {
     const sections = views.filter((v) => v.key.startsWith("sec:"));
     const followed = sections.find((v) =>
-      v.sections[0]?.rows.some((row) => isFollowed(followedPairs, competitionKey, row.teamKey))
+      v.sections[0]?.rows.some((row) =>
+        isFollowed(followedPairs, competitionKey, row.teamKey, row.sourceTeamId)
+      )
     );
     if (followed) return followed.key;
     const alphabetical = [...sections].sort((a, b) => a.label.localeCompare(b.label));
@@ -482,7 +484,7 @@ function StandingsTable(props: {
           <tr
             key={row.teamKey}
             className={
-              isFollowed(props.followedPairs, group.competitionKey, row.teamKey)
+              isFollowed(props.followedPairs, group.competitionKey, row.teamKey, row.sourceTeamId)
                 ? "is-you"
                 : undefined
             }

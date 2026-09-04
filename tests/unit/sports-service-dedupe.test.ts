@@ -33,7 +33,7 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
         rows: [
           {
             teamKey: "liv",
-            sourceTeamId: null,
+            sourceTeamId: "364",
             name: "Liverpool",
             rank: 2,
             points: 58,
@@ -56,7 +56,7 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
         rows: [
           {
             teamKey: "livc",
-            sourceTeamId: null,
+            sourceTeamId: "364",
             name: "Liverpool",
             rank: 1,
             points: 12,
@@ -79,7 +79,7 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
     startsAt: "2026-07-10T19:00:00.000Z",
     state: "pre",
     statusDetail: "Fri 3:00 PM",
-    home: side({ teamKey: "liv", shortName: "LIV", name: "Liverpool" }),
+    home: side({ teamKey: "liv", shortName: "LIV", name: "Liverpool", sourceTeamId: "364" }),
     away: side({ teamKey: "eve", shortName: "EVE", name: "Everton" })
   };
   const uclNextMatch: GameSummary = {
@@ -88,7 +88,7 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
     startsAt: "2026-07-05T19:00:00.000Z", // soonest across the merged group
     state: "pre",
     statusDetail: "Sun 3:00 PM",
-    home: side({ teamKey: "livc", shortName: "LIV", name: "Liverpool" }),
+    home: side({ teamKey: "livc", shortName: "LIV", name: "Liverpool", sourceTeamId: "364" }),
     away: side({ teamKey: "bar", shortName: "BAR", name: "Barcelona" })
   };
 
@@ -156,7 +156,8 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
             name: "Liverpool",
             shortName: "LIV",
             crestUrl: "https://a.espncdn.com/i/teamlogos/soccer/500/liv.png",
-            sourceTeamId: "364" // same club, same ESPN soccer id, across both competitions
+            sourceTeamId: "364", // same club, same ESPN soccer id, across both competitions
+            abbreviation: competitionKey === "eng.1" ? "liv" : "livc"
           }
         ],
         getScoreboard: async () => [], // no game today on either competition → status "news"
@@ -263,7 +264,8 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
                     name: "Liverpool",
                     shortName: "LIV",
                     crestUrl: null,
-                    sourceTeamId: "364"
+                    sourceTeamId: "364",
+                    abbreviation: "liv"
                   }
                 ]
               : [], // usa.1 team lookup misses → sourceTeamId resolves to null for f-unresolved

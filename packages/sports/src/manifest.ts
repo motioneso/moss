@@ -141,6 +141,11 @@ export const sportsModuleManifest = {
       id: "sports.source_photos",
       description:
         "Stories from your own sources show a photo when the source's feed supplies one, or when the article page offers the picture it uses for sharing."
+    },
+    {
+      id: "sports.team_identity",
+      description:
+        "When two teams share the same short name, Sports tells them apart so a followed team's scores, schedule, and standing always stay attached to the right one, even after the team list changes. If a saved team can no longer be told apart from another team with the same short name, Sports keeps the follow as is rather than guess; unfollow it and follow the intended team again to fix it."
     }
   ],
   navigation: [
