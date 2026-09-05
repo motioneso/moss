@@ -196,11 +196,13 @@ export interface EmailSignals {
  * makes it worse, not better; the strength here comes from requiring the combination.
  *
  *   1. the sender looks automated (a no-reply / notifications / security style mailbox),
- *   2. the subject itself names a sign-in, login, account-verification, one-time, two-step or
- *      security code. Real sign-in mail from Google, Apple, Microsoft, banks and shops puts the
- *      code in the subject; door codes, vouchers and tracking numbers do not, so the body on
- *      its own never qualifies,
- *   3. the subject or the opening of the body carries a short code standing on its own,
+ *   2. the subject itself hands over a sign-in, login, account-verification, one-time, two-step
+ *      or security code — it names that kind of code AND is worded as a delivery, and does not
+ *      read as an announcement about codes in general. Real sign-in mail from Google, Apple,
+ *      Microsoft, banks and shops puts the code in the subject; door codes, vouchers, tracking
+ *      numbers and policy notices do not, so the body on its own never qualifies,
+ *   3. the subject or the opening of the body carries a short code standing on its own as one
+ *      unbroken run of characters — a telephone number written in groups never counts,
  *   4. nothing anywhere in the subject or the whole body points at a door, a stay, an order,
  *      a delivery, a booking or a money-off code, which would explain the number another way.
  */
@@ -269,7 +271,7 @@ const OTP_WORD = /\botp\b/;
  * the whole message is read, not one line of it.
  */
 const NOT_A_SIGN_IN_MESSAGE =
-  /\b(?:door|doors|apartment|apartments|apt|flat|room|rooms|gate|gates|lock|locks|keypad|garage|entry|entrance|building|locker|check[\s-]?in|check[\s-]?out|checkout|order|orders|tracking|parcel|package|delivery|deliveries|shipment|shipping|courier|booking|bookings|reservation|reservations|voucher|vouchers|coupon|coupons|discount|discounts|promo|promotion|promotions)\b/;
+  /\b(?:door|doors|apartment|apartments|apt|flat|room|rooms|gate|gates|lock|locks|keypad|garage|entry|entrance|building|locker|stay|stays|check[\s-]?in|check[\s-]?out|checkout|order|orders|tracking|parcel|package|delivery|deliveries|shipment|shipping|courier|booking|bookings|reservation|reservations|voucher|vouchers|coupon|coupons|discount|discounts|promo|promotion|promotions)\b/;
 
 /**
  * A short code standing on its own: four to eight digits, or six to eight letters and digits
@@ -281,6 +283,34 @@ const STANDALONE_CANDIDATE =
 
 /** Four digits that read as a calendar year are a date, not a secret. */
 const READS_AS_A_YEAR = /^(?:19|20)\d{2}$/;
+
+/**
+ * A telephone number written the way people write them: three or more digit groups separated
+ * by spaces or hyphens, such as a support line printed in the footer. Those digits are cleared
+ * out before the message is searched for a code, so "call 0800 123 4567" can never be mistaken
+ * for a sign-in code. A real code is one unbroken run of characters.
+ */
+const TELEPHONE_STYLE = /(?<![a-z0-9])\+?\d[\d-]*(?:[\s-]\d[\d-]*){2,}(?![a-z0-9])/g;
+
+/**
+ * Wording that shows the subject line is handing over a code right now, rather than talking
+ * about codes in general: "your ... code", "code is", "code:", "is your", "use code", or a
+ * short code printed in the subject itself.
+ */
+const SUBJECT_DELIVERS_A_CODE = [
+  /\byour\b[^\n]{0,24}?\b(?:code|passcode|password|otp)\b/,
+  /\b(?:code|passcode|password)\b\s*(?:is\b|:)/,
+  /\bis your\b/,
+  /\buse (?:this )?code\b/
+] as const;
+
+/**
+ * Wording that shows the subject line is about codes in general - a policy, a change of
+ * process, an announcement - rather than carrying one. These messages are ordinary mail and
+ * must reach the normal analysis.
+ */
+const SUBJECT_IS_ABOUT_CODES_IN_GENERAL =
+  /\b(?:policy|policies|update|updates|updated|updating|change|changes|changed|changing|deliver|delivers|delivered|delivering|announcement|announcing|notice|reminder|terms)\b/;
 
 /** How much of the body is searched for the code itself. Excluded wording is looked for in
  * the whole body, however long it is. */
@@ -308,18 +338,35 @@ export interface OneTimeCodeEmailInput {
   readonly body: string;
 }
 
-/** True when the text holds a short code that is not a year and not glued to other characters. */
+/**
+ * True when the text holds a short code that is not a year, is not glued to other characters,
+ * and is not part of a telephone number. Telephone-style runs of digits are blanked out first,
+ * so a support number in the footer never counts as a code.
+ */
 function hasDeliverableCode(text: string): boolean {
+  TELEPHONE_STYLE.lastIndex = 0;
+  const withoutPhoneNumbers = text.replace(TELEPHONE_STYLE, (run) => " ".repeat(run.length));
   STANDALONE_CANDIDATE.lastIndex = 0;
-  for (const match of text.matchAll(STANDALONE_CANDIDATE)) {
+  for (const match of withoutPhoneNumbers.matchAll(STANDALONE_CANDIDATE)) {
     if (!READS_AS_A_YEAR.test(match[0])) return true;
   }
   return false;
 }
 
-/** True when the subject line itself announces a sign-in, verification or two-step code. */
+/**
+ * True when the subject line itself hands over a sign-in, verification or two-step code. It
+ * must name that kind of code, word the line as a delivery ("your security code",
+ * "774411 is your log-in code"), and not read as an announcement about codes in general
+ * ("Security code policy update"), which is ordinary mail.
+ */
 function subjectNamesASignInCode(subject: string): boolean {
-  return SIGN_IN_CODE_PHRASES.some((phrase) => subject.includes(phrase)) || OTP_WORD.test(subject);
+  const namesTheKindOfCode =
+    SIGN_IN_CODE_PHRASES.some((phrase) => subject.includes(phrase)) || OTP_WORD.test(subject);
+  if (!namesTheKindOfCode) return false;
+  if (SUBJECT_IS_ABOUT_CODES_IN_GENERAL.test(subject)) return false;
+  return (
+    SUBJECT_DELIVERS_A_CODE.some((pattern) => pattern.test(subject)) || hasDeliverableCode(subject)
+  );
 }
 
 /**
