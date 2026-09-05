@@ -7,8 +7,13 @@ describe("resolveVitestArgs", () => {
   // package.json script hardcoded "tests/unit" and pnpm appends CLI args rather than replacing
   // them. The fix moves the default here, so "no CLI args" is the only case that falls back to
   // the directory glob. Mirrors the #1314 fix for `test:integration`.
-  it("falls back to the tests/unit glob when no CLI args are given (the verify:foundation path)", () => {
-    expect(resolveVitestArgs([])).toEqual(["--fileParallelism", "--maxWorkers=2", "tests/unit"]);
+  it("falls back to the tests/unit glob plus package-local suites when no CLI args are given (the verify:foundation path)", () => {
+    expect(resolveVitestArgs([])).toEqual([
+      "--fileParallelism",
+      "--maxWorkers=2",
+      "tests/unit",
+      "packages/scratchpad/src/__tests__"
+    ]);
   });
 
   it("runs only the given path, replacing the default rather than appending to it", () => {

@@ -32,6 +32,7 @@
     "@moss/notifications": "workspace:*",
     "@moss/people": "workspace:*",
     "@moss/proactive-monitoring": "workspace:*",
+    "@moss/scratchpad": "workspace:*",
     "@moss/settings": "workspace:*",
     "@moss/shared": "workspace:*",
     "@moss/source-behaviors": "workspace:*",

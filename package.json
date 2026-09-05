@@ -86,6 +86,7 @@
     "ingest:vault": "tsx scripts/ingest-vault.ts",
     "test:vault": "tsx scripts/test-integration.ts tests/integration/vault.test.ts",
     "test:structured-state": "tsx scripts/test-integration.ts tests/integration/structured-state.test.ts",
+    "test:scratchpad": "tsx scripts/test-integration.ts tests/integration/scratchpad-rls.test.ts tests/integration/scratchpad-routes.test.ts tests/integration/scratchpad-tools.test.ts",
     "spike:db:up": "docker compose -f spikes/auth-rls-safety/docker-compose.yml up -d --wait",
     "spike:db:down": "docker compose -f spikes/auth-rls-safety/docker-compose.yml down -v",
     "test:spike": "vitest run spikes",

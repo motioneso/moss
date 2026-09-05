@@ -58,3 +58,5 @@ export * from "./freshness-types.js";
 export * from "./time.js";
 export * from "./recurring-schedule.js";
 export * from "./briefings-format.js";
+export * from "./scratchpad-api.js";
+export * from "./scratchpad-shortcut.js";
