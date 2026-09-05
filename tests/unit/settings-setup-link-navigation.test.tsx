@@ -1,18 +1,17 @@
 // @vitest-environment jsdom
-// Regression coverage for PR 2220: Chat settings' "Set up" button targets the admin-only
-// aiproviders section while the settings page is showing personal sections. The old
-// section switcher checked the requested id only against whichever list (personal or admin)
-// the page was already showing, so from personal settings it silently fell back to the first
-// personal section instead of switching into admin mode.
+// Regression coverage for PR 2220: a button in personal settings that jumps to the admin-only
+// AI providers section needs to work even while the settings page is showing personal sections.
+// The old section switcher checked the requested id only against whichever list (personal or
+// admin) the page was already showing, so from personal settings it silently fell back to the
+// first personal section instead of switching into admin mode.
 //
-// This renders Chat's real settings screen, with its real "Set up" button, wired into the real
-// settings page exactly the way the app wires it (settings-personal-data-panes.tsx passes the
-// page's own section-switch handler straight through as that screen's onCat prop), and it lets
-// the real destination screen render. Only the screen that lists all the other modules is stood
-// in for, so the test does not also have to fake every module's data; the button under test is
-// never touched. The checks look at the heading and controls the destination screen actually
-// draws, so the test fails both when the old broken switching code is restored and when the
-// destination screen draws nothing at all.
+// The real button this bug was about (Chat settings' old "Set up" link) was removed from the
+// app on 2026-09-04 when Chat's settings were folded into the combined Assistant and AI screen,
+// which has no equivalent button. So this test stands in a plain button for the button that used
+// to be there, wired to the exact same handler the real screens use to jump sections
+// (onSelectSection, passed straight through by settings-page.tsx). What is still exercised for
+// real, and is still the actual point of this test, is settings-page.tsx's own section-switching
+// logic, and the real admin destination screen it lands on.
 // Same jsdom + react-test-renderer pattern as tests/unit/settings-ai-admin-pane.test.tsx (this
 // repo has no @testing-library/react).
 import { createElement } from "react";
@@ -43,16 +42,20 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => {
 });
 
 // The screen that lists every module is not what this test is about (the bug and the fix are
-// both in how settings-page.tsx picks which section to show once asked, not in how the module
-// list gets to Chat's screen), so it is stood in with a minimal replacement that goes straight to
-// Chat's real screen. That screen, and its "Set up" button, are the genuine article — not a
-// stand-in — wired up with the same handler the real module list passes it.
+// both in how settings-page.tsx picks which section to show once asked, not in how a module's
+// screen gets its jump-to-admin button), so it is stood in with a minimal replacement: a plain
+// button that calls the same section-switch handler the real module list would pass through.
+// There is no real button left to render in its place (see the comment at the top of this file),
+// so this stand-in is doing the job the old Chat settings "Set up" button used to do.
 vi.mock("../../apps/web/src/settings/settings-personal-data-panes.js", () => ({
   ModulesPane: ({ onSelectSection }: PaneProps) =>
-    createElement(ChatSettingsView, { onBack: () => {}, onCat: onSelectSection })
+    createElement(
+      "button",
+      { onClick: () => onSelectSection?.("aiproviders") },
+      "Set up"
+    )
 }));
 
-import { ChatSettingsView } from "../../apps/web/src/settings/settings-module-subviews.js";
 import { SettingsPage } from "../../apps/web/src/settings/settings-page.js";
 
 const nonAdminMe = {
