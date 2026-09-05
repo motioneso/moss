@@ -1,5 +1,6 @@
 import { assertDataContextDb } from "@moss/db";
 import { sql } from "kysely";
+import type { ProposedCommitmentAction } from "@moss/module-sdk";
 import type {
   CommitmentCandidate,
   CommitmentCandidateSource,
@@ -7,7 +8,9 @@ import type {
   CommitmentExtractionState,
   CommitmentSourceKind,
   CommitmentSuggestedHandling,
+  EmailThreadJudgementOutcomeKind,
   UpsertCandidateInput,
+  UpsertEmailCandidateInput,
   AddEvidenceInput
 } from "./types.js";
 
@@ -47,6 +50,133 @@ export class CommitmentsRepository {
       .executeTakeFirstOrThrow();
 
     return rowToCandidate(row);
+  }
+
+  /**
+   * One judged email thread becomes a candidate, or refreshes the one it already has. The
+   * signature carries the thread reference, so a re-judgement lands on the same row (the partial
+   * unique index on owner + thread_ref is the second guard). A person's rejection or "never owed"
+   * decision is kept; anything else reopens as pending review and clears the stale flag.
+   */
+  async upsertEmailCandidate(
+    scopedDb: unknown,
+    input: UpsertEmailCandidateInput
+  ): Promise<CommitmentCandidate> {
+    assertDataContextDb(scopedDb);
+    const now = new Date();
+    const proposedActions = sql<
+      Record<string, unknown>
+    >`${JSON.stringify(input.proposedActions)}::jsonb`;
+    const whyLines = [...input.whyLines];
+
+    const row = await scopedDb.db
+      .insertInto("app.commitment_candidates")
+      .values({
+        owner_user_id: input.ownerUserId,
+        candidate_signature: input.candidateSignature,
+        kind: input.kind,
+        title: input.title,
+        due_local_date: input.dueLocalDate ?? null,
+        counterparty_label: input.counterpartyLabel ?? null,
+        confidence: input.confidence,
+        suggested_handling: input.suggestedHandling ?? null,
+        counterparty_person_id: input.counterpartyPersonId,
+        counterparty_address: input.counterpartyAddress,
+        proposed_actions: proposedActions,
+        why_lines: whyLines,
+        thread_ref: input.threadRef,
+        last_judged_external_id: input.lastJudgedExternalId,
+        stale: false,
+        source_count: 1,
+        first_seen_at: now,
+        last_seen_at: now
+      })
+      .onConflict((oc) =>
+        oc.columns(["owner_user_id", "candidate_signature"]).doUpdateSet({
+          title: input.title,
+          due_local_date: input.dueLocalDate ?? null,
+          counterparty_label: input.counterpartyLabel ?? null,
+          confidence: input.confidence,
+          suggested_handling: input.suggestedHandling ?? null,
+          counterparty_person_id: input.counterpartyPersonId,
+          counterparty_address: input.counterpartyAddress,
+          proposed_actions: proposedActions,
+          why_lines: whyLines,
+          last_judged_external_id: input.lastJudgedExternalId,
+          stale: false,
+          status: sql`CASE WHEN app.commitment_candidates.status IN ('rejected', 'explicit_non_action') THEN app.commitment_candidates.status ELSE 'pending_review'::app.commitment_candidate_status END`,
+          source_count: sql<number>`app.commitment_candidates.source_count + 1`,
+          last_seen_at: now,
+          updated_at: now
+        })
+      )
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    return rowToCandidate(row);
+  }
+
+  /** Remember what the last judgement of a thread concluded, and which message it read up to. */
+  async recordThreadJudgement(
+    scopedDb: unknown,
+    ownerUserId: string,
+    threadRef: string,
+    lastJudgedExternalId: string,
+    outcome: EmailThreadJudgementOutcomeKind
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    const now = new Date();
+    await scopedDb.db
+      .insertInto("app.commitment_email_thread_judgements")
+      .values({
+        owner_user_id: ownerUserId,
+        thread_ref: threadRef,
+        last_judged_external_id: lastJudgedExternalId,
+        outcome,
+        judged_at: now
+      })
+      .onConflict((oc) =>
+        oc.columns(["owner_user_id", "thread_ref"]).doUpdateSet({
+          last_judged_external_id: lastJudgedExternalId,
+          outcome,
+          judged_at: now
+        })
+      )
+      .execute();
+  }
+
+  async getThreadJudgement(
+    scopedDb: unknown,
+    ownerUserId: string,
+    threadRef: string
+  ): Promise<{ lastJudgedExternalId: string; outcome: EmailThreadJudgementOutcomeKind } | null> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.commitment_email_thread_judgements")
+      .select(["last_judged_external_id", "outcome"])
+      .where("owner_user_id", "=", ownerUserId)
+      .where("thread_ref", "=", threadRef)
+      .executeTakeFirst();
+    return row ? { lastJudgedExternalId: row.last_judged_external_id, outcome: row.outcome } : null;
+  }
+
+  /** Email-thread candidates still waiting on the person: open, not yet resolved, soonest due first. */
+  async listOpenEmailCandidates(
+    scopedDb: unknown,
+    ownerUserId: string
+  ): Promise<CommitmentCandidate[]> {
+    assertDataContextDb(scopedDb);
+    const rows = await scopedDb.db
+      .selectFrom("app.commitment_candidates")
+      .selectAll()
+      .where("owner_user_id", "=", ownerUserId)
+      .where("thread_ref", "is not", null)
+      .where("status", "in", ["pending_review", "accepted", "snoozed"])
+      .where("resolution_ref", "is", null)
+      .orderBy(sql`due_local_date nulls last`)
+      .orderBy("last_seen_at", "desc")
+      .execute();
+    return rows.map(rowToCandidate);
   }
 
   async addEvidenceRow(scopedDb: unknown, input: AddEvidenceInput): Promise<boolean> {
@@ -243,7 +373,23 @@ function rowToCandidate(row: Record<string, unknown>): CommitmentCandidate {
     snoozedUntil: row["snoozed_until"] as Date | null,
     expiresAt: row["expires_at"] as Date | null,
     createdAt: row["created_at"] as Date,
-    updatedAt: row["updated_at"] as Date
+    updatedAt: row["updated_at"] as Date,
+    ...emailColumns(row)
+  };
+}
+
+/** The 0216 columns, present only once that migration has run (and only set on email items). */
+function emailColumns(row: Record<string, unknown>): Partial<CommitmentCandidate> {
+  if (!("thread_ref" in row)) return {};
+  const actions = row["proposed_actions"];
+  return {
+    counterpartyPersonId: (row["counterparty_person_id"] as string | null) ?? null,
+    counterpartyAddress: (row["counterparty_address"] as string | null) ?? null,
+    proposedActions: Array.isArray(actions) ? (actions as ProposedCommitmentAction[]) : [],
+    whyLines: Array.isArray(row["why_lines"]) ? (row["why_lines"] as string[]) : [],
+    threadRef: (row["thread_ref"] as string | null) ?? null,
+    lastJudgedExternalId: (row["last_judged_external_id"] as string | null) ?? null,
+    stale: row["stale"] === true
   };
 }
 
