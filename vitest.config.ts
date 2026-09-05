@@ -120,6 +120,14 @@ export default defineConfig({
         )
       },
       {
+        // Subpath export; must precede the bare "@moss/connectors" alias below, same pairing
+        // requirement as the other subpath/bare alias pairs in this file.
+        find: "@moss/connectors/email-otp-rule",
+        replacement: fileURLToPath(
+          new URL("./packages/connectors/src/email-otp-rule.ts", import.meta.url)
+        )
+      },
+      {
         find: "@moss/connectors",
         replacement: fileURLToPath(new URL("./packages/connectors/src/index.ts", import.meta.url))
       },

@@ -30,7 +30,7 @@ export function createEmailThreadProvider(
       fromIsUser: mine.has(address),
       subject: m.subject ?? "",
       receivedAt: new Date(m.received_at).toISOString(),
-      bodyExcerpt: (m.body_excerpt ?? "").slice(0, THREAD_EXCERPT_CAP)
+      bodyExcerpt: (m.body_excerpt || m.snippet || "").slice(0, THREAD_EXCERPT_CAP)
     };
   };
   return {

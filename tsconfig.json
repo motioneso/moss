@@ -22,6 +22,7 @@
       "@moss/chat/priority-consumer": ["packages/chat/src/priority-consumer.ts"],
       "@moss/connectors": ["packages/connectors/src/index.ts"],
       "@moss/connectors/presets": ["packages/connectors/src/imap-presets.ts"],
+      "@moss/connectors/email-otp-rule": ["packages/connectors/src/email-otp-rule.ts"],
       "@moss/datasets": ["packages/datasets/src/index.ts"],
       "@moss/host-fetch": ["packages/host-fetch/src/index.ts"],
       "@moss/host-fetch/policy": ["packages/host-fetch/src/policy.ts"],

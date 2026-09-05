@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@moss/ai": "workspace:*",
+    "@moss/connectors": "workspace:*",
     "@moss/db": "workspace:*",
     "@moss/jobs": "workspace:*",
     "@moss/module-sdk": "workspace:*",

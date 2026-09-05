@@ -1,3 +1,4 @@
+import { signInCodeDecision } from "@moss/connectors/email-otp-rule";
 import type {
   CommitmentCalendarWindow,
   CommitmentOpenTask,
@@ -102,7 +103,11 @@ export function buildEmailJudgementPrompt(i: EmailJudgementPromptInput): string 
   lines.push("", "## Thread (oldest first)");
   for (const m of i.messages.slice(-MESSAGES_MAX)) {
     const who = m.fromIsUser ? "the user" : m.fromAddress;
-    lines.push(`- ${m.receivedAt} from ${who}: ${m.subject}\n  ${m.bodyExcerpt}`);
+    const handsOverACode =
+      signInCodeDecision({ from: m.fromAddress, subject: m.subject, body: m.bodyExcerpt }) ===
+      "hands-over-a-code";
+    const body = handsOverACode ? "" : m.bodyExcerpt;
+    lines.push(`- ${m.receivedAt} from ${who}: ${m.subject}\n  ${body}`);
   }
   lines.push("", "## Who this is");
   if (i.missing.includes("people")) lines.push("People: unavailable");
