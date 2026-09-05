@@ -1,90 +1,152 @@
 # Moss
 
-A self-hosted AI home base. Chat with an assistant that actually knows your notes, calendar, email, tasks and goals — because all of it lives on your own machine, in your own database.
+**A self-hosted AI assistant for your everyday life.**
 
-Moss is in active alpha. Expect rough edges.
+Moss brings your notes, tasks, calendar, email, and personal context into one place. Talk to it to plan your day, find something you saved, keep track of commitments, or work through a goal. Its modules give the assistant tools to act on your information, and give you dedicated screens to browse and manage it yourself.
 
-## What it does
+Moss is in **active alpha**. Features and installation details are still evolving; expect rough edges.
 
-Moss is a chat interface with a set of modules behind it. The assistant can read from and write to any module you have enabled, so "what's on for tomorrow, and did I ever reply to Sarah?" is one question, not four apps.
+## What you can do with Moss
 
-**Your stuff**
+- **Organize your life.** Manage tasks, lists, goals, commitments, and people. Ask Moss to help turn a conversation into something you can follow through on.
+- **Work with your notes.** Search Markdown and Obsidian notes, create and update notes, and optionally archive conversations to your vault.
+- **Bring in your accounts.** Connect email and calendar sources so your assistant can use messages and upcoming events as context.
+- **Get a view of your day.** Briefings, notifications, and proactive monitoring help surface what needs attention. Follow weather, news, and sports that interest you.
+- **Track your wellbeing.** Record check-ins, manage medications, and review wellness trends.
+- **Build up context over time.** Memory carries useful information across conversations so you do not have to start from scratch each time.
+- **Make it your own.** Enable the modules you need, install additional modules through Settings, or use Workshop to plan and build a new module with Moss.
 
-- **Notes** — point Moss at a Markdown or Obsidian folder and it indexes and searches it
-- **Tasks**, **Lists**, **Goals**, **Commitments** — things to do and things you said you'd do
-- **People** — who you know and what you last talked about
-- **Calendar** and **Email** — read-only context from connected accounts
+Try asking: “What should I focus on today?”, “Find my notes about the kitchen renovation,” or “Create a task to follow up on this next week.” Available actions depend on your enabled modules, connected accounts, and permissions.
 
-**The day**
+## Your assistant, your providers, your data
 
-- **Briefings** — a morning summary built from everything above
-- **Weather**, **News**, **Sports** — the ambient stuff, filtered to what you follow
-- **Notifications** and **Proactive monitoring** — Moss tells you when something changed instead of waiting to be asked
-- **Wellness** — check-ins and trends
+Moss runs on your hardware and stores its database and files there. Data is private by default; sharing is explicit, and administrator access does not bypass private-data permissions. Connector and AI credentials are encrypted at rest.
 
-**Under the hood**
+You bring your own AI access. Moss supports chat through Claude, Codex, and Gemini sign-in, along with configurable AI providers for features that need them. Set up your provider in the first-run wizard or Settings. Provider accounts, subscriptions, and API usage are separate from Moss.
 
-- **Memory** — the assistant remembers across conversations
-- **Web** — fetch and read pages during a conversation
-- **Connectors** — link external accounts
-- **Settings** — configure all of it from the UI
+**Self-hosted storage does not mean all AI processing is local.** When you use a hosted provider, prompts and relevant context are sent to that provider. Connected services and web tools also make external requests.
 
-## Bring your own AI
+## A look inside Moss
 
-Moss has no built-in model and no bundled API key. You configure a provider in Settings and every feature routes to it. Nothing in the codebase hardcodes a provider or a model name, so switching is a settings change, not a migration.
+Meet **Luke**, a fictional researcher organizing work toward a cure for type 1 diabetes. These screenshots come from a running Moss demo with saved research notes, tasks, goals, contacts, calendar events, and wellness check-ins. Personal data is fictional; News and Sports show public provider content captured at the time. The research workspace illustrates organization, not clinical findings or a claimed cure.
 
-## Modules
+**Today** brings Luke's research priorities, calendar, and daily context together.
 
-Every feature above is a module with a manifest — its own database tables, background jobs, permissions, UI, and tools the assistant can call. Modules talk to each other only through declared APIs, so you can enable the ones you want and ignore the rest. The same interface is how you'd add your own.
+![Moss Today dashboard greeting Luke, with beta-cell research tasks and a clinical evidence reading session](docs/images/readme/moss-today.jpg)
 
-## Install
+<details>
+<summary><strong>Tasks — turn research into next actions</strong></summary>
 
-Moss is deployed using Docker Compose. The setup process generates your unique encryption keys and database passwords automatically.
+Luke's reading, evidence checks, and writing tasks, organized by priority and due date.
 
-```sh
-mkdir moss && cd moss
+![Moss Tasks showing Luke's beta-cell replacement comparison, evidence review, and patient-priority questions](docs/images/readme/moss-tasks.jpg)
 
-# Download the production Compose file
-curl -O https://raw.githubusercontent.com/motioneso/Jarv1s/main/infra/docker-compose.prod.yml
+</details>
 
-# 1. Generate your boot secrets (creates env.production.local)
-JARVIS_IMAGE_TAG=stable docker compose -f docker-compose.prod.yml --profile setup run --rm setup
+<details>
+<summary><strong>News — a reading desk for your sources</strong></summary>
 
-# 2. Start the stack
-docker compose -f docker-compose.prod.yml --env-file env.production.local up -d
-```
+Headlines and source summaries in one place, with links to the original reporting.
 
-Open `http://localhost:1533`. To upgrade later, run `docker compose pull` then the `up -d` command again.
+![Moss News showing its front-page layout, lead story, and source headlines](docs/images/readme/moss-news.jpg)
 
-For detailed configuration (including mounting a notes folder), see the [Deploy Guide](docs/operations/deploy.md).
+</details>
 
-## Notes
+<details>
+<summary><strong>Sports — follow your teams</strong></summary>
 
-Mounting a notes folder is optional. If you mount one at `/data/external-notes`, Moss indexes the Markdown in it and the assistant can search it. Mount it read-only unless you want Moss writing back.
+Luke follows the Mariners, Arsenal, and Warriors, with results, upcoming games, and sports coverage together.
 
-## Backups
+![Moss Sports showing Luke's followed teams, scores, upcoming games, and news](docs/images/readme/moss-sports.jpg)
 
-Two volumes hold everything: `moss-postgres` (the database) and `moss-data` (app state, provider CLI auth, caches, local files).
+</details>
 
-```sh
-docker compose down
-docker run --rm -v moss-postgres:/data -v "$PWD":/backup alpine \
-  tar czf /backup/moss-postgres.tar.gz -C /data .
-docker run --rm -v moss-data:/data -v "$PWD":/backup alpine \
-  tar czf /backup/moss-data.tar.gz -C /data .
-docker compose up -d
-```
+<details>
+<summary><strong>Wellness — check in and notice patterns</strong></summary>
 
-## Your data stays yours
+Four weeks of fictional check-ins show how Luke balances focused research with rest and everyday life.
 
-Everything runs on your hardware. Data is private by default and owner-only unless you explicitly share it. Credentials are encrypted at rest and never reach the frontend, the logs, or an AI prompt.
+![Moss Wellness showing Luke's mood check-in and insights from his recent history](docs/images/readme/moss-wellness.jpg)
 
-## Development
+![Moss Wellness chart showing 28 days of fictional mood check-ins](docs/images/readme/moss-wellness-trends.jpg)
 
-Setup lives in [CLAUDE.md](CLAUDE.md) and [docs/operations/dev-environment.md](docs/operations/dev-environment.md).
+</details>
+
+## Install with Docker Compose
+
+You need Docker Engine or Docker Desktop, **Docker Compose v2.24 or newer**, and a terminal with `curl`. These commands use a POSIX shell (Linux, macOS, or WSL). No source checkout or host Node.js installation is needed.
+
+### 1. Download the deployment file
 
 ```sh
-pnpm install
-pnpm db:up
-pnpm verify:foundation
+mkdir moss
+cd moss
+curl -fL https://raw.githubusercontent.com/motioneso/moss/main/infra/docker-compose.prod.yml \
+  -o docker-compose.prod.yml
 ```
+
+### 2. Generate your configuration and secrets
+
+```sh
+JARVIS_IMAGE_TAG=stable POSTGRES_PASSWORD=setup JARVIS_CLI_RUNNER_RPC_SECRET=setup \
+  docker compose -p moss -f docker-compose.prod.yml --profile setup \
+  run --rm --no-deps --pull always --user "$(id -u):$(id -g)" setup
+```
+
+This writes `env.production.local` beside the Compose file, readable only by your user. The two `setup` values let Compose parse the file before secrets exist; the setup service generates fresh passwords and encryption keys instead of using those placeholders. Back up this file securely and keep it out of Git. Run setup only once.
+
+Before starting, add this line to `env.production.local`, replacing the example with the email you will use for your first Moss account:
+
+```dotenv
+MOSS_RECONCILE_CONFIRM_OWNER_EMAIL=you@example.com
+```
+
+Moss checks this identity when reconciling modules after an owner exists. It must match your first account so subsequent starts can complete.
+
+The image and application are named **Moss**. Some Compose service names, volume names, and `JARVIS_*` configuration keys retain their original names for compatibility; use them exactly as shown.
+
+### 3. Start Moss
+
+```sh
+docker compose -p moss -f docker-compose.prod.yml --env-file env.production.local \
+  up -d --no-build
+```
+
+Open **[http://localhost:1533](http://localhost:1533)**, create your first account with the email above, and follow the setup wizard to connect your AI provider. Then choose your modules and connect any accounts you want Moss to use.
+
+The stack includes PostgreSQL with pgvector, the Moss app, and a supporting sports renderer. Database migrations and module reconciliation run automatically during app startup. Allow a few minutes for the first boot.
+
+Check startup status or recent app logs:
+
+```sh
+docker compose -p moss -f docker-compose.prod.yml --env-file env.production.local ps
+docker compose -p moss -f docker-compose.prod.yml --env-file env.production.local \
+  logs --tail=100 jarv1s
+```
+
+For access from another device, configure its exact browser origin in `MOSS_AUTH_TRUSTED_ORIGINS` before starting. See the [deployment guide](docs/operations/deploy.md) for remote access, ports, notes mounts, and backups, and the [HTTPS guide](docs/operations/self-hosted-tls.md) for TLS setup.
+
+### Update Moss
+
+Back up your configuration and persistent data first, then run these commands from your installation directory:
+
+```sh
+docker compose -p moss -f docker-compose.prod.yml --env-file env.production.local pull
+docker compose -p moss -f docker-compose.prod.yml --env-file env.production.local \
+  up -d --no-build
+```
+
+The `stable` channel follows promoted releases. To pin a release, set `JARVIS_IMAGE_TAG` in `env.production.local` to its published version tag. Read [What's New](docs/WHATS_NEW.md) before upgrading.
+
+For an existing installation, keep using its original Compose project name instead of switching to `-p moss`: the project name determines which persistent volumes Compose uses. Never use `down -v` unless you intend to delete the installation's volumes.
+
+## Learn more
+
+- [Deployment and configuration](docs/operations/deploy.md)
+- [HTTPS setup](docs/operations/self-hosted-tls.md)
+- [Release notes](docs/WHATS_NEW.md)
+- [Module developer guide](docs/module-developer-guide.md)
+- [Development environment](docs/operations/dev-environment.md) and [project rules](CLAUDE.md)
+- [Report an issue](https://github.com/motioneso/moss/issues)
+
+Moss is licensed under the [MIT License](LICENSE).

@@ -86,10 +86,12 @@ try {
 // --- Generate boot secrets once (node:crypto). ------------------------------
 // BETTER_AUTH_SECRET drives session + JWT signing (48 bytes -> base64).
 const betterAuthSecret = randomBytes(48).toString("base64");
-// Connector / AI secret keys are the at-rest encryption keys for connector creds
-// and AI provider config — 32 bytes -> hex.
+// Independent at-rest encryption keys for each credential store — 32 bytes -> hex.
 const connectorSecretKey = randomBytes(32).toString("hex");
+const integrationsSecretKey = randomBytes(32).toString("hex");
 const aiSecretKey = randomBytes(32).toString("hex");
+const moduleCredentialSecretKey = randomBytes(32).toString("hex");
+const newsCredentialSecretKey = randomBytes(32).toString("hex");
 // POSTGRES_PASSWORD is the superuser password for FIRST volume init. base64url
 // (18 bytes) keeps it URL-safe since it is also embedded in the bootstrap URL below.
 const postgresPassword = randomBytes(18).toString("base64url");
@@ -165,7 +167,10 @@ const content = [
   "# Required production secrets (generate once; keep stable across restarts).",
   `BETTER_AUTH_SECRET=${betterAuthSecret}`,
   `MOSS_CONNECTOR_SECRET_KEY=${connectorSecretKey}`,
+  `MOSS_INTEGRATIONS_SECRET_KEY=${integrationsSecretKey}`,
   `MOSS_AI_SECRET_KEY=${aiSecretKey}`,
+  `MOSS_MODULE_CREDENTIAL_SECRET_KEY=${moduleCredentialSecretKey}`,
+  `MOSS_NEWS_CREDENTIAL_SECRET_KEY=${newsCredentialSecretKey}`,
   "",
   "# The image tag this deploy runs (pin a concrete version; never :edge/:latest).",
   `JARVIS_IMAGE_TAG=${imageTag}`,
@@ -226,8 +231,10 @@ if (tlsSettings) {
 }
 console.log("  2. BACK THIS FILE UP. It is the only copy of your auth/encryption keys;");
 console.log("     losing it orphans sessions + encrypted connector/AI data.");
-console.log("  3. Bring the stack up:");
+console.log("  3. Add MOSS_RECONCILE_CONFIRM_OWNER_EMAIL=<first-account-email> to this file.");
+console.log("     Use that email when creating your first account.");
+console.log("  4. Bring the stack up (existing installs: retain your original project name):");
 console.log(
-  "     docker compose -p jarv1s-prod -f docker-compose.prod.yml " +
-    "--env-file ./env.production.local up -d --build"
+  "     docker compose -p moss -f docker-compose.prod.yml " +
+    "--env-file ./env.production.local up -d --no-build"
 );
