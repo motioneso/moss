@@ -518,10 +518,10 @@ button.module-link {
   border-radius: var(--radius-sm);
   text-decoration: none;
   vertical-align: middle;
-  /* The button's fixed 30px box is taller than the title's text line, so centering the two
-     boxes on their geometric middles reads as low next to a capital letterform's own optical
-     centre (cap-height to baseline). Nudge up to match the module name's line. */
-  margin-top: -2px;
+  /* Centre the gear on the title's full line box (cap top to descender bottom). An earlier
+     -2px nudge assumed a caps-only optical centre and sat the gear visibly high next to any
+     module name with a descender, e.g. "Sports". Ben, 2026-09-04. */
+  margin-top: 0;
 }
 
 .topbar-settings-button:hover {
