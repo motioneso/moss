@@ -49,7 +49,8 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "notifications",
     label: "Notifications",
-    description: "Review notifications produced by enabled modules.",
+    description:
+      "Review notifications produced by enabled modules. The account menu button at the bottom of the rail shows the unread count as a badge when the menu is closed, and screen readers hear the number as part of the button's spoken label.",
     path: "/notifications",
     scope: "user"
   },
@@ -72,7 +73,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "profile",
     label: "Account & preferences",
     description:
-      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location (use the browser's location or search for a place), quiet hours, sessions, data export and account deletion.",
+      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location (use the browser's location or search for a place; the hint under the location notes which of those two was used this session), quiet hours, sessions, data export and account deletion.",
     path: "/settings?section=profile",
     scope: "user"
   },
@@ -87,7 +88,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "assistant",
     label: "Assistant & AI",
     description:
-      "Choose assistant behavior, persona dials, response style (concise, balanced, or detailed), and model routing available to this user. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > Assistant & AI) to turn on the microphone in chat.",
+      "Choose assistant behavior, persona dials, response style (concise, balanced, or detailed, each shown with an example answer of that length), and model routing available to this user. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > Assistant & AI) to turn on the microphone in chat.",
     path: "/settings?section=assistant",
     scope: "user"
   },
@@ -101,7 +102,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "memory",
     label: "Memory & context",
-    description: "Review and configure assistant memory behavior.",
+    description:
+      "Review and configure assistant memory behaviour, and choose the People folder. Every " +
+      "folder is chosen from the same list of available folders, and People notes live inside " +
+      "the chosen notes folder.",
     path: "/settings?section=memory",
     scope: "user"
   },
@@ -133,7 +137,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "sources",
     label: "Data sources",
-    description: "Review sources the assistant can read.",
+    description:
+      "Review sources the assistant can read and choose the notes folder. Every folder comes " +
+      "from the same list of folders available on the server, and People notes live inside " +
+      "the chosen notes folder. An info icon explains how folders get listed.",
     path: "/settings?section=sources",
     scope: "user"
   },
@@ -178,7 +185,15 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
       "is struck through), " +
       "a minus button (disable) and a trash button (remove after confirmation; the provider's " +
-      "default entry cannot be removed). The Models section collapses from its header.",
+      "default entry cannot be removed). The Models section collapses from its header. The " +
+      "'Not logged in' message only appears after someone presses Refresh models; the provider " +
+      "card itself does not notice a broken sign-in on its own. A refresh the provider answers " +
+      "by refusing the stored sign-in reads 'Not logged in' too. Once a provider has refused a " +
+      "sign-in - on a model refresh, or on a chat message it would not answer - that sign-in " +
+      "counts as expired for that provider, so the next check asks for a fresh login instead of " +
+      "repeating an old success, until a fresh login is accepted. Pressing Log in on a provider " +
+      "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
+      "genuinely broken sign-in always gets a fresh place to sign back in.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },

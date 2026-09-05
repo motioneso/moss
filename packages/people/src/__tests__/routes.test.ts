@@ -1,11 +1,12 @@
-import { chmod, mkdtemp, rm, symlink } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import Fastify from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { DataContextRunner, createDatabase, getMossDatabaseUrls } from "@moss/db";
-import { makeVaultDir, readVaultFile, VaultContextRunner, writeVaultFile } from "@moss/vault";
+import type { AccessContext } from "@moss/db";
+import { readVaultFile, VaultContextRunner, writeVaultFile } from "@moss/vault";
 import type { Kysely } from "kysely";
 import type { MossDatabase } from "@moss/db";
 import { resetFoundationDatabase, ids } from "../../../../tests/integration/test-database.js";
@@ -19,6 +20,29 @@ let db: Kysely<MossDatabase>;
 let runner: DataContextRunner;
 let vaultRoot: string;
 let vaultRunner: VaultContextRunner;
+// #2268 — the People folder now lives inside the server's allowed notes roots, so these tests
+// stand up a real notes root on disk and choose folders inside it, exactly as the shared folder
+// chooser does. The private per-user storage folder is no longer involved.
+let notesRoot: string;
+let outsideRoot: string;
+
+function accessContext(actorUserId = ids.userA): AccessContext {
+  return { actorUserId, requestId: "test" };
+}
+
+/** Writes into a chosen People folder the same way the routes do. */
+function inFolder<T>(
+  folder: string,
+  work: Parameters<VaultContextRunner["withVaultContextAt"]>[3],
+  actorUserId = ids.userA
+): Promise<T> {
+  return vaultRunner.withVaultContextAt(
+    accessContext(actorUserId),
+    folder,
+    [notesRoot],
+    work
+  ) as Promise<T>;
+}
 
 beforeAll(async () => {
   await resetFoundationDatabase();
@@ -26,11 +50,17 @@ beforeAll(async () => {
   runner = new DataContextRunner(db as never);
   vaultRoot = await mkdtemp(join(tmpdir(), "jarvis-people-routes-"));
   vaultRunner = new VaultContextRunner(vaultRoot);
+  notesRoot = await mkdtemp(join(tmpdir(), "jarvis-people-notes-root-"));
+  outsideRoot = await mkdtemp(join(tmpdir(), "jarvis-people-outside-"));
+  process.env["JARVIS_NOTES_ROOTS"] = notesRoot;
 });
 
 afterAll(async () => {
   await db?.destroy();
+  delete process.env["JARVIS_NOTES_ROOTS"];
   if (vaultRoot) await rm(vaultRoot, { recursive: true, force: true });
+  if (notesRoot) await rm(notesRoot, { recursive: true, force: true });
+  if (outsideRoot) await rm(outsideRoot, { recursive: true, force: true });
 });
 
 beforeEach(async () => {
@@ -50,68 +80,82 @@ function buildApp(actorUserId = ids.userA, actorVaultRunner: VaultContextRunner 
   return app;
 }
 
+async function chooseFolder(app: ReturnType<typeof buildApp>, folder: string) {
+  return app.inject({ method: "PUT", url: "/api/people/notes-settings", payload: { folder } });
+}
+
 describe("People notes settings routes", () => {
-  it("keeps directory discovery owner-scoped across symlinks", async () => {
-    let userBRoot = "";
-    await vaultRunner.withVaultContext(
-      { actorUserId: ids.userB, requestId: "directory-user-b" },
-      async (ctx) => {
-        userBRoot = ctx.vaultRoot;
-        await makeVaultDir(ctx, "OnlyUserB");
-      }
-    );
-    await vaultRunner.withVaultContext(
-      { actorUserId: ids.userA, requestId: "directory-user-a" },
-      (ctx) => symlink(userBRoot, join(ctx.vaultRoot, "EscapeToUserB"), "dir")
-    );
-
-    const app = buildApp(ids.userA);
+  it("refuses a folder outside the folders this server allows", async () => {
+    const app = buildApp();
     await app.ready();
-    const root = await app.inject({ method: "GET", url: "/api/people/notes-directories" });
-    expect(root.body).not.toContain("OnlyUserB");
 
-    const escaped = await app.inject({
-      method: "GET",
-      url: "/api/people/notes-directories?path=EscapeToUserB"
-    });
-    expect(escaped.statusCode).toBe(400);
-    expect(JSON.parse(escaped.body)).toEqual({ error: "People notes folder is unavailable" });
-    expect(escaped.body).not.toContain(userBRoot);
-    expect(escaped.body).not.toContain(ids.userB);
-    expect(escaped.body).not.toContain("OnlyUserB");
+    const outside = await chooseFolder(app, outsideRoot);
+    expect(outside.statusCode).toBe(400);
+    expect(JSON.parse(outside.body)).toEqual({ error: "People notes folder is unavailable" });
+    expect(outside.body).not.toContain(outsideRoot);
+
+    const missing = await chooseFolder(app, join(notesRoot, "NeverCreated"));
+    expect(missing.statusCode).toBe(400);
+    expect(JSON.parse(missing.body)).toEqual({ error: "People notes folder is unavailable" });
+
+    const relative = await chooseFolder(app, "People");
+    expect(relative.statusCode).toBe(400);
+    expect(JSON.parse(relative.body)).toEqual({ error: "People notes folder is unavailable" });
+
     await app.close();
   });
 
-  it("maps GET and PUT filesystem failures to one safe response", async () => {
-    await vaultRunner.withVaultContext(
-      { actorUserId: ids.userA, requestId: "not-directory-setup" },
-      (ctx) => writeVaultFile(ctx, "QA987NotDirectory", "plain file")
-    );
+  it("keeps folder browsing inside the chosen folder across symlinks", async () => {
+    const folder = join(notesRoot, "QA987Escape");
+    await mkdir(join(outsideRoot, "OnlyOutside"), { recursive: true });
+    await mkdir(folder, { recursive: true });
+    await symlink(outsideRoot, join(folder, "EscapeOutside"), "dir");
+
     const app = buildApp();
     await app.ready();
+    expect((await chooseFolder(app, folder)).statusCode).toBe(200);
+
+    const root = await app.inject({ method: "GET", url: "/api/people/notes-directories" });
+    expect(root.statusCode).toBe(200);
+    expect(root.body).not.toContain("OnlyOutside");
+
+    const escaped = await app.inject({
+      method: "GET",
+      url: "/api/people/notes-directories?path=EscapeOutside"
+    });
+    expect(escaped.statusCode).toBe(400);
+    expect(JSON.parse(escaped.body)).toEqual({ error: "People notes folder is unavailable" });
+    expect(escaped.body).not.toContain(outsideRoot);
+    expect(escaped.body).not.toContain("OnlyOutside");
+    await app.close();
+  });
+
+  it("maps browse and save failures to one safe response", async () => {
+    const folder = join(notesRoot, "QA987Failures");
+    await mkdir(folder, { recursive: true });
+    const app = buildApp();
+    await app.ready();
+    expect((await chooseFolder(app, folder)).statusCode).toBe(200);
+    await inFolder(folder, (ctx) => writeVaultFile(ctx, "QA987NotDirectory", "plain file"));
 
     for (const response of [
       await app.inject({
         method: "GET",
         url: "/api/people/notes-directories?path=QA987NotDirectory"
       }),
-      await app.inject({
-        method: "PUT",
-        url: "/api/people/notes-settings",
-        payload: { folder: "QA987NotDirectory/Child" }
-      })
+      await chooseFolder(app, join(folder, "QA987NotDirectory", "Child"))
     ]) {
       expect(response.statusCode).toBe(400);
       expect(JSON.parse(response.body)).toEqual({ error: "People notes folder is unavailable" });
-      expect(response.body).not.toContain(vaultRoot);
+      expect(response.body).not.toContain(notesRoot);
     }
     await app.close();
 
     const loopRunner = {
-      withVaultContext: async () => {
-        throw Object.assign(new Error("ELOOP: /private/vault/loop"), {
+      withVaultContextAt: async () => {
+        throw Object.assign(new Error("ELOOP: /notes/loop"), {
           code: "ELOOP",
-          path: "/private/vault/loop",
+          path: "/notes/loop",
           syscall: "scandir"
         });
       }
@@ -120,29 +164,22 @@ describe("People notes settings routes", () => {
     await loopApp.ready();
     for (const response of [
       await loopApp.inject({ method: "GET", url: "/api/people/notes-directories" }),
-      await loopApp.inject({
-        method: "PUT",
-        url: "/api/people/notes-settings",
-        payload: { folder: "Loop/Child" }
-      })
+      await chooseFolder(loopApp, join(notesRoot, "Loop", "Child"))
     ]) {
       expect(response.statusCode).toBe(400);
       expect(JSON.parse(response.body)).toEqual({ error: "People notes folder is unavailable" });
-      expect(response.body).not.toContain("/private/vault/loop");
+      expect(response.body).not.toContain("/notes/loop");
     }
     await loopApp.close();
   });
 
-  it("lists owner-relative directories and rejects traversal without vault details", async () => {
-    await vaultRunner.withVaultContext(
-      { actorUserId: ids.userA, requestId: "directory-setup" },
-      async (ctx) => {
-        await makeVaultDir(ctx, "QA987/Family");
-        await makeVaultDir(ctx, "QA987Private");
-      }
-    );
+  it("lists folders relative to the chosen folder and rejects traversal without details", async () => {
+    const folder = join(notesRoot, "QA987Browse");
+    await mkdir(join(folder, "QA987", "Family"), { recursive: true });
+    await mkdir(join(folder, "QA987Private"), { recursive: true });
     const app = buildApp();
     await app.ready();
+    expect((await chooseFolder(app, folder)).statusCode).toBe(200);
 
     const root = await app.inject({ method: "GET", url: "/api/people/notes-directories" });
     expect(root.statusCode).toBe(200);
@@ -158,20 +195,20 @@ describe("People notes settings routes", () => {
       url: "/api/people/notes-directories?path=People%2F..%2FPrivate"
     });
     expect(invalid.statusCode).toBe(400);
-    expect(invalid.body).not.toContain(vaultRoot);
+    expect(invalid.body).not.toContain(notesRoot);
     expect(invalid.body).not.toContain(ids.userA);
     expect(invalid.body).not.toContain("QA987Private");
     await app.close();
   });
 
   it("serializes exact mixed refresh counters", async () => {
-    await vaultRunner.withVaultContext(
-      { actorUserId: ids.userA, requestId: "refresh-setup" },
-      async (ctx) => {
-        await writeVaultFile(
-          ctx,
-          "QA987Refresh/Canonical.md",
-          `---
+    const folder = join(notesRoot, "QA987Refresh");
+    await mkdir(folder, { recursive: true });
+    await inFolder(folder, async (ctx) => {
+      await writeVaultFile(
+        ctx,
+        "Canonical.md",
+        `---
 jarvisPersonId: 00000000-0000-4000-8000-000000000198
 displayName: Route Canonical
 aliases: []
@@ -181,11 +218,11 @@ status: active
 ---
 body
 `
-        );
-        await writeVaultFile(
-          ctx,
-          "QA987Refresh/Missing-Id.md",
-          `---
+      );
+      await writeVaultFile(
+        ctx,
+        "Missing-Id.md",
+        `---
 displayName: Route Missing Id
 aliases: []
 emails: []
@@ -194,18 +231,14 @@ status: active
 ---
 body
 `
-        );
-        await writeVaultFile(ctx, "QA987Refresh/Invalid.md", "# Invalid");
-        await writeVaultFile(ctx, "QA987Refresh/Outside-counts.txt", "ignored extension");
-      }
-    );
+      );
+      await writeVaultFile(ctx, "Invalid.md", "# Invalid");
+      await writeVaultFile(ctx, "Outside-counts.txt", "ignored extension");
+    });
     const app = buildApp();
     await app.ready();
-    await app.inject({
-      method: "PUT",
-      url: "/api/people/notes-settings",
-      payload: { folder: "QA987Refresh" }
-    });
+    expect((await chooseFolder(app, folder)).statusCode).toBe(200);
+
     const refresh = await app.inject({ method: "POST", url: "/api/people/notes/refresh" });
     expect(refresh.statusCode).toBe(200);
     expect(JSON.parse(refresh.body)).toEqual({
@@ -215,33 +248,26 @@ body
       candidates: 1
     });
 
-    await vaultRunner.withVaultContext(
-      { actorUserId: ids.userA, requestId: "refresh-unreadable" },
-      (ctx) => chmod(join(ctx.vaultRoot, "QA987Refresh/Canonical.md"), 0o000)
-    );
+    await chmod(join(folder, "Canonical.md"), 0o000);
     const unavailable = await app.inject({ method: "POST", url: "/api/people/notes/refresh" });
     expect(unavailable.statusCode).toBe(400);
     expect(JSON.parse(unavailable.body)).toEqual({
       error: "People notes folder is unavailable"
     });
-    expect(unavailable.body).not.toContain(vaultRoot);
+    expect(unavailable.body).not.toContain(notesRoot);
 
-    await vaultRunner.withVaultContext(
-      { actorUserId: ids.userA, requestId: "refresh-loop" },
-      async (ctx) => {
-        await chmod(join(ctx.vaultRoot, "QA987Refresh/Canonical.md"), 0o600);
-        await rm(join(ctx.vaultRoot, "QA987Refresh"), { recursive: true });
-        await symlink("QA987Refresh", join(ctx.vaultRoot, "QA987Refresh"), "dir");
-      }
-    );
-    const loop = await app.inject({ method: "POST", url: "/api/people/notes/refresh" });
-    expect(loop.statusCode).toBe(400);
-    expect(JSON.parse(loop.body)).toEqual({ error: "People notes folder is unavailable" });
-    expect(loop.body).not.toContain(vaultRoot);
+    await chmod(join(folder, "Canonical.md"), 0o600);
+    await rm(folder, { recursive: true });
+    const gone = await app.inject({ method: "POST", url: "/api/people/notes/refresh" });
+    expect(gone.statusCode).toBe(400);
+    expect(JSON.parse(gone.body)).toEqual({ error: "People notes folder is unavailable" });
+    expect(gone.body).not.toContain(notesRoot);
     await app.close();
   });
 
   it("stores and reads the configured People folder", async () => {
+    const folder = join(notesRoot, "QA987Stored");
+    await mkdir(folder, { recursive: true });
     const app = buildApp();
     await app.ready();
 
@@ -249,13 +275,25 @@ body
     expect(initial.statusCode).toBe(200);
     expect(JSON.parse(initial.body)).toEqual({ folder: null });
 
-    const put = await app.inject({
-      method: "PUT",
-      url: "/api/people/notes-settings",
-      payload: { folder: "People" }
-    });
+    const put = await chooseFolder(app, folder);
     expect(put.statusCode).toBe(200);
-    expect(JSON.parse(put.body)).toEqual({ folder: "People" });
+    expect(JSON.parse(put.body)).toEqual({ folder });
+
+    await app.close();
+  });
+
+  it("saves the exact folder that was checked, including a trailing space in its name", async () => {
+    const folder = join(notesRoot, "QA987Trailing ");
+    await mkdir(folder, { recursive: true });
+    const app = buildApp();
+    await app.ready();
+
+    const put = await chooseFolder(app, folder);
+    expect(put.statusCode).toBe(200);
+    expect(JSON.parse(put.body)).toEqual({ folder });
+
+    const read = await app.inject({ method: "GET", url: "/api/people/notes-settings" });
+    expect(JSON.parse(read.body)).toEqual({ folder });
 
     await app.close();
   });
@@ -263,18 +301,11 @@ body
 
 describe("People note write routes", () => {
   it("creates, edits, and archives through the canonical note", async () => {
-    await vaultRunner.withVaultContext(
-      { actorUserId: ids.userA, requestId: "write-route-setup" },
-      (ctx) => makeVaultDir(ctx, "PeopleRoute")
-    );
+    const folder = join(notesRoot, "PeopleRoute");
+    await mkdir(folder, { recursive: true });
     const app = buildApp();
     await app.ready();
-
-    await app.inject({
-      method: "PUT",
-      url: "/api/people/notes-settings",
-      payload: { folder: "PeopleRoute" }
-    });
+    expect((await chooseFolder(app, folder)).statusCode).toBe(200);
 
     const created = await app.inject({
       method: "POST",
@@ -285,7 +316,7 @@ describe("People note write routes", () => {
     const createdBody = JSON.parse(created.body);
     const personId = createdBody.person.id;
     const notePath = createdBody.notePath;
-    expect(notePath).toBe("PeopleRoute/Route-Person.md");
+    expect(notePath).toBe("Route-Person.md");
 
     const patched = await app.inject({
       method: "PATCH",
@@ -298,31 +329,21 @@ describe("People note write routes", () => {
     const archived = await app.inject({ method: "POST", url: `/api/people/${personId}/archive` });
     expect(archived.statusCode).toBe(200);
 
-    await vaultRunner.withVaultContext(
-      { actorUserId: ids.userA, requestId: "assert-route" },
-      async (ctx) => {
-        const note = await readVaultFile(ctx, notePath);
-        expect(note).toContain("displayName: Route Person Edited");
-        expect(note).toContain("status: archived");
-      }
-    );
+    await inFolder(folder, async (ctx) => {
+      const note = await readVaultFile(ctx, notePath);
+      expect(note).toContain("displayName: Route Person Edited");
+      expect(note).toContain("status: archived");
+    });
 
     await app.close();
   });
 
   it("falls back to DB-only update/archive when person has no canonical note", async () => {
-    await vaultRunner.withVaultContext(
-      { actorUserId: ids.userA, requestId: "no-note-route-setup" },
-      (ctx) => makeVaultDir(ctx, "PeopleNoNoteRoute")
-    );
+    const folder = join(notesRoot, "PeopleNoNoteRoute");
+    await mkdir(folder, { recursive: true });
     const app = buildApp();
     await app.ready();
-
-    await app.inject({
-      method: "PUT",
-      url: "/api/people/notes-settings",
-      payload: { folder: "PeopleNoNoteRoute" }
-    });
+    expect((await chooseFolder(app, folder)).statusCode).toBe(200);
 
     const repo = new PeopleRepository();
     let personId = "";

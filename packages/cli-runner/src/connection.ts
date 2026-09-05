@@ -34,6 +34,7 @@ import {
   type RpcProbeProviderParams,
   type RpcProviderKind,
   type RpcReadNewParams,
+  type RpcReadStructuredParams,
   type RpcRequest,
   type RpcResizeTerminalParams,
   type RpcSubmitLoginTokenParams,
@@ -351,6 +352,32 @@ async function invoke(
       }
       return host.readNew(key, afterOffset);
     }
+    case "submitStructured": {
+      // Review B4 follow-up — mirrors the "submit" case, minus attemptId (no idempotency ledger
+      // for a structured one-shot session; the caller owns retry policy, cli-structured-adapter.ts).
+      const key = requireSessionKey(req);
+      const params = isRecord(req.params) ? req.params : {};
+      const text = params.text;
+      if (typeof text !== "string") {
+        throw new BadRequestError("submitStructured.text must be a string");
+      }
+      await host.submitStructured(key, text);
+      return { ok: true };
+    }
+    case "readStructured": {
+      // Review B4 follow-up — mirrors the "readNew" case's afterOffset validation.
+      const key = requireSessionKey(req);
+      const afterOffset = (req.params as RpcReadStructuredParams).afterOffset;
+      if (
+        typeof afterOffset !== "number" ||
+        !Number.isInteger(afterOffset) ||
+        afterOffset < 0 ||
+        afterOffset > MAX_SAFE
+      ) {
+        throw new BadRequestError("afterOffset out of range");
+      }
+      return host.readStructured(key, afterOffset);
+    }
     case "isAlive": {
       const key = requireSessionKey(req);
       return { alive: await host.isAlive(key) };
@@ -384,9 +411,10 @@ async function invoke(
       return { sessionKeys: await host.listLiveSessions() };
     }
     case "probeProvider": {
-      const provider = (req.params as RpcProbeProviderParams).provider;
+      const params = req.params as RpcProbeProviderParams;
+      const provider = params.provider;
       if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
-      return host.probeProvider(provider);
+      return host.probeProvider(provider, { forceFresh: params.forceFresh });
     }
     case "installProvider": {
       // §A.2.4 TWO ordered validation gates, both mapping to bad_request (§3.7) but

@@ -235,6 +235,7 @@
 .fld__row > .jds-input,
 .fld__row > .jds-select,
 .fld__row > .jds-selectwrap,
+.fld__row > .jds-combobox,
 .fld__row > input,
 .fld__row > select {
   flex: 0 1 340px;

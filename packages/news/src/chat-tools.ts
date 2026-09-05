@@ -210,7 +210,8 @@ export const newsPreviewSourceExecute: ToolExecute = async (
       candidates: result.candidates.map((candidate) => ({
         candidateId: candidate.candidateId,
         label: candidate.label,
-        domain: candidate.canonicalDomain
+        domain: candidate.canonicalDomain,
+        ...(candidate.redirectNote ? { redirectNote: candidate.redirectNote } : {})
       })),
       ...(duplicate ? { duplicateOfSourceId: duplicate.id } : {})
     }
