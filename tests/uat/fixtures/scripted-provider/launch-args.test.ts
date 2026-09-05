@@ -179,6 +179,22 @@ describe("parseClaudeLaunchArgs", () => {
     expect(result.kind).toBe("rejected");
   });
 
+  it("rejects a --tools flag alongside the MCP trio", () => {
+    const result = parseClaudeLaunchArgs([
+      "-p",
+      "--session-id",
+      SESSION_ID,
+      "--permission-mode",
+      "dontAsk",
+      ...MCP_TRIO,
+      "--tools",
+      "Read,Glob,Grep",
+      ...TAIL,
+      "hi"
+    ]);
+    expect(result.kind).toBe("rejected");
+  });
+
   it("rejects an unrecognized flag", () => {
     const result = parseClaudeLaunchArgs([
       "-p",

@@ -165,7 +165,9 @@ describe("ClaudePrintChatEngine — nativeSearch (#2228)", () => {
     });
     await engine.submit("hello");
 
-    expect(launchLineAt()).toContain('--tools "Read,Glob,Grep,WebSearch"');
+    // #2317: the MCP branch passes no --tools value at all (any value also drops the
+    // mcp__jarvis__* tools). WebSearch is on by default and stays approved via --allowedTools.
+    expect(launchLineAt()).not.toContain("--tools");
     expect(launchLineAt()).toContain("mcp__jarvis__*");
     expect(launchLineAt()).toMatch(/--allowedTools '[^']*WebSearch/);
   });
