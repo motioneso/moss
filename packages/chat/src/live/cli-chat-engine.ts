@@ -107,7 +107,9 @@ export {
   SESSION_PREFIX
 } from "./cli-session-lifecycle.js";
 export {
+  invalidateProviderProbeCache,
   probeProvider,
+  recordProviderLoginRejected,
   type ProbeProviderResult,
   type ProbeProviderStatus
 } from "./provider-probe.js";

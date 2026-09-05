@@ -45,6 +45,14 @@ export interface ModelListAdapterDeps {
   readonly io?: Pick<TmuxIo, "run">;
   /** Optional override of the codex CLI version (tests / a pre-read value). */
   readonly codexVersion?: () => Promise<string | undefined>;
+  /**
+   * #2242: called when the vendor rejects the stored credential itself (HTTP 401). This call and
+   * the readiness check use the SAME credential against the SAME vendor, so a rejection here is a
+   * rejection there — the host uses this to record that the login now needs redoing instead of
+   * leaving a saved "the login works" answer standing. Not called for other HTTP failures: a 403
+   * is an authenticated request that was not permitted, and a 5xx is the vendor's own fault.
+   */
+  readonly onLoginRejected?: () => void;
 }
 
 export type ModelListAdapter = (deps: ModelListAdapterDeps) => Promise<RpcListProviderModelsResult>;
@@ -117,9 +125,24 @@ export function createCodexVersionReader(
   };
 }
 
-/** A vendor error message that carries the HTTP status only — never a body (it could echo a token). */
-function httpFailure(status: number): RpcListProviderModelsResult {
-  return { status: "error", message: `model list request failed with HTTP ${status}` };
+/** The one HTTP status that means the credential itself was rejected, not the request. */
+const CREDENTIAL_REJECTED_STATUS = 401;
+
+/**
+ * A vendor error message that carries the HTTP status only — never a body (it could echo a token).
+ *
+ * #2242: a 401 is reported as `not_logged_in`, not a plain `error`. The vendor DID answer; it
+ * refused the stored sign-in, so "Could not reach the provider" would be untrue and would send
+ * someone off retrying instead of logging back in. Every other status stays a plain error: a 403
+ * is a request that was allowed to authenticate but not permitted, and a 5xx is the vendor's fault.
+ */
+function httpFailure(status: number, onLoginRejected?: () => void): RpcListProviderModelsResult {
+  const message = `model list request failed with HTTP ${status}`;
+  if (status === CREDENTIAL_REJECTED_STATUS) {
+    onLoginRejected?.();
+    return { status: "not_logged_in", message };
+  }
+  return { status: "error", message };
 }
 
 /** A transport/timeout error, reduced to its class — never the raw message (could carry a URL/token). */
@@ -137,7 +160,8 @@ function transportFailure(err: unknown): RpcListProviderModelsResult {
 async function fetchJson(
   f: typeof globalThis.fetch,
   url: string,
-  headers: Record<string, string>
+  headers: Record<string, string>,
+  onLoginRejected?: () => void
 ): Promise<{ ok: true; json: unknown } | { ok: false; result: RpcListProviderModelsResult }> {
   let response: Response;
   try {
@@ -145,7 +169,7 @@ async function fetchJson(
   } catch (err) {
     return { ok: false, result: transportFailure(err) };
   }
-  if (!response.ok) return { ok: false, result: httpFailure(response.status) };
+  if (!response.ok) return { ok: false, result: httpFailure(response.status, onLoginRejected) };
   try {
     return { ok: true, json: await response.json() };
   } catch {
@@ -162,11 +186,16 @@ const anthropicAdapter: ModelListAdapter = async (deps) => {
   const stored = await readProviderToken(deps.homeBase, "anthropic");
   const token = stored ? stripAnthropicTokenPrefix(stored) : "";
   if (!token) return { status: "not_logged_in" };
-  const outcome = await fetchJson(deps.fetch ?? globalThis.fetch, ANTHROPIC_MODELS_URL, {
-    authorization: `Bearer ${token}`,
-    "anthropic-version": "2023-06-01",
-    "anthropic-beta": "oauth-2025-04-20"
-  });
+  const outcome = await fetchJson(
+    deps.fetch ?? globalThis.fetch,
+    ANTHROPIC_MODELS_URL,
+    {
+      authorization: `Bearer ${token}`,
+      "anthropic-version": "2023-06-01",
+      "anthropic-beta": "oauth-2025-04-20"
+    },
+    deps.onLoginRejected
+  );
   if (!outcome.ok) return outcome.result;
   return { status: "ok", models: filterAnthropicModelIds(outcome.json).map((id) => ({ id })) };
 };
@@ -207,10 +236,15 @@ const codexAdapter: ModelListAdapter = async (deps) => {
     return { status: "error", message: "could not read the installed codex CLI version" };
   }
   const url = `${CODEX_MODELS_URL}?client_version=${encodeURIComponent(version)}`;
-  const outcome = await fetchJson(deps.fetch ?? globalThis.fetch, url, {
-    authorization: `Bearer ${auth.accessToken}`,
-    "ChatGPT-Account-Id": auth.accountId
-  });
+  const outcome = await fetchJson(
+    deps.fetch ?? globalThis.fetch,
+    url,
+    {
+      authorization: `Bearer ${auth.accessToken}`,
+      "ChatGPT-Account-Id": auth.accountId
+    },
+    deps.onLoginRejected
+  );
   if (!outcome.ok) return outcome.result;
   return { status: "ok", models: filterCodexModelIds(outcome.json).map((id) => ({ id })) };
 };
@@ -226,6 +260,24 @@ export const MODEL_LIST_ADAPTERS: Readonly<Record<RpcProviderKind, ModelListAdap
   "openai-compatible": codexAdapter,
   google: googleAdapter
 };
+
+/**
+ * #2242 (round 3): prove a saved sign-in against the vendor for real, using the same request the
+ * model list makes. Needed for codex, whose own readiness check only asks the local tool whether
+ * it is holding a sign-in file — that check cannot tell a refused sign-in from a good one, so it
+ * must never be what clears a recorded refusal. Returns "accepted" only when the vendor answered
+ * with a list; "refused" when it turned the sign-in down; "unknown" for anything else (the vendor
+ * being unreachable or broken), which leaves a recorded refusal exactly as it was.
+ */
+export async function verifyProviderCredential(
+  provider: RpcProviderKind,
+  deps: ModelListAdapterDeps
+): Promise<"accepted" | "refused" | "unknown"> {
+  const result = await listProviderModels(provider, deps);
+  if (result.status === "ok") return "accepted";
+  if (result.status === "not_logged_in") return "refused";
+  return "unknown";
+}
 
 /** Run the provider's adapter; an adapter throw becomes a plain `error` (no secret can leak via message). */
 export async function listProviderModels(

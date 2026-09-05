@@ -27,6 +27,7 @@ import { PROVIDER_CATALOG } from "./catalog.js";
 import { CliChatEngineHost, type PersistentRuntimeLiveConfig } from "./engine-host.js";
 import { InstallService } from "./install-service.js";
 import { LOGIN_ADAPTERS } from "./login-adapters.js";
+import { createCodexVersionReader, verifyProviderCredential } from "./model-list-adapters.js";
 import { ensureGeminiOnboarded } from "./provider-first-run.js";
 import { readProviderCredentialEnv } from "./provider-token-store.js";
 import { LoginService } from "./login-service.js";
@@ -198,6 +199,9 @@ export function createCliRunner(
   // (§L.6.2), and detects completion via the SAME §4.8 probe. Its adapters are the validated
   // login allowlist (§L.1.3, consistency-checked against the install catalog). It participates
   // in the host's §L.6.1 unified exclusivity gate (login ⟂ chat).
+  // #2242 (round 3): read once per runner process, as the model-list path does — the real
+  // vendor request needs the installed tool's version or the answer comes back empty.
+  const readCodexVersionOnce = createCodexVersionReader(io);
   const loginService = new LoginService({
     io,
     adapters: LOGIN_ADAPTERS,
@@ -205,13 +209,23 @@ export function createCliRunner(
     // Completion signal: the §4.8 provider auth probe (no token, no replay) — same deps the
     // host's probeProvider uses, PLUS the #363 claude-scoped credential env so `auth status`
     // reports loggedIn once the captured token is persisted (settling the flow `ready`).
-    probe: async (provider: RpcProviderKind) =>
+    probe: async (provider: RpcProviderKind, opts?: { readonly forceFresh?: boolean }) =>
       probeProvider(provider as ProviderKind, {
         io,
         cliPresent: (p: ProviderKind) => cliAvailable(p),
         multiplexerUsable: () => tmuxAvailable(),
         credentialEnv: await readProviderCredentialEnv(config.homeBase, provider),
-        homeBase: config.homeBase
+        homeBase: config.homeBase,
+        forceFresh: opts?.forceFresh,
+        // #2242 (round 3): a refused sign-in is remembered until the vendor accepts a new one.
+        // Codex's own check cannot prove a sign-in, so this real request is how a person who
+        // has genuinely just logged in gets past that memory and the flow settles ready.
+        verifyCredential: () =>
+          verifyProviderCredential(provider, {
+            homeBase: config.homeBase,
+            io,
+            codexVersion: readCodexVersionOnce
+          })
       }),
     // (#2027) Seed first-run state on the auth volume BEFORE the login session opens. gemini
     // otherwise stops on its sign-in-method menu and never prints the authorization URL.

@@ -16,11 +16,13 @@ import {
   VerifiedSubmitError,
   createChatEngine,
   deriveNeutralDir,
+  invalidateProviderProbeCache,
   killMuxSessionByName,
   listLiveMuxSessions,
   probeProvider,
   purgePrivateTranscripts,
   purgePrivateTranscriptMarkers,
+  recordProviderLoginRejected,
   removeNeutralDir,
   sanitizeSessionKey,
   type CliChatEngine,
@@ -45,147 +47,40 @@ import {
   type RpcSubmitLoginTokenResult,
   type RpcSubmitStructuredResult,
   type ReapReason,
-  type SweepIdlePool,
-  type AdmitCapablePool,
   startIdleReapTimer as startPoolIdleReapTimer
 } from "@moss/chat/live";
-import type { Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
+import type { ProviderKind } from "@moss/ai";
 
 import { Mutex } from "./mutex.js";
-import type { InstallService } from "./install-service.js";
 import { LoginBadRequestError, type LoginService } from "./login-service.js";
-import { createCodexVersionReader, listProviderModels } from "./model-list-adapters.js";
+import {
+  createCodexVersionReader,
+  listProviderModels,
+  verifyProviderCredential
+} from "./model-list-adapters.js";
 import { ensureProviderLaunchReady } from "./provider-first-run.js";
 import { providerTokenPath, readProviderCredentialEnv } from "./provider-token-store.js";
 import { allocateUidSlot, migrateNeutralDir } from "./uid-allocator.js";
 import { createSanitizedTmuxIo } from "./runner-io.js";
-
-export interface EngineHostDeps {
-  readonly io: TmuxIo;
-  /** Shared multiplexer backend injected into every engine (bundled tmux, §7.1). */
-  readonly mux?: Multiplexer;
-  /** Base for `<sessionKey>` neutral dirs (`JARVIS_CLI_NEUTRAL_BASE`, §4.1.1a). */
-  readonly neutralBase: string;
-  /** HOME base for transcript resolution (`JARVIS_CLI_HOME_BASE`, §7.1). */
-  readonly homeBase?: string;
-  /** §4.1.0a single-active-user gate ON (default) / OFF (`JARVIS_CLI_RUNNER_SINGLE_USER`). */
-  readonly singleUser: boolean;
-  /**
-   * #347 per-user UID isolation (`JARVIS_CLI_PER_USER_UID`). ON ⇒ every session's CLI
-   * subprocess is setuid'd to a per-user allocated UID (100000+slot); this REQUIRES the
-   * cli-runner container to run as root (the fork point needs CAP_SETUID). OFF (default) ⇒
-   * the CLI runs as the cli-runner's OWN process UID (the host operator uid that owns the
-   * auth/neutral volumes) — the proven pre-#347 single-identity topology. OFF is the
-   * supported default until the per-user-UID file-permission model is completed + tested;
-   * turning it ON without a root container fails every launch (setuid EPERM). See the
-   * parallel proper-fix track. Optional: absent ⇒ OFF (the safe default), so callers that
-   * never opt in (every current caller) get the proven single-identity topology for free.
-   */
-  readonly perUserUid?: boolean;
-  /** Presence-only PATH probe for `probeProvider` (§4.8). */
-  readonly cliPresent: (provider: ProviderKind) => Promise<boolean>;
-  /** Optional multiplexer-usable check surfaced by `probeProvider` (§4.8 / §9.1). */
-  readonly multiplexerUsable?: () => Promise<boolean>;
-  /**
-   * Out-of-lock mux-create bound (ms). A wedged tmux MUST NOT strand a reservation
-   * (§4.1.0a): the launch fails with `unavailable` and the `finally` releases the key.
-   * Defaults to a generous boot budget.
-   */
-  readonly launchTimeoutMs?: number;
-  /** Failure-only total bound for queued + active verified submit. */
-  readonly verifiedSubmitTimeoutMs?: number;
-  /**
-   * The §A.3 on-demand install service. The host's `installProvider` (§A.2.4) delegates
-   * to it; it carries its OWN per-provider lock (§A.3.1), distinct from the §4.1.0a
-   * admission mutex (the install lane is volume-disjoint from admission, §A.5.1). Absent
-   * ⇒ `installProvider` reports the verb is unavailable on this build.
-   */
-  readonly installService?: InstallService;
-  /**
-   * The §L.3 login service (Phase 3). The host's login verbs (§L.2) delegate to it, and the
-   * §L.6.1 UNIFIED admission gate consults its `isLoginActive()` from BOTH the launch gate and
-   * the beginLogin gate (login is auth-volume-exclusive with chat — UNLIKE install, which is
-   * volume-disjoint and lock-only). Absent ⇒ the login verbs report unavailable on this build.
-   */
-  readonly loginService?: LoginService;
-  /**
-   * #2208 `listProviderModels`: the vendor HTTP client the model-list adapters call. Absent ⇒
-   * `globalThis.fetch`. Injected by tests so no unit test ever reaches a vendor.
-   */
-  readonly fetch?: typeof globalThis.fetch;
-  /**
-   * #1554 Decision 3 — the RPC topology's warm persistent-runtime pool + a live reader of
-   * `chat.persistent_idle_reap_minutes`, consulted ONLY by {@link CliChatEngineHost.startIdleReapTimer}
-   * (`sweepIdle`). Absent either ⇒ that timer is a no-op. Typed structurally
-   * ({@link SweepIdlePool}, only `sweepIdle` used) so tests can pass a fake without constructing a
-   * real pool — kept separate from {@link persistentRuntimePool} below (admission) so the existing
-   * `sweepIdle`-only fakes in `tests/unit/cli-runner-idle-reap-timer.test.ts` don't also need an
-   * `admit` method.
-   */
-  readonly persistentPool?: SweepIdlePool;
-  /** Live read of `chat.persistent_idle_reap_minutes`, re-read fresh on every timer tick. */
-  readonly readIdleReapMinutes?: () => Promise<number>;
-  /**
-   * #1554 task #5 — the RPC topology's warm-pool ADMISSION seam (`admit`), consulted by
-   * `launchOnce` when building the engine (`createChatEngine`'s `persistentPool` opt). In
-   * production this is the SAME `PersistentRuntimePool` instance as {@link persistentPool} above
-   * (one pool serves both sweeping and admission); split into two deps only for the narrower
-   * structural typing each call site needs. Presence of this dep is what lifts the
-   * `persistentRuntimeEnabled: false` pin in `launchOnce` — absent ⇒ unchanged pre-task-5
-   * behavior (always the bounded-fallback/tmux fork, #1350 two-composition-roots guard).
-   */
-  readonly persistentRuntimePool?: AdmitCapablePool;
-  /**
-   * #1554 — the MUTABLE live view of the three persistent-runtime settings, shared by reference
-   * with `main.ts`'s composition root (the pool's `cap` getter and `readIdleReapMinutes` read the
-   * same object). {@link CliChatEngineHost.applyPersistentRuntimeParams} refreshes it from every
-   * launch's {@link RpcLaunchParams}, which is the plan's live-reload channel for this topology.
-   * Absent ⇒ pre-#1554 behavior (pool presence alone gates persistent selection).
-   */
-  readonly persistentLiveConfig?: PersistentRuntimeLiveConfig;
-}
-
-/**
- * #1554 — the cli-runner's current view of `chat.persistent_runtime.enabled`,
- * `chat.persistent_pool_cap` and `chat.persistent_idle_reap_minutes`. Seeded from boot env as a
- * bootstrap default (the very first launch may arrive before the api reads settings), then kept
- * current by each launch's params. Mutable and shared by reference — never copied, or the pool and
- * the idle-reap timer would drift from the host.
- */
-export interface PersistentRuntimeLiveConfig {
-  enabled: boolean;
-  poolCap: number;
-  idleReapMinutes: number;
-}
-
-/** A cap or idle window of 0 denies every admission / reaps every warm child on the next tick, so
- *  a non-positive or non-finite value from the wire keeps the last known good value instead. */
-function positiveIntOr(value: unknown, lastKnown: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 1
-    ? Math.floor(value)
-    : lastKnown;
-}
-
-const DEFAULT_LAUNCH_TIMEOUT_MS = 70_000;
-export const VERIFIED_SUBMIT_DEADLINE_MS = 35_000;
-
-interface SubmitAttempt {
-  digest: string | null;
-  readonly controller: AbortController;
-  promise?: Promise<void>;
-}
-
-interface ReplayLaunchAttempt {
-  readonly digest: string;
-  readonly promise: Promise<RpcLaunchResult>;
-}
-
-// #1554 Decision 2: fired when the (process-wide) persistent runtime pool reaps a session, so
-// every connected RPC client can be told via a `sessionReaped` push. Registered per-connection
-// by `connection.ts`'s `serveConnection`, not per-terminal like `TerminalHost`'s `pushSink` —
-// the pool's `onReap` fires host-side, not connection-side, and this host is the one
-// process-wide instance shared across all accepted connections.
-export type SessionReapedListener = (sessionKey: string, reason: ReapReason) => void;
+export type {
+  EngineHostDeps,
+  PersistentRuntimeLiveConfig,
+  SessionReapedListener,
+  SubmitAttempt,
+  ReplayLaunchAttempt
+} from "./engine-host-types.js";
+export { VERIFIED_SUBMIT_DEADLINE_MS } from "./engine-host-types.js";
+import {
+  DEFAULT_LAUNCH_TIMEOUT_MS,
+  VERIFIED_SUBMIT_DEADLINE_MS,
+  positiveIntOr
+} from "./engine-host-types.js";
+import type {
+  EngineHostDeps,
+  ReplayLaunchAttempt,
+  SessionReapedListener,
+  SubmitAttempt
+} from "./engine-host-types.js";
 
 export class CliChatEngineHost {
   // #1350: widened from CliChatEngineImpl — a `non_interactive` session is now backed by a
@@ -712,16 +607,30 @@ export class CliChatEngineHost {
 
   // ─── probeProvider (§4.8) — no token, no replay ───────────────────────────────
 
-  async probeProvider(provider: RpcProviderKind): Promise<RpcProbeProviderResult> {
+  async probeProvider(
+    provider: RpcProviderKind,
+    opts?: { readonly forceFresh?: boolean }
+  ): Promise<RpcProbeProviderResult> {
+    const credentialEnv = this.deps.homeBase
+      ? await readProviderCredentialEnv(this.deps.homeBase, provider)
+      : undefined;
+    // #2242: a caller asking for a real check (an explicit re-login, or the periodic
+    // install-state reconciliation) must never be answered from a saved success that may have
+    // gone stale — drop it explicitly before running the check, belt-and-suspenders alongside
+    // `forceFresh` skipping the cache read below.
+    if (opts?.forceFresh) invalidateProviderProbeCache(provider as ProviderKind, credentialEnv);
     const result: ProbeProviderResult = await probeProvider(provider as ProviderKind, {
       io: this.deps.io,
       cliPresent: this.deps.cliPresent,
       multiplexerUsable: this.deps.multiplexerUsable,
       // #363: inject the persisted claude OAuth token so `auth status` reports loggedIn.
-      credentialEnv: this.deps.homeBase
-        ? await readProviderCredentialEnv(this.deps.homeBase, provider)
-        : undefined,
-      homeBase: this.deps.homeBase
+      credentialEnv,
+      homeBase: this.deps.homeBase,
+      forceFresh: opts?.forceFresh,
+      // #2242 (round 3): the real request that can retire a recorded refusal for a provider whose
+      // own check cannot prove a sign-in (codex). Only reached when a refusal is standing AND the
+      // caller asked for a real check, so pressing Log in costs one vendor call, not every check.
+      verifyCredential: () => this.verifyProviderCredential(provider)
     });
     return { status: result.status, message: result.message };
   }
@@ -730,6 +639,20 @@ export class CliChatEngineHost {
 
   /** Built on first use: `codex --version` is read at most once per runner process. */
   private readCodexVersion: (() => Promise<string | undefined>) | undefined;
+
+  /** #2242 (round 3): one real vendor request with the saved sign-in, so a check can tell an
+   *  accepted sign-in from the refused one it already knows about. */
+  private async verifyProviderCredential(
+    provider: RpcProviderKind
+  ): Promise<"accepted" | "refused" | "unknown"> {
+    this.readCodexVersion ??= createCodexVersionReader(this.deps.io);
+    return verifyProviderCredential(provider, {
+      homeBase: this.deps.homeBase,
+      fetch: this.deps.fetch,
+      io: this.deps.io,
+      codexVersion: this.readCodexVersion
+    });
+  }
 
   /**
    * #2208: ask the provider's vendor for its live model list using the credential the runner
@@ -740,11 +663,19 @@ export class CliChatEngineHost {
    */
   async listProviderModels(provider: RpcProviderKind): Promise<RpcListProviderModelsResult> {
     this.readCodexVersion ??= createCodexVersionReader(this.deps.io);
+    // #2242: this call uses the same saved credential as the readiness check, so a vendor
+    // rejection here proves the login is dead there too. Record it through the one shared path
+    // instead of dropping the knowledge — otherwise a saved "the login works" answer keeps being
+    // replayed for the rest of its five-minute life and the person is never asked to log in again.
+    const credentialEnv = this.deps.homeBase
+      ? await readProviderCredentialEnv(this.deps.homeBase, provider)
+      : undefined;
     return listProviderModels(provider, {
       homeBase: this.deps.homeBase,
       fetch: this.deps.fetch,
       io: this.deps.io,
-      codexVersion: this.readCodexVersion
+      codexVersion: this.readCodexVersion,
+      onLoginRejected: () => recordProviderLoginRejected(provider as ProviderKind, credentialEnv)
     });
   }
 
