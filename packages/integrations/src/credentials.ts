@@ -1,4 +1,4 @@
-import { JsonSecretCipher, resolveKeyring } from "@moss/db";
+import { JsonSecretCipher, resolveKeyring, type Keyring } from "@moss/db";
 import type { CredentialPlacement } from "@moss/shared";
 
 export function createIntegrationsCipher(env: NodeJS.ProcessEnv = process.env): JsonSecretCipher {
@@ -12,6 +12,14 @@ export function createIntegrationsCipher(env: NodeJS.ProcessEnv = process.env): 
     ),
     "integration credential"
   );
+}
+
+/**
+ * Build the cipher from an already-loaded family keyring (master key store,
+ * #2312). The keyring arrives decrypted; this only wraps it with the domain label.
+ */
+export function createIntegrationsCipherFromKeyring(keyring: Keyring): JsonSecretCipher {
+  return new JsonSecretCipher(keyring, "integration credential");
 }
 
 export function applyCredential(

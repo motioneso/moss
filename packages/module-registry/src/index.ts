@@ -221,6 +221,7 @@ import {
   readBraveSearchApiKey,
   resolveWebSearchEngine,
   registerSettingsJobWorkers,
+  registerFamilyKeyRoutes,
   registerSettingsRoutes,
   registerRuntimeConfigRoutes,
   registerWebSearchKeyRoutes,
@@ -247,7 +248,9 @@ import {
   createAppMapReadService,
   createSourceInspector,
   getModuleBuild,
-  updateModuleBuildStatus
+  updateModuleBuildStatus,
+  INTEGRATIONS_FAMILY,
+  loadFamilyKeyring
 } from "@moss/settings";
 import {
   TASKS_QUEUE_DEFINITIONS,
@@ -272,7 +275,8 @@ import {
 import {
   integrationsModuleManifest,
   integrationsModuleSqlMigrationDirectory,
-  registerIntegrationsRoutes
+  registerIntegrationsRoutes,
+  resolverCache
 } from "@moss/integrations";
 import {
   createHostRateLimiter,
@@ -1566,6 +1570,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         cipher: webSearchCipher,
         onKeyChanged: invalidateWebSearchProviderCache
       });
+      // Family encryption keys (#2312): dedicated admin routes. Clearing the
+      // integrations tool cache on change unpauses tools without a restart.
+      registerFamilyKeyRoutes(server, {
+        dataContext: deps.dataContext,
+        resolveAccessContext: deps.resolveAccessContext,
+        repository: new SettingsRepository(),
+        onKeyChanged: () => resolverCache.clear()
+      });
       registerRuntimeConfigRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
@@ -1711,7 +1723,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     registerRoutes: (server, deps) =>
       registerIntegrationsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
-        dataContext: deps.dataContext
+        dataContext: deps.dataContext,
+        // Master key store (#2312): per-request family key, never eager at boot.
+        resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY)
       })
   },
   {
