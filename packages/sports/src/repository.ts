@@ -55,7 +55,7 @@ export class SportsFollowsRepository {
     const sourceTeamId = input.sourceTeamId ?? null;
     // One insert, untargeted ON CONFLICT DO NOTHING: no conflict-target clause, so it catches a
     // clash against either the partial unique index on (owner_user_id, competition_key,
-    // source_team_id) added in 0214 or the one on (owner_user_id, competition_key) WHERE
+    // source_team_id) added in 0217 or the one on (owner_user_id, competition_key) WHERE
     // team_key IS NULL. A losing concurrent insert returns no row instead of throwing 23505.
     const row = await scopedDb.db
       .insertInto("app.sports_follows")

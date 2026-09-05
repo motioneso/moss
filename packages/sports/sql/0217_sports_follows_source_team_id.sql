@@ -1,4 +1,4 @@
--- packages/sports/sql/0214_sports_follows_source_team_id.sql
+-- packages/sports/sql/0217_sports_follows_source_team_id.sql
 -- Round 5 of review finding S1: a saved follow now stores the provider's permanent team id in its
 -- own column, and that column is the ONLY identity used to match games, standings, briefing facts
 -- and news. team_key keeps exactly two jobs: NULL still means "follow the whole competition"

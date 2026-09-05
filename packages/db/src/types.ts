@@ -1180,7 +1180,7 @@ export interface SportsFollowsTable {
   // did you mean?" prompt. NULL still means "follow the whole competition". Never matched on.
   team_key: string | null;
   // The provider's permanent team id: the only identity used to match games, standings, briefing
-  // facts and news (0214). NULL on a follow saved before that migration; such a row matches
+  // facts and news (0217). NULL on a follow saved before that migration; such a row matches
   // nothing until the person picks a team.
   source_team_id: ColumnType<string | null, string | null | undefined, string | null>;
   created_at: TimestampColumn;
