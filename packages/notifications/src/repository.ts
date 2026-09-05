@@ -75,10 +75,20 @@ export interface NotificationPreferencePort {
  * (`createPushQueuePort` in `@moss/jobs`) is injected by the composition root. Absence
  * (the default) means push is simply not wired for that caller — consistent with
  * `notificationPreferencePort` being optional above.
+ *
+ * Both methods take the caller's `scopedDb` so the job row is written inside the same
+ * transaction as the notification (#743 security finding 7). A job enqueued through a
+ * separate connection could be picked up by the worker before the notification commits
+ * (the worker then sees nothing and drops the push), or survive a rollback as an orphan.
+ * Sharing the transaction makes the job invisible until commit and gone on rollback.
  */
 export interface PushQueuePort {
-  enqueueDeliver(notificationId: string, recipientUserId: string): Promise<void>;
-  enqueueSummary(recipientUserId: string, releaseAt: Date): Promise<void>;
+  enqueueDeliver(
+    scopedDb: DataContextDb,
+    notificationId: string,
+    recipientUserId: string
+  ): Promise<void>;
+  enqueueSummary(scopedDb: DataContextDb, recipientUserId: string, releaseAt: Date): Promise<void>;
 }
 
 export interface QuietHoursSettings {
@@ -336,11 +346,12 @@ export class NotificationsRepository {
     // immediately; a deferred one only ever gets one summary push at release time
     // (Resolved Decision 2), never an individual push. recipient_user_id is always the
     // acting actor (see CreateNotificationInput docblock), so it is never null here.
+    // Enqueued through scopedDb: same transaction as the row above (finding 7).
     if (this.pushQueuePort && row.recipient_user_id) {
       if (deferredUntil) {
-        await this.pushQueuePort.enqueueSummary(row.recipient_user_id, deferredUntil);
+        await this.pushQueuePort.enqueueSummary(scopedDb, row.recipient_user_id, deferredUntil);
       } else {
-        await this.pushQueuePort.enqueueDeliver(row.id, row.recipient_user_id);
+        await this.pushQueuePort.enqueueDeliver(scopedDb, row.id, row.recipient_user_id);
       }
     }
 

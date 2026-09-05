@@ -15,8 +15,13 @@ import {
   type DataContextDb,
   type MossDatabase
 } from "@moss/db";
-import { createPgBossClient, type PgBoss } from "@moss/jobs";
-import { PushSubscriptionLimitError, PushSubscriptionsRepository } from "@moss/notifications";
+import { createPgBossClient, createPushQueuePort, type PgBoss } from "@moss/jobs";
+import {
+  NotificationsRepository,
+  PUSH_DELIVER_QUEUE,
+  PushSubscriptionLimitError,
+  PushSubscriptionsRepository
+} from "@moss/notifications";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import { userAContext, userBContext } from "./notifications-harness.js";
 
@@ -51,6 +56,8 @@ describe("Push subscriptions (#743)", () => {
     dataContext = new DataContextRunner(appDb);
     repository = new PushSubscriptionsRepository();
     boss = createPgBossClient(connectionStrings.app, { connectionTimeoutMillis: 25_000 });
+    // Started here (the server does not own it) so the finding 7 test can enqueue for real.
+    await boss.start();
     server = createApiServer({
       appDb,
       boss,
@@ -259,6 +266,50 @@ describe("Push subscriptions (#743)", () => {
       expect(devices).toHaveLength(10);
     } finally {
       await racingDb.destroy();
+    }
+  });
+
+  // #743 security finding 7: the push job must not be visible to any worker before the
+  // notification it points at is committed. A job enqueued on pg-boss's own pool could be
+  // fetched, find no notification under RLS, and silently drop the push.
+  it("finding 7: the push job is invisible until the notification's transaction commits", async () => {
+    const notifications = new NotificationsRepository(
+      undefined,
+      undefined,
+      createPushQueuePort(boss)
+    );
+    const observer = new Client({ connectionString: connectionStrings.migration });
+    await observer.connect();
+
+    async function jobsFor(notificationId: string): Promise<{ state: string }[]> {
+      const seen = await observer.query<{ state: string }>(
+        `SELECT state FROM pgboss.job WHERE name = $1 AND data->>'notificationId' = $2`,
+        [PUSH_DELIVER_QUEUE, notificationId]
+      );
+      return seen.rows;
+    }
+
+    try {
+      let insideTransaction: { state: string }[] | null = null;
+      const created = await dataContext.withDataContext(userAContext(), async (scopedDb) => {
+        const row = await notifications.create(scopedDb, {
+          moduleId: "briefings",
+          title: "Push ordering",
+          body: "enqueued inside the transaction",
+          urgency: "urgent"
+        });
+        if (!row) throw new Error("notification was not created");
+        // The enqueue has already run at this point, but the transaction has not committed.
+        insideTransaction = await jobsFor(row.id);
+        return row;
+      });
+
+      expect(insideTransaction).toEqual([]);
+      const afterCommit = await jobsFor(created.id);
+      expect(afterCommit).toHaveLength(1);
+      expect(afterCommit[0]?.state).toBe("created");
+    } finally {
+      await observer.end();
     }
   });
 });
