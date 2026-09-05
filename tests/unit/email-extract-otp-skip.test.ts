@@ -582,3 +582,146 @@ describe("reviewer examples, end to end through extractEmailSignals", () => {
     });
   }
 });
+
+/**
+ * The saved record keeps a preview of at most 500 characters, so words that explain a number
+ * another way can sit past the end of it. The decision about a sign-in code is therefore made
+ * once, during sync, from the whole message, and stored on the record; reading must honour
+ * that stored decision and never work it out again from the preview.
+ */
+describe("the saved decision, not the preview, decides what a reader sees", () => {
+  const doorInstructions = fixture({
+    externalId: "door-msg-1",
+    from: "notifications@hotel.example.invalid",
+    subject: "Your one-time passcode",
+    body:
+      "Your one-time passcode is 482910.\n" +
+      "x".repeat(520) +
+      "\nUse this at the apartment door. Bring photo ID."
+  });
+
+  async function saveThenRead(
+    parsed: ParsedEmail,
+    analysis: { summary: string | null; signals: Record<string, unknown> }
+  ) {
+    const saved: EmailExtractResult[] = [];
+    const sorted = await sortFetchedEmails({
+      parsedMessages: [parsed],
+      seen: new Map<string, SavedEmailMarker>(),
+      persistEmail: async (_message, extracted) => {
+        saved.push(extracted);
+      },
+      progress: { emailUpserted: 0, emailFailures: 0, errors: [] },
+      onFailure: () => {}
+    });
+    const skippedOnSave = sorted.otpKeys.includes(parsed.externalId);
+    // What the store actually keeps: a preview of the body, capped at 500 characters, plus
+    // whichever analysis the message ended up with.
+    const finalAnalysis = skippedOnSave ? saved[0]! : analysis;
+    const row = {
+      id: `cache-${parsed.externalId}`,
+      connector_account_id: "account-1",
+      owner_user_id: "user-1",
+      sender: parsed.from,
+      recipients: ["ben@example.invalid"],
+      subject: parsed.subject,
+      snippet: parsed.body.slice(0, 200),
+      body_excerpt: parsed.body.slice(0, 500),
+      received_at: new Date("2026-08-03T12:00:00.000Z"),
+      external_id: parsed.externalId,
+      external_metadata: { threadId: "thread-1" },
+      summary: finalAnalysis.summary,
+      signals: finalAnalysis.signals,
+      created_at: new Date("2026-08-03T12:00:00.000Z"),
+      updated_at: new Date("2026-08-03T12:00:00.000Z")
+    } as unknown as EmailMessage;
+    return {
+      skippedOnSave,
+      item: emailContextItemFromCache(
+        row,
+        { connectorAccountId: "account-1", providerId: "google", providerLabel: "Gmail" },
+        null
+      )
+    };
+  }
+
+  it("keeps the summary and the suggested task when the door wording falls past the preview", async () => {
+    const { skippedOnSave, item } = await saveThenRead(doorInstructions, {
+      summary: "The apartment passcode and door instructions for your arrival.",
+      signals: {
+        confidence: 0.9,
+        actionability: {
+          category: "needs_action",
+          inferredSubject: "Use the apartment passcode on arrival",
+          suggestedTasks: [{ text: "Bring photo ID to the apartment" }]
+        }
+      }
+    });
+
+    expect(skippedOnSave).toBe(false);
+    expect(item.summary).toBe("The apartment passcode and door instructions for your arrival.");
+    expect(item.actionability).toBe("needs_action");
+    expect(item.suggestedTasks.length).toBeGreaterThan(0);
+  });
+
+  it("hides a real sign-in code through the same save-and-read path", async () => {
+    const { skippedOnSave, item } = await saveThenRead(
+      fixture({
+        externalId: "otp-save-1",
+        from: "Google <no-reply@accounts.google.com>",
+        subject: "Your Google verification code",
+        body: "482910 is your Google verification code. Do not share it with anyone."
+      }),
+      { summary: null, signals: {} }
+    );
+
+    expect(skippedOnSave).toBe(true);
+    expect(item.summary).toBeNull();
+    expect(item.actionability).toBe("unknown");
+    expect(item.suggestedTasks).toEqual([]);
+  });
+});
+
+/** The two examples the reviewer ran that were wrongly hidden in the previous round. */
+describe("messages the previous round wrongly hid", () => {
+  it("keeps a hotel message that mentions a stay", () => {
+    expect(
+      looksLikeOneTimeCodeEmail({
+        from: "notifications@hotel.example.invalid",
+        subject: "Your one-time passcode",
+        body: "Your one-time passcode is 581496. Enjoy your stay with us this weekend"
+      })
+    ).toBe(false);
+  });
+
+  it("keeps a bank policy notice whose only number is a support telephone line", async () => {
+    const message = {
+      from: "no-reply@bank.example.invalid",
+      subject: "Security code policy update",
+      body:
+        "We are changing how security codes are delivered. Please review the new policy. " +
+        "For help, call 0800 123 4567."
+    };
+
+    expect(looksLikeOneTimeCodeEmail(message)).toBe(false);
+
+    const runChat = vi.fn(async () => ({
+      text: JSON.stringify({ category: "unknown", confidence: 0.4 })
+    }));
+
+    const result = await extractEmailSignals(fixture(message), { runChat });
+
+    expect(runChat).toHaveBeenCalledTimes(1);
+    expect(result.signals.skipped).toBeUndefined();
+  });
+
+  it("does not treat a telephone number on its own as a sign-in code", () => {
+    expect(
+      looksLikeOneTimeCodeEmail({
+        from: "no-reply@accounts.example.invalid",
+        subject: "Your verification code",
+        body: "If you did not ask for this, call us on 0800 123 4567."
+      })
+    ).toBe(false);
+  });
+});
