@@ -29,10 +29,35 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-05
+
+#### Fixed
+
+- **Complete first-run setup.** New installations now generate all required credential keys and keep the selected release version during setup. [PR #2299](https://github.com/motioneso/moss/pull/2299)
+- **News publisher icons.** Publisher icons on the Today news card now show for NPR and read clearly in both light and dark mode. [PR #2294](https://github.com/motioneso/moss/pull/2294)
+- **Sports search results grouped by league.** Searching for a team in Sports settings now shows results grouped under their own league or sport, so teams with the same name in different sports are no longer mixed together. [PR #2281](https://github.com/motioneso/moss/pull/2281)
+- **Chat settings "Set up" link opens Assistant & AI.** The Set up link under Voice input in Chat settings now opens the Assistant & AI page instead of Account & preferences. [PR #2220](https://github.com/motioneso/moss/pull/2220)
+
+#### Added
+
+- **Web search is now on by default for chat.** Chat can now search the web automatically using your AI model's own built-in search, or a Brave Search key if you add one, so answers can include current information with sources shown. [PR #2280](https://github.com/motioneso/moss/pull/2280)
+- **Sports settings shows whether each source has photos.** Each of your own sports sources now shows whether its stories are getting photos, and lets you stop using photos Moss found for it. [PR #2273](https://github.com/motioneso/moss/pull/2273)
+### 2026-09-04
+
+#### Changed
+
+- **Verification codes never become a task.** A login or verification code email is now always left out of your task suggestions and daily summary, so a temporary sign-in code never shows up as something to act on. [PR #2257](https://github.com/motioneso/moss/pull/2257)
+- **Today's news list shows publisher icons.** The News desk widget on Today now shows each story's publisher as a small icon instead of just the name, with the name still available if you hover over it. [PR #2252](https://github.com/motioneso/moss/pull/2252)
+
+#### Fixed
+
+- **Mode bindings now pick the newest model in the tier.** When several models share a tier (for example two Sonnets), the assistant now uses the most recently released one by default instead of whichever happened to register last. [PR #2219](https://github.com/motioneso/moss/pull/2219)
+- **Settings search finds module settings.** Searching settings (for example, typing News) now also finds a module's own settings and takes you straight there. [PR #2254](https://github.com/motioneso/moss/pull/2254)
 ### 2026-09-01
 
 #### Added
 
+- **Modules Moss builds can add new things it can do.** When Moss finishes building a module with a new chat ability, that ability is [PR #2101](https://github.com/motioneso/moss/pull/2101)
 - **Connect Moss to external tools.** You can now connect Moss to services that speak MCP or publish an OpenAPI spec from Settings, and use their features from chat. [PR #2171](https://github.com/motioneso/moss/pull/2171)
 
 ### 2026-08-31
