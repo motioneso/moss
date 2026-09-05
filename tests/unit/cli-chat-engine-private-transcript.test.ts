@@ -68,7 +68,9 @@ describe("CliChatEngineImpl — Claude MCP lockdown", () => {
     })();
     expect(launchLine).toContain("--allowedTools");
     expect(launchLine).toContain("mcp__jarvis__*");
-    expect(launchLine).toContain('--tools "Read,Glob,Grep"');
+    // #2317: any --tools value also drops the mcp__jarvis__* tools, so the MCP branch
+    // must not pass the flag at all.
+    expect(launchLine).not.toContain("--tools");
     expect(launchLine).not.toMatch(/\bWrite\b/);
     expect(launchLine).not.toMatch(/\bBash\b/);
     // §6.2: the launch line carries the mcp-config FILE PATH, never the token/JSON.

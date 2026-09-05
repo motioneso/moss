@@ -103,7 +103,10 @@ async function buildClaudeCommand(
       ? ["mcp__jarvis__*", "Read", "Glob", "Grep", "Write", "Edit"].join(" ")
       : ["mcp__jarvis__*", ...vaultReadOnlyToolPatterns()].join(" ");
     parts.push(`--allowedTools ${shellQuote(allowedTools)}`);
-    if (!opts.workspaceWrite) parts.push('--tools "Read,Glob,Grep"');
+    // #2317: no bare --tools flag on this branch. On Claude CLI 2.1.183 a non-empty value also drops
+    // every mcp__jarvis__* tool, leaving the session unable to call any Moss tool. Native tools
+    // still go through the PreToolUse hook, which only pre-approves safe vault reads and sends
+    // everything else to the gateway for a user decision.
   } else if (opts.workspaceWrite) {
     parts.push(`--allowedTools ${shellQuote("Read Glob Grep Write Edit")}`);
   } else {
