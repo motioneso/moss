@@ -101,3 +101,25 @@ branch off current main. Needs a decision from Ben.
 - Live UAT walkthrough via `test:workshop-project-entry-uat` against the built image
   `ghcr.io/motioneso/moss:workshop-entry-0905-1042` (built successfully at 10:47).
 - Gemini source RPC still disabled; execution and source-provider acceptance gates unmet.
+
+## Lift onto main, September 5, ~11:30 PDT
+
+The Workshop deliverable is now a real feature branch: `feat/workshop-projects-phase-a`, based on
+current main, in worktree `~/Jarv1s/.claude/worktrees/workshop-pr`. Pull request 2307.
+
+What moved: the 44 Workshop files, the two migrations (renumbered 0223/0224 because main took
+0216/0217 for scratchpads and sports follows), and hand-applied hunks in the seven shared files
+main had also changed — the web app routes, the chat card, the chat gateway wiring, the test
+config, the module registry, the AI repository and shared types, the app map, and four pinned
+expectation lists in the integration tests.
+
+What deliberately did NOT move, and stays on the pushed checkpoint `04f870fe0` for its own pull
+request: the Gemini sign-in and CLI-runner login work, module-build supervision, the owner-only
+provider lookup it needs, and the container execution and confinement infrastructure under
+`infra/workshop` and `tests/uat/workshop-confinement-probe`. None of it is imported by the project
+entry code, so the two can ship separately.
+
+Static checks pass on the new branch: types, lint, format. The full gate is queued behind the two
+gates running on this box. Live proof through the real UI is still owed, and the image built at
+10:47 came from this integration branch, not the lifted one, so it needs rebuilding before the
+walkthrough counts.
