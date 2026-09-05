@@ -24,9 +24,13 @@ import {
 } from "lucide-react";
 import { Fragment, lazy, Suspense, useEffect, useState, type ComponentType } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useQuery } from "@tanstack/react-query";
+import { MODULE_SETTINGS_SURFACES, MODULE_SETTING_KEYWORDS } from "virtual:moss-module-settings";
 
 import { SettingsSearch, type SettingsSearchItem } from "./settings-search";
 
+import { getMyModules } from "../api/client";
+import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
 import { FeedbackProvider } from "./settings-feedback";
 import { ProfilePane } from "./settings-personal-panes";
@@ -35,6 +39,8 @@ import {
   flattenSettingsGroups,
   type SettingsSectionGroup
 } from "./settings-navigation";
+import { CAT_BY_ID } from "./settings-module-availability";
+import { buildModuleSettingsSearchItems, MODULE_SEARCH_ID_PREFIX } from "./settings-module-search";
 import {
   browserSettingsStorage,
   readSettingsStorage,
@@ -352,6 +358,11 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const isAdmin = me.user.isInstanceAdmin;
   const storage = browserSettingsStorage();
   const assistantName = useAssistantName();
+  const myModulesQuery = useQuery({
+    queryKey: queryKeys.myModules,
+    queryFn: getMyModules,
+    retry: false
+  });
 
   const [mode, setMode] = useState<"personal" | "admin">(() =>
     isAdmin && readSettingsStorage(storage, "mode") === "admin" ? "admin" : "personal"
@@ -417,7 +428,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
     setSearchParams({ section: nextMode === "admin" ? categoryAdmin : categoryPersonal });
   };
 
-  const searchItems: SettingsSearchItem[] = [
+  const sectionSearchItems: SettingsSearchItem[] = [
     ...PERSONAL_GROUPS,
     ...(isAdmin ? ADMIN_GROUPS : [])
   ].flatMap((group) =>
@@ -429,6 +440,23 @@ export function SettingsPage({ me }: SettingsPageProps) {
       keywords: SECTION_KEYWORDS[section.id] ?? []
     }))
   );
+  const moduleSearchItems = buildModuleSettingsSearchItems(
+    myModulesQuery.data?.modules ?? [],
+    MODULE_SETTINGS_SURFACES,
+    assistantName,
+    MODULE_SETTING_KEYWORDS
+  );
+  const searchItems: SettingsSearchItem[] = [...sectionSearchItems, ...moduleSearchItems];
+
+  const pickSearchResult = (id: string) => {
+    if (id.startsWith(MODULE_SEARCH_ID_PREFIX)) {
+      const moduleId = id.slice(MODULE_SEARCH_ID_PREFIX.length);
+      const category = CAT_BY_ID[moduleId];
+      setSearchParams(category ? { section: category } : { section: "modules", module: moduleId });
+      return;
+    }
+    setSearchParams({ section: id });
+  };
 
   return (
     <FeedbackProvider>
@@ -447,7 +475,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
           ) : (
             <span />
           )}
-          <SettingsSearch items={searchItems} onSelect={(id) => setSearchParams({ section: id })} />
+          <SettingsSearch items={searchItems} onSelect={pickSearchResult} />
         </div>
 
         <div className="set2__grid">

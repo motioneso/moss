@@ -341,7 +341,7 @@ describe("Sports/News denylist check (#1265)", () => {
 });
 
 describe("Complete built-in self-operation inventory (#1263)", () => {
-  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 56", () => {
+  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 57", () => {
     // People declares its grants in packages/people/src/tools.ts, not a manifest.ts — this
     // walks the real getBuiltInModuleManifests() registry (which resolves that indirection),
     // so it does not undercount the way a manifest.ts-only grep would (34 instead of 38).
@@ -393,7 +393,9 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // build at awaiting_plan_approval — it installs and ships nothing, and the plan card the user
     // must press "Build it" on is the real gate. Admin-only is enforced separately in the host
     // service, not by this tier.
-    expect(grantedAtInstall.length).toBe(41);
+    // #2236: +1 (scratchpad.append), granted_at_install. It only adds a line to the caller's own
+    // scratchpad and can never replace or delete existing text, so it stays in the lowest tier.
+    expect(grantedAtInstall.length).toBe(42);
     expect(confirmAlways.length).toBe(10);
     expect(userPromotable.length).toBe(5);
 
@@ -414,7 +416,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // user_promotable tool (same tier as the existing create/delete calendar tools) — 39 + 5 + 5
     // = 49 total. #1888 added workshop.buildModule (granted_at_install), and #1909 adds five
     // confirmed Sports source writes plus news.refreshNews — 41 + 10 + 5 = 56 total.
-    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(56);
+    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(57);
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
     expect(userPromotable.sort()).toEqual(

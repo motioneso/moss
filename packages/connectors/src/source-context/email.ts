@@ -8,6 +8,7 @@ import type { ImapConnectionSecret } from "../imap-secret.js";
 import { buildEmailActionLink } from "./email-action-links.js";
 import {
   extractEmailSignals,
+  looksLikeOneTimeCodeEmail,
   type EmailExtractDeps,
   type EmailSignals,
   type ParsedEmail
@@ -144,12 +145,28 @@ function cacheKey(connectorAccountId: string, externalId: string): string {
   return JSON.stringify([connectorAccountId, externalId]);
 }
 
+/**
+ * Honour the sign-in-code decision that was recorded when the message was saved, and never
+ * make that decision again here.
+ *
+ * The decision is taken during sync, where the whole message body is available, and stored on
+ * the record as the fixed skip marker. Only a whole body can show that no door, stay, order or
+ * voucher wording appears anywhere in the message, and the saved record keeps a short preview
+ * at most — so re-running the rule on that preview would hide ordinary mail whose explaining
+ * words fall past the preview. A message saved before this filter existed is caught on its
+ * next sync, which decides sign-in code messages before anything else and rewrites them.
+ */
+function otpCheckedTriage(stored: TriageFields, signals: EmailSignals): TriageFields {
+  return signals.skipped === "otp" ? UNTRIAGED : stored;
+}
+
 export function emailContextItemFromCache(
   row: EmailMessage,
   meta: SourceAccountMeta,
   degradedReason: DegradedReason | null
 ): EmailContextItem {
-  const triage = triageFromSignals(row.summary, cachedSignals(row));
+  const signals = cachedSignals(row);
+  const triage = otpCheckedTriage(triageFromSignals(row.summary, signals), signals);
   return {
     messageKey: row.external_id,
     account: meta,
@@ -288,7 +305,19 @@ async function readAccountLive(
       cachedActionability &&
       (!cachedNeedsActionDetails || cachedActionDetailsComplete)
     ) {
-      triage = triageFromSignals(cachedRow.summary, cachedSignalSet);
+      // The live read has the whole message in hand, so the full rule can be applied here as
+      // well as the decision stored when it was saved.
+      const stored = otpCheckedTriage(
+        triageFromSignals(cachedRow.summary, cachedSignalSet),
+        cachedSignalSet
+      );
+      triage = looksLikeOneTimeCodeEmail({
+        from: message.from,
+        subject: message.subject,
+        body: message.body
+      })
+        ? UNTRIAGED
+        : stored;
     } else if (triageBudget > 0) {
       triageBudget -= 1;
       const extracted = await extractEmailSignals(message, extractDeps);
