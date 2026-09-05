@@ -44,6 +44,7 @@ import {
 import { isNewsSnapshotFresh } from "./news-service.js";
 import type { NewsPublisherConnectionPort } from "./publisher-connection-port.js";
 import { reconcileNewsRevalidationSchedule } from "./schedule.js";
+import { deriveFetchHosts } from "./source/workaround.js";
 
 export interface NewsPersonalizationStore {
   listCustomSources(scopedDb: DataContextDb): Promise<NewsCustomSourceDto[]>;
@@ -54,7 +55,9 @@ export interface NewsPersonalizationStore {
       canonicalDomain: string;
       homepageUrl: string;
       feedUrl: string | null;
-      retrievalMethod: "feed" | "scrape";
+      retrievalMethod: "feed" | "scrape" | "reddit";
+      confirmedFetchHosts: readonly string[];
+      iconUrl: string | null;
       validationFingerprint: string;
     }
   ): Promise<NewsCustomSourceDto>;
@@ -66,7 +69,9 @@ export interface NewsPersonalizationStore {
       canonicalDomain: string;
       homepageUrl: string;
       feedUrl: string | null;
-      retrievalMethod: "feed" | "scrape";
+      retrievalMethod: "feed" | "scrape" | "reddit";
+      confirmedFetchHosts: readonly string[];
+      iconUrl: string | null;
       validationFingerprint: string;
     }
   ): Promise<NewsCustomSourceDto | null>;
@@ -280,6 +285,10 @@ export async function confirmSourceFromPreview(
       homepageUrl: candidate.homepageUrl,
       feedUrl: candidate.feedUrl,
       retrievalMethod: candidate.retrievalMethod,
+      // #2282 Task 1.4: until preview confirms hosts (Task 1.6), a source may only be fetched
+      // from the hosts its own homepage and feed URL name. Icons arrive with Task 1.6 too.
+      confirmedFetchHosts: deriveFetchHosts([candidate.homepageUrl, candidate.feedUrl]),
+      iconUrl: null,
       validationFingerprint: candidate.validationFingerprint
     };
     const created = preview.replaceSourceId

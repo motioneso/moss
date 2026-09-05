@@ -914,4 +914,67 @@ describe("news source kinds schema (#2282 migration 0218)", () => {
     );
     expect(result.rows[0]?.privileges).toEqual([true, true, false, false]);
   });
+
+  // #2282 Task 1.4 — the workaround failure count. Only Postgres can prove the CHECK bound,
+  // the health transition and the owner scoping of the one UPDATE.
+  const mirrored: SourceSeed = {
+    ...publication,
+    feedUrl: "https://mirror.example.net/feed.xml",
+    confirmedFetchHosts: ["news.example.com", "mirror.example.net"]
+  };
+
+  async function readStrikes(id: string): Promise<{ failures: number; health: string }> {
+    const result = await bootstrap.query<{ consecutive_failures: number; health_status: string }>(
+      `SELECT consecutive_failures, health_status FROM app.news_custom_sources WHERE id = $1`,
+      [id]
+    );
+    const row = result.rows[0]!;
+    return { failures: row.consecutive_failures, health: row.health_status };
+  }
+
+  it("three workaround failures flip health to temporarily_unavailable and the count stays bounded", async () => {
+    const [alice] = await signUpAliceBob("nk-strikes");
+    const id = await insertSource(alice, mirrored);
+    for (const n of [1, 2]) {
+      await asActor(alice, `nk-strikes-${n}`, (scopedDb) =>
+        repo.recordWorkaroundRefreshOutcome(scopedDb, id, "failure")
+      );
+    }
+    expect(await readStrikes(id)).toEqual({ failures: 2, health: "healthy" });
+    await asActor(alice, "nk-strikes-3", (scopedDb) =>
+      repo.recordWorkaroundRefreshOutcome(scopedDb, id, "failure")
+    );
+    expect(await readStrikes(id)).toEqual({ failures: 3, health: "temporarily_unavailable" });
+    // A fourth failure must not breach the 0..3 CHECK.
+    await asActor(alice, "nk-strikes-4", (scopedDb) =>
+      repo.recordWorkaroundRefreshOutcome(scopedDb, id, "failure")
+    );
+    expect(await readStrikes(id)).toEqual({ failures: 3, health: "temporarily_unavailable" });
+  });
+
+  it("a workaround success resets the failure count", async () => {
+    const [alice] = await signUpAliceBob("nk-reset");
+    const id = await insertSource(alice, mirrored);
+    for (const n of [1, 2]) {
+      await asActor(alice, `nk-reset-${n}`, (scopedDb) =>
+        repo.recordWorkaroundRefreshOutcome(scopedDb, id, "failure")
+      );
+    }
+    expect((await readStrikes(id)).failures).toBe(2);
+    await asActor(alice, "nk-reset-ok", (scopedDb) =>
+      repo.recordWorkaroundRefreshOutcome(scopedDb, id, "success")
+    );
+    expect(await readStrikes(id)).toEqual({ failures: 0, health: "healthy" });
+  });
+
+  it("another owner's refresh outcome leaves the row untouched", async () => {
+    const [alice, bob] = await signUpAliceBob("nk-other");
+    const id = await insertSource(alice, mirrored);
+    for (const n of [1, 2, 3]) {
+      await asActor(bob, `nk-other-${n}`, (scopedDb) =>
+        repo.recordWorkaroundRefreshOutcome(scopedDb, id, "failure")
+      );
+    }
+    expect(await readStrikes(id)).toEqual({ failures: 0, health: "healthy" });
+  });
 });

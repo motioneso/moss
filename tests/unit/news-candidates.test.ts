@@ -25,6 +25,7 @@ function repo(overrides: Record<string, unknown> = {}) {
     listExclusions: async () => [],
     readPolicyVerdict: async () => null,
     upsertPolicyVerdict: async () => undefined,
+    recordWorkaroundRefreshOutcome: async () => undefined,
     ...overrides
   };
 }

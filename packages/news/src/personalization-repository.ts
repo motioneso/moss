@@ -24,6 +24,7 @@ import {
   NEWS_MAX_CUSTOM_SOURCES,
   NEWS_MAX_CUSTOM_TOPICS
 } from "./personalization-domain.js";
+import { isWorkaroundFeed } from "./source/workaround.js";
 
 export { NEWS_MAX_CUSTOM_SOURCES, NEWS_MAX_CUSTOM_TOPICS } from "./personalization-domain.js";
 
@@ -114,12 +115,16 @@ export interface ReplaceSnapshotInput {
 
 const EXCLUSION_COLUMNS = ["id", "canonical_domain", "created_at"] as const;
 
-interface CustomSourceInput {
+export interface CustomSourceInput {
   readonly label: string;
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
   readonly feedUrl: string | null;
-  readonly retrievalMethod: "feed" | "scrape";
+  readonly retrievalMethod: "feed" | "scrape" | "reddit";
+  /** #2282: lowercased, deduped fetch-host allowlist, 1..8 entries (0218 CHECK). */
+  readonly confirmedFetchHosts: readonly string[];
+  /** #2282: https icon shown next to the row, or null. Never exported. */
+  readonly iconUrl: string | null;
   readonly validationFingerprint: string;
 }
 
@@ -183,17 +188,7 @@ export class NewsPersonalizationRepository {
       ])
       .orderBy("created_at", "desc")
       .execute();
-    return rows.map((row) => ({
-      id: row.id,
-      label: row.label,
-      canonicalDomain: row.canonical_domain,
-      homepageUrl: row.homepage_url,
-      feedUrl: row.feed_url,
-      retrievalMethod: row.retrieval_method,
-      validationStatus: row.validation_status,
-      healthStatus: row.health_status,
-      createdAt: row.created_at.toISOString()
-    }));
+    return rows.map(toCustomSourceDto);
   }
 
   async countCustomSources(scopedDb: DataContextDb): Promise<number> {
@@ -210,35 +205,49 @@ export class NewsPersonalizationRepository {
     input: CustomSourceInput
   ): Promise<NewsCustomSourceDto> {
     assertDataContextDb(scopedDb);
+    // #2282: untargeted ON CONFLICT DO NOTHING (as Sports does) so one insert answers both
+    // 0218 partial unique indexes: (owner, canonical_domain) for publications and
+    // (owner, lower(feed_url)) for subreddits. A losing insert returns no row, and the probe
+    // below tells a duplicate from the per-user cap.
     const result = await sql<{
       id: string;
       label: string;
       canonical_domain: string;
       homepage_url: string;
       feed_url: string | null;
-      retrieval_method: "feed" | "scrape";
+      retrieval_method: "feed" | "scrape" | "reddit";
       validation_status: "approved";
       health_status: "healthy";
       created_at: Date;
     }>`
       INSERT INTO app.news_custom_sources
         (owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
+         icon_url, confirmed_fetch_hosts,
          validation_status, health_status, validation_fingerprint, validated_at)
       SELECT app.current_actor_user_id(), ${input.label}, ${input.canonicalDomain},
              ${input.homepageUrl}, ${input.feedUrl}, ${input.retrievalMethod},
+             ${input.iconUrl}, ${[...input.confirmedFetchHosts]}::text[],
              'approved', 'healthy', ${input.validationFingerprint}, now()
        WHERE (SELECT count(*) FROM app.news_custom_sources) < ${NEWS_MAX_CUSTOM_SOURCES}
-      ON CONFLICT (owner_user_id, canonical_domain) DO NOTHING
+      ON CONFLICT DO NOTHING
       RETURNING id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
                 validation_status, health_status, created_at
     `.execute(scopedDb.db);
     const created = result.rows[0];
     if (created) return toCustomSourceDto(created);
-    const duplicate = await scopedDb.db
-      .selectFrom("app.news_custom_sources")
-      .select("id")
-      .where("canonical_domain", "=", input.canonicalDomain)
-      .executeTakeFirst();
+    const duplicate =
+      input.retrievalMethod === "reddit"
+        ? await scopedDb.db
+            .selectFrom("app.news_custom_sources")
+            .select("id")
+            .where("retrieval_method", "=", "reddit")
+            .where(sql`lower(feed_url)`, "=", (input.feedUrl ?? "").toLowerCase())
+            .executeTakeFirst()
+        : await scopedDb.db
+            .selectFrom("app.news_custom_sources")
+            .select("id")
+            .where("canonical_domain", "=", input.canonicalDomain)
+            .executeTakeFirst();
     if (duplicate) throw new NewsDuplicateSourceError();
     throw new NewsPersonalizationLimitError("custom_sources", NEWS_MAX_CUSTOM_SOURCES);
   }
@@ -257,6 +266,9 @@ export class NewsPersonalizationRepository {
         homepage_url: input.homepageUrl,
         feed_url: input.feedUrl,
         retrieval_method: input.retrievalMethod,
+        icon_url: input.iconUrl,
+        confirmed_fetch_hosts: [...input.confirmedFetchHosts],
+        consecutive_failures: 0,
         validation_status: "approved",
         health_status: "healthy",
         validation_fingerprint: input.validationFingerprint,
@@ -304,6 +316,30 @@ export class NewsPersonalizationRepository {
       .set({ health_status: health })
       .where("id", "=", sourceId)
       .execute();
+  }
+
+  /**
+   * #2282 Task 1.4 — one UPDATE per refresh of a workaround feed. A success clears the count; a
+   * failure bumps it (bounded to the 0218 CHECK of 3) and flips health to
+   * temporarily_unavailable on the third strike. Runs under the app OR the worker context:
+   * 0218 grants the worker UPDATE on exactly (health_status, consecutive_failures), and the
+   * owner-scoped policy from 0160 makes a cross-owner call match zero rows.
+   */
+  async recordWorkaroundRefreshOutcome(
+    scopedDb: DataContextDb,
+    sourceId: string,
+    outcome: "success" | "failure"
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    const update =
+      outcome === "success"
+        ? scopedDb.db.updateTable("app.news_custom_sources").set({ consecutive_failures: 0 })
+        : scopedDb.db.updateTable("app.news_custom_sources").set({
+            consecutive_failures: sql`LEAST(consecutive_failures + 1, 3)`,
+            health_status: sql`CASE WHEN consecutive_failures + 1 >= 3
+              THEN 'temporarily_unavailable' ELSE health_status END`
+          });
+    await update.where("id", "=", sourceId).execute();
   }
 
   // #975 Slice 4 — revalidation state reads/writes. These run under the app OR the worker
@@ -840,6 +876,8 @@ function toCustomSourceDto(row: {
     homepageUrl: row.homepage_url,
     feedUrl: row.feed_url,
     retrievalMethod: row.retrieval_method,
+    // #2282: derived here, never stored. Only a feed row can be a workaround.
+    workaround: row.retrieval_method === "feed" && isWorkaroundFeed(row.canonical_domain, row.feed_url),
     validationStatus: row.validation_status,
     healthStatus: row.health_status,
     createdAt: row.created_at.toISOString()

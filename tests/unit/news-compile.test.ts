@@ -50,6 +50,7 @@ function makeRepo(
     updateSourceHealth: async (_db: DataContextDb, sourceId: string) => {
       options.unavailable?.push(sourceId);
     },
+    recordWorkaroundRefreshOutcome: async () => undefined,
     publishSnapshotIfCurrent: async (
       _db: DataContextDb,
       _generation: number,

@@ -147,6 +147,11 @@ export interface NewsCustomSourceDto {
   readonly homepageUrl: string;
   readonly feedUrl: string | null;
   readonly retrievalMethod: "feed" | "scrape" | "reddit";
+  /**
+   * #2282: true when a feed source is read from a host that is not the publisher itself (a
+   * mirror or bridge). Derived by the server; the host list behind it is never exported.
+   */
+  readonly workaround: boolean;
   readonly validationStatus: "approved" | "needs_revalidation" | "rejected";
   readonly healthStatus:
     | "healthy"
@@ -501,6 +506,7 @@ const newsCustomSourceDtoSchema = {
     "homepageUrl",
     "feedUrl",
     "retrievalMethod",
+    "workaround",
     "validationStatus",
     "healthStatus",
     "createdAt"
@@ -512,6 +518,7 @@ const newsCustomSourceDtoSchema = {
     homepageUrl: { type: "string" },
     feedUrl: { type: ["string", "null"] },
     retrievalMethod: { type: "string", enum: ["feed", "scrape", "reddit"] },
+    workaround: { type: "boolean" },
     validationStatus: { type: "string", enum: ["approved", "needs_revalidation", "rejected"] },
     healthStatus: {
       type: "string",

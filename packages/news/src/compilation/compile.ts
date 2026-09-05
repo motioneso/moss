@@ -71,6 +71,7 @@ export type CompilationRepository = Pick<
   | "readPolicyVerdict"
   | "upsertPolicyVerdict"
   | "updateSourceHealth"
+  | "recordWorkaroundRefreshOutcome"
   | "publishSnapshotIfCurrent"
 >;
 
