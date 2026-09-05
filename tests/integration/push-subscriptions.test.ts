@@ -16,7 +16,7 @@ import {
   type MossDatabase
 } from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
-import { PushSubscriptionsRepository } from "@moss/notifications";
+import { PushSubscriptionLimitError, PushSubscriptionsRepository } from "@moss/notifications";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import { userAContext, userBContext } from "./notifications-harness.js";
 
@@ -215,5 +215,50 @@ describe("Push subscriptions (#743)", () => {
     expect(byOwner.statusCode).toBe(200);
     expect(byOwner.json<{ success: boolean }>().success).toBe(true);
     expect(byOwnerAgain.statusCode).toBe(404);
+  });
+  it("finding 6: two registrations racing at nine devices admit exactly one", async () => {
+    // A second pool with two connections so the two upserts really run side by side; the
+    // shared pool above has one connection and would serialize them by accident.
+    const racingDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
+    const racingContext = new DataContextRunner(racingDb);
+    try {
+      // User B starts with no devices (only user A registered above).
+      for (let index = 0; index < 9; index += 1) {
+        await racingContext.withDataContext(userBContext(), (scopedDb) =>
+          repository.upsert(scopedDb, {
+            endpoint: endpointFor(`race-seed-${index}`),
+            p256dh: P256DH,
+            auth: AUTH,
+            userAgentLabel: null
+          })
+        );
+      }
+
+      const outcomes = await Promise.allSettled(
+        ["race-left", "race-right"].map((tag) =>
+          racingContext.withDataContext(userBContext(), (scopedDb) =>
+            repository.upsert(scopedDb, {
+              endpoint: endpointFor(tag),
+              p256dh: P256DH,
+              auth: AUTH,
+              userAgentLabel: null
+            })
+          )
+        )
+      );
+
+      const rejected = outcomes.filter(
+        (outcome): outcome is PromiseRejectedResult => outcome.status === "rejected"
+      );
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0]?.reason).toBeInstanceOf(PushSubscriptionLimitError);
+
+      const devices = await racingContext.withDataContext(userBContext(), (scopedDb) =>
+        repository.listForActor(scopedDb)
+      );
+      expect(devices).toHaveLength(10);
+    } finally {
+      await racingDb.destroy();
+    }
   });
 });

@@ -116,6 +116,16 @@ export class PushSubscriptionsRepository {
 
     const endpointHash = hashPushEndpoint(input.endpoint);
 
+    // Security review 1, finding 6: two registrations racing at nine devices both counted
+    // nine and both inserted. A transaction-scoped advisory lock keyed on the actor makes
+    // the count-then-insert atomic per user; it releases when withDataContext commits.
+    await sql`
+      SELECT pg_advisory_xact_lock(
+        hashtext('push_subscriptions'),
+        hashtext(app.current_actor_user_id()::text)
+      )
+    `.execute(scopedDb.db);
+
     const existingCount = await scopedDb.db
       .selectFrom("app.push_subscriptions")
       .select(({ fn }) => fn.countAll<string>().as("count"))
