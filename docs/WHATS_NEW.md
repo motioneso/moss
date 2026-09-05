@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Chat can use its tools again.** Chat could answer questions but could not actually do anything with your information; it can now use its tools again. [PR #2318](https://github.com/motioneso/moss/pull/2318)
 - **Email stops filling your day with things that are not really tasks.** Moss now decides for itself whether an email actually asks something of you, instead of turning ordinary mail into task suggestions, so your day view stays about real commitments. [PR #2279](https://github.com/motioneso/moss/pull/2279)
 - **Publisher icons no longer touch the headline text.** In the news list on the Today page, the small publisher icon now has a little space between it and the headline instead of being pressed right up against it. [PR #2311](https://github.com/motioneso/moss/pull/2311)
 - **Complete first-run setup.** New installations now generate all required credential keys and keep the selected release version during setup. [PR #2299](https://github.com/motioneso/moss/pull/2299)
