@@ -335,7 +335,9 @@ export class CliChatEngineHost {
       replayBatch: params.replayBatch,
       replayAttemptId: params.replayAttemptId,
       // #367: forward the resolved model id so buildClaudeCommand emits `--model <id>`.
-      model: params.model
+      model: params.model,
+      // #2228: let the CLI run its own web search tool and report sources.
+      nativeSearch: params.nativeSearch
     };
     // Keep a handle on the RAW launch promise (separate from the timeout race) so that a
     // mux-create which SUCCEEDS *after* the timeout already released the reservation can be

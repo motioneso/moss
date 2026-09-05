@@ -208,7 +208,13 @@ export async function generateStructured(
       });
       if ("rawText" in generated) {
         try {
-          result = { rawObject: JSON.parse(unfence(generated.rawText)), usage: generated.usage };
+          result = {
+            rawObject: JSON.parse(unfence(generated.rawText)),
+            usage: generated.usage,
+            ...(generated.sources && generated.sources.length > 0
+              ? { sources: generated.sources }
+              : {})
+          };
         } catch {
           throw new StructuredOutputParseError(
             "CLI output is not valid JSON",

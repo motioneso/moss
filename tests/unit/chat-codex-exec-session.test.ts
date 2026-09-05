@@ -108,3 +108,40 @@ describe("CodexExecSession.buildPrompt — persona/role marker fencing (#1136)",
     expect(lastPrompt(io)).toContain(`<persona>\n${persona}\n</persona>`);
   });
 });
+
+// ─── #2228: built-in web search for command-line models ───────────────────────────────────────
+describe("CodexExecSession.buildCommand — nativeSearch (#2228)", () => {
+  function lastCommand(io: ReturnType<typeof makeIo>): string {
+    const runs = io.run.mock.calls.filter((c: unknown[]) => c[0] === "bash");
+    expect(runs.length).toBeGreaterThan(0);
+    return (runs.at(-1)![1] as string[])[1]!;
+  }
+
+  it("switches on codex's live web search only when the launch asks for it", async () => {
+    const io = makeIo();
+    const session = new CodexExecSession({
+      io,
+      launchOpts: {
+        neutralDir: NEUTRAL_DIR,
+        personaPath: `${NEUTRAL_DIR}/persona.md`,
+        nativeSearch: true
+      },
+      transcriptPath: `${NEUTRAL_DIR}/transcript.jsonl`,
+      tokenEnvPath: null,
+      ownsDrain: true
+    });
+    await session.initialize();
+    await session.submit("what happened today");
+    expect(lastCommand(io)).toContain(`-c 'web_search="live"'`);
+    // The shell and patch tools stay denied regardless of search.
+    expect(lastCommand(io)).toContain(`-c 'features.shell_tool=false'`);
+  });
+
+  it("leaves web search off by default", async () => {
+    const io = makeIo();
+    const session = makeSession(io);
+    await session.initialize();
+    await session.submit("hello");
+    expect(lastCommand(io)).not.toContain("web_search");
+  });
+});

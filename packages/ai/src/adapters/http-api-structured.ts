@@ -73,7 +73,12 @@ export type StructuredProviderResult =
       readonly usage: StructuredUsage;
       readonly sources?: readonly StructuredSource[];
     }
-  | { readonly rawText: string; readonly usage: StructuredUsage };
+  | {
+      readonly rawText: string;
+      readonly usage: StructuredUsage;
+      /** #2228: sources a CLI's own web search tool reported while producing `rawText`. */
+      readonly sources?: readonly StructuredSource[];
+    };
 
 export class StructuredOutputParseError extends Error {
   readonly rawText: string;
@@ -241,7 +246,7 @@ function normalizeStructuredSource(candidate: {
   return { url: candidate.url, title: candidate.title ?? candidate.url };
 }
 
-function dedupeStructuredSources(
+export function dedupeStructuredSources(
   candidates: readonly (StructuredSource | null)[]
 ): StructuredSource[] {
   const seen = new Set<string>();
