@@ -115,7 +115,7 @@ export const newsModuleManifest = {
       id: "news",
       label: "News",
       description:
-        'Read personalized headlines from enabled sources. Marking a story "less like this" removes it right away and refills its spot from other stories already loaded, so the carousel stays full instead of shrinking.',
+        "Read personalized headlines from enabled sources. Marking a story less like this removes it right away and refills its spot from stories already loaded. Today's list shows each publisher's icon beside its headlines, with the name on hover.",
       path: "/news",
       icon: "newspaper",
       order: 34,
@@ -270,6 +270,11 @@ export const newsModuleManifest = {
     {
       method: "GET",
       path: "/api/news/images/:articleId",
+      permissionId: "news.view"
+    },
+    {
+      method: "GET",
+      path: "/api/news/favicon/:domain",
       permissionId: "news.view"
     },
     // #2005 publisher credentials. news.credentials, never news.prefs.
