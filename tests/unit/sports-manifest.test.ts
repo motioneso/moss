@@ -50,13 +50,20 @@ describe("sports manifest", () => {
   });
 
   it("tells Moss about the Stop using Moss's photos control and what it does", () => {
-    // #2237 review 1: the app map must describe the control this slice ships, not only the
-    // status line, or Moss cannot explain the setting.
+    // #2237 review 1 and review 2 finding 4: the app map must describe the control this slice
+    // ships and its effect (it forgets the instruction Moss found and keeps the ordinary feed and
+    // article-page photos), or Moss cannot explain the setting. Matching "feed" anywhere in the
+    // text proved nothing, so each assertion pins the sentence that states the effect.
     const feature = sportsModuleManifest.features.find((f) => f.id === "sports.source_photos");
     expect(feature?.description).toContain("Stop using Moss's photos");
-    expect(feature?.description).toMatch(/feed|article/);
+    expect(feature?.description).toContain(
+      "Stop using Moss's photos forgets Moss's instruction; feed and article photos stay"
+    );
     const settings = sportsModuleManifest.settings.find((s) => s.id === "sports.follows");
     expect(settings?.description).toContain("Stop using Moss's photos");
+    expect(settings?.description).toContain(
+      "Stop using Moss's photos forgets Moss's instruction, feed and article photos stay"
+    );
   });
 
   it("exposes follows plus bounded actor-scoped source tools", () => {
