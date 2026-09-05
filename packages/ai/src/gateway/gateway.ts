@@ -113,9 +113,12 @@ export interface AssistantToolGatewayDependencies {
   readonly resolveLocalTimezone?: (actorUserId: string) => Promise<string | null>;
   /**
    * Returns which web search engine is active for this actor: "brave" (the web.search tool calls
-   * the Brave API directly), "model-native" (the actor's chat model does its own built-in search,
-   * so the separate web.search tool would be redundant), or "none". Injected by the composition
-   * root via `resolveWebSearchEngine` (module isolation: the gateway must not import settings).
+   * the Brave API directly), "model-native" (the web.search tool runs one structured search
+   * through the actor's own chat model), or "none" (no key and no searching model, or built-in
+   * search switched off). Chat turns only ever run through a CLI engine whose own search is
+   * blocked by the permission hook, so web.search is the only chat search path and is offered for
+   * both engines; it is hidden only for "none". Injected by the composition root via
+   * `resolveWebSearchEngine` (module isolation: the gateway must not import settings).
    * Omitted (e.g. in tests) means always list web.search, matching pre-#2228 behavior.
    */
   readonly webSearchEngineForActor?: (
@@ -871,9 +874,9 @@ export class AssistantToolGateway {
   private async executableTools(actorUserId: string): Promise<ExecutableTool[]> {
     const modules: readonly MossModuleManifest[] =
       await this.deps.resolveActiveModules(actorUserId);
-    // #2228: web.search calls the Brave API directly, which is redundant (and would duplicate
-    // results/cost) when the actor's chat model already has its own built-in search, and useless
-    // when neither is available. Resolved once per listing, not per tool.
+    // #2228: web.search is backed by Brave or by the actor's model-native provider; it is the only
+    // search path a chat turn can reach (CLI engines cannot search on their own here), so it is
+    // hidden only when the actor has no engine at all. Resolved once per listing, not per tool.
     const webSearchEngine = this.deps.webSearchEngineForActor
       ? await this.deps.webSearchEngineForActor(actorUserId)
       : "brave";
@@ -883,7 +886,7 @@ export class AssistantToolGateway {
         if (typeof tool.execute !== "function") {
           continue;
         }
-        if (tool.name === "web.search" && webSearchEngine !== "brave") {
+        if (tool.name === "web.search" && webSearchEngine === "none") {
           continue;
         }
         // Fail closed #0: a centrally excluded (self-operation) tool is never listed and never

@@ -1842,6 +1842,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         localePreferences: new PreferencesRepository(),
         agencyPreferences: new PreferencesRepository(),
         priorityPreferences: new PreferencesRepository(),
+        // #2228: the gateway hides the web.search tool only when the actor has no search engine
+        // (no Brave key and no chat model with built-in search, or built-in search switched off).
+        webSearchEngineForActor: (actorUserId) =>
+          deps.dataContext.withDataContext(
+            { actorUserId, requestId: "gateway:web-search-engine" },
+            async (scopedDb) => (await resolveNewsWebSearch(scopedDb)).engine
+          ),
         notesRecall: deps.notesRecall,
         googleConnectionService: deps.googleConnectionService,
         googleApiClient: deps.googleApiClient,

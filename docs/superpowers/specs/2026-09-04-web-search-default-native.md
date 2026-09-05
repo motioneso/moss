@@ -31,8 +31,12 @@ install with one Anthropic key should be able to search the web on day one.
 
 - Search on Ollama or custom OpenAI-compatible endpoints (no built-in search exists there).
 - Per-user engine choice, per-user cost caps, or search usage metering.
-- Search inside CLI-backed providers (claude, gemini, codex CLI adapters). Their own search
-  runs inside their process and is out of scope for this spec.
+- Search inside CLI-backed providers (claude, gemini, codex CLI adapters). Chat turns only ever
+  run through a CLI engine (`packages/chat/src/live/engine-selection.ts`), and the CLI's own
+  search is blocked there: the Claude engines allow only the jarvis MCP tools plus vault reads and
+  the permission hook denies everything else. So "the model searches inside its own process" is
+  not a path that exists in chat, and this spec does not try to open one. (Amended in fix round
+  1 of PR #2280; the original text assumed the CLI could search on its own.)
 - New search engines beyond Brave (Google News RSS, GDELT and the like are a separate spec).
 - Changing how `web.read` works.
 
@@ -45,11 +49,18 @@ install with one Anthropic key should be able to search the web on day one.
    user's effective chat model (default, or their override) has no built-in search and there is
    no Brave key, web search is off for that user and the existing "Web search needed" states
    show.
-3. **Chat searches inline** (Ben, question 3, answer 1). When the active engine is built-in
-   search, the chat request itself carries the provider's search tool; the model searches while
-   answering and the reply renders its sources. The `web.search` tool is not offered to the
-   model in that case (it would be a slower second path to the same result). When the active
-   engine is Brave, chat keeps today's behaviour: the model calls `web.search`.
+3. **Chat searches through the `web.search` tool, whichever engine is active** (Ben, question
+   3, answer 1, amended in fix round 1 of PR #2280). Ben's answer was "chat searches inline",
+   meaning the chat request itself carries the provider's search tool. That path is unreachable:
+   chat turns run only through a CLI engine, never through the HTTP adapters that carry the
+   provider's search tool, and the CLI's own search is denied by the permission hook (non-goal
+   3). Offering nothing in that case would leave a user with the Web search chip on and zero
+   search happening, a dark feature. So the `web.search` tool is the chat search path for both
+   engines: when the engine is Brave it calls the Brave API as today; when the engine is built-in
+   search it runs the model-native provider (decision 6) against the actor's own chat model. The
+   gateway withholds `web.search` only when the engine is none. The `nativeSearch` request option
+   on the HTTP adapters stays for list-shaped callers (decision 6) and for any future non-CLI
+   chat path.
 4. **On by default with one instance-wide switch** (Ben, question 4, answer 1). A new instance
    setting `web.native_search_enabled` (boolean, default true) lives on the AI providers page as
    "Use your model's built-in web search". Off means only Brave counts. This is a setting in the
@@ -99,11 +110,10 @@ install with one Anthropic key should be able to search the web on day one.
   `web_search` tool (the adapter switches endpoint for that request only, since chat
   completions does not carry the tool); Google: `google_search` grounding. Each adapter maps the
   provider's citations into one normalized `sources: { title, url }[]` on the response.
-- The chat path: when the resolver says `model-native` for the actor, the chat request sets
-  `nativeSearch` and the tool list offered to the model omits `web.search`. When it says
-  `brave`, nothing changes from today. The gateway's audit row records `engine` so a search that
-  ran is visible in the tool audit like a `web.search` call is now (metadata only: engine and
-  count, never the query).
+- The chat path (amended, see decision 3): the gateway asks the resolver per actor and
+  withholds `web.search` only when it says `none`. For `brave` and `model-native` the tool is
+  offered and its call is audited like any other tool call (metadata only, never the query).
+  No chat request sets `nativeSearch`, because no chat turn reaches the HTTP adapters.
 
 ### 5.3 Web-research module (`packages/web-research`)
 

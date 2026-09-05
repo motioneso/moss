@@ -131,6 +131,8 @@ export function buildChatGatewayDependencies(args: {
   notifier: SessionNotifier;
   agencyPreferences?: PreferencesPort;
   localePreferences?: PreferencesPort;
+  /** #2228: which web search engine is active for an actor; hides web.search when "none". */
+  webSearchEngineForActor?: (actorUserId: string) => Promise<"brave" | "model-native" | "none">;
   appMapService?: AppMapReadService;
   platformDiagnostics?: PlatformDiagnosticsService;
   collaborators: {
@@ -218,6 +220,7 @@ export function buildChatGatewayDependencies(args: {
             ...(args.platformDiagnostics ? { platformDiagnostics: args.platformDiagnostics } : {})
           }
         : undefined,
+    webSearchEngineForActor: args.webSearchEngineForActor,
     resolveLocalTimezone: args.localePreferences
       ? (actorUserId) =>
           args.runner.withDataContext(
