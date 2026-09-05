@@ -37,6 +37,9 @@ feature that is not present in the image you are running.
 - **Sports search results grouped by league.** Searching for a team in Sports settings now shows results grouped under their own league or sport, so teams with the same name in different sports are no longer mixed together. [PR #2281](https://github.com/motioneso/moss/pull/2281)
 - **Chat settings "Set up" link opens Assistant & AI.** The Set up link under Voice input in Chat settings now opens the Assistant & AI page instead of Account & preferences. [PR #2220](https://github.com/motioneso/moss/pull/2220)
 
+#### Added
+
+- **Sports settings shows whether each source has photos.** Each of your own sports sources now shows whether its stories are getting photos, and lets you stop using photos Moss found for it. [PR #2273](https://github.com/motioneso/moss/pull/2273)
 ### 2026-09-04
 
 #### Changed
