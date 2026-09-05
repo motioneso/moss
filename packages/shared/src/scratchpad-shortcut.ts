@@ -11,12 +11,20 @@
 const MODIFIER_TOKENS = new Set(["mod", "ctrl", "cmd", "meta", "alt", "shift"]);
 
 /**
- * Shortcuts already claimed by another part of the app. Kept as a small, explicit set rather
- * than a broad rule, so adding a new reserved shortcut later is a one-line change.
+ * Shortcuts already claimed by another part of the app, written the way the handler that claims
+ * them actually behaves. The command palette (apps/web/src/shell/command-palette.tsx,
+ * `isCommandPaletteShortcut`) opens whenever control or command is held and the key is "k" - it
+ * ignores any other modifier - so Ctrl+Shift+K and Cmd+Alt+K reach the palette too and must not
+ * be offered to the scratchpad. Each entry is checked against the canonical modifier set (see
+ * `canonicalModifierSet`), so repeated and equivalent spellings cannot slip past it.
  */
-const RESERVED_SHORTCUTS = new Set([
-  "mod+k" // the command palette
-]);
+const RESERVED_SHORTCUT_MATCHERS: readonly ((
+  modifiers: ReadonlySet<string>,
+  key: string
+) => boolean)[] = [
+  // The command palette: control-or-command plus K, whatever else is held down.
+  (modifiers, key) => key === "k" && modifiers.has("mod")
+];
 
 export interface ParsedShortcut {
   readonly modifiers: readonly string[];
@@ -57,24 +65,34 @@ function canonicalizeModifier(modifier: string): string {
   return modifier === "ctrl" || modifier === "cmd" || modifier === "meta" ? "mod" : modifier;
 }
 
-function normalizeShortcut(parsed: ParsedShortcut): string {
-  const canonicalModifiers = parsed.modifiers.map(canonicalizeModifier);
-  return `${canonicalModifiers.join("+")}+${parsed.key}`;
+/**
+ * The shortcut's modifiers as a set of canonical names, which collapses both repeats
+ * ("ctrl+ctrl+k") and equivalent spellings ("ctrl+cmd+k") down to what the keyboard actually
+ * produces. Reservation checks run against this set so neither trick can bypass them.
+ */
+function canonicalModifierSet(parsed: ParsedShortcut): ReadonlySet<string> {
+  return new Set(parsed.modifiers.map(canonicalizeModifier));
+}
+
+function isReservedShortcut(parsed: ParsedShortcut): boolean {
+  const modifiers = canonicalModifierSet(parsed);
+  return RESERVED_SHORTCUT_MATCHERS.some((matches) => matches(modifiers, parsed.key));
 }
 
 /**
  * True when the string parses to a shortcut with a real modifier (something other than Shift
  * alone - Shift plus a letter is a normal typed character, not a keyboard shortcut) and isn't
- * reserved under any of its equivalent spellings ("mod+k", "ctrl+k", "cmd+k", "meta+k" are all
- * the same shortcut).
+ * already claimed elsewhere in the app. Repeated and equivalent modifier spellings are collapsed
+ * first, so "mod+k", "ctrl+k", "cmd+k", "meta+k", "ctrl+ctrl+k" and "ctrl+shift+k" are all
+ * rejected as the command palette's shortcut.
  */
 export function isValidShortcut(shortcut: string): boolean {
   const parsed = parseShortcut(shortcut);
   if (!parsed) return false;
 
-  const canonicalModifiers = parsed.modifiers.map(canonicalizeModifier);
-  const hasRealModifier = canonicalModifiers.some((modifier) => modifier !== "shift");
+  const canonicalModifiers = canonicalModifierSet(parsed);
+  const hasRealModifier = [...canonicalModifiers].some((modifier) => modifier !== "shift");
   if (!hasRealModifier) return false;
 
-  return !RESERVED_SHORTCUTS.has(normalizeShortcut(parsed));
+  return !isReservedShortcut(parsed);
 }

@@ -15,6 +15,9 @@ export const scratchpadReadExecute: ToolExecute = async (
   return {
     data: {
       body: state.body,
+      // The approved spec promises the reader gets a character count alongside the text, so the
+      // assistant can say how full the pad is without counting the characters itself.
+      characterCount: state.body.length,
       revision: state.revision,
       updatedAt: state.updatedAt ? state.updatedAt.toISOString() : null
     }

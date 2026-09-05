@@ -31,7 +31,7 @@ describe("scratchpad assistant tools", () => {
       { actorUserId: ids.userA, requestId: "test" },
       (scopedDb) => scratchpadReadExecute(scopedDb, {}, fakeCtx)
     );
-    expect(empty.data).toMatchObject({ body: "", revision: 0 });
+    expect(empty.data).toMatchObject({ body: "", characterCount: 0, revision: 0 });
 
     const appended = await dataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "test" },
@@ -43,7 +43,7 @@ describe("scratchpad assistant tools", () => {
       { actorUserId: ids.userA, requestId: "test" },
       (scopedDb) => scratchpadReadExecute(scopedDb, {}, fakeCtx)
     );
-    expect(after.data).toMatchObject({ body: "call the vet" });
+    expect(after.data).toMatchObject({ body: "call the vet", characterCount: 12 });
   });
 
   it("appending to an already-full pad returns the friendly 'Scratchpad is full' error, not a thrown exception", async () => {

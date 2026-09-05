@@ -69,4 +69,25 @@ describe("isValidShortcut", () => {
   it("accepts shift alongside a real modifier", () => {
     expect(isValidShortcut("mod+shift+s")).toBe(true);
   });
+
+  // The command palette opens on control-or-command plus K whatever else is held down, so any
+  // extra modifier on top of that combination still lands on the palette, never the scratchpad.
+  it("rejects the palette combination even with an extra modifier held", () => {
+    expect(isValidShortcut("ctrl+shift+k")).toBe(false);
+    expect(isValidShortcut("mod+shift+k")).toBe(false);
+    expect(isValidShortcut("cmd+alt+k")).toBe(false);
+    expect(isValidShortcut("meta+alt+shift+k")).toBe(false);
+  });
+
+  it("rejects a repeated modifier spelling of the palette combination", () => {
+    expect(isValidShortcut("ctrl+ctrl+k")).toBe(false);
+    expect(isValidShortcut("ctrl+cmd+k")).toBe(false);
+    expect(isValidShortcut("mod+meta+k")).toBe(false);
+    expect(isValidShortcut("shift+shift+ctrl+k")).toBe(false);
+  });
+
+  it("still accepts a control combination on a key the palette does not claim", () => {
+    expect(isValidShortcut("ctrl+shift+j")).toBe(true);
+    expect(isValidShortcut("alt+k")).toBe(true);
+  });
 });
