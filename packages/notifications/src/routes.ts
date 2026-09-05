@@ -110,24 +110,28 @@ export function registerNotificationsRoutes(
     }
   );
 
-  server.get("/api/notifications/push/config", { schema: pushConfigRouteSchema }, async (request, reply) => {
-    try {
-      const accessContext = await dependencies.resolveAccessContext(request);
-      const origin = `${request.protocol}://${request.hostname}`;
+  server.get(
+    "/api/notifications/push/config",
+    { schema: pushConfigRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const origin = `${request.protocol}://${request.hostname}`;
 
-      return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
-        const signingKey = await getOrGeneratePushSigningKey(scopedDb, pushSigningCipher, origin);
-        const devices = await pushSubscriptionsRepository.listForActor(scopedDb);
+        return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+          const signingKey = await getOrGeneratePushSigningKey(scopedDb, pushSigningCipher, origin);
+          const devices = await pushSubscriptionsRepository.listForActor(scopedDb);
 
-        return {
-          publicKey: signingKey.publicKey,
-          enabledDevices: devices.map(serializePushDevice)
-        };
-      });
-    } catch (error) {
-      return handleRouteError(error, reply);
+          return {
+            publicKey: signingKey.publicKey,
+            enabledDevices: devices.map(serializePushDevice)
+          };
+        });
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
     }
-  });
+  );
 
   server.post<{ Body: RegisterPushSubscriptionRequest }>(
     "/api/notifications/push/subscriptions",

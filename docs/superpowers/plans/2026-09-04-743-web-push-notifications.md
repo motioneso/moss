@@ -3,7 +3,7 @@
 **Issue:** #2227 (Parent #743 / #1002)  
 **Spec:** `docs/superpowers/specs/2026-09-04-743-web-push-notifications.md`  
 **Author:** Antigravity  
-**Date:** 2026-09-04  
+**Date:** 2026-09-04
 
 ---
 
@@ -229,15 +229,18 @@ export async function getOrGeneratePushSigningKey(
 ### 4.5 Queues and Jobs (`packages/jobs/src/pg-boss.ts` & `packages/notifications/src/push-jobs.ts`)
 
 Added to `ALLOWED_PAYLOAD_KEYS` in `packages/jobs/src/pg-boss.ts`:
+
 - `notificationId`
 - `recipientUserId`
 - `releaseAt`
 
 Queues:
+
 - `notifications.push.deliver`
 - `notifications.push.summary`
 
 Payload contracts:
+
 ```ts
 export interface PushDeliverJobPayload extends ActorScopedJobPayload {
   readonly notificationId: string;
@@ -276,6 +279,7 @@ export interface PushQueuePort {
 ### 4.9 Settings View (`apps/web/src/settings/settings-module-subviews.tsx`)
 
 Replaces the `Coming soon · #743` row with:
+
 - Insecure origin or unsupported message when unavailable.
 - Browser permission instructions when denied.
 - "Enable on this device" button otherwise.
@@ -291,17 +295,20 @@ Replaces the `Coming soon · #743` row with:
 ## 5. Tasks & Phasing
 
 ### Phase 1: Data Model, Secret Cipher & Shared API Schemas
+
 - **Task 1:** Add SQL migration `packages/notifications/sql/0223_push_notifications.sql`. Update manifest database declarations and typescript types.
 - **Task 2:** Add shared API schemas and DTOs in `packages/shared/src/notifications-api.ts`. Export in `packages/shared/src/index.ts`.
 - **Task 3:** Add push secret cipher and key generator in `packages/notifications/src/push-crypto.ts`. Add unit tests in `tests/unit/push-crypto.test.ts`.
 
 ### Phase 2: Payload Capping, Repository Enqueue & Push Worker
+
 - **Task 4:** Implement `buildPushPayload` in `packages/notifications/src/push-payload.ts` and unit tests in `tests/unit/push-payload.test.ts`.
 - **Task 5:** Allow metadata keys in `packages/jobs/src/pg-boss.ts` (`notificationId`, `recipientUserId`, `releaseAt`). Implement `PushQueuePort` and integrate into `NotificationsRepository.create`.
 - **Task 6:** Implement push workers in `packages/notifications/src/push-worker.ts` (deliver and summary). Add unit tests for subscription cleanup (404/410 delete, 5 failures disable, success reset) and summary window in `tests/unit/push-worker.test.ts`.
 - **Task 7:** Register push routes (`GET /config`, `POST /subscriptions`, `DELETE /subscriptions/:id`) in `packages/notifications/src/routes.ts`. Register queues and workers in `packages/module-registry/src/index.ts` and `apps/worker/src/worker.ts`.
 
 ### Phase 3: Web Front-End, Service Worker & App Map
+
 - **Task 8:** Update `apps/web/public/service-worker.js` with `push` and `notificationclick` listeners. Update `apps/web/src/pwa/register-service-worker.ts` to register in dev mode while bypassing fetch caching.
 - **Task 9:** Implement push notification device management UI in `apps/web/src/settings/settings-module-subviews.tsx`.
 - **Task 10:** Update `notificationsModuleManifest` settings declaration and update `tests/unit/coming-soon-inventory.test.ts`. Run `pnpm build:app-map`.
