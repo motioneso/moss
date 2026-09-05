@@ -22,6 +22,7 @@ import {
   type NewsCustomSourceDto,
   type NewsCustomTopicDto,
   type NewsRefreshStateDto,
+  type NewsWebSearchUnavailableReason,
   type NewsPublisherConnectionOfferDto,
   type NewsSourceExclusionDto,
   type NewsSourcePreviewRequest,

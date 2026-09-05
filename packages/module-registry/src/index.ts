@@ -206,8 +206,8 @@ import {
 import {
   EXPORT_QUEUE_DEFINITIONS,
   createWebSearchSecretCipher,
-  getWebSearchKeyConfig,
   readBraveSearchApiKey,
+  resolveWebSearchEngine,
   registerSettingsJobWorkers,
   registerSettingsRoutes,
   registerRuntimeConfigRoutes,
@@ -2187,7 +2187,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
                 }
               )
             ).model !== null,
-          hasWebSearch: async (scopedDb) => (await getWebSearchKeyConfig(scopedDb)).configured
+          hasWebSearch: async (scopedDb) => {
+            const model = await new AiRepository().selectChatModelForUser(scopedDb);
+            const resolution = await resolveWebSearchEngine(
+              scopedDb,
+              model ? { id: model.id, capabilities: model.capabilities } : null
+            );
+            return resolution.engine !== "none";
+          }
         }
       });
     },
