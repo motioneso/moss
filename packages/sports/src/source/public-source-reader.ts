@@ -5,6 +5,7 @@ import type { AccessContext, DataContextDb } from "@moss/db";
 import { isPublicFeedDocument, parsePublicFeedItems } from "@moss/news";
 
 import { catalogEntry } from "./catalog.js";
+import { publisherIdentity } from "./publisher-identity.js";
 import type { SportsSafeFetchPort, SportsWebRequestHop } from "./discovery.js";
 import {
   extractFeedPhoto,
@@ -844,7 +845,7 @@ export class SportsPublicSourceReader {
               fromCache: false
             };
       } else if (group.kind === "reddit") {
-        const listing = parseRedditFeed(response.body, "");
+        const listing = parseRedditFeed(response.body, "", { publisherDomain: publisherIdentity });
         outcome = listing.ok
           ? {
               items: listing.feed.headlines.map((headline) => ({

@@ -105,3 +105,41 @@ export type {
   NewsCredentialLookupPort,
   NewsCredentialLookupResult
 } from "./source/credential-lookup-port.js";
+
+// #2282: the one Reddit reader. News owns it; Sports imports it here rather than keeping a copy.
+export {
+  parseRedditFeed,
+  parseSubredditInput,
+  readSubreddit,
+  REDDIT_ACCEPT_HEADERS,
+  REDDIT_AUTH_REQUIRED_MESSAGE,
+  REDDIT_CANONICAL_DOMAIN,
+  REDDIT_CONTENT_TYPES,
+  REDDIT_FETCH_HOSTS,
+  REDDIT_MAX_HEADLINES,
+  REDDIT_MAX_RESPONSE_BYTES,
+  REDDIT_PREVIEW_SAMPLES,
+  REDDIT_RATE_LIMIT_MESSAGE,
+  REDDIT_USER_AGENT,
+  redditEntryToHeadline,
+  redditFailureReason,
+  redditFetchOptions,
+  redditHopGuard,
+  redditHotFeedUrl,
+  redditOutboundLink,
+  redditSubredditUrl,
+  subredditNameFromUrl
+} from "./source/reddit-reader.js";
+export type {
+  ReadSubredditResult,
+  RedditFailureReason,
+  RedditFeed,
+  RedditFetchOptions,
+  RedditFetchPort,
+  RedditFetchResult,
+  RedditLinkedHeadline,
+  RedditReaderOptions,
+  RedditRequestHop,
+  RedditSubredditInfo,
+  SubredditInput
+} from "./source/reddit-reader.js";
