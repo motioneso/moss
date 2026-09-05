@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-04
+
+#### Changed
+
+- **Today's news list shows publisher icons.** The News desk widget on Today now shows each story's publisher as a small icon instead of just the name, with the name still available if you hover over it. [PR #2252](https://github.com/motioneso/moss/pull/2252)
+
 ### 2026-09-01
 
 #### Added
