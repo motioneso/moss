@@ -145,6 +145,14 @@ export function ChatDrawer(props: {
     el.scrollTo({ top: el.scrollHeight, behavior });
   }, []);
 
+  // The history list shows most-recent-first, so "the top" (not the bottom) is where opening
+  // it should land.
+  const scrollToTop = useCallback((behavior: ScrollBehavior) => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.scrollTo({ top: 0, behavior });
+  }, []);
+
   const jumpToLatest = useCallback(() => {
     setStickToBottom(true);
     scrollToLatest("smooth");
@@ -376,18 +384,28 @@ export function ChatDrawer(props: {
   }, [privateEnded, privateMode, props.streamErrorCount]);
 
   // #633: switching what's displayed (new chat, opening a history row, toggling the history
-  // list, or the drawer itself (re)opening — #638) always re-pins to the bottom of the
-  // newly-shown content.
+  // list, or the drawer itself (re)opening — #638) always re-pins to the start of the
+  // newly-shown content: the top for the most-recent-first history list, the bottom for a
+  // transcript.
   useEffect(() => {
+    if (showHistory) {
+      setStickToBottom(false);
+      if (props.open) {
+        scrollToTop("auto");
+      }
+      return;
+    }
     setStickToBottom(true);
     if (props.open) {
       scrollToLatest("auto");
     }
-  }, [reviewThreadId, showHistory, props.open, scrollToLatest]);
+  }, [reviewThreadId, showHistory, props.open, scrollToLatest, scrollToTop]);
 
   // #633: jump straight to the bottom (no animation) whenever a new record/loading indicator
-  // lands while the user hasn't scrolled away.
+  // lands while the user hasn't scrolled away. Never fires while the history list is showing —
+  // that list opens pinned to the top, not the bottom.
   useEffect(() => {
+    if (showHistory) return;
     if (stickToBottom) {
       scrollToLatest("auto");
     }
