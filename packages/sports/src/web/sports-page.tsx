@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type {
+  AmbiguousFollowedTeamRef,
   GamedayGame,
   GameSide,
   GameSummary,
@@ -15,12 +16,13 @@ import type {
   SportsOverviewResponse
 } from "@moss/shared";
 
-import { getSportsOverview } from "./sports-client.js";
+import { getSportsOverview, resolveSportsFollowTeam } from "./sports-client.js";
 import { sportsQueryKeys } from "./query-keys.js";
 import { formatTime, useUserLocale } from "./locale.js";
 import { teamBarColor } from "./team-colors.js";
 import { Crest, LiveDot, TrophyIcon } from "./sports-parts.js";
 import { HeroCarousel, LatestColumn, NewsBand } from "./sports-news.js";
+import { followedTeamIndex, type FollowedTeamIndex } from "../news-ranking.js";
 import { SportsTicker } from "./sports-ticker.js";
 import { AroundLeaguesBoard, AroundLeaguesTicker } from "./sports-around-ticker.js";
 import { SOCCER_COMPETITIONS } from "./competitions.js";
@@ -135,8 +137,11 @@ export function SportsPage() {
     });
   }, [data]);
 
+  // Numbers and short names are indexed apart, never poured into one collection (S1 re-review 3):
+  // a club whose short name is another club's permanent number would otherwise be marked "you".
+  // See followedTeamIndex / isFollowed in news-ranking.ts.
   const followedPairs = useMemo(
-    () => new Set((data?.followedTeams ?? []).map((f) => `${f.competitionKey}:${f.teamKey}`)),
+    () => followedTeamIndex(data?.followedTeams ?? []),
     [data?.followedTeams]
   );
 
@@ -175,6 +180,8 @@ export function SportsPage() {
       {/* The masthead names whichever game is showing, so tabbing to the second live match
           retitles the page with it rather than leaving the header on the lead game. */}
       <PageHeader game={activeGame?.game ?? null} />
+
+      <AmbiguousFollowNotice follows={data.ambiguousFollows} />
 
       {hasFollows ? (
         <>
@@ -611,7 +618,7 @@ function ScoreBarSide(props: { side: GameSide; competitionKey: string; edge: "l"
 // stories (gameday, and the no-follow slate where no hero renders at all).
 function BroadsheetGrid(props: {
   overview: SportsOverviewResponse;
-  followedPairs: ReadonlySet<string>;
+  followedPairs: FollowedTeamIndex;
   withTopStories?: boolean;
   hiddenStoryRefs?: ReadonlySet<string>;
   onStoryChanged?: StoryFeedbackChange;
@@ -638,11 +645,93 @@ function BroadsheetGrid(props: {
   );
 }
 
+/* -------------------------------------------- Saved team we can no longer identify */
+
+// A saved team from before follows carried the provider's permanent team number. There is
+// nothing on file to say which team was meant, so the page refuses to guess (review finding S1,
+// round 5). Without this the card would simply vanish and the person would have no idea why
+// their team stopped appearing. It says what happened, offers the teams it could be as buttons,
+// and writes the answer onto the saved team the moment one is picked.
+function AmbiguousFollowNotice(props: {
+  follows: readonly AmbiguousFollowedTeamRef[] | undefined;
+}) {
+  const follows = props.follows ?? [];
+  if (follows.length === 0) return null;
+  return (
+    <section className="sp-empty" aria-label="Saved teams that need a choice">
+      <div className="sp-empty__inner">
+        <h2 className="sp-empty__title">Which team did you mean?</h2>
+        {follows.map((follow) => (
+          <AmbiguousFollowChoice follow={follow} key={follow.followId} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AmbiguousFollowChoice(props: { follow: AmbiguousFollowedTeamRef }) {
+  const { follow } = props;
+  const queryClient = useQueryClient();
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const choose = useCallback(
+    async (sourceTeamId: string) => {
+      setSaving(sourceTeamId);
+      setError(null);
+      try {
+        await resolveSportsFollowTeam(follow.followId, { sourceTeamId });
+        await queryClient.invalidateQueries({ queryKey: sportsQueryKeys.overview });
+        await queryClient.invalidateQueries({ queryKey: sportsQueryKeys.follows });
+      } catch {
+        setError("That choice could not be saved. Please try again.");
+      } finally {
+        setSaving(null);
+      }
+    },
+    [follow.followId, queryClient]
+  );
+
+  const savedName = follow.savedTeamKey.toUpperCase();
+
+  // The team list is what the choice would be checked against, so with no list there is nothing
+  // safe to offer. Say so plainly rather than showing an empty question.
+  if (!follow.teamListLoaded || follow.candidates.length === 0) {
+    return (
+      <p className="sp-empty__lede">
+        {`We saved a team called ${savedName}, but today's team list could not be loaded, so we cannot ask which team you meant. Scores and standings stay on hold for this team until the list is back.`}
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <p className="sp-empty__lede">
+        {`We saved a team called ${savedName} before teams were pinned to a permanent number. Pick the right one and it comes straight back; until then its scores and standings are on hold.`}
+      </p>
+      {follow.candidates.map((candidate) => (
+        <button
+          className="sp-nofollow__btn"
+          type="button"
+          key={candidate.sourceTeamId}
+          disabled={saving !== null}
+          onClick={() => {
+            void choose(candidate.sourceTeamId);
+          }}
+        >
+          {saving === candidate.sourceTeamId ? `Saving ${candidate.name}...` : candidate.name}
+        </button>
+      ))}
+      {error === null ? null : <p className="sp-empty__lede">{error}</p>}
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------- Empty state */
 
 function EmptyState(props: {
   data: SportsOverviewResponse;
-  followedPairs: ReadonlySet<string>;
+  followedPairs: FollowedTeamIndex;
   hiddenStoryRefs?: ReadonlySet<string>;
   onStoryChanged?: StoryFeedbackChange;
 }) {

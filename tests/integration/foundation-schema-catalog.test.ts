@@ -388,7 +388,8 @@ describe("MVP foundation schema catalog", () => {
         // #2239 — connector sync status slice 1: previous-run snapshot and trigger source.
         { version: "0215", name: "0215_connector_sync_previous_run.sql" },
         // #2236 slice 1 — the scratchpad's single owner-only table.
-        { version: "0216", name: "0216_scratchpads.sql" }
+        { version: "0216", name: "0216_scratchpads.sql" },
+        { version: "0217", name: "0217_sports_follows_source_team_id.sql" }
       ]);
     } finally {
       await client.end();

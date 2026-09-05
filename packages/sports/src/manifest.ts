@@ -7,6 +7,8 @@ import {
   createSportsFollowResponseSchema,
   deleteSportsCustomSourceSchema,
   deleteSportsFollowResponseSchema,
+  resolveSportsFollowTeamRequestSchema,
+  resolveSportsFollowTeamResponseSchema,
   previewSportsSourceSchema,
   previewSportsSourceAssignmentsSchema,
   previewSportsSourceRecipeSchema,
@@ -63,7 +65,8 @@ const ARTICLE_BODY_TTL_MS = 6 * 60 * 60 * 1000;
 
 // Input bound for the two auto-running follow tools' catalog keys (#1265 security QA
 // BLOCKING-1b). Competition keys are lowercase alphanumeric with dots ("nfl", "eng.1"); ESPN team
-// keys are a lowercased abbreviation or a bare numeric id (espn-source.ts `listTeams`). Nothing in
+// keys are a lowercased abbreviation, a numeric id, or the two joined by a dot when a short name
+// is shared by two teams ("pac.413", espn-source.ts `listTeams`). Nothing in
 // either shape can traverse or escape a URL path segment, which is where these values eventually
 // land (espn-source.ts `getSchedule`). This is a schema-level belt only — the service still closes
 // teamKey against the live league roster, and the URL site still percent-encodes.
@@ -104,7 +107,8 @@ export const sportsModuleManifest = {
       "sql/0192_sports_legacy_feed_assignments_verified.sql",
       "sql/0193_sports_legacy_feed_assignment_repair.sql",
       "sql/0196_sports_news_source_scopes.sql",
-      "sql/0213_sports_reddit_sources.sql"
+      "sql/0213_sports_reddit_sources.sql",
+      "sql/0217_sports_follows_source_team_id.sql"
     ],
     migrationDirectories: ["packages/sports/sql"],
     ownedTables: [
@@ -125,7 +129,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.subreddit_sources",
       description:
-        "The Add a source box in Sports settings also accepts a subreddit (r/nfl or a reddit.com link). Posts that link out to articles become headlines credited to the real publisher; self posts, media, stickied posts, and crossposts are skipped."
+        "The Add a source box in Sports settings also accepts a subreddit (r/nfl or a reddit.com link). Posts linking out to articles become headlines credited to the real publisher; self posts, media, and Reddit-only links are skipped."
     },
     {
       id: "sports.story_feedback",
@@ -141,6 +145,11 @@ export const sportsModuleManifest = {
       id: "sports.source_photos",
       description:
         "Stories from your own sources show a photo when the source's feed supplies one, or when the article page offers the picture it uses for sharing."
+    },
+    {
+      id: "sports.team_identity",
+      description:
+        "Follows are tied to the provider's permanent team number, so two teams sharing a short name never swap scores. A team saved before that is put on hold and Sports asks once which team was meant; picking one brings it back."
     }
   ],
   navigation: [
@@ -159,7 +168,7 @@ export const sportsModuleManifest = {
       id: "sports.follows",
       label: "Sports",
       description:
-        "Choose the teams and leagues shown in Sports, and add custom news sources: a publication's homepage or a subreddit such as r/nfl.",
+        "Choose the teams and leagues shown in Sports, and add custom news sources. Follows are tied to the provider's permanent team number; a team saved before that asks once which team was meant.",
       path: "/settings/modules/sports",
       scope: "user",
       order: 35,
@@ -246,6 +255,13 @@ export const sportsModuleManifest = {
       path: "/api/sports/follows",
       requestSchema: createSportsFollowRequestSchema,
       responseSchema: createSportsFollowResponseSchema,
+      permissionId: "sports.follow"
+    },
+    {
+      method: "POST",
+      path: "/api/sports/follows/:id/team",
+      requestSchema: resolveSportsFollowTeamRequestSchema,
+      responseSchema: resolveSportsFollowTeamResponseSchema,
       permissionId: "sports.follow"
     },
     {
@@ -360,7 +376,7 @@ export const sportsModuleManifest = {
     {
       name: "sports.followTeam",
       description:
-        "Follow a team or an entire competition/league (e.g. 'the Yankees' or 'the Premier League'). Resolve the name to a catalog competitionKey (and teamKey for a specific team) via the sports catalog/search first, then call this with the exact keys.",
+        "Follow a team or a whole competition (e.g. 'the Yankees' or 'the Premier League'). Resolve the name to a catalog competitionKey, plus a teamKey for a single team, through the sports catalog or search, then call this with those keys.",
       permissionId: "sports.follow",
       actionFamilyId: "sports_follows",
       risk: "write",

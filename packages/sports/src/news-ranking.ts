@@ -10,12 +10,67 @@
 
 import type { Headline, SportsNewsGroup } from "@moss/shared";
 
+// Which teams the reader follows. Identity is the provider's permanent team id and nothing else
+// (review finding S1, round 5). Short names are never compared: two teams in one competition can
+// share one, and comparing them is what put a Pacific Tigers score on a Pacific Lutheran card.
+export interface FollowedTeamIndex {
+  /** `competition:permanentId` for every followed team. A follow with no permanent id is not in
+   *  here at all — it matches nothing until the person says which team they meant. */
+  readonly byNumber: ReadonlySet<string>;
+  /** `competition:listKey` for those same teams, and only for those. A team-tagged story carries
+   *  no permanent id on the wire, only the key today's team list gave the team it was tagged
+   *  with — and that key is worked out from the permanent id at both ends, so matching on it is
+   *  matching on the id by another name. Nothing else is ever looked up here. */
+  readonly byCatalogKey: ReadonlySet<string>;
+}
+
+export const EMPTY_FOLLOWED_TEAMS: FollowedTeamIndex = {
+  byNumber: new Set<string>(),
+  byCatalogKey: new Set<string>()
+};
+
+/** Builds the index from the response's followed-team references. A reference is only sent for a
+ *  follow whose permanent id is known, so a reference without one contributes nothing. */
+export function followedTeamIndex(
+  refs: readonly { competitionKey: string; teamKey: string; sourceTeamId?: string | null }[]
+): FollowedTeamIndex {
+  const byNumber = new Set<string>();
+  const byCatalogKey = new Set<string>();
+  for (const ref of refs) {
+    if (ref.sourceTeamId == null) continue;
+    byNumber.add(`${ref.competitionKey}:${ref.sourceTeamId}`);
+    byCatalogKey.add(`${ref.competitionKey}:${ref.teamKey}`);
+  }
+  return { byNumber, byCatalogKey };
+}
+
+/** Does this game side or standings row belong to a team the reader follows?
+ *
+ *  The permanent id is the only thing asked (review finding S1, round 6). A row that carries no id
+ *  — an older cached game or standings table — belongs to NOBODY. It does not fall through to the
+ *  list key: that key can still be a short name two teams share, and falling through to it is what
+ *  marked Pacific Lutheran as followed on a page where only Pacific Tigers was. */
 export function isFollowed(
-  pairs: ReadonlySet<string>,
+  followed: FollowedTeamIndex,
+  competitionKey: string,
+  sourceTeamId?: string | null
+): boolean {
+  if (sourceTeamId == null) return false;
+  return followed.byNumber.has(`${competitionKey}:${sourceTeamId}`);
+}
+
+/** Does this tagged story belong to a team the reader follows?
+ *
+ *  Stories are the one place with no permanent id on the wire: a headline carries only the key
+ *  today's team list gave the team it was tagged with. That key is worked out from the permanent
+ *  id at BOTH ends, so matching on it is matching on the id by another name — which is why this
+ *  rule exists here and nowhere else. Game sides and standings rows must never use it. */
+export function isFollowedStoryTeam(
+  followed: FollowedTeamIndex,
   competitionKey: string,
   teamKey: string
 ): boolean {
-  return pairs.has(`${competitionKey}:${teamKey}`);
+  return followed.byCatalogKey.has(`${competitionKey}:${teamKey}`);
 }
 
 // Written-article detector (mrb5reqq "some can have more text (especially if they are a written
@@ -30,14 +85,14 @@ export function isWrittenArticle(headline: Pick<Headline, "url" | "summary">): b
 // story; a followed-team tag (+2) means this reader cares. NOTE: intentionally does NOT consider
 // `body` (#857) — body is fetched only AFTER the feature is chosen, so including it here would make
 // the pick depend on data it can't have yet and desync server vs client.
-export function storyWeight(headline: Headline, followedPairs: ReadonlySet<string>): number {
+export function storyWeight(headline: Headline, followedPairs: FollowedTeamIndex): number {
   let weight = 0;
   const competitionKey = headline.competitionKey;
   if (headline.imageUrl) weight += 2;
   if (headline.summary) weight += 1;
   if (
     competitionKey !== null &&
-    headline.teamKeys.some((key) => isFollowed(followedPairs, competitionKey, key))
+    headline.teamKeys.some((key) => isFollowedStoryTeam(followedPairs, competitionKey, key))
   ) {
     weight += 2;
   }
@@ -59,7 +114,7 @@ export interface RankedStory {
 // feed order within one — deterministic for SSR and tests.
 export function rankStories(
   groups: readonly SportsNewsGroup[],
-  followedPairs: ReadonlySet<string>
+  followedPairs: FollowedTeamIndex
 ): RankedStory[] {
   return groups
     .flatMap((group) =>
@@ -77,7 +132,7 @@ export function rankStories(
 // same pick from `rankStories` for its own filtered view.
 export function selectFeature(
   groups: readonly SportsNewsGroup[],
-  followedPairs: ReadonlySet<string>
+  followedPairs: FollowedTeamIndex
 ): Headline | null {
   const ranked = rankStories(groups, followedPairs);
   return ranked[0] && ranked[0].weight >= BIG_STORY_WEIGHT ? ranked[0].headline : null;

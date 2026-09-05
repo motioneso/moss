@@ -43,6 +43,7 @@ function buildApp(preferencesRepository: PreferencesPort) {
       create: async () => {
         throw new Error("not used");
       },
+      setSourceTeamId: async () => undefined,
       remove: async () => false
     },
     preferencesRepository,

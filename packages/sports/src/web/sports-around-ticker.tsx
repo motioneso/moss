@@ -4,6 +4,7 @@ import type { GameSide, GameSummary, LocaleSettingsDto, ScoreboardGroup } from "
 
 import { LEAGUE_LOGOS, SOCCER_COMPETITIONS } from "./competitions.js";
 import { formatTime, useUserLocale } from "./locale.js";
+import type { FollowedTeamIndex } from "../news-ranking.js";
 import { isFollowed } from "./sports-news.js";
 import { Crest, LiveDot } from "./sports-parts.js";
 
@@ -233,7 +234,7 @@ function BoardGame(props: {
   soccer: boolean;
   locale: LocaleSettingsDto;
   competitionKey: string;
-  followedPairs: ReadonlySet<string>;
+  followedPairs: FollowedTeamIndex;
 }) {
   const { game, soccer, locale, competitionKey, followedPairs } = props;
   const first: GameSide = soccer ? game.home : game.away;
@@ -250,13 +251,13 @@ function BoardGame(props: {
         side={first}
         pre={pre}
         dim={winner !== null && winner !== first.teamKey}
-        followed={isFollowed(followedPairs, competitionKey, first.teamKey)}
+        followed={isFollowed(followedPairs, competitionKey, first.sourceTeamId)}
       />
       <BoardSide
         side={second}
         pre={pre}
         dim={winner !== null && winner !== second.teamKey}
-        followed={isFollowed(followedPairs, competitionKey, second.teamKey)}
+        followed={isFollowed(followedPairs, competitionKey, second.sourceTeamId)}
       />
     </div>
   );
@@ -273,7 +274,7 @@ export function AroundLeaguesBoard({
   followedPairs
 }: {
   readonly groups: readonly ScoreboardGroup[];
-  readonly followedPairs: ReadonlySet<string>;
+  readonly followedPairs: FollowedTeamIndex;
 }) {
   const locale = useUserLocale();
   const scrollRef = useRef<HTMLDivElement>(null);
