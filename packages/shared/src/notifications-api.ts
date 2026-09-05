@@ -161,3 +161,135 @@ export const markAllNotificationsReadRouteSchema = {
     200: markAllNotificationsReadResponseSchema
   }
 } as const;
+
+// --- Web push (#743 / #2227) --------------------------------------------------------------
+
+export interface PushDeviceDto {
+  readonly id: string;
+  readonly label: string | null;
+  readonly createdAt: string;
+  readonly lastUsedAt: string | null;
+  readonly disabledAt: string | null;
+}
+
+export interface PushConfigResponse {
+  readonly publicKey: string;
+  readonly enabledDevices: readonly PushDeviceDto[];
+}
+
+export interface RegisterPushSubscriptionRequest {
+  readonly endpoint: string;
+  readonly keys: {
+    readonly p256dh: string;
+    readonly auth: string;
+  };
+}
+
+export interface RegisterPushSubscriptionResponse {
+  readonly device: PushDeviceDto;
+}
+
+export interface DeletePushSubscriptionResponse {
+  readonly success: boolean;
+}
+
+const pushDeviceDtoSchema = {
+  type: "object",
+  required: ["id", "label", "createdAt", "lastUsedAt", "disabledAt"],
+  properties: {
+    id: { type: "string" },
+    label: nullableStringSchema,
+    createdAt: { type: "string" },
+    lastUsedAt: nullableStringSchema,
+    disabledAt: nullableStringSchema
+  }
+} as const;
+
+export const pushConfigResponseSchema = {
+  type: "object",
+  required: ["publicKey", "enabledDevices"],
+  properties: {
+    publicKey: { type: "string" },
+    enabledDevices: {
+      type: "array",
+      items: pushDeviceDtoSchema
+    }
+  }
+} as const;
+
+/**
+ * Push delivery addresses must be https URLs (the browser only hands out those) and the
+ * server refuses anything else before it ever stores or contacts the address. The key
+ * lengths are fixed by the Web Push encryption spec: a 65-byte uncompressed P-256 point
+ * (87 base64url characters) and a 16-byte auth secret (22 characters).
+ */
+export const PUSH_ENDPOINT_MIN_LENGTH = 12;
+export const PUSH_ENDPOINT_MAX_LENGTH = 2048;
+export const PUSH_ENDPOINT_PATTERN = "^https://";
+export const PUSH_P256DH_PATTERN = "^[A-Za-z0-9_-]{87}=?$";
+export const PUSH_AUTH_PATTERN = "^[A-Za-z0-9_-]{22}(==)?$";
+
+export const registerPushSubscriptionRequestSchema = {
+  type: "object",
+  required: ["endpoint", "keys"],
+  properties: {
+    endpoint: {
+      type: "string",
+      minLength: PUSH_ENDPOINT_MIN_LENGTH,
+      maxLength: PUSH_ENDPOINT_MAX_LENGTH,
+      pattern: PUSH_ENDPOINT_PATTERN
+    },
+    keys: {
+      type: "object",
+      required: ["p256dh", "auth"],
+      properties: {
+        p256dh: { type: "string", pattern: PUSH_P256DH_PATTERN },
+        auth: { type: "string", pattern: PUSH_AUTH_PATTERN }
+      }
+    }
+  }
+} as const;
+
+export const registerPushSubscriptionResponseSchema = {
+  type: "object",
+  required: ["device"],
+  properties: {
+    device: pushDeviceDtoSchema
+  }
+} as const;
+
+export const deletePushSubscriptionResponseSchema = {
+  type: "object",
+  required: ["success"],
+  properties: {
+    success: { type: "boolean" }
+  }
+} as const;
+
+export const pushSubscriptionParamsSchema = {
+  type: "object",
+  required: ["id"],
+  properties: {
+    id: { type: "string" }
+  }
+} as const;
+
+export const pushConfigRouteSchema = {
+  response: {
+    200: pushConfigResponseSchema
+  }
+} as const;
+
+export const registerPushSubscriptionRouteSchema = {
+  body: registerPushSubscriptionRequestSchema,
+  response: {
+    200: registerPushSubscriptionResponseSchema
+  }
+} as const;
+
+export const deletePushSubscriptionRouteSchema = {
+  params: pushSubscriptionParamsSchema,
+  response: {
+    200: deletePushSubscriptionResponseSchema
+  }
+} as const;

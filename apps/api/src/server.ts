@@ -372,6 +372,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       workerDataContext,
       appDataContext: dataContext,
       settingsRepository: externalModulesRepository,
+      boss,
       logger: { warn: (data, message) => server.log.warn(data, message) },
       // ctx.ai bridge for module workers (#932, spec D6).
       ai: createModuleAiBridge({
