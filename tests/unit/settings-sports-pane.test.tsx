@@ -686,7 +686,10 @@ describe("follow key mismatch on a colliding team (Ben, dev, 2026-09-04)", () =>
     expect(html).toContain("sp-chip");
     expect(html).toContain('src="https://example.com/crests/413.png"');
     expect(html).not.toContain('src="https://example.com/crests/129700.png"');
-    expect(html).toContain("Pacific Tigers");
+    // The chip shows the roster short name, which proves the roster entry was found by id: a
+    // follow with no roster match falls back to its bare saved key "pac".
+    expect(html).toContain('class="sp-chip__lbl">PAC<');
+    expect(html).toContain('aria-label="Unfollow PAC"');
   });
 });
 

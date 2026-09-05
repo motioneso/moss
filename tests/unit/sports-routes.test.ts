@@ -646,7 +646,10 @@ describe("sports routes", () => {
               competitionKey,
               name: "Arsenal",
               shortName: "ARS",
-              crestUrl: null
+              crestUrl: null,
+              // Required on the wire since the follow-key fix: a roster entry with no id would
+              // be dropped by the response serializer and the route would 500.
+              sourceTeamId: "359"
             } as SourceTeamRef
           ]
         : [];
