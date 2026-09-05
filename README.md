@@ -55,7 +55,7 @@ A mix of world news, technology, culture, and research, with source summaries an
 <details>
 <summary><strong>Sports — follow your teams</strong></summary>
 
-Luke follows **Liverpool**, the **San Francisco Giants**, the **Buffalo Bills**, the **Anaheim Ducks**, and **San Diego FC (SDFC)**, with results, upcoming games, and sports coverage together.
+Luke follows **Liverpool**, the **San Francisco Giants**, the **Buffalo Bills**, the **Anaheim Ducks**, and **San Diego FC**, with results, upcoming games, and sports coverage together.
 
 ![Moss Sports showing Luke's followed teams, scores, upcoming games, and news](docs/images/readme/moss-sports.jpg)
 
@@ -66,7 +66,7 @@ Luke follows **Liverpool**, the **San Francisco Giants**, the **Buffalo Bills**,
 <details>
 <summary><strong>Wellness — check in and notice patterns</strong></summary>
 
-Luke tracks his Vyvanse, Lexapro, and Vitamin D alongside daily check-ins. His recent history shows a steady routine with ordinary ups and downs across work, rest, and everyday life.
+Luke tracks his daily medication and has a place to write down mental health check-ins. His recent history shows a steady routine with ordinary ups and downs across work, rest, and everyday life.
 
 ![Moss Wellness showing Luke's mood check-in and insights from his recent history](docs/images/readme/moss-wellness.jpg)
 
