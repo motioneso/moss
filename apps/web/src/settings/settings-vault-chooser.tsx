@@ -4,7 +4,6 @@ import { useState } from "react";
 
 import { Button } from "@moss/ui";
 import { getNotesSourceDirectories } from "../api/notes-client";
-import { getPeopleNotesDirectories } from "../api/people-client";
 import { queryKeys } from "../api/query-keys";
 import { ApiError } from "../api/client";
 import { useAssistantName } from "../api/use-assistant-name";
@@ -15,47 +14,40 @@ export function shouldShowNotesRootRecovery(error: unknown, rootCount: number): 
   return error == null && rootCount === 0;
 }
 
+/**
+ * #2268 — one folder chooser for every screen. It always browses the server's allowed notes
+ * roots; callers only vary the heading and the label on the back button, so a folder picked for
+ * People comes from exactly the same list as the notes source folder.
+ */
 export function VaultChooser(props: {
   readonly current: string;
-  readonly mode?: "notes" | "people";
+  readonly title?: string;
+  readonly backLabel?: string;
   readonly onCancel: () => void;
   readonly onChoose: (path: string) => void;
 }) {
   const [path, setPath] = useState<string | null>(props.current || null);
-  const mode = props.mode ?? "notes";
+  const title = props.title ?? "Choose a notes folder";
+  const backLabel = props.backLabel ?? "Data sources";
   const assistantName = useAssistantName();
   const rootsQuery = useQuery({
-    queryKey:
-      mode === "people"
-        ? queryKeys.people.notesDirectories(null)
-        : queryKeys.settings.notesSourceDirectories(null),
-    queryFn: () =>
-      mode === "people" ? getPeopleNotesDirectories(null) : getNotesSourceDirectories(null),
+    queryKey: queryKeys.settings.notesSourceDirectories(null),
+    queryFn: () => getNotesSourceDirectories(null),
     retry: false
   });
   const roots = rootsQuery.data?.directories ?? [];
-  const syntheticPeopleRecommendation =
-    mode === "people" && path === "People" && !roots.some((root) => root.path === "People");
   const directoriesQuery = useQuery({
-    queryKey:
-      mode === "people"
-        ? queryKeys.people.notesDirectories(path)
-        : queryKeys.settings.notesSourceDirectories(path),
-    queryFn: () =>
-      mode === "people" ? getPeopleNotesDirectories(path) : getNotesSourceDirectories(path),
+    queryKey: queryKeys.settings.notesSourceDirectories(path),
+    queryFn: () => getNotesSourceDirectories(path),
     retry: false,
-    enabled: path !== null && !syntheticPeopleRecommendation
+    enabled: path !== null
   });
 
-  const visibleRoots =
-    mode === "people" && !roots.some((root) => root.path === "People")
-      ? [{ name: "People", path: "People" }, ...roots]
-      : roots;
+  const visibleRoots = roots;
   const directories =
     (path ? directoriesQuery.data?.directories : rootsQuery.data?.directories) ?? [];
   const error = rootsQuery.error ?? (path ? directoriesQuery.error : null);
-  const notesRootRecovery =
-    mode === "notes" && path === null && shouldShowNotesRootRecovery(error, roots.length);
+  const notesRootRecovery = path === null && shouldShowNotesRootRecovery(error, roots.length);
   const displayError = notesRootRecovery ? null : error;
   const loading = rootsQuery.isLoading || (path !== null && directoriesQuery.isLoading);
 
@@ -67,14 +59,14 @@ export function VaultChooser(props: {
     <div className="gflow">
       <button type="button" className="gflow__back" onClick={props.onCancel}>
         <ArrowLeft size={15} aria-hidden="true" />
-        Data sources
+        {backLabel}
       </button>
       <div className="gflow__intro">
         <span className="msub__mark">
           <HardDrive size={21} aria-hidden="true" />
         </span>
         <div className="gflow__introtx">
-          <div className="gflow__title">Choose a notes folder</div>
+          <div className="gflow__title">{title}</div>
           <div className="gflow__sub">Browsing mapped server folders</div>
         </div>
       </div>
@@ -150,7 +142,7 @@ export function VaultChooser(props: {
               : null}
           </div>
 
-          {mode === "notes" && !loading && notesRootRecovery ? (
+          {!loading && notesRootRecovery ? (
             <div className="vlist__empty">
               No notes folders are available to {assistantName}. Ask an operator to mount
               /data/external-notes, set JARVIS_NOTES_ROOTS, and recreate the container.

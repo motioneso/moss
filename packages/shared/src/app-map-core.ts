@@ -101,7 +101,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "memory",
     label: "Memory & context",
-    description: "Review and configure assistant memory behavior.",
+    description:
+      "Review and configure assistant memory behaviour, and choose the People folder. Every " +
+      "folder is chosen from the same list of available folders, and People notes live inside " +
+      "the chosen notes folder.",
     path: "/settings?section=memory",
     scope: "user"
   },
@@ -133,7 +136,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "sources",
     label: "Data sources",
-    description: "Review sources the assistant can read.",
+    description:
+      "Review sources the assistant can read and choose the notes folder. Every folder is " +
+      "chosen from the same list of available folders, and People notes live inside the chosen " +
+      "notes folder.",
     path: "/settings?section=sources",
     scope: "user"
   },

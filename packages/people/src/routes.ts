@@ -2,7 +2,14 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { Type } from "@sinclair/typebox";
 import type { PgBoss } from "pg-boss";
 import type { AccessContext, DataContextRunner } from "@moss/db";
-import { listVaultDirectories, VaultPathError, type VaultContextRunner } from "@moss/vault";
+import { resolveNotesRoots } from "@moss/settings";
+import {
+  listVaultDirectories,
+  VaultContextError,
+  VaultPathError,
+  type VaultContext,
+  type VaultContextRunner
+} from "@moss/vault";
 import { PeopleRepository } from "./repository.js";
 import { PersonContextService } from "./service.js";
 import {
@@ -27,10 +34,26 @@ function isUnavailableVaultError(error: unknown): boolean {
   const fsError = error as NodeJS.ErrnoException;
   return (
     error instanceof VaultPathError ||
+    error instanceof VaultContextError ||
+    error instanceof PeopleNotesFolderUnavailableError ||
+    error instanceof PeopleFolderUnsetError ||
     ["ENOENT", "ENOTDIR", "EACCES"].includes(fsError?.code ?? "") ||
     (typeof fsError?.code === "string" &&
       (typeof fsError.path === "string" || typeof fsError.syscall === "string"))
   );
+}
+
+/**
+ * Every People read and write is scoped to the user's chosen People folder, which since #2268
+ * lives inside their own notes tree rather than the private per-user vault. The folder is
+ * re-resolved and re-checked against the allowed notes roots on each request, so a preference
+ * edited behind the app's back can never widen what People can reach.
+ */
+class PeopleFolderUnsetError extends Error {
+  constructor() {
+    super("People notes folder is not configured");
+    this.name = "PeopleFolderUnsetError";
+  }
 }
 
 export function registerPeopleRoutes(app: FastifyInstance, deps: PeopleRouteDependencies): void {
@@ -38,6 +61,30 @@ export function registerPeopleRoutes(app: FastifyInstance, deps: PeopleRouteDepe
   const svc = deps.svc ?? new PersonContextService(repo);
   const notesService =
     deps.peopleNotesService ?? new PeopleNotesService({ peopleRepository: repo });
+
+  /** Opens a vault context rooted at an already-resolved People folder. */
+  function openPeopleFolder<T>(
+    ac: AccessContext,
+    folder: string,
+    work: (vaultCtx: VaultContext) => Promise<T>
+  ): Promise<T> {
+    const vaultRunner = deps.vaultRunner;
+    if (!vaultRunner) throw new Error("Vault runner is not configured");
+    return vaultRunner.withVaultContextAt(ac, folder, resolveNotesRoots(), work);
+  }
+
+  /** Resolves the stored People folder and opens a context there, for handlers not already
+   * inside a data context. Refuses when no folder has been chosen yet. */
+  async function withPeopleFolder<T>(
+    ac: AccessContext,
+    work: (vaultCtx: VaultContext) => Promise<T>
+  ): Promise<T> {
+    const folder = await deps.dataContext.withDataContext(ac, (sdb) =>
+      notesService.resolveFolder(sdb)
+    );
+    if (!folder) throw new PeopleFolderUnsetError();
+    return openPeopleFolder(ac, folder, work);
+  }
 
   // GET /api/people
   app.get("/api/people", { schema: { response: { 200: Type.Any() } } }, async (request) => {
@@ -186,11 +233,10 @@ export function registerPeopleRoutes(app: FastifyInstance, deps: PeopleRouteDepe
     { schema: { response: { 200: directoriesSchema, 400: safeErrorSchema } } },
     async (request, reply) => {
       const ac = await deps.resolveAccessContext(request);
-      if (!deps.vaultRunner) throw new Error("Vault runner is not configured");
       const requested = ((request.query as { path?: string }).path ?? "").trim();
       try {
         const path = requested || ".";
-        const directories = await deps.vaultRunner.withVaultContext(ac, (vaultCtx) =>
+        const directories = await withPeopleFolder(ac, (vaultCtx) =>
           listVaultDirectories(vaultCtx, path)
         );
         return { path: requested ? requested : null, directories };
@@ -225,35 +271,29 @@ export function registerPeopleRoutes(app: FastifyInstance, deps: PeopleRouteDepe
     async (request, reply) => {
       const ac = await deps.resolveAccessContext(request);
       const body = request.body as { folder: string | null };
-      if (
-        body.folder &&
-        (body.folder.startsWith("/") || body.folder.split(/[\\/]/).includes(".."))
-      ) {
-        return reply.status(400).send({ error: "People notes folder is unavailable" });
-      }
-      if (body.folder && body.folder !== "." && body.folder !== "People") {
-        if (!deps.vaultRunner) throw new Error("Vault runner is not configured");
-        const normalized = body.folder.replace(/^\/+|\/+$/g, "");
-        const slash = normalized.lastIndexOf("/");
-        const parent = slash < 0 ? "." : normalized.slice(0, slash);
-        let directories: Awaited<ReturnType<typeof listVaultDirectories>>;
+      // #2268 — the saved value is now an absolute path picked with the shared folder chooser, so
+      // it is validated the same way the notes source save validates: try to open it, and refuse
+      // anything that does not exist or does not sit inside an allowed notes root.
+      if (body.folder) {
         try {
-          directories = await deps.vaultRunner.withVaultContext(ac, (vaultCtx) =>
-            listVaultDirectories(vaultCtx, parent)
-          );
+          await openPeopleFolder(ac, body.folder, async () => undefined);
         } catch (error) {
-          if (isUnavailableVaultError(error)) {
+          if (isUnavailableVaultError(error) || error instanceof VaultContextError) {
             return reply.status(400).send({ error: "People notes folder is unavailable" });
           }
           throw error;
         }
-        if (!directories.some((directory) => directory.path === normalized)) {
+      }
+      try {
+        return await deps.dataContext.withDataContext(ac, (sdb) =>
+          notesService.putSettings(sdb, ac.actorUserId, body)
+        );
+      } catch (error) {
+        if (error instanceof PeopleNotesFolderUnavailableError) {
           return reply.status(400).send({ error: "People notes folder is unavailable" });
         }
+        throw error;
       }
-      return deps.dataContext.withDataContext(ac, (sdb) =>
-        notesService.putSettings(sdb, ac.actorUserId, body)
-      );
     }
   );
 
@@ -262,15 +302,14 @@ export function registerPeopleRoutes(app: FastifyInstance, deps: PeopleRouteDepe
     { schema: { response: { 200: peopleRefreshSchema, 400: safeErrorSchema } } },
     async (request, reply) => {
       const ac = await deps.resolveAccessContext(request);
-      if (!deps.vaultRunner) throw new Error("Vault runner is not configured");
       try {
-        return await deps.vaultRunner.withVaultContext(ac, (vaultCtx) =>
+        return await withPeopleFolder(ac, (vaultCtx) =>
           deps.dataContext.withDataContext(ac, (sdb) =>
             notesService.refreshFromFolder(sdb, vaultCtx, ac.actorUserId)
           )
         );
       } catch (error) {
-        if (error instanceof PeopleNotesFolderUnavailableError) {
+        if (isUnavailableVaultError(error)) {
           return reply.status(400).send({ error: "People notes folder is unavailable" });
         }
         throw error;
@@ -290,14 +329,13 @@ export function registerPeopleRoutes(app: FastifyInstance, deps: PeopleRouteDepe
     { schema: { body: createSchema, response: { 200: Type.Any() } } },
     async (request) => {
       const ac = await deps.resolveAccessContext(request);
-      if (!deps.vaultRunner) throw new Error("Vault runner is not configured");
       const body = request.body as {
         displayName: string;
         aliases?: string[];
         emails?: string[];
         phones?: string[];
       };
-      return deps.vaultRunner.withVaultContext(ac, (vaultCtx) =>
+      return withPeopleFolder(ac, (vaultCtx) =>
         deps.dataContext.withDataContext(ac, async (sdb) => {
           const result = await notesService.createPersonNote(sdb, vaultCtx, ac.actorUserId, body);
           return { person: result.person, notePath: result.notePath };
@@ -352,15 +390,17 @@ export function registerPeopleRoutes(app: FastifyInstance, deps: PeopleRouteDepe
       const { id } = request.params as { id: string };
       const updates = request.body as { displayName?: string; status?: "active" | "archived" };
       return deps.dataContext.withDataContext(ac, async (sdb) => {
-        const settings = await notesService.getSettings(sdb, ac.actorUserId);
-        if (settings.folder && deps.vaultRunner) {
+        const folder = await notesService.resolveFolder(sdb);
+        if (folder && deps.vaultRunner) {
           try {
-            const result = await deps.vaultRunner.withVaultContext(ac, (vaultCtx) =>
+            const result = await openPeopleFolder(ac, folder, (vaultCtx) =>
               notesService.updatePersonNote(sdb, vaultCtx, ac.actorUserId, id, updates)
             );
             return { person: result.person, notePath: result.notePath };
           } catch (err) {
-            if (!(err instanceof CanonicalNoteNotFoundError)) throw err;
+            if (!(err instanceof CanonicalNoteNotFoundError) && !isUnavailableVaultError(err)) {
+              throw err;
+            }
           }
         }
         const person = await repo.updatePerson(sdb, ac.actorUserId, id, updates);
@@ -377,15 +417,17 @@ export function registerPeopleRoutes(app: FastifyInstance, deps: PeopleRouteDepe
       const ac = await deps.resolveAccessContext(request);
       const { id } = request.params as { id: string };
       return deps.dataContext.withDataContext(ac, async (sdb) => {
-        const settings = await notesService.getSettings(sdb, ac.actorUserId);
-        if (settings.folder && deps.vaultRunner) {
+        const folder = await notesService.resolveFolder(sdb);
+        if (folder && deps.vaultRunner) {
           try {
-            const result = await deps.vaultRunner.withVaultContext(ac, (vaultCtx) =>
+            const result = await openPeopleFolder(ac, folder, (vaultCtx) =>
               notesService.archivePersonNote(sdb, vaultCtx, ac.actorUserId, id)
             );
             return { archived: true, person: result.person, notePath: result.notePath };
           } catch (err) {
-            if (!(err instanceof CanonicalNoteNotFoundError)) throw err;
+            if (!(err instanceof CanonicalNoteNotFoundError) && !isUnavailableVaultError(err)) {
+              throw err;
+            }
           }
         }
         await repo.archivePerson(sdb, ac.actorUserId, id);
