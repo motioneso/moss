@@ -11,6 +11,7 @@ import {
 } from "../../packages/connectors/src/email-extract.js";
 
 const ACTIONABLE_SIGNALS = {
+  gate: "worth_knowing",
   category: "needs_action",
   reason: "The sender requests approval.",
   action: "Approve the launch plan",
@@ -202,10 +203,10 @@ describe("buildEmailExtractDeps", () => {
       const actionability = result.signals.actionability;
       outcomes.push({
         summary: result.summary !== null,
-        complete:
-          Boolean(actionability?.inferredSubject) &&
-          Boolean(actionability?.suggestedTasks?.length) &&
-          (result.signals.confidence ?? 0) > 0,
+        // #2274: the first pass only keeps the verdict (worth_knowing reads as fyi); task
+        // suggestions now come from the per-thread judgement, so "complete" means the verdict
+        // and confidence survived the recovered reply.
+        complete: actionability?.category === "fyi" && (result.signals.confidence ?? 0) > 0,
         category:
           result.summary !== null ? "ok" : elapsedMs >= 80 ? "caller_timeout" : "provider_busy",
         elapsedMs
