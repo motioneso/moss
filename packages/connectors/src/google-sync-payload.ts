@@ -59,7 +59,9 @@ export function assertGoogleSyncContinuationPayload(payload: GoogleSyncContinuat
     if (
       !Array.isArray(payload.deferredKeys) ||
       payload.deferredKeys.length > MAX_DEFERRED_KEYS ||
-      payload.deferredKeys.some((key) => typeof key !== "string" || key.length === 0 || key.length > 256)
+      payload.deferredKeys.some(
+        (key) => typeof key !== "string" || key.length === 0 || key.length > 256
+      )
     ) {
       throw new Error("invalid continuation deferred keys");
     }

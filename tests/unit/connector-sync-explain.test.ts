@@ -38,10 +38,7 @@ describe("explainConnectorSync", () => {
   });
 
   it("a synced account names the counts and the next check time", () => {
-    const result = explainConnectorSync(
-      { ...base, nextRunAt: "2026-09-04T14:45:00.000Z" },
-      NOW
-    );
+    const result = explainConnectorSync({ ...base, nextRunAt: "2026-09-04T14:45:00.000Z" }, NOW);
     expect(result.code).toBe("synced");
     expect(result.label).toBe("Synced");
     expect(result.summary).toContain("3 calendar events");
@@ -180,7 +177,12 @@ describe("explainConnectorSync", () => {
 
   it("no run yet, but a schedule exists, says first sync pending", () => {
     const result = explainConnectorSync(
-      { ...base, lastSyncStatus: null, lastSyncFinishedAt: null, nextRunAt: "2026-09-04T14:45:00.000Z" },
+      {
+        ...base,
+        lastSyncStatus: null,
+        lastSyncFinishedAt: null,
+        nextRunAt: "2026-09-04T14:45:00.000Z"
+      },
       NOW
     );
     expect(result.code).toBe("first-run-pending");

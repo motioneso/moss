@@ -303,7 +303,10 @@ function providerLabel(providerType: ConnectorProviderType): string {
  * Full sentence for the "reason" field, matching the spec's error-code table. Unknown
  * codes fall back to the code with dashes replaced by spaces, as today.
  */
-function errorCodeSentence(error: string | null, counts: ConnectorSyncCounts | null): string | null {
+function errorCodeSentence(
+  error: string | null,
+  counts: ConnectorSyncCounts | null
+): string | null {
   switch (error) {
     case "auth-error":
       return "The provider rejected the saved sign-in.";
@@ -518,7 +521,10 @@ export function deriveNotWorking(
   return entries;
 }
 
-function lastGoodFor(capability: ConnectorCapability, facts: ConnectorNotWorkingFacts): string | null {
+function lastGoodFor(
+  capability: ConnectorCapability,
+  facts: ConnectorNotWorkingFacts
+): string | null {
   return capability.dependsOn === "calendar" ? facts.calendarLastGoodAt : facts.emailLastGoodAt;
 }
 
@@ -611,7 +617,11 @@ export function explainConnectorAccountHealth(
         code: explained.code,
         tone: explained.tone,
         label: "Partial sync",
-        alert: rowAlert("Last sync completed with errors", input.lastSyncError, input.lastSyncCounts),
+        alert: rowAlert(
+          "Last sync completed with errors",
+          input.lastSyncError,
+          input.lastSyncCounts
+        ),
         canReconnect: false
       };
 
@@ -642,7 +652,11 @@ export function explainConnectorAccountHealth(
 }
 
 /** The row's longer line: what went wrong, plus the bounded tallies worth naming. */
-function rowAlert(prefix: string, error: string | null, counts: ConnectorSyncCounts | null): string {
+function rowAlert(
+  prefix: string,
+  error: string | null,
+  counts: ConnectorSyncCounts | null
+): string {
   const details = [rowErrorLabel(error), rowCountsLabel(counts)].filter(Boolean).join(" · ");
   return details
     ? `${prefix}: ${details}. Cached Google data may be stale.`
@@ -672,7 +686,9 @@ function rowCountsLabel(counts: ConnectorSyncCounts | null): string | null {
   if (!counts) return null;
   const parts: string[] = [];
   if (counts.emailFailures) {
-    parts.push(`${counts.emailFailures} email message${counts.emailFailures === 1 ? "" : "s"} failed`);
+    parts.push(
+      `${counts.emailFailures} email message${counts.emailFailures === 1 ? "" : "s"} failed`
+    );
   }
   if (counts.truncated) parts.push("message cap reached");
   return parts.length > 0 ? parts.join(", ") : null;

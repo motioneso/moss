@@ -1,5 +1,9 @@
 import { explainConnectorAccountHealth } from "@moss/shared";
-import type { ConnectorAccountDto, ConnectorSyncExplainCode, ConnectorSyncTone } from "@moss/shared";
+import type {
+  ConnectorAccountDto,
+  ConnectorSyncExplainCode,
+  ConnectorSyncTone
+} from "@moss/shared";
 
 /**
  * Display adaptation only. Every user-visible word for a connected account now comes from

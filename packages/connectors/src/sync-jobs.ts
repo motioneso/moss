@@ -233,7 +233,8 @@ export async function runGoogleSyncChunk(
   let escalations = continuation?.escalations ?? 0;
   // An old queued job carries only a total. Freeze that total as a baseline and count new
   // deferrals by distinct message id on top of it.
-  const carriedDeferred = continuation?.deferredKeys === undefined ? (continuation?.emailDeferred ?? 0) : 0;
+  const carriedDeferred =
+    continuation?.deferredKeys === undefined ? (continuation?.emailDeferred ?? 0) : 0;
   const deferredKeys = new Set<string>(continuation?.deferredKeys ?? []);
   let deferredReason: ConnectorSyncDeferredReason | null = continuation?.deferredReason ?? null;
   let emailDeferred = carriedDeferred + deferredKeys.size;

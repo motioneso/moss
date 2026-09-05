@@ -93,7 +93,12 @@ describe("deriveNotWorking", () => {
   it("a revoked account reports nothing — the user chose this", () => {
     const entries = deriveNotWorking(
       CAPABILITIES,
-      { ...freshFacts, accountStatus: "revoked", signInExpired: true, failedKinds: ["calendar", "email"] },
+      {
+        ...freshFacts,
+        accountStatus: "revoked",
+        signInExpired: true,
+        failedKinds: ["calendar", "email"]
+      },
       NOW
     );
     expect(entries).toEqual([]);

@@ -1,12 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 
-import {
-  DataContextRunner,
-  createDatabase,
-  type AccessContext,
-  type MossDatabase
-} from "@moss/db";
+import { DataContextRunner, createDatabase, type AccessContext, type MossDatabase } from "@moss/db";
 import {
   ConnectorsRepository,
   createConnectorSecretCipher,

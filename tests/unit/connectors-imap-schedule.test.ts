@@ -12,7 +12,12 @@ describe("reconcileImapAccountSchedule", () => {
     expect(schedule).toHaveBeenCalledWith(
       "connectors.imap-sync",
       expect.any(String),
-      { actorUserId: ACTOR, connectorAccountId: "account-1", kind: "imap-sync", trigger: "schedule" },
+      {
+        actorUserId: ACTOR,
+        connectorAccountId: "account-1",
+        kind: "imap-sync",
+        trigger: "schedule"
+      },
       { tz: "UTC", key: "account-1" }
     );
   });
