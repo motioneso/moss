@@ -310,9 +310,11 @@ describe("news personalization repository (#953 Task 3)", () => {
     await bootstrap.query(
       `INSERT INTO app.news_custom_sources
          (owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
-          validation_status, health_status, validation_fingerprint, validated_at)
+          confirmed_fetch_hosts, validation_status, health_status, validation_fingerprint,
+          validated_at)
        VALUES ($1, 'The Example Times', 'news.example.com', 'https://news.example.com', NULL,
-               'scrape', 'approved', 'healthy', 'fp-secret-marker', now())`,
+               'scrape', ARRAY['news.example.com'], 'approved', 'healthy', 'fp-secret-marker',
+               now())`,
       [alice]
     );
     await bootstrap.query(
@@ -485,10 +487,11 @@ describe("news validation state repository (#975 Slice 4)", () => {
     const source = await bootstrap.query<{ id: string }>(
       `INSERT INTO app.news_custom_sources
          (owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
-          validation_status, health_status, validation_fingerprint, validated_at, updated_at)
+          confirmed_fetch_hosts, validation_status, health_status, validation_fingerprint,
+          validated_at, updated_at)
        VALUES ($1, 'The Example Times', 'news.example.com', 'https://news.example.com', NULL,
-               'scrape', 'approved', 'healthy', 'fp-old', now() - interval '1 day',
-               now() - interval '1 day')
+               'scrape', ARRAY['news.example.com'], 'approved', 'healthy', 'fp-old',
+               now() - interval '1 day', now() - interval '1 day')
        RETURNING id`,
       [ownerId]
     );

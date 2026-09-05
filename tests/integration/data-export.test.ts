@@ -376,9 +376,10 @@ describe("Data export", () => {
         await client.query(
           `INSERT INTO app.news_custom_sources
             (id, owner_user_id, label, canonical_domain, homepage_url, feed_url,
-             retrieval_method, validation_status, health_status, validation_fingerprint,
-             validated_at, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, 'feed', 'approved', 'healthy', $7, $8, $9, $10)`,
+             retrieval_method, confirmed_fetch_hosts, validation_status, health_status,
+             validation_fingerprint, validated_at, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, 'feed', ARRAY[lower($4::text)], 'approved', 'healthy',
+                   $7, $8, $9, $10)`,
           [
             sourceId,
             ids.userA,
