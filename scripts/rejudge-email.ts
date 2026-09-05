@@ -11,9 +11,15 @@
  *
  * Nothing but the summary and signals columns is touched. The queued job carries only the actor
  * id, the job kind and an idempotency key.
+ *
+ * If a Google sync chain is already in flight the script clears as usual but does not queue a
+ * sync, and says so: the running chain will not revisit pages it has already walked, and the
+ * sync queue keeps one run per actor, so a job queued behind it finishes having done nothing
+ * (observed on dev, #2271 round 3). Re-judging then happens on the next sync after this one.
  */
 import { randomUUID } from "node:crypto";
 
+import { ConnectorsRepository, planRejudgeSync } from "@moss/connectors";
 import { DataContextRunner, createDatabase, getMossDatabaseUrls } from "@moss/db";
 import { EmailRepository } from "@moss/email";
 import { createPgBossClient, sendJob } from "@moss/jobs";
@@ -49,25 +55,30 @@ async function main(): Promise<void> {
   const boss = createPgBossClient(urls.app);
 
   try {
-    const cleared = await dataContext.withDataContext(
+    const { cleared, plan } = await dataContext.withDataContext(
       { actorUserId: userId, requestId: randomUUID() },
-      (scopedDb) => new EmailRepository().clearRecentTriage(scopedDb, since)
+      async (scopedDb) => {
+        const accounts = await new ConnectorsRepository().listAccounts(scopedDb);
+        return {
+          cleared: await new EmailRepository().clearRecentTriage(scopedDb, since),
+          plan: planRejudgeSync(accounts, new Date())
+        };
+      }
     );
     console.log(
       `Cleared the stored verdict on ${cleared} message(s) received since ${since.toISOString()}.`
     );
 
-    await boss.start();
-    await sendJob(
-      boss,
-      GOOGLE_SYNC_QUEUE,
-      { actorUserId: userId, kind: "google-sync" as const, idempotencyKey: randomUUID() },
-      { singletonKey: userId }
-    );
-    console.log(
-      "Queued a Google sync; the cleared messages are re-judged as it works through them. " +
-        "A mailbox connected over IMAP re-judges on its own next scheduled sync."
-    );
+    if (plan.queueSync) {
+      await boss.start();
+      await sendJob(
+        boss,
+        GOOGLE_SYNC_QUEUE,
+        { actorUserId: userId, kind: "google-sync" as const, idempotencyKey: randomUUID() },
+        { singletonKey: userId }
+      );
+    }
+    console.log(plan.message);
   } finally {
     await boss.stop({ graceful: false }).catch(() => undefined);
     await appDb.destroy();

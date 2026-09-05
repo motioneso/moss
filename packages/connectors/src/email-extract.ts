@@ -313,7 +313,15 @@ const EMAIL_TRIAGE_INSTRUCTIONS = [
   '{ category: "needs_reply"|"needs_action"|"time_sensitive_info"|"waiting_on_someone"|"fyi"|"noise"|"unknown",',
   "  confidence: number, reason?: string, action?: string, dueDate?: string,",
   "  deliversSignInCode: boolean }",
-  "confidence is 0..1. Use ISO dates. Keep reason and action concise.",
+  "confidence is 0..1. Use ISO dates (YYYY-MM-DD). Keep reason and action concise.",
+  "Each email is preceded by the date it arrived (Received) and today's date (Today). Use them to",
+  'resolve relative wording such as "tomorrow", "Friday" or "this week".',
+  "dueDate is the date the user's own reply or action is owed. It is NOT the date of the event,",
+  "meeting, interview, appointment or booking window the message is about. When someone asks the",
+  "user to suggest, choose or confirm times, what is owed is the answer, so the due date is within",
+  "one business day of Received unless the sender names an earlier deadline - never the date of the",
+  "slot being arranged. When a message states its own deadline for the user (a payment date, a form",
+  "cut-off, an RSVP date), use that date.",
   "Only a real obligation justifies needs_reply, needs_action or time_sensitive_info: a person",
   "or an institution the user already has a relationship with expects something from them, or",
   "the user has already committed to something. Urgent wording is not evidence on its own -",
@@ -350,8 +358,26 @@ const EMAIL_TRIAGE_INSTRUCTIONS = [
   "Never repeat the code itself anywhere in your answer."
 ].join("\n");
 
-function promptInput(parsed: ParsedEmail): string {
+/** Calendar date as YYYY-MM-DD, or null when the value is missing or unreadable. */
+function calendarDate(value: string | Date): string | null {
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
+/**
+ * The email as the model sees it. The two date lines are load-bearing: without them the model has
+ * no idea when the message arrived or what day it is, so it anchors a due date to whatever date the
+ * body mentions. That is how a request to suggest interview times came back due on the date of the
+ * interview window rather than the day the reply was owed (#2271 round 3). Dates only, no times -
+ * enough to settle "tomorrow" or "within a day", and nothing extra to leak back into a stored field.
+ */
+function promptInput(parsed: ParsedEmail, now: Date = new Date()): string {
   const header = [`Subject: ${parsed.subject}`, `From: ${parsed.from}`];
+  const received = calendarDate(parsed.receivedAt);
+  if (received !== null) header.push(`Received: ${received}`);
+  const today = calendarDate(now);
+  if (today !== null) header.push(`Today: ${today}`);
   if (looksLikeBulkMail(parsed)) header.push("Bulk mail: yes (carries an unsubscribe link)");
   return [...header, "", parsed.body].join("\n");
 }
