@@ -109,6 +109,7 @@ export {
 export {
   invalidateProviderProbeCache,
   probeProvider,
+  recordProviderLoginRejected,
   type ProbeProviderResult,
   type ProbeProviderStatus
 } from "./provider-probe.js";

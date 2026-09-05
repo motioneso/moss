@@ -22,6 +22,7 @@ import {
   probeProvider,
   purgePrivateTranscripts,
   purgePrivateTranscriptMarkers,
+  recordProviderLoginRejected,
   removeNeutralDir,
   sanitizeSessionKey,
   type CliChatEngine,
@@ -708,11 +709,19 @@ export class CliChatEngineHost {
    */
   async listProviderModels(provider: RpcProviderKind): Promise<RpcListProviderModelsResult> {
     this.readCodexVersion ??= createCodexVersionReader(this.deps.io);
+    // #2242: this call uses the same saved credential as the readiness check, so a vendor
+    // rejection here proves the login is dead there too. Record it through the one shared path
+    // instead of dropping the knowledge — otherwise a saved "the login works" answer keeps being
+    // replayed for the rest of its five-minute life and the person is never asked to log in again.
+    const credentialEnv = this.deps.homeBase
+      ? await readProviderCredentialEnv(this.deps.homeBase, provider)
+      : undefined;
     return listProviderModels(provider, {
       homeBase: this.deps.homeBase,
       fetch: this.deps.fetch,
       io: this.deps.io,
-      codexVersion: this.readCodexVersion
+      codexVersion: this.readCodexVersion,
+      onLoginRejected: () => recordProviderLoginRejected(provider as ProviderKind, credentialEnv)
     });
   }
 

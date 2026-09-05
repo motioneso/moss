@@ -51,6 +51,25 @@ export function invalidateProviderProbeCache(
   probeCache.delete(probeCacheKey(provider, credentialEnv));
 }
 
+/**
+ * #2242: the ONE shared way for any real provider request to report "the vendor rejected this
+ * login". The readiness check is not the only request that can find out a saved login is dead —
+ * the model-list call talks to the same vendor with the same credential, and used to learn it and
+ * throw the knowledge away, leaving a saved success in place for up to five more minutes. Every
+ * such caller routes here, so the next readiness check reports needs_login instead of replaying
+ * the stale success. (The readiness check's own rejection already lands in the same store, by
+ * saving its own result.) Keyed by provider + credential, so a fresh login is unaffected.
+ */
+export function recordProviderLoginRejected(
+  provider: ProviderKind,
+  credentialEnv?: NodeJS.ProcessEnv
+): void {
+  probeCache.set(probeCacheKey(provider, credentialEnv), {
+    result: { status: "needs_login" },
+    expiresAt: Date.now() + PROBE_CACHE_TTL_MS
+  });
+}
+
 export async function probeProvider(
   provider: ProviderKind,
   deps: {

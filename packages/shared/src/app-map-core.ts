@@ -180,7 +180,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "a minus button (disable) and a trash button (remove after confirmation; the provider's " +
       "default entry cannot be removed). The Models section collapses from its header. The " +
       "'Not logged in' message only appears after someone presses Refresh models; the provider " +
-      "card itself does not notice a broken sign-in on its own. Pressing Log in on a provider " +
+      "card itself does not notice a broken sign-in on its own. A refresh the provider answers " +
+      "by refusing the stored sign-in reads 'Not logged in' too, and from then on the sign-in " +
+      "counts as expired, so the next check asks for a fresh login instead of repeating an old " +
+      "success. Pressing Log in on a provider " +
       "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
       "genuinely broken sign-in always gets a fresh place to sign back in.",
     path: "/settings?section=aiproviders",
