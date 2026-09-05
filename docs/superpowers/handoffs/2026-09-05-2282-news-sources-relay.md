@@ -95,3 +95,42 @@ web-research tools.ts, Sports service.ts Reddit candidate mapping, dev-instance 
 ## Next step
 Write the plan with `plan-build`, then `herdr agent prompt coordinator "2282 plan ready: ..."`.
 State doc for you: `/tmp/build-2282-state.md`. Plain English to humans, ASCII only.
+
+## Relay 2 stop (2026-09-05): budget spent, re-slice needed
+
+PLAIN ENGLISH RULE for whoever picks this up: every message to a human is plain English. No
+jargon, no coined shorthand, ASCII punctuation only, at most one backtick per sentence.
+
+The plan is approved with rulings: `docs/superpowers/plans/2026-09-05-2282-news-sources.md`
+(coordinator rulings ledger at the end; migration number 0218 confirmed free). The successor lane
+hit the 70 percent warning mid task 1.2 with no PR open, so per the brief it pushed what is green
+and stopped instead of relaying. Nothing else in the plan is started.
+
+### What is green on the branch
+
+- Task 1.1 done: shared reader at `packages/news/src/source/reddit-reader.ts`, exported from the
+  News package root (`packages/news/src/index.ts`, bottom block). Design points: fetch options
+  carry `skipRobots: true` (News' fetch port in task 1.5 must honour it by dropping the robots
+  gate), `RedditReaderOptions.publisherDomain` hook (default strips leading www; Sports passes
+  its tldts rule so News needs no tldts), `redditHotFeedUrl` replaces `redditListingUrl`, and
+  `ReadSubredditResult.feedUrl` replaces `listingUrl`. Tests: `tests/unit/news-reddit-reader.test.ts`.
+- Task 1.2 done: `packages/sports/src/source/reddit.ts` is a shim (re-exports from `@moss/news`
+  plus `REDDIT_ICON_HOSTS` and `sportsSourceIdentityKey`); `discovery.ts:862` passes
+  `{ publisherDomain: publisherIdentity }` and reads `feedUrl`; `public-source-reader.ts:848`
+  passes the same option to `parseRedditFeed`. The Sports unit test still carries the generic
+  reader cases (only the `listingUrl` assertion was renamed); trimming it to identity plus
+  candidate-mapping cases is optional tidy-up, not a blocker.
+- Both unit files pass together: `pnpm vitest run tests/unit/news-reddit-reader.test.ts tests/unit/sports-reddit-source.test.ts` exit 0, 98 tests.
+
+### Suggested re-slice (each fits one window)
+
+1. Tasks 1.3 to 1.5: migration 0218, repository, options-capable News fetch port and composition
+   root. Pure backend, no UI.
+2. Tasks 1.6 to 1.8 plus the phase 1 e2e and UAT spec: resolver Reddit branch, collector and
+   bounded refresh runner, settings wording and manifest and app map. Then the kill gate live
+   proof on ports 3282 and 5282.
+3. Phase 2 (deterministic feed finder) as its own lane, phase 3 (model-assisted) as another.
+
+Open questions carried from the plan: which service or tier hint selects the user's chat model in
+`resolveModelForService` (task 3.1); the fetch helper's rate-limit field is `retryAfter?: string`
+on the Sports port type, confirm on the News port before task 1.5.
