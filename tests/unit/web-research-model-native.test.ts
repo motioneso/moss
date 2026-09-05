@@ -333,6 +333,35 @@ describe("createModelNativeProvider", () => {
     expect(output.results).toEqual([]);
     expect(output.trace).toMatchObject({ provider: "model-native", unavailable: true });
   });
+
+  it.each([false, true])(
+    "does not guess between two cited fragment pages competing for one description, reversed=%s",
+    async (reversed) => {
+      const sources = [
+        { title: "Route one", url: "https://example.com/#/one" },
+        { title: "Route two", url: "https://example.com/#/two" }
+      ];
+      if (reversed) sources.reverse();
+      const runner: ModelNativeSearchRunner = async () => ({
+        object: {
+          results: [
+            {
+              title: "Rewritten page",
+              url: "https://example.com/",
+              snippet: "Only one page was described"
+            }
+          ]
+        },
+        sources
+      });
+      const provider = createModelNativeProvider(runner);
+
+      const output = await provider.search({ query: "q", limit: 5 });
+
+      expect(output.results).toEqual(sources.map((source) => ({ ...source, snippet: "" })));
+      expect(output.trace).toMatchObject({ count: 2, cited: 2, undescribed: 2 });
+    }
+  );
 });
 
 describe("resolveWebSearchProvider with model-native search", () => {

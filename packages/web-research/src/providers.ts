@@ -234,11 +234,23 @@ export function createModelNativeProvider(runner: ModelNativeSearchRunner): WebS
         cited.push({ title: source.title, url: source.url, matchUrl });
       }
 
+      // A loose match is only trustworthy when exactly one un-exact-matched citation and
+      // exactly one available description share the loose key; two pages competing for the
+      // same shortened address is exactly as ambiguous as one page with two descriptions.
+      const looseKeyCitationCounts = new Map<string, number>();
+      for (const source of cited) {
+        if (describedByExactUrl.has(source.matchUrl)) continue;
+        const key = normalizeUrlForMatch(source.matchUrl);
+        if (key.length === 0) continue;
+        looseKeyCitationCounts.set(key, (looseKeyCitationCounts.get(key) ?? 0) + 1);
+      }
+
       const findDescription = (matchUrl: string): Described | undefined => {
         const exact = describedByExactUrl.get(matchUrl);
         if (exact) return exact;
         const key = normalizeUrlForMatch(matchUrl);
         if (key.length === 0) return undefined;
+        if ((looseKeyCitationCounts.get(key) ?? 0) !== 1) return undefined;
         // Only descriptions no other citation owns by exact url are fair game for the loose
         // match, and only when the loose form leaves a single candidate.
         const candidates = (describedByLooseUrl.get(key) ?? []).filter(
