@@ -27,6 +27,7 @@
 ### Task 1: `commitments.list` returns email items Moss can act on
 
 **Files:**
+
 - Modify: `packages/commitments/src/tools.ts:7-22`, `packages/commitments/src/manifest.ts:70-91`
 - Test: `tests/unit/commitment-list-tool-email-items.test.ts`
 
@@ -36,11 +37,20 @@
 
 ```ts
 type ToolItem = {
-  id; kind; title; status; confidence; dueLocalDate; counterpartyLabel; sourceCount; lastSeenAt;
-  source: "email" | "other";   // the candidate row does not carry its source kind; sources live in a separate table
-  whyLines?: string[];                       // email items only
+  id;
+  kind;
+  title;
+  status;
+  confidence;
+  dueLocalDate;
+  counterpartyLabel;
+  sourceCount;
+  lastSeenAt;
+  source: "email" | "other"; // the candidate row does not carry its source kind; sources live in a separate table
+  whyLines?: string[]; // email items only
   actions?: { kind: "reply" | "task" | "snooze" | "dismiss"; label: string; primary: boolean }[];
-  stale?: boolean; linkedTaskId?: string | null;
+  stale?: boolean;
+  linkedTaskId?: string | null;
 };
 ```
 
@@ -50,27 +60,68 @@ type ToolItem = {
 
 ```ts
 import { describe, expect, it, vi } from "vitest";
-vi.mock("../../packages/commitments/src/repository.js", () => ({ CommitmentsRepository: vi.fn(() => repo) }));
+vi.mock("../../packages/commitments/src/repository.js", () => ({
+  CommitmentsRepository: vi.fn(() => repo)
+}));
 const repo = { listCandidates: vi.fn(), listOpenEmailCandidates: vi.fn() };
 const { commitmentListExecute } = await import("../../packages/commitments/src/tools.js");
 import { dataContextBrand } from "@moss/db";
 const fakeDb = { [dataContextBrand]: true } as any;
-const emailCand = { id: "c1", kind: "obligation", title: "Send Sarah the lease addendum", status: "pending_review", confidence: "high", dueLocalDate: "2026-09-05", counterpartyLabel: "Sarah Kim", counterpartyAddress: "sarah@kim.example", sourceCount: 2, lastSeenAt: new Date("2026-09-04T10:00:00Z"), threadRef: "t1", whyLines: ["\"Could you send it back by Friday?\""], proposedActions: [{ kind: "task", title: "Send addendum", dueLocalDate: "2026-09-05" }], stale: false, linkedTaskId: null, snoozedUntil: null, resolutionRef: null };
-const chatCand = { ...emailCand, id: "c2", threadRef: null, whyLines: [], proposedActions: [], title: "Call mum", counterpartyLabel: "Mum", counterpartyAddress: null };
+const emailCand = {
+  id: "c1",
+  kind: "obligation",
+  title: "Send Sarah the lease addendum",
+  status: "pending_review",
+  confidence: "high",
+  dueLocalDate: "2026-09-05",
+  counterpartyLabel: "Sarah Kim",
+  counterpartyAddress: "sarah@kim.example",
+  sourceCount: 2,
+  lastSeenAt: new Date("2026-09-04T10:00:00Z"),
+  threadRef: "t1",
+  whyLines: ['"Could you send it back by Friday?"'],
+  proposedActions: [{ kind: "task", title: "Send addendum", dueLocalDate: "2026-09-05" }],
+  stale: false,
+  linkedTaskId: null,
+  snoozedUntil: null,
+  resolutionRef: null
+};
+const chatCand = {
+  ...emailCand,
+  id: "c2",
+  threadRef: null,
+  whyLines: [],
+  proposedActions: [],
+  title: "Call mum",
+  counterpartyLabel: "Mum",
+  counterpartyAddress: null
+};
 describe("commitments.list with email items", () => {
   it("marks source, includes why and actions for email items only, and writes a summary", async () => {
     repo.listCandidates.mockResolvedValue([emailCand, chatCand]);
     const r: any = await commitmentListExecute(fakeDb, {}, { actorUserId: "u1" } as any);
     const [e, c] = r.data.items;
-    expect(e.source).toBe("email"); expect(e.actions[0]).toMatchObject({ kind: "task", primary: true, label: "Task, due Fri" }); expect(e.whyLines).toHaveLength(1);
-    expect(c.source).toBe("other"); expect(c.actions).toBeUndefined();
+    expect(e.source).toBe("email");
+    expect(e.actions[0]).toMatchObject({ kind: "task", primary: true, label: "Task, due Fri" });
+    expect(e.whyLines).toHaveLength(1);
+    expect(c.source).toBe("other");
+    expect(c.actions).toBeUndefined();
     expect(r.data.owedSummary).toBe("You owe 2 people something: Sarah Kim (Fri), Mum.");
     expect(JSON.stringify(r.data)).not.toContain("sarah@kim.example");
   });
   it("hides stale email items unless includeOlder", async () => {
     repo.listCandidates.mockResolvedValue([{ ...emailCand, stale: true }]);
-    expect((await commitmentListExecute(fakeDb, {}, { actorUserId: "u1" } as any) as any).data.owedSummary).toBe("Nothing owed right now.");
-    expect((await commitmentListExecute(fakeDb, { includeOlder: true }, { actorUserId: "u1" } as any) as any).data.items[0].stale).toBe(true);
+    expect(
+      ((await commitmentListExecute(fakeDb, {}, { actorUserId: "u1" } as any)) as any).data
+        .owedSummary
+    ).toBe("Nothing owed right now.");
+    expect(
+      (
+        (await commitmentListExecute(fakeDb, { includeOlder: true }, {
+          actorUserId: "u1"
+        } as any)) as any
+      ).data.items[0].stale
+    ).toBe(true);
   });
 });
 ```
@@ -82,21 +133,58 @@ describe("commitments.list with email items", () => {
 ```ts
 export const commitmentListExecute: ToolExecute = async (scopedDb, input, ctx) => {
   assertDataContextDb(scopedDb);
-  const { status, includeOlder } = (input ?? {}) as { status?: CandidateStatus; includeOlder?: boolean };
+  const { status, includeOlder } = (input ?? {}) as {
+    status?: CandidateStatus;
+    includeOlder?: boolean;
+  };
   const today = new Date().toISOString().slice(0, 10);
-  const candidates = await repo.listCandidates(scopedDb, ctx.actorUserId, status ?? "pending_review");
-  const visible = candidates.filter((c) => includeOlder || !(c.threadRef && (c.stale || (c.snoozedUntil && c.snoozedUntil > new Date()))));
+  const candidates = await repo.listCandidates(
+    scopedDb,
+    ctx.actorUserId,
+    status ?? "pending_review"
+  );
+  const visible = candidates.filter(
+    (c) =>
+      includeOlder || !(c.threadRef && (c.stale || (c.snoozedUntil && c.snoozedUntil > new Date())))
+  );
   const items = visible.map((c) => {
-    const base = { id: c.id, kind: c.kind, title: c.title, status: c.status, confidence: c.confidence, dueLocalDate: c.dueLocalDate, counterpartyLabel: c.counterpartyLabel, sourceCount: c.sourceCount, lastSeenAt: c.lastSeenAt.toISOString(), source: c.threadRef ? "email" : "other" };
+    const base = {
+      id: c.id,
+      kind: c.kind,
+      title: c.title,
+      status: c.status,
+      confidence: c.confidence,
+      dueLocalDate: c.dueLocalDate,
+      counterpartyLabel: c.counterpartyLabel,
+      sourceCount: c.sourceCount,
+      lastSeenAt: c.lastSeenAt.toISOString(),
+      source: c.threadRef ? "email" : "other"
+    };
     if (!c.threadRef) return base;
-    const dto = toOwedItemDto(c, { messageCount: c.sourceCount, replyToCacheMessageId: null, today });
-    return { ...base, whyLines: dto.whyLines, actions: dto.actions.map(({ kind, label, primary }) => ({ kind, label, primary })), stale: dto.stale, linkedTaskId: dto.linkedTaskId };
+    const dto = toOwedItemDto(c, {
+      messageCount: c.sourceCount,
+      replyToCacheMessageId: null,
+      today
+    });
+    return {
+      ...base,
+      whyLines: dto.whyLines,
+      actions: dto.actions.map(({ kind, label, primary }) => ({ kind, label, primary })),
+      stale: dto.stale,
+      linkedTaskId: dto.linkedTaskId
+    };
   });
   return { data: { items, owedSummary: summarise(items, today) } } satisfies ToolResult;
 };
-function summarise(items: readonly { counterpartyLabel: string | null; dueLocalDate: string | null }[], today: string): string {
+function summarise(
+  items: readonly { counterpartyLabel: string | null; dueLocalDate: string | null }[],
+  today: string
+): string {
   if (items.length === 0) return "Nothing owed right now.";
-  const parts = items.map((i) => { const d = shortDue(i.dueLocalDate, today); return `${i.counterpartyLabel ?? "someone"}${d ? ` (${d[0].toUpperCase()}${d.slice(1)})` : ""}`; });
+  const parts = items.map((i) => {
+    const d = shortDue(i.dueLocalDate, today);
+    return `${i.counterpartyLabel ?? "someone"}${d ? ` (${d[0].toUpperCase()}${d.slice(1)})` : ""}`;
+  });
   return `You owe ${items.length} ${items.length === 1 ? "person" : "people"} something: ${parts.join(", ")}.`;
 }
 ```
@@ -108,6 +196,7 @@ function summarise(items: readonly { counterpartyLabel: string | null; dueLocalD
 ### Task 2: Sender rules store
 
 **Files:**
+
 - Create: `packages/commitments/sql/0218_commitment_sender_rules.sql`, `packages/commitments/src/sender-rules.ts`
 - Modify: `packages/commitments/src/manifest.ts` (migrations, ownedTables), `packages/commitments/src/types.ts`
 - Test: `tests/unit/commitment-sender-rules.test.ts`
@@ -137,12 +226,30 @@ Copy the exact policy helper name and grant roles from `packages/commitments/sql
 
 ```ts
 export const NOT_OWED_THRESHOLD = 2;
-export interface CommitmentSenderRule { ownerUserId; senderAddress; displayName: string | null; notOwedDismissals: number; ruledNotObligation: boolean; ruledBy: "auto" | "user"; updatedAt: Date }
+export interface CommitmentSenderRule {
+  ownerUserId;
+  senderAddress;
+  displayName: string | null;
+  notOwedDismissals: number;
+  ruledNotObligation: boolean;
+  ruledBy: "auto" | "user";
+  updatedAt: Date;
+}
 export class SenderRulesRepository {
-  recordNotOwedDismissal(scopedDb, ownerUserId, senderAddress, displayName: string | null): Promise<CommitmentSenderRule>  // upsert; increments; sets ruled_not_obligation = true when count >= 2 and ruled_by = 'auto'
-  isRuledNotObligation(scopedDb, ownerUserId, senderAddress): Promise<boolean>
-  list(scopedDb, ownerUserId): Promise<CommitmentSenderRule[]>           // ordered by updated_at desc
-  setRule(scopedDb, ownerUserId, senderAddress, ruledNotObligation: boolean): Promise<CommitmentSenderRule>  // ruled_by = 'user'
+  recordNotOwedDismissal(
+    scopedDb,
+    ownerUserId,
+    senderAddress,
+    displayName: string | null
+  ): Promise<CommitmentSenderRule>; // upsert; increments; sets ruled_not_obligation = true when count >= 2 and ruled_by = 'auto'
+  isRuledNotObligation(scopedDb, ownerUserId, senderAddress): Promise<boolean>;
+  list(scopedDb, ownerUserId): Promise<CommitmentSenderRule[]>; // ordered by updated_at desc
+  setRule(
+    scopedDb,
+    ownerUserId,
+    senderAddress,
+    ruledNotObligation: boolean
+  ): Promise<CommitmentSenderRule>; // ruled_by = 'user'
 }
 ```
 
@@ -155,6 +262,7 @@ Addresses are lower-cased and trimmed before every query (`normaliseAddress`). A
 ### Task 3: Wire learning into dismiss and judgement
 
 **Files:**
+
 - Modify: `packages/module-registry/src/index.ts`
 - Test: `tests/unit/module-registry-sender-rules-wiring.test.ts`
 
@@ -175,13 +283,26 @@ Also, when a rule flips to true, open items from that sender should not linger: 
 ### Task 4: Sender rules routes
 
 **Files:**
+
 - Modify: `packages/shared/src/commitments-api.ts`, `packages/commitments/src/routes.ts`, `packages/commitments/src/manifest.ts` (routes)
 - Test: `tests/unit/commitment-sender-rules-routes.test.ts`
 
 ```ts
-export interface CommitmentSenderRuleDto { senderAddress: string; displayName: string | null; notOwedDismissals: number; ruledNotObligation: boolean; ruledBy: "auto" | "user"; updatedAt: string }
-export interface ListCommitmentSenderRulesResponse { rules: CommitmentSenderRuleDto[] }
-export interface PutCommitmentSenderRuleRequest { senderAddress: string; ruledNotObligation: boolean }
+export interface CommitmentSenderRuleDto {
+  senderAddress: string;
+  displayName: string | null;
+  notOwedDismissals: number;
+  ruledNotObligation: boolean;
+  ruledBy: "auto" | "user";
+  updatedAt: string;
+}
+export interface ListCommitmentSenderRulesResponse {
+  rules: CommitmentSenderRuleDto[];
+}
+export interface PutCommitmentSenderRuleRequest {
+  senderAddress: string;
+  ruledNotObligation: boolean;
+}
 ```
 
 Routes: `GET /api/commitments/sender-rules` (permission `commitments.view`) and `PUT /api/commitments/sender-rules` (permission `commitments.update`; body validated with TypeBox `Type.Object({ senderAddress: Type.String({ format: "email" }), ruledNotObligation: Type.Boolean() })`). Both are declared in the manifest `routes`.
@@ -191,6 +312,7 @@ Routes: `GET /api/commitments/sender-rules` (permission `commitments.view`) and 
 ### Task 5: "Judge with context" setting
 
 **Files:**
+
 - Modify: `packages/shared/src/email-briefing-settings-api.ts` (add `judgeWithContext: boolean` to the DTO and `required`, optional on the update request, both schemas), `packages/email/src/routes.ts` (`EMAIL_JUDGE_WITH_CONTEXT_KEY = "email.judge_with_context"`, read in `readEmailBriefingSettings` as `judgeWithContext === false ? false : true`, write in the PATCH branch list)
 - Create: `packages/email/src/judge-with-context.ts` exporting `readJudgeWithContext(scopedDb, preferences: PreferencesPort): Promise<boolean>` (same default-true rule) and re-export from `packages/email/src/index.ts`
 - Modify: `packages/module-registry/src/index.ts`: worker deps `contextEnabled: (db, uid) => readJudgeWithContext(db, preferencesRepository)`
@@ -201,6 +323,7 @@ Routes: `GET /api/commitments/sender-rules` (permission `commitments.view`) and 
 ### Task 6: Email settings page: switch and sender rules list
 
 **Files:**
+
 - Modify: `packages/email/src/settings/index.tsx`
 - Create: `apps/web/src/api/client-commitments.ts` additions `getSenderRules()`, `putSenderRule(body)` (slice 2 created this file; the settings entry imports from `@moss/shared` types and calls `fetch` the way the rest of `index.tsx` does, since module settings entries do not import from `apps/web`)
 - Test: `packages/email/src/settings/index.test.tsx` (create or extend)
@@ -208,6 +331,7 @@ Routes: `GET /api/commitments/sender-rules` (permission `commitments.view`) and 
 Run the `design-system` skill first; use `Group`, `Row`, `Switch`, `Note` from `@moss/settings-ui` exactly like the existing rows.
 
 New group "What you owe people", after "Briefing signal":
+
 - Row "Judge with context", desc "When deciding whether an email means you owe someone something, Moss also reads your notes, tasks and calendar for that person. Turn off to judge from the email alone." Switch bound to `settings?.judgeWithContext ?? true`, mutation `settingsMutation.mutate({ judgeWithContext: value })`.
 - Row list "Senders you have ruled not owed": one `Row` per rule, `name` = display name or address, `desc` = `ruledBy === "auto" ? "Learned from 2 dismissals" : "Set by you"`, control = Switch bound to `ruledNotObligation`, `onChange` → `putSenderRule({ senderAddress, ruledNotObligation: value })` then invalidate `["commitments", "sender-rules"]`. When empty, a `Note`: "Nothing here yet. Dismissing an item with 'Not something I owe' twice from the same sender adds them."
 
@@ -216,6 +340,7 @@ New group "What you owe people", after "Briefing signal":
 ### Task 7: App map and manifest metadata, release note
 
 **Files:**
+
 - Modify: `packages/email/src/manifest.ts` settings entry description: append "and how Moss decides what you owe people"; `features` entries `email.judge_with_context` and `email.not_owed_senders` (plain descriptions of the switch and the two-dismissal rule and where to undo it).
 - Modify: `packages/commitments/src/manifest.ts` `features`: `commitments.moss_knows_owed` ("Ask Moss 'what do I owe people?' and it lists the same items as the Today card, with why and the proposed actions.").
 - Run `pnpm -s build:app-map` and the truthfulness check.

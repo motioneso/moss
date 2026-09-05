@@ -1,87 +1,229 @@
 <h2>How should "what you owe people" sit on Today?</h2>
-<p class="subtitle">Same three items in each. Wireframe fidelity: judge the shape, not the styling. Click one to pick it.</p>
+<p class="subtitle">
+  Same three items in each. Wireframe fidelity: judge the shape, not the styling. Click one to pick
+  it.
+</p>
 
 <style>
-  .ow { font: 14px/1.4 system-ui, sans-serif; color: #222; }
-  .ow .card { background:#fff; border:1px solid #ddd; border-radius:10px; padding:14px 16px; }
-  .ow .card h4 { margin:0 0 10px; font-size:15px; display:flex; justify-content:space-between; }
-  .ow .card h4 span { font-weight:normal; color:#777; font-size:13px; }
-  .ow .row { padding:10px 0; border-top:1px solid #eee; }
-  .ow .row:first-of-type { border-top:none; }
-  .ow .t { font-weight:600; }
-  .ow .m { color:#666; font-size:13px; margin-top:2px; }
-  .ow .due { color:#a5451b; }
-  .ow .why { background:#f6f6f4; border-radius:6px; padding:8px 10px; font-size:13px; color:#444; margin-top:8px; }
-  .ow .chips { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
-  .ow .chip { border:1px solid #bbb; border-radius:999px; padding:3px 10px; font-size:12.5px; background:#fafafa; }
-  .ow .chip.p { background:#1f4d3a; color:#fff; border-color:#1f4d3a; }
-  .ow .chip.q { color:#777; border-style:dashed; }
-  .ow .peek { color:#1f4d3a; font-size:13px; margin-top:6px; }
-  .ow .nav { display:flex; justify-content:space-between; color:#777; font-size:13px; margin-top:10px; }
-  .ow .avatar { display:inline-block; width:18px; height:18px; border-radius:50%; background:#c9d8cf; vertical-align:-4px; margin-right:6px; }
+  .ow {
+    font:
+      14px/1.4 system-ui,
+      sans-serif;
+    color: #222;
+  }
+  .ow .card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .ow .card h4 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .ow .card h4 span {
+    font-weight: normal;
+    color: #777;
+    font-size: 13px;
+  }
+  .ow .row {
+    padding: 10px 0;
+    border-top: 1px solid #eee;
+  }
+  .ow .row:first-of-type {
+    border-top: none;
+  }
+  .ow .t {
+    font-weight: 600;
+  }
+  .ow .m {
+    color: #666;
+    font-size: 13px;
+    margin-top: 2px;
+  }
+  .ow .due {
+    color: #a5451b;
+  }
+  .ow .why {
+    background: #f6f6f4;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: #444;
+    margin-top: 8px;
+  }
+  .ow .chips {
+    margin-top: 8px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .ow .chip {
+    border: 1px solid #bbb;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 12.5px;
+    background: #fafafa;
+  }
+  .ow .chip.p {
+    background: #1f4d3a;
+    color: #fff;
+    border-color: #1f4d3a;
+  }
+  .ow .chip.q {
+    color: #777;
+    border-style: dashed;
+  }
+  .ow .peek {
+    color: #1f4d3a;
+    font-size: 13px;
+    margin-top: 6px;
+  }
+  .ow .nav {
+    display: flex;
+    justify-content: space-between;
+    color: #777;
+    font-size: 13px;
+    margin-top: 10px;
+  }
+  .ow .avatar {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #c9d8cf;
+    vertical-align: -4px;
+    margin-right: 6px;
+  }
 </style>
 
 <div class="cards">
-
   <div class="card" data-choice="a" onclick="toggleSelect(this)">
-    <div class="card-image"><div class="ow"><div class="card">
-      <h4>You owe people <span>3 open</span></h4>
-      <div class="row">
-        <div class="t">Send Sarah the lease addendum</div>
-        <div class="m"><span class="avatar"></span>Sarah Kim, landlord · <span class="due">owed by Fri</span></div>
-        <div class="chips"><span class="chip p">Draft reply</span><span class="chip">Task, due Fri</span><span class="chip">Snooze</span><span class="chip q">Dismiss</span></div>
+    <div class="card-image">
+      <div class="ow">
+        <div class="card">
+          <h4>You owe people <span>3 open</span></h4>
+          <div class="row">
+            <div class="t">Send Sarah the lease addendum</div>
+            <div class="m">
+              <span class="avatar"></span>Sarah Kim, landlord · <span class="due">owed by Fri</span>
+            </div>
+            <div class="chips">
+              <span class="chip p">Draft reply</span><span class="chip">Task, due Fri</span
+              ><span class="chip">Snooze</span><span class="chip q">Dismiss</span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="t">Pick a time for the intake call</div>
+            <div class="m">
+              <span class="avatar"></span>Dr. Alvarez's office ·
+              <span class="due">owed by Wed</span>
+            </div>
+            <div class="chips">
+              <span class="chip p">Draft reply with 3 free slots</span><span class="chip">Task</span
+              ><span class="chip">Snooze</span><span class="chip q">Dismiss</span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="t">Confirm Fidelity withdrawal details</div>
+            <div class="m">Fidelity · <span class="due">owed by Mon</span></div>
+            <div class="chips">
+              <span class="chip">Draft reply</span><span class="chip p">Task, due Mon</span
+              ><span class="chip">Snooze</span><span class="chip q">Dismiss</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="row">
-        <div class="t">Pick a time for the intake call</div>
-        <div class="m"><span class="avatar"></span>Dr. Alvarez's office · <span class="due">owed by Wed</span></div>
-        <div class="chips"><span class="chip p">Draft reply with 3 free slots</span><span class="chip">Task</span><span class="chip">Snooze</span><span class="chip q">Dismiss</span></div>
-      </div>
-      <div class="row">
-        <div class="t">Confirm Fidelity withdrawal details</div>
-        <div class="m">Fidelity · <span class="due">owed by Mon</span></div>
-        <div class="chips"><span class="chip">Draft reply</span><span class="chip p">Task, due Mon</span><span class="chip">Snooze</span><span class="chip q">Dismiss</span></div>
-      </div>
-    </div></div></div>
-    <div class="card-body"><h3>A. Everything on the card</h3><p>Each item shows who, when, and its four actions inline. Fastest to act, tallest card. "Why" is one tap away, not shown.</p></div>
+    </div>
+    <div class="card-body">
+      <h3>A. Everything on the card</h3>
+      <p>
+        Each item shows who, when, and its four actions inline. Fastest to act, tallest card. "Why"
+        is one tap away, not shown.
+      </p>
+    </div>
   </div>
 
   <div class="card" data-choice="b" onclick="toggleSelect(this)">
-    <div class="card-image"><div class="ow"><div class="card">
-      <h4>You owe people <span>3 open</span></h4>
-      <div class="row">
-        <div class="t">Send Sarah the lease addendum</div>
-        <div class="m"><span class="avatar"></span>Sarah Kim · <span class="due">Fri</span></div>
-        <div class="why">"Could you send the signed addendum back by Friday?" You told her on Tuesday you'd do it this week.</div>
-        <div class="chips"><span class="chip p">Draft reply</span><span class="chip">Task, due Fri</span><span class="chip">Snooze</span><span class="chip q">Dismiss</span></div>
+    <div class="card-image">
+      <div class="ow">
+        <div class="card">
+          <h4>You owe people <span>3 open</span></h4>
+          <div class="row">
+            <div class="t">Send Sarah the lease addendum</div>
+            <div class="m">
+              <span class="avatar"></span>Sarah Kim · <span class="due">Fri</span>
+            </div>
+            <div class="why">
+              "Could you send the signed addendum back by Friday?" You told her on Tuesday you'd do
+              it this week.
+            </div>
+            <div class="chips">
+              <span class="chip p">Draft reply</span><span class="chip">Task, due Fri</span
+              ><span class="chip">Snooze</span><span class="chip q">Dismiss</span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="t">Pick a time for the intake call</div>
+            <div class="m">
+              <span class="avatar"></span>Dr. Alvarez's office · <span class="due">Wed</span>
+            </div>
+            <div class="peek">Tap to see why and act ›</div>
+          </div>
+          <div class="row">
+            <div class="t">Confirm Fidelity withdrawal details</div>
+            <div class="m">Fidelity · <span class="due">Mon</span></div>
+            <div class="peek">Tap to see why and act ›</div>
+          </div>
+        </div>
       </div>
-      <div class="row">
-        <div class="t">Pick a time for the intake call</div>
-        <div class="m"><span class="avatar"></span>Dr. Alvarez's office · <span class="due">Wed</span></div>
-        <div class="peek">Tap to see why and act ›</div>
-      </div>
-      <div class="row">
-        <div class="t">Confirm Fidelity withdrawal details</div>
-        <div class="m">Fidelity · <span class="due">Mon</span></div>
-        <div class="peek">Tap to see why and act ›</div>
-      </div>
-    </div></div></div>
-    <div class="card-body"><h3>B. One open, rest collapsed</h3><p>The top item is expanded with its "why" and actions. Others are one line each and expand on tap. Middle height, shows reasoning.</p></div>
+    </div>
+    <div class="card-body">
+      <h3>B. One open, rest collapsed</h3>
+      <p>
+        The top item is expanded with its "why" and actions. Others are one line each and expand on
+        tap. Middle height, shows reasoning.
+      </p>
+    </div>
   </div>
 
   <div class="card" data-choice="c" onclick="toggleSelect(this)">
-    <div class="card-image"><div class="ow"><div class="card">
-      <h4>You owe people <span>1 of 3</span></h4>
-      <div class="row">
-        <div class="t" style="font-size:16px">Send Sarah the lease addendum</div>
-        <div class="m"><span class="avatar"></span>Sarah Kim, landlord · <span class="due">owed by Friday</span></div>
-        <div class="why">"Could you send the signed addendum back by Friday?"<br>You told her on Tuesday you'd do it this week. The signed copy is in your notes from Aug 30.</div>
-        <div class="chips"><span class="chip p">Draft reply</span><span class="chip">Task, due Fri</span><span class="chip">Snooze</span><span class="chip q">Dismiss</span></div>
+    <div class="card-image">
+      <div class="ow">
+        <div class="card">
+          <h4>You owe people <span>1 of 3</span></h4>
+          <div class="row">
+            <div class="t" style="font-size: 16px">Send Sarah the lease addendum</div>
+            <div class="m">
+              <span class="avatar"></span>Sarah Kim, landlord ·
+              <span class="due">owed by Friday</span>
+            </div>
+            <div class="why">
+              "Could you send the signed addendum back by Friday?"<br />You told her on Tuesday
+              you'd do it this week. The signed copy is in your notes from Aug 30.
+            </div>
+            <div class="chips">
+              <span class="chip p">Draft reply</span><span class="chip">Task, due Fri</span
+              ><span class="chip">Snooze</span><span class="chip q">Dismiss</span>
+            </div>
+          </div>
+          <div class="nav"><span>‹ prev</span><span>Open all 3</span><span>next ›</span></div>
+        </div>
       </div>
-      <div class="nav"><span>‹ prev</span><span>Open all 3</span><span>next ›</span></div>
-    </div></div></div>
-    <div class="card-body"><h3>C. One at a time</h3><p>A single item with full reasoning; step through the rest. Shortest card, most focus, but hides the total picture.</p></div>
+    </div>
+    <div class="card-body">
+      <h3>C. One at a time</h3>
+      <p>
+        A single item with full reasoning; step through the rest. Shortest card, most focus, but
+        hides the total picture.
+      </p>
+    </div>
   </div>
-
 </div>
 
-<p class="subtitle" style="margin-top:20px">Whichever you pick, the same items and actions also appear in the chat via Moss's tool, and the full list lives on the Commitments page.</p>
+<p class="subtitle" style="margin-top: 20px">
+  Whichever you pick, the same items and actions also appear in the chat via Moss's tool, and the
+  full list lives on the Commitments page.
+</p>

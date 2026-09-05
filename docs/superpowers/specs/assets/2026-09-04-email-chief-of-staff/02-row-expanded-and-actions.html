@@ -1,90 +1,272 @@
 <h2>A tapped row, and the two actions with a second step</h2>
-<p class="subtitle">Layout B, all rows collapsed until tapped. Left: one row open. Middle: what "Draft reply" opens. Right: what "Dismiss" asks. Tell me in the terminal what to change.</p>
+<p class="subtitle">
+  Layout B, all rows collapsed until tapped. Left: one row open. Middle: what "Draft reply" opens.
+  Right: what "Dismiss" asks. Tell me in the terminal what to change.
+</p>
 
 <style>
-  .ow { font: 14px/1.4 system-ui, sans-serif; color: #222; }
-  .ow .card { background:#fff; border:1px solid #ddd; border-radius:10px; padding:14px 16px; }
-  .ow .card h4 { margin:0 0 10px; font-size:15px; display:flex; justify-content:space-between; }
-  .ow .card h4 span { font-weight:normal; color:#777; font-size:13px; }
-  .ow .row { padding:10px 0; border-top:1px solid #eee; }
-  .ow .row:first-of-type { border-top:none; }
-  .ow .row.open { background:#fbfbf9; margin:0 -16px; padding:12px 16px; }
-  .ow .t { font-weight:600; }
-  .ow .m { color:#666; font-size:13px; margin-top:2px; }
-  .ow .due { color:#a5451b; }
-  .ow .why { background:#f1f1ee; border-radius:6px; padding:8px 10px; font-size:13px; color:#444; margin-top:8px; }
-  .ow .why .lab { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#888; margin-bottom:3px; }
-  .ow .chips { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
-  .ow .chip { border:1px solid #bbb; border-radius:999px; padding:3px 10px; font-size:12.5px; background:#fafafa; }
-  .ow .chip.p { background:#1f4d3a; color:#fff; border-color:#1f4d3a; }
-  .ow .chip.q { color:#777; border-style:dashed; }
-  .ow .links { margin-top:8px; font-size:12.5px; color:#1f4d3a; }
-  .ow .avatar { display:inline-block; width:18px; height:18px; border-radius:50%; background:#c9d8cf; vertical-align:-4px; margin-right:6px; }
-  .ow .sheet { background:#fff; border:1px solid #ccc; border-radius:12px; padding:14px 16px; box-shadow:0 6px 24px rgba(0,0,0,.08); }
-  .ow .sheet h5 { margin:0 0 8px; font-size:14px; }
-  .ow .field { border:1px solid #ddd; border-radius:6px; padding:8px 10px; font-size:13px; color:#333; background:#fff; white-space:pre-line; }
-  .ow .hint { font-size:12px; color:#777; margin:6px 0 10px; }
-  .ow .btns { display:flex; gap:8px; margin-top:10px; }
-  .ow .btn { border:1px solid #bbb; border-radius:6px; padding:6px 12px; font-size:13px; background:#fafafa; }
-  .ow .btn.p { background:#1f4d3a; color:#fff; border-color:#1f4d3a; }
-  .ow .opt { padding:8px 10px; border:1px solid #ddd; border-radius:6px; margin-top:6px; font-size:13px; }
-  .ow .opt small { display:block; color:#777; }
-  .ow .slot { display:inline-block; border:1px solid #cbd; background:#eef3ef; border-radius:4px; padding:1px 6px; font-size:12px; margin:2px 2px 0 0; }
+  .ow {
+    font:
+      14px/1.4 system-ui,
+      sans-serif;
+    color: #222;
+  }
+  .ow .card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .ow .card h4 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .ow .card h4 span {
+    font-weight: normal;
+    color: #777;
+    font-size: 13px;
+  }
+  .ow .row {
+    padding: 10px 0;
+    border-top: 1px solid #eee;
+  }
+  .ow .row:first-of-type {
+    border-top: none;
+  }
+  .ow .row.open {
+    background: #fbfbf9;
+    margin: 0 -16px;
+    padding: 12px 16px;
+  }
+  .ow .t {
+    font-weight: 600;
+  }
+  .ow .m {
+    color: #666;
+    font-size: 13px;
+    margin-top: 2px;
+  }
+  .ow .due {
+    color: #a5451b;
+  }
+  .ow .why {
+    background: #f1f1ee;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: #444;
+    margin-top: 8px;
+  }
+  .ow .why .lab {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #888;
+    margin-bottom: 3px;
+  }
+  .ow .chips {
+    margin-top: 8px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .ow .chip {
+    border: 1px solid #bbb;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 12.5px;
+    background: #fafafa;
+  }
+  .ow .chip.p {
+    background: #1f4d3a;
+    color: #fff;
+    border-color: #1f4d3a;
+  }
+  .ow .chip.q {
+    color: #777;
+    border-style: dashed;
+  }
+  .ow .links {
+    margin-top: 8px;
+    font-size: 12.5px;
+    color: #1f4d3a;
+  }
+  .ow .avatar {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #c9d8cf;
+    vertical-align: -4px;
+    margin-right: 6px;
+  }
+  .ow .sheet {
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+  }
+  .ow .sheet h5 {
+    margin: 0 0 8px;
+    font-size: 14px;
+  }
+  .ow .field {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: #333;
+    background: #fff;
+    white-space: pre-line;
+  }
+  .ow .hint {
+    font-size: 12px;
+    color: #777;
+    margin: 6px 0 10px;
+  }
+  .ow .btns {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .ow .btn {
+    border: 1px solid #bbb;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    background: #fafafa;
+  }
+  .ow .btn.p {
+    background: #1f4d3a;
+    color: #fff;
+    border-color: #1f4d3a;
+  }
+  .ow .opt {
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    margin-top: 6px;
+    font-size: 13px;
+  }
+  .ow .opt small {
+    display: block;
+    color: #777;
+  }
+  .ow .slot {
+    display: inline-block;
+    border: 1px solid #cbd;
+    background: #eef3ef;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 12px;
+    margin: 2px 2px 0 0;
+  }
 </style>
 
-<div class="split" style="grid-template-columns:1.3fr 1fr 1fr; gap:16px; align-items:start">
-
-  <div class="mockup"><div class="mockup-header">Today card, one row tapped open</div><div class="mockup-body"><div class="ow"><div class="card">
-    <h4>You owe people <span>3 open</span></h4>
-    <div class="row">
-      <div class="t">Send Sarah the lease addendum</div>
-      <div class="m"><span class="avatar"></span>Sarah Kim · <span class="due">Fri</span></div>
-    </div>
-    <div class="row open">
-      <div class="t">Pick a time for the intake call</div>
-      <div class="m"><span class="avatar"></span>Dr. Alvarez's office · <span class="due">owed by Wed</span> · from email, 2 messages</div>
-      <div class="why">
-        <div class="lab">Why</div>
-        "Please reply with two or three times that work for you next week."<br>
-        You have nothing Tue 2–5pm or Thu after 1pm. Your note from Aug 28 says you wanted this before the 15th.
+<div class="split" style="grid-template-columns: 1.3fr 1fr 1fr; gap: 16px; align-items: start">
+  <div class="mockup">
+    <div class="mockup-header">Today card, one row tapped open</div>
+    <div class="mockup-body">
+      <div class="ow">
+        <div class="card">
+          <h4>You owe people <span>3 open</span></h4>
+          <div class="row">
+            <div class="t">Send Sarah the lease addendum</div>
+            <div class="m">
+              <span class="avatar"></span>Sarah Kim · <span class="due">Fri</span>
+            </div>
+          </div>
+          <div class="row open">
+            <div class="t">Pick a time for the intake call</div>
+            <div class="m">
+              <span class="avatar"></span>Dr. Alvarez's office ·
+              <span class="due">owed by Wed</span> · from email, 2 messages
+            </div>
+            <div class="why">
+              <div class="lab">Why</div>
+              "Please reply with two or three times that work for you next week."<br />
+              You have nothing Tue 2–5pm or Thu after 1pm. Your note from Aug 28 says you wanted
+              this before the 15th.
+            </div>
+            <div class="chips">
+              <span class="chip p">Draft reply with 3 free slots</span
+              ><span class="chip">Task, due Wed</span><span class="chip">Snooze</span
+              ><span class="chip q">Dismiss</span>
+            </div>
+            <div class="links">Open thread · Open Dr. Alvarez in People</div>
+          </div>
+          <div class="row">
+            <div class="t">Confirm Fidelity withdrawal details</div>
+            <div class="m">Fidelity · <span class="due">Mon</span></div>
+          </div>
+        </div>
       </div>
-      <div class="chips"><span class="chip p">Draft reply with 3 free slots</span><span class="chip">Task, due Wed</span><span class="chip">Snooze</span><span class="chip q">Dismiss</span></div>
-      <div class="links">Open thread · Open Dr. Alvarez in People</div>
     </div>
-    <div class="row">
-      <div class="t">Confirm Fidelity withdrawal details</div>
-      <div class="m">Fidelity · <span class="due">Mon</span></div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">After tapping "Draft reply"</div>
+    <div class="mockup-body">
+      <div class="ow">
+        <div class="sheet">
+          <h5>Reply to Dr. Alvarez's office</h5>
+          <div class="field">
+            Hi, thanks for reaching out. Any of these work for me:
+
+            <span class="slot">Tue Sep 9, 2:00–3:00pm</span
+            ><span class="slot">Tue Sep 9, 4:00–5:00pm</span
+            ><span class="slot">Thu Sep 11, 1:30–2:30pm</span>
+
+            Let me know which suits, and I'll hold it. Ben
+          </div>
+          <div class="hint">
+            Editable. Slots come from your calendar right now, so they are current when you send.
+            Nothing is sent until you choose.
+          </div>
+          <div class="btns">
+            <span class="btn p">Send</span><span class="btn">Save as Gmail draft</span
+            ><span class="btn">Cancel</span>
+          </div>
+          <div class="hint" style="margin-top: 8px">
+            Send or save closes this item and links it to the sent message. If Moss later sees a
+            reply from them, the thread is judged again.
+          </div>
+        </div>
+      </div>
     </div>
-  </div></div></div></div>
+  </div>
 
-  <div class="mockup"><div class="mockup-header">After tapping "Draft reply"</div><div class="mockup-body"><div class="ow"><div class="sheet">
-    <h5>Reply to Dr. Alvarez's office</h5>
-    <div class="field">Hi, thanks for reaching out. Any of these work for me:
-
-<span class="slot">Tue Sep 9, 2:00–3:00pm</span><span class="slot">Tue Sep 9, 4:00–5:00pm</span><span class="slot">Thu Sep 11, 1:30–2:30pm</span>
-
-Let me know which suits, and I'll hold it.
-
-Ben</div>
-    <div class="hint">Editable. Slots come from your calendar right now, so they are current when you send. Nothing is sent until you choose.</div>
-    <div class="btns"><span class="btn p">Send</span><span class="btn">Save as Gmail draft</span><span class="btn">Cancel</span></div>
-    <div class="hint" style="margin-top:8px">Send or save closes this item and links it to the sent message. If Moss later sees a reply from them, the thread is judged again.</div>
-  </div></div></div></div>
-
-  <div class="mockup"><div class="mockup-header">After tapping "Dismiss"</div><div class="mockup-body"><div class="ow"><div class="sheet">
-    <h5>Dismiss this?</h5>
-    <div class="hint" style="margin-top:0">Optional: tell Moss why, so it gets better.</div>
-    <div class="opt">Not something I owe <small>Moss stops flagging mail like this from this sender.</small></div>
-    <div class="opt">Already handled <small>Just clears it. Teaches nothing.</small></div>
-    <div class="opt">Not now <small>Clears it; comes back if they write again.</small></div>
-    <div class="btns"><span class="btn p">Dismiss</span><span class="btn">Cancel</span></div>
-    <div class="hint" style="margin-top:8px">Tapping Dismiss without a reason just clears it.</div>
-  </div></div></div></div>
-
+  <div class="mockup">
+    <div class="mockup-header">After tapping "Dismiss"</div>
+    <div class="mockup-body">
+      <div class="ow">
+        <div class="sheet">
+          <h5>Dismiss this?</h5>
+          <div class="hint" style="margin-top: 0">Optional: tell Moss why, so it gets better.</div>
+          <div class="opt">
+            Not something I owe <small>Moss stops flagging mail like this from this sender.</small>
+          </div>
+          <div class="opt">Already handled <small>Just clears it. Teaches nothing.</small></div>
+          <div class="opt">Not now <small>Clears it; comes back if they write again.</small></div>
+          <div class="btns"><span class="btn p">Dismiss</span><span class="btn">Cancel</span></div>
+          <div class="hint" style="margin-top: 8px">
+            Tapping Dismiss without a reason just clears it.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
-<div class="section" style="margin-top:18px">
+<div class="section" style="margin-top: 18px">
   <h3>Actions with no second step</h3>
-  <p><b>Task, due Wed</b> creates the task at once, in your default list, and swaps the chip for "Task made · open". The item stays until the task is done or the thread is answered.<br>
-  <b>Snooze</b> offers Moss's suggested date plus "tomorrow / next week / pick a date", then hides the row until then.</p>
+  <p>
+    <b>Task, due Wed</b> creates the task at once, in your default list, and swaps the chip for
+    "Task made · open". The item stays until the task is done or the thread is answered.<br />
+    <b>Snooze</b> offers Moss's suggested date plus "tomorrow / next week / pick a date", then hides
+    the row until then.
+  </p>
 </div>
