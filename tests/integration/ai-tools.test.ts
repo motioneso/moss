@@ -480,6 +480,7 @@ describe("AI read-only assistant tool execution foundation", () => {
       "notes.sync",
       "proactive-scan-source",
       "commitment-extraction",
+      "commitment-email-judgement",
       "person-index",
       "sync-person-memory",
       "workflow.step.deadletter",
