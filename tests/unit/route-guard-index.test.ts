@@ -66,6 +66,13 @@ describe("route→module index", () => {
     // host diagnostics + install: admin-gated platform routes owned by no module (#255, #993)
     expect(PLATFORM_UNGUARDED_ROUTES.has("GET /api/admin/host/diagnostics")).toBe(true);
     expect(PLATFORM_UNGUARDED_ROUTES.has("POST /api/admin/host/install")).toBe(true);
+    // family encryption keys: dedicated encrypted admin routes (#2312) — missing
+    // entries here stop the server booting, which is exactly what happened on 2315.
+    expect(PLATFORM_UNGUARDED_ROUTES.has("GET /api/admin/settings/encryption-keys")).toBe(true);
+    expect(PLATFORM_UNGUARDED_ROUTES.has("PUT /api/admin/settings/encryption-keys")).toBe(true);
+    expect(PLATFORM_UNGUARDED_ROUTES.has("POST /api/admin/settings/encryption-keys/rotate")).toBe(
+      true
+    );
   });
 });
 

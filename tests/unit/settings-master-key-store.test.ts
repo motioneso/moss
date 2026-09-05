@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
-import { dataContextBrand, type DataContextDb } from "@moss/db";
+import { dataContextBrand, JsonSecretCipher, type DataContextDb } from "@moss/db";
 
 import {
   generateFamilyKey,
@@ -9,7 +9,7 @@ import {
   INTEGRATIONS_FAMILY,
   invalidateFamilyKeyCache,
   loadFamilyKeyring,
-  SECRET_FAMILY_SETTINGS
+  SECRET_INSTANCE_SETTING_KEYS
 } from "@moss/settings";
 
 function createMockDb(settings: Record<string, unknown> = {}) {
@@ -117,6 +117,62 @@ describe("family key store (#2312 slice 1)", () => {
     expect(fromEnv).toEqual([{ family: "integrations", source: "env" }]);
   });
 
+  it("data locked under the env key stays readable after moving into the store", async () => {
+    invalidateFamilyKeyCache();
+    const envSecret = "e".repeat(40);
+    const env = {
+      NODE_ENV: "production",
+      ...MASTER_ENV,
+      JARVIS_INTEGRATIONS_SECRET_KEY: envSecret
+    };
+    const { scopedDb, store } = createMockDb();
+    const repository = createMockRepository(store);
+
+    const before = await loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, env);
+    expect(before).not.toBeNull();
+    const sealed = new JsonSecretCipher(before!, "test").encryptJson({ secret: "credential-1" });
+
+    await generateFamilyKey(scopedDb, repository, {
+      family: INTEGRATIONS_FAMILY,
+      actorUserId: "u1",
+      requestId: "r1",
+      env
+    });
+    invalidateFamilyKeyCache();
+    const after = await loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, {
+      NODE_ENV: "production",
+      ...MASTER_ENV
+    });
+    expect(after).not.toBeNull();
+    const opened = new JsonSecretCipher(after!, "test").decryptJson(
+      new JsonSecretCipher(after!, "test").parseEnvelope(sealed)
+    );
+    expect(opened.secret).toBe("credential-1");
+  });
+
+  it("data locked under the first key stays readable after two rotations", async () => {
+    invalidateFamilyKeyCache();
+    const env = { NODE_ENV: "production", ...MASTER_ENV };
+    const { scopedDb, store } = createMockDb();
+    const repository = createMockRepository(store);
+    const write = { family: INTEGRATIONS_FAMILY, actorUserId: "u1", requestId: "r1", env };
+
+    await generateFamilyKey(scopedDb, repository, write);
+    const first = await loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, env);
+    const sealed = new JsonSecretCipher(first!, "test").encryptJson({ secret: "credential-1" });
+
+    await generateFamilyKey(scopedDb, repository, write);
+    invalidateFamilyKeyCache();
+    await generateFamilyKey(scopedDb, repository, write);
+    invalidateFamilyKeyCache();
+    const third = await loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, env);
+    expect(third?.currentKeyId).toBe("s3");
+    const opened = new JsonSecretCipher(third!, "test").decryptJson(
+      new JsonSecretCipher(third!, "test").parseEnvelope(sealed)
+    );
+    expect(opened.secret).toBe("credential-1");
+  });
+
   it("status payloads never contain key material", async () => {
     invalidateFamilyKeyCache();
     const { scopedDb, store } = createMockDb();
@@ -134,6 +190,6 @@ describe("family key store (#2312 slice 1)", () => {
     const material = writes[0]!.value.value.ciphertext;
     expect(typeof material).toBe("string");
     expect(JSON.stringify(status)).not.toContain(material);
-    expect(SECRET_FAMILY_SETTINGS.has("keys.integrations")).toBe(true);
+    expect(SECRET_INSTANCE_SETTING_KEYS.has("keys.integrations")).toBe(true);
   });
 });

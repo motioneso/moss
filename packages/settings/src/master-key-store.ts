@@ -45,11 +45,6 @@ export function familyByName(name: string): FamilyKeyDescriptor | null {
   return FAMILIES.find((family) => family.name === name) ?? null;
 }
 
-/** Setting keys holding family envelopes (subset of the secret registry). */
-export const SECRET_FAMILY_SETTINGS: ReadonlySet<string> = new Set(
-  FAMILIES.map((family) => family.settingKey)
-);
-
 /** {@link JsonSecretCipher} bound to the "master key store" domain label. */
 export class MasterKeyStoreCipher extends JsonSecretCipher {
   constructor(keyring: Keyring) {
@@ -78,7 +73,7 @@ export function createMasterKeyStoreCipher(
 interface StoredFamilyKey {
   readonly keyId: string;
   readonly secret: string;
-  readonly previous?: { readonly keyId: string; readonly secret: string };
+  readonly retired: readonly { readonly keyId: string; readonly secret: string }[];
 }
 
 const SECRET_FIELD = "secret";
@@ -119,8 +114,18 @@ function readStoredFamilyKey(
   const keyId = decrypted.keyId;
   const secret = decrypted[SECRET_FIELD];
   if (typeof keyId !== "string" || typeof secret !== "string") return null;
-  const previous = decrypted.previous as StoredFamilyKey["previous"] | undefined;
-  return { keyId, secret, previous };
+  const retired = decrypted.retired;
+  if (retired !== undefined && !Array.isArray(retired)) return null;
+  return {
+    keyId,
+    secret,
+    retired: Array.isArray(retired)
+      ? retired.filter(
+          (entry): entry is { keyId: string; secret: string } =>
+            typeof entry?.keyId === "string" && typeof entry?.secret === "string"
+        )
+      : []
+  };
 }
 
 /**
@@ -157,9 +162,10 @@ export async function loadFamilyKeyring(
   const current = Buffer.from(stored.secret, "hex");
   const keys = new Map<string, Buffer>([[stored.keyId, current]]);
   const legacyCandidates: Buffer[] = [current];
-  if (stored.previous) {
-    const previous = Buffer.from(stored.previous.secret, "hex");
-    keys.set(stored.previous.keyId, previous);
+  for (const retired of stored.retired) {
+    if (keys.has(retired.keyId)) continue;
+    const previous = Buffer.from(retired.secret, "hex");
+    keys.set(retired.keyId, previous);
     legacyCandidates.push(previous);
   }
   const keyring: Keyring = { currentKeyId: stored.keyId, keys, legacyCandidates };
@@ -211,23 +217,24 @@ export async function generateFamilyKey(
     cipher
   );
   const envSecret = resolveMossEnv(env, input.family.keyEnvVar);
-  const previous = existing
-    ? { keyId: existing.keyId, secret: existing.secret }
-    : envSecret !== undefined
-      ? {
-          keyId: resolveMossEnv(env, input.family.keyIdEnvVar) ?? "v1",
-          secret: createHash("sha256").update(envSecret).digest("hex")
-        }
-      : undefined;
+  const retired: { keyId: string; secret: string }[] = [...(existing?.retired ?? [])];
+  if (existing) {
+    retired.push({ keyId: existing.keyId, secret: existing.secret });
+  } else if (envSecret !== undefined) {
+    retired.push({
+      keyId: resolveMossEnv(env, input.family.keyIdEnvVar) ?? "v1",
+      secret: createHash("sha256").update(envSecret).digest("hex")
+    });
+  }
   const payload: StoredFamilyKey = {
     keyId: nextKeyId(existing?.keyId ?? null),
     secret: randomBytes(32).toString("hex"),
-    ...(previous ? { previous } : {})
+    retired
   };
   const envelope: EncryptedSecret = cipher.encryptJson({
     keyId: payload.keyId,
     [SECRET_FIELD]: payload.secret,
-    ...(payload.previous ? { previous: payload.previous } : {})
+    retired: payload.retired
   });
   await repository.upsertInstanceSetting(scopedDb, {
     key: input.family.settingKey,

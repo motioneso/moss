@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { dataContextBrand, type DataContextDb } from "@moss/db";
 import { registerFamilyKeyRoutes } from "@moss/settings";
 
-function createHarness(admin: boolean) {
+function createHarness(admin: boolean | null) {
   const store = new Map<string, unknown>();
   const keyChanges: unknown[] = [];
   const scopedDb = {
@@ -23,6 +23,7 @@ function createHarness(admin: boolean) {
   } as unknown as DataContextDb;
   const repository = {
     async getUserById() {
+      if (admin === null) return null;
       return { id: "admin", is_instance_admin: admin };
     },
     async upsertInstanceSetting(_db: DataContextDb, input: { key: string; value: unknown }) {
@@ -91,10 +92,41 @@ describe("family key admin routes (#2312 slice 1)", () => {
     expect(rotate.json()).toEqual({ keys: [{ family: "integrations", source: "store" }] });
 
     const nonAdmin = createHarness(false);
-    const denied = await nonAdmin.app.inject({
-      method: "GET",
-      url: "/api/admin/settings/encryption-keys"
-    });
-    expect(denied.statusCode).toBe(403);
+    for (const request of [
+      { method: "GET", url: "/api/admin/settings/encryption-keys" },
+      {
+        method: "PUT",
+        url: "/api/admin/settings/encryption-keys",
+        payload: { family: "integrations" }
+      },
+      {
+        method: "POST",
+        url: "/api/admin/settings/encryption-keys/rotate",
+        payload: { family: "integrations" }
+      }
+    ] as const) {
+      const denied = await nonAdmin.app.inject(request);
+      expect(denied.statusCode).toBe(403);
+    }
+  });
+
+  it("refuses callers with no identity on every endpoint", async () => {
+    const { app } = createHarness(null);
+    for (const request of [
+      { method: "GET", url: "/api/admin/settings/encryption-keys" },
+      {
+        method: "PUT",
+        url: "/api/admin/settings/encryption-keys",
+        payload: { family: "integrations" }
+      },
+      {
+        method: "POST",
+        url: "/api/admin/settings/encryption-keys/rotate",
+        payload: { family: "integrations" }
+      }
+    ] as const) {
+      const denied = await app.inject(request);
+      expect(denied.statusCode).toBe(401);
+    }
   });
 });
