@@ -31,7 +31,8 @@ describe("email thread provider", () => {
         row({}),
         row({ id: "y", external_id: "m2", sender: "ben@ben.com" })
       ]),
-      listNewerInThreads: vi.fn(async () => [])
+      listNewerInThreads: vi.fn(async () => []),
+      getByOwnerAndExternalId: vi.fn(async () => undefined)
     };
     const p = createEmailThreadProvider(repo, async () => new Set(["ben@ben.com"]));
     const msgs = await p.listThreadMessages({}, "u1", "t1");
@@ -47,6 +48,7 @@ describe("email thread provider", () => {
   it("translates the newer-message lookup both ways", async () => {
     const repo = {
       listByThread: vi.fn(async () => []),
+      getByOwnerAndExternalId: vi.fn(async () => undefined),
       listNewerInThreads: vi.fn(async () => [
         { threadId: "t1", message: row({ id: "z", external_id: "m9" }) }
       ])

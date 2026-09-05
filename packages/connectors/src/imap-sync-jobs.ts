@@ -1,5 +1,7 @@
 import type { Job, PgBoss, WorkOptions } from "pg-boss";
 
+import type { EmailThreadJudgementRequester } from "@moss/module-sdk";
+
 import type { ActorScopedJobPayload, QueueDefinition } from "@moss/jobs";
 import { registerDataContextWorker } from "@moss/jobs";
 import type { ConnectorSyncStatus, DataContextDb, DataContextRunner } from "@moss/db";
@@ -8,7 +10,7 @@ import { EmailRepository } from "@moss/email";
 
 import { createConnectorSecretCipher, type ConnectorSecretCipher } from "./crypto.js";
 import type { EmailExtractDeps } from "./email-extract.js";
-import { extractEmailSignals } from "./email-extract.js";
+import { extractEmailSignals, senderAddress } from "./email-extract.js";
 import { buildEmailExtractDeps, type BuildEmailExtractDepsOptions } from "./extract-deps.js";
 import type { EmailReadProvider } from "./email-read-provider.js";
 import { ImapEmailReadProvider, IMAP_DEFAULT_FOLDER } from "./imap-email-read-provider.js";
@@ -89,6 +91,13 @@ export interface RunImapSyncDeps {
   readonly logger?: SyncLogger;
   /** What caused this run to start. Defaults to "schedule" when a caller does not specify one. */
   readonly trigger?: ConnectorSyncTrigger;
+  /** #2274: needed to ask for a thread judgement; without it no request is made. */
+  readonly actorUserId?: string;
+  readonly threadJudgementRequester?: EmailThreadJudgementRequester;
+  readonly knownSenderAddresses?: (
+    scopedDb: DataContextDb,
+    actorUserId: string
+  ) => Promise<ReadonlySet<string>>;
 }
 
 export async function runImapSync(
@@ -143,11 +152,17 @@ export async function runImapSync(
 
   try {
     const keys = await provider.listMessageKeys(secret, IMAP_DEFAULT_FOLDER);
+    const knownSenders =
+      deps.knownSenderAddresses && deps.actorUserId
+        ? await deps.knownSenderAddresses(scopedDb, deps.actorUserId)
+        : undefined;
 
     for (const key of keys) {
       try {
         const parsed = await provider.getMessage(secret, key);
-        const extracted = await extractEmailSignals(parsed, deps.emailExtractDeps);
+        const extracted = await extractEmailSignals(parsed, deps.emailExtractDeps, {
+          knownSender: knownSenders?.has(senderAddress(parsed.from)) ?? false
+        });
         await withSavepoint(scopedDb, (savepointDb) =>
           emailRepo.upsertCachedMessage(savepointDb, {
             connectorAccountId,
@@ -163,6 +178,14 @@ export async function runImapSync(
           })
         );
         emailUpserted += 1;
+        // IMAP carries no thread id, so the message id stands in as the thread reference; the
+        // thread provider then falls back to that single message.
+        if (extracted.gate === "maybe_owed" && deps.threadJudgementRequester && deps.actorUserId) {
+          await deps.threadJudgementRequester.requestThreadJudgement(
+            deps.actorUserId,
+            parsed.externalId
+          );
+        }
       } catch (error) {
         // Each message opens a fresh connection, so a password revoked after the listing
         // step surfaces here rather than from listMessageKeys — let it reach the sign-in
@@ -209,6 +232,8 @@ export interface RegisterImapSyncWorkerDeps {
   readonly workOptions?: WorkOptions;
   readonly onResult?: (job: Job<ImapSyncPayload>, result: ImapSyncResult) => void;
   readonly logger?: SyncLogger;
+  readonly threadJudgementRequester?: EmailThreadJudgementRequester;
+  readonly knownSenderAddresses?: RunImapSyncDeps["knownSenderAddresses"];
 }
 
 export async function registerImapSyncWorker(
@@ -235,7 +260,10 @@ export async function registerImapSyncWorker(
         cipher,
         emailExtractDeps,
         logger: deps.logger,
-        trigger: job.data.trigger
+        trigger: job.data.trigger,
+        actorUserId: job.data.actorUserId,
+        threadJudgementRequester: deps.threadJudgementRequester,
+        knownSenderAddresses: deps.knownSenderAddresses
       });
       deps.onResult?.(job, result);
       return result;
