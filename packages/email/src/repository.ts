@@ -170,8 +170,14 @@ export class EmailRepository {
       typeof input.externalMetadata?.historyId === "string"
         ? input.externalMetadata.historyId
         : null;
+    // A one-time-code skip is a deliberate replacement, not a partial/missing analysis — it
+    // must always overwrite whatever was stored before, even a complete prior triage.
+    const isExplicitOtpSkip =
+      (input.signals as { skipped?: unknown } | undefined)?.skipped === "otp";
     const preserveSameRevisionTriage =
-      incomingHistoryId !== null && (input.summary == null || !hasCompleteTriage(input.signals));
+      !isExplicitOtpSkip &&
+      incomingHistoryId !== null &&
+      (input.summary == null || !hasCompleteTriage(input.signals));
     const storedTriageIsComplete = sql<boolean>`
       app.email_messages.summary is not null
       and case

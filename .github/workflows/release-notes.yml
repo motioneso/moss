@@ -50,6 +50,11 @@ jobs:
         run: |
           set -euo pipefail
 
+          # The merge below commits on a fresh runner, so the bot identity must
+          # exist before any git command that writes a commit (#2283).
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           branch=automation/release-notes
           if git ls-remote --exit-code origin "refs/heads/$branch" >/dev/null 2>&1; then
             git fetch origin "$branch"
@@ -66,8 +71,6 @@ jobs:
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/WHATS_NEW.md
           git commit -m "docs(release-notes): append note for PR #$PR_NUMBER"
           git push origin "$branch"

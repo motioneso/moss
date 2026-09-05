@@ -294,6 +294,15 @@ export interface TasksTable {
   updated_at: TimestampColumn;
 }
 
+export interface ScratchpadsTable {
+  user_id: string;
+  body: string;
+  revision: number;
+  sync_to_notes: boolean;
+  shortcut: string;
+  updated_at: TimestampColumn;
+}
+
 export interface TaskActivityTable {
   id: string;
   task_id: string;
@@ -1407,6 +1416,7 @@ export interface MossDatabase {
   "app.module_kv": ModuleKvTable;
   "app.rls_probe_items": RlsProbeItemsTable;
   "app.tasks": TasksTable;
+  "app.scratchpads": ScratchpadsTable;
   "app.task_activity": TaskActivityTable;
   "app.task_lists": TaskListsTable;
   "app.task_tags": TaskTagsTable;
@@ -1486,6 +1496,7 @@ export type ModuleEnablementRow = Selectable<ModuleEnablementTable>;
 export type ExternalModuleRow = Selectable<ExternalModulesTable>;
 export type RlsProbeItem = Selectable<RlsProbeItemsTable>;
 export type Task = Selectable<TasksTable>;
+export type Scratchpad = Selectable<ScratchpadsTable>;
 export type EmailActionSuppression = Selectable<EmailActionSuppressionTable>;
 export type EmailActionSuppressionEvidence = Selectable<EmailActionSuppressionEvidenceTable>;
 export type TaskActivity = Selectable<TaskActivityTable>;
