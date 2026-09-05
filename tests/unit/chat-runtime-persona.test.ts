@@ -54,6 +54,16 @@ describe("MOSS_PERSONA_TOOL_GUIDANCE", () => {
     expect(MOSS_PERSONA_TOOL_GUIDANCE).toContain("native Write, Edit, Bash, or Skill");
     expect(MOSS_PERSONA_TOOL_GUIDANCE).toContain("wrong-tool choice");
   });
+
+  // #2280 live proof: the drawer launches the CLI without its own search tool, so the model
+  // guessed at a built-in "Web Search" tool, got "No such tool", and reached web.search last
+  // with a poor query. The persona must name web.search as the only way to search the web.
+  it("names web.search as the only public-web search tool and orders search before read", () => {
+    expect(MOSS_PERSONA_TOOL_GUIDANCE).toContain("Jarv1s web.search tool");
+    expect(MOSS_PERSONA_TOOL_GUIDANCE).toContain("descriptive query");
+    expect(MOSS_PERSONA_TOOL_GUIDANCE).toContain("there is no other search tool");
+    expect(MOSS_PERSONA_TOOL_GUIDANCE).toContain("search before trying to read a page");
+  });
 });
 
 function dataContext(): DataContextRunner {
