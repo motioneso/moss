@@ -17,14 +17,19 @@ import {
 const db = {} as DataContextDb;
 const feed = `<rss><channel><item><title>A consequential headline today</title><link>https://one.example/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
 
-function ai(allowed = true): NewsAiPort {
+function ai(allowed = true, category = "news_publisher"): NewsAiPort {
   return {
     fingerprint: async () => "fp",
     generateJson: async () => ({
       ok: true,
-      object: { allowed, category: "news_publisher" }
+      object: { allowed, category }
     })
   };
+}
+
+// A fake model answering as it would for a subreddit: a community, not a publisher.
+function communityAi(allowed = true): NewsAiPort {
+  return ai(allowed, "news_community");
 }
 
 // Same as ai(), but generateJson is a spy so a test can prove the model was never asked.
@@ -803,7 +808,7 @@ describe("resolveSourceInput: subreddits", () => {
           fetch: fetchMap({}),
           fetchWithOptions: redditFetch(subredditOk()),
           search: noSearch,
-          ai: ai(),
+          ai: communityAi(),
           repo: repo()
         },
         { raw, hasWebSearch: false }
@@ -862,7 +867,7 @@ describe("resolveSourceInput: subreddits", () => {
           fetch: fetchMap({}),
           fetchWithOptions: redditFetch(subredditOk()),
           search: noSearch,
-          ai: ai(false),
+          ai: communityAi(false),
           repo: repo()
         },
         { raw: "r/nfl", hasWebSearch: false }
@@ -894,7 +899,7 @@ describe("resolveSourceInput: subreddits", () => {
         fetch: fetchMap({}),
         fetchWithOptions: redditFetch(subredditOk()),
         search,
-        ai: ai(),
+        ai: communityAi(),
         repo: repo()
       },
       { raw: "r/nfl", hasWebSearch: false }
@@ -911,7 +916,7 @@ describe("resolveSourceInput: subreddits", () => {
         fetch: fetchMap({}),
         fetchWithOptions: redditFetch(subredditOk()),
         search: noSearch,
-        ai: ai(),
+        ai: communityAi(),
         repo: policyRepo
       },
       { raw: "r/nfl", hasWebSearch: false }
