@@ -32,6 +32,7 @@ describe("createModelNativeProvider", () => {
     expect(seenInput?.prompt).toContain("release notes for widget 4");
     expect(seenInput?.prompt).toContain("up to 3 results");
     expect(seenInput?.prompt).toContain("last week");
+    expect(seenInput?.prompt).toContain("Copy each url exactly as your search tool returned it");
     expect(seenInput?.schema).toMatchObject({ type: "object", required: ["results"] });
   });
 
@@ -158,6 +159,72 @@ describe("createModelNativeProvider", () => {
     expect(output.results).toEqual([
       { title: "Good", url: "https://example.com/good", snippet: "ok" }
     ]);
+  });
+
+  // #2280 live proof: the model rewrote urls in its JSON body, so none matched a citation by
+  // exact string and every result reached the chat model with an empty snippet. Matching now
+  // ignores scheme, host case, trailing slash, fragment and utm params; the cited url is kept.
+  it("matches a described url to its citation after normalising, keeping the cited url", async () => {
+    const runner: ModelNativeSearchRunner = async () => ({
+      object: {
+        results: [
+          { title: "BBC front page", url: "http://WWW.BBC.CO.UK/news#top", snippet: "Top story" },
+          { title: "Example story", url: "https://example.com/story?id=7", snippet: "Details" }
+        ]
+      },
+      sources: [
+        { title: "BBC", url: "https://www.bbc.co.uk/news/" },
+        { title: "Example", url: "http://Example.com/story?utm_source=x&id=7&utm_medium=y#frag" }
+      ]
+    });
+    const provider = createModelNativeProvider(runner);
+
+    const output = await provider.search({ query: "q", limit: 5 });
+
+    expect(output.results).toEqual([
+      { title: "BBC front page", url: "https://www.bbc.co.uk/news/", snippet: "Top story" },
+      {
+        title: "Example story",
+        url: "http://Example.com/story?utm_source=x&id=7&utm_medium=y#frag",
+        snippet: "Details"
+      }
+    ]);
+    expect(output.trace).toMatchObject({ provider: "model-native", count: 2, undescribed: 0 });
+  });
+
+  it("collapses citations that differ only by trailing slash or scheme", async () => {
+    const runner: ModelNativeSearchRunner = async () => ({
+      object: { results: [] },
+      sources: [
+        { title: "One", url: "https://example.com/a/" },
+        { title: "One again", url: "http://example.com/a" }
+      ]
+    });
+    const provider = createModelNativeProvider(runner);
+
+    const output = await provider.search({ query: "q", limit: 5 });
+
+    expect(output.results.map((result) => result.url)).toEqual(["https://example.com/a/"]);
+  });
+
+  it("counts cited urls the JSON body never described in the trace", async () => {
+    const runner: ModelNativeSearchRunner = async () => ({
+      object: {
+        results: [{ title: "Described", url: "https://example.com/one", snippet: "yes" }]
+      },
+      sources: [
+        { title: "One", url: "https://example.com/one" },
+        { title: "Two", url: "https://example.com/two" },
+        { title: "Three", url: "https://example.com/three" }
+      ]
+    });
+    const provider = createModelNativeProvider(runner);
+
+    const output = await provider.search({ query: "q", limit: 5 });
+
+    expect(output.results).toHaveLength(3);
+    expect(output.results[1]?.snippet).toBe("");
+    expect(output.trace).toMatchObject({ count: 3, cited: 3, undescribed: 2 });
   });
 
   it("caps cited results at the requested limit", async () => {

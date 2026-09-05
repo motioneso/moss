@@ -135,17 +135,50 @@ function buildModelNativeSearchPrompt(input: WebSearchProviderInput): string {
     `Use your web search tool to find up to ${input.limit} results for: ${input.query}.` +
     `${freshnessLine} Reply with ONLY a JSON object of the shape ` +
     `{"results": [{"title": string, "url": string, "snippet": string}]}, built from pages you ` +
-    "actually found through search, not invented ones."
+    "actually found through search, not invented ones. Copy each url exactly as your search " +
+    "tool returned it, character for character; do not shorten, rewrite, or guess a url."
   );
+}
+
+const URL_HAS_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+/**
+ * Normalises a url for matching only (the cited url is still returned untouched): lowercases the
+ * host, drops the scheme, the fragment, the trailing slash and any utm_* params. The #2280 live
+ * proof showed the model rewriting urls in its JSON body, so none matched a citation by exact
+ * string and every result reached the chat model with an empty snippet and a generic title.
+ * A url that does not parse falls back to a trimmed, lowercased string with the same trimming.
+ */
+function normalizeUrlForMatch(raw: string): string {
+  const trimmed = raw.trim();
+  try {
+    const parsed = new URL(URL_HAS_SCHEME.test(trimmed) ? trimmed : `https://${trimmed}`);
+    const params = new URLSearchParams(parsed.search);
+    for (const key of [...params.keys()]) {
+      if (key.toLowerCase().startsWith("utm_")) params.delete(key);
+    }
+    const query = params.toString();
+    const path = parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.host.toLowerCase()}${path}${query ? `?${query}` : ""}`;
+  } catch {
+    return trimmed
+      .toLowerCase()
+      .replace(/^[a-z][a-z0-9+.-]*:\/\//, "")
+      .replace(/#.*$/, "")
+      .replace(/\/+$/, "");
+  }
 }
 
 /**
  * Runs the structured search request. The provider's own citations (the pages its search tool
  * actually returned) are the ground truth for urls: results come back in citation order, each
- * enriched with the title and snippet the model wrote for that url in the JSON body. A url that
+ * enriched with the title and snippet the model wrote for that url in the JSON body. Described
+ * and cited urls are matched after {@link normalizeUrlForMatch}, never by exact string. A url that
  * appears only in the JSON body was never verified by a search hit and is dropped, and a reply
  * with no citations at all yields an empty list (spec decision 6; #2228 review finding 6).
- * Returns an empty list when the runner is unavailable.
+ * `trace.undescribed` counts cited urls the JSON body never described, so a proof can tell whether
+ * the model rewrote urls or simply skipped them. Returns an empty list when the runner is
+ * unavailable.
  */
 export function createModelNativeProvider(runner: ModelNativeSearchRunner): WebSearchProvider {
   return {
@@ -167,8 +200,9 @@ export function createModelNativeProvider(runner: ModelNativeSearchRunner): WebS
         if (!entry || typeof entry !== "object") continue;
         const candidate = entry as { title?: unknown; url?: unknown; snippet?: unknown };
         if (typeof candidate.url !== "string" || candidate.url.length === 0) continue;
-        if (describedByUrl.has(candidate.url)) continue;
-        describedByUrl.set(candidate.url, {
+        const key = normalizeUrlForMatch(candidate.url);
+        if (key.length === 0 || describedByUrl.has(key)) continue;
+        describedByUrl.set(key, {
           title: typeof candidate.title === "string" ? candidate.title : "",
           snippet: typeof candidate.snippet === "string" ? candidate.snippet : ""
         });
@@ -176,12 +210,14 @@ export function createModelNativeProvider(runner: ModelNativeSearchRunner): WebS
 
       const results: WebSearchProviderResult[] = [];
       const seen = new Set<string>();
+      let undescribed = 0;
       for (const source of generated.sources ?? []) {
-        if (typeof source.url !== "string" || source.url.length === 0 || seen.has(source.url)) {
-          continue;
-        }
-        seen.add(source.url);
-        const described = describedByUrl.get(source.url);
+        if (typeof source.url !== "string" || source.url.length === 0) continue;
+        const key = normalizeUrlForMatch(source.url);
+        if (key.length === 0 || seen.has(key)) continue;
+        seen.add(key);
+        const described = describedByUrl.get(key);
+        if (!described) undescribed += 1;
         results.push({
           title: described?.title || source.title || source.url,
           url: source.url,
@@ -192,7 +228,7 @@ export function createModelNativeProvider(runner: ModelNativeSearchRunner): WebS
 
       return {
         results,
-        trace: { provider: "model-native", count: results.length, cited: seen.size }
+        trace: { provider: "model-native", count: results.length, cited: seen.size, undescribed }
       };
     }
   };
