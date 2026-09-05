@@ -76,7 +76,7 @@
     "test:calendar-delete": "tsx scripts/test-integration.ts tests/integration/calendar-delete.test.ts",
     "test:release-hardening": "tsx scripts/test-integration.ts tests/integration/release-hardening.test.ts",
     "test:shares": "tsx scripts/test-integration.ts tests/integration/shares.test.ts",
-    "test:notifications": "tsx scripts/test-integration.ts tests/integration/notifications.test.ts tests/integration/notifications-hardening.test.ts tests/integration/notifications-keyed-upsert.test.ts",
+    "test:notifications": "tsx scripts/test-integration.ts tests/integration/notifications.test.ts tests/integration/notifications-hardening.test.ts tests/integration/notifications-keyed-upsert.test.ts tests/integration/push-subscriptions.test.ts",
     "test:tasks": "tsx scripts/test-integration.ts tests/integration/tasks.test.ts",
     "test:tasks-tools": "tsx scripts/test-integration.ts tests/integration/tasks-tools.test.ts",
     "test:commitments": "JARVIS_PGDATABASE=jarvis_build_537 vitest run tests/integration/commitments.test.ts",
