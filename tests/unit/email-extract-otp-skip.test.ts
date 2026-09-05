@@ -36,12 +36,12 @@ function fixture(overrides: Partial<ParsedEmail>): ParsedEmail {
 }
 
 /**
- * The skip is deliberately four separate signals ANDed together: an automated sender, a subject
- * line that itself names a sign-in / verification / one-time / security code, a short code
+ * The skip is deliberately three separate signals ANDed together: a subject line that itself
+ * names and hands over a sign-in / verification / one-time / security code, a short code
  * standing on its own, and nothing anywhere in the message about a door, a stay, an order, a
- * delivery, a booking or a money-off code. Any one signal alone appears in ordinary mail all
- * the time, so the negatives below are the real specification: they are the messages a person
- * actually wants to see.
+ * delivery, a booking or a money-off code. The sender address is not a signal at all. Any one
+ * signal alone appears in ordinary mail all the time, so the negatives below are the real
+ * specification: they are the messages a person actually wants to see.
  */
 describe("looksLikeOneTimeCodeEmail: ordinary mail is never skipped", () => {
   const negatives: Array<[string, { from: string; subject: string; body: string }]> = [
@@ -118,7 +118,7 @@ describe("looksLikeOneTimeCodeEmail: ordinary mail is never skipped", () => {
       }
     ],
     [
-      "an automated sender with a code phrase but no code standing alone",
+      "a message with a code phrase but no code standing alone",
       {
         from: "no-reply@accounts.example.invalid",
         subject: "About your security code",
@@ -126,7 +126,7 @@ describe("looksLikeOneTimeCodeEmail: ordinary mail is never skipped", () => {
       }
     ],
     [
-      "an automated sender with a short number but no code phrase",
+      "a message with a short number but no code phrase",
       {
         from: "no-reply@billing.example.invalid",
         subject: "Statement ready",
@@ -134,7 +134,7 @@ describe("looksLikeOneTimeCodeEmail: ordinary mail is never skipped", () => {
       }
     ],
     [
-      "an automated message whose subject never mentions a code",
+      "a message whose subject never mentions a code",
       {
         from: "noreply@service.example.invalid",
         subject: "Please review your account",
@@ -174,7 +174,7 @@ describe("looksLikeOneTimeCodeEmail: ordinary mail is never skipped", () => {
   }
 });
 
-describe("looksLikeOneTimeCodeEmail: automated sign-in code mail is skipped", () => {
+describe("looksLikeOneTimeCodeEmail: sign-in code mail is skipped", () => {
   const positives: Array<[string, { from: string; subject: string; body: string }]> = [
     [
       "a Google style verification code",
@@ -760,4 +760,54 @@ describe("messages the previous round wrongly hid", () => {
       })
     ).toBe(false);
   });
+});
+
+/**
+ * The messages a live run over a real inbox found still getting through. Every one of them is
+ * a genuine sign-in code, and every one arrived from an ordinary-looking mailbox: a hiring
+ * site sending from login@, a newspaper sending from ordercs@, a pet insurer sending from
+ * hello@. That is why the sender address is no longer part of the decision.
+ */
+describe("real sign-in code mail from ordinary-looking senders is hidden", () => {
+  const realExamples: Array<[string, { from: string; subject: string; body: string }]> = [
+    [
+      "a hiring site sending from a login mailbox",
+      {
+        from: "MyGreenhouse <login@hiring.example.invalid>",
+        subject: "Here's your MyGreenhouse security code",
+        body: "Your security code is 481920. It expires in 10 minutes."
+      }
+    ],
+    [
+      "a newspaper sending from a customer service mailbox",
+      {
+        from: "The Example Times <ordercs@newspaper.example.invalid>",
+        subject: "220250 is your verification code",
+        body: "220250 is your verification code. Do not share it with anyone."
+      }
+    ],
+    [
+      "a pet insurer sending from a hello mailbox",
+      {
+        from: "Pumpkin <hello@petinsurer.example.invalid>",
+        subject: "Your Pumpkin verification code",
+        body: "Your verification code is 730915. Enter it to finish signing in."
+      }
+    ]
+  ];
+
+  for (const [label, message] of realExamples) {
+    it(`hides ${label}`, async () => {
+      expect(looksLikeOneTimeCodeEmail(message)).toBe(true);
+
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({ category: "unknown", confidence: 0.4 })
+      }));
+
+      const result = await extractEmailSignals(fixture(message), { runChat });
+
+      expect(runChat).not.toHaveBeenCalled();
+      expect(result).toEqual(otpSkippedResult());
+    });
+  }
 });

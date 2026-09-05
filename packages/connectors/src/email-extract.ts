@@ -189,34 +189,26 @@ export interface EmailSignals {
 }
 
 /**
- * A message is treated as a machine-issued sign-in code only when all four of the signals
+ * A message is treated as a machine-issued sign-in code only when all three of the signals
  * below hold at once. Each one on its own is common in ordinary mail — a friend sends a door
- * code, a shop mails a discount code, a no-reply address sends a statement — and earlier
- * keyword-only versions of this check hid real messages because of that. Adding more keywords
- * makes it worse, not better; the strength here comes from requiring the combination.
+ * code, a shop mails a discount code — and earlier keyword-only versions of this check hid
+ * real messages because of that. Adding more keywords makes it worse, not better; the strength
+ * here comes from requiring the combination.
  *
- *   1. the sender looks automated (a no-reply / notifications / security style mailbox),
- *   2. the subject itself hands over a sign-in, login, account-verification, one-time, two-step
+ *   1. the subject itself hands over a sign-in, login, account-verification, one-time, two-step
  *      or security code — it names that kind of code AND is worded as a delivery, and does not
  *      read as an announcement about codes in general. Real sign-in mail from Google, Apple,
  *      Microsoft, banks and shops puts the code in the subject; door codes, vouchers, tracking
  *      numbers and policy notices do not, so the body on its own never qualifies,
- *   3. the subject or the opening of the body carries a short code standing on its own as one
+ *   2. the subject or the opening of the body carries a short code standing on its own as one
  *      unbroken run of characters — a telephone number written in groups never counts,
- *   4. nothing anywhere in the subject or the whole body points at a door, a stay, an order,
+ *   3. nothing anywhere in the subject or the whole body points at a door, a stay, an order,
  *      a delivery, a booking or a money-off code, which would explain the number another way.
+ *
+ * The sender address is deliberately not one of the signals. A live run over a real inbox found
+ * genuine sign-in code mail arriving from ordinary-looking mailboxes — login@, ordercs@,
+ * hello@ — so any list of machine-sounding mailbox names would keep missing real senders.
  */
-
-/**
- * Mailbox names that mean "nobody reads replies to this address". Matched as a whole token of
- * the local part, so "receipts", "tracking", "sarah.jones" and "marketing" do not qualify.
- */
-const AUTOMATED_LOCAL_PART =
-  /(?:^|[._+-])(?:no[._-]?reply|do[._-]?not[._-]?reply|noreply|notification|notifications|notify|alert|alerts|security|secure|verify|verification|auth|authentication|otp|account|accounts|mailer|automated|autoreply|system)(?:[._+-]|$)/;
-
-/** Sub-domains that only ever carry machine mail, e.g. accounts.google.com. Deliberately short:
- * a generic "mail." or "email." sub-domain also fronts ordinary human mail. */
-const AUTOMATED_DOMAIN_LABEL = /^(?:accounts?|notifications?|alerts?|auth|secure|security)\./;
 
 /**
  * Phrases that name a temporary sign-in secret. Each one must both say "code", "passcode" or
@@ -316,22 +308,10 @@ const SUBJECT_IS_ABOUT_CODES_IN_GENERAL =
  * the whole body, however long it is. */
 const OTP_CHECK_BODY_CHARS = 500;
 
-/** The address part of a From header, lower-cased: "Google <no-reply@x.com>" -> no-reply@x.com */
-function senderAddress(from: string): string {
-  const angled = /<([^>]+)>/.exec(from);
-  return (angled?.[1] ?? from).trim().toLowerCase();
-}
-
-function looksAutomatedSender(from: string): boolean {
-  const address = senderAddress(from);
-  const at = address.lastIndexOf("@");
-  if (at <= 0) return false;
-  const localPart = address.slice(0, at);
-  const domain = address.slice(at + 1);
-  return AUTOMATED_LOCAL_PART.test(localPart) || AUTOMATED_DOMAIN_LABEL.test(domain);
-}
-
-/** The message fields this pre-check reads. `ParsedEmail` satisfies it structurally. */
+/**
+ * The message fields a caller passes in. `ParsedEmail` satisfies it structurally. The sender is
+ * accepted so callers can hand over a whole message, but the check never reads it.
+ */
 export interface OneTimeCodeEmailInput {
   readonly from: string;
   readonly subject: string;
@@ -370,16 +350,15 @@ function subjectNamesASignInCode(subject: string): boolean {
 }
 
 /**
- * Deterministic pre-check, run before any model call. It is true only when an automated sender
- * announces a sign-in code in the subject, a short code that is not a year is present, and
- * nothing in the whole message points at a door, a stay, an order, a delivery, a booking or a
- * money-off code. That is why "your apartment check-in instructions" and "your discount
- * voucher" come through even when they carry a one-time passcode, and why "we are changing how
- * security codes are delivered in 2026" comes through as well: it carries only a year.
+ * Deterministic pre-check, run before any model call. It is true only when the subject itself
+ * announces a sign-in code, a short code that is not a year is present, and nothing in the
+ * whole message points at a door, a stay, an order, a delivery, a booking or a money-off code.
+ * That is why "your apartment check-in instructions" and "your discount voucher" come through
+ * even when they carry a one-time passcode, and why "we are changing how security codes are
+ * delivered in 2026" comes through as well: it carries only a year.
  * Never logs the sender, subject or body it inspects — callers must not either.
  */
 export function looksLikeOneTimeCodeEmail(message: OneTimeCodeEmailInput): boolean {
-  if (!looksAutomatedSender(message.from)) return false;
   const subject = message.subject.toLowerCase();
   if (!subjectNamesASignInCode(subject)) return false;
   const body = message.body.toLowerCase();
