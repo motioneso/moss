@@ -417,15 +417,12 @@ test.describe("Sports settings follow picker (#989)", () => {
     await page.getByRole("button", { name: "Follow Pacific Tigers" }).click();
     const tigersUnfollow = page.getByRole("button", { name: "Unfollow Pacific Tigers" });
     await expect(tigersUnfollow).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("button", { name: "Follow Pacific Lutheran Lutes" })).toHaveAttribute(
-      "aria-pressed",
-      "false"
-    );
+    await expect(
+      page.getByRole("button", { name: "Follow Pacific Lutheran Lutes" })
+    ).toHaveAttribute("aria-pressed", "false");
     const chips = page.getByRole("list", { name: "Followed teams and leagues" });
     await expect(chips.getByRole("listitem").filter({ hasText: "PAC" })).toHaveCount(1);
-    await expect(
-      chips.locator('img[src="https://example.com/crests/413.png"]')
-    ).toBeVisible();
+    await expect(chips.locator('img[src="https://example.com/crests/413.png"]')).toBeVisible();
     // The same control now unfollows instead of silently re-following.
     await tigersUnfollow.click();
     await expect(page.getByRole("button", { name: "Follow Pacific Tigers" })).toBeVisible();

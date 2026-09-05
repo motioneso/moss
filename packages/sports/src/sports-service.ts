@@ -1036,7 +1036,8 @@ export class SportsService {
       return {
         ok: false,
         status: 400,
-        error: "The team list is unavailable right now, so this choice cannot be checked. Try again later."
+        error:
+          "The team list is unavailable right now, so this choice cannot be checked. Try again later."
       };
     }
     const team = teams.find((candidate) => candidate.sourceTeamId === input.sourceTeamId);
@@ -1136,8 +1137,7 @@ export class SportsService {
             ? null
             : (headline.teamKeys.find((key) =>
                 isFollowedStoryTeam(followedPairs, competitionKey, key)
-              ) ??
-              null);
+              ) ?? null);
         // A clip or a short blurb is not an opinion piece. A written article MIGHT be, and this
         // check cannot tell — so the flag is left off rather than guessed. Never invent evidence.
         const written = isWrittenArticle(headline);

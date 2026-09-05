@@ -19,7 +19,13 @@ export interface CreateSportsFollowInput {
   readonly sourceTeamId: string | null;
 }
 
-const FOLLOW_COLUMNS = ["id", "competition_key", "team_key", "source_team_id", "created_at"] as const;
+const FOLLOW_COLUMNS = [
+  "id",
+  "competition_key",
+  "team_key",
+  "source_team_id",
+  "created_at"
+] as const;
 
 /** Map a persisted row to the public DTO (snake_case → camelCase, Date → ISO string). */
 export function toDto(row: SportsFollowRow): SportsFollowDto {
@@ -46,10 +52,7 @@ export class SportsFollowsRepository {
     return rows.map(toDto);
   }
 
-  async create(
-    scopedDb: DataContextDb,
-    input: CreateSportsFollowInput
-  ): Promise<SportsFollowDto> {
+  async create(scopedDb: DataContextDb, input: CreateSportsFollowInput): Promise<SportsFollowDto> {
     assertDataContextDb(scopedDb);
     const teamKey = input.teamKey ?? null;
     const sourceTeamId = input.sourceTeamId ?? null;

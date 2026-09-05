@@ -42,10 +42,10 @@ const TIGERS = team({
 
 describe("resolveFollowIdentity with a permanent team id saved", () => {
   it("finds the team by its permanent id even though two teams share the short name", () => {
-    const identity = resolveFollowIdentity(
-      { teamKey: "pac", sourceTeamId: "129700" },
-      [LUTES, TIGERS]
-    );
+    const identity = resolveFollowIdentity({ teamKey: "pac", sourceTeamId: "129700" }, [
+      LUTES,
+      TIGERS
+    ]);
     expect(identity.needsChoice).toBe(false);
     expect(identity.team?.name).toBe("Pacific Lutheran Lutes");
     expect(identity.catalogKey).toBe("pac.129700");
@@ -64,8 +64,16 @@ describe("resolveFollowIdentity with a permanent team id saved", () => {
   it("never reads the saved short name, even when it names a different team outright", () => {
     // "413" is Pacific Tigers' permanent id and also the short name of a different club. The
     // saved id wins outright; the short name is not consulted at all.
-    const other = team({ teamKey: "413", sourceTeamId: "9001", abbreviation: "413", name: "Team 413" });
-    const identity = resolveFollowIdentity({ teamKey: "413", sourceTeamId: "413" }, [other, TIGERS]);
+    const other = team({
+      teamKey: "413",
+      sourceTeamId: "9001",
+      abbreviation: "413",
+      name: "Team 413"
+    });
+    const identity = resolveFollowIdentity({ teamKey: "413", sourceTeamId: "413" }, [
+      other,
+      TIGERS
+    ]);
     expect(identity.team?.name).toBe("Pacific Tigers");
     expect(identity.sourceTeamId).toBe("413");
   });
@@ -86,7 +94,10 @@ describe("resolveFollowIdentity with no permanent team id saved", () => {
   });
 
   it("offers the whole competition when nothing answers to the saved short name", () => {
-    const identity = resolveFollowIdentity({ teamKey: "gone", sourceTeamId: null }, [LUTES, TIGERS]);
+    const identity = resolveFollowIdentity({ teamKey: "gone", sourceTeamId: null }, [
+      LUTES,
+      TIGERS
+    ]);
     expect(identity.needsChoice).toBe(true);
     expect(identity.candidates).toHaveLength(2);
   });
@@ -147,7 +158,9 @@ describe("matchTargetFor and sideMatchesTarget", () => {
   // Re-review 4, scenario 1 again, with the team list down as well: a follow saved before the
   // change plus an old row with no id is the worst case, and it still matches nothing.
   it("gives a follow with no permanent id nothing to match with, list or no list", () => {
-    expect(matchTargetFor(resolveFollowIdentity({ teamKey: "pac", sourceTeamId: null }, []))).toBeNull();
+    expect(
+      matchTargetFor(resolveFollowIdentity({ teamKey: "pac", sourceTeamId: null }, []))
+    ).toBeNull();
     expect(
       matchTargetFor(resolveFollowIdentity({ teamKey: "pac", sourceTeamId: null }, [LUTES, TIGERS]))
     ).toBeNull();

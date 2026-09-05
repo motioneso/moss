@@ -22,8 +22,7 @@ function makeFakeWriter(initial: SportsFollowDto[] = []): SportsFollowsWriter & 
     async create(_db: DataContextDb, input: CreateSportsFollowInput) {
       const teamKey = input.teamKey ?? null;
       const existing = rows.find(
-        (r) =>
-          r.competitionKey === input.competitionKey && r.sourceTeamId === input.sourceTeamId
+        (r) => r.competitionKey === input.competitionKey && r.sourceTeamId === input.sourceTeamId
       );
       if (existing) return existing;
       const created: SportsFollowDto = {

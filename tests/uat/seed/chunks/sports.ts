@@ -90,13 +90,21 @@ export async function seedSportsPublicSourceFixtures(
 ): Promise<void> {
   const follows = new SportsFollowsRepository();
   await runner.withDataContext({ actorUserId }, async (db) => {
-    const league = await follows.create(db, { competitionKey: "eng.1", teamKey: null, sourceTeamId: null });
+    const league = await follows.create(db, {
+      competitionKey: "eng.1",
+      teamKey: null,
+      sourceTeamId: null
+    });
     const team = await follows.create(db, {
       competitionKey: "eng.1",
       teamKey: ARSENAL_TEAM_KEY,
       sourceTeamId: ARSENAL_SOURCE_TEAM_ID
     });
-    const nfl = await follows.create(db, { competitionKey: "nfl", teamKey: null, sourceTeamId: null });
+    const nfl = await follows.create(db, {
+      competitionKey: "nfl",
+      teamKey: null,
+      sourceTeamId: null
+    });
 
     const assignmentFixture = await createFeedSource(db, {
       label: "FotMob assignment fixture",

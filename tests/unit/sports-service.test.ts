@@ -397,7 +397,9 @@ describe("SportsService.getOverview", () => {
   it("emits followed teams as competition-scoped pairs", async () => {
     // Only a follow whose permanent id is in today's team list is sent to the browser, so the
     // list has to serve the Cowboys here (review finding S1, round 5).
-    const service = new SportsService(makeDeps({ source: makeSource({ listTeams: async () => [dalTeamRef] }) }));
+    const service = new SportsService(
+      makeDeps({ source: makeSource({ listTeams: async () => [dalTeamRef] }) })
+    );
     const overview = await service.getOverview(userA);
     expect(overview.followedTeams).toEqual([
       { competitionKey: "nfl", teamKey: "dal", sourceTeamId: "6" }

@@ -73,7 +73,8 @@ describe("sports follows repository RLS", () => {
 
     const created = await dataCtx.withDataContext(
       { actorUserId: alice, requestId: "sports-1a" },
-      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: "min", sourceTeamId: "16" })
+      (scopedDb) =>
+        repo.create(scopedDb, { competitionKey: "nfl", teamKey: "min", sourceTeamId: "16" })
     );
     expect(created.competitionKey).toBe("nfl");
     expect(created.teamKey).toBe("min");
@@ -112,11 +113,13 @@ describe("sports follows repository RLS", () => {
 
     const first = await dataCtx.withDataContext(
       { actorUserId: alice, requestId: "sports-3a" },
-      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
+      (scopedDb) =>
+        repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
     );
     const second = await dataCtx.withDataContext(
       { actorUserId: alice, requestId: "sports-3b" },
-      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
+      (scopedDb) =>
+        repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
     );
     // The repository guards whole-competition (null-team) duplicates with an explicit
     // existence check, so the second create returns the existing row, not a new one.
@@ -192,11 +195,13 @@ describe("sports follows repository RLS", () => {
 
     const aliceFollow = await dataCtx.withDataContext(
       { actorUserId: alice, requestId: "sports-5a" },
-      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
+      (scopedDb) =>
+        repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
     );
     const bobFollow = await dataCtx.withDataContext(
       { actorUserId: bob, requestId: "sports-5b" },
-      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
+      (scopedDb) =>
+        repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
     );
 
     expect(aliceFollow.id).not.toBe(bobFollow.id);
@@ -278,7 +283,11 @@ describe("sports follows repository RLS", () => {
     const old = await dataCtx.withDataContext(
       { actorUserId: alice, requestId: "sports-7a" },
       (scopedDb) =>
-        repo.create(scopedDb, { competitionKey: "ncaa-baseball", teamKey: "pac", sourceTeamId: null })
+        repo.create(scopedDb, {
+          competitionKey: "ncaa-baseball",
+          teamKey: "pac",
+          sourceTeamId: null
+        })
     );
     const wholeLeague = await dataCtx.withDataContext(
       { actorUserId: alice, requestId: "sports-7b" },

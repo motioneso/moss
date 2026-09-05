@@ -4,12 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { DatasetClient, DatasetEnvelope } from "@moss/datasets";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
-import type {
-  GameSide,
-  GameSummary,
-  SportsFollowDto,
-  SportsCustomSourceDto
-} from "@moss/shared";
+import type { GameSide, GameSummary, SportsFollowDto, SportsCustomSourceDto } from "@moss/shared";
 import { SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT } from "@moss/shared";
 
 import type { CreateSportsFollowInput } from "../../packages/sports/src/repository.js";

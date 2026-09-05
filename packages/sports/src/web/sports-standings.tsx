@@ -98,9 +98,7 @@ function defaultViewKey(
   if (hasConference) {
     const sections = views.filter((v) => v.key.startsWith("sec:"));
     const followed = sections.find((v) =>
-      v.sections[0]?.rows.some((row) =>
-        isFollowed(followedPairs, competitionKey, row.sourceTeamId)
-      )
+      v.sections[0]?.rows.some((row) => isFollowed(followedPairs, competitionKey, row.sourceTeamId))
     );
     if (followed) return followed.key;
     const alphabetical = [...sections].sort((a, b) => a.label.localeCompare(b.label));

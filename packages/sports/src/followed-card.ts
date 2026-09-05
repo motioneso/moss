@@ -361,7 +361,10 @@ export function nextMatchAcross(
 // followed-team-first string put the numbers on the wrong side whenever the followed team played
 // away). Returns null when the game has no resolvable two sides (fully degraded source), so the
 // card falls back to the text slot.
-export function resultMatchFor(game: GameSummary, teamKey: TeamMatchInput): FollowedResultMatch | null {
+export function resultMatchFor(
+  game: GameSummary,
+  teamKey: TeamMatchInput
+): FollowedResultMatch | null {
   const side = sideFor(game, teamKey);
   const opponent = opponentFor(game, teamKey);
   if (!side || !opponent) return null;
