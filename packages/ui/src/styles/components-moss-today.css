@@ -264,6 +264,23 @@
   cursor: not-allowed;
 }
 
+/* InfoTip — the trigger is the shared IconButton; this only repositions the shared
+   menu panel (.jds-menu__list) to open under the left edge instead of the right,
+   and widens it for prose instead of a button list. */
+.jds-infotip {
+  position: relative;
+  display: inline-flex;
+}
+.jds-infotip__panel {
+  left: 0;
+  right: auto;
+  width: 15rem;
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  line-height: 1.4;
+}
+
 /* WeatherChip */
 .jds-weather-chip-wrapper {
   position: relative;

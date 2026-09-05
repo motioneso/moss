@@ -32,7 +32,8 @@ function liveGame(): GameSummary {
       crestUrl: null,
       score: 21,
       record: "10-2",
-      winner: true
+      winner: true,
+      scorers: null
     },
     away: {
       teamKey: "dal",
@@ -41,7 +42,8 @@ function liveGame(): GameSummary {
       crestUrl: null,
       score: 14,
       record: "8-4",
-      winner: false
+      winner: false,
+      scorers: null
     }
   };
 }
@@ -60,7 +62,8 @@ function finalGame(): GameSummary {
       crestUrl: null,
       score: 6,
       record: "58-40",
-      winner: true
+      winner: true,
+      scorers: null
     },
     away: {
       teamKey: "bos",
@@ -69,7 +72,8 @@ function finalGame(): GameSummary {
       crestUrl: null,
       score: 3,
       record: "50-48",
-      winner: false
+      winner: false,
+      scorers: null
     }
   };
 }
@@ -91,6 +95,8 @@ function headline(id: string, competitionKey: string, title: string): Headline {
     url: `https://example.test/${id}`,
     publishedAt: "2026-07-06T18:00:00Z",
     imageUrl: null,
+    imageWidth: null,
+    imageHeight: null,
     summary: "",
     teamKeys: [],
     publisherLabel: "ESPN",
@@ -279,7 +285,8 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
             crestUrl: null,
             score: null,
             record: "45-20",
-            winner: false
+            winner: false,
+            scorers: null
           },
           away: {
             teamKey: "gsw",
@@ -288,7 +295,8 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
             crestUrl: null,
             score: null,
             record: "40-25",
-            winner: false
+            winner: false,
+            scorers: null
           }
         }
       ]

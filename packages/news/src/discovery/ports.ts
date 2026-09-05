@@ -4,6 +4,7 @@ export interface NewsSafeFetchResult {
   readonly ok: true;
   readonly status: number;
   readonly finalUrl: string;
+  readonly hopCount?: number;
   readonly contentType: string | null;
   readonly body: string;
   readonly truncated: boolean;

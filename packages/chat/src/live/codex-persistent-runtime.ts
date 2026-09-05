@@ -18,7 +18,13 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { DEFAULT_MODEL_SENTINEL, type ProviderKind, type TmuxIo } from "@moss/ai";
 
 import { neutralizeSeedFraming } from "./prompt-safety.js";
-import { MAX_FRAME_BYTES, MAX_TOTAL_BUFFERED_BYTES } from "./persistent-stream-decoder.js";
+import {
+  LOGIN_REJECTED_RESULT_REASON,
+  MAX_FRAME_BYTES,
+  MAX_TOTAL_BUFFERED_BYTES,
+  PROVIDER_ERROR_RESULT_REASON
+} from "./persistent-stream-decoder.js";
+import { looksLikeLoginRejection, recordProviderLoginRejected } from "./provider-probe.js";
 import type {
   CancelOutcome,
   ChildState,
@@ -33,6 +39,9 @@ import type {
 import type { EngineLaunchOpts } from "./types.js";
 
 const PROMPT_FILENAME = "codex-exec-prompt.txt";
+
+/** This reader reads one provider's output; a refused sign-in it sees belongs to that provider. */
+const DECODED_PROVIDER: ProviderKind = "openai-compatible";
 
 // #1136 (mirrored from codex-exec-session.ts): codex exec hands the model a literal
 // `User:`/`Assistant:` transcript, so a role marker inside replayed text reads as a real turn
@@ -318,6 +327,13 @@ export interface CodexStreamDecoderOpts {
   readonly killChild: (reason: string) => void;
   readonly maxFrameBytes?: number;
   readonly maxTotalBufferedBytes?: number;
+  /**
+   * #2242 (round 3): called when this provider's own answer says it refused the sign-in, so the
+   * saved "the login works" answer is dropped and the next readiness check asks for a fresh
+   * login. Defaults to reporting it for this provider. The stream never sees the sign-in itself,
+   * so the report names no credential.
+   */
+  readonly reportLoginRejected?: () => void;
 }
 
 type QueueWaiter = (result: IteratorResult<RuntimeTurnEvent>) => void;
@@ -335,6 +351,7 @@ export class CodexStreamDecoder {
   private readonly maxFrameBytes: number;
   private readonly maxTotalBufferedBytes: number;
   private readonly killChild: (reason: string) => void;
+  private readonly reportLoginRejected: () => void;
 
   private buffer = "";
   private currentTurnId: string | null = null;
@@ -351,6 +368,8 @@ export class CodexStreamDecoder {
     this.killChild = opts.killChild;
     this.maxFrameBytes = opts.maxFrameBytes ?? MAX_FRAME_BYTES;
     this.maxTotalBufferedBytes = opts.maxTotalBufferedBytes ?? MAX_TOTAL_BUFFERED_BYTES;
+    this.reportLoginRejected =
+      opts.reportLoginRejected ?? (() => recordProviderLoginRejected(DECODED_PROVIDER));
   }
 
   beginTurn(turnId: string): void {
@@ -442,6 +461,26 @@ export class CodexStreamDecoder {
       this.emit({ kind: "turn-complete", turnId });
       return;
     }
+    // #2242 (round 3): this provider announces a failed turn in its own frame, which used to be
+    // ignored entirely — the turn died as a nameless end-of-process failure and a refused sign-in
+    // learned here was thrown away, so the next readiness check still said ready. A refusal now
+    // goes through the same shared report the other reader uses. The provider's own error text is
+    // matched against and never emitted, so nothing it carries reaches a person or a log.
+    if (type === "turn.failed") {
+      this.sawTerminalForTurn = true;
+      const loginRejected = looksLikeLoginRejection(failureText(record));
+      if (loginRejected) this.reportLoginRejected();
+      this.emit({
+        kind: "turn-failed",
+        turnId,
+        outcome: {
+          kind: "neutral-failure",
+          reason: loginRejected ? LOGIN_REJECTED_RESULT_REASON : PROVIDER_ERROR_RESULT_REASON,
+          ...(loginRejected ? { loginRejected: true } : {})
+        }
+      });
+      return;
+    }
     if (type !== "item.completed") return; // thread.started / turn.started carry no useful data
 
     const item = record["item"];
@@ -501,6 +540,23 @@ export class CodexStreamDecoder {
       waiter({ value: undefined, done: true });
     }
   }
+}
+
+/** Every string this provider puts in a failed-turn frame, flattened for matching only. The
+ *  message can sit directly on the frame or one level down under `error`. */
+function failureText(record: Record<string, unknown>): string {
+  const parts: string[] = [];
+  for (const field of ["error", "message", "reason"]) {
+    const value = record[field];
+    if (typeof value === "string") parts.push(value);
+    else if (isRecord(value)) {
+      for (const nested of ["message", "reason", "type"]) {
+        const inner = value[nested];
+        if (typeof inner === "string") parts.push(inner);
+      }
+    }
+  }
+  return parts.join("\n");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

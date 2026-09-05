@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { DataContextDb } from "@moss/db";
 
 import type { NewsAiPort, NewsSafeFetchPort } from "../../packages/news/src/discovery/ports.js";
-import { resolveSourceInput } from "../../packages/news/src/discovery/source-resolution.js";
+import {
+  isKnownSameOwnerAlias,
+  resolveSourceInput
+} from "../../packages/news/src/discovery/source-resolution.js";
 
 const db = {} as DataContextDb;
 const feed = `<rss><channel><item><title>A consequential headline today</title><link>https://one.example/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
@@ -18,12 +21,21 @@ function ai(allowed = true): NewsAiPort {
   };
 }
 
-function repo(exclusions: string[] = []) {
+// Same as ai(), but generateJson is a spy so a test can prove the model was never asked.
+function aiSpy(allowed = true): NewsAiPort & { generateJson: ReturnType<typeof vi.fn> } {
+  const generateJson = vi.fn<NewsAiPort["generateJson"]>(async () => ({
+    ok: true,
+    object: { allowed, category: "news_publisher" }
+  }));
+  return { fingerprint: async () => "fp", generateJson };
+}
+
+function repo(exclusions: string[] = [], cachedVerdict: "approved" | "rejected" | null = null) {
   return {
     listExclusions: vi.fn(async () =>
       exclusions.map((canonicalDomain) => ({ id: canonicalDomain, canonicalDomain, createdAt: "" }))
     ),
-    readPolicyVerdict: vi.fn(async () => null),
+    readPolicyVerdict: vi.fn(async () => cachedVerdict),
     upsertPolicyVerdict: vi.fn(async () => {})
   };
 }
@@ -47,6 +59,24 @@ function fetchMap(
 }
 
 const noSearch = { search: vi.fn(async () => ({ results: [] })) };
+
+describe("isKnownSameOwnerAlias", () => {
+  const groups = [["old.example", "new.example"], ["another.example"]];
+
+  it("matches two domains placed in the same hand-confirmed group, in either order", () => {
+    expect(isKnownSameOwnerAlias(groups, "old.example", "new.example")).toBe(true);
+    expect(isKnownSameOwnerAlias(groups, "new.example", "old.example")).toBe(true);
+  });
+
+  it("also matches a subdomain of a group member", () => {
+    expect(isKnownSameOwnerAlias(groups, "www.old.example", "new.example")).toBe(true);
+  });
+
+  it("does not match domains from different groups, or an empty group list", () => {
+    expect(isKnownSameOwnerAlias(groups, "old.example", "another.example")).toBe(false);
+    expect(isKnownSameOwnerAlias([], "old.example", "new.example")).toBe(false);
+  });
+});
 
 describe("resolveSourceInput", () => {
   it("resolves a direct feed URL and carries validation evidence", async () => {
@@ -123,7 +153,7 @@ describe("resolveSourceInput", () => {
     await expect(
       resolveSourceInput(
         db,
-        { fetch, search: noSearch, ai: ai(), repo: repo() },
+        { fetch, search: noSearch, ai: ai(), repo: repo([], "approved") },
         { raw: "https://one.example/article", hasWebSearch: false }
       )
     ).resolves.toMatchObject({
@@ -131,6 +161,43 @@ describe("resolveSourceInput", () => {
       candidates: [{ homepageUrl: "https://one.example/" }]
     });
     expect(fetch).toHaveBeenCalledWith("https://one.example/");
+  });
+
+  // Regression for review round 3, blocker 1: sending a specific page to its own homepage is
+  // still a move, even with no domain change, so it must skip the model call the same way a
+  // cross-domain move does. On the old code this reached the model (no saved decision, so the
+  // request would have failed here) instead of reading the previously saved decision.
+  it("takes a page-to-homepage move through the model-free path, using only a saved decision", async () => {
+    const fetch = fetchMap({
+      "https://one.example/article": {
+        body: `<link rel="canonical" href="https://one.example/canonical-story">`
+      },
+      "https://one.example/": {
+        body: `<title>One News</title><a href="/story">A sufficiently important headline today</a>`
+      }
+    });
+    const spiedAi = aiSpy();
+    const result = await resolveSourceInput(
+      db,
+      { fetch, search: noSearch, ai: spiedAi, repo: repo([], "approved") },
+      { raw: "https://one.example/article", hasWebSearch: false }
+    );
+    expect(result).toMatchObject({ status: "ok" });
+    expect(spiedAi.generateJson).not.toHaveBeenCalled();
+    if (result.status === "ok") {
+      expect(result.candidates[0].redirectNote).not.toBeNull();
+    }
+
+    // With no saved decision at all, the model-free rule means the address reads as
+    // unavailable rather than asking the model — proof the model call was truly skipped, not
+    // just cached.
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://one.example/article", hasWebSearch: false }
+      )
+    ).resolves.toEqual({ status: "unavailable" });
   });
 
   it("resolves names to at most three verified ambiguous publishers", async () => {
@@ -431,5 +498,224 @@ describe("resolveSourceInput", () => {
         `finalUrl=${finalUrl}`
       ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
     }
+  });
+
+  // A page describing itself as its own address is not proof it is owned by the site the user
+  // typed. Before this fix, any final site that labeled itself correctly was accepted — so a
+  // publisher's own open-redirect link could be pointed at a completely unrelated site and Moss
+  // would offer that unrelated site as the "real" publisher. This must now be refused.
+  it("refuses a cross-domain redirect to an unrelated site, even if that site claims itself", async () => {
+    const redirectsToUnrelatedSite: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://new.example/",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<title>New Example</title><link rel="canonical" href="https://new.example/"><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsToUnrelatedSite, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  // Same open-redirect shape as above, but with no self-claiming tag at all — confirms the
+  // refusal does not depend on what the destination page says about itself.
+  it("refuses a cross-domain redirect to an unrelated site with no self-claim either", async () => {
+    const redirectsToUnrelatedSite: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://new.example/",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsToUnrelatedSite, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  // A shortener disguised behind the usual "www" prefix must still be caught — the old code
+  // matched the shortener set by exact domain string only.
+  it("rejects a redirect to a link shortener even behind a www prefix", async () => {
+    const redirectsToWwwShortener: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://www.bit.ly/abc123",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<title>Redirect</title><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsToWwwShortener, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  it("rejects a redirect to a known link shortener", async () => {
+    const redirectsToShortener: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://bit.ly/abc123",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<title>Redirect</title><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsToShortener, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  it("rejects a redirect whose own canonical link points to yet another domain", async () => {
+    const redirectsThenClaimsElsewhere: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://new.example/",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<link rel="canonical" href="https://third.example/"><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsThenClaimsElsewhere, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  // Regression for review round 3, blockers 1 and 3: a same-domain www move is a real move, so
+  // it must carry a note naming the switch and skip the model call. On the old code this had no
+  // note (readable as "nothing changed") and still asked the model.
+  it("resolves a same-domain www move with a note naming the switch, and no model call", async () => {
+    const wwwRedirect: NewsSafeFetchPort = async (url) => {
+      if (url === "https://example.com/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://www.example.com/",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<title>Example</title><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    const spiedAi = aiSpy();
+    const result = await resolveSourceInput(
+      db,
+      { fetch: wwwRedirect, search: noSearch, ai: spiedAi, repo: repo([], "approved") },
+      { raw: "https://example.com", hasWebSearch: false }
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      candidates: [{ canonicalDomain: "www.example.com" }]
+    });
+    expect(spiedAi.generateJson).not.toHaveBeenCalled();
+    if (result.status === "ok") {
+      expect(result.candidates[0].redirectNote).toBe(
+        "example.com sends visitors to www.example.com, so that is the site we will follow."
+      );
+    }
+
+    // With no saved decision, the model-free rule reads this as unavailable rather than
+    // reaching for the model — proof the old code's model call is really gone.
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: wwwRedirect, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://example.com", hasWebSearch: false }
+      )
+    ).resolves.toEqual({ status: "unavailable" });
+  });
+
+  // Regression for review round 3, blocker 2: once a same-site redirect is accepted, the page
+  // can still name a completely unrelated site as its "real" homepage. The ownership check on
+  // that second move must be against the domain the user actually typed, not against the
+  // unrelated site's own claim about itself (which always trivially matches). On the old code
+  // this was accepted as "ok".
+  it("checks a same-site page's declared homepage against the domain the user typed, not against itself", async () => {
+    const fetch: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/article") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://old.example/article",
+          contentType: "text/html",
+          body: `<link rel="canonical" href="https://unrelated.example/">`,
+          truncated: false
+        };
+      }
+      if (url === "https://unrelated.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://unrelated.example/",
+          contentType: "text/html",
+          body: `<title>Unrelated</title><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example/article", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
   });
 });

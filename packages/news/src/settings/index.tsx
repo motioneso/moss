@@ -571,6 +571,16 @@ export default function NewsSettings() {
           <p className="nw-set__hint">
             Freeform topics in your own words, including guidance on what to include or leave out.
           </p>
+          {availability ? (
+            <p className="nw-set__prereq">
+              <Badge tone={availability.aiConfigured ? "pine" : "amber"} dot>
+                AI model {availability.aiConfigured ? "ready" : "needed"}
+              </Badge>
+              <Badge tone={availability.webSearchConfigured ? "pine" : "amber"} dot>
+                Web search {availability.webSearchConfigured ? "ready" : "needed"}
+              </Badge>
+            </p>
+          ) : null}
           {personalizationReady ? (
             <DescribeTopics
               customTopics={customTopics}
@@ -652,9 +662,6 @@ export default function NewsSettings() {
               <p className="nw-set__prereq">
                 <Badge tone={availability.aiConfigured ? "pine" : "amber"} dot>
                   AI model {availability.aiConfigured ? "ready" : "needed"}
-                </Badge>
-                <Badge tone={availability.webSearchConfigured ? "pine" : "amber"} dot>
-                  Web search {availability.webSearchConfigured ? "ready" : "needed"}
                 </Badge>
               </p>
             ) : null}

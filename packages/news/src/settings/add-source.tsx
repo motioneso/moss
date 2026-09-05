@@ -230,6 +230,7 @@ export function AddSourceFlow() {
                       <span className="nw-set__item-meta">{candidate.canonicalDomain}</span>
                     </div>
                   </div>
+                  {candidate.redirectNote ? <Note>{candidate.redirectNote}</Note> : null}
                 </li>
               ))}
             </ul>

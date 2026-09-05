@@ -998,6 +998,9 @@ importers:
       '@moss/module-sdk':
         specifier: workspace:*
         version: link:../module-sdk
+      '@moss/settings':
+        specifier: workspace:*
+        version: link:../settings
       '@moss/structured-state':
         specifier: workspace:*
         version: link:../structured-state
@@ -1160,6 +1163,9 @@ importers:
       '@moss/structured-state':
         specifier: workspace:*
         version: link:../structured-state
+      '@moss/vault':
+        specifier: workspace:*
+        version: link:../vault
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.0(react@19.2.7)
@@ -1187,6 +1193,9 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.2.7
+      sharp:
+        specifier: 0.34.5
+        version: 0.34.5
       tldts:
         specifier: ^7.4.9
         version: 7.4.9

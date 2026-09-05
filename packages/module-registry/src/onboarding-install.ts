@@ -181,15 +181,20 @@ export function buildOnboardingInstall(deps: {
           continue;
         }
         // A persisted `installing` row may be STALE (api crashed mid-install). A persisted `ready`
-        // row may be LYING (#2232: the saved login token expired, but nothing has re-checked it
+        // row may be LYING (#2242: the saved login token expired, but nothing has re-checked it
         // since). Either way, probe + reconcile. Fail-soft: a probe/socket fault leaves the row
         // unchanged (the projection treats an untrusted probe as no-op) — never break the status
-        // load on a transient probe. The probe itself is cheap here: a real check only runs once
-        // every few minutes per provider, the rest of the time it's a cached answer.
+        // load on a transient probe. #2242: a "ready" row demands a REAL check (forceFresh) here,
+        // not a saved answer — this reconcile is the one place that revisits a saved success on
+        // its own, without anyone pressing Log in, so it must not just repeat the same stale
+        // success back for up to five minutes. An "installing" row keeps the plain check.
         try {
           const conn = deps.getConnection();
           const probe = conn
-            ? await conn.probeProvider({ provider: row.provider })
+            ? await conn.probeProvider({
+                provider: row.provider,
+                ...(row.state === "ready" ? { forceFresh: true } : {})
+              })
             : ({ status: "error" } as const);
           const corrected =
             row.state === "installing"

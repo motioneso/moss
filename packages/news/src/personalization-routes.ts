@@ -438,7 +438,8 @@ export function registerNewsPersonalizationRoutes(
               canonicalDomain: candidate.canonicalDomain,
               homepageUrl: candidate.homepageUrl,
               retrievalMethod: candidate.retrievalMethod,
-              sampleCount: candidate.sampleCount
+              sampleCount: candidate.sampleCount,
+              ...(candidate.redirectNote ? { redirectNote: candidate.redirectNote } : {})
             })),
             candidateIds: result.candidates.map((candidate) => candidate.candidateId),
             ...(duplicate ? { duplicateOfSourceId: duplicate.id } : {}),
