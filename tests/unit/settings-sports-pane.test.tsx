@@ -646,6 +646,40 @@ describe("SportsSettings", () => {
     expect(nflGroup).not.toContain("ARS");
   });
 
+  it("a team whose league is missing from the catalog still sits under its own heading (#2278 review)", () => {
+    const ncaaState = { ...DAL, teamKey: "ncst", competitionKey: "ncaa.mbb", name: "NC State" };
+    const ncaaFootball = { ...ncaaState, competitionKey: "ncaa.fb" };
+    const html = renderToString(
+      createElement(SearchResults, {
+        query: "state",
+        results: [ncaaState, ncaaFootball, DAL],
+        partial: false,
+        isError: false,
+        // Catalog not loaded yet: no league details for any result.
+        competitions: [],
+        followsByKey: new Map(),
+        onToggle: () => {},
+        onRetry: () => {},
+        actionState: null
+      })
+    );
+    const headings = [...html.matchAll(/sp-search__group-heading">([^<]+)</g)].map((m) => m[1]);
+    expect(headings).toEqual([
+      "Unrecognized league (ncaa.mbb)",
+      "Unrecognized league (ncaa.fb)",
+      "Unrecognized league (nfl)"
+    ]);
+    // Every tile sits in a group with exactly one heading; no group is empty.
+    const groups = html.split('<div class="sp-search__group">').slice(1);
+    expect(groups).toHaveLength(3);
+    for (const group of groups) {
+      expect(group.match(/sp-search__group-heading/g)).toHaveLength(1);
+      expect(group.match(/class="sp-team[ "]/g)).toHaveLength(1);
+    }
+    expect(groups[0]).toContain("Follow NC State");
+    expect(groups[2]).toContain("Follow Dallas Cowboys");
+  });
+
   it("searchLeagueRows: label match, parent-league derivation from server results, and dedupe", () => {
     // Direct label match, no server results.
     expect(searchLeagueRows("prem", [], TWO_LEAGUES).map((c) => c.competitionKey)).toEqual(["epl"]);

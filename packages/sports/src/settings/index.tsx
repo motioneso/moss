@@ -386,8 +386,17 @@ export function SearchResults(props: {
     if (group) group.push(team);
     else teamsByLeague.set(team.competitionKey, [team]);
   }
+  // Teams whose league is missing from the catalog (still loading, failed, or retired) must
+  // still land under a heading, one per league key, so same-named clubs stay told apart. The
+  // team record carries no league name, so the heading reuses the summary chip's orphan wording.
   const groupedKeys = new Set(leagues.map((competition) => competition.competitionKey));
-  const ungrouped = props.results.filter((team) => !groupedKeys.has(team.competitionKey));
+  const unrecognizedLeagueKeys = [
+    ...new Set(
+      props.results
+        .filter((team) => !groupedKeys.has(team.competitionKey))
+        .map((team) => team.competitionKey)
+    )
+  ];
   const matchedLeagueKeys = new Set(
     leagueMatches(props.query, props.competitions).map((c) => c.competitionKey)
   );
@@ -481,7 +490,16 @@ export function SearchResults(props: {
           </div>
         );
       })}
-      {ungrouped.length > 0 ? <div className="sp-teamgrid">{ungrouped.map(renderTeam)}</div> : null}
+      {unrecognizedLeagueKeys.map((competitionKey) => (
+        <div className="sp-search__group" key={`g-${competitionKey}`}>
+          <div className="jds-eyebrow sp-search__group-heading">
+            {`Unrecognized league (${competitionKey})`}
+          </div>
+          <div className="sp-teamgrid">
+            {(teamsByLeague.get(competitionKey) ?? []).map(renderTeam)}
+          </div>
+        </div>
+      ))}
       {props.partial ? <Note>Still covering more leagues…</Note> : null}
     </>
   );
