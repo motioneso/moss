@@ -206,6 +206,7 @@ import {
 import {
   EXPORT_QUEUE_DEFINITIONS,
   createWebSearchSecretCipher,
+  type WebSearchSecretCipher,
   readBraveSearchApiKey,
   resolveWebSearchEngine,
   registerSettingsJobWorkers,
@@ -947,6 +948,43 @@ export function buildModelNativeSearchResolver(deps: {
 }
 
 /**
+ * #2228: connect the web-research module's search engines. The module stays db-free, so this
+ * composition root injects two per-request resolvers: the decrypt-at-use Brave key reader, and
+ * the model-native (built-in) search resolver that runs against the actor's own chat model.
+ * Called from BOTH the web server startup (registerRoutes) and the background worker startup
+ * (registerWorkers): they are separate processes, and News topic refresh searches from the
+ * worker. Without the worker half, the News gate unlocks but every background refresh silently
+ * finds no stories (review 2 of PR #2280).
+ */
+export function installWebSearchResolvers(deps: {
+  readonly webSearchCipher: WebSearchSecretCipher;
+  readonly logger?: Pick<FastifyBaseLogger, "info" | "warn">;
+  readonly createCliStructuredAdapter?: ReturnType<typeof createCliStructuredAdapterFactory>;
+}): void {
+  setModelNativeSearchResolver(
+    buildModelNativeSearchResolver({
+      repository: new AiRepository(),
+      cipher: createAiSecretCipher(),
+      logger: deps.logger,
+      createCliStructuredAdapter: deps.createCliStructuredAdapter
+    })
+  );
+  setWebSearchKeyResolver(
+    (scopedDb) => readBraveSearchApiKey(scopedDb as DataContextDb, deps.webSearchCipher),
+    {
+      // Metadata-only observability event. NEVER include the key/ciphertext/envelope/derived
+      // value (Hard Invariant: secrets never escape). An operator pairs this with the setting
+      // key to diagnose a keyring/rotation problem without exposing secret material.
+      onDecryptFailed: () =>
+        deps.logger?.warn(
+          { event: "web_search.key_decrypt_failed" },
+          "Stored Brave Search key failed to decrypt; falling back to env key"
+        )
+    }
+  );
+}
+
+/**
  * #1110: UAT-only. Deterministically fakes a transient News source-preview error for one
  * sentinel input, so the app-map-grounding UAT spec can prove the "no invented fix" path
  * without a live upstream. Both env vars are set unconditionally in the UAT app container's
@@ -1497,9 +1535,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         fetchFn: deps.fetchFn
       });
       // Instance-wide Brave Search key: dedicated admin routes (the key is AES-256-GCM
-      // encrypted at rest, never returned). The web-research module stays db-free; this
-      // composition root injects the decrypt-at-use resolver so the tool resolves the key
-      // per request. invalidateWebSearchProviderCache on save/revoke = no restart needed.
+      // encrypted at rest, never returned). invalidateWebSearchProviderCache on save/revoke = no
+      // restart needed. The search engines themselves are connected by installWebSearchResolvers.
       const webSearchCipher = createWebSearchSecretCipher();
       registerWebSearchKeyRoutes(server, {
         dataContext: deps.dataContext,
@@ -1513,32 +1550,28 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveAccessContext,
         repository: new SettingsRepository()
       });
-      // #2228: built-in (model-native) search for list-shaped callers, resolved per actor from
-      // their own chat model. Without this the News gate unlocks but every search comes back empty.
-      setModelNativeSearchResolver(
-        buildModelNativeSearchResolver({
-          repository: new AiRepository(),
-          cipher: createAiSecretCipher(),
-          logger: server.log,
-          createCliStructuredAdapter: deps.createCliStructuredAdapter
-        })
-      );
-      setWebSearchKeyResolver(
-        (scopedDb) => readBraveSearchApiKey(scopedDb as DataContextDb, webSearchCipher),
-        {
-          // Metadata-only observability event. NEVER include the key/ciphertext/envelope/derived
-          // value (Hard Invariant: secrets never escape). An operator pairs this with the setting
-          // key to diagnose a keyring/rotation problem without exposing secret material.
-          onDecryptFailed: () =>
-            server.log.warn(
-              { event: "web_search.key_decrypt_failed" },
-              "Stored Brave Search key failed to decrypt; falling back to env key"
-            )
-        }
-      );
+      installWebSearchResolvers({
+        webSearchCipher,
+        logger: server.log,
+        createCliStructuredAdapter: deps.createCliStructuredAdapter
+      });
     },
-    registerWorkers: (boss, deps) =>
-      registerSettingsJobWorkers(boss, deps.dataContext, deps.rootDb, getBuiltInModuleManifests)
+    registerWorkers: async (boss, deps) => {
+      // #2228 (fix round 2): the worker is a separate process, so the search engines installed
+      // by registerRoutes never reach it. News topic refresh runs here and calls web search, so
+      // without this every background refresh silently returned no stories.
+      installWebSearchResolvers({
+        webSearchCipher: createWebSearchSecretCipher(),
+        logger: deps.logger,
+        createCliStructuredAdapter: createCliStructuredAdapterFactory()
+      });
+      return registerSettingsJobWorkers(
+        boss,
+        deps.dataContext,
+        deps.rootDb,
+        getBuiltInModuleManifests
+      );
+    }
   },
   {
     manifest: connectorsModuleManifest,
