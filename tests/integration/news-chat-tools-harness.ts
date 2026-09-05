@@ -125,7 +125,10 @@ export class NewsChatToolsHarness {
     this.bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
     await this.bootstrap.connect();
     this.appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
-    this.workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 2 });
+    this.workerDb = createDatabase({
+      connectionString: connectionStrings.worker,
+      maxConnections: 2
+    });
     this.appContext = new DataContextRunner(this.appDb);
     this.workerContext = new DataContextRunner(this.workerDb);
     this.appBoss = createPgBossClient(connectionStrings.app);
@@ -144,9 +147,7 @@ export class NewsChatToolsHarness {
     ]);
   }
 
-  makeGateway(
-    options: { diagnostics?: PlatformDiagnosticsService; boss?: PgBoss | null } = {}
-  ) {
+  makeGateway(options: { diagnostics?: PlatformDiagnosticsService; boss?: PgBoss | null } = {}) {
     this.configureChatTools(options.boss ?? null);
     const tokens = new SessionTokenRegistry();
     const emitted: GatewaySessionRecord[] = [];
@@ -171,10 +172,7 @@ export class NewsChatToolsHarness {
     return { gateway, emitted, mint };
   }
 
-  async previewExampleFeed(
-    gateway: AssistantToolGateway,
-    token: string
-  ): Promise<PreviewPayload> {
+  async previewExampleFeed(gateway: AssistantToolGateway, token: string): Promise<PreviewPayload> {
     const result = await gateway.callTool(token, "news.previewSource", {
       source: "https://example.com/feed.xml"
     });
@@ -202,7 +200,9 @@ export class NewsChatToolsHarness {
   }
 
   async sourceRowCount(): Promise<number> {
-    const rows = await this.bootstrap.query(`SELECT count(*)::int AS n FROM app.news_custom_sources`);
+    const rows = await this.bootstrap.query(
+      `SELECT count(*)::int AS n FROM app.news_custom_sources`
+    );
     return rows.rows[0].n as number;
   }
 
@@ -229,8 +229,9 @@ export class NewsChatToolsHarness {
 
   async waitForRefreshSuccess(requestId: string): Promise<void> {
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      const state = await this.appContext.withDataContext({ actorUserId: ids.userA, requestId }, (db) =>
-        this.newsRepository.readRefreshState(db)
+      const state = await this.appContext.withDataContext(
+        { actorUserId: ids.userA, requestId },
+        (db) => this.newsRepository.readRefreshState(db)
       );
       if (state.state === "idle" && state.lastSuccessAt) return;
       if (attempt === 99) throw new Error("news refresh worker did not complete successfully");

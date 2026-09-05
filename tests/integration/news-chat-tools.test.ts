@@ -21,11 +21,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createApiServer } from "../../apps/api/src/server.js";
-import {
-  AiRepository,
-  SessionTokenRegistry,
-  createPlatformDiagnosticsService
-} from "@moss/ai";
+import { AiRepository, SessionTokenRegistry, createPlatformDiagnosticsService } from "@moss/ai";
 import {
   createNewsDiagnosticsProvider,
   enqueueNewsRefresh,
@@ -492,13 +488,13 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     expect(result).toMatchObject({ ok: false });
     expect(JSON.stringify(result)).toContain("Tool news.confirmSource failed");
     expect(await harness.sourceRowCount()).toBe(before);
-    expect(await harness.waitForAudit({ toolName: "news.confirmSource", outcome: "failed" })).toMatchObject(
-      {
-        owner_user_id: ids.userA,
-        approval_mode: "confirmed",
-        outcome: "failed"
-      }
-    );
+    expect(
+      await harness.waitForAudit({ toolName: "news.confirmSource", outcome: "failed" })
+    ).toMatchObject({
+      owner_user_id: ids.userA,
+      approval_mode: "confirmed",
+      outcome: "failed"
+    });
   }, 30_000);
 
   it("rejects a cross-owner confirmationId replay as expired without writing", async () => {
@@ -554,7 +550,9 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     const payload = parseToolText(result);
     expect(payload).toMatchObject({ status: "accepted", asynchronous: true });
     expect(JSON.stringify(result)).not.toMatch(/completed|complete/i);
-    expect(await harness.waitForAudit({ toolName: "news.refreshNews", outcome: "success" })).toMatchObject({
+    expect(
+      await harness.waitForAudit({ toolName: "news.refreshNews", outcome: "success" })
+    ).toMatchObject({
       owner_user_id: ids.userA,
       approval_mode: "confirmed"
     });
