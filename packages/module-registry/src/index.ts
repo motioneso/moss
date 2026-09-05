@@ -10,14 +10,19 @@ import type { PgBoss } from "pg-boss";
 import {
   commitmentsModuleManifest,
   commitmentsModuleSqlMigrationDirectory,
+  COMMITMENT_EMAIL_JUDGEMENT_QUEUE,
   COMMITMENT_EXTRACTION_QUEUE,
-  CommitmentsRepository
+  CommitmentsRepository,
+  enqueueEmailThreadJudgement,
+  registerEmailThreadJudgementWorker
 } from "@moss/commitments";
 import {
   peopleModuleManifest,
   peopleModuleSqlMigrationDirectory,
   PeopleNotesService,
   PeopleNotesFolderUnavailableError,
+  PeopleRepository,
+  PersonContextService,
   registerPeopleRoutes,
   registerPersonIndexWorker,
   registerSyncPersonMemoryWorker,
@@ -166,6 +171,7 @@ import {
 } from "@moss/db";
 import { resolveTimeZone, type ProactiveSource } from "@moss/shared";
 import {
+  createEmailThreadProvider,
   emailModuleManifest,
   emailModuleSqlMigrationDirectory,
   EmailRepository,
@@ -180,6 +186,12 @@ import {
   type QueueDefinition
 } from "@moss/jobs";
 import { createModuleLogger } from "@moss/module-sdk";
+import {
+  buildEmailContextProviders,
+  buildEmailJudgementGenerate,
+  buildKnownSenderAddresses,
+  buildUserAddressesFor
+} from "./email-judgement-wiring.js";
 import type {
   MossModuleManifest,
   JsonMossModuleManifest,
@@ -1486,13 +1498,28 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         }
       };
       const actionRowRelevance = createActionRowRelevancePort();
+      // #2274: maybe_owed threads go to the Commitments judgement queue; the gate is told which
+      // senders the user already knows (People identities plus people the user has written to).
+      const emailRepositoryForJudgement = new EmailRepository();
+      const userAddressesFor = buildUserAddressesFor({ email: emailRepositoryForJudgement });
+      const knownSenderAddresses = buildKnownSenderAddresses({
+        people: new PeopleRepository(),
+        email: emailRepositoryForJudgement,
+        userAddressesFor
+      });
+      const threadJudgementRequester = {
+        requestThreadJudgement: (owner: string, thread: string) =>
+          enqueueEmailThreadJudgement(boss, owner, thread)
+      };
       const googleWorkIds = await registerConnectorsJobWorkers(boss, {
         dataContext: deps.dataContext,
         rootDb: deps.rootDb,
         taskPort: emailTaskPort,
         actionRowRelevance,
         createCliStructuredAdapter,
-        logger: deps.logger
+        logger: deps.logger,
+        threadJudgementRequester,
+        knownSenderAddresses
       });
       // #792: self-healing periodic sweep, additive to the connect/manual-sync triggers
       // above. Needs the raw root Kysely handle (not DataContextDb) because it must
@@ -1502,7 +1529,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const googleSweepWorkId = await registerGoogleSyncSweepWorker(boss, deps.rootDb);
       const imapWorkIds = await registerImapSyncWorker(boss, {
         dataContext: deps.dataContext,
-        createCliStructuredAdapter
+        createCliStructuredAdapter,
+        threadJudgementRequester,
+        knownSenderAddresses
       });
       const monitorWorkIds = await registerSourceMonitorWorkers(boss, {
         dataContext: deps.dataContext,
@@ -2293,21 +2322,58 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: commitmentsModuleManifest,
     sqlMigrationDirectories: [commitmentsModuleSqlMigrationDirectory],
-    queueDefinitions: [{ name: COMMITMENT_EXTRACTION_QUEUE, options: {} }],
+    queueDefinitions: [
+      { name: COMMITMENT_EXTRACTION_QUEUE, options: {} },
+      // #2274: one thread judgement per job; retries are spaced out because the reasoning
+      // tier is slow and the debounce already coalesces bursts.
+      {
+        name: COMMITMENT_EMAIL_JUDGEMENT_QUEUE,
+        options: { retryLimit: 5, retryDelay: 120, retryBackoff: true }
+      }
+    ],
     registerRoutes: (server, deps) =>
       registerCommitmentsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         boss: deps.boss
       }),
-    registerWorkers: async (boss, deps) =>
-      registerCommitmentExtractionWorker(boss, deps.dataContext, {
-        aiRepository: new AiRepository(),
-        cipher: createAiSecretCipher(),
+    registerWorkers: async (boss, deps) => {
+      const logger = deps.logger ? createModuleLogger(deps.logger, "commitments") : undefined;
+      const aiRepository = new AiRepository();
+      const cipher = createAiSecretCipher();
+      const extractionIds = await registerCommitmentExtractionWorker(boss, deps.dataContext, {
+        aiRepository,
+        cipher,
         repository: new CommitmentsRepository(),
         providers: [chatCommitmentProvider, notesCommitmentProvider],
-        logger: deps.logger ? createModuleLogger(deps.logger, "commitments") : undefined
-      })
+        logger
+      });
+      // #2274: the second pass over email. Context comes from the other modules' public read
+      // tools and repositories (module isolation); the email module exposes threads through
+      // the shared EmailThreadProvider contract.
+      const emailRepository = new EmailRepository();
+      const peopleRepository = new PeopleRepository();
+      const userAddressesFor = buildUserAddressesFor({ email: emailRepository });
+      const judgementIds = await registerEmailThreadJudgementWorker(boss, deps.dataContext, {
+        repository: new CommitmentsRepository(),
+        threads: createEmailThreadProvider(emailRepository, userAddressesFor),
+        context: buildEmailContextProviders({
+          manifests: [notesModuleManifest, tasksModuleManifest, calendarModuleManifest],
+          people: new PersonContextService(peopleRepository),
+          timezoneFor: storedTimeZoneFor
+        }),
+        generate: buildEmailJudgementGenerate({
+          aiRepository,
+          cipher,
+          generateStructured,
+          createCliStructuredAdapter: createCliStructuredAdapterFactory(),
+          logger
+        }),
+        timezoneFor: storedTimeZoneFor,
+        logger
+      });
+      return [...extractionIds, ...judgementIds];
+    }
   },
   {
     manifest: peopleManifest,
@@ -2674,6 +2740,12 @@ export async function resolveRequestTimeZoneForRoute(
   const stored = await dataContext.withDataContext(accessContext, (scopedDb) =>
     preferences.get(scopedDb, "locale")
   );
+  return resolveTimeZone(undefined, extractStoredTimeZone(stored));
+}
+
+/** The user's stored timezone (locale preference), or the server default (#2274 worker path). */
+async function storedTimeZoneFor(scopedDb: unknown, _actorUserId: string): Promise<string> {
+  const stored = await new PreferencesRepository().get(scopedDb as DataContextDb, "locale");
   return resolveTimeZone(undefined, extractStoredTimeZone(stored));
 }
 
