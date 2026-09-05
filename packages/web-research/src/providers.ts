@@ -140,10 +140,12 @@ function buildModelNativeSearchPrompt(input: WebSearchProviderInput): string {
 }
 
 /**
- * Runs the structured search request and merges the parsed result list with any citations the
- * provider attached to the reply (a source the model cited but didn't repeat in the JSON body
- * still counts as a found result). Returns an empty list when the runner is unavailable or the
- * model reports nothing.
+ * Runs the structured search request. The provider's own citations (the pages its search tool
+ * actually returned) are the ground truth for urls: results come back in citation order, each
+ * enriched with the title and snippet the model wrote for that url in the JSON body. A url that
+ * appears only in the JSON body was never verified by a search hit and is dropped, and a reply
+ * with no citations at all yields an empty list (spec decision 6; #2228 review finding 6).
+ * Returns an empty list when the runner is unavailable.
  */
 export function createModelNativeProvider(runner: ModelNativeSearchRunner): WebSearchProvider {
   return {
@@ -160,25 +162,38 @@ export function createModelNativeProvider(runner: ModelNativeSearchRunner): WebS
       const rawResults = Array.isArray((generated.object as { results?: unknown })?.results)
         ? (generated.object as { results: unknown[] }).results
         : [];
-      const byUrl = new Map<string, WebSearchProviderResult>();
+      const describedByUrl = new Map<string, { title: string; snippet: string }>();
       for (const entry of rawResults) {
         if (!entry || typeof entry !== "object") continue;
         const candidate = entry as { title?: unknown; url?: unknown; snippet?: unknown };
         if (typeof candidate.url !== "string" || candidate.url.length === 0) continue;
-        byUrl.set(candidate.url, {
+        if (describedByUrl.has(candidate.url)) continue;
+        describedByUrl.set(candidate.url, {
           title: typeof candidate.title === "string" ? candidate.title : "",
-          url: candidate.url,
           snippet: typeof candidate.snippet === "string" ? candidate.snippet : ""
         });
       }
+
+      const results: WebSearchProviderResult[] = [];
+      const seen = new Set<string>();
       for (const source of generated.sources ?? []) {
-        if (!byUrl.has(source.url)) {
-          byUrl.set(source.url, { title: source.title, url: source.url, snippet: "" });
+        if (typeof source.url !== "string" || source.url.length === 0 || seen.has(source.url)) {
+          continue;
         }
+        seen.add(source.url);
+        const described = describedByUrl.get(source.url);
+        results.push({
+          title: described?.title || source.title || source.url,
+          url: source.url,
+          snippet: described?.snippet ?? ""
+        });
+        if (results.length >= input.limit) break;
       }
 
-      const results = Array.from(byUrl.values()).slice(0, input.limit);
-      return { results, trace: { provider: "model-native", count: results.length } };
+      return {
+        results,
+        trace: { provider: "model-native", count: results.length, cited: seen.size }
+      };
     }
   };
 }

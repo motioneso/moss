@@ -48,7 +48,10 @@ describe("createModelNativeProvider", () => {
     expect(seenPrompt).not.toContain("Prefer results published");
   });
 
-  it("parses well-formed results out of the model's structured reply", async () => {
+  // #2228 fix round 1, finding 6: the provider's citations are the ground truth for urls. A link
+  // that appears only in the model's JSON body was never verified by a search hit, so it is
+  // dropped; a cited link is kept even when the JSON body omits it.
+  it("keeps cited results in citation order, enriched with the JSON body's title and snippet", async () => {
     const runner: ModelNativeSearchRunner = async () => ({
       object: {
         results: [
@@ -56,44 +59,64 @@ describe("createModelNativeProvider", () => {
             title: "Widget 4 release notes",
             url: "https://example.com/widget-4",
             snippet: "New in this release."
-          }
+          },
+          { title: "Widget 4 roadmap", url: "https://example.com/roadmap", snippet: "Next up." }
         ]
-      }
+      },
+      sources: [
+        { title: "roadmap", url: "https://example.com/roadmap" },
+        { title: "widget-4", url: "https://example.com/widget-4" }
+      ]
     });
     const provider = createModelNativeProvider(runner);
 
     const output = await provider.search({ query: "widget 4", limit: 5 });
 
     expect(output.results).toEqual([
+      { title: "Widget 4 roadmap", url: "https://example.com/roadmap", snippet: "Next up." },
       {
         title: "Widget 4 release notes",
         url: "https://example.com/widget-4",
         snippet: "New in this release."
       }
     ]);
-    expect(output.trace).toMatchObject({ provider: "model-native", count: 1 });
+    expect(output.trace).toMatchObject({ provider: "model-native", count: 2, cited: 2 });
   });
 
-  it("drops malformed entries (missing or non-string url) instead of throwing", async () => {
+  it("drops links the model wrote into the JSON body without citing them", async () => {
     const runner: ModelNativeSearchRunner = async () => ({
       object: {
         results: [
-          { title: "No URL" },
-          { title: "Bad URL", url: 42 },
-          { title: "Good", url: "https://example.com/good", snippet: "ok" }
+          { title: "Invented", url: "https://example.com/invented", snippet: "not a hit" },
+          { title: "Real", url: "https://example.com/real", snippet: "from json" }
         ]
-      }
+      },
+      sources: [{ title: "Real", url: "https://example.com/real" }]
     });
     const provider = createModelNativeProvider(runner);
 
     const output = await provider.search({ query: "q", limit: 5 });
 
     expect(output.results).toEqual([
-      { title: "Good", url: "https://example.com/good", snippet: "ok" }
+      { title: "Real", url: "https://example.com/real", snippet: "from json" }
     ]);
   });
 
-  it("merges provider-attached citations that were not repeated in the parsed JSON body", async () => {
+  it("returns nothing when the model returned links but the provider cited none", async () => {
+    const runner: ModelNativeSearchRunner = async () => ({
+      object: {
+        results: [{ title: "Unverified", url: "https://example.com/unverified", snippet: "" }]
+      }
+    });
+    const provider = createModelNativeProvider(runner);
+
+    const output = await provider.search({ query: "q", limit: 5 });
+
+    expect(output.results).toEqual([]);
+    expect(output.trace).toMatchObject({ provider: "model-native", count: 0, cited: 0 });
+  });
+
+  it("keeps a cited link the JSON body omitted, with the citation title and an empty snippet", async () => {
     const runner: ModelNativeSearchRunner = async () => ({
       object: {
         results: [{ title: "Parsed", url: "https://example.com/parsed", snippet: "from json" }]
@@ -108,20 +131,43 @@ describe("createModelNativeProvider", () => {
     const output = await provider.search({ query: "q", limit: 5 });
 
     expect(output.results).toEqual([
-      { title: "Parsed", url: "https://example.com/parsed", snippet: "from json" },
-      { title: "Cited only", url: "https://example.com/cited", snippet: "" }
+      { title: "Cited only", url: "https://example.com/cited", snippet: "" },
+      { title: "Parsed", url: "https://example.com/parsed", snippet: "from json" }
     ]);
   });
 
-  it("caps merged results at the requested limit", async () => {
+  it("ignores malformed JSON entries and duplicate citations without throwing", async () => {
     const runner: ModelNativeSearchRunner = async () => ({
       object: {
         results: [
-          { title: "A", url: "https://example.com/a", snippet: "" },
-          { title: "B", url: "https://example.com/b", snippet: "" },
-          { title: "C", url: "https://example.com/c", snippet: "" }
+          { title: "No URL" },
+          { title: "Bad URL", url: 42 },
+          { title: "Good", url: "https://example.com/good", snippet: "ok" }
         ]
-      }
+      },
+      sources: [
+        { title: "Good", url: "https://example.com/good" },
+        { title: "Good again", url: "https://example.com/good" },
+        { title: "", url: "" }
+      ]
+    });
+    const provider = createModelNativeProvider(runner);
+
+    const output = await provider.search({ query: "q", limit: 5 });
+
+    expect(output.results).toEqual([
+      { title: "Good", url: "https://example.com/good", snippet: "ok" }
+    ]);
+  });
+
+  it("caps cited results at the requested limit", async () => {
+    const runner: ModelNativeSearchRunner = async () => ({
+      object: { results: [] },
+      sources: [
+        { title: "A", url: "https://example.com/a" },
+        { title: "B", url: "https://example.com/b" },
+        { title: "C", url: "https://example.com/c" }
+      ]
     });
     const provider = createModelNativeProvider(runner);
 
