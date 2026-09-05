@@ -225,6 +225,45 @@ describe("NewsSettings personalization sections (#953)", () => {
     expect(html).not.toContain('class="jds-btn jds-btn--primary jds-btn--sm" disabled=""');
   });
 
+  // #2228 fix round 1, finding 7: the described-topics gate names the fix for each reason and
+  // links where that fix actually lives, not always at Assistant settings.
+  it("gate: a chat model without built-in search points at the Chat model picker", () => {
+    const html = render(
+      personalization({
+        availability: { ...allOff, aiConfigured: true, webSearchReason: "model-has-no-search" }
+      })
+    );
+    expect(html).toContain("Your chat model has no built-in search.");
+    expect(html).toContain('href="/settings?section=assistant"');
+    expect(html).toContain("Pick a model under Assistant settings");
+  });
+
+  it("gate: built-in search switched off points an admin at AI providers", () => {
+    const html = render(
+      personalization({
+        availability: { ...allOff, aiConfigured: true, webSearchReason: "native-disabled" }
+      })
+    );
+    expect(html).toContain("Built-in web search is switched off for this instance.");
+    expect(html).toContain('href="/settings?section=aiproviders"');
+    expect(html).toContain("Turn it on or add a Brave key under AI providers");
+  });
+
+  it("gate: no key and no searching model points at AI providers", () => {
+    const html = render(
+      personalization({
+        availability: {
+          ...allOff,
+          aiConfigured: true,
+          webSearchReason: "no-key-no-native-model"
+        }
+      })
+    );
+    expect(html).toContain("No web search is set up.");
+    expect(html).toContain('href="/settings?section=aiproviders"');
+    expect(html).toContain("Add a model with built-in search or a Brave key under AI providers");
+  });
+
   it("prerequisites met: add-source button and add-topic form are live (#975 Task 9 opens the writes)", () => {
     const html = render(personalization({ availability: allOn }));
     // The Slice-1 closed-write placeholders are gone — real forms render instead.

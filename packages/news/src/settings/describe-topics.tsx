@@ -4,7 +4,11 @@ import { Plus, Tag } from "lucide-react";
 import { Badge } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
 import { Card } from "@moss/ui";
-import type { NewsCustomTopicDto, NewsPersonalizationAvailabilityDto } from "@moss/shared";
+import type {
+  NewsCustomTopicDto,
+  NewsPersonalizationAvailabilityDto,
+  NewsWebSearchUnavailableReason
+} from "@moss/shared";
 
 import { createNewsTopic, deleteNewsTopic, updateNewsTopic } from "../web/news-client.js";
 import { newsQueryKeys } from "../web/query-keys.js";
@@ -35,16 +39,59 @@ export function topicCreateErrorMessage(error: unknown): string {
  * missing, pointing at AI providers settings. Relocated from index.tsx (#990) — also used there
  * for the "Publications you add" section, so it must stay exported.
  */
-export function PrereqGate(props: { readonly requirement: string }) {
+export function PrereqGate(props: {
+  readonly requirement: string;
+  /** Where the fix lives; defaults to AI providers (#2228 lets the News gate vary it). */
+  readonly href?: string;
+  readonly linkLabel?: string;
+}) {
   return (
     <span className="nw-set__gate">
       {props.requirement}{" "}
-      <a className="nw-set__gatelink" href="/settings?section=aiproviders">
-        Set it up in AI providers
+      <a className="nw-set__gatelink" href={props.href ?? "/settings?section=aiproviders"}>
+        {props.linkLabel ?? "Set it up in AI providers"}
       </a>
       .
     </span>
   );
+}
+
+/**
+ * #2228: the described-topics gate names the fix for the actual reason web search is off for
+ * this person and links where that fix lives. Only a model without built-in search is fixed on
+ * the personal Assistant page; the other two reasons are admin settings on AI providers.
+ */
+export function describedTopicsGate(reason: NewsWebSearchUnavailableReason | null | undefined): {
+  readonly requirement: string;
+  readonly href: string;
+  readonly linkLabel: string;
+} {
+  switch (reason) {
+    case "model-has-no-search":
+      return {
+        requirement: "Your chat model has no built-in search.",
+        href: "/settings?section=assistant",
+        linkLabel: "Pick a model under Assistant settings, or ask an admin to add a Brave key"
+      };
+    case "native-disabled":
+      return {
+        requirement: "Built-in web search is switched off for this instance.",
+        href: "/settings?section=aiproviders",
+        linkLabel: "Turn it on or add a Brave key under AI providers"
+      };
+    case "no-key-no-native-model":
+      return {
+        requirement: "No web search is set up.",
+        href: "/settings?section=aiproviders",
+        linkLabel: "Add a model with built-in search or a Brave key under AI providers"
+      };
+    default:
+      return {
+        requirement: "Described topics need an AI model and web search.",
+        href: "/settings?section=aiproviders",
+        linkLabel: "Set it up in AI providers"
+      };
+  }
 }
 
 /** Maps a stored topic (or null for add-mode) to the form's controlled field values. */
@@ -314,13 +361,7 @@ export function DescribeTopics(props: {
             Add topic
           </Button>
           {props.availability ? (
-            <PrereqGate
-              requirement={
-                props.availability.webSearchReason === "model-has-no-search"
-                  ? "Your chat model has no built-in search. Pick one that does under Assistant & AI, or ask an admin to add a Brave key."
-                  : "Described topics need an AI model and web search."
-              }
-            />
+            <PrereqGate {...describedTopicsGate(props.availability.webSearchReason)} />
           ) : null}
         </div>
       )}
