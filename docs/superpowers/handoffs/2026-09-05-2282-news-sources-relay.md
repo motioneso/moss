@@ -438,3 +438,54 @@ the run. The p1a2c note above still says how to run it when the box is quiet.
 - A failure from the port may now carry `detail` and `retryAfter`; the reader already expects
   `detail`.
 - Nothing calls `fetchWithOptions` yet, so no behaviour changed for existing sources.
+
+## Lane notes: build-2282-p1b1 stop (2026-09-05)
+
+PLAIN ENGLISH RULE for whoever picks this up: every message to a human is plain English. No
+jargon, no coined shorthand, ASCII punctuation only, at most one backtick per sentence. Pass this
+rule on verbatim to any agent you spawn.
+
+Finished the slice (task 1.6 to green, pushed, PR 2298 commented). Did not start task 1.7.
+
+Mid-session Ben switched every lane from Fable to Opus 5 because the Fable allowance ran out.
+Nothing about the work changed.
+
+### Built and proved this lane (commit c22e6d1cc)
+
+- `source-resolution.ts`: the subreddit branch runs first, before the publication path and before
+  the web-search prerequisite. A Reddit-shaped name that breaks Reddit's rules is rejected
+  `invalid_input` with zero fetches.
+- `resolveSubreddit` reads the hot feed once through the optional `fetchWithOptions` port from
+  task 1.5. Throttling becomes the new `rate_limited` reason, a private or gated subreddit the new
+  `auth_required` reason, everything else `unreachable`.
+- The content-policy verdict is cached under `reddit.com/r/<lowercase name>`, deliberately not
+  under `reddit.com` — approving one subreddit must never approve another.
+- `VerifiedSourceCandidate` gained `confirmedFetchHosts`, `iconUrl`, `workaround` and `feedHost`,
+  and `retrievalMethod` now includes `"reddit"`. Publication candidates fill the new fields from
+  evidence already in hand; confirming a preview copies them instead of re-deriving hosts.
+- Duplicate detection is now `findDuplicateCustomSource`, exported from `source-resolution.ts` and
+  used by both the REST preview route and the chat preview tool. Subreddits match on feed address
+  ignoring case; publications keep the domain rule and never match a subreddit row.
+- The two Reddit failure sentences moved to `packages/news/src/source/reddit-messages.ts`, which
+  imports nothing, and `reddit-reader.ts` re-exports them so the package root and Sports are
+  unchanged. This keeps feed parsing out of the settings browser bundle.
+- Tests, written first and watched fail: 6 new cases in `tests/unit/news-source-resolution.test.ts`.
+- Green: `pnpm typecheck` exit 0; eslint and prettier on the 8 changed files exit 0; 40 News,
+  Reddit and discovery unit files, 659 tests passed. Nothing piped.
+
+### Integration proof: still NOT run (tasks 1.3 and 1.4)
+
+Load stayed above 20 the whole session. Nothing this lane touched the migration or the repository.
+The p1a2c note above still says how to run it when the box is quiet.
+
+### Task 1.7 (next lane): what it can rely on
+
+- A saved subreddit row has `retrievalMethod` `"reddit"`, canonical domain `reddit.com`, its hot
+  feed URL in Reddit's own casing, and `confirmedFetchHosts` of exactly `www.reddit.com`. Use
+  `subredditNameFromUrl` on the saved feed URL to recover the name.
+- The collector should read through the same options-capable port and the same `readSubreddit`,
+  so the fetch host allowlist and the robots skip stay in one place.
+- One thing 1.7 should check: revalidation calls `decideSourcePolicy` with the row's canonical
+  domain, which for a subreddit is plain `reddit.com`. That will miss the per-subreddit verdict
+  this lane writes. Decide there whether revalidation should build the same
+  `reddit.com/r/<name>` key.
