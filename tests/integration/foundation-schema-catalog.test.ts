@@ -382,7 +382,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0211", name: "0211_moss_audit_log_outcome_widen_suppressed_refused.sql" },
         // #2208 — model rows record whether discovery or a person added them.
         { version: "0212", name: "0212_ai_configured_models_origin.sql" },
-        { version: "0213", name: "0213_sports_reddit_sources.sql" }
+        { version: "0213", name: "0213_sports_reddit_sources.sql" },
+        // 0214 — a model row records its provider release date, so the tier ladder can prefer it.
+        { version: "0214", name: "0214_ai_configured_models_released_at.sql" }
       ]);
     } finally {
       await client.end();
