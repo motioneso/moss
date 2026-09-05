@@ -39,6 +39,8 @@ const baseline: SportsSourceBaseline = {
     lastCheckedAt: checkedAt,
     lastSuccessAt: checkedAt,
     recipeStatus: "feed",
+    photoStatus: "pending",
+    photosFoundByMoss: false,
     assignedFollowIds: [followId],
     assignments: [
       {
@@ -381,6 +383,8 @@ describe("SportsSourceService assignment replacement", () => {
         feedUrl: null,
         retrievalMethod: "scrape",
         recipeStatus: "ready",
+        photoStatus: "pending",
+        photosFoundByMoss: false,
         assignments: baseline.source.assignments.map((assignment) => ({
           ...assignment,
           targetUrl: "https://publisher.example.com/api/team/DAL/news"

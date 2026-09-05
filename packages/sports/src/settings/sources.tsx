@@ -23,12 +23,14 @@ import {
   previewSportsSource,
   previewSportsSourceRecipe,
   retrySportsSource,
+  stopUsingSportsSourcePhotos,
   updateSportsEspnCoverage
 } from "../web/sports-client.js";
 import { sportsQueryKeys } from "../web/query-keys.js";
 import { competitionLogoUrl } from "../source/catalog.js";
 import { sportsSourceTargetKey, sportsSportOptions } from "../source/scope.js";
 import { SourceAssignmentPicker, sourceTargetDisplayLabel } from "./source-assignment-picker.js";
+import { SourcePhotoStatus } from "./source-photos.js";
 
 /* #1572: custom public news sources by team and league. Mirrors News' add-source flow
    (packages/news/src/settings/add-source.tsx), simplified for Sports' single-candidate,
@@ -432,6 +434,10 @@ export function SportsSourcesSection(props: {
   });
   const removeMutation = useMutation({ mutationFn: deleteSportsSource, onSuccess: invalidate });
   const retryMutation = useMutation({ mutationFn: retrySportsSource, onSuccess: invalidate });
+  const stopPhotosMutation = useMutation({
+    mutationFn: stopUsingSportsSourcePhotos,
+    onSuccess: invalidate
+  });
   const recipePreviewMutation = useMutation({
     mutationFn: previewSportsSourceRecipe,
     onSuccess: (result, sourceId) => {
@@ -611,6 +617,8 @@ export function SportsSourcesSection(props: {
               recipePreviewMutation.isPending && recipePreviewMutation.variables === source.id;
             const recoveryBusy =
               removing || retrying || rebuilding || recipeConfirmMutation.isPending;
+            const stoppingPhotos =
+              stopPhotosMutation.isPending && stopPhotosMutation.variables === source.id;
             const showRebuild =
               source.retrievalMethod === "scrape" &&
               (source.recipeStatus === "missing" ||
@@ -667,6 +675,12 @@ export function SportsSourcesSection(props: {
                     </Button>
                   </div>
                 </div>
+                <SourcePhotoStatus
+                  source={source}
+                  busy={recoveryBusy || stoppingPhotos}
+                  stopping={stoppingPhotos}
+                  onStopUsing={(sourceId) => stopPhotosMutation.mutate(sourceId)}
+                />
                 {source.healthMessage ? (
                   <p className="sp-src__health-message">{source.healthMessage}</p>
                 ) : null}

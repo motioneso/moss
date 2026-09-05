@@ -1313,6 +1313,12 @@ export type SportsSourceHealthState =
   | "auth_required"
   | "disabled";
 
+/** #2237 (0214) the lifecycle of a source's saved photo instruction. */
+export type SportsSourcePhotoRuleState = "none" | "previewing" | "in_use" | "stale";
+
+/** #2237 (0214) what the last refresh that actually had stories saw. */
+export type SportsSourcePhotoOutcome = "working" | "none";
+
 export interface SportsCustomSourcesTable {
   id: ColumnType<string, string | undefined, string>;
   owner_user_id: string;
@@ -1349,6 +1355,28 @@ export interface SportsCustomSourcesTable {
   authorization_confirmed_at: TimestampColumn;
   /** #2211 (0213): a subreddit's community icon URL on Reddit's image hosts; null for publications. */
   icon_url: ColumnType<string | null, string | null | undefined, string | null>;
+  /**
+   * #2237 (0214): the per-source photo record. The saved instruction for finding an article's
+   * lead photo, its lifecycle state, what the last refresh with stories saw, how many refreshes
+   * in a row saw nothing, and when Moss may look at the source again.
+   */
+  photo_rule_json: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >;
+  photo_rule_state: ColumnType<
+    SportsSourcePhotoRuleState,
+    SportsSourcePhotoRuleState | undefined,
+    SportsSourcePhotoRuleState
+  >;
+  photo_miss_streak: ColumnType<number, number | undefined, number>;
+  photo_last_outcome: ColumnType<
+    SportsSourcePhotoOutcome | null,
+    SportsSourcePhotoOutcome | null | undefined,
+    SportsSourcePhotoOutcome | null
+  >;
+  photo_relook_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }

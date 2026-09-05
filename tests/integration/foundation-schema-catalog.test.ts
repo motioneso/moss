@@ -389,7 +389,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0215", name: "0215_connector_sync_previous_run.sql" },
         // #2236 slice 1 — the scratchpad's single owner-only table.
         { version: "0216", name: "0216_scratchpads.sql" },
-        { version: "0217", name: "0217_sports_follows_source_team_id.sql" }
+        { version: "0217", name: "0217_sports_follows_source_team_id.sql" },
+        // #2237 slice 2 — per-source photo rule and photo status on app.sports_custom_sources.
+        { version: "0222", name: "0222_sports_source_photos.sql" }
       ]);
     } finally {
       await client.end();

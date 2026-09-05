@@ -7,18 +7,14 @@ import { isPublicFeedDocument, parsePublicFeedItems } from "@moss/news";
 import { catalogEntry } from "./catalog.js";
 import type { SportsSafeFetchPort, SportsWebRequestHop } from "./discovery.js";
 import {
-  extractFeedPhoto,
-  extractShareImage,
-  isUsablePhotoCandidate,
-  parseFeedPhotoItems
-} from "./photo.js";
-import {
-  SPORTS_PHOTO_DEADLINE_MARGIN_MS,
   type EnsurePhotoResult,
   type PhotoHostSlot,
   type SportsPhotoStore,
   type StoredPhoto
 } from "./photo-store.js";
+import { attachSportsPhotoUrls } from "./photo-pass.js";
+import { recordSportsPhotoOutcome } from "./photo-storage.js";
+import type { SportsPhotoOutcome } from "./photo-status.js";
 import {
   expandSportsSourceRecipe,
   extractSportsSourceRecipe,
@@ -46,8 +42,8 @@ const MAX_ASSIGNMENTS = 20;
 const MAX_REQUESTS = 30;
 const MAX_CONCURRENCY = 4;
 const MAX_DOMAIN_CONCURRENCY = 2;
-const MAX_RESPONSE_BYTES = 1_000_000;
-const FETCH_TIMEOUT_MS = 6_000;
+export const MAX_RESPONSE_BYTES = 1_000_000;
+export const FETCH_TIMEOUT_MS = 6_000;
 const REFRESH_DEADLINE_MS = 12_000;
 const MAX_RETRY_AFTER_MS = 5_000;
 const HEADLINE_TTL_MS = 10 * 60 * 1000;
@@ -58,10 +54,7 @@ export type SportsPublicSourceHeadline = CustomSourceHeadline & {
 };
 
 /** #2237 the deterministic photo pass' budget, per source, per refresh. */
-const MAX_ARTICLE_PAGE_FETCHES = 6;
 /** The same margin the photo store applies to its own download, so the two cannot drift apart. */
-const PHOTO_DEADLINE_MARGIN_MS = SPORTS_PHOTO_DEADLINE_MARGIN_MS;
-const ARTICLE_PAGE_CONTENT_TYPES = ["text/html", "application/xhtml+xml"];
 /** A failed photo is not retried for as long as its story could still be served from the cache. */
 const PHOTO_FAILURE_TTL_MS = HEADLINE_TTL_MS + DEFAULT_STALE_RETENTION_MS;
 const PHOTO_FAILURE_MAX_ENTRIES = 2_000;
@@ -95,12 +88,12 @@ export interface SportsPublicSourceRefreshResult {
   readonly persistedResults: number;
 }
 
-interface RequestAssignment {
+export interface RequestAssignment {
   readonly source: SportsRuntimeSource;
   readonly assignment: SportsRuntimeSource["assignments"][number];
 }
 
-interface RequestGroup {
+export interface RequestGroup {
   readonly identity: string;
   /** #2211 a subreddit feed is parsed as Reddit Atom, everything else as a feed or recipe. */
   readonly kind: "feed" | "scrape" | "reddit";
@@ -112,7 +105,7 @@ interface RequestGroup {
   readonly assignments: RequestAssignment[];
 }
 
-interface ExtractedHeadline {
+export interface ExtractedHeadline {
   readonly id: string;
   readonly title: string;
   readonly url: string;
@@ -137,7 +130,7 @@ interface RequestOutcome {
   readonly fromCache: boolean;
 }
 
-class DomainConcurrencyLimiter {
+export class DomainConcurrencyLimiter {
   private readonly active = new Map<string, number>();
   private readonly waiters = new Map<string, Array<() => void>>();
 
@@ -336,106 +329,6 @@ export class SportsPublicSourceReader {
     this.cache = dependencies.cache ?? new DatasetCache({ maxEntries: 500 });
     this.now = dependencies.now ?? Date.now;
     this.sleep = dependencies.sleep ?? defaultSleep;
-  }
-
-  /**
-   * #2237 the deterministic photo pass: the feed's own media tag first, then the article page's
-   * share image. Every failure here is swallowed — a story without a photo is still a story, and
-   * a photo must never cost the reader its headlines.
-   */
-  private async attachPhotoUrls(
-    group: RequestGroup,
-    items: readonly ExtractedHeadline[],
-    feedBody: string | null,
-    context: {
-      readonly deadline: number;
-      readonly signal?: AbortSignal;
-      readonly domainLimiter: DomainConcurrencyLimiter;
-      readonly pageBudget: Map<string, number>;
-    }
-  ): Promise<readonly ExtractedHeadline[]> {
-    const feedPhotos = new Map<string, string>();
-    if (feedBody !== null) {
-      for (const parsed of parseFeedPhotoItems(feedBody)) {
-        if (!parsed.link) continue;
-        const found = extractFeedPhoto(parsed);
-        if (found) feedPhotos.set(parsed.link, found.url);
-      }
-    }
-    const sourceIds = new Set(group.assignments.map((pair) => pair.source.id));
-    const withPhotos: ExtractedHeadline[] = [];
-    for (const item of items) {
-      let publisherHost: string;
-      try {
-        publisherHost = new URL(item.url).hostname.toLowerCase();
-      } catch {
-        withPhotos.push(item);
-        continue;
-      }
-      const fromFeed = feedPhotos.get(item.url);
-      if (fromFeed && isUsablePhotoCandidate(fromFeed, { publisherHost })) {
-        withPhotos.push({ ...item, photoUrl: fromFeed });
-        continue;
-      }
-      const budgetLeft = [...sourceIds].every(
-        (sourceId) => (context.pageBudget.get(sourceId) ?? 0) < MAX_ARTICLE_PAGE_FETCHES
-      );
-      if (
-        !budgetLeft ||
-        context.signal?.aborted ||
-        this.now() + PHOTO_DEADLINE_MARGIN_MS >= context.deadline
-      ) {
-        withPhotos.push(item);
-        continue;
-      }
-      for (const sourceId of sourceIds) {
-        context.pageBudget.set(sourceId, (context.pageBudget.get(sourceId) ?? 0) + 1);
-      }
-      const shareUrl = await this.fetchShareImage(item.url, publisherHost, context);
-      withPhotos.push(shareUrl ? { ...item, photoUrl: shareUrl } : item);
-    }
-    return withPhotos;
-  }
-
-  private async fetchShareImage(
-    articleUrl: string,
-    publisherHost: string,
-    context: {
-      readonly deadline: number;
-      readonly signal?: AbortSignal;
-      readonly domainLimiter: DomainConcurrencyLimiter;
-    }
-  ): Promise<string | null> {
-    const held = await context.domainLimiter.acquireAll(
-      [publisherHost],
-      context.deadline,
-      this.now,
-      context.signal
-    );
-    if (!held) return null;
-    try {
-      // Waiting for the slot can itself consume most of what was left, so the deadline margin is
-      // checked again here rather than only before the wait.
-      if (context.signal?.aborted || this.now() + PHOTO_DEADLINE_MARGIN_MS >= context.deadline) {
-        return null;
-      }
-      const response = await this.dependencies.fetch(articleUrl, {
-        allowedHosts: [publisherHost],
-        allowedContentTypes: ARTICLE_PAGE_CONTENT_TYPES,
-        maxBytes: MAX_RESPONSE_BYTES,
-        rejectOversizedResponses: true,
-        timeoutMs: Math.min(FETCH_TIMEOUT_MS, Math.max(1, context.deadline - this.now())),
-        signal: context.signal
-      });
-      if (!response.ok) return null;
-      const found = extractShareImage(response.body, response.finalUrl);
-      if (!found) return null;
-      return isUsablePhotoCandidate(found.url, { publisherHost }) ? found.url : null;
-    } catch {
-      return null;
-    } finally {
-      for (const host of held) context.domainLimiter.release(host);
-    }
   }
 
   /**
@@ -699,11 +592,12 @@ export class SportsPublicSourceReader {
       }
     };
 
+    /** Returns how many of the pushed headlines are served with a stored photo. */
     const pushHeadlines = async (
       pair: RequestAssignment,
       items: readonly ExtractedHeadline[],
       checkedAt: Date | null
-    ): Promise<void> => {
+    ): Promise<number> => {
       const stored = await this.storePhotos(
         accessContext,
         pair,
@@ -714,6 +608,7 @@ export class SportsPublicSourceReader {
       );
       for (const copy of stored.values()) keptPhotoKeys.add(copy.key);
       headlines.push(...publicHeadlines(pair, items, checkedAt, stored));
+      return stored.size;
     };
 
     const run = async (group: RequestGroup): Promise<void> => {
@@ -914,15 +809,22 @@ export class SportsPublicSourceReader {
       });
     };
 
+    // What each source's stories actually got this time round. A photo counts only once its
+    // download succeeded and the returned story is served with it: a candidate address in the
+    // feed says nothing until the store accepts it. Only a refresh that really went out and
+    // really had stories counts: a cached answer says nothing new about photos.
+    const photoOutcomes = new Map<string, SportsPhotoOutcome>();
     const finish = async (entry: (typeof photoPhase)[number]): Promise<void> => {
       let items = entry.outcome.items;
       if (!entry.reuseCached && entry.outcome.state === "healthy") {
         if (this.dependencies.photos) {
-          items = await this.attachPhotoUrls(entry.group, items, entry.feedBody, {
+          items = await attachSportsPhotoUrls(entry.group, items, entry.feedBody, {
             deadline,
             signal: options.signal,
             domainLimiter,
-            pageBudget
+            pageBudget,
+            now: this.now,
+            fetch: this.dependencies.fetch
           });
         }
         const cachedAt = this.now();
@@ -933,8 +835,16 @@ export class SportsPublicSourceReader {
           cachedAt + HEADLINE_TTL_MS + DEFAULT_STALE_RETENTION_MS
         );
       }
+      const countsForPhotos =
+        this.dependencies.photos !== undefined &&
+        !entry.outcome.fromCache &&
+        entry.outcome.state === "healthy" &&
+        items.length > 0;
       for (const pair of entry.group.assignments) {
-        await pushHeadlines(pair, items, entry.outcome.checkedAt);
+        const attached = await pushHeadlines(pair, items, entry.outcome.checkedAt);
+        if (countsForPhotos && photoOutcomes.get(pair.source.id) !== "working") {
+          photoOutcomes.set(pair.source.id, attached > 0 ? "working" : "none");
+        }
         if (!entry.outcome.fromCache) {
           results.push({
             sourceId: pair.source.id,
@@ -968,6 +878,17 @@ export class SportsPublicSourceReader {
         : await this.dependencies.dataContext.withDataContext(accessContext, (db) =>
             this.repository.persistRuntimeResults(db, results)
           );
+    if (photoOutcomes.size > 0) {
+      try {
+        await this.dependencies.dataContext.withDataContext(accessContext, async (db) => {
+          for (const [sourceId, outcome] of photoOutcomes) {
+            await recordSportsPhotoOutcome(db, sourceId, outcome);
+          }
+        });
+      } catch {
+        // The status line is a courtesy; failing to update it must never fail a refresh.
+      }
+    }
     return { headlines, degraded, persistedResults };
   }
 }
