@@ -293,7 +293,11 @@ async function mockSportsSettings(
 
   await page.route("**/api/sports/teams/search*", (route) => {
     const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() ?? "";
-    const teams = ALL_TEAMS.filter((t) => t.name.toLowerCase().includes(q));
+    // Name or short name, like the real search: "al" hits Dallas, Arsenal and LAL at once, and
+    // "pac" hits both colliding Pacific teams.
+    const teams = ALL_TEAMS.filter(
+      (t) => t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q)
+    );
     return fulfillJson(route, { teams, partial: false, degraded: false });
   });
 
@@ -343,7 +347,9 @@ test.describe("Sports settings follow picker (#989)", () => {
     await page.getByRole("button", { name: "Follow Dallas Cowboys" }).click();
     const pendingFollow = page.getByRole("button", { name: "Following…" });
     await expect(pendingFollow).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Follow all of NFL" })).toBeEnabled();
+    // "cowboys" doesn't match the NFL league name itself, so this result shows a plain league
+    // heading, not a Follow-all button — check an unrelated control stays enabled instead.
+    await expect(page.getByRole("searchbox", { name: "Find a team or league" })).toBeEnabled();
     releasePost();
 
     const failedFollow = page.getByRole("button", { name: "Follow Dallas Cowboys" });
@@ -366,7 +372,9 @@ test.describe("Sports settings follow picker (#989)", () => {
     await unfollow.click();
     const pendingUnfollow = page.getByRole("button", { name: "Unfollowing…" });
     await expect(pendingUnfollow).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Follow all of NFL" })).toBeEnabled();
+    // "cowboys" doesn't match the NFL league name itself, so this result shows a plain league
+    // heading, not a Follow-all button — check an unrelated control stays enabled instead.
+    await expect(page.getByRole("searchbox", { name: "Find a team or league" })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Unfollow DAL" })).toBeEnabled();
     releaseDelete();
 
@@ -436,6 +444,48 @@ test.describe("Sports settings follow picker (#989)", () => {
 
     await page.getByRole("button", { name: "Unfollow all of NFL" }).click();
     await expect(page.getByRole("button", { name: "Follow all of NFL" })).toBeVisible();
+  });
+
+  test("search results sit under their own league heading, and no league group is empty (#2278)", async ({
+    page
+  }) => {
+    await mockApi(page, {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: [],
+      notifications: [],
+      tasks: []
+    });
+    await mockSportsSettings(page);
+    await gotoSportsSettings(page);
+
+    // "al" hits Dallas Cowboys, Arsenal and LAL: three leagues at once. No league name contains
+    // "al", so every group gets a plain heading rather than a Follow-all row.
+    await page.getByRole("searchbox", { name: "Find a team or league" }).fill("al");
+    await expect(page.getByRole("button", { name: "Follow Dallas Cowboys" })).toBeVisible();
+
+    const groups = page.locator(".sp-search__group");
+    await expect(groups).toHaveCount(3);
+    const expected: ReadonlyArray<readonly [string, string]> = [
+      ["NFL", "Follow Dallas Cowboys"],
+      ["Premier League", "Follow Arsenal"],
+      ["NBA", "Follow Los Angeles Lakers"]
+    ];
+    for (const [i, [league, tile]] of expected.entries()) {
+      const group = groups.nth(i);
+      await expect(group.locator(".sp-search__group-heading")).toHaveText(league);
+      // Exactly this league's tile, and nothing from any other league.
+      await expect(group.getByRole("button", { name: /^Follow / })).toHaveCount(1);
+      await expect(group.getByRole("button", { name: tile })).toBeVisible();
+    }
+    await expect(page.getByRole("button", { name: /^Follow all of/ })).toHaveCount(0);
+
+    // A league that matched by name alone keeps its Follow-all row but shows no empty grid.
+    await page.getByRole("searchbox", { name: "Find a team or league" }).fill("nfl");
+    await expect(page.getByRole("button", { name: "Follow all of NFL" })).toBeVisible();
+    await expect(groups).toHaveCount(1);
+    await expect(groups.first().locator(".sp-teamgrid")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Follow (?!all)/ })).toHaveCount(0);
   });
 
   test("browse leagues disclosure opens only the selected league's roster and preserves loading/retry states", async ({

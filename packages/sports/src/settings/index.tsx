@@ -377,6 +377,75 @@ export function SearchResults(props: {
       <Note>No teams or leagues match your search.</Note>
     );
   }
+  // Group the flat result list by its league so same-named clubs from different sports never
+  // land in one undifferentiated grid (#2278: a search like "pac" showed three NC State tiles
+  // with nothing saying which sport each belonged to).
+  const teamsByLeague = new Map<string, TeamRef[]>();
+  for (const team of props.results) {
+    const group = teamsByLeague.get(team.competitionKey);
+    if (group) group.push(team);
+    else teamsByLeague.set(team.competitionKey, [team]);
+  }
+  // Teams whose league is missing from the catalog (still loading, failed, or retired) must
+  // still land under a heading, one per league key, so same-named clubs stay told apart. The
+  // team record carries no league name, so the heading reuses the summary chip's orphan wording.
+  const groupedKeys = new Set(leagues.map((competition) => competition.competitionKey));
+  const unrecognizedLeagueKeys = [
+    ...new Set(
+      props.results
+        .filter((team) => !groupedKeys.has(team.competitionKey))
+        .map((team) => team.competitionKey)
+    )
+  ];
+  const matchedLeagueKeys = new Set(
+    leagueMatches(props.query, props.competitions).map((c) => c.competitionKey)
+  );
+
+  function renderTeam(team: TeamRef) {
+    const active =
+      followFor(props.followsByKey, team.competitionKey, team.teamKey, team.sourceTeamId) !==
+      undefined;
+    const pendingHere = pendingDirectionFor(
+      props.actionState,
+      team.competitionKey,
+      team.teamKey,
+      "picker"
+    );
+    const state = followControlState("team", team.name, active, pendingHere);
+    return (
+      <span className="sp-action-target" key={`${team.competitionKey}:${team.teamKey}`}>
+        <button
+          type="button"
+          className={`sp-team${active ? " is-active" : ""}`}
+          aria-pressed={active}
+          aria-label={state.ariaLabel}
+          disabled={pendingHere !== null}
+          onClick={() =>
+            props.onToggle(
+              team.competitionKey,
+              team.teamKey,
+              team.name,
+              "picker",
+              team.sourceTeamId
+            )
+          }
+        >
+          <span className="sp-team__top">
+            <PickCrest name={team.name} shortName={team.shortName} crestUrl={team.crestUrl} />
+            <span className="sp-team__name">{team.shortName || team.name}</span>
+          </span>
+          {state.visible ? <span className="sp-team__state">{state.visible}</span> : null}
+        </button>
+        <ActionError
+          actionState={props.actionState}
+          competitionKey={team.competitionKey}
+          teamKey={team.teamKey}
+          source="picker"
+        />
+      </span>
+    );
+  }
+
   return (
     <>
       {leagues.map((competition) => {
@@ -388,78 +457,50 @@ export function SearchResults(props: {
           "picker"
         );
         const state = followControlState("league", competition.label, wholeActive, pendingHere);
+        const matched = matchedLeagueKeys.has(competition.competitionKey);
+        // A league that matched by name alone has no team tiles: keep its Follow-all row but
+        // never render an empty grid beneath it.
+        const teams = teamsByLeague.get(competition.competitionKey) ?? [];
         return (
-          <span
-            key={`l-${competition.competitionKey}`}
-            className="sp-action-target sp-action-target--wide"
-          >
-            <button
-              type="button"
-              className={`sp-whole${wholeActive ? " is-active" : ""}`}
-              aria-pressed={wholeActive}
-              aria-label={state.ariaLabel}
-              disabled={pendingHere !== null}
-              onClick={() =>
-                props.onToggle(competition.competitionKey, null, competition.label, "picker")
-              }
-            >
-              <span className="sp-whole__lbl">{state.visible}</span>
-            </button>
-            <ActionError
-              actionState={props.actionState}
-              competitionKey={competition.competitionKey}
-              teamKey={null}
-              source="picker"
-            />
-          </span>
+          <div className="sp-search__group" key={`g-${competition.competitionKey}`}>
+            {matched ? (
+              <span className="sp-action-target sp-action-target--wide">
+                <button
+                  type="button"
+                  className={`sp-whole${wholeActive ? " is-active" : ""}`}
+                  aria-pressed={wholeActive}
+                  aria-label={state.ariaLabel}
+                  disabled={pendingHere !== null}
+                  onClick={() =>
+                    props.onToggle(competition.competitionKey, null, competition.label, "picker")
+                  }
+                >
+                  <span className="sp-whole__lbl">{state.visible}</span>
+                </button>
+                <ActionError
+                  actionState={props.actionState}
+                  competitionKey={competition.competitionKey}
+                  teamKey={null}
+                  source="picker"
+                />
+              </span>
+            ) : (
+              <div className="jds-eyebrow sp-search__group-heading">{competition.label}</div>
+            )}
+            {teams.length > 0 ? <div className="sp-teamgrid">{teams.map(renderTeam)}</div> : null}
+          </div>
         );
       })}
-      <div className="sp-teamgrid">
-        {props.results.map((team) => {
-          const active =
-            followFor(props.followsByKey, team.competitionKey, team.teamKey, team.sourceTeamId) !==
-            undefined;
-          const pendingHere = pendingDirectionFor(
-            props.actionState,
-            team.competitionKey,
-            team.teamKey,
-            "picker"
-          );
-          const state = followControlState("team", team.name, active, pendingHere);
-          return (
-            <span className="sp-action-target" key={`${team.competitionKey}:${team.teamKey}`}>
-              <button
-                type="button"
-                className={`sp-team${active ? " is-active" : ""}`}
-                aria-pressed={active}
-                aria-label={state.ariaLabel}
-                disabled={pendingHere !== null}
-                onClick={() =>
-                  props.onToggle(
-                    team.competitionKey,
-                    team.teamKey,
-                    team.name,
-                    "picker",
-                    team.sourceTeamId
-                  )
-                }
-              >
-                <span className="sp-team__top">
-                  <PickCrest name={team.name} shortName={team.shortName} crestUrl={team.crestUrl} />
-                  <span className="sp-team__name">{team.shortName || team.name}</span>
-                </span>
-                {state.visible ? <span className="sp-team__state">{state.visible}</span> : null}
-              </button>
-              <ActionError
-                actionState={props.actionState}
-                competitionKey={team.competitionKey}
-                teamKey={team.teamKey}
-                source="picker"
-              />
-            </span>
-          );
-        })}
-      </div>
+      {unrecognizedLeagueKeys.map((competitionKey) => (
+        <div className="sp-search__group" key={`g-${competitionKey}`}>
+          <div className="jds-eyebrow sp-search__group-heading">
+            {`Unrecognized league (${competitionKey})`}
+          </div>
+          <div className="sp-teamgrid">
+            {(teamsByLeague.get(competitionKey) ?? []).map(renderTeam)}
+          </div>
+        </div>
+      ))}
       {props.partial ? <Note>Still covering more leagues…</Note> : null}
     </>
   );
