@@ -1,151 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { AccessContext, DataContextDb } from "@moss/db";
 import { isPublicFeedDocument } from "@moss/news";
 
 import type { SportsSafeFetchPort } from "../../packages/sports/src/source/discovery.js";
-import { SportsPublicSourceReader } from "../../packages/sports/src/source/public-source-reader.js";
-import { validateSportsSourceRecipe } from "../../packages/sports/src/source/recipe.js";
-import type {
-  SportsRuntimeSource,
-  SportsRuntimeTargetResult,
-  SportsSourcesRepository
-} from "../../packages/sports/src/source/repository.js";
-import type { SportsNewsScope } from "../../packages/sports/src/source/scope.js";
+import type { SportsRuntimeSource } from "../../packages/sports/src/source/repository.js";
 
-const actor: AccessContext = { actorUserId: "user-a", requestId: "request-a" };
-
-const jsonRecipe = {
-  version: 1,
-  kind: "json",
-  fetchHosts: ["api.publisher.example"],
-  request: {
-    urlTemplate: "https://api.publisher.example/team/{teamId}/news",
-    slots: [{ name: "teamId", location: "path", encoding: "path_segment", maxLength: 32 }],
-    headers: { accept: "application/json" }
-  },
-  scopes: ["team"],
-  itemLimit: 10,
-  extraction: {
-    itemsPath: ["news"],
-    headlinePath: ["title"],
-    urlPath: ["url"],
-    publishedAtPath: ["publishedAt"],
-    normalize: ["trim", "collapse_whitespace", "strip_controls"]
-  }
-} as const;
-
-const htmlRecipe = {
-  version: 1,
-  kind: "html",
-  fetchHosts: ["www.publisher.example"],
-  request: {
-    urlTemplate: "https://www.publisher.example/team/{teamId}/news",
-    slots: [{ name: "teamId", location: "path", encoding: "path_segment", maxLength: 32 }],
-    headers: { accept: "text/html,application/xhtml+xml" }
-  },
-  scopes: ["team"],
-  itemLimit: 10,
-  extraction: {
-    collectionSelector: "main.news",
-    itemSelector: "article.story",
-    headline: { selector: "h2", source: "text" },
-    url: { selector: "a", source: "attribute", attribute: "href" },
-    normalize: ["trim", "collapse_whitespace", "strip_controls"]
-  }
-} as const;
-
-function fingerprint(recipe: Readonly<Record<string, unknown>>): string {
-  const result = validateSportsSourceRecipe(recipe);
-  if (!result.ok) throw new Error(result.reason);
-  return result.fingerprint;
-}
-
-function runtimeSource(options: {
-  id: string;
-  recipe?: Readonly<Record<string, unknown>> | null;
-  parameters?: Readonly<Record<string, unknown>>;
-  targetUrl?: string | null;
-  feedUrl?: string | null;
-  hosts?: readonly string[];
-  fingerprint?: string;
-  scope?: SportsNewsScope;
-}): SportsRuntimeSource {
-  const recipe = options.recipe === undefined ? jsonRecipe : options.recipe;
-  return {
-    id: options.id,
-    label: `Publisher ${options.id}`,
-    canonicalDomain: "publisher.example",
-    feedUrl: options.feedUrl ?? null,
-    retrievalMethod: options.feedUrl ? "feed" : "scrape",
-    enabled: true,
-    runtimeFingerprint:
-      options.fingerprint ?? (recipe === null ? `legacy-${options.id}` : fingerprint(recipe)),
-    recipeJson: recipe,
-    confirmedFetchHosts:
-      options.hosts ??
-      (recipe && Array.isArray(recipe.fetchHosts) ? (recipe.fetchHosts as string[]) : []),
-    assignments: [
-      {
-        id: `assignment-${options.id}`,
-        scope: options.scope ?? {
-          kind: "team",
-          sportKey: "soccer",
-          competitionKey: "eng.1",
-          teamKey: "arsenal"
-        },
-        targetUrl: options.targetUrl ?? `https://publisher.example/display/${options.id}`,
-        targetParameters: options.parameters ?? { teamId: options.id },
-        previewStatus: "verified"
-      }
-    ]
-  };
-}
-
-function success(
-  finalUrl: string,
-  body: string,
-  contentType = "application/json"
-): Awaited<ReturnType<SportsSafeFetchPort>> {
-  return { ok: true, status: 200, finalUrl, contentType, body, truncated: false };
-}
-
-function makeReader(
-  sources: readonly SportsRuntimeSource[],
-  fetch: SportsSafeFetchPort,
-  options: { now?: () => number; sleep?: () => Promise<void> } = {}
-) {
-  const persisted: SportsRuntimeTargetResult[][] = [];
-  const repository = {
-    listRuntimeSources: vi.fn(async () => [...sources]),
-    persistRuntimeResults: vi.fn(
-      async (_db: DataContextDb, results: SportsRuntimeTargetResult[]) => {
-        persisted.push([...results]);
-        return results.length;
-      }
-    )
-  } as unknown as SportsSourcesRepository;
-  const reader = new SportsPublicSourceReader({
-    dataContext: {
-      withDataContext: async <T>(
-        _accessContext: AccessContext,
-        work: (db: DataContextDb) => Promise<T>
-      ) => work({} as DataContextDb)
-    },
-    repository,
-    fetch,
-    now: options.now,
-    sleep: options.sleep
-  });
-  return { reader, repository, persisted };
-}
-
-async function permitInitialRequest(
-  url: string,
-  options: Parameters<SportsSafeFetchPort>[1]
-): Promise<boolean> {
-  return (await options?.beforeRequest?.({ url: new URL(url), redirectCount: 0 })) !== false;
-}
+import {
+  actor,
+  fingerprint,
+  htmlRecipe,
+  jsonRecipe,
+  makeReader,
+  permitInitialRequest,
+  runtimeSource,
+  success
+} from "./sports-public-source-reader-helpers.js";
 
 describe("SportsPublicSourceReader", () => {
   it("extracts RSS, JSON, and HTML without fetching article or pagination links", async () => {

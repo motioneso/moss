@@ -104,6 +104,21 @@ interface WeatherLocationFields {
   readonly lon: string;
 }
 
+// How the current place was chosen, for the hint under the field. `source` is only known for a
+// choice made this session (see the useState in ProfilePane); on page load it's null, so the
+// hint stays plain rather than guessing.
+export function weatherLocationHint(
+  location: { readonly label: string } | null,
+  source: "auto" | "search" | null
+): string {
+  if (!location) {
+    return "No place chosen yet, so the forecast is for the main city of your time zone.";
+  }
+  if (source === "auto") return `Using ${location.label}, found with Use my location.`;
+  if (source === "search") return `Using ${location.label}, set by searching.`;
+  return `Using ${location.label}.`;
+}
+
 export function parseWeatherLocationFields(
   fields: WeatherLocationFields
 ): WeatherLocationDto | null {
@@ -235,12 +250,18 @@ export function ProfilePane({ me }: PaneProps) {
     retry: false
   });
   const weatherLocation = weatherLocationQuery.data?.location ?? null;
+  // How the current place was chosen, for the hint below the field. Only known for a
+  // choice made this session — on page load we can't tell, so the hint stays plain.
+  const [weatherLocationSource, setWeatherLocationSource] = useState<"auto" | "search" | null>(
+    null
+  );
   const weatherLocationMutation = useMutation({
     mutationFn: (next: PutWeatherLocationRequest) => putWeatherLocationSettings(next),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.weather.location, data);
       void queryClient.invalidateQueries({ queryKey: queryKeys.weather.today });
       weatherLocationSearchMutation.reset();
+      setWeatherLocationSource(data.location ? "search" : null);
       toast(
         data.location
           ? `Weather location saved: ${data.location.label}.`
@@ -270,6 +291,7 @@ export function ProfilePane({ me }: PaneProps) {
       queryClient.setQueryData(queryKeys.weather.location, data);
       void queryClient.invalidateQueries({ queryKey: queryKeys.weather.today });
       weatherLocationSearchMutation.reset();
+      setWeatherLocationSource("auto");
       toast(`Weather location saved: ${data.location?.label ?? "your location"}.`, {
         tone: "ready"
       });
@@ -408,14 +430,7 @@ export function ProfilePane({ me }: PaneProps) {
             />
           }
         />
-        <Field
-          label="Location"
-          hint={
-            weatherLocation
-              ? `Using ${weatherLocation.label}.`
-              : "No place chosen yet, so the forecast is for the main city of your time zone."
-          }
-        >
+        <Field label="Location" hint={weatherLocationHint(weatherLocation, weatherLocationSource)}>
           <Button
             size="sm"
             disabled={weatherLocationBusy}

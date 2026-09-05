@@ -134,7 +134,8 @@ export const NEWS_CATALOG: readonly NewsSourceEntry[] = [
       culture: "https://feeds.npr.org/1008/rss.xml"
     },
     feedHosts: ["feeds.npr.org"],
-    // NPR's RSS carries no media tags today; hosts declared for forward-compat if they add them.
+    // NPR's RSS carries no media:content/media:thumbnail/enclosure tags; the story image comes
+    // from the first <img> in content:encoded instead, so these hosts gate that fallback too.
     imageHosts: ["media.npr.org", "npr.brightspotcdn.com"]
   },
   {

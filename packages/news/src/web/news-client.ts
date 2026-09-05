@@ -28,8 +28,14 @@ import type {
 
 import { requestJson } from "@moss/module-web-sdk";
 
+import { withoutDismissedStories } from "./news-overview-filters.js";
+
+// A news refresh can be requested before a dismissal made in this tab has finished saving. If
+// that refresh's answer arrives after the dismissal, apply the dismissal to it here rather than
+// trusting it was already applied when the request was sent. See dismissed-story-tracker.ts.
 export async function getNewsOverview(): Promise<NewsOverviewResponse> {
-  return requestJson<NewsOverviewResponse>("/api/news/overview");
+  const overview = await requestJson<NewsOverviewResponse>("/api/news/overview");
+  return withoutDismissedStories(overview);
 }
 
 export async function getNewsCatalog(): Promise<NewsCatalogResponse> {

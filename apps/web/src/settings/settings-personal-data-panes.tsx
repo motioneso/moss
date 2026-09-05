@@ -420,7 +420,6 @@ function SourcesPane() {
     return (
       <VaultChooser
         current={linkedPath ?? ""}
-        mode="notes"
         onCancel={() => setChoosing(false)}
         onChoose={choose}
       />
