@@ -49,11 +49,7 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => {
 // so this stand-in is doing the job the old Chat settings "Set up" button used to do.
 vi.mock("../../apps/web/src/settings/settings-personal-data-panes.js", () => ({
   ModulesPane: ({ onSelectSection }: PaneProps) =>
-    createElement(
-      "button",
-      { onClick: () => onSelectSection?.("aiproviders") },
-      "Set up"
-    )
+    createElement("button", { onClick: () => onSelectSection?.("aiproviders") }, "Set up")
 }));
 
 import { SettingsPage } from "../../apps/web/src/settings/settings-page.js";
