@@ -56,6 +56,7 @@ blocking	apps/web/src/styles/kit-today-feeds.css	tests/uat/specs/1497-today-css-
 blocking	apps/web/src/styles/kit-today-misc.css	tests/uat/specs/1497-today-css-residue.uat.spec.ts
 blocking	packages/news/**	tests/uat/specs/1185-news-layout.uat.spec.ts
 blocking	packages/news/**	tests/uat/specs/2006-news-credentialed-source.uat.spec.ts
+blocking	packages/news/**	tests/uat/specs/2282-news-sources.uat.spec.ts
 blocking	packages/news/**	tests/uat/specs/app-map-grounding.uat.spec.ts
 blocking	packages/settings/src/platform-diagnostics-tool.ts	tests/uat/specs/2032-self-diagnostics.uat.spec.ts
 blocking	packages/news/src/chat-tools.ts	tests/uat/specs/2032-self-diagnostics.uat.spec.ts
