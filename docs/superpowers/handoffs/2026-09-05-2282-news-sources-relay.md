@@ -489,3 +489,108 @@ The p1a2c note above still says how to run it when the box is quiet.
   domain, which for a subreddit is plain `reddit.com`. That will miss the per-subreddit verdict
   this lane writes. Decide there whether revalidation should build the same
   `reddit.com/r/<name>` key.
+
+## Lane notes: build-2282-p1b2 stop (2026-09-05)
+
+PLAIN ENGLISH RULE for whoever picks this up: every message to a human is plain English. No
+jargon, no coined shorthand, ASCII punctuation only, at most one backtick per sentence. Pass this
+rule on verbatim to any agent you spawn.
+
+Did NOT write any code this lane. Spent the whole session reading the plan, the spec, and the
+current source so the next lane can go straight to writing code instead of re-deriving this. Head
+is still c22e6d1cc / PR 2298 unchanged. Nothing to commit, tree is clean. Stopped at 70 percent
+context, as the standing rule requires.
+
+### Task 1.7 (collector Reddit branch): what is already true in the code
+
+- `packages/news/src/compilation/candidates.ts` already has an optional `fetchWithOptions` field
+  on `collectCandidates`' deps (a prior lane wired it), and `compile.ts` already passes it through
+  from its own deps. Nothing to change at the composition-root level.
+- A saved subreddit row (`NewsCustomSourceDto` in `packages/shared/src/news-api.ts`) has
+  `retrievalMethod: "reddit"`, `canonicalDomain: "reddit.com"`, `feedUrl` holding the hot feed URL
+  in Reddit's own casing, and `label` holding `r/<name>`. Get the name back with
+  `subredditNameFromUrl(source.feedUrl)` from `packages/news/src/source/reddit-reader.ts`.
+- `readSubreddit(fetch, name, options)` in `reddit-reader.ts` takes an options-capable fetch
+  function and returns one feed read (identity plus headlines) or a failure reason
+  (`not_found | auth_required | rate_limited | unreachable`). It does NOT expose the raw
+  Retry-After header value - that only survives on the fetch failure object itself
+  (`NewsSafeFetchFailure.retryAfter` in `packages/news/src/discovery/ports.ts`). So the retry
+  policy has to live in a wrapper fetch function passed into `readSubreddit`, not inside
+  `readSubreddit` itself.
+- Plan: `packages/news/src/compilation/reddit-refresh.ts` is a new file (not started) exporting
+  `REDDIT_REFRESH_LIMITS` and `readSubredditsBounded(fetch, sources, opts)`. Build it as: a task
+  gate (max 4 concurrent subreddit reads) and a separate host gate (max 2 concurrent underlying
+  fetches, since every Reddit call hits the same host) wrapping a small semaphore; a shared
+  request counter capped at 30; each underlying fetch gets `timeoutMs` from the remaining time to
+  a 12-second-from-start deadline; on a `rate_limited` failure with a valid, present, at-most-5-
+  second Retry-After value that still fits before the deadline, retry exactly once with a real
+  `setTimeout`; past the deadline or the request cap, resolve `unreachable` without calling fetch.
+  This repo's own convention for testing timers is `vi.useFakeTimers()` plus
+  `vi.advanceTimersByTimeAsync(...)` (see `tests/unit/chat-runtime-idle-reap-timer.test.ts` for the
+  pattern) - vitest's fake timers also fake `Date.now`, so a `now: () => Date.now()` clock works
+  under them without extra plumbing.
+- `collectCandidates` in `candidates.ts`: the existing per-source loop around line 314 must skip
+  `retrievalMethod === "reddit"` rows (add that to its `continue` guard) and hand them instead to
+  a new block that batches every healthy, approved, non-excluded Reddit row through
+  `readSubredditsBounded`, then maps at most 10 headlines per source (not the existing 15-cap
+  constant - use a new local constant) into candidates: `publisher: source.label`,
+  `canonicalDomain: "reddit.com"`, `url: headline.url`, `publishedAt` via the existing
+  `publicationTime` helper (drop entries with none), `excerpt: null`, `imageUrl: null`,
+  `origin: "preferred_source"`. A failure reason of `auth_required` becomes
+  `authentication_failed`; every other failure reason becomes `temporarily_unavailable` (and goes
+  into `sourcesMarkedUnavailable`), same as the rest of the function already does.
+- The dedupe the plan calls "`canonicalizeStoryUrl`/dedupe in the compiler" is actually
+  `applyDeterministicFilters` in `packages/news/src/compilation/filters.ts` (its own
+  `safeCanonicalUrl` helper plus a `chosenByUrl` map). It is exported already and needs no
+  changes - the "a Reddit article survives once" test should call `collectCandidates` then feed
+  the result through `applyDeterministicFilters` directly, not touch compile.ts.
+- Test file already exists at `tests/unit/news-candidates.test.ts` (316 lines) with working
+  helpers (`repo(...)`, a `feed(...)` XML builder, a `db` stub) - add the new Reddit cases there
+  rather than a new file, following its existing style.
+
+### Task 1.8 (wording): what is already true in the code
+
+The spec's "Settings and app map" bullet list was written before tasks 1.1-1.6 touched this file,
+so several of its "old text" quotes no longer appear verbatim - use the exact "becomes" wording
+from each bullet as the target text, matched to the closest current line by meaning, not by
+chasing a literal string that no longer exists:
+
+- `packages/news/src/settings/index.tsx` line 523: pane helper text - old text matches exactly,
+  swap `publications` for `sources` per the spec bullet.
+- Line 537 and 542-543: "Topics from your publications"/"Narrow your enabled publications..." -
+  match exactly, swap per spec bullets 4 and 5.
+- Line 608: current text is "Built-in publications" (already renamed once before this lane), not
+  the spec's literal old text "Publications". Target end text is the spec's "Built-in sources" -
+  change this line to that, and treat this as covering both the spec's "kicker" and "accessibility
+  label" bullets for this group (there is no separate aria-label carrying "News sources" anywhere
+  in this file or elsewhere in the News package - grepped, confirmed absent - the heading text is
+  the only accessible name here).
+- Line 654 and 659: "Publications you add" / "Publications you add yourself, verified before they
+  join your feed." - change to "Sources you add" / add the second spec sentence "Verified sources
+  contribute recent headlines to News and briefings." too (check whether it is already a separate
+  paragraph nearby before adding a duplicate). Same reasoning as above: this covers the spec's
+  "kicker" and "accessibility label" bullets for the personal group.
+- Lines 530 ("Follow desks from your publications or describe interests...") and 599 ("Choose
+  built-in publications, connect accounts...") are NOT in the spec's exact-wording list even
+  though the plan's line-number pointer for this task includes them. Leave them as they are - do
+  not invent replacement wording for a sentence the spec does not give exact text for.
+- `packages/news/src/settings/add-source.tsx`: confirmed lines to change are 31 (policy error),
+  34 (invalid_input error - keep the existing em-dash character, just swap the word), 54
+  (fallback error), 171 (request error), 177 (add box label "Publication homepage or domain" to
+  "Source homepage or domain"), and separately line 185's `placeholder="theatlantic.com"` becomes
+  `"politico.com or r/technology"` per the plan (this placeholder change is not one of the
+  spec's "exact" bullets, it is called out separately in the plan text itself).
+- `packages/news/src/manifest.ts`: settings description (around line 128) and the news.prefs
+  feature area need the wording the plan names (source vocabulary, subreddit input, migration
+  0218 listed). Not yet located precisely in the file - read `manifest.ts` from around line 100 to
+  170 first thing next session (partially read this session, see above for the version before
+  this task's edits).
+- Existing test files to extend (not yet opened this session, do next):
+  `tests/unit/news-settings-pane.test.tsx` and `tests/unit/news-manifest.test.ts`.
+
+### What the end-to-end lane needs to know
+
+Tasks 1.7 and 1.8 are both still unbuilt. Nothing pushed this lane. The draft pull request 2298
+was not commented (there is nothing new to report on it). Whoever continues 1.7/1.8 should be able
+to start writing tests and code immediately from the notes above without re-reading the plan or
+spec sections again.
