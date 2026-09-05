@@ -71,3 +71,33 @@ Execution/source-provider acceptance gates remain: Gemini source RPC is still di
   Integration diagnostics pending; do not start concurrent DB work. Helper 1761667 remains STOPPED.
 - Next: finish gate, resume exact helper for teardown BEFORE another DB gate; focused API + repaired
   catalogue checks through run-gate; then owned UAT via test:workshop-project-entry-uat using image.
+
+## Pickup, September 5, ~11:05 PDT (Claude, after the Codex lane hit its usage limit)
+
+The Codex account is out of credits until September 11, so this lane changed hands mid-verification.
+
+- Ben approved cleaning up the pending human-proof instance. Helper PID 1761667 was resumed,
+  its scheduled teardown ran, Compose project `uat-1761667_8daad470` is gone and the helper exited.
+  The Gemini sign-in proof was never collected; that acceptance gate is still open.
+- The 100226 foundation gate finished rc=1 with five integration failures. All five already had
+  fixes sitting in the working tree that the gate started before: four pinned expectation lists
+  (migration catalogue, cascade tables, and two built-in SQL directory assertions) plus a real
+  ordering bug in `resolveModelForCapability`, repaired with `.clearOrderBy()`.
+- Everything was uncommitted — 214 files, three issues of work, nothing pushed. Committed as
+  `04f870fe0` and pushed to `origin/build/workshop-phase-a-0904` purely as insurance. It is a
+  checkpoint, not a merge-ready change.
+- Full `verify:foundation` rerun queued behind the email-cos lane's gate and launched after it.
+
+### Known problem with this branch
+
+It is an integration branch, not a feature branch: 63 non-merge commits ahead of main and 29
+behind, carrying merged work from sports, connectors, news, settings and chat lanes. The Workshop
+deliverable is only the files in `04f870fe0`. Before any PR, that work needs lifting onto a fresh
+branch off current main. Needs a decision from Ben.
+
+### Still outstanding
+
+- Foundation gate green.
+- Live UAT walkthrough via `test:workshop-project-entry-uat` against the built image
+  `ghcr.io/motioneso/moss:workshop-entry-0905-1042` (built successfully at 10:47).
+- Gemini source RPC still disabled; execution and source-provider acceptance gates unmet.
