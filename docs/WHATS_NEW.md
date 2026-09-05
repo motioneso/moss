@@ -38,6 +38,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Mode bindings now pick the newest model in the tier.** When several models share a tier (for example two Sonnets), the assistant now uses the most recently released one by default instead of whichever happened to register last. [PR #2219](https://github.com/motioneso/moss/pull/2219)
 - **Settings search finds module settings.** Searching settings (for example, typing News) now also finds a module's own settings and takes you straight there. [PR #2254](https://github.com/motioneso/moss/pull/2254)
 ### 2026-09-01
 
