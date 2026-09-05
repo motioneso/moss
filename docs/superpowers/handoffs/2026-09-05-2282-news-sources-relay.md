@@ -353,3 +353,47 @@ Seams on this branch:
 ### Task 1.5
 
 Unchanged from the p1a notes above.
+
+## Lane notes: build-2282-p1a2c stop (2026-09-05)
+
+PLAIN ENGLISH RULE for whoever picks this up: every message to a human is plain English. No
+jargon, no coined shorthand, ASCII punctuation only, at most one backtick per sentence.
+
+Finished the slice (task 1.4 to green, draft PR open). Did not start task 1.5.
+
+### Fixed and proved this lane (commit 907bea7c4)
+
+- The 10 typecheck errors in tests/unit/news-compile.test.ts had one cause: the source()
+  fixture at :14 lacked the new required DTO field `workaround`, so the repo fake's list method
+  was not assignable. Added `workaround: false`.
+- Running all 8 News unit files found 4 more failures in tests/unit/news-routes.test.ts: the
+  response schema now requires `workaround`, so a fixture row without it made the route answer
+  500. Added the field to LEAKED_SOURCE_ROW (:118) and to the expected DTO literal (:485).
+- prettier reformatted 4 of the task 1.4 files (whitespace only); eslint was already clean.
+- package.json gains `test:news-personalization-repository` (one-file integration script,
+  mirrors test:sports-sources) so scripts/run-gate.sh can prove tasks 1.3 and 1.4 on an
+  isolated database: `scripts/run-gate.sh start --gate test:news-personalization-repository`,
+  then `scripts/run-gate.sh wait --follow` in the background.
+- Green: `pnpm typecheck` exit 0 (all four steps); eslint --max-warnings=0 and prettier --check
+  on the 20 changed files exit 0; `pnpm test:unit` on the 8 News unit files: 156 passed.
+
+### Integration proof: NOT run, tasks 1.3 and 1.4 still unproven
+
+The brief allows the run only under 1-minute load 12. Load sat between 21 and 30 for the whole
+lane and was 29.7 after the full 20 minute wait. Nothing about the integration file changed.
+Next lane: run it with the run-gate command above when the box is quiet; expect exit 0 with
+21 server-booting cases plus the posture describe. If it times out on server start at low
+load, follow the p1a2 note (compare the 0218 describe's beforeEach with the older ones).
+
+### Draft PR
+
+PR #2298, draft, base main, head 907bea7c4. Body lists the phase, tasks done and remaining,
+the unrun proof, migration 0218, and Release note Category: N/A. Branch is 3 commits behind
+origin/main at stop; nobody has rebased yet.
+
+### Task 1.5 (next lane)
+
+Unchanged from the p1a notes above ("Facts verified for tasks 1.4 and 1.5"): an
+options-capable News fetch port whose options match RedditFetchOptions, failure gains
+`detail` and `retryAfter`, and fetchWithOptions wired in buildNewsDiscoveryPorts in the
+module registry. Read the plan section "Task 1.5" only.
