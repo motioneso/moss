@@ -311,8 +311,9 @@ export function AppShell(props: AppShellProps) {
     props.modules
   );
   const activeModuleId = resolveActiveModuleId(location.pathname);
-  const showSettingsButton =
-    activeModuleId !== null && hasModuleSettings(activeModuleId, props.modules);
+  // Ben, 2026-09-04: every module page, including optional and external ones, shows the gear
+  // linking to that module's settings page, whether or not the module declares settings.
+  const showSettingsButton = activeModuleId !== null;
   const closeMobileNav = () => setMobileNavOpen(false);
 
   // #1756: exactly one ChatDrawer element, rendered in one of two spots below (docked beside

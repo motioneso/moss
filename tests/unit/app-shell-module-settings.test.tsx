@@ -208,11 +208,13 @@ describe("AppShell module settings button in topbar", () => {
     expect(html).toContain('href="/settings?section=modules&amp;module=tasks"');
   });
 
-  it("does not render the settings cogwheel on Today or Workshop pages", () => {
+  it("does not render the settings cogwheel on Today, but does on every module page", () => {
     const todayHtml = renderShell("/today");
     expect(todayHtml).not.toContain('class="topbar-settings-button');
 
-    const workshopHtml = renderShell("/workshop");
-    expect(workshopHtml).not.toContain('class="topbar-settings-button');
+    // An external module that declares no settings still gets the gear, linking to its
+    // settings page (Ben, 2026-09-04: every module page, even optional or external ones).
+    const externalHtml = renderShell("/m/weather");
+    expect(externalHtml).toContain('href="/settings?section=modules&amp;module=weather"');
   });
 });
