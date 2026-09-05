@@ -189,26 +189,75 @@ describe("real sync runs record their own health (#2239 slice 1)", () => {
     expect(JSON.stringify(row?.last_sync_counts ?? {})).not.toContain("refresh refused");
   });
 
-  it("an email-account run whose sign-in is refused is recorded as a failed run", async () => {
+  it("an email-account run the mail server refuses to sign in to is recorded as a failed run", async () => {
     const accountId = await createImapAccount();
-    const originalKey = process.env.JARVIS_CONNECTOR_SECRET_KEY;
-    // A stored secret this run cannot open is what an expired or rotated sign-in looks like.
-    process.env.JARVIS_CONNECTOR_SECRET_KEY = "a-different-connector-secret-key";
-    try {
-      const result = await workerContext.withDataContext(context(), (scopedDb) =>
-        runImapSync(scopedDb, accountId, {
-          ...imapDeps("2026-09-04T12:00:00.000Z", []),
-          cipher: createConnectorSecretCipher()
-        })
-      );
-      expect(result.errors).toEqual(["auth-error"]);
-    } finally {
-      process.env.JARVIS_CONNECTOR_SECRET_KEY = originalKey;
-    }
+
+    // The mail server itself refuses the saved password, the way a rotated or revoked
+    // mailbox password really fails: authentication is refused on connect, inside the
+    // first read call.
+    const result = await workerContext.withDataContext(context(), (scopedDb) =>
+      runImapSync(scopedDb, accountId, {
+        ...imapDeps("2026-09-04T12:00:00.000Z", []),
+        emailReadProvider: {
+          listFolders: async () => {
+            throw imapAuthenticationFailure();
+          },
+          listMessageKeys: async () => {
+            throw imapAuthenticationFailure();
+          },
+          getMessage: async () => {
+            throw imapAuthenticationFailure();
+          }
+        }
+      })
+    );
+    expect(result.errors).toEqual(["auth-error"]);
 
     const row = await accountRow(accountId);
     expect(row?.last_sync_status).toBe("failed");
     expect(row?.last_sync_error).toBe("auth-error");
+    // The bounded label only — never the mailbox password or the server's own text.
+    const stored = JSON.stringify(row?.last_sync_counts ?? {});
+    expect(stored).not.toContain("secret");
+    expect(stored).not.toContain("Invalid credentials");
+  });
+
+  it("a continuation chunk of a real run leaves the earlier run as the previous run", async () => {
+    const accountId = await createGoogleAccount();
+
+    // Run one finishes, so it is the run that must survive.
+    await workerContext.withDataContext(context(), (scopedDb) =>
+      runGoogleSync(scopedDb, googleDeps(accountId, "2026-09-04T10:00:00.000Z"))
+    );
+
+    // Run two is chunked for real: the first chunk hands work to a continuation.
+    const deps = googleDeps(accountId, "2026-09-04T11:00:00.000Z");
+    const first = await workerContext.withDataContext(context(), (scopedDb) =>
+      runGoogleSyncChunk(scopedDb, deps)
+    );
+    expect(first.continuation).toBeDefined();
+
+    const midRun = await accountRow(accountId);
+    expect(midRun?.previous_sync?.finishedAt).toBe("2026-09-04T10:00:00.000Z");
+
+    // The continuation chunk records this run's own outcome. Run one must still be the
+    // previous run afterwards — a build that copies the snapshot again here would replace
+    // it with run two's own half-finished state.
+    let outcome = first;
+    let guard = 0;
+    while (outcome.continuation && guard < 10) {
+      guard += 1;
+      outcome = await workerContext.withDataContext(context(), (scopedDb) =>
+        runGoogleSyncChunk(scopedDb, deps, outcome.continuation)
+      );
+    }
+    expect(outcome.continuation).toBeUndefined();
+
+    const row = await accountRow(accountId);
+    expect(row?.last_sync_status).toBe("success");
+    expect(row?.last_sync_finished_at?.toISOString()).toBe("2026-09-04T11:00:00.000Z");
+    expect(row?.previous_sync).toMatchObject({ status: "success", trigger: "schedule" });
+    expect(row?.previous_sync?.finishedAt).toBe("2026-09-04T10:00:00.000Z");
   });
 
   it("a real Google run that keeps deferring the same message counts it once", async () => {
@@ -279,6 +328,18 @@ describe("real sync runs record their own health (#2239 slice 1)", () => {
     return accounts.find((account) => account.id === accountId);
   }
 });
+
+/** What ImapFlow raises when the mail server refuses the sign-in. */
+function imapAuthenticationFailure(): Error {
+  const error = new Error("Invalid credentials (Failure)") as Error & {
+    authenticationFailed: boolean;
+    responseText: string;
+  };
+  error.name = "AuthenticationFailedError";
+  error.authenticationFailed = true;
+  error.responseText = "Invalid credentials (Failure)";
+  return error;
+}
 
 function context(): AccessContext {
   return { actorUserId: ids.userA, requestId: "request:sync-worker-runs" };

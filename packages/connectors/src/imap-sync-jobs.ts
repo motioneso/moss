@@ -49,6 +49,36 @@ export interface ImapSyncResult {
 
 const NOOP_LOGGER: SyncLogger = { warn: () => undefined, info: () => undefined };
 
+/**
+ * Does this failure mean the mail server refused the saved sign-in?
+ *
+ * IMAP has no token refresh: a rotated or revoked password shows up as an authentication
+ * failure on connect, raised from inside the first read call. Without this the run recorded
+ * `partial`/`email-error`, which reads as "some mail did not come through" when the truth is
+ * "your sign-in no longer works" — spec section 9 requires `failed`/`auth-error` here, the
+ * same outcome Google's refused refresh produces.
+ *
+ * Matches on the shapes ImapFlow exposes (`authenticationFailed`, an `AUTHENTICATIONFAILED`
+ * response code, or the server's own text) and never on the credential itself.
+ */
+export function isImapSignInRefused(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as {
+    authenticationFailed?: unknown;
+    code?: unknown;
+    responseText?: unknown;
+    name?: unknown;
+    message?: unknown;
+  };
+  if (candidate.authenticationFailed === true) return true;
+  const haystack = [candidate.code, candidate.responseText, candidate.name, candidate.message]
+    .filter((part): part is string => typeof part === "string")
+    .join(" ");
+  return /authenticationfailed|authentication failed|invalid credentials|login failed|\[AUTH\]|password (is )?incorrect/i.test(
+    haystack
+  );
+}
+
 export interface RunImapSyncDeps {
   readonly repository: ConnectorsRepository;
   readonly cipher: ConnectorSecretCipher;
@@ -143,6 +173,17 @@ export async function runImapSync(
       }
     }
   } catch (error) {
+    if (isImapSignInRefused(error)) {
+      // Never log the error object itself — it can carry the mailbox password.
+      logger.warn({ actorScoped: true, stage: "auth" }, "imap-sync sign-in refused");
+      await deps.repository.markSyncFinished(scopedDb, connectorAccountId, {
+        finishedAt: now(),
+        status: "failed",
+        error: "auth-error",
+        counts: { emailUpserted, emailFailures, truncated: false }
+      });
+      return { emailUpserted, emailFailures, errors: ["auth-error"], truncated: false };
+    }
     logger.warn({ stage: "email", name: (error as Error).name }, "imap-sync email failed");
     errors.push("email-error");
   }
