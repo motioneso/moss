@@ -243,6 +243,29 @@ export class EmailRepository {
   }
 
   /**
+   * Wipe the stored analysis (summary + signals) from the actor's recently received messages so
+   * the next sync sends them back through the model instead of skipping them as unchanged. The
+   * skip check in the sync phase requires a stored summary AND complete triage, so emptying both
+   * is exactly what re-opens them. Nothing else about the message is touched.
+   *
+   * The owner predicate is load-bearing, not belt-and-braces: the UPDATE policy in
+   * sql/0068_email_worker_grants_and_google_insert.sql also admits rows shared to the actor with
+   * 'manage', so RLS alone would let this wipe another owner's messages — and only the actor's
+   * own sync would ever re-judge them, leaving the other owner blank. Owner-only keeps the reset
+   * to mail this actor's own connector accounts brought in.
+   */
+  async clearRecentTriage(scopedDb: DataContextDb, receivedSince: Date): Promise<number> {
+    assertDataContextDb(scopedDb);
+    const result = await scopedDb.db
+      .updateTable("app.email_messages")
+      .set({ summary: null, signals: {}, updated_at: new Date() })
+      .where("received_at", ">=", receivedSince)
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows ?? 0);
+  }
+
+  /**
    * Lightweight per-account sync markers for skip-unchanged: external_id, the stored Gmail
    * historyId (read from external_metadata), whether a non-null summary exists, and whether
    * actionable triage has the subject/task fields required for projection. The handler skips the

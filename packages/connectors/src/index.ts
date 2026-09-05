@@ -24,6 +24,7 @@ export * from "./manifest.js";
 export * from "./oauth.js";
 export * from "./repository.js";
 export * from "./routes.js";
+export * from "./sync-in-progress.js";
 export * from "./sync-jobs.js";
 export * from "./freshness.js";
 export * from "./source-context/types.js";

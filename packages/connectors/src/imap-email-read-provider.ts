@@ -129,7 +129,10 @@ export class ImapEmailReadProvider implements EmailReadProvider<ImapConnectionSe
         labelIds: [],
         snippet: null,
         body: mail.text ?? (mail.html || ""),
-        bodyTruncated: false
+        bodyTruncated: false,
+        // Presence only: the parser already has every header, and the opt-out address in this
+        // one is deliberately never read out or stored.
+        hasListUnsubscribe: mail.headers?.has("list-unsubscribe") === true
       };
     });
   }
