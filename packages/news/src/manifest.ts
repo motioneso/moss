@@ -94,7 +94,9 @@ export const newsModuleManifest = {
       // #2006 — health states distinguish rejected credentials from temporary outages.
       "sql/0204_news_source_health_states.sql",
       // #2006 QA fix — complete the worker's narrow credential-status read grant.
-      "sql/0205_news_credential_status_worker_grant.sql"
+      "sql/0205_news_credential_status_worker_grant.sql",
+      // #2282 — subreddit sources, per-source fetch-host allowlist, workaround failure count.
+      "sql/0218_news_source_kinds.sql"
     ],
     migrationDirectories: ["packages/news/sql"],
     ownedTables: [
