@@ -11,8 +11,16 @@ import type {
 } from "./discovery/ports.js";
 import type { NewsCredentialStore } from "./credential-repository.js";
 import { validateTopic } from "./discovery/policy-validation.js";
-import { resolveSourceInput, type SourceResolutionResult } from "./discovery/source-resolution.js";
+import {
+  findDuplicateCustomSource,
+  resolveSourceInput,
+  type SourceResolutionResult
+} from "./discovery/source-resolution.js";
 import { normalizePublisherDomain } from "./personalization-domain.js";
+import {
+  REDDIT_AUTH_REQUIRED_MESSAGE,
+  REDDIT_RATE_LIMIT_MESSAGE
+} from "./source/reddit-messages.js";
 import {
   NewsDuplicateSourceError,
   NewsPersonalizationLimitError
@@ -161,6 +169,10 @@ function describeResolutionFailure(result: SourceResolutionResult): string {
         return "Could not reach or verify that publisher.";
       case "blocked":
         return "That publisher's site does not allow automatic access, so it can't be added.";
+      case "rate_limited":
+        return REDDIT_RATE_LIMIT_MESSAGE;
+      case "auth_required":
+        return REDDIT_AUTH_REQUIRED_MESSAGE;
     }
   }
   return "Source discovery is currently unavailable — try again later.";
@@ -207,9 +219,7 @@ export const newsPreviewSourceExecute: ToolExecute = async (
   });
   const existing = await d.repository.listCustomSources(scopedDb);
   const duplicate = result.candidates
-    .map((candidate) =>
-      existing.find((source) => source.canonicalDomain === candidate.canonicalDomain)
-    )
+    .map((candidate) => findDuplicateCustomSource(existing, candidate))
     .find(Boolean);
   return {
     data: {

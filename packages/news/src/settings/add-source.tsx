@@ -10,6 +10,10 @@ import type {
   NewsSourcePreviewResponse
 } from "@moss/shared";
 
+import {
+  REDDIT_AUTH_REQUIRED_MESSAGE,
+  REDDIT_RATE_LIMIT_MESSAGE
+} from "../source/reddit-messages.js";
 import { confirmNewsSource, previewNewsSource } from "../web/news-client.js";
 import { newsQueryKeys } from "../web/query-keys.js";
 import { ConnectPublisherForm } from "./connect-publisher.js";
@@ -30,7 +34,10 @@ const PREVIEW_REJECTION_COPY: Record<string, string> = {
   invalid_input: "That doesn't look like a publication we can check — try a homepage link.",
   unreachable: "We couldn't reach that site. Check the address and try again.",
   not_https: "Only HTTPS links or bare domains are accepted.",
-  blocked: "That site doesn't allow automatic access, so we can't add it."
+  blocked: "That site doesn't allow automatic access, so we can't add it.",
+  // #2282: a subreddit that Reddit is throttling, or one that is private or restricted.
+  rate_limited: REDDIT_RATE_LIMIT_MESSAGE,
+  auth_required: REDDIT_AUTH_REQUIRED_MESSAGE
 };
 
 /**
