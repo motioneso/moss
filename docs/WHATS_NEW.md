@@ -40,6 +40,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Web search is now on by default for chat.** Chat can now search the web automatically using your AI model's own built-in search, or a Brave Search key if you add one, so answers can include current information with sources shown. [PR #2280](https://github.com/motioneso/moss/pull/2280)
 - **Sports settings shows whether each source has photos.** Each of your own sports sources now shows whether its stories are getting photos, and lets you stop using photos Moss found for it. [PR #2273](https://github.com/motioneso/moss/pull/2273)
 ### 2026-09-04
 
