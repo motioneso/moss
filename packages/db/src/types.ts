@@ -390,6 +390,8 @@ export interface ConnectorAccountsTable {
   last_sync_status: ConnectorSyncStatus | null;
   last_sync_error: string | null;
   last_sync_counts: JsonColumn | null;
+  last_sync_trigger: string | null;
+  previous_sync: JsonColumn | null;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }

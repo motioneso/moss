@@ -151,7 +151,12 @@ describe("google sync sweep (#792)", () => {
 
       for (const call of calls) {
         expect(call.queue).toBe(GOOGLE_SYNC_QUEUE);
-        expect(Object.keys(call.payload).sort()).toEqual(["actorUserId", "idempotencyKey", "kind"]);
+        expect(Object.keys(call.payload).sort()).toEqual([
+          "actorUserId",
+          "idempotencyKey",
+          "kind",
+          "trigger"
+        ]);
         expect(call.payload.kind).toBe("google-sync");
       }
       const [callForA, callForB] = calls;

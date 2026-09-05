@@ -39,7 +39,7 @@ are written against the compiler by the build agent.
 | Current wording table                                                 | `apps/web/src/settings/settings-connector-sync.ts:3-20` (`ConnectorAccountHealth`, `isConnectorSyncInFlight`, `getConnectorAccountHealth`)                                                           | exists; becomes an adapter over the shared module                                                                                                                                               |
 | A Today banner that reads freshness and warns                         | `apps/web/src/today/today-page.tsx:740` `BriefingStaleBanner`, defined in `apps/web/src/today/briefing-freshness.tsx:60`                                                                             | exists; the "Not working right now" block follows this pattern                                                                                                                                  |
 | App map core entries                                                  | `packages/shared/src/app-map-core.ts:125-131` `connected`; the `today` entry in the same file                                                                                                        | exists                                                                                                                                                                                          |
-| Migration numbering                                                   | highest across `packages/*/sql` and `infra/postgres/migrations` is `0213_sports_reddit_sources.sql`                                                                                                  | next is `0214`                                                                                                                                                                                  |
+| Migration numbering                                                   | highest across `packages/*/sql` and `infra/postgres/migrations` is `0213_sports_reddit_sources.sql`                                                                                                  | next is `0215`                                                                                                                                                                                  |
 | Playwright e2e with a mocked API                                      | `tests/e2e/settings-modules.spec.ts:1-20` (`mockApi` with `connectorAccounts`), `tests/e2e/mock-connectors-api.ts`                                                                                   | exists                                                                                                                                                                                          |
 | Live e2e against the dev instance                                     | `tests/live/`                                                                                                                                                                                        | exists                                                                                                                                                                                          |
 | Test precedents                                                       | `tests/unit/connectors-feature-grants.test.ts`, `tests/unit/connectors-freshness.test.ts`, `tests/integration/connectors-imap-routes.test.ts`, `tests/integration/connectors-sync-wedge.test.ts`     | exists                                                                                                                                                                                          |
@@ -47,7 +47,7 @@ are written against the compiler by the build agent.
 Open questions with owners:
 
 - **Q1 (build agent, slice 2):** pg-boss stores the singleton key in `pgboss.job.singleton_key`; confirm the column name on the installed pg-boss version before writing the newest-job query. If it differs, filter on `data->>'actorUserId'` for Google and `data->>'connectorAccountId'` for IMAP instead.
-- **Q2 (build agent, slice 1):** the retryable-deferral branch at `google-sync-phases.ts:418` may run once per message per attempt; count distinct message units, not attempts, so `emailDeferred` never exceeds `emailUpserted`.
+- **Q2 (build agent, slice 1) — RESOLVED:** the retryable-deferral branch does run once per message per attempt, because the retry re-enqueues the same page. Resolved by identity rather than arithmetic: the run carries the set of deferred message external ids (`deferredKeys`, capped at `MAX_DEFERRED_KEYS = 500`) through the continuation payload, re-deferring an id already in the set is a no-op, and a later success removes it. `emailDeferred` is the size of that set, so it counts distinct message units and never exceeds `emailUpserted`. A job queued before this field existed carries only its old total, which is frozen as a baseline.
 
 ## 2. Determinism boundary
 
@@ -66,7 +66,7 @@ release-note section of the PR kept current.
 
 ### Slice 1: Record and explain (no visible change)
 
-**Migration** `packages/connectors/sql/0214_connector_sync_previous_run.sql`:
+**Migration** `packages/connectors/sql/0215_connector_sync_previous_run.sql`:
 
 ```sql
 ALTER TABLE app.connector_accounts
@@ -88,21 +88,36 @@ export interface PreviousSyncSnapshot {
   readonly errorCode: string | null; readonly counts: ConnectorSyncCounts; readonly trigger: ConnectorSyncTrigger | null;
 }
 markSyncStarted(scopedDb, accountId, input: { startedAt: Date; trigger: ConnectorSyncTrigger }): Promise<void>
-markSyncFinished(scopedDb, accountId, input: { finishedAt: Date; status; error; counts; isContinuation: boolean }): Promise<void>
+markSyncFinished(scopedDb, accountId, input: { finishedAt: Date; status; error; counts: ConnectorSyncCounts }): Promise<void>
 ```
 
-`markSyncFinished` copies the current summary into `previous_sync` in the same UPDATE (SQL
-subselect of the row's own columns) before overwriting, unless `isContinuation` is true or no
-finished run exists. `ConnectorAccountSafeRow` gains `previousSync` and `lastSyncTrigger`.
+**Where the previous-run snapshot is taken (implemented, differs from the first draft above).**
+`markSyncStarted` — not `markSyncFinished` — copies the row's current summary into
+`previous_sync`, in the same UPDATE that stamps the new start time. This is forced by ordering:
+`markSyncStarted` clears `last_sync_status` back to null when a run begins, so by the time that
+run's own `markSyncFinished` executes, the prior run's status is already gone and there is
+nothing left to copy. Reading it at run start, immediately before the same statement overwrites
+it, is the only point where "the last good run" still exists on the row, and doing it in one
+UPDATE keeps it atomic. The copy is skipped when there is no finished prior run (first sync
+ever), so a first run leaves the snapshot absent rather than empty.
+
+A consequence: `markSyncFinished` needs no `isContinuation` flag and no longer takes one. A
+mid-run continuation chunk writing its outcome cannot disturb a snapshot it never touches, and
+`markSyncStarted` is only called when a run actually begins, never for a continuation chunk.
+`ConnectorAccountSafeRow` gains `previousSync` and `lastSyncTrigger`.
 
 **Trigger plumbing:** the Google and IMAP job payloads gain `trigger` (a short string, metadata
 only). Schedule registration sends `"schedule"`, the existing Google route sends `"manual"`,
 sync-on-connect sends `"on-connect"`. The assistant tool (slice 2) sends `"assistant"`.
 
-**Deferred AI counter:** `google-sync-phases.ts` progress gains `emailDeferred: number` and
+**Deferred AI counter:** `google-sync-phases.ts` progress gains `emailDeferred: number`, the
+`deferredKeys` set behind it, and
 `deferredReason: "assistant-login-expired" | "assistant-unavailable" | "structured-output" | null`;
-`ConnectorSyncCounts` gains `emailDeferred?: number`. The reason is carried in counts as a code,
-never a message.
+`ConnectorSyncCounts` gains `emailDeferred?: number` and `deferredReason?: ... | null`. The reason
+is carried through the continuation payload and saved with the counts as a code, never a message;
+`deferredReasonSentence` in the shared explain module is the only place a code becomes words.
+`EmailExtractRetryableReason` gains `"login-expired"` so an expired assistant sign-in is
+classified rather than falling through to the generic structured-output reason.
 
 **Shared explain module** `packages/shared/src/connector-sync-explain.ts` (no imports beyond
 `connectors-api.ts` types):

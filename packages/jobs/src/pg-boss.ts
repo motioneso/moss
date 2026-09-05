@@ -126,6 +126,11 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "startedAt",
   "calendarSeenSince",
   "calendarUpserted",
+  "emailDeferred",
+  // Bounded set of provider message ids still awaiting the assistant, plus the fixed
+  // reason code for the wait. Ids and a closed vocabulary only - never message content.
+  "deferredKeys",
+  "deferredReason",
   "calendarReconciled",
   "emailUpserted",
   "emailFailures",
@@ -134,7 +139,8 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "buildId",
   "step",
   "workflowRunId",
-  "stepRunId"
+  "stepRunId",
+  "trigger"
 ]);
 
 export function assertMetadataOnlyPayload(payload: unknown): void {
