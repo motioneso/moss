@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToPipeableStream, renderToString } from "react-dom/server";
 import { MemoryRouter } from "react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Writable } from "node:stream";
 import type { ReactNode } from "react";
 
@@ -10,6 +11,24 @@ import { CORE_APP_SETTINGS } from "../../packages/shared/src/app-map-core.js";
 vi.mock("../../apps/web/src/api/use-assistant-name.js", () => ({
   useAssistantName: () => "Moss"
 }));
+
+// This root-level test suite runs under the plain vitest config, which does not load the Vite
+// plugin that normally supplies this module's contents at build time (see other tests in this
+// folder that render settings-page.tsx, e.g. settings-connector-sync.test.tsx). Stand in an
+// empty module list, since no test in this file needs a real one.
+vi.mock("virtual:moss-module-settings", () => ({
+  MODULE_SETTINGS_SURFACES: [],
+  MODULE_SETTINGS_COMPONENTS: {},
+  MODULE_SETTING_KEYWORDS: {}
+}));
+
+// settings-page.tsx fetches the current user's module list with a data-fetching hook, which
+// throws if there is no provider for it above the page in the tree. None of the tests in this
+// file care about that module list, so a plain, throwaway provider is enough.
+function withQueryClient(element: ReactNode): ReactNode {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return <QueryClientProvider client={client}>{element}</QueryClientProvider>;
+}
 
 function renderAll(element: ReactNode): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -62,9 +81,11 @@ describe("SettingsPage priorities navigation", () => {
 
   it("exposes Priorities in personal settings navigation", () => {
     const html = renderToString(
-      <MemoryRouter initialEntries={["/settings"]}>
-        <SettingsPage me={nonAdminMe} />
-      </MemoryRouter>
+      withQueryClient(
+        <MemoryRouter initialEntries={["/settings"]}>
+          <SettingsPage me={nonAdminMe} />
+        </MemoryRouter>
+      )
     );
 
     expect(html).toContain("Moss");
@@ -73,9 +94,11 @@ describe("SettingsPage priorities navigation", () => {
 
   it("does not render the global Advanced settings toggle", () => {
     const html = renderToString(
-      <MemoryRouter initialEntries={["/settings"]}>
-        <SettingsPage me={adminMe} />
-      </MemoryRouter>
+      withQueryClient(
+        <MemoryRouter initialEntries={["/settings"]}>
+          <SettingsPage me={adminMe} />
+        </MemoryRouter>
+      )
     );
 
     expect(html).toContain("Admin / Setup");
@@ -85,9 +108,11 @@ describe("SettingsPage priorities navigation", () => {
 
   it("renders the four personal group labels and drops merged destinations", () => {
     const html = renderToString(
-      <MemoryRouter initialEntries={["/settings"]}>
-        <SettingsPage me={nonAdminMe} />
-      </MemoryRouter>
+      withQueryClient(
+        <MemoryRouter initialEntries={["/settings"]}>
+          <SettingsPage me={nonAdminMe} />
+        </MemoryRouter>
+      )
     );
 
     expect(html).toContain("Your account");
@@ -100,9 +125,11 @@ describe("SettingsPage priorities navigation", () => {
 
   it("renders the three admin group labels and drops the Identity destination", () => {
     const html = renderToString(
-      <MemoryRouter initialEntries={["/settings?section=people"]}>
-        <SettingsPage me={adminMe} />
-      </MemoryRouter>
+      withQueryClient(
+        <MemoryRouter initialEntries={["/settings?section=people"]}>
+          <SettingsPage me={adminMe} />
+        </MemoryRouter>
+      )
     );
 
     expect(html).toContain("Access");
@@ -113,9 +140,11 @@ describe("SettingsPage priorities navigation", () => {
 
   it("falls back to a permitted personal section for a non-admin admin deep link", () => {
     const html = renderToString(
-      <MemoryRouter initialEntries={["/settings?section=people"]}>
-        <SettingsPage me={nonAdminMe} />
-      </MemoryRouter>
+      withQueryClient(
+        <MemoryRouter initialEntries={["/settings?section=people"]}>
+          <SettingsPage me={nonAdminMe} />
+        </MemoryRouter>
+      )
     );
 
     expect(html).toContain("Account &amp; preferences");
@@ -124,9 +153,11 @@ describe("SettingsPage priorities navigation", () => {
 
   it("renders Recently Released as the active Moss destination for a non-admin", async () => {
     const html = await renderAll(
-      <MemoryRouter initialEntries={["/settings?section=released"]}>
-        <SettingsPage me={nonAdminMe} />
-      </MemoryRouter>
+      withQueryClient(
+        <MemoryRouter initialEntries={["/settings?section=released"]}>
+          <SettingsPage me={nonAdminMe} />
+        </MemoryRouter>
+      )
     );
     expect(html).toContain("Moss");
     expect(html).toContain("Recently Released");
