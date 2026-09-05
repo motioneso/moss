@@ -207,15 +207,32 @@ describe("Notifications module M5", () => {
     expect(registrations.map((item) => item.manifest.id)).toEqual(expectedBuiltInModuleIds);
     expect(manifest?.database?.ownedTables).toEqual([
       "app.notifications",
-      "app.notification_reads"
+      "app.notification_reads",
+      "app.push_subscriptions",
+      "app.push_signing_key"
     ]);
     // No sidebar nav entry: notifications are reached via the topbar bell (AppShell).
     // The route + APIs remain registered; only the module-nav link was retired.
     expect(manifest?.navigation).toEqual([]);
-    expect(manifest?.settings ?? []).toEqual([]);
-    expect(registration?.queueDefinitions).toEqual([
-      { name: "notifications.digest.compose", options: { retryLimit: 0 } }
+    // One user-scoped settings surface (#743 web push); its wording is checked by the app-map
+    // tests, so only the identity and the permission gate are pinned here.
+    expect(manifest?.settings?.map((setting) => setting.id)).toEqual(["notifications.push"]);
+    expect(manifest?.settings?.[0]).toMatchObject({
+      scope: "user",
+      permissionId: "notifications.update",
+      path: "/settings?section=modules&module=notifications"
+    });
+    // Digest compose never retries; the two push queues' retry options are owned by the
+    // push worker tests, so only their names are pinned here.
+    expect(registration?.queueDefinitions?.map((queue) => queue.name)).toEqual([
+      "notifications.digest.compose",
+      "notifications.push.deliver",
+      "notifications.push.summary"
     ]);
+    expect(registration?.queueDefinitions?.[0]).toEqual({
+      name: "notifications.digest.compose",
+      options: { retryLimit: 0 }
+    });
     expect(getBuiltInSqlMigrationDirectories()).toContainEqual(
       expect.stringContaining("packages/notifications/sql")
     );

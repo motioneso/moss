@@ -25,6 +25,7 @@ import {
   MODULE_BUILD_QUEUE,
   MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS,
   createModuleBuildWorker,
+  createPushQueuePort,
   sendJob,
   type ExternalModuleJobPayload,
   type ModuleControlPayload,
@@ -242,7 +243,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   const aiRepository = new AiRepository();
   const moduleBuildNotifications = new NotificationsRepository(
     undefined,
-    createNotificationPreferencePort()
+    createNotificationPreferencePort(),
+    createPushQueuePort(boss)
   );
   const moduleBuildSettings = new SettingsRepository();
   const builtInModuleIds = new Set(getBuiltInModuleManifests().map((manifest) => manifest.id));
@@ -333,7 +335,11 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   });
   await registerUpgradeNotifyWorker(boss, dataContext, {
     logger: workerLogger,
-    repository: new NotificationsRepository(undefined, createNotificationPreferencePort())
+    repository: new NotificationsRepository(
+      undefined,
+      createNotificationPreferencePort(),
+      createPushQueuePort(boss)
+    )
   });
 
   // #996/#860: external-module job reconciliation is always-on now (the
@@ -368,7 +374,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   // this only avoids implying the module-notify and upgrade-notify paths share a lifecycle.
   const moduleNotifications = new NotificationsRepository(
     undefined,
-    createNotificationPreferencePort()
+    createNotificationPreferencePort(),
+    createPushQueuePort(boss)
   );
   const postModuleNotification = async (
     access: AccessContext,

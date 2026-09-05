@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Bell, MoonStar, Sunrise } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import type { NotificationDigestCadenceDto } from "@moss/shared";
+import type { NotificationDigestCadenceDto, PushDeviceDto } from "@moss/shared";
+import { Button } from "@moss/ui";
 
 import {
   DEFAULT_NOTIFICATIONS,
@@ -11,15 +12,18 @@ import {
 } from "./settings-sample-data";
 import {
   createBriefingDefinition,
+  deletePushSubscription,
   getNotificationDigestPreference,
   getNotificationPreferences,
   getLocaleSettings,
+  getPushConfig,
   listSourceBehaviors,
   listAiAssistantTools,
   listBriefingDefinitions,
   putNotificationDigestPreference,
   putNotificationPreference,
   putSourceBehavior,
+  registerPushSubscription,
   updateBriefingDefinition
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
@@ -379,7 +383,7 @@ export function NotificationSettings(props: {
           desc={`The notification center inside ${assistantName}.`}
           control={<Badge tone="forest">Enabled</Badge>}
         />
-        <Row name="Push" desc="System notifications on this device." comingIssue={743} />
+        <PushChannel />
         <Row
           name="Email digest"
           desc={
@@ -494,5 +498,163 @@ export function NotificationSettings(props: {
         .
       </Note>
     </ModuleSub>
+  );
+}
+
+// #743 / #2227: web push. There is no server-computed device fingerprint (the plan's
+// endpointHash field was dropped to keep the DTO small — one design call made without asking),
+// so "This device" is decided locally: the id the server hands back on subscribe is cached in
+// localStorage and compared against the device list on every load.
+const PUSH_DEVICE_ID_STORAGE_KEY = "moss.push.deviceId";
+
+function pushIsSupported(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.isSecureContext &&
+    "serviceWorker" in navigator &&
+    "PushManager" in window &&
+    "Notification" in window
+  );
+}
+
+function urlBase64ToUint8Array(base64Url: string): BufferSource {
+  const padding = "=".repeat((4 - (base64Url.length % 4)) % 4);
+  const base64 = (base64Url + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = window.atob(base64);
+  const buffer = new ArrayBuffer(raw.length);
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < raw.length; i += 1) {
+    bytes[i] = raw.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function PushChannel() {
+  const queryClient = useQueryClient();
+  const supported = pushIsSupported();
+  const [permission, setPermission] = useState<NotificationPermission | null>(
+    supported ? Notification.permission : null
+  );
+  const [deviceId, setDeviceId] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : window.localStorage.getItem(PUSH_DEVICE_ID_STORAGE_KEY)
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const configQuery = useQuery({
+    queryKey: queryKeys.settings.notificationPush,
+    queryFn: getPushConfig,
+    enabled: supported && permission !== "denied"
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (device: PushDeviceDto) => deletePushSubscription(device.id),
+    onSuccess: (_result, device) => {
+      if (device.id === deviceId) {
+        window.localStorage.removeItem(PUSH_DEVICE_ID_STORAGE_KEY);
+        setDeviceId(null);
+      }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.notificationPush });
+    },
+    onError: (err) => setError(readError(err))
+  });
+
+  const enable = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const requested = await Notification.requestPermission();
+      setPermission(requested);
+      if (requested !== "granted") {
+        return;
+      }
+      const config = configQuery.data ?? (await configQuery.refetch()).data;
+      if (!config) {
+        throw new Error("Couldn't load push settings from the server.");
+      }
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(config.publicKey)
+      });
+      const json = subscription.toJSON();
+      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+        throw new Error("The browser didn't return a usable subscription.");
+      }
+      const result = await registerPushSubscription({
+        endpoint: json.endpoint,
+        keys: { p256dh: json.keys.p256dh, auth: json.keys.auth }
+      });
+      window.localStorage.setItem(PUSH_DEVICE_ID_STORAGE_KEY, result.device.id);
+      setDeviceId(result.device.id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.notificationPush });
+    } catch (err) {
+      setError(readError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!supported) {
+    return (
+      <Row
+        name="Push"
+        desc="Not available here: this browser doesn't support push, or the page isn't loaded over a secure connection."
+      />
+    );
+  }
+
+  if (permission === "denied") {
+    return (
+      <Row
+        name="Push"
+        desc="Blocked in this browser's site settings. Allow notifications for this site, then reload the page."
+      />
+    );
+  }
+
+  const devices = configQuery.data?.enabledDevices ?? [];
+
+  return (
+    <>
+      <Row
+        name="Push"
+        desc="System notifications on this device."
+        control={
+          <Button variant="secondary" size="sm" onClick={() => void enable()} disabled={busy}>
+            {busy ? "Enabling..." : "Enable on this device"}
+          </Button>
+        }
+      />
+      {error ? <NotWired>{error}</NotWired> : null}
+      {devices.map((device) => (
+        <Row
+          key={device.id}
+          name={device.label ?? "Unnamed device"}
+          desc={
+            device.disabledAt
+              ? "Turned off after repeated delivery failures."
+              : "Registered for push notifications."
+          }
+          control={
+            <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {device.id === deviceId ? (
+                <Badge tone="forest" dot>
+                  This device
+                </Badge>
+              ) : null}
+              <Button
+                variant="quiet"
+                size="sm"
+                onClick={() => removeMutation.mutate(device)}
+                disabled={removeMutation.isPending}
+              >
+                Remove
+              </Button>
+            </span>
+          }
+        />
+      ))}
+    </>
   );
 }

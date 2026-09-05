@@ -173,6 +173,7 @@ import {
 } from "@moss/email";
 import {
   assertMetadataOnlyPayload,
+  createPushQueuePort,
   FOUNDATION_QUEUES,
   registerDataContextWorker,
   sendJob,
@@ -190,6 +191,16 @@ import type {
 import {
   NotificationsRepository,
   DIGEST_COMPOSE_QUEUE,
+  PUSH_DELIVER_QUEUE,
+  PUSH_QUEUE_RETRY_OPTIONS,
+  PUSH_SUMMARY_QUEUE,
+  PUSH_WORK_OPTIONS,
+  runPushDeliverJob,
+  runPushSummaryJob,
+  throwIfPushRetryNeeded,
+  type PushDeliverJobPayload,
+  type PushDeliveryOutcome,
+  type PushSummaryJobPayload,
   type NotificationPreferencePort,
   runNotificationDigestCompose,
   notificationsModuleManifest,
@@ -1711,7 +1722,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: notificationsModuleManifest,
     sqlMigrationDirectories: [notificationsModuleSqlMigrationDirectory],
-    queueDefinitions: [{ name: DIGEST_COMPOSE_QUEUE, options: { retryLimit: 0 } }],
+    queueDefinitions: [
+      { name: DIGEST_COMPOSE_QUEUE, options: { retryLimit: 0 } },
+      // #743 security finding 8: temporary push-service failures (throttling, 5xx, a send
+      // that never answers) retry with backoff; the worker asks for the retry only after its
+      // transaction commits, and skips devices that already received the payload.
+      { name: PUSH_DELIVER_QUEUE, options: PUSH_QUEUE_RETRY_OPTIONS },
+      { name: PUSH_SUMMARY_QUEUE, options: PUSH_QUEUE_RETRY_OPTIONS }
+    ],
     registerRoutes: registerNotificationsRoutes,
     registerWorkers: async (boss, deps) => [
       await registerDataContextWorker(
@@ -1727,6 +1745,22 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             notificationPreferencePort: createNotificationPreferencePort(),
             sender: createNotificationDigestSender()
           })
+      ),
+      await registerDataContextWorker<PushDeliverJobPayload, PushDeliveryOutcome>(
+        boss,
+        PUSH_DELIVER_QUEUE,
+        deps.dataContext,
+        (job, scopedDb) => runPushDeliverJob(job, scopedDb),
+        PUSH_WORK_OPTIONS,
+        { afterCommit: throwIfPushRetryNeeded }
+      ),
+      await registerDataContextWorker<PushSummaryJobPayload, PushDeliveryOutcome>(
+        boss,
+        PUSH_SUMMARY_QUEUE,
+        deps.dataContext,
+        (job, scopedDb) => runPushSummaryJob(job, scopedDb),
+        PUSH_WORK_OPTIONS,
+        { afterCommit: throwIfPushRetryNeeded }
       )
     ]
   },
@@ -1993,7 +2027,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         },
         notificationsRepository: new NotificationsRepository(
           quietHoursPortImpl,
-          createNotificationPreferencePort()
+          createNotificationPreferencePort(),
+          createPushQueuePort(boss)
         ),
         logger: briefingsLogger
       });
@@ -2360,7 +2395,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // owner's per-module notification preference like every other module emitter.
         notificationsRepository: new NotificationsRepository(
           quietHoursPortImpl,
-          createNotificationPreferencePort()
+          createNotificationPreferencePort(),
+          createPushQueuePort(boss)
         ),
         revalidationLogger: {
           info: (fields) => deps.logger?.info(fields, "news revalidation")

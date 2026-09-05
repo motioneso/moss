@@ -465,6 +465,8 @@ describe("AI read-only assistant tool execution foundation", () => {
       "goals-memory-sync",
       "goals-memory-sync-reconcile",
       "notifications.digest.compose",
+      "notifications.push.deliver",
+      "notifications.push.summary",
       "calendar.cache-evict-event",
       "ai-purge-audit-log",
       "chat.embed-turn",

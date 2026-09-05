@@ -391,7 +391,10 @@ describe("MVP foundation schema catalog", () => {
         { version: "0216", name: "0216_scratchpads.sql" },
         { version: "0217", name: "0217_sports_follows_source_team_id.sql" },
         // #2237 slice 2 — per-source photo rule and photo status on app.sports_custom_sources.
-        { version: "0222", name: "0222_sports_source_photos.sql" }
+        { version: "0222", name: "0222_sports_source_photos.sql" },
+        // #743 web push: subscriptions, delivery ledger, per-user push settings.
+        // 0218-0222 are taken by other in-flight branches (see migration numbering in #743 PR notes).
+        { version: "0225", name: "0225_push_notifications.sql" }
       ]);
     } finally {
       await client.end();

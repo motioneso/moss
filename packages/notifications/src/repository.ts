@@ -4,6 +4,7 @@ import { sql, type SqlBool } from "kysely";
 
 import { assertDataContextDb, type DataContextDb, type Notification } from "@moss/db";
 
+import { isSameOriginAppPath } from "./app-path.js";
 import { projectNotificationMetadata } from "./metadata.js";
 
 export interface NotificationWithReadState extends Notification {
@@ -67,6 +68,28 @@ export interface QuietHoursPort {
 
 export interface NotificationPreferencePort {
   isModuleEnabled(scopedDb: DataContextDb, moduleId: string): Promise<boolean>;
+}
+
+/**
+ * Cross-package port: notifications enqueues push delivery jobs without importing
+ * `@moss/jobs` (pg-boss) into the domain layer. The real implementation
+ * (`createPushQueuePort` in `@moss/jobs`) is injected by the composition root. Absence
+ * (the default) means push is simply not wired for that caller — consistent with
+ * `notificationPreferencePort` being optional above.
+ *
+ * Both methods take the caller's `scopedDb` so the job row is written inside the same
+ * transaction as the notification (#743 security finding 7). A job enqueued through a
+ * separate connection could be picked up by the worker before the notification commits
+ * (the worker then sees nothing and drops the push), or survive a rollback as an orphan.
+ * Sharing the transaction makes the job invisible until commit and gone on rollback.
+ */
+export interface PushQueuePort {
+  enqueueDeliver(
+    scopedDb: DataContextDb,
+    notificationId: string,
+    recipientUserId: string
+  ): Promise<void>;
+  enqueueSummary(scopedDb: DataContextDb, recipientUserId: string, releaseAt: Date): Promise<void>;
 }
 
 export interface QuietHoursSettings {
@@ -175,7 +198,8 @@ export async function resolveTimezone(
  */
 function validateHref(href: string | null | undefined): string | null {
   if (href === undefined || href === null) return null;
-  if (href.length === 0 || !href.startsWith("/") || href.startsWith("//") || href.includes(":")) {
+  // #743 security finding 4: one shared rule, see app-path.ts for what it refuses and why.
+  if (!isSameOriginAppPath(href)) {
     throw new Error("href must be a same-origin path");
   }
   return href;
@@ -184,7 +208,8 @@ function validateHref(href: string | null | undefined): string | null {
 export class NotificationsRepository {
   constructor(
     private readonly quietHoursPort?: QuietHoursPort,
-    private readonly notificationPreferencePort?: NotificationPreferencePort
+    private readonly notificationPreferencePort?: NotificationPreferencePort,
+    private readonly pushQueuePort?: PushQueuePort
   ) {}
 
   async listVisible(scopedDb: DataContextDb): Promise<ListNotificationsResult> {
@@ -318,6 +343,20 @@ export class NotificationsRepository {
     // for two unrelated meanings.
     const row = rows.rows[0];
     if (!row) throw new Error("notifications upsert returned no row");
+
+    // Push delivery (#743 / #2227): urgent and never-deferred notifications push
+    // immediately; a deferred one only ever gets one summary push at release time
+    // (Resolved Decision 2), never an individual push. recipient_user_id is always the
+    // acting actor (see CreateNotificationInput docblock), so it is never null here.
+    // Enqueued through scopedDb: same transaction as the row above (finding 7).
+    if (this.pushQueuePort && row.recipient_user_id) {
+      if (deferredUntil) {
+        await this.pushQueuePort.enqueueSummary(scopedDb, row.recipient_user_id, deferredUntil);
+      } else {
+        await this.pushQueuePort.enqueueDeliver(scopedDb, row.id, row.recipient_user_id);
+      }
+    }
+
     return row;
   }
 

@@ -8,7 +8,7 @@ import {
   type DataContextRunner
 } from "@moss/db";
 import type { EmbeddingProvider } from "@moss/memory";
-import type { CreateNotificationInput } from "@moss/notifications";
+import { isSameOriginAppPath, type CreateNotificationInput } from "@moss/notifications";
 import type { ModuleAssistantToolRisk } from "@moss/module-sdk";
 import { EMBED_BATCH_MAX } from "@moss/module-sdk";
 import type { ModuleFetchRequest, ModuleFetchResponse } from "@moss/module-sdk";
@@ -651,13 +651,8 @@ function notifyRequest(value: Record<string, unknown>): {
  */
 function notifyHref(value: unknown): string | undefined {
   if (value === undefined) return undefined;
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    !value.startsWith("/") ||
-    value.startsWith("//") ||
-    value.includes(":")
-  ) {
+  // #743 security finding 4: the same rule the repository and push payload use.
+  if (!isSameOriginAppPath(value)) {
     throw new ExternalModuleRpcError("invalid_rpc", "notify.post href must be a same-origin path");
   }
   return value;
