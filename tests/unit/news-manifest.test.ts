@@ -77,8 +77,6 @@ describe("news manifest wording and migrations (#2282)", () => {
   });
 
   it("declares the subreddit-sources migration", () => {
-    expect(newsModuleManifest.database.migrations).toContain(
-      "sql/0218_news_source_kinds.sql"
-    );
+    expect(newsModuleManifest.database.migrations).toContain("sql/0218_news_source_kinds.sql");
   });
 });
