@@ -156,7 +156,12 @@ export interface NewsCustomSourceDto {
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
   readonly feedUrl: string | null;
-  readonly retrievalMethod: "feed" | "scrape";
+  readonly retrievalMethod: "feed" | "scrape" | "reddit";
+  /**
+   * #2282: true when a feed source is read from a host that is not the publisher itself (a
+   * mirror or bridge). Derived by the server; the host list behind it is never exported.
+   */
+  readonly workaround: boolean;
   readonly validationStatus: "approved" | "needs_revalidation" | "rejected";
   readonly healthStatus:
     | "healthy"
@@ -206,7 +211,7 @@ export interface NewsSourcePreviewCandidate {
   readonly label: string;
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
-  readonly retrievalMethod: "feed" | "scrape";
+  readonly retrievalMethod: "feed" | "scrape" | "reddit";
   readonly sampleCount: number;
   readonly redirectNote?: string;
 }
@@ -511,6 +516,7 @@ const newsCustomSourceDtoSchema = {
     "homepageUrl",
     "feedUrl",
     "retrievalMethod",
+    "workaround",
     "validationStatus",
     "healthStatus",
     "createdAt"
@@ -521,7 +527,8 @@ const newsCustomSourceDtoSchema = {
     canonicalDomain: { type: "string" },
     homepageUrl: { type: "string" },
     feedUrl: { type: ["string", "null"] },
-    retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
+    retrievalMethod: { type: "string", enum: ["feed", "scrape", "reddit"] },
+    workaround: { type: "boolean" },
     validationStatus: { type: "string", enum: ["approved", "needs_revalidation", "rejected"] },
     healthStatus: {
       type: "string",
@@ -744,7 +751,7 @@ export const previewNewsSourceSchema = {
               label: { type: "string" },
               canonicalDomain: { type: "string" },
               homepageUrl: { type: "string" },
-              retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
+              retrievalMethod: { type: "string", enum: ["feed", "scrape", "reddit"] },
               sampleCount: { type: "number" },
               redirectNote: { type: "string" }
             }

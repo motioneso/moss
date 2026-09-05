@@ -117,6 +117,7 @@ const LEAKED_SOURCE_ROW = {
   homepageUrl: "https://custom-wire.example",
   feedUrl: null,
   retrievalMethod: "scrape",
+  workaround: false,
   validationStatus: "approved",
   healthStatus: "healthy",
   createdAt: "2026-07-10T00:00:00.000Z",
@@ -181,6 +182,7 @@ function makePersonalization(overrides: Partial<FakePersonalization> = {}): Fake
     createCustomSource: async (_db, input) => ({
       id: "77777777-7777-7777-7777-777777777777",
       ...input,
+      workaround: false,
       validationStatus: "approved",
       healthStatus: "healthy",
       createdAt: "2026-07-11T00:00:00.000Z"
@@ -188,6 +190,7 @@ function makePersonalization(overrides: Partial<FakePersonalization> = {}): Fake
     replaceCustomSource: async (_db, id, input) => ({
       id,
       ...input,
+      workaround: false,
       validationStatus: "approved",
       healthStatus: "healthy",
       createdAt: "2026-07-11T00:00:00.000Z"
@@ -278,6 +281,7 @@ function buildApp(
           : (overrides.webSearchReason ?? "no-key-no-native-model")
     },
     discovery: overrides.discovery ?? {
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
       fetch: async () => ({ ok: false, reason: "network" }),
       image: async () => ({ ok: false, reason: "network" }),
       favicon: async () => ({ ok: false, reason: "network" }),
@@ -488,6 +492,7 @@ describe("news personalization routes (#953 Slice 1)", () => {
         homepageUrl: "https://custom-wire.example",
         feedUrl: null,
         retrievalMethod: "scrape",
+        workaround: false,
         validationStatus: "approved",
         healthStatus: "healthy",
         createdAt: "2026-07-10T00:00:00.000Z"
@@ -675,6 +680,7 @@ describe("news personalization routes (#958 Slice 2)", () => {
   it("previews and confirms a verified source without exposing its fingerprint", async () => {
     const { app, personalization } = buildApp({
       discovery: {
+        fetchWithOptions: async () => ({ ok: false, reason: "network" }),
         fetch: async (url) => ({
           ok: true,
           status: 200,
@@ -759,6 +765,7 @@ describe("news personalization routes (#958 Slice 2)", () => {
   it("rejects a topic when the provider policy does not affirm it", async () => {
     const { app, personalization } = buildApp({
       discovery: {
+        fetchWithOptions: async () => ({ ok: false, reason: "network" }),
         fetch: async () => ({ ok: false, reason: "network" }),
         image: async () => ({ ok: false, reason: "network" }),
         favicon: async () => ({ ok: false, reason: "network" }),

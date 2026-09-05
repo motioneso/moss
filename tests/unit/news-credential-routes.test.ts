@@ -66,6 +66,7 @@ const CREATED_SOURCE: NewsCustomSourceDto = {
   homepageUrl: "https://wire.example.com",
   feedUrl: null,
   retrievalMethod: "scrape",
+  workaround: false,
   validationStatus: "approved",
   healthStatus: "healthy",
   createdAt: "2026-08-27T09:00:00.000Z"

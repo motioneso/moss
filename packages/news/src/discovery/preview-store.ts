@@ -6,10 +6,22 @@ export interface VerifiedSourceCandidate {
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
   readonly feedUrl: string | null;
-  readonly retrievalMethod: "feed" | "scrape";
+  readonly retrievalMethod: "feed" | "scrape" | "reddit";
   readonly sampleCount: number;
   readonly validationFingerprint: string;
   readonly redirectNote: string | null;
+  /**
+   * #2282 Task 1.6: the hosts this source may be fetched from, decided while the candidate was
+   * verified rather than re-derived at confirm time. A subreddit is read from Reddit's own host,
+   * which no publisher-URL rule would produce.
+   */
+  readonly confirmedFetchHosts: readonly string[];
+  /** #2282: https icon for the saved row, or null when verification found none. */
+  readonly iconUrl: string | null;
+  /** #2282: the feed is served by someone other than the publisher (a mirror or bridge). */
+  readonly workaround: boolean;
+  /** #2282: the host serving a workaround feed, else null. */
+  readonly feedHost: string | null;
 }
 
 export interface PendingSourcePreview {

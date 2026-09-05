@@ -62,6 +62,7 @@ describe("news personalization routes", () => {
         webSearchReason: async () => null
       },
       discovery: {
+        fetchWithOptions: async () => ({ ok: false, reason: "network" }),
         fetch: async (url) => ({
           ok: true,
           status: 200,

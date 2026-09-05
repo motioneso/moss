@@ -48,6 +48,7 @@ describe("registerNewsJobWorkers", () => {
       readPolicyVerdict: async () => null,
       upsertPolicyVerdict: async () => undefined,
       updateSourceHealth: async () => undefined,
+      recordWorkaroundRefreshOutcome: async () => undefined,
       listSourceValidationStates: async () => [],
       listTopicValidationStates: async () => [],
       updateSourceValidation: async () => undefined,
@@ -78,6 +79,7 @@ describe("registerNewsJobWorkers", () => {
           }
         ]
       },
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
       fetch: async (url) => {
         fetchCount += 1;
         if (fetchCount === 1) {
@@ -172,6 +174,7 @@ describe("registerNewsJobWorkers", () => {
       readPolicyVerdict: async () => null,
       upsertPolicyVerdict: async () => undefined,
       updateSourceHealth: async () => undefined,
+      recordWorkaroundRefreshOutcome: async () => undefined,
       listSourceValidationStates: async () => [],
       listTopicValidationStates: async () => [],
       updateSourceValidation: async () => undefined,
@@ -203,6 +206,7 @@ describe("registerNewsJobWorkers", () => {
           }
         ]
       },
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
       fetch: async (url) => {
         fetches += 1;
         return {

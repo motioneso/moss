@@ -31,9 +31,14 @@ import {
   type UpdateNewsTopicRequest
 } from "@moss/shared";
 
-import { resolveSourceInput } from "./discovery/source-resolution.js";
+import { findDuplicateCustomSource, resolveSourceInput } from "./discovery/source-resolution.js";
 import { validateTopic } from "./discovery/policy-validation.js";
-import type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "./discovery/ports.js";
+import type {
+  NewsAiPort,
+  NewsFetchPort,
+  NewsSafeFetchPort,
+  NewsWebSearchPort
+} from "./discovery/ports.js";
 import { createPreviewStore } from "./discovery/preview-store.js";
 import { enqueueNewsRefresh, enqueueNewsRevalidation } from "./jobs.js";
 import { normalizePublisherDomain } from "./personalization-domain.js";
@@ -55,7 +60,9 @@ export interface NewsPersonalizationStore {
       canonicalDomain: string;
       homepageUrl: string;
       feedUrl: string | null;
-      retrievalMethod: "feed" | "scrape";
+      retrievalMethod: "feed" | "scrape" | "reddit";
+      confirmedFetchHosts: readonly string[];
+      iconUrl: string | null;
       validationFingerprint: string;
     }
   ): Promise<NewsCustomSourceDto>;
@@ -67,7 +74,9 @@ export interface NewsPersonalizationStore {
       canonicalDomain: string;
       homepageUrl: string;
       feedUrl: string | null;
-      retrievalMethod: "feed" | "scrape";
+      retrievalMethod: "feed" | "scrape" | "reddit";
+      confirmedFetchHosts: readonly string[];
+      iconUrl: string | null;
       validationFingerprint: string;
     }
   ): Promise<NewsCustomSourceDto | null>;
@@ -131,6 +140,8 @@ export interface PersonalizationRouteDependencies {
   };
   readonly discovery: {
     readonly fetch: NewsSafeFetchPort;
+    /** #2282: optional here so existing test fakes keep working; the composition root always passes it. */
+    readonly fetchWithOptions?: NewsFetchPort;
     readonly search: NewsWebSearchPort;
     readonly ai: NewsAiPort;
   };
@@ -282,6 +293,10 @@ export async function confirmSourceFromPreview(
       homepageUrl: candidate.homepageUrl,
       feedUrl: candidate.feedUrl,
       retrievalMethod: candidate.retrievalMethod,
+      // #2282 Task 1.6: the preview decided these while it had the evidence in hand; confirming
+      // copies them rather than guessing again from the URLs. The tamper check above is unchanged.
+      confirmedFetchHosts: candidate.confirmedFetchHosts,
+      iconUrl: candidate.iconUrl,
       validationFingerprint: candidate.validationFingerprint
     };
     const created = preview.replaceSourceId
@@ -436,9 +451,7 @@ export function registerNewsPersonalizationRoutes(
           });
           const existing = input.replaceSourceId ? [] : await repository.listCustomSources(db);
           const duplicate = result.candidates
-            .map((candidate) =>
-              existing.find((source) => source.canonicalDomain === candidate.canonicalDomain)
-            )
+            .map((candidate) => findDuplicateCustomSource(existing, candidate))
             .find(Boolean);
           const connection = connectionOfferFor(dependencies.connections, result.candidates);
           return {

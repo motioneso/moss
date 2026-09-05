@@ -94,7 +94,9 @@ export const newsModuleManifest = {
       // #2006 — health states distinguish rejected credentials from temporary outages.
       "sql/0204_news_source_health_states.sql",
       // #2006 QA fix — complete the worker's narrow credential-status read grant.
-      "sql/0205_news_credential_status_worker_grant.sql"
+      "sql/0205_news_credential_status_worker_grant.sql",
+      // #2282 — subreddit sources, per-source fetch-host allowlist, workaround failure count.
+      "sql/0218_news_source_kinds.sql"
     ],
     migrationDirectories: ["packages/news/sql"],
     ownedTables: [
@@ -127,7 +129,7 @@ export const newsModuleManifest = {
       id: "news.prefs",
       label: "News",
       description:
-        "Choose news topics, manage built-in, connected, custom, and excluded publishers, and story preferences. Adding a publication needs an AI model; discovering topics across the web also needs web search.",
+        "Choose news topics, manage built-in, connected, and excluded publishers, and the sources you add: a publication or a subreddit. Adding a source needs an AI model; discovering topics across the web also needs web search.",
       path: "/settings/modules/news",
       scope: "user",
       order: 34,
@@ -500,9 +502,9 @@ export const newsModuleManifest = {
     {
       id: "news.add_source",
       description:
-        "Find a publisher by URL or name and add it to personalized News. A forward to the " +
-        "same publisher's own site is followed, with a note naming the switch. A forward to " +
-        "an unrelated site is refused; try that address directly instead.",
+        "Find a publisher by URL or name, or a subreddit with an r/name input, and add it to " +
+        "personalized News. A subreddit source contributes articles linked from its hot feed. " +
+        "A forward to an unrelated site is refused.",
       requires: newsAddSourceRequirement,
       remediations: [
         {
