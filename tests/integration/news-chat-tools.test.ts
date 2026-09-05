@@ -396,6 +396,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     );
     await enqueueNewsRefresh(appBoss, ids.userA);
     await registerNewsJobWorkers(workerBoss, workerContext, {
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
       fetch: async (url) => ({
         ok: true as const,
         status: 200,

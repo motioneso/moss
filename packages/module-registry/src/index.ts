@@ -319,6 +319,7 @@ import {
   createRegistryNewsPublisherConnectionPort,
   enqueueNewsRefresh,
   type NewsAiPort,
+  type NewsFetchOptions,
   type NewsRoutesDependencies,
   type NewsStoryFeedbackPort
 } from "@moss/news";
@@ -727,6 +728,24 @@ function buildNewsDiscoveryPorts(
         requireHttps: true,
         robots: newsRobotsGate,
         rateLimiter: newsHostRateLimiter
+      }),
+    // #2282 task 1.5: the options-capable sibling, built like Sports' port. Same HTTPS rule and
+    // the News host rate limiter on every call; the robots gate stays unless the caller (the
+    // Reddit reader, whose host refuses generic agents by robots rule) asks to skip it.
+    fetchWithOptions: (url: string, options?: NewsFetchOptions) =>
+      fetchWebResource(url, {
+        requireHttps: true,
+        robots: options?.skipRobots ? undefined : newsRobotsGate,
+        rateLimiter: newsHostRateLimiter,
+        allowedHosts: options?.allowedHosts,
+        requestHeaders: options?.requestHeaders,
+        userAgent: options?.userAgent,
+        allowedContentTypes: options?.allowedContentTypes,
+        beforeRequest: options?.beforeRequest,
+        maxBytes: options?.maxBytes,
+        rejectOversizedResponses: options?.rejectOversizedResponses,
+        timeoutMs: options?.timeoutMs,
+        signal: options?.signal
       }),
     image: (url: string, maxBytes: number, allowedHosts?: readonly string[]) =>
       fetchWebResourceBytes(url, {

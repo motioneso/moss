@@ -219,6 +219,7 @@ function buildNewsServer(options: {
     datasetClient: unusedDatasetClient,
     availability: { hasJsonModel: async () => true, hasWebSearch: async () => true },
     discovery: {
+      fetchWithOptions: servePages(options.pages),
       fetch: servePages(options.pages),
       image: async () => ({ ok: false, reason: "network" }),
       search: {

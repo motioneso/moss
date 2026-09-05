@@ -1,10 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CliChatUnavailableError, type ChatEngineFactory } from "@moss/chat";
 import type { AccessContext, DataContextDb } from "@moss/db";
 import { getBuiltInModuleRegistrations } from "@moss/module-registry";
 import type * as AiModule from "@moss/ai";
 import type * as NewsModule from "@moss/news";
+import type { NewsFetchOptions, RedditFetchOptions } from "@moss/news";
+import type * as WebResearchModule from "@moss/web-research";
 
 /**
  * #2229: Settings > News > Add a source always failed with
@@ -64,6 +66,35 @@ vi.mock("@moss/ai", async (importOriginal) => {
   };
 });
 
+const webResearchCapture = vi.hoisted(() => ({
+  calls: [] as { url: string; options: Record<string, unknown> | undefined }[],
+  result: undefined as unknown
+}));
+
+// #2282 task 1.5: capture the options the News ports hand to the shared web fetch helper, so the
+// tests below can prove which gates each port keeps without touching the network.
+vi.mock("@moss/web-research", async (importOriginal) => {
+  const actual = await importOriginal<typeof WebResearchModule>();
+  return {
+    ...actual,
+    fetchWebResource: vi.fn(async (url: string, options?: Record<string, unknown>) => {
+      webResearchCapture.calls.push({ url, options });
+      return (
+        webResearchCapture.result ?? {
+          ok: true,
+          status: 200,
+          finalUrl: url,
+          contentType: "text/html",
+          body: "",
+          truncated: false,
+          bytesRead: 0,
+          hopCount: 0
+        }
+      );
+    })
+  };
+});
+
 function fakeLogger() {
   const logger = {
     info: vi.fn(),
@@ -71,6 +102,34 @@ function fakeLogger() {
     child: () => logger
   };
   return logger;
+}
+
+/** Registers the News routes against a fake server and returns the discovery ports it was given. */
+function captureNewsDiscovery(): unknown {
+  newsRoutesCapture.discovery = undefined;
+  const registration = getBuiltInModuleRegistrations().find((item) => item.manifest.id === "news");
+  expect(registration?.registerRoutes).toBeDefined();
+  const fakeServer = { log: fakeLogger(), post: vi.fn(), get: vi.fn() };
+  registration!.registerRoutes!(
+    fakeServer as never,
+    {
+      rootDb: {} as never,
+      dataContext: {} as never,
+      resolveAccessContext: async () => ({}) as AccessContext,
+      boss: {} as never,
+      chatEngineFactory: (() => {
+        throw new CliChatUnavailableError("chat engine factory is not resolved yet");
+      }) as ChatEngineFactory,
+      createCliStructuredAdapter: (() => ({
+        generateStructured: async () => ({
+          rawObject: {},
+          usage: { inputTokens: 0, outputTokens: 0 }
+        })
+      })) as never
+    } as never
+  );
+  expect(newsRoutesCapture.discovery).toBeDefined();
+  return newsRoutesCapture.discovery;
 }
 
 describe("news discovery source preview (#2229)", () => {
@@ -130,5 +189,91 @@ describe("news discovery source preview (#2229)", () => {
       ok: true,
       object: { allowed: true, category: "news_publisher" }
     });
+  });
+});
+
+describe("news fetch port with options (#2282 task 1.5)", () => {
+  type Ports = {
+    fetch: (url: string) => Promise<unknown>;
+    fetchWithOptions: (url: string, options?: NewsFetchOptions) => Promise<unknown>;
+  };
+  const ports = () => captureNewsDiscovery() as Ports;
+  const lastOptions = () => {
+    expect(webResearchCapture.calls).toHaveLength(1);
+    return webResearchCapture.calls[0]!.options!;
+  };
+
+  beforeEach(() => {
+    webResearchCapture.calls.length = 0;
+    webResearchCapture.result = undefined;
+  });
+
+  it("keeps the robots gate and the News rate limiter by default", async () => {
+    await ports().fetchWithOptions("https://example.com/feed.xml");
+    const options = lastOptions();
+    expect(options.requireHttps).toBe(true);
+    expect(options.robots).toBeDefined();
+    expect(options.rateLimiter).toBeDefined();
+  });
+
+  it("drops the robots gate when skipRobots is set and forwards the Reddit reader's options", async () => {
+    const beforeRequest = () => true;
+    const signal = new AbortController().signal;
+    const readerOptions: RedditFetchOptions = {
+      allowedHosts: ["www.reddit.com"],
+      requestHeaders: { accept: "application/json" },
+      userAgent: "jarv1s-news/1.0",
+      allowedContentTypes: ["application/json"],
+      beforeRequest,
+      maxBytes: 1024,
+      rejectOversizedResponses: true,
+      timeoutMs: 5000,
+      signal,
+      skipRobots: true
+    };
+    await ports().fetchWithOptions("https://www.reddit.com/r/news/top.json", readerOptions);
+    const options = lastOptions();
+    expect(options.robots).toBeUndefined();
+    expect(options.rateLimiter).toBeDefined();
+    expect(options).toMatchObject({
+      requireHttps: true,
+      allowedHosts: ["www.reddit.com"],
+      requestHeaders: { accept: "application/json" },
+      userAgent: "jarv1s-news/1.0",
+      allowedContentTypes: ["application/json"],
+      maxBytes: 1024,
+      rejectOversizedResponses: true,
+      timeoutMs: 5000
+    });
+    expect(options.beforeRequest).toBe(beforeRequest);
+    expect(options.signal).toBe(signal);
+    expect("skipRobots" in options).toBe(false);
+  });
+
+  it("passes the helper's rate-limit Retry-After and failure detail through unchanged", async () => {
+    webResearchCapture.result = {
+      ok: false,
+      reason: "rate_limited",
+      status: 429,
+      retryAfter: "30"
+    };
+    await expect(
+      ports().fetchWithOptions("https://www.reddit.com/r/news/top.json", { skipRobots: true })
+    ).resolves.toEqual({ ok: false, reason: "rate_limited", status: 429, retryAfter: "30" });
+
+    webResearchCapture.calls.length = 0;
+    webResearchCapture.result = { ok: false, reason: "http_error", detail: "response_too_large" };
+    await expect(ports().fetchWithOptions("https://example.com/big.xml")).resolves.toEqual({
+      ok: false,
+      reason: "http_error",
+      detail: "response_too_large"
+    });
+  });
+
+  it("the URL-only fetch port still applies the robots gate for every current caller", async () => {
+    await ports().fetch("https://example.com/");
+    const options = lastOptions();
+    expect(options.robots).toBeDefined();
+    expect(options.rateLimiter).toBeDefined();
   });
 });

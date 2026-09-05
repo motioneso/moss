@@ -3,7 +3,12 @@ import { Parser } from "htmlparser2";
 import type { DataContextDb } from "@moss/db";
 
 import { decideSourcePolicy } from "../discovery/policy-validation.js";
-import type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "../discovery/ports.js";
+import type {
+  NewsAiPort,
+  NewsFetchPort,
+  NewsSafeFetchPort,
+  NewsWebSearchPort
+} from "../discovery/ports.js";
 import { extractListingHeadlines } from "../discovery/feed-discovery.js";
 import { normalizePublisherDomain, publisherDomainMatches } from "../personalization-domain.js";
 import type { NewsPersonalizationRepository } from "../personalization-repository.js";
@@ -270,6 +275,8 @@ export async function collectCandidates(
   scopedDb: DataContextDb,
   deps: {
     fetch: NewsSafeFetchPort;
+    /** #2282: options-capable fetch for the Reddit collector branch (task 1.7); optional so fakes stay small. */
+    fetchWithOptions?: NewsFetchPort;
     search: NewsWebSearchPort;
     ai: NewsAiPort;
     repo: CandidateRepository;

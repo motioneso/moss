@@ -9,7 +9,7 @@ import type { DataContextDb } from "@moss/db";
 
 import { extractListingHeadlines, sampleFeedHeadlines } from "./discovery/feed-discovery.js";
 import { decideSourcePolicy, validateTopic } from "./discovery/policy-validation.js";
-import type { NewsAiPort, NewsSafeFetchPort } from "./discovery/ports.js";
+import type { NewsAiPort, NewsFetchPort, NewsSafeFetchPort } from "./discovery/ports.js";
 import type {
   NewsPersonalizationRepository,
   NewsSourceValidationState,
@@ -40,6 +40,8 @@ export interface NewsRevalidationLogger {
 
 export interface NewsRevalidationDeps {
   readonly fetch: NewsSafeFetchPort;
+  /** #2282: options-capable fetch so health checks can re-read a subreddit; optional so fakes stay small. */
+  readonly fetchWithOptions?: NewsFetchPort;
   readonly ai: NewsAiPort;
   readonly repository: Pick<
     NewsPersonalizationRepository,

@@ -32,7 +32,12 @@ import {
 
 import { resolveSourceInput } from "./discovery/source-resolution.js";
 import { validateTopic } from "./discovery/policy-validation.js";
-import type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "./discovery/ports.js";
+import type {
+  NewsAiPort,
+  NewsFetchPort,
+  NewsSafeFetchPort,
+  NewsWebSearchPort
+} from "./discovery/ports.js";
 import { createPreviewStore } from "./discovery/preview-store.js";
 import { enqueueNewsRefresh, enqueueNewsRevalidation } from "./jobs.js";
 import { normalizePublisherDomain } from "./personalization-domain.js";
@@ -134,6 +139,8 @@ export interface PersonalizationRouteDependencies {
   };
   readonly discovery: {
     readonly fetch: NewsSafeFetchPort;
+    /** #2282: optional here so existing test fakes keep working; the composition root always passes it. */
+    readonly fetchWithOptions?: NewsFetchPort;
     readonly search: NewsWebSearchPort;
     readonly ai: NewsAiPort;
   };

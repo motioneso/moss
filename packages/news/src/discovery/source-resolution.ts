@@ -15,6 +15,7 @@ import { decideSourcePolicy } from "./policy-validation.js";
 import type {
   NewsAiPort,
   NewsSafeFetchFailure,
+  NewsFetchPort,
   NewsSafeFetchPort,
   NewsSafeFetchResult,
   NewsWebSearchPort
@@ -230,6 +231,8 @@ export async function resolveSourceInput(
   scopedDb: DataContextDb,
   deps: {
     fetch: NewsSafeFetchPort;
+    /** #2282: options-capable fetch for subreddit resolution (task 1.6); optional so fakes stay small. */
+    fetchWithOptions?: NewsFetchPort;
     search: NewsWebSearchPort;
     ai: NewsAiPort;
     repo: ResolutionRepo;

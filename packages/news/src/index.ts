@@ -32,7 +32,14 @@ export {
   registerNewsJobWorkers
 } from "./jobs.js";
 export type { NewsRefreshPayload, NewsRevalidatePayload } from "./jobs.js";
-export type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "./discovery/ports.js";
+export type {
+  NewsAiPort,
+  NewsFetchOptions,
+  NewsFetchPort,
+  NewsFetchRequestHop,
+  NewsSafeFetchPort,
+  NewsWebSearchPort
+} from "./discovery/ports.js";
 export {
   NEWS_MODULE_ID,
   newsAddSourceRequirement,
