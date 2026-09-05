@@ -25,8 +25,9 @@ export type BuildEmailExtractDepsOptions = Pick<
 const EMAIL_SIGNALS_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["category", "confidence"],
+  required: ["gate", "category", "confidence"],
   properties: {
+    gate: { type: "string", enum: ["nothing", "worth_knowing", "maybe_owed"] },
     category: {
       enum: [
         "needs_reply",

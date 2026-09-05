@@ -178,6 +178,18 @@ export type EmailActionabilityCategory =
   | "noise"
   | "unknown";
 
+/**
+ * Spec 2026-09-04-email-chief-of-staff §3.1: the first-pass gate. `nothing` stores no summary and
+ * a noise verdict; `worth_knowing` keeps a one-line summary and an fyi verdict; `maybe_owed` stores
+ * neither and marks the message for the per-thread second pass in Commitments.
+ */
+export type EmailGateOutcome = "nothing" | "worth_knowing" | "maybe_owed";
+export const EMAIL_GATE_OUTCOMES: readonly EmailGateOutcome[] = [
+  "nothing",
+  "worth_knowing",
+  "maybe_owed"
+];
+
 const ACTIONABILITY_CATEGORIES: readonly EmailActionabilityCategory[] = [
   "needs_reply",
   "needs_action",
@@ -220,6 +232,8 @@ export interface EmailSignals {
    * already invisible to the Today briefing filter and to suggested-task creation, both of
    * which require an inferred subject that a skipped message never gets. */
   readonly skipped?: "otp";
+  /** The gate said maybe_owed: no verdict yet, the thread's judgement worker decides. */
+  readonly pendingJudgement?: boolean;
 }
 
 export function otpSkippedResult(): EmailExtractResult {
@@ -229,6 +243,8 @@ export function otpSkippedResult(): EmailExtractResult {
 export interface EmailExtractResult {
   readonly summary: string | null;
   readonly signals: EmailSignals;
+  /** First-pass gate outcome. Absent on an otp skip and on answers that carried no gate. */
+  readonly gate?: EmailGateOutcome;
   /** True when the pass escalated to a higher tier (telemetry; counted by the handler). */
   readonly escalated?: boolean;
 }
@@ -316,11 +332,30 @@ async function withTimeout<T>(
   }
 }
 
+const GATE_INSTRUCTIONS = [
+  "First decide the gate. Answer exactly one of: nothing, worth_knowing, maybe_owed.",
+  "nothing: ordinary mail, bulk or not, that asks nothing of this user: newsletters, sales,",
+  "receipts, shipping notices, ticket releases, fundraising, petitions, event promos, product",
+  "updates, social notifications, test alerts, terms of service and policy updates, sign-in and",
+  "security notices where nothing failed, routine back-and-forth that asks nothing.",
+  "worth_knowing: the user would want to glance at it but it asks nothing: a parcel arrived, a",
+  "payment went through, a friend's news, a calendar notification, an account activity summary.",
+  "maybe_owed: a person or institution the user already deals with may be waiting on them, or a",
+  "date may bind them: a bill or payment problem, an appointment or form, a deadline from an",
+  "employer, school, landlord, bank, insurer or doctor, a question from someone they know. Urgent",
+  "wording (act now, action required, final notice) is not evidence by itself. Mail with an",
+  "unsubscribe link can still be maybe_owed (rent reminders, loan statements).",
+  "When you cannot tell, answer maybe_owed; a stronger reader decides later.",
+  "Only write a summary when the gate is worth_knowing."
+].join("\n");
+
 const EMAIL_TRIAGE_INSTRUCTIONS = [
   "You are an email triage assistant. Read the email and reply with one JSON object only:",
-  '{ category: "needs_reply"|"needs_action"|"time_sensitive_info"|"waiting_on_someone"|"fyi"|"noise"|"unknown",',
+  '{ gate: "nothing"|"worth_knowing"|"maybe_owed",',
+  '  category: "needs_reply"|"needs_action"|"time_sensitive_info"|"waiting_on_someone"|"fyi"|"noise"|"unknown",',
   "  confidence: number, reason?: string, action?: string, dueDate?: string,",
   "  deliversSignInCode: boolean }",
+  GATE_INSTRUCTIONS,
   "confidence is 0..1. Use ISO dates (YYYY-MM-DD). Keep reason and action concise.",
   "Each email is preceded by the date it arrived (Received) and today's date (Today). Use them to",
   'resolve relative wording such as "tomorrow", "Friday" or "this week".',
@@ -533,8 +568,17 @@ function safeParseSignals(
     // returns the first MAX_SUMMARY_CHARS of a longer body slip a near-complete body prefix past a
     // containment check (the guard could no longer "see" the full body inside the summary).
     const summary = typeof obj.summary === "string" ? obj.summary : null;
+    // A present-but-unknown gate value means "nothing" (the safe side); an absent gate leaves the
+    // legacy single-pass behaviour untouched so older answers and fixtures keep their verdict.
+    const gate =
+      obj.gate === undefined
+        ? undefined
+        : EMAIL_GATE_OUTCOMES.includes(obj.gate as EmailGateOutcome)
+          ? (obj.gate as EmailGateOutcome)
+          : "nothing";
     return {
       summary,
+      ...(gate === undefined ? {} : { gate }),
       signals: {
         billsDue: compact ? [] : safeBills(obj.billsDue, normalizedBody),
         actionItems: compact ? [] : safeActionItems(obj.actionItems, normalizedBody),
@@ -669,11 +713,31 @@ function sanitizeExtractResult(
   // of fields: setting the flag earlier would have it dropped on exactly the messages that
   // tripped the guard. It is a deterministic boolean, so no body text can ride along with it.
   const signals = looksLikeBulkMail(parsed) ? { ...result.signals, bulk: true } : result.signals;
-  return {
+  return applyGate({
     ...result,
     signals: parsed.bodyTruncated ? { ...signals, truncated: true } : signals,
     escalated: false
-  };
+  });
+}
+
+/**
+ * The gate decides what the single pass may store (spec §3.1): `nothing` keeps no summary and a
+ * bare noise verdict, `worth_knowing` keeps the summary under an fyi verdict, `maybe_owed` keeps
+ * neither and flags the message for the thread judgement. Runs after every other guard so a
+ * deterministic fallback summary cannot sneak back in for mail the gate said to leave alone.
+ */
+function applyGate(result: EmailExtractResult): EmailExtractResult {
+  const { gate, signals } = result;
+  if (gate === undefined) return result;
+  if (gate === "nothing") {
+    const { pendingJudgement: _pending, ...rest } = signals;
+    return { ...result, summary: null, signals: { ...rest, actionability: { category: "noise" } } };
+  }
+  if (gate === "worth_knowing") {
+    return { ...result, signals: { ...signals, actionability: { category: "fyi" } } };
+  }
+  const { actionability: _drop, ...rest } = signals;
+  return { ...result, summary: null, signals: { ...rest, pendingJudgement: true } };
 }
 
 function buildBatchPrompt(messages: readonly ParsedEmail[]): string {

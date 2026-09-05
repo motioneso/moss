@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { buildEmailExtractDeps } from "../../packages/connectors/src/extract-deps.js";
 
 const value = {
+  gate: "maybe_owed",
   category: "needs_action",
   reason: "A synthetic action is required.",
   action: "Complete the synthetic action",
