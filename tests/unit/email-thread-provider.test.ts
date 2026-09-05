@@ -60,9 +60,7 @@ describe("email thread provider", () => {
     };
     const p = createEmailThreadProvider(repo, async () => new Set(["ben@ben.com"]));
     const msgs = await p.listThreadMessages({}, "u1", "t1");
-    expect(msgs[0]!.bodyExcerpt).toBe(
-      "Verification code 195638 This code expires in 10 minutes"
-    );
+    expect(msgs[0]!.bodyExcerpt).toBe("Verification code 195638 This code expires in 10 minutes");
   });
   it("translates the newer-message lookup both ways", async () => {
     const repo = {
