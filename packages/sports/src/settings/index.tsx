@@ -241,15 +241,28 @@ export function indexFollows(follows: readonly SportsFollowDto[]): Map<string, S
   return index;
 }
 
-/** The saved follow a tile stands for: by permanent id when the tile has one, else by key. */
+/**
+ * The saved follow a tile stands for: by permanent id when the tile has one, else by key.
+ *
+ * A tile with a permanent id falls back to the key only for an older save that has no id of its
+ * own. Two teams that share a short name can swap places in the list between refreshes (the
+ * Tigers saved as "pac"/413, then a list holding only the Lutes as "pac"/129700), and a follow
+ * with a different id must never be treated as this tile's, or the Lutes tile would show as
+ * followed and its click would remove the Tigers follow (review round 7).
+ */
 export function followFor(
   index: ReadonlyMap<string, SportsFollowDto>,
   competitionKey: string,
   teamKey: string | null,
   sourceTeamId: string | null
 ): SportsFollowDto | undefined {
-  const byId = sourceTeamId === null ? undefined : index.get(followIdKey(competitionKey, sourceTeamId));
-  return byId ?? index.get(followKey(competitionKey, teamKey));
+  const byId =
+    sourceTeamId === null ? undefined : index.get(followIdKey(competitionKey, sourceTeamId));
+  if (byId !== undefined) return byId;
+  const byKey = index.get(followKey(competitionKey, teamKey));
+  if (byKey === undefined) return undefined;
+  if (sourceTeamId !== null && byKey.sourceTeamId !== null) return undefined;
+  return byKey;
 }
 
 type FollowActionSource = "summary" | "picker";

@@ -471,17 +471,14 @@ describe("SportsSettings", () => {
         partial: false,
         isError: false,
         competitions: TWO_LEAGUES,
-        followsByKey: new Map([
-          [
-            "epl::team.ars",
-            {
-              id: "follow-ars",
-              competitionKey: "epl",
-              teamKey: ARS.teamKey,
-              sourceTeamId: "id-ars",
-              createdAt: "2026-01-01T00:00:00Z"
-            }
-          ]
+        followsByKey: indexFollows([
+          {
+            id: "follow-ars",
+            competitionKey: "epl",
+            teamKey: ARS.teamKey,
+            sourceTeamId: ARS.sourceTeamId,
+            createdAt: "2026-01-01T00:00:00Z"
+          }
         ]),
         onToggle: () => {},
         onRetry: () => {},
@@ -508,7 +505,13 @@ describe("SportsSettings", () => {
     });
     client.setQueryData(FOLLOWS_KEY, {
       follows: [
-        { id: "f1", competitionKey: "epl", teamKey: "team.ars", sourceTeamId: "id-team.ars", createdAt: "2026-01-01T00:00:00Z" }
+        {
+          id: "f1",
+          competitionKey: "epl",
+          teamKey: "team.ars",
+          sourceTeamId: "id-team.ars",
+          createdAt: "2026-01-01T00:00:00Z"
+        }
       ]
     });
     // Followed-chip roster resolution fetches the league's teams via the shared leagueTeams key
@@ -529,7 +532,13 @@ describe("SportsSettings", () => {
     });
     client.setQueryData(FOLLOWS_KEY, {
       follows: [
-        { id: "f1", competitionKey: "epl", teamKey: "team.ars", sourceTeamId: "id-team.ars", createdAt: "2026-01-01T00:00:00Z" }
+        {
+          id: "f1",
+          competitionKey: "epl",
+          teamKey: "team.ars",
+          sourceTeamId: "id-team.ars",
+          createdAt: "2026-01-01T00:00:00Z"
+        }
       ]
     });
     client.setQueryData(sportsQueryKeys.leagueTeams("epl"), {
@@ -546,7 +555,13 @@ describe("SportsSettings", () => {
     client.setQueryData(CATALOG_KEY, { competitions: TWO_LEAGUES, degraded: false });
     client.setQueryData(FOLLOWS_KEY, {
       follows: [
-        { id: "f1", competitionKey: "epl", teamKey: "team.ars", sourceTeamId: "id-team.ars", createdAt: "2026-01-01T00:00:00Z" }
+        {
+          id: "f1",
+          competitionKey: "epl",
+          teamKey: "team.ars",
+          sourceTeamId: "id-team.ars",
+          createdAt: "2026-01-01T00:00:00Z"
+        }
       ]
     });
     client.setQueryData(sportsQueryKeys.leagueTeams("epl"), { teams: [ARS], degraded: false });
@@ -563,7 +578,13 @@ describe("SportsSettings", () => {
     client.setQueryData(CATALOG_KEY, { competitions: TWO_LEAGUES, degraded: false });
     client.setQueryData(FOLLOWS_KEY, {
       follows: [
-        { id: "fl", competitionKey: "nfl", teamKey: null, sourceTeamId: null, createdAt: "2026-01-01T00:00:00Z" }
+        {
+          id: "fl",
+          competitionKey: "nfl",
+          teamKey: null,
+          sourceTeamId: null,
+          createdAt: "2026-01-01T00:00:00Z"
+        }
       ]
     });
     const html = renderWithQuery(client);
@@ -674,6 +695,20 @@ describe("follow key mismatch on a colliding team (Ben, dev, 2026-09-04)", () =>
     expect(followFor(legacy, "nfl", "dal", "id-dal")?.id).toBe("f-pac");
   });
 
+  it("never lends a saved follow to a different team that later takes over its short name (review round 7)", () => {
+    // The Tigers were saved as "pac" with id 413. The list then refreshes with only the Lutes,
+    // who now hold the bare key "pac" with id 129700. The Lutes tile must not read as followed,
+    // and its click must not reach the Tigers follow.
+    const index = indexFollows([savedTigers]);
+    expect(followFor(index, "nfl", "pac", "129700")).toBeUndefined();
+    // The Tigers themselves still resolve, whatever key the list gives them today.
+    expect(followFor(index, "nfl", "pac", "413")?.id).toBe("f-pac");
+    expect(followFor(index, "nfl", "pac.413", "413")?.id).toBe("f-pac");
+    // Only an older save with no id of its own may be claimed through the key.
+    const legacy = indexFollows([{ ...savedTigers, sourceTeamId: null }]);
+    expect(followFor(legacy, "nfl", "pac", "129700")?.id).toBe("f-pac");
+  });
+
   it("shows the followed colliding team's own crest in the summary chip", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(CATALOG_KEY, { competitions: [TWO_LEAGUES[0]], degraded: false });
@@ -694,11 +729,14 @@ describe("follow key mismatch on a colliding team (Ben, dev, 2026-09-04)", () =>
 });
 
 describe("is-active styling coverage (#691)", () => {
-  const followed = new Map([
-    [
-      "epl::team.ars",
-      { id: "f1", competitionKey: "epl", teamKey: "team.ars", sourceTeamId: "id-team.ars", createdAt: "2026-01-01T00:00:00Z" }
-    ]
+  const followed = indexFollows([
+    {
+      id: "f1",
+      competitionKey: "epl",
+      teamKey: "team.ars",
+      sourceTeamId: "id-team.ars",
+      createdAt: "2026-01-01T00:00:00Z"
+    }
   ]);
 
   it("marks a followed team is-active in search results, unfollowed team not", () => {
