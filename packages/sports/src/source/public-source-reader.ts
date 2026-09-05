@@ -592,11 +592,12 @@ export class SportsPublicSourceReader {
       }
     };
 
+    /** Returns how many of the pushed headlines are served with a stored photo. */
     const pushHeadlines = async (
       pair: RequestAssignment,
       items: readonly ExtractedHeadline[],
       checkedAt: Date | null
-    ): Promise<void> => {
+    ): Promise<number> => {
       const stored = await this.storePhotos(
         accessContext,
         pair,
@@ -607,6 +608,7 @@ export class SportsPublicSourceReader {
       );
       for (const copy of stored.values()) keptPhotoKeys.add(copy.key);
       headlines.push(...publicHeadlines(pair, items, checkedAt, stored));
+      return stored.size;
     };
 
     const run = async (group: RequestGroup): Promise<void> => {
@@ -807,7 +809,9 @@ export class SportsPublicSourceReader {
       });
     };
 
-    // What each source's stories got this time round. Only a refresh that really went out and
+    // What each source's stories actually got this time round. A photo counts only once its
+    // download succeeded and the returned story is served with it: a candidate address in the
+    // feed says nothing until the store accepts it. Only a refresh that really went out and
     // really had stories counts: a cached answer says nothing new about photos.
     const photoOutcomes = new Map<string, SportsPhotoOutcome>();
     const finish = async (entry: (typeof photoPhase)[number]): Promise<void> => {
@@ -831,20 +835,16 @@ export class SportsPublicSourceReader {
           cachedAt + HEADLINE_TTL_MS + DEFAULT_STALE_RETENTION_MS
         );
       }
-      const photoOutcome: SportsPhotoOutcome | null =
-        this.dependencies.photos &&
+      const countsForPhotos =
+        this.dependencies.photos !== undefined &&
         !entry.outcome.fromCache &&
         entry.outcome.state === "healthy" &&
-        items.length > 0
-          ? items.some((item) => item.photoUrl)
-            ? "working"
-            : "none"
-          : null;
+        items.length > 0;
       for (const pair of entry.group.assignments) {
-        if (photoOutcome !== null && photoOutcomes.get(pair.source.id) !== "working") {
-          photoOutcomes.set(pair.source.id, photoOutcome);
+        const attached = await pushHeadlines(pair, items, entry.outcome.checkedAt);
+        if (countsForPhotos && photoOutcomes.get(pair.source.id) !== "working") {
+          photoOutcomes.set(pair.source.id, attached > 0 ? "working" : "none");
         }
-        await pushHeadlines(pair, items, entry.outcome.checkedAt);
         if (!entry.outcome.fromCache) {
           results.push({
             sourceId: pair.source.id,
