@@ -998,6 +998,9 @@ importers:
       '@moss/module-sdk':
         specifier: workspace:*
         version: link:../module-sdk
+      '@moss/settings':
+        specifier: workspace:*
+        version: link:../settings
       '@moss/structured-state':
         specifier: workspace:*
         version: link:../structured-state
