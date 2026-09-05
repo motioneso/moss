@@ -613,7 +613,7 @@ export async function registerConnectorsJobWorkers(
             logger: deps.logger,
             runId: job.data.kind === "google-sync" ? job.id : job.data.idempotencyKey,
             threadJudgementRequester: deps.threadJudgementRequester,
-            knownSenderAddresses: deps.knownSenderAddresses
+            knownSenderAddresses: deps.knownSenderAddresses,
             trigger: job.data.kind === "google-sync" ? job.data.trigger : undefined
           },
           state

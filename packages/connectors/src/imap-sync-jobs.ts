@@ -262,7 +262,7 @@ export async function registerImapSyncWorker(
         logger: deps.logger,
         actorUserId: job.data.actorUserId,
         threadJudgementRequester: deps.threadJudgementRequester,
-        knownSenderAddresses: deps.knownSenderAddresses
+        knownSenderAddresses: deps.knownSenderAddresses,
         trigger: job.data.trigger
       });
       deps.onResult?.(job, result);
