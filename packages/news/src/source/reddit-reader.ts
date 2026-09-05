@@ -29,9 +29,8 @@ export const REDDIT_USER_AGENT = "Moss/1.0 (self-hosted personal dashboard)";
 export const REDDIT_MAX_RESPONSE_BYTES = 1_000_000;
 export const REDDIT_MAX_HEADLINES = 40;
 export const REDDIT_PREVIEW_SAMPLES = 10;
-export const REDDIT_RATE_LIMIT_MESSAGE =
-  "Reddit is rate limiting Moss. Headlines resume automatically.";
-export const REDDIT_AUTH_REQUIRED_MESSAGE = "This subreddit is private or restricted.";
+// Re-exported so every existing importer (and the package root) keeps its current path.
+export { REDDIT_AUTH_REQUIRED_MESSAGE, REDDIT_RATE_LIMIT_MESSAGE } from "./reddit-messages.js";
 
 const SUBREDDIT_NAME = /^[A-Za-z0-9_]{3,21}$/;
 const SHORT_FORM = /^\/?r\/([^/\s?#]+)\/?$/i;

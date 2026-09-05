@@ -30,7 +30,7 @@ import {
   type UpdateNewsTopicRequest
 } from "@moss/shared";
 
-import { resolveSourceInput } from "./discovery/source-resolution.js";
+import { findDuplicateCustomSource, resolveSourceInput } from "./discovery/source-resolution.js";
 import { validateTopic } from "./discovery/policy-validation.js";
 import type {
   NewsAiPort,
@@ -49,7 +49,6 @@ import {
 import { isNewsSnapshotFresh } from "./news-service.js";
 import type { NewsPublisherConnectionPort } from "./publisher-connection-port.js";
 import { reconcileNewsRevalidationSchedule } from "./schedule.js";
-import { deriveFetchHosts } from "./source/workaround.js";
 
 export interface NewsPersonalizationStore {
   listCustomSources(scopedDb: DataContextDb): Promise<NewsCustomSourceDto[]>;
@@ -292,10 +291,10 @@ export async function confirmSourceFromPreview(
       homepageUrl: candidate.homepageUrl,
       feedUrl: candidate.feedUrl,
       retrievalMethod: candidate.retrievalMethod,
-      // #2282 Task 1.4: until preview confirms hosts (Task 1.6), a source may only be fetched
-      // from the hosts its own homepage and feed URL name. Icons arrive with Task 1.6 too.
-      confirmedFetchHosts: deriveFetchHosts([candidate.homepageUrl, candidate.feedUrl]),
-      iconUrl: null,
+      // #2282 Task 1.6: the preview decided these while it had the evidence in hand; confirming
+      // copies them rather than guessing again from the URLs. The tamper check above is unchanged.
+      confirmedFetchHosts: candidate.confirmedFetchHosts,
+      iconUrl: candidate.iconUrl,
       validationFingerprint: candidate.validationFingerprint
     };
     const created = preview.replaceSourceId
@@ -441,9 +440,7 @@ export function registerNewsPersonalizationRoutes(
           });
           const existing = input.replaceSourceId ? [] : await repository.listCustomSources(db);
           const duplicate = result.candidates
-            .map((candidate) =>
-              existing.find((source) => source.canonicalDomain === candidate.canonicalDomain)
-            )
+            .map((candidate) => findDuplicateCustomSource(existing, candidate))
             .find(Boolean);
           const connection = connectionOfferFor(dependencies.connections, result.candidates);
           return {

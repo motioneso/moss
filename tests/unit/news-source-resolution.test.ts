@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DataContextDb } from "@moss/db";
 
-import type { NewsAiPort, NewsSafeFetchPort } from "../../packages/news/src/discovery/ports.js";
+import type {
+  NewsAiPort,
+  NewsFetchPort,
+  NewsSafeFetchFailure,
+  NewsSafeFetchPort,
+  NewsSafeFetchResult
+} from "../../packages/news/src/discovery/ports.js";
 import {
   isKnownSameOwnerAlias,
   resolveSourceInput
@@ -717,5 +723,203 @@ describe("resolveSourceInput", () => {
         { raw: "https://old.example/article", hasWebSearch: false }
       )
     ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+});
+
+/* #2282 Task 1.6 — subreddit resolution. The subreddit branch runs before the publication path
+   and before the web-search prerequisite, so `r/name` never reaches publisher discovery. */
+
+const SUBREDDIT_REQUEST_URL = "https://www.reddit.com/r/nfl/hot.rss";
+
+/** One Atom entry the way Reddit writes it: escaped HTML whose "[link]" anchor leaves Reddit. */
+function subredditEntry(index: number): string {
+  const link = `https://www.espn.com/nfl/story/${index}`;
+  const html =
+    `<!-- SC_OFF --><div class="md"><p>Body</p></div><!-- SC_ON --> submitted by ` +
+    `<a href="https://www.reddit.com/user/fan"> /u/fan </a> <br/> ` +
+    `<span><a href="${link}">[link]</a></span>`;
+  const escaped = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return (
+    `<entry><author><name>/u/fan</name></author><content type="html">${escaped}</content>` +
+    `<id>t3_post${index}</id><link href="https://www.reddit.com/r/NFL/comments/${index}/t/" />` +
+    `<published>2026-09-01T12:00:00+00:00</published><title>Headline number ${index}</title></entry>`
+  );
+}
+
+/** Reddit answers with its own casing of the name in the feed's category term. */
+function subredditFeed(entryCount = 12): string {
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">` +
+    `<category term="NFL" label="r/NFL"/><id>/r/NFL/hot.rss</id>` +
+    `<subtitle>The place for NFL news and discussion.</subtitle>` +
+    `<title>NFL: National Football League Discussion</title>` +
+    Array.from({ length: entryCount }, (_, index) => subredditEntry(index + 1)).join("") +
+    `</feed>`
+  );
+}
+
+function redditFetch(
+  result: NewsSafeFetchResult | NewsSafeFetchFailure
+): NewsFetchPort & ReturnType<typeof vi.fn> {
+  return vi.fn(async (url: string) =>
+    url === SUBREDDIT_REQUEST_URL ? result : { ok: false as const, reason: "network" as const }
+  ) as NewsFetchPort & ReturnType<typeof vi.fn>;
+}
+
+function subredditOk(entryCount = 12): NewsSafeFetchResult {
+  return {
+    ok: true,
+    status: 200,
+    finalUrl: SUBREDDIT_REQUEST_URL,
+    contentType: "application/atom+xml; charset=UTF-8",
+    body: subredditFeed(entryCount),
+    truncated: false
+  };
+}
+
+const EXPECTED_SUBREDDIT_CANDIDATE = {
+  label: "r/NFL",
+  canonicalDomain: "reddit.com",
+  homepageUrl: "https://www.reddit.com/r/NFL/",
+  feedUrl: "https://www.reddit.com/r/NFL/hot.rss",
+  retrievalMethod: "reddit",
+  sampleCount: 10,
+  validationFingerprint: "fp",
+  redirectNote: null,
+  confirmedFetchHosts: ["www.reddit.com"],
+  iconUrl: null,
+  workaround: false,
+  feedHost: null
+};
+
+describe("resolveSourceInput: subreddits", () => {
+  it("resolves the short, slashed and full-link forms to one identical subreddit candidate", async () => {
+    const raws = ["r/nfl", "/r/nfl", "https://www.reddit.com/r/nfl"];
+    const candidates = [];
+    for (const raw of raws) {
+      const result = await resolveSourceInput(
+        db,
+        {
+          fetch: fetchMap({}),
+          fetchWithOptions: redditFetch(subredditOk()),
+          search: noSearch,
+          ai: ai(),
+          repo: repo()
+        },
+        { raw, hasWebSearch: false }
+      );
+      expect(result.status).toBe("ok");
+      if (result.status !== "ok") return;
+      expect(result.candidates).toHaveLength(1);
+      const { candidateId, ...rest } = result.candidates[0];
+      expect(candidateId).toEqual(expect.any(String));
+      candidates.push(rest);
+    }
+    expect(candidates[0]).toEqual(EXPECTED_SUBREDDIT_CANDIDATE);
+    expect(candidates[1]).toEqual(candidates[0]);
+    expect(candidates[2]).toEqual(candidates[0]);
+  });
+
+  it("refuses a Reddit-shaped name that breaks Reddit's own rules without fetching anything", async () => {
+    const fetchWithOptions = redditFetch(subredditOk());
+    const result = await resolveSourceInput(
+      db,
+      { fetch: fetchMap({}), fetchWithOptions, search: noSearch, ai: ai(), repo: repo() },
+      { raw: "r/x!", hasWebSearch: true }
+    );
+    expect(result).toEqual({ status: "rejected", reason: "invalid_input" });
+    expect(fetchWithOptions).not.toHaveBeenCalled();
+  });
+
+  it("tells throttling, a private subreddit and a missing one apart", async () => {
+    const cases: { failure: NewsSafeFetchFailure; reason: string }[] = [
+      { failure: { ok: false, reason: "rate_limited", status: 429 }, reason: "rate_limited" },
+      { failure: { ok: false, reason: "http_error", status: 403 }, reason: "auth_required" },
+      { failure: { ok: false, reason: "http_error", status: 404 }, reason: "unreachable" }
+    ];
+    for (const item of cases) {
+      await expect(
+        resolveSourceInput(
+          db,
+          {
+            fetch: fetchMap({}),
+            fetchWithOptions: redditFetch(item.failure),
+            search: noSearch,
+            ai: ai(),
+            repo: repo()
+          },
+          { raw: "r/nfl", hasWebSearch: false }
+        )
+      ).resolves.toEqual({ status: "rejected", reason: item.reason });
+    }
+  });
+
+  it("still applies the content policy and the exclusion list to a subreddit", async () => {
+    await expect(
+      resolveSourceInput(
+        db,
+        {
+          fetch: fetchMap({}),
+          fetchWithOptions: redditFetch(subredditOk()),
+          search: noSearch,
+          ai: ai(false),
+          repo: repo()
+        },
+        { raw: "r/nfl", hasWebSearch: false }
+      )
+    ).resolves.toEqual({ status: "rejected", reason: "policy" });
+
+    const excludedFetch = redditFetch(subredditOk());
+    await expect(
+      resolveSourceInput(
+        db,
+        {
+          fetch: fetchMap({}),
+          fetchWithOptions: excludedFetch,
+          search: noSearch,
+          ai: ai(),
+          repo: repo(["reddit.com"])
+        },
+        { raw: "r/nfl", hasWebSearch: false }
+      )
+    ).resolves.toEqual({ status: "rejected", reason: "policy" });
+    expect(excludedFetch).not.toHaveBeenCalled();
+  });
+
+  it("needs no web search for a subreddit, and never asks the search provider", async () => {
+    const search = { search: vi.fn(async () => ({ results: [] })) };
+    const result = await resolveSourceInput(
+      db,
+      {
+        fetch: fetchMap({}),
+        fetchWithOptions: redditFetch(subredditOk()),
+        search,
+        ai: ai(),
+        repo: repo()
+      },
+      { raw: "r/nfl", hasWebSearch: false }
+    );
+    expect(result.status).toBe("ok");
+    expect(search.search).not.toHaveBeenCalled();
+  });
+
+  it("judges each subreddit on its own, not once for the whole of Reddit", async () => {
+    const policyRepo = repo();
+    await resolveSourceInput(
+      db,
+      {
+        fetch: fetchMap({}),
+        fetchWithOptions: redditFetch(subredditOk()),
+        search: noSearch,
+        ai: ai(),
+        repo: policyRepo
+      },
+      { raw: "r/nfl", hasWebSearch: false }
+    );
+    expect(policyRepo.readPolicyVerdict).toHaveBeenCalledWith(db, "reddit.com/r/nfl", "fp");
+    expect(policyRepo.upsertPolicyVerdict).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ canonicalDomain: "reddit.com/r/nfl" })
+    );
   });
 });

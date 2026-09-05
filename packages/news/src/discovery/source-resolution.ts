@@ -5,7 +5,17 @@ import type { DataContextDb } from "@moss/db";
 
 import { normalizePublisherDomain, publisherDomainMatches } from "../personalization-domain.js";
 import type { NewsPersonalizationRepository } from "../personalization-repository.js";
+import {
+  REDDIT_CANONICAL_DOMAIN,
+  REDDIT_FETCH_HOSTS,
+  REDDIT_PREVIEW_SAMPLES,
+  parseSubredditInput,
+  readSubreddit,
+  redditHotFeedUrl,
+  redditSubredditUrl
+} from "../source/reddit-reader.js";
 import { TITLE_CHAR_CAP, sanitizeFeedText } from "../source/sanitize.js";
+import { deriveFetchHosts, isWorkaroundFeed } from "../source/workaround.js";
 import {
   discoverFeedUrls,
   extractListingHeadlines,
@@ -78,7 +88,17 @@ export type SourceResolutionResult =
       status: "rejected";
       /** `redirected`: the address led to a different site (not a policy call).
        *  `blocked`: the site's own robots rules refuse automatic access (not a reachability problem). */
-      reason: "policy" | "redirected" | "invalid_input" | "unreachable" | "not_https" | "blocked";
+      reason:
+        | "policy"
+        | "redirected"
+        | "invalid_input"
+        | "unreachable"
+        | "not_https"
+        | "blocked"
+        /** #2282: Reddit is throttling us; the subreddit itself is fine, so this is not "unreachable". */
+        | "rate_limited"
+        /** #2282: the subreddit is private, quarantined or otherwise gated. */
+        | "auth_required";
     }
   | { status: "unavailable" };
 
@@ -142,6 +162,17 @@ function htmlMetadata(html: string): {
     description: sanitizeFeedText(description, 300),
     canonicalUrl
   };
+}
+
+/** The hostname a URL is served from, lowercased, or null when it cannot be parsed. */
+function hostOf(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host.length > 0 ? host : null;
+  } catch {
+    return null;
+  }
 }
 
 function isFeed(contentType: string | null, body: string): boolean {
@@ -241,6 +272,14 @@ export async function resolveSourceInput(
 ): Promise<SourceResolutionResult> {
   const raw = input.raw.trim();
   const exclusions = (await deps.repo.listExclusions(scopedDb)).map((item) => item.canonicalDomain);
+  // #2282 Task 1.6: a subreddit is decided before anything else. It is never a publication, and
+  // it needs no web search, so a Reddit-shaped input must not fall through to publisher discovery
+  // or to the search prerequisite below.
+  const subredditInput = parseSubredditInput(raw);
+  if (subredditInput) {
+    if (subredditInput.kind === "invalid") return { status: "rejected", reason: "invalid_input" };
+    return resolveSubreddit(scopedDb, deps, subredditInput.name, exclusions);
+  }
   const normalized = normalizePublisherDomain(raw);
   const looksLikeUrl =
     /^[a-z][a-z0-9+.-]*:/i.test(raw) || (!raw.includes(" ") && raw.includes("."));
@@ -284,6 +323,106 @@ export async function resolveSourceInput(
   return providerUnavailable
     ? { status: "unavailable" }
     : { status: "rejected", reason: "unreachable" };
+}
+
+/**
+ * #2282 Task 1.6: whether a verified candidate is already saved. Every subreddit shares the
+ * canonical domain reddit.com, so comparing domains alone would call the user's second subreddit
+ * a duplicate of their first. Subreddits are matched on their feed address instead, ignoring
+ * Reddit's casing of the name; publications keep the domain rule and never match a subreddit row.
+ */
+export function findDuplicateCustomSource<
+  T extends {
+    readonly canonicalDomain: string;
+    readonly feedUrl: string | null;
+    readonly retrievalMethod: string;
+  }
+>(existing: readonly T[], candidate: VerifiedSourceCandidate): T | undefined {
+  if (candidate.retrievalMethod === "reddit") {
+    const feedUrl = candidate.feedUrl?.toLowerCase();
+    if (!feedUrl) return undefined;
+    return existing.find(
+      (source) => source.retrievalMethod === "reddit" && source.feedUrl?.toLowerCase() === feedUrl
+    );
+  }
+  return existing.find(
+    (source) =>
+      source.retrievalMethod !== "reddit" && source.canonicalDomain === candidate.canonicalDomain
+  );
+}
+
+/**
+ * #2282 Task 1.6: one subreddit to one verified candidate. The feed call carries identity and
+ * headlines together, so there is no second request. The content-policy verdict is cached per
+ * subreddit (`reddit.com/r/name`), never once for the whole of Reddit — approving r/one must
+ * never approve r/two.
+ */
+async function resolveSubreddit(
+  scopedDb: DataContextDb,
+  deps: {
+    fetchWithOptions?: NewsFetchPort;
+    ai: NewsAiPort;
+    repo: ResolutionRepo;
+  },
+  name: string,
+  exclusions: readonly string[]
+): Promise<SourceResolutionResult> {
+  // Excluding reddit.com excludes every subreddit; refuse before spending a request on it.
+  if (exclusions.some((excluded) => publisherDomainMatches(excluded, REDDIT_CANONICAL_DOMAIN))) {
+    return { status: "rejected", reason: "policy" };
+  }
+  // Wiring failure, not a user error: every route supplies the options-capable fetch.
+  if (!deps.fetchWithOptions) return { status: "unavailable" };
+
+  const read = await readSubreddit(deps.fetchWithOptions, name);
+  if (!read.ok) {
+    if (read.reason === "rate_limited") return { status: "rejected", reason: "rate_limited" };
+    if (read.reason === "auth_required") return { status: "rejected", reason: "auth_required" };
+    return { status: "rejected", reason: "unreachable" };
+  }
+
+  const displayName = read.subreddit.displayName;
+  const label = `r/${displayName}`;
+  const policy = await decideSourcePolicy(
+    scopedDb,
+    { ai: deps.ai, repo: deps.repo },
+    {
+      canonicalDomain: `${REDDIT_CANONICAL_DOMAIN}/r/${displayName.toLowerCase()}`,
+      description: sanitizeFeedText(
+        [label, read.subreddit.title, read.subreddit.description].filter(Boolean).join(" — "),
+        300
+      ),
+      sampleHeadlines: read.headlines
+        .slice(0, REDDIT_PREVIEW_SAMPLES)
+        .map((headline) => headline.title)
+    }
+  );
+  if (policy.verdict === "unavailable") return { status: "unavailable" };
+  if (policy.verdict === "rejected") return { status: "rejected", reason: "policy" };
+
+  return {
+    status: "ok",
+    candidates: [
+      {
+        candidateId: randomUUID(),
+        label,
+        canonicalDomain: REDDIT_CANONICAL_DOMAIN,
+        homepageUrl: redditSubredditUrl(displayName),
+        feedUrl: redditHotFeedUrl(displayName),
+        retrievalMethod: "reddit",
+        sampleCount: Math.min(REDDIT_PREVIEW_SAMPLES, read.headlines.length),
+        validationFingerprint: policy.fingerprint,
+        redirectNote: null,
+        // Reddit's own host, not one derived from a publisher URL.
+        confirmedFetchHosts: [...REDDIT_FETCH_HOSTS],
+        // The Atom feed only carries Reddit's generic site icon, never the subreddit's own.
+        iconUrl: null,
+        // A subreddit is read from Reddit by design, so it is never a workaround feed.
+        workaround: false,
+        feedHost: null
+      }
+    ]
+  };
 }
 
 async function verifyPublisher(
@@ -428,6 +567,9 @@ async function verifyPublisher(
   if (policy.verdict === "rejected") {
     return { status: "failed", result: { status: "rejected", reason: "policy" } };
   }
+  // #2282 Task 1.6: the hosts and the mirror-feed judgement are settled here, while the fetches
+  // that proved them are still in hand, instead of being re-derived when the user confirms.
+  const workaround = isWorkaroundFeed(domain.domain, feedUrl);
   return {
     status: "candidate",
     candidate: {
@@ -439,7 +581,11 @@ async function verifyPublisher(
       retrievalMethod: feedUrl ? "feed" : "scrape",
       sampleCount: headlines.length,
       validationFingerprint: policy.fingerprint,
-      redirectNote
+      redirectNote,
+      confirmedFetchHosts: deriveFetchHosts([homepageUrl, feedUrl]),
+      iconUrl: null,
+      workaround,
+      feedHost: workaround ? hostOf(feedUrl) : null
     }
   };
 }
