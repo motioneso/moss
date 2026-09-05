@@ -28,10 +28,10 @@ import { ConnectPublisherForm } from "./connect-publisher.js";
  * Unknown keys fall back to generic copy rather than leaking the key to the user.
  */
 const PREVIEW_REJECTION_COPY: Record<string, string> = {
-  policy: "That publication isn't allowed by the content policy.",
+  policy: "That source isn't allowed by the content policy.",
   redirected:
     "That site redirects somewhere else, so we can't add it. Try the address it sends you to.",
-  invalid_input: "That doesn't look like a publication we can check — try a homepage link.",
+  invalid_input: "That doesn't look like a source we can check — try a homepage link.",
   unreachable: "We couldn't reach that site. Check the address and try again.",
   not_https: "Only HTTPS links or bare domains are accepted.",
   blocked: "That site doesn't allow automatic access, so we can't add it.",
@@ -45,13 +45,16 @@ const PREVIEW_REJECTION_COPY: Record<string, string> = {
  * structured `error` (rendered by `NewsAddSourceError` instead — this helper never guesses
  * settings-specific remediation copy).
  */
+/** The generic copy shown when the preview request itself failed (no structured reason). */
+export const PREVIEW_REQUEST_ERROR_MESSAGE = "Could not check that source. Try again.";
+
 export function previewOutcomeMessage(result: NewsSourcePreviewResponse): string | null {
   switch (result.status) {
     case "rejected":
     case "invalid":
       return (
         (result.reason ? PREVIEW_REJECTION_COPY[result.reason] : undefined) ??
-        "That publication can't be added."
+        "That source can't be added."
       );
     default:
       return null;
@@ -168,13 +171,13 @@ export function AddSourceFlow() {
   const errorMessage =
     previewFailure ??
     confirmFailure ??
-    (previewMutation.isError ? "Could not check that publication. Try again." : null);
+    (previewMutation.isError ? PREVIEW_REQUEST_ERROR_MESSAGE : null);
 
   return (
     <div className="nw-set__addflow">
       <form className="nw-set__exform" onSubmit={submitPreview}>
         <label className="nw-set__exlabel" htmlFor="nw-addsource-input">
-          Publication homepage or domain
+          Source homepage or domain
         </label>
         <div className="nw-set__exrow">
           <input
@@ -182,7 +185,7 @@ export function AddSourceFlow() {
             className="jds-input"
             type="text"
             value={input}
-            placeholder="theatlantic.com"
+            placeholder="politico.com or r/technology"
             disabled={busy}
             onChange={(event) => {
               setInput(event.target.value);
