@@ -517,6 +517,8 @@ export interface AiConfiguredModelsTable {
     AiConfiguredModelOrigin | undefined,
     AiConfiguredModelOrigin
   >;
+  /** The provider's own release date for the model when its list gives one; null otherwise. */
+  released_at: NullableTimestampColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
