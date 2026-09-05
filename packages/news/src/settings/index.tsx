@@ -520,7 +520,7 @@ export default function NewsSettings() {
     <>
       <PaneHead
         title="News"
-        desc="Pick the publications your front page draws from, and optionally narrow it to the topics you follow. These choices also shape news in briefings."
+        desc="Pick the sources your front page draws from, and optionally narrow it to the topics you follow. These choices also shape news in briefings."
       />
 
       <section className="nw-set" aria-label="Topics">
@@ -534,13 +534,13 @@ export default function NewsSettings() {
         <div className="nw-set__group">
           <div className="nw-set__group-head">
             <h3 className="nw-set__subheading">
-              <span>Topics from your publications</span>
+              <span>Topics from your sources</span>
               {topics.length > 0 ? <Badge tone="neutral">{topics.length}</Badge> : null}
             </h3>
           </div>
           <p className="nw-set__hint">
-            Narrow your enabled publications to these desks. With none followed you get each
-            publication&rsquo;s general front page.
+            Narrow your enabled sources to these desks. With none followed you get each
+            source&rsquo;s general front page.
           </p>
           <div className="nw-set__chips">
             {topics.map((topic: NewsTopicOption) => {
@@ -605,7 +605,7 @@ export default function NewsSettings() {
         <div className="nw-set__group">
           <div className="nw-set__group-head">
             <h3 className="nw-set__subheading">
-              <span>Built-in publications</span>
+              <span>Built-in sources</span>
               <Badge tone="neutral">{sources.length}</Badge>
             </h3>
           </div>
@@ -651,12 +651,13 @@ export default function NewsSettings() {
           <div className="nw-set__group">
             <div className="nw-set__group-head">
               <h3 className="nw-set__subheading">
-                <span>Publications you add</span>
+                <span>Sources you add</span>
                 <Badge tone="neutral">{customSources.length}</Badge>
               </h3>
             </div>
             <p className="nw-set__hint">
-              Publications you add yourself, verified before they join your feed.
+              Sources you add yourself, verified before they join your feed. Verified sources
+              contribute recent headlines to News and briefings.
             </p>
             {availability ? (
               <p className="nw-set__prereq">
