@@ -24,7 +24,7 @@ export const scratchpadModuleManifest = {
     required: true
   },
   database: {
-    migrations: ["sql/0214_scratchpads.sql"],
+    migrations: ["sql/0216_scratchpads.sql"],
     migrationDirectories: ["packages/scratchpad/sql"],
     ownedTables: ["app.scratchpads"]
   },
