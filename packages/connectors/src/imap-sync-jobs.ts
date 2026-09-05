@@ -164,6 +164,10 @@ export async function runImapSync(
         );
         emailUpserted += 1;
       } catch (error) {
+        // Each message opens a fresh connection, so a password revoked after the listing
+        // step surfaces here rather than from listMessageKeys — let it reach the sign-in
+        // handling below instead of being folded into a per-message error.
+        if (isImapSignInRefused(error)) throw error;
         emailFailures += 1;
         if (!errors.includes("email-message-error")) errors.push("email-message-error");
         logger.warn(

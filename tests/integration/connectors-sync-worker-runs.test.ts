@@ -189,38 +189,56 @@ describe("real sync runs record their own health (#2239 slice 1)", () => {
     expect(JSON.stringify(row?.last_sync_counts ?? {})).not.toContain("refresh refused");
   });
 
-  it("an email-account run the mail server refuses to sign in to is recorded as a failed run", async () => {
-    const accountId = await createImapAccount();
+  it.each(["listing the mailbox", "opening a message"])(
+    "an email-account run the mail server refuses to sign in to while %s is recorded as a failed run",
+    async (stage) => {
+      const logs: unknown[] = [];
+      const accountId = await createImapAccount();
 
-    // The mail server itself refuses the saved password, the way a rotated or revoked
-    // mailbox password really fails: authentication is refused on connect, inside the
-    // first read call.
-    const result = await workerContext.withDataContext(context(), (scopedDb) =>
-      runImapSync(scopedDb, accountId, {
-        ...imapDeps("2026-09-04T12:00:00.000Z", []),
-        emailReadProvider: {
-          listFolders: async () => {
-            throw imapAuthenticationFailure();
+      // The mail server itself refuses the saved password, the way a rotated or revoked
+      // mailbox password really fails: authentication is refused on connect. When the
+      // refusal happens while opening a message, the message list came back fine first —
+      // each message opens its own connection, so a password revoked after listing still
+      // has to be caught as a sign-in failure, not a single bad message.
+      const result = await workerContext.withDataContext(context(), (scopedDb) =>
+        runImapSync(scopedDb, accountId, {
+          ...imapDeps("2026-09-04T12:00:00.000Z", []),
+          logger: {
+            warn: (...args: unknown[]) => {
+              logs.push(args);
+            },
+            info: (...args: unknown[]) => {
+              logs.push(args);
+            }
           },
-          listMessageKeys: async () => {
-            throw imapAuthenticationFailure();
-          },
-          getMessage: async () => {
-            throw imapAuthenticationFailure();
+          emailReadProvider: {
+            listFolders: async () => {
+              if (stage === "opening a message") return ["INBOX"];
+              throw imapAuthenticationFailure();
+            },
+            listMessageKeys: async () => {
+              if (stage === "opening a message") return [{ folder: "INBOX", id: "imap:INBOX:1:1" }];
+              throw imapAuthenticationFailure();
+            },
+            getMessage: async () => {
+              throw imapAuthenticationFailure();
+            }
           }
-        }
-      })
-    );
-    expect(result.errors).toEqual(["auth-error"]);
+        })
+      );
+      expect(result.errors).toEqual(["auth-error"]);
 
-    const row = await accountRow(accountId);
-    expect(row?.last_sync_status).toBe("failed");
-    expect(row?.last_sync_error).toBe("auth-error");
-    // The bounded label only — never the mailbox password or the server's own text.
-    const stored = JSON.stringify(row?.last_sync_counts ?? {});
-    expect(stored).not.toContain("secret");
-    expect(stored).not.toContain("Invalid credentials");
-  });
+      const row = await accountRow(accountId);
+      expect(row?.last_sync_status).toBe("failed");
+      expect(row?.last_sync_error).toBe("auth-error");
+      // The bounded label only — never the mailbox password or the server's own text.
+      const stored = JSON.stringify(row?.last_sync_counts ?? {});
+      expect(stored).not.toContain("secret");
+      expect(stored).not.toContain("Invalid credentials");
+      expect(JSON.stringify(logs)).not.toContain("secret");
+      expect(JSON.stringify(logs)).not.toContain("Invalid credentials");
+    }
+  );
 
   it("a continuation chunk of a real run leaves the earlier run as the previous run", async () => {
     const accountId = await createGoogleAccount();
