@@ -301,3 +301,55 @@ implementation; no PR is open. Branch head is the commit that adds this section.
 ### Task 1.5
 
 Unchanged from the previous lane notes above.
+
+## Lane notes: build-2282-p1a2b stop (2026-09-05)
+
+PLAIN ENGLISH RULE for whoever picks this up: every message to a human is plain English. No
+jargon, no coined shorthand, ASCII punctuation only, at most one backtick per sentence.
+
+Stopped at the 70 percent context warning per brief (no relay). No PR is open yet.
+
+### Task 1.3: still unproven, never run
+
+The box 1-minute load sat between 19 and 34 for the whole lane, so the integration run was
+never started (the brief says wait under 12). Nothing about task 1.3 changed. The exact command
+from the p1a2 notes still applies; the file now also carries three task 1.4 cases, so one run
+proves both tasks (21 server-booting cases plus the posture describe).
+
+### Task 1.4: built in commit `77fbe2b37`, partly verified
+
+- Unit file tests/unit/news-personalization-repository.test.ts: 18 pass (was red).
+- `tsc -p tsconfig.tests.json --noEmit`: exit 0.
+- `pnpm typecheck`: exit 2, all 10 errors in tests/unit/news-compile.test.ts (lines 120, 135,
+  151, 161, 168, 208, 233, 240 and two more): the deps object passed to compilePersonalizedNews
+  is not assignable, "repo: CompilationRepository". The repo fake at :44-56 already has
+  recordWorkaroundRefreshOutcome added; the likely remaining cause is the sources list
+  (options.sources) typed without the new required DTO field workaround, or a second fake in
+  that file. Read the first error in full (it is truncated at 220 chars in /tmp/t14-tsc.log).
+- eslint and prettier NOT yet run on the changed files. Run both on the 16 files in the commit.
+- Integration cases for the failure count written at
+  tests/integration/news-personalization-repository.test.ts:935 onward (three cases), unproven.
+
+Seams on this branch:
+- packages/news/src/source/workaround.ts: isWorkaroundFeed and deriveFetchHosts (new file).
+- packages/news/src/personalization-repository.ts:203 createCustomSource (untargeted conflict,
+  branched probe); :328 recordWorkaroundRefreshOutcome; :880 the DTO workaround derivation
+  (only a feed row can be a workaround).
+- packages/shared/src/news-api.ts: NewsCustomSourceDto.workaround plus schema property and
+  required entry.
+- Callers now pass confirmedFetchHosts and iconUrl null: personalization-routes.ts (store
+  interface and the confirm write), credential-routes.ts (adds descriptor.host).
+- compile.ts CompilationRepository and candidates.ts CandidateRepository pick the new method;
+  six unit fakes gained a no-op for it.
+
+### Next lane, in order
+
+1. Fix the news-compile.test.ts typecheck, run eslint and prettier on the changed files,
+   amend nothing: add a fix commit.
+2. When load is under 12, run the one integration file (background, log under /tmp), expect
+   exit 0 with 21 cases plus posture. That proves 1.3 and 1.4 together.
+3. Open the draft PR (Category: N/A), then task 1.5 belongs to a later lane.
+
+### Task 1.5
+
+Unchanged from the p1a notes above.
