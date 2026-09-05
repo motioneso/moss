@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-05
+
+#### Fixed
+
+- **Chat settings "Set up" link opens Assistant & AI.** The Set up link under Voice input in Chat settings now opens the Assistant & AI page instead of Account & preferences. [PR #2220](https://github.com/motioneso/moss/pull/2220)
+
 ### 2026-09-04
 
 #### Changed
