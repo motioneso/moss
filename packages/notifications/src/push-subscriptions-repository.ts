@@ -14,7 +14,7 @@ export class PushSubscriptionLimitError extends Error {
 }
 
 /**
- * All tables here are RLS-scoped to `app.current_actor_user_id()` (migration 0214), so
+ * All tables here are RLS-scoped to `app.current_actor_user_id()` (migration 0223), so
  * every method here is implicitly owner-scoped: the settings page reads/writes its own
  * user's rows, and the delivery worker (running in the recipient's data context) reads
  * and cleans up that same recipient's rows. No method takes an explicit owner id.

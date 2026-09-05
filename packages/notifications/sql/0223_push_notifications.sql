@@ -1,4 +1,4 @@
--- Migration 0214: Web push subscriptions and signing key (Issue #743 / #2227)
+-- Migration 0223: Web push subscriptions and signing key (Issue #743 / #2227)
 
 CREATE TABLE IF NOT EXISTS app.push_subscriptions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

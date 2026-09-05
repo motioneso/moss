@@ -61,10 +61,10 @@ Every capability this plan assumes exists is cited `file:line` from the current 
 
 ## 4. Design Decisions & Technical Contracts
 
-### 4.1 SQL Migration (`packages/notifications/sql/0214_push_notifications.sql`)
+### 4.1 SQL Migration (`packages/notifications/sql/0223_push_notifications.sql`)
 
 ```sql
--- Migration 0214: Web push subscriptions and signing key (Issue #743 / #2227)
+-- Migration 0223: Web push subscriptions and signing key (Issue #743 / #2227)
 
 CREATE TABLE IF NOT EXISTS app.push_subscriptions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -291,7 +291,7 @@ Replaces the `Coming soon · #743` row with:
 ## 5. Tasks & Phasing
 
 ### Phase 1: Data Model, Secret Cipher & Shared API Schemas
-- **Task 1:** Add SQL migration `packages/notifications/sql/0214_push_notifications.sql`. Update manifest database declarations and typescript types.
+- **Task 1:** Add SQL migration `packages/notifications/sql/0223_push_notifications.sql`. Update manifest database declarations and typescript types.
 - **Task 2:** Add shared API schemas and DTOs in `packages/shared/src/notifications-api.ts`. Export in `packages/shared/src/index.ts`.
 - **Task 3:** Add push secret cipher and key generator in `packages/notifications/src/push-crypto.ts`. Add unit tests in `tests/unit/push-crypto.test.ts`.
 

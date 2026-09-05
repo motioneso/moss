@@ -53,7 +53,7 @@ interface PushSigningKeyRow {
  * call. `subject` (a `mailto:` or `https:` VAPID contact) is only used the first time the
  * key is created — later calls ignore it and return the stored subject, so the instance
  * keeps one identity even if the origin that first enabled push differs from a later one.
- * A unique constraint on the fixed row id (migration 0214) makes two racing first-enables
+ * A unique constraint on the fixed row id (migration 0223) makes two racing first-enables
  * converge on one key: whichever insert wins, the loser's `ON CONFLICT DO NOTHING` is a
  * no-op and the final SELECT reads the winner's row.
  */
