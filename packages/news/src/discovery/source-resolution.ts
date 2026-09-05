@@ -395,7 +395,8 @@ async function resolveSubreddit(
       sampleHeadlines: read.headlines
         .slice(0, REDDIT_PREVIEW_SAMPLES)
         .map((headline) => headline.title)
-    }
+    },
+    { subjectKind: "community" }
   );
   if (policy.verdict === "unavailable") return { status: "unavailable" };
   if (policy.verdict === "rejected") return { status: "rejected", reason: "policy" };
