@@ -273,7 +273,7 @@ export function DescribeTopics(props: {
           })}
         </ul>
       ) : (
-        <p className="nw-set__hint">News still uses your selected publications.</p>
+        <p className="nw-set__hint">News still uses your selected sources.</p>
       )}
       {removeMutation.isError ? (
         <p className="nw-set__exerr" role="alert">

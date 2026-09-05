@@ -179,7 +179,7 @@ test("described topics: empty state, create via Enter, edit, and remove", async 
   await page.goto("/settings?section=modules&module=news");
   await expect(page.getByRole("heading", { name: "News" })).toBeVisible();
   await expect(page.getByText("Topics across the web")).toBeVisible();
-  await expect(page.getByText("News still uses your selected publications.")).toBeVisible();
+  await expect(page.getByText("News still uses your selected sources.")).toBeVisible();
 
   // Create via Enter from the label input (no explicit button click).
   await page.getByRole("button", { name: "Add a topic" }).click();
@@ -240,7 +240,7 @@ test("described topics: empty state, create via Enter, edit, and remove", async 
   ]);
   expect(deleteRequest.method()).toBe("DELETE");
   await expect(page.getByRole("status")).toContainText("Topic removed");
-  await expect(page.getByText("News still uses your selected publications.")).toBeVisible();
+  await expect(page.getByText("News still uses your selected sources.")).toBeVisible();
 });
 
 test("topic success waits for the refreshed row before announcing completion", async ({ page }) => {
@@ -526,7 +526,7 @@ test.describe("publisher keys (#2008)", () => {
 
     await page.goto("/settings?section=modules&module=news");
     await page.getByRole("button", { name: "Add a source" }).click();
-    const input = page.getByLabel("Publication homepage or domain");
+    const input = page.getByLabel("Source homepage or domain");
 
     // An ordinary publication: the existing add path, and no key box anywhere.
     await input.fill("theatlantic.com");
@@ -604,7 +604,7 @@ test.describe("publisher keys (#2008)", () => {
 
     await page.goto("/settings?section=modules&module=news");
     await page.getByRole("button", { name: "Add a source" }).click();
-    await page.getByLabel("Publication homepage or domain").fill("newsapi.org");
+    await page.getByLabel("Source homepage or domain").fill("newsapi.org");
     await page.getByRole("button", { name: "Check" }).click();
     await page.getByLabel("Access key").fill(FAKE_KEY);
     await page.getByLabel("I have permission to use this key here.").check();
@@ -854,7 +854,7 @@ test.describe("publisher keys (#2008)", () => {
 
     await page.goto("/settings?section=modules&module=news");
     await page.getByRole("button", { name: "Add a source" }).click();
-    await page.getByLabel("Publication homepage or domain").fill("newsapi.org");
+    await page.getByLabel("Source homepage or domain").fill("newsapi.org");
     await page.getByRole("button", { name: "Check" }).click();
     await page.getByLabel("Access key").fill(FAKE_KEY);
     await page.getByLabel("I have permission to use this key here.").check();
@@ -870,5 +870,96 @@ test.describe("publisher keys (#2008)", () => {
     releaseConnect?.();
     await expect(page.getByText("News will use this source on its next refresh.")).toBeVisible();
     expect(confirmCalls).toBe(0);
+  });
+});
+
+/* #2282 — adding a subreddit as a source, in a real browser. */
+
+test.describe("subreddit sources (#2282)", () => {
+  test("adding r/technology previews, confirms, and shows the saved row", async ({ page }) => {
+    const REDDIT_SOURCE = {
+      id: "33333333-3333-3333-3333-333333333333",
+      label: "r/technology",
+      canonicalDomain: "reddit.com",
+      homepageUrl: "https://www.reddit.com/r/technology",
+      feedUrl: null,
+      retrievalMethod: "reddit" as const,
+      workaround: false,
+      validationStatus: "approved" as const,
+      healthStatus: "healthy" as const,
+      createdAt: "2026-09-05T00:00:00.000Z"
+    };
+
+    let saved = false;
+
+    await page.route("**/api/news/sources/preview", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          status: "ok",
+          confirmationId: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+          candidates: [
+            {
+              label: "r/technology",
+              canonicalDomain: "reddit.com",
+              homepageUrl: "https://www.reddit.com/r/technology",
+              retrievalMethod: "reddit",
+              sampleCount: 10
+            }
+          ],
+          candidateIds: ["ffffffff-ffff-ffff-ffff-ffffffffffff"]
+        })
+      })
+    );
+
+    await page.route("**/api/news/sources", (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      saved = true;
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({ source: REDDIT_SOURCE })
+      });
+    });
+
+    await page.route("**/api/news/personalization", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          availability: {
+            aiConfigured: true,
+            webSearchConfigured: true,
+            customSourceByUrlEnabled: true,
+            customSourceByNameEnabled: true,
+            freeformTopicsEnabled: true
+          },
+          customSources: saved ? [REDDIT_SOURCE] : [],
+          customTopics: [],
+          sourceExclusions: [],
+          snapshot: null,
+          refresh: { state: "idle", updatedAt: null }
+        })
+      })
+    );
+
+    await page.goto("/settings?section=modules&module=news");
+    await expect(page.getByRole("heading", { name: "News" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Add a source" }).click();
+    const input = page.getByLabel("Source homepage or domain");
+    await expect(input).toBeVisible();
+    await input.fill("r/technology");
+    await page.getByRole("button", { name: "Check" }).click();
+
+    await expect(page.getByText("r/technology", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("reddit.com", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Add this source" }).click();
+
+    await expect(page.getByText("Source added", { exact: false })).toBeVisible();
+    await expect(page.getByText("Sources you add", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove r/technology" })).toBeVisible();
   });
 });

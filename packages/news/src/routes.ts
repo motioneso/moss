@@ -23,6 +23,7 @@ import { NewsService, type NewsPrefsReader } from "./news-service.js";
 import type {
   NewsAiPort,
   NewsFaviconFetchPort,
+  NewsFetchPort,
   NewsImageFetchPort,
   NewsSafeFetchPort,
   NewsWebSearchPort
@@ -79,6 +80,8 @@ export interface NewsRoutesDependencies {
   readonly availability: NewsPersonalizationAvailabilityPort;
   readonly discovery: {
     readonly fetch: NewsSafeFetchPort;
+    /** #2282: the options-capable port the Reddit reader and feed finder use; `fetch` stays URL-only. */
+    readonly fetchWithOptions: NewsFetchPort;
     readonly image: NewsImageFetchPort;
     /** #2291: favicon bytes without the robots gate; see NewsFaviconFetchPort. */
     readonly favicon: NewsFaviconFetchPort;
@@ -250,6 +253,7 @@ export function registerNewsRoutes(
     previews,
     discovery: {
       fetch: dependencies.discovery.fetch,
+      fetchWithOptions: dependencies.discovery.fetchWithOptions,
       search: dependencies.discovery.search,
       ai: dependencies.discovery.ai
     },
