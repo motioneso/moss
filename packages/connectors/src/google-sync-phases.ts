@@ -566,6 +566,12 @@ export async function runGoogleEmailPhase(
         threadJudgementRequester: context.deps.threadJudgementRequester
       });
       await projectKeys(projectedKeys);
+      // These messages just went through extraction without a retryable error, so any of them
+      // still marked deferred from an earlier attempt on this run are resolved now.
+      for (const key of inFlightKeys) {
+        context.progress.deferredKeys.delete(key);
+      }
+      context.progress.emailDeferred = context.progress.deferredKeys.size;
       processed += batch.length;
       context.logger.info(
         {
