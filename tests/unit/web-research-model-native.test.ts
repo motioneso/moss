@@ -52,7 +52,11 @@ describe("createModelNativeProvider", () => {
     const runner: ModelNativeSearchRunner = async () => ({
       object: {
         results: [
-          { title: "Widget 4 release notes", url: "https://example.com/widget-4", snippet: "New in this release." }
+          {
+            title: "Widget 4 release notes",
+            url: "https://example.com/widget-4",
+            snippet: "New in this release."
+          }
         ]
       }
     });
@@ -61,7 +65,11 @@ describe("createModelNativeProvider", () => {
     const output = await provider.search({ query: "widget 4", limit: 5 });
 
     expect(output.results).toEqual([
-      { title: "Widget 4 release notes", url: "https://example.com/widget-4", snippet: "New in this release." }
+      {
+        title: "Widget 4 release notes",
+        url: "https://example.com/widget-4",
+        snippet: "New in this release."
+      }
     ]);
     expect(output.trace).toMatchObject({ provider: "model-native", count: 1 });
   });
@@ -80,7 +88,9 @@ describe("createModelNativeProvider", () => {
 
     const output = await provider.search({ query: "q", limit: 5 });
 
-    expect(output.results).toEqual([{ title: "Good", url: "https://example.com/good", snippet: "ok" }]);
+    expect(output.results).toEqual([
+      { title: "Good", url: "https://example.com/good", snippet: "ok" }
+    ]);
   });
 
   it("merges provider-attached citations that were not repeated in the parsed JSON body", async () => {

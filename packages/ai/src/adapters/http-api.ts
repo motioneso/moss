@@ -264,9 +264,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
           if (!textPart) {
             throw new Error("No output text in OpenAI responses payload");
           }
-          const citations = (textPart.annotations ?? []).filter(
-            (a) => a.type === "url_citation"
-          );
+          const citations = (textPart.annotations ?? []).filter((a) => a.type === "url_citation");
           const sources = dedupeSources(citations.map((c) => normalizeSource(c)));
           return {
             text: textPart.text ?? "",

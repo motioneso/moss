@@ -19,7 +19,13 @@ function buildResolver(overrides: {
   engine?: "brave" | "model-native" | "none";
   generate?: ReturnType<typeof vi.fn>;
 }) {
-  const generate = overrides.generate ?? vi.fn(async () => ({ ok: true, object: { results: [] }, usage: { inputTokens: 0, outputTokens: 0 } }));
+  const generate =
+    overrides.generate ??
+    vi.fn(async () => ({
+      ok: true,
+      object: { results: [] },
+      usage: { inputTokens: 0, outputTokens: 0 }
+    }));
   const model = overrides.model === undefined ? searchingModel : overrides.model;
   const resolver = buildModelNativeSearchResolver({
     repository: {

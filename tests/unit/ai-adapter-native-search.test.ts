@@ -22,7 +22,9 @@ describe("HttpApiAdapter native search — anthropic", () => {
   it("adds the web_search tool and extracts citations from text blocks", async () => {
     const fakeFetch = async (url: string | URL | Request, init?: RequestInit) => {
       const body = JSON.parse((init?.body as string) ?? "{}");
-      expect(body.tools).toEqual([{ type: "web_search_20250305", name: "web_search", max_uses: 5 }]);
+      expect(body.tools).toEqual([
+        { type: "web_search_20250305", name: "web_search", max_uses: 5 }
+      ]);
 
       return new Response(
         JSON.stringify({
@@ -38,7 +40,9 @@ describe("HttpApiAdapter native search — anthropic", () => {
       );
     };
 
-    const adapter = new HttpApiAdapter("anthropic", "sk-test", { fetch: fakeFetch as typeof fetch });
+    const adapter = new HttpApiAdapter("anthropic", "sk-test", {
+      fetch: fakeFetch as typeof fetch
+    });
     const out = await adapter.generateChat({
       model: anthropicModel,
       messages: [{ role: "user", content: "why is the sky blue?" }],
@@ -58,7 +62,9 @@ describe("HttpApiAdapter native search — anthropic", () => {
       });
     };
 
-    const adapter = new HttpApiAdapter("anthropic", "sk-test", { fetch: fakeFetch as typeof fetch });
+    const adapter = new HttpApiAdapter("anthropic", "sk-test", {
+      fetch: fakeFetch as typeof fetch
+    });
     const out = await adapter.generateChat({ model: anthropicModel, messages: [] });
     expect(out.sources).toBeUndefined();
   });
@@ -139,8 +145,6 @@ describe("HttpApiAdapter native search — google", () => {
     });
 
     expect(out.text).toBe("It rains a lot in Seattle.");
-    expect(out.sources).toEqual([
-      { title: "Seattle weather", url: "https://example.com/seattle" }
-    ]);
+    expect(out.sources).toEqual([{ title: "Seattle weather", url: "https://example.com/seattle" }]);
   });
 });

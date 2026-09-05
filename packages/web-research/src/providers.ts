@@ -251,7 +251,9 @@ export function setWebSearchKeyResolver(
 }
 
 /** Composition-root seam: install the resolver for model-native (built-in) search. */
-export function setModelNativeSearchResolver(resolver: ModelNativeSearchResolver | undefined): void {
+export function setModelNativeSearchResolver(
+  resolver: ModelNativeSearchResolver | undefined
+): void {
   modelNativeResolver = resolver;
 }
 

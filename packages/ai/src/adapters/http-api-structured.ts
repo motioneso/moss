@@ -68,7 +68,11 @@ export type GenerateStructuredProviderInput = {
 };
 
 export type StructuredProviderResult =
-  | { readonly rawObject: unknown; readonly usage: StructuredUsage; readonly sources?: readonly StructuredSource[] }
+  | {
+      readonly rawObject: unknown;
+      readonly usage: StructuredUsage;
+      readonly sources?: readonly StructuredSource[];
+    }
   | { readonly rawText: string; readonly usage: StructuredUsage };
 
 export class StructuredOutputParseError extends Error {

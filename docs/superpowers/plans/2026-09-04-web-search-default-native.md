@@ -62,6 +62,7 @@ If the resolver tests fail to correctly establish precedence between Brave Searc
 3. Implement engine resolver:
    - File: `packages/settings/src/web-search-engine-resolver.ts`
      Export function signature:
+
      ```ts
      export type WebSearchEngineResolution =
        | { readonly engine: "brave" }
@@ -83,6 +84,7 @@ If the resolver tests fail to correctly establish precedence between Brave Searc
        env?: NodeJS.ProcessEnv
      ): Promise<WebSearchEngineResolution>;
      ```
+
    - Export helper functions to read and write the native search switch:
      ```ts
      export async function readNativeSearchEnabled(scopedDb: DataContextDb): Promise<boolean>;
@@ -92,6 +94,7 @@ If the resolver tests fail to correctly establish precedence between Brave Searc
        input: { enabled: boolean; actorUserId: string; requestId: string }
      ): Promise<void>;
      ```
+
 4. Update web search setting contract and routes:
    - File: `packages/shared/src/web-search-api.ts`
      Add `nativeSearchEnabled: boolean` to `WebSearchKeyStatusDto`.
@@ -108,12 +111,14 @@ If the resolver tests fail to correctly establish precedence between Brave Searc
      - Returns model-native when Brave key is absent, switch is true, and chat model has web-search.
      - Returns model-has-no-search when Brave key is absent, switch is true, and chat model lacks web-search.
      - Returns no-key-no-native-model when Brave key is absent, switch is true, and chat model is null.
-     Why it fails if broken: any inverted precedence or wrong reason tag triggers an assertion failure.
+       Why it fails if broken: any inverted precedence or wrong reason tag triggers an assertion failure.
 
 Verification:
+
 ```bash
 pnpm exec vitest run tests/unit/web-search-engine-resolver.test.ts > /tmp/phase1-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: 0.
 
 ## Phase 2: Model Discovery and Capability Marking
@@ -143,12 +148,14 @@ Expected exit code: 0.
      - gemini-2.0-flash, gemini-2.5-pro get web-search.
      - gemini-1.5-pro does not get web-search.
      - CLI models, Ollama models, and custom models do not get web-search.
-     Why it fails if broken: regression in capability inference immediately fails family assertions.
+       Why it fails if broken: regression in capability inference immediately fails family assertions.
 
 Verification:
+
 ```bash
 pnpm exec vitest run tests/unit/ai-model-discovery-web-search.test.ts > /tmp/phase2-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: 0.
 
 ## Phase 3: Provider Adapters with Native Search
@@ -189,9 +196,11 @@ Expected exit code: 0.
      Why it fails if broken: checks assert exact wire payloads and citation normalization.
 
 Verification:
+
 ```bash
 pnpm exec vitest run tests/unit/ai-adapter-native-search.test.ts > /tmp/phase3-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: 0.
 
 ## Phase 4: Model-Native Provider in Web-Research
@@ -218,9 +227,11 @@ Expected exit code: 0.
      Why it fails if broken: catches broken result mappings and missing citations.
 
 Verification:
+
 ```bash
 pnpm exec vitest run tests/unit/web-research-model-native.test.ts > /tmp/phase4-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: 0.
 
 ## Phase 5: News Module Integration
@@ -246,9 +257,11 @@ Expected exit code: 0.
      Why it fails if broken: catches unauthorized access or incorrect gate text mapping.
 
 Verification:
+
 ```bash
 pnpm exec vitest run tests/unit/news-availability-web-search.test.ts > /tmp/phase5-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: 0.
 
 ## Phase 6: User Interface and App Map Truthfulness
@@ -263,7 +276,7 @@ Expected exit code: 0.
      - "On, using Brave"
      - "On, using each person's chat model"
      - "Off. Add a Brave key or turn on built-in search."
-     Describe Brave Search field as "Enhanced: consistent results for every model, including local ones."
+       Describe Brave Search field as "Enhanced: consistent results for every model, including local ones."
 2. Update Chat model picker:
    - File: `apps/web/src/settings/settings-ai-pane.tsx`
      Display "Web search" chip for models with the capability.
@@ -277,9 +290,11 @@ Expected exit code: 0.
    - Run token and UI catalogue checks.
 
 Verification:
+
 ```bash
 pnpm check:design-tokens > /tmp/phase6-tokens.log 2>&1; echo "EXIT=$?"
 pnpm check:ui-catalogue > /tmp/phase6-ui.log 2>&1; echo "EXIT=$?"
 pnpm build:app-map > /tmp/phase6-appmap.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: 0.
