@@ -977,6 +977,23 @@ export interface CommitmentCandidatesTable {
   expires_at: NullableTimestampColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
+  // 0216 (email chief of staff): email-thread candidates. thread_ref is unique per owner; the
+  // judgement never stores a body, only the capped why lines and the proposed actions.
+  counterparty_person_id: ColumnType<string | null, string | null | undefined, string | null>;
+  counterparty_address: ColumnType<string | null, string | null | undefined, string | null>;
+  proposed_actions: JsonColumn;
+  why_lines: ColumnType<string[], string[] | undefined, string[]>;
+  thread_ref: ColumnType<string | null, string | null | undefined, string | null>;
+  last_judged_external_id: ColumnType<string | null, string | null | undefined, string | null>;
+  stale: ColumnType<boolean, boolean | undefined, boolean>;
+}
+
+export interface CommitmentEmailThreadJudgementsTable {
+  owner_user_id: string;
+  thread_ref: string;
+  last_judged_external_id: string;
+  outcome: "no_item" | "item";
+  judged_at: TimestampColumn;
 }
 
 export interface CommitmentCandidateSourcesTable {
@@ -1463,6 +1480,7 @@ export interface MossDatabase {
   "app.commitment_candidate_sources": CommitmentCandidateSourcesTable;
   "app.commitment_candidate_events": CommitmentCandidateEventsTable;
   "app.commitment_extraction_state": CommitmentExtractionStateTable;
+  "app.commitment_email_thread_judgements": CommitmentEmailThreadJudgementsTable;
   "app.workflow_runs": WorkflowRunsTable;
   "app.workflow_step_runs": WorkflowStepRunsTable;
   "app.workflow_approvals": WorkflowApprovalsTable;

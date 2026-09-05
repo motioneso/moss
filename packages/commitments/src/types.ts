@@ -1,3 +1,5 @@
+import type { ProposedCommitmentAction } from "@moss/module-sdk";
+
 export type CommitmentCandidateKind = "deadline" | "promise" | "obligation" | "intent";
 export type CommitmentCandidateStatus =
   | "pending_review"
@@ -34,6 +36,14 @@ export interface CommitmentCandidate {
   readonly expiresAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  // Email-thread candidates only (spec 2026-09-04-email-chief-of-staff); absent elsewhere.
+  readonly counterpartyPersonId?: string | null;
+  readonly counterpartyAddress?: string | null;
+  readonly proposedActions?: readonly ProposedCommitmentAction[];
+  readonly whyLines?: readonly string[];
+  readonly threadRef?: string | null;
+  readonly lastJudgedExternalId?: string | null;
+  readonly stale?: boolean;
 }
 
 export interface CommitmentCandidateSource {
@@ -68,6 +78,18 @@ export interface UpsertCandidateInput {
   readonly suggestedHandling: CommitmentSuggestedHandling | null;
   readonly occurredAt: string | null;
 }
+
+/** One judged email thread becoming (or refreshing) a candidate. */
+export interface UpsertEmailCandidateInput extends Omit<UpsertCandidateInput, "occurredAt"> {
+  readonly counterpartyPersonId: string | null;
+  readonly counterpartyAddress: string | null;
+  readonly proposedActions: readonly ProposedCommitmentAction[];
+  readonly whyLines: readonly string[];
+  readonly threadRef: string;
+  readonly lastJudgedExternalId: string;
+}
+
+export type EmailThreadJudgementOutcomeKind = "no_item" | "item";
 
 export interface AddEvidenceInput {
   readonly candidateId: string;

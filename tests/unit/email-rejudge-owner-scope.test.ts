@@ -1,17 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  DummyDriver,
-  Kysely,
-  PostgresAdapter,
-  PostgresIntrospector,
-  PostgresQueryCompiler,
-  type CompiledQuery,
-  type DatabaseConnection
-} from "kysely";
-
-import { dataContextBrand, type DataContextDb, type MossDatabase } from "@moss/db";
-
 import { EmailRepository } from "../../packages/email/src/repository.js";
+import { makeRecordingDb } from "./helpers/recording-db.js";
 
 /**
  * #2271 round 2. The re-judge reset empties the stored verdict so the next sync judges the mail
@@ -24,40 +13,6 @@ import { EmailRepository } from "../../packages/email/src/repository.js";
  * that a second owner's shared mail survives is in
  * tests/integration/email-rejudge-owner-scope.test.ts.
  */
-
-interface Recorded {
-  readonly sql: string;
-  readonly parameters: readonly unknown[];
-}
-
-function makeRecordingDb(): { scoped: DataContextDb; queries: Recorded[] } {
-  const queries: Recorded[] = [];
-  const connection = {
-    executeQuery: async (compiled: CompiledQuery) => {
-      queries.push({ sql: compiled.sql, parameters: compiled.parameters });
-      return { rows: [], numAffectedRows: 0n };
-    },
-    streamQuery: () => {
-      throw new Error("streaming is not used by this repository");
-    }
-  } as unknown as DatabaseConnection;
-
-  class RecordingDriver extends DummyDriver {
-    override async acquireConnection(): Promise<DatabaseConnection> {
-      return connection;
-    }
-  }
-
-  const db = new Kysely<MossDatabase>({
-    dialect: {
-      createAdapter: () => new PostgresAdapter(),
-      createDriver: () => new RecordingDriver(),
-      createIntrospector: (kyselyDb) => new PostgresIntrospector(kyselyDb),
-      createQueryCompiler: () => new PostgresQueryCompiler()
-    }
-  });
-  return { scoped: { db, [dataContextBrand]: true } as unknown as DataContextDb, queries };
-}
 
 describe("EmailRepository.clearRecentTriage", () => {
   it("clears only the actor's own mail, and only the two analysis columns", async () => {
