@@ -131,6 +131,11 @@ export const sportsModuleManifest = {
       id: "sports.story_feedback",
       description:
         "Rate a sports story with More like this or Less like this from the dots that appear in its top-right corner while it is hovered or focused, on Today and on Sports. Less like this asks for a reason and hides the story."
+    },
+    {
+      id: "sports.result_scorers",
+      description:
+        "A finished soccer or hockey game on Today and Sports shows home scorers, home logo, score, away logo, away scorers, home on the left. Soccer scorers carry goal minutes, as in Isak 6, 8; hockey has none and may list fewer names than goals."
     }
   ],
   navigation: [
