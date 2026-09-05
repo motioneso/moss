@@ -19,6 +19,7 @@ function source(index = 1) {
     homepageUrl: `https://publisher-${index}.example.com`,
     feedUrl: `https://publisher-${index}.example.com/feed.xml`,
     retrievalMethod: "feed" as const,
+    workaround: false,
     validationStatus: "approved" as const,
     healthStatus: "healthy" as const,
     createdAt: now.toISOString()

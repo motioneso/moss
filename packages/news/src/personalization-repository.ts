@@ -877,7 +877,8 @@ function toCustomSourceDto(row: {
     feedUrl: row.feed_url,
     retrievalMethod: row.retrieval_method,
     // #2282: derived here, never stored. Only a feed row can be a workaround.
-    workaround: row.retrieval_method === "feed" && isWorkaroundFeed(row.canonical_domain, row.feed_url),
+    workaround:
+      row.retrieval_method === "feed" && isWorkaroundFeed(row.canonical_domain, row.feed_url),
     validationStatus: row.validation_status,
     healthStatus: row.health_status,
     createdAt: row.created_at.toISOString()

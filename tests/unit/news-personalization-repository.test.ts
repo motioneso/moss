@@ -231,7 +231,7 @@ describe("news personalization repository source kinds (#2282 Task 1.4)", () => 
     expect(dto?.retrievalMethod).toBe("feed");
     expect(dto?.workaround).toBe(true);
     const json = JSON.stringify(dto);
-    expect(json).not.toContain("mirror.example.net\"]");
+    expect(json).not.toContain('mirror.example.net"]');
     expect(json).not.toContain("confirmed");
     expect(json).not.toContain("icon");
     expect(json).not.toContain("consecutive");
@@ -260,10 +260,10 @@ describe("news personalization repository source kinds (#2282 Task 1.4)", () => 
     await repo.recordWorkaroundRefreshOutcome(scoped, SOURCE_ID, "success");
     expect(queries).toHaveLength(1);
     const update = compiledSql(queries, 0);
-    expect(update).toContain("update \"app\".\"news_custom_sources\"");
+    expect(update).toContain('update "app"."news_custom_sources"');
     expect(update).toContain("consecutive_failures");
     expect(update).not.toContain("least(");
-    expect(update).toContain("where \"id\" = $");
+    expect(update).toContain('where "id" = $');
     expect(queries[0]?.parameters).toEqual(expect.arrayContaining([0, SOURCE_ID]));
   });
 
@@ -275,13 +275,15 @@ describe("news personalization repository source kinds (#2282 Task 1.4)", () => 
     expect(update).toContain("least(");
     expect(update).toContain("temporarily_unavailable");
     expect(update).toContain("health_status");
-    expect(update).toContain("where \"id\" = $");
+    expect(update).toContain('where "id" = $');
     expect(queries[0]?.parameters).toContain(SOURCE_ID);
   });
 
   it("every new path refuses an unscoped handle before touching SQL", async () => {
     const unscoped = { db: {} } as unknown as DataContextDb;
-    await expect(repo.recordWorkaroundRefreshOutcome(unscoped, SOURCE_ID, "success")).rejects.toThrow();
+    await expect(
+      repo.recordWorkaroundRefreshOutcome(unscoped, SOURCE_ID, "success")
+    ).rejects.toThrow();
     await expect(repo.createCustomSource(unscoped, publicationInput)).rejects.toThrow();
   });
 });
@@ -306,7 +308,9 @@ describe("isWorkaroundFeed (#2282 Task 1.4)", () => {
   });
 
   it("compares hosts case-insensitively and ignores paths, ports and query strings", () => {
-    expect(isWorkaroundFeed("news.example.com", "https://NEWS.Example.COM:443/feed?x=1")).toBe(false);
+    expect(isWorkaroundFeed("news.example.com", "https://NEWS.Example.COM:443/feed?x=1")).toBe(
+      false
+    );
   });
 
   it("treats an unparseable feed URL as not a workaround", () => {

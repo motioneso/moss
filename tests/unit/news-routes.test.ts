@@ -116,6 +116,7 @@ const LEAKED_SOURCE_ROW = {
   homepageUrl: "https://custom-wire.example",
   feedUrl: null,
   retrievalMethod: "scrape",
+  workaround: false,
   validationStatus: "approved",
   healthStatus: "healthy",
   createdAt: "2026-07-10T00:00:00.000Z",
@@ -482,6 +483,7 @@ describe("news personalization routes (#953 Slice 1)", () => {
         homepageUrl: "https://custom-wire.example",
         feedUrl: null,
         retrievalMethod: "scrape",
+        workaround: false,
         validationStatus: "approved",
         healthStatus: "healthy",
         createdAt: "2026-07-10T00:00:00.000Z"
