@@ -36,10 +36,7 @@ function createMockRepository(store: Map<string, unknown>) {
   const calls: unknown[] = [];
   return {
     calls,
-    async upsertInstanceSetting(
-      _scopedDb: DataContextDb,
-      input: { key: string; value: unknown }
-    ) {
+    async upsertInstanceSetting(_scopedDb: DataContextDb, input: { key: string; value: unknown }) {
       calls.push(input);
       store.set(input.key, (input.value as { value?: unknown })?.value ?? null);
     }
@@ -134,7 +131,7 @@ describe("family key store (#2312 slice 1)", () => {
     const status = await getFamilyKeyStatus(scopedDb, { ...MASTER_ENV });
     const writes = repository.calls as { value: { value: { ciphertext: string } } }[];
     expect(writes).toHaveLength(1);
-    const material = writes[0].value.value.ciphertext;
+    const material = writes[0]!.value.value.ciphertext;
     expect(typeof material).toBe("string");
     expect(JSON.stringify(status)).not.toContain(material);
     expect(SECRET_FAMILY_SETTINGS.has("keys.integrations")).toBe(true);

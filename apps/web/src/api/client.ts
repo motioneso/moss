@@ -24,7 +24,12 @@ import type {
   GetChatSettingsResponse,
   GetPersonaSettingsResponse,
   GetChatModelOverrideSettingsResponse,
+  GetFamilyKeysResponse,
   GetWebSearchKeyResponse,
+  PutFamilyKeyRequest,
+  PutFamilyKeyResponse,
+  RotateFamilyKeyRequest,
+  RotateFamilyKeyResponse,
   PutWebSearchKeyRequest,
   PutWebSearchKeyResponse,
   PutYoloSelfRequest,
@@ -1358,6 +1363,26 @@ export async function putWebSearchKey(
 export async function deleteWebSearchKey(): Promise<DeleteWebSearchKeyResponse> {
   return requestJson<DeleteWebSearchKeyResponse>("/api/admin/settings/web-search", {
     method: "DELETE"
+  });
+}
+
+export async function getFamilyKeys(): Promise<GetFamilyKeysResponse> {
+  return requestJson<GetFamilyKeysResponse>("/api/admin/settings/encryption-keys");
+}
+
+export async function putFamilyKey(input: PutFamilyKeyRequest): Promise<PutFamilyKeyResponse> {
+  return requestJson<PutFamilyKeyResponse>("/api/admin/settings/encryption-keys", {
+    method: "PUT",
+    body: input
+  });
+}
+
+export async function rotateFamilyKey(
+  input: RotateFamilyKeyRequest
+): Promise<RotateFamilyKeyResponse> {
+  return requestJson<RotateFamilyKeyResponse>("/api/admin/settings/encryption-keys/rotate", {
+    method: "POST",
+    body: input
   });
 }
 

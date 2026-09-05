@@ -18,6 +18,7 @@ import {
   ServerCog,
   ShieldCheck,
   GitCommitHorizontal,
+  KeyRound,
   UserRound,
   Users,
   type LucideIcon
@@ -29,7 +30,7 @@ import { MODULE_SETTINGS_SURFACES, MODULE_SETTING_KEYWORDS } from "virtual:moss-
 
 import { SettingsSearch, type SettingsSearchItem } from "./settings-search";
 
-import { getMyModules } from "../api/client";
+import { getFamilyKeys, getMyModules } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
 import { FeedbackProvider } from "./settings-feedback";
@@ -47,7 +48,8 @@ import {
   writeSettingsStorage
 } from "./settings-storage";
 import type { PaneProps } from "./settings-types";
-import { PrioritySettings, Segmented } from "./settings-ui";
+import { Button } from "@moss/ui";
+import { Note, PrioritySettings, Segmented } from "./settings-ui";
 import { CORE_APP_SETTINGS, type MeResponse } from "@moss/shared";
 
 type SettingsPane = ComponentType<PaneProps>;
@@ -80,7 +82,14 @@ type PersonalSectionId =
   | "skills"
   | "released";
 
-type AdminSectionId = "people" | "aiproviders" | "instmods" | "audit" | "oversight" | "host";
+type AdminSectionId =
+  | "people"
+  | "aiproviders"
+  | "instmods"
+  | "audit"
+  | "oversight"
+  | "host"
+  | "enckeys";
 
 function lazyPane(loader: () => Promise<{ default: SettingsPane }>) {
   return lazy(loader);
@@ -142,6 +151,11 @@ const OversightPane = lazyPane(() =>
 );
 const HostPane = lazyPane(() =>
   import("./settings-admin-panes").then((module) => ({ default: module.HostPane }))
+);
+const EncryptionKeysPane = lazyPane(() =>
+  import("./settings-encryption-keys-pane").then((module) => ({
+    default: module.EncryptionKeysPane
+  }))
 );
 
 const ASSISTANT_NAME_GROUP_LABEL = "__ASSISTANT_NAME__";
@@ -310,6 +324,13 @@ const ADMIN_GROUPS = [
         label: "Advanced host setup",
         description: coreSettingDescription("host"),
         Pane: HostPane
+      },
+      {
+        id: "enckeys",
+        icon: KeyRound,
+        label: "Encryption keys",
+        description: coreSettingDescription("enckeys"),
+        Pane: EncryptionKeysPane
       }
     ]
   }
@@ -345,7 +366,8 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
   aiproviders: ["api key", "openai", "anthropic", "ollama", "model", "provider"],
   instmods: ["install", "modules", "uninstall", "update"],
   audit: ["log", "history", "who did what"],
-  host: ["server", "domain", "url", "backup", "advanced"]
+  host: ["server", "domain", "url", "backup", "advanced"],
+  enckeys: ["encryption", "keys", "secret", "credentials", "setup"]
 };
 
 interface SettingsPageProps {
@@ -363,6 +385,14 @@ export function SettingsPage({ me }: SettingsPageProps) {
     queryFn: getMyModules,
     retry: false
   });
+  const familyKeysQuery = useQuery({
+    queryKey: queryKeys.ai.familyKeys,
+    queryFn: getFamilyKeys,
+    retry: false
+  });
+  const missingFamilyKeys = (familyKeysQuery.data?.keys ?? []).filter(
+    (key) => key.source === "missing"
+  );
 
   const [mode, setMode] = useState<"personal" | "admin">(() =>
     isAdmin && readSettingsStorage(storage, "mode") === "admin" ? "admin" : "personal"
@@ -512,6 +542,18 @@ export function SettingsPage({ me }: SettingsPageProps) {
           </nav>
 
           <div className="set2__pane">
+            {adminMode && missingFamilyKeys.length > 0 ? (
+              <Note icon={<KeyRound size={13} />}>
+                Encryption needs attention:{" "}
+                {missingFamilyKeys.length === 1
+                  ? "one key is"
+                  : `${missingFamilyKeys.length} keys are`}{" "}
+                not set up. Some features are paused.{" "}
+                <Button variant="secondary" size="sm" onClick={() => setActiveSection("enckeys")}>
+                  Review
+                </Button>
+              </Note>
+            ) : null}
             <Suspense fallback={<div className="pane__loading">Loading settings...</div>}>
               <Pane
                 me={me}

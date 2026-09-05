@@ -229,5 +229,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     description: "Review non-secret host diagnostics and deployment guidance.",
     path: "/settings?section=host",
     scope: "admin"
+  },
+  {
+    id: "enckeys",
+    label: "Encryption keys",
+    description:
+      "Generate and rotate the encryption keys that lock stored credentials. A banner here and on the settings home names any key that still needs attention; keys are never shown.",
+    path: "/settings?section=enckeys",
+    scope: "admin"
   }
 ];

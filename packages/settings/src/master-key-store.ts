@@ -149,7 +149,10 @@ export async function loadFamilyKeyring(
   }
 
   const cipher = createMasterKeyStoreCipher(env);
-  const stored = readStoredFamilyKey(await readFamilySettingValue(scopedDb, family.settingKey), cipher);
+  const stored = readStoredFamilyKey(
+    await readFamilySettingValue(scopedDb, family.settingKey),
+    cipher
+  );
   if (!stored) return null;
   const current = Buffer.from(stored.secret, "hex");
   const keys = new Map<string, Buffer>([[stored.keyId, current]]);
@@ -176,7 +179,7 @@ export interface FamilyKeyStore {
     scopedDb: DataContextDb,
     input: {
       key: string;
-      value: unknown;
+      value: Record<string, unknown>;
       updatedByUserId: string;
       requestId: string;
       action: string;

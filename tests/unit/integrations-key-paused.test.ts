@@ -9,10 +9,7 @@ import {
   type DiscoveredTool
 } from "@moss/integrations";
 
-const ENV_KEYS = [
-  "JARVIS_INTEGRATIONS_SECRET_KEY",
-  "MOSS_INTEGRATIONS_SECRET_KEY"
-] as const;
+const ENV_KEYS = ["JARVIS_INTEGRATIONS_SECRET_KEY", "MOSS_INTEGRATIONS_SECRET_KEY"] as const;
 
 let savedEnv: Record<string, string | undefined>;
 
@@ -76,7 +73,12 @@ describe("integrations paused without a key (#2312 slice 1)", () => {
   it("unlists credentialed connections but keeps credential-less ones", async () => {
     const repository = {
       listConnections: async () => [
-        connection({ id: "c1", name: "With secret", hasCredential: true, discoveredTools: [tool("t1")] }),
+        connection({
+          id: "c1",
+          name: "With secret",
+          hasCredential: true,
+          discoveredTools: [tool("t1")]
+        }),
         connection({ id: "c2", name: "Open", hasCredential: false, discoveredTools: [tool("t2")] })
       ]
     };
@@ -108,11 +110,10 @@ describe("integrations paused without a key (#2312 slice 1)", () => {
     const modules = await resolve("actor");
     const listed = modules.flatMap((m) => m.assistantTools ?? []);
     expect(listed).toHaveLength(1);
-    const result = (await listed[0]!.execute(
-      {},
-      {},
-      { actorUserId: "actor", chatSessionId: "chat" } as never
-    )) as { data: { status: string; summary: string } };
+    const result = (await listed[0]!.execute!({}, {}, {
+      actorUserId: "actor",
+      chatSessionId: "chat"
+    } as never)) as { data: { status: string; summary: string } };
     expect(result.data.status).toBe("error");
     expect(result.data.summary).toContain("Encryption keys");
   });
