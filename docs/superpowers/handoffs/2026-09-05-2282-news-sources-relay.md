@@ -397,3 +397,44 @@ Unchanged from the p1a notes above ("Facts verified for tasks 1.4 and 1.5"): an
 options-capable News fetch port whose options match RedditFetchOptions, failure gains
 `detail` and `retryAfter`, and fetchWithOptions wired in buildNewsDiscoveryPorts in the
 module registry. Read the plan section "Task 1.5" only.
+
+## Lane notes: build-2282-p1a3 stop (2026-09-05)
+
+PLAIN ENGLISH RULE for whoever picks this up: every message to a human is plain English. No
+jargon, no coined shorthand, ASCII punctuation only, at most one backtick per sentence.
+
+Finished the slice (task 1.5 to green, pushed, PR 2298 commented). Did not start task 1.6.
+
+### Built and proved this lane (commit fc8207e8c)
+
+- `packages/news/src/discovery/ports.ts`: `NewsFetchOptions` (every field optional, shaped so
+  `RedditFetchOptions` is assignable unchanged) and `NewsFetchPort`; `NewsSafeFetchFailure`
+  gains `detail?: string` and `retryAfter?: string`. The plan's `retryAfterMs` is superseded:
+  the web helper's field is the raw Retry-After string, so the port carries that.
+- `buildNewsDiscoveryPorts` (`packages/module-registry/src/index.ts`) adds `fetchWithOptions`:
+  HTTPS required, News host rate limiter on every call, robots gate dropped only when
+  `skipRobots` is set; `skipRobots` itself is not forwarded to the helper.
+- Threaded as `fetchWithOptions`: required on `NewsRoutesDependencies.discovery` and on the
+  `registerNewsJobWorkers` deps (7 test files gained a stub); optional on the personalization
+  route, chat tool and revalidation deps and on `resolveSourceInput`, `collectCandidates` and
+  `compilePersonalizedNews` deps. Routes pass the whole discovery object through, so the
+  optional seams receive it with no further wiring; `jobs.ts` passes it explicitly.
+- Tests, written first: `tests/unit/module-registry-news-discovery-adapter.test.ts` (4 new cases
+  through a faked `fetchWebResource`) and `tests/unit/news-fetch-port.test.ts` (2 cases, the
+  compile-time assignability proof).
+- Green: `pnpm typecheck` exit 0; eslint and prettier on the 20 changed files exit 0;
+  `pnpm test:unit` on all 44 News unit files: 629 passed.
+
+### Integration proof: still NOT run (tasks 1.3 and 1.4)
+
+Nothing here touched the migration or the repository. Load stayed above 20; the brief forbade
+the run. The p1a2c note above still says how to run it when the box is quiet.
+
+### Task 1.6 (next lane): what it can rely on
+
+- In `resolveSourceInput`, the port is `deps.fetchWithOptions` (optional). The unit-test fakes of
+  that function do not carry it, so the subreddit branch's tests must add one; use the exported
+  `NewsFetchPort` type. Hand it straight to the Reddit reader: `RedditFetchPort` accepts it.
+- A failure from the port may now carry `detail` and `retryAfter`; the reader already expects
+  `detail`.
+- Nothing calls `fetchWithOptions` yet, so no behaviour changed for existing sources.
