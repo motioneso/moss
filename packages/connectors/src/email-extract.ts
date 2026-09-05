@@ -289,6 +289,13 @@ export interface EmailExtractOptions {
   readonly priority?: StructuredRunPriority;
   readonly scope?: StructuredRunScope;
   readonly closeScope?: boolean;
+  /**
+   * Single-message path: the sender is someone the user already deals with (in their People or
+   * previously replied to). The gate is told to lean toward maybe_owed, but it is not proof.
+   */
+  readonly knownSender?: boolean;
+  /** Batch path: lower-cased sender addresses (see senderAddress) that count as known senders. */
+  readonly knownSenders?: ReadonlySet<string>;
 }
 
 export const EMAIL_EXTRACT_BATCH_MAX_ITEMS = 48;
@@ -415,8 +422,18 @@ function calendarDate(value: string | Date): string | null {
  * interview window rather than the day the reply was owed (#2271 round 3). Dates only, no times -
  * enough to settle "tomorrow" or "within a day", and nothing extra to leak back into a stored field.
  */
-function promptInput(parsed: ParsedEmail, now: Date = new Date()): string {
+/** The bare, lower-cased address from a From header such as `Sarah Kim <Sarah@Kim.Example>`. */
+export function senderAddress(from: string): string {
+  const m = from.match(/<([^>]+)>/);
+  return (m ? m[1]! : from).trim().toLowerCase();
+}
+
+const KNOWN_SENDER_LINE =
+  "Sender: someone this user already deals with (in their People or previously replied to). Lean toward maybe_owed, but it is not proof.";
+
+function promptInput(parsed: ParsedEmail, knownSender = false, now: Date = new Date()): string {
   const header = [`Subject: ${parsed.subject}`, `From: ${parsed.from}`];
+  if (knownSender) header.push(KNOWN_SENDER_LINE);
   const received = calendarDate(parsed.receivedAt);
   if (received !== null) header.push(`Received: ${received}`);
   const today = calendarDate(now);
@@ -425,8 +442,8 @@ function promptInput(parsed: ParsedEmail, now: Date = new Date()): string {
   return [...header, "", parsed.body].join("\n");
 }
 
-function buildPrompt(parsed: ParsedEmail): string {
-  return [EMAIL_TRIAGE_INSTRUCTIONS, promptInput(parsed)].join("\n\n");
+function buildPrompt(parsed: ParsedEmail, knownSender = false): string {
+  return [EMAIL_TRIAGE_INSTRUCTIONS, promptInput(parsed, knownSender)].join("\n\n");
 }
 
 /**
@@ -740,13 +757,21 @@ function applyGate(result: EmailExtractResult): EmailExtractResult {
   return { ...result, summary: null, signals: { ...rest, pendingJudgement: true } };
 }
 
-function buildBatchPrompt(messages: readonly ParsedEmail[]): string {
+function buildBatchPrompt(
+  messages: readonly ParsedEmail[],
+  knownSenders?: ReadonlySet<string>
+): string {
   return [
     EMAIL_TRIAGE_INSTRUCTIONS,
     "Apply those rules to every numbered input.",
     'Return one JSON object: {"results":[{"index":0,"value":<triage object>}, ...]}.',
     "Include every index exactly once and no extra indexes.",
-    JSON.stringify(messages.map((message, index) => ({ index, email: promptInput(message) })))
+    JSON.stringify(
+      messages.map((message, index) => ({
+        index,
+        email: promptInput(message, knownSenders?.has(senderAddress(message.from)) ?? false)
+      }))
+    )
   ].join("\n\n");
 }
 
@@ -843,7 +868,7 @@ export async function extractEmailSignalsBatch(
         const reply = await withTimeout(
           (signal) =>
             deps.runChat(
-              buildPrompt(message),
+              buildPrompt(message, options.knownSenders?.has(senderAddress(message.from)) ?? false),
               signal,
               1,
               telemetry,
@@ -865,7 +890,7 @@ export async function extractEmailSignalsBatch(
       const reply = await withTimeout(
         (signal) =>
           deps.runChat(
-            buildBatchPrompt(batch),
+            buildBatchPrompt(batch, options.knownSenders),
             signal,
             batch.length,
             telemetry,
@@ -932,7 +957,7 @@ export async function extractEmailSignals(
         String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
     );
 
-  const prompt = buildPrompt(parsed);
+  const prompt = buildPrompt(parsed, options.knownSender ?? false);
   let result: EmailExtractResult;
   try {
     const reply = await withTimeout((signal) => deps.runChat(prompt, signal), timeoutMs);
