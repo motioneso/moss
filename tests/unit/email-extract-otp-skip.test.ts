@@ -7,6 +7,7 @@ import {
   extractEmailSignalsBatch,
   looksLikeOneTimeCodeEmail,
   otpSkippedResult,
+  signInCodeDecision,
   type EmailExtractDeps,
   type EmailExtractResult,
   type ParsedEmail
@@ -944,5 +945,145 @@ describe("ordinary talk about a code is never hidden", () => {
         body: "Here is your verification code\n\n482910\n\nIt expires in ten minutes."
       })
     ).toBe(true);
+  });
+});
+
+/**
+ * Re-review 8 and Ben's ruling: when the deterministic rule is not sure, the model decides.
+ * The subject of each message below names a verification code, so the strict rule stops short
+ * and the message goes through the same analysis pass every ordinary email gets. One extra
+ * yes/no answer in that pass says whether the message really hands a code over.
+ */
+describe("when the rule is unsure, the model decides", () => {
+  const unclearMessages: Array<[string, { from: string; subject: string; body: string }]> = [
+    [
+      "a request for help whose code has expired",
+      {
+        from: "person@example.invalid",
+        subject: "Your verification code doesn't work",
+        body: "When I enter 482910, the website says it has expired. Can you help me sign in before Monday?"
+      }
+    ],
+    [
+      "a support request quoting an error code",
+      {
+        from: "person@example.invalid",
+        subject: "Your verification code",
+        body: "The error code is 482910. Please send us a screenshot so we can restore your access."
+      }
+    ],
+    [
+      "a request for help with the code on its own line",
+      {
+        from: "person@example.invalid",
+        subject: "Your verification code",
+        body: "I cannot sign in with this code:\n\n482910\n\nCan you help me regain access before Monday?"
+      }
+    ]
+  ];
+
+  for (const [label, message] of unclearMessages) {
+    it(`asks the model about ${label} and keeps it when the answer is no`, async () => {
+      expect(signInCodeDecision(message)).toBe("unclear");
+
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({
+          category: "needs_reply",
+          confidence: 0.6,
+          deliversSignInCode: false
+        })
+      }));
+
+      const result = await extractEmailSignals(fixture(message), { runChat });
+
+      expect(runChat).toHaveBeenCalledTimes(1);
+      expect(result.signals.skipped).toBeUndefined();
+      expect(result.summary).not.toBeNull();
+    });
+
+    it(`sets ${label} aside when the model answers yes`, async () => {
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({
+          category: "noise",
+          confidence: 0.9,
+          deliversSignInCode: true
+        })
+      }));
+
+      const result = await extractEmailSignals(fixture(message), { runChat });
+
+      expect(runChat).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(otpSkippedResult());
+    });
+
+    it(`sets ${label} aside in a batch when the model answers yes`, async () => {
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({
+          category: "noise",
+          confidence: 0.9,
+          deliversSignInCode: true
+        })
+      }));
+
+      const results = await extractEmailSignalsBatch([fixture(message)], { runChat });
+
+      expect(runChat).toHaveBeenCalledTimes(1);
+      expect(results[0]).toEqual(otpSkippedResult());
+    });
+  }
+
+  it("never asks the model about a message the strict rule is sure about", () => {
+    expect(
+      signInCodeDecision({
+        from: "Pumpkin <hello@petinsurer.example.invalid>",
+        subject: "Your Pumpkin verification code",
+        body: "Your verification code is 730915. Enter it to finish signing in."
+      })
+    ).toBe("hands-over-a-code");
+  });
+
+  it("leaves an ordinary message alone even if the model answers yes", async () => {
+    const message = {
+      from: "sarah.jones@example.invalid",
+      subject: "Dinner Saturday",
+      body: "The door code is 482910. Please bring dessert and come round about seven."
+    };
+
+    expect(signInCodeDecision(message)).toBe("ordinary");
+
+    const runChat = vi.fn(async () => ({
+      text: JSON.stringify({
+        category: "fyi",
+        confidence: 0.8,
+        deliversSignInCode: true
+      })
+    }));
+
+    const result = await extractEmailSignals(fixture(message), { runChat });
+
+    expect(runChat).toHaveBeenCalledTimes(1);
+    expect(result.signals.skipped).toBeUndefined();
+    expect(result.summary).not.toBeNull();
+  });
+
+  it("keeps the yes/no answer out of the stored signals", async () => {
+    const runChat = vi.fn(async () => ({
+      text: JSON.stringify({
+        category: "needs_reply",
+        confidence: 0.6,
+        deliversSignInCode: false
+      })
+    }));
+
+    const result = await extractEmailSignals(
+      fixture({
+        from: "person@example.invalid",
+        subject: "Your verification code",
+        body: "The error code is 482910. Please send us a screenshot so we can restore your access."
+      }),
+      { runChat }
+    );
+
+    expect(JSON.stringify(result.signals)).not.toContain("deliversSignInCode");
   });
 });
