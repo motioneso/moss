@@ -675,6 +675,60 @@ describe("fetchWebResource", () => {
     ).resolves.toMatchObject({ ok: false, reason: "robots" });
   });
 
+  // Bug: a bare domain that redirects everything to its www address (including robots.txt
+  // itself) used to fail the robots check, because the check only looked at the raw robots.txt
+  // response and a redirect is neither "allowed" nor "not found". It should follow the redirect
+  // and read robots.txt from wherever it actually ends up, the same way a browser would.
+  it("follows a redirect on robots.txt so a bare domain that redirects to its www address still works", async () => {
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    setWebHttpTransportForTests(async (request) => {
+      if (request.url.hostname === "bare.example" && request.url.pathname === "/robots.txt") {
+        return new Response(null, {
+          status: 301,
+          headers: { location: "https://www.bare.example/robots.txt" }
+        });
+      }
+      if (request.url.hostname === "www.bare.example" && request.url.pathname === "/robots.txt") {
+        return new Response("User-agent: *\nAllow: /", { status: 200 });
+      }
+      return new Response("the page", { status: 200 });
+    });
+
+    await expect(
+      fetchWebResource("https://bare.example/story", { robots: createRobotsGate() })
+    ).resolves.toMatchObject({ ok: true, body: "the page" });
+  });
+
+  // Bug (PR 2252, second review round): the site's own rules file (robots.txt) followed
+  // redirects without checking the allowed-host list, so a publisher could point its rules file
+  // at an unapproved site and this request would still go fetch it. Every hop of that fetch must
+  // be checked the same way the page fetch itself is checked.
+  it("refuses a site rules file that redirects to a host outside the allowed list", async () => {
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    let calledUnapprovedHost = false;
+    setWebHttpTransportForTests(async (request) => {
+      if (request.url.hostname === "publisher.example" && request.url.pathname === "/robots.txt") {
+        return new Response(null, {
+          status: 301,
+          headers: { location: "https://not-approved.example/robots.txt" }
+        });
+      }
+      if (request.url.hostname === "not-approved.example") {
+        calledUnapprovedHost = true;
+        return new Response("User-agent: *\nAllow: /", { status: 200 });
+      }
+      return new Response("the page", { status: 200 });
+    });
+
+    await expect(
+      fetchWebResource("https://publisher.example/story", {
+        robots: createRobotsGate(),
+        allowedHosts: ["publisher.example"]
+      })
+    ).resolves.toMatchObject({ ok: false, reason: "robots" });
+    expect(calledUnapprovedHost).toBe(false);
+  });
+
   it("maps rate limits, truncation, and timeout", async () => {
     setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
     setWebHttpTransportForTests(async () => new Response("abcdef", { status: 200 }));

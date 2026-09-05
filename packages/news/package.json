@@ -20,6 +20,7 @@
     "@moss/notifications": "workspace:*",
     "@moss/settings-ui": "workspace:*",
     "@moss/shared": "workspace:*",
+    "@moss/ui": "workspace:*",
     "@tanstack/react-query": "^5.0.0",
     "fastify": "^5.6.2",
     "htmlparser2": "^10.1.0",

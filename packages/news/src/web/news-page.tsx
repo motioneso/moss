@@ -159,14 +159,6 @@ function Masthead(props: {
         // instead of sitting empty between its two rules.
         <p className="nw-mast__plate">Front pages from your sources</p>
       )}
-      {/* #1759: the module page carries its own way into its settings, rather than the empty
-          state being the only place that offers one. Centered under the band so it keeps the
-          masthead's symmetry instead of hanging off one side of it. */}
-      <p className="nw-mast__tools">
-        <a className="nw-mast__settings" href={SETTINGS_HREF}>
-          Settings
-        </a>
-      </p>
     </header>
   );
 }

@@ -293,6 +293,7 @@ import {
   SportsBrowserBrokerServer,
   SportsBrowserClient,
   SportsEspnCoverageRepository,
+  SportsPhotoStore,
   SportsPublicSourceReader,
   SportsService,
   type RegisteredStory,
@@ -703,13 +704,18 @@ const newsHostRateLimiter = createHostRateLimiter();
 
 function buildNewsDiscoveryPorts(
   logger?: Pick<FastifyBaseLogger, "info" | "warn">,
-  engineFactory?: ChatEngineFactory
+  // #2229: takes the already-built adapter, not a raw engine factory. The route path must pass
+  // deps.createCliStructuredAdapter (built from structuredChatEngineFactory, which resolves
+  // correctly on both the socket and in-process paths) rather than building a new adapter from
+  // deps.chatEngineFactory — that raw late-bound bridge never resolves on the socket path, so
+  // every one-shot structured call (source preview) threw "not resolved yet". The worker path
+  // keeps its own default (no live chat engine involved there).
+  createCliStructuredAdapter: ReturnType<
+    typeof createCliStructuredAdapterFactory
+  > = createCliStructuredAdapterFactory()
 ) {
   const repository = new AiRepository();
   const cipher = createAiSecretCipher();
-  // #982/#869/#981: module-registry is the composition boundary importing both ai's port and chat's
-  // CLI implementation. Resolve one shared transport factory; packages/ai never imports chat.
-  const createCliStructuredAdapter = createCliStructuredAdapterFactory(engineFactory);
   return {
     fetch: (url: string) =>
       fetchWebResource(url, {
@@ -717,12 +723,13 @@ function buildNewsDiscoveryPorts(
         robots: newsRobotsGate,
         rateLimiter: newsHostRateLimiter
       }),
-    image: (url: string, maxBytes: number) =>
+    image: (url: string, maxBytes: number, allowedHosts?: readonly string[]) =>
       fetchWebResourceBytes(url, {
         requireHttps: true,
         robots: newsRobotsGate,
         rateLimiter: newsHostRateLimiter,
-        maxBytes
+        maxBytes,
+        ...(allowedHosts ? { allowedHosts } : {})
       }),
     search: {
       async search(
@@ -925,6 +932,16 @@ function buildNewsStoryFeedbackPort(
   });
   return {
     storyRef: (canonicalUrl) => storyFeedbackTargetRef("news", canonicalUrl),
+    listDismissedRefs: async (scopedDb, ownerUserId) => {
+      const rules = await usefulnessFeedbackRepository.listActiveStoryRules(
+        scopedDb,
+        ownerUserId,
+        "news"
+      );
+      return new Set(
+        rules.filter((rule) => rule.direction === "less").map((rule) => rule.targetRef)
+      );
+    },
     registerTargets: async (scopedDb, ownerUserId, rows) => {
       for (const row of rows) {
         await usefulnessFeedbackRepository.upsertTarget(scopedDb, {
@@ -2016,10 +2033,17 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       );
       const sourcesRepository = new SportsSourcesRepository();
       const espnCoverageRepository = new SportsEspnCoverageRepository();
+      // #2237 story photos are copied into the owner's own vault and served from our origin, so
+      // the vault runner and the byte fetch port are built here rather than inside the module.
+      const sportsPhotoStore = new SportsPhotoStore({
+        vault: new VaultContextRunner(getVaultBaseDir()),
+        fetchBytes: discovery.fetchBytes
+      });
       const publicSourceReader = new SportsPublicSourceReader({
         dataContext: deps.dataContext,
         repository: sourcesRepository,
         fetch: discovery.fetch,
+        photos: sportsPhotoStore,
         cache: new DatasetCache({ maxEntries: 500 })
       });
       const followsRepository = new SportsFollowsRepository();
@@ -2081,7 +2105,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveTeams: async (competitionKey) =>
           (await sourceTeamResolver.getLeagueTeams(competitionKey)).teams,
         dataContext: deps.dataContext,
-        reader: publicSourceReader
+        reader: publicSourceReader,
+        photos: sportsPhotoStore
       });
       configureSportsChatTools(datasetClient, followsRepository, sourceService);
       registerSportsRoutes(server, {
@@ -2095,6 +2120,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         publicSourceReader,
         previews,
         sourceService,
+        photos: sportsPhotoStore,
         storyRelevance: sportsStoryRelevance,
         storyFeedback: sportsStoryFeedback
       });
@@ -2121,7 +2147,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       configureNewsBriefingService(datasetClient);
       const discovery = buildNewsDiscoveryPorts(
         createModuleLogger(server.log, "news"),
-        deps.chatEngineFactory
+        deps.createCliStructuredAdapter
       );
       const previewOverride = buildUatNewsPreviewOverride();
       registerNewsRoutes(server, {

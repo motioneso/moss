@@ -7,19 +7,9 @@ import { Button, Menu } from "@moss/module-web-sdk";
 
 import { newsQueryKeys } from "./query-keys.js";
 import { createNewsStoryFeedback } from "./story-feedback-client.js";
+import { markStoryDismissed } from "./dismissed-story-tracker.js";
+import { withoutDismissedStories } from "./news-overview-filters.js";
 import "./story-feedback.css";
-
-function withoutStory(data: NewsOverviewResponse, targetRef: string): NewsOverviewResponse {
-  const keep = (headline: NewsHeadline) => headline.feedbackRef !== targetRef;
-  return {
-    ...data,
-    topStories: data.topStories.filter(keep),
-    rankedStories: data.rankedStories?.filter(keep),
-    sourceGroups: data.sourceGroups
-      .map((group) => ({ ...group, headlines: group.headlines.filter(keep) }))
-      .filter((group) => group.headlines.length > 0)
-  };
-}
 
 export function StoryFeedbackMenu(props: {
   readonly headline: NewsHeadline;
@@ -44,11 +34,13 @@ function StoryFeedbackMenuWithTarget(props: {
   const mutation = useMutation({
     mutationFn: (input: { kind: "more_like_this" | "less_like_this"; reason?: string }) =>
       createNewsStoryFeedback({ targetRef: targetRef!, surface: props.surface, ...input }),
-    onSuccess: () => {
-      queryClient.setQueryData<NewsOverviewResponse>(newsQueryKeys.overview, (current) =>
-        current && targetRef ? withoutStory(current, targetRef) : current
-      );
-      void queryClient.invalidateQueries({ queryKey: newsQueryKeys.overview });
+    onSuccess: (_result, variables) => {
+      if (variables.kind === "less_like_this") {
+        markStoryDismissed(targetRef);
+        queryClient.setQueryData<NewsOverviewResponse>(newsQueryKeys.overview, (current) =>
+          current ? withoutDismissedStories(current) : current
+        );
+      }
       void queryClient.invalidateQueries({ queryKey: newsQueryKeys.feedback });
       setReasonOpen(false);
       setReason("");

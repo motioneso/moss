@@ -134,13 +134,16 @@ export class NewsService {
     onStale?: (scopedDb: DataContextDb) => Promise<void>
   ): Promise<NewsOverviewResponse> {
     return this.dataContext.withDataContext(accessContext, async (db) => {
-      const [prefs, exclusions, customSources, customTopics, snapshot] = await Promise.all([
-        this.repository.list(db),
-        this.personalization.listExclusions(db),
-        this.personalization.listCustomSources(db),
-        this.personalization.listCustomTopics(db),
-        this.personalization.readLatestSnapshot(db)
-      ]);
+      const [prefs, exclusions, customSources, customTopics, snapshot, dismissedRefs] =
+        await Promise.all([
+          this.repository.list(db),
+          this.personalization.listExclusions(db),
+          this.personalization.listCustomSources(db),
+          this.personalization.listCustomTopics(db),
+          this.personalization.readLatestSnapshot(db),
+          this.storyFeedback?.listDismissedRefs(db, accessContext.actorUserId) ??
+            Promise.resolve(new Set<string>())
+        ]);
       const now = this.now();
       const personalized = this.composePersonalized(
         snapshot,
@@ -148,7 +151,8 @@ export class NewsService {
         exclusions,
         customSources,
         customTopics,
-        now
+        now,
+        dismissedRefs
       );
       if (!isNewsSnapshotFresh(snapshot, now) || personalized === null) {
         await onStale?.(db);
@@ -181,7 +185,8 @@ export class NewsService {
         exclusions,
         customSources,
         customTopics,
-        this.now()
+        this.now(),
+        new Set<string>()
       ) ?? (await this.composeOverview(prefs, exclusions));
     return {
       facts: overview.topStories.slice(0, 5).map((h) => `${h.title} — ${h.sourceLabel}`)
@@ -194,7 +199,8 @@ export class NewsService {
     exclusions: readonly NewsSourceExclusionDto[],
     customSources: readonly NewsCustomSourceDto[],
     customTopics: readonly NewsCustomTopicDto[],
-    now: Date
+    now: Date,
+    dismissedRefs: ReadonlySet<string>
   ): NewsOverviewResponse | null {
     if (!snapshot || snapshot.expiresAt.getTime() <= now.getTime()) return null;
     try {
@@ -205,15 +211,25 @@ export class NewsService {
 
     const excludedDomains = exclusions.map((item) => item.canonicalDomain);
     const cutoff = now.getTime() - NEWS_ARTICLE_MAX_AGE_MS;
+    const storyRef = this.storyFeedback?.storyRef.bind(this.storyFeedback);
     const seen = new Set<string>();
     const articles = snapshot.payload.articles.filter((article) => {
       if (Date.parse(article.publishedAt) < cutoff) return false;
       if (hostnameIsExcluded(article.canonicalDomain, excludedDomains)) return false;
       if (seen.has(article.url)) return false;
+      // #2247: a published snapshot can predate a later dismissal, so it is re-checked here on
+      // every read rather than only at compile time. A link that cannot be turned into a
+      // reference was never offered feedback in the first place, so it is never suppressed here.
+      if (dismissedRefs.size > 0 && storyRef) {
+        try {
+          if (dismissedRefs.has(storyRef(article.url))) return false;
+        } catch {
+          // malformed link: not judged, not suppressed
+        }
+      }
       seen.add(article.url);
       return true;
     });
-    const storyRef = this.storyFeedback?.storyRef.bind(this.storyFeedback);
     const headlines = articles.map((article) => toPersonalizedHeadline(article, storyRef));
     const configuredSources = personalizedSources(prefs, customSources, excludedDomains);
     const configuredByDomain = new Map(configuredSources.map((source) => [source.domain, source]));
@@ -283,6 +299,7 @@ export class NewsService {
         // Dedupe by URL hash WITHIN the source (a story often sits in `top` + a topic feed;
         // no cross-source dedupe in V1 — differing coverage of one event is a feature here).
         const seen = new Set<string>();
+        const faviconUrl = faviconProxyUrl(urlHostname(source.homepageUrl));
         const inputs: RankInput<NewsHeadline>[] = [];
         for (const { plan, items } of feeds) {
           items.forEach((item, feedPosition) => {
@@ -298,7 +315,8 @@ export class NewsService {
                 sourceKey: source.sourceKey,
                 sourceLabel: source.label,
                 topicKey: plan.topicKey,
-                topicLabel: plan.topicKey ? (topicOption(plan.topicKey)?.label ?? null) : null
+                topicLabel: plan.topicKey ? (topicOption(plan.topicKey)?.label ?? null) : null,
+                faviconUrl
               }
             });
           });
@@ -425,6 +443,7 @@ function toPersonalizedHeadline(
     url: article.url,
     publishedAt: article.publishedAt,
     imageUrl: article.imageUrl ? `/api/news/images/${encodeURIComponent(article.id)}` : null,
+    faviconUrl: faviconProxyUrl(article.canonicalDomain),
     summary: article.excerpt ?? ""
   };
 }
@@ -490,6 +509,17 @@ function personalizedSources(
  * WHATWG URL lowercases and punycodes the hostname, matching normalizePublisherDomain's
  * canonical form; the trailing-dot strip mirrors it for FQDN-notation links.
  */
+/**
+ * Same-origin proxy path for a publisher's favicon, keyed by its own domain rather than by
+ * article — the icon is one per publisher, not one per story. Mirrors the image proxy's reason
+ * for existing: browsers never need `img-src` opened up to every publisher's domain, because the
+ * server fetches the file and hands it back from this origin. Null domain means no article/source
+ * URL could be parsed, so there is nothing to fetch a favicon for.
+ */
+function faviconProxyUrl(domain: string | null): string | null {
+  return domain ? `/api/news/favicon/${encodeURIComponent(domain)}` : null;
+}
+
 function urlHostname(url: string): string | null {
   try {
     const hostname = new URL(url).hostname;

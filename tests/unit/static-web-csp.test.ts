@@ -8,7 +8,8 @@ import { SPA_CSP } from "../../apps/api/src/static-web.js";
 const EXPECTED_IMG_SRC =
   "img-src 'self' data: https://a.espncdn.com https://s.espncdn.com https://s.secure.espncdn.com" +
   " https://espnmedia-cdn.akamaized.net" +
-  " https://cdn.arstechnica.net https://i.guim.co.uk https://ichef.bbci.co.uk" +
+  " https://assets.apnews.com https://cdn.arstechnica.net https://dims.apnews.com" +
+  " https://i.guim.co.uk https://ichef.bbci.co.uk" +
   " https://media.npr.org https://media.wired.com https://npr.brightspotcdn.com" +
   " https://platform.theverge.com https://static01.nyt.com";
 

@@ -28,6 +28,36 @@ import {
 
 export const STRUCTURED_MAX_REPAIR_RETRIES = 2;
 
+/**
+ * Error names whose class doc comment guarantees an operator-safe message (no secrets, no raw
+ * provider/response content) — compared by name (a plain string), not `instanceof`, so this stays
+ * decoupled from the class that throws them.
+ */
+const OPERATOR_SAFE_ERROR_NAMES = new Set([
+  "CliChatUnavailableError",
+  "CliChatDeliveryUnknownError"
+]);
+
+/**
+ * S2: turn a caught adapter error into a fixed, allow-listed diagnostic code instead of logging its
+ * message. `HttpApiAdapter.generateStructured` calls `response.json()`, and a malformed-but-successful
+ * response makes Node fold the raw response body into `SyntaxError.message` — logging that message
+ * would leak private response content into application logs. Everything not on the allow-list below
+ * collapses to "provider_error_unclassified" rather than falling back to the raw text.
+ */
+export function classifyStructuredProviderErrorCode(error: unknown): string {
+  if (!(error instanceof Error)) return "provider_error_unclassified";
+  if (OPERATOR_SAFE_ERROR_NAMES.has(error.name)) return error.name;
+  if (error instanceof SyntaxError) return "invalid_response_body";
+  const httpStatusMatch = /HTTP (\d{3})$/.exec(error.message);
+  if (httpStatusMatch) return `http_${httpStatusMatch[1]}`;
+  if (/^No .+ in .+ response/.test(error.message) || /^No .+ response$/.test(error.message)) {
+    return "empty_provider_response";
+  }
+  if (error.message.startsWith("Unsupported provider kind")) return "unsupported_provider_kind";
+  return "provider_error_unclassified";
+}
+
 export type StructuredProviderAdapter = {
   generateStructured(input: GenerateStructuredProviderInput): Promise<StructuredProviderResult>;
 };
@@ -183,7 +213,16 @@ export async function generateStructured(
         continue;
       }
       deps.logger?.warn(
-        { service: input.service, name: error instanceof Error ? error.name : "UnknownError" },
+        {
+          service: input.service,
+          name: error instanceof Error ? error.name : "UnknownError",
+          // S2: never log the raw exception message here. A malformed-but-successful HTTP response
+          // makes Node's JSON parser fold the response body into `SyntaxError.message`, and adapter
+          // errors in general are not guaranteed operator-safe (the #2229 comment this replaced
+          // pointed at a credential-decryption catch that protects a different operation). Log only
+          // a fixed diagnostic code, never the message text itself.
+          code: classifyStructuredProviderErrorCode(error)
+        },
         "ai.structured provider error"
       );
       return { ok: false, error: "provider_error" };

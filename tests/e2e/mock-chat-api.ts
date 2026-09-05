@@ -111,6 +111,8 @@ export function createMockChatThread(
     incognito: false,
     createdAt: "2026-06-06T12:00:00.000Z",
     updatedAt: "2026-06-06T12:00:00.000Z",
+    lastActiveAt: "2026-06-06T12:00:00.000Z",
+    lastMessagePreview: null,
     ...overrides
   };
 }

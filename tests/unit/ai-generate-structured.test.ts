@@ -311,6 +311,40 @@ describe("generateStructured", () => {
       error: "provider_error"
     });
     expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "http_500" }),
+      "ai.structured provider error"
+    );
+  });
+
+  // Review S2: `HttpApiAdapter.generateStructured` calls `response.json()`, and a
+  // malformed-but-successful response makes Node fold the raw response body into
+  // `SyntaxError.message`. Before this fix, that message was logged as-is, so private response
+  // content crossed the logging boundary. Now only a fixed diagnostic code is logged.
+  it("never logs raw response text from a malformed-JSON provider error", async () => {
+    const warn = vi.fn();
+    const privateResponseText = "PRIVATE_SENTINEL";
+    const deps = makeDeps({
+      createAdapter: () => ({
+        generateStructured: vi
+          .fn()
+          .mockRejectedValue(
+            new SyntaxError(`Unexpected token 'P', "${privateResponseText}" is not valid JSON`)
+          )
+      }),
+      logger: { info: vi.fn(), warn }
+    });
+
+    expect(await generateStructured(scopedDb, makeInput(), deps)).toEqual({
+      ok: false,
+      error: "provider_error"
+    });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(privateResponseText);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "invalid_response_body" }),
+      "ai.structured provider error"
+    );
   });
 
   it("rejects provider kinds unsupported by the structured HTTP adapter", async () => {

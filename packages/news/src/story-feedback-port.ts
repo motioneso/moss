@@ -33,6 +33,12 @@ export interface NewsStoryFeedbackPort {
   /** The opaque, stable reference for a story. Derived from its canonical link. */
   storyRef(canonicalUrl: string): string;
   /**
+   * Story references the owner has actively marked "less like this". A published snapshot can
+   * outlive that dismissal (#2247), so any code serving an existing snapshot must re-check this
+   * on every read rather than trusting what was true when the snapshot was compiled.
+   */
+  listDismissedRefs(scopedDb: DataContextDb, ownerUserId: string): Promise<ReadonlySet<string>>;
+  /**
    * Record the stories currently on screen as targets the feedback API will accept. Nothing else
    * writes these rows, and the API refuses a story it has no row for, so an unregistered story can
    * never receive a preference.

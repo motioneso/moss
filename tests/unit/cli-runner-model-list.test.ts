@@ -6,14 +6,15 @@
  *     `client_version` is the installed CLI's real version (read once, cached); only
  *     `visibility === "list"` slugs are kept; a missing file is `not_logged_in`;
  *   - google: `unsupported`;
- *   - a timeout / HTTP failure / throw yields a plain `error` whose message carries NO token;
+ *   - a timeout / HTTP failure / throw yields a plain `error` whose message carries NO token, and
+ *     a refused sign-in (HTTP 401) is reported as `not_logged_in` and clears the saved readiness;
  *   - the RPC verb is dispatched non-session and its kind guard is bad_request.
  */
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   MODEL_LIST_TIMEOUT_MS,
@@ -26,6 +27,7 @@ import {
 } from "../../packages/cli-runner/src/model-list-adapters.js";
 import { persistProviderToken } from "../../packages/cli-runner/src/provider-token-store.js";
 import { CliChatEngineHost } from "../../packages/cli-runner/src/engine-host.js";
+import { clearProviderProbeCacheForTests } from "../../packages/chat/src/live/provider-probe.js";
 
 const ANTHROPIC_TOKEN = "sk-ant-oat01-secret-token-value";
 const CODEX_TOKEN = "eyJ-codex-access-token-secret";
@@ -175,13 +177,21 @@ describe("anthropic model-list adapter", () => {
     expect(f).not.toHaveBeenCalled();
   });
 
-  it("turns an HTTP failure into a plain error that carries no token", async () => {
+  it("reports a refused sign-in as not logged in, and any other HTTP failure as a plain error, carrying no token", async () => {
     const home = await homeWithAnthropicToken();
-    const { f } = fakeFetch(jsonResponse({ error: `bad token ${ANTHROPIC_TOKEN}` }, 401));
-    const result = await listProviderModels("anthropic", { homeBase: home, fetch: f });
+    // #2242: the vendor answered and refused the stored sign-in — that is a login problem, not
+    // an unreachable provider, so the person is told to log in again rather than to retry.
+    const refused = fakeFetch(jsonResponse({ error: `bad token ${ANTHROPIC_TOKEN}` }, 401));
+    const rejected = await listProviderModels("anthropic", { homeBase: home, fetch: refused.f });
+    expect(rejected.status).toBe("not_logged_in");
+    expect(JSON.stringify(rejected)).not.toContain(ANTHROPIC_TOKEN);
+    expect(JSON.stringify(rejected)).toContain("401");
+
+    const broken = fakeFetch(jsonResponse({ error: `bad token ${ANTHROPIC_TOKEN}` }, 500));
+    const result = await listProviderModels("anthropic", { homeBase: home, fetch: broken.f });
     expect(result.status).toBe("error");
     expect(JSON.stringify(result)).not.toContain(ANTHROPIC_TOKEN);
-    expect(JSON.stringify(result)).toContain("401");
+    expect(JSON.stringify(result)).toContain("500");
   });
 
   it("turns a timeout / thrown fetch into a plain error that carries no token", async () => {
@@ -320,5 +330,147 @@ describe("engine-host listProviderModels", () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(calls).toHaveLength(2);
     expect(await host.listProviderModels("google")).toMatchObject({ status: "unsupported" });
+  });
+});
+
+describe("#2242: a rejected credential clears the saved 'the login works' answer", () => {
+  beforeEach(() => {
+    clearProviderProbeCacheForTests();
+  });
+  afterEach(() => {
+    clearProviderProbeCacheForTests();
+  });
+
+  it("turns a later readiness check into needs_login after the vendor rejects the token", async () => {
+    // The exact sequence the review found: the readiness check saves a "ready" answer, the token
+    // is then revoked, the model-list call comes back 401 — and the very next readiness check
+    // must NOT replay the saved success for the rest of the five-minute cache window.
+    const home = await homeWithAnthropicToken();
+    let revoked = false;
+    const run = vi.fn(async () =>
+      revoked
+        ? { code: 1, stdout: "", stderr: "API Error: 401 invalid bearer token" }
+        : { code: 0, stdout: "OK" }
+    );
+    const { f } = fakeFetch(async () => jsonResponse({ error: "unauthorized" }, 401));
+    const host = new CliChatEngineHost({
+      io: {
+        run,
+        readFile: vi.fn().mockResolvedValue(""),
+        writeFile: vi.fn().mockResolvedValue(undefined),
+        sleep: vi.fn().mockResolvedValue(undefined)
+      },
+      neutralBase: "/tmp/neutral-base",
+      homeBase: home,
+      singleUser: false,
+      cliPresent: async () => true,
+      fetch: f
+    });
+
+    expect(await host.probeProvider("anthropic")).toMatchObject({ status: "ready" });
+
+    revoked = true;
+    const rejected = await host.listProviderModels("anthropic");
+    expect(JSON.stringify(rejected)).toContain("401");
+    expect(JSON.stringify(rejected)).not.toContain(ANTHROPIC_TOKEN);
+
+    expect(await host.probeProvider("anthropic")).toMatchObject({ status: "needs_login" });
+  });
+
+  it("keeps a codex readiness check honest after the vendor rejects the credential", async () => {
+    // Round-3 review finding: codex's readiness check only asks the local tool whether it holds a
+    // credential file, and it returned before the refusal was consulted — so a refused model list
+    // correctly said Not logged in and the very next readiness check said ready anyway.
+    const home = await homeWithCodexAuth();
+    const { f } = fakeFetch(async () => jsonResponse({ error: "unauthorized" }, 401));
+    const host = new CliChatEngineHost({
+      io: {
+        run: vi.fn(async (_cmd: string, args: readonly string[]) => ({
+          code: 0,
+          stdout: args.includes("--version") ? "codex-cli 0.139.0" : "Logged in using ChatGPT"
+        })),
+        readFile: vi.fn().mockResolvedValue(""),
+        writeFile: vi.fn().mockResolvedValue(undefined),
+        sleep: vi.fn().mockResolvedValue(undefined)
+      },
+      neutralBase: "/tmp/neutral-base",
+      homeBase: home,
+      singleUser: false,
+      cliPresent: async () => true,
+      fetch: f
+    });
+
+    expect(await host.probeProvider("openai-compatible")).toMatchObject({ status: "ready" });
+
+    const refused = await host.listProviderModels("openai-compatible");
+    expect(refused).toMatchObject({ status: "not_logged_in" });
+    expect(JSON.stringify(refused)).not.toContain(CODEX_TOKEN);
+
+    expect(await host.probeProvider("openai-compatible")).toMatchObject({ status: "needs_login" });
+
+    // Pressing Log in asks for a real check. It must not clear the refusal on its own: see the
+    // dedicated test below, which drives recovery through a sign-in the vendor actually accepts.
+    expect(await host.probeProvider("openai-compatible", { forceFresh: true })).toMatchObject({
+      status: "needs_login"
+    });
+  });
+
+  it("only lets a sign-in the vendor accepts clear a refused codex sign-in", async () => {
+    // Round-3 review blocker 1: pressing Log in, or simply waiting five minutes, used to make the
+    // refusal disappear and the SAME unchanged sign-in read as ready again - so the Log in button
+    // could close the sign-in screen without anyone signing in. The local tool only reports that
+    // it is holding a sign-in file, which a refused sign-in passes just as easily as a good one.
+    const home = await homeWithCodexAuth();
+    let vendorAccepts = false;
+    const { f } = fakeFetch(async () =>
+      vendorAccepts
+        ? jsonResponse({ models: [{ slug: "gpt-5.6", visibility: "list" }] })
+        : jsonResponse({ error: "unauthorized" }, 401)
+    );
+    const host = new CliChatEngineHost({
+      io: {
+        run: vi.fn(async (_cmd: string, args: readonly string[]) => ({
+          code: 0,
+          stdout: args.includes("--version") ? "codex-cli 0.139.0" : "Logged in using ChatGPT"
+        })),
+        readFile: vi.fn().mockResolvedValue(""),
+        writeFile: vi.fn().mockResolvedValue(undefined),
+        sleep: vi.fn().mockResolvedValue(undefined)
+      },
+      neutralBase: "/tmp/neutral-base",
+      homeBase: home,
+      singleUser: false,
+      cliPresent: async () => true,
+      fetch: f
+    });
+
+    expect(await host.probeProvider("openai-compatible")).toMatchObject({ status: "ready" });
+    expect(await host.listProviderModels("openai-compatible")).toMatchObject({
+      status: "not_logged_in"
+    });
+    expect(await host.probeProvider("openai-compatible")).toMatchObject({ status: "needs_login" });
+
+    // Pressing Log in while the vendor still refuses the same sign-in.
+    expect(await host.probeProvider("openai-compatible", { forceFresh: true })).toMatchObject({
+      status: "needs_login"
+    });
+
+    // Waiting past the five minutes the saved answer used to live for changes nothing.
+    const realNow = Date.now;
+    try {
+      Date.now = () => realNow() + 5 * 60_000 + 1;
+      expect(await host.probeProvider("openai-compatible")).toMatchObject({
+        status: "needs_login"
+      });
+    } finally {
+      Date.now = realNow;
+    }
+
+    // The vendor accepting the sign-in for real is the one thing that recovers it.
+    vendorAccepts = true;
+    expect(await host.probeProvider("openai-compatible", { forceFresh: true })).toMatchObject({
+      status: "ready"
+    });
+    expect(await host.probeProvider("openai-compatible")).toMatchObject({ status: "ready" });
   });
 });
