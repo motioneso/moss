@@ -82,10 +82,71 @@ export const notificationsModuleManifest = {
       id: "notifications.push",
       label: "Push notifications",
       description:
-        "Turn on push notifications for this browser and manage which devices receive them.",
+        "Turn on push notifications for this browser and manage which devices receive them. " +
+        "Needs a secure connection, is not available in every browser, and each person can " +
+        "register up to 10 devices.",
       path: "/settings?section=modules&module=notifications",
       scope: "user",
       permissionId: "notifications.update"
+    }
+  ],
+  features: [
+    {
+      id: "notifications.push",
+      description:
+        "Push notifications alert a registered browser or device, alongside the in-app bell. " +
+        "Needs a secure connection, is not supported everywhere, and allows up to 10 devices " +
+        "per person. A repeatedly-failing device is turned off but stays listed.",
+      remediations: [
+        {
+          id: "notifications.push.manage_devices",
+          description:
+            "Remove push devices no longer in use, or turn push back on for a device, under " +
+            "Push notifications in Settings.",
+          path: "/settings?section=modules&module=notifications"
+        },
+        {
+          id: "notifications.push.use_supported_browser",
+          description:
+            "Open the site over a secure (https) connection in a browser that supports push " +
+            "notifications, then check Push notifications in Settings again.",
+          path: "/settings?section=modules&module=notifications"
+        }
+      ],
+      errors: [
+        {
+          code: "push_unsupported",
+          class: "prerequisite",
+          remediationRef: "notifications.push.use_supported_browser",
+          description:
+            "Shown as 'Not available here': this browser does not support push notifications, " +
+            "or the page was not loaded over a secure connection."
+        },
+        {
+          code: "push_permission_denied",
+          class: "permission",
+          description:
+            "Shown as 'Blocked in this browser's site settings': the user previously refused " +
+            "the browser's notification permission prompt. Allow notifications for this site " +
+            "in the browser's own settings, then reload the page."
+        },
+        {
+          code: "push_device_limit",
+          class: "validation",
+          description:
+            "Registering a new device was refused because this person already has 10 " +
+            "registered devices, the most allowed. Remove a device that is no longer used, " +
+            "then try again."
+        },
+        {
+          code: "push_device_disabled",
+          class: "transient",
+          description:
+            "Shown next to a device as 'Turned off after repeated delivery failures': " +
+            "delivery failed five times in a row, so the device stopped receiving push. " +
+            "Remove it, or turn push back on for that same device to start again."
+        }
+      ]
     }
   ],
   permissions: [
@@ -98,8 +159,10 @@ export const notificationsModuleManifest = {
     },
     {
       id: "notifications.update",
-      label: "Update notification read state",
-      description: "Mark notifications read for the active actor.",
+      label: "Update notifications",
+      description:
+        "Mark notifications read for the active actor, and register or remove that actor's " +
+        "push notification devices.",
       scope: "user",
       actions: ["update"]
     },
