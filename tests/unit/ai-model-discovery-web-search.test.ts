@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inferWebSearchCapability } from "@moss/ai";
+import { cliProviderHasBuiltInSearch, inferWebSearchCapability } from "@moss/ai";
 
 describe("inferWebSearchCapability", () => {
   it("gives Claude 3.5 and later web search, but not Claude 3.0 models", () => {
@@ -38,8 +38,26 @@ describe("inferWebSearchCapability", () => {
     expect(inferWebSearchCapability("custom", "gpt-4o")).toBe(false);
   });
 
-  it("never gives CLI-discovered models web search, even a normally search-capable id", () => {
-    expect(inferWebSearchCapability("anthropic", "claude-3-5-sonnet-20241022", true)).toBe(false);
-    expect(inferWebSearchCapability("openai-compatible", "gpt-4o", true)).toBe(false);
+  it("marks CLI-discovered models by the CLI's own search tool, not the model id", () => {
+    // Claude CLI and Codex CLI each ship a web search tool, so every model they list can search,
+    // including ids the API-key path would reject.
+    expect(inferWebSearchCapability("anthropic", "claude-3-5-sonnet-20241022", true)).toBe(true);
+    expect(inferWebSearchCapability("anthropic", "claude-3-haiku-20240307", true)).toBe(true);
+    expect(inferWebSearchCapability("openai-compatible", "gpt-4o", true)).toBe(true);
+    expect(inferWebSearchCapability("openai-compatible", "gpt-4", true)).toBe(true);
+    // No CLI declares built-in search for these kinds.
+    expect(inferWebSearchCapability("google", "gemini-2.5-pro", true)).toBe(false);
+    expect(inferWebSearchCapability("ollama", "llama3.1", true)).toBe(false);
+    expect(inferWebSearchCapability("custom", "gpt-4o", true)).toBe(false);
+  });
+});
+
+describe("cliProviderHasBuiltInSearch", () => {
+  it("declares which CLI providers carry a search tool", () => {
+    expect(cliProviderHasBuiltInSearch("anthropic")).toBe(true);
+    expect(cliProviderHasBuiltInSearch("openai-compatible")).toBe(true);
+    expect(cliProviderHasBuiltInSearch("google")).toBe(false);
+    expect(cliProviderHasBuiltInSearch("ollama")).toBe(false);
+    expect(cliProviderHasBuiltInSearch("custom")).toBe(false);
   });
 });

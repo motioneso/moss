@@ -268,16 +268,33 @@ function inferTierFromModelId(providerKind: AiProviderKind, modelId: string): Ai
 }
 
 /**
- * Whether a model has a built-in web search tool from its own provider (#2228). CLI providers
- * shell out to a local login and never expose a search tool through this integration, so they
- * are excluded regardless of the underlying vendor.
+ * Which command-line providers ship their own web search tool (#2228). For a CLI-backed model the
+ * search tool belongs to the CLI, not the model family, so the flag is per provider kind. A new
+ * CLI provider adds one row here and teaches its engine to switch the tool on and report sources.
+ */
+const CLI_PROVIDER_SEARCH: Readonly<Record<AiProviderKind, { builtInSearch: boolean }>> = {
+  anthropic: { builtInSearch: true },
+  "openai-compatible": { builtInSearch: true },
+  google: { builtInSearch: false },
+  ollama: { builtInSearch: false },
+  custom: { builtInSearch: false }
+};
+
+export function cliProviderHasBuiltInSearch(providerKind: AiProviderKind): boolean {
+  return CLI_PROVIDER_SEARCH[providerKind].builtInSearch;
+}
+
+/**
+ * Whether a model has a built-in web search tool from its own provider (#2228). For CLI providers
+ * the answer is the CLI's own declaration (`CLI_PROVIDER_SEARCH`), independent of the model id.
  */
 export function inferWebSearchCapability(
   providerKind: AiProviderKind,
   providerModelId: string,
   isCli = false
 ): boolean {
-  if (isCli || providerKind === "ollama" || providerKind === "custom") return false;
+  if (isCli) return cliProviderHasBuiltInSearch(providerKind);
+  if (providerKind === "ollama" || providerKind === "custom") return false;
   const id = providerModelId.toLowerCase();
 
   if (providerKind === "anthropic") {
