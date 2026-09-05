@@ -370,9 +370,10 @@ export interface NotificationReadsTable {
 export interface PushSubscriptionsTable {
   id: string;
   owner_user_id: string;
-  endpoint: string;
-  p256dh: string;
-  auth: string;
+  /** sha256 hex of the endpoint URL; the plaintext lives only inside the envelope. */
+  endpoint_hash: string;
+  /** AES-256-GCM envelope of `{ endpoint, p256dh, auth }` (migration 0223). */
+  credentials_ciphertext: JsonColumn;
   user_agent_label: string | null;
   created_at: TimestampColumn;
   last_used_at: NullableTimestampColumn;

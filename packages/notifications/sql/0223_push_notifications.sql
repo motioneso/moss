@@ -3,15 +3,18 @@
 CREATE TABLE IF NOT EXISTS app.push_subscriptions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
-  endpoint text NOT NULL,
-  p256dh text NOT NULL,
-  auth text NOT NULL,
+  -- Security review 1, finding 2: the push endpoint URL and the browser's encryption keys
+  -- are bearer credentials (anyone holding them can push to that device), so they never sit
+  -- in plaintext columns. The row keeps only a sha256 of the endpoint for uniqueness and an
+  -- AES-256-GCM envelope of {endpoint, p256dh, auth}, opened by the delivery worker.
+  endpoint_hash text NOT NULL,
+  credentials_ciphertext jsonb NOT NULL,
   user_agent_label text,
   created_at timestamptz NOT NULL DEFAULT now(),
   last_used_at timestamptz,
   failure_count integer NOT NULL DEFAULT 0,
   disabled_at timestamptz,
-  CONSTRAINT push_subscriptions_owner_endpoint_key UNIQUE (owner_user_id, endpoint)
+  CONSTRAINT push_subscriptions_owner_endpoint_key UNIQUE (owner_user_id, endpoint_hash)
 );
 
 CREATE INDEX IF NOT EXISTS push_subscriptions_owner_user_id_idx

@@ -58,18 +58,13 @@ function summaryJob(data: PushSummaryJobPayload): Job<PushSummaryJobPayload> {
   } as unknown as Job<PushSummaryJobPayload>;
 }
 
+// The worker sees decrypted delivery targets (listActiveForDelivery), never the stored row.
 function fakeSubscription(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: "sub-1",
-    owner_user_id: "user-1",
     endpoint: "https://push.example/ep",
     p256dh: "p256dh-key",
     auth: "auth-key",
-    user_agent_label: "Chrome on Mac OS X",
-    created_at: new Date(),
-    last_used_at: null,
-    failure_count: 0,
-    disabled_at: null,
     ...overrides
   };
 }
@@ -82,7 +77,7 @@ describe("runPushDeliverJob", () => {
 
   it("does nothing when the notification no longer exists (deleted or RLS-invisible)", async () => {
     const { runPushDeliverJob } = await import("@moss/notifications");
-    const listActiveForActor = vi.fn();
+    const listActiveForDelivery = vi.fn();
     const getById = vi.fn().mockResolvedValue(undefined);
     const sendWebPush = vi.fn();
 
@@ -91,20 +86,20 @@ describe("runPushDeliverJob", () => {
       fakeScopedDb,
       {
         notificationsRepository: { getById } as never,
-        subscriptionsRepository: { listActiveForActor } as never,
+        subscriptionsRepository: { listActiveForDelivery } as never,
         cipher: {} as never,
         sendWebPush
       }
     );
 
-    expect(listActiveForActor).not.toHaveBeenCalled();
+    expect(listActiveForDelivery).not.toHaveBeenCalled();
     expect(sendWebPush).not.toHaveBeenCalled();
   });
 
   it("does nothing when the recipient has no active subscriptions", async () => {
     const { runPushDeliverJob } = await import("@moss/notifications");
     const getById = vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null });
-    const listActiveForActor = vi.fn().mockResolvedValue([]);
+    const listActiveForDelivery = vi.fn().mockResolvedValue([]);
     const sendWebPush = vi.fn();
 
     await runPushDeliverJob(
@@ -112,7 +107,7 @@ describe("runPushDeliverJob", () => {
       fakeScopedDb,
       {
         notificationsRepository: { getById } as never,
-        subscriptionsRepository: { listActiveForActor } as never,
+        subscriptionsRepository: { listActiveForDelivery } as never,
         cipher: {} as never,
         sendWebPush
       }
@@ -125,7 +120,7 @@ describe("runPushDeliverJob", () => {
     const { runPushDeliverJob } = await import("@moss/notifications");
     const subscription = fakeSubscription();
     const getById = vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null });
-    const listActiveForActor = vi.fn().mockResolvedValue([subscription]);
+    const listActiveForDelivery = vi.fn().mockResolvedValue([subscription]);
     const recordDeliverySuccess = vi.fn();
     const recordDeliveryFailure = vi.fn();
     const del = vi.fn();
@@ -137,7 +132,7 @@ describe("runPushDeliverJob", () => {
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: {
-          listActiveForActor,
+          listActiveForDelivery,
           recordDeliverySuccess,
           recordDeliveryFailure,
           delete: del
@@ -157,7 +152,7 @@ describe("runPushDeliverJob", () => {
     const { runPushDeliverJob } = await import("@moss/notifications");
     const subscription = fakeSubscription();
     const getById = vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null });
-    const listActiveForActor = vi.fn().mockResolvedValue([subscription]);
+    const listActiveForDelivery = vi.fn().mockResolvedValue([subscription]);
     const recordDeliverySuccess = vi.fn();
     const recordDeliveryFailure = vi.fn();
     const del = vi.fn();
@@ -171,7 +166,7 @@ describe("runPushDeliverJob", () => {
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: {
-          listActiveForActor,
+          listActiveForDelivery,
           recordDeliverySuccess,
           recordDeliveryFailure,
           delete: del
@@ -190,7 +185,7 @@ describe("runPushDeliverJob", () => {
     const { runPushDeliverJob } = await import("@moss/notifications");
     const subscription = fakeSubscription();
     const getById = vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null });
-    const listActiveForActor = vi.fn().mockResolvedValue([subscription]);
+    const listActiveForDelivery = vi.fn().mockResolvedValue([subscription]);
     const del = vi.fn();
     const recordDeliveryFailure = vi.fn();
     const sendWebPush = vi
@@ -203,7 +198,7 @@ describe("runPushDeliverJob", () => {
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: {
-          listActiveForActor,
+          listActiveForDelivery,
           recordDeliverySuccess: vi.fn(),
           recordDeliveryFailure,
           delete: del
@@ -221,7 +216,7 @@ describe("runPushDeliverJob", () => {
     const { runPushDeliverJob } = await import("@moss/notifications");
     const subscription = fakeSubscription();
     const getById = vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null });
-    const listActiveForActor = vi.fn().mockResolvedValue([subscription]);
+    const listActiveForDelivery = vi.fn().mockResolvedValue([subscription]);
     const del = vi.fn();
     const recordDeliveryFailure = vi.fn();
     const sendWebPush = vi
@@ -234,7 +229,7 @@ describe("runPushDeliverJob", () => {
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: {
-          listActiveForActor,
+          listActiveForDelivery,
           recordDeliverySuccess: vi.fn(),
           recordDeliveryFailure,
           delete: del
@@ -253,7 +248,7 @@ describe("runPushDeliverJob", () => {
     const subA = fakeSubscription({ id: "sub-a", endpoint: "https://push.example/a" });
     const subB = fakeSubscription({ id: "sub-b", endpoint: "https://push.example/b" });
     const getById = vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null });
-    const listActiveForActor = vi.fn().mockResolvedValue([subA, subB]);
+    const listActiveForDelivery = vi.fn().mockResolvedValue([subA, subB]);
     const recordDeliverySuccess = vi.fn();
     const recordDeliveryFailure = vi.fn();
     const sendWebPush = vi.fn().mockImplementation(async (target: { endpoint: string }) => {
@@ -268,7 +263,7 @@ describe("runPushDeliverJob", () => {
       {
         notificationsRepository: { getById } as never,
         subscriptionsRepository: {
-          listActiveForActor,
+          listActiveForDelivery,
           recordDeliverySuccess,
           recordDeliveryFailure,
           delete: vi.fn()
@@ -293,7 +288,7 @@ describe("runPushSummaryJob", () => {
   it("sends nothing when no unread notification matches this release window", async () => {
     const { runPushSummaryJob } = await import("@moss/notifications");
     mockCountRows = [{ count: "0" }];
-    const listActiveForActor = vi.fn();
+    const listActiveForDelivery = vi.fn();
     const sendWebPush = vi.fn();
 
     await runPushSummaryJob(
@@ -303,17 +298,21 @@ describe("runPushSummaryJob", () => {
         releaseAt: "2026-09-04T08:00:00.000Z"
       }),
       fakeScopedDb,
-      { subscriptionsRepository: { listActiveForActor } as never, cipher: {} as never, sendWebPush }
+      {
+        subscriptionsRepository: { listActiveForDelivery } as never,
+        cipher: {} as never,
+        sendWebPush
+      }
     );
 
-    expect(listActiveForActor).not.toHaveBeenCalled();
+    expect(listActiveForDelivery).not.toHaveBeenCalled();
     expect(sendWebPush).not.toHaveBeenCalled();
   });
 
   it("sends nothing when the count is positive but there are no active subscriptions", async () => {
     const { runPushSummaryJob } = await import("@moss/notifications");
     mockCountRows = [{ count: "2" }];
-    const listActiveForActor = vi.fn().mockResolvedValue([]);
+    const listActiveForDelivery = vi.fn().mockResolvedValue([]);
     const sendWebPush = vi.fn();
 
     await runPushSummaryJob(
@@ -323,7 +322,11 @@ describe("runPushSummaryJob", () => {
         releaseAt: "2026-09-04T08:00:00.000Z"
       }),
       fakeScopedDb,
-      { subscriptionsRepository: { listActiveForActor } as never, cipher: {} as never, sendWebPush }
+      {
+        subscriptionsRepository: { listActiveForDelivery } as never,
+        cipher: {} as never,
+        sendWebPush
+      }
     );
 
     expect(sendWebPush).not.toHaveBeenCalled();
@@ -333,7 +336,7 @@ describe("runPushSummaryJob", () => {
     const { runPushSummaryJob } = await import("@moss/notifications");
     mockCountRows = [{ count: "1" }];
     const subscription = fakeSubscription();
-    const listActiveForActor = vi.fn().mockResolvedValue([subscription]);
+    const listActiveForDelivery = vi.fn().mockResolvedValue([subscription]);
     const sendWebPush = vi.fn().mockResolvedValue(undefined);
 
     await runPushSummaryJob(
@@ -345,7 +348,7 @@ describe("runPushSummaryJob", () => {
       fakeScopedDb,
       {
         subscriptionsRepository: {
-          listActiveForActor,
+          listActiveForDelivery,
           recordDeliverySuccess: vi.fn(),
           recordDeliveryFailure: vi.fn(),
           delete: vi.fn()
@@ -366,7 +369,7 @@ describe("runPushSummaryJob", () => {
     const { runPushSummaryJob } = await import("@moss/notifications");
     mockCountRows = [{ count: "3" }];
     const subscription = fakeSubscription();
-    const listActiveForActor = vi.fn().mockResolvedValue([subscription]);
+    const listActiveForDelivery = vi.fn().mockResolvedValue([subscription]);
     const sendWebPush = vi.fn().mockResolvedValue(undefined);
 
     await runPushSummaryJob(
@@ -378,7 +381,7 @@ describe("runPushSummaryJob", () => {
       fakeScopedDb,
       {
         subscriptionsRepository: {
-          listActiveForActor,
+          listActiveForDelivery,
           recordDeliverySuccess: vi.fn(),
           recordDeliveryFailure: vi.fn(),
           delete: vi.fn()

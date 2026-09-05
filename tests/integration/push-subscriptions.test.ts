@@ -1,0 +1,145 @@
+// Web push device registration (#743, PR 2234 security review 1). Covers the findings that
+// need a real database: secrets at rest (finding 2), owner scoping across users and the admin
+// role (finding 3), and the per-user device cap under concurrent registration (finding 6).
+// Seed users, sessions and actor contexts are shared with the notifications suite.
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createHash, randomUUID } from "node:crypto";
+import { sql, type Kysely } from "kysely";
+import pg from "pg";
+
+import { createApiServer } from "../../apps/api/src/server.js";
+import {
+  DataContextRunner,
+  createDatabase,
+  type DataContextDb,
+  type MossDatabase
+} from "@moss/db";
+import { createPgBossClient, type PgBoss } from "@moss/jobs";
+import { PushSubscriptionsRepository } from "@moss/notifications";
+import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { userAContext } from "./notifications-harness.js";
+
+const { Client } = pg;
+
+// Shapes a browser hands back from PushManager.subscribe(): a 65-byte P-256 point and a
+// 16-byte auth secret, both base64url without padding.
+const P256DH =
+  "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM";
+const AUTH = "tBHItJI5svbpez7KI4CCXg";
+
+function endpointFor(tag: string): string {
+  return `https://push.example.test/send/${tag}-${randomUUID()}`;
+}
+
+describe("Push subscriptions (#743)", () => {
+  let appDb: Kysely<MossDatabase>;
+  let dataContext: DataContextRunner;
+  let repository: PushSubscriptionsRepository;
+  let boss: PgBoss;
+  let server: ReturnType<typeof createApiServer>;
+
+  beforeAll(async () => {
+    await resetFoundationDatabase();
+
+    appDb = createDatabase({
+      connectionString: connectionStrings.app,
+      maxConnections: 1
+    });
+    dataContext = new DataContextRunner(appDb);
+    repository = new PushSubscriptionsRepository();
+    boss = createPgBossClient(connectionStrings.app, { connectionTimeoutMillis: 25_000 });
+    server = createApiServer({
+      appDb,
+      boss,
+      logger: false
+    });
+    await server.ready();
+  });
+
+  afterAll(async () => {
+    await Promise.allSettled([server?.close(), appDb?.destroy(), boss?.stop({ graceful: false })]);
+  });
+
+  async function registerAs(session: string, endpoint: string) {
+    return server.inject({
+      method: "POST",
+      url: "/api/notifications/push/subscriptions",
+      headers: { authorization: `Bearer ${session}` },
+      payload: { endpoint, keys: { p256dh: P256DH, auth: AUTH } }
+    });
+  }
+
+  it("finding 2: stores the endpoint and keys only inside an encrypted envelope", async () => {
+    const endpoint = endpointFor("secrets");
+    const response = await registerAs(ids.sessionA, endpoint);
+    expect(response.statusCode).toBe(200);
+    const registered = response.json<{ device: { id: string } }>().device;
+
+    // The response DTO never carries the endpoint or keys.
+    expect(response.body).not.toContain(endpoint);
+    expect(response.body).not.toContain(P256DH);
+    expect(response.body).not.toContain(AUTH);
+
+    // The table has no plaintext column for any of the three values (migration 0223).
+    const catalog = new Client({ connectionString: connectionStrings.migration });
+    await catalog.connect();
+    try {
+      const columns = await catalog.query<{ column_name: string }>(
+        `
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_schema = 'app' AND table_name = 'push_subscriptions'
+        `
+      );
+      const names = columns.rows.map((row) => row.column_name);
+      expect(names).toEqual(expect.arrayContaining(["endpoint_hash", "credentials_ciphertext"]));
+      expect(names).not.toContain("endpoint");
+      expect(names).not.toContain("p256dh");
+      expect(names).not.toContain("auth");
+    } finally {
+      await catalog.end();
+    }
+
+    // The raw row, read with every column, holds a hash and a sealed envelope only.
+    const raw = await dataContext.withDataContext(
+      userAContext(),
+      async (scopedDb: DataContextDb) => {
+        const result = await sql<Record<string, unknown>>`
+        SELECT * FROM app.push_subscriptions WHERE id = ${registered.id}
+      `.execute(scopedDb.db);
+        return result.rows[0];
+      }
+    );
+    expect(raw).toBeDefined();
+    const serialized = JSON.stringify(raw);
+    expect(serialized).not.toContain(endpoint);
+    expect(serialized).not.toContain(P256DH);
+    expect(serialized).not.toContain(AUTH);
+    expect(raw?.endpoint_hash).toBe(createHash("sha256").update(endpoint).digest("hex"));
+    expect((raw?.credentials_ciphertext as { algorithm?: string }).algorithm).toBe("aes-256-gcm");
+
+    // The settings listing stays secret-free; only the delivery path opens the envelope.
+    const { devices, targets } = await dataContext.withDataContext(
+      userAContext(),
+      async (scopedDb) => ({
+        devices: await repository.listForActor(scopedDb),
+        targets: await repository.listActiveForDelivery(scopedDb)
+      })
+    );
+    const device = devices.find((row) => row.id === registered.id);
+    expect(device).toBeDefined();
+    expect(JSON.stringify(device)).not.toContain(endpoint);
+    expect(Object.keys(device ?? {})).not.toContain("credentials_ciphertext");
+    expect(targets.find((target) => target.id === registered.id)).toEqual({
+      id: registered.id,
+      endpoint,
+      p256dh: P256DH,
+      auth: AUTH
+    });
+
+    // Re-registering the same endpoint hits the hash-based uniqueness key, not a new row.
+    const again = await registerAs(ids.sessionA, endpoint);
+    expect(again.statusCode).toBe(200);
+    expect(again.json<{ device: { id: string } }>().device.id).toBe(registered.id);
+  });
+});

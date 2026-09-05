@@ -17,19 +17,40 @@ export class PushSigningCipher extends JsonSecretCipher {
 }
 
 /**
+ * {@link JsonSecretCipher} bound to the "push subscription" domain label. Encrypts each
+ * device's `{ endpoint, p256dh, auth }` at rest (security review 1, finding 2): those three
+ * values are bearer credentials for pushing to that browser, so the row stores only this
+ * envelope plus a hash of the endpoint. A distinct label from the signing key keeps the two
+ * envelope kinds from being swapped for each other.
+ */
+export class PushSubscriptionCipher extends JsonSecretCipher {
+  constructor(keyring: Keyring) {
+    super(keyring, "push subscription");
+  }
+}
+
+/**
  * Reuses `JARVIS_AI_SECRET_KEY` (Ben's 2026-09-01 ruling: no new feature may require a
  * hand-edited settings file) rather than introducing a push-specific key env var.
  */
-export function createPushSigningCipher(env: NodeJS.ProcessEnv = process.env): PushSigningCipher {
-  return new PushSigningCipher(
-    resolveKeyring(
-      "JARVIS_AI_SECRET_KEY",
-      "JARVIS_AI_SECRET_KEY_ID",
-      "JARVIS_AI_SECRET_KEYS",
-      "jarv1s-development-ai-secret",
-      env
-    )
+function resolvePushKeyring(env: NodeJS.ProcessEnv): Keyring {
+  return resolveKeyring(
+    "JARVIS_AI_SECRET_KEY",
+    "JARVIS_AI_SECRET_KEY_ID",
+    "JARVIS_AI_SECRET_KEYS",
+    "jarv1s-development-ai-secret",
+    env
   );
+}
+
+export function createPushSigningCipher(env: NodeJS.ProcessEnv = process.env): PushSigningCipher {
+  return new PushSigningCipher(resolvePushKeyring(env));
+}
+
+export function createPushSubscriptionCipher(
+  env: NodeJS.ProcessEnv = process.env
+): PushSubscriptionCipher {
+  return new PushSubscriptionCipher(resolvePushKeyring(env));
 }
 
 export interface PushSigningKeyRecord {

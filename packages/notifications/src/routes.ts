@@ -19,7 +19,7 @@ import { createPushSigningCipher, getOrGeneratePushSigningKey } from "./push-cry
 import {
   PushSubscriptionLimitError,
   PushSubscriptionsRepository,
-  type PushSubscription
+  type PushSubscriptionDevice
 } from "./push-subscriptions-repository.js";
 import { NotificationsRepository, type NotificationWithReadState } from "./repository.js";
 
@@ -179,7 +179,7 @@ export function registerNotificationsRoutes(
 }
 
 /** Serialize a stored push subscription row into the client-facing device DTO. */
-function serializePushDevice(subscription: PushSubscription): PushDeviceDto {
+function serializePushDevice(subscription: PushSubscriptionDevice): PushDeviceDto {
   return {
     id: subscription.id,
     label: subscription.user_agent_label,

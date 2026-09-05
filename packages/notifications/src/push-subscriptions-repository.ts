@@ -1,8 +1,25 @@
+import { createHash } from "node:crypto";
+
 import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb, type PushSubscription } from "@moss/db";
 
-export type { PushSubscription };
+import { createPushSubscriptionCipher, type PushSubscriptionCipher } from "./push-crypto.js";
+
+/**
+ * A device row with its secret envelope stripped: what the settings page and the
+ * registration route see. The endpoint and keys only leave the row through
+ * {@link PushSubscriptionsRepository.listActiveForDelivery}.
+ */
+export type PushSubscriptionDevice = Omit<PushSubscription, "credentials_ciphertext">;
+
+/** Decrypted delivery target for one device; lives only inside the delivery worker. */
+export interface PushDeliveryTarget {
+  readonly id: string;
+  readonly endpoint: string;
+  readonly p256dh: string;
+  readonly auth: string;
+}
 
 const MAX_SUBSCRIPTIONS_PER_USER = 10;
 
@@ -13,32 +30,61 @@ export class PushSubscriptionLimitError extends Error {
   }
 }
 
+const DEVICE_COLUMNS = [
+  "id",
+  "owner_user_id",
+  "endpoint_hash",
+  "user_agent_label",
+  "created_at",
+  "last_used_at",
+  "failure_count",
+  "disabled_at"
+] as const;
+
+/** sha256 hex of the endpoint URL: the uniqueness key, never reversible to the URL. */
+export function hashPushEndpoint(endpoint: string): string {
+  return createHash("sha256").update(endpoint, "utf8").digest("hex");
+}
+
 /**
  * All tables here are RLS-scoped to `app.current_actor_user_id()` (migration 0223), so
  * every method here is implicitly owner-scoped: the settings page reads/writes its own
  * user's rows, and the delivery worker (running in the recipient's data context) reads
  * and cleans up that same recipient's rows. No method takes an explicit owner id.
+ *
+ * Secrets at rest (security review 1, finding 2): the endpoint URL and the browser's
+ * `p256dh`/`auth` keys are stored only inside an AES-256-GCM envelope; the row carries a
+ * sha256 of the endpoint for the uniqueness constraint. Only `listActiveForDelivery`
+ * opens the envelope.
  */
 export class PushSubscriptionsRepository {
-  /** All of the current actor's registered devices, active and disabled alike. */
-  async listForActor(scopedDb: DataContextDb): Promise<readonly PushSubscription[]> {
+  constructor(private readonly cipher: PushSubscriptionCipher = createPushSubscriptionCipher()) {}
+
+  /** All of the current actor's registered devices, active and disabled alike. Secret-free. */
+  async listForActor(scopedDb: DataContextDb): Promise<readonly PushSubscriptionDevice[]> {
     assertDataContextDb(scopedDb);
     return scopedDb.db
       .selectFrom("app.push_subscriptions")
-      .selectAll()
+      .select(DEVICE_COLUMNS)
       .orderBy("created_at", "asc")
       .execute();
   }
 
-  /** Non-disabled devices only, for delivery fan-out. */
-  async listActiveForActor(scopedDb: DataContextDb): Promise<readonly PushSubscription[]> {
+  /**
+   * Non-disabled devices only, decrypted, for delivery fan-out. The returned targets hold
+   * the plaintext endpoint and keys: they must not be logged, serialized into a job
+   * payload, or returned from a route.
+   */
+  async listActiveForDelivery(scopedDb: DataContextDb): Promise<readonly PushDeliveryTarget[]> {
     assertDataContextDb(scopedDb);
-    return scopedDb.db
+    const rows = await scopedDb.db
       .selectFrom("app.push_subscriptions")
-      .selectAll()
+      .select(["id", "credentials_ciphertext"])
       .where("disabled_at", "is", null)
       .orderBy("created_at", "asc")
       .execute();
+
+    return rows.map((row) => this.openCredentials(row.id, row.credentials_ciphertext));
   }
 
   /**
@@ -55,37 +101,44 @@ export class PushSubscriptionsRepository {
       readonly auth: string;
       readonly userAgentLabel: string | null;
     }
-  ): Promise<PushSubscription> {
+  ): Promise<PushSubscriptionDevice> {
     assertDataContextDb(scopedDb);
+
+    const endpointHash = hashPushEndpoint(input.endpoint);
 
     const existingCount = await scopedDb.db
       .selectFrom("app.push_subscriptions")
       .select(({ fn }) => fn.countAll<string>().as("count"))
-      .where("endpoint", "!=", input.endpoint)
+      .where("endpoint_hash", "!=", endpointHash)
       .executeTakeFirst();
 
     if (existingCount && Number(existingCount.count) >= MAX_SUBSCRIPTIONS_PER_USER) {
       throw new PushSubscriptionLimitError();
     }
 
-    const rows = await sql<PushSubscription>`
+    const ciphertext = this.cipher.encryptJson({
+      endpoint: input.endpoint,
+      p256dh: input.p256dh,
+      auth: input.auth
+    });
+
+    const rows = await sql<PushSubscriptionDevice>`
       INSERT INTO app.push_subscriptions (
-        owner_user_id, endpoint, p256dh, auth, user_agent_label
+        owner_user_id, endpoint_hash, credentials_ciphertext, user_agent_label
       )
       VALUES (
         app.current_actor_user_id(),
-        ${input.endpoint},
-        ${input.p256dh},
-        ${input.auth},
+        ${endpointHash},
+        ${JSON.stringify(ciphertext)}::jsonb,
         ${input.userAgentLabel}
       )
-      ON CONFLICT (owner_user_id, endpoint) DO UPDATE SET
-        p256dh = excluded.p256dh,
-        auth = excluded.auth,
+      ON CONFLICT (owner_user_id, endpoint_hash) DO UPDATE SET
+        credentials_ciphertext = excluded.credentials_ciphertext,
         user_agent_label = excluded.user_agent_label,
         disabled_at = NULL,
         failure_count = 0
-      RETURNING *
+      RETURNING id, owner_user_id, endpoint_hash, user_agent_label, created_at, last_used_at,
+        failure_count, disabled_at
     `.execute(scopedDb.db);
 
     const row = rows.rows[0];
@@ -121,5 +174,14 @@ export class PushSubscriptionsRepository {
           disabled_at = CASE WHEN failure_count + 1 >= 5 THEN now() ELSE disabled_at END
       WHERE id = ${id}
     `.execute(scopedDb.db);
+  }
+
+  private openCredentials(id: string, envelope: unknown): PushDeliveryTarget {
+    const decrypted = this.cipher.decryptJson(this.cipher.parseEnvelope(envelope));
+    const { endpoint, p256dh, auth } = decrypted;
+    if (typeof endpoint !== "string" || typeof p256dh !== "string" || typeof auth !== "string") {
+      throw new Error("push subscription envelope is missing its endpoint or keys");
+    }
+    return { id, endpoint, p256dh, auth };
   }
 }

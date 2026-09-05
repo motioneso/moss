@@ -9,7 +9,7 @@ import { createPushSigningCipher, getOrGeneratePushSigningKey } from "./push-cry
 import type { PushDeliverJobPayload, PushSummaryJobPayload } from "./push-jobs.js";
 import {
   PushSubscriptionsRepository,
-  type PushSubscription as PushSubscriptionRow
+  type PushDeliveryTarget
 } from "./push-subscriptions-repository.js";
 import { NotificationsRepository } from "./repository.js";
 
@@ -56,7 +56,7 @@ async function deliverToSubscriptions(
   scopedDb: DataContextDb,
   subscriptionsRepository: PushSubscriptionsRepository,
   sendWebPush: typeof webpush.sendNotification,
-  subscriptions: readonly PushSubscriptionRow[],
+  subscriptions: readonly PushDeliveryTarget[],
   signingKey: { readonly subject: string; readonly publicKey: string; readonly privateKey: string },
   payload: WebPushPayload
 ): Promise<void> {
@@ -107,7 +107,7 @@ export async function runPushDeliverJob(
     return;
   }
 
-  const subscriptions = await subscriptionsRepository.listActiveForActor(scopedDb);
+  const subscriptions = await subscriptionsRepository.listActiveForDelivery(scopedDb);
   if (subscriptions.length === 0) {
     return;
   }
@@ -160,7 +160,7 @@ export async function runPushSummaryJob(
     return;
   }
 
-  const subscriptions = await subscriptionsRepository.listActiveForActor(scopedDb);
+  const subscriptions = await subscriptionsRepository.listActiveForDelivery(scopedDb);
   if (subscriptions.length === 0) {
     return;
   }
