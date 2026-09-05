@@ -2,8 +2,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parseEnv } from "node:util";
 
 import { describe, expect, it } from "vitest";
+import { resolveKeyring } from "@moss/db";
 
 import {
   TlsConfigError,
@@ -359,6 +361,36 @@ describe("setup-prod.ts subprocess (#1505)", () => {
         "https://jarvis.lan"
       );
       expect(content).toContain("MOSS_AUTH_BASE_URL=http://localhost:3000");
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it("generates distinct keys for every production credential store", () => {
+    const outDir = mkdtempSync(join(tmpdir(), "setup-prod-secrets-"));
+    try {
+      const result = runSetup(outDir, {
+        JARVIS_TLS_HOST: undefined,
+        JARVIS_TLS_ISSUER: undefined
+      });
+      expect(result.exitCode).toBe(0);
+      const env = parseEnv(readFileSync(join(outDir, "env.production.local"), "utf8"));
+      expect(env.NODE_ENV).toBe("production");
+      const stores = ["CONNECTOR", "INTEGRATIONS", "AI", "MODULE_CREDENTIAL", "NEWS_CREDENTIAL"];
+      const secrets = stores.map((store) => env[`MOSS_${store}_SECRET_KEY`]);
+      for (const secret of secrets) expect(secret).toMatch(/^[a-f0-9]{64}$/);
+      expect(new Set(secrets).size).toBe(stores.length);
+      for (const store of stores) {
+        expect(() =>
+          resolveKeyring(
+            `JARVIS_${store}_SECRET_KEY`,
+            `JARVIS_${store}_SECRET_KEY_ID`,
+            `JARVIS_${store}_SECRET_KEYS`,
+            "unused-development-default",
+            env
+          )
+        ).not.toThrow();
+      }
     } finally {
       rmSync(outDir, { recursive: true, force: true });
     }
