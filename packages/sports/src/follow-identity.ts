@@ -11,8 +11,9 @@ import type { SourceTeamRef } from "./source/sports-source.js";
 // to load. So there is no reading left. A follow saved from today on carries the provider's
 // permanent id. A follow saved before this change carries none, and matches NOTHING anywhere —
 // no game, no standings row, no briefing fact, no story — until the person is asked once which
-// team they meant and picks. The saved short name is read in exactly one place, to suggest
-// candidates for that question, and it can never select a team on its own.
+// team they meant and picks. The saved short name is read in exactly one place, to put the likely
+// teams first in that question, and it can never select a team on its own or hide any other team
+// from the list (review finding S1, round 6).
 export interface ResolvedTeamIdentity {
   /** The team this follow means, looked up in today's team list by permanent id. Null when no id
    *  is stored, or when today's list has no team with that id. */
@@ -25,9 +26,9 @@ export interface ResolvedTeamIdentity {
   /** True when no permanent id is stored, so this follow must be kept out of every match and the
    *  person asked which team they meant. */
   readonly needsChoice: boolean;
-  /** Teams to offer as the answer to that question: the ones in today's list whose short name is
-   *  the saved one, or the whole competition when none of them is. Empty when the list did not
-   *  load, which is also what `teamListLoaded` reports. */
+  /** Teams to offer as the answer to that question: every team in today's list, with the ones
+   *  whose short name is the saved one first. Empty when the list did not load, which is also
+   *  what `teamListLoaded` reports. */
   readonly candidates: readonly SourceTeamRef[];
   /** False when today's team list did not load at all, so no choice can be offered yet. */
   readonly teamListLoaded: boolean;
@@ -52,22 +53,26 @@ export function resolveFollowIdentity(
       teamListLoaded
     };
   }
-  // No permanent id: an older save. The saved short name is used ONLY to shorten the list of
-  // teams the person is offered, never to pick one. If nothing answers to it, offer the whole
-  // competition rather than silently offering nothing.
+  // No permanent id: an older save. The saved short name is used ONLY to ORDER the teams the
+  // person is offered, never to shorten the list and never to pick one (review finding S1, round
+  // 6). Hiding the teams that do not answer to the saved short name looked helpful and was not:
+  // an older Tigers save of "413" was offered only the club literally named 413, and the person
+  // could not reach the team they actually meant. Every team in the competition stays reachable;
+  // the ones answering to the saved name simply come first.
   const savedShortName = saved.teamKey;
-  const named =
-    savedShortName === null
-      ? []
-      : teams.filter(
-          (team) => team.abbreviation === savedShortName || team.teamKey === savedShortName
-        );
+  const answersToSavedName = (team: SourceTeamRef): boolean =>
+    savedShortName !== null &&
+    (team.abbreviation === savedShortName || team.teamKey === savedShortName);
+  const candidates = [
+    ...teams.filter((team) => answersToSavedName(team)),
+    ...teams.filter((team) => !answersToSavedName(team))
+  ];
   return {
     team: null,
     sourceTeamId: null,
     catalogKey: null,
     needsChoice: true,
-    candidates: named.length > 0 ? named : teams,
+    candidates,
     teamListLoaded
   };
 }

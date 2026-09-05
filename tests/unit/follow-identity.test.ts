@@ -91,6 +91,30 @@ describe("resolveFollowIdentity with no permanent team id saved", () => {
     expect(identity.candidates).toHaveLength(2);
   });
 
+  it("keeps every team reachable when one club is named after another club's number", () => {
+    // Review finding S1, round 6 (2026-09-05). "413" is Pacific Tigers' permanent number and also
+    // a different club's short name. Offering only the club literally called 413 left a Tigers
+    // follower unable to answer the question at all. Everyone is offered; the club whose name
+    // matches the saved text simply comes first.
+    const named413 = team({
+      teamKey: "413",
+      sourceTeamId: "9001",
+      abbreviation: "413",
+      name: "Team 413"
+    });
+    const identity = resolveFollowIdentity({ teamKey: "413", sourceTeamId: null }, [
+      LUTES,
+      TIGERS,
+      named413
+    ]);
+    expect(identity.needsChoice).toBe(true);
+    expect(identity.candidates.map((candidate) => candidate.name)).toEqual([
+      "Team 413",
+      "Pacific Lutheran Lutes",
+      "Pacific Tigers"
+    ]);
+  });
+
   it("reports that no team list loaded, so no choice can be offered yet", () => {
     const identity = resolveFollowIdentity({ teamKey: "pac", sourceTeamId: null }, []);
     expect(identity.needsChoice).toBe(true);

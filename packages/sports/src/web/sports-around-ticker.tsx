@@ -251,13 +251,13 @@ function BoardGame(props: {
         side={first}
         pre={pre}
         dim={winner !== null && winner !== first.teamKey}
-        followed={isFollowed(followedPairs, competitionKey, first.teamKey, first.sourceTeamId)}
+        followed={isFollowed(followedPairs, competitionKey, first.sourceTeamId)}
       />
       <BoardSide
         side={second}
         pre={pre}
         dim={winner !== null && winner !== second.teamKey}
-        followed={isFollowed(followedPairs, competitionKey, second.teamKey, second.sourceTeamId)}
+        followed={isFollowed(followedPairs, competitionKey, second.sourceTeamId)}
       />
     </div>
   );

@@ -12,7 +12,12 @@ import {
   type FollowedTeamIndex
 } from "../news-ranking.js";
 import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
-export { isFollowed, followedTeamIndex, EMPTY_FOLLOWED_TEAMS } from "../news-ranking.js";
+export {
+  isFollowed,
+  isFollowedStoryTeam,
+  followedTeamIndex,
+  EMPTY_FOLLOWED_TEAMS
+} from "../news-ranking.js";
 export type { FollowedTeamIndex } from "../news-ranking.js";
 
 function storyKey(headline: Headline): string {

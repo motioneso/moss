@@ -44,19 +44,32 @@ export function followedTeamIndex(
   return { byNumber, byCatalogKey };
 }
 
-/** Does this game side, standings row or tagged story belong to a team the reader follows?
+/** Does this game side or standings row belong to a team the reader follows?
  *
- *  A row that carries a permanent id is settled by that id alone — if the id is not a followed
- *  one, the answer is no, full stop. There is no falling through to the short name, which is what
- *  marked Pacific Lutheran as followed on a page where only Pacific Tigers was. Only a row with no
- *  id at all (a tagged story) falls to the list key, which is itself derived from ids. */
+ *  The permanent id is the only thing asked (review finding S1, round 6). A row that carries no id
+ *  — an older cached game or standings table — belongs to NOBODY. It does not fall through to the
+ *  list key: that key can still be a short name two teams share, and falling through to it is what
+ *  marked Pacific Lutheran as followed on a page where only Pacific Tigers was. */
 export function isFollowed(
   followed: FollowedTeamIndex,
   competitionKey: string,
-  teamKey: string,
   sourceTeamId?: string | null
 ): boolean {
-  if (sourceTeamId != null) return followed.byNumber.has(`${competitionKey}:${sourceTeamId}`);
+  if (sourceTeamId == null) return false;
+  return followed.byNumber.has(`${competitionKey}:${sourceTeamId}`);
+}
+
+/** Does this tagged story belong to a team the reader follows?
+ *
+ *  Stories are the one place with no permanent id on the wire: a headline carries only the key
+ *  today's team list gave the team it was tagged with. That key is worked out from the permanent
+ *  id at BOTH ends, so matching on it is matching on the id by another name — which is why this
+ *  rule exists here and nowhere else. Game sides and standings rows must never use it. */
+export function isFollowedStoryTeam(
+  followed: FollowedTeamIndex,
+  competitionKey: string,
+  teamKey: string
+): boolean {
   return followed.byCatalogKey.has(`${competitionKey}:${teamKey}`);
 }
 
@@ -79,7 +92,7 @@ export function storyWeight(headline: Headline, followedPairs: FollowedTeamIndex
   if (headline.summary) weight += 1;
   if (
     competitionKey !== null &&
-    headline.teamKeys.some((key) => isFollowed(followedPairs, competitionKey, key))
+    headline.teamKeys.some((key) => isFollowedStoryTeam(followedPairs, competitionKey, key))
   ) {
     weight += 2;
   }

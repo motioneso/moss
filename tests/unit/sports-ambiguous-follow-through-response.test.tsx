@@ -218,3 +218,140 @@ describe("a club whose name looks like another club's number, all the way to the
     expect(mine[0]).toContain("Pacific Tigers");
   });
 });
+
+// Re-review 5 blocker 1 (2026-09-05): a standings row that carries no permanent number used to
+// fall back to comparing the key today's team list gave the team — which is still just a short
+// name two Pacific schools share. Round 5 promised such a row belongs to nobody, and the browser
+// broke that promise: both Pacific rows came back marked as the reader's own.
+const TIGERS_AND_LOOKALIKE_TEAMS = [
+  {
+    teamKey: "pac",
+    competitionKey: "nfl",
+    name: "Pacific Tigers",
+    shortName: "Tigers",
+    crestUrl: null,
+    sourceTeamId: "413",
+    abbreviation: "pac"
+  },
+  {
+    teamKey: "413",
+    competitionKey: "nfl",
+    name: "Team 413",
+    shortName: "413",
+    crestUrl: null,
+    sourceTeamId: "9001",
+    abbreviation: "413"
+  }
+];
+
+// Older stored standings: real names, no permanent numbers, and both Pacific schools answering to
+// the same short name.
+const numberlessStandings: StandingsTable = {
+  sections: [
+    {
+      label: null,
+      rows: [
+        { ...standingsRow("Pacific Tigers", "413", 1), sourceTeamId: null },
+        { ...standingsRow("Pacific Lutheran Lutes", "129700", 2), sourceTeamId: null }
+      ]
+    }
+  ]
+};
+
+async function numberlessStandingsOverviewOverHttp(): Promise<SportsOverviewResponse> {
+  const { app } = buildApp({
+    repo: makeRepo([
+      {
+        id: "33333333-3333-3333-3333-333333333333",
+        competitionKey: "nfl",
+        teamKey: "pac",
+        sourceTeamId: "413",
+        createdAt: "2026-06-01T00:00:00.000Z"
+      }
+    ]),
+    datasetClient: makeSource({
+      listTeams: async () => TIGERS_AND_LOOKALIKE_TEAMS,
+      getScoreboard: async () => [],
+      getSchedule: async () => [],
+      getStandings: async () => numberlessStandings
+    })
+  });
+  await app.ready();
+  const res = await app.inject({ method: "GET", url: "/api/sports/overview" });
+  expect(res.statusCode).toBe(200);
+  const body = JSON.parse(res.body) as SportsOverviewResponse;
+  await app.close();
+  return body;
+}
+
+describe("standings rows stored before teams carried permanent numbers", () => {
+  it("marks no row as yours, because a row with no number belongs to nobody", async () => {
+    const body = await numberlessStandingsOverviewOverHttp();
+    const stored = body.standings[0]?.sections[0]?.rows ?? [];
+    expect(stored.map((row) => row.sourceTeamId)).toEqual([null, null]);
+    const html = renderPage(body);
+    const rows = html
+      .split("<tr")
+      .slice(1)
+      .filter((row) => row.includes("Pacific"));
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((row) => row.includes("is-you"))).toHaveLength(0);
+  });
+});
+
+// Re-review 5 blocker 2 (2026-09-05): the recovery question offered only the teams answering to
+// the saved short name, so an older Tigers save of "413" was offered the club literally named 413
+// and nothing else. The team the person actually meant was unreachable.
+const THREE_TEAMS = [
+  ...PACIFIC_TEAMS,
+  {
+    teamKey: "413",
+    competitionKey: "nfl",
+    name: "Team 413",
+    shortName: "413",
+    crestUrl: null,
+    sourceTeamId: "9001",
+    abbreviation: "413"
+  }
+];
+
+async function savedFourOneThreeOverviewOverHttp(): Promise<SportsOverviewResponse> {
+  const { app } = buildApp({
+    repo: makeRepo([
+      {
+        id: "44444444-4444-4444-4444-444444444444",
+        competitionKey: "nfl",
+        teamKey: "413",
+        sourceTeamId: null,
+        createdAt: "2026-06-01T00:00:00.000Z"
+      }
+    ]),
+    datasetClient: makeSource({
+      listTeams: async () => THREE_TEAMS,
+      getScoreboard: async () => [],
+      getSchedule: async () => [],
+      getStandings: async () => sharedShortNameStandings
+    })
+  });
+  await app.ready();
+  const res = await app.inject({ method: "GET", url: "/api/sports/overview" });
+  expect(res.statusCode).toBe(200);
+  const body = JSON.parse(res.body) as SportsOverviewResponse;
+  await app.close();
+  return body;
+}
+
+describe("an older save whose text happens to be another club's number", () => {
+  it("offers every team in the competition, not just the club named after the saved text", async () => {
+    const body = await savedFourOneThreeOverviewOverHttp();
+    const offered = body.ambiguousFollows[0]?.candidates ?? [];
+    expect(offered.map((candidate) => candidate.name)).toEqual([
+      "Team 413",
+      "Pacific Lutheran Lutes",
+      "Pacific Tigers"
+    ]);
+    const html = renderPage(body);
+    expect(html).toContain("Which team did you mean?");
+    expect(html).toContain("Pacific Tigers");
+  });
+});

@@ -24,7 +24,12 @@ import {
 } from "@moss/shared";
 
 import { SPORTS_CATALOG, catalogEntry, competitionLogoUrl } from "./source/catalog.js";
-import { followedTeamIndex, isFollowed, isWrittenArticle, selectFeature } from "./news-ranking.js";
+import {
+  followedTeamIndex,
+  isFollowedStoryTeam,
+  isWrittenArticle,
+  selectFeature
+} from "./news-ranking.js";
 import {
   canonicalStoryUrl,
   composeSportsNewsGroups,
@@ -1130,7 +1135,7 @@ export class SportsService {
           competitionKey === null
             ? null
             : (headline.teamKeys.find((key) =>
-                isFollowed(followedPairs, competitionKey, key)
+                isFollowedStoryTeam(followedPairs, competitionKey, key)
               ) ??
               null);
         // A clip or a short blurb is not an opinion piece. A written article MIGHT be, and this
