@@ -296,4 +296,62 @@ export class EmailRepository {
       hasCompleteTriage: hasCompleteTriage(r.signals)
     }));
   }
+
+  /** Hard cap on the messages one thread judgement reads (spec 2026-09-04-email-chief-of-staff). */
+  static readonly THREAD_MESSAGE_LIMIT = 50;
+
+  /**
+   * Every cached message in one provider thread, oldest first. Owner-only on purpose: the SELECT
+   * policy also admits shared rows, but a judgement about what the actor owes must only ever read
+   * the actor's own mail.
+   */
+  async listByThread(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    threadId: string
+  ): Promise<EmailMessage[]> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.email_messages")
+      .selectAll()
+      .where("owner_user_id", "=", ownerUserId)
+      .where(sql<string>`external_metadata->>'threadId'`, "=", threadId)
+      .orderBy("received_at", "asc")
+      .orderBy("id")
+      .limit(EmailRepository.THREAD_MESSAGE_LIMIT)
+      .execute();
+  }
+
+  /**
+   * For each thread, the newest cached message received after the named message, when there is
+   * one. Threads with nothing newer are left out.
+   */
+  async listNewerInThreads(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    pairs: readonly { threadId: string; afterExternalId: string }[]
+  ): Promise<{ threadId: string; message: EmailMessage }[]> {
+    assertDataContextDb(scopedDb);
+    const out: { threadId: string; message: EmailMessage }[] = [];
+    for (const pair of pairs) {
+      const after = scopedDb.db
+        .selectFrom("app.email_messages")
+        .select("received_at")
+        .where("owner_user_id", "=", ownerUserId)
+        .where("external_id", "=", pair.afterExternalId)
+        .limit(1);
+      const row = await scopedDb.db
+        .selectFrom("app.email_messages")
+        .selectAll()
+        .where("owner_user_id", "=", ownerUserId)
+        .where(sql<string>`external_metadata->>'threadId'`, "=", pair.threadId)
+        .where("received_at", ">", after)
+        .orderBy("received_at", "desc")
+        .orderBy("id")
+        .limit(1)
+        .executeTakeFirst();
+      if (row) out.push({ threadId: pair.threadId, message: row });
+    }
+    return out;
+  }
 }
