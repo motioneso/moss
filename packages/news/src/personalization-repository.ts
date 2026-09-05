@@ -138,7 +138,7 @@ export interface NewsSourceValidationState {
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
   readonly feedUrl: string | null;
-  readonly retrievalMethod: "feed" | "scrape";
+  readonly retrievalMethod: "feed" | "scrape" | "reddit";
   readonly validationStatus: "approved" | "needs_revalidation" | "rejected";
   readonly validationFingerprint: string | null;
   readonly healthStatus:
@@ -823,7 +823,7 @@ function toCustomSourceDto(row: {
   canonical_domain: string;
   homepage_url: string;
   feed_url: string | null;
-  retrieval_method: "feed" | "scrape";
+  retrieval_method: "feed" | "scrape" | "reddit";
   validation_status: "approved" | "needs_revalidation" | "rejected";
   health_status:
     | "healthy"
