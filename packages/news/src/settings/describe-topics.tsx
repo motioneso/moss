@@ -314,7 +314,13 @@ export function DescribeTopics(props: {
             Add topic
           </Button>
           {props.availability ? (
-            <PrereqGate requirement="Described topics need an AI model and web search." />
+            <PrereqGate
+              requirement={
+                props.availability.webSearchReason === "model-has-no-search"
+                  ? "Your chat model has no built-in search. Pick one that does under Assistant & AI, or ask an admin to add a Brave key."
+                  : "Described topics need an AI model and web search."
+              }
+            />
           ) : null}
         </div>
       )}

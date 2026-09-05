@@ -533,6 +533,27 @@ export const newsModuleManifest = {
             "to directly, as its own address."
         }
       ]
+    },
+    {
+      id: "news.described_topics",
+      description:
+        "Describe a topic in your own words and have News find matching stories across the web.",
+      remediations: [
+        {
+          id: "news.described_topics.enable_web_search",
+          description:
+            "Your chat model has no built-in search. Pick one that does under Assistant & AI, or ask an admin to add a Brave key.",
+          path: "/settings?section=assistant"
+        }
+      ],
+      errors: [
+        {
+          code: "news.described_topics.no_web_search",
+          class: "prerequisite",
+          remediationRef: "news.described_topics.enable_web_search",
+          description: "Described topics need an AI model and web search."
+        }
+      ]
     }
   ],
   dataLifecycle: {
