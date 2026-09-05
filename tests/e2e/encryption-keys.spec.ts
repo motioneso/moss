@@ -31,6 +31,7 @@ test("admin generates a missing key from the banner and rotates it", async ({ pa
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockEncryptionKeys(page, "missing");
   await page.goto("/settings");
+  await page.getByRole("button", { name: "Admin / Setup" }).click();
 
   await expect(page.getByText("Encryption needs attention")).toBeVisible();
   await page.getByRole("button", { name: "Review" }).click();
@@ -64,7 +65,9 @@ test("a broken key tells the truth and replaces with confirmation", async ({ pag
     source = "store";
     return route.fulfill({ json: { keys: [{ family: "integrations", source }] } });
   });
-  await page.goto("/settings?section=enckeys");
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Admin / Setup" }).click();
+  await page.getByRole("button", { name: "Encryption keys" }).click();
   await expect(page.getByText("Stopped: the stored key no longer opens")).toBeVisible();
   await expect(page.getByRole("button", { name: "Rotate" })).toHaveCount(0);
 
