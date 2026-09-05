@@ -28,25 +28,25 @@ You bring your own AI access. Moss supports chat through Claude, Codex, and Gemi
 
 ## A look inside Moss
 
-Meet **Luke**, a fictional researcher organizing work toward a cure for type 1 diabetes. These screenshots come from a running Moss demo with saved research notes, tasks, goals, contacts, calendar events, and wellness check-ins. Personal data is fictional; News and Sports show public provider content captured at the time. The research workspace illustrates organization, not clinical findings or a claimed cure.
+Meet **Luke**, a Moss user who brings his work and personal life together in one place. He uses Moss to organize his type 1 diabetes research, stay on top of everyday tasks, follow the news and his teams, and keep track of his wellbeing.
 
-**Today** brings Luke's research priorities, calendar, and daily context together.
+**Today** brings Luke's work priorities, personal plans, calendar, and daily context together.
 
-![Moss Today dashboard greeting Luke, with beta-cell research tasks and a clinical evidence reading session](docs/images/readme/moss-today.jpg)
+![Moss Today dashboard greeting Luke, with work priorities, personal tasks, calendar, and wellness](docs/images/readme/moss-today.jpg)
 
 <details>
-<summary><strong>Tasks — turn research into next actions</strong></summary>
+<summary><strong>Tasks — keep work and personal life organized</strong></summary>
 
-Luke's reading, evidence checks, and writing tasks, organized by priority and due date.
+Luke keeps separate **Work**, **Personal**, and **Home** task lists. Research deadlines sit alongside groceries, weekend plans, and household jobs, with priorities and due dates across all three.
 
-![Moss Tasks showing Luke's beta-cell replacement comparison, evidence review, and patient-priority questions](docs/images/readme/moss-tasks.jpg)
+![Moss Tasks showing Luke's Work, Personal, and Home tasks together](docs/images/readme/moss-tasks.jpg)
 
 </details>
 
 <details>
 <summary><strong>News — a reading desk for your sources</strong></summary>
 
-Headlines and source summaries in one place, with links to the original reporting.
+A mix of world news, technology, culture, and research, with source summaries and links to the original reporting.
 
 ![Moss News showing its front-page layout, lead story, and source headlines](docs/images/readme/moss-news.jpg)
 
@@ -55,20 +55,22 @@ Headlines and source summaries in one place, with links to the original reportin
 <details>
 <summary><strong>Sports — follow your teams</strong></summary>
 
-Luke follows the Mariners, Arsenal, and Warriors, with results, upcoming games, and sports coverage together.
+Luke follows **Liverpool**, the **San Francisco Giants**, the **Buffalo Bills**, the **Anaheim Ducks**, and **San Diego FC (SDFC)**, with results, upcoming games, and sports coverage together.
 
 ![Moss Sports showing Luke's followed teams, scores, upcoming games, and news](docs/images/readme/moss-sports.jpg)
+
+![More of Luke’s followed teams: the Buffalo Bills, San Diego FC, and Anaheim Ducks](docs/images/readme/moss-sports-teams.jpg)
 
 </details>
 
 <details>
 <summary><strong>Wellness — check in and notice patterns</strong></summary>
 
-Four weeks of fictional check-ins show how Luke balances focused research with rest and everyday life.
+Luke tracks his Vyvanse, Lexapro, and Vitamin D alongside daily check-ins. His recent history shows a steady routine with ordinary ups and downs across work, rest, and everyday life.
 
 ![Moss Wellness showing Luke's mood check-in and insights from his recent history](docs/images/readme/moss-wellness.jpg)
 
-![Moss Wellness chart showing 28 days of fictional mood check-ins](docs/images/readme/moss-wellness-trends.jpg)
+![Moss Wellness chart showing 28 days of Luke’s mood check-ins](docs/images/readme/moss-wellness-trends.jpg)
 
 </details>
 
