@@ -386,7 +386,12 @@ export class ClaudePrintChatEngine implements CliChatEngine {
         " "
       );
       parts.push(`--allowedTools ${shellQuote(allowedTools)}`);
-      parts.push(`--tools "${["Read", "Glob", "Grep", ...searchTools].join(",")}"`);
+      // #2317: no bare --tools flag on this branch. On Claude CLI 2.1.183 a non-empty --tools value also
+      // drops every mcp__jarvis__* tool, so chat could talk but never act (measured 2026-09-05 in
+      // a live container: 0 Moss tools with the flag, 101 without). Native tools stay closed off
+      // by the fail-closed PreToolUse hook from writeClaudeOneShotPermissionHook, which denies
+      // everything except mcp__jarvis__*, ToolSearch, safe vault reads and session-workspace
+      // writes, so removing the flag does not re-open the #1071/F1 native-tool hole.
     } else if (opts.nativeSearch) {
       parts.push(`--tools "${CLAUDE_WEB_SEARCH_TOOL}"`);
       parts.push(`--allowedTools "${CLAUDE_WEB_SEARCH_TOOL}"`);

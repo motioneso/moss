@@ -358,7 +358,9 @@ describe("ClaudePrintChatEngine — vault read-only allowlist (#634)", () => {
     expect(launchLineAt()).toContain("Glob(/data/external-notes/**)");
     expect(launchLineAt()).toContain("Grep(/data/external-notes/**)");
     expect(launchLineAt()).toContain("mcp__jarvis__*");
-    expect(launchLineAt()).toContain('--tools "Read,Glob,Grep"');
+    // #2317: any --tools value also drops the mcp__jarvis__* tools on Claude CLI 2.1.183,
+    // so the MCP branch must not pass the flag at all.
+    expect(launchLineAt()).not.toContain("--tools");
     expect(launchLineAt()).toContain(
       "--settings '/tmp/jarvis-neutral/.jarvis-claude-settings.json'"
     );
@@ -413,7 +415,9 @@ describe("ClaudePrintChatEngine — vault read-only allowlist (#634)", () => {
     expect(launchLineAt()).not.toMatch(/\bWrite\b/);
     expect(launchLineAt()).not.toMatch(/\bEdit\b/);
     expect(launchLineAt()).not.toMatch(/\bBash\b/);
-    expect(launchLineAt()).toContain('--tools "Read,Glob,Grep"');
+    // #2317: any --tools value also drops the mcp__jarvis__* tools on Claude CLI 2.1.183,
+    // so the MCP branch must not pass the flag at all.
+    expect(launchLineAt()).not.toContain("--tools");
   });
 
   it("DENY: a malicious root cannot smuggle a separate Bash(* tool grant (security fix)", async () => {
