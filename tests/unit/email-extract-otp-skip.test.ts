@@ -811,3 +811,138 @@ describe("real sign-in code mail from ordinary-looking senders is hidden", () =>
     });
   }
 });
+
+/**
+ * Round 7 review: with the sender no longer read, three ordinary messages were being hidden.
+ * A subject that replies to or forwards an earlier message, or that asks about a code, is a
+ * conversation and not a delivery. A number that follows "rejects", "case" or "call" is not a
+ * handed-over code, and a telephone number written with brackets is not one either.
+ */
+describe("ordinary talk about a code is never hidden", () => {
+  const conversations: Array<[string, { from: string; subject: string; body: string }]> = [
+    [
+      "a forwarded request for help whose code the website refused",
+      {
+        from: "mum@example.invalid",
+        subject: "Fwd: Your Google verification code",
+        body: "Can you help me sign in? The website rejects 482910 and I need access before Monday."
+      }
+    ],
+    [
+      "a support reply carrying a case number",
+      {
+        from: "alex@support.example.invalid",
+        subject: "Re: Your verification code",
+        body: "We have resolved case 583921. Please try signing in again and reply if you still need help."
+      }
+    ],
+    [
+      "a support message whose only number is a telephone number in brackets",
+      {
+        from: "alex@support.example.invalid",
+        subject: "About your security code",
+        body: "Please call me on (415) 555-4829 so I can help you regain access."
+      }
+    ]
+  ];
+
+  for (const [label, message] of conversations) {
+    it(`keeps ${label}`, async () => {
+      expect(looksLikeOneTimeCodeEmail(message)).toBe(false);
+
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({ category: "unknown", confidence: 0.4 })
+      }));
+
+      const result = await extractEmailSignals(fixture(message), { runChat });
+
+      expect(runChat).toHaveBeenCalledTimes(1);
+      expect(result.signals.skipped).toBeUndefined();
+    });
+  }
+
+  const telephoneShapes: Array<[string, string]> = [
+    ["brackets round the area code", "Please call me on (415) 555-4829 if you need a hand."],
+    ["brackets and no hyphen", "Please call me on (415) 555 4829 if you need a hand."],
+    ["dots between the groups", "Please call me on 415.555.4829 if you need a hand."],
+    ["hyphens between the groups", "Please call me on 415-555-4829 if you need a hand."],
+    ["a country code in brackets", "Please call me on (+44) 20 7946 0958 if you need a hand."]
+  ];
+
+  for (const [label, body] of telephoneShapes) {
+    it(`does not read a telephone number with ${label} as a code`, () => {
+      expect(
+        looksLikeOneTimeCodeEmail({
+          from: "alex@support.example.invalid",
+          subject: "Your verification code",
+          body
+        })
+      ).toBe(false);
+    });
+  }
+
+  const numbersThatBelongElsewhere: Array<[string, string]> = [
+    ["a case number", "We have resolved case 583921 and closed it."],
+    ["a ticket number", "Your ticket 583921 is now with the sign-in team."],
+    ["a reference number", "Quote reference 583921 when you write back to us."],
+    ["a number the website refused", "The website rejects 482910 every time I try."]
+  ];
+
+  for (const [label, body] of numbersThatBelongElsewhere) {
+    it(`does not read ${label} as a handed-over code`, () => {
+      expect(
+        looksLikeOneTimeCodeEmail({
+          from: "alex@support.example.invalid",
+          subject: "Your verification code",
+          body
+        })
+      ).toBe(false);
+    });
+  }
+
+  const conversationSubjects = [
+    "Re: Your verification code",
+    "RE: your sign-in code",
+    "Fwd: Your Google verification code",
+    "FW: your login code",
+    "Fw: your one-time passcode",
+    "About your security code",
+    "Regarding your verification code",
+    "Question about your sign-in code",
+    "Help with your verification code",
+    "Problem with your login code",
+    "Issue with your one-time passcode"
+  ];
+
+  for (const subject of conversationSubjects) {
+    it(`keeps a message whose subject reads "${subject}"`, () => {
+      expect(
+        looksLikeOneTimeCodeEmail({
+          from: "alex@support.example.invalid",
+          subject,
+          body: "Your verification code is 482910. Enter it to finish signing in."
+        })
+      ).toBe(false);
+    });
+  }
+
+  it("keeps a message whose code is only mentioned, never handed over", () => {
+    expect(
+      looksLikeOneTimeCodeEmail({
+        from: "alex@support.example.invalid",
+        subject: "Your verification code",
+        body: "I never received it. My colleague on desk 482910 said the same thing happened."
+      })
+    ).toBe(false);
+  });
+
+  it("still hides a code that sits on its own line under a sentence naming it", () => {
+    expect(
+      looksLikeOneTimeCodeEmail({
+        from: "no-reply@accounts.example.invalid",
+        subject: "Your verification code",
+        body: "Here is your verification code\n\n482910\n\nIt expires in ten minutes."
+      })
+    ).toBe(true);
+  });
+});

@@ -195,13 +195,19 @@ export interface EmailSignals {
  * real messages because of that. Adding more keywords makes it worse, not better; the strength
  * here comes from requiring the combination.
  *
- *   1. the subject itself hands over a sign-in, login, account-verification, one-time, two-step
- *      or security code — it names that kind of code AND is worded as a delivery, and does not
- *      read as an announcement about codes in general. Real sign-in mail from Google, Apple,
- *      Microsoft, banks and shops puts the code in the subject; door codes, vouchers, tracking
- *      numbers and policy notices do not, so the body on its own never qualifies,
- *   2. the subject or the opening of the body carries a short code standing on its own as one
- *      unbroken run of characters — a telephone number written in groups never counts,
+ *   1. the subject names a sign-in, login, account-verification, one-time, two-step or security
+ *      code and is worded as a delivery — not as an announcement about codes in general, not as
+ *      a reply or a forward, and not as someone asking about a code or reporting a problem with
+ *      one. Real sign-in mail from Google, Apple, Microsoft, banks and shops names that kind of
+ *      code in the subject; door codes, vouchers, tracking numbers and policy notices do not,
+ *      so the body on its own never qualifies. The subject alone is not treated as handing a
+ *      code over, only as naming one,
+ *   2. the subject or the opening of the body actually hands a short code over: the code stands
+ *      on its own as one unbroken run of characters, and it follows wording such as "code is",
+ *      "code:", "enter" or "use", or is named as the code straight afterwards, or sits alone on
+ *      a line under a sentence naming it. A number introduced as a case, ticket, reference,
+ *      order or telephone line does not count, and a telephone number written in groups or with
+ *      the area code in brackets is blanked out before the search,
  *   3. nothing anywhere in the subject or the whole body points at a door, a stay, an order,
  *      a delivery, a booking or a money-off code, which would explain the number another way.
  *
@@ -278,11 +284,19 @@ const READS_AS_A_YEAR = /^(?:19|20)\d{2}$/;
 
 /**
  * A telephone number written the way people write them: three or more digit groups separated
- * by spaces or hyphens, such as a support line printed in the footer. Those digits are cleared
- * out before the message is searched for a code, so "call 0800 123 4567" can never be mistaken
- * for a sign-in code. A real code is one unbroken run of characters.
+ * by spaces, dots or hyphens, such as a support line printed in the footer. Those digits are
+ * cleared out before the message is searched for a code, so "call 0800 123 4567" can never be
+ * mistaken for a sign-in code. A real code is one unbroken run of characters.
  */
-const TELEPHONE_STYLE = /(?<![a-z0-9])\+?\d[\d-]*(?:[\s-]\d[\d-]*){2,}(?![a-z0-9])/g;
+const TELEPHONE_STYLE = /(?<![a-z0-9])\+?\d[\d.-]*(?:[\s.-]\d[\d.-]*){2,}(?![a-z0-9])/g;
+
+/**
+ * The same thing with the area code in brackets, which is how North American numbers are
+ * usually written: "(415) 555-4829", "(415) 555 4829", "(+44) 20 7946 0958". Without this the
+ * last four digits stand alone and read as a code.
+ */
+const TELEPHONE_WITH_BRACKETED_AREA_CODE =
+  /(?<![a-z0-9])\(\s*\+?\d{1,5}\s*\)[\s.-]*\d[\d\s.-]*\d(?![a-z0-9])/g;
 
 /**
  * Wording that shows the subject line is handing over a code right now, rather than talking
@@ -304,6 +318,21 @@ const SUBJECT_DELIVERS_A_CODE = [
 const SUBJECT_IS_ABOUT_CODES_IN_GENERAL =
   /\b(?:policy|policies|update|updates|updated|updating|change|changes|changed|changing|deliver|delivers|delivered|delivering|announcement|announcing|notice|reminder|terms)\b/;
 
+/**
+ * A subject that replies to or forwards an earlier message. A machine sending a code starts a
+ * new message; a person answering one keeps the thread. The reply carries the original wording
+ * without handing over anything, so it is a conversation and must reach the normal analysis.
+ */
+const SUBJECT_IS_A_REPLY_OR_FORWARD =
+  /^\s*(?:\[[^\]\n]{0,32}\]\s*)*(?:re|fwd?|fw|rv|aw|tr)\s*(?:\[\d{1,3}\])?\s*:/;
+
+/**
+ * A subject that talks about a code rather than carrying one: someone asking about it, needing
+ * help with it, or reporting a problem. Ordinary human mail, however the body reads.
+ */
+const SUBJECT_DISCUSSES_A_CODE =
+  /\b(?:about|regarding|question|questions|query|queries|help|problem|problems|issue|issues|trouble|advice)\b/;
+
 /** How much of the body is searched for the code itself. Excluded wording is looked for in
  * the whole body, however long it is. */
 const OTP_CHECK_BODY_CHARS = 500;
@@ -318,17 +347,99 @@ export interface OneTimeCodeEmailInput {
   readonly body: string;
 }
 
+/** Any of the words that name a temporary secret, used when reading the text around a number. */
+const NAMES_A_CODE = /\b(?:code|passcode|password|otp)\b/;
+
+/**
+ * Wording immediately before a number that hands it over: "your code is 482910",
+ * "verification code: 482910", "enter 482910", "use 482910 to sign in".
+ */
+const HANDS_THE_CODE_OVER_BEFORE_IT = [
+  /\b(?:code|passcode|password|otp)\b[^\n]{0,16}?(?:\bis\b|:)[\s:]*$/,
+  /\b(?:enter|use|using|type)\b[^\n]{0,32}$/
+] as const;
+
+/** Wording immediately after a number that names it as the code: "482910 is your Google code". */
+const HANDS_THE_CODE_OVER_AFTER_IT =
+  /^[^\n]{0,4}?\bis\b[^\n]{0,40}?\b(?:code|passcode|password|otp)\b/;
+
+/**
+ * Words that explain a nearby number as something other than a sign-in code: a support case, a
+ * ticket, a reference, an order, a telephone line, or a number a website has refused.
+ */
+const THE_NUMBER_BELONGS_TO_SOMETHING_ELSE =
+  /\b(?:reject|rejects|rejected|rejecting|refuse|refuses|refused|case|ticket|tickets|reference|ref|order|orders|call|calls|calling|phone|dial|desk|extension|invoice|statement)\b[^\n]{0,16}$/;
+
+/** How much of the text either side of a number is read to decide what the number is. */
+const CODE_CONTEXT_CHARS = 64;
+
+/** Blank out anything shaped like a telephone number, keeping the length of the text the same. */
+function withoutTelephoneNumbers(text: string): string {
+  TELEPHONE_WITH_BRACKETED_AREA_CODE.lastIndex = 0;
+  TELEPHONE_STYLE.lastIndex = 0;
+  return text
+    .replace(TELEPHONE_WITH_BRACKETED_AREA_CODE, (run) => " ".repeat(run.length))
+    .replace(TELEPHONE_STYLE, (run) => " ".repeat(run.length));
+}
+
 /**
  * True when the text holds a short code that is not a year, is not glued to other characters,
  * and is not part of a telephone number. Telephone-style runs of digits are blanked out first,
  * so a support number in the footer never counts as a code.
  */
 function hasDeliverableCode(text: string): boolean {
-  TELEPHONE_STYLE.lastIndex = 0;
-  const withoutPhoneNumbers = text.replace(TELEPHONE_STYLE, (run) => " ".repeat(run.length));
+  const searchable = withoutTelephoneNumbers(text);
   STANDALONE_CANDIDATE.lastIndex = 0;
-  for (const match of withoutPhoneNumbers.matchAll(STANDALONE_CANDIDATE)) {
+  for (const match of searchable.matchAll(STANDALONE_CANDIDATE)) {
     if (!READS_AS_A_YEAR.test(match[0])) return true;
+  }
+  return false;
+}
+
+/**
+ * True when the number sits alone on its own line and the line above it names a code, which is
+ * how many services lay a code out: "Here is your verification code" and then the digits.
+ */
+function standsAloneUnderWordingThatNamesACode(
+  text: string,
+  start: number,
+  candidate: string
+): boolean {
+  const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+  const lineBreak = text.indexOf("\n", start);
+  const lineEnd = lineBreak === -1 ? text.length : lineBreak;
+  if (text.slice(lineStart, lineEnd).trim() !== candidate) return false;
+  const earlierLines = text
+    .slice(0, lineStart)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const lineAbove = earlierLines[earlierLines.length - 1];
+  return lineAbove !== undefined && NAMES_A_CODE.test(lineAbove);
+}
+
+/**
+ * True when the text does not merely contain a short number, but actually hands it over as the
+ * code: the number follows wording like "code is", "code:", "enter" or "use", or is named as
+ * the code straight afterwards, or stands alone on a line under a sentence naming the code. A
+ * number introduced as a case, ticket, reference, order or telephone line never counts, so a
+ * support reply quoting a case number and a request for help with a refused code both come
+ * through as ordinary mail.
+ */
+function handsOverACode(text: string): boolean {
+  const searchable = withoutTelephoneNumbers(text);
+  STANDALONE_CANDIDATE.lastIndex = 0;
+  for (const match of searchable.matchAll(STANDALONE_CANDIDATE)) {
+    const candidate = match[0];
+    if (READS_AS_A_YEAR.test(candidate)) continue;
+    const start = match.index ?? 0;
+    const before = searchable.slice(Math.max(0, start - CODE_CONTEXT_CHARS), start);
+    if (THE_NUMBER_BELONGS_TO_SOMETHING_ELSE.test(before)) continue;
+    const afterStart = start + candidate.length;
+    const after = searchable.slice(afterStart, afterStart + CODE_CONTEXT_CHARS);
+    if (HANDS_THE_CODE_OVER_BEFORE_IT.some((pattern) => pattern.test(before))) return true;
+    if (HANDS_THE_CODE_OVER_AFTER_IT.test(after)) return true;
+    if (standsAloneUnderWordingThatNamesACode(searchable, start, candidate)) return true;
   }
   return false;
 }
@@ -344,6 +455,8 @@ function subjectNamesASignInCode(subject: string): boolean {
     SIGN_IN_CODE_PHRASES.some((phrase) => subject.includes(phrase)) || OTP_WORD.test(subject);
   if (!namesTheKindOfCode) return false;
   if (SUBJECT_IS_ABOUT_CODES_IN_GENERAL.test(subject)) return false;
+  if (SUBJECT_IS_A_REPLY_OR_FORWARD.test(subject)) return false;
+  if (SUBJECT_DISCUSSES_A_CODE.test(subject)) return false;
   return (
     SUBJECT_DELIVERS_A_CODE.some((pattern) => pattern.test(subject)) || hasDeliverableCode(subject)
   );
@@ -363,7 +476,7 @@ export function looksLikeOneTimeCodeEmail(message: OneTimeCodeEmailInput): boole
   if (!subjectNamesASignInCode(subject)) return false;
   const body = message.body.toLowerCase();
   if (NOT_A_SIGN_IN_MESSAGE.test(`${subject}\n${body}`)) return false;
-  return hasDeliverableCode(`${subject}\n${body.slice(0, OTP_CHECK_BODY_CHARS)}`);
+  return handsOverACode(`${subject}\n${body.slice(0, OTP_CHECK_BODY_CHARS)}`);
 }
 
 export function otpSkippedResult(): EmailExtractResult {
