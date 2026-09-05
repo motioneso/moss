@@ -1210,7 +1210,8 @@ export interface NewsCustomSourcesTable {
   canonical_domain: string;
   homepage_url: string;
   feed_url: string | null;
-  retrieval_method: "feed" | "scrape";
+  // #2282 (0218): 'reddit' rows are pinned to the subreddit shape by a table CHECK.
+  retrieval_method: "feed" | "scrape" | "reddit";
   validation_status: NewsValidationStatus;
   health_status:
     | "healthy"
@@ -1219,6 +1220,11 @@ export interface NewsCustomSourcesTable {
     | "unsupported"
     | "disabled";
   validation_fingerprint: string;
+  // #2282 (0218): https icon (never export data), lowercase fetch-host allowlist (1..8, no
+  // default: every writer supplies it), and the bounded workaround failure count (0..3).
+  icon_url: string | null;
+  confirmed_fetch_hosts: string[];
+  consecutive_failures: ColumnType<number, number | undefined, number>;
   validated_at: TimestampColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;

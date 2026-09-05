@@ -691,3 +691,224 @@ describe("news validation state repository (#975 Slice 4)", () => {
     expect(after.rows[0]?.fp).toBe("fp-new");
   });
 });
+
+// #2282 — migration 0218 adds subreddit sources (retrieval_method 'reddit'), a per-source
+// confirmed fetch-host allowlist, an https-only icon URL, and a bounded workaround failure
+// count. Every case here fails if the matching constraint, index or grant is missing.
+describe("news source kinds schema (#2282 migration 0218)", () => {
+  let appDb: Kysely<MossDatabase>;
+  let authRuntime: MossAuthRuntime;
+  let boss: PgBoss;
+  let server: ReturnType<typeof createApiServer>;
+  let dataCtx: DataContextRunner;
+  let bootstrap: pg.Client;
+  const repo = new NewsPersonalizationRepository();
+
+  async function signUp(name: string, email: string): Promise<string> {
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/auth/sign-up/email",
+      headers: { "content-type": "application/json" },
+      payload: { name, email, password: "password12345" }
+    });
+    return res.json<{ user: { id: string } }>().user.id;
+  }
+
+  async function signUpAliceBob(prefix: string): Promise<[string, string]> {
+    await signUp("Admin", `${prefix}-admin@example.com`);
+    await setInstanceSetting("registration.requires_approval", { value: false });
+    const alice = await signUp("Alice", `${prefix}-alice@example.com`);
+    const bob = await signUp("Bob", `${prefix}-bob@example.com`);
+    return [alice, bob];
+  }
+
+  function asActor<T>(
+    actorUserId: string,
+    requestId: string,
+    fn: (scopedDb: Parameters<Parameters<DataContextRunner["withDataContext"]>[1]>[0]) => Promise<T>
+  ): Promise<T> {
+    return dataCtx.withDataContext({ actorUserId, requestId }, fn);
+  }
+
+  interface SourceSeed {
+    readonly label: string;
+    readonly canonicalDomain: string;
+    readonly homepageUrl: string;
+    readonly feedUrl: string | null;
+    readonly retrievalMethod: string;
+    readonly iconUrl: string | null;
+    readonly confirmedFetchHosts: readonly string[];
+  }
+
+  const publication: SourceSeed = {
+    label: "The Example Times",
+    canonicalDomain: "news.example.com",
+    homepageUrl: "https://news.example.com",
+    feedUrl: "https://news.example.com/feed",
+    retrievalMethod: "feed",
+    iconUrl: null,
+    confirmedFetchHosts: ["news.example.com"]
+  };
+
+  function subreddit(name: string): SourceSeed {
+    return {
+      label: `r/${name}`,
+      canonicalDomain: "reddit.com",
+      homepageUrl: `https://www.reddit.com/r/${name}/`,
+      feedUrl: `https://www.reddit.com/r/${name}/hot.rss`,
+      retrievalMethod: "reddit",
+      iconUrl: null,
+      confirmedFetchHosts: ["www.reddit.com"]
+    };
+  }
+
+  /** Raw superuser insert: exercises the table's own constraints, not the repository. */
+  async function insertSource(ownerId: string, seed: SourceSeed): Promise<string> {
+    const result = await bootstrap.query<{ id: string }>(
+      `INSERT INTO app.news_custom_sources
+         (owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
+          icon_url, confirmed_fetch_hosts, validation_status, health_status,
+          validation_fingerprint, validated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'approved', 'healthy', 'fp-0218', now())
+       RETURNING id`,
+      [
+        ownerId,
+        seed.label,
+        seed.canonicalDomain,
+        seed.homepageUrl,
+        seed.feedUrl,
+        seed.retrievalMethod,
+        seed.iconUrl,
+        [...seed.confirmedFetchHosts]
+      ]
+    );
+    return result.rows[0]!.id;
+  }
+
+  beforeEach(async () => {
+    await resetEmptyFoundationDatabase();
+    appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
+    authRuntime = createMossAuthRuntime({ appDb, runner: new DataContextRunner(appDb) });
+    boss = createPgBossClient(connectionStrings.app, { connectionTimeoutMillis: 25_000 });
+    server = createApiServer({ appDb, authRuntime, boss, logger: false });
+    await server.ready();
+    dataCtx = new DataContextRunner(appDb);
+    bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
+    await bootstrap.connect();
+  });
+
+  afterEach(async () => {
+    await Promise.allSettled([
+      server?.close(),
+      authRuntime?.close(),
+      appDb?.destroy(),
+      bootstrap?.end(),
+      boss?.stop({ graceful: false })
+    ]);
+  });
+
+  it("accepts a subreddit row and rejects the reddit method on a non-Reddit shape", async () => {
+    const [alice] = await signUpAliceBob("nk-shape");
+    await expect(insertSource(alice, subreddit("nfl"))).resolves.toMatch(/^[0-9a-f-]{36}$/);
+    await expect(
+      insertSource(alice, { ...publication, retrievalMethod: "reddit" })
+    ).rejects.toThrow(/news_custom_sources_reddit_shape_check/);
+    await expect(insertSource(alice, { ...subreddit("nba"), feedUrl: null })).rejects.toThrow(
+      /news_custom_sources_reddit_shape_check/
+    );
+  });
+
+  it("icon_url must be an https URL when present", async () => {
+    const [alice] = await signUpAliceBob("nk-icon");
+    await expect(
+      insertSource(alice, { ...publication, iconUrl: "http://news.example.com/icon.png" })
+    ).rejects.toThrow(/news_custom_sources_icon_url_check/);
+    await expect(
+      insertSource(alice, { ...publication, iconUrl: "https://news.example.com/icon.png" })
+    ).resolves.toBeTruthy();
+  });
+
+  it("confirmed_fetch_hosts rejects an empty list, uppercase hosts, and more than eight", async () => {
+    const [alice] = await signUpAliceBob("nk-hosts");
+    await expect(insertSource(alice, { ...publication, confirmedFetchHosts: [] })).rejects.toThrow(
+      /news_custom_sources_confirmed_fetch_hosts_check/
+    );
+    await expect(
+      insertSource(alice, { ...publication, confirmedFetchHosts: ["News.Example.com"] })
+    ).rejects.toThrow(/news_custom_sources_confirmed_fetch_hosts_check/);
+    await expect(
+      insertSource(alice, {
+        ...publication,
+        confirmedFetchHosts: Array.from({ length: 9 }, (_, i) => `h${i}.example.com`)
+      })
+    ).rejects.toThrow(/news_custom_sources_confirmed_fetch_hosts_check/);
+    await expect(
+      insertSource(alice, {
+        ...publication,
+        confirmedFetchHosts: ["news.example.com", "cdn.example.net"]
+      })
+    ).resolves.toBeTruthy();
+  });
+
+  it("consecutive_failures starts at 0 and cannot exceed 3", async () => {
+    const [alice] = await signUpAliceBob("nk-count");
+    const id = await insertSource(alice, publication);
+    const before = await bootstrap.query<{ consecutive_failures: number }>(
+      `SELECT consecutive_failures FROM app.news_custom_sources WHERE id = $1`,
+      [id]
+    );
+    expect(before.rows[0]?.consecutive_failures).toBe(0);
+    await expect(
+      bootstrap.query(`UPDATE app.news_custom_sources SET consecutive_failures = 4 WHERE id = $1`, [
+        id
+      ])
+    ).rejects.toThrow(/news_custom_sources_consecutive_failures_check/);
+  });
+
+  it("two owners may each follow one subreddit; one owner cannot hold r/nfl and r/NFL", async () => {
+    const [alice, bob] = await signUpAliceBob("nk-sub");
+    await insertSource(alice, subreddit("nfl"));
+    await expect(insertSource(bob, subreddit("nfl"))).resolves.toBeTruthy();
+    await expect(insertSource(alice, subreddit("NFL"))).rejects.toThrow(
+      /news_custom_sources_owner_subreddit_unique/
+    );
+    // Two different subreddits share canonical_domain 'reddit.com' for one owner without clashing.
+    await expect(insertSource(alice, subreddit("nba"))).resolves.toBeTruthy();
+  });
+
+  it("a publication domain still collides for one owner", async () => {
+    const [alice, bob] = await signUpAliceBob("nk-domain");
+    await insertSource(alice, publication);
+    await expect(insertSource(alice, { ...publication, label: "Again" })).rejects.toThrow(
+      /news_custom_sources_owner_domain_unique/
+    );
+    await expect(insertSource(bob, publication)).resolves.toBeTruthy();
+  });
+
+  it("another owner's subreddit row is invisible under RLS", async () => {
+    const [alice, bob] = await signUpAliceBob("nk-rls");
+    await insertSource(alice, subreddit("nfl"));
+    const bobs = await asActor(bob, "nk-rls-b", (scopedDb) => repo.listCustomSources(scopedDb));
+    expect(bobs).toEqual([]);
+    const alices = await asActor(alice, "nk-rls-a", (scopedDb) => repo.listCustomSources(scopedDb));
+    expect(alices).toHaveLength(1);
+    expect(alices[0]?.retrievalMethod).toBe("reddit");
+  });
+
+  it("the worker may update the failure count with health, and nothing else new", async () => {
+    await signUpAliceBob("nk-grant");
+    const result = await bootstrap.query<{ privileges: boolean[] }>(
+      `SELECT ARRAY[
+         has_column_privilege('jarvis_worker_runtime', 'app.news_custom_sources',
+                              'consecutive_failures', 'update'),
+         has_column_privilege('jarvis_worker_runtime', 'app.news_custom_sources',
+                              'health_status', 'update'),
+         has_column_privilege('jarvis_worker_runtime', 'app.news_custom_sources',
+                              'icon_url', 'update'),
+         has_column_privilege('jarvis_worker_runtime', 'app.news_custom_sources',
+                              'confirmed_fetch_hosts', 'update')
+       ] AS privileges`
+    );
+    expect(result.rows[0]?.privileges).toEqual([true, true, false, false]);
+  });
+});

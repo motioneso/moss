@@ -146,7 +146,7 @@ export interface NewsCustomSourceDto {
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
   readonly feedUrl: string | null;
-  readonly retrievalMethod: "feed" | "scrape";
+  readonly retrievalMethod: "feed" | "scrape" | "reddit";
   readonly validationStatus: "approved" | "needs_revalidation" | "rejected";
   readonly healthStatus:
     | "healthy"
@@ -196,7 +196,7 @@ export interface NewsSourcePreviewCandidate {
   readonly label: string;
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
-  readonly retrievalMethod: "feed" | "scrape";
+  readonly retrievalMethod: "feed" | "scrape" | "reddit";
   readonly sampleCount: number;
   readonly redirectNote?: string;
 }
@@ -511,7 +511,7 @@ const newsCustomSourceDtoSchema = {
     canonicalDomain: { type: "string" },
     homepageUrl: { type: "string" },
     feedUrl: { type: ["string", "null"] },
-    retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
+    retrievalMethod: { type: "string", enum: ["feed", "scrape", "reddit"] },
     validationStatus: { type: "string", enum: ["approved", "needs_revalidation", "rejected"] },
     healthStatus: {
       type: "string",
@@ -730,7 +730,7 @@ export const previewNewsSourceSchema = {
               label: { type: "string" },
               canonicalDomain: { type: "string" },
               homepageUrl: { type: "string" },
-              retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
+              retrievalMethod: { type: "string", enum: ["feed", "scrape", "reddit"] },
               sampleCount: { type: "number" },
               redirectNote: { type: "string" }
             }
