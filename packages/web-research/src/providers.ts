@@ -143,10 +143,12 @@ function buildModelNativeSearchPrompt(input: WebSearchProviderInput): string {
 const URL_HAS_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
 
 /**
- * Normalises a url for matching only (the cited url is still returned untouched): lowercases the
- * host, drops the scheme, the fragment, the trailing slash and any utm_* params. The #2280 live
- * proof showed the model rewriting urls in its JSON body, so none matched a citation by exact
- * string and every result reached the chat model with an empty snippet and a generic title.
+ * Normalises a url for the loose fallback match only (the cited url is still returned untouched):
+ * lowercases the host, drops the scheme, the fragment, the trailing slash and any utm_* params.
+ * The #2280 live proof showed the model rewriting urls in its JSON body, so none matched a
+ * citation by exact string and every result reached the chat model with an empty snippet and a
+ * generic title. Because this form is lossy (https://a/#/one and https://a/#/two share it), it is
+ * only trusted when it picks out exactly one description; see {@link createModelNativeProvider}.
  * A url that does not parse falls back to a trimmed, lowercased string with the same trimming.
  */
 function normalizeUrlForMatch(raw: string): string {
@@ -172,10 +174,15 @@ function normalizeUrlForMatch(raw: string): string {
 /**
  * Runs the structured search request. The provider's own citations (the pages its search tool
  * actually returned) are the ground truth for urls: results come back in citation order, each
- * enriched with the title and snippet the model wrote for that url in the JSON body. Described
- * and cited urls are matched after {@link normalizeUrlForMatch}, never by exact string. A url that
- * appears only in the JSON body was never verified by a search hit and is dropped, and a reply
- * with no citations at all yields an empty list (spec decision 6; #2228 review finding 6).
+ * enriched with the title and snippet the model wrote for that url in the JSON body. Citations are
+ * deduplicated by exact (trimmed) url only, so two distinct pages that differ by scheme, trailing
+ * slash or fragment both survive. A description is matched to a citation by exact url first; the
+ * {@link normalizeUrlForMatch} form is a fallback used only when it selects exactly one
+ * description that no other citation already owns exactly. An ambiguous fallback is not guessed:
+ * the citation keeps its own url and title and an empty snippet (#2228 review, comment
+ * 5551840638). A url that appears only in the JSON body was never verified by a search hit and is
+ * dropped, and a reply with no citations at all yields an empty list (spec decision 6; #2228
+ * review finding 6).
  * `trace.undescribed` counts cited urls the JSON body never described, so a proof can tell whether
  * the model rewrote urls or simply skipped them. Returns an empty list when the runner is
  * unavailable.
@@ -195,28 +202,55 @@ export function createModelNativeProvider(runner: ModelNativeSearchRunner): WebS
       const rawResults = Array.isArray((generated.object as { results?: unknown })?.results)
         ? (generated.object as { results: unknown[] }).results
         : [];
-      const describedByUrl = new Map<string, { title: string; snippet: string }>();
+      type Described = { url: string; title: string; snippet: string };
+      const describedByExactUrl = new Map<string, Described>();
+      const describedByLooseUrl = new Map<string, Described[]>();
       for (const entry of rawResults) {
         if (!entry || typeof entry !== "object") continue;
         const candidate = entry as { title?: unknown; url?: unknown; snippet?: unknown };
-        if (typeof candidate.url !== "string" || candidate.url.length === 0) continue;
-        const key = normalizeUrlForMatch(candidate.url);
-        if (key.length === 0 || describedByUrl.has(key)) continue;
-        describedByUrl.set(key, {
+        if (typeof candidate.url !== "string") continue;
+        const url = candidate.url.trim();
+        if (url.length === 0 || describedByExactUrl.has(url)) continue;
+        const described: Described = {
+          url,
           title: typeof candidate.title === "string" ? candidate.title : "",
           snippet: typeof candidate.snippet === "string" ? candidate.snippet : ""
-        });
+        };
+        describedByExactUrl.set(url, described);
+        const key = normalizeUrlForMatch(url);
+        if (key.length === 0) continue;
+        const loose = describedByLooseUrl.get(key);
+        if (loose) loose.push(described);
+        else describedByLooseUrl.set(key, [described]);
       }
 
-      const results: WebSearchProviderResult[] = [];
+      const cited: { title?: string; url: string; matchUrl: string }[] = [];
       const seen = new Set<string>();
-      let undescribed = 0;
       for (const source of generated.sources ?? []) {
-        if (typeof source.url !== "string" || source.url.length === 0) continue;
-        const key = normalizeUrlForMatch(source.url);
-        if (key.length === 0 || seen.has(key)) continue;
-        seen.add(key);
-        const described = describedByUrl.get(key);
+        if (typeof source.url !== "string") continue;
+        const matchUrl = source.url.trim();
+        if (matchUrl.length === 0 || seen.has(matchUrl)) continue;
+        seen.add(matchUrl);
+        cited.push({ title: source.title, url: source.url, matchUrl });
+      }
+
+      const findDescription = (matchUrl: string): Described | undefined => {
+        const exact = describedByExactUrl.get(matchUrl);
+        if (exact) return exact;
+        const key = normalizeUrlForMatch(matchUrl);
+        if (key.length === 0) return undefined;
+        // Only descriptions no other citation owns by exact url are fair game for the loose
+        // match, and only when the loose form leaves a single candidate.
+        const candidates = (describedByLooseUrl.get(key) ?? []).filter(
+          (described) => !seen.has(described.url)
+        );
+        return candidates.length === 1 ? candidates[0] : undefined;
+      };
+
+      const results: WebSearchProviderResult[] = [];
+      let undescribed = 0;
+      for (const source of cited) {
+        const described = findDescription(source.matchUrl);
         if (!described) undescribed += 1;
         results.push({
           title: described?.title || source.title || source.url,

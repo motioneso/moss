@@ -192,19 +192,100 @@ describe("createModelNativeProvider", () => {
     expect(output.trace).toMatchObject({ provider: "model-native", count: 2, undescribed: 0 });
   });
 
-  it("collapses citations that differ only by trailing slash or scheme", async () => {
+  it("keeps citations that differ only by trailing slash or scheme", async () => {
     const runner: ModelNativeSearchRunner = async () => ({
       object: { results: [] },
       sources: [
         { title: "One", url: "https://example.com/a/" },
-        { title: "One again", url: "http://example.com/a" }
+        { title: "One again", url: "http://example.com/a" },
+        { title: "One repeated", url: "https://example.com/a/" }
       ]
     });
     const provider = createModelNativeProvider(runner);
 
     const output = await provider.search({ query: "q", limit: 5 });
 
-    expect(output.results.map((result) => result.url)).toEqual(["https://example.com/a/"]);
+    expect(output.results.map((result) => result.url)).toEqual([
+      "https://example.com/a/",
+      "http://example.com/a"
+    ]);
+    expect(output.trace).toMatchObject({ count: 2, cited: 2, undescribed: 2 });
+  });
+
+  it.each([
+    ["fragment routes", "https://example.com/#/one", "https://example.com/#/two"],
+    ["scheme", "http://example.com/a", "https://example.com/a"],
+    ["trailing slash", "https://example.com/a", "https://example.com/a/"],
+    ["different hosts", "https://one.example.com/a", "https://two.example.com/a"],
+    ["path case", "https://example.com/A", "https://example.com/a"],
+    ["query values", "https://example.com/a?id=1", "https://example.com/a?id=2"],
+    ["query case", "https://example.com/a?id=A", "https://example.com/a?id=a"]
+  ])(
+    "keeps separate pages with their own descriptions in citation order: %s",
+    async (_name, first, second) => {
+      const runner: ModelNativeSearchRunner = async () => ({
+        object: {
+          results: [
+            { title: "First page", url: first, snippet: "First description" },
+            { title: "Second page", url: second, snippet: "Second description" }
+          ]
+        },
+        sources: [
+          { title: "Second citation", url: second },
+          { title: "First citation", url: first }
+        ]
+      });
+      const provider = createModelNativeProvider(runner);
+
+      const output = await provider.search({ query: "q", limit: 5 });
+
+      expect(output.results).toEqual([
+        { title: "Second page", url: second, snippet: "Second description" },
+        { title: "First page", url: first, snippet: "First description" }
+      ]);
+      expect(output.trace).toMatchObject({ count: 2, cited: 2, undescribed: 0 });
+    }
+  );
+
+  it("leaves a citation undescribed when several descriptions share its normalised url", async () => {
+    const runner: ModelNativeSearchRunner = async () => ({
+      object: {
+        results: [
+          { title: "Route one", url: "https://example.com/#/one", snippet: "One" },
+          { title: "Route two", url: "https://example.com/#/two", snippet: "Two" }
+        ]
+      },
+      sources: [{ title: "Example home", url: "https://example.com/" }]
+    });
+    const provider = createModelNativeProvider(runner);
+
+    const output = await provider.search({ query: "q", limit: 5 });
+
+    expect(output.results).toEqual([
+      { title: "Example home", url: "https://example.com/", snippet: "" }
+    ]);
+    expect(output.trace).toMatchObject({ count: 1, cited: 1, undescribed: 1 });
+  });
+
+  it("does not lend a description that exactly matches one citation to another", async () => {
+    const runner: ModelNativeSearchRunner = async () => ({
+      object: {
+        results: [{ title: "Route one", url: "https://example.com/#/one", snippet: "One" }]
+      },
+      sources: [
+        { title: "Two", url: "https://example.com/#/two" },
+        { title: "One", url: "https://example.com/#/one" }
+      ]
+    });
+    const provider = createModelNativeProvider(runner);
+
+    const output = await provider.search({ query: "q", limit: 5 });
+
+    expect(output.results).toEqual([
+      { title: "Two", url: "https://example.com/#/two", snippet: "" },
+      { title: "Route one", url: "https://example.com/#/one", snippet: "One" }
+    ]);
+    expect(output.trace).toMatchObject({ count: 2, cited: 2, undescribed: 1 });
   });
 
   it("counts cited urls the JSON body never described in the trace", async () => {
