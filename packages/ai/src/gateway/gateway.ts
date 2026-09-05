@@ -111,6 +111,16 @@ export interface AssistantToolGatewayDependencies {
    * format user-visible date/time strings (e.g. calendar approval cards) use the correct timezone.
    */
   readonly resolveLocalTimezone?: (actorUserId: string) => Promise<string | null>;
+  /**
+   * Returns which web search engine is active for this actor: "brave" (the web.search tool calls
+   * the Brave API directly), "model-native" (the actor's chat model does its own built-in search,
+   * so the separate web.search tool would be redundant), or "none". Injected by the composition
+   * root via `resolveWebSearchEngine` (module isolation: the gateway must not import settings).
+   * Omitted (e.g. in tests) means always list web.search, matching pre-#2228 behavior.
+   */
+  readonly webSearchEngineForActor?: (
+    actorUserId: string
+  ) => Promise<"brave" | "model-native" | "none">;
   /** Defaults to a console.error(JSON.stringify(...)) shim when omitted. */
   readonly logger?: GatewayLogger;
 }
@@ -861,10 +871,19 @@ export class AssistantToolGateway {
   private async executableTools(actorUserId: string): Promise<ExecutableTool[]> {
     const modules: readonly MossModuleManifest[] =
       await this.deps.resolveActiveModules(actorUserId);
+    // #2228: web.search calls the Brave API directly, which is redundant (and would duplicate
+    // results/cost) when the actor's chat model already has its own built-in search, and useless
+    // when neither is available. Resolved once per listing, not per tool.
+    const webSearchEngine = this.deps.webSearchEngineForActor
+      ? await this.deps.webSearchEngineForActor(actorUserId)
+      : "brave";
     const out: ExecutableTool[] = [];
     for (const module of modules) {
       for (const tool of module.assistantTools ?? []) {
         if (typeof tool.execute !== "function") {
+          continue;
+        }
+        if (tool.name === "web.search" && webSearchEngine !== "brave") {
           continue;
         }
         // Fail closed #0: a centrally excluded (self-operation) tool is never listed and never
