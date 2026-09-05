@@ -8,6 +8,8 @@ import SportsSettings, {
   createFollow,
   deleteFollow,
   followControlState,
+  followFor,
+  indexFollows,
   leagueMatches,
   searchLeagueRows,
   SearchResults
@@ -39,6 +41,7 @@ type TeamRefLite = {
   readonly name: string;
   readonly shortName: string;
   readonly crestUrl: string | null;
+  readonly sourceTeamId: string | null;
 };
 // Mirrors the static catalog contract (#907 Task 6): no `teams` field — the pane resolves
 // rosters via the lazy leagueTeams query instead, seeded per-test below where needed.
@@ -58,14 +61,16 @@ const DAL: TeamRefLite = {
   competitionKey: "nfl",
   name: "Dallas Cowboys",
   shortName: "DAL",
-  crestUrl: null
+  crestUrl: null,
+  sourceTeamId: "id-dal"
 };
 const ARS: TeamRefLite = {
   teamKey: "team.ars",
   competitionKey: "epl",
   name: "Arsenal",
   shortName: "ARS",
-  crestUrl: null
+  crestUrl: null,
+  sourceTeamId: "id-team.ars"
 };
 
 const TWO_LEAGUES: readonly CompetitionLite[] = [
@@ -608,6 +613,80 @@ describe("SportsSettings", () => {
     // A result team whose competitionKey isn't in the catalog is skipped, not crashed on.
     const orphanTeam = { ...DAL, competitionKey: "xyz.retired" };
     expect(searchLeagueRows("zzz", [orphanTeam], TWO_LEAGUES)).toHaveLength(0);
+  });
+});
+
+// Ben, dev, 2026-09-04: following Pacific never showed as followed. Two teams share the short name
+// "PAC", so the team list gives them composite keys ("pac.413", "pac.129700") while the saved follow
+// keeps the bare short name "pac" and the permanent id. Matching on the key can never succeed, so
+// the tile stayed unfollowed, the chip lost its crest, and a second click re-followed instead of
+// unfollowing. These tests match on the permanent id and fail on the key-only page.
+describe("follow key mismatch on a colliding team (Ben, dev, 2026-09-04)", () => {
+  const TIGERS: TeamRefLite = {
+    teamKey: "pac.413",
+    competitionKey: "nfl",
+    name: "Pacific Tigers",
+    shortName: "PAC",
+    crestUrl: "https://example.com/crests/413.png",
+    sourceTeamId: "413"
+  };
+  const LUTES: TeamRefLite = {
+    teamKey: "pac.129700",
+    competitionKey: "nfl",
+    name: "Pacific Lutheran Lutes",
+    shortName: "PAC",
+    crestUrl: "https://example.com/crests/129700.png",
+    sourceTeamId: "129700"
+  };
+  const savedTigers = {
+    id: "f-pac",
+    competitionKey: "nfl",
+    teamKey: "pac",
+    sourceTeamId: "413",
+    createdAt: "2026-09-04T00:00:00Z"
+  };
+
+  it("marks the followed colliding team's tile active, and only that one", () => {
+    const html = renderToString(
+      createElement(SearchResults, {
+        query: "pac",
+        results: [TIGERS, LUTES],
+        partial: false,
+        isError: false,
+        competitions: TWO_LEAGUES,
+        followsByKey: indexFollows([savedTigers]),
+        onToggle: () => {},
+        onRetry: () => {},
+        actionState: null
+      })
+    );
+    expect(html).toContain('aria-label="Unfollow Pacific Tigers"');
+    expect(html).toContain('aria-label="Follow Pacific Lutheran Lutes"');
+    expect(html.match(/sp-team is-active/g)).toHaveLength(1);
+  });
+
+  it("resolves the tile back to the saved follow, so the next click unfollows instead of re-following", () => {
+    const index = indexFollows([savedTigers]);
+    expect(followFor(index, "nfl", TIGERS.teamKey, TIGERS.sourceTeamId)?.id).toBe("f-pac");
+    expect(followFor(index, "nfl", LUTES.teamKey, LUTES.sourceTeamId)).toBeUndefined();
+    // A follow with no permanent id (saved before the id column existed) still matches by key.
+    const legacy = indexFollows([{ ...savedTigers, teamKey: "dal", sourceTeamId: null }]);
+    expect(followFor(legacy, "nfl", "dal", "id-dal")?.id).toBe("f-pac");
+  });
+
+  it("shows the followed colliding team's own crest in the summary chip", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(CATALOG_KEY, { competitions: [TWO_LEAGUES[0]], degraded: false });
+    client.setQueryData(FOLLOWS_KEY, { follows: [savedTigers] });
+    client.setQueryData(sportsQueryKeys.leagueTeams("nfl"), {
+      teams: [LUTES, TIGERS],
+      degraded: false
+    });
+    const html = renderWithQuery(client);
+    expect(html).toContain("sp-chip");
+    expect(html).toContain('src="https://example.com/crests/413.png"');
+    expect(html).not.toContain('src="https://example.com/crests/129700.png"');
+    expect(html).toContain("Pacific Tigers");
   });
 });
 

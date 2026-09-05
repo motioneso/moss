@@ -11,13 +11,16 @@ import { errorResponseSchema } from "./schema-fragments.js";
 const teamRefSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["teamKey", "competitionKey", "name", "shortName", "crestUrl"],
+  // `sourceTeamId` must be listed: fast-json-stringify drops any key the schema does not name, and
+  // this is the only value the browser can match a saved follow on (see TeamRef).
+  required: ["teamKey", "competitionKey", "name", "shortName", "crestUrl", "sourceTeamId"],
   properties: {
     teamKey: { type: "string" },
     competitionKey: { type: "string" },
     name: { type: "string" },
     shortName: { type: "string" },
-    crestUrl: { type: ["string", "null"] }
+    crestUrl: { type: ["string", "null"] },
+    sourceTeamId: { type: ["string", "null"] }
   }
 } as const;
 

@@ -42,7 +42,8 @@ const DAL: TeamRef = {
   competitionKey: "nfl",
   name: "Dallas Cowboys",
   shortName: "DAL",
-  crestUrl: null
+  crestUrl: null,
+  sourceTeamId: "id-dal"
 };
 const COMPETITIONS = new Map([[NFL.competitionKey, NFL]]);
 const TEAMS = new Map([[NFL.competitionKey, [DAL]]]);

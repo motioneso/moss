@@ -85,14 +85,16 @@ function setup(
       competitionKey: "nfl",
       name: "Dallas Cowboys",
       shortName: "DAL",
-      crestUrl: null
+      crestUrl: null,
+      sourceTeamId: "id-dal"
     },
     {
       teamKey: "phi",
       competitionKey: "nfl",
       name: "Philadelphia Eagles",
       shortName: "PHI",
-      crestUrl: null
+      crestUrl: null,
+      sourceTeamId: "id-phi"
     }
   ]
 ) {
@@ -301,21 +303,24 @@ describe("SportsSourceService assignment replacement", () => {
         competitionKey: "usa.1",
         name: "San Diego FC",
         shortName: "SDFC",
-        crestUrl: null
+        crestUrl: null,
+        sourceTeamId: "id-sd"
       },
       {
         teamKey: "liv",
         competitionKey: "eng.1",
         name: "Liverpool",
         shortName: "LIV",
-        crestUrl: null
+        crestUrl: null,
+        sourceTeamId: "id-liv"
       },
       {
         teamKey: "usa",
         competitionKey: "fifa.world",
         name: "USA",
         shortName: "USA",
-        crestUrl: null
+        crestUrl: null,
+        sourceTeamId: "id-usa"
       }
     ]);
     fetch.mockResolvedValue({
@@ -432,14 +437,16 @@ describe("SportsSourceService assignment replacement", () => {
           competitionKey: "nfl",
           name: "Dallas Cowboys",
           shortName: "DAL",
-          crestUrl: null
+          crestUrl: null,
+          sourceTeamId: "id-dal"
         },
         {
           teamKey: "phi",
           competitionKey: "nfl",
           name: "Philadelphia Eagles",
           shortName: "PHI",
-          crestUrl: null
+          crestUrl: null,
+          sourceTeamId: "id-phi"
         }
       ]
     });
@@ -579,7 +586,8 @@ describe("SportsSourceService recipe recovery", () => {
           competitionKey: "nfl",
           name: "Dallas Cowboys",
           shortName: "DAL",
-          crestUrl: null
+          crestUrl: null,
+          sourceTeamId: "id-dal"
         }
       ]
     });
@@ -746,7 +754,8 @@ describe("SportsSourceService recipe recovery", () => {
           competitionKey: "nfl",
           name: "Dallas Cowboys",
           shortName: "DAL",
-          crestUrl: null
+          crestUrl: null,
+          sourceTeamId: "id-dal"
         }
       ]
     });
@@ -843,7 +852,8 @@ describe("SportsSourceService recipe recovery", () => {
           competitionKey: "nfl",
           name: "Dallas Cowboys",
           shortName: "DAL",
-          crestUrl: null
+          crestUrl: null,
+          sourceTeamId: "id-dal"
         }
       ]
     });

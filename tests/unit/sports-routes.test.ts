@@ -618,9 +618,13 @@ describe("sports routes", () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.teams).toHaveLength(1);
-    // Wire-body checks: crestUrl survives serialization; source-internal ids do NOT leak.
+    // Wire-body checks: crestUrl survives serialization, and so does the provider's permanent
+    // team id. It is deliberately on the wire since the follow-key fix (Ben, dev, 2026-09-04): the
+    // settings page matches a saved follow to a tile on it, because a colliding team's list key
+    // ("pac.413") never equals the bare short name the follow stores. It is public data (the same
+    // number sits in the crest URL), not a secret.
     expect(res.body).toContain("crestUrl");
-    expect(res.body).not.toContain("sourceTeamId");
+    expect(body.teams[0].sourceTeamId).toBe("359");
     await app.close();
   });
 

@@ -221,6 +221,37 @@ function followKey(competitionKey: string, teamKey: string | null): string {
   return `${competitionKey}::${teamKey ?? ""}`;
 }
 
+// A follow is matched to a picker tile on the provider's permanent team id, never on teamKey: two
+// teams sharing a short name get composite list keys such as "pac.413" while the saved follow keeps
+// the bare short name "pac" for display, so a key comparison never matched (Ben, dev, 2026-09-04).
+// The id index uses an "id:" prefix, which no catalog key can contain (keys are dot-only), so the
+// two kinds of entry cannot collide. Whole-league follows (no id) index by key alone.
+function followIdKey(competitionKey: string, sourceTeamId: string): string {
+  return followKey(competitionKey, `id:${sourceTeamId}`);
+}
+
+export function indexFollows(follows: readonly SportsFollowDto[]): Map<string, SportsFollowDto> {
+  const index = new Map<string, SportsFollowDto>();
+  for (const follow of follows) {
+    index.set(followKey(follow.competitionKey, follow.teamKey), follow);
+    if (follow.sourceTeamId !== null) {
+      index.set(followIdKey(follow.competitionKey, follow.sourceTeamId), follow);
+    }
+  }
+  return index;
+}
+
+/** The saved follow a tile stands for: by permanent id when the tile has one, else by key. */
+export function followFor(
+  index: ReadonlyMap<string, SportsFollowDto>,
+  competitionKey: string,
+  teamKey: string | null,
+  sourceTeamId: string | null
+): SportsFollowDto | undefined {
+  const byId = sourceTeamId === null ? undefined : index.get(followIdKey(competitionKey, sourceTeamId));
+  return byId ?? index.get(followKey(competitionKey, teamKey));
+}
+
 type FollowActionSource = "summary" | "picker";
 
 type FollowActionState = {
@@ -337,7 +368,8 @@ function FollowedSummary(props: {
     competitionKey: string,
     teamKey: string | null,
     label: string,
-    source: FollowActionSource
+    source: FollowActionSource,
+    sourceTeamId?: string | null
   ) => void;
   actionState: FollowActionState;
 }) {
@@ -351,11 +383,17 @@ function FollowedSummary(props: {
         // removable via the same button below.
         const orphan = competition === undefined;
         const wholeLeague = follow.teamKey === null;
+        // Match the roster entry on the permanent id when the follow has one; the saved teamKey is
+        // a display short name that may not equal a colliding team's composite list key.
         const team = wholeLeague
           ? null
           : props.teamsByCompetition
               .get(follow.competitionKey)
-              ?.find((t) => t.teamKey === follow.teamKey);
+              ?.find((t) =>
+                follow.sourceTeamId !== null
+                  ? t.sourceTeamId === follow.sourceTeamId
+                  : t.teamKey === follow.teamKey
+              );
         const label = orphan
           ? `Unrecognized league (${follow.competitionKey})`
           : wholeLeague
@@ -387,7 +425,13 @@ function FollowedSummary(props: {
                 ) !== null
               }
               onClick={() =>
-                props.onToggle(follow.competitionKey, follow.teamKey, label, "summary")
+                props.onToggle(
+                  follow.competitionKey,
+                  follow.teamKey,
+                  label,
+                  "summary",
+                  follow.sourceTeamId
+                )
               }
             >
               ×
@@ -417,7 +461,8 @@ export function SearchResults(props: {
     competitionKey: string,
     teamKey: string | null,
     label: string,
-    source: FollowActionSource
+    source: FollowActionSource,
+    sourceTeamId?: string | null
   ) => void;
   actionState: FollowActionState;
 }) {
@@ -484,7 +529,9 @@ export function SearchResults(props: {
       })}
       <div className="sp-teamgrid">
         {props.results.map((team) => {
-          const active = props.followsByKey.has(followKey(team.competitionKey, team.teamKey));
+          const active =
+            followFor(props.followsByKey, team.competitionKey, team.teamKey, team.sourceTeamId) !==
+            undefined;
           const pendingHere = pendingDirectionFor(
             props.actionState,
             team.competitionKey,
@@ -501,7 +548,13 @@ export function SearchResults(props: {
                 aria-label={state.ariaLabel}
                 disabled={pendingHere !== null}
                 onClick={() =>
-                  props.onToggle(team.competitionKey, team.teamKey, team.name, "picker")
+                  props.onToggle(
+                    team.competitionKey,
+                    team.teamKey,
+                    team.name,
+                    "picker",
+                    team.sourceTeamId
+                  )
                 }
               >
                 <span className="sp-team__top">
@@ -563,7 +616,8 @@ export function BrowseGroups(props: {
     competitionKey: string,
     teamKey: string | null,
     label: string,
-    source: FollowActionSource
+    source: FollowActionSource,
+    sourceTeamId?: string | null
   ) => void;
   actionState: FollowActionState;
 }) {
@@ -664,9 +718,13 @@ export function BrowseGroups(props: {
                   ) : (
                     <div className="sp-teamgrid">
                       {props.expandedTeams.map((team) => {
-                        const active = props.followsByKey.has(
-                          followKey(team.competitionKey, team.teamKey)
-                        );
+                        const active =
+                          followFor(
+                            props.followsByKey,
+                            team.competitionKey,
+                            team.teamKey,
+                            team.sourceTeamId
+                          ) !== undefined;
                         const pendingHere = pendingDirectionFor(
                           props.actionState,
                           team.competitionKey,
@@ -690,7 +748,8 @@ export function BrowseGroups(props: {
                                   team.competitionKey,
                                   team.teamKey,
                                   team.name,
-                                  "picker"
+                                  "picker",
+                                  team.sourceTeamId
                                 )
                               }
                             >
@@ -741,9 +800,7 @@ export default function SportsSettings() {
 
   const competitions = catalogQuery.data?.competitions ?? [];
   const follows = followsQuery.data?.follows ?? [];
-  const followsByKey = new Map(
-    follows.map((follow) => [followKey(follow.competitionKey, follow.teamKey), follow])
-  );
+  const followsByKey = indexFollows(follows);
   const competitionsByKey = new Map<string, CompetitionRef>(
     competitions.map((c) => [c.competitionKey, c])
   );
@@ -790,9 +847,10 @@ export default function SportsSettings() {
     competitionKey: string,
     teamKey: string | null,
     label: string,
-    source: FollowActionSource
+    source: FollowActionSource,
+    sourceTeamId: string | null = null
   ) {
-    const existing = followsByKey.get(followKey(competitionKey, teamKey));
+    const existing = followFor(followsByKey, competitionKey, teamKey, sourceTeamId);
     if (existing) {
       setActionState({
         competitionKey,

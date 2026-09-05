@@ -9,6 +9,11 @@ export interface TeamRef {
   readonly name: string;
   readonly shortName: string;
   readonly crestUrl: string | null;
+  // The provider's permanent team id, the same value a saved follow carries. The settings page
+  // matches a tile to a follow on this, never on teamKey: two teams sharing a short name get
+  // composite list keys such as "pac.413" while the follow keeps the bare short name for display,
+  // so a key comparison never matched and a followed team looked unfollowed (Ben, dev, 2026-09-04).
+  readonly sourceTeamId: string | null;
 }
 
 export interface GameSide {
