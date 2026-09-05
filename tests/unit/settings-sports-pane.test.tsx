@@ -618,6 +618,34 @@ describe("SportsSettings", () => {
     expect(leagueMatches("", TWO_LEAGUES)).toHaveLength(0);
   });
 
+  it("groups search results under their own league: a heading when the league itself didn't match, a Follow-all button when it did (#2278)", () => {
+    const html = renderToString(
+      createElement(SearchResults, {
+        query: "premier",
+        results: [DAL, ARS],
+        partial: false,
+        isError: false,
+        competitions: TWO_LEAGUES,
+        followsByKey: new Map(),
+        onToggle: () => {},
+        onRetry: () => {},
+        actionState: null
+      })
+    );
+    // "premier" matches Premier League's own label, so that group keeps its Follow-all button...
+    expect(html).toContain("Follow all of Premier League");
+    // ...but NFL only appears because Dallas Cowboys matched, so it gets a plain heading instead.
+    expect(html).not.toContain("Follow all of NFL");
+    expect(html).toMatch(/class="jds-eyebrow sp-search__group-heading">NFL</);
+    // Each league's teams sit directly under its own group, not mixed into one shared grid.
+    const eplGroup = html.slice(html.indexOf("Premier League"), html.indexOf(">NFL<"));
+    expect(eplGroup).toContain("ARS");
+    expect(eplGroup).not.toContain("DAL");
+    const nflGroup = html.slice(html.indexOf(">NFL<"));
+    expect(nflGroup).toContain("DAL");
+    expect(nflGroup).not.toContain("ARS");
+  });
+
   it("searchLeagueRows: label match, parent-league derivation from server results, and dedupe", () => {
     // Direct label match, no server results.
     expect(searchLeagueRows("prem", [], TWO_LEAGUES).map((c) => c.competitionKey)).toEqual(["epl"]);

@@ -343,7 +343,9 @@ test.describe("Sports settings follow picker (#989)", () => {
     await page.getByRole("button", { name: "Follow Dallas Cowboys" }).click();
     const pendingFollow = page.getByRole("button", { name: "Following…" });
     await expect(pendingFollow).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Follow all of NFL" })).toBeEnabled();
+    // "cowboys" doesn't match the NFL league name itself, so this result shows a plain league
+    // heading, not a Follow-all button — check an unrelated control stays enabled instead.
+    await expect(page.getByRole("button", { name: "Browse leagues" })).toBeEnabled();
     releasePost();
 
     const failedFollow = page.getByRole("button", { name: "Follow Dallas Cowboys" });
@@ -366,7 +368,9 @@ test.describe("Sports settings follow picker (#989)", () => {
     await unfollow.click();
     const pendingUnfollow = page.getByRole("button", { name: "Unfollowing…" });
     await expect(pendingUnfollow).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Follow all of NFL" })).toBeEnabled();
+    // "cowboys" doesn't match the NFL league name itself, so this result shows a plain league
+    // heading, not a Follow-all button — check an unrelated control stays enabled instead.
+    await expect(page.getByRole("button", { name: "Browse leagues" })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Unfollow DAL" })).toBeEnabled();
     releaseDelete();
 
