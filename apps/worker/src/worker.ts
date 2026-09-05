@@ -25,6 +25,7 @@ import {
   MODULE_BUILD_QUEUE,
   MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS,
   createModuleBuildWorker,
+  createPushQueuePort,
   sendJob,
   type ExternalModuleJobPayload,
   type ModuleControlPayload,
@@ -61,11 +62,7 @@ import {
 import { createSanitizedTmuxIo } from "@moss/cli-runner";
 import { ChatAttachmentsService } from "@moss/chat";
 import { ensureProviderLaunchReady } from "@moss/cli-runner/provider-first-run";
-import {
-  NotificationsRepository,
-  createPushQueuePort,
-  type CreateNotificationInput
-} from "@moss/notifications";
+import { NotificationsRepository, type CreateNotificationInput } from "@moss/notifications";
 import {
   createModuleCredentialSecretCipher,
   getModuleBuild,

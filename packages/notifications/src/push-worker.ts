@@ -3,7 +3,6 @@ import webpush from "web-push";
 
 import type { DataContextDb } from "@moss/db";
 import { assertDataContextDb } from "@moss/db";
-import type { Job } from "@moss/jobs";
 
 import { buildPushPayload } from "./push-payload.js";
 import { createPushSigningCipher, getOrGeneratePushSigningKey } from "./push-crypto.js";
@@ -20,6 +19,14 @@ export interface PushWorkerDependencies {
   readonly cipher?: ReturnType<typeof createPushSigningCipher>;
   /** Test seam: real code always goes through the `web-push` library. */
   readonly sendWebPush?: typeof webpush.sendNotification;
+}
+
+/**
+ * The slice of a pg-boss job the push workers read. Structural on purpose: `@moss/jobs`
+ * depends on this package, so importing its `Job` type here would form a package cycle.
+ */
+export interface PushJob<T> {
+  readonly data: T;
 }
 
 interface WebPushPayload {
@@ -83,7 +90,7 @@ async function deliverToSubscriptions(
  * Delivers one notification to every non-disabled subscription of its recipient.
  */
 export async function runPushDeliverJob(
-  job: Job<PushDeliverJobPayload>,
+  job: PushJob<PushDeliverJobPayload>,
   scopedDb: DataContextDb,
   deps: PushWorkerDependencies = {}
 ): Promise<void> {
@@ -130,7 +137,7 @@ export async function runPushDeliverJob(
  * an exact match — not a range — is the right cohort for one release. Zero sends nothing.
  */
 export async function runPushSummaryJob(
-  job: Job<PushSummaryJobPayload>,
+  job: PushJob<PushSummaryJobPayload>,
   scopedDb: DataContextDb,
   deps: PushWorkerDependencies = {}
 ): Promise<void> {

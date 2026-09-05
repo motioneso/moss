@@ -228,6 +228,12 @@ export async function getOrGeneratePushSigningKey(
 
 ### 4.5 Queues and Jobs (`packages/jobs/src/pg-boss.ts` & `packages/notifications/src/push-jobs.ts`)
 
+> Rebase note (2026-09-05): `createPushQueuePort` moved to `packages/jobs/src/push-jobs.ts`.
+> `@moss/jobs` already depends on `@moss/notifications`, so the reverse import formed a package
+> cycle (`check:package-deps`). The payload interfaces below stay in
+> `packages/notifications/src/push-jobs.ts` and declare `actorUserId` directly instead of
+> extending `ActorScopedJobPayload`; the shape is unchanged.
+
 Added to `ALLOWED_PAYLOAD_KEYS` in `packages/jobs/src/pg-boss.ts`:
 
 - `notificationId`

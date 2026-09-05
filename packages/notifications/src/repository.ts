@@ -72,7 +72,7 @@ export interface NotificationPreferencePort {
 /**
  * Cross-package port: notifications enqueues push delivery jobs without importing
  * `@moss/jobs` (pg-boss) into the domain layer. The real implementation
- * (`createPushQueuePort` in `push-jobs.ts`) is injected by the composition root. Absence
+ * (`createPushQueuePort` in `@moss/jobs`) is injected by the composition root. Absence
  * (the default) means push is simply not wired for that caller — consistent with
  * `notificationPreferencePort` being optional above.
  */

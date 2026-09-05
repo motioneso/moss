@@ -2,6 +2,7 @@ import type { PgBoss } from "pg-boss";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { ChatAttachmentsService } from "@moss/chat";
+import { createPushQueuePort } from "@moss/jobs";
 import type { MossModuleManifest, ToolResult } from "@moss/module-sdk";
 import {
   createNotificationPreferencePort,
@@ -19,7 +20,7 @@ import {
   type ExternalModuleAiResult,
   type ExternalToolInvoker
 } from "@moss/module-registry/node";
-import { NotificationsRepository, createPushQueuePort } from "@moss/notifications";
+import { NotificationsRepository } from "@moss/notifications";
 import { createModuleCredentialSecretCipher, type SettingsRepository } from "@moss/settings";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 

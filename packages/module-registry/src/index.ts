@@ -173,6 +173,7 @@ import {
 } from "@moss/email";
 import {
   assertMetadataOnlyPayload,
+  createPushQueuePort,
   FOUNDATION_QUEUES,
   registerDataContextWorker,
   sendJob,
@@ -192,7 +193,6 @@ import {
   DIGEST_COMPOSE_QUEUE,
   PUSH_DELIVER_QUEUE,
   PUSH_SUMMARY_QUEUE,
-  createPushQueuePort,
   runPushDeliverJob,
   runPushSummaryJob,
   type PushDeliverJobPayload,
