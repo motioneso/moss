@@ -382,7 +382,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0211", name: "0211_moss_audit_log_outcome_widen_suppressed_refused.sql" },
         // #2208 — model rows record whether discovery or a person added them.
         { version: "0212", name: "0212_ai_configured_models_origin.sql" },
-        { version: "0213", name: "0213_sports_reddit_sources.sql" }
+        { version: "0213", name: "0213_sports_reddit_sources.sql" },
+        // #2236 slice 1 — the scratchpad's single owner-only table.
+        { version: "0214", name: "0214_scratchpads.sql" }
       ]);
     } finally {
       await client.end();

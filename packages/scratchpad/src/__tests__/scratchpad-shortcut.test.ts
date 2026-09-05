@@ -55,4 +55,18 @@ describe("isValidShortcut", () => {
   it("treats the reserved shortcut check as case and spacing insensitive", () => {
     expect(isValidShortcut(" Mod + K ")).toBe(false);
   });
+
+  it("rejects ctrl+k, cmd+k and meta+k too - they are the same reserved shortcut as mod+k", () => {
+    expect(isValidShortcut("ctrl+k")).toBe(false);
+    expect(isValidShortcut("cmd+k")).toBe(false);
+    expect(isValidShortcut("meta+k")).toBe(false);
+  });
+
+  it("rejects a shortcut whose only modifier is shift", () => {
+    expect(isValidShortcut("shift+s")).toBe(false);
+  });
+
+  it("accepts shift alongside a real modifier", () => {
+    expect(isValidShortcut("mod+shift+s")).toBe(true);
+  });
 });

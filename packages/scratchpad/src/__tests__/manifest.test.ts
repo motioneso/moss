@@ -22,7 +22,9 @@ describe("scratchpadModuleManifest", () => {
   });
 
   it("declares scratchpad.read as a read-risk tool", () => {
-    const readTool = scratchpadModuleManifest.assistantTools.find((tool) => tool.name === "scratchpad.read");
+    const readTool = scratchpadModuleManifest.assistantTools.find(
+      (tool) => tool.name === "scratchpad.read"
+    );
     expect(readTool).toBeDefined();
     expect(readTool?.risk).toBe("read");
   });

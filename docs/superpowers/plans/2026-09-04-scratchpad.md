@@ -28,22 +28,22 @@ unchanged; only where the code lives moves.
 
 Every platform capability the spec assumes, with where it exists today.
 
-| Capability assumed | Where it is | What it means for the build |
-| --- | --- | --- |
-| A shell-level panel outside the routed page | `apps/web/src/shell/app-shell.tsx:69` `const [chatOpen, setChatOpen] = useState(false);`, `:20` ChatDrawer import, `:294-302` exactly one `<ChatDrawer open={chatOpen} ...>` (issue #1756) | Scratchpad panel is a sibling of ChatDrawer with the same open-state pattern. One element, ever. |
-| Global keyboard shortcut handling | `apps/web/src/shell/command-palette.tsx:154-155` `document.addEventListener("keydown", onKeyDown, { capture: true })`; `:452-460` palette matches `(metaKey \|\| ctrlKey) && (key === "k" \|\| code === "KeyK")` | Same pattern: a capture-phase keydown listener owned by the shell. Cmd/Ctrl+K is the only existing app shortcut, so Cmd/Ctrl+Shift+S is free. |
-| Personal settings sections | `apps/web/src/settings/settings-page.tsx:148-195` hardcoded section ids (`profile`, `appearance`, ..., `released`), `:249` `PERSONAL_SECTIONS`, `:376` `searchParams.get("section")` | Settings sections are a hardcoded list in the web app, not read from manifests. Add `scratchpad` to that list with its own pane file. The manifest `settings` entry exists for the app map only. |
-| App map declarations | `packages/shared/src/app-map-core.ts:41` `CORE_APP_SCREENS`, `:70` `CORE_APP_SETTINGS`; module manifests carry `navigation`, `settings`, `features` (`packages/module-sdk/src/index.ts:659-676`) | Because the scratchpad is a module, its screen, setting and feature live in the manifest, not in app-map-core. |
-| Notes folder configured signal | `packages/settings/src/notes-source-routes.ts:160,175` GET and `:192` PUT `/api/me/notes-source`, declared at `packages/settings/src/manifest.ts:233,243` | "Notes folder configured" = that route returns a folder. The scratchpad module must not read the settings module's tables; it calls a service (decision below). |
-| Writing a note file | `packages/notes/src/manifest.ts:111-131` tool `notes.create` (`requiresServices: ["notesSync"]`, `requiresConfirmation: input.overwrite === true`); `packages/chat/src/gateway-services.ts:88` `services.notesSync`; `packages/notes/src/daily-archive-writer.ts:44,85` `notesSync.enqueue(actorUserId, root)` | The daily archive writer already writes a file into the notes root from server code and enqueues a sync. The mirror follows that pattern, not the `notes.create` tool (see open question 1). |
-| Moss tool exposure | `packages/module-sdk/src/index.ts:573` `ModuleAssistantToolManifest`, `:143` `ToolExecute`; `packages/ai/src/gateway/gateway.ts:696-712` `executeTool` runs `found.execute(scopedDb, input, ctx, services)` inside `runner.withDataContext(access, ...)`; read tools pass `readToolTrustBoundary` | Declare `scratchpad.read` (risk `read`) and `scratchpad.append` (risk `write`, `executionPolicy: "auto"`, `selfOperationGrant: "granted_at_install"`) in the manifest. Their `execute` uses the scoped db, so RLS applies. |
-| Routes must be declared | `packages/module-registry/src/route-guard.ts:153,214,220` fails start-up for routes not in any manifest `routes[]` and for declared routes never registered | Every scratchpad route appears in the manifest `routes` list (`packages/module-sdk/src/index.ts:434` shape) and is registered by `registerRoutes` in `BUILT_IN_MODULES`. |
-| Module database block | `packages/tasks/src/manifest.ts:257-263` `database: { migrations: ["sql/0003_tasks_module.sql", ...], ownedTables: [...] }`; `packages/module-registry/src/index.ts:1502` `sqlMigrationDirectories: [tasksModuleSqlMigrationDirectory]` | Copy the tasks shape: one migration file listed in `database.migrations`, `ownedTables: ["app.scratchpads"]`, directory exported from the package and listed in the registration. |
-| RLS convention | `app.current_actor_user_id()` used in 37 migrations, grants to `jarvis_app_runtime` (6 files, last `infra/postgres/migrations/0109`) | Four owner policies plus `FORCE ROW LEVEL SECURITY` and a grant to `jarvis_app_runtime`. No `BYPASSRLS`. |
-| RLS tests | `tests/integration/auth-accounts-write-rls.test.ts` (vitest, `createDatabase` from `@moss/db`, `resetEmptyFoundationDatabase` from `./test-database.js`; `:45` `it("jarvis_app_runtime is denied writing to app.auth_accounts")`) | `tests/integration/scratchpad-rls.test.ts` follows this file. The comment there says a superuser bypasses FORCE RLS, so tests run as the runtime role. |
-| Browser tests with a fake API | `tests/e2e/mock-api.ts:163` `export async function mockApi(page, state: MockApiState)`; `MockApiState` keys are per-feature (`tasks`, `chatMessages`, `notifications`, ...) ; `tests/e2e/app-shell.spec.ts` imports `mockApi`, `createMockUser` | Add optional `scratchpad?` state to `MockApiState` and route the four scratchpad endpoints in `mockApi`. |
-| Shared API contracts | `packages/shared/src/me-api.ts:4,8,20` exported interfaces per endpoint | `packages/shared/src/scratchpad-api.ts` in the same style. |
-| Design primitives | `packages/ui/OPTIONS.md`: `jds-menu`, `jds-field`, `jds-switch`, `jds-icon-button`, `jds-card`, `jds-dialog`, `jds-empty-state`; `apps/web/src/styles/kit-chat.css:1` `.chatd`, `:19` `@media (min-width: 721px)` | Panel chrome is `jds-*` only. Layout classes live in `apps/web/src/styles/kit-scratchpad.css`, added to the kit list the same way `kit-chat.css` is. `pnpm check:design-tokens` catches invented classes. |
+| Capability assumed                          | Where it is                                                                                                                                                                                                                                                                                                    | What it means for the build                                                                                                                                                                                                |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A shell-level panel outside the routed page | `apps/web/src/shell/app-shell.tsx:69` `const [chatOpen, setChatOpen] = useState(false);`, `:20` ChatDrawer import, `:294-302` exactly one `<ChatDrawer open={chatOpen} ...>` (issue #1756)                                                                                                                     | Scratchpad panel is a sibling of ChatDrawer with the same open-state pattern. One element, ever.                                                                                                                           |
+| Global keyboard shortcut handling           | `apps/web/src/shell/command-palette.tsx:154-155` `document.addEventListener("keydown", onKeyDown, { capture: true })`; `:452-460` palette matches `(metaKey \|\| ctrlKey) && (key === "k" \|\| code === "KeyK")`                                                                                               | Same pattern: a capture-phase keydown listener owned by the shell. Cmd/Ctrl+K is the only existing app shortcut, so Cmd/Ctrl+Shift+S is free.                                                                              |
+| Personal settings sections                  | `apps/web/src/settings/settings-page.tsx:148-195` hardcoded section ids (`profile`, `appearance`, ..., `released`), `:249` `PERSONAL_SECTIONS`, `:376` `searchParams.get("section")`                                                                                                                           | Settings sections are a hardcoded list in the web app, not read from manifests. Add `scratchpad` to that list with its own pane file. The manifest `settings` entry exists for the app map only.                           |
+| App map declarations                        | `packages/shared/src/app-map-core.ts:41` `CORE_APP_SCREENS`, `:70` `CORE_APP_SETTINGS`; module manifests carry `navigation`, `settings`, `features` (`packages/module-sdk/src/index.ts:659-676`)                                                                                                               | Because the scratchpad is a module, its screen, setting and feature live in the manifest, not in app-map-core.                                                                                                             |
+| Notes folder configured signal              | `packages/settings/src/notes-source-routes.ts:160,175` GET and `:192` PUT `/api/me/notes-source`, declared at `packages/settings/src/manifest.ts:233,243`                                                                                                                                                      | "Notes folder configured" = that route returns a folder. The scratchpad module must not read the settings module's tables; it calls a service (decision below).                                                            |
+| Writing a note file                         | `packages/notes/src/manifest.ts:111-131` tool `notes.create` (`requiresServices: ["notesSync"]`, `requiresConfirmation: input.overwrite === true`); `packages/chat/src/gateway-services.ts:88` `services.notesSync`; `packages/notes/src/daily-archive-writer.ts:44,85` `notesSync.enqueue(actorUserId, root)` | The daily archive writer already writes a file into the notes root from server code and enqueues a sync. The mirror follows that pattern, not the `notes.create` tool (see open question 1).                               |
+| Moss tool exposure                          | `packages/module-sdk/src/index.ts:573` `ModuleAssistantToolManifest`, `:143` `ToolExecute`; `packages/ai/src/gateway/gateway.ts:696-712` `executeTool` runs `found.execute(scopedDb, input, ctx, services)` inside `runner.withDataContext(access, ...)`; read tools pass `readToolTrustBoundary`              | Declare `scratchpad.read` (risk `read`) and `scratchpad.append` (risk `write`, `executionPolicy: "auto"`, `selfOperationGrant: "granted_at_install"`) in the manifest. Their `execute` uses the scoped db, so RLS applies. |
+| Routes must be declared                     | `packages/module-registry/src/route-guard.ts:153,214,220` fails start-up for routes not in any manifest `routes[]` and for declared routes never registered                                                                                                                                                    | Every scratchpad route appears in the manifest `routes` list (`packages/module-sdk/src/index.ts:434` shape) and is registered by `registerRoutes` in `BUILT_IN_MODULES`.                                                   |
+| Module database block                       | `packages/tasks/src/manifest.ts:257-263` `database: { migrations: ["sql/0003_tasks_module.sql", ...], ownedTables: [...] }`; `packages/module-registry/src/index.ts:1502` `sqlMigrationDirectories: [tasksModuleSqlMigrationDirectory]`                                                                        | Copy the tasks shape: one migration file listed in `database.migrations`, `ownedTables: ["app.scratchpads"]`, directory exported from the package and listed in the registration.                                          |
+| RLS convention                              | `app.current_actor_user_id()` used in 37 migrations, grants to `jarvis_app_runtime` (6 files, last `infra/postgres/migrations/0109`)                                                                                                                                                                           | Four owner policies plus `FORCE ROW LEVEL SECURITY` and a grant to `jarvis_app_runtime`. No `BYPASSRLS`.                                                                                                                   |
+| RLS tests                                   | `tests/integration/auth-accounts-write-rls.test.ts` (vitest, `createDatabase` from `@moss/db`, `resetEmptyFoundationDatabase` from `./test-database.js`; `:45` `it("jarvis_app_runtime is denied writing to app.auth_accounts")`)                                                                              | `tests/integration/scratchpad-rls.test.ts` follows this file. The comment there says a superuser bypasses FORCE RLS, so tests run as the runtime role.                                                                     |
+| Browser tests with a fake API               | `tests/e2e/mock-api.ts:163` `export async function mockApi(page, state: MockApiState)`; `MockApiState` keys are per-feature (`tasks`, `chatMessages`, `notifications`, ...) ; `tests/e2e/app-shell.spec.ts` imports `mockApi`, `createMockUser`                                                                | Add optional `scratchpad?` state to `MockApiState` and route the four scratchpad endpoints in `mockApi`.                                                                                                                   |
+| Shared API contracts                        | `packages/shared/src/me-api.ts:4,8,20` exported interfaces per endpoint                                                                                                                                                                                                                                        | `packages/shared/src/scratchpad-api.ts` in the same style.                                                                                                                                                                 |
+| Design primitives                           | `packages/ui/OPTIONS.md`: `jds-menu`, `jds-field`, `jds-switch`, `jds-icon-button`, `jds-card`, `jds-dialog`, `jds-empty-state`; `apps/web/src/styles/kit-chat.css:1` `.chatd`, `:19` `@media (min-width: 721px)`                                                                                              | Panel chrome is `jds-*` only. Layout classes live in `apps/web/src/styles/kit-scratchpad.css`, added to the kit list the same way `kit-chat.css` is. `pnpm check:design-tokens` catches invented classes.                  |
 
 ## Decisions
 
@@ -111,16 +111,44 @@ RLS classification: owner-only. No worker role grant; nothing runs in a job.
 
 ```ts
 export interface ScratchpadResponse {
-  body: string; revision: number; updatedAt: string | null; maxChars: 64000;
-  syncToNotes: boolean; notesFolderConfigured: boolean; shortcut: string;
+  body: string;
+  revision: number;
+  updatedAt: string | null;
+  maxChars: 64000;
+  syncToNotes: boolean;
+  notesFolderConfigured: boolean;
+  shortcut: string;
 }
-export interface PutScratchpadRequest { body: string; revision: number }
-export interface PutScratchpadResponse { revision: number; updatedAt: string; notesMirror?: NotesMirrorResult }
-export interface ScratchpadConflictResponse { error: "scratchpad_conflict"; body: string; revision: number; updatedAt: string }
-export interface AppendScratchpadRequest { text: string }
-export interface AppendScratchpadResponse { revision: number; updatedAt: string; appended: string }
-export interface PatchScratchpadSettingsRequest { syncToNotes?: boolean; shortcut?: string }
-export type NotesMirrorResult = { ok: true } | { ok: false; reason: "folder_missing" | "write_failed" };
+export interface PutScratchpadRequest {
+  body: string;
+  revision: number;
+}
+export interface PutScratchpadResponse {
+  revision: number;
+  updatedAt: string;
+  notesMirror?: NotesMirrorResult;
+}
+export interface ScratchpadConflictResponse {
+  error: "scratchpad_conflict";
+  body: string;
+  revision: number;
+  updatedAt: string;
+}
+export interface AppendScratchpadRequest {
+  text: string;
+}
+export interface AppendScratchpadResponse {
+  revision: number;
+  updatedAt: string;
+  appended: string;
+}
+export interface PatchScratchpadSettingsRequest {
+  syncToNotes?: boolean;
+  shortcut?: string;
+}
+export type NotesMirrorResult =
+  | { ok: true }
+  | { ok: false; reason: "folder_missing" | "write_failed" };
 ```
 
 Error codes: `scratchpad_conflict` 409, `scratchpad_too_large` 413, `scratchpad_notes_folder_missing`

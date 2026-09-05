@@ -8,7 +8,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run packages/scratchpad/src/__tests__"
+    "test": "vitest run --root ../.. packages/scratchpad/src/__tests__"
   },
   "dependencies": {
     "@moss/db": "workspace:*",

@@ -34,6 +34,24 @@ export const scratchpadModuleManifest = {
     { method: "POST", path: "/api/scratchpad/append", permissionId: "scratchpad.write" },
     { method: "PATCH", path: "/api/scratchpad/settings", permissionId: "scratchpad.write" }
   ],
+  // #2236 slice 1: storage, the API, and the two assistant tools only. No screen yet - the
+  // scratchpad UI is a later slice - so `navigation` and `settings` stay absent on purpose,
+  // matching the notifications module's precedent for a module with no screen yet.
+  features: [
+    {
+      id: "scratchpad.assistant_read_append",
+      description:
+        "The assistant can read the user's scratchpad and append a line to it. It can never replace or delete existing text.",
+      errors: [
+        {
+          code: "scratchpad_too_large",
+          class: "validation",
+          description:
+            "Shown as 'Scratchpad is full': the pad is already at its 64,000 character limit, so the new text was not appended."
+        }
+      ]
+    }
+  ],
   assistantActionFamilies: [
     {
       id: "scratchpad_changes",

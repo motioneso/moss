@@ -274,12 +274,12 @@ is not declared will stop the server from starting). Contracts in
 // GET /api/scratchpad
 type ScratchpadGetResponse = {
   body: string;
-  revision: number;        // 0 when no row exists yet
+  revision: number; // 0 when no row exists yet
   updatedAt: string | null;
   maxChars: 64000;
   syncToNotes: boolean;
-  notesFolderConfigured: boolean;   // from the notes module's public status
-  shortcut: string;                 // e.g. "mod+shift+s"
+  notesFolderConfigured: boolean; // from the notes module's public status
+  shortcut: string; // e.g. "mod+shift+s"
 };
 
 // PATCH /api/scratchpad/settings

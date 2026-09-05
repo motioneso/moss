@@ -1,12 +1,15 @@
 import { assertDataContextDb } from "@moss/db";
 import type { ToolExecute, ToolResult } from "@moss/module-sdk";
-import { SCRATCHPAD_MAX_CHARS } from "@moss/shared";
 
-import { ScratchpadRepository } from "./repository.js";
+import { ScratchpadRepository, ScratchpadTooLargeError } from "./repository.js";
 
 const repository = new ScratchpadRepository();
 
-export const scratchpadReadExecute: ToolExecute = async (scopedDb, _input, _ctx): Promise<ToolResult> => {
+export const scratchpadReadExecute: ToolExecute = async (
+  scopedDb,
+  _input,
+  _ctx
+): Promise<ToolResult> => {
   assertDataContextDb(scopedDb);
   const state = await repository.get(scopedDb);
   return {
@@ -18,7 +21,11 @@ export const scratchpadReadExecute: ToolExecute = async (scopedDb, _input, _ctx)
   };
 };
 
-export const scratchpadAppendExecute: ToolExecute = async (scopedDb, input, _ctx): Promise<ToolResult> => {
+export const scratchpadAppendExecute: ToolExecute = async (
+  scopedDb,
+  input,
+  _ctx
+): Promise<ToolResult> => {
   assertDataContextDb(scopedDb);
   const { text } = input as { text: string };
   const trimmed = typeof text === "string" ? text.trim() : "";
@@ -29,11 +36,16 @@ export const scratchpadAppendExecute: ToolExecute = async (scopedDb, input, _ctx
   if (trimmed.length > 2000) {
     return { data: { error: "Text is too long to append in one call (2000 character limit)" } };
   }
-  if (trimmed.length > SCRATCHPAD_MAX_CHARS) {
-    return { data: { error: "Scratchpad is full" } };
-  }
 
-  const result = await repository.append(scopedDb, trimmed);
+  let result;
+  try {
+    result = await repository.append(scopedDb, trimmed);
+  } catch (error) {
+    if (error instanceof ScratchpadTooLargeError) {
+      return { data: { error: "Scratchpad is full" } };
+    }
+    throw error;
+  }
   return {
     data: {
       revision: result.revision,

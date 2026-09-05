@@ -47,13 +47,34 @@ export function parseShortcut(shortcut: string): ParsedShortcut | null {
   return { modifiers, key };
 }
 
-function normalizeShortcut(parsed: ParsedShortcut): string {
-  return `${parsed.modifiers.join("+")}+${parsed.key}`;
+/**
+ * "ctrl", "cmd" and "meta" all mean the same physical key as "mod" on their own platform, so two
+ * shortcuts that differ only in which of those four tokens they use are really the same shortcut.
+ * Used only for the reserved-shortcut check and the modifier check below - `parseShortcut` keeps
+ * returning the raw tokens the caller typed.
+ */
+function canonicalizeModifier(modifier: string): string {
+  return modifier === "ctrl" || modifier === "cmd" || modifier === "meta" ? "mod" : modifier;
 }
 
-/** True when the string parses to a shortcut with at least one modifier and isn't reserved. */
+function normalizeShortcut(parsed: ParsedShortcut): string {
+  const canonicalModifiers = parsed.modifiers.map(canonicalizeModifier);
+  return `${canonicalModifiers.join("+")}+${parsed.key}`;
+}
+
+/**
+ * True when the string parses to a shortcut with a real modifier (something other than Shift
+ * alone - Shift plus a letter is a normal typed character, not a keyboard shortcut) and isn't
+ * reserved under any of its equivalent spellings ("mod+k", "ctrl+k", "cmd+k", "meta+k" are all
+ * the same shortcut).
+ */
 export function isValidShortcut(shortcut: string): boolean {
   const parsed = parseShortcut(shortcut);
   if (!parsed) return false;
+
+  const canonicalModifiers = parsed.modifiers.map(canonicalizeModifier);
+  const hasRealModifier = canonicalModifiers.some((modifier) => modifier !== "shift");
+  if (!hasRealModifier) return false;
+
   return !RESERVED_SHORTCUTS.has(normalizeShortcut(parsed));
 }

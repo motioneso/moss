@@ -17,7 +17,7 @@ import {
 } from "@moss/shared";
 import { PreferencesRepository } from "@moss/structured-state";
 
-import { ScratchpadRepository } from "./repository.js";
+import { ScratchpadRepository, ScratchpadTooLargeError } from "./repository.js";
 
 export interface ScratchpadRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
@@ -132,9 +132,17 @@ export function registerScratchpadRoutes(
         return sendTooLarge(reply);
       }
 
-      const result = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-        repository.append(scopedDb, text)
-      );
+      let result;
+      try {
+        result = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.append(scopedDb, text)
+        );
+      } catch (error) {
+        if (error instanceof ScratchpadTooLargeError) {
+          return sendTooLarge(reply);
+        }
+        throw error;
+      }
 
       const response: AppendScratchpadResponse = {
         revision: result.revision,
@@ -161,20 +169,23 @@ export function registerScratchpadRoutes(
         }
       }
 
-      const result = await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
-        if (parsed.syncToNotes === true) {
-          const source = await preferences.get(scopedDb, NOTES_SOURCE_PREFERENCE_KEY);
-          const notesFolderConfigured = typeof source === "string" && source.length > 0;
-          if (!notesFolderConfigured) {
-            return { conflict: true as const };
+      const result = await dependencies.dataContext.withDataContext(
+        accessContext,
+        async (scopedDb) => {
+          if (parsed.syncToNotes === true) {
+            const source = await preferences.get(scopedDb, NOTES_SOURCE_PREFERENCE_KEY);
+            const notesFolderConfigured = typeof source === "string" && source.length > 0;
+            if (!notesFolderConfigured) {
+              return { conflict: true as const };
+            }
           }
+          const updated = await repository.patchSettings(scopedDb, {
+            syncToNotes: parsed.syncToNotes,
+            shortcut: parsed.shortcut
+          });
+          return { conflict: false as const, updated };
         }
-        const updated = await repository.patchSettings(scopedDb, {
-          syncToNotes: parsed.syncToNotes,
-          shortcut: parsed.shortcut
-        });
-        return { conflict: false as const, updated };
-      });
+      );
 
       if (result.conflict) {
         return reply.code(409).send({ code: "scratchpad_notes_folder_missing" });
