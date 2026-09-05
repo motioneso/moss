@@ -30,6 +30,7 @@
 ### Task 1: Shared contract for the card
 
 **Files:**
+
 - Create or modify: `packages/shared/src/commitments-api.ts`; export from `packages/shared/src/index.ts`
 - Test: `tests/unit/commitment-owed-dto.test.ts`
 
@@ -39,8 +40,8 @@
 export type OwedActionKind = "reply" | "task" | "snooze" | "dismiss";
 export interface OwedProposedAction {
   readonly kind: OwedActionKind;
-  readonly label: string;            // "Draft reply with 3 free slots", "Task, due Wed", "Snooze", "Dismiss"
-  readonly primary: boolean;         // exactly one primary per item
+  readonly label: string; // "Draft reply with 3 free slots", "Task, due Wed", "Snooze", "Dismiss"
+  readonly primary: boolean; // exactly one primary per item
   readonly dueLocalDate?: string | null;
   readonly untilLocalDate?: string | null;
   readonly wantsFreeSlots?: boolean;
@@ -53,7 +54,7 @@ export interface OwedItemDto {
   readonly dueLocalDate: string | null;
   readonly confidence: "high" | "medium" | "low";
   readonly whyLines: readonly string[];
-  readonly sourceLine: string;       // "from email, 2 messages"
+  readonly sourceLine: string; // "from email, 2 messages"
   readonly threadRef: string;
   readonly replyToCacheMessageId: string | null; // newest counterparty message; what reply/send take
   readonly actions: readonly OwedProposedAction[];
@@ -62,13 +63,33 @@ export interface OwedItemDto {
   readonly stale: boolean;
   readonly linkedTaskId: string | null;
 }
-export interface OwedItemsResponse { readonly items: readonly OwedItemDto[]; readonly older: readonly OwedItemDto[]; }
-export interface OwedReplyRequest { readonly mode: "send" | "draft"; readonly body: string; }
-export interface OwedReplyDraftResponse { readonly body: string; readonly freeSlots: readonly { start: string; end: string }[]; }
-export interface OwedTaskRequest { readonly title?: string; readonly dueLocalDate?: string | null; }
-export interface OwedSnoozeRequest { readonly untilLocalDate: string; }
-export interface OwedDismissRequest { readonly reason?: "not_owed" | "handled" | "not_now"; }
-export interface OwedActionResponse { readonly item: OwedItemDto | null; readonly taskId?: string; readonly messageRef?: string; }
+export interface OwedItemsResponse {
+  readonly items: readonly OwedItemDto[];
+  readonly older: readonly OwedItemDto[];
+}
+export interface OwedReplyRequest {
+  readonly mode: "send" | "draft";
+  readonly body: string;
+}
+export interface OwedReplyDraftResponse {
+  readonly body: string;
+  readonly freeSlots: readonly { start: string; end: string }[];
+}
+export interface OwedTaskRequest {
+  readonly title?: string;
+  readonly dueLocalDate?: string | null;
+}
+export interface OwedSnoozeRequest {
+  readonly untilLocalDate: string;
+}
+export interface OwedDismissRequest {
+  readonly reason?: "not_owed" | "handled" | "not_now";
+}
+export interface OwedActionResponse {
+  readonly item: OwedItemDto | null;
+  readonly taskId?: string;
+  readonly messageRef?: string;
+}
 ```
 
 Plus JSON schemas `owedReplyRequestSchema`, `owedTaskRequestSchema`, `owedSnoozeRequestSchema`, `owedDismissRequestSchema` (TypeBox, like `statusUpdateSchema` in `routes.ts`), and the pure mapper `toOwedItemDto(candidate: CommitmentCandidate, opts: { messageCount: number; replyToCacheMessageId: string | null; today: string }): OwedItemDto` in `packages/commitments/src/owed-dto.ts`.
@@ -79,23 +100,70 @@ Plus JSON schemas `owedReplyRequestSchema`, `owedTaskRequestSchema`, `owedSnooze
 // tests/unit/commitment-owed-dto.test.ts
 import { describe, expect, it } from "vitest";
 import { toOwedItemDto } from "../../packages/commitments/src/owed-dto.js";
-const cand = (o: any = {}) => ({ id: "c1", ownerUserId: "u1", candidateSignature: "s", kind: "obligation", title: "Send Sarah the lease addendum", dueLocalDate: "2026-09-05", counterpartyLabel: "Sarah Kim", counterpartyPersonId: "p1", counterpartyAddress: "sarah@kim.example", confidence: "high", suggestedHandling: "create_task", status: "pending_review", resolutionRef: null, snoozedUntil: null, stale: false, threadRef: "t1", lastJudgedExternalId: "m2", whyLines: ["\"Could you send it back by Friday?\""], proposedActions: [{ kind: "reply", facts: [], wantsFreeSlots: true }, { kind: "task", title: "Send addendum", dueLocalDate: "2026-09-05" }, { kind: "dismiss" }], linkedTaskId: null, ...o });
+const cand = (o: any = {}) => ({
+  id: "c1",
+  ownerUserId: "u1",
+  candidateSignature: "s",
+  kind: "obligation",
+  title: "Send Sarah the lease addendum",
+  dueLocalDate: "2026-09-05",
+  counterpartyLabel: "Sarah Kim",
+  counterpartyPersonId: "p1",
+  counterpartyAddress: "sarah@kim.example",
+  confidence: "high",
+  suggestedHandling: "create_task",
+  status: "pending_review",
+  resolutionRef: null,
+  snoozedUntil: null,
+  stale: false,
+  threadRef: "t1",
+  lastJudgedExternalId: "m2",
+  whyLines: ['"Could you send it back by Friday?"'],
+  proposedActions: [
+    { kind: "reply", facts: [], wantsFreeSlots: true },
+    { kind: "task", title: "Send addendum", dueLocalDate: "2026-09-05" },
+    { kind: "dismiss" }
+  ],
+  linkedTaskId: null,
+  ...o
+});
 describe("toOwedItemDto", () => {
   it("labels actions, always offers all four, marks the first proposed one primary", () => {
-    const dto = toOwedItemDto(cand() as any, { messageCount: 2, replyToCacheMessageId: "cm1", today: "2026-09-04" });
+    const dto = toOwedItemDto(cand() as any, {
+      messageCount: 2,
+      replyToCacheMessageId: "cm1",
+      today: "2026-09-04"
+    });
     expect(dto.actions.map((a) => a.kind)).toEqual(["reply", "task", "snooze", "dismiss"]);
-    expect(dto.actions[0]).toMatchObject({ label: "Draft reply with free slots", primary: true, wantsFreeSlots: true });
-    expect(dto.actions[1]).toMatchObject({ label: "Task, due Fri", primary: false, dueLocalDate: "2026-09-05" });
+    expect(dto.actions[0]).toMatchObject({
+      label: "Draft reply with free slots",
+      primary: true,
+      wantsFreeSlots: true
+    });
+    expect(dto.actions[1]).toMatchObject({
+      label: "Task, due Fri",
+      primary: false,
+      dueLocalDate: "2026-09-05"
+    });
     expect(dto.actions.filter((a) => a.primary)).toHaveLength(1);
     expect(dto.sourceLine).toBe("from email, 2 messages");
     expect(dto.replyToCacheMessageId).toBe("cm1");
   });
   it("a due date more than 6 days out is shown as a date", () => {
-    const dto = toOwedItemDto(cand({ proposedActions: [{ kind: "task", title: "T", dueLocalDate: "2026-09-20" }] }) as any, { messageCount: 1, replyToCacheMessageId: null, today: "2026-09-04" });
+    const dto = toOwedItemDto(
+      cand({ proposedActions: [{ kind: "task", title: "T", dueLocalDate: "2026-09-20" }] }) as any,
+      { messageCount: 1, replyToCacheMessageId: null, today: "2026-09-04" }
+    );
     expect(dto.actions.find((a) => a.kind === "task")?.label).toBe("Task, due Sep 20");
   });
   it("never includes email addresses or bodies", () => {
-    const s = JSON.stringify(toOwedItemDto(cand() as any, { messageCount: 1, replyToCacheMessageId: null, today: "2026-09-04" }));
+    const s = JSON.stringify(
+      toOwedItemDto(cand() as any, {
+        messageCount: 1,
+        replyToCacheMessageId: null,
+        today: "2026-09-04"
+      })
+    );
     expect(s).not.toContain("sarah@kim.example");
   });
 });
@@ -110,27 +178,69 @@ import type { CommitmentCandidate } from "./types.js";
 const ORDER = ["reply", "task", "snooze", "dismiss"] as const;
 export function shortDue(due: string | null, today: string): string | null {
   if (!due) return null;
-  const d = new Date(`${due}T00:00:00Z`), t = new Date(`${today}T00:00:00Z`);
+  const d = new Date(`${due}T00:00:00Z`),
+    t = new Date(`${today}T00:00:00Z`);
   const days = Math.round((d.getTime() - t.getTime()) / 86_400_000);
-  if (days === 0) return "today"; if (days === 1) return "tomorrow";
-  if (days > 1 && days <= 6) return d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+  if (days === 0) return "today";
+  if (days === 1) return "tomorrow";
+  if (days > 1 && days <= 6)
+    return d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
-export function toOwedItemDto(c: CommitmentCandidate, o: { messageCount: number; replyToCacheMessageId: string | null; today: string }): OwedItemDto {
+export function toOwedItemDto(
+  c: CommitmentCandidate,
+  o: { messageCount: number; replyToCacheMessageId: string | null; today: string }
+): OwedItemDto {
   const proposed = c.proposedActions ?? [];
   const firstKind = proposed[0]?.kind ?? "reply";
   const actions: OwedProposedAction[] = ORDER.map((kind) => {
     const p = proposed.find((a) => a.kind === kind) as any;
     switch (kind) {
-      case "reply": return { kind, primary: firstKind === kind, label: p?.wantsFreeSlots ? "Draft reply with free slots" : "Draft reply", wantsFreeSlots: p?.wantsFreeSlots === true };
-      case "task": { const due = p?.dueLocalDate ?? c.dueLocalDate ?? null; const s = shortDue(due, o.today); return { kind, primary: firstKind === kind, label: s ? `Task, due ${s[0].toUpperCase()}${s.slice(1)}` : "Make task", dueLocalDate: due }; }
-      case "snooze": return { kind, primary: firstKind === kind, label: "Snooze", untilLocalDate: p?.untilLocalDate ?? null };
-      case "dismiss": return { kind, primary: false, label: "Dismiss" };
+      case "reply":
+        return {
+          kind,
+          primary: firstKind === kind,
+          label: p?.wantsFreeSlots ? "Draft reply with free slots" : "Draft reply",
+          wantsFreeSlots: p?.wantsFreeSlots === true
+        };
+      case "task": {
+        const due = p?.dueLocalDate ?? c.dueLocalDate ?? null;
+        const s = shortDue(due, o.today);
+        return {
+          kind,
+          primary: firstKind === kind,
+          label: s ? `Task, due ${s[0].toUpperCase()}${s.slice(1)}` : "Make task",
+          dueLocalDate: due
+        };
+      }
+      case "snooze":
+        return {
+          kind,
+          primary: firstKind === kind,
+          label: "Snooze",
+          untilLocalDate: p?.untilLocalDate ?? null
+        };
+      case "dismiss":
+        return { kind, primary: false, label: "Dismiss" };
     }
   });
-  return { id: c.id, title: c.title, counterpartyLabel: c.counterpartyLabel ?? "Someone", counterpartyPersonId: c.counterpartyPersonId ?? null, dueLocalDate: c.dueLocalDate, confidence: c.confidence,
-    whyLines: c.whyLines ?? [], sourceLine: `from email, ${o.messageCount} message${o.messageCount === 1 ? "" : "s"}`, threadRef: c.threadRef!, replyToCacheMessageId: o.replyToCacheMessageId,
-    actions, status: c.status as OwedItemDto["status"], snoozedUntil: c.snoozedUntil ? c.snoozedUntil.toISOString() : null, stale: c.stale ?? false, linkedTaskId: c.linkedTaskId ?? null };
+  return {
+    id: c.id,
+    title: c.title,
+    counterpartyLabel: c.counterpartyLabel ?? "Someone",
+    counterpartyPersonId: c.counterpartyPersonId ?? null,
+    dueLocalDate: c.dueLocalDate,
+    confidence: c.confidence,
+    whyLines: c.whyLines ?? [],
+    sourceLine: `from email, ${o.messageCount} message${o.messageCount === 1 ? "" : "s"}`,
+    threadRef: c.threadRef!,
+    replyToCacheMessageId: o.replyToCacheMessageId,
+    actions,
+    status: c.status as OwedItemDto["status"],
+    snoozedUntil: c.snoozedUntil ? c.snoozedUntil.toISOString() : null,
+    stale: c.stale ?? false,
+    linkedTaskId: c.linkedTaskId ?? null
+  };
 }
 ```
 
@@ -142,6 +252,7 @@ export function toOwedItemDto(c: CommitmentCandidate, o: { messageCount: number;
 ### Task 2: Action services contract in module-sdk
 
 **Files:**
+
 - Modify: `packages/module-sdk/src/index.ts`
 - Test: `tests/unit/module-sdk-email-judgement-types.test.ts` (extend)
 
@@ -150,15 +261,33 @@ export function toOwedItemDto(c: CommitmentCandidate, o: { messageCount: number;
 ```ts
 export interface CommitmentActionServices {
   email: {
-    draftReply(scopedDb: unknown, actorUserId: string, cacheMessageId: string, body: string): Promise<{ messageRef: string }>;
-    sendReply(scopedDb: unknown, actorUserId: string, cacheMessageId: string, body: string): Promise<{ messageRef: string }>;
+    draftReply(
+      scopedDb: unknown,
+      actorUserId: string,
+      cacheMessageId: string,
+      body: string
+    ): Promise<{ messageRef: string }>;
+    sendReply(
+      scopedDb: unknown,
+      actorUserId: string,
+      cacheMessageId: string,
+      body: string
+    ): Promise<{ messageRef: string }>;
   };
   tasks: {
-    create(scopedDb: unknown, actorUserId: string, input: { title: string; dueLocalDate: string | null; sourceNote: string }): Promise<{ taskId: string }>;
+    create(
+      scopedDb: unknown,
+      actorUserId: string,
+      input: { title: string; dueLocalDate: string | null; sourceNote: string }
+    ): Promise<{ taskId: string }>;
     isDone(scopedDb: unknown, actorUserId: string, taskId: string): Promise<boolean | null>; // null = task gone
   };
   calendar: {
-    freeSlots(scopedDb: unknown, actorUserId: string, opts: { days: number; count: number; minutes: number }): Promise<readonly { start: string; end: string }[]>;
+    freeSlots(
+      scopedDb: unknown,
+      actorUserId: string,
+      opts: { days: number; count: number; minutes: number }
+    ): Promise<readonly { start: string; end: string }[]>;
   };
   composeReply?: (scopedDb: unknown, actorUserId: string, prompt: string) => Promise<string>; // interactive tier text generation; slice 2 Task 4
 }
@@ -169,6 +298,7 @@ export interface CommitmentActionServices {
 ### Task 3: Repository: linked task, resolved, stale
 
 **Files:**
+
 - Create: `packages/commitments/sql/0217_commitment_email_links.sql`
 - Modify: `packages/commitments/src/manifest.ts` (migrations), `repository.ts`, `types.ts`
 - Test: `tests/unit/commitment-email-repository-sql.test.ts` (extend)
@@ -183,6 +313,7 @@ CREATE INDEX IF NOT EXISTS idx_commitment_candidates_owner_open_email
 ```
 
 **Interfaces (Produces):**
+
 - `markResolved(scopedDb, ownerUserId, candidateId, by: ResolvedBy, resolutionRef: string): Promise<CommitmentCandidate>` sets `status='accepted'`, `resolution_ref`, `resolved_by`, `updated_at`.
 - `setLinkedTask(scopedDb, ownerUserId, candidateId, taskId: string): Promise<CommitmentCandidate>`.
 - `markStale(scopedDb, ownerUserId, olderThanLocalDate: string): Promise<number>` sets `stale=true` where `thread_ref IS NOT NULL AND resolution_ref IS NULL AND due_local_date < $olderThan AND stale=false`; returns count.
@@ -195,6 +326,7 @@ CREATE INDEX IF NOT EXISTS idx_commitment_candidates_owner_open_email
 ### Task 4: Action logic (pure, injected services)
 
 **Files:**
+
 - Create: `packages/commitments/src/email-actions.ts`
 - Test: `tests/unit/commitment-email-actions.test.ts`
 
@@ -211,23 +343,37 @@ export class OwedActionError extends Error { constructor(public code: "not_found
 ```
 
 Rules (from spec section 5):
+
 - `prepareReply`: load candidate (owner-scoped; `not_found` if missing or not an email item; `already_closed` if `resolution_ref` set). Find the newest counterparty message via `threads.listThreadMessages`; `no_message` if none. If the proposed reply action `wantsFreeSlots`, fetch `services.calendar.freeSlots({days: 7, count: 3, minutes: 60})` now (not at judgement time). If `services.composeReply` exists, ask it for a plain-text reply using the candidate title, why lines, reply facts and the slots (prompt in code below); otherwise fall back to a template. Return `{ body, freeSlots }`.
-- `performReply`: `mode: "send"` calls `services.email.sendReply`, `"draft"` calls `draftReply`; both then `markResolved(by: mode === "send" ? "reply_sent" : "draft_saved", resolutionRef: \`email:${messageRef}\`)` and return `{ item: null, messageRef }`.
-- `performTask`: `services.tasks.create({ title: req.title ?? proposedTask.title ?? candidate.title, dueLocalDate: req.dueLocalDate ?? proposedTask.dueLocalDate ?? candidate.dueLocalDate, sourceNote: \`From email: ${candidate.title}\` })`, then `setLinkedTask` and `updateStatus(..., "accepted")`. Item stays open. Return `{ item: dto, taskId }`.
+- `performReply`: `mode: "send"` calls `services.email.sendReply`, `"draft"` calls `draftReply`; both then `markResolved(by: mode === "send" ? "reply_sent" : "draft_saved", resolutionRef: \`email:${messageRef}\`)`and return`{ item: null, messageRef }`.
+- `performTask`: `services.tasks.create({ title: req.title ?? proposedTask.title ?? candidate.title, dueLocalDate: req.dueLocalDate ?? proposedTask.dueLocalDate ?? candidate.dueLocalDate, sourceNote: \`From email: ${candidate.title}\` })`, then `setLinkedTask`and`updateStatus(..., "accepted")`. Item stays open. Return `{ item: dto, taskId }`.
 - `performSnooze`: `updateStatus(..., "snoozed", new Date(\`${untilLocalDate}T00:00:00Z\`))`.
 - `performDismiss`: `updateStatus(..., req.reason === "not_owed" ? "explicit_non_action" : "rejected")`; if `not_owed` and `onNotOwed` given, call it with `candidate.counterpartyAddress` (slice 3 supplies the learner). Return `{ item: null }`.
 
 Reply prompt (for `composeReply`):
 
 ```ts
-export function buildReplyPrompt(i: { title: string; counterparty: string; why: readonly string[]; facts: readonly string[]; slots: readonly { start: string; end: string }[]; timezone: string; userName: string }): string {
+export function buildReplyPrompt(i: {
+  title: string;
+  counterparty: string;
+  why: readonly string[];
+  facts: readonly string[];
+  slots: readonly { start: string; end: string }[];
+  timezone: string;
+  userName: string;
+}): string {
   return [
     `Write a short, warm, plain-text email reply from ${i.userName} to ${i.counterparty}. No subject line, no markdown, no placeholders.`,
-    `What the user owes: ${i.title}.`, i.why.length ? `Context: ${i.why.join(" ")}` : "",
+    `What the user owes: ${i.title}.`,
+    i.why.length ? `Context: ${i.why.join(" ")}` : "",
     i.facts.length ? `Use these facts: ${i.facts.join("; ")}` : "",
-    i.slots.length ? `Offer exactly these times (${i.timezone}), one per line: ${i.slots.map((s) => `${s.start} to ${s.end}`).join("; ")}` : "",
+    i.slots.length
+      ? `Offer exactly these times (${i.timezone}), one per line: ${i.slots.map((s) => `${s.start} to ${s.end}`).join("; ")}`
+      : "",
     "Three to six sentences. Sign off with the user's first name."
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 ```
 
@@ -240,19 +386,20 @@ Template fallback: `Hi ${firstName(counterparty)},\n\nThanks for your note about
 ### Task 5: Routes for the card and actions
 
 **Files:**
+
 - Modify: `packages/commitments/src/routes.ts`, `packages/commitments/src/manifest.ts` (`routes`), `packages/commitments/src/index.ts` (`CommitmentsRouteDependencies` gains `actionServices?: CommitmentActionServices`, `threads?: EmailThreadProvider`, `onNotOwed?`)
 - Test: `tests/unit/commitment-owed-routes.test.ts` (Fastify `inject`, fake deps; model on the existing commitments route test if one exists, else on `tests/unit/*-routes.test.ts`)
 
 Routes (all `permissionId: "commitments.view"` for GET, `"commitments.update"` for POST, declared in the manifest or the server refuses to start):
 
-| Method | Path | Body | Returns |
-|---|---|---|---|
-| GET | `/api/commitments/owed` | none | `OwedItemsResponse`: `items` = open, not stale, not snoozed-in-future, ordered by due then last seen; `older` = stale or snoozed |
-| GET | `/api/commitments/owed/:id/reply` | none | `OwedReplyDraftResponse` from `prepareReply` |
-| POST | `/api/commitments/owed/:id/reply` | `OwedReplyRequest` | `OwedActionResponse` |
-| POST | `/api/commitments/owed/:id/task` | `OwedTaskRequest` | `OwedActionResponse` |
-| POST | `/api/commitments/owed/:id/snooze` | `OwedSnoozeRequest` | `OwedActionResponse` |
-| POST | `/api/commitments/owed/:id/dismiss` | `OwedDismissRequest` | `OwedActionResponse` |
+| Method | Path                                | Body                 | Returns                                                                                                                          |
+| ------ | ----------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/commitments/owed`             | none                 | `OwedItemsResponse`: `items` = open, not stale, not snoozed-in-future, ordered by due then last seen; `older` = stale or snoozed |
+| GET    | `/api/commitments/owed/:id/reply`   | none                 | `OwedReplyDraftResponse` from `prepareReply`                                                                                     |
+| POST   | `/api/commitments/owed/:id/reply`   | `OwedReplyRequest`   | `OwedActionResponse`                                                                                                             |
+| POST   | `/api/commitments/owed/:id/task`    | `OwedTaskRequest`    | `OwedActionResponse`                                                                                                             |
+| POST   | `/api/commitments/owed/:id/snooze`  | `OwedSnoozeRequest`  | `OwedActionResponse`                                                                                                             |
+| POST   | `/api/commitments/owed/:id/dismiss` | `OwedDismissRequest` | `OwedActionResponse`                                                                                                             |
 
 Error mapping: `not_found` 404, `no_message` 409, `already_closed` 409, missing services 503 with `{ error: "Email actions unavailable" }`. The GET builds each DTO with `messageCount` and `replyToCacheMessageId` from `threads.listThreadMessages` (newest non-user message); if `threads` is absent, use `messageCount: 1` and `null`.
 
@@ -263,6 +410,7 @@ Error mapping: `not_found` 404, `no_message` 409, `already_closed` 409, missing 
 ### Task 6: Closing when the user replies in Gmail, and marking stale
 
 **Files:**
+
 - Create: `packages/commitments/src/email-close.ts`
 - Modify: `packages/connectors/src/google-sync-phases.ts` (call `context.deps.afterEmailSync?.(scopedDb, actorUserId)` at the end of `runGoogleEmailPhase`), same in `imap-sync-jobs.ts`
 - Test: `tests/unit/commitment-email-close.test.ts`
@@ -270,11 +418,23 @@ Error mapping: `not_found` 404, `no_message` 409, `already_closed` 409, missing 
 **Interfaces (Produces):**
 
 ```ts
-export async function closeItemsAnsweredInMail(scopedDb, actorUserId, deps: { repository: CommitmentsRepository; threads: EmailThreadProvider; requestJudgement: (actorUserId: string, threadRef: string) => Promise<void> }): Promise<{ closed: number; rejudged: number }>
-export async function markStaleItems(scopedDb, actorUserId, deps: { repository: CommitmentsRepository; today: string }): Promise<number>
+export async function closeItemsAnsweredInMail(
+  scopedDb,
+  actorUserId,
+  deps: {
+    repository: CommitmentsRepository;
+    threads: EmailThreadProvider;
+    requestJudgement: (actorUserId: string, threadRef: string) => Promise<void>;
+  }
+): Promise<{ closed: number; rejudged: number }>;
+export async function markStaleItems(
+  scopedDb,
+  actorUserId,
+  deps: { repository: CommitmentsRepository; today: string }
+): Promise<number>;
 ```
 
-Rules (spec section 6): for each open email candidate, ask `threads.listThreadsWithNewerMessages` with `{ threadRef, afterExternalId: lastJudgedExternalId }`. If the newest newer message `fromIsUser`, `markResolved(by: "user_replied_in_mail", resolutionRef: \`email:${externalId}\`)`. If it is from the counterparty, call `requestJudgement` so slice 1 re-judges the thread (the judgement upsert then refreshes the same row). `markStaleItems` calls `repository.markStale` with `today minus 14 days`.
+Rules (spec section 6): for each open email candidate, ask `threads.listThreadsWithNewerMessages` with `{ threadRef, afterExternalId: lastJudgedExternalId }`. If the newest newer message `fromIsUser`, `markResolved(by: "user_replied_in_mail", resolutionRef: \`email:${externalId}\`)`. If it is from the counterparty, call `requestJudgement`so slice 1 re-judges the thread (the judgement upsert then refreshes the same row).`markStaleItems`calls`repository.markStale`with`today minus 14 days`.
 
 - [ ] **Step 1: Failing tests**: user reply closes with the right `resolvedBy` and ref; counterparty reply requests a judgement and does not close; no newer message does nothing; a candidate due 15 days ago becomes stale, one due 13 days ago does not.
 - [ ] **Step 2: Run, FAIL. Step 3: Implement**; wire `afterEmailSync` in the composition root (Task 8) to run both functions inside the sync's data context. **Step 4: Run, PASS.**
@@ -283,11 +443,12 @@ Rules (spec section 6): for each open email candidate, ask `threads.listThreadsW
 ### Task 7: Closing when the linked task is done
 
 **Files:**
+
 - Modify: `packages/commitments/src/email-close.ts` (add `closeItemsWithDoneTasks`)
 - Modify: `packages/tasks/src/index.ts` (export a small `TaskStatusLookup` implementation: `isTaskDone(scopedDb, actorUserId, taskId): Promise<boolean | null>` built on the tasks repository's existing get-by-id, reading `status`)
 - Test: extend `tests/unit/commitment-email-close.test.ts`
 
-Tasks publishes no status-change event, so this is a poll folded into the same after-sync hook and into the GET owed route (cheap: one lookup per open item with a linked task). `closeItemsWithDoneTasks(scopedDb, actorUserId, { repository, services })`: for each open candidate with `linkedTaskId`, `services.tasks.isDone(...)`; `true` → `markResolved(by: "task_done", resolutionRef: \`task:${taskId}\`)`; `null` (task deleted) → clear the link with `setLinkedTask(..., null)` (allow null in Task 3's method) and leave the item open.
+Tasks publishes no status-change event, so this is a poll folded into the same after-sync hook and into the GET owed route (cheap: one lookup per open item with a linked task). `closeItemsWithDoneTasks(scopedDb, actorUserId, { repository, services })`: for each open candidate with `linkedTaskId`, `services.tasks.isDone(...)`; `true` → `markResolved(by: "task_done", resolutionRef: \`task:${taskId}\`)`; `null`(task deleted) → clear the link with`setLinkedTask(..., null)` (allow null in Task 3's method) and leave the item open.
 
 - [ ] **Step 1: Failing tests** for the three outcomes. **Step 2: Run, FAIL. Step 3: Implement. Step 4: Run, PASS, typecheck.**
 - [ ] **Step 5: Commit** with `feat(commitments): close an email item when its linked task is done`.
@@ -295,10 +456,12 @@ Tasks publishes no status-change event, so this is a poll folded into the same a
 ### Task 8: Wire services in the composition root
 
 **Files:**
+
 - Modify: `packages/module-registry/src/index.ts`
 - Test: `tests/unit/module-registry-email-actions-wiring.test.ts` (asserts the built `CommitmentActionServices.email.sendReply` calls the `emailWrite` service's `sendReply` with a `ToolContext` for the actor, and `tasks.create` posts `dueAt` as the local date at 17:00 in the user's timezone)
 
 Build `CommitmentActionServices`:
+
 - `email.*`: wrap the existing `EmailWriteService` instance the gateway builds (`packages/chat/src/gateway-services.ts:174` shows how it is constructed; construct one the same way here), calling `draftReply(scopedDb, ctx, { cacheMessageId, body })` with `ctx` built like briefings does in `compose-shared.ts:363`; return `{ messageRef: result.messageId ?? result.draftId }` (read `EmailWriteResult` in `packages/email/src/email-write-service.ts` for the exact field names).
 - `tasks.create`: call the tasks module's create handler the way `taskCreateExecute` does (import the exported service function from `@moss/tasks`, not the route), with `{ title, dueAt: dueLocalDate ? toIsoAtLocalHour(dueLocalDate, 17, timezone) : null, description: sourceNote }`; return `{ taskId: task.id }`.
 - `tasks.isDone`: the Task 7 lookup, `status === "done"` (confirm the done value in `TASK_STATUSES` in `packages/shared/src/tasks-api.ts`).
@@ -311,19 +474,33 @@ Build `CommitmentActionServices`:
 ### Task 9: Web client and query keys
 
 **Files:**
+
 - Create: `apps/web/src/api/client-commitments.ts`
 - Modify: `apps/web/src/api/query-keys.ts` (add `commitments: { owed: ["commitments", "owed"] as const }`)
 - Test: `apps/web/src/api/client-commitments.test.ts` (fetch mocked, following `client-proactive`'s test if present)
 
 ```ts
-import type { OwedItemsResponse, OwedReplyDraftResponse, OwedReplyRequest, OwedTaskRequest, OwedSnoozeRequest, OwedDismissRequest, OwedActionResponse } from "@moss/shared";
+import type {
+  OwedItemsResponse,
+  OwedReplyDraftResponse,
+  OwedReplyRequest,
+  OwedTaskRequest,
+  OwedSnoozeRequest,
+  OwedDismissRequest,
+  OwedActionResponse
+} from "@moss/shared";
 import { apiFetch } from "./client"; // whatever helper client.ts uses for JSON requests with credentials
 export const getOwedItems = () => apiFetch<OwedItemsResponse>("/api/commitments/owed");
-export const getOwedReplyDraft = (id: string) => apiFetch<OwedReplyDraftResponse>(`/api/commitments/owed/${id}/reply`);
-export const postOwedReply = (id: string, body: OwedReplyRequest) => apiFetch<OwedActionResponse>(`/api/commitments/owed/${id}/reply`, { method: "POST", body });
-export const postOwedTask = (id: string, body: OwedTaskRequest) => apiFetch<OwedActionResponse>(`/api/commitments/owed/${id}/task`, { method: "POST", body });
-export const postOwedSnooze = (id: string, body: OwedSnoozeRequest) => apiFetch<OwedActionResponse>(`/api/commitments/owed/${id}/snooze`, { method: "POST", body });
-export const postOwedDismiss = (id: string, body: OwedDismissRequest) => apiFetch<OwedActionResponse>(`/api/commitments/owed/${id}/dismiss`, { method: "POST", body });
+export const getOwedReplyDraft = (id: string) =>
+  apiFetch<OwedReplyDraftResponse>(`/api/commitments/owed/${id}/reply`);
+export const postOwedReply = (id: string, body: OwedReplyRequest) =>
+  apiFetch<OwedActionResponse>(`/api/commitments/owed/${id}/reply`, { method: "POST", body });
+export const postOwedTask = (id: string, body: OwedTaskRequest) =>
+  apiFetch<OwedActionResponse>(`/api/commitments/owed/${id}/task`, { method: "POST", body });
+export const postOwedSnooze = (id: string, body: OwedSnoozeRequest) =>
+  apiFetch<OwedActionResponse>(`/api/commitments/owed/${id}/snooze`, { method: "POST", body });
+export const postOwedDismiss = (id: string, body: OwedDismissRequest) =>
+  apiFetch<OwedActionResponse>(`/api/commitments/owed/${id}/dismiss`, { method: "POST", body });
 ```
 
 - [ ] Failing test (each function hits the right path and method); run; implement; run; commit `feat(web): api client for owed items`.
@@ -331,6 +508,7 @@ export const postOwedDismiss = (id: string, body: OwedDismissRequest) => apiFetc
 ### Task 10: The Today card (layout B, rows collapsed until tapped)
 
 **Files:**
+
 - Create: `apps/web/src/today/owed-card.tsx`, `owed-row.tsx`, `owed-snooze-menu.tsx`, `use-owed-items.ts`
 - Modify: `apps/web/src/today/today-page.tsx` (mount `<OwedCard />` directly above `<ProactiveCards />`), `apps/web/src/styles/kit-today-misc.css` (only if an existing `jds-*` class cannot express the row; run the design-system audit)
 - Test: `apps/web/src/today/owed-card.test.tsx`
@@ -338,6 +516,7 @@ export const postOwedDismiss = (id: string, body: OwedDismissRequest) => apiFetc
 Run the `design-system` skill first. Use `jds-brief` / `jds-brief__head` / `jds-brief__kicker` / `jds-brief__title` for the card shell (as `proactive-cards.tsx:42-49`), `jds-task` / `jds-task__main` / `jds-task__title` / `jds-task__meta` for rows, and the existing chip/button primitives from `@moss/ui` for the four actions. Do not invent classes.
 
 Behaviour:
+
 - Header "You owe people", right side "N open". Card renders nothing while loading or when `items` and `older` are both empty.
 - Each row collapsed: title, counterparty, short due (`shortDue` moved to `@moss/shared` so both sides use it). Tap toggles `expandedId` (one open at a time, none by default).
 - Expanded: source line, "Why" block with the why lines, four chips in the DTO's order with the primary one styled primary, links row with "Open thread" (deep link `https://mail.google.com/mail/#all/${threadRef}`, opens new tab; hidden if the thread ref is an IMAP message id).
@@ -352,6 +531,7 @@ Behaviour:
 ### Task 11: Draft reply and Dismiss sheets
 
 **Files:**
+
 - Create: `apps/web/src/today/owed-reply-sheet.tsx`, `owed-dismiss-sheet.tsx`
 - Test: `apps/web/src/today/owed-sheets.test.tsx`
 
@@ -366,6 +546,7 @@ Use the dialog/sheet primitive already used by `task-details-dialog.tsx`.
 ### Task 12: App map and manifest metadata
 
 **Files:**
+
 - Modify: `packages/shared/src/app-map-core.ts` (Today description: add "and a 'You owe people' card listing email threads Moss judged you owe a reply or step on, each with Draft reply, Make task, Snooze and Dismiss")
 - Modify: `packages/commitments/src/manifest.ts` (`features` entry describing the owed items, their four actions, and the three ways an item closes; the `routes` from Task 5)
 - Run: `pnpm -s build:app-map` and the app-map truthfulness check named in `docs/DEVELOPMENT_STANDARDS.md`.

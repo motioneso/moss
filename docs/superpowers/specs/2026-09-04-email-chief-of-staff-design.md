@@ -34,18 +34,18 @@ candidates reach Today only as lines in the briefing text.
 
 ## 2. Decisions (from the session)
 
-| Question | Ruling |
-| --- | --- |
-| Where does this live for the user? | Today screen first, leading into tasks and calendar; Moss also knows in chat. |
-| How much does Moss do on its own? | Suggest only. Nothing is created in tasks, calendar or Gmail until the user taps. Auto modes stay a later opt-in. |
-| What closes an item? | All three: an in-app action; a reply from the user seen in Gmail on sync; the linked task completing. |
-| Actions in version one | Draft reply, make task, snooze, dismiss. "Hold time on the calendar" is deferred. |
-| Which mail gets the full treatment? | Two passes. A cheap gate on every message; a reasoning-tier pass only on threads the gate says might be owed. |
-| First-pass selectivity | The gate is not a summariser. Ordinary mail (bulk or not) that asks nothing gets no summary or verdict, just "seen". |
-| How does Moss know in chat? | A tool only. No standing context injection. Relevance-matched nudges are a later follow-up. |
-| What does dismiss teach? | Optional reason. Only "not something I owe" teaches, per sender. |
-| Where is it built? | Grow the Commitments module into the store (approach A), not a new store in email or a new module. |
-| Today card shape | Layout B: a list, every row collapsed until tapped; tapping expands it with the "why" and the actions. |
+| Question                            | Ruling                                                                                                               |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Where does this live for the user?  | Today screen first, leading into tasks and calendar; Moss also knows in chat.                                        |
+| How much does Moss do on its own?   | Suggest only. Nothing is created in tasks, calendar or Gmail until the user taps. Auto modes stay a later opt-in.    |
+| What closes an item?                | All three: an in-app action; a reply from the user seen in Gmail on sync; the linked task completing.                |
+| Actions in version one              | Draft reply, make task, snooze, dismiss. "Hold time on the calendar" is deferred.                                    |
+| Which mail gets the full treatment? | Two passes. A cheap gate on every message; a reasoning-tier pass only on threads the gate says might be owed.        |
+| First-pass selectivity              | The gate is not a summariser. Ordinary mail (bulk or not) that asks nothing gets no summary or verdict, just "seen". |
+| How does Moss know in chat?         | A tool only. No standing context injection. Relevance-matched nudges are a later follow-up.                          |
+| What does dismiss teach?            | Optional reason. Only "not something I owe" teaches, per sender.                                                     |
+| Where is it built?                  | Grow the Commitments module into the store (approach A), not a new store in email or a new module.                   |
+| Today card shape                    | Layout B: a list, every row collapsed until tapped; tapping expands it with the "why" and the actions.               |
 
 Model tiers are requested as capabilities ("cheapest", "reasoning"); the router picks the user's
 configured model. No provider or model name appears anywhere (hard invariant).
