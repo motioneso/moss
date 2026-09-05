@@ -43,3 +43,12 @@ only, at most one backtick per sentence. Pass this rule on verbatim to any agent
    migration number, exit codes> [pane <your pane id from herdr pane list>]"`.
 
 Relay depth is 1. Do not relay again; if the meter fires, push what is green and report.
+
+## Relay 1 result (2026-09-04)
+
+- Lint exit 0, typecheck exit 0, browser test tests/e2e/sports-settings.spec.ts exit 0 (7 passed,
+  mocked API, own web server on port 4173, no database).
+- First unit run found two red tests in this branch's own files; fixed in commit b18036f9c
+  (search route fixture lacked the permanent id and 500ed on the strict schema; chip test asserted
+  the full name where the chip shows the short name). Second run: 41 files, 613 tests, exit 0.
+- Migration stays 0217. Pushed with --force-with-lease; PR comment posted. Lane done.
