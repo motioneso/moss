@@ -589,22 +589,36 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       // #1762: narrowed to the four fields the personal Modules list needs, so the settings
       // package never sees a ReconciledExternalModule (it cannot import that type).
       listInstalledExternalModules: async (accessContext) =>
-        (await listInstalledExternalModules(accessContext)).map((module) => ({
-          id: module.id,
-          name: module.name,
-          version: module.version,
-          hasPreferences: module.preferences.length > 0,
-          // #1759: read from the boot discovery snapshot rather than the reconciled module,
-          // which does not carry credential declarations. A module with user-scope slots and no
-          // switches still needs a settings page — that is exactly Finance.
-          hasUserCredentials: (
+        (await listInstalledExternalModules(accessContext)).map((module) => {
+          const userCredentials = (
             externalModuleHolder.getDiscoveries().find((d) => d.id === module.id)?.manifest.auth ??
             []
-          ).some((declaration) => declaration.scope === "user"),
-          // #1945: the resolver above only ever returns "draft" or "enabled" here (its filter
-          // keeps `active` modules only, and drift-disabled/discovered ones are never active).
-          status: module.status as "draft" | "enabled"
-        })),
+          ).filter((declaration) => declaration.scope === "user");
+          return {
+            id: module.id,
+            name: module.name,
+            version: module.version,
+            hasPreferences: module.preferences.length > 0,
+            // #1759: read from the boot discovery snapshot rather than the reconciled module,
+            // which does not carry credential declarations. A module with user-scope slots and no
+            // switches still needs a settings page — that is exactly Finance.
+            hasUserCredentials: userCredentials.length > 0,
+            // #1945: the resolver above only ever returns "draft" or "enabled" here (its filter
+            // keeps `active` modules only, and drift-disabled/discovered ones are never active).
+            status: module.status as "draft" | "enabled",
+            // Search keywords, never a stored value: each declared switch's label and help text,
+            // plus the display name of each declared user-scope credential slot (e.g. "Plaid
+            // access tokens" for Finance).
+            settingKeywords: [
+              ...module.preferences.flatMap((preference) =>
+                [preference.label, preference.description].filter((text): text is string =>
+                  Boolean(text)
+                )
+              ),
+              ...userCredentials.map((declaration) => declaration.displayName)
+            ]
+          };
+        }),
       moduleDistribution,
       // #1263 Task 15: install-time self-operation grants also apply on (re-)enable. Built here
       // over the one AiRepository instance this file already owns, so settings never imports
