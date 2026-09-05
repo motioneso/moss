@@ -117,6 +117,8 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "sourceVersion",
   "sourceKind",
   "sourceRefHash",
+  // #2274: the provider's thread id for one email thread judgement (an id, never content).
+  "threadRef",
   "version",
   "personId",
   "personUpdatedAt",

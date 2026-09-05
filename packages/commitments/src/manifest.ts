@@ -10,6 +10,8 @@ import {
 
 export const COMMITMENTS_MODULE_ID = "jarvis.commitments";
 export const COMMITMENT_EXTRACTION_QUEUE = "commitment-extraction";
+/** One job per (owner, email thread): the second pass of email as chief of staff. */
+export const COMMITMENT_EMAIL_JUDGEMENT_QUEUE = "commitment-email-judgement";
 
 export const commitmentsModuleSqlMigrationDirectory = fileURLToPath(
   new URL("../sql", import.meta.url)
@@ -57,7 +59,10 @@ export const commitmentsModuleManifest: MossModuleManifest = {
     { method: "POST", path: "/api/commitments/extract", permissionId: "commitments.extract" },
     { method: "GET", path: "/api/commitments/extraction-state", permissionId: "commitments.view" }
   ],
-  jobs: [{ queueName: COMMITMENT_EXTRACTION_QUEUE, metadataOnly: true }],
+  jobs: [
+    { queueName: COMMITMENT_EXTRACTION_QUEUE, metadataOnly: true },
+    { queueName: COMMITMENT_EMAIL_JUDGEMENT_QUEUE, metadataOnly: true }
+  ],
   assistantActionFamilies: [
     {
       id: "commitment_review",
