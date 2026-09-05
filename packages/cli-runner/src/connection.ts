@@ -411,9 +411,10 @@ async function invoke(
       return { sessionKeys: await host.listLiveSessions() };
     }
     case "probeProvider": {
-      const provider = (req.params as RpcProbeProviderParams).provider;
+      const params = req.params as RpcProbeProviderParams;
+      const provider = params.provider;
       if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
-      return host.probeProvider(provider);
+      return host.probeProvider(provider, { forceFresh: params.forceFresh });
     }
     case "installProvider": {
       // §A.2.4 TWO ordered validation gates, both mapping to bad_request (§3.7) but

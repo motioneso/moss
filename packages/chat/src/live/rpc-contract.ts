@@ -457,6 +457,12 @@ export interface RpcListLiveSessionsResult {
 /** params for method "probeProvider" (§4.8) — instance-wide query, no sessionKey. */
 export interface RpcProbeProviderParams {
   readonly provider: RpcProviderKind;
+  /**
+   * #2242: skip any saved answer and run the real check now. Used by the periodic install-state
+   * reconciliation so a login that quietly expired is caught on its own within a bounded time,
+   * not only when someone happens to press Log in again.
+   */
+  readonly forceFresh?: boolean;
 }
 /** result for method "probeProvider" (§4.8). */
 export interface RpcProbeProviderResult {

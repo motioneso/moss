@@ -39,7 +39,8 @@ function liveGame(): GameSummary {
       crestUrl: null,
       score: 21,
       record: "10-2",
-      winner: true
+      winner: true,
+      scorers: null
     },
     away: {
       teamKey: "dal",
@@ -48,7 +49,8 @@ function liveGame(): GameSummary {
       crestUrl: null,
       score: 14,
       record: "8-4",
-      winner: false
+      winner: false,
+      scorers: null
     }
   };
 }

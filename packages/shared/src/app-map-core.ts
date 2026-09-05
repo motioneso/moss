@@ -49,7 +49,8 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "notifications",
     label: "Notifications",
-    description: "Review notifications produced by enabled modules.",
+    description:
+      "Review notifications produced by enabled modules. The account menu button at the bottom of the rail shows the unread count as a badge when the menu is closed, and screen readers hear the number as part of the button's spoken label.",
     path: "/notifications",
     scope: "user"
   },
@@ -133,7 +134,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "sources",
     label: "Data sources",
-    description: "Review sources the assistant can read.",
+    description:
+      "Review sources the assistant can read. Linking a notes folder opens a chooser that lists " +
+      "the folders available on the server; a small info icon next to that list explains that a " +
+      "folder shows up there once whoever manages the server adds it and restarts it.",
     path: "/settings?section=sources",
     scope: "user"
   },
@@ -178,7 +182,15 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
       "is struck through), " +
       "a minus button (disable) and a trash button (remove after confirmation; the provider's " +
-      "default entry cannot be removed). The Models section collapses from its header.",
+      "default entry cannot be removed). The Models section collapses from its header. The " +
+      "'Not logged in' message only appears after someone presses Refresh models; the provider " +
+      "card itself does not notice a broken sign-in on its own. A refresh the provider answers " +
+      "by refusing the stored sign-in reads 'Not logged in' too. Once a provider has refused a " +
+      "sign-in - on a model refresh, or on a chat message it would not answer - that sign-in " +
+      "counts as expired for that provider, so the next check asks for a fresh login instead of " +
+      "repeating an old success, until a fresh login is accepted. Pressing Log in on a provider " +
+      "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
+      "genuinely broken sign-in always gets a fresh place to sign back in.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },
