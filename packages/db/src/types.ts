@@ -372,7 +372,7 @@ export interface PushSubscriptionsTable {
   owner_user_id: string;
   /** sha256 hex of the endpoint URL; the plaintext lives only inside the envelope. */
   endpoint_hash: string;
-  /** AES-256-GCM envelope of `{ endpoint, p256dh, auth }` (migration 0223). */
+  /** AES-256-GCM envelope of `{ endpoint, p256dh, auth }` (migration 0225). */
   credentials_ciphertext: JsonColumn;
   user_agent_label: string | null;
   created_at: TimestampColumn;

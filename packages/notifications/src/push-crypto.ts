@@ -100,7 +100,7 @@ export function resolveVapidSubject(env: NodeJS.ProcessEnv = process.env): strin
  * call. The VAPID subject is not stored with the key: it is resolved from configuration at
  * send time by {@link resolveVapidSubject}, so a value captured at first enable can never
  * become a stale or attacker-chosen identity. A unique constraint on the fixed row id
- * (migration 0223) makes two racing first-enables converge on one key: whichever insert
+ * (migration 0225) makes two racing first-enables converge on one key: whichever insert
  * wins, the loser's `ON CONFLICT DO NOTHING` is a no-op and the final SELECT reads the
  * winner's row.
  */

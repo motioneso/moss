@@ -394,7 +394,7 @@ describe("MVP foundation schema catalog", () => {
         { version: "0222", name: "0222_sports_source_photos.sql" },
         // #743 web push: subscriptions, delivery ledger, per-user push settings.
         // 0218-0222 are taken by other in-flight branches (see migration numbering in #743 PR notes).
-        { version: "0223", name: "0223_push_notifications.sql" }
+        { version: "0225", name: "0225_push_notifications.sql" }
       ]);
     } finally {
       await client.end();

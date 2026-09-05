@@ -90,7 +90,7 @@ describe("Push subscriptions (#743)", () => {
     expect(response.body).not.toContain(P256DH);
     expect(response.body).not.toContain(AUTH);
 
-    // The table has no plaintext column for any of the three values (migration 0223).
+    // The table has no plaintext column for any of the three values (migration 0225).
     const catalog = new Client({ connectionString: connectionStrings.migration });
     await catalog.connect();
     try {

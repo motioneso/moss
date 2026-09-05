@@ -49,7 +49,7 @@ const DEVICE_COLUMNS = [
 ] as const;
 
 /**
- * Explicit owner predicate on every statement. RLS (migration 0223) already restricts the
+ * Explicit owner predicate on every statement. RLS (migration 0225) already restricts the
  * table to the current actor, but security review 1 finding 3 asked for the scoping to be
  * visible in the query itself, so a future policy edit or a role with wider grants cannot
  * silently widen these methods.
@@ -62,7 +62,7 @@ export function hashPushEndpoint(endpoint: string): string {
 }
 
 /**
- * All tables here are RLS-scoped to `app.current_actor_user_id()` (migration 0223), so
+ * All tables here are RLS-scoped to `app.current_actor_user_id()` (migration 0225), so
  * every method here is implicitly owner-scoped: the settings page reads/writes its own
  * user's rows, and the delivery worker (running in the recipient's data context) reads
  * and cleans up that same recipient's rows. No method takes an explicit owner id.

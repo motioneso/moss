@@ -64,7 +64,7 @@ export const notificationsModuleManifest = {
       "sql/0101_notifications_metadata_size_check.sql",
       "sql/0102_notifications_defense_in_depth_comments.sql",
       "sql/0142_notifications_module_id.sql",
-      "sql/0223_push_notifications.sql"
+      "sql/0225_push_notifications.sql"
     ],
     migrationDirectories: ["packages/notifications/sql"],
     ownedTables: [
