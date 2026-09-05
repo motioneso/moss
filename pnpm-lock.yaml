@@ -1420,12 +1420,18 @@ importers:
 
   packages/workshop:
     dependencies:
+      '@moss/db':
+        specifier: workspace:*
+        version: link:../db
       '@moss/module-sdk':
         specifier: workspace:*
         version: link:../module-sdk
       '@moss/module-web-sdk':
         specifier: workspace:*
         version: link:../module-web-sdk
+      '@moss/settings':
+        specifier: workspace:*
+        version: link:../settings
       '@moss/shared':
         specifier: workspace:*
         version: link:../shared
@@ -1435,6 +1441,12 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.0(react@19.2.7)
+      fastify:
+        specifier: ^5.8.5
+        version: 5.8.5
+      kysely:
+        specifier: ^0.29.2
+        version: 0.29.2
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)

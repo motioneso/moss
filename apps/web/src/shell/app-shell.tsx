@@ -34,7 +34,7 @@ import { HeaderWeather } from "../today/header-weather";
 import { applyThemeTokens } from "../theme/theme-runtime";
 import { CommandPalette } from "./command-palette";
 import { NAV_ICON_MAP } from "./nav-icons";
-import { WORKSHOP_MODULE_ID } from "@moss/workshop";
+import { WORKSHOP_MODULE_ID } from "@moss/shared";
 import {
   loadShellColorMode,
   loadShellTheme,

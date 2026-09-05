@@ -184,23 +184,25 @@ describe("Briefings module M6 read-only scheduled summaries", () => {
     expect(registration?.queueDefinitions.map((queue) => queue.name)).toEqual([
       BRIEFINGS_RUN_QUEUE
     ]);
-    // #2013 registers workflows after people, so it now runs last.
-    expect(getBuiltInSqlMigrationDirectories().at(-1)).toContain("packages/workflows/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-2)).toContain("packages/people/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-3)).toContain("packages/commitments/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-4)).toContain("packages/proactive-monitoring");
+    // Workshop owns project/feed migrations and registers after workflows, so it runs last.
+    expect(getBuiltInSqlMigrationDirectories().at(-1)).toContain("packages/workshop/sql");
+    // #2013 registers workflows after people.
+    expect(getBuiltInSqlMigrationDirectories().at(-2)).toContain("packages/workflows/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-3)).toContain("packages/people/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-4)).toContain("packages/commitments/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-5)).toContain("packages/proactive-monitoring");
     // #2236 registers scratchpad right after notes, so it now sits closer to the end.
-    expect(getBuiltInSqlMigrationDirectories().at(-5)).toContain("packages/scratchpad/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-6)).toContain("packages/notes/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-7)).toContain("packages/news/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-8)).toContain("packages/sports/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-9)).toContain("packages/wellness/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-10)).toContain("packages/structured-state/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-11)).toContain(
+    expect(getBuiltInSqlMigrationDirectories().at(-6)).toContain("packages/scratchpad/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-7)).toContain("packages/notes/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-8)).toContain("packages/news/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-9)).toContain("packages/sports/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-10)).toContain("packages/wellness/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-11)).toContain("packages/structured-state/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-12)).toContain(
       "packages/usefulness-feedback/sql"
     );
-    expect(getBuiltInSqlMigrationDirectories().at(-12)).toContain("packages/memory/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-13)).toContain("packages/briefings/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-13)).toContain("packages/memory/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-14)).toContain("packages/briefings/sql");
   });
 
   it("keeps definitions private by default and denies admin private-data bypass", async () => {
