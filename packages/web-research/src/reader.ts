@@ -228,6 +228,7 @@ export interface FetchWebResourceSuccess<TBody> {
   readonly body: TBody;
   readonly truncated: boolean;
   readonly bytesRead: number;
+  readonly hopCount: number;
 }
 
 export type FetchWebResourceFailure = {
@@ -255,6 +256,43 @@ export type FetchWebResourceResult = FetchWebResourceSuccess<string> | FetchWebR
 export type FetchWebResourceBytesResult =
   | FetchWebResourceSuccess<Uint8Array>
   | FetchWebResourceFailure;
+
+/**
+ * Fetches a site's robots.txt, following ordinary redirects (for example a bare domain that
+ * redirects everything, including robots.txt, to its own www address) instead of taking a single
+ * redirect status at face value. Each hop is re-checked by `validateHttpUrl` so a redirect can
+ * never send this request somewhere unsafe. Gives up and reports nothing (which the robots gate
+ * treats as blocked) after too many hops, so an endless redirect chain still fails closed.
+ */
+async function fetchRobotsFileFollowingRedirects(
+  robotsUrl: URL,
+  controller: AbortController,
+  options: FetchWebResourceOptions
+): Promise<{ status: number; body: string } | null> {
+  const maxBytes = options.maxBytes ?? DEFAULT_WEB_RESEARCH_CONFIG.maxDownloadBytes;
+  let current = robotsUrl;
+  for (let redirects = 0; redirects <= DEFAULT_WEB_RESEARCH_CONFIG.redirectLimit; redirects += 1) {
+    const robotsSafe = await abortable(
+      validateHttpUrl(current.toString(), options.resolveHost),
+      controller.signal
+    );
+    if (!robotsSafe.ok) return null;
+    if (options.rateLimiter) {
+      await abortable(options.rateLimiter.acquire(robotsSafe.url.hostname), controller.signal);
+    }
+    const response = await requestCheckedUrl(robotsSafe, controller.signal, "GET", {});
+    if (isRedirect(response.status)) {
+      await response.body?.cancel().catch(() => {});
+      const location = response.headers.get("location");
+      if (!location) return null;
+      current = new URL(location, current);
+      continue;
+    }
+    const { body } = await readTextCapped(response, maxBytes);
+    return { status: response.status, body };
+  }
+  return null;
+}
 
 async function fetchWebResourceWithBody<TBody>(
   rawUrl: string,
@@ -321,25 +359,9 @@ async function fetchWebResourceWithBody<TBody>(
         return { ok: false, reason: "not_https" };
       }
       if (options.robots) {
-        const allowed = await options.robots.isAllowed(safe.url, async (robotsUrl) => {
-          const robotsSafe = await abortable(
-            validateHttpUrl(robotsUrl.toString(), options.resolveHost),
-            controller.signal
-          );
-          if (!robotsSafe.ok) return null;
-          if (options.rateLimiter) {
-            await abortable(
-              options.rateLimiter.acquire(robotsSafe.url.hostname),
-              controller.signal
-            );
-          }
-          const response = await requestCheckedUrl(robotsSafe, controller.signal, "GET", {});
-          const { body } = await readTextCapped(
-            response,
-            options.maxBytes ?? DEFAULT_WEB_RESEARCH_CONFIG.maxDownloadBytes
-          );
-          return { status: response.status, body };
-        });
+        const allowed = await options.robots.isAllowed(safe.url, async (robotsUrl) =>
+          fetchRobotsFileFollowingRedirects(robotsUrl, controller, options)
+        );
         if (!allowed) return { ok: false, reason: "robots" };
       }
       if (options.rateLimiter) {
@@ -465,7 +487,8 @@ async function fetchWebResourceWithBody<TBody>(
         contentType,
         body,
         truncated,
-        bytesRead
+        bytesRead,
+        hopCount: redirects
       };
     }
     return { ok: false, reason: "network" };

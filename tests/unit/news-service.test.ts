@@ -587,6 +587,7 @@ describe("NewsService story feedback references (#2018)", () => {
     return {
       written,
       storyRef: (canonicalUrl: string) => `news:ref-for-${canonicalUrl}`,
+      listDismissedRefs: async () => new Set(),
       registerTargets: async (_db, _ownerUserId, rows) => {
         written.push([...rows]);
       },
@@ -691,5 +692,34 @@ describe("NewsService story feedback references (#2018)", () => {
 
     expect(overview.rankedStories).toHaveLength(1);
     expect(overview.rankedStories?.[0]?.feedbackRef).toBeUndefined();
+  });
+});
+
+describe("NewsService dismissed-story filtering on read (#2247)", () => {
+  it("does not bring back a story the owner has dismissed, even from an already-saved list", async () => {
+    const port: NewsStoryFeedbackPort = {
+      storyRef: (canonicalUrl: string) => `news:ref-for-${canonicalUrl}`,
+      listDismissedRefs: async () => new Set(["news:ref-for-https://preferred.example/one"]),
+      registerTargets: async () => {},
+      applyRelevance: async () => ({
+        status: "applied",
+        kept: [],
+        boosts: [],
+        suppressedCount: 0,
+        overriddenCount: 0
+      })
+    };
+    const service = new NewsService(
+      makeDeps({
+        snapshot: snapshot([snapshotArticle("one"), snapshotArticle("two")]),
+        storyFeedback: port
+      })
+    );
+
+    const overview = await service.getOverview(userA);
+
+    const urls = overview.topStories.map((story) => story.url);
+    expect(urls).not.toContain("https://preferred.example/one");
+    expect(urls).toContain("https://preferred.example/two");
   });
 });

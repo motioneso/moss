@@ -39,9 +39,11 @@ import {
   type RpcProbeProviderResult,
   type RpcProviderKind,
   type RpcReadNewResult,
+  type RpcReadStructuredResult,
   type RpcCancelSubmitParams,
   type RpcSubmitParams,
   type RpcSubmitLoginTokenResult,
+  type RpcSubmitStructuredResult,
   type ReapReason,
   type SweepIdlePool,
   type AdmitCapablePool,
@@ -384,6 +386,7 @@ export class CliChatEngineHost {
       homeBase: this.deps.homeBase,
       ownsDrain: true,
       executionMode: params.executionMode,
+      needsStructuredOutput: params.needsStructuredOutput,
       // #1554: the pin is lifted — the RPC root selects the persistent adapter when a pool was
       // wired in AND `chat.persistent_runtime.enabled` is currently on. The flag arrives per
       // launch in the RPC params (the plan's live-reload channel for this topology), so flipping
@@ -416,10 +419,16 @@ export class CliChatEngineHost {
       );
     }
 
-    // Keep a handle on the RAW launch promise (separate from the timeout race) so that a
-    // mux-create which SUCCEEDS *after* the timeout already released the reservation can be
-    // reaped immediately — we do not wait for the startup sweep or the api §5.3 reconcile.
-    const launchPromise = engine.launch({
+    // Review B4 follow-up — `params.schema` present means this is a structured one-shot call
+    // (email extraction via `CliStructuredAdapter`). `createChatEngine` already built the bounded
+    // print engine for it (`needsStructuredOutput` above), so the launch call itself must be
+    // `launchStructured`, not the ordinary `launch` — the ordinary one never spawns the
+    // JSON-stream child process the structured submit/read verbs below depend on.
+    if (params.schema && !hasStructuredMethods(engine)) {
+      this.reservations.delete(key);
+      throw new CliChatUnavailableError("CLI structured stream is unavailable");
+    }
+    const launchOpts = {
       neutralDir,
       // The in-process engine ignores personaPath when personaText is present; pass a
       // path under the neutral dir to keep types satisfied (§4.1.1a — server writes
@@ -432,7 +441,14 @@ export class CliChatEngineHost {
       replayAttemptId: params.replayAttemptId,
       // #367: forward the resolved model id so buildClaudeCommand emits `--model <id>`.
       model: params.model
-    });
+    };
+    // Keep a handle on the RAW launch promise (separate from the timeout race) so that a
+    // mux-create which SUCCEEDS *after* the timeout already released the reservation can be
+    // reaped immediately — we do not wait for the startup sweep or the api §5.3 reconcile.
+    const launchPromise =
+      params.schema && hasStructuredMethods(engine)
+        ? engine.launchStructured({ ...launchOpts, schema: params.schema })
+        : engine.launch(launchOpts);
 
     let timedOut = false;
     try {
@@ -595,6 +611,33 @@ export class CliChatEngineHost {
     });
   }
 
+  /** Review B4 follow-up — structured one-shot submit, mirrors `readNew`/`submit`'s enqueue shape. */
+  submitStructured(sessionKey: string, text: string): Promise<RpcSubmitStructuredResult> {
+    const key = sanitizeSessionKey(sessionKey);
+    return this.enqueue(key, async () => {
+      const engine = this.engines.get(key);
+      if (!engine) throw new NotLaunchedError();
+      if (!hasStructuredMethods(engine)) {
+        throw new CliChatUnavailableError("CLI structured stream is unavailable");
+      }
+      await engine.submitStructured(text);
+      return { ok: true as const };
+    });
+  }
+
+  /** Review B4 follow-up — structured one-shot poll, mirrors `readNew`'s enqueue shape. */
+  readStructured(sessionKey: string, afterOffset: number): Promise<RpcReadStructuredResult> {
+    const key = sanitizeSessionKey(sessionKey);
+    return this.enqueue(key, async () => {
+      const engine = this.engines.get(key);
+      if (!engine) throw new NotLaunchedError();
+      if (!hasStructuredMethods(engine)) {
+        throw new CliChatUnavailableError("CLI structured stream is unavailable");
+      }
+      return engine.readStructured(afterOffset);
+    });
+  }
+
   isAlive(sessionKey: string): Promise<boolean> {
     const key = sanitizeSessionKey(sessionKey);
     return this.enqueue(key, async () => {
@@ -732,6 +775,11 @@ export class CliChatEngineHost {
    * single login slot inside the lock, then start the flow outside it. A blocked/no-adapter
    * provider throws `LoginBadRequestError` (→ bad_request); a chat/login-busy rejection throws
    * `CliChatUnavailableError` (→ unavailable). No wire-contract change.
+   *
+   * #2232: if a login for this SAME provider is already in flight (e.g. two begin requests fired
+   * back to back by a double-mounted dialog), this reports that flow's current status instead of
+   * refusing — the caller sees the login it already started, not an error. A different provider,
+   * or a login only visible as a stray disk session, still gets the busy rejection.
    */
   async beginLogin(provider: RpcProviderKind): Promise<RpcBeginLoginResult> {
     const svc = this.deps.loginService;
@@ -739,7 +787,8 @@ export class CliChatEngineHost {
     if (!svc.hasAdapter(provider)) {
       throw new LoginBadRequestError("provider not loginable: no login adapter");
     }
-    let loginId: string;
+    let loginId: string | undefined;
+    let reuseLoginId: string | undefined;
     const release = await this.admissionMutex.acquire();
     try {
       if (this.deps.singleUser && (await this.currentLiveKeys()).size > 0) {
@@ -747,15 +796,20 @@ export class CliChatEngineHost {
       }
       // One login at a time regardless of the single-user flag (one flow slot, §L.3.1).
       if (await svc.isLoginActive()) {
-        throw new CliChatUnavailableError("a provider login is already in progress");
+        reuseLoginId = svc.activeLoginId(provider);
+        if (reuseLoginId === undefined) {
+          throw new CliChatUnavailableError("a provider login is already in progress");
+        }
+      } else {
+        loginId = svc.reserve(provider); // SYNC slot claim inside the lock (§L.6.1)
       }
-      loginId = svc.reserve(provider); // SYNC slot claim inside the lock (§L.6.1)
     } finally {
       release();
     }
+    if (reuseLoginId !== undefined) return svc.poll(provider, reuseLoginId);
     // Start the flow OUTSIDE the lock (the reservation holds the slot). On any failure the
     // service clears the flow + reaps the session (§L.3.1).
-    return svc.start(loginId);
+    return svc.start(loginId!);
   }
 
   /** §L.2.3 pollLogin — re-derive status (probe + runtime smoke); a stale loginId ⇒ bad_request. */
@@ -898,6 +952,28 @@ export class CliChatEngineHost {
  */
 function hasVerifiedSubmit(engine: CliChatEngine): engine is CliChatEngineImpl {
   return typeof (engine as Partial<CliChatEngineImpl>).verifiedSubmit === "function";
+}
+
+/**
+ * Review B4 follow-up — mirrors `hasVerifiedSubmit`'s feature-detect pattern. Only the bounded
+ * print engine (`ClaudePrintChatEngine`, built by `createChatEngine` whenever
+ * `needsStructuredOutput` is set) implements these three methods.
+ */
+type StructuredCapableEngine = CliChatEngine & {
+  launchStructured(
+    opts: Parameters<CliChatEngine["launch"]>[0] & { readonly schema: Record<string, unknown> }
+  ): Promise<{ readonly offset: number }>;
+  submitStructured(text: string): Promise<void>;
+  readStructured(afterOffset: number): Promise<RpcReadStructuredResult>;
+};
+
+function hasStructuredMethods(engine: CliChatEngine): engine is StructuredCapableEngine {
+  const e = engine as Partial<StructuredCapableEngine>;
+  return (
+    typeof e.launchStructured === "function" &&
+    typeof e.submitStructured === "function" &&
+    typeof e.readStructured === "function"
+  );
 }
 
 /** Internal marker mapped to RpcErr code "not_launched" by the dispatcher. */

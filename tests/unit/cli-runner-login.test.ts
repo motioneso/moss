@@ -7,10 +7,11 @@
  *     post-submit;
  *   - §L.6.3 redactExact: the pasted token is scrubbed from an error message;
  *   - §L.6.1 unified exclusivity gate (engine-host): chat-live ⇒ beginLogin unavailable;
- *     login-in-flight ⇒ launch unavailable + a 2nd beginLogin unavailable;
+ *     login-in-flight ⇒ launch unavailable; a 2nd beginLogin for the SAME provider (#2232) reuses
+ *     the in-flight login, a DIFFERENT provider still gets unavailable;
  *   - §L.1.3 adapter validation: orphan / too-broad-pathPrefix adapters are dropped.
  */
-import { mkdtemp, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -314,6 +315,25 @@ describe("LoginService flow (§L.2/§L.3)", () => {
     expect(await svc.isLoginActive()).toBe(false);
   });
 
+  it("#2232: opens a real login session when the probe says needs_login, even with a saved token file", async () => {
+    // A saved token FILE existing is not proof the token still works (an expired token used to
+    // read as "ready" forever). start() always asks the probe fresh before deciding whether to
+    // short-circuit, so once the probe correctly reports needs_login for an expired token, a
+    // fresh login session opens instead of the old short-circuit-to-ready.
+    const tokenPath = providerTokenPath(homeBase, "anthropic");
+    await mkdir(path.dirname(tokenPath), { recursive: true });
+    await writeFile(tokenPath, "expired-token-value", { mode: 0o600 });
+    const f = makeLoginIo("https://claude.ai/oauth/authorize?code=abc");
+    const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
+    const loginId = svc.reserve("anthropic");
+
+    const out = await svc.start(loginId);
+
+    expect(out.status).toBe("awaiting_token");
+    expect(f.live.has(`${LOGIN_SESSION_PREFIX}anthropic`)).toBe(true);
+    await svc.cancel("anthropic", loginId);
+  });
+
   it("startupSweep kills every jarv1s-login-* session (§L.3.4)", async () => {
     const f = makeLoginIo();
     f.live.add(`${LOGIN_SESSION_PREFIX}anthropic`);
@@ -546,7 +566,7 @@ describe("§L.6.1 unified exclusivity gate (engine-host)", () => {
     });
   }
 
-  it("rejects a chat launch AND a 2nd beginLogin while a login is in flight", async () => {
+  it("rejects a chat launch while a login is in flight", async () => {
     const f = makeLoginIo("https://claude.ai/oauth/authorize?code=abc");
     const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
     const host = makeHost(f.io, svc);
@@ -554,10 +574,40 @@ describe("§L.6.1 unified exclusivity gate (engine-host)", () => {
     const begun = await host.beginLogin("anthropic");
     expect(begun.status).toBe("awaiting_token");
 
-    await expect(host.beginLogin("anthropic")).rejects.toBeInstanceOf(CliChatUnavailableError);
     await expect(
       host.launch("user-1", { provider: "anthropic", personaText: "p" })
     ).rejects.toBeInstanceOf(CliChatUnavailableError);
+
+    await host.cancelLogin("anthropic", begun.loginId);
+  });
+
+  it("#2232: a 2nd beginLogin for the SAME provider reuses the in-flight login instead of failing", async () => {
+    // Models the settings dialog's StrictMode double-mount (#2232): two begin requests for the
+    // same provider land back to back. The second must see the login the first already started,
+    // not "Provider login is currently unavailable."
+    const f = makeLoginIo("https://claude.ai/oauth/authorize?code=abc");
+    const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
+    const host = makeHost(f.io, svc);
+
+    const first = await host.beginLogin("anthropic");
+    const second = await host.beginLogin("anthropic");
+
+    // Same login, echoed back rather than refused. `poll` re-derives status live, so the second
+    // call can legitimately see the flow having progressed a step (e.g. token → authorization) —
+    // what matters is it is the SAME flow, not a rejection.
+    expect(second.loginId).toBe(first.loginId);
+    expect(second.status).not.toBe("error");
+
+    await host.cancelLogin("anthropic", first.loginId);
+  });
+
+  it("rejects a 2nd beginLogin for a DIFFERENT provider while a login is in flight", async () => {
+    const f = makeLoginIo("https://claude.ai/oauth/authorize?code=abc");
+    const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
+    const host = makeHost(f.io, svc);
+
+    const begun = await host.beginLogin("anthropic");
+    await expect(host.beginLogin("google")).rejects.toBeInstanceOf(CliChatUnavailableError);
 
     await host.cancelLogin("anthropic", begun.loginId);
   });

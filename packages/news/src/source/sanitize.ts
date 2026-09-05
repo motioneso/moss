@@ -33,7 +33,7 @@ export function decodeEntities(text: string): string {
 // String.fromCodePoint throws RangeError on a value above U+10FFFF (or a lone surrogate), and a
 // caller's catch would then drop the whole item over one malformed entity. An out-of-range
 // codepoint keeps its literal source text instead — lossless and never throwing.
-function codePointOr(n: number, original: string): string {
+export function codePointOr(n: number, original: string): string {
   if (!Number.isInteger(n) || n < 0 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) {
     return original;
   }

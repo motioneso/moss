@@ -155,6 +155,17 @@ export class LoginService {
   }
 
   /**
+   * #2232: the loginId of the CURRENT in-memory flow, but only if it is for `provider`. Lets the
+   * admission gate reuse a same-provider double begin (e.g. a StrictMode double-mount sending two
+   * begin requests back to back) instead of refusing the second one outright. `undefined` when
+   * there is no in-memory flow, or the active flow is for a different provider, or the "active"
+   * signal is only a disk session with no flow in memory (nothing to reuse).
+   */
+  activeLoginId(provider: RpcProviderKind): string | undefined {
+    return this.flow && this.flow.provider === provider ? this.flow.loginId : undefined;
+  }
+
+  /**
    * §L.6.1 reserve: SYNCHRONOUSLY claim the single login slot (called inside the admission
    * mutex so a concurrent launch/begin sees it). Returns the minted loginId. Throws
    * LoginBadRequestError if a flow already exists (defensive — the gate should have rejected).

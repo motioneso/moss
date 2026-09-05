@@ -50,6 +50,13 @@ import { Button } from "@moss/ui";
 
 type PersonaState = PersonaDraft;
 
+const RESPONSE_STYLE_EXAMPLE_HINT: Record<ChatResponseStyle, string> = {
+  concise: 'Concise example: "Yes, the meeting moved to 3pm."',
+  balanced: 'Balanced example: "Yes, the meeting moved to 3pm because Sam had a conflict."',
+  detailed:
+    'Detailed example: "Yes, the meeting moved to 3pm because Sam had a conflict. Let me know if that new time doesn\'t work for you."'
+};
+
 const DEFAULT_DESCRIPTION =
   "Be direct and a little dry: skip the pep talks. Hold me to commitments I've actually made, but ease off when I've had a rough day. Lead with what matters and keep it short.";
 const DEFAULT_PERSONA_DIALS = {
@@ -219,18 +226,6 @@ function Persona({ who }: { readonly who: string }) {
             onChange={(v) => setDial("directness", v as DirectnessDial)}
           />
           <Choice
-            key={responseStyle}
-            label="Response style"
-            hint="Saved default for how long chat answers are."
-            value={cap(responseStyle)}
-            options={["Concise", "Balanced", "Detailed"]}
-            onChange={(v) =>
-              chatSettingsMutation.mutate({
-                chat: { responseStyle: v.toLowerCase() as ChatResponseStyle }
-              })
-            }
-          />
-          <Choice
             key={`hum${rev}`}
             label="Humor"
             value={p.humor}
@@ -247,6 +242,18 @@ function Persona({ who }: { readonly who: string }) {
           />
         </>
       )}
+      <Choice
+        key={responseStyle}
+        label="Response style"
+        hint={RESPONSE_STYLE_EXAMPLE_HINT[responseStyle]}
+        value={cap(responseStyle)}
+        options={["Concise", "Balanced", "Detailed"]}
+        onChange={(v) =>
+          chatSettingsMutation.mutate({
+            chat: { responseStyle: v.toLowerCase() as ChatResponseStyle }
+          })
+        }
+      />
 
       {previewReply ? (
         <div className="ppv">
@@ -375,6 +382,10 @@ function ChatModel() {
               desc={`${defaultModel.providerDisplayName} · ${defaultModel.providerModelId} — Managed by admin.`}
             />
           )}
+          <Note>
+            Providers, credentials and which model handles each kind of work live in{" "}
+            <b>Admin → Assistant &amp; AI</b>. A transcription model enables the microphone in chat.
+          </Note>
         </>
       ) : (
         <div className="ai-empty">
