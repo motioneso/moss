@@ -80,6 +80,8 @@ export interface SeedOptions {
   readonly sportsPublicSourceFixtures?: boolean;
   /** #2015: seed one owner-scoped pending approval for the live card path. */
   readonly workflowApprovalFixture?: boolean;
+  /** #2175: seed three audit-log rows (suppressed, refused, success with a duration) for Activity. */
+  readonly activityOutcomeFixture?: boolean;
   /**
    * #1121: when set, seeds a neutral scripted AI provider/model (see
    * ./chunks/chat-script.ts) and writes JARVIS_UAT_SCRIPTED_PROVIDER_BIN (#1659 defect 4) so the

@@ -6,6 +6,7 @@ import type {
   PutWeatherLocationResponse,
   PutWeatherUnitRequest,
   PutWeatherUnitResponse,
+  ReverseWeatherLocationResponse,
   SearchWeatherLocationsResponse
 } from "@moss/shared";
 
@@ -33,6 +34,15 @@ export async function searchWeatherLocations(
 ): Promise<SearchWeatherLocationsResponse> {
   return requestJson<SearchWeatherLocationsResponse>(
     `/api/me/weather-location/search?query=${encodeURIComponent(query)}`
+  );
+}
+
+export async function reverseWeatherLocation(
+  lat: number,
+  lon: number
+): Promise<ReverseWeatherLocationResponse> {
+  return requestJson<ReverseWeatherLocationResponse>(
+    `/api/me/weather-location/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`
   );
 }
 

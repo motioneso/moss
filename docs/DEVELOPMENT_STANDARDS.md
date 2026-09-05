@@ -50,6 +50,24 @@ not configured under `external-modules/`, and a `possibly undefined` only root `
 brief had named vitest and prettier, so the agents did precisely what was asked. A brief naming 2
 of the gate's 15 steps leaves the other 13 to be discovered the expensive way.
 
+## App Map Truthfulness
+
+Every product change must update Moss's app map in the same PR so the assistant can accurately
+explain what Moss has, where it lives, what it requires, and how to recover from errors. This
+includes adding, changing, moving, or removing a feature, setting, screen, navigation path,
+requirement, error, or remediation. A stale or missing declaration blocks merge; it is not
+follow-up work.
+
+- Core screens and settings: update `CORE_APP_SCREENS` or `CORE_APP_SETTINGS` in
+  `packages/shared/src/app-map-core.ts`.
+- Module-owned behavior: update the owning module manifest's `navigation`, `settings`, and
+  `features` metadata, including nested `errors` and `remediations`.
+- Keep labels, descriptions, paths, scope, flags, and requirements aligned with the real shipped
+  behavior. Remove declarations when behavior is removed.
+
+Pure refactors and internal implementation changes that do not alter what Moss can do or explain
+need no map change.
+
 ## Live-Path Gate (CI-green is not done)
 
 Do not request, capture, attach, or review screenshots for this gate. Use executable assertions and

@@ -31,7 +31,9 @@ import {
   type VerifiedSportsSourceCandidate,
   type VerifiedSportsSourceTarget
 } from "./discovery.js";
+import type { SportsPhotoStore } from "./photo-store.js";
 import type { createSportsPreviewStore } from "./preview-store.js";
+import { sportsSourceIdentityKey } from "./reddit.js";
 import type { SportsPublicSourceReader } from "./public-source-reader.js";
 import type { SportsSourceBaseline, SportsSourcesRepository } from "./repository.js";
 import type { SportsEspnCoverageRepository } from "./espn-coverage-repository.js";
@@ -72,6 +74,8 @@ interface SportsSourceServiceDependencies {
     ): Promise<T>;
   };
   readonly reader?: Pick<SportsPublicSourceReader, "refresh">;
+  /** #2237 omitted where a caller never deletes a source, such as preview-only tests. */
+  readonly photos?: Pick<SportsPhotoStore, "removeSource">;
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {
@@ -177,9 +181,9 @@ export class SportsSourceService {
     if (result.status !== "ok") return result;
 
     const existing = await this.dependencies.sources.list(scopedDb);
+    const candidateKey = sportsSourceIdentityKey(result.candidate);
     const duplicate =
-      existing.find((source) => source.canonicalDomain === result.candidate.canonicalDomain) ??
-      null;
+      existing.find((source) => sportsSourceIdentityKey(source) === candidateKey) ?? null;
     const confirmationId = this.dependencies.previews.put({
       kind: "new-source",
       ownerUserId,
@@ -223,7 +227,8 @@ export class SportsSourceService {
 
     await this.dependencies.sources.lockOwnerAssignments(scopedDb);
     const existing = await this.dependencies.sources.list(scopedDb);
-    if (existing.some((source) => source.canonicalDomain === preview.candidate.canonicalDomain)) {
+    const previewKey = sportsSourceIdentityKey(preview.candidate);
+    if (existing.some((source) => sportsSourceIdentityKey(source) === previewKey)) {
       throw new SportsSourceRequestError(409, "Source already exists");
     }
     const assignmentCount = await this.dependencies.sources.countAssignments(scopedDb);
@@ -299,7 +304,26 @@ export class SportsSourceService {
     }
 
     let discovered: VerifiedSportsSourceCandidate | null = null;
-    if (requestedTargets.length > 0) {
+    // #2211 Every subreddit target reads the one feed the row already stores, so a coverage change
+    // needs no Reddit call. Calling anyway tripped Reddit's rate limit right after adding the
+    // source and the edit failed (Ben, 2026-09-04). A pinned exact URL still goes through discovery.
+    let sameFeedTargets: VerifiedSportsSourceTarget[] = [];
+    if (
+      requestedTargets.length > 0 &&
+      baseline.source.retrievalMethod === "reddit" &&
+      baseline.source.feedUrl &&
+      !requestedTargets.some((target) => target.exactTargetUrl)
+    ) {
+      const feedUrl = baseline.source.feedUrl;
+      const checkedAt = baseline.source.lastCheckedAt ?? baseline.source.createdAt;
+      sameFeedTargets = requestedTargets.map((target) => ({
+        ...target,
+        targetUrl: feedUrl,
+        parameters: {},
+        samples: [],
+        checkedAt
+      }));
+    } else if (requestedTargets.length > 0) {
       const result = await resolveSportsSourceInput(scopedDb, this.dependencies.discovery, {
         rawUrl: baseline.source.feedUrl ?? baseline.source.homepageUrl,
         targets: requestedTargets,
@@ -321,8 +345,9 @@ export class SportsSourceService {
       discovered = result.candidate;
     }
 
+    const verifiedTargets = [...(discovered?.targets ?? []), ...sameFeedTargets];
     const discoveredByTargetKey = new Map(
-      (discovered?.targets ?? []).map((target) => [sportsSourceTargetKey(target.target), target])
+      verifiedTargets.map((target) => [sportsSourceTargetKey(target.target), target])
     );
     const targets: VerifiedSportsSourceTarget[] = [];
     for (const assignment of input.assignments) {
@@ -376,7 +401,7 @@ export class SportsSourceService {
       baseline,
       candidate,
       reusedAssignmentIds: [...reused.values()].map((assignment) => assignment.id),
-      verifiedTargets: discovered?.targets ?? [],
+      verifiedTargets,
       authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
       createdAt: Date.now()
     });
@@ -462,16 +487,28 @@ export class SportsSourceService {
       targets
     });
     if (result.status !== "ok") return result;
-    if (!samePublisherIdentity(result.candidate.canonicalDomain, baseline.source.canonicalDomain)) {
+    if (
+      baseline.source.retrievalMethod === "reddit" || result.candidate.retrievalMethod === "reddit"
+        ? sportsSourceIdentityKey(result.candidate) !== sportsSourceIdentityKey(baseline.source)
+        : !samePublisherIdentity(result.candidate.canonicalDomain, baseline.source.canonicalDomain)
+    ) {
       return { status: "rejected", reason: "stale_source" };
     }
+    // A rebuild refreshes retrieval, not identity: the same-publisher check above already
+    // established the candidate is the row's own publisher, so keep the row's canonical_domain
+    // rather than the rediscovered host (e.g. www.), which can collide with another saved source
+    // that already owns that exact domain (sports_custom_sources_owner_user_id_canonical_domain_key).
+    const candidate: VerifiedSportsSourceCandidate = {
+      ...result.candidate,
+      canonicalDomain: baseline.source.canonicalDomain
+    };
 
     const confirmationId = this.dependencies.previews.put({
       kind: "recipe-rebuild",
       ownerUserId,
       sourceId,
       baseline,
-      candidate: result.candidate,
+      candidate,
       authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
       createdAt: Date.now()
     });
@@ -479,7 +516,7 @@ export class SportsSourceService {
       status: "ok",
       confirmationId,
       authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
-      candidate: candidateResponse(result.candidate)
+      candidate: candidateResponse(candidate)
     };
   }
 
@@ -570,8 +607,25 @@ export class SportsSourceService {
     return { kind: "builtin", id: "espn", label: "ESPN", ...coverage };
   }
 
-  removeSource(scopedDb: DataContextDb, sourceId: string): Promise<boolean> {
-    return this.dependencies.sources.remove(scopedDb, sourceId);
+  /**
+   * #2237 removing a source removes its stored photos in the same request. The vault half is
+   * best-effort: a filesystem hiccup must not turn an otherwise successful delete into an error,
+   * and the retention sweep collects anything left behind.
+   */
+  async removeSource(
+    scopedDb: DataContextDb,
+    sourceId: string,
+    accessContext?: AccessContext
+  ): Promise<boolean> {
+    const removed = await this.dependencies.sources.remove(scopedDb, sourceId);
+    if (removed && accessContext && this.dependencies.photos) {
+      try {
+        await this.dependencies.photos.removeSource(accessContext, sourceId);
+      } catch {
+        // Housekeeping only; see above.
+      }
+    }
+    return removed;
   }
 
   private async resolveTarget(

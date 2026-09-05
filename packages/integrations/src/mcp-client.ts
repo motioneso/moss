@@ -6,6 +6,7 @@ import type { CredentialPlacement } from "@moss/shared";
 import { applyCredential } from "./credentials.js";
 import { IntegrationUserError } from "./errors.js";
 import { DISCOVERY_TIMEOUT_MS, TOOL_CALL_TIMEOUT_MS } from "./limits.js";
+import { mcpConnectionCache, type McpConnectionCache } from "./mcp-connection-cache.js";
 import type { DiscoveredTool } from "./openapi-convert.js";
 
 async function connect(
@@ -67,16 +68,21 @@ export async function discoverMcpTools(
 }
 
 export async function callMcpTool(
+  actorUserId: string,
+  connectionId: string,
   url: string,
   secret: string | null,
   placement: CredentialPlacement | null,
   toolName: string,
-  input: Record<string, unknown>
+  input: Record<string, unknown>,
+  deps?: { cache?: McpConnectionCache }
 ): Promise<{ ok: boolean; data: Record<string, unknown> }> {
-  const client = await connect(url, secret, placement).catch(() => {
-    throw new IntegrationUserError("Could not reach an MCP server at that URL.");
-  });
-  try {
+  const cache = deps?.cache ?? mcpConnectionCache;
+  const doConnect = () =>
+    connect(url, secret, placement).catch(() => {
+      throw new IntegrationUserError("Could not reach an MCP server at that URL.");
+    });
+  return cache.withClient(actorUserId, connectionId, doConnect, async (client) => {
     const res = await client.callTool({ name: toolName, arguments: input }, undefined, {
       timeout: TOOL_CALL_TIMEOUT_MS
     });
@@ -86,7 +92,5 @@ export async function callMcpTool(
         .map((c) => c.text ?? "")
         .join("\n") ?? "";
     return { ok: res.isError !== true, data: { result: text } };
-  } finally {
-    await client.close().catch(() => {});
-  }
+  });
 }

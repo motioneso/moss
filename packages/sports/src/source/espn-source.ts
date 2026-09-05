@@ -56,6 +56,15 @@ interface EspnCompetitor {
     readonly logos?: readonly { readonly href?: string }[];
   };
   readonly records?: readonly { readonly summary?: string }[];
+  // Hockey scoreboard events carry each side's own "goal leaders" here — see hockeyScorers below
+  // for the caveat that this list can be shorter than the actual number of distinct scorers.
+  readonly leaders?: readonly {
+    readonly name?: string;
+    readonly leaders?: readonly {
+      readonly displayValue?: string;
+      readonly athlete?: { readonly shortName?: string; readonly displayName?: string };
+    }[];
+  }[];
 }
 
 interface EspnEvent {
@@ -64,6 +73,23 @@ interface EspnEvent {
   readonly competitions?: readonly {
     readonly competitors?: readonly EspnCompetitor[];
     readonly status?: { readonly type?: { readonly state?: string; readonly detail?: string } };
+    // Soccer scoreboard events carry every scoring play here (one entry per goal) — see
+    // soccerScorers below.
+    readonly details?: readonly {
+      readonly type?: { readonly text?: string };
+      // ESPN's own "this play was a goal" flag. Authoritative: it is true for every goal
+      // variant text ("Goal", "Goal - Header", "Goal - Volley", ...) and false for cards
+      // and substitutions.
+      readonly scoringPlay?: boolean;
+      readonly team?: { readonly id?: string };
+      // Minute of the goal, e.g. "11'" or "90'+1'" (verified in the saved Everton-Brentford
+      // response) — rendered after the scorer's name as "I. Thiago 11, 51, 88".
+      readonly clock?: { readonly displayValue?: string };
+      readonly athletesInvolved?: readonly {
+        readonly shortName?: string;
+        readonly displayName?: string;
+      }[];
+    }[];
   }[];
 }
 
@@ -74,7 +100,13 @@ interface EspnStandingsEntry {
     readonly displayName?: string;
   };
   readonly note?: { readonly description?: string; readonly color?: string } | null;
-  readonly stats?: readonly { readonly name?: string; readonly value?: number }[];
+  // `displayValue` is read only for the "overall" record stat ("10-2" / "10-2-1") — see
+  // overallRecord below.
+  readonly stats?: readonly {
+    readonly name?: string;
+    readonly value?: number;
+    readonly displayValue?: string;
+  }[];
 }
 
 // --- Helpers -------------------------------------------------------------------------------
@@ -106,7 +138,87 @@ function mapState(state: string | undefined): GameSummary["state"] {
   return "pre";
 }
 
-function toSide(competitor: EspnCompetitor | undefined): GameSide {
+// ESPN writes a goal's minute as "11'" or, in added time, "90'+1'". Ben's target line is
+// "Isak 6, 8", so the apostrophes come off and added time keeps its plus ("90+1").
+function goalMinute(displayValue: string | undefined): string | null {
+  const trimmed = (displayValue ?? "").replace(/'/g, "").trim();
+  return /^\d/.test(trimmed) ? trimmed : null;
+}
+
+// One line per scorer, with every minute they scored in: "Isak 6, 8". A goal whose minute the
+// provider left out falls back to the repeat-count form, so a name is never dropped.
+function tallyScorersWithMinutes(
+  goals: readonly { readonly name: string; readonly minute: string | null }[]
+): readonly string[] {
+  const byName = new Map<string, string[]>();
+  const missingMinutes = new Map<string, number>();
+  for (const goal of goals) {
+    const minutes = byName.get(goal.name) ?? [];
+    if (goal.minute != null) minutes.push(goal.minute);
+    else missingMinutes.set(goal.name, (missingMinutes.get(goal.name) ?? 0) + 1);
+    byName.set(goal.name, minutes);
+  }
+  return Array.from(byName.entries()).map(([name, minutes]) => {
+    if (minutes.length > 0) return `${name} ${minutes.join(", ")}`;
+    const count = missingMinutes.get(name) ?? 1;
+    return count > 1 ? `${name} (${count})` : name;
+  });
+}
+
+type EspnScoringDetails = NonNullable<NonNullable<EspnEvent["competitions"]>[number]["details"]>;
+
+// A scoring play in ESPN's soccer detail list. Match on ESPN's own `scoringPlay` flag rather
+// than on the play's label: verified live against ESPN's January 4, 2026 Everton-Brentford
+// scoreboard (#2253), goals arrive under several labels ("Goal", "Goal - Header",
+// "Goal - Volley", "Goal - Penalty", ...), so any label allowlist silently drops real goals —
+// that game lost both Everton goals and one of Brentford's three. The label prefix is only a
+// fallback for a response that omits the flag; cards and substitutions match neither.
+function isSoccerGoal(detail: EspnScoringDetails[number] | undefined): boolean {
+  if (detail?.scoringPlay === true) return true;
+  if (detail?.scoringPlay === false) return false;
+  return (detail?.type?.text ?? "").startsWith("Goal");
+}
+
+// Soccer: `competitions[0].details` is a complete list of scoring plays (one entry per goal,
+// verified live against ESPN's API). Filter to actual goals for the given team, then tally.
+function soccerScorers(
+  details: EspnScoringDetails | undefined,
+  teamId: string | undefined
+): readonly string[] | null {
+  const goals = (details ?? [])
+    .filter((d) => isSoccerGoal(d) && d?.team?.id === teamId)
+    .flatMap((d) =>
+      (d?.athletesInvolved ?? []).map((a) => ({
+        name: a?.shortName ?? a?.displayName,
+        minute: goalMinute(d?.clock?.displayValue)
+      }))
+    )
+    .filter((goal): goal is { name: string; minute: string | null } => goal.name != null);
+  return goals.length === 0 ? null : tallyScorersWithMinutes(goals);
+}
+
+// Hockey: each competitor carries ESPN's own "goals" leaders category. This is ESPN's "goal
+// leaders" list, not a full scoring log, and it can be capped shorter than the number of
+// distinct scorers on a team (verified live: Dallas scored 4 goals, only 3 distinct scorers were
+// listed) — so a team with several different scorers may show one fewer name than goals scored.
+// That is a gap in what the provider hands back, not a bug in this parsing.
+function hockeyScorers(leaders: EspnCompetitor["leaders"]): readonly string[] | null {
+  const goals = (leaders ?? []).find((category) => category?.name === "goals");
+  const names = (goals?.leaders ?? [])
+    .map((leader) => {
+      const name = leader?.athlete?.shortName ?? leader?.athlete?.displayName;
+      if (name == null) return null;
+      const count = Number(leader.displayValue);
+      return count > 1 ? `${name} (${count})` : name;
+    })
+    .filter((name): name is string => name != null);
+  return names.length === 0 ? null : names;
+}
+
+function toSide(
+  competitor: EspnCompetitor | undefined,
+  scorers: readonly string[] | null
+): GameSide {
   const team = competitor?.team;
   const teamKey = (team?.abbreviation ?? team?.id ?? "").toLowerCase();
   // Object-shaped scores come from the /schedule endpoint; Number({...}) is NaN, which used to
@@ -125,7 +237,8 @@ function toSide(competitor: EspnCompetitor | undefined): GameSide {
     crestUrl: team?.logo ?? team?.logos?.[0]?.href ?? null,
     score: score === null || Number.isNaN(score) ? null : score,
     record: competitor?.records?.[0]?.summary ?? null,
-    winner: competitor?.winner === true
+    winner: competitor?.winner === true,
+    scorers
   } satisfies GameSide;
 }
 
@@ -135,14 +248,22 @@ function toGame(event: EspnEvent, competitionKey: string): GameSummary {
   const home = competitors.find((c) => c.homeAway === "home") ?? competitors[0];
   const away = competitors.find((c) => c.homeAway === "away") ?? competitors[1];
   const type = competition?.status?.type;
+  // Safe to call here: getScoreboard already calls resolve() on the same competitionKey before
+  // toGame runs, so an unknown key would have thrown there first.
+  const { sport } = resolve(competitionKey);
+  const scorersFor = (c: EspnCompetitor | undefined): readonly string[] | null => {
+    if (sport === "soccer") return soccerScorers(competition?.details, c?.team?.id);
+    if (sport === "hockey") return hockeyScorers(c?.leaders);
+    return null;
+  };
   return {
     id: event.id ?? "",
     competitionKey,
     startsAt: event.date ?? "",
     state: mapState(type?.state),
     statusDetail: type?.detail ?? "",
-    home: toSide(home),
-    away: toSide(away)
+    home: toSide(home, scorersFor(home)),
+    away: toSide(away, scorersFor(away))
   };
 }
 
@@ -165,8 +286,30 @@ function normalizeNoteColor(color: string | undefined): string | null {
   return /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(hex) ? hex : null;
 }
 
+// College football standings (?level=3, verified live 2026-09-03) carry a "wins" stat but NO
+// "losses", "ties" or "winPercent" stats — the only place the losses live is the "overall"
+// record string ("1-0", "10-2-1"). Without this fallback every FBS team reads as undefeated.
+// Pro leagues carry the numeric stats and never reach the fallback.
+function overallRecord(
+  stats: EspnStandingsEntry["stats"]
+): { wins: number; losses: number; ties: number | null } | null {
+  const text = stats?.find((s) => s.name === "overall")?.displayValue;
+  const match = text ? /^(\d+)-(\d+)(?:-(\d+))?$/.exec(text.trim()) : null;
+  if (!match) return null;
+  return {
+    wins: Number(match[1]),
+    losses: Number(match[2]),
+    ties: match[3] === undefined ? null : Number(match[3])
+  };
+}
+
 function toStandingsRow(entry: EspnStandingsEntry, index: number): StandingsRow {
   const teamKey = (entry.team?.abbreviation ?? entry.team?.id ?? "").toLowerCase();
+  const overall = overallRecord(entry.stats);
+  const wins = statValue(entry.stats, "wins") ?? overall?.wins ?? 0;
+  const losses = statValue(entry.stats, "losses") ?? overall?.losses ?? 0;
+  const draws = statValue(entry.stats, "ties") ?? overall?.ties ?? null;
+  const played = wins + losses + (draws ?? 0);
   return {
     teamKey,
     name: entry.team?.displayName ?? teamKey,
@@ -176,10 +319,12 @@ function toStandingsRow(entry: EspnStandingsEntry, index: number): StandingsRow 
     // every card (live feedback mraxrdxr, mraz6m43).
     rank: statValue(entry.stats, "rank") ?? index + 1,
     points: statValue(entry.stats, "points") ?? null,
-    wins: statValue(entry.stats, "wins") ?? 0,
-    losses: statValue(entry.stats, "losses") ?? 0,
-    draws: statValue(entry.stats, "ties") ?? null,
-    winPercent: statValue(entry.stats, "winPercent") ?? null,
+    wins,
+    losses,
+    draws,
+    winPercent:
+      statValue(entry.stats, "winPercent") ??
+      (overall && played > 0 ? (wins + (draws ?? 0) / 2) / played : null),
     qualifies: entry.note != null,
     qualificationNote: entry.note?.description ?? null,
     qualificationColor: normalizeNoteColor(entry.note?.color)
@@ -234,9 +379,13 @@ export interface EspnHeadlinesParams {
 async function listTeams(fetchFn: typeof fetch, params: EspnTeamsParams): Promise<SourceTeamRef[]> {
   const { competitionKey } = params;
   const { sport, league } = resolve(competitionKey);
+  // ESPN pages the teams list at 50 by default. Pro leagues fit, but the college leagues added
+  // for #2210 run to hundreds (college-football answers 760, mens-college-basketball 362, verified
+  // live 2026-09-03), and the default page started at "Abilene Christian", so Alabama, Ohio State
+  // and every other major program were unfollowable. Ask for everything in one page.
   const data = (await fetchJson(
     fetchFn,
-    `${SITE_BASE}/${sport}/${league}/teams`,
+    `${SITE_BASE}/${sport}/${league}/teams?limit=1000`,
     `${league} teams`
   )) as {
     sports?: readonly {

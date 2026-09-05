@@ -1,7 +1,9 @@
 import { useState, type FormEvent, type ReactElement } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Tag } from "lucide-react";
 import { Badge } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
+import { Card } from "@moss/ui";
 import type { NewsCustomTopicDto, NewsPersonalizationAvailabilityDto } from "@moss/shared";
 
 import { createNewsTopic, deleteNewsTopic, updateNewsTopic } from "../web/news-client.js";
@@ -30,15 +32,15 @@ export function topicCreateErrorMessage(error: unknown): string {
 
 /**
  * #975 Task 9 flipped the writes live, so this gate now renders ONLY when a prerequisite is
- * missing, pointing at Assistant settings. Relocated from index.tsx (#990) — also used there
+ * missing, pointing at AI providers settings. Relocated from index.tsx (#990) — also used there
  * for the "Publications you add" section, so it must stay exported.
  */
 export function PrereqGate(props: { readonly requirement: string }) {
   return (
     <span className="nw-set__gate">
       {props.requirement}{" "}
-      <a className="nw-set__gatelink" href="/settings?section=assistant">
-        Set it up in Assistant settings
+      <a className="nw-set__gatelink" href="/settings?section=aiproviders">
+        Set it up in AI providers
       </a>
       .
     </span>
@@ -90,12 +92,14 @@ export function DescribeTopics(props: {
     void queryClient.invalidateQueries({ queryKey: newsQueryKeys.overview });
   };
 
+  const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [guidance, setGuidance] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   function resetForm() {
+    setAdding(false);
     setEditingId(null);
     setLabel("");
     setGuidance("");
@@ -131,6 +135,7 @@ export function DescribeTopics(props: {
   function startEdit(topic: NewsCustomTopicDto) {
     createMutation.reset();
     updateMutation.reset();
+    setAdding(false);
     setEditingId(topic.id);
     const values = describedTopicFormValues(topic);
     setLabel(values.label);
@@ -182,31 +187,40 @@ export function DescribeTopics(props: {
             const removing = removeMutation.isPending && removeMutation.variables === topic.id;
             return (
               <li key={topic.id} className="nw-set__item">
-                <span className="nw-set__item-label">{topic.label}</span>
-                {topic.guidance ? (
-                  <span className="nw-set__item-meta">{topic.guidance}</span>
-                ) : null}
-                {topic.validationStatus !== "approved" ? (
-                  <Badge tone="amber">Needs revalidation</Badge>
-                ) : null}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  aria-label={`Edit ${topic.label}`}
-                  disabled={pending || removing}
-                  onClick={() => startEdit(topic)}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  aria-label={`Remove ${topic.label}`}
-                  disabled={removing}
-                  onClick={() => removeMutation.mutate(topic.id)}
-                >
-                  Remove
-                </Button>
+                <div className="nw-set__item-row">
+                  <div className="nw-set__identity">
+                    <span className="nw-set__item-icon" aria-hidden="true">
+                      <Tag size={16} />
+                    </span>
+                    <span className="nw-set__item-label">{topic.label}</span>
+                    {topic.guidance ? (
+                      <span className="nw-set__item-meta">{topic.guidance}</span>
+                    ) : null}
+                    {topic.validationStatus !== "approved" ? (
+                      <Badge tone="amber">Needs revalidation</Badge>
+                    ) : null}
+                  </div>
+                  <div className="nw-set__actions">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Edit ${topic.label}`}
+                      disabled={pending || removing}
+                      onClick={() => startEdit(topic)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Remove ${topic.label}`}
+                      disabled={pending || removing}
+                      onClick={() => removeMutation.mutate(topic.id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
               </li>
             );
           })}
@@ -220,57 +234,80 @@ export function DescribeTopics(props: {
         </p>
       ) : null}
       {props.needsAttention ? props.retryRow() : null}
-      {props.availability?.freeformTopicsEnabled ? (
-        <form className="nw-set__exform" onSubmit={submit}>
-          <label className="nw-set__exlabel" htmlFor="nw-addtopic-label">
-            Topic in your own words
-          </label>
-          <div className="nw-set__exrow">
-            <input
-              id="nw-addtopic-label"
-              className="jds-input"
-              type="text"
-              value={label}
-              placeholder="mechanical watches"
-              disabled={pending}
-              onChange={(event) => {
-                setLabel(event.target.value);
-                setStatusMessage(null);
-              }}
-            />
-          </div>
-          <label className="nw-set__exlabel" htmlFor="nw-addtopic-guidance">
-            Optional guidance — what to include or leave out
-          </label>
-          <div className="nw-set__exrow">
-            <input
-              id="nw-addtopic-guidance"
-              className="jds-input"
-              type="text"
-              value={guidance}
-              placeholder="not smartwatches"
-              disabled={pending}
-              onChange={(event) => {
-                setGuidance(event.target.value);
-                setStatusMessage(null);
-              }}
-            />
-            <Button type="submit" size="sm" disabled={pending || !label.trim()}>
-              {createMutation.isPending
-                ? "Checking…"
-                : updateMutation.isPending
-                  ? "Saving…"
-                  : editingId
-                    ? "Save changes"
-                    : "Add topic"}
-            </Button>
-            {editingId ? (
-              <Button variant="secondary" size="sm" disabled={pending} onClick={cancelEdit}>
-                Cancel
+      {adding || editingId ? (
+        <div className="nw-set__candidate">
+          <Card sunken padding="lg">
+            <div className="nw-set__add-head">
+              <h4 className="nw-set__eyebrow">{editingId ? "Edit topic" : "Add a topic"}</h4>
+              <Button variant="secondary" size="sm" aria-expanded={true} onClick={cancelEdit}>
+                Close
               </Button>
-            ) : null}
-          </div>
-        </form>
+            </div>
+            <form className="nw-set__exform" onSubmit={submit}>
+              <label className="nw-set__exlabel" htmlFor="nw-addtopic-label">
+                Topic in your own words
+              </label>
+              <div className="nw-set__exrow">
+                <input
+                  id="nw-addtopic-label"
+                  className="jds-input"
+                  type="text"
+                  value={label}
+                  placeholder="mechanical watches"
+                  disabled={pending}
+                  onChange={(event) => {
+                    setLabel(event.target.value);
+                    setStatusMessage(null);
+                  }}
+                />
+              </div>
+              <label className="nw-set__exlabel" htmlFor="nw-addtopic-guidance">
+                Optional guidance — what to include or leave out
+              </label>
+              <div className="nw-set__exrow">
+                <input
+                  id="nw-addtopic-guidance"
+                  className="jds-input"
+                  type="text"
+                  value={guidance}
+                  placeholder="not smartwatches"
+                  disabled={pending}
+                  onChange={(event) => {
+                    setGuidance(event.target.value);
+                    setStatusMessage(null);
+                  }}
+                />
+                <Button type="submit" size="sm" disabled={pending || !label.trim()}>
+                  {createMutation.isPending
+                    ? "Checking…"
+                    : updateMutation.isPending
+                      ? "Saving…"
+                      : editingId
+                        ? "Save changes"
+                        : "Add topic"}
+                </Button>
+                <Button variant="secondary" size="sm" disabled={pending} onClick={cancelEdit}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      ) : props.availability?.freeformTopicsEnabled ? (
+        <div className="nw-set__add-section">
+          <Button
+            variant="secondary"
+            size="sm"
+            aria-expanded={false}
+            onClick={() => {
+              resetForm();
+              setAdding(true);
+            }}
+          >
+            <Plus size={14} aria-hidden="true" />
+            Add a topic
+          </Button>
+        </div>
       ) : (
         <div className="nw-set__addrow">
           <Button variant="secondary" size="sm" disabled>

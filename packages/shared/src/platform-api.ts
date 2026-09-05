@@ -95,6 +95,17 @@ export interface LocaleSettingsDto {
   readonly region: string;
   readonly dateFormat: LocaleDateFormat;
 }
+/**
+ * The locale a user sees before saving one. `GET /api/me/locale` reports this when no preference
+ * row exists, so anything resolving the actor's *effective* timezone must fall back to the same
+ * value. #2157: the chat clock read the raw row, found nothing, and answered in UTC while Settings
+ * showed Pacific.
+ */
+export const DEFAULT_LOCALE_SETTINGS: LocaleSettingsDto = {
+  timezone: "America/Los_Angeles",
+  region: "en-US",
+  dateFormat: "24"
+};
 export interface GetLocaleSettingsResponse {
   readonly locale: LocaleSettingsDto;
 }

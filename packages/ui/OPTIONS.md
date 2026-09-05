@@ -58,6 +58,10 @@ _No enum or boolean props._
 - **toggle** (optional boolean flag)
 - **selected** (optional boolean flag)
 
+## combobox
+
+- **disabled** (optional boolean flag)
+
 ## day-cell
 
 - **out** (optional boolean flag)
@@ -98,6 +102,10 @@ _No enum or boolean props._
 
 - **status** (required): `ready`, `drift`, `error`, `idle`
 - **live** (optional boolean flag)
+
+## info-tip
+
+_No enum or boolean props._
 
 ## legend-swatch
 

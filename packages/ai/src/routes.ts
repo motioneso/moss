@@ -41,6 +41,7 @@ import {
   resolveAiAssistantActionRouteSchema,
   revokeAiProviderConfigRouteSchema,
   updateAiConfiguredModelRouteSchema,
+  deleteAiConfiguredModelRouteSchema,
   updateAiProviderConfigRouteSchema,
   type AiAssistantToolBlockedReason,
   type AiAssistantActionDto,
@@ -48,7 +49,6 @@ import {
   type AiAssistantToolDto,
   type AiAssistantToolInvocationDto,
   type AiAuthMethod,
-  type AiConfiguredModelDto,
   type AiModelCapability,
   type AiModelStatus,
   type AiModelTier,
@@ -89,6 +89,8 @@ import { registerModuleBuildRoutes } from "./module-build-routes.js";
 import { registerProviderVisibilityRoutes } from "./provider-visibility-routes.js";
 import { createAiSecretCipher, type AiSecretCipher } from "./crypto.js";
 import { discoverAndPersistModels } from "./discover-and-persist-models.js";
+import { serializeModel } from "./serialize-model.js";
+export { serializeModel } from "./serialize-model.js";
 import { ModelDiscoveryService } from "./model-discovery.js";
 import { registerAiProviderValidationRoutes } from "./provider-validation-routes.js";
 import {
@@ -101,7 +103,6 @@ import {
   NotAGenericProviderError,
   type AiAssistantActionRequestSafeRow,
   type ChatModelOverrideSettings,
-  type AiConfiguredModelSafeRow,
   type AiProviderConfigSafeRow
 } from "./repository.js";
 
@@ -234,7 +235,11 @@ export function registerAiRoutes(
             if (created.status === "active") {
               const providers = await repository.listProviders(scopedDb);
               const activeCount = providers.filter((p) => p.status === "active").length;
-              const anyFlagged = providers.some((p) => p.is_instance_default);
+              // #2207: only an active flagged row counts; a revoked row still carrying the flag
+              // (installs from before the revoke fix) must not block adoption.
+              const anyFlagged = providers.some(
+                (p) => p.is_instance_default && p.status === "active"
+              );
               if (!anyFlagged && activeCount === 1) {
                 const flagged = await repository.setInstanceDefaultProvider(scopedDb, created.id);
                 if (flagged) return flagged;
@@ -437,6 +442,46 @@ export function registerAiRoutes(
         }
 
         return { model: serializeModel(model, accessContext.actorUserId) };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  // #2208 follow-up: the Remove button on a model row. The provider's `default` sentinel is kept
+  // (400) so a CLI provider can always launch without --model.
+  server.delete<{ Params: IdParams }>(
+    "/api/ai/models/:id",
+    { schema: deleteAiConfiguredModelRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const outcome = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            await assertInstanceAdmin(repository, scopedDb, accessContext.actorUserId);
+            const existing = (await repository.listModels(scopedDb)).find(
+              (row) => row.id === request.params.id
+            );
+            if (!existing) {
+              return { kind: "missing" as const };
+            }
+            if (existing.provider_model_id === "default") {
+              return { kind: "sentinel" as const };
+            }
+            const id = await repository.deleteModel(scopedDb, request.params.id);
+            return id ? { kind: "deleted" as const, id } : { kind: "missing" as const };
+          }
+        );
+        if (outcome.kind === "missing") {
+          return reply.code(404).send({ error: "AI model config not found" });
+        }
+        if (outcome.kind === "sentinel") {
+          return reply
+            .code(400)
+            .send({ error: "The provider's default entry cannot be removed; disable it instead" });
+        }
+        return { id: outcome.id };
       } catch (error) {
         return handleRouteError(error, reply);
       }
@@ -953,29 +998,6 @@ export async function serializeProvider(
   };
 }
 
-export function serializeModel(
-  model: AiConfiguredModelSafeRow,
-  actorUserId: string
-): AiConfiguredModelDto {
-  const isOwner = model.owner_user_id === actorUserId;
-  const displayProviderName = isOwner ? model.provider_display_name : "Instance default";
-  return {
-    id: model.id,
-    providerConfigId: isOwner ? model.provider_config_id : null,
-    providerKind: isOwner ? model.provider_kind : null,
-    providerDisplayName: displayProviderName,
-    providerStatus: model.provider_status,
-    providerModelId: isOwner ? model.provider_model_id : null,
-    displayName: model.display_name,
-    capabilities: model.capabilities.map(parseCapability),
-    status: model.status,
-    tier: model.tier,
-    allowUserOverride: model.allow_user_override,
-    createdAt: serializeDate(model.created_at),
-    updatedAt: serializeDate(model.updated_at)
-  };
-}
-
 function serializeChatModelOverrideSettings(
   settings: ChatModelOverrideSettings,
   actorUserId: string
@@ -1189,6 +1211,7 @@ function serializeAuditLogEntry(row: MossActionAuditLog): ActionAuditLogEntryDto
     chatSessionId: row.chat_session_id ?? null,
     sourceSurface: row.source_surface as ActionAuditLogEntryDto["sourceSurface"],
     inputSummary: row.input_summary as ActionAuditLogEntryDto["inputSummary"],
+    durationMs: row.duration_ms ?? null,
     occurredAt:
       row.occurred_at instanceof Date ? row.occurred_at.toISOString() : String(row.occurred_at)
   };

@@ -34,7 +34,7 @@ import {
   type NotificationPreferenceWriteService
 } from "@moss/settings";
 
-import { extractTimezone } from "./locale-utils.js";
+import { resolveEffectiveTimezone } from "./locale-utils.js";
 import { ChatRepository } from "./repository.js";
 import { ChatUserMemorySettingsRepository } from "./memory-settings-repository.js";
 import { buildCalendarWriteService } from "./calendar-write-impl.js";
@@ -224,7 +224,9 @@ export function buildChatGatewayDependencies(args: {
             { actorUserId, requestId: "gateway:resolve-locale-tz" },
             async (scopedDb) => {
               const raw = await args.localePreferences!.get(scopedDb, "locale");
-              return extractTimezone(raw);
+              // #2157: match what Settings shows — never leave the tool context blank (→ UTC)
+              // just because the user has not saved a locale yet.
+              return resolveEffectiveTimezone(raw);
             }
           )
       : undefined

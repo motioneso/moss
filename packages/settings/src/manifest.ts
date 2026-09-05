@@ -190,6 +190,11 @@ export const settingsModuleManifest: MossModuleManifest = {
     },
     {
       method: "GET",
+      path: "/api/me/weather-location/reverse",
+      permissionId: "settings.view"
+    },
+    {
+      method: "GET",
       path: "/api/me/weather-unit",
       permissionId: "settings.view"
     },

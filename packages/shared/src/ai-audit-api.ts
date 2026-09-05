@@ -26,6 +26,7 @@ const actionAuditLogEntrySchema = {
     "chatSessionId",
     "sourceSurface",
     "inputSummary",
+    "durationMs",
     "occurredAt"
   ],
   properties: {
@@ -41,7 +42,16 @@ const actionAuditLogEntrySchema = {
     },
     outcome: {
       type: "string",
-      enum: ["success", "failed", "denied", "cancelled", "invalid", "conflict"]
+      enum: [
+        "success",
+        "failed",
+        "denied",
+        "cancelled",
+        "invalid",
+        "conflict",
+        "suppressed",
+        "refused"
+      ]
     },
     errorClass: { type: ["string", "null"] },
     requestId: { type: ["string", "null"] },
@@ -51,6 +61,8 @@ const actionAuditLogEntrySchema = {
       enum: ["chat", "proactive", "scheduled", "unknown"]
     },
     inputSummary: actionAuditInputSummarySchema,
+    // #2175: how long the tool call took; null when no call happened (e.g. a denial).
+    durationMs: { type: ["integer", "null"] },
     occurredAt: { type: "string" }
   }
 } as const;
@@ -87,12 +99,22 @@ export type ActionAuditLogEntryDto = {
   readonly actionFamilyId: string | null;
   readonly actionKind: "write" | "outbound" | "destructive";
   readonly approvalMode: "auto" | "yolo" | "confirmed" | "rejected" | "cancelled" | "timeout";
-  readonly outcome: "success" | "failed" | "denied" | "cancelled" | "invalid" | "conflict";
+  readonly outcome:
+    | "success"
+    | "failed"
+    | "denied"
+    | "cancelled"
+    | "invalid"
+    | "conflict"
+    | "suppressed"
+    | "refused";
   readonly errorClass: string | null;
   readonly requestId: string | null;
   readonly chatSessionId: string | null;
   readonly sourceSurface: "chat" | "proactive" | "scheduled" | "unknown";
   readonly inputSummary: ActionAuditInputSummary | null;
+  /** #2175: milliseconds the tool call took; null when no call happened (e.g. a denial). */
+  readonly durationMs: number | null;
   readonly occurredAt: string;
 };
 

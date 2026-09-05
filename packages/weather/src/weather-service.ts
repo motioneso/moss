@@ -8,7 +8,7 @@ import { lookupCityForTimeZone } from "./timezone-city.js";
 
 const WEATHER_LOCATION_KEY = "weather-location";
 const WEATHER_UNIT_KEY = "weather-unit";
-const DEFAULT_WEATHER_UNIT: WeatherUnit = "metric";
+const DEFAULT_WEATHER_UNIT: WeatherUnit = "imperial";
 const WEATHER_CACHE_TTL_MS = 30 * 60 * 1000;
 const GEO_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
@@ -85,7 +85,7 @@ export class WeatherService {
     const raw = await this.dataContext.withDataContext(accessContext, (scopedDb) =>
       this.preferencesRepo.get(scopedDb, WEATHER_UNIT_KEY)
     );
-    return raw === "imperial" ? "imperial" : DEFAULT_WEATHER_UNIT;
+    return raw === "metric" || raw === "imperial" ? raw : DEFAULT_WEATHER_UNIT;
   }
 
   private async resolveLocation(

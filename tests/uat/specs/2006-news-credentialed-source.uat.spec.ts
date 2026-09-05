@@ -59,6 +59,7 @@ test("connects, rotates, and revokes a real credentialed News source", async ({ 
   await signIn(page);
   await openNewsSettings(page);
 
+  await page.getByRole("button", { name: "Add a source" }).click();
   const sourceInput = page.getByLabel("Publication homepage or domain");
   await sourceInput.fill(CONNECTION_HOST);
   await page.getByRole("button", { name: "Check" }).click();

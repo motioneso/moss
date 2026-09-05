@@ -67,7 +67,7 @@ export function composeMosaic(pool: readonly NewsHeadline[]): MosaicPlan {
 
 // Same rotation idiom as sports' quiet-day hero (packages/sports/src/web/sports-news.tsx):
 // five slides max, slow crossfade, hover/focus pauses, reduced motion disables auto-advance.
-const CAROUSEL_CAP = 5;
+export const CAROUSEL_CAP = 5;
 const CAROUSEL_ADVANCE_MS = 7000;
 
 function kicker(headline: NewsHeadline): string {
@@ -89,7 +89,7 @@ function HeroSlide({ headline, active }: { readonly headline: NewsHeadline; acti
       aria-roledescription="slide"
       aria-hidden={!active}
     >
-      <div className="nw-hero">
+      <div className="nw-hero nw-fbhost">
         {headline.imageUrl ? (
           <img className="nw-hero__photo" src={headline.imageUrl} alt="" loading="lazy" />
         ) : (
@@ -122,8 +122,9 @@ function HeroSlide({ headline, active }: { readonly headline: NewsHeadline; acti
           >
             Continue reading<span aria-hidden="true"> →</span>
           </a>
-          <StoryFeedbackMenu headline={headline} surface="news" />
         </div>
+        {/* Feedback dots sit in the hero's top-right corner and show on hover (.nw-fbhost). */}
+        {active ? <StoryFeedbackMenu headline={headline} surface="news" /> : null}
       </div>
     </article>
   );
@@ -220,7 +221,7 @@ function MosaicArticle({
   // only body field the feed ships, so a genuinely terse summary still reads short — this spends
   // whatever text exists instead of stopping at 3 lines beside a phantom image slot. Majors always
   // carry art (composeMosaic requires it), so this only ever hits standards.
-  const className = ["nw-mosaic__art", major ? "nw-mosaic__art--major" : ""];
+  const className = ["nw-mosaic__art", "nw-fbhost", major ? "nw-mosaic__art--major" : ""];
   if (!major && !headline.imageUrl) className.push("nw-mosaic__art--textonly");
   return (
     <article className={className.filter(Boolean).join(" ")}>
@@ -240,7 +241,7 @@ function MosaicArticle({
 
 function FeatureArticle({ headline }: { readonly headline: NewsHeadline }) {
   return (
-    <article className="nw-feature">
+    <article className="nw-feature nw-fbhost">
       {headline.imageUrl ? (
         <img className="nw-feature__img" src={headline.imageUrl} alt="" loading="lazy" />
       ) : null}
@@ -251,8 +252,8 @@ function FeatureArticle({ headline }: { readonly headline: NewsHeadline }) {
         <a className="nw-more" href={headline.url} target="_blank" rel="noreferrer">
           Continue reading →
         </a>
-        <StoryFeedbackMenu headline={headline} surface="news" />
       </div>
+      <StoryFeedbackMenu headline={headline} surface="news" />
     </article>
   );
 }
@@ -289,7 +290,7 @@ export function NewsBriefs({ briefs }: { readonly briefs: readonly NewsHeadline[
       <p className="nw-briefs__label">In brief</p>
       <ul className="nw-briefs__list">
         {briefs.map((headline) => (
-          <li className="nw-briefs__item" key={headline.id}>
+          <li className="nw-briefs__item nw-fbhost" key={headline.id}>
             <a className="nw-briefs__link" href={headline.url} target="_blank" rel="noreferrer">
               <span className="nw-briefs__tag">{headline.sourceLabel}</span>
               {headline.title}
@@ -336,7 +337,7 @@ export function SourceRail({ groups }: { readonly groups: readonly NewsSourceGro
           </a>
           <ul className="nw-rail__list">
             {group.headlines.slice(0, RAIL_ITEMS_CAP).map((headline) => (
-              <li className="nw-rail__item" key={headline.id}>
+              <li className="nw-rail__item nw-fbhost" key={headline.id}>
                 <a className="nw-rail__link" href={headline.url} target="_blank" rel="noreferrer">
                   {headline.title}
                 </a>

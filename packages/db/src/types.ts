@@ -259,6 +259,8 @@ export type AiProviderKind = "openai-compatible" | "anthropic" | "google" | "oll
 export type AiProviderStatus = "active" | "error" | "disabled" | "revoked";
 export type AiModelStatus = "active" | "disabled";
 export type AiModelTier = "reasoning" | "interactive" | "economy";
+// #2208: who created a model row. Discovery may prune only its own ('discovered') rows.
+export type AiConfiguredModelOrigin = "discovered" | "manual";
 export type AiAssistantActionRisk = "write" | "outbound" | "destructive";
 export type AiAssistantActionStatus = "pending" | "confirmed" | "rejected" | "cancelled";
 export type ChatMessageRole = "user" | "assistant";
@@ -289,6 +291,15 @@ export interface TasksTable {
   recurrence_series_id: string | null;
   suggestion_metadata: Record<string, unknown> | null;
   created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface ScratchpadsTable {
+  user_id: string;
+  body: string;
+  revision: number;
+  sync_to_notes: boolean;
+  shortcut: string;
   updated_at: TimestampColumn;
 }
 
@@ -501,6 +512,11 @@ export interface AiConfiguredModelsTable {
   status: AiModelStatus;
   tier: AiModelTier;
   allow_user_override: ColumnType<boolean, boolean | undefined, boolean>;
+  origin: ColumnType<
+    AiConfiguredModelOrigin,
+    AiConfiguredModelOrigin | undefined,
+    AiConfiguredModelOrigin
+  >;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
@@ -536,6 +552,7 @@ export interface MossActionAuditLogTable {
   source_surface: string;
   input_summary: JsonColumn | null;
   occurred_at: TimestampColumn;
+  duration_ms: number | null;
 }
 
 export interface MossErrorLogTable {
@@ -1293,7 +1310,7 @@ export interface SportsCustomSourcesTable {
   canonical_domain: string;
   homepage_url: string;
   feed_url: string | null;
-  retrieval_method: "feed" | "scrape";
+  retrieval_method: "feed" | "scrape" | "reddit";
   enabled: ColumnType<boolean, boolean | undefined, boolean>;
   health_state: ColumnType<
     SportsSourceHealthState,
@@ -1320,6 +1337,8 @@ export interface SportsCustomSourcesTable {
   >;
   confirmed_fetch_hosts: string[];
   authorization_confirmed_at: TimestampColumn;
+  /** #2211 (0213): a subreddit's community icon URL on Reddit's image hosts; null for publications. */
+  icon_url: ColumnType<string | null, string | null | undefined, string | null>;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
@@ -1395,6 +1414,7 @@ export interface MossDatabase {
   "app.module_kv": ModuleKvTable;
   "app.rls_probe_items": RlsProbeItemsTable;
   "app.tasks": TasksTable;
+  "app.scratchpads": ScratchpadsTable;
   "app.task_activity": TaskActivityTable;
   "app.task_lists": TaskListsTable;
   "app.task_tags": TaskTagsTable;
@@ -1474,6 +1494,7 @@ export type ModuleEnablementRow = Selectable<ModuleEnablementTable>;
 export type ExternalModuleRow = Selectable<ExternalModulesTable>;
 export type RlsProbeItem = Selectable<RlsProbeItemsTable>;
 export type Task = Selectable<TasksTable>;
+export type Scratchpad = Selectable<ScratchpadsTable>;
 export type EmailActionSuppression = Selectable<EmailActionSuppressionTable>;
 export type EmailActionSuppressionEvidence = Selectable<EmailActionSuppressionEvidenceTable>;
 export type TaskActivity = Selectable<TaskActivityTable>;

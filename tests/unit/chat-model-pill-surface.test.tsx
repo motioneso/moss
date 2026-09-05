@@ -85,6 +85,7 @@ function model(overrides: Partial<AiConfiguredModelDto>): AiConfiguredModelDto {
     status: "active",
     tier: "interactive",
     allowUserOverride: true,
+    origin: "discovered",
     createdAt: "2026-07-08T00:00:00.000Z",
     updatedAt: "2026-07-08T00:00:00.000Z",
     ...overrides

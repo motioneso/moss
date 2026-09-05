@@ -461,11 +461,15 @@ describe("generateStructured end-to-end", () => {
     });
     expect(create.statusCode).toBe(201);
     const cliProviderId = create.json().provider.id as string;
-    const cliModel = await dataContext.withDataContext(adminContext(), async (db) =>
-      (await repository.listModels(db)).find(
-        (model) =>
-          model.provider_config_id === cliProviderId && model.provider_model_id === "gpt-5.6-luna"
-      )
+    // #2208: CLI providers no longer ship a static model list; with no cli-runner reachable the
+    // create path adds only the sentinel. Add the json-capable model by hand, as an admin would.
+    const cliModel = await dataContext.withDataContext(adminContext(), (db) =>
+      repository.createModel(db, {
+        providerConfigId: cliProviderId,
+        providerModelId: "gpt-5.6-luna",
+        displayName: "gpt-5.6-luna",
+        capabilities: ["chat", "json"]
+      })
     );
     expect(cliModel).toBeDefined();
 

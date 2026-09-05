@@ -293,6 +293,7 @@ import {
   SportsBrowserBrokerServer,
   SportsBrowserClient,
   SportsEspnCoverageRepository,
+  SportsPhotoStore,
   SportsPublicSourceReader,
   SportsService,
   type RegisteredStory,
@@ -332,6 +333,11 @@ import {
   registerNotesSyncRoutes,
   registerNotesJobWorkers
 } from "@moss/notes";
+import {
+  registerScratchpadRoutes,
+  scratchpadModuleManifest,
+  scratchpadModuleSqlMigrationDirectory
+} from "@moss/scratchpad";
 import {
   FeedbackTargetVerifierRegistry,
   buildStoryTargetContext,
@@ -376,7 +382,7 @@ import {
 } from "./chat-multiplexer.js";
 import { createNewsCredentialCipherPort } from "./news-credential-cipher.js";
 import { buildOnboardingInstall } from "./onboarding-install.js";
-import { buildOnboardingLogin } from "./onboarding-login.js";
+import { buildCliModelLister, buildOnboardingLogin } from "./onboarding-login.js";
 
 // Declared here (not `apps/api/src/server.ts`, which sets it via an onRequest hook)
 // because module-registry is the composition root every consumer of the field
@@ -610,6 +616,12 @@ export interface BuiltInRouteDependencies {
    */
   readonly onboardingLogin?: OnboardingLoginDependencies;
   /**
+   * #2208 — the ONE model-discovery service for the ai module's routes, built inside
+   * registerBuiltInApiRoutes with the cli-runner model lister on the socket path. Absent (tests,
+   * host-dev) ⇒ the ai routes build a lister-less service and CLI discovery reports `unavailable`.
+   */
+  readonly aiModelDiscovery?: ModelDiscoveryService;
+  /**
    * #917 — boot-time external-module discovery snapshot, built by the API composition root
    * (apps/api discoverExternalModules) and forwarded to the settings module, where the Task 9
    * admin GET route reconciles it against app.external_modules. Absent ⇒ feature off. Optional
@@ -697,13 +709,18 @@ const newsHostRateLimiter = createHostRateLimiter();
 
 function buildNewsDiscoveryPorts(
   logger?: Pick<FastifyBaseLogger, "info" | "warn">,
-  engineFactory?: ChatEngineFactory
+  // #2229: takes the already-built adapter, not a raw engine factory. The route path must pass
+  // deps.createCliStructuredAdapter (built from structuredChatEngineFactory, which resolves
+  // correctly on both the socket and in-process paths) rather than building a new adapter from
+  // deps.chatEngineFactory — that raw late-bound bridge never resolves on the socket path, so
+  // every one-shot structured call (source preview) threw "not resolved yet". The worker path
+  // keeps its own default (no live chat engine involved there).
+  createCliStructuredAdapter: ReturnType<
+    typeof createCliStructuredAdapterFactory
+  > = createCliStructuredAdapterFactory()
 ) {
   const repository = new AiRepository();
   const cipher = createAiSecretCipher();
-  // #982/#869/#981: module-registry is the composition boundary importing both ai's port and chat's
-  // CLI implementation. Resolve one shared transport factory; packages/ai never imports chat.
-  const createCliStructuredAdapter = createCliStructuredAdapterFactory(engineFactory);
   return {
     fetch: (url: string) =>
       fetchWebResource(url, {
@@ -711,12 +728,13 @@ function buildNewsDiscoveryPorts(
         robots: newsRobotsGate,
         rateLimiter: newsHostRateLimiter
       }),
-    image: (url: string, maxBytes: number) =>
+    image: (url: string, maxBytes: number, allowedHosts?: readonly string[]) =>
       fetchWebResourceBytes(url, {
         requireHttps: true,
         robots: newsRobotsGate,
         rateLimiter: newsHostRateLimiter,
-        maxBytes
+        maxBytes,
+        ...(allowedHosts ? { allowedHosts } : {})
       }),
     search: {
       async search(
@@ -776,6 +794,7 @@ function buildSportsDiscoveryPorts(
       options?: {
         readonly allowedHosts?: readonly string[];
         readonly requestHeaders?: Readonly<Record<string, string>>;
+        readonly userAgent?: string;
         readonly allowedContentTypes?: readonly string[];
         readonly beforeRequest?: (hop: {
           readonly url: URL;
@@ -792,12 +811,31 @@ function buildSportsDiscoveryPorts(
         rateLimiter: sportsHostRateLimiter,
         allowedHosts: options?.allowedHosts,
         requestHeaders: options?.requestHeaders,
+        userAgent: options?.userAgent,
         allowedContentTypes: options?.allowedContentTypes,
         beforeRequest: options?.beforeRequest,
         maxBytes: options?.maxBytes,
         rejectOversizedResponses: options?.rejectOversizedResponses,
         timeoutMs: options?.timeoutMs,
         signal: options?.signal
+      }),
+    // #2211: publication favicons for the source-icon route. Same safety layer as `fetch`, bytes out.
+    fetchBytes: (
+      url: string,
+      options: {
+        readonly allowedHosts: readonly string[];
+        readonly maxBytes: number;
+        readonly rejectOversizedResponses: boolean;
+        readonly timeoutMs: number;
+      }
+    ) =>
+      fetchWebResourceBytes(url, {
+        requireHttps: true,
+        rateLimiter: sportsHostRateLimiter,
+        allowedHosts: options.allowedHosts,
+        maxBytes: options.maxBytes,
+        rejectOversizedResponses: options.rejectOversizedResponses,
+        timeoutMs: options.timeoutMs
       }),
     ...(browser ? { browser } : {}),
     ai: {
@@ -899,6 +937,16 @@ function buildNewsStoryFeedbackPort(
   });
   return {
     storyRef: (canonicalUrl) => storyFeedbackTargetRef("news", canonicalUrl),
+    listDismissedRefs: async (scopedDb, ownerUserId) => {
+      const rules = await usefulnessFeedbackRepository.listActiveStoryRules(
+        scopedDb,
+        ownerUserId,
+        "news"
+      );
+      return new Set(
+        rules.filter((rule) => rule.direction === "less").map((rule) => rule.targetRef)
+      );
+    },
     registerTargets: async (scopedDb, ownerUserId, rows) => {
       for (const row of rows) {
         await usefulnessFeedbackRepository.upsertTarget(scopedDb, {
@@ -1587,6 +1635,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         resolveActiveModules: deps.resolveActiveModules,
+        // #2208: CLI providers discover models through the cli-runner; share the wired service.
+        ...(deps.aiModelDiscovery ? { modelDiscovery: deps.aiModelDiscovery } : {}),
         // #915 D6: installed set, not actor-filtered enablement.
         listInstalledModuleIds: () => deps.listModuleManifests().map((manifest) => manifest.id),
         tasksCompatibility,
@@ -1988,10 +2038,17 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       );
       const sourcesRepository = new SportsSourcesRepository();
       const espnCoverageRepository = new SportsEspnCoverageRepository();
+      // #2237 story photos are copied into the owner's own vault and served from our origin, so
+      // the vault runner and the byte fetch port are built here rather than inside the module.
+      const sportsPhotoStore = new SportsPhotoStore({
+        vault: new VaultContextRunner(getVaultBaseDir()),
+        fetchBytes: discovery.fetchBytes
+      });
       const publicSourceReader = new SportsPublicSourceReader({
         dataContext: deps.dataContext,
         repository: sourcesRepository,
         fetch: discovery.fetch,
+        photos: sportsPhotoStore,
         cache: new DatasetCache({ maxEntries: 500 })
       });
       const followsRepository = new SportsFollowsRepository();
@@ -2053,7 +2110,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveTeams: async (competitionKey) =>
           (await sourceTeamResolver.getLeagueTeams(competitionKey)).teams,
         dataContext: deps.dataContext,
-        reader: publicSourceReader
+        reader: publicSourceReader,
+        photos: sportsPhotoStore
       });
       configureSportsChatTools(datasetClient, followsRepository, sourceService);
       registerSportsRoutes(server, {
@@ -2067,6 +2125,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         publicSourceReader,
         previews,
         sourceService,
+        photos: sportsPhotoStore,
         storyRelevance: sportsStoryRelevance,
         storyFeedback: sportsStoryFeedback
       });
@@ -2093,7 +2152,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       configureNewsBriefingService(datasetClient);
       const discovery = buildNewsDiscoveryPorts(
         createModuleLogger(server.log, "news"),
-        deps.chatEngineFactory
+        deps.createCliStructuredAdapter
       );
       const previewOverride = buildUatNewsPreviewOverride();
       registerNewsRoutes(server, {
@@ -2202,6 +2261,16 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             })
           );
         }
+      })
+  },
+  {
+    manifest: scratchpadModuleManifest,
+    sqlMigrationDirectories: [scratchpadModuleSqlMigrationDirectory],
+    queueDefinitions: [],
+    registerRoutes: (server, deps) =>
+      registerScratchpadRoutes(server, {
+        dataContext: deps.dataContext,
+        resolveAccessContext: deps.resolveAccessContext
       })
   },
   {
@@ -2767,6 +2836,17 @@ export function registerBuiltInApiRoutes(
   // cli-runner container; no in-process login path). On host-dev / in-process this is undefined ⇒ the
   // login routes fail closed (500). The admin-gated routes are then the SOLE login triggers; #347 stays
   // BLOCKING — login is single-active-user (the §L.6.1 unified exclusivity gate is NOT bypassed).
+  // #2208: CLI providers have no HTTP `/models`; discovery asks the cli-runner over the SAME lazy
+  // socket connection the login seam uses, and the runner asks the vendor with the stored login
+  // (ids only cross the socket). One service instance serves login-ready AND the admin routes so
+  // the 1 h cache is shared. Off the socket path the lister is undefined ⇒ `reason: "unavailable"`.
+  const aiModelDiscovery = new ModelDiscoveryService({
+    cliModelLister: buildCliModelLister({
+      enabled: socketConfigured,
+      getConnection: getRpcConnection
+    })
+  });
+
   const onboardingLogin: OnboardingLoginDependencies | undefined = buildOnboardingLogin({
     enabled: socketConfigured,
     getConnection: getRpcConnection,
@@ -2777,7 +2857,7 @@ export function registerBuiltInApiRoutes(
       repository: new AiRepository(),
       cipher: createAiSecretCipher(),
       // #982/#869 D2: login-ready uses same discovery service semantics as admin connect paths.
-      modelDiscovery: new ModelDiscoveryService()
+      modelDiscovery: aiModelDiscovery
     }),
     logger: { warn: (obj, msg) => server.log.warn(obj, msg) }
   });
@@ -2862,6 +2942,7 @@ export function registerBuiltInApiRoutes(
     onboardingProbes,
     onboardingInstall,
     onboardingLogin,
+    aiModelDiscovery,
     // Surface a setter so the chat runtime (constructed inside registerChatRoutes) can publish the ONE
     // RPC connection it owns back to the probes + the boot lifecycle below. On the RPC path the runtime
     // wires reconcile + the idle reaper onto this connection; here we only need the handle to route

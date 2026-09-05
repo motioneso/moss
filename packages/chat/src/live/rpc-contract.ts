@@ -15,7 +15,7 @@
  * malformed frame and the receiver closes the connection (§3.7).
  */
 
-import type { AiProviderExecutionMode } from "@moss/shared";
+import type { AiCliModelListResult, AiProviderExecutionMode } from "@moss/shared";
 
 import type { TranscriptRecord, ChatRecordKind } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
@@ -152,6 +152,12 @@ export type RpcMethod =
   | "submit"
   | "cancelSubmit"
   | "readNew"
+  // Structured one-shot calls (email extraction and other scoped structured callers, review B4
+  // follow-up): "launch" is reused for the structured launch (see RpcLaunchParams.schema) because
+  // its result shape already matches; submit/read need their own methods because their param/result
+  // shapes differ from the ordinary chat submit/readNew (no attemptId, no TranscriptRecord[]).
+  | "submitStructured"
+  | "readStructured"
   | "isAlive"
   | "interrupt"
   | "purgeTranscripts" // per-session (sessionKey required) — #744 private-chat transcript purge over RPC
@@ -163,6 +169,7 @@ export type RpcMethod =
   | "pollLogin" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
   | "submitLoginToken" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
   | "cancelLogin" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
+  | "listProviderModels" // non-session (#2208 live model list from the provider's vendor — ADDITIVE)
   // #1059 owner terminal — additive, never used by the chat runtime
   | "openTerminal"
   | "writeTerminal"
@@ -261,6 +268,11 @@ export interface RpcLaunchParams {
   /** Selects the CLI + transcript parser. Mirrors CliChatEngine.provider. */
   readonly provider: RpcProviderKind;
   readonly executionMode?: AiProviderExecutionMode;
+  /** #1350/B4: set only by a structured caller. See `ChatEngineSelectionOpts.needsStructuredOutput`
+   *  in engine-selection.ts — this carries the same call-boundary signal across the socket so the
+   *  cli-runner root can't drift from the in-process root on which calls keep the bounded print
+   *  engine regardless of the persistent-runtime flag. */
+  readonly needsStructuredOutput?: boolean;
   /**
    * Rendered persona CONTENT (NOT a path). cli-runner writes it to the persona file under the
    * server-derived neutralDir, then passes that path to the CLI (e.g. --append-system-prompt-file).
@@ -306,6 +318,14 @@ export interface RpcLaunchParams {
   /** #1554 — `chat.persistent_idle_reap_minutes`, same live-read-per-launch contract; the
    *  cli-runner's idle-reap timer re-reads it on every tick. */
   readonly persistentIdleReapMinutes?: number;
+  /**
+   * Review B4 follow-up — present only for a structured one-shot call (e.g. email extraction via
+   * `CliStructuredAdapter`). Mirrors `CliStructuredEngine.launchStructured`'s `schema` param
+   * (cli-structured-adapter.ts). When present, cli-runner calls the built engine's
+   * `launchStructured(...)` instead of `launch(...)`; `RpcLaunchResult` already matches that
+   * method's `{offset}` return shape, so "launch" is reused rather than adding a new method.
+   */
+  readonly schema?: Record<string, unknown>;
 }
 
 /**
@@ -371,6 +391,33 @@ export interface RpcReadNewResult {
   readonly complete: boolean;
 }
 
+/**
+ * Review B4 follow-up — params/result for method "submitStructured". Mirrors
+ * `CliStructuredEngine.submitStructured` (cli-structured-adapter.ts): a plain text turn, no
+ * attemptId (a structured session is one caller, one turn at a time; the ordinary submit's
+ * idempotency ledger does not apply).
+ */
+export interface RpcSubmitStructuredParams {
+  readonly text: string;
+}
+export interface RpcSubmitStructuredResult {
+  readonly ok: true;
+}
+
+/**
+ * Review B4 follow-up — params/result for method "readStructured". Mirrors
+ * `CliStructuredEngine.readStructured` (cli-structured-adapter.ts): unlike readNew, this returns
+ * raw accumulated text (not TranscriptRecord[]).
+ */
+export interface RpcReadStructuredParams {
+  readonly afterOffset: number;
+}
+export interface RpcReadStructuredResult {
+  readonly text?: string;
+  readonly offset: number;
+  readonly complete: boolean;
+}
+
 /** params for method "kill" (§4.5). Failed private purge preserves its exact retry marker. */
 export interface RpcKillParams {
   readonly preserveNeutralDir?: boolean;
@@ -410,6 +457,12 @@ export interface RpcListLiveSessionsResult {
 /** params for method "probeProvider" (§4.8) — instance-wide query, no sessionKey. */
 export interface RpcProbeProviderParams {
   readonly provider: RpcProviderKind;
+  /**
+   * #2242: skip any saved answer and run the real check now. Used by the periodic install-state
+   * reconciliation so a login that quietly expired is caught on its own within a bounded time,
+   * not only when someone happens to press Log in again.
+   */
+  readonly forceFresh?: boolean;
 }
 /** result for method "probeProvider" (§4.8). */
 export interface RpcProbeProviderResult {
@@ -417,6 +470,17 @@ export interface RpcProbeProviderResult {
   readonly status: "ready" | "needs_login" | "not_installed" | "multiplexer_unavailable" | "error";
   readonly message?: string;
 }
+
+/**
+ * params for method "listProviderModels" (#2208) — instance-wide query, no sessionKey. The runner
+ * reads the provider's stored login credential from the cli-auth volume and asks the vendor for
+ * its live model list; ONLY model ids cross the socket (never the credential, never in `message`).
+ */
+export interface RpcListProviderModelsParams {
+  readonly provider: RpcProviderKind;
+}
+/** result for method "listProviderModels" (#2208) — the shared `AiCliModelListResult` verbatim. */
+export type RpcListProviderModelsResult = AiCliModelListResult;
 
 // #1059 terminal method params/results (interface-pair pattern, mirrors RpcSubmit*). Additive
 // only — no existing method's request/response shape changes.

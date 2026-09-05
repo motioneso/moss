@@ -60,6 +60,8 @@ import {
   type RpcLaunchParams,
   type RpcLaunchResult,
   type RpcListLiveSessionsResult,
+  type RpcListProviderModelsParams,
+  type RpcListProviderModelsResult,
   type RpcMethod,
   type RpcOk,
   type PersistentRuntimeLaunchConfig,
@@ -68,8 +70,12 @@ import {
   type RpcPurgeTranscriptsResult,
   type RpcReadNewParams,
   type RpcReadNewResult,
+  type RpcReadStructuredParams,
+  type RpcReadStructuredResult,
   type RpcSubmitParams,
   type RpcSubmitResult,
+  type RpcSubmitStructuredParams,
+  type RpcSubmitStructuredResult,
   type ReapReason
 } from "./rpc-contract.js";
 import type { CliChatEngine, EngineKillOpts, EngineLaunchOpts, TranscriptRecord } from "./types.js";
@@ -255,6 +261,8 @@ export class RpcConnection {
       case "submit":
       case "cancelSubmit":
       case "readNew":
+      case "submitStructured":
+      case "readStructured":
       case "isAlive":
       case "interrupt":
       case "kill":
@@ -296,6 +304,22 @@ export class RpcConnection {
     return this.call<RpcReadNewResult>("readNew", sessionKey, params);
   }
 
+  /** Review B4 follow-up — structured one-shot submit (email extraction and similar callers). */
+  submitStructured(
+    sessionKey: string,
+    params: RpcSubmitStructuredParams
+  ): Promise<RpcSubmitStructuredResult> {
+    return this.call<RpcSubmitStructuredResult>("submitStructured", sessionKey, params);
+  }
+
+  /** Review B4 follow-up — structured one-shot poll (email extraction and similar callers). */
+  readStructured(
+    sessionKey: string,
+    params: RpcReadStructuredParams
+  ): Promise<RpcReadStructuredResult> {
+    return this.call<RpcReadStructuredResult>("readStructured", sessionKey, params);
+  }
+
   isAlive(sessionKey: string): Promise<RpcIsAliveResult> {
     return this.call<RpcIsAliveResult>("isAlive", sessionKey, {});
   }
@@ -327,6 +351,8 @@ export class RpcConnection {
     const turnVerbs: ReadonlySet<RpcMethod> = new Set([
       "submit",
       "readNew",
+      "submitStructured",
+      "readStructured",
       "isAlive",
       "interrupt",
       "kill",
@@ -397,6 +423,16 @@ export class RpcConnection {
 
   cancelLogin(params: RpcCancelLoginParams): Promise<RpcCancelLoginResult> {
     return this.call<RpcCancelLoginResult>("cancelLogin", undefined, params);
+  }
+
+  /**
+   * #2208 listProviderModels — NON-SESSION, like probeProvider. The runner asks the provider's
+   * vendor for its live model list with the credential it already holds; ONLY ids come back.
+   * Every non-ok outcome (not logged in, unsupported, vendor failure) is a normal result, not an
+   * `RpcErr`. Server-bounded at 5 s per vendor call, so no client deadline is applied here.
+   */
+  listProviderModels(params: RpcListProviderModelsParams): Promise<RpcListProviderModelsResult> {
+    return this.call<RpcListProviderModelsResult>("listProviderModels", undefined, params);
   }
 
   /** Tear down the connection (process shutdown). Idempotent. */
@@ -766,7 +802,9 @@ export class ChatEngineRpcClient implements CliChatEngine {
      * cli-runner root gets current values (the plan's live-reload channel for this topology).
      * Absent ⇒ the launch carries no persistent fields and the runner keeps its boot bootstrap.
      */
-    private readonly readPersistentConfig?: () => Promise<PersistentRuntimeLaunchConfig>
+    private readonly readPersistentConfig?: () => Promise<PersistentRuntimeLaunchConfig>,
+    /** B4: forwarded to `RpcLaunchParams.needsStructuredOutput`. See its doc comment. */
+    private readonly needsStructuredOutput = false
   ) {}
 
   /**
@@ -775,6 +813,33 @@ export class ChatEngineRpcClient implements CliChatEngine {
    * meaningless cross-container). Returns the post-drain offset (§4.1.2).
    */
   async launch(opts: EngineLaunchOpts): Promise<{ offset: number }> {
+    const params = await this.buildLaunchParams(opts);
+    const result = await this.conn.launch(this.sessionKey, params);
+    return { offset: result.offset };
+  }
+
+  /**
+   * Review B4 follow-up — structured one-shot launch (email extraction and similar scoped
+   * structured callers, cli-structured-adapter.ts's `CliStructuredEngine`). Reuses the "launch"
+   * RPC method (its `RpcLaunchResult` already matches `{offset}`) with `schema` attached, so
+   * cli-runner's `launchOnce` calls the underlying engine's `launchStructured` instead of `launch`.
+   * Having this method (alongside `submitStructured`/`readStructured` below) is what makes
+   * `isCliStructuredEngine()` recognize an RPC-backed engine as structured-capable.
+   */
+  async launchStructured(
+    opts: EngineLaunchOpts & { readonly schema: Record<string, unknown> }
+  ): Promise<{ readonly offset: number }> {
+    const params = await this.buildLaunchParams(opts);
+    const result = await this.conn.launch(this.sessionKey, { ...params, schema: opts.schema });
+    return { offset: result.offset };
+  }
+
+  /**
+   * §4.1.0a: serialize ONLY personaText + replayBatch + mcpToken + mcpServerUrl + provider into
+   * RpcLaunchParams and DROP neutralDir + personaPath (the api has no CLI-data mount; those paths
+   * are meaningless cross-container). Shared by `launch` and `launchStructured`.
+   */
+  private async buildLaunchParams(opts: EngineLaunchOpts): Promise<RpcLaunchParams> {
     // #1554: fail-closed — a settings read that throws degrades this launch to the bounded-fallback
     // engine (persistent OFF), never fails the turn. Same posture as the in-process root's readers.
     const persistent = this.readPersistentConfig
@@ -786,9 +851,10 @@ export class ChatEngineRpcClient implements CliChatEngine {
           })
         )
       : undefined;
-    const params: RpcLaunchParams = {
+    return {
       provider: this.provider,
       executionMode: this.executionMode,
+      needsStructuredOutput: this.needsStructuredOutput,
       personaText: opts.personaText ?? "",
       ...(opts.mcpToken !== undefined ? { mcpToken: opts.mcpToken } : {}),
       ...(opts.mcpServerUrl !== undefined ? { mcpServerUrl: opts.mcpServerUrl } : {}),
@@ -803,12 +869,15 @@ export class ChatEngineRpcClient implements CliChatEngine {
           }
         : {})
     };
-    const result = await this.conn.launch(this.sessionKey, params);
-    return { offset: result.offset };
   }
 
   async submit(text: string): Promise<void> {
     await this.conn.submit(this.sessionKey, { attemptId: randomUUID(), text });
+  }
+
+  /** Review B4 follow-up — see `launchStructured`'s doc comment. */
+  async submitStructured(text: string): Promise<void> {
+    await this.conn.submitStructured(this.sessionKey, { text });
   }
 
   async readNew(
@@ -816,6 +885,14 @@ export class ChatEngineRpcClient implements CliChatEngine {
   ): Promise<{ records: TranscriptRecord[]; offset: number; complete: boolean }> {
     const result = await this.conn.readNew(this.sessionKey, { afterOffset });
     return { records: result.records, offset: result.offset, complete: result.complete };
+  }
+
+  /** Review B4 follow-up — see `launchStructured`'s doc comment. */
+  async readStructured(
+    afterOffset: number
+  ): Promise<{ readonly text?: string; readonly offset: number; readonly complete: boolean }> {
+    const result = await this.conn.readStructured(this.sessionKey, { afterOffset });
+    return { text: result.text, offset: result.offset, complete: result.complete };
   }
 
   async isAlive(): Promise<boolean> {

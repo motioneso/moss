@@ -48,6 +48,7 @@ describe("module settings scanner", () => {
           {
             id: "fixture.settings",
             label: "Fixture",
+            description: "Configure the fixture module.",
             path: "/settings/modules/fixture",
             scope: "user",
             order: 10,
@@ -67,6 +68,7 @@ describe("module settings scanner", () => {
           {
             id: "declarative.settings",
             label: "Declarative",
+            description: "Configure the declarative module.",
             path: "/settings/modules/declarative",
             scope: "user"
           }
@@ -82,6 +84,7 @@ describe("module settings scanner", () => {
         moduleName: "Declarative",
         id: "declarative.settings",
         label: "Declarative",
+        description: "Configure the declarative module.",
         path: "/settings/modules/declarative",
         scope: "user",
         order: null,
@@ -92,6 +95,7 @@ describe("module settings scanner", () => {
         moduleName: "Fixture",
         id: "fixture.settings",
         label: "Fixture",
+        description: "Configure the fixture module.",
         path: "/settings/modules/fixture",
         scope: "user",
         order: 10,

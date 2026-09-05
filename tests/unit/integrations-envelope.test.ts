@@ -9,6 +9,7 @@ import {
   createCallMemory,
   createIntegrationsActiveModulesResolver,
   createIntegrationsCipher,
+  createResolverCache,
   INTEGRATION_SUMMARY
 } from "@moss/integrations";
 import type { ConnectionRow, DiscoveredTool } from "@moss/integrations";
@@ -66,6 +67,7 @@ async function buildExecute(baseUrl: string, tool: DiscoveredTool) {
     cipher: createIntegrationsCipher(),
     logger: { warn: () => {} },
     callMemory: createCallMemory(),
+    resolverCache: createResolverCache(),
     repository: {
       listConnections: async () => [
         connection({ id: "conn-1", name: "Conn", baseUrl, discoveredTools: [tool] })

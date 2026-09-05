@@ -201,10 +201,29 @@ async function listActions(page: Page): Promise<readonly RecordedAction[]> {
   return ((await response.json()) as { actions: readonly RecordedAction[] }).actions;
 }
 
+// #2164 diagnostic: prove the live actor's own tool list carries the retry tool before the chat
+// turn starts, so a later "Approve button never appeared" failure can't be a missing-declaration
+// question — narrows the failure to the model's decision or the SSE delivery path instead.
+async function requireToolInLiveActorList(page: Page, toolName: string): Promise<void> {
+  const response = await page.request.get("/api/ai/assistant-tools");
+  expect(response.ok(), `assistant-tools -> ${response.status()}`).toBeTruthy();
+  const names = ((await response.json()) as { tools: readonly { name: string }[] }).tools.map(
+    (tool) => tool.name
+  );
+  expect(names, "live actor tool list must carry the retry tool before the chat turn").toContain(
+    toolName
+  );
+}
+
+// #2164 root cause: a dotted internal tool id paired with an imperative "call it exactly
+// once, do not call another tool" instruction and a raw JSON payload reads as an injected
+// command to a healthy model, which then refuses it. The message here must read as an
+// ordinary user request in plain English instead — see the static guard in
+// tests/unit/1909-sports-uat-natural-request.test.ts.
 async function confirmThroughMoss(
   page: Page,
   toolName: string,
-  input: Record<string, unknown>,
+  requestText: string,
   summaryText: RegExp
 ): Promise<void> {
   const before = new Set((await listActions(page)).map((action) => action.id));
@@ -216,21 +235,26 @@ async function confirmThroughMoss(
     { timeout: 300_000 }
   );
   const composer = page.getByRole("textbox", { name: /^Message/ });
-  await composer.fill(
-    toolName === "sports.retrySource"
-      ? `Please retry the sports source with ID ${String(input.sourceId)}.`
-      : `Call ${toolName} exactly once with this JSON input. Do not call another tool: ${JSON.stringify(input)}`
-  );
+  await composer.fill(requestText);
   await composer.press("Enter");
 
   const card = page
     .locator('[role="region"][aria-label="Action request"]')
     .filter({ hasText: summaryText })
     .last();
-  await expect(card.getByRole("button", { name: "Approve" })).toBeVisible({
-    timeout: SOURCE_DEADLINE_MS
-  });
-  await card.getByRole("button", { name: "Approve" }).click();
+  const approveButton = card.getByRole("button", { name: "Approve" });
+  // #2164 r24: a real model can announce an action and then end its turn without taking it.
+  // One plain-English nudge, once, keeps this a real user turn rather than a scripted retry.
+  const NUDGE_WAIT_MS = 60_000;
+  const POST_NUDGE_WAIT_MS = SOURCE_DEADLINE_MS - NUDGE_WAIT_MS;
+  try {
+    await expect(approveButton).toBeVisible({ timeout: NUDGE_WAIT_MS });
+  } catch {
+    await composer.fill("Please go ahead and do that now.");
+    await composer.press("Enter");
+    await expect(approveButton).toBeVisible({ timeout: POST_NUDGE_WAIT_MS });
+  }
+  await approveButton.click();
   const response = await turnSettled;
   expect(response.ok(), `${toolName} chat turn -> ${response.status()}`).toBeTruthy();
   await expect
@@ -242,6 +266,26 @@ async function confirmThroughMoss(
       { timeout: 60_000 }
     )
     .toBe("confirmed");
+}
+
+// #2164 r18: a rebuild-step failure used to leave only the friendly `{ error }` result the
+// gateway logs (#1251 hostile-object rule bars logging the thrown database error itself), with
+// the actual preview candidate the confirm call was built from gone by the time anyone looks.
+// Attaches it to the Playwright report on failure, alongside the run's other retained evidence.
+async function withRebuildEvidence<T>(
+  sourceId: string,
+  preview: PreviewResult,
+  action: () => Promise<T>
+): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    await test.info().attach(`rebuild-candidate-${sourceId}`, {
+      body: Buffer.from(JSON.stringify(preview, null, 2), "utf8"),
+      contentType: "application/json"
+    });
+    throw error;
+  }
 }
 
 function confirmationInput(preview: PreviewResult, extra: Record<string, unknown> = {}) {
@@ -260,6 +304,20 @@ function confirmationInput(preview: PreviewResult, extra: Record<string, unknown
     confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
     targets: preview.candidate.targets.map(({ target, targetUrl }) => ({ target, targetUrl }))
   };
+}
+
+// Spells out the two values the two confirmation steps care about — the confirmation id
+// and the authorization acknowledgement — as ordinary prose, then lists the remaining
+// exact-match fields the schema still requires so the live model can reproduce them.
+function describeConfirmation(preview: PreviewResult, extra: Record<string, unknown> = {}): string {
+  const { confirmationId, authorizationAcknowledgement, ...rest } = confirmationInput(
+    preview,
+    extra
+  );
+  return (
+    `confirmation id ${confirmationId} and authorization acknowledgement ` +
+    `"${authorizationAcknowledgement}", matching these exact preview details: ${JSON.stringify(rest)}`
+  );
 }
 
 test("public publishers reach Sports, Today, recovery, and Moss status (#1909)", async ({
@@ -310,6 +368,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   await bringUpRealModel(page);
   const follows = await createPremierLeagueFollows(page);
   const section = await openSportsSettings(page);
+  await section.getByRole("button", { name: "Add a source" }).click();
   await expect(section.getByLabel("Publication homepage or domain")).toBeVisible();
   await expect(section.getByRole("button", { name: "Check", exact: true })).toBeVisible();
   await expect(
@@ -317,11 +376,13 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   ).toBeVisible();
   await expect(section.getByRole("button", { name: /Rebuild FotMob legacy scrape/ })).toBeVisible();
 
+  await requireToolInLiveActorList(page, "sports.retrySource");
+
   await test.step("Moss Retry recovers a controlled partial target failure", async () => {
     await confirmThroughMoss(
       page,
       "sports.retrySource",
-      { sourceId: failing.id },
+      `One of my sports sources (id ${failing.id}) is showing a partial target failure — please retry it.`,
       new RegExp(`Retry sports source ${failing.id}`)
     );
     const recovered = (await listSources(page)).find((source) => source.id === failing.id);
@@ -344,41 +405,45 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     const preview = await invokeReadTool<PreviewResult>(page, "sports.rebuildSourceRecipe", {
       sourceId: fotmob.id
     });
-    expect(preview).toMatchObject({
-      status: "ok",
-      candidate: { confirmedFetchHosts: expect.arrayContaining(["www.fotmob.com"]) }
+    await withRebuildEvidence(fotmob.id, preview, async () => {
+      expect(preview).toMatchObject({
+        status: "ok",
+        candidate: { confirmedFetchHosts: expect.arrayContaining(["www.fotmob.com"]) }
+      });
+      await confirmThroughMoss(
+        page,
+        "sports.confirmSourceRecipe",
+        `Please go ahead and rebuild the recipe for sports source ${fotmob.id} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: fotmob.id })}.`,
+        new RegExp(`Replace the recipe for sports source ${fotmob.id}`)
+      );
+      const rebuilt = (await listSources(page)).find((source) => source.id === fotmob.id);
+      expect(["feed", "ready"]).toContain(rebuilt?.recipeStatus);
+      expect(rebuilt?.healthReasonCode).toBeNull();
+      expect(
+        rebuilt?.assignments.every((assignment) => assignment.previewStatus === "verified")
+      ).toBe(true);
     });
-    await confirmThroughMoss(
-      page,
-      "sports.confirmSourceRecipe",
-      confirmationInput(preview, { sourceId: fotmob.id }),
-      new RegExp(`Replace the recipe for sports source ${fotmob.id}`)
-    );
-    const rebuilt = (await listSources(page)).find((source) => source.id === fotmob.id);
-    expect(["feed", "ready"]).toContain(rebuilt?.recipeStatus);
-    expect(rebuilt?.healthReasonCode).toBeNull();
-    expect(
-      rebuilt?.assignments.every((assignment) => assignment.previewStatus === "verified")
-    ).toBe(true);
   });
 
   await test.step("Moss rebuilds and confirms a drifted recipe", async () => {
     const preview = await invokeReadTool<PreviewResult>(page, "sports.rebuildSourceRecipe", {
       sourceId: drift.id
     });
-    expect(preview.candidate?.confirmedFetchHosts).toContain(DRIFT_FIXTURE_DOMAIN);
-    await confirmThroughMoss(
-      page,
-      "sports.confirmSourceRecipe",
-      confirmationInput(preview, { sourceId: drift.id }),
-      new RegExp(`Replace the recipe for sports source ${drift.id}`)
-    );
-    const rebuilt = (await listSources(page)).find((source) => source.id === drift.id);
-    expect(rebuilt?.recipeStatus).toBe("feed");
-    expect(rebuilt?.healthReasonCode).toBeNull();
-    expect(
-      rebuilt?.assignments.every((assignment) => assignment.previewStatus === "verified")
-    ).toBe(true);
+    await withRebuildEvidence(drift.id, preview, async () => {
+      expect(preview.candidate?.confirmedFetchHosts).toContain(DRIFT_FIXTURE_DOMAIN);
+      await confirmThroughMoss(
+        page,
+        "sports.confirmSourceRecipe",
+        `Please go ahead and rebuild the recipe for sports source ${drift.id} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: drift.id })}.`,
+        new RegExp(`Replace the recipe for sports source ${drift.id}`)
+      );
+      const rebuilt = (await listSources(page)).find((source) => source.id === drift.id);
+      expect(rebuilt?.recipeStatus).toBe("feed");
+      expect(rebuilt?.healthReasonCode).toBeNull();
+      expect(
+        rebuilt?.assignments.every((assignment) => assignment.previewStatus === "verified")
+      ).toBe(true);
+    });
   });
 
   const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
@@ -393,7 +458,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     await confirmThroughMoss(
       page,
       "sports.confirmSource",
-      confirmationInput(preview),
+      `Please go ahead and add the sports source you just previewed, using ${describeConfirmation(preview)}.`,
       /Add sports source/
     );
     const created = (await listSources(page)).find(
@@ -412,7 +477,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     await confirmThroughMoss(
       page,
       "sports.confirmSourceAssignments",
-      confirmationInput(preview, { sourceId: mirroredSourceId }),
+      `Please go ahead and replace the assignments for sports source ${mirroredSourceId} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: mirroredSourceId })}.`,
       new RegExp(`Replace assignments for sports source ${mirroredSourceId}`)
     );
     const replaced = (await listSources(page)).find((source) => source.id === mirroredSourceId);

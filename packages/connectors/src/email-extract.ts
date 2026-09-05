@@ -2,6 +2,19 @@ import type { GmailMessageFull, GmailPayloadPart } from "./google-api-client.js"
 import type { StructuredRunPriority, StructuredRunScope, StructuredTelemetry } from "@moss/ai";
 import { resolveMossEnv } from "@moss/db";
 
+import {
+  looksLikeOneTimeCodeEmail,
+  signInCodeDecision,
+  type OneTimeCodeEmailInput
+} from "./email-otp-rule.js";
+
+export {
+  looksLikeOneTimeCodeEmail,
+  signInCodeDecision,
+  type OneTimeCodeEmailInput,
+  type SignInCodeDecision
+} from "./email-otp-rule.js";
+
 /** Max decoded body length sent to the LLM (bounded to protect prompt limits, spec risk #6). */
 export const MAX_BODY_CHARS = 20_000;
 
@@ -181,6 +194,17 @@ export interface EmailSignals {
   readonly importance?: "low" | "normal" | "high";
   readonly confidence?: number;
   readonly truncated?: boolean;
+  /** Set when a message was recognized as handing over a sign-in code: either by the
+   * deterministic rule, which skips the model call entirely, or by the model's own yes/no
+   * answer when that rule was unsure. No `actionability` is ever attached to a skipped
+   * message, so it is
+   * already invisible to the Today briefing filter and to suggested-task creation, both of
+   * which require an inferred subject that a skipped message never gets. */
+  readonly skipped?: "otp";
+}
+
+export function otpSkippedResult(): EmailExtractResult {
+  return { summary: null, signals: { skipped: "otp", confidence: 0 } };
 }
 
 export interface EmailExtractResult {
@@ -223,7 +247,7 @@ export interface EmailExtractDeps {
 }
 
 export interface EmailExtractOptions {
-  /** Per-LLM-call timeout in ms (bounds sync latency; default from env, then 20s). */
+  /** Per-LLM-call timeout in ms (bounds sync latency; default from env, then DEFAULT_EMAIL_LLM_TIMEOUT_MS). */
   readonly callTimeoutMs?: number;
   /** Metadata-only telemetry factory; the worker supplies job and batch attribution. */
   readonly telemetry?: (batchIndex: number, batchSize: number) => StructuredTelemetry;
@@ -234,6 +258,14 @@ export interface EmailExtractOptions {
 
 export const EMAIL_EXTRACT_BATCH_MAX_ITEMS = 48;
 export const EMAIL_EXTRACT_BATCH_MAX_PROMPT_BYTES = 48_000;
+
+/**
+ * Default per-call budget (ms) when `JARVIS_EMAIL_LLM_TIMEOUT_MS` is unset. The one-shot engine
+ * that now serves every structured email-extraction call (review B4) can take longer than 20
+ * seconds to start a fresh process and answer, so a 20-second budget timed out every batch. 120
+ * seconds gives that engine room to start and reply under normal load.
+ */
+export const DEFAULT_EMAIL_LLM_TIMEOUT_MS = 120_000;
 
 /** Reject a chat call that exceeds the budget so one slow model can't stall the whole sync. */
 async function withTimeout<T>(
@@ -268,7 +300,8 @@ async function withTimeout<T>(
 const EMAIL_TRIAGE_INSTRUCTIONS = [
   "You are an email triage assistant. Read the email and reply with one JSON object only:",
   '{ category: "needs_reply"|"needs_action"|"time_sensitive_info"|"waiting_on_someone"|"fyi"|"noise"|"unknown",',
-  "  confidence: number, reason?: string, action?: string, dueDate?: string }",
+  "  confidence: number, reason?: string, action?: string, dueDate?: string,",
+  "  deliversSignInCode: boolean }",
   "confidence is 0..1. Use ISO dates. Keep reason and action concise.",
   "Actionability rules:",
   "- needs_reply: a real person is waiting on the user's answer. NEVER use it for marketing,",
@@ -280,7 +313,11 @@ const EMAIL_TRIAGE_INSTRUCTIONS = [
   "- fyi: informational, no urgency (receipts, confirmations, status updates).",
   "- noise: marketing, promotions, newsletters, social notifications. No suggestedTasks.",
   "- unknown: only when genuinely unclassifiable.",
-  "reason must be one short sentence."
+  "reason must be one short sentence.",
+  "deliversSignInCode: true only when this message hands the recipient a fresh sign-in,",
+  "verification or two-step code to type in. False for help requests, replies, forwards,",
+  "error reports, policy notices, and door, booking or discount codes.",
+  "Never repeat the code itself anywhere in your answer."
 ].join("\n");
 
 function promptInput(parsed: ParsedEmail): string {
@@ -600,6 +637,24 @@ export function partitionEmailExtractionBatches(messages: readonly ParsedEmail[]
   return batches;
 }
 
+/**
+ * True when the message was one the deterministic rule could not settle and the model answered
+ * that it really does hand a sign-in code over. The answer is read here and nowhere else: it is
+ * never stored in the signals and never written to a log.
+ */
+function modelSaysItHandsOverACode(replyText: string, message: OneTimeCodeEmailInput): boolean {
+  if (signInCodeDecision(message) !== "unclear") return false;
+  try {
+    const start = replyText.indexOf("{");
+    const end = replyText.lastIndexOf("}");
+    if (start < 0 || end < start) return false;
+    const obj = JSON.parse(replyText.slice(start, end + 1)) as Record<string, unknown>;
+    return obj.deliversSignInCode === true;
+  } catch {
+    return false;
+  }
+}
+
 function retryableReason(error: unknown): EmailExtractRetryableReason {
   if (error instanceof EmailExtractRetryableError) return error.reason;
   const name = error instanceof Error ? error.name : "";
@@ -625,10 +680,28 @@ export async function extractEmailSignalsBatch(
 ): Promise<EmailExtractResult[]> {
   const timeoutMs =
     options.callTimeoutMs ??
-    Number(resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ?? "20000");
+    Number(
+      resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ??
+        String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
+    );
+  // Callers are expected to have already routed one-time-code messages to otpSkippedResult()
+  // themselves (see google-sync-phases.ts) rather than pass them in here: this function's
+  // closeScope option finalizes a scoped CLI session keyed to the *call*, and a call whose
+  // only message got silently skipped would never fire that close and would leak the session.
+  const results: EmailExtractResult[] = new Array(messages.length);
+  const toProcess: ParsedEmail[] = [];
+  const toProcessIndexes: number[] = [];
+  messages.forEach((message, index) => {
+    if (looksLikeOneTimeCodeEmail(message)) {
+      results[index] = otpSkippedResult();
+    } else {
+      toProcess.push(message);
+      toProcessIndexes.push(index);
+    }
+  });
   const extracted: EmailExtractResult[] = [];
 
-  for (const [batchIndex, batch] of partitionEmailExtractionBatches(messages).entries()) {
+  for (const [batchIndex, batch] of partitionEmailExtractionBatches(toProcess).entries()) {
     const telemetry = options.telemetry?.(batchIndex, batch.length);
     try {
       if (batch.length === 1) {
@@ -647,7 +720,12 @@ export async function extractEmailSignalsBatch(
           timeoutMs,
           () => telemetry?.emit({ kind: "timeout", priority: options.priority })
         );
-        extracted.push(sanitizeExtractResult(message, parseBatchSignals(reply.text, message)));
+        const parsedReply = parseBatchSignals(reply.text, message);
+        extracted.push(
+          modelSaysItHandsOverACode(reply.text, message)
+            ? otpSkippedResult()
+            : sanitizeExtractResult(message, parsedReply)
+        );
         continue;
       }
       const reply = await withTimeout(
@@ -686,11 +764,13 @@ export async function extractEmailSignalsBatch(
       }
       for (let index = 0; index < batch.length; index += 1) {
         if (!byIndex.has(index)) throw new Error("email-extract-batch-result-index");
+        const message = batch[index]!;
+        const answer = JSON.stringify(byIndex.get(index));
+        const parsedReply = parseBatchSignals(answer, message);
         extracted.push(
-          sanitizeExtractResult(
-            batch[index]!,
-            parseBatchSignals(JSON.stringify(byIndex.get(index)), batch[index]!)
-          )
+          modelSaysItHandsOverACode(answer, message)
+            ? otpSkippedResult()
+            : sanitizeExtractResult(message, parsedReply)
         );
       }
     } catch (error) {
@@ -698,7 +778,10 @@ export async function extractEmailSignalsBatch(
       throw new EmailExtractRetryableError(retryableReason(error));
     }
   }
-  return extracted;
+  toProcessIndexes.forEach((originalIndex, i) => {
+    results[originalIndex] = extracted[i]!;
+  });
+  return results;
 }
 
 export async function extractEmailSignals(
@@ -706,14 +789,20 @@ export async function extractEmailSignals(
   deps: EmailExtractDeps,
   options: EmailExtractOptions = {}
 ): Promise<EmailExtractResult> {
+  if (looksLikeOneTimeCodeEmail(parsed)) return otpSkippedResult();
+
   const timeoutMs =
     options.callTimeoutMs ??
-    Number(resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ?? "20000");
+    Number(
+      resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ??
+        String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
+    );
 
   const prompt = buildPrompt(parsed);
   let result: EmailExtractResult;
   try {
     const reply = await withTimeout((signal) => deps.runChat(prompt, signal), timeoutMs);
+    if (modelSaysItHandsOverACode(reply.text, parsed)) return otpSkippedResult();
     result = safeParseSignals(reply.text, parsed);
   } catch (error) {
     if (error instanceof EmailExtractNeedsConfigurationError) throw error;

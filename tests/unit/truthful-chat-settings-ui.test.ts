@@ -2,20 +2,20 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("truthful chat settings UI", () => {
-  it("does not expose fake chat controls", () => {
-    const source = readFileSync("apps/web/src/settings/settings-module-subviews.tsx", "utf8");
+  it("does not expose fake chat controls and folds response style into Assistant & AI", () => {
+    const subviewsSource = readFileSync(
+      "apps/web/src/settings/settings-module-subviews.tsx",
+      "utf8"
+    );
+    const aiSource = readFileSync("apps/web/src/settings/settings-ai-pane.tsx", "utf8");
 
-    expect(source).not.toContain("Chat settings aren't saved or applied yet.");
-    expect(source).not.toContain("Stream responses");
-    expect(source).not.toContain("Suggested actions");
-    expect(source).not.toContain("Remember across conversations");
-    expect(source).toContain("Response style");
-    // Voice input (#738) is real now, not a stub — Chat settings reflects live
-    // capability-route status (configured+healthy) and links out to Assistant & AI to set it
-    // up, rather than claiming a fake "Coming soon".
-    expect(source).not.toContain("Coming soon");
-    expect(source).toContain('lookupAiCapabilityRoute("transcription")');
-    expect(source).toContain("Assistant & AI");
+    expect(subviewsSource).not.toContain("ChatSettingsView");
+    expect(aiSource).not.toContain("Chat settings aren't saved or applied yet.");
+    expect(aiSource).not.toContain("Stream responses");
+    expect(aiSource).not.toContain("Suggested actions");
+    expect(aiSource).not.toContain("Remember across conversations");
+    expect(aiSource).toContain("Response style");
+    expect(aiSource).not.toContain("Coming soon");
   });
 
   it("uses the real chat settings API client", () => {

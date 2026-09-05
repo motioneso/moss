@@ -1,4 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Note, PaneHead } from "@moss/settings-ui";
 import type {
@@ -65,16 +66,19 @@ function StoryPreferencesSection() {
     (item) => item.targetKind === "sports_story"
   );
 
+  // Nothing to manage yet: keep the whole section out of the pane (Ben, 2026-09-03).
+  if (!feedbackQuery.isError && feedback.length === 0) {
+    return null;
+  }
+
   return (
     <section className="sp-feedback-settings" aria-label="Story preferences">
-      <h2 className="sp-feedback-settings__title">Story preferences</h2>
-      <p className="sp-feedback-settings__note">
+      <h2 className="jds-section-title sp-feedback-settings__title">Story preferences</h2>
+      <p className="jds-section-sub sp-feedback-settings__note">
         A major story about a subject you asked to see less of may still appear.
       </p>
       {feedbackQuery.isError ? <Note>Could not load story preferences. Try again.</Note> : null}
-      {!feedbackQuery.isError && feedback.length === 0 ? (
-        <Note>No saved story preferences.</Note>
-      ) : (
+      {feedbackQuery.isError ? null : (
         <div className="sp-feedback-settings__list">
           {feedback.map((item) => {
             const headline = metadataText(item, "headline") ?? "Saved story";
@@ -279,7 +283,9 @@ export function followControlState(
   if (pending === "unfollow") return { visible: "Unfollowing…", ariaLabel: "Unfollowing…" };
   const followLabel =
     variant === "league" ? `Follow all of ${subjectLabel}` : `Follow ${subjectLabel}`;
-  if (!active) return { visible: followLabel, ariaLabel: followLabel };
+  // Team chips carry no "Follow X" text (Ben, 2026-09-03): the chip itself is the control and
+  // the accessible name still says it. The "Following" state text stays.
+  if (!active) return { visible: variant === "team" ? "" : followLabel, ariaLabel: followLabel };
   if (variant === "team") return { visible: "Following", ariaLabel: `Unfollow ${subjectLabel}` };
   return {
     visible: `Following all of ${subjectLabel}`,
@@ -502,7 +508,7 @@ export function SearchResults(props: {
                   <PickCrest name={team.name} shortName={team.shortName} crestUrl={team.crestUrl} />
                   <span className="sp-team__name">{team.shortName || team.name}</span>
                 </span>
-                <span className="sp-team__state">{state.visible}</span>
+                {state.visible ? <span className="sp-team__state">{state.visible}</span> : null}
               </button>
               <ActionError
                 actionState={props.actionState}
@@ -599,7 +605,12 @@ export function BrowseGroups(props: {
                     aria-expanded={expanded}
                     onClick={() => props.onExpand(expanded ? null : competition.competitionKey)}
                   >
-                    {competition.label}
+                    {expanded ? (
+                      <ChevronDown size={16} aria-hidden="true" />
+                    ) : (
+                      <ChevronRight size={16} aria-hidden="true" />
+                    )}
+                    <span>{competition.label}</span>
                   </button>
                   <span className="sp-action-target">
                     <button
@@ -617,7 +628,16 @@ export function BrowseGroups(props: {
                         )
                       }
                     >
-                      <span className="sp-whole__lbl">{wholeState.visible}</span>
+                      <span className="sp-whole__lbl">
+                        {/* The league name already heads the row, so the button reads
+                            "Follow all" and every row's button lines up at one width
+                            (Ben, 2026-09-03). The aria-label keeps the full name. */}
+                        {wholePendingHere !== null
+                          ? wholeState.visible
+                          : wholeActive
+                            ? "Following all"
+                            : "Follow all"}
+                      </span>
                     </button>
                     <ActionError
                       actionState={props.actionState}
@@ -682,7 +702,9 @@ export function BrowseGroups(props: {
                                 />
                                 <span className="sp-team__name">{team.shortName || team.name}</span>
                               </span>
-                              <span className="sp-team__state">{state.visible}</span>
+                              {state.visible ? (
+                                <span className="sp-team__state">{state.visible}</span>
+                              ) : null}
                             </button>
                             <ActionError
                               actionState={props.actionState}
@@ -823,9 +845,14 @@ export default function SportsSettings() {
     <>
       <PaneHead
         title="Sports"
-        desc="Follow competitions or teams to see them on your Sports page and in briefings."
+        desc="Choose what you follow, where your sports news comes from, and which standings you can browse."
       />
-      <StandingsLeaguesSection competitions={competitions} />
+      <div className="sp-follow__head">
+        <h2 className="jds-section-title">Following</h2>
+        <p className="jds-section-sub">
+          Follow competitions or teams to see them on your Sports page and in briefings.
+        </p>
+      </div>
       <FollowedSummary
         follows={follows}
         competitionsByKey={competitionsByKey}
@@ -866,6 +893,11 @@ export default function SportsSettings() {
             aria-controls="sp-browse-panel"
             onClick={() => setBrowseOpen((open) => !open)}
           >
+            {browseOpen ? (
+              <ChevronDown size={16} aria-hidden="true" />
+            ) : (
+              <ChevronRight size={16} aria-hidden="true" />
+            )}
             Browse leagues
           </button>
           {browseOpen ? (
@@ -899,6 +931,7 @@ export default function SportsSettings() {
         teamsByCompetition={teamsByCompetition}
       />
       <StoryPreferencesSection />
+      <StandingsLeaguesSection competitions={competitions} />
     </>
   );
 }

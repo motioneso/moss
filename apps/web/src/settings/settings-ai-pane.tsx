@@ -2,15 +2,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, PencilLine, GitCommitHorizontal, NotebookText, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import type { ChatResponseStyle } from "@moss/shared";
+
 import { getNotesSource } from "../api/notes-client";
 import {
   getChatArchiveSettings,
   getChatModelOverrideSettings,
+  getChatSettings,
   getYoloSettings,
   getPersonaSettings,
   previewPersona,
   putChatArchiveSettings,
   putChatModelOverride,
+  putChatSettings,
   putYoloSelf,
   putPersonaSettings
 } from "../api/client";
@@ -45,6 +49,13 @@ import {
 import { Button } from "@moss/ui";
 
 type PersonaState = PersonaDraft;
+
+const RESPONSE_STYLE_EXAMPLE_HINT: Record<ChatResponseStyle, string> = {
+  concise: 'Concise example: "Yes, the meeting moved to 3pm."',
+  balanced: 'Balanced example: "Yes, the meeting moved to 3pm because Sam had a conflict."',
+  detailed:
+    'Detailed example: "Yes, the meeting moved to 3pm because Sam had a conflict. Let me know if that new time doesn\'t work for you."'
+};
 
 const DEFAULT_DESCRIPTION =
   "Be direct and a little dry: skip the pep talks. Hold me to commitments I've actually made, but ease off when I've had a rough day. Lead with what matters and keep it short.";
@@ -85,6 +96,17 @@ function Persona({ who }: { readonly who: string }) {
     queryFn: getPersonaSettings,
     retry: false
   });
+  const chatSettingsQuery = useQuery({
+    queryKey: queryKeys.chat.settings,
+    queryFn: getChatSettings
+  });
+  const chatSettingsMutation = useMutation({
+    mutationFn: putChatSettings,
+    onSuccess: (data) => queryClient.setQueryData(queryKeys.chat.settings, data),
+    onError: (error) => toast(readError(error))
+  });
+  const responseStyle = chatSettingsQuery.data?.chat.responseStyle ?? "balanced";
+  const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1);
   useEffect(() => {
     if (!personaQuery.data) return;
     if (receivedInitialSnapshot.current) return;
@@ -160,7 +182,7 @@ function Persona({ who }: { readonly who: string }) {
           aria-label="Assistant name"
         />
       </Field>
-      <Field label="How to set your persona" hint="Switching methods keeps your current draft.">
+      <Field label="How to set your persona">
         <Segmented
           ariaLabel="How to set your persona"
           value={mode}
@@ -220,6 +242,18 @@ function Persona({ who }: { readonly who: string }) {
           />
         </>
       )}
+      <Choice
+        key={responseStyle}
+        label="Response style"
+        hint={RESPONSE_STYLE_EXAMPLE_HINT[responseStyle]}
+        value={cap(responseStyle)}
+        options={["Concise", "Balanced", "Detailed"]}
+        onChange={(v) =>
+          chatSettingsMutation.mutate({
+            chat: { responseStyle: v.toLowerCase() as ChatResponseStyle }
+          })
+        }
+      />
 
       {previewReply ? (
         <div className="ppv">
@@ -350,7 +384,7 @@ function ChatModel() {
           )}
           <Note>
             Providers, credentials and which model handles each kind of work live in{" "}
-            <b>Admin → Assistant &amp; AI</b>.
+            <b>Admin → Assistant &amp; AI</b>. A transcription model enables the microphone in chat.
           </Note>
         </>
       ) : (

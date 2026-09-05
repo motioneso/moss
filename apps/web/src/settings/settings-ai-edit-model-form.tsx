@@ -1,13 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@moss/ui";
-import { updateAiModel } from "../api/client";
-import { queryKeys } from "../api/query-keys";
-import { readError } from "./settings-types";
-import { useFeedback } from "./settings-feedback";
-import { Field, Segmented } from "./settings-ui";
+import { createAiModel, updateAiModel } from "../api/client.js";
+import { queryKeys } from "../api/query-keys.js";
+import { readError } from "./settings-types.js";
+import { useFeedback } from "./settings-feedback.js";
+import { Field, Segmented } from "./settings-ui.js";
 import {
   AI_MODEL_CAPABILITIES,
   type AiConfiguredModelDto,
@@ -17,7 +17,7 @@ import {
 
 const ALL_CAPABILITIES: readonly AiModelCapability[] = AI_MODEL_CAPABILITIES;
 
-const CAP_SHORT: Record<AiModelCapability, string> = {
+export const CAP_SHORT: Record<AiModelCapability, string> = {
   chat: "Chat",
   "tool-use": "Tools",
   json: "JSON",
@@ -26,40 +26,50 @@ const CAP_SHORT: Record<AiModelCapability, string> = {
   transcription: "Voice"
 };
 
-const MODEL_TIERS: readonly AiModelTier[] = ["reasoning", "interactive", "economy"];
+export const TIERS: Record<AiModelTier, { label: string; hint: string }> = {
+  reasoning: { label: "Reasoning", hint: "Deepest and slowest. Hard planning and judgment." },
+  interactive: { label: "Interactive", hint: "Fast and balanced. The everyday default." },
+  economy: { label: "Economy", hint: "Cheapest and quickest. Light, high-volume work." }
+};
 
-export function EditModelForm(props: {
-  readonly model: AiConfiguredModelDto;
+export const MODEL_TIERS: readonly AiModelTier[] = ["reasoning", "interactive", "economy"];
+
+export interface ModelFormValues {
+  readonly providerModelId: string;
+  readonly displayName: string;
+  readonly tier: AiModelTier;
+  readonly capabilities: readonly AiModelCapability[];
+}
+
+/**
+ * The one model form (Model id, Display name, Tier, Capabilities) behind both the inline edit
+ * (B513) and #2208's "Add model". The caller owns the request; this owns the fields.
+ */
+function ModelForm(props: {
+  readonly initial: ModelFormValues;
+  readonly submitLabel: string;
+  readonly pendingLabel: string;
+  readonly pending: boolean;
+  readonly onSubmit: (values: ModelFormValues) => void;
   readonly onClose: () => void;
 }) {
-  const queryClient = useQueryClient();
-  const { toast } = useFeedback();
-  const { model } = props;
-
-  const [providerModelId, setProviderModelId] = useState(model.providerModelId ?? "");
-  const [displayName, setDisplayName] = useState(model.displayName);
-  const [tier, setTier] = useState<AiModelTier>(model.tier);
+  const [providerModelId, setProviderModelId] = useState(props.initial.providerModelId);
+  const [displayName, setDisplayName] = useState(props.initial.displayName);
+  const [tier, setTier] = useState<AiModelTier>(props.initial.tier);
   const [capabilities, setCapabilities] = useState<readonly AiModelCapability[]>(
-    model.capabilities
+    props.initial.capabilities
   );
-
-  const editMutation = useMutation({
-    mutationFn: () => updateAiModel(model.id, { providerModelId, displayName, tier, capabilities }),
-    onSuccess: () => {
-      void Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.ai.models }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.ai.capabilities })
-      ]);
-      toast("Model updated", { icon: <Pencil size={17} /> });
-      props.onClose();
-    },
-    onError: (error) => toast(readError(error), { tone: "drift" })
-  });
+  const valid = providerModelId.trim() !== "" && displayName.trim() !== "";
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!providerModelId.trim() || !displayName.trim()) return;
-    editMutation.mutate();
+    if (!valid) return;
+    props.onSubmit({
+      providerModelId: providerModelId.trim(),
+      displayName: displayName.trim(),
+      tier,
+      capabilities
+    });
   };
 
   return (
@@ -105,17 +115,93 @@ export function EditModelForm(props: {
         ))}
       </div>
       <div className="ai-model-form__acts">
-        <Button
-          type="submit"
-          size="sm"
-          disabled={editMutation.isPending || !providerModelId.trim() || !displayName.trim()}
-        >
-          {editMutation.isPending ? "Saving…" : "Save"}
+        <Button type="submit" size="sm" disabled={props.pending || !valid}>
+          {props.pending ? props.pendingLabel : props.submitLabel}
         </Button>
         <Button variant="quiet" size="sm" onClick={props.onClose}>
           Cancel
         </Button>
       </div>
     </form>
+  );
+}
+
+export function EditModelForm(props: {
+  readonly model: AiConfiguredModelDto;
+  readonly onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useFeedback();
+  const { model } = props;
+
+  const editMutation = useMutation({
+    mutationFn: (values: ModelFormValues) => updateAiModel(model.id, values),
+    onSuccess: () => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.ai.models }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.ai.capabilities })
+      ]);
+      toast("Model updated", { icon: <Pencil size={17} /> });
+      props.onClose();
+    },
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
+
+  return (
+    <ModelForm
+      initial={{
+        providerModelId: model.providerModelId ?? "",
+        displayName: model.displayName,
+        tier: model.tier,
+        capabilities: model.capabilities
+      }}
+      submitLabel="Save"
+      pendingLabel="Saving…"
+      pending={editMutation.isPending}
+      onSubmit={(values) => editMutation.mutate(values)}
+      onClose={props.onClose}
+    />
+  );
+}
+
+/**
+ * #2208: add a model by hand under one provider. The row is stored as `manual`, so a later
+ * "Refresh models" or re-login never removes it.
+ */
+export function AddModelForm(props: {
+  readonly providerConfigId: string;
+  readonly onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useFeedback();
+
+  const addMutation = useMutation({
+    mutationFn: (values: ModelFormValues) =>
+      createAiModel({ providerConfigId: props.providerConfigId, ...values }),
+    onSuccess: () => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.ai.models }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.ai.capabilities })
+      ]);
+      toast("Model added", { icon: <Plus size={17} /> });
+      props.onClose();
+    },
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
+
+  return (
+    <ModelForm
+      initial={{
+        providerModelId: "",
+        displayName: "",
+        tier: "interactive",
+        capabilities: ["chat"]
+      }}
+      submitLabel="Add model"
+      pendingLabel="Adding…"
+      pending={addMutation.isPending}
+      onSubmit={(values) => addMutation.mutate(values)}
+      onClose={props.onClose}
+    />
   );
 }

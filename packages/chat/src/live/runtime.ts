@@ -7,7 +7,7 @@
  * fake engine (no real tmux / `claude` binary). Everything else is real.
  */
 import { AiRepository, createRealTmuxIo, type Multiplexer, type ProviderKind } from "@moss/ai";
-import { extractTimezone } from "../locale-utils.js";
+import { resolveEffectiveTimezone } from "../locale-utils.js";
 import { DEFAULT_CHAT_SURFACE, type ChatSurface } from "./chat-surface.js";
 import {
   resolveMossEnv,
@@ -116,7 +116,12 @@ function composeMossPersona(surface: ChatSurface): string {
 export type ChatEngineFactory = (
   provider: ProviderKind,
   sessionKey: string,
-  opts?: { readonly executionMode?: AiProviderExecutionMode }
+  opts?: {
+    readonly executionMode?: AiProviderExecutionMode;
+    /** B4: set only by a structured caller (`CliStructuredAdapter`). See
+     *  `ChatEngineSelectionOpts.needsStructuredOutput` in engine-selection.ts. */
+    readonly needsStructuredOutput?: boolean;
+  }
 ) => CliChatEngine | Promise<CliChatEngine>;
 
 export interface PersonaPreferencesPort {
@@ -202,6 +207,7 @@ export function createRealEngineFactory(
       mux: opts.mux,
       homeBase,
       executionMode: engineOpts?.executionMode,
+      needsStructuredOutput: engineOpts?.needsStructuredOutput,
       // #1557 Phase 1: read from `chat.persistent_runtime.enabled` by the caller
       // (`chat-multiplexer.ts`'s `resolveChatEngineFactory`, the host-dev boot path). The
       // cli-runner RPC root (`engine-host.ts`) never reaches this factory — it calls
@@ -265,7 +271,8 @@ function createRpcEngineFactory(opts: {
       sessionKey,
       connection,
       engineOpts?.executionMode,
-      opts.readPersistentRuntimeConfig
+      opts.readPersistentRuntimeConfig,
+      engineOpts?.needsStructuredOutput
     );
   return { factory, connection };
 }
@@ -386,6 +393,18 @@ export interface CreateChatSessionRuntimeDeps {
      * orphaned mux sessions are reapable by name even when the `sessions` Map is empty (api restart).
      */
     readonly listSessionIds?: () => string[];
+    /**
+     * #2159 — resolves once this token's first MCP tools/list has been observed (or `false`
+     * after a bounded timeout). Wraps `SessionTokenRegistry.waitForToolsListObserved`.
+     * Forwarded to the manager as `waitForToolsListReady`. Absent ⇒ no readiness gate.
+     */
+    readonly waitForReady?: (token: string) => Promise<boolean>;
+    /**
+     * #2164 r21 — reads a token's current tools/list observation count. Wraps
+     * `SessionTokenRegistry.getToolsListObservationCount`. Forwarded to the manager as
+     * `getToolsListObservationCount`. Absent ⇒ the per-turn readiness guard does not run.
+     */
+    readonly getToolsListObservationCount?: (token: string) => number;
   };
   /**
    * #342 (§3.5 boot-time fork) — when set, `createChatSessionRuntime` selects the engine factory ITSELF
@@ -556,6 +575,8 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     touchMcpToken: deps.mcpTokenLifecycle?.touch,
     reconcileMcpTokens: deps.mcpTokenLifecycle?.reconcile,
     listMcpTokenSessionIds: deps.mcpTokenLifecycle?.listSessionIds,
+    waitForToolsListReady: deps.mcpTokenLifecycle?.waitForReady,
+    getToolsListObservationCount: deps.mcpTokenLifecycle?.getToolsListObservationCount,
     // §4.5 kill-by-mux-name for an api-unknown orphan: route through the guard-bypassing reconcile
     // driver while a reconcile is in flight (the only path that calls this), falling back to the public
     // connection method otherwise. Undefined on the in-process/host path (no separate cli-runner holds
@@ -700,10 +721,9 @@ export async function resolveChatPersona(
     userName
   });
 
-  const timezone = extractTimezone(localeRaw);
-  const tzBlock = timezone
-    ? `User's local timezone: ${timezone}. Always display dates and times in this timezone.`
-    : null;
+  // #2157: same effective zone as Settings and chat.getCurrentTime, even before a locale is saved.
+  const timezone = resolveEffectiveTimezone(localeRaw);
+  const tzBlock = `User's local timezone: ${timezone}. Always display dates and times in this timezone.`;
   const chatSettings = normalizeChatSettings(chatRaw);
   const responseStyleBlock = renderChatResponseStyleInstruction(chatSettings.responseStyle);
 

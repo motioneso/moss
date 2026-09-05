@@ -103,7 +103,8 @@ export const sportsModuleManifest = {
       "sql/0191_sports_public_source_runtime.sql",
       "sql/0192_sports_legacy_feed_assignments_verified.sql",
       "sql/0193_sports_legacy_feed_assignment_repair.sql",
-      "sql/0196_sports_news_source_scopes.sql"
+      "sql/0196_sports_news_source_scopes.sql",
+      "sql/0213_sports_reddit_sources.sql"
     ],
     migrationDirectories: ["packages/sports/sql"],
     ownedTables: [
@@ -115,6 +116,33 @@ export const sportsModuleManifest = {
       "app.sports_headline_prefs"
     ]
   },
+  features: [
+    {
+      id: "sports.source_icons",
+      description:
+        "Each custom news source in Sports settings shows its own icon next to its name: a publication's favicon. Subreddits and any source without a usable icon show a neutral newspaper symbol instead."
+    },
+    {
+      id: "sports.subreddit_sources",
+      description:
+        "The Add a source box in Sports settings also accepts a subreddit (r/nfl or a reddit.com link). Posts that link out to articles become headlines credited to the real publisher; self posts, media, stickied posts, and crossposts are skipped."
+    },
+    {
+      id: "sports.story_feedback",
+      description:
+        "Rate a sports story with More like this or Less like this from the dots that appear in its top-right corner while it is hovered or focused, on Today and on Sports. Less like this asks for a reason and hides the story."
+    },
+    {
+      id: "sports.result_scorers",
+      description:
+        "A finished soccer or hockey game on Today and Sports shows home scorers, home logo, score, away logo, away scorers, home on the left. Soccer scorers carry goal minutes, as in Isak 6, 8; hockey has none and may list fewer names than goals."
+    },
+    {
+      id: "sports.source_photos",
+      description:
+        "Stories from your own sources show a photo when the source's feed supplies one, or when the article page offers the picture it uses for sharing."
+    }
+  ],
   navigation: [
     {
       id: "sports",
@@ -130,7 +158,8 @@ export const sportsModuleManifest = {
     {
       id: "sports.follows",
       label: "Sports",
-      description: "Choose the teams and leagues shown in Sports.",
+      description:
+        "Choose the teams and leagues shown in Sports, and add custom news sources: a publication's homepage or a subreddit such as r/nfl.",
       path: "/settings/modules/sports",
       scope: "user",
       order: 35,
@@ -157,7 +186,7 @@ export const sportsModuleManifest = {
       id: "sports.sources",
       label: "Manage custom sports news sources",
       description:
-        "Add, assign, and remove the active actor's own custom public news sources for sports.",
+        "Add, assign, and remove the active actor's own custom public news sources for sports, including publications and subreddits.",
       scope: "user",
       actions: ["create", "update", "delete"]
     }
@@ -290,6 +319,16 @@ export const sportsModuleManifest = {
       path: "/api/sports/sources/:id",
       responseSchema: deleteSportsCustomSourceSchema,
       permissionId: "sports.sources"
+    },
+    {
+      method: "GET",
+      path: "/api/sports/sources/:sourceId/icon",
+      permissionId: "sports.view"
+    },
+    {
+      method: "GET",
+      path: "/api/sports/headlines/:headlineId/photo",
+      permissionId: "sports.view"
     }
   ],
   assistantActionFamilies: [

@@ -4,17 +4,16 @@ import { assertDataContextDb } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 import type { ToolExecute, ToolResult } from "@moss/module-sdk";
 import { PreferencesRepository } from "@moss/structured-state";
-import type { LocaleDateFormat, LocaleSettingsDto } from "@moss/shared";
+import {
+  DEFAULT_LOCALE_SETTINGS,
+  type LocaleDateFormat,
+  type LocaleSettingsDto
+} from "@moss/shared";
 
 import { settingsUndoStack } from "./undo-stack.js";
 
 // Matches locale-routes.ts's LOCALE_PREFERENCE_KEY exactly — both read/write the same preference row.
 const LOCALE_PREFERENCE_KEY = "locale";
-const DEFAULT_LOCALE_SETTINGS: LocaleSettingsDto = {
-  timezone: "America/Los_Angeles",
-  region: "en-US",
-  dateFormat: "24"
-};
 
 const preferences = new PreferencesRepository();
 

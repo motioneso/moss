@@ -7,6 +7,19 @@ import { isPublicFeedDocument, parsePublicFeedItems } from "@moss/news";
 import { catalogEntry } from "./catalog.js";
 import type { SportsSafeFetchPort, SportsWebRequestHop } from "./discovery.js";
 import {
+  extractFeedPhoto,
+  extractShareImage,
+  isUsablePhotoCandidate,
+  parseFeedPhotoItems
+} from "./photo.js";
+import {
+  SPORTS_PHOTO_DEADLINE_MARGIN_MS,
+  type EnsurePhotoResult,
+  type PhotoHostSlot,
+  type SportsPhotoStore,
+  type StoredPhoto
+} from "./photo-store.js";
+import {
   expandSportsSourceRecipe,
   extractSportsSourceRecipe,
   validateSportsSourceRecipe,
@@ -18,6 +31,14 @@ import {
   type SportsRuntimeSource,
   type SportsRuntimeTargetResult
 } from "./repository.js";
+import {
+  parseRedditFeed,
+  REDDIT_ACCEPT_HEADERS,
+  REDDIT_CONTENT_TYPES,
+  REDDIT_RATE_LIMIT_MESSAGE,
+  REDDIT_USER_AGENT,
+  redditHopGuard
+} from "./reddit.js";
 import type { CustomSourceHeadline } from "./sports-source.js";
 import { SPORTS_SPORT_LABELS } from "./scope.js";
 
@@ -32,9 +53,23 @@ const MAX_RETRY_AFTER_MS = 5_000;
 const HEADLINE_TTL_MS = 10 * 60 * 1000;
 
 export type SportsPublicSourceHeadline = CustomSourceHeadline & {
-  readonly imageUrl: null;
+  readonly imageUrl: string | null;
   readonly sportKey: SportsRuntimeSource["assignments"][number]["scope"]["sportKey"];
 };
+
+/** #2237 the deterministic photo pass' budget, per source, per refresh. */
+const MAX_ARTICLE_PAGE_FETCHES = 6;
+/** The same margin the photo store applies to its own download, so the two cannot drift apart. */
+const PHOTO_DEADLINE_MARGIN_MS = SPORTS_PHOTO_DEADLINE_MARGIN_MS;
+const ARTICLE_PAGE_CONTENT_TYPES = ["text/html", "application/xhtml+xml"];
+/** A failed photo is not retried for as long as its story could still be served from the cache. */
+const PHOTO_FAILURE_TTL_MS = HEADLINE_TTL_MS + DEFAULT_STALE_RETENTION_MS;
+const PHOTO_FAILURE_MAX_ENTRIES = 2_000;
+
+/** Newlines cannot occur in a user id, a source id or a URL, so this join is unambiguous. */
+function photoFailureKey(actorUserId: string, sourceId: string, photoUrl: string): string {
+  return `${actorUserId}\n${sourceId}\n${photoUrl}`;
+}
 
 interface ReaderDataContext {
   withDataContext<T>(
@@ -47,6 +82,8 @@ interface PublicSourceReaderDependencies {
   readonly dataContext: ReaderDataContext;
   readonly repository?: SportsSourcesRepository;
   readonly fetch: SportsSafeFetchPort;
+  /** #2237 omitted in tests that do not exercise photos; the pass is skipped entirely then. */
+  readonly photos?: SportsPhotoStore;
   readonly cache?: DatasetCache;
   readonly now?: () => number;
   readonly sleep?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
@@ -65,6 +102,8 @@ interface RequestAssignment {
 
 interface RequestGroup {
   readonly identity: string;
+  /** #2211 a subreddit feed is parsed as Reddit Atom, everything else as a feed or recipe. */
+  readonly kind: "feed" | "scrape" | "reddit";
   readonly url: string;
   readonly headers: Readonly<Record<string, string>>;
   readonly allowedContentTypes: readonly string[];
@@ -79,6 +118,14 @@ interface ExtractedHeadline {
   readonly url: string;
   readonly publishedAt: string | null;
   readonly summary: string;
+  /** #2211 set for a subreddit's linked article: the real publisher, not the subreddit. */
+  readonly publisherLabel?: string;
+  readonly publisherDomain?: string;
+  /**
+   * #2237 the publisher's own photo URL, never a per-owner key: this item is cached across every
+   * owner who follows the same source, so an owner-specific value here would leak between vaults.
+   */
+  readonly photoUrl?: string | null;
 }
 
 interface RequestOutcome {
@@ -184,7 +231,8 @@ function retryDelay(value: string | undefined, now: number): number | null {
 
 function failureState(
   failure: { readonly reason: string; readonly status?: number },
-  budgetDenied: boolean
+  budgetDenied: boolean,
+  kind: RequestGroup["kind"] = "feed"
 ): Pick<RequestOutcome, "state" | "reason" | "message"> {
   if (budgetDenied) {
     return {
@@ -204,7 +252,8 @@ function failureState(
     return {
       state: "failing",
       reason: "rate_limited",
-      message: "The publisher asked Moss to retry later."
+      message:
+        kind === "reddit" ? REDDIT_RATE_LIMIT_MESSAGE : "The publisher asked Moss to retry later."
     };
   }
   if (failure.reason === "blocked" || failure.reason === "not_https") {
@@ -240,30 +289,38 @@ function recipeItems(items: readonly SportsRecipeItem[], requestUrl: string): Ex
 function publicHeadlines(
   pair: RequestAssignment,
   items: readonly ExtractedHeadline[],
-  checkedAt: Date | null
+  checkedAt: Date | null,
+  photos: ReadonlyMap<string, StoredPhoto> = new Map()
 ): SportsPublicSourceHeadline[] {
   const { source, assignment } = pair;
   const competitionKey = assignment.scope.kind === "sport" ? null : assignment.scope.competitionKey;
   const fallbackTime = (checkedAt ?? new Date(0)).toISOString();
-  return items.map((item) => ({
-    origin: "custom",
-    sourceId: source.id,
-    id: `${source.id}:${item.id}`,
-    sportKey: assignment.scope.sportKey,
-    competitionKey,
-    competitionLabel:
-      assignment.scope.kind === "sport"
-        ? SPORTS_SPORT_LABELS[assignment.scope.sportKey]
-        : (catalogEntry(assignment.scope.competitionKey)?.label ?? assignment.scope.competitionKey),
-    title: item.title,
-    url: item.url,
-    publishedAt: item.publishedAt ?? fallbackTime,
-    imageUrl: null,
-    summary: item.summary,
-    teamKeys: assignment.scope.kind === "team" ? [assignment.scope.teamKey] : [],
-    publisherLabel: source.label,
-    publisherDomain: source.canonicalDomain
-  }));
+  return items.map((item) => {
+    const headlineId = `${source.id}:${item.id}`;
+    const photo = photos.get(item.id) ?? null;
+    return {
+      origin: "custom" as const,
+      sourceId: source.id,
+      id: headlineId,
+      sportKey: assignment.scope.sportKey,
+      competitionKey,
+      competitionLabel:
+        assignment.scope.kind === "sport"
+          ? SPORTS_SPORT_LABELS[assignment.scope.sportKey]
+          : (catalogEntry(assignment.scope.competitionKey)?.label ??
+            assignment.scope.competitionKey),
+      title: item.title,
+      url: item.url,
+      publishedAt: item.publishedAt ?? fallbackTime,
+      imageUrl: photo ? `/api/sports/headlines/${encodeURIComponent(headlineId)}/photo` : null,
+      imageWidth: photo?.width ?? null,
+      imageHeight: photo?.height ?? null,
+      summary: item.summary,
+      teamKeys: assignment.scope.kind === "team" ? [assignment.scope.teamKey] : [],
+      publisherLabel: item.publisherLabel ?? source.label,
+      publisherDomain: item.publisherDomain ?? source.canonicalDomain
+    };
+  });
 }
 
 export class SportsPublicSourceReader {
@@ -271,12 +328,192 @@ export class SportsPublicSourceReader {
   private readonly cache: DatasetCache;
   private readonly now: () => number;
   private readonly sleep: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
+  /** Photo attempt key to the time its "do not retry" memory expires. Insertion-ordered. */
+  private readonly photoFailures = new Map<string, number>();
 
   constructor(private readonly dependencies: PublicSourceReaderDependencies) {
     this.repository = dependencies.repository ?? new SportsSourcesRepository();
     this.cache = dependencies.cache ?? new DatasetCache({ maxEntries: 500 });
     this.now = dependencies.now ?? Date.now;
     this.sleep = dependencies.sleep ?? defaultSleep;
+  }
+
+  /**
+   * #2237 the deterministic photo pass: the feed's own media tag first, then the article page's
+   * share image. Every failure here is swallowed — a story without a photo is still a story, and
+   * a photo must never cost the reader its headlines.
+   */
+  private async attachPhotoUrls(
+    group: RequestGroup,
+    items: readonly ExtractedHeadline[],
+    feedBody: string | null,
+    context: {
+      readonly deadline: number;
+      readonly signal?: AbortSignal;
+      readonly domainLimiter: DomainConcurrencyLimiter;
+      readonly pageBudget: Map<string, number>;
+    }
+  ): Promise<readonly ExtractedHeadline[]> {
+    const feedPhotos = new Map<string, string>();
+    if (feedBody !== null) {
+      for (const parsed of parseFeedPhotoItems(feedBody)) {
+        if (!parsed.link) continue;
+        const found = extractFeedPhoto(parsed);
+        if (found) feedPhotos.set(parsed.link, found.url);
+      }
+    }
+    const sourceIds = new Set(group.assignments.map((pair) => pair.source.id));
+    const withPhotos: ExtractedHeadline[] = [];
+    for (const item of items) {
+      let publisherHost: string;
+      try {
+        publisherHost = new URL(item.url).hostname.toLowerCase();
+      } catch {
+        withPhotos.push(item);
+        continue;
+      }
+      const fromFeed = feedPhotos.get(item.url);
+      if (fromFeed && isUsablePhotoCandidate(fromFeed, { publisherHost })) {
+        withPhotos.push({ ...item, photoUrl: fromFeed });
+        continue;
+      }
+      const budgetLeft = [...sourceIds].every(
+        (sourceId) => (context.pageBudget.get(sourceId) ?? 0) < MAX_ARTICLE_PAGE_FETCHES
+      );
+      if (
+        !budgetLeft ||
+        context.signal?.aborted ||
+        this.now() + PHOTO_DEADLINE_MARGIN_MS >= context.deadline
+      ) {
+        withPhotos.push(item);
+        continue;
+      }
+      for (const sourceId of sourceIds) {
+        context.pageBudget.set(sourceId, (context.pageBudget.get(sourceId) ?? 0) + 1);
+      }
+      const shareUrl = await this.fetchShareImage(item.url, publisherHost, context);
+      withPhotos.push(shareUrl ? { ...item, photoUrl: shareUrl } : item);
+    }
+    return withPhotos;
+  }
+
+  private async fetchShareImage(
+    articleUrl: string,
+    publisherHost: string,
+    context: {
+      readonly deadline: number;
+      readonly signal?: AbortSignal;
+      readonly domainLimiter: DomainConcurrencyLimiter;
+    }
+  ): Promise<string | null> {
+    const held = await context.domainLimiter.acquireAll(
+      [publisherHost],
+      context.deadline,
+      this.now,
+      context.signal
+    );
+    if (!held) return null;
+    try {
+      // Waiting for the slot can itself consume most of what was left, so the deadline margin is
+      // checked again here rather than only before the wait.
+      if (context.signal?.aborted || this.now() + PHOTO_DEADLINE_MARGIN_MS >= context.deadline) {
+        return null;
+      }
+      const response = await this.dependencies.fetch(articleUrl, {
+        allowedHosts: [publisherHost],
+        allowedContentTypes: ARTICLE_PAGE_CONTENT_TYPES,
+        maxBytes: MAX_RESPONSE_BYTES,
+        rejectOversizedResponses: true,
+        timeoutMs: Math.min(FETCH_TIMEOUT_MS, Math.max(1, context.deadline - this.now())),
+        signal: context.signal
+      });
+      if (!response.ok) return null;
+      const found = extractShareImage(response.body, response.finalUrl);
+      if (!found) return null;
+      return isUsablePhotoCandidate(found.url, { publisherHost }) ? found.url : null;
+    } catch {
+      return null;
+    } finally {
+      for (const host of held) context.domainLimiter.release(host);
+    }
+  }
+
+  /**
+   * Downloads and stores each story's photo into this owner's vault, then records which stored
+   * copy each headline id serves. Returns the copies keyed by feed item id.
+   */
+  private isRememberedPhotoFailure(key: string): boolean {
+    const expiresAt = this.photoFailures.get(key);
+    if (expiresAt === undefined) return false;
+    if (expiresAt > this.now()) return true;
+    this.photoFailures.delete(key);
+    return false;
+  }
+
+  private rememberPhotoFailure(key: string): void {
+    this.photoFailures.delete(key);
+    this.photoFailures.set(key, this.now() + PHOTO_FAILURE_TTL_MS);
+    while (this.photoFailures.size > PHOTO_FAILURE_MAX_ENTRIES) {
+      const oldest = this.photoFailures.keys().next();
+      if (oldest.done) break;
+      this.photoFailures.delete(oldest.value);
+    }
+  }
+
+  private async storePhotos(
+    accessContext: AccessContext,
+    pair: RequestAssignment,
+    items: readonly ExtractedHeadline[],
+    deadline: number,
+    domainLimiter: DomainConcurrencyLimiter,
+    signal?: AbortSignal
+  ): Promise<Map<string, StoredPhoto>> {
+    const stored = new Map<string, StoredPhoto>();
+    const photos = this.dependencies.photos;
+    if (!photos) return stored;
+    // The same limiter the article page fetches use, so a publisher never sees more than two of
+    // our requests at once whichever kind of request they are.
+    const hostSlot: PhotoHostSlot = {
+      acquire: async (host) =>
+        (await domainLimiter.acquireAll([host], deadline, this.now, signal)) !== null,
+      release: (host) => domainLimiter.release(host.toLowerCase())
+    };
+    for (const item of items) {
+      // Past the deadline every remaining story is certain to be skipped, and each call still
+      // does folder and file work before reaching the store's own check, so stop here instead.
+      // The margin is deliberately not applied: inside it a copy we already hold is still worth
+      // returning, and that costs no network.
+      if (signal?.aborted || deadline - this.now() <= 0) break;
+      if (!item.photoUrl) continue;
+      // A photo that already failed is not tried again while the story is still cached: without
+      // this, a permanently broken image is re-downloaded on every single refresh.
+      const failureKey = photoFailureKey(accessContext.actorUserId, pair.source.id, item.photoUrl);
+      if (this.isRememberedPhotoFailure(failureKey)) continue;
+      let result: EnsurePhotoResult;
+      try {
+        result = await photos.ensure(accessContext, pair.source.id, item.photoUrl, {
+          ...(signal ? { signal } : {}),
+          remainingMs: () => deadline - this.now(),
+          hostSlot
+        });
+      } catch {
+        result = { outcome: "unusable" };
+      }
+      // Only a photo we actually learned something bad about is remembered. Running out of
+      // refresh time teaches us nothing, so that photo is tried again on the next refresh.
+      if (result.outcome === "unusable") {
+        this.rememberPhotoFailure(failureKey);
+        continue;
+      }
+      if (result.outcome === "skipped") continue;
+      stored.set(item.id, result.photo);
+      photos.linkHeadline(
+        accessContext.actorUserId,
+        `${pair.source.id}:${item.id}`,
+        result.photo.key
+      );
+    }
+    return stored;
   }
 
   async refresh(
@@ -349,9 +586,20 @@ export class SportsPublicSourceReader {
         continue;
       }
       let group: Omit<RequestGroup, "assignments">;
-      if (source.retrievalMethod === "feed" && source.feedUrl) {
+      if (source.retrievalMethod === "reddit" && source.feedUrl) {
         group = {
           identity: stableId(`${source.runtimeFingerprint}\0${source.feedUrl}`),
+          kind: "reddit",
+          url: source.feedUrl,
+          headers: REDDIT_ACCEPT_HEADERS,
+          allowedContentTypes: REDDIT_CONTENT_TYPES,
+          allowedHosts: source.confirmedFetchHosts,
+          recipe: null
+        };
+      } else if (source.retrievalMethod === "feed" && source.feedUrl) {
+        group = {
+          identity: stableId(`${source.runtimeFingerprint}\0${source.feedUrl}`),
+          kind: "feed",
           url: source.feedUrl,
           headers: {
             accept:
@@ -395,6 +643,7 @@ export class SportsPublicSourceReader {
         }
         group = {
           identity: expanded.identity,
+          kind: "scrape",
           url: expanded.url,
           headers: expanded.headers,
           allowedContentTypes:
@@ -413,18 +662,78 @@ export class SportsPublicSourceReader {
     const headlines: SportsPublicSourceHeadline[] = [];
     let requestCount = 0;
     const deadline = this.now() + REFRESH_DEADLINE_MS;
-    const pending = [...groups.values()];
-    const running = new Set<Promise<void>>();
     const domainLimiter = new DomainConcurrencyLimiter();
+    const pageBudget = new Map<string, number>();
+    const keptPhotoKeys = new Set<string>();
+    /**
+     * The photo hunt is deliberately held back until every source has its headlines. Sharing one
+     * four-at-a-time budget between the two meant a source whose photos were slow could hold a
+     * slot long enough for an unrelated healthy source never to be fetched at all, which turned a
+     * photo problem into missing headlines for somebody else.
+     */
+    const photoPhase: Array<{
+      readonly group: RequestGroup;
+      readonly outcome: RequestOutcome;
+      readonly feedBody: string | null;
+      /** A cache hit that was already photo-hunted and cached: do neither again. */
+      readonly reuseCached: boolean;
+    }> = [];
+
+    const runAll = async (tasks: ReadonlyArray<() => Promise<void>>): Promise<void> => {
+      const queue = [...tasks];
+      const running = new Set<Promise<void>>();
+      while (queue.length > 0 || running.size > 0) {
+        let scheduled = false;
+        while (running.size < MAX_CONCURRENCY) {
+          const task = queue.shift();
+          if (!task) break;
+          const promise = task().finally(() => {
+            running.delete(promise);
+          });
+          running.add(promise);
+          scheduled = true;
+        }
+        if (running.size > 0 && (!scheduled || running.size >= MAX_CONCURRENCY)) {
+          await Promise.race(running);
+        }
+      }
+    };
+
+    const pushHeadlines = async (
+      pair: RequestAssignment,
+      items: readonly ExtractedHeadline[],
+      checkedAt: Date | null
+    ): Promise<void> => {
+      const stored = await this.storePhotos(
+        accessContext,
+        pair,
+        items,
+        deadline,
+        domainLimiter,
+        options.signal
+      );
+      for (const copy of stored.values()) keptPhotoKeys.add(copy.key);
+      headlines.push(...publicHeadlines(pair, items, checkedAt, stored));
+    };
 
     const run = async (group: RequestGroup): Promise<void> => {
       const cacheHit = options.bypassCache
         ? undefined
         : this.cache.get<readonly ExtractedHeadline[]>(group.identity, this.now());
       if (cacheHit?.fresh) {
-        for (const pair of group.assignments) {
-          headlines.push(...publicHeadlines(pair, cacheHit.value, null));
-        }
+        photoPhase.push({
+          group,
+          outcome: {
+            items: cacheHit.value,
+            state: "healthy",
+            reason: null,
+            message: null,
+            checkedAt: null,
+            fromCache: true
+          },
+          feedBody: null,
+          reuseCached: true
+        });
         return;
       }
       let budgetDenied = false;
@@ -451,6 +760,7 @@ export class SportsPublicSourceReader {
         }
         return;
       }
+      const redditGuard = group.kind === "reddit" ? redditHopGuard(group.url) : null;
       const beforeRequest = async (hop: SportsWebRequestHop): Promise<boolean> => {
         if (options.signal?.aborted || requestCount >= MAX_REQUESTS) {
           budgetDenied = requestCount >= MAX_REQUESTS;
@@ -459,6 +769,7 @@ export class SportsPublicSourceReader {
         if (hop.url.port || !group.allowedHosts.includes(hop.url.hostname.toLowerCase())) {
           return false;
         }
+        if (redditGuard && !redditGuard(hop)) return false;
         requestCount += 1;
         return true;
       };
@@ -471,6 +782,7 @@ export class SportsPublicSourceReader {
           maxBytes: MAX_RESPONSE_BYTES,
           rejectOversizedResponses: true,
           timeoutMs: Math.min(FETCH_TIMEOUT_MS, Math.max(1, deadline - this.now())),
+          ...(group.kind === "reddit" ? { userAgent: REDDIT_USER_AGENT } : {}),
           signal: options.signal
         });
       let response: Awaited<ReturnType<SportsSafeFetchPort>>;
@@ -498,7 +810,7 @@ export class SportsPublicSourceReader {
       const checkedAt = budgetDenied ? null : new Date(this.now());
       let outcome: RequestOutcome;
       if (!response.ok) {
-        const failure = failureState(response, budgetDenied);
+        const failure = failureState(response, budgetDenied, group.kind);
         outcome = {
           items: cacheHit?.value ?? [],
           ...failure,
@@ -528,6 +840,33 @@ export class SportsPublicSourceReader {
                 extracted.reason === "recipe_drift"
                   ? "The publisher changed the structure used by this source."
                   : "The publisher returned an unsupported response.",
+              checkedAt,
+              fromCache: false
+            };
+      } else if (group.kind === "reddit") {
+        const listing = parseRedditFeed(response.body, "");
+        outcome = listing.ok
+          ? {
+              items: listing.feed.headlines.map((headline) => ({
+                id: stableId(headline.url),
+                title: headline.title,
+                url: headline.url,
+                publishedAt: headline.publishedAt,
+                summary: "",
+                publisherLabel: headline.publisherLabel,
+                publisherDomain: headline.publisherDomain
+              })),
+              state: "healthy",
+              reason: null,
+              message: null,
+              checkedAt,
+              fromCache: false
+            }
+          : {
+              items: cacheHit?.value ?? [],
+              state: "unsupported",
+              reason: "unsupported_response",
+              message: "Reddit did not return a readable post feed.",
               checkedAt,
               fromCache: false
             };
@@ -566,48 +905,60 @@ export class SportsPublicSourceReader {
           )
         };
       }
-      if (outcome.state === "healthy") {
+      if (outcome.state !== "healthy") degraded = true;
+      photoPhase.push({
+        group,
+        outcome,
+        feedBody: group.kind === "feed" && response.ok ? response.body : null,
+        reuseCached: false
+      });
+    };
+
+    const finish = async (entry: (typeof photoPhase)[number]): Promise<void> => {
+      let items = entry.outcome.items;
+      if (!entry.reuseCached && entry.outcome.state === "healthy") {
+        if (this.dependencies.photos) {
+          items = await this.attachPhotoUrls(entry.group, items, entry.feedBody, {
+            deadline,
+            signal: options.signal,
+            domainLimiter,
+            pageBudget
+          });
+        }
         const cachedAt = this.now();
         this.cache.set(
-          group.identity,
-          outcome.items,
+          entry.group.identity,
+          items,
           cachedAt + HEADLINE_TTL_MS,
           cachedAt + HEADLINE_TTL_MS + DEFAULT_STALE_RETENTION_MS
         );
-      } else {
-        degraded = true;
       }
-      for (const pair of group.assignments) {
-        headlines.push(...publicHeadlines(pair, outcome.items, outcome.checkedAt));
-        if (!outcome.fromCache) {
+      for (const pair of entry.group.assignments) {
+        await pushHeadlines(pair, items, entry.outcome.checkedAt);
+        if (!entry.outcome.fromCache) {
           results.push({
             sourceId: pair.source.id,
             assignmentId: pair.assignment.id,
             runtimeFingerprint: pair.source.runtimeFingerprint,
             targetUrl: pair.assignment.targetUrl,
             targetParameters: pair.assignment.targetParameters,
-            healthState: outcome.state,
-            healthReasonCode: outcome.reason,
-            healthMessage: outcome.message,
-            checkedAt: outcome.checkedAt
+            healthState: entry.outcome.state,
+            healthReasonCode: entry.outcome.reason,
+            healthMessage: entry.outcome.message,
+            checkedAt: entry.outcome.checkedAt
           });
         }
       }
     };
 
-    while (pending.length > 0 || running.size > 0) {
-      let scheduled = false;
-      while (running.size < MAX_CONCURRENCY) {
-        const group = pending.shift();
-        if (!group) break;
-        const promise = run(group).finally(() => {
-          running.delete(promise);
-        });
-        running.add(promise);
-        scheduled = true;
-      }
-      if (running.size > 0 && (!scheduled || running.size >= MAX_CONCURRENCY)) {
-        await Promise.race(running);
+    await runAll([...groups.values()].map((group) => () => run(group)));
+    await runAll(photoPhase.map((entry) => () => finish(entry)));
+
+    if (this.dependencies.photos) {
+      try {
+        await this.dependencies.photos.sweep(accessContext, keptPhotoKeys);
+      } catch {
+        // Housekeeping only: an unswept copy expires on the next refresh.
       }
     }
 

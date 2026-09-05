@@ -49,6 +49,12 @@ Deliberate decisions, each with a real failure behind it. Violating one is a blo
 
 - **Spec before build.** No new feature or module without an approved design spec in
   `docs/superpowers/specs/`, and a GitHub `task` issue to build against.
+- **Keep Moss's app map truthful.** Every product change — including a feature, setting, screen,
+  navigation path, requirement, error, or remediation — updates the app-map declarations in the
+  same PR. Core screens/settings live in `packages/shared/src/app-map-core.ts`; module-owned
+  surfaces and behavior live in the owning manifest's `navigation`, `settings`, and `features`
+  metadata. A stale or missing map entry is a blocker, not follow-up work. Full rule in
+  `docs/DEVELOPMENT_STANDARDS.md` → App Map Truthfulness.
 - **Design the front end before building a module.** A new module needs a front-end design
   discussion with Ben and agreed mockups of every screen, in the spec, before implementation.
   Full rule in `docs/DEVELOPMENT_STANDARDS.md` → Design System Guardrails.

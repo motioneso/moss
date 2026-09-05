@@ -76,6 +76,18 @@ describe("AppearancePane — palette auto-staging wiring", () => {
   });
 });
 
+describe("AppearancePane — editor visibility", () => {
+  it("keeps the editor hidden until the user starts a theme", () => {
+    const html = renderAppearancePane();
+    expect(html).toContain("New theme");
+    expect(html).toContain("Color mode");
+    expect(html).toContain("theme-gallery");
+    expect(html).not.toContain("theme-editor");
+    expect(html).not.toContain("Save theme");
+    expect(html).not.toContain("Cancel");
+  });
+});
+
 describe("appearance pane helpers", () => {
   it("saves and activates the custom theme draft", async () => {
     const calls: string[] = [];

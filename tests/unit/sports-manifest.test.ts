@@ -22,7 +22,8 @@ describe("sports manifest", () => {
       "sql/0191_sports_public_source_runtime.sql",
       "sql/0192_sports_legacy_feed_assignments_verified.sql",
       "sql/0193_sports_legacy_feed_assignment_repair.sql",
-      "sql/0196_sports_news_source_scopes.sql"
+      "sql/0196_sports_news_source_scopes.sql",
+      "sql/0213_sports_reddit_sources.sql"
     ]);
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
     expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");
@@ -182,5 +183,28 @@ describe("sports manifest", () => {
       ["articleBody", "headlines", "schedule", "scoreboard", "standings", "teams"].sort()
     );
     expect(espn?.datasets.every((d) => d.staleness === "degrade-empty")).toBe(true);
+  });
+  // #2253: an over-long description is not a style nit — the module registry throws while
+  // loading the built-in module list, so the API and the worker both refuse to start.
+  it("keeps every app-map description inside the length the registry enforces", () => {
+    const LIMIT = 240;
+    const entries = [
+      ...sportsModuleManifest.navigation.map((s) => [`navigation ${s.id}`, s.description] as const),
+      ...sportsModuleManifest.settings.map((s) => [`settings ${s.id}`, s.description] as const),
+      ...(sportsModuleManifest.features ?? []).map(
+        (f) => [`feature ${f.id}`, f.description] as const
+      )
+    ];
+    const tooLong = entries
+      .filter(([, description]) => description.trim().length > LIMIT)
+      .map(([label, description]) => `${label}: ${description.trim().length}`);
+    expect(tooLong).toEqual([]);
+    expect(entries.every(([, description]) => description.trim().length > 0)).toBe(true);
+  });
+
+  // The registry validates every built-in module the moment it is loaded, which is what the API
+  // and the worker do on boot — so a successful import here is a real start-up check, not a proxy.
+  it("loads the built-in module list the API and worker boot from", async () => {
+    await expect(import("../../packages/module-registry/src/index.js")).resolves.toBeDefined();
   });
 });

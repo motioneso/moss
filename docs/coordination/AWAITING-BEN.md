@@ -1,3 +1,7 @@
+<!-- Entry rule (2026-09-03): an environment blocker may only be filed here with two proofs named in
+the entry: the product's own API/screen showing the thing absent, and the tested checkout at
+origin/main (git rev-list --count HEAD..origin/main = 0). See the coordinate skill, Phase 2. -->
+
 # Awaiting Ben
 
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
@@ -69,3 +73,63 @@ program not starting during the live test) now that it's blocking a security fix
 <!-- Resolved 2026-08-30/31: Ben replied "yes" to the sign-off ask in chat. PR #2117 (module-build
 environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
+## Open
+
+<!-- Resolved 2026-09-03: false alarm. Home Assistant was never disconnected. It lives in the new
+integrations table (packages/integrations), not the old connector_definitions table the proof lane
+queried. On 2026-09-03 the dev API listed it enabled with 75/75 tools and a live refresh returned 200.
+The dev checkout was also 40 commits behind origin/main and had no Integrations screen at all; merged
+and restarted. Original entry:
+
+- **#2175 kill-gate proof blocked: Home Assistant is disconnected on the dev instance.** The proof
+  lane found zero connector accounts and no Home Assistant entry in the connector list on the
+  shared dev database, even though the activity log shows it working as recently as 17:17 UTC
+  today. The lane made no writes — it only started the API and looked. It stopped before making
+  any switch call and reapable. Someone with connection access (Ben) needs to reconnect Home
+  Assistant on dev before the kitchen-switch proof can run. Finding posted on issue #2175:
+  https://github.com/motioneso/moss/issues/2175#issuecomment-5517216596 -->
+
+<!-- Resolved 2026-09-03 by takeover 35: #2175 is closed and this no longer blocks anyone.
+The cause was never a missing credential. Signing in needs a helper service that the development
+API only wires up when it is started with a matching socket setting; running from source that
+setting was unset, so the button failed closed. A later session got the helper running and proved a
+sign-in works when driven directly, but the button on the screen still failed. Ben stopped the
+investigation and decided to test on the live app instead, where signing in already works. #2175 was
+closed with proof steps 1, 4 and 5 unproven and the kill gate unmeasured, and that is stated plainly
+on the issue. The misleading "Connected" display is now its own issue, #2203. Original entry:
+
+- **#2175 Task 10 proof is stuck: no AI provider on dev can answer a chat, and reconnecting one
+  needs you.** Chat on the dev instance is unusable for everyone: it says "No AI provider is
+  connected yet" and the message box says "No model configured". On the admin Assistant and AI
+  page, the setting that picks the chat model warns "Needs configuration". There are two rows named
+  "Claude" which claim to be "Connected" but still show a "Log in" button and expose zero models;
+  clicking "Log in" does nothing in the browser, because that provider needs an interactive
+  terminal login an agent session cannot complete. The only rows with stored keys are eleven
+  leftover fakes from this morning's PR 2191 proof run, and every one of them lists zero models, so
+  they cannot answer either - and a scripted fake could not count as proof anyway.
+
+  Verified the way a user would, by two separate lanes hours apart, reading the real screens rather
+  than querying a table; the running dev servers match origin/main on app code. No setting was
+  changed, no test row deleted, no credential touched.
+
+  What we need from you: log a real Claude provider in on dev. Then the proof lane can finish steps
+  1, 4 and 5 and the kill-gate reading for #2175.
+
+  Evidence: https://github.com/motioneso/moss/issues/2175#issuecomment-5531267512
+
+  Also worth your eye, separately: a provider row showing "Connected" while offering a "Log in"
+  button and listing zero models looks like a real display bug - the admin screen says connected
+  when the provider cannot serve a request.
+
+<!-- Corrected 2026-09-03, same day, by takeover 32: the entry above blamed a missing credential and
+asked Ben to log a Claude provider in. Wrong cause. Clicking "Log in" returns a 500,
+"onboarding login service not configured". That login route is only wired up when the API starts
+with a socket setting pointing at the helper service that drives command-line tools
+(JARVIS_CLI_RUNNER_SOCKET; see packages/module-registry/src/index.ts ~2669 and ~2770). The dev API
+runs from source via `pnpm dev:api` with that setting unset, so it fails closed no matter who clicks.
+Ben ruled he does not want to set up API billing and does not want to move dev onto the full
+container stack. Lane `dev-cli-runner-host` (pane w1:pC0) is proving whether that helper can run as
+an ordinary process on the dev box, driving the Claude command-line tool already installed there.
+NO BEN ACTION NEEDED right now - this entry is not blocking him.
+Detail: https://github.com/motioneso/moss/issues/2175#issuecomment-5531759370 -->
+-->

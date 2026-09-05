@@ -49,8 +49,17 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "notifications",
     label: "Notifications",
-    description: "Review notifications produced by enabled modules.",
+    description:
+      "Review notifications produced by enabled modules. The account menu button at the bottom of the rail shows the unread count as a badge when the menu is closed, and screen readers hear the number as part of the button's spoken label.",
     path: "/notifications",
+    scope: "user"
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    description:
+      "Personal and admin settings. A search box on the top bar matches section names, descriptions and common setting words, and also matches every installed module that has its own settings to open (for example News) by that module's name, description, and the name of each individual setting or credential it declares (for example, searching a credential's own name like \"Plaid\" finds the module that uses it). A module with nothing to configure is left out of the results. Picking a result jumps straight to that module's settings.",
+    path: "/settings",
     scope: "user"
   }
 ];
@@ -63,7 +72,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "profile",
     label: "Account & preferences",
-    description: "Edit personal profile, account, and preference details.",
+    description:
+      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location (use the browser's location or search for a place; the hint under the location notes which of those two was used this session), quiet hours, sessions, data export and account deletion.",
     path: "/settings?section=profile",
     scope: "user"
   },
@@ -77,7 +87,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "assistant",
     label: "Assistant & AI",
-    description: "Choose assistant behavior and model routing available to this user.",
+    description:
+      "Choose assistant behavior, persona dials, response style (concise, balanced, or detailed, each shown with an example answer of that length), and model routing available to this user. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > Assistant & AI) to turn on the microphone in chat.",
     path: "/settings?section=assistant",
     scope: "user"
   },
@@ -91,14 +102,20 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "memory",
     label: "Memory & context",
-    description: "Review and configure assistant memory behavior.",
+    description:
+      "Review and configure assistant memory behaviour, and choose the People folder. Every " +
+      "folder is chosen from the same list of available folders, and People notes live inside " +
+      "the chosen notes folder.",
     path: "/settings?section=memory",
     scope: "user"
   },
   {
     id: "activity",
     label: "Activity",
-    description: "Review assistant activity visible to this user.",
+    description:
+      "Review assistant activity visible to this user, including how long each action took to " +
+      "run and, for repeated integration requests, whether a call was skipped because it was " +
+      "already covered or refused for asking too fast.",
     path: "/settings?section=activity",
     scope: "user"
   },
@@ -112,14 +129,18 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "connected",
     label: "Connected accounts",
-    description: "Connect external accounts and review their status.",
+    description:
+      "Connect external accounts and review their status. Add an email account by typing its address; Yahoo Mail, Proton Mail, iCloud and Fastmail addresses are recognised and get their mail server settings and app-password instructions filled in, other addresses choose the mail service by hand.",
     path: "/settings?section=connected",
     scope: "user"
   },
   {
     id: "sources",
     label: "Data sources",
-    description: "Review sources the assistant can read.",
+    description:
+      "Review sources the assistant can read and choose the notes folder. Every folder comes " +
+      "from the same list of folders available on the server, and People notes live inside " +
+      "the chosen notes folder. An info icon explains how folders get listed.",
     path: "/settings?section=sources",
     scope: "user"
   },
@@ -154,7 +175,25 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "aiproviders",
     label: "Assistant & AI",
-    description: "Configure instance AI providers, models, and bindings.",
+    description:
+      "Configure instance AI providers, models, and bindings. Each provider card lists its models " +
+      "with a Refresh models button (asks the provider for its current list; the line under the " +
+      "list then reads 'Refreshed: N models', 'Not logged in', 'This provider cannot list its " +
+      "models yet', 'The sign-in helper is not running', or 'Could not reach the provider') and an " +
+      "Add model button (type in a model by hand; such rows show a * after the id, the footer " +
+      "reads '* Manually added', and they survive refreshes and re-logins). Each model row has " +
+      "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
+      "is struck through), " +
+      "a minus button (disable) and a trash button (remove after confirmation; the provider's " +
+      "default entry cannot be removed). The Models section collapses from its header. The " +
+      "'Not logged in' message only appears after someone presses Refresh models; the provider " +
+      "card itself does not notice a broken sign-in on its own. A refresh the provider answers " +
+      "by refusing the stored sign-in reads 'Not logged in' too. Once a provider has refused a " +
+      "sign-in - on a model refresh, or on a chat message it would not answer - that sign-in " +
+      "counts as expired for that provider, so the next check asks for a fresh login instead of " +
+      "repeating an old success, until a fresh login is accepted. Pressing Log in on a provider " +
+      "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
+      "genuinely broken sign-in always gets a fresh place to sign back in.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },

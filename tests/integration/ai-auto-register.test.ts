@@ -5,11 +5,11 @@ import pg from "pg";
 import {
   AiAutoRegisterService,
   AiRepository,
-  CLI_STATIC_MODELS,
   ModelDiscoveryService,
   createAiSecretCipher,
   type AiSecretCipher
 } from "@moss/ai";
+import type { AiCliModelListResult, AiProviderKind } from "@moss/shared";
 import { DataContextRunner, createDatabase, type AccessContext, type MossDatabase } from "@moss/db";
 import { SettingsRepository } from "@moss/settings";
 
@@ -18,6 +18,18 @@ import { buildOnboardingLogin } from "../../packages/module-registry/src/onboard
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
+
+// #2208: CLI providers no longer ship a typed-in model list — discovery asks the cli-runner for the
+// vendor's live ids. These tests stand in for that runner with a fixed answer per provider kind, so
+// the reconcile behaviour (natural-key upsert, prune, sentinel kept) is exercised without a socket.
+const STUB_CLI_MODELS: Partial<Record<AiProviderKind, readonly string[]>> = {
+  anthropic: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+  "openai-compatible": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6"]
+};
+const stubCliModelLister = async (provider: AiProviderKind): Promise<AiCliModelListResult> => {
+  const ids = STUB_CLI_MODELS[provider];
+  return ids ? { status: "ok", models: ids.map((id) => ({ id })) } : { status: "unsupported" };
+};
 
 describe("AI auto-register default chat model on login (#367)", () => {
   let appDb: Kysely<MossDatabase>;
@@ -38,7 +50,11 @@ describe("AI auto-register default chat model on login (#367)", () => {
     dataContext = new DataContextRunner(appDb);
     repository = new AiRepository();
     cipher = createAiSecretCipher();
-    service = new AiAutoRegisterService({ repository, cipher });
+    service = new AiAutoRegisterService({
+      repository,
+      cipher,
+      modelDiscovery: new ModelDiscoveryService({ cliModelLister: stubCliModelLister })
+    });
   });
 
   afterAll(async () => {
@@ -196,14 +212,13 @@ describe("AI auto-register default chat model on login (#367)", () => {
         tier: "economy"
       });
 
-      const changedDiscovery = new ModelDiscoveryService();
-      changedDiscovery.discoverModels = async () => ({
-        models: CLI_STATIC_MODELS.anthropic!.filter(
-          (model) => model.providerModelId !== bound.provider_model_id
-        ),
-        fromCache: false,
-        fromFallback: true,
-        cacheExpiresAt: null
+      const changedDiscovery = new ModelDiscoveryService({
+        cliModelLister: async () => ({
+          status: "ok",
+          models: STUB_CLI_MODELS.anthropic!.filter((id) => id !== bound.provider_model_id).map(
+            (id) => ({ id })
+          )
+        })
       });
       await discoverAndPersistModels(
         db,
@@ -233,7 +248,7 @@ describe("AI auto-register default chat model on login (#367)", () => {
     });
   });
 
-  it("clean-slate reconcile removes stale/manual concrete rows but preserves sentinel", async () => {
+  it("reconcile keeps hand-added rows and the sentinel while re-listing discovered ids (#2208)", async () => {
     await dataContext.withDataContext(adminCtx(), (db) =>
       service.ensureDefaultChatModel(db, "anthropic")
     );
@@ -257,12 +272,16 @@ describe("AI auto-register default chat model on login (#367)", () => {
       await service.ensureDefaultChatModel(db, "anthropic");
     });
 
+    // #2208: createModel writes origin = manual, and reconcile prunes only discovered rows, so
+    // both hand-added rows survive alongside the freshly listed ids and the sentinel.
     const models = await dataContext.withDataContext(adminCtx(), (db) => repository.listModels(db));
     expect(models.map((row) => row.provider_model_id).sort()).toEqual([
       "claude-haiku-4-5-20251001",
       "claude-opus-4-8",
       "claude-sonnet-4-6",
-      "default"
+      "default",
+      "manual-model",
+      "stale-static"
     ]);
     expect(models.find((row) => row.provider_model_id === "default")?.status).toBe("active");
   });
@@ -293,6 +312,59 @@ describe("AI auto-register default chat model on login (#367)", () => {
       repository.listModels(db)
     );
     expect(afterAdmin.map((row) => row.provider_model_id)).toEqual(["default"]);
+  });
+
+  it("clears the instance-default flag when the default provider is revoked (#2207)", async () => {
+    const id = await dataContext.withDataContext(adminCtx(), async (db) => {
+      const created = await repository.createProvider(db, {
+        providerKind: "anthropic",
+        displayName: "Claude (to be removed)",
+        authMethod: "cli",
+        encryptedCredential: cipher.encryptJson({ cli: true })
+      });
+      await repository.setInstanceDefaultProvider(db, created.id);
+      await repository.revokeProvider(db, created.id, cipher.encryptJson({ revoked: true }));
+      return created.id;
+    });
+
+    const providers = await dataContext.withDataContext(adminCtx(), (db) =>
+      repository.listProviders(db)
+    );
+    const revoked = providers.find((p) => p.id === id);
+    expect(revoked?.status).toBe("revoked");
+    expect(revoked?.is_instance_default).toBe(false);
+    expect(providers.some((p) => p.is_instance_default)).toBe(false);
+  });
+
+  it("still adopts the next sole provider when a revoked row carries a stale default flag (#2207)", async () => {
+    // Installs revoked their default before the fix left the flag on the tombstone. Simulate that
+    // pre-fix state directly, then log in: the new Claude row must become the default anyway.
+    const staleId = await dataContext.withDataContext(adminCtx(), async (db) => {
+      const created = await repository.createProvider(db, {
+        providerKind: "anthropic",
+        displayName: "Claude (stale default)",
+        authMethod: "cli",
+        encryptedCredential: cipher.encryptJson({ cli: true })
+      });
+      await db.db
+        .updateTable("app.ai_provider_configs")
+        .set({ status: "revoked", is_instance_default: true, revoked_at: new Date() })
+        .where("id", "=", created.id)
+        .execute();
+      return created.id;
+    });
+
+    await dataContext.withDataContext(adminCtx(), (db) =>
+      service.ensureDefaultChatModel(db, "anthropic")
+    );
+
+    const providers = await dataContext.withDataContext(adminCtx(), (db) =>
+      repository.listProviders(db)
+    );
+    const active = providers.filter((p) => p.status === "active");
+    expect(active).toHaveLength(1);
+    expect(active[0]?.is_instance_default).toBe(true);
+    expect(providers.find((p) => p.id === staleId)?.is_instance_default).toBe(false);
   });
 
   it("does not recreate a model the user disabled (never resurrect — decision 2)", async () => {
@@ -368,6 +440,102 @@ describe("AI auto-register default chat model on login (#367)", () => {
     // The registered model is selectable (resolves through the active config).
     expect(model?.provider_model_id).toBe("default");
     expect(model?.provider_status).toBe("active");
+  });
+
+  it("reactivates the clicked disabled config instead of duplicating it (#2205)", async () => {
+    // Settings → AI: the founder clicks "Log in" on a Claude row they had disabled earlier. The
+    // dialog sends that row's id; ready must flip THAT row back to active, keep its models, and
+    // create no second Claude config.
+    const disabledId = await dataContext.withDataContext(adminCtx(), async (db) => {
+      const created = await repository.createProvider(db, {
+        providerKind: "anthropic",
+        displayName: "Claude (disabled)",
+        status: "disabled",
+        authMethod: "cli",
+        encryptedCredential: cipher.encryptJson({ cli: true })
+      });
+      await repository.createModel(db, {
+        providerConfigId: created.id,
+        providerModelId: "default",
+        displayName: "Claude (default model)",
+        capabilities: ["chat"],
+        status: "active",
+        tier: "interactive"
+      });
+      return created.id;
+    });
+
+    await dataContext.withDataContext(adminCtx(), (db) =>
+      service.ensureDefaultChatModel(db, "anthropic", { providerConfigId: disabledId })
+    );
+
+    const { providers, model, models } = await dataContext.withDataContext(
+      adminCtx(),
+      async (db) => ({
+        providers: (await repository.listProviders(db)).filter(
+          (p) => p.provider_kind === "anthropic"
+        ),
+        model: await repository.selectChatModelForUser(db),
+        models: await repository.listModels(db)
+      })
+    );
+
+    expect(providers).toHaveLength(1);
+    expect(providers[0]?.id).toBe(disabledId);
+    expect(providers[0]?.status).toBe("active");
+    expect(providers[0]?.is_instance_default).toBe(true);
+    expect(model?.provider_model_id).toBe("default");
+    expect(models.filter((row) => row.provider_model_id === "default")).toHaveLength(1);
+  });
+
+  it("ignores a clicked id that names another kind and falls back to the kind-only path (#2205)", async () => {
+    const codexId = await dataContext.withDataContext(adminCtx(), async (db) => {
+      const created = await repository.createProvider(db, {
+        providerKind: "openai-compatible",
+        displayName: "Codex",
+        status: "disabled",
+        authMethod: "cli",
+        encryptedCredential: cipher.encryptJson({ cli: true })
+      });
+      return created.id;
+    });
+
+    await dataContext.withDataContext(adminCtx(), (db) =>
+      service.ensureDefaultChatModel(db, "anthropic", { providerConfigId: codexId })
+    );
+
+    const providers = await dataContext.withDataContext(adminCtx(), (db) =>
+      repository.listProviders(db)
+    );
+    expect(providers.find((p) => p.id === codexId)?.status).toBe("disabled");
+    expect(
+      providers.filter((p) => p.provider_kind === "anthropic" && p.status === "active")
+    ).toHaveLength(1);
+  });
+
+  it("passes the clicked row through persistLoginTerminal (#2205)", async () => {
+    const seen: unknown[] = [];
+    const seam = buildOnboardingLogin({
+      enabled: true,
+      getConnection: () => undefined,
+      repository: new SettingsRepository(),
+      autoRegister: {
+        ensureDefaultChatModel: async (_db, kind, options) => {
+          seen.push([kind, options]);
+        }
+      },
+      logger: { warn: () => {} }
+    })!;
+
+    await dataContext.withDataContext(adminCtx(), (db) =>
+      seam.stateStore.persistLoginTerminal(db, {
+        provider: "anthropic",
+        status: "ready",
+        requestId: "r3",
+        providerConfigId: "row-1"
+      })
+    );
+    expect(seen).toEqual([["anthropic", { providerConfigId: "row-1" }]]);
   });
 
   it("no-ops for a provider without a catalog default", async () => {

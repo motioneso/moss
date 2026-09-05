@@ -34,8 +34,8 @@ describe("EspnDatasetAdapter", () => {
       okFetch(fixture("nfl-scoreboard.json"))
     )) as {
       state: string;
-      home: { teamKey: string; score: number | null; winner: boolean };
-      away: { teamKey: string };
+      home: { teamKey: string; score: number | null; winner: boolean; scorers: string[] | null };
+      away: { teamKey: string; scorers: string[] | null };
     }[];
     expect(games.length).toBeGreaterThan(0);
     expect(games[0]?.home.teamKey).toBeTypeOf("string");
@@ -45,6 +45,146 @@ describe("EspnDatasetAdapter", () => {
     expect(games[0]?.away.teamKey).toBe("ne");
     expect(["pre", "live", "final"]).toContain(games[0]?.state);
     expect(games[0]?.state).toBe("final");
+    // NFL carries neither field in a form that maps to "goals" — no scorers for any other sport.
+    expect(games[0]?.home.scorers).toBeNull();
+    expect(games[0]?.away.scorers).toBeNull();
+  });
+
+  it("parses soccer scoring plays into each side's goal scorers with their minutes", async () => {
+    const event = {
+      id: "1",
+      date: "2026-01-04T00:00:00Z",
+      competitions: [
+        {
+          competitors: [
+            { homeAway: "home", team: { id: "100", abbreviation: "MIN" } },
+            { homeAway: "away", team: { id: "200", abbreviation: "DAL" } }
+          ],
+          status: { type: { state: "post", detail: "Full Time" } },
+          details: [
+            {
+              type: { text: "Goal" },
+              team: { id: "100" },
+              clock: { displayValue: "6'" },
+              athletesInvolved: [{ shortName: "A. Isak" }]
+            },
+            {
+              type: { text: "Goal" },
+              team: { id: "100" },
+              clock: { displayValue: "8'" },
+              athletesInvolved: [{ shortName: "A. Isak" }]
+            },
+            {
+              type: { text: "Goal" },
+              team: { id: "200" },
+              clock: { displayValue: "90'+2'" },
+              athletesInvolved: [{ shortName: "Z. Benson" }]
+            },
+            // Non-goal scoring plays (e.g. a card) must not be counted as a scorer.
+            {
+              type: { text: "Yellow Card" },
+              team: { id: "200" },
+              athletesInvolved: [{ shortName: "X" }]
+            }
+          ]
+        }
+      ]
+    };
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "usa.1", day: "2026-01-04" },
+      okFetch({ events: [event] })
+    )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
+    // Ben's target line, #2253: one row per scorer, every minute they scored in.
+    expect(games[0]?.home.scorers).toEqual(["A. Isak 6, 8"]);
+    expect(games[0]?.away.scorers).toEqual(["Z. Benson 90+2"]);
+  });
+
+  it("counts every goal ESPN flags, whatever the play is labelled (#2253)", async () => {
+    // The provider's real, saved response for Everton v Brentford on January 4, 2026. Its goals
+    // arrive labelled "Goal", "Goal - Header" and "Goal - Volley"; an earlier label allowlist
+    // dropped both Everton goals and one of Brentford's three from Thiago.
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "eng.1", day: "2026-01-04" },
+      okFetch(fixture("eng1-scoreboard-20260104-everton-brentford.json"))
+    )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
+    expect(games[0]?.home.scorers).toEqual(["Beto 66", "T. Barry 90+1"]);
+    expect(games[0]?.away.scorers).toEqual(["I. Thiago 11, 51, 88", "N. Collins 50"]);
+  });
+
+  it("ignores cards and other non-scoring plays in the same list", async () => {
+    const event = {
+      id: "1",
+      date: "2026-01-04T00:00:00Z",
+      competitions: [
+        {
+          competitors: [
+            { homeAway: "home", team: { id: "100", abbreviation: "EVE" } },
+            { homeAway: "away", team: { id: "200", abbreviation: "BRE" } }
+          ],
+          status: { type: { state: "post", detail: "Full Time" } },
+          details: [
+            {
+              type: { text: "Yellow Card" },
+              scoringPlay: false,
+              team: { id: "100" },
+              athletesInvolved: [{ shortName: "J. Garner" }]
+            },
+            {
+              type: { text: "Goal - Penalty" },
+              scoringPlay: true,
+              team: { id: "100" },
+              athletesInvolved: [{ shortName: "D. Calvert-Lewin" }]
+            }
+          ]
+        }
+      ]
+    };
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "eng.1", day: "2026-01-04" },
+      okFetch({ events: [event] })
+    )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
+    expect(games[0]?.home.scorers).toEqual(["D. Calvert-Lewin"]);
+    expect(games[0]?.away.scorers).toBeNull();
+  });
+
+  it("parses hockey goal leaders into each side's scorers", async () => {
+    const event = {
+      id: "1",
+      date: "2026-01-04T00:00:00Z",
+      competitions: [
+        {
+          competitors: [
+            {
+              homeAway: "home",
+              team: { id: "100", abbreviation: "DAL" },
+              leaders: [
+                {
+                  name: "goals",
+                  leaders: [
+                    { displayValue: "1", athlete: { shortName: "Z. Benson" } },
+                    { displayValue: "1", athlete: { shortName: "T. Hintz" } }
+                  ]
+                }
+              ]
+            },
+            { homeAway: "away", team: { id: "200", abbreviation: "MIN" } }
+          ],
+          status: { type: { state: "post", detail: "Final" } }
+        }
+      ]
+    };
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "nhl", day: "2026-01-04" },
+      okFetch({ events: [event] })
+    )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
+    // Dallas scored 4 goals in the real game this fixture is modeled on but ESPN's own "goal
+    // leaders" list only carries these two distinct scorers — that gap is expected here.
+    expect(games[0]?.home.scorers).toEqual(["Z. Benson", "T. Hintz"]);
+    expect(games[0]?.away.scorers).toBeNull();
   });
 
   it("throws a typed error on non-200 (caller degrades)", async () => {
@@ -185,6 +325,57 @@ describe("EspnDatasetAdapter", () => {
     expect(table.sections[0]?.label).toBe("AFC East");
     expect(table.sections[0]?.conference).toBe("American Football Conference");
     expect(table.sections[0]?.rows.map((r) => r.rank)).toEqual([1, 2]);
+  });
+
+  // College football ?level=3 entries carry "wins" and an "overall" record string but no
+  // "losses"/"winPercent" stat at all (verified live 2026-09-03); the parser must read the
+  // record string or every FBS team shows as undefeated.
+  it("reads losses from the overall record when ESPN omits the losses stat (college football)", async () => {
+    const payload = {
+      name: "NCAA Football",
+      children: [
+        {
+          name: "Big Ten Conference",
+          standings: {
+            entries: [
+              {
+                team: { abbreviation: "OSU", displayName: "Ohio State Buckeyes" },
+                stats: [
+                  { name: "wins", value: 10, displayValue: "10" },
+                  { name: "overall", displayValue: "10-2" }
+                ]
+              },
+              {
+                team: { abbreviation: "PSU", displayName: "Penn State Nittany Lions" },
+                stats: [{ name: "overall", displayValue: "9-3-1" }]
+              }
+            ]
+          }
+        }
+      ]
+    };
+    const table = (await fetchDataset(
+      "standings",
+      { competitionKey: "ncaaf" },
+      okFetch(payload)
+    )) as {
+      sections: { label: string | null; rows: Record<string, unknown>[] }[];
+    };
+    expect(table.sections.map((s) => s.label)).toEqual(["Big Ten Conference"]);
+    expect(table.sections[0]?.rows[0]).toMatchObject({
+      teamKey: "osu",
+      wins: 10,
+      losses: 2,
+      draws: null,
+      winPercent: 10 / 12
+    });
+    expect(table.sections[0]?.rows[1]).toMatchObject({
+      teamKey: "psu",
+      wins: 9,
+      losses: 3,
+      draws: 1,
+      winPercent: 9.5 / 13
+    });
   });
 
   it("parses news into Headline[]", async () => {

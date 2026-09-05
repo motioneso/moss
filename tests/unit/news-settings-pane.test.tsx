@@ -204,7 +204,7 @@ function renderPersonalizationState(state: "pending" | "error"): string {
 describe("NewsSettings personalization sections (#953)", () => {
   it("renders all three new sections alongside the untouched curated controls", () => {
     const html = render(personalization());
-    expect(html).toContain("Publications you add");
+    expect(html).toContain("Add source");
     expect(html).toContain("Topics across the web");
     expect(html).toContain("Excluded publishers");
     // Curated V1 controls unchanged.
@@ -219,20 +219,20 @@ describe("NewsSettings personalization sections (#953)", () => {
     expect(
       (html.match(/class="jds-btn jds-btn--secondary jds-btn--sm" disabled=""/g) ?? []).length
     ).toBe(2);
-    expect(html).toContain("/settings?section=assistant");
+    expect(html).toContain("/settings?section=aiproviders");
     // The exclusion form stays fully live without any AI prerequisite.
     expect(html).toContain('class="jds-btn jds-btn--primary jds-btn--sm"');
     expect(html).not.toContain('class="jds-btn jds-btn--primary jds-btn--sm" disabled=""');
   });
 
-  it("prerequisites met: add-source and add-topic forms are live (#975 Task 9 opens the writes)", () => {
+  it("prerequisites met: add-source button and add-topic form are live (#975 Task 9 opens the writes)", () => {
     const html = render(personalization({ availability: allOn }));
     // The Slice-1 closed-write placeholders are gone — real forms render instead.
     expect(html).not.toContain("Coming soon");
-    expect(html).toContain('id="nw-addsource-input"');
-    expect(html).toContain('id="nw-addtopic-label"');
+    expect(html).toContain("Add a source");
+    expect(html).toContain("Add a topic");
     // With prerequisites satisfied there is nothing to set up.
-    expect(html).not.toContain("/settings?section=assistant");
+    expect(html).not.toContain("/settings?section=aiproviders");
   });
 
   it("renders stored verified sources and described topics read-only", () => {
@@ -263,6 +263,7 @@ describe("NewsSettings personalization sections (#953)", () => {
         ]
       })
     );
+    expect(html).toContain("Publications you add");
     expect(html).toContain("The Atlantic");
     expect(html).toContain("theatlantic.com");
     expect(html).toContain("Watches");
@@ -371,21 +372,21 @@ describe("NewsSettings write flows (#975 Task 9)", () => {
     expect(html).toContain('aria-label="Remove The Atlantic"');
   });
 
-  it("shows Retry validation when a source needs revalidation", () => {
+  it("shows Retry when a source needs revalidation", () => {
     const html = render(
       personalization({ availability: allOn, customSources: [storedSource("needs_revalidation")] })
     );
-    expect(html).toContain("Retry validation");
+    expect(html).toContain("Retry");
   });
 
-  it("shows Retry validation when an approved source is unavailable", () => {
+  it("shows Retry when an approved source is unavailable", () => {
     const html = render(
       personalization({
         availability: allOn,
         customSources: [storedSource("approved", "temporarily_unavailable")]
       })
     );
-    expect(html).toContain("Retry validation");
+    expect(html).toContain("Retry");
   });
 
   it.each([
@@ -411,7 +412,7 @@ describe("NewsSettings write flows (#975 Task 9)", () => {
     expect(html).toContain("Retry validation");
   });
 
-  it("hides Retry validation when every stored item is approved and available", () => {
+  it("hides Retry when every stored item is approved and available", () => {
     const html = render(
       personalization({
         availability: allOn,
@@ -419,7 +420,45 @@ describe("NewsSettings write flows (#975 Task 9)", () => {
         customTopics: [storedTopic("approved")]
       })
     );
-    expect(html).not.toContain("Retry validation");
+    expect(html).not.toContain("Retry");
+  });
+});
+
+// Adding a publication by web address never calls out to a search engine — only looking up
+// topics across the web does. The "Publications you add" group must not claim it needs a
+// prerequisite it does not use; "Topics across the web" is where that claim belongs.
+describe("News settings prerequisite badges (news-badge)", () => {
+  it("shows only the AI model badge for publications you add, not a web search badge", () => {
+    const html = render(
+      personalization({
+        availability: { ...allOn, webSearchConfigured: false },
+        customSources: [storedSource("approved")]
+      })
+    );
+    const publicationsGroup = html.slice(html.indexOf("Publications you add"));
+    expect(publicationsGroup).toContain("AI model <!-- -->ready");
+    expect(publicationsGroup).not.toContain("Web search");
+  });
+
+  it("shows both the AI model and web search badges for topics across the web", () => {
+    const html = render(personalization({ availability: allOn }));
+    const topicsGroup = html.slice(
+      html.indexOf("Topics across the web"),
+      html.indexOf("Publications you add")
+    );
+    expect(topicsGroup).toContain("AI model <!-- -->ready");
+    expect(topicsGroup).toContain("Web search <!-- -->ready");
+  });
+
+  it("shows the web search badge as needed for topics across the web when it is missing", () => {
+    const html = render(
+      personalization({ availability: { ...allOn, webSearchConfigured: false } })
+    );
+    const topicsGroup = html.slice(
+      html.indexOf("Topics across the web"),
+      html.indexOf("Publications you add")
+    );
+    expect(topicsGroup).toContain("Web search <!-- -->needed");
   });
 });
 
@@ -591,7 +630,7 @@ describe("NewsSettings adversarial content renders as inert text (#975 council r
     // Both PrereqGates (sources + topics sections) render under allOff; every href must be
     // the one static settings link and nothing else.
     expect(hrefs.length).toBeGreaterThan(0);
-    expect([...new Set(hrefs)]).toEqual(["/settings?section=assistant"]);
+    expect([...new Set(hrefs)]).toEqual(["/settings?section=aiproviders"]);
     expect(hrefs.some((href) => /^(javascript|data):/i.test(href))).toBe(false);
   });
 });

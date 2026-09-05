@@ -161,6 +161,15 @@
       ]
     },
     {
+      "name": "combobox",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/combobox.tsx", "type": "registry:ui" }],
+      "dependencies": ["lucide-react"],
+      "exports": ["Combobox"],
+      "options": [],
+      "flags": [{ "prop": "disabled", "optional": true }]
+    },
+    {
       "name": "day-cell",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/day-cell.tsx", "type": "registry:ui" }],
@@ -289,6 +298,15 @@
         }
       ],
       "flags": [{ "prop": "live", "optional": true }]
+    },
+    {
+      "name": "info-tip",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/info-tip.tsx", "type": "registry:ui" }],
+      "dependencies": ["lucide-react"],
+      "exports": ["InfoTip"],
+      "options": [],
+      "flags": []
     },
     {
       "name": "legend-swatch",

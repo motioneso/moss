@@ -80,6 +80,88 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
     logoUrl: `${ESPN_LEAGUE}/mlb.png`,
     confederation: "INTL"
   },
+  // Women's pro and major college leagues (Ben, 2026-09-03: "really any pro sports, or major
+  // college sports"). Every ESPN league slug below was probed live on 2026-09-03 and returns
+  // standings groups: college-football (FBS, 12 conference groups), mens/womens-college-basketball
+  // (31 conferences each), wnba (2 conferences), college-baseball, mens-college-hockey. NOT added
+  // because ESPN's standings endpoint returns nothing for them: pwhl, nba-g-league, and wpbl
+  // (women's pro baseball) — WPBL cannot be sourced from ESPN at all.
+  // Logos: only wnba resolves under /i/teamlogos/leagues/500; every college slug tried
+  // (college-football, mens-college-basketball, womens-college-basketball, college-baseball,
+  // mens-college-hockey, ncaa, ncaaf, ncaam, ncaaw, ncaab, cfb) 404s, so those carry no logo.
+  {
+    competitionKey: "wnba",
+    label: "WNBA",
+    sportLabel: "Basketball",
+    regionLabel: null,
+    kind: "league",
+    marquee: false,
+    standingsShape: "record",
+    espnSport: "basketball",
+    espnLeague: "wnba",
+    logoUrl: `${ESPN_LEAGUE}/wnba.png`,
+    confederation: "INTL"
+  },
+  {
+    competitionKey: "ncaaf",
+    label: "NCAA Football (FBS)",
+    sportLabel: "Football",
+    regionLabel: null,
+    kind: "league",
+    marquee: false,
+    standingsShape: "record",
+    espnSport: "football",
+    espnLeague: "college-football",
+    confederation: "INTL"
+  },
+  {
+    competitionKey: "ncaam",
+    label: "NCAA Men's Basketball",
+    sportLabel: "Basketball",
+    regionLabel: null,
+    kind: "league",
+    marquee: false,
+    standingsShape: "record",
+    espnSport: "basketball",
+    espnLeague: "mens-college-basketball",
+    confederation: "INTL"
+  },
+  {
+    competitionKey: "ncaaw",
+    label: "NCAA Women's Basketball",
+    sportLabel: "Basketball",
+    regionLabel: null,
+    kind: "league",
+    marquee: false,
+    standingsShape: "record",
+    espnSport: "basketball",
+    espnLeague: "womens-college-basketball",
+    confederation: "INTL"
+  },
+  {
+    competitionKey: "ncaa-baseball",
+    label: "NCAA Baseball",
+    sportLabel: "Baseball",
+    regionLabel: null,
+    kind: "league",
+    marquee: false,
+    standingsShape: "record",
+    espnSport: "baseball",
+    espnLeague: "college-baseball",
+    confederation: "INTL"
+  },
+  {
+    competitionKey: "ncaa-hockey",
+    label: "NCAA Men's Hockey",
+    sportLabel: "Hockey",
+    regionLabel: null,
+    kind: "league",
+    marquee: false,
+    standingsShape: "record",
+    espnSport: "hockey",
+    espnLeague: "mens-college-hockey",
+    confederation: "INTL"
+  },
   {
     competitionKey: "eng.1",
     label: "Premier League",
@@ -154,6 +236,19 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
     espnSport: "soccer",
     espnLeague: "usa.1",
     logoUrl: `${ESPN_SOCCER}/19.png`, // ESPN soccer id 19 = MLS
+    confederation: "CONCACAF"
+  },
+  {
+    competitionKey: "usa.nwsl",
+    label: "NWSL",
+    sportLabel: "Soccer",
+    regionLabel: "United States",
+    kind: "league",
+    marquee: false,
+    standingsShape: "table",
+    espnSport: "soccer",
+    espnLeague: "usa.nwsl",
+    logoUrl: `${ESPN_SOCCER}/2323.png`, // ESPN soccer id 2323 = NWSL (verified 2026-09-03)
     confederation: "CONCACAF"
   },
   // Remaining UEFA top flights, plus Americas (#907 slice 3). All live-probed via

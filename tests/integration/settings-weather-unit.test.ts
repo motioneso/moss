@@ -44,14 +44,14 @@ describe("weather unit preferences", () => {
     await Promise.allSettled([server?.close(), appDb?.destroy(), boss?.stop({ graceful: false })]);
   });
 
-  it("defaults to metric without persisting a setting", async () => {
+  it("defaults to Fahrenheit without persisting a setting", async () => {
     const res = await server.inject({
       method: "GET",
       url: "/api/me/weather-unit",
       headers: { cookie: ownerCookie }
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json<GetWeatherUnitResponse>()).toEqual({ unit: "metric" });
+    expect(res.json<GetWeatherUnitResponse>()).toEqual({ unit: "imperial" });
   });
 
   it("persists imperial and returns it on the next read", async () => {
@@ -59,17 +59,17 @@ describe("weather unit preferences", () => {
       method: "PUT",
       url: "/api/me/weather-unit",
       headers: { cookie: ownerCookie, "content-type": "application/json" },
-      payload: { unit: "imperial" }
+      payload: { unit: "metric" }
     });
     expect(put.statusCode).toBe(200);
-    expect(put.json<GetWeatherUnitResponse>()).toEqual({ unit: "imperial" });
+    expect(put.json<GetWeatherUnitResponse>()).toEqual({ unit: "metric" });
 
     const get = await server.inject({
       method: "GET",
       url: "/api/me/weather-unit",
       headers: { cookie: ownerCookie }
     });
-    expect(get.json<GetWeatherUnitResponse>()).toEqual({ unit: "imperial" });
+    expect(get.json<GetWeatherUnitResponse>()).toEqual({ unit: "metric" });
   });
 
   it("keeps the preference isolated per user", async () => {
@@ -79,7 +79,7 @@ describe("weather unit preferences", () => {
       headers: { cookie: memberCookie }
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json<GetWeatherUnitResponse>()).toEqual({ unit: "metric" });
+    expect(res.json<GetWeatherUnitResponse>()).toEqual({ unit: "imperial" });
   });
 
   it("rejects an unsupported unit", async () => {

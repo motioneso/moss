@@ -8,7 +8,7 @@ import type {
   WeatherUnit
 } from "@moss/shared";
 import { formatInZone } from "@moss/shared";
-import { Button } from "@moss/ui";
+import { Button, Combobox, type ComboboxOption } from "@moss/ui";
 import { Check, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -24,6 +24,7 @@ import {
   getWeatherUnitSettings,
   putWeatherLocationSettings,
   putWeatherUnitSettings,
+  reverseWeatherLocation,
   searchWeatherLocations
 } from "../api/weather-client";
 import { queryKeys } from "../api/query-keys";
@@ -79,6 +80,13 @@ const SUPPORTED_TIME_ZONES = Intl.supportedValuesOf("timeZone")
   })
   .sort((a, b) => a.offsetMinutes - b.offsetMinutes || a.timeZone.localeCompare(b.timeZone));
 
+// Searchable picker options: "(UTC-08:00) America/Los_Angeles" also matches "los angeles".
+export const TIME_ZONE_OPTIONS: readonly ComboboxOption[] = SUPPORTED_TIME_ZONES.map((zone) => ({
+  value: zone.timeZone,
+  label: zone.label,
+  keywords: zone.timeZone.replace(/[_/]/g, " ")
+}));
+
 const DEFAULT_QUIET_HOURS: QuietHoursSettingsDto = {
   enabled: false,
   start: "22:00",
@@ -94,6 +102,21 @@ interface WeatherLocationFields {
   readonly label: string;
   readonly lat: string;
   readonly lon: string;
+}
+
+// How the current place was chosen, for the hint under the field. `source` is only known for a
+// choice made this session (see the useState in ProfilePane); on page load it's null, so the
+// hint stays plain rather than guessing.
+export function weatherLocationHint(
+  location: { readonly label: string } | null,
+  source: "auto" | "search" | null
+): string {
+  if (!location) {
+    return "No place chosen yet, so the forecast is for the main city of your time zone.";
+  }
+  if (source === "auto") return `Using ${location.label}, found with Use my location.`;
+  if (source === "search") return `Using ${location.label}, set by searching.`;
+  return `Using ${location.label}.`;
 }
 
 export function parseWeatherLocationFields(
@@ -227,12 +250,18 @@ export function ProfilePane({ me }: PaneProps) {
     retry: false
   });
   const weatherLocation = weatherLocationQuery.data?.location ?? null;
+  // How the current place was chosen, for the hint below the field. Only known for a
+  // choice made this session — on page load we can't tell, so the hint stays plain.
+  const [weatherLocationSource, setWeatherLocationSource] = useState<"auto" | "search" | null>(
+    null
+  );
   const weatherLocationMutation = useMutation({
     mutationFn: (next: PutWeatherLocationRequest) => putWeatherLocationSettings(next),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.weather.location, data);
       void queryClient.invalidateQueries({ queryKey: queryKeys.weather.today });
       weatherLocationSearchMutation.reset();
+      setWeatherLocationSource(data.location ? "search" : null);
       toast(
         data.location
           ? `Weather location saved: ${data.location.label}.`
@@ -247,15 +276,38 @@ export function ProfilePane({ me }: PaneProps) {
     mutationFn: searchWeatherLocations,
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
-  const clearWeatherLocation = () => {
-    weatherLocationMutation.mutate(null);
-  };
+  // "Use my location": ask the browser once, name the point, then save it the
+  // same way a searched place is saved. Needs a secure origin (https or localhost).
+  const browserLocationMutation = useMutation({
+    mutationFn: async () => {
+      const position = await readBrowserPosition();
+      const { location } = await reverseWeatherLocation(
+        position.coords.latitude,
+        position.coords.longitude
+      );
+      return putWeatherLocationSettings(location);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.weather.location, data);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.weather.today });
+      weatherLocationSearchMutation.reset();
+      setWeatherLocationSource("auto");
+      toast(`Weather location saved: ${data.location?.label ?? "your location"}.`, {
+        tone: "ready"
+      });
+    },
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
+  const weatherLocationBusy =
+    weatherLocationMutation.isPending ||
+    weatherLocationSearchMutation.isPending ||
+    browserLocationMutation.isPending;
   const weatherUnitQuery = useQuery({
     queryKey: queryKeys.weather.unit,
     queryFn: getWeatherUnitSettings,
     retry: false
   });
-  const weatherUnit: WeatherUnit = weatherUnitQuery.data?.unit ?? "metric";
+  const weatherUnit: WeatherUnit = weatherUnitQuery.data?.unit ?? "imperial";
   const weatherUnitMutation = useMutation({
     mutationFn: putWeatherUnitSettings,
     onSuccess: (data) => {
@@ -312,18 +364,15 @@ export function ProfilePane({ me }: PaneProps) {
         <div className="fld">
           <div className="fld__lbl">Time zone</div>
           <div className="fld__row">
-            <Select
+            <Combobox
               value={locale.timezone}
               aria-label="Time zone"
+              options={TIME_ZONE_OPTIONS}
               disabled={localeQuery.isLoading || localeMutation.isPending}
-              onChange={(event) => updateLocale({ timezone: event.currentTarget.value })}
-            >
-              {SUPPORTED_TIME_ZONES.map((zone) => (
-                <option key={zone.timeZone} value={zone.timeZone}>
-                  {zone.label}
-                </option>
-              ))}
-            </Select>
+              searchPlaceholder="Search time zones"
+              emptyText="No time zone matches."
+              onChange={(timezone) => updateLocale({ timezone })}
+            />
           </div>
         </div>
         <div className="fld">
@@ -364,18 +413,37 @@ export function ProfilePane({ me }: PaneProps) {
 
       <Group
         title="Weather"
-        desc="Search for a place to use instead of approximate timezone-based detection."
+        desc="Temperatures on Today and in the briefing, and the place they are for."
       >
-        <Field
-          label="Search for a place"
-          hint="Choose a result to save it as your weather location."
-        >
+        <Row
+          name="Unit"
+          desc={`Temperatures are shown in ${weatherUnit === "imperial" ? "Fahrenheit" : "Celsius"}.`}
+          control={
+            <Segmented
+              ariaLabel="Unit"
+              value={weatherUnit}
+              options={[
+                { value: "imperial", label: "Fahrenheit", disabled: weatherUnitBusy },
+                { value: "metric", label: "Celsius", disabled: weatherUnitBusy }
+              ]}
+              onChange={(unit) => weatherUnitMutation.mutate(unit)}
+            />
+          }
+        />
+        <Field label="Location" hint={weatherLocationHint(weatherLocation, weatherLocationSource)}>
+          <Button
+            size="sm"
+            disabled={weatherLocationBusy}
+            onClick={() => browserLocationMutation.mutate()}
+          >
+            {browserLocationMutation.isPending ? "Finding you..." : "Use my location"}
+          </Button>
           <input
             className="jds-input"
             value={weatherLocationSearch}
             aria-label="Search for a weather location"
-            placeholder="City, region, or country"
-            disabled={weatherLocationSearchMutation.isPending || weatherLocationMutation.isPending}
+            placeholder="Or search: city, region, or country"
+            disabled={weatherLocationBusy}
             onChange={(event) => {
               setWeatherLocationSearch(event.currentTarget.value);
             }}
@@ -385,19 +453,14 @@ export function ProfilePane({ me }: PaneProps) {
               }
             }}
           />
+          <Button
+            size="sm"
+            disabled={!weatherLocationSearch.trim() || weatherLocationBusy}
+            onClick={() => weatherLocationSearchMutation.mutate(weatherLocationSearch.trim())}
+          >
+            Search
+          </Button>
         </Field>
-        <Row
-          name="Search"
-          control={
-            <Button
-              size="sm"
-              disabled={!weatherLocationSearch.trim() || weatherLocationSearchMutation.isPending}
-              onClick={() => weatherLocationSearchMutation.mutate(weatherLocationSearch.trim())}
-            >
-              Search
-            </Button>
-          }
-        />
         {weatherLocationSearchMutation.data?.candidates.map((candidate) => (
           <Row
             key={`${candidate.lat}:${candidate.lon}`}
@@ -413,41 +476,6 @@ export function ProfilePane({ me }: PaneProps) {
             }
           />
         ))}
-        <Row
-          name="Manual override"
-          desc={
-            weatherLocation
-              ? `Currently using ${weatherLocation.label}.`
-              : "Using automatic timezone-based location."
-          }
-          control={
-            <div style={{ display: "flex", gap: 8 }}>
-              <Button
-                variant="quiet"
-                size="sm"
-                disabled={!weatherLocation || weatherLocationMutation.isPending}
-                onClick={clearWeatherLocation}
-              >
-                Clear override
-              </Button>
-            </div>
-          }
-        />
-        <Row
-          name="Unit"
-          desc={`Weather temperatures are shown in ${weatherUnit === "imperial" ? "Fahrenheit" : "Celsius"}.`}
-          control={
-            <Segmented
-              ariaLabel="Unit"
-              value={weatherUnit}
-              options={[
-                { value: "metric", label: "Celsius", disabled: weatherUnitBusy },
-                { value: "imperial", label: "Fahrenheit", disabled: weatherUnitBusy }
-              ]}
-              onChange={(unit) => weatherUnitMutation.mutate(unit)}
-            />
-          }
-        />
       </Group>
 
       <Group
@@ -504,4 +532,32 @@ export function ProfilePane({ me }: PaneProps) {
       <DeleteAccount me={me} />
     </>
   );
+}
+
+function readBrowserPosition(): Promise<GeolocationPosition> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    return Promise.reject(
+      new Error("This browser can't share your location. Search for a place instead.")
+    );
+  }
+  if (typeof window !== "undefined" && !window.isSecureContext) {
+    return Promise.reject(
+      new Error("Location sharing needs a secure (https) address. Search for a place instead.")
+    );
+  }
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      (error) => {
+        reject(
+          new Error(
+            error.code === error.PERMISSION_DENIED
+              ? "Location access was blocked. Allow it in the browser, or search for a place."
+              : "Your location couldn't be found right now. Search for a place instead."
+          )
+        );
+      },
+      { enableHighAccuracy: false, timeout: 15_000, maximumAge: 300_000 }
+    );
+  });
 }

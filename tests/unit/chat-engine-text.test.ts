@@ -50,16 +50,26 @@ it("keeps the repeated local time distinct across the daylight saving change (#1
   expect(after).toContain("2026-11-01 (Sunday) 01:30 (America/Los_Angeles, UTC offset -480");
 });
 
-it("tells the model to state a known local zone as fact and stay consistent (#1869)", () => {
+it("tells the model to keep a known local zone as fact but only mention it when relevant (#1869)", () => {
   const context = renderCurrentTimeContext(
     new Date("2026-08-31T05:13:00.000Z"),
     "America/Los_Angeles"
   );
 
-  expect(context).toContain("State that local date, weekday, time and time zone as fact.");
+  expect(context).toContain("mention the date, time, weekday or time zone only when the user asks");
   expect(context).toContain("Do not hedge");
   expect(context).toContain("do not flip-flop about the known time zone");
   expect(context).not.toContain("local time zone is not known");
+});
+
+it("does not instruct the model to always volunteer the local time on every turn (#2129)", () => {
+  const context = renderCurrentTimeContext(
+    new Date("2026-08-31T05:13:00.000Z"),
+    "America/Los_Angeles"
+  );
+
+  expect(context).not.toContain("State that local date, weekday, time and time zone as fact.");
+  expect(context).toContain("do not volunteer them");
 });
 
 it("admits an unknown local zone once and forbids guessing it (#1869 run_6 follow-up)", () => {

@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Clock, MessageSquareText, ShieldOff, SquarePen, X } from "lucide-react";
 import { type UIEvent, useCallback, useEffect, useRef, useState } from "react";
 
+import { EmptyState as JdsEmptyState } from "@moss/ui";
+
 import { BrandMark } from "../shell/brand-mark";
 
 import {
@@ -141,6 +143,14 @@ export function ChatDrawer(props: {
     const el = bodyRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+
+  // The history list shows most-recent-first, so "the top" (not the bottom) is where opening
+  // it should land.
+  const scrollToTop = useCallback((behavior: ScrollBehavior) => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.scrollTo({ top: 0, behavior });
   }, []);
 
   const jumpToLatest = useCallback(() => {
@@ -374,18 +384,28 @@ export function ChatDrawer(props: {
   }, [privateEnded, privateMode, props.streamErrorCount]);
 
   // #633: switching what's displayed (new chat, opening a history row, toggling the history
-  // list, or the drawer itself (re)opening — #638) always re-pins to the bottom of the
-  // newly-shown content.
+  // list, or the drawer itself (re)opening — #638) always re-pins to the start of the
+  // newly-shown content: the top for the most-recent-first history list, the bottom for a
+  // transcript.
   useEffect(() => {
+    if (showHistory) {
+      setStickToBottom(false);
+      if (props.open) {
+        scrollToTop("auto");
+      }
+      return;
+    }
     setStickToBottom(true);
     if (props.open) {
       scrollToLatest("auto");
     }
-  }, [reviewThreadId, showHistory, props.open, scrollToLatest]);
+  }, [reviewThreadId, showHistory, props.open, scrollToLatest, scrollToTop]);
 
   // #633: jump straight to the bottom (no animation) whenever a new record/loading indicator
-  // lands while the user hasn't scrolled away.
+  // lands while the user hasn't scrolled away. Never fires while the history list is showing —
+  // that list opens pinned to the top, not the bottom.
   useEffect(() => {
+    if (showHistory) return;
     if (stickToBottom) {
       scrollToLatest("auto");
     }
@@ -601,6 +621,7 @@ export function ChatDrawer(props: {
               records={effectiveRecords}
               focusActionRequestId={props.focusActionRequestId}
               onActionRequestFocused={props.onActionRequestFocused}
+              working={isWaiting}
             />
           ) : chatRouteQuery.isSuccess && !chatAvailable && !lockedModelUnavailable ? (
             <ConnectProviderEmpty isFounder={props.isFounder} />
@@ -709,7 +730,8 @@ function HistoryList(props: {
   readonly threads: readonly {
     readonly id: string;
     readonly title: string;
-    readonly updatedAt: string;
+    readonly lastActiveAt: string;
+    readonly lastMessagePreview: string | null;
   }[];
   readonly selectedThreadId: string | null;
   readonly onSelect: (threadId: string) => void;
@@ -717,7 +739,14 @@ function HistoryList(props: {
 }) {
   const locale = useUserLocale();
   if (props.threads.length === 0) {
-    return <div className="chatd-sess chatd-sess--empty">No past conversations yet.</div>;
+    return (
+      <div className="chatd-sess chatd-sess--empty">
+        <JdsEmptyState
+          icon={<MessageSquareText size={18} aria-hidden="true" />}
+          title="No past conversations yet."
+        />
+      </div>
+    );
   }
   return (
     <div className="chatd-sess">
@@ -735,8 +764,13 @@ function HistoryList(props: {
           </span>
           <span className="chatd-sess__main">
             <span className="chatd-sess__title">{thread.title}</span>
+            {thread.lastMessagePreview ? (
+              <span className="chatd-sess__preview">{thread.lastMessagePreview}</span>
+            ) : null}
           </span>
-          <span className="chatd-sess__when">{formatShortDate(thread.updatedAt, locale)}</span>
+          <span className="chatd-sess__when">
+            {relativeThreadTime(thread.lastActiveAt, locale)}
+          </span>
         </button>
       ))}
     </div>
@@ -825,9 +859,14 @@ function safeActivityKind(kind: string): ChatRecordKind {
   return "status";
 }
 
-function formatShortDate(value: string, locale: LocaleSettingsDto): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
+function relativeThreadTime(value: string, locale: LocaleSettingsDto): string {
+  const then = new Date(value).getTime();
+  if (Number.isNaN(then)) return "";
+  const mins = Math.round((Date.now() - then) / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
   return formatDate(value, locale, { month: "short", day: "numeric" });
 }
 

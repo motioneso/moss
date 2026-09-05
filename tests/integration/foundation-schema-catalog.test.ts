@@ -373,7 +373,18 @@ describe("MVP foundation schema catalog", () => {
         // #2162 integrations foundation — owner-only connections with encrypted credential.
         { version: "0207", name: "0207_integration_connections.sql" },
         // #2175 Task 3 — per-connection in-burst duplicate-call suppression memory table.
-        { version: "0208", name: "0208_integration_unsuppressed_tools.sql" }
+        { version: "0208", name: "0208_integration_unsuppressed_tools.sql" },
+        // #2175 Task 5 — one-time grandfathering for pre-existing over-threshold connections.
+        { version: "0209", name: "0209_integration_group_derivation_grandfather.sql" },
+        // #2175 Task 7 — call duration on the action audit log.
+        { version: "0210", name: "0210_moss_audit_log_duration_ms.sql" },
+        // #2175 Task 7 — audit outcome widened to record suppressed/refused calls.
+        { version: "0211", name: "0211_moss_audit_log_outcome_widen_suppressed_refused.sql" },
+        // #2208 — model rows record whether discovery or a person added them.
+        { version: "0212", name: "0212_ai_configured_models_origin.sql" },
+        { version: "0213", name: "0213_sports_reddit_sources.sql" },
+        // #2236 slice 1 — the scratchpad's single owner-only table.
+        { version: "0216", name: "0216_scratchpads.sql" }
       ]);
     } finally {
       await client.end();

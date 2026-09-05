@@ -155,7 +155,53 @@
 .sp-tk__result {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  /* #2253: with no scorer lists there are no flex:1 spacers to balance the row, so
+     the crests and score packed against the left edge. Centring the row itself keeps
+     that group in the middle whether both, one, or neither team has scorer data. */
+  justify-content: center;
+  /* #2253 round 2: a tighter gap than the rest of the card on purpose — every pixel spent
+     between the logos and the score is a pixel the scorer names lose on a narrow card. */
+  gap: var(--space-1);
+}
+/* Goal-scorer names either side of the two crests (home list hugs the home crest on its outer
+   side, away list hugs the away crest on its outer side). flex:1 lets the two lists absorb the
+   row's spare width so the crests + score stay visually centered. */
+.sp-tk__scorers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+/* #2253: align with text-align, NOT align-items. A column flex container sizes its
+   items to their content on the cross axis, so align-items: flex-end made each name's
+   list item as wide as the full name — wider than the list — and it spilled out of the
+   row uncut. Stretched items take the list's width, which is what the ellipsis below
+   needs to bite on. */
+.sp-tk__scorers--home {
+  text-align: right;
+  align-items: stretch;
+}
+.sp-tk__scorers--away {
+  text-align: left;
+  align-items: stretch;
+}
+/* #2253 round 2: a scorer name must stay readable, not get cut to "Isa…". On the narrow
+   /sports strip these columns are only ~70px wide, and one-line-plus-dots ate even the short
+   target line ("Isak 6, 8"). Names now wrap onto a second line at caption size instead, and
+   `overflow-wrap: break-word` is the last-resort guard that keeps a single very long word inside
+   the card rather than pushing the logos off centre. */
+.sp-tk__scorers li {
+  min-width: 0;
+  max-width: 100%;
+}
+.sp-tk__scorers li > span {
+  display: block;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 /* Lead-story headline (V3 mockup 2026-07-09): the card's editorial anchor, so it's set bold in
    text color at reading size — no longer the muted --text-xs caption the pre-V3 inline-thumb
@@ -442,7 +488,47 @@
 .sp-feat__result {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  /* #2253: with no scorer lists there are no flex:1 spacers to balance the row, so
+     the crests and score packed against the left edge. Centring the row itself keeps
+     that group in the middle whether both, one, or neither team has scorer data. */
+  justify-content: center;
+  /* #2253 round 2: same tighter gap as .sp-tk__result — the scorer names need that width. */
+  gap: var(--space-1);
+}
+/* Goal-scorer names either side of the two crests — same pattern as .sp-tk__scorers above. */
+.sp-feat__scorers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+/* #2253: align with text-align, NOT align-items. A column flex container sizes its
+   items to their content on the cross axis, so align-items: flex-end made each name's
+   list item as wide as the full name — wider than the list — and it spilled out of the
+   row uncut. Stretched items take the list's width, which is what the ellipsis below
+   needs to bite on. */
+.sp-feat__scorers--home {
+  text-align: right;
+  align-items: stretch;
+}
+.sp-feat__scorers--away {
+  text-align: left;
+  align-items: stretch;
+}
+/* #2253 round 2: same readable-name treatment as .sp-tk__scorers above — wrap rather than
+   trim, with a last-resort break so one long word can't shove the logos off centre. */
+.sp-feat__scorers li {
+  min-width: 0;
+  max-width: 100%;
+}
+.sp-feat__scorers li > span {
+  display: block;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 .sp-feat__score {
   margin: 0;
@@ -588,6 +674,84 @@
 .sp-brief__title {
   line-height: 1.4;
 }
+/* Story feedback overlay (Ben 2026-09-03). A .sp-fbhost wraps one story (the lead, or one brief
+   row) and parks the feedback dots in its top-right corner, over the photo when there is one, on
+   the same line as the text otherwise — never on a line of their own. The dots are hidden until
+   the story is hovered or holds focus, and stay while the menu or the reason editor is open, so a
+   page full of stories does not show a row of "..." everywhere. Pointer-less devices (touch) have
+   no hover, so they always show the dots. Mirrors the News desk's .nw-feedback placement without
+   depending on it (module isolation). */
+.sp-fbhost {
+  position: relative;
+}
+.sp-fbhost > .sp-feedback {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  margin-top: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.sp-fbhost:hover > .sp-feedback,
+.sp-fbhost:focus-within > .sp-feedback,
+.sp-fbhost > .sp-feedback:has([aria-expanded="true"]),
+.sp-fbhost > .sp-feedback:has(.sp-feedback__editor) {
+  opacity: 1;
+}
+@media (hover: none) {
+  .sp-fbhost > .sp-feedback {
+    opacity: 1;
+  }
+}
+/* Text-only hosts (list rows, card leads): keep the last words clear of the dots so a long
+   headline never runs underneath them. Photo hosts leave the image full-bleed on purpose. */
+.sp-brief__row > .sp-brief__link,
+.sp-tk__lead > .sp-tk__newstx,
+.sp-tk__stories > .sp-fbhost > .sp-tk__storylink,
+.sp-feat__leadwrap > .sp-feat__lead,
+.sp-feat__stories > .sp-fbhost > .sp-feat__storylink,
+.sp-latest__item > .sp-hl,
+.sp-newsband__brief > .sp-newsband__brieflink {
+  padding-right: var(--space-7);
+}
+.sp-tk__stories > .sp-fbhost > .sp-feedback,
+.sp-feat__stories > .sp-fbhost > .sp-feedback,
+.sp-newsband__brief > .sp-feedback,
+.sp-latest__item > .sp-feedback,
+.sp-tk__lead > .sp-feedback,
+.sp-feat__leadwrap > .sp-feedback {
+  top: 0;
+  right: 0;
+}
+/* Inside a host the reason editor and the Saved/error notes float below the dots instead of
+   flowing inline, so opening them never reflows the story. */
+.sp-fbhost > .sp-feedback {
+  flex-direction: column;
+  align-items: flex-end;
+}
+/* The editor and the Saved note are jds-card--raised (the visual comes from the primitive; this
+   sheet only places them). */
+.sp-fbhost .sp-feedback__editor {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: min(19rem, calc(100vw - 3rem));
+}
+.sp-fbhost .sp-feedback__saved {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  white-space: nowrap;
+  padding: var(--space-1) var(--space-2);
+}
+.sp-fbhost > .sp-feedback > .sp-feedback__error {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  white-space: nowrap;
+}
+
 /* "Your teams" subhead: a mono-caps section label with a top keyline that splits the followed
    cards off from the world-of-sport stories above (Ben: "before we see the your teams section"). */
 .sp-tksub {

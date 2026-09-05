@@ -202,7 +202,8 @@ async function handleAiModelsRoute(route: Route, state: MockAiApiState): Promise
       capabilities: input.capabilities,
       status: input.status ?? "active",
       tier: input.tier ?? "interactive",
-      allowUserOverride: input.allowUserOverride ?? true
+      allowUserOverride: input.allowUserOverride ?? true,
+      origin: "manual"
     });
 
     state.aiModels = [...(state.aiModels ?? []), model];
@@ -398,6 +399,7 @@ export function createMockAiModel(
     status: "active",
     tier: "interactive",
     allowUserOverride: true,
+    origin: "discovered",
     createdAt: "2026-06-06T12:00:00.000Z",
     updatedAt: "2026-06-06T12:00:00.000Z",
     ...overrides

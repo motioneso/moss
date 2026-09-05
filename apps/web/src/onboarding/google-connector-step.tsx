@@ -33,11 +33,16 @@ import { importCredentialsJson } from "../connectors/google-credentials";
 
 import { FootNote, StepHeader } from "./onboarding-ui";
 
+/* `server` mirrors the display-only half of the backend preset (@moss/connectors/presets) so
+   the settings flow can show which mail server a recognised address will use; the API still
+   resolves host/port/TLS from `id`. tests/unit/settings-imap-connect.test.tsx asserts the two
+   stay in step. */
 export const IMAP_PROVIDERS = [
   {
     id: "imap-yahoo",
     name: "Yahoo Mail",
     tile: "Y",
+    server: { host: "imap.mail.yahoo.com", port: 993, tls: true },
     prerequisite:
       "Generate an app password in Yahoo Account Security; your normal password will not work.",
     steps: [
@@ -51,6 +56,7 @@ export const IMAP_PROVIDERS = [
     id: "imap-proton",
     name: "Proton Mail",
     tile: "P",
+    server: { host: "127.0.0.1", port: 1143, tls: false },
     prerequisite:
       "Requires a paid Proton plan with Proton Mail Bridge installed and running on or reachable from this host.",
     steps: [
@@ -64,6 +70,7 @@ export const IMAP_PROVIDERS = [
     id: "imap-icloud",
     name: "iCloud",
     tile: "i",
+    server: { host: "imap.mail.me.com", port: 993, tls: true },
     prerequisite: "Generate an app-specific password at appleid.apple.com.",
     steps: [
       "Sign in at appleid.apple.com and open Sign-In and Security.",
@@ -76,6 +83,7 @@ export const IMAP_PROVIDERS = [
     id: "imap-fastmail",
     name: "Fastmail",
     tile: "F",
+    server: { host: "imap.fastmail.com", port: 993, tls: true },
     prerequisite: "Generate an app password in Fastmail Settings > Privacy & Security.",
     steps: [
       "In Fastmail, go to Settings > Privacy & Security.",

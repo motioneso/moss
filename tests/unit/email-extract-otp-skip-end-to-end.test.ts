@@ -1,0 +1,652 @@
+import { describe, expect, it, vi } from "vitest";
+
+import type { EmailMessage } from "@moss/db";
+
+import {
+  extractEmailSignals,
+  extractEmailSignalsBatch,
+  looksLikeOneTimeCodeEmail,
+  otpSkippedResult,
+  signInCodeDecision,
+  type EmailExtractDeps,
+  type EmailExtractResult,
+  type ParsedEmail
+} from "../../packages/connectors/src/email-extract.js";
+import { emailContextItemFromCache } from "../../packages/connectors/src/source-context/email.js";
+import {
+  sortFetchedEmails,
+  type SavedEmailMarker
+} from "../../packages/connectors/src/google-sync-phases.js";
+
+function fixture(overrides: Partial<ParsedEmail>): ParsedEmail {
+  return {
+    externalId: "msg-1",
+    threadId: "thread-1",
+    historyId: "history-1",
+    subject: "Hello",
+    from: "someone@example.invalid",
+    recipients: ["ben@example.invalid"],
+    receivedAt: "2026-08-03T12:00:00.000Z",
+    labelIds: ["INBOX"],
+    snippet: "Hello",
+    body: "Hello",
+    bodyTruncated: false,
+    ...overrides
+  };
+}
+
+/**
+ * Second half of the sign-in-code tests, split from tests/unit/email-extract-otp-skip.test.ts to
+ * keep each file under the repository's 1000-line limit. This half runs whole messages through
+ * the extractor, the sync sorting step and the task planner; the other half covers the rule
+ * itself, message by message.
+ */
+
+/**
+ * The reviewer's own examples, run the way a real sync runs them: through extractEmailSignals
+ * with a counting fake model. Each case says whether the message is skipped, and a skipped
+ * message must never reach the model at all.
+ */
+describe("reviewer examples, end to end through extractEmailSignals", () => {
+  const cases: Array<[string, { from: string; subject: string; body: string }, boolean]> = [
+    [
+      "an apartment check-in email carrying a door passcode",
+      {
+        from: "notifications@hotel.example.invalid",
+        subject: "Your apartment check-in instructions",
+        body: "Your door passcode is 482910. Check-in is after 3pm; please bring photo ID."
+      },
+      false
+    ],
+    [
+      "apartment check-in instructions whose passcode sits on its own line",
+      {
+        from: "notifications@hotel.example.invalid",
+        subject: "Your apartment check-in instructions",
+        body: "Your one-time passcode is 482910.\nUse it at the apartment door. Please bring photo ID."
+      },
+      false
+    ],
+    [
+      "a discount voucher whose code sits on its own line",
+      {
+        from: "no-reply@shop.example.invalid",
+        subject: "Your discount voucher",
+        body: "Your single-use code is 482910.\nApply this discount at checkout before Sunday."
+      },
+      false
+    ],
+    [
+      "a bank notice about how security codes will be delivered in a future year",
+      {
+        from: "no-reply@bank.example.invalid",
+        subject: "Security code policy update",
+        body:
+          "Starting in 2026, we are changing how security codes are delivered. " +
+          "Please review the new policy."
+      },
+      false
+    ],
+    [
+      "a realistic Google sign-in code",
+      {
+        from: "Google <no-reply@accounts.google.com>",
+        subject: "Your Google verification code",
+        body: "482910 is your Google verification code. Do not share it with anyone."
+      },
+      true
+    ],
+    [
+      "a realistic bank log-in code",
+      {
+        from: "no.reply@notifications.examplebank.co.uk",
+        subject: "774411 is your log-in code",
+        body: "Use 774411 to log in to online banking. We will never phone you to ask for it."
+      },
+      true
+    ],
+    [
+      "a realistic shop account sign-in code",
+      {
+        from: "no-reply@account.exampleshop.invalid",
+        subject: "Your Example Shop sign-in code",
+        body: "Enter 391847 to sign in to your Example Shop account. It expires in 10 minutes."
+      },
+      true
+    ],
+    [
+      "a friend's door code",
+      {
+        from: "sarah.jones@example.invalid",
+        subject: "Dinner Saturday",
+        body: "The door code is 482910. Please bring dessert and come round about seven."
+      },
+      false
+    ],
+    [
+      "an automated discount offer",
+      {
+        from: "no-reply@shop.example.invalid",
+        subject: "20% off this weekend only",
+        body: "Your discount code is 123456. Use it on your next order before Sunday."
+      },
+      false
+    ],
+    [
+      "a parcel tracking number",
+      {
+        from: "tracking@parcels.example.invalid",
+        subject: "Your parcel is on its way",
+        body: "Tracking number 482910 should arrive Thursday. Track it any time online."
+      },
+      false
+    ],
+    [
+      "a hotpot invitation",
+      {
+        from: "dave@example.invalid",
+        subject: "Friday plans",
+        body: "Please book the hotpot restaurant for Friday, table for 6 at 7pm."
+      },
+      false
+    ],
+    [
+      "an ordinary human request",
+      {
+        from: "priya@work.example.invalid",
+        subject: "Wifi",
+        body: "What is the wifi code for the meeting room? I think it is 48291086 but it fails."
+      },
+      false
+    ]
+  ];
+
+  for (const [label, message, skipped] of cases) {
+    it(`${skipped ? "skips" : "analyses"} ${label}`, async () => {
+      expect(looksLikeOneTimeCodeEmail(message)).toBe(skipped);
+
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({ category: "unknown", confidence: 0.4 })
+      }));
+      const deps: EmailExtractDeps = { runChat };
+
+      const result = await extractEmailSignals(fixture(message), deps);
+
+      if (skipped) {
+        expect(runChat).not.toHaveBeenCalled();
+        expect(result).toEqual(otpSkippedResult());
+      } else {
+        expect(runChat).toHaveBeenCalledTimes(1);
+        expect(result.signals.skipped).toBeUndefined();
+      }
+    });
+  }
+});
+
+/**
+ * The saved record keeps a preview of at most 500 characters, so words that explain a number
+ * another way can sit past the end of it. The decision about a sign-in code is therefore made
+ * once, during sync, from the whole message, and stored on the record; reading must honour
+ * that stored decision and never work it out again from the preview.
+ */
+describe("the saved decision, not the preview, decides what a reader sees", () => {
+  const doorInstructions = fixture({
+    externalId: "door-msg-1",
+    from: "notifications@hotel.example.invalid",
+    subject: "Your one-time passcode",
+    body:
+      "Your one-time passcode is 482910.\n" +
+      "x".repeat(520) +
+      "\nUse this at the apartment door. Bring photo ID."
+  });
+
+  async function saveThenRead(
+    parsed: ParsedEmail,
+    analysis: { summary: string | null; signals: Record<string, unknown> }
+  ) {
+    const saved: EmailExtractResult[] = [];
+    const sorted = await sortFetchedEmails({
+      parsedMessages: [parsed],
+      seen: new Map<string, SavedEmailMarker>(),
+      persistEmail: async (_message, extracted) => {
+        saved.push(extracted);
+      },
+      progress: { emailUpserted: 0, emailFailures: 0, errors: [] },
+      onFailure: () => {}
+    });
+    const skippedOnSave = sorted.otpKeys.includes(parsed.externalId);
+    // What the store actually keeps: a preview of the body, capped at 500 characters, plus
+    // whichever analysis the message ended up with.
+    const finalAnalysis = skippedOnSave ? saved[0]! : analysis;
+    const row = {
+      id: `cache-${parsed.externalId}`,
+      connector_account_id: "account-1",
+      owner_user_id: "user-1",
+      sender: parsed.from,
+      recipients: ["ben@example.invalid"],
+      subject: parsed.subject,
+      snippet: parsed.body.slice(0, 200),
+      body_excerpt: parsed.body.slice(0, 500),
+      received_at: new Date("2026-08-03T12:00:00.000Z"),
+      external_id: parsed.externalId,
+      external_metadata: { threadId: "thread-1" },
+      summary: finalAnalysis.summary,
+      signals: finalAnalysis.signals,
+      created_at: new Date("2026-08-03T12:00:00.000Z"),
+      updated_at: new Date("2026-08-03T12:00:00.000Z")
+    } as unknown as EmailMessage;
+    return {
+      skippedOnSave,
+      item: emailContextItemFromCache(
+        row,
+        { connectorAccountId: "account-1", providerId: "google", providerLabel: "Gmail" },
+        null
+      )
+    };
+  }
+
+  it("keeps the summary and the suggested task when the door wording falls past the preview", async () => {
+    const { skippedOnSave, item } = await saveThenRead(doorInstructions, {
+      summary: "The apartment passcode and door instructions for your arrival.",
+      signals: {
+        confidence: 0.9,
+        actionability: {
+          category: "needs_action",
+          inferredSubject: "Use the apartment passcode on arrival",
+          suggestedTasks: [{ text: "Bring photo ID to the apartment" }]
+        }
+      }
+    });
+
+    expect(skippedOnSave).toBe(false);
+    expect(item.summary).toBe("The apartment passcode and door instructions for your arrival.");
+    expect(item.actionability).toBe("needs_action");
+    expect(item.suggestedTasks.length).toBeGreaterThan(0);
+  });
+
+  it("hides a real sign-in code through the same save-and-read path", async () => {
+    const { skippedOnSave, item } = await saveThenRead(
+      fixture({
+        externalId: "otp-save-1",
+        from: "Google <no-reply@accounts.google.com>",
+        subject: "Your Google verification code",
+        body: "482910 is your Google verification code. Do not share it with anyone."
+      }),
+      { summary: null, signals: {} }
+    );
+
+    expect(skippedOnSave).toBe(true);
+    expect(item.summary).toBeNull();
+    expect(item.actionability).toBe("unknown");
+    expect(item.suggestedTasks).toEqual([]);
+  });
+});
+
+/** The two examples the reviewer ran that were wrongly hidden in the previous round. */
+describe("messages the previous round wrongly hid", () => {
+  it("keeps a hotel message that mentions a stay", () => {
+    expect(
+      looksLikeOneTimeCodeEmail({
+        from: "notifications@hotel.example.invalid",
+        subject: "Your one-time passcode",
+        body: "Your one-time passcode is 581496. Enjoy your stay with us this weekend"
+      })
+    ).toBe(false);
+  });
+
+  it("keeps a bank policy notice whose only number is a support telephone line", async () => {
+    const message = {
+      from: "no-reply@bank.example.invalid",
+      subject: "Security code policy update",
+      body:
+        "We are changing how security codes are delivered. Please review the new policy. " +
+        "For help, call 0800 123 4567."
+    };
+
+    expect(looksLikeOneTimeCodeEmail(message)).toBe(false);
+
+    const runChat = vi.fn(async () => ({
+      text: JSON.stringify({ category: "unknown", confidence: 0.4 })
+    }));
+
+    const result = await extractEmailSignals(fixture(message), { runChat });
+
+    expect(runChat).toHaveBeenCalledTimes(1);
+    expect(result.signals.skipped).toBeUndefined();
+  });
+
+  it("does not treat a telephone number on its own as a sign-in code", () => {
+    expect(
+      looksLikeOneTimeCodeEmail({
+        from: "no-reply@accounts.example.invalid",
+        subject: "Your verification code",
+        body: "If you did not ask for this, call us on 0800 123 4567."
+      })
+    ).toBe(false);
+  });
+});
+
+/**
+ * The messages a live run over a real inbox found still getting through. Every one of them is
+ * a genuine sign-in code, and every one arrived from an ordinary-looking mailbox: a hiring
+ * site sending from login@, a newspaper sending from ordercs@, a pet insurer sending from
+ * hello@. That is why the sender address is no longer part of the decision.
+ */
+describe("real sign-in code mail from ordinary-looking senders is hidden", () => {
+  const realExamples: Array<[string, { from: string; subject: string; body: string }]> = [
+    [
+      "a hiring site sending from a login mailbox",
+      {
+        from: "MyGreenhouse <login@hiring.example.invalid>",
+        subject: "Here's your MyGreenhouse security code",
+        body: "Your security code is 481920. It expires in 10 minutes."
+      }
+    ],
+    [
+      "a newspaper sending from a customer service mailbox",
+      {
+        from: "The Example Times <ordercs@newspaper.example.invalid>",
+        subject: "220250 is your verification code",
+        body: "220250 is your verification code. Do not share it with anyone."
+      }
+    ],
+    [
+      "a pet insurer sending from a hello mailbox",
+      {
+        from: "Pumpkin <hello@petinsurer.example.invalid>",
+        subject: "Your Pumpkin verification code",
+        body: "Your verification code is 730915. Enter it to finish signing in."
+      }
+    ]
+  ];
+
+  for (const [label, message] of realExamples) {
+    it(`hides ${label}`, async () => {
+      expect(looksLikeOneTimeCodeEmail(message)).toBe(true);
+
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({ category: "unknown", confidence: 0.4 })
+      }));
+
+      const result = await extractEmailSignals(fixture(message), { runChat });
+
+      expect(runChat).not.toHaveBeenCalled();
+      expect(result).toEqual(otpSkippedResult());
+    });
+  }
+});
+
+/**
+ * Round 7 review: with the sender no longer read, three ordinary messages were being hidden.
+ * A subject that replies to or forwards an earlier message, or that asks about a code, is a
+ * conversation and not a delivery. A number that follows "rejects", "case" or "call" is not a
+ * handed-over code, and a telephone number written with brackets is not one either.
+ */
+describe("ordinary talk about a code is never hidden", () => {
+  const conversations: Array<[string, { from: string; subject: string; body: string }]> = [
+    [
+      "a forwarded request for help whose code the website refused",
+      {
+        from: "mum@example.invalid",
+        subject: "Fwd: Your Google verification code",
+        body: "Can you help me sign in? The website rejects 482910 and I need access before Monday."
+      }
+    ],
+    [
+      "a support reply carrying a case number",
+      {
+        from: "alex@support.example.invalid",
+        subject: "Re: Your verification code",
+        body: "We have resolved case 583921. Please try signing in again and reply if you still need help."
+      }
+    ],
+    [
+      "a support message whose only number is a telephone number in brackets",
+      {
+        from: "alex@support.example.invalid",
+        subject: "About your security code",
+        body: "Please call me on (415) 555-4829 so I can help you regain access."
+      }
+    ]
+  ];
+
+  for (const [label, message] of conversations) {
+    it(`keeps ${label}`, async () => {
+      expect(looksLikeOneTimeCodeEmail(message)).toBe(false);
+
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({ category: "unknown", confidence: 0.4 })
+      }));
+
+      const result = await extractEmailSignals(fixture(message), { runChat });
+
+      expect(runChat).toHaveBeenCalledTimes(1);
+      expect(result.signals.skipped).toBeUndefined();
+    });
+  }
+
+  const telephoneShapes: Array<[string, string]> = [
+    ["brackets round the area code", "Please call me on (415) 555-4829 if you need a hand."],
+    ["brackets and no hyphen", "Please call me on (415) 555 4829 if you need a hand."],
+    ["dots between the groups", "Please call me on 415.555.4829 if you need a hand."],
+    ["hyphens between the groups", "Please call me on 415-555-4829 if you need a hand."],
+    ["a country code in brackets", "Please call me on (+44) 20 7946 0958 if you need a hand."]
+  ];
+
+  for (const [label, body] of telephoneShapes) {
+    it(`does not read a telephone number with ${label} as a code`, () => {
+      expect(
+        looksLikeOneTimeCodeEmail({
+          from: "alex@support.example.invalid",
+          subject: "Your verification code",
+          body
+        })
+      ).toBe(false);
+    });
+  }
+
+  const numbersThatBelongElsewhere: Array<[string, string]> = [
+    ["a case number", "We have resolved case 583921 and closed it."],
+    ["a ticket number", "Your ticket 583921 is now with the sign-in team."],
+    ["a reference number", "Quote reference 583921 when you write back to us."],
+    ["a number the website refused", "The website rejects 482910 every time I try."]
+  ];
+
+  for (const [label, body] of numbersThatBelongElsewhere) {
+    it(`does not read ${label} as a handed-over code`, () => {
+      expect(
+        looksLikeOneTimeCodeEmail({
+          from: "alex@support.example.invalid",
+          subject: "Your verification code",
+          body
+        })
+      ).toBe(false);
+    });
+  }
+
+  const conversationSubjects = [
+    "Re: Your verification code",
+    "RE: your sign-in code",
+    "Fwd: Your Google verification code",
+    "FW: your login code",
+    "Fw: your one-time passcode",
+    "About your security code",
+    "Regarding your verification code",
+    "Question about your sign-in code",
+    "Help with your verification code",
+    "Problem with your login code",
+    "Issue with your one-time passcode"
+  ];
+
+  for (const subject of conversationSubjects) {
+    it(`keeps a message whose subject reads "${subject}"`, () => {
+      expect(
+        looksLikeOneTimeCodeEmail({
+          from: "alex@support.example.invalid",
+          subject,
+          body: "Your verification code is 482910. Enter it to finish signing in."
+        })
+      ).toBe(false);
+    });
+  }
+
+  it("keeps a message whose code is only mentioned, never handed over", () => {
+    expect(
+      looksLikeOneTimeCodeEmail({
+        from: "alex@support.example.invalid",
+        subject: "Your verification code",
+        body: "I never received it. My colleague on desk 482910 said the same thing happened."
+      })
+    ).toBe(false);
+  });
+
+  it("still hides a code that sits on its own line under a sentence naming it", () => {
+    expect(
+      looksLikeOneTimeCodeEmail({
+        from: "no-reply@accounts.example.invalid",
+        subject: "Your verification code",
+        body: "Here is your verification code\n\n482910\n\nIt expires in ten minutes."
+      })
+    ).toBe(true);
+  });
+});
+
+/**
+ * Re-review 8 and Ben's ruling: when the deterministic rule is not sure, the model decides.
+ * The subject of each message below names a verification code, so the strict rule stops short
+ * and the message goes through the same analysis pass every ordinary email gets. One extra
+ * yes/no answer in that pass says whether the message really hands a code over.
+ */
+describe("when the rule is unsure, the model decides", () => {
+  const unclearMessages: Array<[string, { from: string; subject: string; body: string }]> = [
+    [
+      "a request for help whose code has expired",
+      {
+        from: "person@example.invalid",
+        subject: "Your verification code doesn't work",
+        body: "When I enter 482910, the website says it has expired. Can you help me sign in before Monday?"
+      }
+    ],
+    [
+      "a support request quoting an error code",
+      {
+        from: "person@example.invalid",
+        subject: "Your verification code",
+        body: "The error code is 482910. Please send us a screenshot so we can restore your access."
+      }
+    ],
+    [
+      "a request for help with the code on its own line",
+      {
+        from: "person@example.invalid",
+        subject: "Your verification code",
+        body: "I cannot sign in with this code:\n\n482910\n\nCan you help me regain access before Monday?"
+      }
+    ]
+  ];
+
+  for (const [label, message] of unclearMessages) {
+    it(`asks the model about ${label} and keeps it when the answer is no`, async () => {
+      expect(signInCodeDecision(message)).toBe("unclear");
+
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({
+          category: "needs_reply",
+          confidence: 0.6,
+          deliversSignInCode: false
+        })
+      }));
+
+      const result = await extractEmailSignals(fixture(message), { runChat });
+
+      expect(runChat).toHaveBeenCalledTimes(1);
+      expect(result.signals.skipped).toBeUndefined();
+      expect(result.summary).not.toBeNull();
+    });
+
+    it(`sets ${label} aside when the model answers yes`, async () => {
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({
+          category: "noise",
+          confidence: 0.9,
+          deliversSignInCode: true
+        })
+      }));
+
+      const result = await extractEmailSignals(fixture(message), { runChat });
+
+      expect(runChat).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(otpSkippedResult());
+    });
+
+    it(`sets ${label} aside in a batch when the model answers yes`, async () => {
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({
+          category: "noise",
+          confidence: 0.9,
+          deliversSignInCode: true
+        })
+      }));
+
+      const results = await extractEmailSignalsBatch([fixture(message)], { runChat });
+
+      expect(runChat).toHaveBeenCalledTimes(1);
+      expect(results[0]).toEqual(otpSkippedResult());
+    });
+  }
+
+  it("never asks the model about a message the strict rule is sure about", () => {
+    expect(
+      signInCodeDecision({
+        from: "Pumpkin <hello@petinsurer.example.invalid>",
+        subject: "Your Pumpkin verification code",
+        body: "Your verification code is 730915. Enter it to finish signing in."
+      })
+    ).toBe("hands-over-a-code");
+  });
+
+  it("leaves an ordinary message alone even if the model answers yes", async () => {
+    const message = {
+      from: "sarah.jones@example.invalid",
+      subject: "Dinner Saturday",
+      body: "The door code is 482910. Please bring dessert and come round about seven."
+    };
+
+    expect(signInCodeDecision(message)).toBe("ordinary");
+
+    const runChat = vi.fn(async () => ({
+      text: JSON.stringify({
+        category: "fyi",
+        confidence: 0.8,
+        deliversSignInCode: true
+      })
+    }));
+
+    const result = await extractEmailSignals(fixture(message), { runChat });
+
+    expect(runChat).toHaveBeenCalledTimes(1);
+    expect(result.signals.skipped).toBeUndefined();
+    expect(result.summary).not.toBeNull();
+  });
+
+  it("keeps the yes/no answer out of the stored signals", async () => {
+    const runChat = vi.fn(async () => ({
+      text: JSON.stringify({
+        category: "needs_reply",
+        confidence: 0.6,
+        deliversSignInCode: false
+      })
+    }));
+
+    const result = await extractEmailSignals(
+      fixture({
+        from: "person@example.invalid",
+        subject: "Your verification code",
+        body: "The error code is 482910. Please send us a screenshot so we can restore your access."
+      }),
+      { runChat }
+    );
+
+    expect(JSON.stringify(result.signals)).not.toContain("deliversSignInCode");
+  });
+});

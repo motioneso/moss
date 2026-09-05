@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BookmarkPlus,
   ChevronDown,
-  GitCommitHorizontal,
   MoreHorizontal,
   Paperclip,
   ThumbsDown,
@@ -18,6 +17,7 @@ import type {
   UsefulnessFeedbackDto,
   UsefulnessFeedbackKind
 } from "@moss/shared";
+import { Menu } from "@moss/ui";
 
 import { queryKeys } from "../api/query-keys";
 import {
@@ -42,12 +42,20 @@ export function Thread(props: {
   readonly records: readonly TranscriptRecord[];
   readonly focusActionRequestId?: string | null;
   readonly onActionRequestFocused?: () => void;
+  /**
+   * Whether a turn is still running. When given, a trailing step group only reads as
+   * "Thinking..." while this is true; when omitted, a trailing group (no reply after it yet)
+   * is treated as still in progress.
+   */
+  readonly working?: boolean;
 }) {
   return (
     <div className="chatd-thread" aria-live="polite">
-      {groupRecords(props.records).map((item, index) =>
+      {groupRecords(props.records, props.working).map((item, index) =>
         item.type === "activity" ? (
-          <ActivityPeek key={index} records={item.records} />
+          <ActivityPeek key={index} records={item.records} inProgress={item.inProgress} />
+        ) : item.type === "status" ? (
+          <StatusLine key={index} record={item.record} />
         ) : (
           <RecordRow
             key={index}
@@ -69,42 +77,71 @@ const ACTIVITY_KINDS: ReadonlySet<ChatRecordKind> = new Set<ChatRecordKind>([
 
 type RenderItem =
   | { readonly type: "record"; readonly record: TranscriptRecord }
-  | { readonly type: "activity"; readonly records: readonly TranscriptRecord[] };
+  | { readonly type: "status"; readonly record: TranscriptRecord }
+  | {
+      readonly type: "activity";
+      readonly records: readonly TranscriptRecord[];
+      readonly inProgress: boolean;
+    };
 
-function groupRecords(records: readonly TranscriptRecord[]): RenderItem[] {
+/**
+ * Status records ("I'll get today's top headlines for you.") surface in the thread as their own
+ * quiet lines so it is obvious the assistant is working; thinking and tool steps collapse into
+ * one "Thinking..." line per turn, placed after the statuses and just above the reply. The line
+ * is never removed once the reply lands — it stays for historical context. (Note: only action
+ * results are persisted server-side, so restored conversations carry no steps to show.)
+ */
+export function groupRecords(
+  records: readonly TranscriptRecord[],
+  working?: boolean
+): RenderItem[] {
   const items: RenderItem[] = [];
   let buffer: TranscriptRecord[] = [];
 
-  const flush = () => {
+  const flush = (inProgress: boolean) => {
     if (buffer.length > 0) {
-      items.push({ type: "activity", records: buffer });
+      items.push({ type: "activity", records: buffer, inProgress });
       buffer = [];
     }
   };
 
   for (const record of records) {
-    if (ACTIVITY_KINDS.has(record.kind) && record.kind !== "action_request") {
+    if (record.kind === "status") {
+      items.push({ type: "status", record });
+    } else if (ACTIVITY_KINDS.has(record.kind) && record.kind !== "action_request") {
       buffer.push(record);
     } else {
-      flush();
+      flush(false);
       items.push({ type: "record", record });
     }
   }
-  flush();
+  flush(working ?? true);
   return items;
 }
 
-export function ActivityPeek(props: { readonly records: readonly TranscriptRecord[] }) {
-  const count = props.records.length;
+/** Note 2 — a status update shown inline in the thread, quieter than a reply bubble. */
+function StatusLine(props: { readonly record: TranscriptRecord }) {
   return (
-    <details className="chatd-peek">
-      <summary className="chatd-peek__summary">
-        <GitCommitHorizontal size={13} aria-hidden="true" />
-        <span className="chatd-peek__label">Behind the scenes</span>
-        <span className="chatd-peek__count">
-          {count} {count === 1 ? "step" : "steps"}
-        </span>
-        <ChevronDown className="chatd-peek__chev" size={14} aria-hidden="true" />
+    <p className="chatd-status" role="status">
+      {props.record.text}
+    </p>
+  );
+}
+
+export function ActivityPeek(props: {
+  readonly records: readonly TranscriptRecord[];
+  readonly inProgress?: boolean;
+}) {
+  const count = props.records.length;
+  const inProgress = props.inProgress ?? false;
+  return (
+    <details className="chatd-peek chatd-peek--quiet" data-in-progress={inProgress || undefined}>
+      <summary className="chatd-peek__summary chatd-peek__summary--quiet">
+        <span className="chatd-peek__label">{inProgress ? "Thinking..." : "Thinking"}</span>
+        {inProgress ? null : (
+          <span className="chatd-peek__count">{`${count} ${count === 1 ? "step" : "steps"}`}</span>
+        )}
+        <ChevronDown className="chatd-peek__chev" size={12} aria-hidden="true" />
       </summary>
       <div className="chatd-peek__body">
         {props.records.map((record, index) => (
@@ -240,7 +277,7 @@ function RecordRow(props: {
       </div>
       <ChatFreshnessFooter sourceFreshness={props.record.sourceFreshness} />
       {props.record.messageId ? (
-        <ChatFeedbackMenu messageId={props.record.messageId} canRemember={false} />
+        <ChatFeedbackMenu messageId={props.record.messageId} canRemember={false} corner />
       ) : null}
     </div>
   );
@@ -309,7 +346,12 @@ export function ChatFreshnessFooter({
   );
 }
 
-function ChatFeedbackMenu(props: { readonly messageId: string; readonly canRemember: boolean }) {
+function ChatFeedbackMenu(props: {
+  readonly messageId: string;
+  readonly canRemember: boolean;
+  /** Note 3 — pin to the top-right of the assistant message and show only on hover/focus. */
+  readonly corner?: boolean;
+}) {
   const queryClient = useQueryClient();
   const [last, setLast] = useState<UsefulnessFeedbackDto | null>(null);
   const createMutation = useMutation({
@@ -333,41 +375,47 @@ function ChatFeedbackMenu(props: { readonly messageId: string; readonly canRemem
     }
   });
 
+  const className = [
+    "feedback-menu",
+    props.corner ? "feedback-menu--corner" : null,
+    last ? "is-saved" : null
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const items = [
+    {
+      id: "more_like_this",
+      label: "More like this",
+      icon: <ThumbsUp size={13} aria-hidden="true" />,
+      disabled: createMutation.isPending
+    },
+    {
+      id: "not_useful",
+      label: "Not useful",
+      icon: <ThumbsDown size={13} aria-hidden="true" />,
+      disabled: createMutation.isPending
+    },
+    ...(props.canRemember
+      ? [
+          {
+            id: "remember_this",
+            label: "Remember this",
+            icon: <BookmarkPlus size={13} aria-hidden="true" />,
+            disabled: createMutation.isPending
+          }
+        ]
+      : [])
+  ];
+
   return (
-    <div className="feedback-menu">
-      <details className="feedback-menu__details">
-        <summary className="feedback-menu__trigger" aria-label="Feedback" title="Feedback">
-          <MoreHorizontal size={14} aria-hidden="true" />
-        </summary>
-        <div className="feedback-menu__list">
-          <button
-            type="button"
-            onClick={() => createMutation.mutate("more_like_this")}
-            disabled={createMutation.isPending}
-          >
-            <ThumbsUp size={13} aria-hidden="true" />
-            More like this
-          </button>
-          <button
-            type="button"
-            onClick={() => createMutation.mutate("not_useful")}
-            disabled={createMutation.isPending}
-          >
-            <ThumbsDown size={13} aria-hidden="true" />
-            Not useful
-          </button>
-          {props.canRemember ? (
-            <button
-              type="button"
-              onClick={() => createMutation.mutate("remember_this")}
-              disabled={createMutation.isPending}
-            >
-              <BookmarkPlus size={13} aria-hidden="true" />
-              Remember this
-            </button>
-          ) : null}
-        </div>
-      </details>
+    <div className={className}>
+      <Menu
+        triggerIcon={<MoreHorizontal size={14} aria-hidden="true" />}
+        triggerLabel="Feedback"
+        items={items}
+        onSelect={(id) => createMutation.mutate(id as UsefulnessFeedbackKind)}
+      />
       {last ? (
         <span className="feedback-menu__status">
           Saved

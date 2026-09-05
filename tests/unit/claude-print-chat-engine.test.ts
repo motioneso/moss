@@ -13,7 +13,7 @@ vi.mock("node:child_process", async () => ({
 }));
 
 function fakeChild() {
-  const listeners = new Map<string, Array<() => void>>();
+  const listeners = new Map<string, Array<(code?: number | null) => void>>();
   const stdin = new PassThrough();
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -24,11 +24,11 @@ function fakeChild() {
       queueMicrotask(() => listeners.get("exit")?.forEach((listener) => listener()));
       return true;
     }),
-    on: vi.fn((event: string, callback: () => void) => {
+    on: vi.fn((event: string, callback: (code?: number | null) => void) => {
       listeners.set(event, [...(listeners.get(event) ?? []), callback]);
       return child;
     }),
-    once: vi.fn((event: string, callback: () => void) => {
+    once: vi.fn((event: string, callback: (code?: number | null) => void) => {
       listeners.set(event, [...(listeners.get(event) ?? []), callback]);
       return child;
     }),
@@ -132,7 +132,7 @@ describe("ClaudePrintChatEngine", () => {
       expect.objectContaining({
         cwd: "/tmp/jarvis-neutral",
         detached: true,
-        stdio: "ignore"
+        stdio: ["ignore", "ignore", "pipe"]
       })
     );
     expect(await engine.isAlive()).toBe(true);
@@ -438,5 +438,511 @@ describe("ClaudePrintChatEngine — vault read-only allowlist (#634)", () => {
     expect(launchLineAt()).not.toMatch(/\bBash\b/);
     expect(launchLineAt()).not.toContain("Read(/vault)");
     expect(launchLineAt()).toContain("mcp__jarvis__*");
+  });
+
+  describe("#2164 r21 (item 3) toolName passthrough", () => {
+    it("carries toolName through readNew for a tool_use event", async () => {
+      const transcriptPath =
+        "/home/test/.claude/projects/-tmp-jarvis-neutral/00000000-0000-4000-8000-000000000020.jsonl";
+      const transcript = JSON.stringify({
+        type: "assistant",
+        message: {
+          role: "assistant",
+          stop_reason: "tool_use",
+          content: [{ type: "tool_use", name: "read_note", input: {} }]
+        }
+      });
+      const io = fakeIo({ [transcriptPath]: `${transcript}\n` });
+      const engine = new ClaudePrintChatEngine("user-1", io, {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000020"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+
+      const result = await engine.readNew(0);
+
+      expect(result.records).toEqual([{ kind: "tool", text: "read_note", toolName: "read_note" }]);
+    });
+
+    it("carries toolCallId and a rejected record through readNew for an mcp__ tool_use plus its errored tool_result", async () => {
+      const transcriptPath =
+        "/home/test/.claude/projects/-tmp-jarvis-neutral/00000000-0000-4000-8000-000000000023.jsonl";
+      const assistantLine = JSON.stringify({
+        type: "assistant",
+        message: {
+          role: "assistant",
+          stop_reason: "tool_use",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_seam1",
+              name: "mcp__jarvis__sports_retry_source",
+              input: {}
+            }
+          ]
+        }
+      });
+      const userLine = JSON.stringify({
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "tool_result", tool_use_id: "toolu_seam1", is_error: true }]
+        }
+      });
+      const io = fakeIo({ [transcriptPath]: `${assistantLine}\n${userLine}\n` });
+      const engine = new ClaudePrintChatEngine("user-1", io, {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000023"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+
+      const result = await engine.readNew(0);
+
+      const toolRecord = result.records.find((r) => r.kind === "tool" && r.toolName);
+      const rejectionRecord = result.records.find((r) => r.kind === "tool" && !r.toolName);
+      expect(toolRecord).toMatchObject({ toolCallId: "toolu_seam1" });
+      expect(rejectionRecord).toMatchObject({ toolCallId: "toolu_seam1", rejected: true });
+    });
+
+    it("carries toolCallId and the rejection record across two separate readNew polls", async () => {
+      const transcriptPath =
+        "/home/test/.claude/projects/-tmp-jarvis-neutral/00000000-0000-4000-8000-000000000024.jsonl";
+      const assistantLine = JSON.stringify({
+        type: "assistant",
+        message: {
+          role: "assistant",
+          stop_reason: "tool_use",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_seam2",
+              name: "mcp__jarvis__sports_retry_source",
+              input: {}
+            }
+          ]
+        }
+      });
+      const userLine = JSON.stringify({
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "tool_result", tool_use_id: "toolu_seam2", is_error: true }]
+        }
+      });
+      const io = fakeIo({ [transcriptPath]: `${assistantLine}\n` });
+      const engine = new ClaudePrintChatEngine("user-1", io, {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000024"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+
+      const first = await engine.readNew(0);
+      expect(first.records).toMatchObject([
+        { kind: "tool", toolName: "mcp__jarvis__sports_retry_source", toolCallId: "toolu_seam2" }
+      ]);
+
+      io.writes[transcriptPath] = `${assistantLine}\n${userLine}\n`;
+      const second = await engine.readNew(first.offset);
+
+      expect(second.records).toMatchObject([
+        { kind: "tool", toolCallId: "toolu_seam2", rejected: true }
+      ]);
+      expect(second.records[0]).not.toHaveProperty("toolName", "mcp__jarvis__sports_retry_source");
+    });
+  });
+
+  describe("#2164 r21 (item 4) last-submit diagnostics", () => {
+    it("returns undefined-exitCode/empty-stderr diagnostics before any submit", () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000021"
+      });
+      expect(engine.getLastSubmitDiagnostics()).toEqual({ stderrTail: "", exitCode: null });
+    });
+
+    it("captures a bounded, scrubbed stderr tail and exit code from the submitted child", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000022"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      await engine.submit("hello");
+
+      currentChild.stderr.write(
+        `boom Authorization: Bearer sekrit-token-value and jst_deadbeef and /tmp/jarvis-neutral leaked\n`
+      );
+      const exitCallback = currentChild.once.mock.calls.find(([event]) => event === "exit")?.[1];
+      exitCallback?.(1);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const diag = engine.getLastSubmitDiagnostics();
+      expect(diag.exitCode).toBe(1);
+      expect(diag.stderrTail).not.toContain("sekrit-token-value");
+      expect(diag.stderrTail).not.toContain("jst_deadbeef");
+      expect(diag.stderrTail).not.toContain("/tmp/jarvis-neutral");
+      expect(diag.stderrTail).toContain("boom");
+    });
+
+    it("bounds the captured stderr tail to ~4KB, dropping the oldest bytes", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000023"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      await engine.submit("hello");
+
+      currentChild.stderr.write("a".repeat(3000));
+      currentChild.stderr.write("b".repeat(3000));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const diag = engine.getLastSubmitDiagnostics();
+      // 3000 "a"s + 3000 "b"s = 6000 chars, bounded to the last 4096: the oldest 1904 "a"s drop,
+      // leaving 1096 "a"s followed by all 3000 "b"s.
+      expect(diag.stderrTail.length).toBe(4096);
+      expect(diag.stderrTail).toBe("a".repeat(1096) + "b".repeat(3000));
+    });
+
+    // #2164 r21 security correction (item 2a) — the launch line runs prompt text through
+    // `bash -lc "$(cat <promptPath>)"`, so bash expands it into the `claude` child's argv before
+    // exec. An error that echoes argv would put the user's prompt text into stderr, and the
+    // docstring's promise that the diagnostic "never includes the prompt" was previously
+    // unenforced. Proves the current turn's sanitized prompt is scrubbed like any other secret.
+    it("scrubs the current turn's prompt text out of a stderr tail that echoes it", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000025"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      const promptText = "the secret prompt marker XYZ789 that must never leak";
+      await engine.submit(promptText);
+
+      // #2164 r22 — the prompt-echo line and the failure-reason line are written separately: the
+      // r22 fragment scrub drops a whole line containing any 32-char window of the prompt, so a
+      // single line carrying both the prompt and "command failed" would drop the failure reason
+      // along with the leak. Splitting them proves the scrub still surfaces unrelated diagnostic
+      // text while removing the leaking line entirely.
+      currentChild.stderr.write(`claude -p "${promptText}" exited unexpectedly\n`);
+      currentChild.stderr.write("command failed\n");
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const diag = engine.getLastSubmitDiagnostics();
+      expect(diag.stderrTail).not.toContain(promptText);
+      expect(diag.stderrTail).not.toContain("secret prompt marker XYZ789");
+      expect(diag.stderrTail).toContain("command failed");
+    });
+
+    // #2164 r21 security correction (item 2b) — `.slice(-4096)` previously ran BEFORE
+    // redaction, at accumulation time, so a token whose bytes straddle the trim boundary could
+    // survive as an unmatched fragment missing its "jst_" prefix (unredactable — the regex
+    // requires the prefix). Builds a buffer already at the 4096 cap with a jst_ token sitting
+    // at its very front, then a small later chunk whose length lands the cut exactly inside the
+    // token, evicting its "jst_" prefix but leaving the rest — the exact straddle the ruling
+    // describes.
+    it("does not leak an unmatched token fragment left behind when a jst_ token straddles the 4 KB seam", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000026"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      await engine.submit("hello");
+
+      // Token "jst_deadbeefcafe1234" (20 chars) + "\n" (21 chars) at the very front of an
+      // exactly-4096-char buffer.
+      const token = "jst_deadbeefcafe1234";
+      const tokenLine = `${token}\n`;
+      const padding = "z".repeat(4096 - tokenLine.length);
+      currentChild.stderr.write(tokenLine + padding);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // A 10-char chunk cuts exactly 10 chars off the front — through "jst_deadbe", the first
+      // half of the token — leaving "efcafe1234" as an unmatched, prefix-less fragment.
+      currentChild.stderr.write("MOREDATAXY");
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const diag = engine.getLastSubmitDiagnostics();
+      expect(diag.stderrTail).not.toContain(token);
+      expect(diag.stderrTail).not.toContain("efcafe1234");
+    });
+
+    // #2164 r22 security correction (item 3) — a prompt longer than the 4096-byte stderr cap can
+    // never appear whole in a stderr line, so the r21 whole-literal scrub never matched. Builds a
+    // long prompt, then echoes only a middle slice of it (a realistic argv-echo fragment) and
+    // proves no 32-char window of the prompt survives.
+    it("drops a stderr line containing only a fragment of a too-long prompt", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000027"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      const longPrompt = "secret-instruction-marker-" + "x".repeat(5000) + "-end-of-prompt";
+      await engine.submit(longPrompt);
+
+      const fragment = longPrompt.slice(2000, 2100);
+      currentChild.stderr.write(`bash: -lc: line 1: claude: ${fragment}\n`);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const diag = engine.getLastSubmitDiagnostics();
+      for (let i = 0; i <= longPrompt.length - 32; i += 17) {
+        expect(diag.stderrTail).not.toContain(longPrompt.slice(i, i + 32));
+      }
+    });
+
+    it("keeps a stderr line unrelated to the prompt intact", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000028"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      const longPrompt = "secret-instruction-marker-" + "x".repeat(5000) + "-end-of-prompt";
+      await engine.submit(longPrompt);
+
+      currentChild.stderr.write("bash: claude: command not found\n");
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const diag = engine.getLastSubmitDiagnostics();
+      expect(diag.stderrTail).toContain("bash: claude: command not found");
+    });
+
+    it("resets stderr/exit code diagnostics at the start of each submit", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000024"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      await engine.submit("first");
+      currentChild.stderr.write("first failure\n");
+      const firstExit = currentChild.once.mock.calls.find(([event]) => event === "exit")?.[1];
+      firstExit?.(1);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(engine.getLastSubmitDiagnostics().exitCode).toBe(1);
+
+      currentChild = fakeChild();
+      spawnMock.mockReturnValue(currentChild);
+      await engine.submit("second");
+
+      const diag = engine.getLastSubmitDiagnostics();
+      expect(diag.exitCode).toBeNull();
+      expect(diag.stderrTail).toBe("");
+    });
+  });
+});
+
+// #2164 r23 security correction (item 2) — the r22 window scan cut 32-char windows from the
+// sanitized prompt with newlines intact while the stderr side split on "\n" first, so a window
+// straddling a prompt line boundary could never match inside one stderr line. If every line of
+// the prompt is under 32 characters, no window can ever match and the whole prompt survives an
+// argv echo verbatim. The scrub is now line-wise: 32+ char lines still window-match, and
+// 8-31 char trimmed lines are dropped as whole literals.
+describe("#2164 r23 (item 2) multi-line prompt scrub", () => {
+  it("drops stderr lines echoing prompt lines that are each shorter than the 32-char window", async () => {
+    const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+      mux: fakeMux(),
+      homeBase: "/home/test",
+      sessionId: "00000000-0000-4000-8000-000000000029"
+    });
+    await engine.launch({
+      neutralDir: "/tmp/jarvis-neutral",
+      personaPath: "/tmp/jarvis-neutral/persona.md",
+      personaText: "persona"
+    });
+    const line1 = "the vault passphrase is";
+    const line2 = "correct horse battery";
+    const multiLinePrompt = `${line1}\n${line2}`;
+    await engine.submit(multiLinePrompt);
+
+    currentChild.stderr.write(`claude: argv echo: ${line1}\n`);
+    currentChild.stderr.write(`claude: argv echo: ${line2}\n`);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const diag = engine.getLastSubmitDiagnostics();
+    expect(diag.stderrTail).not.toContain(line1);
+    expect(diag.stderrTail).not.toContain(line2);
+  });
+
+  it("drops a truncated argv-echo fragment carrying a whole short prompt line in a too-long, every-line-short prompt", async () => {
+    const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+      mux: fakeMux(),
+      homeBase: "/home/test",
+      sessionId: "00000000-0000-4000-8000-000000000030"
+    });
+    await engine.launch({
+      neutralDir: "/tmp/jarvis-neutral",
+      personaPath: "/tmp/jarvis-neutral/persona.md",
+      personaText: "persona"
+    });
+    // 200 distinct lines, each genuinely under the 32-char window after trim (23 chars, so
+    // each also clears the 8-char literal floor), so the whole prompt exceeds the 4096-byte
+    // stderr cap while no single line is ever long enough to produce a window — every line
+    // instead lands in the line-wise literal set this correction adds.
+    const lines = Array.from(
+      { length: 200 },
+      (_, i) => `secret token ${i.toString().padStart(4, "0")} value`
+    );
+    const multiLinePrompt = lines.join("\n");
+    expect(Buffer.byteLength(multiLinePrompt, "utf8")).toBeGreaterThan(4096);
+    await engine.submit(multiLinePrompt);
+
+    // A truncated argv echo of the launch command that happens to carry one whole prompt line
+    // verbatim, with no adjacent newline — as a real truncated echo of a single argv token would.
+    const carriedLine = lines[123]!;
+    expect(carriedLine.trim().length).toBeGreaterThanOrEqual(8);
+    expect(carriedLine.trim().length).toBeLessThan(32);
+    currentChild.stderr.write(`bash: -lc: line 1: claude: --resume x ${carriedLine} trailing\n`);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const diag = engine.getLastSubmitDiagnostics();
+    // Both halves of the line-wise scrub: no 32-char window of any prompt line survives, and no
+    // whole prompt line of 8+ characters survives.
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (line.length >= 32) {
+        for (let i = 0; i <= line.length - 32; i++) {
+          expect(diag.stderrTail).not.toContain(line.slice(i, i + 32));
+        }
+      } else if (line.length >= 8) {
+        expect(diag.stderrTail).not.toContain(line);
+      }
+    }
+  });
+
+  it("keeps an unrelated stderr line intact in the presence of a multi-line prompt", async () => {
+    const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+      mux: fakeMux(),
+      homeBase: "/home/test",
+      sessionId: "00000000-0000-4000-8000-000000000031"
+    });
+    await engine.launch({
+      neutralDir: "/tmp/jarvis-neutral",
+      personaPath: "/tmp/jarvis-neutral/persona.md",
+      personaText: "persona"
+    });
+    const line1 = "the vault passphrase is";
+    const line2 = "correct horse battery";
+    await engine.submit(`${line1}\n${line2}`);
+
+    currentChild.stderr.write("bash: claude: command not found\n");
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const diag = engine.getLastSubmitDiagnostics();
+    expect(diag.stderrTail).toContain("bash: claude: command not found");
+  });
+});
+
+// #2164 r23 security correction (item 3) — `submit()` never kills the previous turn's child on
+// this path; only teardown or an explicit Stop do. A still-running earlier child's stderr
+// listener previously closed over `this`, so it could keep writing into a shared
+// lastSubmitStderr/lastSubmitExitCode pair after a later submit() reset it, corrupting the
+// current turn's diagnostic with a different turn's private text and exit code. Each submit()
+// now isolates its capture in a local object the listeners close over.
+describe("#2164 r23 (item 3) per-submit capture isolation", () => {
+  it("keeps a later turn's diagnostic clean of an earlier, still-writing turn's stderr and prompt", async () => {
+    const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+      mux: fakeMux(),
+      homeBase: "/home/test",
+      sessionId: "00000000-0000-4000-8000-000000000032"
+    });
+    await engine.launch({
+      neutralDir: "/tmp/jarvis-neutral",
+      personaPath: "/tmp/jarvis-neutral/persona.md",
+      personaText: "persona"
+    });
+
+    const turnOneChild = currentChild;
+    await engine.submit("what is the turn one secret plan");
+    turnOneChild.stderr.write("turn one is still running\n");
+    await new Promise((resolve) => setImmediate(resolve));
+
+    currentChild = fakeChild();
+    spawnMock.mockReturnValue(currentChild);
+    await engine.submit("totally different turn two question");
+
+    // Turn one's abandoned child keeps writing after turn two has been submitted.
+    turnOneChild.stderr.write("turn one wrote again after being abandoned\n");
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const diag = engine.getLastSubmitDiagnostics();
+    expect(diag.stderrTail).not.toContain("turn one is still running");
+    expect(diag.stderrTail).not.toContain("turn one wrote again after being abandoned");
+    expect(diag.stderrTail).not.toContain("turn one secret plan");
+  });
+
+  it("reports the current turn's exit code, never an earlier abandoned turn's late exit", async () => {
+    const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+      mux: fakeMux(),
+      homeBase: "/home/test",
+      sessionId: "00000000-0000-4000-8000-000000000033"
+    });
+    await engine.launch({
+      neutralDir: "/tmp/jarvis-neutral",
+      personaPath: "/tmp/jarvis-neutral/persona.md",
+      personaText: "persona"
+    });
+
+    const turnOneChild = currentChild;
+    await engine.submit("turn one");
+
+    currentChild = fakeChild();
+    spawnMock.mockReturnValue(currentChild);
+    await engine.submit("turn two");
+
+    expect(engine.getLastSubmitDiagnostics().exitCode).toBeNull();
+
+    // Turn one's child finally exits after turn two is already in flight.
+    const turnOneExit = turnOneChild.once.mock.calls.find(([event]) => event === "exit")?.[1];
+    turnOneExit?.(7);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(engine.getLastSubmitDiagnostics().exitCode).toBeNull();
   });
 });

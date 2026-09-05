@@ -64,6 +64,15 @@ export const emailModuleManifest = {
       entry: "./settings"
     }
   ],
+  features: [
+    {
+      id: "email.skip-sign-in-code-emails",
+      description:
+        "An email that clearly hands over a sign-in code is set aside without analysis. " +
+        "When the message is unclear, the model decides, so requests for help, replies, " +
+        "forwards and door, booking or discount codes still come through."
+    }
+  ],
   permissions: [
     {
       id: "email.view",

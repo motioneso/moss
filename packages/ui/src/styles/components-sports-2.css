@@ -772,3 +772,43 @@
   font-size: var(--text-2xs);
   color: var(--text-subtle);
 }
+
+/* Standings leagues settings (Ben 2026-09-03): the heading is a collapse toggle; its chevron sits
+   faint until hovered. Country rows in the checklist reuse the same chevron treatment. */
+.sp-standings-settings__toggle {
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+.sp-standings-settings__toggle > svg {
+  color: var(--text-faint);
+}
+.sp-standings-settings__toggle:hover > svg {
+  color: var(--text);
+}
+/* Configure standings type hierarchy: sport heading > country row > league row. */
+.sp-standings-tree__sport-label {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+.sp-standings-tree__league > span:last-child {
+  font-weight: var(--weight-regular);
+}
+.sp-standings-tree__toggle {
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+.sp-standings-tree__toggle > svg {
+  color: var(--text-faint);
+}
+.sp-standings-tree__toggle:hover > svg {
+  color: var(--text);
+}
+
+/* Goal-scorer lists beside the crests on finished games (Today ticker and Sports feature row). */
+.sp-tk__scorers,
+.sp-feat__scorers {
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+}

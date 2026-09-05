@@ -2,7 +2,7 @@
 // (sports' widget gets its CSS transitively by importing from sports-page; this one doesn't).
 import "./styles/news-2.css";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { getNewsOverview } from "./news-client.js";
 import { newsQueryKeys } from "./query-keys.js";
@@ -10,6 +10,31 @@ import { StoryFeedbackMenu } from "./story-feedback-menu.js";
 
 // One lead + three brief lines keeps Today compact while sharing News' exact ranking.
 const WIDGET_CAP = 4;
+
+/**
+ * A brief row's source tag: the publisher's favicon when one loaded, the publisher name as plain
+ * text otherwise (Ben: show the icon, keep the name as the image's alt text and tooltip). Tracks
+ * the URL that failed, not a bare flag, so a later story from a publisher whose icon loaded fine
+ * doesn't stay stuck showing text because an earlier request for the same URL once failed.
+ */
+function SourceTag(props: { faviconUrl: string | null; label: string }): ReactNode {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  if (props.faviconUrl && props.faviconUrl !== failedUrl) {
+    return (
+      <img
+        className="nw-twlist__favicon"
+        src={props.faviconUrl}
+        alt={props.label}
+        title={props.label}
+        width={14}
+        height={14}
+        loading="lazy"
+        onError={() => setFailedUrl(props.faviconUrl)}
+      />
+    );
+  }
+  return <>{props.label}</>;
+}
 
 /**
  * Today "News desk" widget. Reuses the same `getNewsOverview()` query as the `/news` page
@@ -45,7 +70,7 @@ export function NewsTodayWidget(): ReactNode {
       <div className="jds-brief__title">Top stories</div>
       {/* Lead story — broadsheet treatment. Photo (when present), source tag, display headline,
           and a one-line dek clamped so a long summary can't push the brief list off the fold. */}
-      <div className="nw-twlead-wrap">
+      <div className="nw-twlead-wrap nw-fbhost">
         <a className="nw-twlead" href={lead.url} target="_blank" rel="noreferrer">
           {lead.imageUrl ? (
             <img className="nw-twlead__photo" src={lead.imageUrl} alt="" loading="lazy" />
@@ -60,9 +85,11 @@ export function NewsTodayWidget(): ReactNode {
         <ul className="nw-twlist">
           {rest.map((headline) => (
             <li className="nw-twlist__item" key={headline.id}>
-              <div className="nw-twlist__row">
+              <div className="nw-twlist__row nw-fbhost">
                 <a className="nw-twlist__link" href={headline.url} target="_blank" rel="noreferrer">
-                  <span className="nw-twlist__tag">{headline.sourceLabel}</span>
+                  <span className="nw-twlist__tag">
+                    <SourceTag faviconUrl={headline.faviconUrl} label={headline.sourceLabel} />
+                  </span>
                   <span className="nw-twlist__title">{headline.title}</span>
                 </a>
                 <StoryFeedbackMenu headline={headline} surface="today" />

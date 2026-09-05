@@ -17,14 +17,17 @@
  *   - stateStore      ← the settings module's `SettingsRepository` provider-install-state methods,
  *                       run under the admin-scoped DataContextDb the route resolves (0103 write
  *                       RLS = `current_actor_is_admin()`; the api is the SOLE writer, §A.4).
- *   - reconcile       ← the §A.4.2 stale-`installing` projection (`reconcileInstallingRow`) driven
- *                       over (persisted row, fresh `probeProvider`) for every persisted row, so a
- *                       crash-left `installing` row is corrected + surfaced on the status load.
+ *   - reconcile       ← the §A.4.2 stale-`installing` projection (`reconcileInstallingRow`) for a
+ *                       crash-left `installing` row, PLUS (#2232) the §L.4.2 login projection
+ *                       (`reconcileProviderLifecycleRow`) for a `ready` row, so a saved login that
+ *                       has since expired is caught and downgraded to `needs_login` on the status
+ *                       load instead of showing "connected" forever.
  */
 
 import type { DataContextDb } from "@moss/db";
 import {
   reconcileInstallingRow,
+  reconcileProviderLifecycleRow,
   type ProviderCatalog,
   type ProviderInstallStateStore as ChatInstallStateStore,
   type RpcConnection
@@ -171,25 +174,37 @@ export function buildOnboardingInstall(deps: {
       const store = reconcileStoreFor(scopedDb);
       for (const row of rows) {
         if (!INSTALL_PROVIDER_KINDS.includes(row.provider)) continue;
-        if (row.state !== "installing") {
-          // Not stale — surface the persisted state directly (no probe, no write).
+        if (row.state !== "installing" && row.state !== "ready") {
+          // Not stale, and not a "ready" row that could be hiding an expired login — surface the
+          // persisted state directly (no probe, no write).
           out[row.provider] = row.state;
           continue;
         }
-        // A persisted `installing` row may be STALE (api crashed mid-install). Probe + reconcile.
-        // Fail-soft: a probe/socket fault leaves the row `installing` (the projection treats an
-        // untrusted probe as no-op) — never break the status load on a transient probe.
+        // A persisted `installing` row may be STALE (api crashed mid-install). A persisted `ready`
+        // row may be LYING (#2242: the saved login token expired, but nothing has re-checked it
+        // since). Either way, probe + reconcile. Fail-soft: a probe/socket fault leaves the row
+        // unchanged (the projection treats an untrusted probe as no-op) — never break the status
+        // load on a transient probe. #2242: a "ready" row demands a REAL check (forceFresh) here,
+        // not a saved answer — this reconcile is the one place that revisits a saved success on
+        // its own, without anyone pressing Log in, so it must not just repeat the same stale
+        // success back for up to five minutes. An "installing" row keeps the plain check.
         try {
           const conn = deps.getConnection();
           const probe = conn
-            ? await conn.probeProvider({ provider: row.provider })
+            ? await conn.probeProvider({
+                provider: row.provider,
+                ...(row.state === "ready" ? { forceFresh: true } : {})
+              })
             : ({ status: "error" } as const);
-          const corrected = await reconcileInstallingRow(row.provider, store, probe);
+          const corrected =
+            row.state === "installing"
+              ? await reconcileInstallingRow(row.provider, store, probe)
+              : await reconcileProviderLifecycleRow(row.provider, store, probe);
           out[row.provider] = corrected ?? row.state;
         } catch (err) {
           deps.logger?.warn(
             { err: err instanceof Error ? err.message : String(err), provider: row.provider },
-            "provider-install reconcile probe failed; leaving installing state"
+            "provider-install reconcile probe failed; leaving persisted state"
           );
           out[row.provider] = row.state;
         }

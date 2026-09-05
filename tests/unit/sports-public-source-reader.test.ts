@@ -1,151 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { AccessContext, DataContextDb } from "@moss/db";
 import { isPublicFeedDocument } from "@moss/news";
 
 import type { SportsSafeFetchPort } from "../../packages/sports/src/source/discovery.js";
-import { SportsPublicSourceReader } from "../../packages/sports/src/source/public-source-reader.js";
-import { validateSportsSourceRecipe } from "../../packages/sports/src/source/recipe.js";
-import type {
-  SportsRuntimeSource,
-  SportsRuntimeTargetResult,
-  SportsSourcesRepository
-} from "../../packages/sports/src/source/repository.js";
-import type { SportsNewsScope } from "../../packages/sports/src/source/scope.js";
+import type { SportsRuntimeSource } from "../../packages/sports/src/source/repository.js";
 
-const actor: AccessContext = { actorUserId: "user-a", requestId: "request-a" };
-
-const jsonRecipe = {
-  version: 1,
-  kind: "json",
-  fetchHosts: ["api.publisher.example"],
-  request: {
-    urlTemplate: "https://api.publisher.example/team/{teamId}/news",
-    slots: [{ name: "teamId", location: "path", encoding: "path_segment", maxLength: 32 }],
-    headers: { accept: "application/json" }
-  },
-  scopes: ["team"],
-  itemLimit: 10,
-  extraction: {
-    itemsPath: ["news"],
-    headlinePath: ["title"],
-    urlPath: ["url"],
-    publishedAtPath: ["publishedAt"],
-    normalize: ["trim", "collapse_whitespace", "strip_controls"]
-  }
-} as const;
-
-const htmlRecipe = {
-  version: 1,
-  kind: "html",
-  fetchHosts: ["www.publisher.example"],
-  request: {
-    urlTemplate: "https://www.publisher.example/team/{teamId}/news",
-    slots: [{ name: "teamId", location: "path", encoding: "path_segment", maxLength: 32 }],
-    headers: { accept: "text/html,application/xhtml+xml" }
-  },
-  scopes: ["team"],
-  itemLimit: 10,
-  extraction: {
-    collectionSelector: "main.news",
-    itemSelector: "article.story",
-    headline: { selector: "h2", source: "text" },
-    url: { selector: "a", source: "attribute", attribute: "href" },
-    normalize: ["trim", "collapse_whitespace", "strip_controls"]
-  }
-} as const;
-
-function fingerprint(recipe: Readonly<Record<string, unknown>>): string {
-  const result = validateSportsSourceRecipe(recipe);
-  if (!result.ok) throw new Error(result.reason);
-  return result.fingerprint;
-}
-
-function runtimeSource(options: {
-  id: string;
-  recipe?: Readonly<Record<string, unknown>> | null;
-  parameters?: Readonly<Record<string, unknown>>;
-  targetUrl?: string | null;
-  feedUrl?: string | null;
-  hosts?: readonly string[];
-  fingerprint?: string;
-  scope?: SportsNewsScope;
-}): SportsRuntimeSource {
-  const recipe = options.recipe === undefined ? jsonRecipe : options.recipe;
-  return {
-    id: options.id,
-    label: `Publisher ${options.id}`,
-    canonicalDomain: "publisher.example",
-    feedUrl: options.feedUrl ?? null,
-    retrievalMethod: options.feedUrl ? "feed" : "scrape",
-    enabled: true,
-    runtimeFingerprint:
-      options.fingerprint ?? (recipe === null ? `legacy-${options.id}` : fingerprint(recipe)),
-    recipeJson: recipe,
-    confirmedFetchHosts:
-      options.hosts ??
-      (recipe && Array.isArray(recipe.fetchHosts) ? (recipe.fetchHosts as string[]) : []),
-    assignments: [
-      {
-        id: `assignment-${options.id}`,
-        scope: options.scope ?? {
-          kind: "team",
-          sportKey: "soccer",
-          competitionKey: "eng.1",
-          teamKey: "arsenal"
-        },
-        targetUrl: options.targetUrl ?? `https://publisher.example/display/${options.id}`,
-        targetParameters: options.parameters ?? { teamId: options.id },
-        previewStatus: "verified"
-      }
-    ]
-  };
-}
-
-function success(
-  finalUrl: string,
-  body: string,
-  contentType = "application/json"
-): Awaited<ReturnType<SportsSafeFetchPort>> {
-  return { ok: true, status: 200, finalUrl, contentType, body, truncated: false };
-}
-
-function makeReader(
-  sources: readonly SportsRuntimeSource[],
-  fetch: SportsSafeFetchPort,
-  options: { now?: () => number; sleep?: () => Promise<void> } = {}
-) {
-  const persisted: SportsRuntimeTargetResult[][] = [];
-  const repository = {
-    listRuntimeSources: vi.fn(async () => [...sources]),
-    persistRuntimeResults: vi.fn(
-      async (_db: DataContextDb, results: SportsRuntimeTargetResult[]) => {
-        persisted.push([...results]);
-        return results.length;
-      }
-    )
-  } as unknown as SportsSourcesRepository;
-  const reader = new SportsPublicSourceReader({
-    dataContext: {
-      withDataContext: async <T>(
-        _accessContext: AccessContext,
-        work: (db: DataContextDb) => Promise<T>
-      ) => work({} as DataContextDb)
-    },
-    repository,
-    fetch,
-    now: options.now,
-    sleep: options.sleep
-  });
-  return { reader, repository, persisted };
-}
-
-async function permitInitialRequest(
-  url: string,
-  options: Parameters<SportsSafeFetchPort>[1]
-): Promise<boolean> {
-  return (await options?.beforeRequest?.({ url: new URL(url), redirectCount: 0 })) !== false;
-}
+import {
+  actor,
+  fingerprint,
+  htmlRecipe,
+  jsonRecipe,
+  makeReader,
+  permitInitialRequest,
+  runtimeSource,
+  success
+} from "./sports-public-source-reader-helpers.js";
 
 describe("SportsPublicSourceReader", () => {
   it("extracts RSS, JSON, and HTML without fetching article or pagination links", async () => {
@@ -537,6 +406,112 @@ describe("SportsPublicSourceReader", () => {
 
     await expect(reader.refresh(actor)).resolves.toMatchObject({ persistedResults: 6 });
     expect(maximum).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("SportsPublicSourceReader subreddit sources (#2211)", () => {
+  const listingUrl = "https://www.reddit.com/r/nfl/hot.rss";
+  const subreddit: SportsRuntimeSource = {
+    ...runtimeSource({ id: "nfl", recipe: null, feedUrl: listingUrl, hosts: ["www.reddit.com"] }),
+    label: "r/nfl",
+    canonicalDomain: "reddit.com",
+    retrievalMethod: "reddit",
+    assignments: [
+      {
+        id: "assignment-nfl",
+        scope: { kind: "sport", sportKey: "football" },
+        targetUrl: listingUrl,
+        targetParameters: {},
+        previewStatus: "verified"
+      }
+    ]
+  };
+  const escape = (html: string) =>
+    html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const redditEntry = (id: string, title: string, link: string | null) =>
+    `<entry><category term="nfl" label="r/nfl"/><content type="html">${escape(
+      `submitted by <a href="https://www.reddit.com/user/fan">/u/fan</a>` +
+        (link ? ` <a href="${link}">[link]</a>` : "") +
+        ` <a href="https://www.reddit.com/r/nfl/comments/${id}/">[comments]</a>`
+    )}</content><id>t3_${id}</id><link href="https://www.reddit.com/r/nfl/comments/${id}/" />` +
+    `<updated>2025-09-04T14:13:20+00:00</updated><published>2025-09-04T14:13:20+00:00</published>` +
+    `<title>${title}</title></entry>`;
+  const listing =
+    `<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">` +
+    `<category term="nfl" label="r/nfl"/><title>NFL</title>` +
+    redditEntry("a", "Chiefs sign a new kicker", "https://www.espn.com/nfl/story/1") +
+    redditEntry("b", "Game thread", null) +
+    `</feed>`;
+
+  it("reads the feed as Reddit Atom and credits each headline to the linked publisher", async () => {
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      expect(url).toBe(listingUrl);
+      expect(options?.allowedHosts).toEqual(["www.reddit.com"]);
+      expect(options?.allowedContentTypes).toContain("application/atom+xml");
+      expect(options?.allowedContentTypes).not.toContain("application/json");
+      expect(options?.userAgent).toMatch(/^Moss\//);
+      expect(await permitInitialRequest(url, options)).toBe(true);
+      expect(
+        await options?.beforeRequest?.({
+          url: new URL("https://www.reddit.com/search"),
+          redirectCount: 1
+        })
+      ).toBe(false);
+      return success(url, listing, "application/atom+xml; charset=UTF-8");
+    });
+    const { reader, persisted } = makeReader([subreddit], fetch);
+    const result = await reader.refresh(actor);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.headlines).toHaveLength(1);
+    expect(result.headlines[0]).toMatchObject({
+      origin: "custom",
+      sourceId: "nfl",
+      title: "Chiefs sign a new kicker",
+      url: "https://www.espn.com/nfl/story/1",
+      publisherLabel: "espn.com",
+      publisherDomain: "espn.com",
+      sportKey: "football",
+      publishedAt: "2025-09-04T14:13:20.000Z"
+    });
+    expect(persisted[0]?.[0]).toMatchObject({
+      healthState: "healthy",
+      assignmentId: "assignment-nfl"
+    });
+  });
+
+  it("marks a Reddit rate limit as failing with the Reddit message, and a private subreddit as auth required", async () => {
+    let status = 429;
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      await permitInitialRequest(url, options);
+      return { ok: false, reason: "http_error", status };
+    });
+    const { reader, persisted } = makeReader([subreddit], fetch, { sleep: async () => {} });
+    await reader.refresh(actor);
+    expect(persisted[0]?.[0]).toMatchObject({
+      healthState: "failing",
+      healthReasonCode: "rate_limited",
+      healthMessage: "Reddit is rate limiting Moss. Headlines resume automatically."
+    });
+
+    status = 403;
+    await reader.refresh(actor, { bypassCache: true });
+    expect(persisted.at(-1)?.[0]).toMatchObject({
+      healthState: "auth_required",
+      healthReasonCode: "auth_required"
+    });
+  });
+
+  it("treats a non-feed body as an unsupported response", async () => {
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      await permitInitialRequest(url, options);
+      return success(url, "<html><body>blocked by network security</body></html>");
+    });
+    const { reader, persisted } = makeReader([subreddit], fetch);
+    await reader.refresh(actor);
+    expect(persisted[0]?.[0]).toMatchObject({
+      healthState: "unsupported",
+      healthReasonCode: "unsupported_response"
+    });
   });
 });
 

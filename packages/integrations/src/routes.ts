@@ -23,12 +23,15 @@ import {
   type ConnectionRow,
   type UpdateConnectionInput
 } from "./repository.js";
+import { resolverCache, type ResolverCache } from "./resolver-cache.js";
 
 export interface IntegrationsRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
   readonly repository?: IntegrationsRepository;
   readonly cipher?: JsonSecretCipher;
+  /** Test seam — defaults to the module-level `resolverCache` singleton (#2175 Task 8). */
+  readonly resolverCache?: ResolverCache;
 }
 
 interface IdParams {
@@ -41,6 +44,7 @@ export function registerIntegrationsRoutes(
 ): void {
   const repository = dependencies.repository ?? new IntegrationsRepository();
   const cipher = dependencies.cipher ?? createIntegrationsCipher();
+  const cache = dependencies.resolverCache ?? resolverCache;
 
   server.get("/api/integrations", async (request, reply) => {
     try {
@@ -107,6 +111,7 @@ export function registerIntegrationsRoutes(
         }
       );
 
+      cache.drop(accessContext.actorUserId);
       return reply.code(201).send(detail);
     } catch (error) {
       return handleRouteError(error, reply);
@@ -135,6 +140,7 @@ export function registerIntegrationsRoutes(
         repository.updateConnection(scopedDb, request.params.id, patch)
       );
       if (!updated) return reply.code(404).send({ error: "Integration not found" });
+      cache.drop(accessContext.actorUserId);
       return toDetail(updated, updated.discoveredTools);
     } catch (error) {
       return handleRouteError(error, reply);
@@ -171,6 +177,7 @@ export function registerIntegrationsRoutes(
         }
       );
 
+      cache.drop(accessContext.actorUserId);
       return detail;
     } catch (error) {
       return handleRouteError(error, reply);
@@ -202,6 +209,7 @@ export function registerIntegrationsRoutes(
         repository.deleteConnection(scopedDb, request.params.id)
       );
       if (!deleted) return reply.code(404).send({ error: "Integration not found" });
+      cache.drop(accessContext.actorUserId);
       return reply.code(204).send();
     } catch (error) {
       return handleRouteError(error, reply);

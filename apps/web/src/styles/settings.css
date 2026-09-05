@@ -174,7 +174,7 @@
 .pane__desc {
   line-height: 1.55;
   margin: 8px 0 0;
-  max-width: 72ch;
+  /* No measure cap: Ben wants pane intros to use the full pane width (2026-09-03). */
 }
 
 .pane__card {
@@ -235,6 +235,7 @@
 .fld__row > .jds-input,
 .fld__row > .jds-select,
 .fld__row > .jds-selectwrap,
+.fld__row > .jds-combobox,
 .fld__row > input,
 .fld__row > select {
   flex: 0 1 340px;
@@ -271,6 +272,15 @@
   padding: 1px 5px;
 }
 
-.appearance-theme-mode {
-  margin-bottom: var(--space-4);
+/* ---- Top bar: settings search ---- */
+.set2__search {
+  flex: 1 1 240px;
+  max-width: 380px;
+  margin-left: auto;
+}
+.set2__search .jds-combobox__option {
+  justify-content: space-between;
+}
+.set2__search-group {
+  flex: 0 0 auto;
 }

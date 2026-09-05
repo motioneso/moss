@@ -240,6 +240,100 @@ export function isPublicFeedDocument(xml: string): boolean {
   return !invalid && stack.length === 0 && (root === "feed" || (root === "rss" && rssChannel));
 }
 
+// Some feeds (NPR) carry no media:content/media:thumbnail/enclosure at all — the only image is
+// the first real <img> in the story's HTML body. The body fragment is read with the same
+// streaming HTML tokenizer the rest of this module already uses, not a regex: hand-written
+// patterns kept both losing valid pictures (uppercase tag names, unquoted values, a tag split
+// across lines, a ">" inside an attribute value) and letting tracking pixels through. The
+// tokenizer is a single forward pass, and the fragment is capped first, so a huge or malformed
+// body costs a bounded amount of work.
+const BODY_IMAGE_SCAN_CHAR_CAP = 20_000;
+
+// Tracking pixels are invisible by construction, so only unambiguous evidence disqualifies an
+// image: a declared width or height of 0 or 1, a hidden attribute or style, a host whose first
+// label exists to count views, or the whole word "pixel" or "impression" standing alone as a
+// path segment or a query key. Nothing else counts. Earlier revisions matched tracking-sounding
+// words inside a file name or a campaign value, which threw away real photographs called
+// "track.jpg", "beacon.jpg" and "real.jpg?trk=newsletter".
+const TRACKING_HOST_LABEL_PATTERN =
+  /^(?:pixel|pixels|px|beacon|track|tracker|tracking|analytics|stats|metrics|collect|counter|imp|impression|log|logs)$/i;
+// "pixel" or "impression" and nothing else, ignoring a file extension: "/pixel.gif" and
+// "/impression/abc" qualify, "google-pixel-10.jpg" and "pixels-of-history.jpg" do not.
+const TRACKING_WORD_PATTERN = /^(?:pixel|impression)(?:\.[a-z0-9]+)?$/i;
+const TRACKING_QUERY_KEY_PATTERN = /^(?:pixel|impression)$/i;
+// A style that hides the image outright, or sizes it down to a single pixel.
+// CSS comments are legal anywhere between tokens, so drop them before matching.
+const stripCssComments = (style: string): string => style.replace(/\/\*[\s\S]*?\*\//g, "");
+
+const HIDDEN_STYLE_PATTERN =
+  /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden|(?:width|height)\s*:\s*(?:0|1)(?:\.0+)?(?:px)?)\s*(?:!\s*important\s*)?(?:;|$)/i;
+
+/** A declared HTML pixel size, or null when the attribute is absent or not a plain number
+ *  ("auto", "50%", ""). Only a real number can disqualify an image; junk means "unknown". */
+function declaredPixelSize(value: string | undefined): number | null {
+  if (value === undefined) return null;
+  const match = /^\s*(\d+)(?:\.\d+)?\s*(?:px)?\s*$/i.exec(value);
+  return match ? Number(match[1]) : null;
+}
+
+function isInvisibleImage(attribs: Record<string, string>): boolean {
+  if (attribs.hidden !== undefined) return true;
+  if (attribs.style !== undefined && HIDDEN_STYLE_PATTERN.test(stripCssComments(attribs.style)))
+    return true;
+  const width = declaredPixelSize(attribs.width);
+  const height = declaredPixelSize(attribs.height);
+  return (width !== null && width <= 1) || (height !== null && height <= 1);
+}
+
+function isTrackingAddress(src: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(src, "https://feed.invalid/");
+  } catch {
+    return false; // unparseable — the allow-list check downstream rejects it anyway
+  }
+  const firstLabel = url.hostname.split(".")[0] ?? "";
+  if (TRACKING_HOST_LABEL_PATTERN.test(firstLabel)) return true;
+  for (const segment of url.pathname.split("/")) {
+    if (segment && TRACKING_WORD_PATTERN.test(segment)) return true;
+  }
+  for (const key of url.searchParams.keys()) {
+    if (TRACKING_QUERY_KEY_PATTERN.test(key)) return true;
+  }
+  return false;
+}
+
+/** First real (non-tracking) <img> address in an HTML fragment, or null. The tokenizer runs in
+ *  HTML mode, so it lower-cases tag and attribute names, accepts unquoted and single-quoted
+ *  values, and decodes each entity exactly once — an already-escaped "&amp;lt;" stays "&lt;"
+ *  rather than collapsing to "<" and changing the address. */
+function firstRealImgSrc(html: string): string | null {
+  if (!html) return null;
+  const text =
+    html.length > BODY_IMAGE_SCAN_CHAR_CAP ? html.slice(0, BODY_IMAGE_SCAN_CHAR_CAP) : html;
+  const picked: { src: string | null } = { src: null };
+  const parser = new Parser(
+    {
+      onopentag(name, attribs) {
+        if (picked.src !== null || name !== "img") return;
+        const src = (attribs.src ?? "").trim();
+        if (!src) return;
+        if (isInvisibleImage(attribs)) return;
+        if (isTrackingAddress(src)) return;
+        picked.src = src;
+      }
+    },
+    { decodeEntities: true }
+  );
+  try {
+    parser.write(text);
+    parser.end();
+  } catch {
+    return picked.src;
+  }
+  return picked.src;
+}
+
 function toSanitizedFeedItems(xml: string, imageHosts: readonly string[]): RssFeedItem[] {
   const items: RssFeedItem[] = [];
   const seen = new Set<string>();
@@ -252,12 +346,21 @@ function toSanitizedFeedItems(xml: string, imageHosts: readonly string[]): RssFe
     const title = sanitizeFeedText(raw.title, TITLE_CHAR_CAP);
     if (!title) continue;
     seen.add(id);
+    // Fall back to a body image only when the feed carried no media tag at all. A media image
+    // that exists but fails the host check must not open the door to a body image instead — the
+    // feed named the story's art and got it wrong, so the story gets no art (reviewer blocker 5).
+    const imageUrl = raw.imageUrl
+      ? sanitizeImageUrl(raw.imageUrl, imageHosts)
+      : sanitizeImageUrl(
+          firstRealImgSrc(raw.contentFallback) ?? firstRealImgSrc(raw.summary),
+          imageHosts
+        );
     items.push({
       id,
       title,
       url,
       publishedAt: sanitizePublishedAt(raw.publishedAt),
-      imageUrl: sanitizeImageUrl(raw.imageUrl, imageHosts),
+      imageUrl,
       summary: sanitizeFeedText(raw.summary || raw.contentFallback, SUMMARY_CHAR_CAP)
     });
   }

@@ -4,6 +4,7 @@ export interface NewsSafeFetchResult {
   readonly ok: true;
   readonly status: number;
   readonly finalUrl: string;
+  readonly hopCount?: number;
   readonly contentType: string | null;
   readonly body: string;
   readonly truncated: boolean;
@@ -29,7 +30,13 @@ export type NewsSafeFetchPort = (
 
 export type NewsImageFetchPort = (
   url: string,
-  maxBytes: number
+  maxBytes: number,
+  /**
+   * When supplied, the fetch (including every redirect hop) must land on one of these hosts or
+   * it is refused — how the favicon route keeps a redirect from carrying an approved request off
+   * to an arbitrary site.
+   */
+  allowedHosts?: readonly string[]
 ) => Promise<
   | {
       readonly ok: true;

@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, KeyRound, Mail, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, KeyRound, Mail, Server } from "lucide-react";
 import { useState } from "react";
 
+import { findImapProviderIdForEmail } from "@moss/shared";
 import { Button } from "@moss/ui";
 import { connectImapConnection, testImapConnection } from "../api/client";
 import { GOOGLE_CONNECT_SUCCESS_QUERY_KEYS } from "../connectors/use-google-connect-flow";
@@ -19,25 +20,52 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Connection failed.";
 }
 
+function providerById(id: string | null): ImapProvider | null {
+  return IMAP_PROVIDERS.find((p) => p.id === id) ?? null;
+}
+
+/** One-line description of the mail server a preset will connect to. */
+export function serverSummary(provider: ImapProvider): string {
+  const security = provider.server.tls ? "encrypted" : "no encryption, local Bridge only";
+  return `${provider.server.host}, port ${provider.server.port} (${security})`;
+}
+
+export const GENERIC_SERVER_HINT =
+  "We do not have setup notes for this address yet. Choose the service that hosts your mail; the server settings come from that choice.";
+
+export const GENERIC_PASSWORD_HINT =
+  "Most mail services need an app password made for this connection rather than your normal sign-in password.";
+
 /* Settings-surface twin of the onboarding IMAP flow (google-connector-step.tsx) — same
    provider list, same testImapConnection/connectImapConnection API layer, same success
-   query-key invalidation, since accounts.done is shared between onboarding and settings. */
+   query-key invalidation, since accounts.done is shared between onboarding and settings.
+   Unlike onboarding, this flow asks for the email address first and recognises the
+   provider from its domain (findImapProviderIdForEmail); the user can still pick or
+   override the service by hand. */
 export function ImapConnect(props: {
   readonly onBack: () => void;
   readonly initialProvider?: ImapProvider;
 }) {
-  const [provider, setProvider] = useState<ImapProvider | null>(props.initialProvider ?? null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  // The service the user chose by hand; null means "follow whatever the address suggests".
+  const [chosenProviderId, setChosenProviderId] = useState<string | null>(
+    props.initialProvider?.id ?? null
+  );
   const [testResult, setTestResult] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useFeedback();
 
+  const detectedProviderId = findImapProviderIdForEmail(username);
+  const provider = providerById(chosenProviderId ?? detectedProviderId);
+  const recognised = chosenProviderId === null && provider !== null;
+
   const credsReady = username.trim().length > 0 && password.length > 0;
+  const ready = credsReady && provider !== null;
 
   const testImap = useMutation({
     mutationFn: () => {
-      if (!provider) throw new Error("Choose a provider first.");
+      if (!provider) throw new Error("Choose which service hosts this address first.");
       return testImapConnection({ providerId: provider.id, username, password });
     },
     onSuccess: ({ result }) => setTestResult(imapResultCopy(result))
@@ -45,7 +73,7 @@ export function ImapConnect(props: {
 
   const connectImap = useMutation({
     mutationFn: () => {
-      if (!provider) throw new Error("Choose a provider first.");
+      if (!provider) throw new Error("Choose which service hosts this address first.");
       return connectImapConnection({ providerId: provider.id, username, password });
     },
     onSuccess: () =>
@@ -62,59 +90,20 @@ export function ImapConnect(props: {
     onError: (error) => toast(errorMessage(error), { tone: "drift" })
   });
 
-  if (!provider) {
-    return (
-      <div className="imapflow">
-        <button type="button" className="gflow__back" onClick={props.onBack}>
-          <ArrowLeft size={15} aria-hidden="true" />
-          All accounts
-        </button>
-        <div className="provpick__hd">Choose an email provider</div>
-        <div className="onb-provgrid">
-          {IMAP_PROVIDERS.map((p) => (
-            <button
-              className="onb-provmini"
-              key={p.id}
-              type="button"
-              onClick={() => {
-                setProvider(p);
-                setTestResult(null);
-              }}
-            >
-              <span className="onb-provmini__tile">{p.tile}</span>
-              <span className="onb-provmini__main">
-                <span className="onb-provmini__name">{p.name}</span>
-                <span className="onb-provmini__soon">Connect {p.name}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="imapflow">
-      <button
-        type="button"
-        className="gflow__back"
-        onClick={() => (props.initialProvider ? props.onBack() : setProvider(null))}
-      >
+      <button type="button" className="gflow__back" onClick={props.onBack}>
         <ArrowLeft size={15} aria-hidden="true" />
-        {props.initialProvider ? "All accounts" : "Choose a different provider"}
+        All accounts
       </button>
       <div className="gflow__intro">
-        <span className="gflow__g">{provider.tile}</span>
+        <span className="gflow__g">
+          <Mail size={18} aria-hidden="true" />
+        </span>
         <div className="gflow__introtx">
-          <div className="gflow__title">Connect {provider.name}</div>
+          <div className="gflow__title">Add an email account</div>
           <div className="gflow__sub">IMAP email sync</div>
         </div>
-      </div>
-      <div className="onb-guide__intro">
-        <span className="ic">
-          <ShieldCheck size={15} aria-hidden="true" />
-        </span>
-        <span>{provider.prerequisite}</span>
       </div>
       <div className="onb-cred">
         <div className="onb-cred__hd">Enter your email credentials</div>
@@ -127,11 +116,42 @@ export function ImapConnect(props: {
             <input
               type="email"
               value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              onChange={(event) => {
+                setUsername(event.target.value);
+                setTestResult(null);
+              }}
               placeholder="you@example.com"
               spellCheck={false}
               aria-label="Email address"
             />
+          </span>
+        </label>
+        <label className="onb-cred__field">
+          <span className="onb-cred__lbl">Mail service</span>
+          <span className="onb-cred__in">
+            <span className="ic">
+              <Server size={15} aria-hidden="true" />
+            </span>
+            <select
+              value={provider?.id ?? ""}
+              onChange={(event) => {
+                setChosenProviderId(event.target.value || null);
+                setTestResult(null);
+              }}
+              aria-label="Mail service"
+            >
+              <option value="">Choose the service that hosts this address</option>
+              {IMAP_PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </span>
+          <span className="onb-cred__hint" data-hint="server">
+            {provider
+              ? `${recognised ? "Recognised from your email address. " : ""}Mail server: ${serverSummary(provider)}.`
+              : GENERIC_SERVER_HINT}
           </span>
         </label>
         <label className="onb-cred__field">
@@ -144,27 +164,44 @@ export function ImapConnect(props: {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="Provider app password"
+              placeholder={provider ? `${provider.name} app password` : "App password"}
               spellCheck={false}
               aria-label="App password"
             />
+          </span>
+          <span className="onb-cred__hint" data-hint="password">
+            {provider ? (
+              <>
+                {provider.prerequisite} {provider.steps.join(" ")}{" "}
+                <a
+                  className="onb-guide__link"
+                  href={provider.helpUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {provider.name} setup guide <ExternalLink size={12} aria-hidden="true" />
+                </a>
+              </>
+            ) : (
+              GENERIC_PASSWORD_HINT
+            )}
           </span>
         </label>
         <div className="onb-cred__actions">
           <Button
             variant="quiet"
             size="sm"
-            disabled={!credsReady || testImap.isPending}
+            disabled={!ready || testImap.isPending}
             onClick={() => testImap.mutate()}
           >
             Test connection
           </Button>
           <Button
             size="sm"
-            disabled={!credsReady || connectImap.isPending}
+            disabled={!ready || connectImap.isPending}
             onClick={() => connectImap.mutate()}
           >
-            Connect {provider.name}
+            {provider ? `Connect ${provider.name}` : "Connect"}
           </Button>
           <Button variant="quiet" size="sm" onClick={props.onBack}>
             Cancel

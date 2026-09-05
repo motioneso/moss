@@ -3,9 +3,7 @@ import {
   Activity,
   KeyRound,
   MinusCircle,
-  Pencil,
   Plus,
-  RefreshCw,
   GitCommitHorizontal,
   LogIn,
   Terminal,
@@ -29,6 +27,7 @@ import {
   setInstanceDefaultProvider,
   testAiProvider,
   updateAiModel,
+  deleteAiModel,
   updateAiProvider
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
@@ -36,7 +35,8 @@ import { useAssistantName } from "../api/use-assistant-name";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
 import { Badge, Field, Group, Note, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
-import { EditModelForm } from "./settings-ai-edit-model-form";
+import { MODEL_TIERS, TIERS } from "./settings-ai-edit-model-form";
+import { ProviderModels } from "./settings-ai-provider-models";
 import { TerminalModal } from "./terminal-modal";
 import {
   ProviderLoginDialog,
@@ -73,23 +73,6 @@ const PROVIDER_CATALOG: readonly {
   { label: "Custom", kind: "custom", authMethod: "api_key" }
 ];
 
-const CAP_SHORT: Record<AiModelCapability, string> = {
-  chat: "Chat",
-  "tool-use": "Tools",
-  json: "JSON",
-  vision: "Vision",
-  summarization: "Summary",
-  transcription: "Voice"
-};
-
-const TIERS: Record<AiModelTier, { label: string; hint: string }> = {
-  reasoning: { label: "Reasoning", hint: "Deepest and slowest. Hard planning and judgment." },
-  interactive: { label: "Interactive", hint: "Fast and balanced. The everyday default." },
-  economy: { label: "Economy", hint: "Cheapest and quickest. Light, high-volume work." }
-};
-
-const MODEL_TIERS: readonly AiModelTier[] = ["reasoning", "interactive", "economy"];
-
 // Chat and the strict email-extraction background service share the existing binding control. Voice
 // stays on its dedicated endpoint; other worker capabilities remain automatic.
 const SERVICE_ROWS: readonly {
@@ -116,62 +99,6 @@ const SERVICE_ROWS: readonly {
 
 /* ----------------------------------------------------------- Provider card */
 
-function ModelLine(props: {
-  readonly model: AiConfiguredModelDto;
-  readonly isEditing: boolean;
-  readonly onEdit: () => void;
-  readonly onOverrideChange: (model: AiConfiguredModelDto, allowed: boolean) => void;
-  readonly onStatusChange: (model: AiConfiguredModelDto, status: "active" | "disabled") => void;
-}) {
-  const { model } = props;
-  const tier = TIERS[model.tier];
-  const isChatModel = model.capabilities.includes("chat");
-  const isDisabled = model.status === "disabled";
-  return (
-    <div className={`mdl${isDisabled ? " mdl--disabled" : ""}`}>
-      <div className="mdl__id">
-        {model.providerModelId}
-        {isDisabled ? <span className="mdl__off">off</span> : null}
-      </div>
-      <span className={`tier tier--${model.tier}`} title={tier.hint}>
-        {tier.label}
-      </span>
-      <div className="mdl__caps">
-        {model.capabilities.map((c) => (
-          <span className="cap" key={c}>
-            {CAP_SHORT[c] ?? c}
-          </span>
-        ))}
-      </div>
-      {isChatModel ? (
-        <Switch
-          ariaLabel={`${model.displayName} available for user chat override`}
-          checked={model.allowUserOverride}
-          onChange={(allowed) => props.onOverrideChange(model, allowed)}
-        />
-      ) : null}
-      <button
-        type="button"
-        className={`mdl__edit-btn${props.isEditing ? " is-active" : ""}`}
-        title="Edit model"
-        aria-label={`Edit ${model.displayName}`}
-        onClick={props.onEdit}
-      >
-        <Pencil size={12} aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="mdl__toggle-btn"
-        title={isDisabled ? "Enable model" : "Disable model"}
-        aria-label={isDisabled ? `Enable ${model.displayName}` : `Disable ${model.displayName}`}
-        onClick={() => props.onStatusChange(model, isDisabled ? "active" : "disabled")}
-      >
-        <MinusCircle size={12} aria-hidden="true" />
-      </button>
-    </div>
-  );
-}
-
 function ProviderCard(props: {
   readonly provider: AiProviderConfigDto;
   readonly models: readonly AiConfiguredModelDto[];
@@ -186,6 +113,7 @@ function ProviderCard(props: {
     model: AiConfiguredModelDto,
     status: "active" | "disabled"
   ) => void;
+  readonly onModelDelete: (model: AiConfiguredModelDto) => void;
   // #870/H1 Slice 1: instance-default flag + setter. The default provider is the one that resolves
   // the model for every mode-bound service; exactly one provider carries it instance-wide.
   readonly isInstanceDefault: boolean;
@@ -194,7 +122,6 @@ function ProviderCard(props: {
 }) {
   const { provider } = props;
   const { toast } = useFeedback();
-  const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const [baseUrl, setBaseUrl] = useState(provider.baseUrl ?? "");
   const [apiKey, setApiKey] = useState("");
   // #1059 — a CLI-auth provider has no API key to credential-test; its Test action opens
@@ -370,40 +297,14 @@ function ProviderCard(props: {
         </div>
       ) : null}
 
-      <div className="prov__models">
-        <div className="prov__modelshd">
-          <span>Models · {props.models.length}</span>
-        </div>
-        <div className="prov__modellist">
-          {props.models.length ? (
-            props.models.map((m) => (
-              <div key={m.id}>
-                <ModelLine
-                  model={m}
-                  isEditing={editingModelId === m.id}
-                  onEdit={() => setEditingModelId((cur) => (cur === m.id ? null : m.id))}
-                  onOverrideChange={props.onModelOverride}
-                  onStatusChange={props.onModelStatusChange}
-                />
-                {editingModelId === m.id ? (
-                  <EditModelForm model={m} onClose={() => setEditingModelId(null)} />
-                ) : null}
-              </div>
-            ))
-          ) : (
-            <div className="prov__synced" style={{ marginTop: 0 }}>
-              Models appear here automatically when the provider connects.
-            </div>
-          )}
-        </div>
-        {/* #982/#869 Lane B: discovery is automatic; manual REST escape hatches remain server-side. */}
-        {props.models.length ? (
-          <div className="prov__synced">
-            <RefreshCw size={11} aria-hidden="true" />
-            Registered for {provider.displayName}.
-          </div>
-        ) : null}
-      </div>
+      <ProviderModels
+        provider={provider}
+        models={props.models}
+        onModelOverride={props.onModelOverride}
+        onModelStatusChange={props.onModelStatusChange}
+        onModelDelete={props.onModelDelete}
+      />
+
       {/* #1059 — rendered outside .prov__edit so opening the terminal never depends on the
           card's edit-mode toggle; ProviderCard already destructures `provider` at the top. */}
       {terminalOpen ? (
@@ -671,6 +572,15 @@ export function AiProvidersPane() {
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
+  // #2208 follow-up: Remove on a model row deletes it for good (after the confirm below).
+  const modelDeleteMutation = useMutation({
+    mutationFn: (model: AiConfiguredModelDto) => deleteAiModel(model.id),
+    onSuccess: () => {
+      void invalidate();
+      toast("Model removed", { icon: <Trash2 size={17} /> });
+    },
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
   // #870/H1 Slice 1: the instance-default provider supplies the model for every mode-bound service
   // (Chat/Voice on a tier). Exactly one provider holds the flag instance-wide — the backend clears
   // any prior default in the same statement (partial unique index enforces the singleton), so the
@@ -767,6 +677,16 @@ export function AiProvidersPane() {
                 }
                 onModelStatusChange={(model, status) =>
                   modelStatusMutation.mutate({ model, status })
+                }
+                onModelDelete={(model) =>
+                  confirm({
+                    title: `Remove ${model.providerModelId}?`,
+                    description:
+                      "The model is deleted from this provider. Any work bound to it falls back to another model.",
+                    confirmLabel: "Remove",
+                    danger: true,
+                    onConfirm: () => modelDeleteMutation.mutate(model)
+                  })
                 }
                 isInstanceDefault={provider.isInstanceDefault}
                 onSetInstanceDefault={() => instanceDefaultMutation.mutate(provider.id)}

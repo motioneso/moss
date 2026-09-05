@@ -19,6 +19,15 @@ import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-me
 // where a group-stage standing reads as a league position, and for leagues that aren't in
 // progress: "#14 · 0 pts" / "#3 · 0-0" is last season's rank next to a blank record (live
 // feedback mra39rlv; the server now nulls these too, this guards the older prod payload).
+// #2253: the finished-game row shows the bare score ("2–0"), not "W 2–0" — Ben's layout
+// ruling reads left to right as scorers, logo, score, logo, scorers, and the recent-form pips
+// already say whether the team won. The win/draw/loss word survives for screen readers only.
+function resultWord(label: "W" | "D" | "L"): string {
+  if (label === "W") return "won";
+  if (label === "L") return "lost";
+  return "drew";
+}
+
 function standingIsSane(card: FollowedTeamCard): boolean {
   if (!card.standing) return false;
   if (TOURNAMENT_COMPETITIONS.has(card.competitionKey)) return false;
@@ -342,7 +351,7 @@ function FeaturedTeamCard(props: {
             lead story headline carries it, set in the display face. */}
         {showNews ? (
           lead ? (
-            <>
+            <div className="sp-feat__leadwrap sp-fbhost">
               <a className="sp-feat__lead" href={lead.url} target="_blank" rel="noreferrer">
                 {lead.title}
                 {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
@@ -354,7 +363,7 @@ function FeaturedTeamCard(props: {
                   onChanged={props.onStoryChanged ?? (() => undefined)}
                 />
               ) : null}
-            </>
+            </div>
           ) : (
             // Storyless pre-game/idle card: an honest placeholder, NEVER the matchup — the Next
             // footer already carries the fixture, so echoing card.primary here is the duplication
@@ -364,19 +373,63 @@ function FeaturedTeamCard(props: {
             <span className="sp-feat__lead sp-feat__lead--empty">No recent news</span>
           )
         ) : card.resultMatch ? (
-          // Finished game: lead with the opponent crest and show just "L 3–9" — the crest carries
-          // the opponent's identity so the "vs Blue Jays" text tail (which read as cheap, Ben
-          // 2026-07-08 /sports annotation #2) is gone. Same crest-leads treatment as the Next
-          // footer below. The sr-only name keeps the opponent reachable for screen readers.
-          <div className="sp-feat__result">
-            <Crest
-              name={card.resultMatch.opponentName}
-              crestUrl={card.resultMatch.opponentCrestUrl}
-              size="sm"
-            />
-            <p className="sp-feat__score">{card.resultMatch.scoreText}</p>
-            <span className="sp-sronly">vs {card.resultMatch.opponentName}</span>
-          </div>
+          // Finished game: home team's crest on the left, away team's crest on the right, score
+          // in the middle (Ben: "home to the left"), with each team's goal scorers (soccer and
+          // hockey only — null for every other sport) sitting on that team's outer side. The
+          // crest still carries the opponent's identity visually; the sr-only line keeps both
+          // team names reachable for screen readers.
+          (() => {
+            const rm = card.resultMatch;
+            const home =
+              rm.homeAway === "home"
+                ? { name: card.name, crestUrl: card.crestUrl, scorers: rm.ownScorers }
+                : {
+                    name: rm.opponentName,
+                    crestUrl: rm.opponentCrestUrl,
+                    scorers: rm.opponentScorers
+                  };
+            const away =
+              rm.homeAway === "away"
+                ? { name: card.name, crestUrl: card.crestUrl, scorers: rm.ownScorers }
+                : {
+                    name: rm.opponentName,
+                    crestUrl: rm.opponentCrestUrl,
+                    scorers: rm.opponentScorers
+                  };
+            // #2253: reserve the space on BOTH outer sides whenever either team has scorer data,
+            // so a one-sided list (or hockey's frequent single-team gap) doesn't pull the crests
+            // off center — but render neither, as before, on the far more common game with no
+            // scorer data at all.
+            const hasScorers = Boolean(home.scorers || away.scorers);
+            return (
+              <div className="sp-feat__result">
+                {hasScorers ? (
+                  <ul className="sp-feat__scorers sp-feat__scorers--home">
+                    {(home.scorers ?? []).map((s) => (
+                      <li key={s}>
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <Crest name={home.name} crestUrl={home.crestUrl} size="sm" />
+                <p className="sp-feat__score">{`${rm.homeScore}–${rm.awayScore}`}</p>
+                <Crest name={away.name} crestUrl={away.crestUrl} size="sm" />
+                {hasScorers ? (
+                  <ul className="sp-feat__scorers sp-feat__scorers--away">
+                    {(away.scorers ?? []).map((s) => (
+                      <li key={s}>
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <span className="sp-sronly">
+                  {home.name} vs {away.name}, {resultWord(rm.resultLabel)}
+                </span>
+              </div>
+            );
+          })()
         ) : (
           <p className={isScore ? "sp-feat__score" : "sp-feat__matchup"}>
             {card.primary.replace(/\s*·\s*Scheduled$/i, "")}
@@ -385,7 +438,7 @@ function FeaturedTeamCard(props: {
         {secondary.length > 0 ? (
           <ul className="sp-feat__stories">
             {secondary.map((story) => (
-              <li key={story.storyRef}>
+              <li className="sp-fbhost" key={story.storyRef}>
                 <a className="sp-feat__storylink" href={story.url} target="_blank" rel="noreferrer">
                   {story.title}
                   {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
@@ -483,7 +536,7 @@ export function TickerTeam(props: {
         <div className="sp-tk__col">
           {showNews ? (
             lead ? (
-              <>
+              <div className="sp-tk__lead sp-fbhost">
                 <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
                   {lead.title}
                   {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
@@ -493,23 +546,68 @@ export function TickerTeam(props: {
                   surface={surface}
                   onChanged={props.onStoryChanged ?? (() => undefined)}
                 />
-              </>
+              </div>
             ) : (
               <span className="sp-tk__newstx sp-tk__newstx--empty">No recent news</span>
             )
           ) : card.resultMatch ? (
-            // Finished game: crest-leads score, same treatment as FeaturedTeamCard on /sports
-            // (#867, #885). The crest carries the opponent identity; the "vs X" text tail is
-            // dropped (Ben /sports annotation #2), sr-only name keeps it reachable.
-            <div className="sp-tk__result">
-              <Crest
-                name={card.resultMatch.opponentName}
-                crestUrl={card.resultMatch.opponentCrestUrl}
-                size="sm"
-              />
-              <span className="sp-tk__score">{card.resultMatch.scoreText}</span>
-              <span className="sp-sronly">vs {card.resultMatch.opponentName}</span>
-            </div>
+            // Finished game: home team's crest on the left, away team's crest on the right, score
+            // in the middle (Ben: "home to the left"), with each team's goal scorers (soccer and
+            // hockey only — null for every other sport) sitting on that team's outer side. Same
+            // treatment as FeaturedTeamCard on /sports (#867, #885). The crest still carries the
+            // opponent's identity visually; the sr-only line keeps both team names reachable for
+            // screen readers.
+            (() => {
+              const rm = card.resultMatch;
+              const home =
+                rm.homeAway === "home"
+                  ? { name: card.name, crestUrl: card.crestUrl, scorers: rm.ownScorers }
+                  : {
+                      name: rm.opponentName,
+                      crestUrl: rm.opponentCrestUrl,
+                      scorers: rm.opponentScorers
+                    };
+              const away =
+                rm.homeAway === "away"
+                  ? { name: card.name, crestUrl: card.crestUrl, scorers: rm.ownScorers }
+                  : {
+                      name: rm.opponentName,
+                      crestUrl: rm.opponentCrestUrl,
+                      scorers: rm.opponentScorers
+                    };
+              // #2253: same fix as FeaturedTeamCard above — reserve both outer slots whenever
+              // either side has scorer data, so a one-sided list doesn't drag the crests off
+              // center; render neither when the game has no scorer data at all.
+              const hasScorers = Boolean(home.scorers || away.scorers);
+              return (
+                <div className="sp-tk__result">
+                  {hasScorers ? (
+                    <ul className="sp-tk__scorers sp-tk__scorers--home">
+                      {(home.scorers ?? []).map((s) => (
+                        <li key={s}>
+                          <span>{s}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <Crest name={home.name} crestUrl={home.crestUrl} size="sm" />
+                  <span className="sp-tk__score">{`${rm.homeScore}–${rm.awayScore}`}</span>
+                  <Crest name={away.name} crestUrl={away.crestUrl} size="sm" />
+                  {hasScorers ? (
+                    <ul className="sp-tk__scorers sp-tk__scorers--away">
+                      {(away.scorers ?? []).map((s) => (
+                        <li key={s}>
+                          <span>{s}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <span className="sp-sronly">
+                    {home.name} vs {away.name}, {resultWord(rm.resultLabel)}
+                  </span>
+                </div>
+              );
+            })()
           ) : (
             // Matchup lines ("Blue Jays @ Giants") get body type and wrap; score lines stay mono.
             // "· Scheduled" is server noise; the kickoff time lives in the Next footer below
@@ -522,7 +620,7 @@ export function TickerTeam(props: {
             <ul className="sp-tk__stories">
               {/* Old cached stories have no opaque reference, so their feedback menu stays hidden. */}
               {secondary.map((story) => (
-                <li key={story.storyRef}>
+                <li className="sp-fbhost" key={story.storyRef}>
                   <a className="sp-tk__storylink" href={story.url} target="_blank" rel="noreferrer">
                     {story.title}
                     {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
@@ -599,7 +697,7 @@ export function TickerLeague(props: {
         ) : null}
         <div className="sp-tk__col">
           {lead ? (
-            <>
+            <div className="sp-tk__lead sp-fbhost">
               <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
                 {lead.title}
                 {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
@@ -609,14 +707,14 @@ export function TickerLeague(props: {
                 surface={surface}
                 onChanged={props.onStoryChanged ?? (() => undefined)}
               />
-            </>
+            </div>
           ) : (
             <span className="sp-tk__newstx sp-tk__newstx--empty">No recent news</span>
           )}
           {secondary.length > 0 ? (
             <ul className="sp-tk__stories">
               {secondary.map((story) => (
-                <li key={story.storyRef}>
+                <li className="sp-fbhost" key={story.storyRef}>
                   <a className="sp-tk__storylink" href={story.url} target="_blank" rel="noreferrer">
                     {story.title}
                     {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}

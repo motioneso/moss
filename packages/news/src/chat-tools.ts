@@ -144,12 +144,16 @@ function describeResolutionFailure(result: SourceResolutionResult): string {
     switch (result.reason) {
       case "policy":
         return "That publisher is not allowed by content policy.";
+      case "redirected":
+        return "That address redirects to a different site; try the address it sends you to.";
       case "invalid_input":
         return "That doesn't look like a news publisher URL or name.";
       case "not_https":
         return "Publisher sites must be reachable over HTTPS.";
       case "unreachable":
         return "Could not reach or verify that publisher.";
+      case "blocked":
+        return "That publisher's site does not allow automatic access, so it can't be added.";
     }
   }
   return "Source discovery is currently unavailable — try again later.";
@@ -206,7 +210,8 @@ export const newsPreviewSourceExecute: ToolExecute = async (
       candidates: result.candidates.map((candidate) => ({
         candidateId: candidate.candidateId,
         label: candidate.label,
-        domain: candidate.canonicalDomain
+        domain: candidate.canonicalDomain,
+        ...(candidate.redirectNote ? { redirectNote: candidate.redirectNote } : {})
       })),
       ...(duplicate ? { duplicateOfSourceId: duplicate.id } : {})
     }

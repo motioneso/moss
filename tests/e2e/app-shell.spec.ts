@@ -32,7 +32,7 @@ test("signs in and renders shell navigation", async ({ page }) => {
   await expect(page.locator(".module-nav").getByRole("link", { name: "Calendar" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Chat with Moss" })).toBeVisible();
 
-  await page.getByRole("button", { name: /Owner User/ }).click();
+  await page.getByRole("button", { name: /Account menu/ }).click();
   await expect(page.getByRole("button", { name: /Notifications/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Settings & permissions/ })).toBeVisible();
 });
@@ -266,13 +266,18 @@ test("configures chat and email extraction models through settings", async ({ pa
   await expect(page.getByText("Provider credential is valid.")).toBeVisible();
 
   // #982/#869 Lane B: connecting is the whole setup flow. Models appear automatically and the
-  // manual Discover/Add/picker surfaces no longer exist.
+  // old Discover/picker surfaces no longer exist. #2208 brought back "Refresh models" and
+  // "Add model" as explicit per-provider actions; the Model id field only appears once
+  // Add model is opened.
+  // The Models section starts collapsed; its header toggles the list.
+  await page.getByRole("button", { name: /^Models · \d+$/ }).click();
   await expect(page.locator(".mdl__id", { hasText: "gpt-4o" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Discover", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Add", exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Discovered models")).toHaveCount(0);
   await expect(page.getByLabel("Model id")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Add model", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Refresh models", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add model", exact: true })).toBeVisible();
 
   // #870 Slice 1: services (Chat / Voice) replace the old capability-routing rows.
   // exact:true — the default substring match also hits the footer Note ("…follows the

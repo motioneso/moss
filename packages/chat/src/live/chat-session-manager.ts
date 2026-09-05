@@ -1,17 +1,12 @@
 import type { ProviderKind } from "@moss/ai";
 import { resolveMossEnv } from "@moss/db";
-import type {
-  AnswerProvenanceMetadataV1,
-  AiProviderExecutionMode,
-  SourceFreshnessV1
-} from "@moss/shared";
+import type { AnswerProvenanceMetadataV1, SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
-import type { RecallPort } from "../recall-port.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
 import { renderAttachmentsManifest } from "./attachments-manifest.js";
 import { renderReplayBlock, renderSummaryBlock } from "./chat-context-blocks.js";
-import type { CrossToolReadRunner } from "./cross-tool-reasoning.js";
+import { isBoundedFallbackEngine } from "./engine-selection.js";
 import { buildEngineText } from "./engine-text.js";
 import {
   ChatStreamLimitError,
@@ -20,7 +15,7 @@ import {
   CliChatDeliveryUnknownError,
   CliChatUnavailableError
 } from "./errors.js";
-import { renderPersona, type PersonaFs } from "./persona.js";
+import { renderPersona } from "./persona.js";
 import { renderMemorySeedBlock } from "./recall-seed.js";
 import type {
   ActionResultMetadata,
@@ -30,8 +25,6 @@ import type {
 } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
 import { applyRemoteReap, countSubscribersFor, delay } from "./session-runtime-helpers.js";
-import type { PriorityModelPreferenceV1 } from "@moss/priority";
-import type { NotesContextRetriever } from "./notes-retrieval.js";
 import {
   DEFAULT_CHAT_SURFACE,
   normalizeChatSurface,
@@ -48,102 +41,12 @@ export {
 export { ChatStreamLimitError, ChatThreadNotFoundError, ChatTurnInFlightError } from "./errors.js";
 export type {
   ChatPersistencePort,
+  ChatSessionManagerDeps,
+  Clock,
   PassiveRetrievalPort,
   PrivateThreadState
 } from "./chat-session-ports.js";
-import type { ChatPersistencePort, PassiveRetrievalPort } from "./chat-session-ports.js";
-
-export interface Clock {
-  now(): number;
-}
-
-export interface ChatSessionManagerDeps {
-  readonly engineFactory: (
-    provider: ProviderKind,
-    sessionKey: string,
-    opts?: { readonly executionMode?: AiProviderExecutionMode }
-  ) => CliChatEngine | Promise<CliChatEngine>;
-  readonly persistence: ChatPersistencePort;
-  readonly personaFs: PersonaFs;
-  readonly clock: Clock;
-  readonly idleMs: number;
-  /** Base dir for renderPersona (per-user neutral dirs are created under it). */
-  readonly neutralBase: string;
-  /** Persona text (may contain a {{userName}} token). */
-  readonly persona:
-    | string
-    | ((actorUserId: string, userName: string, surface: ChatSurface) => Promise<string>);
-  /** Delay between readNew polls (default 25ms; tests pass 0). */
-  readonly pollMs?: number;
-  /**
-   * #456 — idle/heartbeat watchdog window (ms). The deadline resets whenever readNew yields new
-   * transcript records; only a turn that emits NOTHING for this window trips it (accurate status
-   * record, NOT the old broken TIMEOUT_MESSAGE). Default 180000 (3 min); composition root resolves
-   * JARVIS_CHAT_IDLE_WATCHDOG_MS. This is NOT a duration cap — an actively-producing turn (multi-tool,
-   * 3+ min) never trips it.
-   */
-  readonly idleWatchdogMs?: number;
-  readonly mintMcpToken?: (
-    actorUserId: string,
-    chatSessionId: string
-  ) => Promise<{ token: string; mcpServerUrl: string }>;
-  readonly revokeMcpToken?: (chatSessionId: string) => void;
-  /** Refresh the session token's TTL on activity, so a live session's token never
-   *  expires under the registry backstop (mirrors lastActivity / idle reaping). */
-  readonly touchMcpToken?: (chatSessionId: string) => void;
-  /**
-   * #342 (§5.3 step 2) — revoke every MCP token whose chatSessionId is NOT in the live set.
-   * Wraps SessionTokenRegistry.reconcile(liveSessionIds). The ONE source for orphan-token
-   * revocation: it works off the token registry, so it sweeps orphaned tokens even when
-   * `sessions` is empty (an api restart). Absent ⇒ reconciliation skips the token sweep
-   * (host/in-process path that mints no tokens).
-   */
-  readonly reconcileMcpTokens?: (liveSessionIds: Set<string>) => void;
-  /**
-   * #342 (§5.3 steps 2/4) — every chatSessionId the token registry currently holds a token
-   * for (SessionTokenRegistry.listSessionIds). After an api restart the `sessions` Map is
-   * empty, so this — not the Map — is what tells reconciliation which orphaned mux sessions
-   * to reap by name. Absent ⇒ reconciliation reaps only sessions the Map knows about.
-   */
-  readonly listMcpTokenSessionIds?: () => string[];
-  /**
-   * #342 (§4.5 / §5.3 step 4) — issue a `kill` for a sessionKey the manager has NO engine
-   * object for (an api-unknown live mux session after an api restart). The RPC client kills
-   * BY MUX NAME over the socket; the in-process path can no-op (a host install has no
-   * separate cli-runner to hold orphans). Idempotent. Absent ⇒ orphan-by-name reaping is
-   * skipped (only Map-known sessions are killed via their engine).
-   */
-  readonly killSession?: (sessionKey: string, opts?: EngineKillOpts) => Promise<void>;
-  readonly purgePrivateTranscripts?: (sessionKey: string) => Promise<void>;
-  /** Phase 3: optional recall service — injects <memory> seed before replay. */
-  readonly recall?: RecallPort;
-  /** Optional per-turn hidden context retrieval. Empty/failed result submits the raw turn. */
-  readonly passiveRetrieval?: PassiveRetrievalPort;
-  readonly notesRetrieval?: Pick<NotesContextRetriever, "retrieveWithItems">;
-  readonly crossToolRead?: CrossToolReadRunner;
-  readonly priorityModel?: { getModel(actorUserId: string): Promise<PriorityModelPreferenceV1> };
-  /**
-   * #342 (§4.1.2) — does the ENGINE own the replay submit+drain?
-   *
-   * `false` (default, in-process path): the engine ignores `replayBatch`/`personaText`,
-   * returns `{ offset: 0 }`, and the MANAGER submits + drains the replay itself below.
-   *
-   * `true` (RPC path): the cli-runner server wrote the persona file, submitted `replayBatch`,
-   * and drained the transcript server-side; `launch` returns the real post-drain offset and the
-   * manager does NO further submit/drain.
-   *
-   * This is an EXPLICIT discriminator and MUST be used instead of the `offset === 0` sentinel:
-   * `offset === 0` is ALSO a legitimate RPC result (a replay was submitted but the transcript
-   * never materialized within the server's drain budget), so keying the in-process re-drain on
-   * `offset === 0` would cause the manager to DOUBLE-submit the replay over the socket.
-   *
-   * CROSS-LANE (Lane A wiring): set `serverOwnsDrain = true` exactly when the RPC engine factory
-   * is selected (socket configured); leave it `false`/absent for the in-process factory.
-   */
-  readonly serverOwnsDrain?: boolean;
-  // Wall-clock seam for buildEngineText's time context; deliberately separate from `clock` above (idle/heartbeat elapsed time).
-  readonly now?: () => Date;
-}
+import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
 
 type Subscriber = (record: TranscriptRecord) => void;
 
@@ -157,11 +60,26 @@ interface UserSession {
   transcriptOffset: number;
   incognito: boolean;
   readonly seededContextKeys: Set<string>;
+  /**
+   * #2164 — the token this session's engine was launched with, kept so a bounded-fallback
+   * turn can check MCP tools-list readiness after the fact (see `mcpToken` usage in `runTurn`).
+   * Undefined when no MCP client was configured for this session at all.
+   */
+  readonly mcpToken?: string;
+  /**
+   * #2164 — true when this session's engine is a bounded-fallback (one-shot, print) engine.
+   * Those engines start their MCP client per turn inside `submit()`, so the #2159 launch-time
+   * readiness gate is skipped for them (nothing to observe yet at launch) and a tool-less reply
+   * can otherwise be accepted before we know the CLI ever attached the MCP tools at all.
+   */
+  readonly isBoundedFallbackEngine: boolean;
 }
 
 const MAX_SUBSCRIBERS_PER_ACTOR = 5;
 const MAX_SUBSCRIBERS_TOTAL_PER_ACTOR = MAX_SUBSCRIBERS_PER_ACTOR * 2;
 const PRIVATE_DETACH_GRACE_MS = 30_000;
+const TOOLS_LIST_OBSERVATION_TIMEOUT_MS = 10_000;
+const TOOLS_LIST_OBSERVATION_POLL_MS = 25;
 
 export class ChatSessionManager {
   private readonly sessions = new Map<string, UserSession>();
@@ -269,13 +187,33 @@ export class ChatSessionManager {
       personaPath,
       personaText: persona,
       replayBatch,
-      // #367: pass the resolved model id. The launch builders emit `--model` only for a concrete
-      // settings override; for the `"default"` sentinel they omit it so the CLI rides its own
-      // interactive/account model (the primary path — chat never requires model selection).
+      // #367: launch builders emit `--model` only for a concrete settings override; the
+      // `"default"` sentinel omits it so the CLI rides its own interactive/account model.
       model,
       mcpToken: mcpConfig?.token,
       mcpServerUrl: mcpConfig?.mcpServerUrl
     });
+
+    // #2159 — block session readiness (and so the first user message) until this session's MCP
+    // client has completed its first tools/list, closing the race where the terminal composer
+    // reads "ready" before the CLI's own tool-discovery round trip against our server has landed.
+    // #2164 — bounded-fallback (print/one-shot) engines never start an MCP client inside launch()
+    // (only per-turn, in submit()), so waiting here would always time out and tear down the
+    // session before its first message. Only engines that start MCP during launch() get the wait.
+    if (mcpConfig?.token && !isBoundedFallbackEngine(provider, executionMode)) {
+      const toolsListReady = await this.deps.waitForToolsListReady?.(mcpConfig.token);
+      if (toolsListReady === false) {
+        // The engine process this launch just started, and the token just minted for it, would
+        // otherwise leak: nothing else tracks or reaps either once this throw unwinds the launch.
+        try {
+          await engine.kill();
+        } catch {
+          // Best-effort teardown of a process that never finished starting up.
+        }
+        this.deps.revokeMcpToken?.(sessionKey);
+        throw new CliChatUnavailableError("tools list was not ready in time");
+      }
+    }
 
     const session: UserSession = {
       actorUserId,
@@ -286,7 +224,9 @@ export class ChatSessionManager {
       lastActivity: this.deps.clock.now(),
       transcriptOffset: offset,
       incognito: threadState?.incognito ?? false,
-      seededContextKeys: new Set()
+      seededContextKeys: new Set(),
+      mcpToken: mcpConfig?.token,
+      isBoundedFallbackEngine: isBoundedFallbackEngine(provider, executionMode)
     };
     this.sessions.set(sessionKey, session);
 
@@ -298,6 +238,22 @@ export class ChatSessionManager {
     }
 
     return session;
+  }
+
+  // #2164 r21 — true once a fresh attach lands (count exceeds baseline), false after
+  // TOOLS_LIST_OBSERVATION_TIMEOUT_MS, undefined when there's nothing to compare (guard skipped).
+  private async waitForNewToolsListObservation(
+    token: string,
+    baselineCount: number | undefined
+  ): Promise<boolean | undefined> {
+    const getCount = this.deps.getToolsListObservationCount;
+    if (!getCount || baselineCount === undefined) return undefined;
+    const deadline = this.deps.clock.now() + TOOLS_LIST_OBSERVATION_TIMEOUT_MS;
+    for (;;) {
+      if (getCount(token) > baselineCount) return true;
+      if (this.deps.clock.now() >= deadline) return false;
+      await delay(TOOLS_LIST_OBSERVATION_POLL_MS);
+    }
   }
 
   /**
@@ -397,8 +353,7 @@ export class ChatSessionManager {
     assistantMessageId?: string;
     sourceFreshness?: SourceFreshnessV1 | null;
   }> {
-    // #1157: a failed launch (dead tmux server after a container restart, stale daemon
-    // state) gets exactly one retry with forced replay before surfacing.
+    // #1157: a failed launch (dead tmux server, stale daemon state) gets one retry before surfacing.
     let session: UserSession;
     try {
       session = await this.ensureSession(actorUserId, userName, undefined, surface);
@@ -430,20 +385,22 @@ export class ChatSessionManager {
         text,
         surface
       );
-      // #1133 — attachments ride as a server-composed manifest appended AFTER all
-      // user-influenced text; the engine pulls bytes via chat.readAttachment on demand.
+      // #1133 — attachments ride as a server-composed manifest appended AFTER all user text.
       const manifest = renderAttachmentsManifest(attachments);
       const withAttachments = manifest ? `${builtEngineText}\n\n${manifest}` : builtEngineText;
       const engineText = opts?.moduleControl
         ? `${withAttachments}\n\n${opts.moduleControl}`
         : withAttachments;
       this.emit(actorUserId, surface, { kind: "user", text });
+      let toolsListBaseline = session.mcpToken
+        ? this.deps.getToolsListObservationCount?.(session.mcpToken)
+        : undefined;
       try {
         await session.engine.submit(engineText);
       } catch (err) {
         if (err instanceof CliChatDeliveryUnknownError) {
-          // Delivery MAY have happened — never resubmit (duplicate-turn risk). Evict so
-          // the next turn relaunches cleanly (pre-#1157 behavior, kept).
+          // Delivery MAY have happened — never resubmit (duplicate-turn risk); evict so the
+          // next turn relaunches cleanly (pre-#1157 behavior, kept).
           if (this.sessions.get(sessionKey) === session) this.sessions.delete(sessionKey);
           this.deps.revokeMcpToken?.(sessionKey);
           throw err;
@@ -452,6 +409,9 @@ export class ChatSessionManager {
           // #1157: unavailable = the text verifiably never entered the engine (paste failed
           // pre-entry, or the daemon has no live session). Safe to heal + resubmit ONCE.
           session = await this.healAndRelaunch(actorUserId, userName, session);
+          toolsListBaseline = session.mcpToken // #2164 r21 — recapture against the fresh token
+            ? this.deps.getToolsListObservationCount?.(session.mcpToken)
+            : undefined;
           await session.engine.submit(engineText);
         } else {
           throw err;
@@ -460,6 +420,9 @@ export class ChatSessionManager {
 
       let reply = "";
       const invokedToolNames = new Set<string>();
+      // #2164 r21 correction — correlates mcp__ calls with rejections across readNew polls.
+      const mcpAttempts: { readonly name: string; readonly id?: string }[] = [];
+      const rejectedCallIds = new Set<string>();
       let lastEmissionAt = this.deps.clock.now();
       let watchdogTripped = false;
       let stopped = false;
@@ -488,16 +451,21 @@ export class ChatSessionManager {
         session.transcriptOffset = offset;
         if (records.length > 0) {
           lastEmissionAt = this.deps.clock.now();
-          // #456 — signal activity so the in-flight RPC turn-verb deadline resets (an
-          // actively-producing turn never trips the 45s deadline; a wedged cli-runner still does).
+          // #456 — signal activity so the in-flight RPC turn-verb deadline resets (a wedged
+          // cli-runner still trips it; an actively-producing turn never does).
           session.engine.resetActivityDeadline?.();
         }
         for (const record of records) {
-          this.emit(actorUserId, surface, record);
+          const rejectionOnly = record.kind === "tool" && !record.toolName && !record.text?.trim();
+          if (!rejectionOnly) this.emit(actorUserId, surface, record);
           if (record.kind === "reply") reply = record.text;
           if (record.kind === "tool" && record.toolName) {
             invokedToolNames.add(record.toolName);
+            if (record.toolName.startsWith("mcp__"))
+              mcpAttempts.push({ name: record.toolName, id: record.toolCallId });
           }
+          if (record.kind === "tool" && record.rejected && record.toolCallId)
+            rejectedCallIds.add(record.toolCallId);
         }
         if (complete) break;
         // #456 — user-driven Stop: the signal aborts mid-turn; break cleanly (no error) so the
@@ -506,10 +474,8 @@ export class ChatSessionManager {
           stopped = true;
           break;
         }
-        // #456 — idle/heartbeat watchdog: break only when the engine has emitted NOTHING for the
-        // full window. An actively-producing turn (records on every poll) keeps resetting the
-        // deadline, so a multi-tool 3+ min turn never trips it. Emits an accurate status record
-        // (NOT the old broken TIMEOUT_MESSAGE). No reply was produced → recordTurn is skipped.
+        // #456 — idle/heartbeat watchdog: break only when the engine emitted NOTHING for the full
+        // window (an actively-producing turn keeps resetting the deadline). No reply → recordTurn skipped.
         if (
           this.idleWatchdogMs > 0 &&
           this.deps.clock.now() - lastEmissionAt > this.idleWatchdogMs
@@ -538,6 +504,41 @@ export class ChatSessionManager {
         session.lastActivity = this.deps.clock.now();
         this.deps.touchMcpToken?.(sessionKey);
         return { reply };
+      }
+
+      // #2164 — a bounded-fallback engine starts its MCP client per turn in `submit()`, so the
+      // #2159 gate is skipped for it; check only when no MCP tool fired. Only a non-rejected
+      // `mcp__` attempt with a call id proves attachment (r22 fixed an id-less bypass).
+      const mcpToolInvoked = mcpAttempts.some((a) => a.id != null && !rejectedCallIds.has(a.id));
+      if (
+        session.isBoundedFallbackEngine &&
+        session.provider === "anthropic" &&
+        session.mcpToken &&
+        !mcpToolInvoked &&
+        reply
+      ) {
+        const toolsListReady = await this.waitForNewToolsListObservation(
+          session.mcpToken,
+          toolsListBaseline
+        );
+        if (toolsListReady === false) {
+          // #2164 r21 — bounded, scrubbed diagnostic; duck-typed cast since not on CliChatEngine.
+          type Diagnostics = { readonly stderrTail: string; readonly exitCode: number | null };
+          type DiagnosticsCapable = { getLastSubmitDiagnostics?: () => Diagnostics | undefined };
+          const diag = (session.engine as DiagnosticsCapable).getLastSubmitDiagnostics?.();
+          if (diag) {
+            console.error(
+              `[chat] readiness gate failed: exit=${diag.exitCode} stderr=${diag.stderrTail}`
+            );
+          }
+          this.emit(actorUserId, surface, {
+            kind: "status",
+            text: "Chat tools were not available for this reply — please try again."
+          });
+          throw new CliChatUnavailableError(
+            "MCP tools were never attached before the reply was accepted"
+          );
+        }
       }
 
       let answerProvenance: AnswerProvenanceMetadataV1 | undefined;

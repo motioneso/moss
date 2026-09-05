@@ -17,3 +17,6 @@ linked doc **in full** and follow it.
 ## Documentation Standards
 
 - Always use `~/Jarv1s` instead of absolute paths (like `/home/<user>/Jarv1s`) in all documentation, specs, and handoff files to prevent exposing local usernames and system architecture.
+- Every product change must keep Moss's app map truthful in the same PR. Add, change, or remove the
+  matching core declarations in `packages/shared/src/app-map-core.ts` or the owning module
+  manifest's `navigation`, `settings`, and `features` metadata, including errors and remediations.
