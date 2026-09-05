@@ -2,11 +2,7 @@ import dns from "node:dns";
 import https from "node:https";
 import net from "node:net";
 
-import {
-  PUSH_AUTH_PATTERN,
-  PUSH_ENDPOINT_MAX_LENGTH,
-  PUSH_P256DH_PATTERN
-} from "@moss/shared";
+import { PUSH_AUTH_PATTERN, PUSH_ENDPOINT_MAX_LENGTH, PUSH_P256DH_PATTERN } from "@moss/shared";
 
 /**
  * Where a push delivery address may point (#743 security finding 1).
@@ -257,7 +253,11 @@ export function validatePushSubscriptionInput(input: PushSubscriptionInput): Pus
 
 export type LookupFunction = typeof dns.lookup;
 
-type LookupCallback = (err: NodeJS.ErrnoException | null, address?: unknown, family?: unknown) => void;
+type LookupCallback = (
+  err: NodeJS.ErrnoException | null,
+  address?: unknown,
+  family?: unknown
+) => void;
 
 /**
  * Wraps a DNS lookup so a hostname that resolves to a private, loopback, link-local or

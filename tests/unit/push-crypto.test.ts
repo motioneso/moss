@@ -77,7 +77,9 @@ describe("resolveVapidSubject", () => {
   });
 
   it("uses only the https origin of the configured public base URL", () => {
-    const env = { JARVIS_PUBLIC_BASE_URL: "https://moss.example.com/app/?x=1#f" } as NodeJS.ProcessEnv;
+    const env = {
+      JARVIS_PUBLIC_BASE_URL: "https://moss.example.com/app/?x=1#f"
+    } as NodeJS.ProcessEnv;
     expect(resolveVapidSubject(env)).toBe("https://moss.example.com");
   });
 

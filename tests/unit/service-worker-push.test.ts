@@ -160,7 +160,10 @@ describe("service worker push (#743)", () => {
     }
     await Promise.all(pending);
     expect(sandbox.shown).toEqual([
-      { title: "Hi", options: { body: "there", icon: "/icons/icon.svg", data: { href: "/tasks/1" } } }
+      {
+        title: "Hi",
+        options: { body: "there", icon: "/icons/icon.svg", data: { href: "/tasks/1" } }
+      }
     ]);
   });
 });
