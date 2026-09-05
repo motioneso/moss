@@ -10,7 +10,8 @@ import type {
   NewsCustomTopicDto,
   NewsPrefDto,
   NewsRefreshStateDto,
-  NewsSourceExclusionDto
+  NewsSourceExclusionDto,
+  NewsWebSearchUnavailableReason
 } from "@moss/shared";
 
 import { NewsPersonalizationLimitError } from "../../packages/news/src/personalization-repository.js";
@@ -246,6 +247,7 @@ function buildApp(
     personalization?: FakePersonalization;
     hasJsonModel?: boolean;
     hasWebSearch?: boolean;
+    webSearchReason?: NewsWebSearchUnavailableReason | null;
   } = {}
 ) {
   const repo = overrides.repo ?? makeRepo([SEEDED_TOPIC_PREF]);
@@ -270,7 +272,10 @@ function buildApp(
     availability: {
       hasJsonModel: async () => overrides.hasJsonModel ?? true,
       hasWebSearch: async () => overrides.hasWebSearch ?? true,
-      webSearchReason: async () => (overrides.hasWebSearch ?? true ? null : "no-key-no-native-model")
+      webSearchReason: async () =>
+        (overrides.hasWebSearch ?? true)
+          ? null
+          : (overrides.webSearchReason ?? "no-key-no-native-model")
     },
     discovery: overrides.discovery ?? {
       fetch: async () => ({ ok: false, reason: "network" }),
@@ -468,6 +473,7 @@ describe("news personalization routes (#953 Slice 1)", () => {
     expect(body.availability).toEqual({
       aiConfigured: true,
       webSearchConfigured: true,
+      webSearchReason: null,
       customSourceByUrlEnabled: true,
       customSourceByNameEnabled: true,
       freeformTopicsEnabled: true
@@ -537,6 +543,7 @@ describe("news personalization routes (#953 Slice 1)", () => {
     expect(JSON.parse(res.body).availability).toEqual({
       aiConfigured: true,
       webSearchConfigured: false,
+      webSearchReason: "no-key-no-native-model",
       customSourceByUrlEnabled: true,
       customSourceByNameEnabled: false,
       freeformTopicsEnabled: false
@@ -549,6 +556,7 @@ describe("news personalization routes (#953 Slice 1)", () => {
     expect(JSON.parse(resNoAi.body).availability).toEqual({
       aiConfigured: false,
       webSearchConfigured: true,
+      webSearchReason: null,
       customSourceByUrlEnabled: false,
       customSourceByNameEnabled: false,
       freeformTopicsEnabled: false

@@ -876,7 +876,7 @@ function buildSportsDiscoveryPorts(
  * chat model. Shared by hasWebSearch and webSearchReason so the model lookup and engine
  * resolution only happen a single time per call site.
  */
-async function resolveNewsWebSearch(scopedDb: DataContextDb) {
+export async function resolveNewsWebSearch(scopedDb: DataContextDb) {
   const model = await new AiRepository().selectChatModelForUser(scopedDb);
   return resolveWebSearchEngine(
     scopedDb,
