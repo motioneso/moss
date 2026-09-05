@@ -285,7 +285,9 @@ describe("ChatDrawer surface routing (#1533)", () => {
           title: "Old thread",
           incognito: false,
           createdAt: "2026-01-01T00:00:00Z",
-          updatedAt: "2026-01-01T00:00:00Z"
+          updatedAt: "2026-01-01T00:00:00Z",
+          lastActiveAt: "2026-01-01T00:00:00Z",
+          lastMessagePreview: null
         }
       ]
     });
@@ -339,6 +341,115 @@ describe("ChatDrawer surface routing (#1533)", () => {
         sourceFreshness: null
       });
     });
+  });
+
+  it("shows chat history in the order the server sent it, not resorted by the client", async () => {
+    // "resumed" was last active most recently even though its own updatedAt (a
+    // title-level field that does not bump on a reply) is the oldest of the three —
+    // this is exactly what happens when someone reopens an older conversation. A
+    // client-side re-sort by updatedAt would put "resumed" last; the drawer must
+    // trust the server's order and show it first.
+    vi.mocked(listChatThreads).mockResolvedValueOnce({
+      threads: [
+        {
+          id: "t-resumed",
+          ownerUserId: "user-1",
+          title: "resumed",
+          incognito: false,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+          lastActiveAt: "2026-03-03T00:00:00Z",
+          lastMessagePreview: null
+        },
+        {
+          id: "t-middle",
+          ownerUserId: "user-1",
+          title: "middle",
+          incognito: false,
+          createdAt: "2026-02-01T00:00:00Z",
+          updatedAt: "2026-02-01T00:00:00Z",
+          lastActiveAt: "2026-02-01T00:00:00Z",
+          lastMessagePreview: null
+        },
+        {
+          id: "t-newest-updated",
+          ownerUserId: "user-1",
+          title: "newest-updated",
+          incognito: false,
+          createdAt: "2026-03-01T00:00:00Z",
+          updatedAt: "2026-03-01T00:00:00Z",
+          lastActiveAt: "2026-01-01T00:00:00Z",
+          lastMessagePreview: null
+        }
+      ]
+    });
+
+    const renderer = await renderDrawer(DEFAULT_CHAT_SURFACE);
+
+    await act(async () => {
+      findByAriaLabel(renderer, "Show chat history")?.props.onClick();
+    });
+
+    const rows = renderer.root.findAll((node) => node.props.className === "chatd-sess__title");
+    expect(rows.map((row) => row.children)).toEqual([["resumed"], ["middle"], ["newest-updated"]]);
+  });
+
+  it("opens history scrolled to the top, not to the bottom the transcript view left it at", async () => {
+    // The history list shows the most recent conversation first, so opening it must move the
+    // shared scroll area to position 0. A regression sent it to the full scroll height instead
+    // (the bottom-pinning behavior meant for the transcript leaking into the history view).
+    vi.mocked(listChatThreads).mockResolvedValueOnce({
+      threads: [
+        {
+          id: "t-newest",
+          ownerUserId: "user-1",
+          title: "newest",
+          incognito: false,
+          createdAt: "2026-03-01T00:00:00Z",
+          updatedAt: "2026-03-01T00:00:00Z",
+          lastActiveAt: "2026-03-01T00:00:00Z",
+          lastMessagePreview: null
+        },
+        {
+          id: "t-oldest",
+          ownerUserId: "user-1",
+          title: "oldest",
+          incognito: false,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+          lastActiveAt: "2026-01-01T00:00:00Z",
+          lastMessagePreview: null
+        }
+      ]
+    });
+
+    const scrollRequests: number[] = [];
+    const bodyMock = {
+      scrollTop: 0,
+      scrollHeight: 2000,
+      clientHeight: 400,
+      scrollTo(options: { top: number }) {
+        scrollRequests.push(options.top);
+        this.scrollTop = options.top;
+      }
+    };
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(buildElement(client, DEFAULT_CHAT_SURFACE, vi.fn()), {
+        createNodeMock: (element) =>
+          (element.props as { className?: string }).className === "chatd__body" ? bodyMock : null
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      findByAriaLabel(renderer, "Show chat history")?.props.onClick();
+    });
+
+    expect(scrollRequests.at(-1)).toBe(0);
   });
 
   it("guards a stale sendChatTurn resolution — invalidates the surface it started on", async () => {
@@ -411,7 +522,9 @@ describe("ChatDrawer surface routing (#1533)", () => {
           title: "Job thread",
           incognito: false,
           createdAt: "2026-01-02T00:00:00Z",
-          updatedAt: "2026-01-02T00:00:00Z"
+          updatedAt: "2026-01-02T00:00:00Z",
+          lastActiveAt: "2026-01-02T00:00:00Z",
+          lastMessagePreview: null
         }
       ]
     });

@@ -95,6 +95,25 @@ describe("Combobox", () => {
     expect(document.querySelector('[data-testid="value"]')!.textContent).toBe("Asia/Tokyo");
   });
 
+  it("recovers keyboard selection after a search finds no matches and then does", () => {
+    mount();
+    act(() => trigger().click());
+    const setQuery = (text: string) => {
+      act(() => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+        setter.call(search(), text);
+        search().dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    };
+    setQuery("zzz-no-such-place");
+    expect(options()).toHaveLength(0);
+    key(search(), "ArrowDown");
+    setQuery("tok");
+    expect(options().map((o) => o.textContent)).toEqual(["(UTC+09:00) Asia/Tokyo"]);
+    key(search(), "Enter");
+    expect(document.querySelector('[data-testid="value"]')!.textContent).toBe("Asia/Tokyo");
+  });
+
   it("closes on an outside pointer press without changing the value", () => {
     mount();
     act(() => trigger().click());

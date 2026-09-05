@@ -9,6 +9,7 @@ export interface VerifiedSourceCandidate {
   readonly retrievalMethod: "feed" | "scrape";
   readonly sampleCount: number;
   readonly validationFingerprint: string;
+  readonly redirectNote: string | null;
 }
 
 export interface PendingSourcePreview {

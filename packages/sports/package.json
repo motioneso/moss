@@ -20,6 +20,7 @@
     "@moss/settings-ui": "workspace:*",
     "@moss/shared": "workspace:*",
     "@moss/structured-state": "workspace:*",
+    "@moss/vault": "workspace:*",
     "@tanstack/react-query": "^5.0.0",
     "ajv": "^8.17.1",
     "css-select": "^7.0.0",
@@ -29,6 +30,7 @@
     "lucide-react": "^0.468.0",
     "playwright-core": "^1.60.0",
     "react": "^19.0.0",
+    "sharp": "0.34.5",
     "tldts": "^7.4.9"
   },
   "devDependencies": {

@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Moss — Sports settings, source photos (spec mockup)</title>
+    <!--
+      Spec mockup for docs/superpowers/specs/2026-09-04-sports-custom-source-photos-design.md.
+      Static and openable directly in a browser. Class names are the real ones: jds-* primitives
+      from packages/ui (badge, button, eyebrow) and the sp-src__* layout classes already used by
+      packages/sports/src/settings/sources.tsx. The only new layout classes are the photo preview
+      block (sp-src__photos*), which the build adds to sports-sources.css. Token NAMES match
+      apps/web/src/styles/tokens.css; the values below exist only so the file renders standalone.
+    -->
+    <style>
+      :root {
+        --font-display: "Neue Haas Grotesk", Helvetica, Arial, sans-serif;
+        --font-sans: "Inter", Helvetica, Arial, sans-serif;
+        --bg: #f4f1ea;
+        --surface: #fbf9f4;
+        --surface-2: #efebe2;
+        --text: #1f2420;
+        --text-subtle: #5f665f;
+        --border-subtle: #e2ddd2;
+        --border-w: 1px;
+        --radius-sm: 6px;
+        --radius-md: 10px;
+        --accent: #2f5d43;
+        --accent-soft: #dfe9e1;
+        --amber-soft: #f3e6c8;
+        --amber-text: #7a5a12;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-6: 24px;
+        --text-xs: 12px;
+        --text-sm: 14px;
+        --text-md: 16px;
+      }
+      body {
+        margin: 0;
+        padding: var(--space-6);
+        background: var(--bg);
+        color: var(--text);
+        font: var(--text-md)/1.5 var(--font-sans);
+      }
+      h1 {
+        font-family: var(--font-display);
+        font-size: 22px;
+        margin: 0 0 var(--space-4);
+      }
+      .jds-eyebrow {
+        font-size: var(--text-xs);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-subtle);
+        font-variant-numeric: tabular-nums;
+      }
+      .jds-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        font-size: var(--text-xs);
+        border-radius: var(--radius-sm);
+        background: var(--surface-2);
+        color: var(--text-subtle);
+      }
+      .jds-badge--forest {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .jds-badge--amber {
+        background: var(--amber-soft);
+        color: var(--amber-text);
+      }
+      .jds-badge--pill {
+        border-radius: 999px;
+      }
+      .jds-btn {
+        font: inherit;
+        font-size: var(--text-sm);
+        padding: 6px 12px;
+        border-radius: var(--radius-sm);
+        border: var(--border-w) solid var(--border-subtle);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .jds-btn--primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .jds-btn--secondary {
+        background: var(--surface);
+      }
+      .jds-btn--quiet {
+        border-color: transparent;
+        background: transparent;
+        color: var(--text-subtle);
+      }
+      .jds-btn--sm {
+        padding: 4px 10px;
+      }
+      .jds-btn[disabled] {
+        opacity: 0.55;
+        cursor: default;
+      }
+      .jds-btn-link {
+        font: inherit;
+        font-size: var(--text-sm);
+        color: var(--accent);
+        background: none;
+        border: 0;
+        padding: 0;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+
+      /* sp-src__* below mirrors packages/sports/src/settings/sports-sources.css */
+      .sp-src__list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        max-width: 980px;
+      }
+      .sp-src__item {
+        padding: var(--space-3);
+        border: var(--border-w) solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        background: var(--surface);
+      }
+      .sp-src__item-row,
+      .sp-src__identity,
+      .sp-src__actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .sp-src__item-row {
+        gap: var(--space-3);
+        justify-content: space-between;
+      }
+      .sp-src__identity {
+        gap: var(--space-2);
+      }
+      .sp-src__actions {
+        gap: var(--space-2);
+        margin-left: auto;
+      }
+      .sp-src__item-icon {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        background: var(--surface-2);
+        display: inline-block;
+      }
+      .sp-src__item-label {
+        font-weight: 600;
+      }
+      .sp-src__meta-line {
+        font-size: var(--text-sm);
+        color: var(--text-subtle);
+      }
+      .sp-src__hint {
+        margin: var(--space-2) 0 0;
+        font-size: var(--text-sm);
+        color: var(--text-subtle);
+      }
+
+      /* New in this spec: the photo preview block inside a source row. */
+      .sp-src__photos {
+        margin-top: var(--space-3);
+        padding-top: var(--space-3);
+        border-top: var(--border-w) solid var(--border-subtle);
+        display: grid;
+        gap: var(--space-2);
+      }
+      .sp-src__photos-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-3);
+      }
+      .sp-src__photos-sample {
+        display: grid;
+        gap: var(--space-1);
+        font-size: var(--text-sm);
+      }
+      .sp-src__photos-img {
+        aspect-ratio: 16 / 9;
+        width: 100%;
+        border-radius: var(--radius-sm);
+        object-fit: cover;
+        background: linear-gradient(135deg, var(--surface-2), var(--accent-soft));
+        border: var(--border-w) solid var(--border-subtle);
+      }
+      .sp-src__photos-actions {
+        display: flex;
+        gap: var(--space-2);
+        justify-content: flex-end;
+      }
+
+      .demo-label {
+        margin: var(--space-6) 0 var(--space-2);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Sports settings: custom sources with photo status</h1>
+
+    <p class="jds-eyebrow demo-label">State 1: deterministic pass found no photo</p>
+    <ul class="sp-src__list">
+      <li class="sp-src__item">
+        <div class="sp-src__item-row">
+          <div class="sp-src__identity">
+            <span class="sp-src__item-icon" aria-hidden="true"></span>
+            <span class="sp-src__item-label">The Athletic</span>
+            <span class="jds-badge jds-badge--forest jds-badge--pill">Healthy</span>
+            <span class="sp-src__meta-line">Photos: none found</span>
+          </div>
+          <div class="sp-src__actions">
+            <button
+              class="jds-btn jds-btn--secondary jds-btn--sm"
+              aria-label="Find photos for The Athletic"
+            >
+              Find photos
+            </button>
+            <button class="jds-btn jds-btn--secondary jds-btn--sm">Edit</button>
+            <button class="jds-btn jds-btn--secondary jds-btn--sm">Remove</button>
+          </div>
+        </div>
+      </li>
+    </ul>
+
+    <p class="jds-eyebrow demo-label">State 2: Moss found photos, preview waiting on the owner</p>
+    <ul class="sp-src__list">
+      <li class="sp-src__item">
+        <div class="sp-src__item-row">
+          <div class="sp-src__identity">
+            <span class="sp-src__item-icon" aria-hidden="true"></span>
+            <span class="sp-src__item-label">The Athletic</span>
+            <span class="jds-badge jds-badge--forest jds-badge--pill">Healthy</span>
+            <span class="sp-src__meta-line">Photos: preview ready</span>
+          </div>
+          <div class="sp-src__actions">
+            <button class="jds-btn jds-btn--secondary jds-btn--sm">Edit</button>
+            <button class="jds-btn jds-btn--secondary jds-btn--sm">Remove</button>
+          </div>
+        </div>
+        <div class="sp-src__photos" role="region" aria-label="Photo preview for The Athletic">
+          <span class="jds-eyebrow">Photo preview</span>
+          <p class="sp-src__hint" style="margin-top: 0">
+            Moss found photos on 3 of 3 recent stories from this source.
+          </p>
+          <div class="sp-src__photos-grid">
+            <div class="sp-src__photos-sample">
+              <div class="sp-src__photos-img" role="img" aria-label="Sample photo 1"></div>
+              <span>Trade deadline winners and losers</span>
+            </div>
+            <div class="sp-src__photos-sample">
+              <div class="sp-src__photos-img" role="img" aria-label="Sample photo 2"></div>
+              <span>Inside the Chiefs' new-look defense</span>
+            </div>
+            <div class="sp-src__photos-sample">
+              <div class="sp-src__photos-img" role="img" aria-label="Sample photo 3"></div>
+              <span>Power rankings: week one</span>
+            </div>
+          </div>
+          <div class="sp-src__photos-actions">
+            <button class="jds-btn jds-btn--quiet jds-btn--sm">Not right</button>
+            <button class="jds-btn jds-btn--primary jds-btn--sm">Use these photos</button>
+          </div>
+        </div>
+      </li>
+    </ul>
+
+    <p class="jds-eyebrow demo-label">State 3: photos found by Moss, in use</p>
+    <ul class="sp-src__list">
+      <li class="sp-src__item">
+        <div class="sp-src__item-row">
+          <div class="sp-src__identity">
+            <span class="sp-src__item-icon" aria-hidden="true"></span>
+            <span class="sp-src__item-label">The Athletic</span>
+            <span class="jds-badge jds-badge--forest jds-badge--pill">Healthy</span>
+            <span class="sp-src__meta-line">Photos: working</span>
+          </div>
+          <div class="sp-src__actions">
+            <button
+              class="jds-btn jds-btn--secondary jds-btn--sm"
+              aria-label="Stop using Moss's photos for The Athletic"
+            >
+              Stop using Moss's photos
+            </button>
+            <button class="jds-btn jds-btn--secondary jds-btn--sm">Edit</button>
+            <button class="jds-btn jds-btn--secondary jds-btn--sm">Remove</button>
+          </div>
+        </div>
+      </li>
+    </ul>
+
+    <p class="jds-eyebrow demo-label">
+      State 4: no chat model configured (existing prerequisite gate)
+    </p>
+    <ul class="sp-src__list">
+      <li class="sp-src__item">
+        <div class="sp-src__item-row">
+          <div class="sp-src__identity">
+            <span class="sp-src__item-icon" aria-hidden="true"></span>
+            <span class="sp-src__item-label">Pro Football Talk</span>
+            <span class="jds-badge jds-badge--forest jds-badge--pill">Healthy</span>
+            <span class="sp-src__meta-line">Photos: none found</span>
+          </div>
+          <div class="sp-src__actions">
+            <button class="jds-btn jds-btn--secondary jds-btn--sm" disabled>Looking…</button>
+            <button class="jds-btn jds-btn--secondary jds-btn--sm">Edit</button>
+            <button class="jds-btn jds-btn--secondary jds-btn--sm">Remove</button>
+          </div>
+        </div>
+        <div class="sp-src__photos">
+          <p class="sp-src__hint" style="margin-top: 0">
+            Finding photos needs a configured chat model.
+            <button class="jds-btn-link">Open Assistant settings</button>
+          </p>
+        </div>
+      </li>
+    </ul>
+
+    <p class="jds-eyebrow demo-label">State 5: Moss's own re-look also found nothing</p>
+    <ul class="sp-src__list">
+      <li class="sp-src__item">
+        <div class="sp-src__item-row">
+          <div class="sp-src__identity">
+            <span class="sp-src__item-icon" aria-hidden="true"></span>
+            <span class="sp-src__item-label">The Athletic</span>
+            <span class="jds-badge jds-badge--forest jds-badge--pill">Healthy</span>
+            <span class="sp-src__meta-line">Photos: stopped working</span>
+          </div>
+          <div class="sp-src__actions">
+            <button class="jds-btn jds-btn--secondary jds-btn--sm">Find photos</button>
+            <button class="jds-btn jds-btn--secondary jds-btn--sm">Stop using Moss's photos</button>
+            <button class="jds-btn jds-btn--secondary jds-btn--sm">Edit</button>
+            <button class="jds-btn jds-btn--secondary jds-btn--sm">Remove</button>
+          </div>
+        </div>
+      </li>
+    </ul>
+  </body>
+</html>

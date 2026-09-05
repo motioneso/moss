@@ -134,7 +134,8 @@ export const NEWS_CATALOG: readonly NewsSourceEntry[] = [
       culture: "https://feeds.npr.org/1008/rss.xml"
     },
     feedHosts: ["feeds.npr.org"],
-    // NPR's RSS carries no media tags today; hosts declared for forward-compat if they add them.
+    // NPR's RSS carries no media:content/media:thumbnail/enclosure tags; the story image comes
+    // from the first <img> in content:encoded instead, so these hosts gate that fallback too.
     imageHosts: ["media.npr.org", "npr.brightspotcdn.com"]
   },
   {
@@ -199,4 +200,19 @@ export const NEWS_FETCH_HOSTS: readonly string[] = sortedUnion(
 );
 export const NEWS_IMAGE_HOSTS: readonly string[] = sortedUnion(
   NEWS_CATALOG.map((e) => e.imageHosts)
+);
+
+/**
+ * Every catalog entry's own homepage host, lower-cased. This is the publisher allow-list the
+ * favicon route checks a requested domain against — the icon route otherwise has no per-article
+ * lookup to lean on, unlike the personalized image route.
+ */
+export const NEWS_HOMEPAGE_HOSTS: readonly string[] = sortedUnion(
+  NEWS_CATALOG.map((e) => {
+    try {
+      return [new URL(e.homepageUrl).hostname.toLowerCase()];
+    } catch {
+      return [];
+    }
+  })
 );

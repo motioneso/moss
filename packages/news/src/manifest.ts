@@ -114,7 +114,8 @@ export const newsModuleManifest = {
     {
       id: "news",
       label: "News",
-      description: "Read personalized headlines from enabled sources.",
+      description:
+        "Read personalized headlines from enabled sources. Marking a story less like this removes it right away and refills its spot from stories already loaded. Today's list shows each publisher's icon beside its headlines, with the name on hover.",
       path: "/news",
       icon: "newspaper",
       order: 34,
@@ -126,7 +127,7 @@ export const newsModuleManifest = {
       id: "news.prefs",
       label: "News",
       description:
-        "Choose news topics, manage built-in, connected, custom, and excluded publishers, and story preferences.",
+        "Choose news topics, manage built-in, connected, custom, and excluded publishers, and story preferences. Adding a publication needs an AI model; discovering topics across the web also needs web search.",
       path: "/settings/modules/news",
       scope: "user",
       order: 34,
@@ -269,6 +270,11 @@ export const newsModuleManifest = {
     {
       method: "GET",
       path: "/api/news/images/:articleId",
+      permissionId: "news.view"
+    },
+    {
+      method: "GET",
+      path: "/api/news/favicon/:domain",
       permissionId: "news.view"
     },
     // #2005 publisher credentials. news.credentials, never news.prefs.
@@ -485,8 +491,18 @@ export const newsModuleManifest = {
   ],
   features: [
     {
+      id: "news.story_pictures",
+      description:
+        "Show a picture with a story. If a publisher's feed doesn't name one (such as NPR), News " +
+        "looks in the story's own text instead. The address must be on that publisher's approved " +
+        "list, and a tracking image is never shown as story art."
+    },
+    {
       id: "news.add_source",
-      description: "Find a publisher by URL or name and add it to personalized News.",
+      description:
+        "Find a publisher by URL or name and add it to personalized News. A forward to the " +
+        "same publisher's own site is followed, with a note naming the switch. A forward to " +
+        "an unrelated site is refused; try that address directly instead.",
       requires: newsAddSourceRequirement,
       remediations: [
         {
@@ -507,6 +523,14 @@ export const newsModuleManifest = {
           class: "transient",
           description:
             "Source discovery is temporarily unavailable; retry or contact an administrator."
+        },
+        {
+          code: "news.add_source.redirect_refused",
+          class: "validation",
+          description:
+            "The address given forwards to a different site Moss cannot confirm is the same " +
+            "publisher, so the move is refused. The user is told to try the address it forwards " +
+            "to directly, as its own address."
         }
       ]
     }
