@@ -40,6 +40,11 @@ export const INTEGRATIONS_FAMILY: FamilyKeyDescriptor = {
 
 const FAMILIES: readonly FamilyKeyDescriptor[] = [INTEGRATIONS_FAMILY];
 
+/** Look up a family by the name the admin routes receive. */
+export function familyByName(name: string): FamilyKeyDescriptor | null {
+  return FAMILIES.find((family) => family.name === name) ?? null;
+}
+
 /** Setting keys holding family envelopes (subset of the secret registry). */
 export const SECRET_FAMILY_SETTINGS: ReadonlySet<string> = new Set(
   FAMILIES.map((family) => family.settingKey)
