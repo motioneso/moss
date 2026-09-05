@@ -54,7 +54,11 @@ import type { Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
 import { Mutex } from "./mutex.js";
 import type { InstallService } from "./install-service.js";
 import { LoginBadRequestError, type LoginService } from "./login-service.js";
-import { createCodexVersionReader, listProviderModels } from "./model-list-adapters.js";
+import {
+  createCodexVersionReader,
+  listProviderModels,
+  verifyProviderCredential
+} from "./model-list-adapters.js";
 import { ensureProviderLaunchReady } from "./provider-first-run.js";
 import { providerTokenPath, readProviderCredentialEnv } from "./provider-token-store.js";
 import { allocateUidSlot, migrateNeutralDir } from "./uid-allocator.js";
@@ -690,7 +694,11 @@ export class CliChatEngineHost {
       // #363: inject the persisted claude OAuth token so `auth status` reports loggedIn.
       credentialEnv,
       homeBase: this.deps.homeBase,
-      forceFresh: opts?.forceFresh
+      forceFresh: opts?.forceFresh,
+      // #2242 (round 3): the real request that can retire a recorded refusal for a provider whose
+      // own check cannot prove a sign-in (codex). Only reached when a refusal is standing AND the
+      // caller asked for a real check, so pressing Log in costs one vendor call, not every check.
+      verifyCredential: () => this.verifyProviderCredential(provider)
     });
     return { status: result.status, message: result.message };
   }
@@ -699,6 +707,20 @@ export class CliChatEngineHost {
 
   /** Built on first use: `codex --version` is read at most once per runner process. */
   private readCodexVersion: (() => Promise<string | undefined>) | undefined;
+
+  /** #2242 (round 3): one real vendor request with the saved sign-in, so a check can tell an
+   *  accepted sign-in from the refused one it already knows about. */
+  private async verifyProviderCredential(
+    provider: RpcProviderKind
+  ): Promise<"accepted" | "refused" | "unknown"> {
+    this.readCodexVersion ??= createCodexVersionReader(this.deps.io);
+    return verifyProviderCredential(provider, {
+      homeBase: this.deps.homeBase,
+      fetch: this.deps.fetch,
+      io: this.deps.io,
+      codexVersion: this.readCodexVersion
+    });
+  }
 
   /**
    * #2208: ask the provider's vendor for its live model list using the credential the runner

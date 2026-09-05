@@ -9,15 +9,20 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   CodexPersistentRuntime,
+  CodexStreamDecoder,
   NEUTRAL_ADMISSION_FAILURE,
   NEUTRAL_CRASH_FAILURE,
   NEUTRAL_LAUNCH_FAILURE
 } from "../../packages/chat/src/live/codex-persistent-runtime.js";
 import type { RuntimeTurnEvent } from "../../packages/chat/src/live/provider-runtime.js";
+import {
+  clearProviderProbeCacheForTests,
+  probeProvider
+} from "../../packages/chat/src/live/provider-probe.js";
 import type { EngineLaunchOpts } from "../../packages/chat/src/live/types.js";
 
 class FakeChild extends EventEmitter {
@@ -217,5 +222,61 @@ describe("CodexPersistentRuntime", () => {
     await runtime.reap("idle-timeout");
     health = await runtime.health();
     expect(health.alive).toBe(false);
+  });
+});
+
+describe("#2242: a codex chat message the provider refuses clears the saved sign-in answer", () => {
+  afterEach(() => {
+    clearProviderProbeCacheForTests();
+  });
+
+  // Round-3 review blocker 3: this provider announces a failed turn in its own frame, which the
+  // reader ignored entirely - the turn died as a nameless end-of-process failure, the refusal was
+  // thrown away, and the next readiness check said ready because the local tool was still holding
+  // a sign-in file.
+  const deps = {
+    io: { run: async () => ({ code: 0, stdout: "Logged in using ChatGPT" }) },
+    cliPresent: async () => true
+  };
+
+  async function drainFailedTurn(record: Record<string, unknown>): Promise<RuntimeTurnEvent[]> {
+    const decoder = new CodexStreamDecoder({ killChild: () => {} });
+    decoder.beginTurn("turn-1");
+    decoder.write(`${JSON.stringify(record)}\n`);
+    decoder.end();
+    const events: RuntimeTurnEvent[] = [];
+    for await (const event of decoder.events()) events.push(event);
+    return events;
+  }
+
+  it("makes the next readiness check ask for a login, and keeps the provider's own words out", async () => {
+    expect(await probeProvider("openai-compatible", deps)).toEqual({ status: "ready" });
+
+    const events = await drainFailedTurn({
+      type: "turn.failed",
+      error: { message: "401 Unauthorized: invalid bearer token" }
+    });
+
+    expect(events).toHaveLength(1);
+    const outcome = (events[0] as { outcome: { reason: string; loginRejected?: boolean } }).outcome;
+    expect(outcome.loginRejected).toBe(true);
+    expect(outcome.reason).toContain("Log in again");
+    expect(outcome.reason).not.toContain("401");
+    expect(outcome.reason).not.toContain("bearer");
+    expect(await probeProvider("openai-compatible", deps)).toEqual({ status: "needs_login" });
+  });
+
+  it("leaves the saved answer alone when the failed turn was not about signing in", async () => {
+    expect(await probeProvider("openai-compatible", deps)).toEqual({ status: "ready" });
+
+    const events = await drainFailedTurn({
+      type: "turn.failed",
+      error: { message: "the assistant process ran out of memory" }
+    });
+
+    const outcome = (events[0] as { outcome: { reason: string; loginRejected?: boolean } }).outcome;
+    expect(outcome.loginRejected).toBeUndefined();
+    expect(outcome.reason).toContain("reported an error");
+    expect(await probeProvider("openai-compatible", deps)).toEqual({ status: "ready" });
   });
 });

@@ -40,7 +40,7 @@ const FRAME_TOO_LARGE_REASON =
 const TOTAL_BUFFERED_EXCEEDED_REASON =
   "The assistant process produced more output than this runtime buffers and was stopped.";
 const EOF_WITHOUT_TERMINAL_REASON = "The assistant process ended before completing this turn.";
-const PROVIDER_ERROR_RESULT_REASON =
+export const PROVIDER_ERROR_RESULT_REASON =
   "The assistant process reported an error completing this turn.";
 /**
  * #2242 (round 3): the provider answered, and what it said was "this sign-in is no good". That is
@@ -48,7 +48,7 @@ const PROVIDER_ERROR_RESULT_REASON =
  * advice — they have to sign in again. Composed here, never quoting the provider's own text, so
  * nothing from the raw error (which can carry credential material) reaches a person or a log.
  */
-const LOGIN_REJECTED_RESULT_REASON =
+export const LOGIN_REJECTED_RESULT_REASON =
   "The provider refused the saved sign-in for this assistant, so this message was not answered. Log in again to continue.";
 
 export interface PersistentStreamDecoderOpts {
@@ -185,14 +185,18 @@ export class PersistentStreamDecoder {
 
     if (record["type"] === "result") {
       this.sawTerminalForTurn = true;
+      // #2242 (round 3): keep WHICH kind of failure this was. A refused sign-in used to be
+      // flattened into a general failure here, so the one place that learns a login has died
+      // during a real conversation threw that knowledge away and the saved success stood.
+      // Checked whether or not some reply text already arrived this turn: the provider can
+      // answer a little and then refuse the sign-in, and that refusal is just as final. It was
+      // being read only when nothing had been said yet, so a part-answered turn left the saved
+      // "the login works" answer standing and the next check reused it.
+      const loginRejected = looksLikeLoginRejection(failureText(record));
+      if (loginRejected) this.reportLoginRejected();
       if (!this.sawReplyForTurn) {
         const isUsableResult = record["is_error"] !== true && record["subtype"] === "success";
         if (!isUsableResult) {
-          // #2242 (round 3): keep WHICH kind of failure this was. A refused sign-in used to be
-          // flattened into a general failure here, so the one place that learns a login has died
-          // during a real conversation threw that knowledge away and the saved success stood.
-          const loginRejected = looksLikeLoginRejection(failureText(record));
-          if (loginRejected) this.reportLoginRejected();
           this.emit({
             kind: "turn-failed",
             turnId,

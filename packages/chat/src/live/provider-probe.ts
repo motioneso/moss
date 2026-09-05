@@ -48,25 +48,35 @@ function probeCacheKey(provider: ProviderKind, credentialEnv?: NodeJS.ProcessEnv
 interface LoginRejectionEntry {
   /** The credential that was refused, or null when the caller could not name it. A caller that
    *  cannot name the credential (the chat stream, which never sees the token) rejects whatever
-   *  credential the next check uses; an explicit fresh login clears it either way. */
+   *  credential the next check uses; a request that really succeeds clears it either way. */
   readonly credential: string | null;
-  readonly expiresAt: number;
 }
 
+/**
+ * #2242 (round 3): a refusal does NOT age out. It used to expire with the saved success, five
+ * minutes on, which meant simply waiting made an unchanged, still-refused credential read as
+ * ready again. Only proof that the vendor now accepts a sign-in retires a refusal.
+ */
 const loginRejections = new Map<ProviderKind, LoginRejectionEntry>();
 
 function hasLoginRejection(
   provider: ProviderKind,
-  credentialEnv: NodeJS.ProcessEnv | undefined,
-  now: number
+  credentialEnv: NodeJS.ProcessEnv | undefined
 ): boolean {
   const entry = loginRejections.get(provider);
   if (!entry) return false;
-  if (entry.expiresAt <= now) {
-    loginRejections.delete(provider);
-    return false;
-  }
   return entry.credential === null || entry.credential === credentialFingerprint(credentialEnv);
+}
+
+/**
+ * #2242 (round 3): does this provider's OWN readiness check prove the saved credential against
+ * the vendor? claude runs a real one-shot call and gemini runs a real prompt, so a ready answer
+ * from either is proof. Codex's check only asks the local tool whether it is holding a sign-in
+ * file — a refused credential passes that just as easily as a good one — so a ready answer from
+ * it proves nothing and must never retire a recorded refusal.
+ */
+function checkProvesCredential(provider: ProviderKind): boolean {
+  return provider !== "openai-compatible";
 }
 
 /** Test-only: drop every cached probe answer so each test starts from a clean slate. */
@@ -86,11 +96,10 @@ export function invalidateProviderProbeCache(
   credentialEnv?: NodeJS.ProcessEnv
 ): void {
   probeCache.delete(probeCacheKey(provider, credentialEnv));
-  // #2242 (round 3): a person pressing Log in is offering a credential the vendor has not
-  // refused yet, so the remembered refusal must not answer for it. Dropping it here is what
-  // lets a fresh sign-in recover a provider whose readiness check cannot prove a credential
-  // on its own.
-  loginRejections.delete(provider);
+  // #2242 (round 3): the recorded refusal deliberately SURVIVES this. Pressing Log in used to
+  // wipe it, which let the very same refused credential come straight back as ready without the
+  // vendor accepting anything new — so pressing Log in could close the sign-in screen instead of
+  // opening one. Only a real request the vendor accepts retires a refusal now.
 }
 
 /**
@@ -107,8 +116,7 @@ export function recordProviderLoginRejected(
   credentialEnv?: NodeJS.ProcessEnv
 ): void {
   loginRejections.set(provider, {
-    credential: credentialEnv === undefined ? null : credentialFingerprint(credentialEnv),
-    expiresAt: Date.now() + PROBE_CACHE_TTL_MS
+    credential: credentialEnv === undefined ? null : credentialFingerprint(credentialEnv)
   });
   // Drop every saved success for this provider too: the refusal proves the saved answer wrong,
   // and leaving it behind would let it reappear the moment the refusal ages out.
@@ -143,6 +151,13 @@ export async function probeProvider(
      * only when someone happens to press Log in again.
      */
     readonly forceFresh?: boolean;
+    /**
+     * #2242 (round 3): a real request to the vendor with the saved sign-in, for a provider whose
+     * own readiness check cannot prove a credential (codex). Supplied by the runner, which can
+     * make that request; without it a recorded refusal simply stands. "accepted" is the only
+     * answer that retires a refusal — anything else leaves it in place.
+     */
+    readonly verifyCredential?: () => Promise<"accepted" | "refused" | "unknown">;
   }
 ): Promise<ProbeProviderResult> {
   if (deps.multiplexerUsable && !(await deps.multiplexerUsable())) {
@@ -153,19 +168,28 @@ export async function probeProvider(
     const key = probeCacheKey(provider, deps.credentialEnv);
     const now = Date.now();
     // #2242 (round 3): a known refusal is consulted BEFORE any provider's own check, for every
-    // provider. Codex's check only asks the local tool whether it holds a credential file, so
-    // running it first meant the answer was "ready" the instant after the vendor refused that
-    // same credential. An explicit fresh check (pressing Log in) skips the refusal instead.
-    if (!deps.forceFresh && hasLoginRejection(provider, deps.credentialEnv, now)) {
-      return { status: "needs_login" };
+    // provider, and an explicit fresh check no longer waves it away. Codex's check only asks the
+    // local tool whether it holds a sign-in file, so letting a forced check skip the refusal made
+    // the answer "ready" for the very credential the vendor had just refused. A forced check gets
+    // past a refusal only by proving the sign-in for real: claude and gemini do that with their
+    // own check below; codex needs the runner's real request, and stays at needs_login without it.
+    if (hasLoginRejection(provider, deps.credentialEnv)) {
+      if (!deps.forceFresh) return { status: "needs_login" };
+      if (!checkProvesCredential(provider)) {
+        const verdict = deps.verifyCredential ? await deps.verifyCredential() : "unknown";
+        if (verdict !== "accepted") return { status: "needs_login" };
+        loginRejections.delete(provider);
+      }
     }
     if (provider !== "anthropic") {
       const result =
         provider === "openai-compatible"
           ? await probeCodexAuth(deps.io)
           : await probeGeminiAuth(deps.io);
-      // A check that comes back ready after a fresh credential retires the old refusal.
-      if (result.status === "ready") loginRejections.delete(provider);
+      // A check that really proves the credential and comes back ready retires the old refusal.
+      if (result.status === "ready" && checkProvesCredential(provider)) {
+        loginRejections.delete(provider);
+      }
       return result;
     }
     if (!deps.forceFresh) {

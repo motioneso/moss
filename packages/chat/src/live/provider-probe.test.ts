@@ -257,13 +257,25 @@ describe("#2242: a refused sign-in outlives the provider's own readiness check",
 
     recordProviderLoginRejected("openai-compatible", {});
 
-    // Pressing Log in asks for a real check rather than an old saved answer.
+    // Round-3 review blocker 1: pressing Log in asks for a real check, but this provider's own
+    // check only asks the local tool whether it is holding a sign-in file, so on its own it can
+    // never clear the refusal - the same refused sign-in would come straight back as ready.
     invalidateProviderProbeCache("openai-compatible", {});
     expect(
       await probeProvider("openai-compatible", {
         io,
         cliPresent: async () => true,
         forceFresh: true
+      })
+    ).toEqual({ status: "needs_login" });
+
+    // A real request the provider accepts is what clears it.
+    expect(
+      await probeProvider("openai-compatible", {
+        io,
+        cliPresent: async () => true,
+        forceFresh: true,
+        verifyCredential: async () => "accepted" as const
       })
     ).toEqual({ status: "ready" });
 

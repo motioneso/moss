@@ -261,6 +261,24 @@ export const MODEL_LIST_ADAPTERS: Readonly<Record<RpcProviderKind, ModelListAdap
   google: googleAdapter
 };
 
+/**
+ * #2242 (round 3): prove a saved sign-in against the vendor for real, using the same request the
+ * model list makes. Needed for codex, whose own readiness check only asks the local tool whether
+ * it is holding a sign-in file — that check cannot tell a refused sign-in from a good one, so it
+ * must never be what clears a recorded refusal. Returns "accepted" only when the vendor answered
+ * with a list; "refused" when it turned the sign-in down; "unknown" for anything else (the vendor
+ * being unreachable or broken), which leaves a recorded refusal exactly as it was.
+ */
+export async function verifyProviderCredential(
+  provider: RpcProviderKind,
+  deps: ModelListAdapterDeps
+): Promise<"accepted" | "refused" | "unknown"> {
+  const result = await listProviderModels(provider, deps);
+  if (result.status === "ok") return "accepted";
+  if (result.status === "not_logged_in") return "refused";
+  return "unknown";
+}
+
 /** Run the provider's adapter; an adapter throw becomes a plain `error` (no secret can leak via message). */
 export async function listProviderModels(
   provider: RpcProviderKind,

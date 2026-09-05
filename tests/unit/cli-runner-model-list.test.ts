@@ -401,7 +401,66 @@ describe("#2242: a rejected credential clears the saved 'the login works' answer
 
     expect(await host.probeProvider("openai-compatible")).toMatchObject({ status: "needs_login" });
 
-    // Pressing Log in asks for a real check, and an accepted sign-in recovers the provider.
+    // Pressing Log in asks for a real check. It must not clear the refusal on its own: see the
+    // dedicated test below, which drives recovery through a sign-in the vendor actually accepts.
+    expect(await host.probeProvider("openai-compatible", { forceFresh: true })).toMatchObject({
+      status: "needs_login"
+    });
+  });
+
+  it("only lets a sign-in the vendor accepts clear a refused codex sign-in", async () => {
+    // Round-3 review blocker 1: pressing Log in, or simply waiting five minutes, used to make the
+    // refusal disappear and the SAME unchanged sign-in read as ready again - so the Log in button
+    // could close the sign-in screen without anyone signing in. The local tool only reports that
+    // it is holding a sign-in file, which a refused sign-in passes just as easily as a good one.
+    const home = await homeWithCodexAuth();
+    let vendorAccepts = false;
+    const { f } = fakeFetch(async () =>
+      vendorAccepts
+        ? jsonResponse({ models: [{ slug: "gpt-5.6", visibility: "list" }] })
+        : jsonResponse({ error: "unauthorized" }, 401)
+    );
+    const host = new CliChatEngineHost({
+      io: {
+        run: vi.fn(async (_cmd: string, args: readonly string[]) => ({
+          code: 0,
+          stdout: args.includes("--version") ? "codex-cli 0.139.0" : "Logged in using ChatGPT"
+        })),
+        readFile: vi.fn().mockResolvedValue(""),
+        writeFile: vi.fn().mockResolvedValue(undefined),
+        sleep: vi.fn().mockResolvedValue(undefined)
+      },
+      neutralBase: "/tmp/neutral-base",
+      homeBase: home,
+      singleUser: false,
+      cliPresent: async () => true,
+      fetch: f
+    });
+
+    expect(await host.probeProvider("openai-compatible")).toMatchObject({ status: "ready" });
+    expect(await host.listProviderModels("openai-compatible")).toMatchObject({
+      status: "not_logged_in"
+    });
+    expect(await host.probeProvider("openai-compatible")).toMatchObject({ status: "needs_login" });
+
+    // Pressing Log in while the vendor still refuses the same sign-in.
+    expect(await host.probeProvider("openai-compatible", { forceFresh: true })).toMatchObject({
+      status: "needs_login"
+    });
+
+    // Waiting past the five minutes the saved answer used to live for changes nothing.
+    const realNow = Date.now;
+    try {
+      Date.now = () => realNow() + 5 * 60_000 + 1;
+      expect(await host.probeProvider("openai-compatible")).toMatchObject({
+        status: "needs_login"
+      });
+    } finally {
+      Date.now = realNow;
+    }
+
+    // The vendor accepting the sign-in for real is the one thing that recovers it.
+    vendorAccepts = true;
     expect(await host.probeProvider("openai-compatible", { forceFresh: true })).toMatchObject({
       status: "ready"
     });

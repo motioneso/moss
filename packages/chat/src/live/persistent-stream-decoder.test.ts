@@ -110,6 +110,44 @@ describe("#2242: a chat message the provider refuses clears the saved sign-in an
     expect(realChecks()).toBe(1);
   });
 
+  it("clears the saved answer when the refusal lands after some reply text", async () => {
+    // Round-3 review blocker 2: the refusal was only read when nothing had been said yet in the
+    // turn. The provider can answer a little and then refuse the sign-in, and that refusal is
+    // just as final - but a part-answered turn left the saved success standing and the next
+    // readiness check reused it, so nobody was asked to log in again.
+    const { io, realChecks } = alwaysReadyClaude();
+    const deps = {
+      io,
+      cliPresent: async () => true,
+      credentialEnv: { CLAUDE_CODE_OAUTH_TOKEN: "tok-live" }
+    };
+
+    expect(await probeProvider("anthropic", deps)).toEqual({ status: "ready" });
+
+    const decoder = new PersistentStreamDecoder({ killChild: () => {} });
+    decoder.beginTurn("turn-1");
+    decoder.write(
+      `${JSON.stringify({
+        type: "assistant",
+        message: { stop_reason: "end_turn", content: [{ type: "text", text: "Partial reply" }] }
+      })}\n`
+    );
+    decoder.write(
+      `${JSON.stringify({
+        type: "result",
+        subtype: "error_during_execution",
+        is_error: true,
+        errors: ["API Error: 401 invalid bearer token"]
+      })}\n`
+    );
+    decoder.end();
+    const events = await drain(decoder);
+
+    expect(events[0]).toMatchObject({ kind: "record", record: { kind: "reply" } });
+    expect(await probeProvider("anthropic", deps)).toEqual({ status: "needs_login" });
+    expect(realChecks()).toBe(1);
+  });
+
   it("does not read the assistant's own reply as a refused sign-in", async () => {
     const events = await drain(
       failedTurn({
