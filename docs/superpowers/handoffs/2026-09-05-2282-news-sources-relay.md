@@ -216,3 +216,88 @@ needs" list below plus the plan's task text, and build.
   `tests/unit/news-credential-repository.test.ts:44-90` (copy `makeRecordingDb`).
 - The worker grant check in the repository integration test uses `has_table_privilege`, which
   column grants do not flip, so the new column grant keeps that older case green.
+
+## Lane notes: build-2282-p1a2 stop (2026-09-05)
+
+PLAIN ENGLISH RULE for whoever picks this up: every message to a human is plain English. No
+jargon, no coined shorthand, ASCII punctuation only, at most one backtick per sentence.
+
+Stopped at the 70 percent context warning per brief (no relay). Task 1.3 is typecheck, lint and
+format green but its integration file is NOT yet proven; task 1.4 has a red unit test and no
+implementation; no PR is open. Branch head is the commit that adds this section.
+
+### Verified this lane (task 1.3)
+
+- Commit `dea1a5047`: the five raw INSERTs now carry confirmed_fetch_hosts; two repository types
+  (NewsSourceValidationState.retrievalMethod, toCustomSourceDto row) widen to "reddit". Without
+  the widening tsc was red at personalization-repository.ts:279 and :330.
+- `tsc --noEmit` exit 0, `tsc -p tsconfig.tests.json --noEmit` exit 0, eslint exit 0 and
+  prettier --check exit 0 on every file in 7b9f8a9c9 plus dea1a5047 (prettier has no parser
+  for .sql; skip that one file).
+- Integration run of the one file on an isolated database: exit 1, log at /tmp/t13-2282.log.
+  All 18 cases that boot the API server failed identically with Fastify
+  AVV_ERR_PLUGIN_EXEC_TIMEOUT ("Plugin did not start in time") at createApiServer ready, about
+  14 s each, including 10 pre-existing #953/#975 cases this branch never touched; the schema
+  posture describe passed. Several other lanes were running gates at the time (herdr pane list
+  showed 2280, 2279, 2294, 2234 lanes active). So the 8 new cases are unproven, not disproven.
+  Next lane: rerun the exact command below when the box is quiet. If it times out again on a
+  quiet box, compare the new describe's beforeEach (boss + server) with the older describes,
+  which failed the same way, before blaming the migration.
+- Scratch recipe used (JARVIS_PGDATABASE unset; the runner creates and drops a jarvis_test_*
+  database itself, so the live dev database is never touched; run it in the background, expect
+  about 5 minutes): `pnpm test:integration tests/integration/news-personalization-repository.test.ts > /tmp/t13.log 2>&1; echo "EXIT=$?"`
+- Migration 0218 is not on origin/main and not applied on the dev database (the
+  confirmed_fetch_hosts column is absent there). Branch was 1 commit behind origin/main at stop.
+
+### Built this lane (task 1.4, red)
+
+- Commit `3a3ba3258`: tests/unit/news-personalization-repository.test.ts gains a recording
+  Kysely driver and two describe blocks. It fails to load until
+  packages/news/src/source/workaround.ts exists. What it pins, so the implementation matches:
+  - createCustomSource: SQL contains "on conflict do nothing" with no target list, and the
+    columns confirmed_fetch_hosts and icon_url; parameters include the hosts array.
+  - Duplicate probe after a no-row insert: for "reddit" the SQL contains lower(feed_url) and
+    retrieval_method and NOT canonical_domain, parameter is the lowercased feed URL; for a
+    publication it contains canonical_domain and NOT feed_url. Probe hit throws
+    NewsDuplicateSourceError; probe miss throws NewsPersonalizationLimitError.
+  - replaceCustomSource: SQL writes confirmed_fetch_hosts, icon_url, consecutive_failures;
+    parameters include 0 and the hosts array.
+  - listCustomSources DTO: retrievalMethod and workaround present; the JSON never contains
+    "confirmed", "icon", "consecutive", "fingerprint" or the host list. A reddit row has
+    workaround false; a feed row whose feed host is another publisher has workaround true.
+  - recordWorkaroundRefreshOutcome(scopedDb, id, "success" | "failure"): exactly one query;
+    success has no least( and passes 0; failure contains least(, health_status and
+    temporarily_unavailable. Both contain where "id" = $n. Unscoped handle rejects first.
+  - isWorkaroundFeed(canonicalDomain, feedUrl | null): false for null, same host, subdomain
+    either direction, mixed case, ports and query strings, and unparseable URLs; true for a
+    different publisher including suffix tricks (notexample.com, example.com.evil.com).
+
+### What the 1.4 implementation still needs (file:line on this branch)
+
+- packages/news/src/personalization-repository.ts: CustomSourceInput :117-124 (add
+  confirmedFetchHosts, iconUrl, retrievalMethod gains "reddit"); createCustomSource :208-244
+  (the targeted ON CONFLICT at :231 must become untargeted; probe at :236-241 branches);
+  replaceCustomSource :246-280; listCustomSources :167-197 and toCustomSourceDto :820-847 add
+  workaround via the helper; add recordWorkaroundRefreshOutcome next to updateSourceHealth :291.
+- New packages/news/src/source/workaround.ts: build on publisherDomainMatches
+  (personalization-domain.ts:93) in both directions, as candidates.ts:89 samePublisher does.
+- packages/shared/src/news-api.ts: NewsCustomSourceDto :143-158 gains workaround: boolean;
+  schema :497-525 needs the property AND the required entry or the serializer drops it.
+- Callers that build the input: personalization-routes.ts:50-72 (two inline input types) and
+  :277-287 (the write from the preview candidate; the candidate type at
+  source-resolution.ts:425-440 has no hosts or icon yet, so for 1.4 derive hosts from the
+  homepage and feed URL hosts, lowercased and deduped, and pass iconUrl null until task 1.6);
+  credential-routes.ts:153 (hosts from descriptor.host and homepageUrl, iconUrl null);
+  preview-store.ts:9 and publisher-connection-port.ts:14 type sites;
+  tests/integration/news-discovery-repository.test.ts:52 sourceInput helper.
+- compile.ts:66-75 CompilationRepository and candidates.ts:60-67 CandidateRepository Pick lists
+  add "recordWorkaroundRefreshOutcome".
+- Integration cases still to write in the 0218 describe of
+  tests/integration/news-personalization-repository.test.ts (reuse insertSource and asActor):
+  three failures flip health to temporarily_unavailable, a success resets the count, another
+  owner's refresh leaves the row untouched.
+- Typecheck will list the literal DTO sites in tests that need workaround added.
+
+### Task 1.5
+
+Unchanged from the previous lane notes above.
