@@ -79,6 +79,21 @@ describe("judgement prompt", () => {
       "ruled that mail from this sender is not something they owe"
     );
   });
+  it("drops the body of a sign-in code message even when the preview arrives as one flattened line", () => {
+    // Real large-provider previews strip line breaks, so the code never sits alone on its own
+    // line the way the strict rule expects. This is the shape a real mail provider sends, not a
+    // tidy multi-line example, because that is the exact shape that reached the model before.
+    const p = buildEmailJudgementPrompt({
+      ...base,
+      messages: [
+        msg({
+          subject: "Your verification code",
+          bodyExcerpt: "Verification code 195638 This code expires in 10 minutes"
+        })
+      ]
+    });
+    expect(p).not.toContain("195638");
+  });
 });
 
 describe("parseEmailJudgement", () => {

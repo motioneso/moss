@@ -5,8 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./presets": "./src/imap-presets.ts",
-    "./email-otp-rule": "./src/email-otp-rule.ts"
+    "./presets": "./src/imap-presets.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

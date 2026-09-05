@@ -7,7 +7,7 @@ import {
   looksLikeOneTimeCodeEmail,
   signInCodeDecision,
   type OneTimeCodeEmailInput
-} from "./email-otp-rule.js";
+} from "@moss/shared/email-otp-rule";
 
 export { looksLikeBulkMail, type BulkMailInput } from "./email-bulk-rule.js";
 
@@ -16,7 +16,7 @@ export {
   signInCodeDecision,
   type OneTimeCodeEmailInput,
   type SignInCodeDecision
-} from "./email-otp-rule.js";
+} from "@moss/shared/email-otp-rule";
 
 /** Max decoded body length sent to the LLM (bounded to protect prompt limits, spec risk #6). */
 export const MAX_BODY_CHARS = 20_000;

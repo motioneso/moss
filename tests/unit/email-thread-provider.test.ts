@@ -45,6 +45,25 @@ describe("email thread provider", () => {
     expect(msgs[0]!.bodyExcerpt.length).toBe(4000);
     expect(repo.listByThread).toHaveBeenCalledWith({}, "u1", "t1");
   });
+  it("falls back to the short preview when no excerpt was ever saved", async () => {
+    // Real large-provider sync only ever writes the short preview column; the longer excerpt
+    // column stays empty. This is the shape a real inbox leaves behind, not a tidy fixture.
+    const repo = {
+      listByThread: vi.fn(async () => [
+        row({
+          body_excerpt: null,
+          snippet: "Verification code 195638 This code expires in 10 minutes"
+        })
+      ]),
+      listNewerInThreads: vi.fn(async () => []),
+      getByOwnerAndExternalId: vi.fn(async () => undefined)
+    };
+    const p = createEmailThreadProvider(repo, async () => new Set(["ben@ben.com"]));
+    const msgs = await p.listThreadMessages({}, "u1", "t1");
+    expect(msgs[0]!.bodyExcerpt).toBe(
+      "Verification code 195638 This code expires in 10 minutes"
+    );
+  });
   it("translates the newer-message lookup both ways", async () => {
     const repo = {
       listByThread: vi.fn(async () => []),
