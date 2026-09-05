@@ -38,6 +38,19 @@ export function clearProviderProbeCacheForTests(): void {
   probeCache.clear();
 }
 
+/**
+ * #2242: forget a saved "the login works" answer for one provider + credential. A caller that
+ * has just learned the login is actually broken — a known authentication failure on a real
+ * call, or a person explicitly starting a fresh login — uses this so the next check runs for
+ * real instead of repeating a saved answer that is now known to be wrong.
+ */
+export function invalidateProviderProbeCache(
+  provider: ProviderKind,
+  credentialEnv?: NodeJS.ProcessEnv
+): void {
+  probeCache.delete(probeCacheKey(provider, credentialEnv));
+}
+
 export async function probeProvider(
   provider: ProviderKind,
   deps: {
@@ -46,6 +59,15 @@ export async function probeProvider(
     readonly multiplexerUsable?: () => Promise<boolean>;
     readonly credentialEnv?: NodeJS.ProcessEnv;
     readonly homeBase?: string;
+    /**
+     * #2242: skip the saved answer and run the real check now. An explicit re-login must never
+     * be told "you're already logged in" on the strength of an old saved answer — if the login
+     * was quietly revoked since that answer was saved, trusting it would close the re-login
+     * screen without ever giving the person a fresh place to sign in. Also used by the periodic
+     * install-state reconciliation so a login that quietly expired is caught on its own, not
+     * only when someone happens to press Log in again.
+     */
+    readonly forceFresh?: boolean;
   }
 ): Promise<ProbeProviderResult> {
   if (deps.multiplexerUsable && !(await deps.multiplexerUsable())) {
@@ -62,9 +84,11 @@ export async function probeProvider(
       }
     }
     const key = probeCacheKey(provider, deps.credentialEnv);
-    const cached = probeCache.get(key);
     const now = Date.now();
-    if (cached && cached.expiresAt > now) return cached.result;
+    if (!deps.forceFresh) {
+      const cached = probeCache.get(key);
+      if (cached && cached.expiresAt > now) return cached.result;
+    }
     const result = await probeClaudeAuth(deps.io, deps.credentialEnv, deps.homeBase);
     probeCache.set(key, { result, expiresAt: now + PROBE_CACHE_TTL_MS });
     return result;

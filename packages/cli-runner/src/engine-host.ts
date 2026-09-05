@@ -16,6 +16,7 @@ import {
   VerifiedSubmitError,
   createChatEngine,
   deriveNeutralDir,
+  invalidateProviderProbeCache,
   killMuxSessionByName,
   listLiveMuxSessions,
   probeProvider,
@@ -669,16 +670,26 @@ export class CliChatEngineHost {
 
   // ─── probeProvider (§4.8) — no token, no replay ───────────────────────────────
 
-  async probeProvider(provider: RpcProviderKind): Promise<RpcProbeProviderResult> {
+  async probeProvider(
+    provider: RpcProviderKind,
+    opts?: { readonly forceFresh?: boolean }
+  ): Promise<RpcProbeProviderResult> {
+    const credentialEnv = this.deps.homeBase
+      ? await readProviderCredentialEnv(this.deps.homeBase, provider)
+      : undefined;
+    // #2242: a caller asking for a real check (an explicit re-login, or the periodic
+    // install-state reconciliation) must never be answered from a saved success that may have
+    // gone stale — drop it explicitly before running the check, belt-and-suspenders alongside
+    // `forceFresh` skipping the cache read below.
+    if (opts?.forceFresh) invalidateProviderProbeCache(provider as ProviderKind, credentialEnv);
     const result: ProbeProviderResult = await probeProvider(provider as ProviderKind, {
       io: this.deps.io,
       cliPresent: this.deps.cliPresent,
       multiplexerUsable: this.deps.multiplexerUsable,
       // #363: inject the persisted claude OAuth token so `auth status` reports loggedIn.
-      credentialEnv: this.deps.homeBase
-        ? await readProviderCredentialEnv(this.deps.homeBase, provider)
-        : undefined,
-      homeBase: this.deps.homeBase
+      credentialEnv,
+      homeBase: this.deps.homeBase,
+      forceFresh: opts?.forceFresh
     });
     return { status: result.status, message: result.message };
   }

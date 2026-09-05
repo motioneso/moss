@@ -178,7 +178,11 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
       "is struck through), " +
       "a minus button (disable) and a trash button (remove after confirmation; the provider's " +
-      "default entry cannot be removed). The Models section collapses from its header.",
+      "default entry cannot be removed). The Models section collapses from its header. The " +
+      "'Not logged in' message only appears after someone presses Refresh models; the provider " +
+      "card itself does not notice a broken sign-in on its own. Pressing Log in on a provider " +
+      "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
+      "genuinely broken sign-in always gets a fresh place to sign back in.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },
