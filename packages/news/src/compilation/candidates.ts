@@ -351,7 +351,9 @@ export async function collectCandidates(
         return name ? [[source.id, name] as const] : [];
       })
     );
-    const results = await readSubredditsBounded(deps.fetchWithOptions, [...new Set(names.values())]);
+    const results = await readSubredditsBounded(deps.fetchWithOptions, [
+      ...new Set(names.values())
+    ]);
     for (const source of redditSources) {
       const name = names.get(source.id);
       const result = name ? results.get(name) : undefined;
