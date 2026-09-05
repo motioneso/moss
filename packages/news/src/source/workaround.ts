@@ -26,7 +26,9 @@ export function isWorkaroundFeed(canonicalDomain: string, feedUrl: string | null
   const feedHost = hostOf(feedUrl);
   if (!feedHost) return false;
   const publisher = canonicalDomain.toLowerCase();
-  return !(publisherDomainMatches(publisher, feedHost) || publisherDomainMatches(feedHost, publisher));
+  return !(
+    publisherDomainMatches(publisher, feedHost) || publisherDomainMatches(feedHost, publisher)
+  );
 }
 
 /**
