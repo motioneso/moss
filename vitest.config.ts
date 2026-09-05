@@ -279,6 +279,14 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./packages/settings-ui/src/vite.ts", import.meta.url))
       },
       {
+        // Subpath export; must precede the bare "@moss/shared" alias below, same pairing
+        // requirement as the other subpath/bare alias pairs in this file.
+        find: "@moss/shared/email-otp-rule",
+        replacement: fileURLToPath(
+          new URL("./packages/shared/src/email-otp-rule.ts", import.meta.url)
+        )
+      },
+      {
         find: "@moss/shared",
         replacement: fileURLToPath(new URL("./packages/shared/src/index.ts", import.meta.url))
       },
