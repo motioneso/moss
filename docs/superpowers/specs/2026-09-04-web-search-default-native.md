@@ -31,12 +31,16 @@ install with one Anthropic key should be able to search the web on day one.
 
 - Search on Ollama or custom OpenAI-compatible endpoints (no built-in search exists there).
 - Per-user engine choice, per-user cost caps, or search usage metering.
-- Search inside CLI-backed providers (claude, gemini, codex CLI adapters). Chat turns only ever
-  run through a CLI engine (`packages/chat/src/live/engine-selection.ts`), and the CLI's own
-  search is blocked there: the Claude engines allow only the jarvis MCP tools plus vault reads and
-  the permission hook denies everything else. So "the model searches inside its own process" is
-  not a path that exists in chat, and this spec does not try to open one. (Amended in fix round
-  1 of PR #2280; the original text assumed the CLI could search on its own.)
+- Search inside an ordinary chat turn of a CLI-backed provider. Chat turns only ever run through
+  a CLI engine (`packages/chat/src/live/engine-selection.ts`), and the CLI's own search stays
+  blocked on those launches: the Claude engines allow only the jarvis MCP tools plus vault reads
+  and the permission hook denies everything else. CLI providers ARE covered by built-in search,
+  but through the same `web.search` tool path as everyone else: the tool's model-native provider
+  makes a one-shot structured call, and for a CLI provider that call launches the CLI with its own
+  search tool switched on and reads the pages it used back as sources (section 5.2). (Amended in
+  fix round 1 of PR #2280, and again in the CLI extension: the first amendment said CLI providers
+  were out; Ben's ruling on 2026-09-05 was that a CLI model must search "just as if I asked you to
+  search here".)
 - New search engines beyond Brave (Google News RSS, GDELT and the like are a separate spec).
 - Changing how `web.read` works.
 
@@ -60,7 +64,13 @@ install with one Anthropic key should be able to search the web on day one.
    search it runs the model-native provider (decision 6) against the actor's own chat model. The
    gateway withholds `web.search` only when the engine is none. The `nativeSearch` request option
    on the HTTP adapters stays for list-shaped callers (decision 6) and for any future non-CLI
-   chat path.
+   chat path. When the actor's chat model is CLI-backed, the model-native provider's structured
+   call goes through the CLI adapter with `nativeSearch` set, which launches the CLI with its own
+   search tool on and returns the pages it used as sources, so citations and the "search was
+   used" signal are identical to the API-key providers. The chat model picker chip, the AI
+   providers settings wording, the News availability reason and the app map entry all read the
+   model's `web-search` flag, so they say built-in search is available for CLI models without
+   naming any provider.
 4. **On by default with one instance-wide switch** (Ben, question 4, answer 1). A new instance
    setting `web.native_search_enabled` (boolean, default true) lives on the AI providers page as
    "Use your model's built-in web search". Off means only Brave counts. This is a setting in the
@@ -101,9 +111,21 @@ install with one Anthropic key should be able to search the web on day one.
 - Model discovery sets `web-search` on: Anthropic Claude 3.5 and later chat models; OpenAI
   models that accept the `web_search` tool on the Responses API (gpt-4.1 family, gpt-4o family,
   o-series and later; the discovery list is data, not code, so new families are one row);
-  Google Gemini 2 and later. Ollama, custom and CLI providers never get it. Existing rows are
-  re-marked by the next discovery run; an admin can also toggle it on the model row like
-  `vision` today, so a mis-detected model is a click, not a release.
+  Google Gemini 2 and later. Ollama and custom providers never get it. CLI providers get it per
+  provider kind, not per model id, because the search tool belongs to the CLI: a small table in
+  `model-discovery.ts` (`CLI_PROVIDER_SEARCH`) declares Claude CLI and Codex CLI as having
+  built-in search and Gemini CLI as not; a new CLI adds one row. Existing rows are re-marked by
+  the next discovery run (refresh models on the provider card); an admin can also toggle it on
+  the model row like `vision` today, so a mis-detected model is a click, not a release.
+- CLI providers search through the CLI's own tool. The one-shot CLI structured adapter forwards
+  `nativeSearch` on the engine launch (in-process and over the cli-runner socket). The Claude
+  print engine then adds `WebSearch` to `--tools` and `--allowedTools`; codex exec adds
+  `-c 'web_search="live"'`. The transcript reader maps what each CLI reports into the shared
+  `{ title, url }` source shape: Claude's WebSearch result lists every page it searched with a
+  title; codex reports only the pages it opened and gives no titles, so the url stands in as the
+  title. The adapter collects sources across every read of the turn, dedupes by url, and returns
+  them with the raw text; `generateStructured` passes them on unchanged. The scoped (long-lived)
+  structured session used by connector extraction does not take part; it never searches.
 - Provider adapters (`adapters/http-api.ts`, `http-api-structured.ts`) accept an optional
   `nativeSearch: true` on a request and add the provider's search tool:
   Anthropic `web_search_20250305` with `max_uses` 5; OpenAI: the Responses API with a
