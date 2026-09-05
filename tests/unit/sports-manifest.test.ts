@@ -49,6 +49,16 @@ describe("sports manifest", () => {
     ]);
   });
 
+  it("tells Moss about the Stop using Moss's photos control and what it does", () => {
+    // #2237 review 1: the app map must describe the control this slice ships, not only the
+    // status line, or Moss cannot explain the setting.
+    const feature = sportsModuleManifest.features.find((f) => f.id === "sports.source_photos");
+    expect(feature?.description).toContain("Stop using Moss's photos");
+    expect(feature?.description).toMatch(/feed|article/);
+    const settings = sportsModuleManifest.settings.find((s) => s.id === "sports.follows");
+    expect(settings?.description).toContain("Stop using Moss's photos");
+  });
+
   it("exposes follows plus bounded actor-scoped source tools", () => {
     expect(sportsModuleManifest.assistantTools).toHaveLength(12);
     const byName = Object.fromEntries(

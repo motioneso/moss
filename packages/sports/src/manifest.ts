@@ -146,7 +146,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.source_photos",
       description:
-        "Stories from your own sources show a photo from the feed or the article page. Each source's row in Sports settings says whether photos are working, none were found, are still being checked, or have stopped working."
+        "Your own sources' stories show a photo from the feed or article page. Each source row in Sports settings says if photos are working, none found, checking, or stopped working, and offers Stop using Moss's photos when Moss found them."
     },
     {
       id: "sports.team_identity",
@@ -170,7 +170,7 @@ export const sportsModuleManifest = {
       id: "sports.follows",
       label: "Sports",
       description:
-        "Choose the teams and leagues shown in Sports, and add custom news sources: a homepage or a subreddit. Each source's row says whether its stories are getting photos. A team saved before permanent team numbers asks once which team was meant.",
+        "Pick teams and leagues for Sports; add news sources (homepage or subreddit). Source rows say if stories get photos, with Stop using Moss's photos when Moss found them. A team saved before permanent team numbers asks once which was meant.",
       path: "/settings/modules/sports",
       scope: "user",
       order: 35,
