@@ -124,6 +124,21 @@ export class EmailRepository {
       .executeTakeFirst();
   }
 
+  /** #2274: a thread reference that is really one message id (IMAP has no thread ids). */
+  async getByOwnerAndExternalId(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    externalId: string
+  ): Promise<EmailMessage | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.email_messages")
+      .selectAll()
+      .where("owner_user_id", "=", ownerUserId)
+      .where("external_id", "=", externalId)
+      .executeTakeFirst();
+  }
+
   async createCachedMessageForTest(
     scopedDb: DataContextDb,
     input: CreateCachedEmailMessageInput

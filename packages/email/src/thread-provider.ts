@@ -18,7 +18,7 @@ export function senderAddress(from: string): string {
  * leave this shape: the excerpt is what the cache already holds, capped again here.
  */
 export function createEmailThreadProvider(
-  repo: Pick<EmailRepository, "listByThread" | "listNewerInThreads">,
+  repo: Pick<EmailRepository, "listByThread" | "listNewerInThreads" | "getByOwnerAndExternalId">,
   userAddressesFor: (scopedDb: unknown, ownerUserId: string) => Promise<ReadonlySet<string>>
 ): EmailThreadProvider {
   const map = (m: EmailMessage, mine: ReadonlySet<string>): EmailThreadMessage => {
@@ -37,7 +37,10 @@ export function createEmailThreadProvider(
     async listThreadMessages(scopedDb, actorUserId, threadRef) {
       const mine = await userAddressesFor(scopedDb, actorUserId);
       const rows = await repo.listByThread(scopedDb as never, actorUserId, threadRef);
-      return rows.map((m) => map(m, mine));
+      if (rows.length > 0) return rows.map((m) => map(m, mine));
+      // No provider thread id matched: the reference may be a single message id (IMAP).
+      const single = await repo.getByOwnerAndExternalId(scopedDb as never, actorUserId, threadRef);
+      return single ? [map(single, mine)] : [];
     },
     async listThreadsWithNewerMessages(scopedDb, actorUserId, threads) {
       const mine = await userAddressesFor(scopedDb, actorUserId);

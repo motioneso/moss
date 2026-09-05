@@ -7,6 +7,7 @@ import type { ActorScopedJobPayload, QueueDefinition } from "@moss/jobs";
 import type { ConnectorSyncStatus, DataContextDb, DataContextRunner, MossDatabase } from "@moss/db";
 import { hasInFlightJob, sendJob, toAccessContext } from "@moss/jobs";
 import { AiRepository, createAiSecretCipher } from "@moss/ai";
+import type { EmailThreadJudgementRequester } from "@moss/module-sdk";
 import { CalendarRepository } from "@moss/calendar";
 import { EmailRepository } from "@moss/email";
 import { PreferencesRepository } from "@moss/structured-state";
@@ -164,6 +165,16 @@ export interface GoogleSyncDeps {
   readonly actionProjection?: ProjectEmailActionsDeps;
   /** Stable root job id used to derive deterministic continuation job ids. */
   readonly runId?: string;
+  /**
+   * #2274: after a message the gate marks maybe_owed, ask the Commitments module to judge its
+   * thread. Ids only cross this boundary.
+   */
+  readonly threadJudgementRequester?: EmailThreadJudgementRequester;
+  /** #2274: lower-cased addresses the user already deals with, built once per sync phase. */
+  readonly knownSenderAddresses?: (
+    scopedDb: DataContextDb,
+    actorUserId: string
+  ) => Promise<ReadonlySet<string>>;
 }
 
 /** Sanitized structured logging for partial-failure observability (never secrets/body). */
