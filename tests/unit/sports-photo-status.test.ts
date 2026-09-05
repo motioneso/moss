@@ -44,6 +44,19 @@ describe("sports source photo status", () => {
     ).toBe("previewing");
   });
 
+  it("keeps saying none found while a stale source still owes Moss's own look", () => {
+    expect(
+      photoStatusFor(
+        record({
+          photoRuleState: "stale",
+          photoRuleJson: RULE,
+          photoLastOutcome: "none",
+          photoRelookAt: null
+        })
+      )
+    ).toBe("none");
+  });
+
   it("says photos stopped working once Moss's own re-look also came back empty", () => {
     expect(
       photoStatusFor(

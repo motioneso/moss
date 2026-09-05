@@ -240,7 +240,7 @@ describe("sports sources repository", () => {
     await expect(asActor(ids.userA, (db) => repo.list(db))).resolves.toEqual([]);
   });
 
-  it("gives up on a saved photo place after three empty refreshes, and comes back on a hit", async () => {
+  it("marks a saved photo place stale after three empty refreshes, owes Moss a look, and comes back on a hit", async () => {
     const created = await asActor(ids.userA, (db) => repo.create(db, { candidate: candidate(1) }));
     if ("limitExceeded" in created) throw new Error("unexpected limit");
     const rule = {
@@ -279,13 +279,19 @@ describe("sports sources repository", () => {
       expect(state.photo_relook_at).toBeNull();
     }
 
-    const at = new Date("2026-09-04T12:00:00.000Z");
-    await asActor(ids.userA, (db) => recordSportsPhotoOutcome(db, created.id, "none", at));
+    // The third miss only marks the rule stale. No re-look time is written: that is the re-look's
+    // own record of having run and failed, so the row must not say "stopped working" yet and the
+    // owed look may run at the next sync instead of a day later (spec decisions 6c and 7).
+    await asActor(ids.userA, (db) => recordSportsPhotoOutcome(db, created.id, "none"));
     const gaveUp = await photoState();
-    expect(gaveUp).toMatchObject({ photo_rule_state: "stale", photo_miss_streak: 3 });
-    expect(gaveUp.photo_relook_at?.toISOString()).toBe("2026-09-05T12:00:00.000Z");
+    expect(gaveUp).toMatchObject({
+      photo_rule_state: "stale",
+      photo_miss_streak: 3,
+      photo_last_outcome: "none"
+    });
+    expect(gaveUp.photo_relook_at).toBeNull();
     await expect(asActor(ids.userA, (db) => repo.list(db))).resolves.toMatchObject([
-      { photoStatus: "stopped_working", photosFoundByMoss: true }
+      { photoStatus: "none", photosFoundByMoss: true }
     ]);
 
     await asActor(ids.userA, (db) => recordSportsPhotoOutcome(db, created.id, "working"));

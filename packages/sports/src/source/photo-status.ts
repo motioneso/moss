@@ -15,8 +15,9 @@ export interface SportsSourcePhotoRecord {
   /** What the last refresh that actually had stories saw. Null until one has completed. */
   readonly photoLastOutcome: SportsPhotoOutcome | null;
   /**
-   * When Moss's own look at this source may next run. Non-null on a stale source means a look has
-   * already been made and came back empty, which is the only case the owner is told about.
+   * Set only once Moss's own look at this source has run and come back empty: it is the earliest
+   * time the next look may run (spec decision 6c). Null on a stale source means the look is still
+   * owed, so the owner is not yet told anything beyond the last refresh's outcome.
    */
   readonly photoRelookAt: Date | null;
 }

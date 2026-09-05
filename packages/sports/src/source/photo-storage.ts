@@ -12,19 +12,24 @@ import { SPORTS_PHOTO_MISS_STREAK_LIMIT, type SportsPhotoOutcome } from "./photo
  * can add the rest of the photo flow without growing that file past the size standard.
  */
 
-/** How long Moss waits before looking at a source whose photos stopped working. */
+/**
+ * How long Moss waits after a look of its own came back empty before it may look again (spec
+ * decision 6c: at most once per day per source). Only the re-look writes photo_relook_at; the
+ * refresh path below never does, because a stale rule with no time set means the look is still
+ * owed and may run at the source's next sync.
+ */
 export const SPORTS_PHOTO_RELOOK_DELAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Records what one refresh with stories saw for one source. A hit clears the run of misses, and
  * brings a source that had stopped working back into use. A miss only counts towards giving up
- * when there is a saved instruction to give up on.
+ * when there is a saved instruction to give up on; the third miss marks that instruction stale
+ * and nothing more, so the row keeps saying "none found" until Moss's own look has run and failed.
  */
 export async function recordSportsPhotoOutcome(
   scopedDb: DataContextDb,
   sourceId: string,
-  outcome: SportsPhotoOutcome,
-  now: Date = new Date()
+  outcome: SportsPhotoOutcome
 ): Promise<void> {
   assertDataContextDb(scopedDb);
   const row = await scopedDb.db
@@ -57,12 +62,7 @@ export async function recordSportsPhotoOutcome(
     .set({
       photo_last_outcome: "none",
       photo_miss_streak: streak,
-      ...(giveUp
-        ? {
-            photo_rule_state: "stale" as const,
-            photo_relook_at: new Date(now.getTime() + SPORTS_PHOTO_RELOOK_DELAY_MS)
-          }
-        : {})
+      ...(giveUp ? { photo_rule_state: "stale" as const, photo_relook_at: null } : {})
     })
     .where("id", "=", sourceId)
     .execute();
