@@ -69,18 +69,20 @@ describe("generateStructured", () => {
   });
 
   it("keeps the sources a CLI adapter reports alongside raw text (#2228)", async () => {
-    const deps = buildDeps({});
-    deps.createCliStructuredAdapter = () => ({
-      generateStructured: async () => ({
-        rawText: '{"ok":true}',
-        usage: { inputTokens: 1, outputTokens: 1 },
-        sources: [{ title: "A", url: "https://example.com/a" }]
+    const deps: GenerateStructuredDeps = {
+      ...buildDeps({}),
+      createCliStructuredAdapter: () => ({
+        generateStructured: async () => ({
+          rawText: '{"ok":true}',
+          usage: { inputTokens: 1, outputTokens: 1 },
+          sources: [{ title: "A", url: "https://example.com/a" }]
+        })
       })
-    });
+    };
     const result = await generateStructured(
       scopedDb,
       {
-        service: "web-search",
+        service: "module.web-research",
         schema: { type: "object", properties: {} },
         prompt: "search this",
         nativeSearch: true
@@ -96,16 +98,18 @@ describe("generateStructured", () => {
   });
 
   it("returns no sources key when a CLI adapter reports raw text without any (#2228)", async () => {
-    const deps = buildDeps({});
-    deps.createCliStructuredAdapter = () => ({
-      generateStructured: async () => ({
-        rawText: '{"ok":true}',
-        usage: { inputTokens: 1, outputTokens: 1 }
+    const deps: GenerateStructuredDeps = {
+      ...buildDeps({}),
+      createCliStructuredAdapter: () => ({
+        generateStructured: async () => ({
+          rawText: '{"ok":true}',
+          usage: { inputTokens: 1, outputTokens: 1 }
+        })
       })
-    });
+    };
     const result = await generateStructured(
       scopedDb,
-      { service: "web-search", schema: { type: "object", properties: {} }, prompt: "x" },
+      { service: "module.web-research", schema: { type: "object", properties: {} }, prompt: "x" },
       deps
     );
 

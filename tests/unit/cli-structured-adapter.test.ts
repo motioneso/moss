@@ -351,7 +351,7 @@ describe("CliStructuredAdapter — nativeSearch and sources (#2228)", () => {
   });
 
   it("omits nativeSearch from the launch and sources from the result when search was not asked for", async () => {
-    const launch = vi.fn(async () => ({ offset: 0 }));
+    const launch = vi.fn(async (_input: unknown) => ({ offset: 0 }));
     const factory: ChatEngineFactory = () => ({
       provider: "anthropic",
       launch,
