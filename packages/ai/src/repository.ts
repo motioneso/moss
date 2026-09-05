@@ -570,8 +570,9 @@ export class AiRepository {
    * #870 Slice 1 (Step 4, L1): idempotently insert discovered models. INSERT-only with
    * do-nothing on the `UNIQUE(owner_user_id, provider_config_id, provider_model_id)` constraint —
    * an existing row (ANY status) is left untouched, so re-discovery never (a) duplicates, (b)
-   * resurrects a model the admin disabled, or (c) clobbers a customized row. Returns the count of
-   * newly-inserted rows. Best-effort caller: discovery failure must never block provider creation.
+   * resurrects a model the admin disabled, or (c) clobbers a customized row. The two exceptions are
+   * additive only: a missing release date (0214) and the `web-search` flag (#2228). Returns the
+   * count of newly-inserted rows. Best-effort caller: discovery failure must never block provider creation.
    */
   async upsertDiscoveredModels(
     scopedDb: DataContextDb,
@@ -612,11 +613,25 @@ export class AiRepository {
           created_at: now,
           updated_at: now
         })
-        // An existing row (any status) keeps everything the admin may have changed; the only
-        // field a re-discovery may fill in is a release date the row did not have yet (0214).
+        // An existing row (any status) keeps everything the admin may have changed. A re-discovery
+        // may only fill in a release date the row did not have yet (0214) and, per the #2228 spec
+        // ("existing rows are re-marked by the next discovery run"), add the `web-search` flag when
+        // the vendor's list now declares it. It never removes a capability or touches the rest.
         .onConflict((oc) =>
           oc.columns(["owner_user_id", "provider_config_id", "provider_model_id"]).doUpdateSet({
-            released_at: sql`coalesce(app.ai_configured_models.released_at, excluded.released_at)`
+            released_at: sql`coalesce(app.ai_configured_models.released_at, excluded.released_at)`,
+            capabilities: sql`case
+              when 'web-search' = any(excluded.capabilities)
+                and not ('web-search' = any(app.ai_configured_models.capabilities))
+              then array_append(app.ai_configured_models.capabilities, 'web-search')
+              else app.ai_configured_models.capabilities
+            end`,
+            updated_at: sql`case
+              when 'web-search' = any(excluded.capabilities)
+                and not ('web-search' = any(app.ai_configured_models.capabilities))
+              then excluded.updated_at
+              else app.ai_configured_models.updated_at
+            end`
           })
         )
         .returning(sql<boolean>`(xmax = 0)`.as("inserted"))
