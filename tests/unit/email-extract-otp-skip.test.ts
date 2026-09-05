@@ -7,7 +7,6 @@ import {
   extractEmailSignalsBatch,
   looksLikeOneTimeCodeEmail,
   otpSkippedResult,
-  signInCodeDecision,
   type EmailExtractDeps,
   type EmailExtractResult,
   type ParsedEmail
