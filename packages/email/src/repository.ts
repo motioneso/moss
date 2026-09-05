@@ -243,6 +243,23 @@ export class EmailRepository {
   }
 
   /**
+   * Wipe the stored analysis (summary + signals) from the actor's recently received messages so
+   * the next sync sends them back through the model instead of skipping them as unchanged. The
+   * skip check in the sync phase requires a stored summary AND complete triage, so emptying both
+   * is exactly what re-opens them. Nothing else about the message is touched, and RLS keeps this
+   * to the actor's own rows.
+   */
+  async clearRecentTriage(scopedDb: DataContextDb, receivedSince: Date): Promise<number> {
+    assertDataContextDb(scopedDb);
+    const result = await scopedDb.db
+      .updateTable("app.email_messages")
+      .set({ summary: null, signals: {}, updated_at: new Date() })
+      .where("received_at", ">=", receivedSince)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows ?? 0);
+  }
+
+  /**
    * Lightweight per-account sync markers for skip-unchanged: external_id, the stored Gmail
    * historyId (read from external_metadata), whether a non-null summary exists, and whether
    * actionable triage has the subject/task fields required for projection. The handler skips the

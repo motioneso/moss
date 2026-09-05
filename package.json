@@ -38,6 +38,7 @@
     "export:user": "tsx scripts/export-user-data.ts",
     "delete:user": "tsx scripts/delete-user-data-cli.ts",
     "admin:reset-password": "tsx scripts/admin-reset-password.ts",
+    "email:rejudge": "tsx scripts/rejudge-email.ts",
     "audit:preflight": "bash scripts/check-tree-fresh.sh",
     "audit:release-hardening": "tsx scripts/audit-release-hardening.ts",
     "gate:release-hardening": "pnpm db:migrate && pnpm audit:release-hardening",
