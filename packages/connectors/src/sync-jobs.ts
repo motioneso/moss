@@ -552,6 +552,11 @@ export interface RegisterConnectorsJobWorkersDeps {
     result: GoogleSyncResult
   ) => void;
   readonly logger?: SyncLogger;
+  /** #2274: hands maybe_owed threads to the Commitments judgement queue. Optional so tests and
+   *  hosts without the commitments module keep working. */
+  readonly threadJudgementRequester?: GoogleSyncDeps["threadJudgementRequester"];
+  /** #2274: addresses the user already knows, computed once per sync phase. */
+  readonly knownSenderAddresses?: GoogleSyncDeps["knownSenderAddresses"];
 }
 
 export async function registerConnectorsJobWorkers(
@@ -607,7 +612,9 @@ export async function registerConnectorsJobWorkers(
             },
             logger: deps.logger,
             runId: job.data.kind === "google-sync" ? job.id : job.data.idempotencyKey,
-            trigger: job.data.kind === "google-sync" ? job.data.trigger : undefined
+            trigger: job.data.kind === "google-sync" ? job.data.trigger : undefined,
+            threadJudgementRequester: deps.threadJudgementRequester,
+            knownSenderAddresses: deps.knownSenderAddresses
           },
           state
         );

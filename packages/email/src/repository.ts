@@ -4,6 +4,12 @@ import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb, type EmailMessage } from "@moss/db";
 
+/** The bare, lower-cased address from a header value such as `Sarah Kim <Sarah@Kim.Example>`. */
+function bareAddress(value: string): string {
+  const m = value.match(/<([^>]+)>/);
+  return (m ? m[1]! : value).trim().toLowerCase();
+}
+
 function hasCompleteTriage(signals: unknown): boolean {
   if (!signals || typeof signals !== "object" || Array.isArray(signals)) return false;
   const actionability = (signals as Record<string, unknown>).actionability;
@@ -320,6 +326,74 @@ export class EmailRepository {
    * policy also admits shared rows, but a judgement about what the actor owes must only ever read
    * the actor's own mail.
    */
+  /** Most cached inbox mail is addressed to the mailbox owner, so the recipients that appear on
+   *  at least this share of the owner's newest messages are treated as the owner's own addresses. */
+  static readonly OWN_ADDRESS_SAMPLE = 500;
+  static readonly OWN_ADDRESS_MIN_SHARE = 0.2;
+
+  /**
+   * Recipient addresses that appear on at least a fifth of the owner's newest cached messages
+   * (#2274). The connected-account record does not hold the mailbox address, so this is how the
+   * composition root learns which messages in a thread the user wrote. Raw header values; the
+   * caller normalises.
+   */
+  async listFrequentRecipientAddresses(
+    scopedDb: DataContextDb,
+    ownerUserId: string
+  ): Promise<string[]> {
+    assertDataContextDb(scopedDb);
+    const rows = await scopedDb.db
+      .selectFrom("app.email_messages")
+      .select("recipients")
+      .where("owner_user_id", "=", ownerUserId)
+      .orderBy("received_at", "desc")
+      .limit(EmailRepository.OWN_ADDRESS_SAMPLE)
+      .execute();
+    if (rows.length === 0) return [];
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const seen = new Set<string>();
+      for (const raw of row.recipients ?? []) {
+        const address = bareAddress(raw);
+        if (!address || seen.has(address)) continue;
+        seen.add(address);
+        counts.set(address, (counts.get(address) ?? 0) + 1);
+      }
+    }
+    const floor = rows.length * EmailRepository.OWN_ADDRESS_MIN_SHARE;
+    return [...counts.entries()].filter(([, n]) => n >= floor).map(([address]) => address);
+  }
+
+  /**
+   * Distinct recipient addresses of cached messages sent from any of the given addresses: the
+   * people the user has written to (#2274 known senders). Raw header values; the caller
+   * normalises. Empty when no sender addresses are given.
+   */
+  async listRecipientAddressesOfSenders(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    senders: ReadonlySet<string>
+  ): Promise<string[]> {
+    assertDataContextDb(scopedDb);
+    if (senders.size === 0) return [];
+    const rows = await scopedDb.db
+      .selectFrom("app.email_messages")
+      .select(["sender", "recipients"])
+      .where("owner_user_id", "=", ownerUserId)
+      .orderBy("received_at", "desc")
+      .limit(EmailRepository.OWN_ADDRESS_SAMPLE)
+      .execute();
+    const out = new Set<string>();
+    for (const row of rows) {
+      if (!senders.has(bareAddress(row.sender))) continue;
+      for (const raw of row.recipients ?? []) {
+        const address = bareAddress(raw);
+        if (address) out.add(address);
+      }
+    }
+    return [...out];
+  }
+
   async listByThread(
     scopedDb: DataContextDb,
     ownerUserId: string,
