@@ -133,10 +133,30 @@ export function buildStructuredRequest(
       };
     }
     case "openai-compatible": {
-      // #2228: OpenAI's built-in web search tool is only available through the Responses
-      // API, which does not support the strict json_schema response format this structured
-      // path relies on. nativeSearch is accepted but has no effect here for this provider.
       const base = baseUrl ?? "https://api.openai.com";
+      if (input.nativeSearch) {
+        // #2228: OpenAI's built-in web search tool only exists on the Responses API, so this
+        // request (and only this one) switches endpoint. The Responses API carries the same
+        // strict JSON schema under text.format, and url citations come back as annotations.
+        return {
+          url: `${base}/v1/responses`,
+          headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+          body: {
+            model: input.model.provider_model_id,
+            max_output_tokens: input.maxOutputTokens,
+            input: input.messages.map((turn) => ({ role: turn.role, content: turn.content })),
+            tools: [{ type: "web_search" }],
+            text: {
+              format: {
+                type: "json_schema",
+                name: "structured_output",
+                strict: true,
+                schema: input.schema
+              }
+            }
+          }
+        };
+      }
       return {
         url: `${base}/v1/chat/completions`,
         headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
@@ -184,12 +204,26 @@ type AnthropicPayload = {
     input?: unknown;
     text?: string;
     citations?: Array<{ url?: string; title?: string }>;
+    /** web_search_tool_result blocks: the search hits the model was shown (#2228). */
+    content?: Array<{ type?: string; url?: string; title?: string }>;
   }>;
   usage?: { input_tokens?: number; output_tokens?: number };
 };
 type OpenAiPayload = {
   choices?: Array<{ message?: { content?: unknown } }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
+};
+/** Responses API shape, used when the request carried the web_search tool (#2228). */
+type OpenAiResponsesPayload = {
+  output?: Array<{
+    type?: string;
+    content?: Array<{
+      type?: string;
+      text?: unknown;
+      annotations?: Array<{ type?: string; url?: string; title?: string }>;
+    }>;
+  }>;
+  usage?: { input_tokens?: number; output_tokens?: number };
 };
 type GooglePayload = {
   candidates?: Array<{
@@ -244,14 +278,23 @@ export function extractStructuredResult(
           usage
         );
       }
+      // Search hits arrive as web_search_tool_result blocks; text-block citations only exist
+      // when the model wrote prose, which a forced structured tool call rarely does.
       const sources = dedupeStructuredSources(
         (record.content ?? [])
-          .flatMap((block) => block?.citations ?? [])
+          .flatMap((block) =>
+            block?.type === "web_search_tool_result"
+              ? (block.content ?? []).filter((hit) => hit?.type === "web_search_result")
+              : (block?.citations ?? [])
+          )
           .map((c) => normalizeStructuredSource(c))
       );
       return { rawObject: toolUse.input, usage, ...(sources.length > 0 ? { sources } : {}) };
     }
     case "openai-compatible": {
+      if (Array.isArray((payload as OpenAiResponsesPayload | null)?.output)) {
+        return extractOpenAiResponsesResult(payload as OpenAiResponsesPayload);
+      }
       const record = (payload ?? {}) as OpenAiPayload;
       const usage = {
         inputTokens: numberOrZero(record.usage?.prompt_tokens),
@@ -297,6 +340,32 @@ export function extractStructuredResult(
       throw new Error(`unsupported provider kind: ${String(exhaustive)}`);
     }
   }
+}
+
+function extractOpenAiResponsesResult(record: OpenAiResponsesPayload): StructuredProviderResult {
+  const usage = {
+    inputTokens: numberOrZero(record.usage?.input_tokens),
+    outputTokens: numberOrZero(record.usage?.output_tokens)
+  };
+  const textParts = (record.output ?? [])
+    .filter((item) => item?.type === "message")
+    .flatMap((item) => item.content ?? [])
+    .filter((part) => part?.type === "output_text");
+  const text = textParts.map((part) => (typeof part.text === "string" ? part.text : "")).join("");
+  if (text.length === 0) {
+    throw new StructuredOutputParseError("openai responses payload has no output text", "", usage);
+  }
+  const sources = dedupeStructuredSources(
+    textParts
+      .flatMap((part) => part.annotations ?? [])
+      .filter((annotation) => annotation?.type === "url_citation")
+      .map((annotation) => normalizeStructuredSource(annotation))
+  );
+  return {
+    rawObject: parseJsonOrThrow(text, usage),
+    usage,
+    ...(sources.length > 0 ? { sources } : {})
+  };
 }
 
 function parseJsonOrThrow(text: string, usage: StructuredUsage): unknown {
