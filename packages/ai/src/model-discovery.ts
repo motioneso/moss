@@ -281,7 +281,9 @@ export function inferWebSearchCapability(
   const id = providerModelId.toLowerCase();
 
   if (providerKind === "anthropic") {
-    const match = /claude-(\d+)(?:-(\d+))?/.exec(id);
+    // Ids carry the version either right after "claude-" (claude-3-5-sonnet-20241022) or after
+    // the family name (claude-sonnet-4-20250514, claude-opus-4-1, claude-haiku-4-5-20251001).
+    const match = /claude-(?:[a-z]+-)*(\d+)(?:[-.](\d+))?/.exec(id);
     if (!match) return false;
     const major = Number(match[1]);
     const minor = match[2] !== undefined ? Number(match[2]) : 0;
@@ -291,6 +293,9 @@ export function inferWebSearchCapability(
   if (providerKind === "openai-compatible") {
     if (id.startsWith("gpt-4o") || id.startsWith("gpt-4.1")) return true;
     if (/^o\d/.test(id)) return true;
+    // gpt-5 and every later major (gpt-5-mini, gpt-5.1, ...) accept the Responses API web_search tool.
+    const gpt = /^gpt-(\d+)(?:\.(\d+))?/.exec(id);
+    if (gpt && Number(gpt[1]) >= 5) return true;
     return false;
   }
 

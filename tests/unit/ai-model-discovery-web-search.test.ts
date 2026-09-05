@@ -5,15 +5,22 @@ describe("inferWebSearchCapability", () => {
   it("gives Claude 3.5 and later web search, but not Claude 3.0 models", () => {
     expect(inferWebSearchCapability("anthropic", "claude-3-5-sonnet-20241022")).toBe(true);
     expect(inferWebSearchCapability("anthropic", "claude-3-7-sonnet-20250219")).toBe(true);
-    expect(inferWebSearchCapability("anthropic", "claude-4-opus")).toBe(true);
+    // Real current ids put the family name before the version (finding 5, fix round 1).
+    expect(inferWebSearchCapability("anthropic", "claude-sonnet-4-20250514")).toBe(true);
+    expect(inferWebSearchCapability("anthropic", "claude-opus-4-1")).toBe(true);
+    expect(inferWebSearchCapability("anthropic", "claude-haiku-4-5-20251001")).toBe(true);
+    expect(inferWebSearchCapability("anthropic", "claude-opus-5")).toBe(true);
     expect(inferWebSearchCapability("anthropic", "claude-3-opus-20240229")).toBe(false);
     expect(inferWebSearchCapability("anthropic", "claude-3-haiku-20240307")).toBe(false);
   });
 
-  it("gives gpt-4o, gpt-4.1, and o-series web search, but not gpt-4 or gpt-3.5-turbo", () => {
+  it("gives gpt-4o, gpt-4.1, gpt-5 and later, and o-series web search, but not gpt-4 or gpt-3.5-turbo", () => {
     expect(inferWebSearchCapability("openai-compatible", "gpt-4o")).toBe(true);
     expect(inferWebSearchCapability("openai-compatible", "gpt-4o-mini")).toBe(true);
     expect(inferWebSearchCapability("openai-compatible", "gpt-4.1")).toBe(true);
+    expect(inferWebSearchCapability("openai-compatible", "gpt-5")).toBe(true);
+    expect(inferWebSearchCapability("openai-compatible", "gpt-5-mini")).toBe(true);
+    expect(inferWebSearchCapability("openai-compatible", "gpt-5.1")).toBe(true);
     expect(inferWebSearchCapability("openai-compatible", "o1")).toBe(true);
     expect(inferWebSearchCapability("openai-compatible", "o3-mini")).toBe(true);
     expect(inferWebSearchCapability("openai-compatible", "gpt-4")).toBe(false);
