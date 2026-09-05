@@ -137,13 +137,20 @@ describe("anthropic model-list adapter", () => {
     const home = await homeWithAnthropicToken(`CLAUDE_CODE_OAUTH_TOKEN=${ANTHROPIC_TOKEN}`);
     const { f, calls } = fakeFetch(
       jsonResponse({
-        data: [{ id: "claude-fable-5-1" }, { id: "claude-opus-4-8" }, { id: "claude-x:old" }]
+        data: [
+          { id: "claude-fable-5-1", created_at: "2026-06-01T00:00:00Z" },
+          { id: "claude-opus-4-8" },
+          { id: "claude-x:old" }
+        ]
       })
     );
     const result = await listProviderModels("anthropic", { homeBase: home, fetch: f });
     expect(result).toEqual({
       status: "ok",
-      models: [{ id: "claude-fable-5-1" }, { id: "claude-opus-4-8" }]
+      models: [
+        { id: "claude-fable-5-1", releasedAt: "2026-06-01T00:00:00.000Z" },
+        { id: "claude-opus-4-8", releasedAt: null }
+      ]
     });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.url).toBe("https://api.anthropic.com/v1/models?limit=100");

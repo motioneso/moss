@@ -582,6 +582,7 @@ export class AiRepository {
       readonly capabilities: readonly AiModelCapability[];
       readonly tier: AiModelTier;
       readonly status: AiModelStatus;
+      readonly releasedAt?: string | null;
     }[]
   ): Promise<number> {
     assertDataContextDb(scopedDb);
@@ -607,15 +608,20 @@ export class AiRepository {
           // a specific model non-overridable via updateModel.
           allow_user_override: true,
           origin: "discovered",
+          released_at: model.releasedAt ? new Date(model.releasedAt) : null,
           created_at: now,
           updated_at: now
         })
+        // An existing row (any status) keeps everything the admin may have changed; the only
+        // field a re-discovery may fill in is a release date the row did not have yet (0214).
         .onConflict((oc) =>
-          oc.columns(["owner_user_id", "provider_config_id", "provider_model_id"]).doNothing()
+          oc.columns(["owner_user_id", "provider_config_id", "provider_model_id"]).doUpdateSet({
+            released_at: sql`coalesce(app.ai_configured_models.released_at, excluded.released_at)`
+          })
         )
+        .returning(sql<boolean>`(xmax = 0)`.as("inserted"))
         .executeTakeFirst();
-      // numInsertedOrUpdatedRows is 0n when the conflict skipped the row.
-      if ((result.numInsertedOrUpdatedRows ?? 0n) > 0n) inserted += 1;
+      if (result?.inserted) inserted += 1;
     }
     return inserted;
   }
@@ -1326,6 +1332,8 @@ export class AiRepository {
         // provider-specific contract; explicit model bindings bypass this ladder.
         .clearOrderBy()
         .orderBy(sql`CASE WHEN models.provider_model_id = 'default' THEN 0 ELSE 1 END`)
+        // 0214: the newest RELEASE wins inside a tier; registration order only breaks ties.
+        .orderBy(sql`models.released_at desc nulls last`)
         .orderBy("models.created_at", "desc")
         .orderBy("models.id", "desc")
         .executeTakeFirst();
@@ -1343,6 +1351,8 @@ export class AiRepository {
         // #982/#869 D1: preserve sentinel-first chat behavior in the single-model fallback too.
         .clearOrderBy()
         .orderBy(sql`CASE WHEN models.provider_model_id = 'default' THEN 0 ELSE 1 END`)
+        // 0214: the newest RELEASE wins inside a tier; registration order only breaks ties.
+        .orderBy(sql`models.released_at desc nulls last`)
         .orderBy("models.created_at", "desc")
         .orderBy("models.id", "desc")
         .executeTakeFirst()
@@ -1404,6 +1414,11 @@ export class AiRepository {
         .where("providers.purpose", "=", "assistant")
         .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
         .where("models.tier", "=", t)
+        // safeModelQuery already orders by created_at desc; clear that before applying the 0214
+        // order (newest RELEASE wins inside a tier, registration order only breaks ties), or the
+        // base order wins first and registration order decides again.
+        .clearOrderBy()
+        .orderBy(sql`models.released_at desc nulls last`)
         .orderBy("models.created_at", "desc")
         .orderBy("models.id", "desc")
         .executeTakeFirst();
@@ -1417,6 +1432,8 @@ export class AiRepository {
       .where("providers.status", "=", "active")
       .where("providers.purpose", "=", "assistant")
       .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
+      .clearOrderBy()
+      .orderBy(sql`models.released_at desc nulls last`)
       .orderBy("models.created_at", "desc")
       .orderBy("models.id", "desc")
       .executeTakeFirst();
