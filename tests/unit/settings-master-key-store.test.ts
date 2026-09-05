@@ -185,8 +185,16 @@ describe("family key store (#2312 slice 1)", () => {
     const { scopedDb, store } = createMockDb();
     const repository = createMockRepository(store);
 
-    const before = await loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, env);
-    const sealed = new JsonSecretCipher(before!, "test").encryptJson({ secret: "old-data" });
+    // Seal under the RETIRED env key ("v0"), not the current one, so the test
+    // fails if the move carries only the current secret.
+    const retiredKeyring = {
+      currentKeyId: "v0",
+      keys: new Map([["v0", createHash("sha256").update("o".repeat(40)).digest()]]),
+      legacyCandidates: [createHash("sha256").update("o".repeat(40)).digest()]
+    };
+    const sealed = new JsonSecretCipher(retiredKeyring, "test").encryptJson({
+      secret: "old-data"
+    });
 
     await generateFamilyKey(scopedDb, repository, {
       family: INTEGRATIONS_FAMILY,
@@ -199,7 +207,6 @@ describe("family key store (#2312 slice 1)", () => {
       NODE_ENV: "production",
       ...MASTER_ENV
     });
-    // Sealed under the env current key; the retired "v0" must ride along too.
     expect(after!.keys.has("v0")).toBe(true);
     const opened = new JsonSecretCipher(after!, "test").decryptJson(
       new JsonSecretCipher(after!, "test").parseEnvelope(sealed)
@@ -209,29 +216,40 @@ describe("family key store (#2312 slice 1)", () => {
 
   it("a row that no longer decrypts reports broken and recovers by replacement", async () => {
     invalidateFamilyKeyCache();
-    const env = { NODE_ENV: "production", ...MASTER_ENV };
-    const { scopedDb, store } = createMockDb({
-      [INTEGRATIONS_FAMILY.settingKey]: { ciphertext: "not-an-envelope" }
-    });
+    const masterA = { ...MASTER_ENV };
+    const masterB = { JARVIS_AI_SECRET_KEY: "n".repeat(40) };
+    const envA = { NODE_ENV: "production", ...masterA };
+    const envB = { NODE_ENV: "production", ...masterB };
+    const { scopedDb, store } = createMockDb();
     const repository = createMockRepository(store);
 
-    const status = await getFamilyKeyStatus(scopedDb, env);
+    // The real operator case: a well-formed row sealed under one master secret,
+    // read after the master changed without keeping the old one.
+    await generateFamilyKey(scopedDb, repository, {
+      family: INTEGRATIONS_FAMILY,
+      actorUserId: "u1",
+      requestId: "r1",
+      env: envA
+    });
+    invalidateFamilyKeyCache();
+    const status = await getFamilyKeyStatus(scopedDb, envB);
     expect(status).toEqual([{ family: "integrations", source: "broken" }]);
-    await expect(loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, env)).resolves.toBeNull();
+    await expect(loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, envB)).resolves.toBeNull();
 
     await rotateFamilyKey(scopedDb, repository, {
       family: INTEGRATIONS_FAMILY,
       actorUserId: "u1",
       requestId: "r1",
-      env
+      env: envB
     });
     const writes = repository.calls as { metadata: Record<string, unknown> }[];
-    expect(writes[0]!.metadata).toEqual({
+    expect(writes).toHaveLength(2);
+    expect(writes[1]!.metadata).toEqual({
       key: "keys.integrations",
       recoveredFromUnreadable: true
     });
     invalidateFamilyKeyCache();
-    expect(await getFamilyKeyStatus(scopedDb, env)).toEqual([
+    expect(await getFamilyKeyStatus(scopedDb, envB)).toEqual([
       { family: "integrations", source: "store" }
     ]);
   });

@@ -69,10 +69,7 @@ export function EncryptionKeysPane() {
         title="Encryption keys"
         desc="Some features pause until their key is set up. Keys are locked with your master secret and never shown here."
       />
-      <Group
-        title="Encryption keys"
-        desc="Some features pause until their key is set up. Keys are locked with your master secret and never shown here."
-      >
+      <Group title="Family keys">
         {statusQuery.isPending ? (
           <Note icon={<KeyRound size={13} />}>Checking key status…</Note>
         ) : null}
