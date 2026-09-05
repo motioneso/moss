@@ -725,3 +725,53 @@ describe("messages the previous round wrongly hid", () => {
     ).toBe(false);
   });
 });
+
+/**
+ * The messages a live run over a real inbox found still getting through. Every one of them is
+ * a genuine sign-in code, and every one arrived from an ordinary-looking mailbox: a hiring
+ * site sending from login@, a newspaper sending from ordercs@, a pet insurer sending from
+ * hello@. That is why the sender address is no longer part of the decision.
+ */
+describe("real sign-in code mail from ordinary-looking senders is hidden", () => {
+  const realExamples: Array<[string, { from: string; subject: string; body: string }]> = [
+    [
+      "a hiring site sending from a login mailbox",
+      {
+        from: "MyGreenhouse <login@hiring.example.invalid>",
+        subject: "Here's your MyGreenhouse security code",
+        body: "Your security code is 481920. It expires in 10 minutes."
+      }
+    ],
+    [
+      "a newspaper sending from a customer service mailbox",
+      {
+        from: "The Example Times <ordercs@newspaper.example.invalid>",
+        subject: "220250 is your verification code",
+        body: "220250 is your verification code. Do not share it with anyone."
+      }
+    ],
+    [
+      "a pet insurer sending from a hello mailbox",
+      {
+        from: "Pumpkin <hello@petinsurer.example.invalid>",
+        subject: "Your Pumpkin verification code",
+        body: "Your verification code is 730915. Enter it to finish signing in."
+      }
+    ]
+  ];
+
+  for (const [label, message] of realExamples) {
+    it(`hides ${label}`, async () => {
+      expect(looksLikeOneTimeCodeEmail(message)).toBe(true);
+
+      const runChat = vi.fn(async () => ({
+        text: JSON.stringify({ category: "unknown", confidence: 0.4 })
+      }));
+
+      const result = await extractEmailSignals(fixture(message), { runChat });
+
+      expect(runChat).not.toHaveBeenCalled();
+      expect(result).toEqual(otpSkippedResult());
+    });
+  }
+});
