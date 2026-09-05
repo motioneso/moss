@@ -5,7 +5,11 @@ import type { DataContextDb } from "@moss/db";
 import { assertDataContextDb } from "@moss/db";
 
 import { buildPushPayload } from "./push-payload.js";
-import { createPushSigningCipher, getOrGeneratePushSigningKey } from "./push-crypto.js";
+import {
+  createPushSigningCipher,
+  getOrGeneratePushSigningKey,
+  resolveVapidSubject
+} from "./push-crypto.js";
 import type { PushDeliverJobPayload, PushSummaryJobPayload } from "./push-jobs.js";
 import {
   PushSubscriptionsRepository,
@@ -36,13 +40,25 @@ interface WebPushPayload {
   readonly href: string | null;
 }
 
+interface VapidDetails {
+  readonly subject: string;
+  readonly publicKey: string;
+  readonly privateKey: string;
+}
+
 /**
- * There is no instance public URL setting (spec 5.2). The VAPID subject only needs to be a
- * stable contact identity, not a reachable one, and it is set once on first key generation
- * and then reused from storage — this default only matters the very first time.
+ * The VAPID identity presented to the push service: the stored key pair plus a subject
+ * resolved from configuration at send time (never from a request, never from the row).
  */
-function resolveVapidSubject(): string {
-  return "mailto:push@jarv1s.local";
+function buildVapidDetails(signingKey: {
+  readonly publicKey: string;
+  readonly privateKey: string;
+}): VapidDetails {
+  return {
+    subject: resolveVapidSubject(),
+    publicKey: signingKey.publicKey,
+    privateKey: signingKey.privateKey
+  };
 }
 
 /**
@@ -57,7 +73,7 @@ async function deliverToSubscriptions(
   subscriptionsRepository: PushSubscriptionsRepository,
   sendWebPush: typeof webpush.sendNotification,
   subscriptions: readonly PushDeliveryTarget[],
-  signingKey: { readonly subject: string; readonly publicKey: string; readonly privateKey: string },
+  vapidDetails: VapidDetails,
   payload: WebPushPayload
 ): Promise<void> {
   const serialized = JSON.stringify(payload);
@@ -71,7 +87,7 @@ async function deliverToSubscriptions(
             keys: { p256dh: subscription.p256dh, auth: subscription.auth }
           },
           serialized,
-          { vapidDetails: signingKey }
+          { vapidDetails }
         );
         await subscriptionsRepository.recordDeliverySuccess(scopedDb, subscription.id);
       } catch (error) {
@@ -112,14 +128,14 @@ export async function runPushDeliverJob(
     return;
   }
 
-  const signingKey = await getOrGeneratePushSigningKey(scopedDb, cipher, resolveVapidSubject());
+  const signingKey = await getOrGeneratePushSigningKey(scopedDb, cipher);
 
   await deliverToSubscriptions(
     scopedDb,
     subscriptionsRepository,
     sendWebPush,
     subscriptions,
-    signingKey,
+    buildVapidDetails(signingKey),
     buildPushPayload({
       id: notification.id,
       title: notification.title,
@@ -165,14 +181,14 @@ export async function runPushSummaryJob(
     return;
   }
 
-  const signingKey = await getOrGeneratePushSigningKey(scopedDb, cipher, resolveVapidSubject());
+  const signingKey = await getOrGeneratePushSigningKey(scopedDb, cipher);
 
   await deliverToSubscriptions(
     scopedDb,
     subscriptionsRepository,
     sendWebPush,
     subscriptions,
-    signingKey,
+    buildVapidDetails(signingKey),
     {
       id: `summary:${job.data.releaseAt}`,
       title: "Moss",

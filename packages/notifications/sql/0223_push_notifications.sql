@@ -24,7 +24,6 @@ CREATE TABLE IF NOT EXISTS app.push_signing_key (
   id text PRIMARY KEY CHECK (id = 'default'),
   public_key text NOT NULL,
   private_key_ciphertext jsonb NOT NULL,
-  subject text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 

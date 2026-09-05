@@ -116,10 +116,11 @@ export function registerNotificationsRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const origin = `${request.protocol}://${request.hostname}`;
 
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
-          const signingKey = await getOrGeneratePushSigningKey(scopedDb, pushSigningCipher, origin);
+          // The VAPID subject is never taken from the request (#743 finding 5); see
+          // resolveVapidSubject in push-crypto.ts.
+          const signingKey = await getOrGeneratePushSigningKey(scopedDb, pushSigningCipher);
           const devices = await pushSubscriptionsRepository.listForActor(scopedDb);
 
           return {

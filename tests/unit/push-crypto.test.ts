@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { resolveKeyring } from "@moss/db";
-import { createPushSigningCipher, PushSigningCipher } from "@moss/notifications";
+import {
+  createPushSigningCipher,
+  DEFAULT_VAPID_SUBJECT,
+  PushSigningCipher,
+  resolveVapidSubject
+} from "@moss/notifications";
 
 function makeEnv(secret: string): NodeJS.ProcessEnv {
   return {
@@ -60,5 +65,35 @@ describe("createPushSigningCipher", () => {
     const cipher = createPushSigningCipher(makeEnv("shared-ai-secret"));
     const envelope = cipher.encryptJson({ privateKey: "shared-key-round-trip" });
     expect(cipher.decryptJson(envelope).privateKey).toBe("shared-key-round-trip");
+  });
+});
+
+// #743 security finding 5: the VAPID subject is configuration-derived. A request's Host
+// header must never become the identity the instance presents to push services.
+describe("resolveVapidSubject", () => {
+  it("falls back to the fixed mailto contact when no public base URL is configured", () => {
+    expect(resolveVapidSubject({} as NodeJS.ProcessEnv)).toBe(DEFAULT_VAPID_SUBJECT);
+    expect(DEFAULT_VAPID_SUBJECT).toBe("mailto:push@jarv1s.local");
+  });
+
+  it("uses only the https origin of the configured public base URL", () => {
+    const env = { JARVIS_PUBLIC_BASE_URL: "https://moss.example.com/app/?x=1#f" } as NodeJS.ProcessEnv;
+    expect(resolveVapidSubject(env)).toBe("https://moss.example.com");
+  });
+
+  it("honours the MOSS_ spelling of the setting", () => {
+    const env = { MOSS_PUBLIC_BASE_URL: "https://moss.example.org" } as NodeJS.ProcessEnv;
+    expect(resolveVapidSubject(env)).toBe("https://moss.example.org");
+  });
+
+  it.each([
+    ["http://moss.example.com", "an http URL"],
+    ["not a url", "a malformed value"],
+    ["https://user:pw@moss.example.com", "a URL carrying credentials"],
+    ["mailto:someone@example.com", "a non-https scheme"],
+    ["", "an empty value"]
+  ])("ignores %s (%s) and uses the fixed contact", (value) => {
+    const env = { JARVIS_PUBLIC_BASE_URL: value } as NodeJS.ProcessEnv;
+    expect(resolveVapidSubject(env)).toBe(DEFAULT_VAPID_SUBJECT);
   });
 });

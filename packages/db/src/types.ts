@@ -385,7 +385,6 @@ export interface PushSigningKeyTable {
   id: string;
   public_key: string;
   private_key_ciphertext: JsonColumn;
-  subject: string;
   created_at: TimestampColumn;
 }
 

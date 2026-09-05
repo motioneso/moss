@@ -5,6 +5,7 @@ import {
   JsonSecretCipher,
   assertDataContextDb,
   resolveKeyring,
+  resolveMossEnv,
   type DataContextDb,
   type Keyring
 } from "@moss/db";
@@ -57,7 +58,6 @@ export interface PushSigningKeyRecord {
   readonly id: string;
   readonly publicKey: string;
   readonly privateKey: string;
-  readonly subject: string;
   readonly createdAt: Date;
 }
 
@@ -65,28 +65,53 @@ interface PushSigningKeyRow {
   readonly id: string;
   readonly public_key: string;
   readonly private_key_ciphertext: unknown;
-  readonly subject: string;
   readonly created_at: Date;
+}
+
+/** Fixed VAPID contact used when no public https base URL is configured. */
+export const DEFAULT_VAPID_SUBJECT = "mailto:push@jarv1s.local";
+
+/**
+ * The VAPID `sub` claim sent to push services. It is derived from configuration only, never
+ * from the incoming request: `JARVIS_PUBLIC_BASE_URL` (or its `MOSS_*` spelling) yields its
+ * https origin when it parses as an https URL, and anything else (unset, malformed, http)
+ * falls back to a fixed `mailto:` contact. A request-supplied Host header must not be able
+ * to become the identity the instance presents to Apple, Google and Mozilla (#743 review,
+ * finding 5).
+ */
+export function resolveVapidSubject(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = resolveMossEnv(env, "JARVIS_PUBLIC_BASE_URL");
+  if (!configured) return DEFAULT_VAPID_SUBJECT;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(configured);
+  } catch {
+    return DEFAULT_VAPID_SUBJECT;
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+    return DEFAULT_VAPID_SUBJECT;
+  }
+  return parsed.origin;
 }
 
 /**
  * Returns the instance's single VAPID key pair, generating and persisting it on first
- * call. `subject` (a `mailto:` or `https:` VAPID contact) is only used the first time the
- * key is created — later calls ignore it and return the stored subject, so the instance
- * keeps one identity even if the origin that first enabled push differs from a later one.
- * A unique constraint on the fixed row id (migration 0223) makes two racing first-enables
- * converge on one key: whichever insert wins, the loser's `ON CONFLICT DO NOTHING` is a
- * no-op and the final SELECT reads the winner's row.
+ * call. The VAPID subject is not stored with the key: it is resolved from configuration at
+ * send time by {@link resolveVapidSubject}, so a value captured at first enable can never
+ * become a stale or attacker-chosen identity. A unique constraint on the fixed row id
+ * (migration 0223) makes two racing first-enables converge on one key: whichever insert
+ * wins, the loser's `ON CONFLICT DO NOTHING` is a no-op and the final SELECT reads the
+ * winner's row.
  */
 export async function getOrGeneratePushSigningKey(
   scopedDb: DataContextDb,
-  cipher: PushSigningCipher,
-  subject: string
+  cipher: PushSigningCipher
 ): Promise<PushSigningKeyRecord> {
   assertDataContextDb(scopedDb);
 
   const existing = await sql<PushSigningKeyRow>`
-    SELECT id, public_key, private_key_ciphertext, subject, created_at
+    SELECT id, public_key, private_key_ciphertext, created_at
     FROM app.push_signing_key
     WHERE id = 'default'
   `.execute(scopedDb.db);
@@ -100,13 +125,13 @@ export async function getOrGeneratePushSigningKey(
   const ciphertext = cipher.encryptJson({ privateKey: keys.privateKey });
 
   await sql`
-    INSERT INTO app.push_signing_key (id, public_key, private_key_ciphertext, subject)
-    VALUES ('default', ${keys.publicKey}, ${JSON.stringify(ciphertext)}::jsonb, ${subject})
+    INSERT INTO app.push_signing_key (id, public_key, private_key_ciphertext)
+    VALUES ('default', ${keys.publicKey}, ${JSON.stringify(ciphertext)}::jsonb)
     ON CONFLICT (id) DO NOTHING
   `.execute(scopedDb.db);
 
   const stored = await sql<PushSigningKeyRow>`
-    SELECT id, public_key, private_key_ciphertext, subject, created_at
+    SELECT id, public_key, private_key_ciphertext, created_at
     FROM app.push_signing_key
     WHERE id = 'default'
   `.execute(scopedDb.db);
@@ -128,7 +153,6 @@ function toRecord(row: PushSigningKeyRow, cipher: PushSigningCipher): PushSignin
     id: row.id,
     publicKey: row.public_key,
     privateKey,
-    subject: row.subject,
     createdAt: row.created_at
   };
 }

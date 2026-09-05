@@ -7,7 +7,6 @@ import type { PushDeliverJobPayload, PushSummaryJobPayload } from "@moss/notific
 import type * as PushCryptoModule from "../../packages/notifications/src/push-crypto.js";
 
 const FIXED_SIGNING_KEY = {
-  subject: "mailto:push@jarv1s.local",
   publicKey: "fixed-public-key",
   privateKey: "fixed-private-key"
 };
@@ -146,6 +145,44 @@ describe("runPushDeliverJob", () => {
     expect(recordDeliverySuccess).toHaveBeenCalledWith(fakeScopedDb, "sub-1");
     expect(recordDeliveryFailure).not.toHaveBeenCalled();
     expect(del).not.toHaveBeenCalled();
+  });
+
+  // #743 security finding 5: the VAPID subject comes from configuration at send time, not
+  // from the stored key row and not from whatever Host header first enabled push.
+  it("signs with a configuration-derived VAPID subject, never a stored or request one", async () => {
+    vi.stubEnv("JARVIS_PUBLIC_BASE_URL", "https://moss.example.com/app");
+    const { runPushDeliverJob } = await import("@moss/notifications");
+    const sendWebPush = vi.fn().mockResolvedValue(undefined);
+
+    try {
+      await runPushDeliverJob(
+        deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
+        fakeScopedDb,
+        {
+          notificationsRepository: {
+            getById: vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null })
+          } as never,
+          subscriptionsRepository: {
+            listActiveForDelivery: vi.fn().mockResolvedValue([fakeSubscription()]),
+            recordDeliverySuccess: vi.fn(),
+            recordDeliveryFailure: vi.fn(),
+            delete: vi.fn()
+          } as never,
+          cipher: {} as never,
+          sendWebPush
+        }
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    expect(sendWebPush).toHaveBeenCalledTimes(1);
+    const options = sendWebPush.mock.calls[0]?.[2] as { vapidDetails: Record<string, string> };
+    expect(options.vapidDetails).toEqual({
+      subject: "https://moss.example.com",
+      publicKey: "fixed-public-key",
+      privateKey: "fixed-private-key"
+    });
   });
 
   it("deletes the subscription when the push service reports it gone (404)", async () => {
