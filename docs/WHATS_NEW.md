@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Verification codes never become a task.** A login or verification code email is now always left out of your task suggestions and daily summary, so a temporary sign-in code never shows up as something to act on. [PR #2257](https://github.com/motioneso/moss/pull/2257)
 - **Today's news list shows publisher icons.** The News desk widget on Today now shows each story's publisher as a small icon instead of just the name, with the name still available if you hover over it. [PR #2252](https://github.com/motioneso/moss/pull/2252)
 
 #### Fixed
