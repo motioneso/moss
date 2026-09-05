@@ -198,7 +198,12 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "default, with a status line reading 'On, using Brave', 'On, using each person's chat " +
       "model', or 'Off. Add a Brave key or turn on built-in search.' A Brave Search API key " +
       "field below it is described as giving consistent results for every model, including " +
-      "local ones.",
+      "local ones. " +
+      "Services includes Workshop planning, which defaults to reasoning and requires JSON " +
+      "capability. Planning checks the actual route and owner-bound connection before use. " +
+      "If unavailable, choose a compatible reasoning model here and change or unlock Chat " +
+      "lock (this account) if it conflicts, then retry planning. Workshop execution remains " +
+      "unavailable.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },

@@ -181,6 +181,29 @@ export interface ExternalModulesTable {
   updated_at: TimestampColumn;
 }
 
+export interface WorkshopProjectsTable {
+  feed_sequence: ColumnType<string, string | undefined, string>;
+  id: ColumnType<string, string | undefined, never>;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  request_key: string;
+  title: string;
+  initial_request: string;
+  context: string;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface WorkshopProjectFeedTable {
+  project_id: string;
+  owner_user_id: ColumnType<string, string | undefined, never>;
+  message_id: string;
+  sequence: string;
+  kind: ColumnType<"user_message", "user_message" | undefined, never>;
+  text: string;
+  delivery: ColumnType<"pending", "pending" | undefined, never>;
+  created_at: TimestampColumn;
+}
+
 // #1754: a module build in progress — the plan, status, and cost a chat turn writes to
 // start one. Never the generated code itself (that lives on disk, keyed by id).
 export interface ModuleBuildsTable {
@@ -1448,6 +1471,8 @@ export interface MossDatabase {
   "app.module_enablement": ModuleEnablementTable;
   "app.external_modules": ExternalModulesTable;
   "app.module_builds": ModuleBuildsTable;
+  "app.workshop_projects": WorkshopProjectsTable;
+  "app.workshop_project_feed": WorkshopProjectFeedTable;
   "app.module_credentials": ModuleCredentialsTable;
   "app.module_kv": ModuleKvTable;
   "app.rls_probe_items": RlsProbeItemsTable;

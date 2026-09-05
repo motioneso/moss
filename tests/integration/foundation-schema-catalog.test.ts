@@ -391,7 +391,10 @@ describe("MVP foundation schema catalog", () => {
         { version: "0216", name: "0216_scratchpads.sql" },
         { version: "0217", name: "0217_sports_follows_source_team_id.sql" },
         // #2237 slice 2 — per-source photo rule and photo status on app.sports_custom_sources.
-        { version: "0222", name: "0222_sports_source_photos.sql" }
+        { version: "0222", name: "0222_sports_source_photos.sql" },
+        // Workshop projects own their durable feed; both arrive together.
+        { version: "0223", name: "0223_workshop_projects.sql" },
+        { version: "0224", name: "0224_workshop_project_feed.sql" }
       ]);
     } finally {
       await client.end();

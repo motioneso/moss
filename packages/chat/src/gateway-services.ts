@@ -175,20 +175,7 @@ export function buildChatGatewayDependencies(args: {
       ),
     toolServices: {
       ...buildChatToolServices(args.collaborators),
-      // #1888 — asking Moss for a module in chat. Built here rather than in
-      // buildChatToolServices because it needs the ai repository as well as the queue, and it
-      // reuses this file's resolveYoloMode so a module build follows exactly the same
-      // auto-approve rule as every other write. No queue means no service, which means the
-      // gateway hides workshop.buildModule entirely (fail closed).
-      ...(args.collaborators.boss
-        ? {
-            moduleBuildStart: buildModuleBuildStartService({
-              boss: args.collaborators.boss,
-              aiRepository: args.repository,
-              isYoloActive: resolveYoloMode
-            })
-          }
-        : {})
+      moduleBuildStart: buildModuleBuildStartService()
     },
     readToolTrustBoundary: createNotesReadToolTrustBoundary({
       threads: new ChatRepository(),

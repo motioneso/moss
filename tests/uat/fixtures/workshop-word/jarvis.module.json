@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "uat-workshop-word",
+  "name": "Workshop Word (UAT)",
+  "version": "0.1.0",
+  "publisher": "Moss UAT",
+  "lifecycle": "optional",
+  "compatibility": { "jarv1s": ">=0.1.0" },
+  "description": "Trusted storage proof fixture for Workshop.",
+  "storage": [{ "namespace": "uat-workshop-word.saved", "scopes": ["user"] }],
+  "runtime": { "workerEntrypoint": "dist/worker.js", "workerContractVersion": 1 },
+  "web": { "entrypoint": "dist/web/index.js", "contractVersion": 2 },
+  "navigation": [
+    { "id": "uat-workshop-word", "label": "Workshop Word", "path": "/", "icon": "landmark" }
+  ],
+  "assistantTools": [
+    {
+      "name": "uat-workshop-word.word.list",
+      "permissionId": "uat-workshop-word.word.list",
+      "description": "List the owner's saved words.",
+      "risk": "read",
+      "inputSchema": { "type": "object", "additionalProperties": false },
+      "handler": "word.list"
+    }
+  ],
+  "worker": {
+    "queues": [
+      {
+        "name": "uat-workshop-word.word-save",
+        "handler": "word.save",
+        "retryLimit": 1,
+        "allowManualRun": true,
+        "paramsSchema": { "type": "object", "fields": { "wordId": { "type": "identifier" } } }
+      },
+      {
+        "name": "uat-workshop-word.word-remove",
+        "handler": "word.remove",
+        "retryLimit": 1,
+        "allowManualRun": true,
+        "paramsSchema": { "type": "object", "fields": { "wordId": { "type": "identifier" } } }
+      }
+    ]
+  }
+}

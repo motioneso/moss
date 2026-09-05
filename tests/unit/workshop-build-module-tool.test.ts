@@ -1,15 +1,32 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { liveStreamResult } from "@moss/ai";
 import { workshopModuleManifest, workshopBuildModuleExecute } from "@moss/workshop";
 import { buildModuleBuildStartService } from "@moss/chat";
-import type { DataContextDb } from "@moss/db";
+import { dataContextBrand, type DataContextDb } from "@moss/db";
+import * as workshop from "@moss/workshop";
+import { ChatRepository } from "../../packages/chat/src/repository.js";
 
 const ctx = {
   actorUserId: "user-a",
   requestId: "req-1",
   chatSessionId: "chat-1"
 };
+
+const requestKey = "00000000-0000-4000-8000-000000000001";
+const saved = {
+  project: {
+    id: "00000000-0000-4000-8000-000000000002",
+    title: "a tide clock",
+    initialRequest: "a tide clock",
+    context: "",
+    createdAt: "2026-09-05T00:00:00.000Z",
+    updatedAt: "2026-09-05T00:00:00.000Z"
+  },
+  created: true,
+  destination: "/workshop/00000000-0000-4000-8000-000000000002"
+};
+afterEach(() => vi.restoreAllMocks());
 
 function findTool() {
   const tool = workshopModuleManifest.assistantTools?.find(
@@ -40,62 +57,134 @@ describe("workshop.buildModule manifest declaration", () => {
     expect(family?.allowedTiers).toEqual(["ask_each_time", "trusted_auto", "always_confirm"]);
   });
 
-  it("only exposes the two inputs the planner needs, and nothing generic", () => {
+  it("requires the explicit request and a stable replay key", () => {
     const properties = Object.keys(findTool().inputSchema?.properties ?? {});
-    expect(properties.sort()).toEqual(["conversationExcerpt", "description"]);
+    expect(properties.sort()).toEqual(["description", "requestKey"]);
   });
 });
 
 describe("workshop.buildModule execute", () => {
-  it("fails closed when the host wired no build service", async () => {
+  it("fails closed when the host wired no create service", async () => {
     await expect(
-      workshopBuildModuleExecute({}, { description: "a tide clock" }, ctx, {})
+      workshopBuildModuleExecute({}, { description: "a tide clock", requestKey }, ctx, {})
     ).rejects.toThrow(/not available/i);
   });
 
-  it("rejects an empty description rather than planning nothing", async () => {
-    const service = {
-      start: async () => ({ buildId: "b1", plan: {} as never, awaitingApproval: true })
-    };
+  it.each(["", "   ", "x".repeat(4001), "x\0"])(
+    "rejects invalid description %j",
+    async (description) => {
+      const start = vi.fn();
+      await expect(
+        workshopBuildModuleExecute({}, { description, requestKey }, ctx, {
+          moduleBuildStart: { start }
+        })
+      ).rejects.toThrow(/description/i);
+      expect(start).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([undefined, "mcp_random", "bad-key"])("rejects invalid replay key %j", async (key) => {
+    const start = vi.fn();
     await expect(
-      workshopBuildModuleExecute({}, { description: "   " }, ctx, { moduleBuildStart: service })
-    ).rejects.toThrow(/description/i);
+      workshopBuildModuleExecute({}, { description: "a tide clock", requestKey: key }, ctx, {
+        moduleBuildStart: { start }
+      })
+    ).rejects.toThrow(/UUID requestKey/i);
+    expect(start).not.toHaveBeenCalled();
   });
 
-  it("hands back the plan, the build id, and whether it is still waiting", async () => {
-    const plan = {
-      whatItDoes: "Shows the tide",
-      whatItReaches: ["the tide service"],
-      whatItKeeps: "Today's tide times",
-      whenItRuns: "Each morning",
-      roughCost: { time: "about an hour", budgetCents: 40 }
-    };
-    const service = {
-      start: async () => ({ buildId: "b1", plan, awaitingApproval: true })
-    };
-    const result = await workshopBuildModuleExecute({}, { description: "a tide clock" }, ctx, {
-      moduleBuildStart: service
-    });
-    expect(result.data).toEqual({ buildId: "b1", awaitingApproval: true, plan });
+  it("preserves the replay key across host request IDs and returns the saved project", async () => {
+    const start = vi.fn().mockResolvedValue(saved);
+    for (const requestId of ["mcp_one", "mcp_two"]) {
+      const result = await workshopBuildModuleExecute(
+        {},
+        { description: " a tide clock ", requestKey, conversationExcerpt: "private history" },
+        { ...ctx, requestId },
+        { moduleBuildStart: { start } }
+      );
+      expect(result.data).toEqual(saved);
+    }
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(start).toHaveBeenLastCalledWith(
+      {},
+      {
+        actorUserId: ctx.actorUserId,
+        chatSessionId: ctx.chatSessionId,
+        description: "a tide clock",
+        requestKey
+      }
+    );
   });
 });
 
-describe("who may ask for a module", () => {
-  it("refuses a signed-in user who is not an administrator", async () => {
-    const service = buildModuleBuildStartService({
-      boss: {} as never,
-      aiRepository: {} as never,
-      isYoloActive: async () => false,
-      isInstanceAdmin: async () => false
+describe("create-only chat handoff", () => {
+  const db = { [dataContextBrand]: true, db: {} } as DataContextDb;
+  const input = {
+    actorUserId: "user-a",
+    chatSessionId: "user-a:drawer",
+    description: "a tide clock",
+    requestKey
+  };
+
+  it.each(["chat-1", "user-b:drawer"])(
+    "rejects an unowned or unknown surface %s",
+    async (chatSessionId) => {
+      const create = vi.spyOn(workshop, "createWorkshopProject");
+      await expect(
+        buildModuleBuildStartService().start(db, { ...input, chatSessionId })
+      ).rejects.toThrow(/Open \/workshop\/new/);
+      expect(create).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([undefined, { incognito: true }, { incognito: undefined }])(
+    "rejects missing or private threads %j",
+    async (thread) => {
+      vi.spyOn(ChatRepository.prototype, "getCurrentThread").mockResolvedValue(thread as never);
+      const create = vi.spyOn(workshop, "createWorkshopProject");
+      await expect(buildModuleBuildStartService().start(db, input)).rejects.toThrow(
+        /Open \/workshop\/new/
+      );
+      expect(create).not.toHaveBeenCalled();
+    }
+  );
+
+  it("uses the shared creation service with no queue or model dependency", async () => {
+    const current = vi
+      .spyOn(ChatRepository.prototype, "getCurrentThread")
+      .mockResolvedValue({ incognito: false } as never);
+    const create = vi.spyOn(workshop, "createWorkshopProject").mockResolvedValue(saved);
+    expect(await buildModuleBuildStartService().start(db, input)).toEqual(saved);
+    expect(current).toHaveBeenCalledWith(db, "user-a", "drawer");
+    expect(create).toHaveBeenCalledWith(db, {
+      requestKey,
+      title: "a tide clock",
+      initialRequest: "a tide clock"
     });
-    await expect(
-      service.start({} as DataContextDb, {
-        actorUserId: "user-a",
-        chatSessionId: "chat-1",
-        description: "a tide clock",
-        conversationExcerpt: ""
-      })
-    ).rejects.toThrow(/administrator/i);
+  });
+
+  it("preserves admin denial from the shared scoped-actor check", async () => {
+    vi.spyOn(ChatRepository.prototype, "getCurrentThread").mockResolvedValue({
+      incognito: false
+    } as never);
+    vi.spyOn(workshop, "createWorkshopProject").mockRejectedValue(
+      new workshop.WorkshopAdminRequiredError()
+    );
+    await expect(buildModuleBuildStartService().start(db, input)).rejects.toMatchObject({
+      statusCode: 403
+    });
+  });
+
+  it("curates unexpected persistence errors", async () => {
+    vi.spyOn(ChatRepository.prototype, "getCurrentThread").mockResolvedValue({
+      incognito: false
+    } as never);
+    vi.spyOn(workshop, "createWorkshopProject").mockRejectedValue(
+      new Error("private database detail")
+    );
+    await expect(buildModuleBuildStartService().start(db, input)).rejects.toThrow(
+      "Workshop could not save this request."
+    );
   });
 });
 
