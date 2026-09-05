@@ -309,12 +309,16 @@ describe("AssistantToolGateway self-operation", () => {
       async list() {
         return rows;
       },
+      async setSourceTeamId() {
+        return undefined;
+      },
       async create(_db, input: CreateSportsFollowRequest) {
         const teamKey = input.teamKey ?? null;
         const created: SportsFollowDto = {
           id: "f-1",
           competitionKey: input.competitionKey,
           teamKey,
+          sourceTeamId: teamKey === null ? null : `id-${teamKey}`,
           createdAt: "2026-07-27T00:00:00.000Z"
         };
         rows.push(created);

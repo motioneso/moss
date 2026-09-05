@@ -104,6 +104,7 @@ describe("SportsService ESPN headline coverage", () => {
             id: "premier-league",
             competitionKey: "eng.1",
             teamKey: null,
+            sourceTeamId: null,
             createdAt: "2026-08-25T00:00:00.000Z"
           }
         ],

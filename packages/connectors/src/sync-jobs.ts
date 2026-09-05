@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Job, PgBoss, WorkOptions } from "pg-boss";
 import type { Kysely } from "kysely";
 
+import type { ConnectorSyncDeferredReason } from "@moss/shared";
 import type { ActorScopedJobPayload, QueueDefinition } from "@moss/jobs";
 import type { ConnectorSyncStatus, DataContextDb, DataContextRunner, MossDatabase } from "@moss/db";
 import { hasInFlightJob, sendJob, toAccessContext } from "@moss/jobs";
@@ -20,7 +21,7 @@ import {
 } from "./google-api-client.js";
 import { decryptGoogleConnectionSecret, GoogleConnectionService } from "./google-connection.js";
 import { GoogleOAuthClient } from "./oauth.js";
-import { ConnectorsRepository } from "./repository.js";
+import { ConnectorsRepository, type ConnectorSyncTrigger } from "./repository.js";
 import type { EmailExtractDeps } from "./email-extract.js";
 import { buildEmailExtractDeps, type BuildEmailExtractDepsOptions } from "./extract-deps.js";
 import { EmailActionSuppressionRepository } from "./action-suppression-repository.js";
@@ -68,6 +69,8 @@ export const GOOGLE_SYNC_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
 export interface GoogleSyncPayload extends ActorScopedJobPayload {
   readonly kind: "google-sync";
   readonly idempotencyKey?: string;
+  /** What caused this run to be enqueued: a schedule tick, a manual click, the assistant, or right after connecting. */
+  readonly trigger: ConnectorSyncTrigger;
 }
 
 type GoogleSyncPhase = "calendar" | "email-current-day" | "email";
@@ -86,6 +89,18 @@ export interface GoogleSyncContinuationPayload extends ActorScopedJobPayload {
   readonly emailUpserted: number;
   readonly emailFailures: number;
   readonly escalations: number;
+  /**
+   * Distinct messages set aside for a later retry this run (never more than emailUpserted).
+   * Absent on a job queued before this field existed; such a job is read as zero.
+   */
+  readonly emailDeferred?: number;
+  /**
+   * The message ids currently set aside, so retrying the same page cannot count one message
+   * twice and a later success can take it back off the list. Bounded by MAX_DEFERRED_KEYS.
+   */
+  readonly deferredKeys?: readonly string[];
+  /** Why email work was set aside, as a fixed code the shared wording module understands. */
+  readonly deferredReason?: ConnectorSyncDeferredReason | null;
   readonly errors: readonly string[];
 }
 
@@ -107,6 +122,8 @@ export interface GoogleSyncResult {
   readonly emailFailures?: number;
   /** Count of LLM escalations to a higher tier (cost/telemetry; metadata only). */
   readonly escalations?: number;
+  /** Messages set aside for a later retry this run (never more than emailUpserted). */
+  readonly emailDeferred?: number;
   readonly errors: string[];
   readonly truncated?: boolean;
 }
@@ -164,6 +181,8 @@ export interface GoogleSyncDeps {
   readonly actionProjection?: ProjectEmailActionsDeps;
   /** Stable root job id used to derive deterministic continuation job ids. */
   readonly runId?: string;
+  /** What caused this run to start. Defaults to "manual" when a caller does not specify one. */
+  readonly trigger?: ConnectorSyncTrigger;
 }
 
 /** Sanitized structured logging for partial-failure observability (never secrets/body). */
@@ -212,6 +231,13 @@ export async function runGoogleSyncChunk(
   let emailUpserted = continuation?.emailUpserted ?? 0;
   let emailFailures = continuation?.emailFailures ?? 0;
   let escalations = continuation?.escalations ?? 0;
+  // An old queued job carries only a total. Freeze that total as a baseline and count new
+  // deferrals by distinct message id on top of it.
+  const carriedDeferred =
+    continuation?.deferredKeys === undefined ? (continuation?.emailDeferred ?? 0) : 0;
+  const deferredKeys = new Set<string>(continuation?.deferredKeys ?? []);
+  let deferredReason: ConnectorSyncDeferredReason | null = continuation?.deferredReason ?? null;
+  let emailDeferred = carriedDeferred + deferredKeys.size;
 
   const account = await deps.getActiveAccount(scopedDb);
   if (!account) {
@@ -242,7 +268,12 @@ export async function runGoogleSyncChunk(
   }
 
   // Stamp the start of the run on the account row (health metadata only — never status).
-  if (!continuation) await connectorsRepo.markSyncStarted(scopedDb, account.id, now());
+  if (!continuation) {
+    await connectorsRepo.markSyncStarted(scopedDb, account.id, {
+      startedAt: now(),
+      trigger: deps.trigger ?? "manual"
+    });
+  }
 
   // Single shared token holder for the whole run: withTokenRetry writes a refreshed token back
   // here the instant it refreshes (even if the retried op then fails), so every later call —
@@ -266,6 +297,8 @@ export async function runGoogleSyncChunk(
           emailUpserted: 0,
           emailFailures: 0,
           escalations: 0,
+          emailDeferred,
+          deferredReason,
           truncated: false
         }
       });
@@ -306,6 +339,9 @@ export async function runGoogleSyncChunk(
     emailUpserted,
     emailFailures,
     escalations,
+    emailDeferred,
+    deferredKeys,
+    deferredReason,
     errors
   };
   const phaseContext = {
@@ -332,6 +368,7 @@ export async function runGoogleSyncChunk(
       emailUpserted,
       emailFailures,
       escalations,
+      emailDeferred,
       errors,
       truncated: true
     },
@@ -348,6 +385,9 @@ export async function runGoogleSyncChunk(
       emailUpserted,
       emailFailures,
       escalations,
+      emailDeferred,
+      deferredKeys: [...deferredKeys],
+      deferredReason,
       errors
     }
   });
@@ -368,6 +408,8 @@ export async function runGoogleSyncChunk(
     emailUpserted = progress.emailUpserted;
     emailFailures = progress.emailFailures;
     escalations = progress.escalations;
+    emailDeferred = carriedDeferred + progress.deferredKeys.size;
+    deferredReason = progress.deferredReason;
     if (result.retry) return next(phase, phaseCursor);
     if (result.nextCursor) return next(phase, result.nextCursor);
     if (phase === "email-current-day") return next("email");
@@ -380,6 +422,7 @@ export async function runGoogleSyncChunk(
       emailUpserted,
       emailFailures,
       escalations,
+      emailDeferred,
       truncated: false,
       errorCount: errors.length
     },
@@ -400,6 +443,8 @@ export async function runGoogleSyncChunk(
         emailUpserted,
         emailFailures,
         escalations,
+        emailDeferred,
+        deferredReason,
         truncated: false
       }
     });
@@ -413,6 +458,7 @@ export async function runGoogleSyncChunk(
       emailUpserted,
       emailFailures,
       escalations,
+      emailDeferred,
       errors,
       truncated: false
     }
@@ -549,7 +595,8 @@ export async function registerConnectorsJobWorkers(
               logger: deps.logger
             },
             logger: deps.logger,
-            runId: job.data.kind === "google-sync" ? job.id : job.data.idempotencyKey
+            runId: job.data.kind === "google-sync" ? job.id : job.data.idempotencyKey,
+            trigger: job.data.kind === "google-sync" ? job.data.trigger : undefined
           },
           state
         );

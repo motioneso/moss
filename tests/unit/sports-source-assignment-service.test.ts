@@ -77,7 +77,13 @@ const baseline: SportsSourceBaseline = {
 function setup(
   currentBaseline: SportsSourceBaseline = baseline,
   follows: SportsFollowDto[] = [
-    { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt }
+    {
+      id: followId,
+      competitionKey: "nfl",
+      teamKey: "dal",
+      sourceTeamId: "id-dal",
+      createdAt: checkedAt
+    }
   ],
   teams = [
     {
@@ -85,14 +91,16 @@ function setup(
       competitionKey: "nfl",
       name: "Dallas Cowboys",
       shortName: "DAL",
-      crestUrl: null
+      crestUrl: null,
+      sourceTeamId: "id-dal"
     },
     {
       teamKey: "phi",
       competitionKey: "nfl",
       name: "Philadelphia Eagles",
       shortName: "PHI",
-      crestUrl: null
+      crestUrl: null,
+      sourceTeamId: "id-phi"
     }
   ]
 ) {
@@ -265,7 +273,11 @@ describe("SportsSourceService assignment replacement", () => {
         competitionKey: "fifa.world",
         teamKey: "usa"
       }
-    ].map((follow) => ({ ...follow, createdAt: checkedAt }));
+    ].map((follow) => ({
+      ...follow,
+      sourceTeamId: follow.teamKey === null ? null : `id-${follow.teamKey}`,
+      createdAt: checkedAt
+    }));
     const fotmob: SportsSourceBaseline = {
       ...baseline,
       source: {
@@ -297,21 +309,24 @@ describe("SportsSourceService assignment replacement", () => {
         competitionKey: "usa.1",
         name: "San Diego FC",
         shortName: "SDFC",
-        crestUrl: null
+        crestUrl: null,
+        sourceTeamId: "id-sd"
       },
       {
         teamKey: "liv",
         competitionKey: "eng.1",
         name: "Liverpool",
         shortName: "LIV",
-        crestUrl: null
+        crestUrl: null,
+        sourceTeamId: "id-liv"
       },
       {
         teamKey: "usa",
         competitionKey: "fifa.world",
         name: "USA",
         shortName: "USA",
-        crestUrl: null
+        crestUrl: null,
+        sourceTeamId: "id-usa"
       }
     ]);
     fetch.mockResolvedValue({
@@ -410,8 +425,20 @@ describe("SportsSourceService assignment replacement", () => {
     const service = new SportsSourceService({
       follows: {
         list: async () => [
-          { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt },
-          { id: addedFollowId, competitionKey: "nfl", teamKey: "phi", createdAt: checkedAt }
+          {
+            id: followId,
+            competitionKey: "nfl",
+            teamKey: "dal",
+            sourceTeamId: "id-dal",
+            createdAt: checkedAt
+          },
+          {
+            id: addedFollowId,
+            competitionKey: "nfl",
+            teamKey: "phi",
+            sourceTeamId: "id-phi",
+            createdAt: checkedAt
+          }
         ]
       },
       sources: {
@@ -428,14 +455,16 @@ describe("SportsSourceService assignment replacement", () => {
           competitionKey: "nfl",
           name: "Dallas Cowboys",
           shortName: "DAL",
-          crestUrl: null
+          crestUrl: null,
+          sourceTeamId: "id-dal"
         },
         {
           teamKey: "phi",
           competitionKey: "nfl",
           name: "Philadelphia Eagles",
           shortName: "PHI",
-          crestUrl: null
+          crestUrl: null,
+          sourceTeamId: "id-phi"
         }
       ]
     });
@@ -497,8 +526,20 @@ describe("SportsSourceService assignment replacement", () => {
       }))
     };
     const { service, fetch } = setup(feedBaseline, [
-      { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt },
-      { id: addedFollowId, competitionKey: "nfl", teamKey: "phi", createdAt: checkedAt }
+      {
+        id: followId,
+        competitionKey: "nfl",
+        teamKey: "dal",
+        sourceTeamId: "id-dal",
+        createdAt: checkedAt
+      },
+      {
+        id: addedFollowId,
+        competitionKey: "nfl",
+        teamKey: "phi",
+        sourceTeamId: "id-phi",
+        createdAt: checkedAt
+      }
     ]);
     fetch.mockResolvedValue({
       ok: true,
@@ -553,7 +594,13 @@ describe("SportsSourceService recipe recovery", () => {
     const service = new SportsSourceService({
       follows: {
         list: async () => [
-          { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt }
+          {
+            id: followId,
+            competitionKey: "nfl",
+            teamKey: "dal",
+            sourceTeamId: "id-dal",
+            createdAt: checkedAt
+          }
         ]
       },
       sources: {
@@ -575,7 +622,8 @@ describe("SportsSourceService recipe recovery", () => {
           competitionKey: "nfl",
           name: "Dallas Cowboys",
           shortName: "DAL",
-          crestUrl: null
+          crestUrl: null,
+          sourceTeamId: "id-dal"
         }
       ]
     });
@@ -720,7 +768,13 @@ describe("SportsSourceService recipe recovery", () => {
     const service = new SportsSourceService({
       follows: {
         list: async () => [
-          { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt }
+          {
+            id: followId,
+            competitionKey: "nfl",
+            teamKey: "dal",
+            sourceTeamId: "id-dal",
+            createdAt: checkedAt
+          }
         ]
       },
       sources: {
@@ -742,7 +796,8 @@ describe("SportsSourceService recipe recovery", () => {
           competitionKey: "nfl",
           name: "Dallas Cowboys",
           shortName: "DAL",
-          crestUrl: null
+          crestUrl: null,
+          sourceTeamId: "id-dal"
         }
       ]
     });
@@ -805,7 +860,13 @@ describe("SportsSourceService recipe recovery", () => {
     const service = new SportsSourceService({
       follows: {
         list: async () => [
-          { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt }
+          {
+            id: followId,
+            competitionKey: "nfl",
+            teamKey: "dal",
+            sourceTeamId: "id-dal",
+            createdAt: checkedAt
+          }
         ]
       },
       sources: {
@@ -839,7 +900,8 @@ describe("SportsSourceService recipe recovery", () => {
           competitionKey: "nfl",
           name: "Dallas Cowboys",
           shortName: "DAL",
-          crestUrl: null
+          crestUrl: null,
+          sourceTeamId: "id-dal"
         }
       ]
     });

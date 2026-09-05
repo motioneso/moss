@@ -27,7 +27,12 @@ export async function reconcileImapAccountSchedule(
   connected: boolean
 ): Promise<void> {
   if (connected) {
-    const data: ImapSyncPayload = { actorUserId, connectorAccountId, kind: "imap-sync" };
+    const data: ImapSyncPayload = {
+      actorUserId,
+      connectorAccountId,
+      kind: "imap-sync",
+      trigger: "schedule"
+    };
     assertMetadataOnlyPayload(data);
     await boss.schedule(IMAP_SYNC_QUEUE, IMAP_SYNC_CRON, data, {
       tz: IMAP_SYNC_TZ,

@@ -29,6 +29,8 @@ import {
   type ConfirmSportsSourceRequest,
   type ConfirmSportsSourceAssignmentsRequest,
   type CreateSportsFollowRequest,
+  resolveSportsFollowTeamResponseSchema,
+  type ResolveSportsFollowTeamRequest,
   type PreviewSportsSourceRequest,
   type PreviewSportsSourceAssignmentsRequest,
   type UpdateSportsEspnCoverageRequest
@@ -305,6 +307,28 @@ export function registerSportsRoutes(
           service.followTeam(db, input)
         );
         if (!result.ok) throw new HttpError(400, result.error);
+        return { follow: result.follow };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  // The answer to "which team did you mean?" on the Sports page. Writes the provider's permanent
+  // team id onto one older saved follow, which is what brings it back into scores, standings,
+  // briefing facts and news. The service checks the chosen team against today's team list first.
+  server.post(
+    "/api/sports/follows/:id/team",
+    { schema: resolveSportsFollowTeamResponseSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { id } = request.params as { id: string };
+        const body = request.body as ResolveSportsFollowTeamRequest;
+        const result = await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          service.resolveFollowTeam(db, { followId: id, sourceTeamId: body.sourceTeamId })
+        );
+        if (!result.ok) throw new HttpError(result.status, result.error);
         return { follow: result.follow };
       } catch (error) {
         return handleRouteError(error, reply);

@@ -11,147 +11,21 @@ import type {
   SportsFollowsResponse,
   SportsLeagueTeamsResponse,
   SportsTeamSearchResponse,
-  TeamRef,
-  UsefulnessFeedbackDto
+  TeamRef
 } from "@moss/shared";
 import { requestJson } from "@moss/module-web-sdk";
 
 import { sportsQueryKeys } from "../web/query-keys.js";
-import {
-  listSportsStoryFeedback,
-  undoSportsStoryFeedback,
-  updateSportsStoryFeedbackReason
-} from "../web/sports-client.js";
 import { StandingsLeaguesSection } from "./standings-leagues.js";
+import { StoryPreferencesSection } from "./story-preferences.js";
 import { SportsSourcesSection } from "./sources.js";
 import "./sports-2.css";
 import "./sports-sources.css";
 
 const CATALOG_KEY = sportsQueryKeys.catalog;
 const FOLLOWS_KEY = sportsQueryKeys.follows;
-const STORY_FEEDBACK_KEY = ["sports", "story-feedback"] as const;
 
 export { StandingsLeaguesSection };
-
-function metadataText(feedback: UsefulnessFeedbackDto, key: string): string | null {
-  const value = feedback.metadata[key];
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function StoryPreferencesSection() {
-  const queryClient = useQueryClient();
-  const feedbackQuery = useQuery({
-    queryKey: STORY_FEEDBACK_KEY,
-    queryFn: listSportsStoryFeedback
-  });
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editReason, setEditReason] = useState("");
-  const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: STORY_FEEDBACK_KEY });
-    void queryClient.invalidateQueries({ queryKey: sportsQueryKeys.overview });
-  };
-  const editMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      updateSportsStoryFeedbackReason(id, { reason }),
-    onSuccess: () => {
-      setEditingId(null);
-      refresh();
-    }
-  });
-  const undoMutation = useMutation({
-    mutationFn: (id: string) => undoSportsStoryFeedback(id),
-    onSuccess: refresh
-  });
-  const feedback = (feedbackQuery.data?.feedback ?? []).filter(
-    (item) => item.targetKind === "sports_story"
-  );
-
-  // Nothing to manage yet: keep the whole section out of the pane (Ben, 2026-09-03).
-  if (!feedbackQuery.isError && feedback.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="sp-feedback-settings" aria-label="Story preferences">
-      <h2 className="jds-section-title sp-feedback-settings__title">Story preferences</h2>
-      <p className="jds-section-sub sp-feedback-settings__note">
-        A major story about a subject you asked to see less of may still appear.
-      </p>
-      {feedbackQuery.isError ? <Note>Could not load story preferences. Try again.</Note> : null}
-      {feedbackQuery.isError ? null : (
-        <div className="sp-feedback-settings__list">
-          {feedback.map((item) => {
-            const headline = metadataText(item, "headline") ?? "Saved story";
-            const source = metadataText(item, "sourceLabel");
-            const isEditing = editingId === item.id;
-            return (
-              <article className="sp-feedback-settings__row" key={item.id}>
-                <div className="sp-feedback-settings__details">
-                  <strong>{item.kind === "more_like_this" ? "More" : "Less"}</strong>
-                  <span>{headline}</span>
-                  {source ? <span>{source}</span> : null}
-                  {item.reason ? <span>{item.reason}</span> : null}
-                  <time dateTime={item.updatedAt}>
-                    {new Date(item.updatedAt || item.createdAt).toLocaleDateString()}
-                  </time>
-                </div>
-                {isEditing ? (
-                  <div className="sp-feedback-settings__editor">
-                    <textarea
-                      aria-label={`Reason for ${headline}`}
-                      value={editReason}
-                      maxLength={500}
-                      onChange={(event) => setEditReason(event.currentTarget.value)}
-                    />
-                    {editMutation.isError ? (
-                      <span role="alert">Could not update this preference. Try again.</span>
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={editMutation.isPending || editReason.trim().length === 0}
-                      onClick={() =>
-                        editMutation.mutate({ id: item.id, reason: editReason.trim() })
-                      }
-                    >
-                      Save
-                    </button>
-                    <button type="button" onClick={() => setEditingId(null)}>
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <div className="sp-feedback-settings__actions">
-                    {item.kind === "less_like_this" ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingId(item.id);
-                          setEditReason(item.reason ?? "");
-                        }}
-                      >
-                        Edit reason
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={undoMutation.isPending}
-                      onClick={() => undoMutation.mutate(item.id)}
-                    >
-                      Remove
-                    </button>
-                    {undoMutation.isError ? (
-                      <span role="alert">Could not remove this preference. Try again.</span>
-                    ) : null}
-                  </div>
-                )}
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
 
 // #907: the catalog contract dropped `teams` in Task 6 — this pane never read
 // `competition.teams` (the local `CompetitionWithTeams` type was already gone), so every helper
@@ -219,6 +93,50 @@ function PickCrest(props: { name: string; shortName?: string | null; crestUrl?: 
 // composite key: teamKey null (whole league) -> "" sentinel
 function followKey(competitionKey: string, teamKey: string | null): string {
   return `${competitionKey}::${teamKey ?? ""}`;
+}
+
+// A follow is matched to a picker tile on the provider's permanent team id, never on teamKey: two
+// teams sharing a short name get composite list keys such as "pac.413" while the saved follow keeps
+// the bare short name "pac" for display, so a key comparison never matched (Ben, dev, 2026-09-04).
+// The id index uses an "id:" prefix, which no catalog key can contain (keys are dot-only), so the
+// two kinds of entry cannot collide. Whole-league follows (no id) index by key alone.
+function followIdKey(competitionKey: string, sourceTeamId: string): string {
+  return followKey(competitionKey, `id:${sourceTeamId}`);
+}
+
+export function indexFollows(follows: readonly SportsFollowDto[]): Map<string, SportsFollowDto> {
+  const index = new Map<string, SportsFollowDto>();
+  for (const follow of follows) {
+    index.set(followKey(follow.competitionKey, follow.teamKey), follow);
+    if (follow.sourceTeamId !== null) {
+      index.set(followIdKey(follow.competitionKey, follow.sourceTeamId), follow);
+    }
+  }
+  return index;
+}
+
+/**
+ * The saved follow a tile stands for: by permanent id when the tile has one, else by key.
+ *
+ * A tile with a permanent id falls back to the key only for an older save that has no id of its
+ * own. Two teams that share a short name can swap places in the list between refreshes (the
+ * Tigers saved as "pac"/413, then a list holding only the Lutes as "pac"/129700), and a follow
+ * with a different id must never be treated as this tile's, or the Lutes tile would show as
+ * followed and its click would remove the Tigers follow (review round 7).
+ */
+export function followFor(
+  index: ReadonlyMap<string, SportsFollowDto>,
+  competitionKey: string,
+  teamKey: string | null,
+  sourceTeamId: string | null
+): SportsFollowDto | undefined {
+  const byId =
+    sourceTeamId === null ? undefined : index.get(followIdKey(competitionKey, sourceTeamId));
+  if (byId !== undefined) return byId;
+  const byKey = index.get(followKey(competitionKey, teamKey));
+  if (byKey === undefined) return undefined;
+  if (sourceTeamId !== null && byKey.sourceTeamId !== null) return undefined;
+  return byKey;
 }
 
 type FollowActionSource = "summary" | "picker";
@@ -337,7 +255,8 @@ function FollowedSummary(props: {
     competitionKey: string,
     teamKey: string | null,
     label: string,
-    source: FollowActionSource
+    source: FollowActionSource,
+    sourceTeamId?: string | null
   ) => void;
   actionState: FollowActionState;
 }) {
@@ -351,11 +270,17 @@ function FollowedSummary(props: {
         // removable via the same button below.
         const orphan = competition === undefined;
         const wholeLeague = follow.teamKey === null;
+        // Match the roster entry on the permanent id when the follow has one; the saved teamKey is
+        // a display short name that may not equal a colliding team's composite list key.
         const team = wholeLeague
           ? null
           : props.teamsByCompetition
               .get(follow.competitionKey)
-              ?.find((t) => t.teamKey === follow.teamKey);
+              ?.find((t) =>
+                follow.sourceTeamId !== null
+                  ? t.sourceTeamId === follow.sourceTeamId
+                  : t.teamKey === follow.teamKey
+              );
         const label = orphan
           ? `Unrecognized league (${follow.competitionKey})`
           : wholeLeague
@@ -387,7 +312,13 @@ function FollowedSummary(props: {
                 ) !== null
               }
               onClick={() =>
-                props.onToggle(follow.competitionKey, follow.teamKey, label, "summary")
+                props.onToggle(
+                  follow.competitionKey,
+                  follow.teamKey,
+                  label,
+                  "summary",
+                  follow.sourceTeamId
+                )
               }
             >
               ×
@@ -417,7 +348,8 @@ export function SearchResults(props: {
     competitionKey: string,
     teamKey: string | null,
     label: string,
-    source: FollowActionSource
+    source: FollowActionSource,
+    sourceTeamId?: string | null
   ) => void;
   actionState: FollowActionState;
 }) {
@@ -445,6 +377,75 @@ export function SearchResults(props: {
       <Note>No teams or leagues match your search.</Note>
     );
   }
+  // Group the flat result list by its league so same-named clubs from different sports never
+  // land in one undifferentiated grid (#2278: a search like "pac" showed three NC State tiles
+  // with nothing saying which sport each belonged to).
+  const teamsByLeague = new Map<string, TeamRef[]>();
+  for (const team of props.results) {
+    const group = teamsByLeague.get(team.competitionKey);
+    if (group) group.push(team);
+    else teamsByLeague.set(team.competitionKey, [team]);
+  }
+  // Teams whose league is missing from the catalog (still loading, failed, or retired) must
+  // still land under a heading, one per league key, so same-named clubs stay told apart. The
+  // team record carries no league name, so the heading reuses the summary chip's orphan wording.
+  const groupedKeys = new Set(leagues.map((competition) => competition.competitionKey));
+  const unrecognizedLeagueKeys = [
+    ...new Set(
+      props.results
+        .filter((team) => !groupedKeys.has(team.competitionKey))
+        .map((team) => team.competitionKey)
+    )
+  ];
+  const matchedLeagueKeys = new Set(
+    leagueMatches(props.query, props.competitions).map((c) => c.competitionKey)
+  );
+
+  function renderTeam(team: TeamRef) {
+    const active =
+      followFor(props.followsByKey, team.competitionKey, team.teamKey, team.sourceTeamId) !==
+      undefined;
+    const pendingHere = pendingDirectionFor(
+      props.actionState,
+      team.competitionKey,
+      team.teamKey,
+      "picker"
+    );
+    const state = followControlState("team", team.name, active, pendingHere);
+    return (
+      <span className="sp-action-target" key={`${team.competitionKey}:${team.teamKey}`}>
+        <button
+          type="button"
+          className={`sp-team${active ? " is-active" : ""}`}
+          aria-pressed={active}
+          aria-label={state.ariaLabel}
+          disabled={pendingHere !== null}
+          onClick={() =>
+            props.onToggle(
+              team.competitionKey,
+              team.teamKey,
+              team.name,
+              "picker",
+              team.sourceTeamId
+            )
+          }
+        >
+          <span className="sp-team__top">
+            <PickCrest name={team.name} shortName={team.shortName} crestUrl={team.crestUrl} />
+            <span className="sp-team__name">{team.shortName || team.name}</span>
+          </span>
+          {state.visible ? <span className="sp-team__state">{state.visible}</span> : null}
+        </button>
+        <ActionError
+          actionState={props.actionState}
+          competitionKey={team.competitionKey}
+          teamKey={team.teamKey}
+          source="picker"
+        />
+      </span>
+    );
+  }
+
   return (
     <>
       {leagues.map((competition) => {
@@ -456,70 +457,50 @@ export function SearchResults(props: {
           "picker"
         );
         const state = followControlState("league", competition.label, wholeActive, pendingHere);
+        const matched = matchedLeagueKeys.has(competition.competitionKey);
+        // A league that matched by name alone has no team tiles: keep its Follow-all row but
+        // never render an empty grid beneath it.
+        const teams = teamsByLeague.get(competition.competitionKey) ?? [];
         return (
-          <span
-            key={`l-${competition.competitionKey}`}
-            className="sp-action-target sp-action-target--wide"
-          >
-            <button
-              type="button"
-              className={`sp-whole${wholeActive ? " is-active" : ""}`}
-              aria-pressed={wholeActive}
-              aria-label={state.ariaLabel}
-              disabled={pendingHere !== null}
-              onClick={() =>
-                props.onToggle(competition.competitionKey, null, competition.label, "picker")
-              }
-            >
-              <span className="sp-whole__lbl">{state.visible}</span>
-            </button>
-            <ActionError
-              actionState={props.actionState}
-              competitionKey={competition.competitionKey}
-              teamKey={null}
-              source="picker"
-            />
-          </span>
+          <div className="sp-search__group" key={`g-${competition.competitionKey}`}>
+            {matched ? (
+              <span className="sp-action-target sp-action-target--wide">
+                <button
+                  type="button"
+                  className={`sp-whole${wholeActive ? " is-active" : ""}`}
+                  aria-pressed={wholeActive}
+                  aria-label={state.ariaLabel}
+                  disabled={pendingHere !== null}
+                  onClick={() =>
+                    props.onToggle(competition.competitionKey, null, competition.label, "picker")
+                  }
+                >
+                  <span className="sp-whole__lbl">{state.visible}</span>
+                </button>
+                <ActionError
+                  actionState={props.actionState}
+                  competitionKey={competition.competitionKey}
+                  teamKey={null}
+                  source="picker"
+                />
+              </span>
+            ) : (
+              <div className="jds-eyebrow sp-search__group-heading">{competition.label}</div>
+            )}
+            {teams.length > 0 ? <div className="sp-teamgrid">{teams.map(renderTeam)}</div> : null}
+          </div>
         );
       })}
-      <div className="sp-teamgrid">
-        {props.results.map((team) => {
-          const active = props.followsByKey.has(followKey(team.competitionKey, team.teamKey));
-          const pendingHere = pendingDirectionFor(
-            props.actionState,
-            team.competitionKey,
-            team.teamKey,
-            "picker"
-          );
-          const state = followControlState("team", team.name, active, pendingHere);
-          return (
-            <span className="sp-action-target" key={`${team.competitionKey}:${team.teamKey}`}>
-              <button
-                type="button"
-                className={`sp-team${active ? " is-active" : ""}`}
-                aria-pressed={active}
-                aria-label={state.ariaLabel}
-                disabled={pendingHere !== null}
-                onClick={() =>
-                  props.onToggle(team.competitionKey, team.teamKey, team.name, "picker")
-                }
-              >
-                <span className="sp-team__top">
-                  <PickCrest name={team.name} shortName={team.shortName} crestUrl={team.crestUrl} />
-                  <span className="sp-team__name">{team.shortName || team.name}</span>
-                </span>
-                {state.visible ? <span className="sp-team__state">{state.visible}</span> : null}
-              </button>
-              <ActionError
-                actionState={props.actionState}
-                competitionKey={team.competitionKey}
-                teamKey={team.teamKey}
-                source="picker"
-              />
-            </span>
-          );
-        })}
-      </div>
+      {unrecognizedLeagueKeys.map((competitionKey) => (
+        <div className="sp-search__group" key={`g-${competitionKey}`}>
+          <div className="jds-eyebrow sp-search__group-heading">
+            {`Unrecognized league (${competitionKey})`}
+          </div>
+          <div className="sp-teamgrid">
+            {(teamsByLeague.get(competitionKey) ?? []).map(renderTeam)}
+          </div>
+        </div>
+      ))}
       {props.partial ? <Note>Still covering more leagues…</Note> : null}
     </>
   );
@@ -563,7 +544,8 @@ export function BrowseGroups(props: {
     competitionKey: string,
     teamKey: string | null,
     label: string,
-    source: FollowActionSource
+    source: FollowActionSource,
+    sourceTeamId?: string | null
   ) => void;
   actionState: FollowActionState;
 }) {
@@ -664,9 +646,13 @@ export function BrowseGroups(props: {
                   ) : (
                     <div className="sp-teamgrid">
                       {props.expandedTeams.map((team) => {
-                        const active = props.followsByKey.has(
-                          followKey(team.competitionKey, team.teamKey)
-                        );
+                        const active =
+                          followFor(
+                            props.followsByKey,
+                            team.competitionKey,
+                            team.teamKey,
+                            team.sourceTeamId
+                          ) !== undefined;
                         const pendingHere = pendingDirectionFor(
                           props.actionState,
                           team.competitionKey,
@@ -690,7 +676,8 @@ export function BrowseGroups(props: {
                                   team.competitionKey,
                                   team.teamKey,
                                   team.name,
-                                  "picker"
+                                  "picker",
+                                  team.sourceTeamId
                                 )
                               }
                             >
@@ -741,9 +728,7 @@ export default function SportsSettings() {
 
   const competitions = catalogQuery.data?.competitions ?? [];
   const follows = followsQuery.data?.follows ?? [];
-  const followsByKey = new Map(
-    follows.map((follow) => [followKey(follow.competitionKey, follow.teamKey), follow])
-  );
+  const followsByKey = indexFollows(follows);
   const competitionsByKey = new Map<string, CompetitionRef>(
     competitions.map((c) => [c.competitionKey, c])
   );
@@ -790,9 +775,10 @@ export default function SportsSettings() {
     competitionKey: string,
     teamKey: string | null,
     label: string,
-    source: FollowActionSource
+    source: FollowActionSource,
+    sourceTeamId: string | null = null
   ) {
-    const existing = followsByKey.get(followKey(competitionKey, teamKey));
+    const existing = followFor(followsByKey, competitionKey, teamKey, sourceTeamId);
     if (existing) {
       setActionState({
         competitionKey,

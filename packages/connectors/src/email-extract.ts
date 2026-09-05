@@ -221,7 +221,12 @@ export class EmailExtractNeedsConfigurationError extends Error {
   }
 }
 
-export type EmailExtractRetryableReason = "busy" | "timeout" | "no-reply" | "structured-output";
+export type EmailExtractRetryableReason =
+  | "busy"
+  | "timeout"
+  | "no-reply"
+  | "login-expired"
+  | "structured-output";
 
 export class EmailExtractRetryableError extends Error {
   readonly retryable = true;
@@ -659,6 +664,16 @@ function retryableReason(error: unknown): EmailExtractRetryableReason {
   if (error instanceof EmailExtractRetryableError) return error.reason;
   const name = error instanceof Error ? error.name : "";
   const message = error instanceof Error ? error.message : "";
+  const text = `${name} ${message}`;
+  // An expired sign-in on the assistant's own service reads as an authentication failure.
+  // It is worth its own reason because the fix is "sign in again", not "wait and retry".
+  if (
+    /login.?expired|session.?expired|credentials?.?expired|token.?expired|not.?logged.?in|unauthenti?cated|unauthorized|401|invalid_api_key|please (log|sign).?in/i.test(
+      text
+    )
+  ) {
+    return "login-expired";
+  }
   if (/timeout|timed.?out/i.test(`${name} ${message}`)) return "timeout";
   if (/busy/i.test(`${name} ${message}`)) return "busy";
   if (/no.?reply|without a reply/i.test(`${name} ${message}`)) return "no-reply";

@@ -13,7 +13,7 @@ import { buildEmailExtractDeps, type BuildEmailExtractDepsOptions } from "./extr
 import type { EmailReadProvider } from "./email-read-provider.js";
 import { ImapEmailReadProvider, IMAP_DEFAULT_FOLDER } from "./imap-email-read-provider.js";
 import { decryptImapConnectionSecret, type ImapConnectionSecret } from "./imap-secret.js";
-import { ConnectorsRepository } from "./repository.js";
+import { ConnectorsRepository, type ConnectorSyncTrigger } from "./repository.js";
 import { withSavepoint, type SyncLogger } from "./sync-jobs.js";
 
 export const IMAP_SYNC_QUEUE = "connectors.imap-sync";
@@ -36,6 +36,8 @@ export interface ImapSyncPayload extends ActorScopedJobPayload {
   readonly kind: "imap-sync";
   readonly connectorAccountId: string;
   readonly idempotencyKey?: string;
+  /** What caused this run to start. Today only the recurring schedule enqueues IMAP syncs. */
+  readonly trigger: ConnectorSyncTrigger;
 }
 
 export interface ImapSyncResult {
@@ -47,6 +49,36 @@ export interface ImapSyncResult {
 
 const NOOP_LOGGER: SyncLogger = { warn: () => undefined, info: () => undefined };
 
+/**
+ * Does this failure mean the mail server refused the saved sign-in?
+ *
+ * IMAP has no token refresh: a rotated or revoked password shows up as an authentication
+ * failure on connect, raised from inside the first read call. Without this the run recorded
+ * `partial`/`email-error`, which reads as "some mail did not come through" when the truth is
+ * "your sign-in no longer works" — spec section 9 requires `failed`/`auth-error` here, the
+ * same outcome Google's refused refresh produces.
+ *
+ * Matches on the shapes ImapFlow exposes (`authenticationFailed`, an `AUTHENTICATIONFAILED`
+ * response code, or the server's own text) and never on the credential itself.
+ */
+export function isImapSignInRefused(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as {
+    authenticationFailed?: unknown;
+    code?: unknown;
+    responseText?: unknown;
+    name?: unknown;
+    message?: unknown;
+  };
+  if (candidate.authenticationFailed === true) return true;
+  const haystack = [candidate.code, candidate.responseText, candidate.name, candidate.message]
+    .filter((part): part is string => typeof part === "string")
+    .join(" ");
+  return /authenticationfailed|authentication failed|invalid credentials|login failed|\[AUTH\]|password (is )?incorrect/i.test(
+    haystack
+  );
+}
+
 export interface RunImapSyncDeps {
   readonly repository: ConnectorsRepository;
   readonly cipher: ConnectorSecretCipher;
@@ -55,6 +87,8 @@ export interface RunImapSyncDeps {
   readonly emailRepository?: EmailRepository;
   readonly now?: () => Date;
   readonly logger?: SyncLogger;
+  /** What caused this run to start. Defaults to "schedule" when a caller does not specify one. */
+  readonly trigger?: ConnectorSyncTrigger;
 }
 
 export async function runImapSync(
@@ -70,7 +104,10 @@ export async function runImapSync(
   let emailUpserted = 0;
   let emailFailures = 0;
 
-  await deps.repository.markSyncStarted(scopedDb, connectorAccountId, now());
+  await deps.repository.markSyncStarted(scopedDb, connectorAccountId, {
+    startedAt: now(),
+    trigger: deps.trigger ?? "schedule"
+  });
 
   let secret: ImapConnectionSecret;
   try {
@@ -127,6 +164,10 @@ export async function runImapSync(
         );
         emailUpserted += 1;
       } catch (error) {
+        // Each message opens a fresh connection, so a password revoked after the listing
+        // step surfaces here rather than from listMessageKeys — let it reach the sign-in
+        // handling below instead of being folded into a per-message error.
+        if (isImapSignInRefused(error)) throw error;
         emailFailures += 1;
         if (!errors.includes("email-message-error")) errors.push("email-message-error");
         logger.warn(
@@ -136,6 +177,17 @@ export async function runImapSync(
       }
     }
   } catch (error) {
+    if (isImapSignInRefused(error)) {
+      // Never log the error object itself — it can carry the mailbox password.
+      logger.warn({ actorScoped: true, stage: "auth" }, "imap-sync sign-in refused");
+      await deps.repository.markSyncFinished(scopedDb, connectorAccountId, {
+        finishedAt: now(),
+        status: "failed",
+        error: "auth-error",
+        counts: { emailUpserted, emailFailures, truncated: false }
+      });
+      return { emailUpserted, emailFailures, errors: ["auth-error"], truncated: false };
+    }
     logger.warn({ stage: "email", name: (error as Error).name }, "imap-sync email failed");
     errors.push("email-error");
   }
@@ -182,7 +234,8 @@ export async function registerImapSyncWorker(
         repository,
         cipher,
         emailExtractDeps,
-        logger: deps.logger
+        logger: deps.logger,
+        trigger: job.data.trigger
       });
       deps.onResult?.(job, result);
       return result;

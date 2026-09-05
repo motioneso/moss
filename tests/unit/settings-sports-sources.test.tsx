@@ -26,12 +26,14 @@ const FOLLOWS: readonly SportsFollowDto[] = [
     id: "11111111-1111-1111-1111-111111111111",
     competitionKey: "nfl",
     teamKey: null,
+    sourceTeamId: null,
     createdAt: "2026-08-25T12:00:00.000Z"
   },
   {
     id: "22222222-2222-2222-2222-222222222222",
     competitionKey: "nfl",
     teamKey: "dal",
+    sourceTeamId: "id-dal",
     createdAt: "2026-08-25T12:00:00.000Z"
   }
 ];
@@ -40,7 +42,8 @@ const DAL: TeamRef = {
   competitionKey: "nfl",
   name: "Dallas Cowboys",
   shortName: "DAL",
-  crestUrl: null
+  crestUrl: null,
+  sourceTeamId: "id-dal"
 };
 const COMPETITIONS = new Map([[NFL.competitionKey, NFL]]);
 const TEAMS = new Map([[NFL.competitionKey, [DAL]]]);

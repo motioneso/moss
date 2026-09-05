@@ -6,6 +6,16 @@ export type ConnectorAccountStatus = "active" | "error" | "revoked";
 export type ConnectorSyncStatus = "success" | "partial" | "failed";
 
 /**
+ * Why this run set email messages aside for the assistant to catch up on later. A small
+ * fixed set of codes, never a provider message: the human sentence for each one lives in
+ * `connector-sync-explain.ts` so the words stay in one place.
+ */
+export type ConnectorSyncDeferredReason =
+  | "assistant-login-expired"
+  | "assistant-unavailable"
+  | "structured-output";
+
+/**
  * Aggregate-only sync counts surfaced to owners/admins. Never carries per-item
  * detail (subjects, titles, external IDs) — just bounded tallies for health display.
  */
@@ -16,6 +26,16 @@ export interface ConnectorSyncCounts {
   readonly emailFailures?: number;
   readonly escalations?: number;
   readonly truncated?: boolean;
+  /**
+   * How many email messages Google sync set aside for a later retry this run (never more
+   * than emailUpserted). Distinct from emailFailures, which is a permanent per-message error.
+   */
+  readonly emailDeferred?: number;
+  /**
+   * Why those messages were set aside, as a fixed code. Null (or absent) when nothing was
+   * deferred. Never carries a provider message, prompt, or any message content.
+   */
+  readonly deferredReason?: ConnectorSyncDeferredReason | null;
 }
 
 export interface ConnectorProviderDto {
@@ -130,7 +150,8 @@ const connectorSyncCountsSchema = {
     emailUpserted: { type: "number" },
     emailFailures: { type: "number" },
     escalations: { type: "number" },
-    truncated: { type: "boolean" }
+    truncated: { type: "boolean" },
+    emailDeferred: { type: "number" }
   }
 } as const;
 
