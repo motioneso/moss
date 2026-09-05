@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TmuxIo } from "@moss/ai";
-import { clearProviderProbeCacheForTests, probeProvider } from "./provider-probe.js";
+import {
+  clearProviderProbeCacheForTests,
+  invalidateProviderProbeCache,
+  probeProvider,
+  recordProviderLoginRejected
+} from "./provider-probe.js";
 
 function fakeRealMergeIo(result: { code: number; stdout: string; stderr?: string }) {
   const calls: Array<{ cmd: string; args: readonly string[]; env?: NodeJS.ProcessEnv }> = [];
@@ -205,5 +210,104 @@ describe("probeProvider google: how forgiving the readiness answer is (#2027)", 
     expect(await probeProvider("google", { io, cliPresent: async () => true })).toEqual({
       status: "needs_login"
     });
+  });
+});
+
+describe("#2242: a refused sign-in outlives the provider's own readiness check", () => {
+  afterEach(() => {
+    clearProviderProbeCacheForTests();
+  });
+
+  // Codex's readiness check only asks the local tool whether it is holding a credential file, so
+  // it answers "logged in" straight after the vendor refused that very credential. The review
+  // found exactly that: a refused model list correctly said Not logged in, and the readiness
+  // check one line later said ready.
+  it("codex asks for a login after the vendor refused the credential", async () => {
+    const { io, calls } = fakeRealMergeIo({ code: 0, stdout: "Logged in using ChatGPT" });
+
+    expect(await probeProvider("openai-compatible", { io, cliPresent: async () => true })).toEqual({
+      status: "ready"
+    });
+
+    recordProviderLoginRejected("openai-compatible", {});
+
+    expect(await probeProvider("openai-compatible", { io, cliPresent: async () => true })).toEqual({
+      status: "needs_login"
+    });
+    // The local tool was not asked the second time; its answer could only have been the wrong one.
+    expect(calls).toHaveLength(1);
+  });
+
+  it("google asks for a login after the vendor refused the credential", async () => {
+    const { io } = fakeRealMergeIo({ code: 0, stdout: "OK\n" });
+
+    expect(await probeProvider("google", { io, cliPresent: async () => true })).toEqual({
+      status: "ready"
+    });
+
+    recordProviderLoginRejected("google", {});
+
+    expect(await probeProvider("google", { io, cliPresent: async () => true })).toEqual({
+      status: "needs_login"
+    });
+  });
+
+  it("a fresh login that the provider accepts clears the refusal", async () => {
+    const { io } = fakeRealMergeIo({ code: 0, stdout: "Logged in using ChatGPT" });
+
+    recordProviderLoginRejected("openai-compatible", {});
+
+    // Pressing Log in asks for a real check rather than an old saved answer.
+    invalidateProviderProbeCache("openai-compatible", {});
+    expect(
+      await probeProvider("openai-compatible", {
+        io,
+        cliPresent: async () => true,
+        forceFresh: true
+      })
+    ).toEqual({ status: "ready" });
+
+    // And the refusal does not come back to haunt the next ordinary check.
+    expect(await probeProvider("openai-compatible", { io, cliPresent: async () => true })).toEqual({
+      status: "ready"
+    });
+  });
+
+  it("a refusal with no credential named applies to whatever credential is checked next", async () => {
+    // The chat stream never sees the token, so it names no credential when it reports a refusal.
+    const { io } = fakeRealMergeIo({ code: 0, stdout: "OK\n" });
+
+    recordProviderLoginRejected("anthropic");
+
+    expect(
+      await probeProvider("anthropic", {
+        io,
+        cliPresent: async () => true,
+        credentialEnv: { CLAUDE_CODE_OAUTH_TOKEN: "tok-anything" }
+      })
+    ).toEqual({ status: "needs_login" });
+  });
+
+  it("a readiness check that really succeeds clears the refusal", async () => {
+    const { io } = fakeRealMergeIo({ code: 0, stdout: "OK\n" });
+
+    recordProviderLoginRejected("anthropic");
+
+    expect(
+      await probeProvider("anthropic", {
+        io,
+        cliPresent: async () => true,
+        credentialEnv: { CLAUDE_CODE_OAUTH_TOKEN: "tok-fresh" },
+        forceFresh: true
+      })
+    ).toEqual({ status: "ready" });
+
+    expect(
+      await probeProvider("anthropic", {
+        io,
+        cliPresent: async () => true,
+        credentialEnv: { CLAUDE_CODE_OAUTH_TOKEN: "tok-fresh" }
+      })
+    ).toEqual({ status: "ready" });
   });
 });

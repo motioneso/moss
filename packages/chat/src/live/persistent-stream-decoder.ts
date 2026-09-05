@@ -9,7 +9,14 @@
  * polling API, this is push-based straight into `ProviderChatRuntime.streamEvents()`.
  */
 
+import type { ProviderKind } from "@moss/ai";
+
+import { looksLikeLoginRejection, recordProviderLoginRejected } from "./provider-probe.js";
 import type { RuntimeTurnEvent } from "./provider-runtime.js";
+
+/** This decoder reads one provider's stream-json output; a refused sign-in it sees belongs to
+ *  that provider. Callers with a different provider pass their own `reportLoginRejected`. */
+const DECODED_PROVIDER: ProviderKind = "anthropic";
 
 /**
  * Bound on a single stream-json line (one assistant message chunk or tool_use payload). 2MB is
@@ -35,6 +42,14 @@ const TOTAL_BUFFERED_EXCEEDED_REASON =
 const EOF_WITHOUT_TERMINAL_REASON = "The assistant process ended before completing this turn.";
 const PROVIDER_ERROR_RESULT_REASON =
   "The assistant process reported an error completing this turn.";
+/**
+ * #2242 (round 3): the provider answered, and what it said was "this sign-in is no good". That is
+ * a different thing from the assistant crashing, and telling someone to try again is the wrong
+ * advice — they have to sign in again. Composed here, never quoting the provider's own text, so
+ * nothing from the raw error (which can carry credential material) reaches a person or a log.
+ */
+const LOGIN_REJECTED_RESULT_REASON =
+  "The provider refused the saved sign-in for this assistant, so this message was not answered. Log in again to continue.";
 
 export interface PersistentStreamDecoderOpts {
   /** Invoked at most once, when a bound is exceeded. The decoder only decides when to kill —
@@ -44,6 +59,14 @@ export interface PersistentStreamDecoderOpts {
   readonly maxFrameBytes?: number;
   /** Override for tests; production callers should rely on the `MAX_TOTAL_BUFFERED_BYTES` default. */
   readonly maxTotalBufferedBytes?: number;
+  /**
+   * #2242 (round 3): called when the provider's own answer says it refused the sign-in, so the
+   * saved "the login works" answer is dropped and the next readiness check asks for a fresh
+   * login. Defaults to reporting it for the provider this stream belongs to. The stream never
+   * sees the credential itself, so the report names no credential — an explicit fresh login
+   * clears it, as does a readiness check that really succeeds.
+   */
+  readonly reportLoginRejected?: () => void;
 }
 
 type QueueWaiter = (result: IteratorResult<RuntimeTurnEvent>) => void;
@@ -52,6 +75,7 @@ export class PersistentStreamDecoder {
   private readonly maxFrameBytes: number;
   private readonly maxTotalBufferedBytes: number;
   private readonly killChild: (reason: string) => void;
+  private readonly reportLoginRejected: () => void;
 
   private buffer = "";
   private currentTurnId: string | null = null;
@@ -68,6 +92,8 @@ export class PersistentStreamDecoder {
     this.killChild = opts.killChild;
     this.maxFrameBytes = opts.maxFrameBytes ?? MAX_FRAME_BYTES;
     this.maxTotalBufferedBytes = opts.maxTotalBufferedBytes ?? MAX_TOTAL_BUFFERED_BYTES;
+    this.reportLoginRejected =
+      opts.reportLoginRejected ?? (() => recordProviderLoginRejected(DECODED_PROVIDER));
   }
 
   /** Call once per submitted turn, before writing the user frame. Only one turn is ever in
@@ -162,10 +188,19 @@ export class PersistentStreamDecoder {
       if (!this.sawReplyForTurn) {
         const isUsableResult = record["is_error"] !== true && record["subtype"] === "success";
         if (!isUsableResult) {
+          // #2242 (round 3): keep WHICH kind of failure this was. A refused sign-in used to be
+          // flattened into a general failure here, so the one place that learns a login has died
+          // during a real conversation threw that knowledge away and the saved success stood.
+          const loginRejected = looksLikeLoginRejection(failureText(record));
+          if (loginRejected) this.reportLoginRejected();
           this.emit({
             kind: "turn-failed",
             turnId,
-            outcome: { kind: "neutral-failure", reason: PROVIDER_ERROR_RESULT_REASON }
+            outcome: {
+              kind: "neutral-failure",
+              reason: loginRejected ? LOGIN_REJECTED_RESULT_REASON : PROVIDER_ERROR_RESULT_REASON,
+              ...(loginRejected ? { loginRejected: true } : {})
+            }
           });
           return;
         }
@@ -242,6 +277,25 @@ export class PersistentStreamDecoder {
       waiter({ value: undefined, done: true });
     }
   }
+}
+
+/**
+ * The failure text a result frame carries, gathered from its error-carrying fields only — never
+ * from the assistant's own words, so an ordinary reply that happens to mention a sign-in cannot
+ * be mistaken for the provider refusing one. The gathered text is only ever matched against, and
+ * is never emitted or logged.
+ */
+function failureText(record: Record<string, unknown>): string {
+  const parts: string[] = [];
+  for (const field of ["error", "result"]) {
+    const value = record[field];
+    if (typeof value === "string") parts.push(value);
+  }
+  const errors = record["errors"];
+  if (Array.isArray(errors)) {
+    for (const entry of errors) if (typeof entry === "string") parts.push(entry);
+  }
+  return parts.join("\n");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

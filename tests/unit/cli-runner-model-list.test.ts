@@ -369,4 +369,42 @@ describe("#2242: a rejected credential clears the saved 'the login works' answer
 
     expect(await host.probeProvider("anthropic")).toMatchObject({ status: "needs_login" });
   });
+
+  it("keeps a codex readiness check honest after the vendor rejects the credential", async () => {
+    // Round-3 review finding: codex's readiness check only asks the local tool whether it holds a
+    // credential file, and it returned before the refusal was consulted — so a refused model list
+    // correctly said Not logged in and the very next readiness check said ready anyway.
+    const home = await homeWithCodexAuth();
+    const { f } = fakeFetch(async () => jsonResponse({ error: "unauthorized" }, 401));
+    const host = new CliChatEngineHost({
+      io: {
+        run: vi.fn(async (_cmd: string, args: readonly string[]) => ({
+          code: 0,
+          stdout: args.includes("--version") ? "codex-cli 0.139.0" : "Logged in using ChatGPT"
+        })),
+        readFile: vi.fn().mockResolvedValue(""),
+        writeFile: vi.fn().mockResolvedValue(undefined),
+        sleep: vi.fn().mockResolvedValue(undefined)
+      },
+      neutralBase: "/tmp/neutral-base",
+      homeBase: home,
+      singleUser: false,
+      cliPresent: async () => true,
+      fetch: f
+    });
+
+    expect(await host.probeProvider("openai-compatible")).toMatchObject({ status: "ready" });
+
+    const refused = await host.listProviderModels("openai-compatible");
+    expect(refused).toMatchObject({ status: "not_logged_in" });
+    expect(JSON.stringify(refused)).not.toContain(CODEX_TOKEN);
+
+    expect(await host.probeProvider("openai-compatible")).toMatchObject({ status: "needs_login" });
+
+    // Pressing Log in asks for a real check, and an accepted sign-in recovers the provider.
+    expect(await host.probeProvider("openai-compatible", { forceFresh: true })).toMatchObject({
+      status: "ready"
+    });
+    expect(await host.probeProvider("openai-compatible")).toMatchObject({ status: "ready" });
+  });
 });

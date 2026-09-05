@@ -28,14 +28,51 @@ interface ProbeCacheEntry {
  *  misses the cache instead of replaying a stale answer. */
 const probeCache = new Map<string, ProbeCacheEntry>();
 
+function credentialFingerprint(credentialEnv?: NodeJS.ProcessEnv): string {
+  return credentialEnv?.CLAUDE_CODE_OAUTH_TOKEN ?? "";
+}
+
 function probeCacheKey(provider: ProviderKind, credentialEnv?: NodeJS.ProcessEnv): string {
-  const token = credentialEnv?.CLAUDE_CODE_OAUTH_TOKEN ?? "";
-  return `${provider}:${token}`;
+  return `${provider}:${credentialFingerprint(credentialEnv)}`;
+}
+
+/**
+ * #2242 (round 3): a provider that has been caught refusing its saved sign-in, remembered
+ * separately from the saved success above. It has to be separate because the two answers come
+ * from different places: only the anthropic readiness check saves a success, while a rejection
+ * can be learned by any real request — the model-list call, or a chat message that came back
+ * "this sign-in is no good". The rejection is consulted for EVERY provider, including the ones
+ * whose readiness check only asks a local tool whether a credential file exists (codex), which
+ * would otherwise keep answering "ready" straight after the vendor refused that very credential.
+ */
+interface LoginRejectionEntry {
+  /** The credential that was refused, or null when the caller could not name it. A caller that
+   *  cannot name the credential (the chat stream, which never sees the token) rejects whatever
+   *  credential the next check uses; an explicit fresh login clears it either way. */
+  readonly credential: string | null;
+  readonly expiresAt: number;
+}
+
+const loginRejections = new Map<ProviderKind, LoginRejectionEntry>();
+
+function hasLoginRejection(
+  provider: ProviderKind,
+  credentialEnv: NodeJS.ProcessEnv | undefined,
+  now: number
+): boolean {
+  const entry = loginRejections.get(provider);
+  if (!entry) return false;
+  if (entry.expiresAt <= now) {
+    loginRejections.delete(provider);
+    return false;
+  }
+  return entry.credential === null || entry.credential === credentialFingerprint(credentialEnv);
 }
 
 /** Test-only: drop every cached probe answer so each test starts from a clean slate. */
 export function clearProviderProbeCacheForTests(): void {
   probeCache.clear();
+  loginRejections.clear();
 }
 
 /**
@@ -49,6 +86,11 @@ export function invalidateProviderProbeCache(
   credentialEnv?: NodeJS.ProcessEnv
 ): void {
   probeCache.delete(probeCacheKey(provider, credentialEnv));
+  // #2242 (round 3): a person pressing Log in is offering a credential the vendor has not
+  // refused yet, so the remembered refusal must not answer for it. Dropping it here is what
+  // lets a fresh sign-in recover a provider whose readiness check cannot prove a credential
+  // on its own.
+  loginRejections.delete(provider);
 }
 
 /**
@@ -64,10 +106,24 @@ export function recordProviderLoginRejected(
   provider: ProviderKind,
   credentialEnv?: NodeJS.ProcessEnv
 ): void {
-  probeCache.set(probeCacheKey(provider, credentialEnv), {
-    result: { status: "needs_login" },
+  loginRejections.set(provider, {
+    credential: credentialEnv === undefined ? null : credentialFingerprint(credentialEnv),
     expiresAt: Date.now() + PROBE_CACHE_TTL_MS
   });
+  // Drop every saved success for this provider too: the refusal proves the saved answer wrong,
+  // and leaving it behind would let it reappear the moment the refusal ages out.
+  for (const key of [...probeCache.keys()]) {
+    if (key.startsWith(`${provider}:`)) probeCache.delete(key);
+  }
+}
+
+/**
+ * #2242 (round 3): does this text read as "the vendor refused this sign-in", as opposed to any
+ * other failure? Shared so the chat stream classifies a failed message exactly the way the
+ * readiness check classifies a failed check — one wording list, not two that drift apart.
+ */
+export function looksLikeLoginRejection(text: string): boolean {
+  return CLAUDE_AUTH_FAILURE_RE.test(text);
 }
 
 export async function probeProvider(
@@ -94,21 +150,30 @@ export async function probeProvider(
   }
   try {
     if (!(await deps.cliPresent(provider))) return { status: "not_installed" };
-    if (provider !== "anthropic") {
-      switch (provider) {
-        case "openai-compatible":
-          return await probeCodexAuth(deps.io);
-        case "google":
-          return await probeGeminiAuth(deps.io);
-      }
-    }
     const key = probeCacheKey(provider, deps.credentialEnv);
     const now = Date.now();
+    // #2242 (round 3): a known refusal is consulted BEFORE any provider's own check, for every
+    // provider. Codex's check only asks the local tool whether it holds a credential file, so
+    // running it first meant the answer was "ready" the instant after the vendor refused that
+    // same credential. An explicit fresh check (pressing Log in) skips the refusal instead.
+    if (!deps.forceFresh && hasLoginRejection(provider, deps.credentialEnv, now)) {
+      return { status: "needs_login" };
+    }
+    if (provider !== "anthropic") {
+      const result =
+        provider === "openai-compatible"
+          ? await probeCodexAuth(deps.io)
+          : await probeGeminiAuth(deps.io);
+      // A check that comes back ready after a fresh credential retires the old refusal.
+      if (result.status === "ready") loginRejections.delete(provider);
+      return result;
+    }
     if (!deps.forceFresh) {
       const cached = probeCache.get(key);
       if (cached && cached.expiresAt > now) return cached.result;
     }
     const result = await probeClaudeAuth(deps.io, deps.credentialEnv, deps.homeBase);
+    if (result.status === "ready") loginRejections.delete(provider);
     probeCache.set(key, { result, expiresAt: now + PROBE_CACHE_TTL_MS });
     return result;
   } catch {
