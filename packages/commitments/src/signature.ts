@@ -26,6 +26,6 @@ function normalize(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function sha8(s: string): string {
+export function sha8(s: string): string {
   return crypto.createHash("sha256").update(s).digest("hex").slice(0, 8);
 }
