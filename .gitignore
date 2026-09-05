@@ -51,6 +51,8 @@ Jarvis Design System/
 
 # Claude Code session scratchpad
 scratchpad/
+# ...but not the @moss/scratchpad module package (#2236) - same folder name, different thing.
+!packages/scratchpad/
 
 # Append-only context telemetry written concurrently by every agent session. Nothing
 # reads it (the 70% warning comes from the PostToolUse hook, not this file), and tracking

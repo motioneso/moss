@@ -294,6 +294,15 @@ export interface TasksTable {
   updated_at: TimestampColumn;
 }
 
+export interface ScratchpadsTable {
+  user_id: string;
+  body: string;
+  revision: number;
+  sync_to_notes: boolean;
+  shortcut: string;
+  updated_at: TimestampColumn;
+}
+
 export interface TaskActivityTable {
   id: string;
   task_id: string;
@@ -381,6 +390,8 @@ export interface ConnectorAccountsTable {
   last_sync_status: ConnectorSyncStatus | null;
   last_sync_error: string | null;
   last_sync_counts: JsonColumn | null;
+  last_sync_trigger: string | null;
+  previous_sync: JsonColumn | null;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
@@ -508,6 +519,8 @@ export interface AiConfiguredModelsTable {
     AiConfiguredModelOrigin | undefined,
     AiConfiguredModelOrigin
   >;
+  /** The provider's own release date for the model when its list gives one; null otherwise. */
+  released_at: NullableTimestampColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
@@ -1184,7 +1197,13 @@ export interface SportsFollowsTable {
   id: ColumnType<string, string | undefined, string>;
   owner_user_id: string;
   competition_key: string;
+  // The team's short name, for display and for suggesting candidates in the one-time "which team
+  // did you mean?" prompt. NULL still means "follow the whole competition". Never matched on.
   team_key: string | null;
+  // The provider's permanent team id: the only identity used to match games, standings, briefing
+  // facts and news (0217). NULL on a follow saved before that migration; such a row matches
+  // nothing until the person picks a team.
+  source_team_id: ColumnType<string | null, string | null | undefined, string | null>;
   created_at: TimestampColumn;
 }
 
@@ -1422,6 +1441,7 @@ export interface MossDatabase {
   "app.module_kv": ModuleKvTable;
   "app.rls_probe_items": RlsProbeItemsTable;
   "app.tasks": TasksTable;
+  "app.scratchpads": ScratchpadsTable;
   "app.task_activity": TaskActivityTable;
   "app.task_lists": TaskListsTable;
   "app.task_tags": TaskTagsTable;
@@ -1502,6 +1522,7 @@ export type ModuleEnablementRow = Selectable<ModuleEnablementTable>;
 export type ExternalModuleRow = Selectable<ExternalModulesTable>;
 export type RlsProbeItem = Selectable<RlsProbeItemsTable>;
 export type Task = Selectable<TasksTable>;
+export type Scratchpad = Selectable<ScratchpadsTable>;
 export type EmailActionSuppression = Selectable<EmailActionSuppressionTable>;
 export type EmailActionSuppressionEvidence = Selectable<EmailActionSuppressionEvidenceTable>;
 export type TaskActivity = Selectable<TaskActivityTable>;

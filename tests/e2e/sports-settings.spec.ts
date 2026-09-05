@@ -55,22 +55,44 @@ const COWBOYS: TeamRef = {
   competitionKey: "nfl",
   name: "Dallas Cowboys",
   shortName: "DAL",
-  crestUrl: null
+  crestUrl: null,
+  sourceTeamId: "id-dal"
 };
 const ARSENAL: TeamRef = {
   teamKey: "team.ars",
   competitionKey: "eng.1",
   name: "Arsenal",
   shortName: "ARS",
-  crestUrl: null
+  crestUrl: null,
+  sourceTeamId: "id-team.ars"
+};
+// Two NFL-fixture teams sharing the short name "PAC": the list gives them composite keys while the
+// server saves the follow under the bare short name plus the permanent id (Ben, dev, 2026-09-04).
+const PACIFIC_TIGERS: TeamRef = {
+  teamKey: "pac.413",
+  competitionKey: "nfl",
+  name: "Pacific Tigers",
+  shortName: "PAC",
+  crestUrl: "https://example.com/crests/413.png",
+  sourceTeamId: "413"
+};
+const PACIFIC_LUTES: TeamRef = {
+  teamKey: "pac.129700",
+  competitionKey: "nfl",
+  name: "Pacific Lutheran Lutes",
+  shortName: "PAC",
+  crestUrl: "https://example.com/crests/129700.png",
+  sourceTeamId: "129700"
 };
 const LAKERS: TeamRef = {
   teamKey: "lal",
   competitionKey: "nba",
   name: "Los Angeles Lakers",
   shortName: "LAL",
-  crestUrl: null
+  crestUrl: null,
+  sourceTeamId: "id-lal"
 };
+const ALL_TEAMS: readonly TeamRef[] = [COWBOYS, ARSENAL, LAKERS, PACIFIC_TIGERS, PACIFIC_LUTES];
 
 async function fulfillJson(route: Route, body: unknown, status = 200): Promise<void> {
   await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
@@ -242,10 +264,16 @@ async function mockSportsSettings(
       await scenario.postGate;
       if (scenario.failPost) return fulfillJson(route, { message: "Follow failed" }, 500);
       const body = route.request().postDataJSON() as CreateSportsFollowRequest;
+      // Mirror the real server (sports-service followTeam): the saved teamKey is the team's bare
+      // short name, not the list key it was clicked under, and the permanent id rides alongside.
+      const team = ALL_TEAMS.find(
+        (t) => t.competitionKey === body.competitionKey && t.teamKey === body.teamKey
+      );
       const follow: SportsFollowDto = {
         id: `f${nextId++}`,
         competitionKey: body.competitionKey,
-        teamKey: body.teamKey ?? null,
+        teamKey: body.teamKey == null ? null : (team?.shortName.toLowerCase() ?? body.teamKey),
+        sourceTeamId: body.teamKey == null ? null : (team?.sourceTeamId ?? `id-${body.teamKey}`),
         createdAt: "2026-07-12T00:00:00.000Z"
       };
       follows = [...follows, follow];
@@ -265,14 +293,20 @@ async function mockSportsSettings(
 
   await page.route("**/api/sports/teams/search*", (route) => {
     const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() ?? "";
-    const teams = [COWBOYS, ARSENAL, LAKERS].filter((t) => t.name.toLowerCase().includes(q));
+    const teams = ALL_TEAMS.filter((t) => t.name.toLowerCase().includes(q));
     return fulfillJson(route, { teams, partial: false, degraded: false });
   });
 
   await page.route("**/api/sports/leagues/*/teams", (route) => {
     const key = decodeURIComponent(new URL(route.request().url()).pathname.split("/")[4] ?? "");
     const teams =
-      key === "nfl" ? [COWBOYS] : key === "eng.1" ? [ARSENAL] : key === "nba" ? [LAKERS] : [];
+      key === "nfl"
+        ? [COWBOYS, PACIFIC_TIGERS, PACIFIC_LUTES]
+        : key === "eng.1"
+          ? [ARSENAL]
+          : key === "nba"
+            ? [LAKERS]
+            : [];
     return fulfillJson(route, { teams, degraded: false });
   });
 
@@ -375,6 +409,24 @@ test.describe("Sports settings follow picker (#989)", () => {
     // Unfollow via the same control.
     await page.getByRole("button", { name: "Unfollow Dallas Cowboys" }).click();
     await expect(page.getByRole("button", { name: "Follow Dallas Cowboys" })).toBeVisible();
+
+    // A colliding team (Ben, dev, 2026-09-04): the list key is "pac.413" but the server saves the
+    // follow under the bare short name "pac". The tile must still read as followed, the Following
+    // chip must show that team's own crest, and the other "PAC" team stays unfollowed.
+    await page.getByRole("searchbox", { name: "Find a team or league" }).fill("pacific");
+    await page.getByRole("button", { name: "Follow Pacific Tigers" }).click();
+    const tigersUnfollow = page.getByRole("button", { name: "Unfollow Pacific Tigers" });
+    await expect(tigersUnfollow).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByRole("button", { name: "Follow Pacific Lutheran Lutes" })
+    ).toHaveAttribute("aria-pressed", "false");
+    const chips = page.getByRole("list", { name: "Followed teams and leagues" });
+    await expect(chips.getByRole("listitem").filter({ hasText: "PAC" })).toHaveCount(1);
+    await expect(chips.locator('img[src="https://example.com/crests/413.png"]')).toBeVisible();
+    // The same control now unfollows instead of silently re-following.
+    await tigersUnfollow.click();
+    await expect(page.getByRole("button", { name: "Follow Pacific Tigers" })).toBeVisible();
+    await expect(chips.getByRole("listitem").filter({ hasText: "PAC" })).toHaveCount(0);
 
     // Follow-all a league from search results.
     await page.getByRole("searchbox", { name: "Find a team or league" }).fill("nfl");

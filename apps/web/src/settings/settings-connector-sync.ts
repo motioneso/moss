@@ -1,4 +1,15 @@
-import type { ConnectorAccountDto, ConnectorSyncCounts } from "@moss/shared";
+import { explainConnectorAccountHealth } from "@moss/shared";
+import type {
+  ConnectorAccountDto,
+  ConnectorSyncExplainCode,
+  ConnectorSyncTone
+} from "@moss/shared";
+
+/**
+ * Display adaptation only. Every user-visible word for a connected account now comes from
+ * `packages/shared/src/connector-sync-explain.ts`; this file just turns the shared status
+ * code and tone into the indicator dot and badge tone this pane's markup understands.
+ */
 
 export type ConnectorAccountHealth = {
   readonly indicator: "ready" | "error" | "idle";
@@ -29,130 +40,67 @@ export function getConnectorAccountHealth(
     | "lastSyncCounts"
   >
 ): ConnectorAccountHealth {
-  if (account.status === "revoked") {
-    return {
-      indicator: "idle",
-      badgeTone: "neutral",
-      label: "Revoked",
-      alert: null,
-      canReconnect: false
-    };
-  }
-
-  if (isConnectorSyncInFlight(account)) {
-    return {
-      indicator: "idle",
-      badgeTone: "neutral",
-      label: "Syncing",
-      alert: null,
-      canReconnect: false
-    };
-  }
-
-  if (account.lastSyncStatus === "failed") {
-    const isAuthFailure = account.lastSyncError === "auth-error";
-    return {
-      indicator: "error",
-      badgeTone: "amber",
-      label: "Sign-in expired",
-      alert: isAuthFailure
-        ? `Last sync failed because ${account.providerType === "google" ? "Google" : "email"} access needs to be reconnected. Reconnect to resume syncing.`
-        : syncAlert("Last sync failed", account.lastSyncError, account.lastSyncCounts),
-      canReconnect: isAuthFailure || account.providerType === "google"
-    };
-  }
-
-  if (account.status === "error") {
-    return {
-      indicator: "error",
-      badgeTone: "amber",
-      label: "Connection error",
-      alert:
-        account.providerType === "google"
-          ? "Google reported a connection error. Reconnect to restore syncing."
-          : "This email account reported a connection error. Reconnect to restore syncing.",
-      canReconnect: true
-    };
-  }
-
-  if (account.lastSyncStatus === "partial") {
-    const capped = account.lastSyncCounts?.truncated && !account.lastSyncError;
-    return {
-      indicator: "error",
-      badgeTone: "amber",
-      label: capped ? "Message cap reached" : "Partial sync",
-      alert: syncAlert(
-        capped ? "Last sync reached its message cap" : "Last sync completed with errors",
-        account.lastSyncError,
-        account.lastSyncCounts
-      ),
-      canReconnect: false
-    };
-  }
-
-  if (account.lastSyncStatus === null) {
-    return {
-      indicator: "idle",
-      badgeTone: "neutral",
-      label: "Awaiting first sync",
-      alert: "First sync hasn't run yet — new data will appear once it completes.",
-      canReconnect: false
-    };
-  }
+  const health = explainConnectorAccountHealth(
+    {
+      providerType: account.providerType,
+      status: account.status,
+      lastSyncStartedAt: account.lastSyncStartedAt,
+      lastSyncFinishedAt: account.lastSyncFinishedAt,
+      lastSyncStatus: account.lastSyncStatus,
+      lastSyncError: account.lastSyncError,
+      lastSyncCounts: account.lastSyncCounts,
+      pending: null,
+      nextRunAt: null,
+      deferredAi: null,
+      syncInFlight: isConnectorSyncInFlight(account)
+    },
+    new Date()
+  );
 
   return {
-    indicator: "ready",
-    badgeTone: "forest",
-    label: "Synced",
-    alert: null,
-    canReconnect: false
+    indicator: indicatorFor(health.code),
+    badgeTone: badgeToneFor(health.tone),
+    label: health.label,
+    alert: health.alert,
+    canReconnect: health.canReconnect
   };
+}
+
+/** The coloured dot beside the account name. */
+function indicatorFor(code: ConnectorSyncExplainCode): ConnectorAccountHealth["indicator"] {
+  switch (code) {
+    case "sign-in-expired":
+    case "connection-error":
+    case "capped":
+    case "partial":
+    case "waiting-for-worker":
+      return "error";
+    case "revoked":
+    case "syncing":
+    case "queued":
+    case "first-run-pending":
+    case "not-scheduled":
+      return "idle";
+    default:
+      return "ready";
+  }
+}
+
+/** This pane's badge has no red, so a shared red reads as amber here. */
+function badgeToneFor(tone: ConnectorSyncTone): ConnectorAccountHealth["badgeTone"] {
+  switch (tone) {
+    case "forest":
+      return "forest";
+    case "amber":
+    case "red":
+      return "amber";
+    default:
+      return "neutral";
+  }
 }
 
 function parseTimestamp(value: string | null): number | null {
   if (!value) return null;
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function syncAlert(
-  prefix: string,
-  error: string | null,
-  counts: ConnectorSyncCounts | null
-): string {
-  const details = [syncErrorLabel(error), syncCountsLabel(counts)].filter(Boolean).join(" · ");
-  return details
-    ? `${prefix}: ${details}. Cached Google data may be stale.`
-    : `${prefix}. Cached Google data may be stale.`;
-}
-
-function syncErrorLabel(error: string | null): string | null {
-  switch (error) {
-    case "calendar-error":
-      return "Calendar sync failed";
-    case "calendar-item-error":
-      return "Some calendar items could not be saved";
-    case "email-error":
-      return "Email sync failed";
-    case "email-message-error":
-      return "Some email messages could not be saved";
-    case "no-active-connection":
-      return "No active Google connection";
-    case null:
-      return null;
-    default:
-      return error.replace(/-/g, " ");
-  }
-}
-
-function syncCountsLabel(counts: ConnectorSyncCounts | null): string | null {
-  if (!counts) return null;
-  const parts: string[] = [];
-  if (counts.emailFailures) {
-    parts.push(
-      `${counts.emailFailures} email message${counts.emailFailures === 1 ? "" : "s"} failed`
-    );
-  }
-  if (counts.truncated) parts.push("message cap reached");
-  return parts.length > 0 ? parts.join(", ") : null;
 }

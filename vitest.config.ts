@@ -345,6 +345,10 @@ export default defineConfig({
         find: "@moss/people",
         replacement: fileURLToPath(new URL("./packages/people/src/index.ts", import.meta.url))
       },
+      {
+        find: "@moss/scratchpad",
+        replacement: fileURLToPath(new URL("./packages/scratchpad/src/index.ts", import.meta.url))
+      },
       // Subpath export first, same pairing requirement as the other subpath/bare pairs above.
       {
         find: "@moss/workflows/routes",
@@ -363,6 +367,7 @@ export default defineConfig({
       "tests/**/*.test.tsx",
       "packages/people/src/__tests__/**/*.test.ts",
       "packages/db/src/__tests__/**/*.test.ts",
+      "packages/scratchpad/src/__tests__/**/*.test.ts",
       "packages/chat/src/live/*.test.ts",
       "packages/chat/src/*.test.ts",
       "packages/calendar/src/*.test.ts",

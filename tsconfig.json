@@ -67,6 +67,7 @@
       "@moss/weather": ["packages/weather/src/index.ts"],
       "@moss/wellness": ["packages/wellness/src/index.ts"],
       "@moss/notes": ["packages/notes/src/index.ts"],
+      "@moss/scratchpad": ["packages/scratchpad/src/index.ts"],
       "@moss/proactive-monitoring": ["packages/proactive-monitoring/src/index.ts"],
       "@moss/commitments": ["packages/commitments/src/index.ts"],
       "@moss/commitments/extractor": ["packages/commitments/src/extractor.ts"],

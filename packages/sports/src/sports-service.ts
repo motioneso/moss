@@ -2,7 +2,6 @@ import type { DatasetClient } from "@moss/datasets";
 import type { AccessContext, DataContextDb } from "@moss/db";
 import {
   localDay,
-  type CreateSportsFollowRequest,
   type FollowedLeagueCard,
   type FollowedLeagueRef,
   type FollowedTeamCard,
@@ -25,7 +24,12 @@ import {
 } from "@moss/shared";
 
 import { SPORTS_CATALOG, catalogEntry, competitionLogoUrl } from "./source/catalog.js";
-import { isWrittenArticle, selectFeature } from "./news-ranking.js";
+import {
+  followedTeamIndex,
+  isFollowedStoryTeam,
+  isWrittenArticle,
+  selectFeature
+} from "./news-ranking.js";
 import {
   canonicalStoryUrl,
   composeSportsNewsGroups,
@@ -71,6 +75,13 @@ import type {
   SportsEspnCoverageState
 } from "./source/espn-coverage-repository.js";
 import { sportsNewsCoverageAllows, sportsNewsScopeForFollow } from "./source/scope.js";
+import type { CreateSportsFollowInput } from "./repository.js";
+import {
+  matchTargetFor,
+  resolveFollowIdentity,
+  type ResolvedTeamIdentity,
+  type TeamMatchTarget
+} from "./follow-identity.js";
 
 /** A compact, non-sensitive today-fact for the daily briefing. */
 export type FollowedFact = { competitionKey: string; text: string };
@@ -91,7 +102,13 @@ export interface SportsFollowsReader {
 /** The subset of `SportsFollowsRepository` the service needs to follow/unfollow (injectable for
  *  tests). The routes' CRUD handlers and the assistant tools share this same write surface. */
 export interface SportsFollowsWriter extends SportsFollowsReader {
-  create(scopedDb: DataContextDb, input: CreateSportsFollowRequest): Promise<SportsFollowDto>;
+  create(scopedDb: DataContextDb, input: CreateSportsFollowInput): Promise<SportsFollowDto>;
+  setSourceTeamId(
+    scopedDb: DataContextDb,
+    id: string,
+    sourceTeamId: string,
+    teamKey: string | null
+  ): Promise<SportsFollowDto | undefined>;
   remove(scopedDb: DataContextDb, id: string): Promise<boolean>;
 }
 
@@ -251,6 +268,9 @@ function shownStoryRefs(overview: SportsOverviewResponse): ReadonlySet<string> {
 
 interface FollowedTeamBundle {
   readonly follow: ResolvedFollow;
+  readonly identity: ResolvedTeamIdentity;
+  /** The identity to match games, schedules and standings rows against — see `matchTargetFor`. */
+  readonly matchKey: TeamMatchTarget;
   readonly sourceTeamId: string | null;
   readonly scoreboard: readonly GameSummary[];
   readonly standings: StandingsTable["sections"];
@@ -450,6 +470,47 @@ export class SportsService {
     const headlinesByComp = new Map(perComp.map((p) => [p.key, p.headlines]));
     const headlinesBySport = new Map<SportsSportKey, SourceHeadline[]>();
     const teamsByComp = new Map(perComp.map((p) => [p.key, p.teams]));
+
+    // Resolve each followed team's saved key against today's team list exactly once, here, before
+    // any game, standings or news matching happens (review finding S1). A follow whose saved short
+    // name is now shared by more than one team, with no permanent number on file to break the tie,
+    // is kept out of every match below rather than guessed at — it is reported separately so the
+    // person can be asked which team they meant, instead of the page silently showing the wrong one.
+    const identityByFollowId = new Map<string, ResolvedTeamIdentity>(
+      followedTeams.map((follow) => [
+        follow.id,
+        resolveFollowIdentity(follow, teamsByComp.get(follow.competitionKey) ?? [])
+      ])
+    );
+    // A follow with no permanent id is left out of every match on this page, whether or not the
+    // team list loaded. There is nothing to work out from its saved short name that would not be a
+    // guess, and every guess we have tried has been caught attaching a score to the wrong team.
+    const activeFollowedTeams = followedTeams.filter(
+      (follow) => !identityByFollowId.get(follow.id)!.needsChoice
+    );
+    const ambiguousFollows: SportsOverviewResponse["ambiguousFollows"] = followedTeams
+      .filter((follow) => identityByFollowId.get(follow.id)!.needsChoice)
+      .map((follow) => {
+        const identity = identityByFollowId.get(follow.id)!;
+        return {
+          followId: follow.id,
+          competitionKey: follow.competitionKey,
+          savedTeamKey: follow.teamKey,
+          candidates: identity.candidates.flatMap((team) =>
+            team.sourceTeamId === null
+              ? []
+              : [{ sourceTeamId: team.sourceTeamId, name: team.name, crestUrl: team.crestUrl }]
+          ),
+          teamListLoaded: identity.teamListLoaded
+        };
+      });
+    // A headline is tagged with the key today's team list gave the team its provider id names
+    // (resolveEspnHeadlineTeamKeys), so news matching uses that key. A followed team the current
+    // list does not contain has no key and simply tags nothing — it never borrows another team's.
+    const headlineFollowedTeams: ResolvedFollow[] = activeFollowedTeams.flatMap((follow) => {
+      const catalogKey = identityByFollowId.get(follow.id)!.catalogKey;
+      return catalogKey === null ? [] : [{ ...follow, teamKey: catalogKey }];
+    });
     for (const headline of custom.headlines) {
       if (headline.competitionKey === null) {
         const existing = headlinesBySport.get(headline.sportKey) ?? [];
@@ -464,15 +525,14 @@ export class SportsService {
     // data is stashed as a bundle rather than piped straight into a card — a merged card (#855)
     // needs to pool a whole group's bundles, not just one.
     const bundleList: FollowedTeamBundle[] = await Promise.all(
-      followedTeams.map(async (follow) => {
-        // Resolve the provider's numeric team id from the catalog: ESPN's soccer schedule
-        // endpoint returns an empty payload for abbreviation slugs, which silently zeroed
-        // form/next-match on every soccer card (live feedback mrawhx9c). Null falls back to
-        // the abbreviation inside the source, which the US leagues accept.
-        const sourceTeamId =
-          (teamsByComp.get(follow.competitionKey) ?? []).find(
-            (team) => team.teamKey === follow.teamKey
-          )?.sourceTeamId ?? null;
+      activeFollowedTeams.map(async (follow) => {
+        // The permanent number resolved above, not a fresh catalog lookup: looking `follow.teamKey`
+        // up again here would repeat the exact mistake review finding S1 was about — a saved short
+        // name that is no longer unique matching whichever team happens to hold it in this list.
+        const identity = identityByFollowId.get(follow.id)!;
+        const sourceTeamId = identity.sourceTeamId;
+        // Non-null: ambiguous follows were filtered out of activeFollowedTeams above.
+        const matchKey = matchTargetFor(identity)!;
         const teamScope = sportsNewsScopeForFollow(follow);
         const includeEspnTeamFeed =
           teamScope !== null && sportsNewsCoverageAllows(espnCoverage, follows, teamScope);
@@ -504,6 +564,8 @@ export class SportsService {
         }
         return {
           follow,
+          identity,
+          matchKey,
           sourceTeamId,
           scoreboard: scoreboardByComp.get(follow.competitionKey) ?? [],
           standings: standingsByComp.get(follow.competitionKey)?.sections ?? [],
@@ -517,7 +579,7 @@ export class SportsService {
     // on the scoreboards and the follows, never on top stories, so pulling their teams' feeds now
     // means the relevance filter sees every headline the page could show and runs exactly once.
     // Filtering after the hero was known would cost a second model call on every page load.
-    const gamedayGames = this.gamedayGames(followedTeams, scoreboardByComp, this.now());
+    const gamedayGames = this.gamedayGames(bundleList, scoreboardByComp, this.now());
 
     // On a gameday, the league-wide news feed rarely covers the featured matchup itself, so
     // the scorebar's photo+blurb band (findFeaturedStory on the client) usually comes up
@@ -534,7 +596,8 @@ export class SportsService {
       // news endpoint 400s on a soccer abbreviation slug (EspnHeadlinesParams.sourceTeamId),
       // which would leave a soccer gameday hero with no matchup story at all.
       const teamFeeds = await Promise.all(
-        [game.home.teamKey, game.away.teamKey].map((teamKey) => {
+        [game.home, game.away].map((side) => {
+          const teamKey = side.teamKey;
           const includeEspnTeamFeed =
             heroCompetition !== undefined &&
             sportsNewsCoverageAllows(espnCoverage, follows, {
@@ -549,8 +612,13 @@ export class SportsService {
                 {
                   competitionKey: game.competitionKey,
                   teamKey,
+                  // Prefer the numeric id already on the game side itself — it does not depend
+                  // on finding this exact team by teamKey in the catalog, which can miss for a
+                  // team whose abbreviation collided with another team's (review finding S1).
                   sourceTeamId:
-                    heroTeams.find((team) => team.teamKey === teamKey)?.sourceTeamId ?? null
+                    side.sourceTeamId ??
+                    heroTeams.find((team) => team.teamKey === teamKey)?.sourceTeamId ??
+                    null
                 },
                 [],
                 state
@@ -578,14 +646,17 @@ export class SportsService {
     const relevance = await this.applyStoryRelevance(
       accessContext,
       { byComp: headlinesByComp, bySport: headlinesBySport, bundles: bundleList },
-      followedTeams,
+      headlineFollowedTeams,
       state
     );
 
     const bundles = new Map(bundleList.map((b) => [b.follow.id, b]));
     // Group by canonical club key (espnSport:sourceTeamId) — spec's dedupe rule (#855). A follow
     // whose sourceTeamId didn't resolve becomes its own singleton group (never merged by name).
-    const groups = groupFollowedTeams(followedTeams, (f) => bundles.get(f.id)!.sourceTeamId);
+    const groups = groupFollowedTeams(
+      activeFollowedTeams,
+      (f) => bundles.get(f.id)!.identity.sourceTeamId
+    );
     const cards: FollowedTeamCard[] = groups.map((group) =>
       this.buildGroupedCard(group, bundles, this.now(), refFor)
     );
@@ -598,7 +669,11 @@ export class SportsService {
       headlinesByComp,
       competitionKeys
     );
-    const rankedTopStories = rankTopStories(rankingNewsGroups, followedTeams, relevance.liftFor);
+    const rankedTopStories = rankTopStories(
+      rankingNewsGroups,
+      headlineFollowedTeams,
+      relevance.liftFor
+    );
 
     // The hero must not echo what the followed strip already shows (mrb8ahf7). rankTopStories'
     // first tier IS followed-team stories — the same pool toTeamStories draws each card's ≤3
@@ -664,7 +739,8 @@ export class SportsService {
       ...group,
       headlines: group.headlines.map((headline) => toPublicHeadline(headline, refFor))
     }));
-    const followedPairs = new Set(followedTeams.map((f) => `${f.competitionKey}:${f.teamKey}`));
+    // News is tagged with today's team-list key, so the index is built from those keys.
+    const followedPairs = followedTeamIndex(headlineFollowedTeams);
     const feature = selectFeature(publicNewsGroups, followedPairs);
     const internalFeature = feature
       ? newsGroups
@@ -723,12 +799,24 @@ export class SportsService {
       topStories: topStories.map((headline) => toPublicHeadline(headline, refFor)),
       leagueNews: newsGroupsWithBody,
       standings,
-      followedTeams: followedTeams.map((f) => ({
-        competitionKey: f.competitionKey,
-        teamKey: f.teamKey
-      })),
+      // Only a follow whose team was found in today's list by its permanent id is sent here. One
+      // that was not found has no key today, and sending it without one would invite the browser
+      // to fall back to a short name.
+      followedTeams: activeFollowedTeams.flatMap((f) => {
+        const identity = identityByFollowId.get(f.id)!;
+        return identity.catalogKey === null
+          ? []
+          : [
+              {
+                competitionKey: f.competitionKey,
+                teamKey: identity.catalogKey,
+                sourceTeamId: identity.sourceTeamId
+              }
+            ];
+      }),
       followedLeagues,
       followedLeagueCards,
+      ambiguousFollows,
       degraded: state.degraded
     };
 
@@ -799,6 +887,7 @@ export class SportsService {
       const today = this.today();
       const state: DegradeState = { degraded: false };
       const boards = new Map<string, GameSummary[]>();
+      const teamLists = new Map<string, readonly SourceTeamRef[]>();
       const facts: FollowedFact[] = [];
       for (const follow of follows) {
         const comp = follow.competitionKey;
@@ -815,8 +904,19 @@ export class SportsService {
         }
         const games = boards.get(comp) ?? [];
         if (follow.teamKey) {
-          const game = findTeamGame(games, follow.teamKey);
-          if (game) facts.push({ competitionKey: comp, text: teamFact(game, follow.teamKey) });
+          // The briefing resolves the saved follow against today's team list exactly like the
+          // page does (review finding S1). Reading the saved short name straight off the board,
+          // as this used to, told someone following Pacific Lutheran about Pacific Tigers the
+          // moment both schools answered "PAC". A follow that cannot be told apart is skipped:
+          // the briefing says nothing rather than saying the wrong thing.
+          if (!teamLists.has(comp)) {
+            teamLists.set(comp, await this.teamsFor(comp, state));
+          }
+          const identity = resolveFollowIdentity(follow, teamLists.get(comp) ?? []);
+          const target = matchTargetFor(identity);
+          if (target === null) continue;
+          const game = findTeamGame(games, target);
+          if (game) facts.push({ competitionKey: comp, text: teamFact(game, target) });
         } else if (games.length > 0) {
           const label = catalogEntry(comp)?.label ?? comp;
           facts.push({
@@ -848,19 +948,37 @@ export class SportsService {
     if (!catalogEntry(input.competitionKey)) {
       return { ok: false, error: `Unknown competition: ${input.competitionKey}` };
     }
-    const teamKey = input.teamKey ?? null;
-    if (teamKey !== null) {
-      // `getLeagueTeams` fails soft (empty list + degraded) on an ESPN outage rather than
-      // throwing, so an outage rejects every teamKey. That is deliberate fail-CLOSED behavior for
-      // an auto-run write tool — do not add a degraded-bypass.
-      const { teams } = await this.getLeagueTeams(input.competitionKey);
-      if (!teams.some((team) => team.teamKey === teamKey)) {
-        return { ok: false, error: `Unknown team: ${teamKey}` };
-      }
+    const requestedKey = input.teamKey ?? null;
+    if (requestedKey === null) {
+      const follow = await this.repository.create(scopedDb, {
+        competitionKey: input.competitionKey,
+        teamKey: null,
+        sourceTeamId: null
+      });
+      return { ok: true, follow };
+    }
+    // `getLeagueTeams` fails soft (empty list + degraded) on an ESPN outage rather than
+    // throwing, so an outage rejects every teamKey. That is deliberate fail-CLOSED behavior for
+    // an auto-run write tool — do not add a degraded-bypass.
+    const teams = await this.teamsFor(input.competitionKey, { degraded: false });
+    const team = teams.find((candidate) => candidate.teamKey === requestedKey);
+    if (!team) return { ok: false, error: `Unknown team: ${requestedKey}` };
+    // A follow is only worth saving if it can be identified later, and the provider's permanent
+    // team id is the only thing that identifies it. Without one, refuse — falling back to the
+    // short name is exactly the guess that four review rounds caught attaching a follow to the
+    // wrong team.
+    if (team.sourceTeamId === null) {
+      return {
+        ok: false,
+        error: `Sports could not get a permanent id for ${team.name} from the provider, so this team cannot be followed yet. Try again later.`
+      };
     }
     const follow = await this.repository.create(scopedDb, {
       competitionKey: input.competitionKey,
-      teamKey
+      // Display only: the short name the team answers to today, or its list key when the provider
+      // gave no short name.
+      teamKey: team.abbreviation ?? team.teamKey,
+      sourceTeamId: team.sourceTeamId
     });
     return { ok: true, follow };
   }
@@ -875,14 +993,63 @@ export class SportsService {
     if (!catalogEntry(input.competitionKey)) {
       return { ok: false, error: `Unknown competition: ${input.competitionKey}` };
     }
-    const teamKey = input.teamKey ?? null;
+    const requestedKey = input.teamKey ?? null;
     const existing = await this.repository.list(scopedDb);
-    const match = existing.find(
-      (f) => f.competitionKey === input.competitionKey && f.teamKey === teamKey
-    );
+    let match;
+    if (requestedKey === null) {
+      match = existing.find((f) => f.competitionKey === input.competitionKey && f.teamKey === null);
+    } else {
+      // Unfollow by the same identity everything else uses: look the requested catalog key up in
+      // today's team list, take its permanent id, and remove the row holding that id. A short-name
+      // comparison here could unfollow the other team sharing the name.
+      const teams = await this.teamsFor(input.competitionKey, { degraded: false });
+      const sourceTeamId =
+        teams.find((candidate) => candidate.teamKey === requestedKey)?.sourceTeamId ?? null;
+      match =
+        sourceTeamId === null
+          ? undefined
+          : existing.find(
+              (f) => f.competitionKey === input.competitionKey && f.sourceTeamId === sourceTeamId
+            );
+    }
     if (!match) return { ok: true, removed: false };
     const removed = await this.repository.remove(scopedDb, match.id);
     return { ok: true, removed };
+  }
+
+  /** Answers "which team did you mean?" for one older saved follow. The chosen team must be in
+   *  today's list for that competition, so the id written here is always a real provider id; the
+   *  saved short name is refreshed at the same time so the display name stops being stale.
+   *  Refuses while the team list is unavailable rather than writing an unchecked id. */
+  async resolveFollowTeam(
+    scopedDb: DataContextDb,
+    input: { followId: string; sourceTeamId: string }
+  ): Promise<{ ok: true; follow: SportsFollowDto } | { ok: false; status: number; error: string }> {
+    const follows = await this.repository.list(scopedDb);
+    const follow = follows.find((row) => row.id === input.followId);
+    if (!follow) return { ok: false, status: 404, error: "That saved team no longer exists." };
+    if (follow.teamKey === null) {
+      return { ok: false, status: 400, error: "That follow is a whole competition, not a team." };
+    }
+    const teams = await this.teamsFor(follow.competitionKey, { degraded: false });
+    if (teams.length === 0) {
+      return {
+        ok: false,
+        status: 400,
+        error:
+          "The team list is unavailable right now, so this choice cannot be checked. Try again later."
+      };
+    }
+    const team = teams.find((candidate) => candidate.sourceTeamId === input.sourceTeamId);
+    if (!team) return { ok: false, status: 400, error: "That team is not in this competition." };
+    const updated = await this.repository.setSourceTeamId(
+      scopedDb,
+      follow.id,
+      input.sourceTeamId,
+      team.abbreviation ?? team.teamKey
+    );
+    if (!updated) return { ok: false, status: 404, error: "That saved team no longer exists." };
+    return { ok: true, follow: updated };
   }
 
   // --- internals ----------------------------------------------------------
@@ -939,9 +1106,7 @@ export class SportsService {
     const empty = { details: new Map<string, StoryDetail>(), liftFor: () => 0 };
     if (!policy || !refFor) return empty;
 
-    const followedPairs = new Set(
-      followedTeams.map((follow) => `${follow.competitionKey}:${follow.teamKey}`)
-    );
+    const followedPairs = followedTeamIndex(followedTeams);
     const refByUrl = new Map<string, string>();
     const details = new Map<string, StoryDetail>();
 
@@ -970,8 +1135,9 @@ export class SportsService {
         const teamRef =
           competitionKey === null
             ? null
-            : (headline.teamKeys.find((key) => followedPairs.has(`${competitionKey}:${key}`)) ??
-              null);
+            : (headline.teamKeys.find((key) =>
+                isFollowedStoryTeam(followedPairs, competitionKey, key)
+              ) ?? null);
         // A clip or a short blurb is not an opinion piece. A written article MIGHT be, and this
         // check cannot tell — so the flag is left off rather than guessed. Never invent evidence.
         const written = isWrittenArticle(headline);
@@ -1104,23 +1270,26 @@ export class SportsService {
    * relevance filter runs. Filtering twice would mean two model calls per page load.
    */
   private gamedayGames(
-    followedTeams: readonly ResolvedFollow[],
+    bundles: readonly FollowedTeamBundle[],
     scoreboardByComp: Map<string, GameSummary[]>,
     now: Date
   ): GamedayGame[] {
     // Every followed game in the window becomes a hero slide (#1386), not just the best one.
     const inWindow: GamedayGame[] = [];
     const seenGameIds = new Set<string>();
-    for (const follow of followedTeams) {
+    for (const bundle of bundles) {
+      const follow = bundle.follow;
       // currentTeamGame (not findTeamGame): the two-day scoreboard also holds last night's
       // final and, past Eastern midnight, tomorrow's matchup — neither belongs in the hero.
+      // Matched by permanent number (bundle.matchKey), never the saved short name directly — see
+      // follow-identity.ts — so a shared short name can't attach this slide to the wrong team.
       const game = currentTeamGame(
         scoreboardByComp.get(follow.competitionKey) ?? [],
-        follow.teamKey,
+        bundle.matchKey,
         now
       );
       if (!game) continue;
-      const teamSide = sideFor(game, follow.teamKey);
+      const teamSide = sideFor(game, bundle.matchKey);
       if (!teamSide) continue;
       // The gameday masthead+scorebar only leads the page from T−15min through the final
       // whistle; a morning "Today: X at Y" all day pushes real news below the fold (live
@@ -1152,7 +1321,16 @@ export class SportsService {
     topStories: readonly SourceHeadline[],
     refFor: StoryRefFor | undefined
   ): OverviewHero {
-    if (gamedayGames.length > 0) return { mode: "gameday", games: gamedayGames };
+    if (gamedayGames.length > 0) {
+      // The provider's permanent team number now rides along on every game side in the response
+      // schema, the hero included: it is the only thing that keeps the browser's "this is your
+      // team" marking on the right team when two teams share a short name (review finding S1).
+      // The hero is the one response field validated against a `oneOf` schema, and
+      // fast-json-stringify's `oneOf` matcher rejects an object carrying a property the schema
+      // does not list — so this field staying listed in `gameSideSchema` is load-bearing, not
+      // cosmetic. The serialization guard in tests/unit/sports-routes.test.ts holds that line.
+      return { mode: "gameday", games: [...gamedayGames] };
+    }
     const top = topStories[0];
     return { mode: "story", headline: top ? toPublicHeadline(top, refFor) : null };
   }
@@ -1174,26 +1352,24 @@ export class SportsService {
     const competitionLabel = catalogEntry(comp)?.label ?? comp;
 
     const todayGame = currentGameAcrossGroup(
-      orderedBundles.map((b) => ({ scoreboard: b.scoreboard, teamKey: b.follow.teamKey })),
+      orderedBundles.map((b) => ({ scoreboard: b.scoreboard, teamKey: b.matchKey })),
       now
     );
     const todaySide = todayGame ? sideFor(todayGame.game, todayGame.teamKey) : undefined;
-    const catalogTeamFor = (b: FollowedTeamBundle) =>
-      b.teams.find((t) => t.teamKey === b.follow.teamKey);
+    // The resolved identity already carries the catalog team (see follow-identity.ts) — reusing it
+    // here means a shared short name can never pull in a different team's catalog entry.
+    const catalogTeamFor = (b: FollowedTeamBundle) => b.identity.team ?? undefined;
     // D1: today side → catalog → schedule → last-resort uppercase key, same precedence as the
     // old single-team buildCard, now searched primary-first across the group's bundles.
     const name =
       todaySide?.name ??
       firstDefined(orderedBundles, (b) => catalogTeamFor(b)?.name) ??
-      firstDefined(orderedBundles, (b) => scheduleSideFor(b.schedule, b.follow.teamKey)?.name) ??
+      firstDefined(orderedBundles, (b) => scheduleSideFor(b.schedule, b.matchKey)?.name) ??
       group.primary.teamKey.toUpperCase();
     const crestUrl =
       todaySide?.crestUrl ??
       firstDefined(orderedBundles, (b) => catalogTeamFor(b)?.crestUrl) ??
-      firstDefined(
-        orderedBundles,
-        (b) => scheduleSideFor(b.schedule, b.follow.teamKey)?.crestUrl
-      ) ??
+      firstDefined(orderedBundles, (b) => scheduleSideFor(b.schedule, b.matchKey)?.crestUrl) ??
       null;
 
     let status: FollowedTeamCard["status"];
@@ -1214,18 +1390,20 @@ export class SportsService {
       primary = "";
     }
 
-    const resolvedGames = orderedBundles.flatMap((b) =>
-      toResolvedGames(b.schedule, b.follow.teamKey)
-    );
+    const resolvedGames = orderedBundles.flatMap((b) => toResolvedGames(b.schedule, b.matchKey));
+    // Headlines are tagged with today's team-list key, not the permanent number — see
+    // follow-identity.ts — so this must use the resolved catalog key, not b.matchKey.
     const storyPool = orderedBundles.flatMap((b) =>
-      filterTeamHeadlines(b.headlines, b.follow.teamKey)
+      b.identity.catalogKey === null ? [] : filterTeamHeadlines(b.headlines, b.identity.catalogKey)
     );
     const competitionLabels = orderedBundles.map(
       (b) => catalogEntry(b.follow.competitionKey)?.label ?? b.follow.competitionKey
     );
 
     return {
-      teamKey: group.primary.teamKey,
+      // Display/react-key only. Falls back to the saved short name for a followed team today's
+      // list does not contain; nothing is matched on this field.
+      teamKey: primaryBundle.identity.catalogKey ?? group.primary.teamKey,
       competitionKey: comp,
       competitionLabel,
       name,
@@ -1239,7 +1417,7 @@ export class SportsService {
       // standing comes ONLY from the primary competition (spec Design) — a Champions League
       // group table would be meaningless as "the" standing for a club whose default identity is
       // its domestic league position.
-      standing: standingLine(primaryBundle.standings, group.primary.teamKey),
+      standing: standingLine(primaryBundle.standings, primaryBundle.matchKey),
       nextMatch: nextMatchAcross(resolvedGames, now),
       // Crest-led result for the featured strip's score slot (Ben 2026-07-08 /sports #2). Only a
       // finished today game qualifies.

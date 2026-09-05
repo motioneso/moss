@@ -346,6 +346,11 @@ import {
   registerNotesJobWorkers
 } from "@moss/notes";
 import {
+  registerScratchpadRoutes,
+  scratchpadModuleManifest,
+  scratchpadModuleSqlMigrationDirectory
+} from "@moss/scratchpad";
+import {
   FeedbackTargetVerifierRegistry,
   buildStoryTargetContext,
   createStoryFeedbackTargetVerifier,
@@ -735,12 +740,13 @@ function buildNewsDiscoveryPorts(
         robots: newsRobotsGate,
         rateLimiter: newsHostRateLimiter
       }),
-    image: (url: string, maxBytes: number) =>
+    image: (url: string, maxBytes: number, allowedHosts?: readonly string[]) =>
       fetchWebResourceBytes(url, {
         requireHttps: true,
         robots: newsRobotsGate,
         rateLimiter: newsHostRateLimiter,
-        maxBytes
+        maxBytes,
+        ...(allowedHosts ? { allowedHosts } : {})
       }),
     search: {
       async search(
@@ -2284,6 +2290,16 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             })
           );
         }
+      })
+  },
+  {
+    manifest: scratchpadModuleManifest,
+    sqlMigrationDirectories: [scratchpadModuleSqlMigrationDirectory],
+    queueDefinitions: [],
+    registerRoutes: (server, deps) =>
+      registerScratchpadRoutes(server, {
+        dataContext: deps.dataContext,
+        resolveAccessContext: deps.resolveAccessContext
       })
   },
   {

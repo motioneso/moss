@@ -11,22 +11,29 @@ import { errorResponseSchema } from "./schema-fragments.js";
 const teamRefSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["teamKey", "competitionKey", "name", "shortName", "crestUrl"],
+  // `sourceTeamId` must be listed: fast-json-stringify drops any key the schema does not name, and
+  // this is the only value the browser can match a saved follow on (see TeamRef).
+  required: ["teamKey", "competitionKey", "name", "shortName", "crestUrl", "sourceTeamId"],
   properties: {
     teamKey: { type: "string" },
     competitionKey: { type: "string" },
     name: { type: "string" },
     shortName: { type: "string" },
-    crestUrl: { type: ["string", "null"] }
+    crestUrl: { type: ["string", "null"] },
+    sourceTeamId: { type: ["string", "null"] }
   }
 } as const;
 
 const gameSideSchema = {
   type: "object",
   additionalProperties: false,
+  // `sourceTeamId` is NOT in `required`: an older cached game predates the field. It must stay in
+  // `properties` regardless — fast-json-stringify drops any key the schema does not list, which
+  // is how the browser lost its only safe way to tell two teams with the same short name apart.
   required: ["teamKey", "name", "shortName", "crestUrl", "score", "record", "winner", "scorers"],
   properties: {
     teamKey: { type: "string" },
+    sourceTeamId: { type: ["string", "null"] },
     name: { type: "string" },
     shortName: { type: "string" },
     crestUrl: { type: ["string", "null"] },
@@ -55,6 +62,8 @@ const gameSummarySchema = {
 const standingsRowSchema = {
   type: "object",
   additionalProperties: false,
+  // See gameSideSchema: same field, same reason, and likewise kept out of `required` for older
+  // cached standings tables.
   required: [
     "teamKey",
     "name",
@@ -70,6 +79,7 @@ const standingsRowSchema = {
   ],
   properties: {
     teamKey: { type: "string" },
+    sourceTeamId: { type: ["string", "null"] },
     name: { type: "string" },
     rank: { type: "number" },
     points: { type: ["number", "null"] },
@@ -178,11 +188,12 @@ const competitionRefSchema = {
 const followDtoSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["id", "competitionKey", "teamKey", "createdAt"],
+  required: ["id", "competitionKey", "teamKey", "sourceTeamId", "createdAt"],
   properties: {
     id: { type: "string" },
     competitionKey: { type: "string" },
     teamKey: { type: ["string", "null"] },
+    sourceTeamId: { type: ["string", "null"] },
     createdAt: { type: "string" }
   }
 } as const;
@@ -484,6 +495,7 @@ export const sportsOverviewResponseSchema = {
         "leagueNews",
         "standings",
         "followedTeams",
+        "ambiguousFollows",
         "followedLeagues",
         "followedLeagueCards",
         "degraded"
@@ -503,7 +515,43 @@ export const sportsOverviewResponseSchema = {
             required: ["competitionKey", "teamKey"],
             properties: {
               competitionKey: { type: "string" },
-              teamKey: { type: "string" }
+              teamKey: { type: "string" },
+              sourceTeamId: { type: ["string", "null"] }
+            }
+          }
+        },
+        // Saved follows with no permanent team id on them. The page asks the person which team
+        // they meant instead of guessing a score for them.
+        ambiguousFollows: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: [
+              "followId",
+              "competitionKey",
+              "savedTeamKey",
+              "candidates",
+              "teamListLoaded"
+            ],
+            properties: {
+              followId: { type: "string" },
+              competitionKey: { type: "string" },
+              savedTeamKey: { type: "string" },
+              candidates: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["sourceTeamId", "name", "crestUrl"],
+                  properties: {
+                    sourceTeamId: { type: "string" },
+                    name: { type: "string" },
+                    crestUrl: { type: ["string", "null"] }
+                  }
+                }
+              },
+              teamListLoaded: { type: "boolean" }
             }
           }
         },
@@ -651,6 +699,43 @@ export const createSportsFollowResponseSchema = {
     },
     400: errorResponseSchema,
     401: errorResponseSchema
+  }
+} as const;
+
+// POST /api/sports/follows/:id/team — the answer to "which team did you mean?". Writes the
+// permanent id onto one older saved follow. This is the only route that turns an inactive follow
+// back into a working one.
+export const resolveSportsFollowTeamRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sourceTeamId"],
+  properties: {
+    sourceTeamId: { type: "string", minLength: 1, maxLength: 100 }
+  }
+} as const;
+
+export const resolveSportsFollowTeamResponseSchema = {
+  params: {
+    type: "object",
+    additionalProperties: false,
+    required: ["id"],
+    properties: {
+      id: { type: "string", format: "uuid" }
+    }
+  },
+  body: resolveSportsFollowTeamRequestSchema,
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["follow"],
+      properties: {
+        follow: followDtoSchema
+      }
+    },
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema
   }
 } as const;
 

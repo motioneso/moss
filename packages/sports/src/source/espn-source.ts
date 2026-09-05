@@ -229,6 +229,11 @@ function toSide(
   const score = scoreValue === undefined || scoreValue === "" ? null : Number(scoreValue);
   return {
     teamKey,
+    // ESPN's own numeric team id, kept alongside teamKey. A scoreboard/schedule fetch only sees
+    // one competition at a time, so it can't tell a shared-abbreviation team apart the way
+    // listTeams can (see the collision check there) — this lets matching code fall back to the
+    // id when two teams share an abbreviation (review finding S1, 2026-09-04).
+    sourceTeamId: team?.id ?? null,
     name: team?.displayName ?? teamKey,
     shortName: team?.shortDisplayName ?? team?.displayName ?? teamKey,
     // `logo` on scoreboard payloads, `logos[0].href` on schedule payloads — without the
@@ -312,6 +317,8 @@ function toStandingsRow(entry: EspnStandingsEntry, index: number): StandingsRow 
   const played = wins + losses + (draws ?? 0);
   return {
     teamKey,
+    // See the matching field on GameSide (toSide, above) for why this rides alongside teamKey.
+    sourceTeamId: entry.team?.id ?? null,
     name: entry.team?.displayName ?? teamKey,
     // US record leagues at ?level=3 carry NO "rank" stat on division entries (verified live
     // 2026-07-07) but arrive standings-sorted, so the position in the section IS the rank.
@@ -403,17 +410,51 @@ async function listTeams(fetchFn: typeof fetch, params: EspnTeamsParams): Promis
     }[];
   };
   const teams = data.sports?.[0]?.leagues?.[0]?.teams ?? [];
-  return teams.map(({ team }) => {
-    const teamKey = (team?.abbreviation ?? team?.id ?? "").toLowerCase();
+  // The college catalog added for #2210 is large enough that the same short abbreviation gets
+  // reused by two different schools within one competition (e.g. two teams both answering "PAC"
+  // in NCAA baseball, review finding S1, 2026-09-04). A follow saved under a shared abbreviation
+  // is a coin flip on which team a person actually gets, so any abbreviation that repeats in this
+  // list is not a safe identity. Those teams get a key that joins the short name to ESPN's own
+  // numeric id ("pac.413"), NOT the bare id: a bare id would sit in the same space as every other
+  // team's short name, and ESPN really does hand out abbreviations that are all digits, so team
+  // 413's key could silently become another team's name. The dot is part of the accepted key
+  // shape already (competition keys like "eng.1"), so this passes the follow tool's input rules.
+  // Every other, non-colliding team keeps the exact same key it has always had, so existing saved
+  // follows for those teams are unaffected.
+  const abbreviationCounts = new Map<string, number>();
+  for (const { team } of teams) {
+    const abbreviation = team?.abbreviation?.toLowerCase();
+    if (!abbreviation) continue;
+    abbreviationCounts.set(abbreviation, (abbreviationCounts.get(abbreviation) ?? 0) + 1);
+  }
+  const refs = teams.map(({ team }) => {
+    const abbreviation = team?.abbreviation?.toLowerCase();
+    const id = (team?.id ?? "").toLowerCase();
+    const isAmbiguous =
+      abbreviation !== undefined && (abbreviationCounts.get(abbreviation) ?? 0) > 1;
+    const teamKey =
+      isAmbiguous && id !== "" ? `${abbreviation}.${id}` : (abbreviation ?? id ?? "").toLowerCase();
     return {
       teamKey,
       competitionKey,
       name: team?.displayName ?? teamKey,
       shortName: team?.shortDisplayName ?? team?.displayName ?? teamKey,
       crestUrl: team?.logos?.[0]?.href ?? null,
-      sourceTeamId: team?.id ?? null
+      sourceTeamId: team?.id ?? null,
+      abbreviation: abbreviation ?? null
     } satisfies SourceTeamRef;
   });
+  // Last-resort guard: two teams must never leave here holding the same key, whatever ESPN sent
+  // (an abbreviation that already contains a dot, two teams with no id at all). A duplicate key
+  // is the exact failure this whole change exists to prevent, so break the tie rather than trust
+  // the shapes above.
+  const keyCounts = new Map<string, number>();
+  for (const ref of refs) keyCounts.set(ref.teamKey, (keyCounts.get(ref.teamKey) ?? 0) + 1);
+  return refs.map((ref, index) =>
+    (keyCounts.get(ref.teamKey) ?? 0) > 1
+      ? { ...ref, teamKey: `${ref.teamKey}.${(ref.sourceTeamId ?? String(index)).toLowerCase()}` }
+      : ref
+  );
 }
 
 async function getScoreboard(

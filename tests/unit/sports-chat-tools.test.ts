@@ -8,11 +8,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { dataContextBrand, type DataContextDb } from "@moss/db";
 import { VaultContextRunner } from "@moss/vault";
-import type {
-  CreateSportsFollowRequest,
-  SportsCustomSourceDto,
-  SportsFollowDto
-} from "@moss/shared";
+import type { SportsCustomSourceDto, SportsFollowDto } from "@moss/shared";
+import type { CreateSportsFollowInput } from "../../packages/sports/src/repository.js";
 import type { ToolExecute } from "@moss/module-sdk";
 
 import {
@@ -45,16 +42,27 @@ function makeFakeWriter(): SportsFollowsWriter {
     async list() {
       return rows;
     },
-    async create(_db: DataContextDb, input: CreateSportsFollowRequest) {
+    async setSourceTeamId(_db: DataContextDb, id: string, sourceTeamId: string) {
+      const row = rows.find((r) => r.id === id);
+      if (!row || row.teamKey === null) return undefined;
+      const updated: SportsFollowDto = { ...row, sourceTeamId };
+      rows[rows.indexOf(row)] = updated;
+      return updated;
+    },
+    async create(_db: DataContextDb, input: CreateSportsFollowInput) {
       const teamKey = input.teamKey ?? null;
+      const sourceTeamId = input.sourceTeamId ?? null;
       const existing = rows.find(
-        (r) => r.competitionKey === input.competitionKey && r.teamKey === teamKey
+        (r) =>
+          r.competitionKey === input.competitionKey &&
+          (sourceTeamId === null ? r.teamKey === teamKey : r.sourceTeamId === sourceTeamId)
       );
       if (existing) return existing;
       const created: SportsFollowDto = {
         id: `f-${rows.length + 1}`,
         competitionKey: input.competitionKey,
         teamKey,
+        sourceTeamId,
         createdAt: "2026-07-27T00:00:00.000Z"
       };
       rows.push(created);
@@ -82,7 +90,10 @@ function makeFakeDatasetClient(rosters: Record<string, readonly string[]> = { nf
           name: teamKey.toUpperCase(),
           shortName: teamKey.toUpperCase(),
           crestUrl: null,
-          sourceTeamId: null
+          // Since review round 5 a follow is saved by the provider's permanent team number, so a
+          // roster stand-in has to supply one or the save is refused.
+          sourceTeamId: `id-${teamKey}`,
+          abbreviation: teamKey
         })),
         degraded: false,
         cacheMiss: false

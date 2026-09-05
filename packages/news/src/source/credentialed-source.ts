@@ -260,6 +260,16 @@ export function toCredentialedHeadline(
     url: item.url,
     publishedAt: item.publishedAt,
     imageUrl: item.imageUrl,
+    faviconUrl: faviconProxyUrlForArticle(item.url),
     summary: item.summary
   };
+}
+
+/** Same-origin favicon proxy path for the article's own domain; null when the URL won't parse. */
+function faviconProxyUrlForArticle(url: string): string | null {
+  try {
+    return `/api/news/favicon/${encodeURIComponent(new URL(url).hostname)}`;
+  } catch {
+    return null;
+  }
 }

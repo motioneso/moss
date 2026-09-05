@@ -8,7 +8,13 @@ import { fileURLToPath } from "node:url";
 // the same flaw #1314 fixed for `test:integration`; mirroring that fix here so "no args" and
 // "args" are two distinct, deliberate cases instead of one string pnpm can accidentally extend.
 const UNIT_VITEST_ARGS: readonly string[] = ["--fileParallelism", "--maxWorkers=2"];
-const DEFAULT_VITEST_ARGS: readonly string[] = ["tests/unit"];
+// #2236: `vitest run <path>` filters against the FULL resolved file path, not a path relative
+// to this script's cwd (repo root, since pnpm always runs scripts from the package that
+// declares them - here that's already the root). "tests/unit" alone silently drops every
+// package-local test directory vitest.config.ts's `include` also lists (packages/scratchpad,
+// packages/people, ...), because none of those paths contain the substring "tests/unit". Each
+// package-local suite has to be named explicitly here or CI never runs it.
+const DEFAULT_VITEST_ARGS: readonly string[] = ["tests/unit", "packages/scratchpad/src/__tests__"];
 
 export function resolveVitestArgs(cliArgs: readonly string[]): string[] {
   return [...UNIT_VITEST_ARGS, ...(cliArgs.length > 0 ? cliArgs : DEFAULT_VITEST_ARGS)];

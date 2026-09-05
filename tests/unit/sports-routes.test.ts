@@ -4,15 +4,9 @@ import { describe, expect, it } from "vitest";
 import type { DatasetClient, DatasetEnvelope } from "@moss/datasets";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
-import type {
-  CreateSportsFollowRequest,
-  GameSide,
-  GameSummary,
-  SportsFollowDto,
-  SportsCustomSourceDto
-} from "@moss/shared";
-import { SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT } from "@moss/shared";
+import type { GameSide, GameSummary, SportsFollowDto } from "@moss/shared";
 
+import type { CreateSportsFollowInput } from "../../packages/sports/src/repository.js";
 import {
   registerSportsRoutes,
   type SportsRoutesDependencies
@@ -23,8 +17,6 @@ import type {
   SourceTeamRef,
   StandingsTable
 } from "../../packages/sports/src/source/sports-source.js";
-import type { SportsSourcesRepository } from "../../packages/sports/src/source/repository.js";
-import { makeSourcesRepo } from "./sports-sources-route-fixture.js";
 
 /**
  * A fake `DatasetClient` dispatching by dataset key, mirroring the shape the retired
@@ -106,7 +98,7 @@ function makeDatasetClient(
   };
 }
 
-const userA: AccessContext = {
+export const userA: AccessContext = {
   actorUserId: "00000000-0000-0000-0000-00000000000a",
   requestId: "req-a"
 };
@@ -114,6 +106,7 @@ const userA: AccessContext = {
 function side(overrides: Partial<GameSide> & { teamKey: string; shortName: string }): GameSide {
   return {
     name: overrides.shortName,
+    sourceTeamId: null,
     crestUrl: null,
     score: null,
     record: null,
@@ -129,7 +122,13 @@ const dalLiveGame: GameSummary = {
   startsAt: "2026-07-01T20:00:00.000Z",
   state: "live",
   statusDetail: "Q3 4:12",
-  home: side({ teamKey: "dal", shortName: "DAL", name: "Dallas Cowboys", score: 21 }),
+  home: side({
+    teamKey: "dal",
+    shortName: "DAL",
+    name: "Dallas Cowboys",
+    score: 21,
+    sourceTeamId: "6"
+  }),
   away: side({ teamKey: "min", shortName: "MIN", name: "Minnesota Vikings", score: 14 })
 };
 
@@ -142,7 +141,7 @@ const dalUpcomingGame: GameSummary = {
   startsAt: "2026-07-05T20:00:00.000Z",
   state: "pre",
   statusDetail: "4:00 PM",
-  home: side({ teamKey: "dal", shortName: "DAL", name: "Dallas Cowboys" }),
+  home: side({ teamKey: "dal", shortName: "DAL", name: "Dallas Cowboys", sourceTeamId: "6" }),
   away: side({
     teamKey: "gb",
     shortName: "GB",
@@ -151,7 +150,7 @@ const dalUpcomingGame: GameSummary = {
   })
 };
 
-function makeSource(overrides: FakeSourceHandlers = {}): DatasetClient {
+export function makeSource(overrides: FakeSourceHandlers = {}): DatasetClient {
   return makeDatasetClient({
     listTeams: async (competitionKey) => [
       {
@@ -160,7 +159,8 @@ function makeSource(overrides: FakeSourceHandlers = {}): DatasetClient {
         name: "Dallas Cowboys",
         shortName: "DAL",
         crestUrl: null,
-        sourceTeamId: "6"
+        sourceTeamId: "6",
+        abbreviation: "dal"
       }
     ],
     getScoreboard: async () => [dalLiveGame],
@@ -173,17 +173,26 @@ function makeSource(overrides: FakeSourceHandlers = {}): DatasetClient {
 
 interface FakeRepo {
   list(scopedDb: DataContextDb): Promise<SportsFollowDto[]>;
-  create(scopedDb: DataContextDb, input: CreateSportsFollowRequest): Promise<SportsFollowDto>;
+  create(scopedDb: DataContextDb, input: CreateSportsFollowInput): Promise<SportsFollowDto>;
+  setSourceTeamId(
+    scopedDb: DataContextDb,
+    id: string,
+    sourceTeamId: string,
+    teamKey: string | null
+  ): Promise<SportsFollowDto | undefined>;
   remove(scopedDb: DataContextDb, id: string): Promise<boolean>;
-  created: CreateSportsFollowRequest[];
+  created: CreateSportsFollowInput[];
+  chosen: { id: string; sourceTeamId: string; teamKey: string | null }[];
   removed: string[];
 }
 
-function makeRepo(initial: SportsFollowDto[]): FakeRepo {
-  const created: CreateSportsFollowRequest[] = [];
+export function makeRepo(initial: SportsFollowDto[]): FakeRepo {
+  const created: CreateSportsFollowInput[] = [];
+  const chosen: { id: string; sourceTeamId: string; teamKey: string | null }[] = [];
   const removed: string[] = [];
   return {
     created,
+    chosen,
     removed,
     list: async () => initial,
     create: async (_db, input) => {
@@ -192,8 +201,15 @@ function makeRepo(initial: SportsFollowDto[]): FakeRepo {
         id: "new-follow",
         competitionKey: input.competitionKey,
         teamKey: input.teamKey ?? null,
+        sourceTeamId: input.sourceTeamId ?? null,
         createdAt: "2026-07-01T00:00:00.000Z"
       };
+    },
+    setSourceTeamId: async (_db, id, sourceTeamId, teamKey) => {
+      chosen.push({ id, sourceTeamId, teamKey });
+      const row = initial.find((follow) => follow.id === id);
+      if (!row || row.teamKey === null) return undefined;
+      return { ...row, sourceTeamId, teamKey };
     },
     remove: async (_db, id) => {
       removed.push(id);
@@ -202,7 +218,7 @@ function makeRepo(initial: SportsFollowDto[]): FakeRepo {
   };
 }
 
-function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRepo } = {}) {
+export function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRepo } = {}) {
   const repo =
     overrides.repo ??
     makeRepo([
@@ -210,6 +226,7 @@ function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRe
         id: "11111111-1111-1111-1111-111111111111",
         competitionKey: "nfl",
         teamKey: "dal",
+        sourceTeamId: "6",
         createdAt: "2026-06-01T00:00:00.000Z"
       }
     ]);
@@ -280,7 +297,14 @@ describe("sports routes", () => {
     expect(withNext).toBeDefined();
     expect(withNext.nextMatch).toHaveProperty("opponentCrestUrl");
     expect(JSON.stringify(body)).not.toContain("sourceTeamIds");
-    expect(JSON.stringify(body)).not.toContain("sourceTeamId");
+    // The reverse guard, for the field the browser needs (review finding S1): the provider's
+    // permanent team number must survive serialization on every shape that carries a team, or
+    // the page cannot keep "this is your team" on the right team once two teams share a short
+    // name. A response schema that omits it drops it silently, which is exactly what happened.
+    expect(body.followedTeams[0]).toHaveProperty("sourceTeamId", "6");
+    expect(body.scoreboard[0].games[0].home).toHaveProperty("sourceTeamId", "6");
+    expect(body.hero.games[0].game.home).toHaveProperty("sourceTeamId", "6");
+    expect(body).toHaveProperty("ambiguousFollows");
     await app.close();
   });
 
@@ -301,7 +325,13 @@ describe("sports routes", () => {
             startsAt: "2026-07-01T16:00:00.000Z",
             state: "final",
             statusDetail: "Final",
-            home: side({ teamKey: "dal", shortName: "DAL", name: "Dallas Cowboys", score: 3 }),
+            home: side({
+              teamKey: "dal",
+              shortName: "DAL",
+              name: "Dallas Cowboys",
+              score: 3,
+              sourceTeamId: "6"
+            }),
             away: side({
               teamKey: "gb",
               shortName: "GB",
@@ -382,7 +412,7 @@ describe("sports routes", () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.follow.competitionKey).toBe("nba");
-    expect(repo.created).toEqual([{ competitionKey: "nba", teamKey: null }]);
+    expect(repo.created).toEqual([{ competitionKey: "nba", teamKey: null, sourceTeamId: null }]);
     await app.close();
   });
 
@@ -473,6 +503,7 @@ describe("sports routes", () => {
               rows: [
                 {
                   teamKey: "ars",
+                  sourceTeamId: null,
                   name: "Arsenal",
                   rank: 1,
                   points: 40,
@@ -494,6 +525,7 @@ describe("sports routes", () => {
           id: "f1",
           competitionKey: "eng.1",
           teamKey: null,
+          sourceTeamId: null,
           createdAt: "2026-06-01T00:00:00.000Z"
         }
       ])
@@ -516,6 +548,7 @@ describe("sports routes", () => {
               rows: [
                 {
                   teamKey: "buf",
+                  sourceTeamId: null,
                   name: "Buffalo Bills",
                   rank: 1,
                   points: null,
@@ -577,9 +610,13 @@ describe("sports routes", () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.teams).toHaveLength(1);
-    // Wire-body checks: crestUrl survives serialization; source-internal ids do NOT leak.
+    // Wire-body checks: crestUrl survives serialization, and so does the provider's permanent
+    // team id. It is deliberately on the wire since the follow-key fix (Ben, dev, 2026-09-04): the
+    // settings page matches a saved follow to a tile on it, because a colliding team's list key
+    // ("pac.413") never equals the bare short name the follow stores. It is public data (the same
+    // number sits in the crest URL), not a secret.
     expect(res.body).toContain("crestUrl");
-    expect(res.body).not.toContain("sourceTeamId");
+    expect(body.teams[0].sourceTeamId).toBe("359");
     await app.close();
   });
 
@@ -601,7 +638,10 @@ describe("sports routes", () => {
               competitionKey,
               name: "Arsenal",
               shortName: "ARS",
-              crestUrl: null
+              crestUrl: null,
+              // Required on the wire since the follow-key fix: a roster entry with no id would
+              // be dropped by the response serializer and the route would 500.
+              sourceTeamId: "359"
             } as SourceTeamRef
           ]
         : [];
@@ -693,283 +733,6 @@ describe("sports routes", () => {
     expect(body.teams).toEqual([]);
     expect(body.partial).toBe(false);
     expect(liveFetches).toBe(0);
-    await app.close();
-  });
-
-  it("POST /api/sports/sources/preview accepts a feed without a JSON model", async () => {
-    const sourcesRepository = makeSourcesRepo([]);
-    const { app } = buildApp({
-      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository,
-      discovery: {
-        fetch: async (url) => ({
-          ok: true,
-          status: 200,
-          finalUrl: url,
-          contentType: "application/rss+xml",
-          body: `<rss><channel><item><title>A consequential sports headline</title><link>https://one.example.com/story</link></item></channel></rss>`,
-          truncated: false
-        }),
-        ai: {
-          generateJson: async () => ({ ok: false, error: "needs_config" }),
-          fingerprint: async () => null
-        }
-      }
-    });
-    await app.ready();
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/sports/sources/preview",
-      payload: { url: "https://one.example.com" }
-    });
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toMatchObject({
-      status: "ok",
-      candidate: { canonicalDomain: "one.example.com", retrievalMethod: "feed" }
-    });
-    await app.close();
-  });
-
-  it("previews, confirms, and persists a selected target with truthful health", async () => {
-    const sourcesRepository = makeSourcesRepo([]);
-    const { app } = buildApp({
-      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository,
-      discovery: {
-        fetch: async (url) => ({
-          ok: true,
-          status: 200,
-          finalUrl: url,
-          contentType: "application/rss+xml",
-          body: `<rss><channel><item><title>A consequential sports headline</title><link>https://one.example.com/story</link></item></channel></rss>`,
-          truncated: false
-        }),
-        ai: {
-          generateJson: async () => ({ ok: false, error: "needs_config" }),
-          fingerprint: async () => null
-        }
-      }
-    });
-    await app.ready();
-    const previewResponse = await app.inject({
-      method: "POST",
-      url: "/api/sports/sources/preview",
-      payload: {
-        url: "https://one.example.com",
-        assignments: [
-          {
-            target: {
-              kind: "follow",
-              followId: "11111111-1111-1111-1111-111111111111"
-            }
-          }
-        ]
-      }
-    });
-    expect(previewResponse.statusCode).toBe(200);
-    const preview = JSON.parse(previewResponse.body);
-    expect(preview.candidate.targets).toEqual([
-      expect.objectContaining({
-        target: {
-          kind: "follow",
-          followId: "11111111-1111-1111-1111-111111111111"
-        },
-        label: "Dallas Cowboys",
-        scope: "team",
-        sampleHeadlines: ["A consequential sports headline"]
-      })
-    ]);
-
-    const payload = {
-      confirmationId: preview.confirmationId,
-      authorizationAcknowledgement: preview.authorizationAcknowledgement,
-      canonicalDomain: preview.candidate.canonicalDomain,
-      confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
-      targets: preview.candidate.targets.map((target: { target: object; targetUrl: string }) => ({
-        target: target.target,
-        targetUrl: target.targetUrl
-      }))
-    };
-    const confirmResponse = await app.inject({
-      method: "POST",
-      url: "/api/sports/sources",
-      payload
-    });
-    expect(confirmResponse.statusCode).toBe(201);
-    expect(JSON.parse(confirmResponse.body).source).toMatchObject({
-      healthState: "healthy",
-      assignedFollowIds: ["11111111-1111-1111-1111-111111111111"],
-      assignments: [
-        {
-          followId: "11111111-1111-1111-1111-111111111111",
-          previewStatus: "verified",
-          healthState: "healthy"
-        }
-      ]
-    });
-    expect(sourcesRepository.lockCount).toBe(1);
-
-    const replayResponse = await app.inject({
-      method: "POST",
-      url: "/api/sports/sources",
-      payload
-    });
-    expect(replayResponse.statusCode).toBe(409);
-    await app.close();
-  });
-
-  it("POST /api/sports/sources confirms a preview and returns 400 at the source limit", async () => {
-    const sourcesRepository = makeSourcesRepo([], true);
-    const previews = {
-      put: () => "confirmation-1",
-      take: () => ({
-        kind: "new-source" as const,
-        ownerUserId: userA.actorUserId,
-        submittedUrl: "https://publisher.example.com",
-        candidate: {
-          candidateId: "c1",
-          label: "Publisher",
-          canonicalDomain: "publisher.example.com",
-          homepageUrl: "https://publisher.example.com/",
-          feedUrl: "https://publisher.example.com/feed.xml",
-          retrievalMethod: "feed" as const,
-          sampleCount: 1,
-          validationFingerprint: "fp",
-          recipe: null,
-          recipeFingerprint: null,
-          confirmedFetchHosts: ["publisher.example.com"],
-          targets: [],
-          checkedAt: "2026-08-23T12:00:00.000Z",
-          samples: [{ headline: "Headline" }]
-        },
-        duplicateOfSourceId: null,
-        authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
-        createdAt: Date.now()
-      })
-    };
-    const { app } = buildApp({
-      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository,
-      previews: previews as unknown as SportsRoutesDependencies["previews"]
-    });
-    await app.ready();
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/sports/sources",
-      payload: {
-        confirmationId: "confirmation-1",
-        authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
-        canonicalDomain: "publisher.example.com",
-        confirmedFetchHosts: ["publisher.example.com"],
-        targets: []
-      }
-    });
-    expect(res.statusCode).toBe(400);
-    await app.close();
-  });
-
-  it("POST /api/sports/sources confirms a preview and assigns follows", async () => {
-    const sourcesRepository = makeSourcesRepo([]);
-    const previews = {
-      put: () => "confirmation-1",
-      take: () => ({
-        kind: "new-source" as const,
-        ownerUserId: userA.actorUserId,
-        submittedUrl: "https://publisher.example.com",
-        candidate: {
-          candidateId: "c1",
-          label: "Publisher",
-          canonicalDomain: "publisher.example.com",
-          homepageUrl: "https://publisher.example.com/",
-          feedUrl: "https://publisher.example.com/feed.xml",
-          retrievalMethod: "feed" as const,
-          sampleCount: 1,
-          validationFingerprint: "fp",
-          recipe: null,
-          recipeFingerprint: null,
-          confirmedFetchHosts: ["publisher.example.com"],
-          checkedAt: "2026-08-23T12:00:00.000Z",
-          samples: [{ headline: "Headline" }],
-          targets: [
-            {
-              target: {
-                kind: "follow" as const,
-                followId: "33333333-3333-3333-3333-333333333333"
-              },
-              label: "Dallas Cowboys",
-              scope: "team" as const,
-              targetUrl: "https://publisher.example.com/feed.xml",
-              parameters: {},
-              samples: [{ headline: "Headline" }],
-              checkedAt: "2026-08-23T12:00:00.000Z"
-            }
-          ]
-        },
-        duplicateOfSourceId: null,
-        authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
-        createdAt: Date.now()
-      })
-    };
-    const { app } = buildApp({
-      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository,
-      previews: previews as unknown as SportsRoutesDependencies["previews"]
-    });
-    await app.ready();
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/sports/sources",
-      payload: {
-        confirmationId: "confirmation-1",
-        authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
-        canonicalDomain: "publisher.example.com",
-        confirmedFetchHosts: ["publisher.example.com"],
-        targets: [
-          {
-            target: {
-              kind: "follow",
-              followId: "33333333-3333-3333-3333-333333333333"
-            },
-            targetUrl: "https://publisher.example.com/feed.xml"
-          }
-        ]
-      }
-    });
-    expect(res.statusCode).toBe(201);
-    const body = JSON.parse(res.body);
-    expect(body.source.assignedFollowIds).toEqual(["33333333-3333-3333-3333-333333333333"]);
-    expect(sourcesRepository.assignments).toEqual([]);
-    expect(sourcesRepository.lockCount).toBe(1);
-    await app.close();
-  });
-
-  it("DELETE /api/sports/sources/:id removes a source", async () => {
-    const source: SportsCustomSourceDto = {
-      id: "11111111-1111-1111-1111-111111111111",
-      label: "Publisher",
-      canonicalDomain: "publisher.example.com",
-      homepageUrl: "https://publisher.example.com/",
-      feedUrl: null,
-      retrievalMethod: "scrape",
-      enabled: true,
-      healthState: "pending",
-      healthReasonCode: null,
-      healthMessage: null,
-      lastCheckedAt: null,
-      lastSuccessAt: null,
-      recipeStatus: "ready",
-      assignedFollowIds: [],
-      assignments: [],
-      createdAt: "2026-08-21T00:00:00.000Z"
-    };
-    const sourcesRepository = makeSourcesRepo([source]);
-    const { app } = buildApp({
-      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository
-    });
-    await app.ready();
-    const res = await app.inject({
-      method: "DELETE",
-      url: "/api/sports/sources/11111111-1111-1111-1111-111111111111"
-    });
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ deleted: true });
-    expect(sourcesRepository.removed).toEqual(["11111111-1111-1111-1111-111111111111"]);
     await app.close();
   });
 });

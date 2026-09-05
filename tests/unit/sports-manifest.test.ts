@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { validateToolInput } from "@moss/ai";
 import { collectSportsSourcesExportSection } from "../../packages/sports/src/data-lifecycle.js";
 import { sportsModuleManifest } from "../../packages/sports/src/manifest.js";
+import { redditEntryToHeadline } from "../../packages/sports/src/source/reddit.js";
 
 describe("sports manifest", () => {
   it("declares owner-only table + nav + settings + routes", () => {
@@ -23,7 +24,8 @@ describe("sports manifest", () => {
       "sql/0192_sports_legacy_feed_assignments_verified.sql",
       "sql/0193_sports_legacy_feed_assignment_repair.sql",
       "sql/0196_sports_news_source_scopes.sql",
-      "sql/0213_sports_reddit_sources.sql"
+      "sql/0213_sports_reddit_sources.sql",
+      "sql/0217_sports_follows_source_team_id.sql"
     ]);
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
     expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");
@@ -206,5 +208,34 @@ describe("sports manifest", () => {
   // and the worker do on boot — so a successful import here is a real start-up check, not a proxy.
   it("loads the built-in module list the API and worker boot from", async () => {
     await expect(import("../../packages/module-registry/src/index.js")).resolves.toBeDefined();
+  });
+});
+
+describe("sports manifest keeps its subreddit-source promise truthful (review #2210, 2026-09-04)", () => {
+  it("does not claim to filter out pinned posts, since Reddit's feed carries no pinned flag to filter on", () => {
+    const entry = sportsModuleManifest.features.find((f) => f.id === "sports.subreddit_sources");
+    expect(entry?.description).not.toMatch(
+      /stick(y|ied)|pinned posts.*(skipped|filtered|removed)/i
+    );
+  });
+
+  it("actually includes a pinned-looking post when it links out, matching the corrected promise", () => {
+    // Reddit's Atom feed has no field marking a post as pinned/stickied at all — a `category`
+    // some subreddits use for an "Announcement" flair is the closest thing, and it is not a
+    // pinned signal. redditEntryToHeadline() only ever looks at the outbound [link] anchor, so a
+    // would-be-pinned post that links to an article comes through like any other post does.
+    const html =
+      `<!-- SC_OFF --><div class="md"><p>Body</p></div><!-- SC_ON --> submitted by ` +
+      `<a href="https://www.reddit.com/user/mods"> /u/mods </a> <br/> ` +
+      `<span><a href="https://www.espn.com/nfl/story/_/id/1/season-preview">[link]</a></span> ` +
+      `<span><a href="https://www.reddit.com/r/nfl/comments/pin1/thread/">[comments]</a></span>`;
+    const escaped = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const entryXml =
+      `<entry><author><name>/u/mods</name></author><category term="nfl" label="r/nfl"/>` +
+      `<content type="html">${escaped}</content><id>t3_pin1</id>` +
+      `<link href="https://www.reddit.com/r/nfl/comments/pin1/thread/" />` +
+      `<updated>2025-09-04T14:13:20+00:00</updated><published>2025-09-04T14:13:20+00:00</published>` +
+      `<title>Season preview megathread</title></entry>`;
+    expect(redditEntryToHeadline(entryXml)).not.toBeNull();
   });
 });

@@ -58,7 +58,7 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     id: "settings",
     label: "Settings",
     description:
-      "Personal and admin settings. A search box on the top bar matches section names, descriptions and common setting words and jumps to that section.",
+      "Personal and admin settings. A search box on the top bar matches section names, descriptions and common setting words, and also matches every installed module that has its own settings to open (for example News) by that module's name, description, and the name of each individual setting or credential it declares (for example, searching a credential's own name like \"Plaid\" finds the module that uses it). A module with nothing to configure is left out of the results. Picking a result jumps straight to that module's settings.",
     path: "/settings",
     scope: "user"
   }
@@ -102,7 +102,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "memory",
     label: "Memory & context",
-    description: "Review and configure assistant memory behavior.",
+    description:
+      "Review and configure assistant memory behaviour, and choose the People folder. Every " +
+      "folder is chosen from the same list of available folders, and People notes live inside " +
+      "the chosen notes folder.",
     path: "/settings?section=memory",
     scope: "user"
   },
@@ -135,9 +138,9 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "sources",
     label: "Data sources",
     description:
-      "Review sources the assistant can read. Linking a notes folder opens a chooser that lists " +
-      "the folders available on the server; a small info icon next to that list explains that a " +
-      "folder shows up there once whoever manages the server adds it and restarts it.",
+      "Review sources the assistant can read and choose the notes folder. Every folder comes " +
+      "from the same list of folders available on the server, and People notes live inside " +
+      "the chosen notes folder. An info icon explains how folders get listed.",
     path: "/settings?section=sources",
     scope: "user"
   },

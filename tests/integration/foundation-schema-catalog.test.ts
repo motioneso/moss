@@ -383,6 +383,13 @@ describe("MVP foundation schema catalog", () => {
         // #2208 — model rows record whether discovery or a person added them.
         { version: "0212", name: "0212_ai_configured_models_origin.sql" },
         { version: "0213", name: "0213_sports_reddit_sources.sql" },
+        // 0214 — a model row records its provider release date, so the tier ladder can prefer it.
+        { version: "0214", name: "0214_ai_configured_models_released_at.sql" },
+        // #2239 — connector sync status slice 1: previous-run snapshot and trigger source.
+        { version: "0215", name: "0215_connector_sync_previous_run.sql" },
+        // #2236 slice 1 — the scratchpad's single owner-only table.
+        { version: "0216", name: "0216_scratchpads.sql" },
+        { version: "0217", name: "0217_sports_follows_source_team_id.sql" },
         // #2274 — the email thread judgement reads a whole thread by owner and thread id.
         { version: "0220", name: "0220_email_thread_lookup.sql" },
         // #2274 — email candidates carry proposed actions; one judgement record per thread.
