@@ -87,11 +87,24 @@ export type GenerateStructuredInput = {
   readonly maxOutputTokens?: number;
   /** #2228: let the model use its own built-in web search tool while producing this result. */
   readonly nativeSearch?: boolean;
+  /**
+   * #2228: run against this exact model instead of routing by service binding. Used by
+   * model-native web search, which must use the actor's own chat model (spec decision 2), not
+   * whichever JSON model the calling module is bound to.
+   */
+  readonly explicitModel?: GenerateStructuredExplicitModel;
   readonly signal?: AbortSignal;
   readonly telemetry?: StructuredTelemetry;
   readonly priority?: StructuredRunPriority;
   readonly scope?: StructuredRunScope;
   readonly closeScope?: boolean;
+};
+
+export type GenerateStructuredExplicitModel = {
+  readonly id: string;
+  readonly provider_config_id: string;
+  readonly provider_kind: string;
+  readonly provider_model_id: string;
 };
 
 export type GenerateStructuredResult =
@@ -114,13 +127,16 @@ export async function generateStructured(
   assertBoundedStructuredSchema(input.schema);
   assertBoundedStructuredPrompt(input.prompt);
 
-  const route = await deps.repository.resolveModelForService(scopedDb, input.service, {
-    capability: "json",
-    tierHint: input.tierHint,
-    requireExplicitBinding: input.requireExplicitBinding
-  });
-  if (!route.model) return { ok: false, error: "needs_config" };
-  const model = route.model;
+  const model =
+    input.explicitModel ??
+    (
+      await deps.repository.resolveModelForService(scopedDb, input.service, {
+        capability: "json",
+        tierHint: input.tierHint,
+        requireExplicitBinding: input.requireExplicitBinding
+      })
+    ).model;
+  if (!model) return { ok: false, error: "needs_config" };
 
   const provider = await deps.repository.selectProviderWithCredential(
     scopedDb,

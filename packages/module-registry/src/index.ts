@@ -156,7 +156,7 @@ import {
   type GoogleApiClient,
   type GoogleConnectionService
 } from "@moss/connectors";
-import type { ActiveModulesResolver } from "@moss/ai";
+import type { ActiveModulesResolver, AiSecretCipher } from "@moss/ai";
 import {
   resolveMossEnv,
   type AccessContext,
@@ -269,7 +269,9 @@ import {
   fetchWebResourceBytes,
   invalidateWebSearchProviderCache,
   resolveWebSearchProvider,
+  setModelNativeSearchResolver,
   setWebSearchKeyResolver,
+  type ModelNativeSearchResolver,
   webModuleManifest
 } from "@moss/web-research";
 import {
@@ -885,6 +887,66 @@ export async function resolveNewsWebSearch(scopedDb: DataContextDb) {
 }
 
 /**
+ * #2228: the composition-root seam behind model-native (built-in) web search for list-shaped
+ * callers (News described topics, source-by-name, the web.search tool). Per request it looks up
+ * the actor's effective chat model, asks the engine resolver whether built-in search is active
+ * for that model, and if so returns a runner that executes ONE structured request against that
+ * exact model with the provider's search tool enabled. The runner closes over the request's
+ * scoped data context, so it is built per call and never shared across actors.
+ */
+export function buildModelNativeSearchResolver(deps: {
+  readonly repository: Pick<
+    AiRepository,
+    "selectChatModelForUser" | "resolveModelForService" | "selectProviderWithCredential"
+  >;
+  readonly cipher: Pick<AiSecretCipher, "decryptJson">;
+  readonly logger?: Pick<FastifyBaseLogger, "info" | "warn">;
+  readonly createCliStructuredAdapter?: ReturnType<typeof createCliStructuredAdapterFactory>;
+  readonly resolveEngine?: typeof resolveWebSearchEngine;
+  readonly generate?: typeof generateStructured;
+}): ModelNativeSearchResolver {
+  const resolveEngine = deps.resolveEngine ?? resolveWebSearchEngine;
+  const generate = deps.generate ?? generateStructured;
+  return async (scopedDbUnknown) => {
+    const scopedDb = scopedDbUnknown as DataContextDb;
+    const model = await deps.repository.selectChatModelForUser(scopedDb);
+    const resolution = await resolveEngine(
+      scopedDb,
+      model ? { id: model.id, capabilities: model.capabilities } : null
+    );
+    if (resolution.engine !== "model-native" || !model) return null;
+    return {
+      modelId: model.id,
+      runner: async (input) => {
+        const generated = await generate(
+          scopedDb,
+          {
+            service: "module.web-research",
+            schema: input.schema,
+            prompt: input.prompt,
+            nativeSearch: true,
+            explicitModel: {
+              id: model.id,
+              provider_config_id: model.provider_config_id,
+              provider_kind: model.provider_kind,
+              provider_model_id: model.provider_model_id
+            }
+          },
+          {
+            repository: deps.repository,
+            cipher: deps.cipher,
+            logger: deps.logger,
+            createCliStructuredAdapter: deps.createCliStructuredAdapter
+          }
+        );
+        if (!generated.ok) return null;
+        return { object: generated.object, sources: generated.sources };
+      }
+    };
+  };
+}
+
+/**
  * #1110: UAT-only. Deterministically fakes a transient News source-preview error for one
  * sentinel input, so the app-map-grounding UAT spec can prove the "no invented fix" path
  * without a live upstream. Both env vars are set unconditionally in the UAT app container's
@@ -1451,6 +1513,16 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveAccessContext,
         repository: new SettingsRepository()
       });
+      // #2228: built-in (model-native) search for list-shaped callers, resolved per actor from
+      // their own chat model. Without this the News gate unlocks but every search comes back empty.
+      setModelNativeSearchResolver(
+        buildModelNativeSearchResolver({
+          repository: new AiRepository(),
+          cipher: createAiSecretCipher(),
+          logger: server.log,
+          createCliStructuredAdapter: deps.createCliStructuredAdapter
+        })
+      );
       setWebSearchKeyResolver(
         (scopedDb) => readBraveSearchApiKey(scopedDb as DataContextDb, webSearchCipher),
         {
