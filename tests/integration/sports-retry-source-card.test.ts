@@ -53,6 +53,8 @@ const retriedSource: SportsCustomSourceDto = {
   lastCheckedAt: "2026-08-31T00:00:00.000Z",
   lastSuccessAt: "2026-08-31T00:00:00.000Z",
   recipeStatus: "ready",
+  photoStatus: "pending",
+  photosFoundByMoss: false,
   assignedFollowIds: [],
   assignments: [],
   createdAt: "2026-08-31T00:00:00.000Z"

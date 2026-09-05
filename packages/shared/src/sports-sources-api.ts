@@ -13,6 +13,24 @@ export type SportsSourceHealthState =
   | "disabled";
 
 export type SportsSourceRecipeStatus = "feed" | "ready" | "missing" | "drift";
+
+/**
+ * #2237 what the source row says about photos. Derived on the server from the source's photo
+ * record, never stored, so the sentence a user reads cannot drift from the last refresh.
+ */
+export type SportsSourcePhotoStatus =
+  | "working"
+  | "none"
+  | "previewing"
+  | "stopped_working"
+  | "pending";
+export const SPORTS_SOURCE_PHOTO_STATUSES: readonly SportsSourcePhotoStatus[] = [
+  "working",
+  "none",
+  "previewing",
+  "stopped_working",
+  "pending"
+];
 /** #2211: `reddit` reads a subreddit's public new-posts listing; recipe-less like `feed`. */
 export type SportsSourceRetrievalMethod = "feed" | "scrape" | "reddit";
 export const SPORTS_SOURCE_RETRIEVAL_METHODS: readonly SportsSourceRetrievalMethod[] = [
@@ -64,6 +82,10 @@ export interface SportsCustomSourceDto {
   readonly lastCheckedAt: string | null;
   readonly lastSuccessAt: string | null;
   readonly recipeStatus: SportsSourceRecipeStatus;
+  /** #2237 whether stories from this source are getting photos, and what to do if not. */
+  readonly photoStatus: SportsSourcePhotoStatus;
+  /** #2237 true only when the photos come from a rule Moss found and the owner confirmed. */
+  readonly photosFoundByMoss: boolean;
   readonly assignedFollowIds: readonly string[];
   readonly assignments: readonly SportsSourceAssignmentDto[];
   readonly createdAt: string;
@@ -249,6 +271,8 @@ const sportsCustomSourceDtoSchema = {
     "lastCheckedAt",
     "lastSuccessAt",
     "recipeStatus",
+    "photoStatus",
+    "photosFoundByMoss",
     "assignedFollowIds",
     "assignments",
     "createdAt"
@@ -267,6 +291,8 @@ const sportsCustomSourceDtoSchema = {
     lastCheckedAt: { type: ["string", "null"], format: "date-time" },
     lastSuccessAt: { type: ["string", "null"], format: "date-time" },
     recipeStatus: { type: "string", enum: ["feed", "ready", "missing", "drift"] },
+    photoStatus: { type: "string", enum: SPORTS_SOURCE_PHOTO_STATUSES },
+    photosFoundByMoss: { type: "boolean" },
     assignedFollowIds: {
       type: "array",
       maxItems: 20,
@@ -558,6 +584,24 @@ export const updateSportsSourceAssignmentsSchema = {
 } as const;
 
 export const retrySportsSourceSchema = {
+  params: sportsSourceAssignmentsParamsSchema,
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["source"],
+      properties: { source: sportsCustomSourceDtoSchema }
+    },
+    401: errorResponseSchema,
+    404: errorResponseSchema
+  }
+} as const;
+
+/**
+ * #2237 DELETE /api/sports/sources/:id/photos - "Stop using Moss's photos". Removes the saved
+ * photo rule and puts the source back on the feed tag and share image pass alone.
+ */
+export const deleteSportsSourcePhotosSchema = {
   params: sportsSourceAssignmentsParamsSchema,
   response: {
     200: {

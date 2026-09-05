@@ -267,6 +267,8 @@ describe("sports routes: custom sources", () => {
       lastCheckedAt: null,
       lastSuccessAt: null,
       recipeStatus: "ready",
+      photoStatus: "pending",
+      photosFoundByMoss: false,
       assignedFollowIds: [],
       assignments: [],
       createdAt: "2026-08-21T00:00:00.000Z"

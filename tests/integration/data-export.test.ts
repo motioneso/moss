@@ -20,6 +20,21 @@ import { HttpError } from "@moss/module-sdk";
 
 const { Client } = pg;
 
+/** The module-owned export surfaces these tests read, shared by the direct and archive paths. */
+type ExportedSections = {
+  newsPersonalization: {
+    custom_sources: unknown[];
+    custom_topics: unknown[];
+    source_exclusions: unknown[];
+  };
+  sportsSources: {
+    assignments: unknown[];
+    espnAssignments: unknown[];
+    headlinePreferences: unknown[];
+    sources: unknown[];
+  };
+};
+
 describe("Data export", () => {
   let appDb: Kysely<MossDatabase>;
   let authDb: Kysely<MossDatabase>;
@@ -333,6 +348,8 @@ describe("Data export", () => {
       lastCheckedAt: "2026-02-04T08:00:00.000Z",
       lastSuccessAt: "2026-02-04T08:00:00.000Z",
       recipeStatus: "ready",
+      photoRuleState: "none",
+      photoLastOutcome: null,
       recipeSchemaVersion: 1,
       authorizationConfirmedAt: "2026-02-04T07:59:00.000Z",
       validatedAt: "2026-02-04T07:58:00.000Z",
@@ -544,21 +561,7 @@ describe("Data export", () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body = res.json() as {
-        tables: {
-          newsPersonalization: {
-            custom_sources: unknown[];
-            custom_topics: unknown[];
-            source_exclusions: unknown[];
-          };
-          sportsSources: {
-            assignments: unknown[];
-            espnAssignments: unknown[];
-            headlinePreferences: unknown[];
-            sources: unknown[];
-          };
-        };
-      };
+      const body = res.json() as { tables: ExportedSections };
 
       const section = body.tables.newsPersonalization;
       expect(section).toBeDefined();
@@ -647,19 +650,7 @@ describe("Data export", () => {
           { actorUserId: ids.userA },
           (vaultCtx) => readVaultFile(vaultCtx, `exports/${jobRecord.id}.json`)
         );
-        const archive = JSON.parse(archiveJson) as {
-          sections: {
-            newsPersonalization: {
-              custom_sources: unknown[];
-              custom_topics: unknown[];
-              source_exclusions: unknown[];
-            };
-            sportsSources: {
-              assignments: unknown[];
-              sources: unknown[];
-            };
-          };
-        };
+        const archive = JSON.parse(archiveJson) as { sections: ExportedSections };
 
         const section = archive.sections.newsPersonalization;
         expect(section).toBeDefined();

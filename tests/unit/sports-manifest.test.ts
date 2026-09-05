@@ -25,7 +25,8 @@ describe("sports manifest", () => {
       "sql/0193_sports_legacy_feed_assignment_repair.sql",
       "sql/0196_sports_news_source_scopes.sql",
       "sql/0213_sports_reddit_sources.sql",
-      "sql/0217_sports_follows_source_team_id.sql"
+      "sql/0217_sports_follows_source_team_id.sql",
+      "sql/0222_sports_source_photos.sql"
     ]);
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
     expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");
@@ -35,7 +36,8 @@ describe("sports manifest", () => {
         "/api/sports/standings-preferences",
         "/api/sports/sources/:id/retry",
         "/api/sports/sources/:id/rebuild/preview",
-        "/api/sports/sources/:id/rebuild"
+        "/api/sports/sources/:id/rebuild",
+        "/api/sports/sources/:id/photos"
       ])
     );
     expect(sportsModuleManifest.dataLifecycle?.exportSections).toEqual([
@@ -45,6 +47,23 @@ describe("sports manifest", () => {
         collect: collectSportsSourcesExportSection
       }
     ]);
+  });
+
+  it("tells Moss about the Stop using Moss's photos control and what it does", () => {
+    // #2237 review 1 and review 2 finding 4: the app map must describe the control this slice
+    // ships and its effect (it forgets the instruction Moss found and keeps the ordinary feed and
+    // article-page photos), or Moss cannot explain the setting. Matching "feed" anywhere in the
+    // text proved nothing, so each assertion pins the sentence that states the effect.
+    const feature = sportsModuleManifest.features.find((f) => f.id === "sports.source_photos");
+    expect(feature?.description).toContain("Stop using Moss's photos");
+    expect(feature?.description).toContain(
+      "Stop using Moss's photos forgets Moss's instruction; feed and article photos stay"
+    );
+    const settings = sportsModuleManifest.settings.find((s) => s.id === "sports.follows");
+    expect(settings?.description).toContain("Stop using Moss's photos");
+    expect(settings?.description).toContain(
+      "Stop using Moss's photos forgets Moss's instruction, feed and article photos stay"
+    );
   });
 
   it("exposes follows plus bounded actor-scoped source tools", () => {

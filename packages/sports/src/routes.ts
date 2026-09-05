@@ -8,6 +8,7 @@ import {
   confirmSportsSourceSchema,
   createSportsFollowResponseSchema,
   deleteSportsCustomSourceSchema,
+  deleteSportsSourcePhotosSchema,
   deleteSportsFollowResponseSchema,
   previewSportsSourceSchema,
   previewSportsSourceAssignmentsSchema,
@@ -534,6 +535,26 @@ export function registerSportsRoutes(
         const input = request.body as ConfirmSportsSourceRecipeRequest;
         const source = await dependencies.dataContext.withDataContext(accessContext, (db) =>
           sourceService.confirmRecipeRebuild(db, accessContext.actorUserId, id, input)
+        );
+        return { source };
+      } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.delete(
+    "/api/sports/sources/:id/photos",
+    { schema: deleteSportsSourcePhotosSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { id } = request.params as { id: string };
+        const source = await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.stopUsingFoundPhotos(db, id)
         );
         return { source };
       } catch (error) {

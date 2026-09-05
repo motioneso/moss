@@ -201,6 +201,16 @@ export async function confirmSportsSourceRecipe(
   );
 }
 
+/** #2237 "Stop using Moss's photos" on one source's settings row. */
+export async function stopUsingSportsSourcePhotos(
+  id: string
+): Promise<{ source: SportsCustomSourceDto }> {
+  return requestJson<{ source: SportsCustomSourceDto }>(
+    `/api/sports/sources/${encodeURIComponent(id)}/photos`,
+    { method: "DELETE" }
+  );
+}
+
 export async function deleteSportsSource(id: string): Promise<{ deleted: boolean }> {
   return requestJson<{ deleted: boolean }>(`/api/sports/sources/${encodeURIComponent(id)}`, {
     method: "DELETE"

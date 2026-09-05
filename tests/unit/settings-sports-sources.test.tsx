@@ -73,6 +73,8 @@ const fotmob = {
   lastCheckedAt: "2026-08-25T12:00:00.000Z",
   lastSuccessAt: "2026-08-25T12:00:00.000Z",
   recipeStatus: "feed" as const,
+  photoStatus: "pending" as const,
+  photosFoundByMoss: false,
   assignedFollowIds: [FOLLOWS[0]!.id],
   assignments: [
     {
@@ -128,6 +130,87 @@ describe("Sports source coverage settings", () => {
 
     expect(html).toContain(`<img src="/api/sports/sources/${fotmobSourceId}/icon"`);
     expect(html).not.toContain("fotmob.com/favicon.ico");
+  });
+
+  it("says the same thing about photos on the row as the design agreed", () => {
+    const cases = [
+      ["working", "Photos: working"],
+      ["none", "Photos: none found"],
+      ["previewing", "Photos: preview ready"],
+      ["stopped_working", "Photos: stopped working"],
+      ["pending", "Photos: checking"]
+    ] as const;
+    for (const [status, sentence] of cases) {
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } }
+      });
+      client.setQueryData(sportsQueryKeys.sources, {
+        sources: [{ ...fotmob, photoStatus: status }]
+      });
+      expect(renderSection(client)).toContain(sentence);
+    }
+  });
+
+  it("only offers to stop using Moss's photos on a source whose photos Moss found", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } }
+    });
+    client.setQueryData(sportsQueryKeys.sources, {
+      sources: [{ ...fotmob, photoStatus: "working" as const }]
+    });
+    expect(renderSection(client)).not.toContain("Stop using Moss");
+
+    client.setQueryData(sportsQueryKeys.sources, {
+      sources: [{ ...fotmob, photoStatus: "working" as const, photosFoundByMoss: true }]
+    });
+    expect(renderSection(client)).toContain("Stop using Moss&#x27;s photos");
+  });
+
+  it("stopping Moss's photos asks the server to forget them for that source", async () => {
+    const withFoundPhotos = {
+      ...fotmob,
+      photoStatus: "working" as const,
+      photosFoundByMoss: true
+    };
+    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
+      if (String(input).endsWith("/photos") && init?.method === "DELETE") {
+        return new Response(JSON.stringify({ source: fotmob }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({ sources: [withFoundPhotos] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(sportsQueryKeys.sources, { sources: [withFoundPhotos] });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(SportsSourcesSection, {
+            follows: FOLLOWS,
+            competitionsByKey: COMPETITIONS,
+            teamsByCompetition: TEAMS
+          })
+        )
+      );
+    });
+
+    const stop = renderer.root
+      .findAllByType("button")
+      .find((candidate) => renderedText(candidate.props.children) === "Stop using Moss's photos");
+    await act(async () => stop?.props.onClick());
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/sports/sources/${fotmobSourceId}/photos`,
+      expect.objectContaining({ method: "DELETE" })
+    );
   });
 
   it("renders Sports, Leagues, and Teams with the shared checkbox primitive", () => {
