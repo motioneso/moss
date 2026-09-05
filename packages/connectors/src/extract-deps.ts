@@ -41,7 +41,9 @@ const EMAIL_SIGNALS_SCHEMA = {
     reason: { type: "string" },
     action: { type: "string" },
     dueDate: { type: "string" },
-    confidence: { type: "number", minimum: 0, maximum: 1 }
+    confidence: { type: "number", minimum: 0, maximum: 1 },
+    // Only read for messages the deterministic sign-in-code rule could not settle; never stored.
+    deliversSignInCode: { type: "boolean" }
   }
 } as const;
 
