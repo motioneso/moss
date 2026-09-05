@@ -64,6 +64,7 @@ export type CandidateRepository = Pick<
   | "listExclusions"
   | "readPolicyVerdict"
   | "upsertPolicyVerdict"
+  | "recordWorkaroundRefreshOutcome"
 >;
 
 function excluded(domain: string, exclusions: readonly string[]): boolean {

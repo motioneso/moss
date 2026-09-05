@@ -39,6 +39,7 @@ import {
   NewsPersonalizationLimitError
 } from "./personalization-repository.js";
 import { triggerNewsRefresh, type NewsPersonalizationStore } from "./personalization-routes.js";
+import { deriveFetchHosts } from "./source/workaround.js";
 import type {
   NewsConnectionDescriptor,
   NewsCredentialValidationOutcome,
@@ -156,6 +157,12 @@ async function createSourceForConnection(
       homepageUrl: descriptor.homepageUrl,
       feedUrl: descriptor.feedUrl,
       retrievalMethod: descriptor.retrievalMethod,
+      // #2282: the key goes to descriptor.host, so that host plus the publisher's own pages
+      // are the only places this source may be fetched from. Icons arrive with Task 1.6.
+      confirmedFetchHosts: deriveFetchHosts([descriptor.homepageUrl, descriptor.feedUrl], [
+        descriptor.host
+      ]),
+      iconUrl: null,
       validationFingerprint: connectionFingerprint(descriptor.connectionId)
     });
   } catch (error) {

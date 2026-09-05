@@ -184,6 +184,7 @@ describe("NewsService personalized snapshot overview", () => {
             homepageUrl: "https://preferred.example",
             feedUrl: null,
             retrievalMethod: "scrape",
+            workaround: false,
             validationStatus: "approved",
             healthStatus: "healthy",
             createdAt: "2026-07-11T00:00:00.000Z"

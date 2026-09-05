@@ -181,6 +181,7 @@ function makePersonalization(overrides: Partial<FakePersonalization> = {}): Fake
     createCustomSource: async (_db, input) => ({
       id: "77777777-7777-7777-7777-777777777777",
       ...input,
+      workaround: false,
       validationStatus: "approved",
       healthStatus: "healthy",
       createdAt: "2026-07-11T00:00:00.000Z"
@@ -188,6 +189,7 @@ function makePersonalization(overrides: Partial<FakePersonalization> = {}): Fake
     replaceCustomSource: async (_db, id, input) => ({
       id,
       ...input,
+      workaround: false,
       validationStatus: "approved",
       healthStatus: "healthy",
       createdAt: "2026-07-11T00:00:00.000Z"

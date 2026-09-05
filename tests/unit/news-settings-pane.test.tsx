@@ -112,6 +112,7 @@ function storedSource(
     homepageUrl: "https://www.theatlantic.com",
     feedUrl: null,
     retrievalMethod: "scrape" as const,
+    workaround: false,
     validationStatus,
     healthStatus,
     createdAt: "2026-07-11T00:00:00.000Z"
@@ -286,6 +287,7 @@ describe("NewsSettings personalization sections (#953)", () => {
             homepageUrl: "https://www.theatlantic.com",
             feedUrl: null,
             retrievalMethod: "scrape",
+            workaround: false,
             validationStatus: "approved",
             healthStatus: "healthy",
             createdAt: "2026-07-11T00:00:00.000Z"
