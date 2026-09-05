@@ -22,6 +22,7 @@ import { formatTime, useUserLocale } from "./locale.js";
 import { teamBarColor } from "./team-colors.js";
 import { Crest, LiveDot, TrophyIcon } from "./sports-parts.js";
 import { HeroCarousel, LatestColumn, NewsBand } from "./sports-news.js";
+import { followedTeamIndex, type FollowedTeamIndex } from "../news-ranking.js";
 import { SportsTicker } from "./sports-ticker.js";
 import { AroundLeaguesBoard, AroundLeaguesTicker } from "./sports-around-ticker.js";
 import { SOCCER_COMPETITIONS } from "./competitions.js";
@@ -136,17 +137,13 @@ export function SportsPage() {
     });
   }, [data]);
 
-  // A followed team's short name and its permanent number both go in here (S1): a game or
-  // standings row always carries the raw, possibly-shared short name as its own key, so marking
-  // it "you" needs both to be checked. See isFollowed in news-ranking.ts.
-  const followedPairs = useMemo(() => {
-    const pairs = new Set<string>();
-    for (const f of data?.followedTeams ?? []) {
-      pairs.add(`${f.competitionKey}:${f.teamKey}`);
-      if (f.sourceTeamId != null) pairs.add(`${f.competitionKey}:${f.sourceTeamId}`);
-    }
-    return pairs;
-  }, [data?.followedTeams]);
+  // Numbers and short names are indexed apart, never poured into one collection (S1 re-review 3):
+  // a club whose short name is another club's permanent number would otherwise be marked "you".
+  // See followedTeamIndex / isFollowed in news-ranking.ts.
+  const followedPairs = useMemo(
+    () => followedTeamIndex(data?.followedTeams ?? []),
+    [data?.followedTeams]
+  );
 
   if (!data) {
     return (
@@ -621,7 +618,7 @@ function ScoreBarSide(props: { side: GameSide; competitionKey: string; edge: "l"
 // stories (gameday, and the no-follow slate where no hero renders at all).
 function BroadsheetGrid(props: {
   overview: SportsOverviewResponse;
-  followedPairs: ReadonlySet<string>;
+  followedPairs: FollowedTeamIndex;
   withTopStories?: boolean;
   hiddenStoryRefs?: ReadonlySet<string>;
   onStoryChanged?: StoryFeedbackChange;
@@ -689,7 +686,7 @@ function joinNames(names: readonly string[]): string {
 
 function EmptyState(props: {
   data: SportsOverviewResponse;
-  followedPairs: ReadonlySet<string>;
+  followedPairs: FollowedTeamIndex;
   hiddenStoryRefs?: ReadonlySet<string>;
   onStoryChanged?: StoryFeedbackChange;
 }) {

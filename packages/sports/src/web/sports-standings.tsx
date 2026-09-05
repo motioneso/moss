@@ -18,6 +18,7 @@ import {
 } from "./sports-client.js";
 import { sportsQueryKeys } from "./query-keys.js";
 import { buildStandingsPickerGroups, StandingsPicker } from "./sports-standings-picker.js";
+import type { FollowedTeamIndex } from "../news-ranking.js";
 import { isFollowed } from "./sports-news.js";
 import { formatDate, formatTime, useUserLocale } from "./locale.js";
 import { TrophyIcon } from "./sports-parts.js";
@@ -91,7 +92,7 @@ function buildViews(sections: readonly StandingsSection[]): StandingsView[] {
 function defaultViewKey(
   views: readonly StandingsView[],
   competitionKey: string,
-  followedPairs: ReadonlySet<string>
+  followedPairs: FollowedTeamIndex
 ): string {
   const hasConference = views.some((v) => v.key.startsWith("conf:"));
   if (hasConference) {
@@ -122,7 +123,7 @@ function unwrapStandings(data: SportsStandingsResponse | StandingsGroup | undefi
 
 export function StandingsRail(props: {
   groups: readonly StandingsGroup[];
-  followedPairs: ReadonlySet<string>;
+  followedPairs: FollowedTeamIndex;
 }) {
   const catalogQuery = useQuery({ queryKey: sportsQueryKeys.catalog, queryFn: getSportsCatalog });
   const followsQuery = useQuery({ queryKey: sportsQueryKeys.follows, queryFn: listSportsFollows });
@@ -444,7 +445,7 @@ function StandingsTable(props: {
   group: StandingsGroup;
   section: StandingsSection;
   label: string;
-  followedPairs: ReadonlySet<string>;
+  followedPairs: FollowedTeamIndex;
   // Merged All/conference views mix sections, so ESPN's per-section ranks repeat (two "#1"s in
   // an MLS East+West merge) — renumber by the sorted order instead (mra50mfr).
   renumber?: boolean;

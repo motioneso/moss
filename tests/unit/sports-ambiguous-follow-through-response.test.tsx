@@ -136,3 +136,71 @@ describe("a saved team that can no longer be told apart, all the way to the page
     expect(mine[0]).toContain("Pacific Tigers");
   });
 });
+
+// Re-review 3 blocker 3 (2026-09-04): the browser used to put permanent numbers and short names
+// in one collection and accept a row that matched either. A club whose own short name happens to
+// be another club's permanent number was therefore marked as the reader's team. The list below is
+// exactly that trap: Pacific Tigers' number is 413, and a different club goes by "413".
+const NUMBER_LOOKALIKE_TEAMS = [
+  ...PACIFIC_TEAMS,
+  {
+    teamKey: "413",
+    competitionKey: "nfl",
+    name: "Team 413",
+    shortName: "413",
+    crestUrl: null,
+    sourceTeamId: "9001",
+    abbreviation: "413"
+  }
+];
+
+const lookalikeStandings: StandingsTable = {
+  sections: [
+    {
+      label: null,
+      rows: [
+        standingsRow("Pacific Tigers", "413", 1),
+        { ...standingsRow("Team 413", "9001", 2), teamKey: "413" }
+      ]
+    }
+  ]
+};
+
+async function lookalikeOverviewOverHttp(): Promise<SportsOverviewResponse> {
+  const { app } = buildApp({
+    repo: makeRepo([
+      {
+        id: "22222222-2222-2222-2222-222222222222",
+        competitionKey: "nfl",
+        teamKey: "pac.413",
+        createdAt: "2026-06-01T00:00:00.000Z"
+      }
+    ]),
+    datasetClient: makeSource({
+      listTeams: async () => NUMBER_LOOKALIKE_TEAMS,
+      getScoreboard: async () => [],
+      getSchedule: async () => [],
+      getStandings: async () => lookalikeStandings
+    })
+  });
+  await app.ready();
+  const res = await app.inject({ method: "GET", url: "/api/sports/overview" });
+  expect(res.statusCode).toBe(200);
+  const body = JSON.parse(res.body) as SportsOverviewResponse;
+  await app.close();
+  return body;
+}
+
+describe("a club whose name looks like another club's number, all the way to the page", () => {
+  it("marks only the followed team, not the club named after its number", async () => {
+    const html = renderPage(await lookalikeOverviewOverHttp());
+    const rows = html
+      .split("<tr")
+      .slice(1)
+      .filter((row) => row.includes("Pacific Tigers") || row.includes("Team 413"));
+    expect(rows).toHaveLength(2);
+    const mine = rows.filter((row) => row.includes("is-you"));
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toContain("Pacific Tigers");
+  });
+});

@@ -80,24 +80,49 @@ describe("resolveFollowIdentity", () => {
     ]);
   });
 
-  // Blocker 2's collision note: a synthetic team's own abbreviation, "413", is the same string as
-  // Pacific Tigers' permanent number. A saved follow of "413" must mean the team whose short name
-  // is literally "413" here (an exact teamKey match), not get pulled toward Pacific Tigers by the
-  // permanent-number check, which only runs after an exact teamKey match has already failed.
-  it("does not let a team's own short name collide with another team's permanent number", () => {
+  // Re-review 3 blocker 2: the saved value "413" is BOTH Pacific Tigers' permanent number and
+  // another club's own short name. The old order read it as a short name first and silently
+  // handed the follow to Team 413, whose real number is 9001. Two readings, two different clubs:
+  // the person has to be asked, and both candidates offered.
+  it("asks which team was meant when a saved value is one team's number and another's short name", () => {
     const teams = [
       team({ teamKey: "413", sourceTeamId: "9001", abbreviation: "413", name: "Team 413" }),
-      team({ teamKey: "129700", sourceTeamId: "413", abbreviation: "pac", name: "Pacific Tigers" })
+      team({ teamKey: "pac.413", sourceTeamId: "413", abbreviation: "pac", name: "Pacific Tigers" })
+    ];
+    const identity = resolveFollowIdentity("413", teams);
+    expect(identity.ambiguous).toBe(true);
+    expect(identity.needsChoice).toBe(true);
+    expect(identity.team).toBeNull();
+    expect(identity.sourceTeamId).toBeNull();
+    expect(identity.candidates.map((c) => c.name).sort()).toEqual(["Pacific Tigers", "Team 413"]);
+  });
+
+  // The other half of the same rule: with no rival club wearing "413" as a name, the saved number
+  // stays attached to its own team rather than being dropped.
+  it("keeps a saved number attached to its own team when nothing else answers to it", () => {
+    const teams = [
+      team({ teamKey: "pac.413", sourceTeamId: "413", abbreviation: "pac", name: "Pacific Tigers" }),
+      team({
+        teamKey: "pac.129700",
+        sourceTeamId: "129700",
+        abbreviation: "pac",
+        name: "Pacific Lutheran Lutes"
+      })
     ];
     const identity = resolveFollowIdentity("413", teams);
     expect(identity.ambiguous).toBe(false);
-    expect(identity.team?.name).toBe("Team 413");
+    expect(identity.team?.name).toBe("Pacific Tigers");
+    expect(identity.sourceTeamId).toBe("413");
   });
 
-  it("leaves a follow unresolved, not ambiguous, when the team list is empty", () => {
+  // Re-review 3 blocker 1: with no team list there is nothing to check the saved short name
+  // against, so the follow is marked unchecked. It keeps the saved name only as a last resort for
+  // data that carries nothing else, and the caller shows the person the recovery prompt.
+  it("marks a follow as unchecked when no team list loaded at all", () => {
     const identity = resolveFollowIdentity("pac", []);
-    expect(identity.ambiguous).toBe(false);
+    expect(identity.verified).toBe(false);
     expect(identity.team).toBeNull();
+    expect(identity.sourceTeamId).toBeNull();
     expect(identity.catalogKey).toBe("pac");
   });
 });
@@ -113,7 +138,7 @@ describe("matchTargetFor", () => {
       })
     ];
     const identity = resolveFollowIdentity("pac.129700", teams);
-    const target = matchTargetFor(identity, "pac.129700");
+    const target = matchTargetFor(identity);
     expect(target?.sourceTeamId).toBe("129700");
     // The other school's row wears the same short name and its own number.
     expect(sideMatchesTarget({ teamKey: "pac", sourceTeamId: "413" }, target!)).toBe(false);
@@ -129,14 +154,38 @@ describe("matchTargetFor", () => {
         name: "Pacific Lutheran Lutes"
       })
     ];
-    const target = matchTargetFor(resolveFollowIdentity("pac", teams), "pac");
+    const target = matchTargetFor(resolveFollowIdentity("pac", teams));
     expect(sideMatchesTarget({ teamKey: "pac" }, target!)).toBe(true);
   });
 
-  it("keeps the saved value when no team list loaded, rather than throwing away the follow", () => {
-    const target = matchTargetFor(resolveFollowIdentity("pac", []), "pac");
-    expect(target?.shortNames).toEqual(["pac"]);
-    expect(target?.verified).toBe(false);
+  // Re-review 3 blocker 1, second half: the saved follow is Pacific Lutheran by number, the team
+  // list shows both PAC schools, and an older cached Tigers row has lost its number. "pac" means
+  // two clubs today, so it may not settle anything — the row is withheld, not handed over.
+  it("will not use a shared short name on a number-less row, even for a follow that has a number", () => {
+    const teams = [
+      team({
+        teamKey: "pac.129700",
+        sourceTeamId: "129700",
+        abbreviation: "pac",
+        name: "Pacific Lutheran Lutes"
+      }),
+      team({ teamKey: "pac.413", sourceTeamId: "413", abbreviation: "pac", name: "Pacific Tigers" })
+    ];
+    const target = matchTargetFor(resolveFollowIdentity("pac.129700", teams));
+    expect(target?.sourceTeamId).toBe("129700");
+    expect(target?.safeShortNames).not.toContain("pac");
+    expect(sideMatchesTarget({ teamKey: "pac" }, target!)).toBe(false);
+  });
+
+  // Re-review 3 blocker 1, first half: no team list, so the saved short name was never checked.
+  // It may not be used against a game row that carries a permanent number of its own, because
+  // that row's identity is checkable and we have nothing to check it against.
+  it("will not claim a numbered game row for a follow the team list never confirmed", () => {
+    const target = matchTargetFor(resolveFollowIdentity("pac", []))!;
+    expect(target.verified).toBe(false);
+    expect(sideMatchesTarget({ teamKey: "pac", sourceTeamId: "413" }, target)).toBe(false);
+    // Older cached data that carries no number anywhere still works as it always did.
+    expect(sideMatchesTarget({ teamKey: "pac" }, target)).toBe(true);
   });
 
   it("refuses to match anything for a saved team that can no longer be told apart", () => {
@@ -144,6 +193,6 @@ describe("matchTargetFor", () => {
       team({ teamKey: "pac.129700", sourceTeamId: "129700", abbreviation: "pac" }),
       team({ teamKey: "pac.413", sourceTeamId: "413", abbreviation: "pac" })
     ];
-    expect(matchTargetFor(resolveFollowIdentity("pac", teams), "pac")).toBeNull();
+    expect(matchTargetFor(resolveFollowIdentity("pac", teams))).toBeNull();
   });
 });

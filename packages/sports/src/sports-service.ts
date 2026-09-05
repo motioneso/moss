@@ -25,7 +25,7 @@ import {
 } from "@moss/shared";
 
 import { SPORTS_CATALOG, catalogEntry, competitionLogoUrl } from "./source/catalog.js";
-import { isWrittenArticle, selectFeature } from "./news-ranking.js";
+import { followedTeamIndex, isFollowed, isWrittenArticle, selectFeature } from "./news-ranking.js";
 import {
   canonicalStoryUrl,
   composeSportsNewsGroups,
@@ -471,11 +471,19 @@ export class SportsService {
         resolveFollowIdentity(follow.teamKey, teamsByComp.get(follow.competitionKey) ?? [])
       ])
     );
+    // `needsChoice`, not just `ambiguous`: a saved value with two meanings AND a saved value that
+    // nothing can pin down (an unavailable team list leaves a bare short name unprovable) are both
+    // cases where showing a score would be a guess. Both are withheld and both get the prompt.
     const activeFollowedTeams = followedTeams.filter(
-      (follow) => !identityByFollowId.get(follow.id)!.ambiguous
+      (follow) => !identityByFollowId.get(follow.id)!.needsChoice
     );
     const ambiguousFollows: SportsOverviewResponse["ambiguousFollows"] = followedTeams
-      .filter((follow) => identityByFollowId.get(follow.id)!.ambiguous)
+      .filter((follow) => {
+        const identity = identityByFollowId.get(follow.id)!;
+        // Two reasons to ask: the saved value has two possible meanings, or no team list loaded
+        // so it has no confirmed meaning at all. Either way the page must not guess a score.
+        return identity.needsChoice || !identity.verified;
+      })
       .map((follow) => ({
         competitionKey: follow.competitionKey,
         savedTeamKey: follow.teamKey,
@@ -509,7 +517,7 @@ export class SportsService {
         const identity = identityByFollowId.get(follow.id)!;
         const sourceTeamId = identity.sourceTeamId;
         // Non-null: ambiguous follows were filtered out of activeFollowedTeams above.
-        const matchKey = matchTargetFor(identity, follow.teamKey)!;
+        const matchKey = matchTargetFor(identity)!;
         const teamScope = sportsNewsScopeForFollow(follow);
         const includeEspnTeamFeed =
           teamScope !== null && sportsNewsCoverageAllows(espnCoverage, follows, teamScope);
@@ -716,9 +724,8 @@ export class SportsService {
       ...group,
       headlines: group.headlines.map((headline) => toPublicHeadline(headline, refFor))
     }));
-    const followedPairs = new Set(
-      headlineFollowedTeams.map((f) => `${f.competitionKey}:${f.teamKey}`)
-    );
+    // News is tagged with today's team-list key, so the index is built from those keys.
+    const followedPairs = followedTeamIndex(headlineFollowedTeams);
     const feature = selectFeature(publicNewsGroups, followedPairs);
     const internalFeature = feature
       ? newsGroups
@@ -881,7 +888,7 @@ export class SportsService {
             teamLists.set(comp, await this.teamsFor(comp, state));
           }
           const identity = resolveFollowIdentity(follow.teamKey, teamLists.get(comp) ?? []);
-          const target = matchTargetFor(identity, follow.teamKey);
+          const target = matchTargetFor(identity);
           if (target === null) continue;
           const game = findTeamGame(games, target);
           if (game) facts.push({ competitionKey: comp, text: teamFact(game, target) });
@@ -1007,9 +1014,7 @@ export class SportsService {
     const empty = { details: new Map<string, StoryDetail>(), liftFor: () => 0 };
     if (!policy || !refFor) return empty;
 
-    const followedPairs = new Set(
-      followedTeams.map((follow) => `${follow.competitionKey}:${follow.teamKey}`)
-    );
+    const followedPairs = followedTeamIndex(followedTeams);
     const refByUrl = new Map<string, string>();
     const details = new Map<string, StoryDetail>();
 
@@ -1038,7 +1043,9 @@ export class SportsService {
         const teamRef =
           competitionKey === null
             ? null
-            : (headline.teamKeys.find((key) => followedPairs.has(`${competitionKey}:${key}`)) ??
+            : (headline.teamKeys.find((key) =>
+                isFollowed(followedPairs, competitionKey, key)
+              ) ??
               null);
         // A clip or a short blurb is not an opinion piece. A written article MIGHT be, and this
         // check cannot tell — so the flag is left off rather than guessed. Never invent evidence.

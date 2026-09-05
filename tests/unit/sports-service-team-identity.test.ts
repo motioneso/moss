@@ -132,12 +132,13 @@ describe("SportsService.getOverview team identity (S1)", () => {
     expect(card?.status).toBe("live");
   });
 
-  it("does not let a team's own short name collide with another team's permanent number", async () => {
+  it("asks which team was meant when a saved value is one team's number and another's name", async () => {
     // Straight from the provider's real output for the review's three-team input: Pacific
     // Lutheran and Pacific Tigers share "PAC" and so carry the short name joined to their own
     // numbers, while a fourth team really is named "413" — which is also the Tigers' number.
-    // Following the team actually named 413 must land on that team and nothing else. On the old
-    // keys the Tigers' key WAS the bare string "413", so the two teams shared one identity.
+    // An old save of "413" could be either the Tigers (whose number it is) or the club actually
+    // named 413 (re-review 3 blocker 2). It used to resolve silently to Team 413; the page must
+    // now withhold both and ask which was meant.
     const collisionFollow: SportsFollowDto = { ...lutheranFollow, teamKey: "413" };
     const game413 = {
       id: "g-413",
@@ -186,13 +187,15 @@ describe("SportsService.getOverview team identity (S1)", () => {
       })
     );
     const overview = await service.getOverview(userA);
-    expect(overview.ambiguousFollows).toEqual([]);
-    expect(overview.followedTeams).toEqual([
-      { competitionKey: "nfl", teamKey: "413", sourceTeamId: "7001" }
+    expect(overview.ambiguousFollows).toEqual([
+      {
+        competitionKey: "nfl",
+        savedTeamKey: "413",
+        candidateNames: ["Pacific Tigers", "Team 413"]
+      }
     ]);
-    const card = overview.followed.find((c) => c.teamKey === "413");
-    expect(card).toBeDefined();
-    expect(card?.status).toBe("live");
+    expect(overview.followedTeams).toEqual([]);
+    expect(overview.followed).toEqual([]);
   });
 
   it("still finds a followed team on an older cached game that carries no provider number", async () => {
@@ -227,6 +230,96 @@ describe("SportsService.getOverview team identity (S1)", () => {
     const card = overview.followed.find((c) => c.teamKey === "pac");
     expect(card?.status).toBe("live");
     expect(card?.primary).toContain("5");
+  });
+
+  // Re-review 3 blocker 1, first half. The team list did not load at all, so nothing can check
+  // what the saved "pac" means. The scoreboard carries a Pacific Tigers game with its own
+  // permanent number. Handing that score to a Pacific Lutheran follower is the wrong-team bug;
+  // the page must show no score and ask which team was meant.
+  it("withholds a score and asks when no team list loaded and the game carries a number", async () => {
+    const tigersGame = {
+      id: "g-tigers-nolist",
+      competitionKey: "nfl",
+      startsAt: "2026-07-01T20:00:00.000Z",
+      state: "live" as const,
+      statusDetail: "Top 7th",
+      home: side({
+        teamKey: "pac",
+        shortName: "PAC",
+        name: "Pacific Tigers",
+        score: 7,
+        sourceTeamId: "413"
+      }),
+      away: side({ teamKey: "opp", shortName: "OPP", name: "Some Opponent", score: 1 })
+    };
+    const service = new SportsService(
+      makeDeps({
+        follows: [lutheranFollow],
+        source: makeDatasetClient({
+          listTeams: async () => [],
+          getScoreboard: async () => [tigersGame],
+          getSchedule: async () => [tigersGame],
+          getStandings: async () => ({ sections: [] }),
+          getHeadlines: async () => []
+        })
+      })
+    );
+    const overview = await service.getOverview(userA);
+    expect(overview.ambiguousFollows).toEqual([
+      { competitionKey: "nfl", savedTeamKey: "pac", candidateNames: [] }
+    ]);
+    const card = overview.followed.find((c) => c.teamKey === "pac");
+    expect(card?.status).not.toBe("live");
+    // No Tigers score anywhere on the follower's own card, and the follow marks nothing "you".
+    expect(JSON.stringify(overview.followed)).not.toContain("Pacific Tigers");
+  });
+
+  // Re-review 3 blocker 1, second half. The complete three-team list is available and the follow
+  // is Pacific Lutheran by number, but an older cached Pacific Tigers game has no numbers on its
+  // sides. "PAC" means two schools today, so it may not settle anything: the Tigers game must not
+  // be attached to the Pacific Lutheran card.
+  it("will not attach a number-less cached game to a follow whose short name two teams share", async () => {
+    const cachedTigersGame = {
+      id: "g-tigers-nonumbers",
+      competitionKey: "nfl",
+      startsAt: "2026-07-01T20:00:00.000Z",
+      state: "live" as const,
+      statusDetail: "Top 7th",
+      home: side({ teamKey: "pac", shortName: "PAC", name: "Pacific Tigers", score: 7 }),
+      away: side({ teamKey: "opp", shortName: "OPP", name: "Some Opponent", score: 1 })
+    };
+    const service = new SportsService(
+      makeDeps({
+        follows: [{ ...lutheranFollow, teamKey: "pac.129700" }],
+        source: makeDatasetClient({
+          listTeams: async () => [
+            pacTeam({
+              teamKey: "pac.129700",
+              sourceTeamId: "129700",
+              abbreviation: "pac",
+              name: "Pacific Lutheran Lutes"
+            }),
+            pacTeam({
+              teamKey: "pac.413",
+              sourceTeamId: "413",
+              abbreviation: "pac",
+              name: "Pacific Tigers"
+            }),
+            pacTeam({ teamKey: "413", sourceTeamId: "9001", abbreviation: "413", name: "Team 413" })
+          ],
+          getScoreboard: async () => [cachedTigersGame],
+          getSchedule: async () => [cachedTigersGame],
+          getStandings: async () => ({ sections: [] }),
+          getHeadlines: async () => []
+        })
+      })
+    );
+    const overview = await service.getOverview(userA);
+    expect(overview.ambiguousFollows).toEqual([]);
+    const card = overview.followed.find((c) => c.teamKey === "pac.129700");
+    expect(card).toBeDefined();
+    expect(card?.status).not.toBe("live");
+    expect(JSON.stringify(overview.followed)).not.toContain("Pacific Tigers");
   });
 });
 
