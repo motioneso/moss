@@ -23,8 +23,11 @@ import {
   sanitizeItemUrl,
   sanitizePublishedAt
 } from "../source/sanitize.js";
+import { REDDIT_CANONICAL_DOMAIN, subredditNameFromUrl } from "../source/reddit-reader.js";
+import { readSubredditsBounded } from "./reddit-refresh.js";
 
 const PER_SOURCE_CAP = 15;
+const REDDIT_PER_SOURCE_CAP = 10;
 const COLLECTION_CAP = 300;
 const FUTURE_TOLERANCE_MS = 15 * 60 * 1_000;
 
@@ -313,6 +316,7 @@ export async function collectCandidates(
 
   for (const source of sources) {
     if (
+      source.retrievalMethod === "reddit" ||
       source.validationStatus !== "approved" ||
       source.healthStatus !== "healthy" ||
       excluded(source.canonicalDomain, exclusions)
@@ -330,6 +334,51 @@ export async function collectCandidates(
       fetchFailures += 1;
       sourceFailures.push({ sourceId: source.id, reason: result.failure });
       if (result.failure === "temporarily_unavailable") sourcesMarkedUnavailable.push(source.id);
+    }
+  }
+
+  const redditSources = sources.filter(
+    (source) =>
+      source.retrievalMethod === "reddit" &&
+      source.validationStatus === "approved" &&
+      source.healthStatus === "healthy" &&
+      !excluded(source.canonicalDomain, exclusions)
+  );
+  if (redditSources.length > 0 && deps.fetchWithOptions) {
+    const names = new Map(
+      redditSources.flatMap((source) => {
+        const name = subredditNameFromUrl(source.feedUrl);
+        return name ? [[source.id, name] as const] : [];
+      })
+    );
+    const results = await readSubredditsBounded(deps.fetchWithOptions, [...new Set(names.values())]);
+    for (const source of redditSources) {
+      const name = names.get(source.id);
+      const result = name ? results.get(name) : undefined;
+      if (!result) continue;
+      if (!result.ok) {
+        fetchFailures += 1;
+        const failure: NewsSourceFailureReason =
+          result.reason === "auth_required" ? "authentication_failed" : "temporarily_unavailable";
+        sourceFailures.push({ sourceId: source.id, reason: failure });
+        if (failure === "temporarily_unavailable") sourcesMarkedUnavailable.push(source.id);
+        continue;
+      }
+      for (const headline of result.headlines.slice(0, REDDIT_PER_SOURCE_CAP)) {
+        const publishedAt = publicationTime(headline.publishedAt, opts.now);
+        if (!publishedAt) continue;
+        collected.push({
+          publisher: source.label,
+          canonicalDomain: REDDIT_CANONICAL_DOMAIN,
+          headline: headline.title,
+          url: headline.url,
+          publishedAt,
+          excerpt: null,
+          imageUrl: null,
+          origin: "preferred_source",
+          matchedTopics: []
+        });
+      }
     }
   }
 
