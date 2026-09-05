@@ -171,10 +171,7 @@ export class PeopleNotesService {
     if (isAbsolute(stored)) return stored;
     if (stored.split(/[\\/]/).includes("..")) return null;
 
-    const notesSource = await this.preferencesRepository.get(
-      scopedDb,
-      NOTES_SOURCE_PREFERENCE_KEY
-    );
+    const notesSource = await this.preferencesRepository.get(scopedDb, NOTES_SOURCE_PREFERENCE_KEY);
     if (typeof notesSource !== "string" || !isAbsolute(notesSource)) return null;
 
     const candidate = resolve(notesSource, stored);
