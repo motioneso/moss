@@ -21,6 +21,7 @@ function side(overrides: Partial<GameSide> & { sourceTeamId: string | null }): G
     score: null,
     record: null,
     winner: false,
+    scorers: null,
     ...overrides
   };
 }

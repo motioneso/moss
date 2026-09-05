@@ -391,7 +391,8 @@ describe("SportsPage", () => {
         crestUrl: null,
         score: 21,
         record: "10-2",
-        winner: true
+        winner: true,
+        scorers: null
       },
       away: {
         teamKey: "gb",
@@ -401,7 +402,8 @@ describe("SportsPage", () => {
         crestUrl: null,
         score: 14,
         record: "8-4",
-        winner: false
+        winner: false,
+        scorers: null
       }
     };
     const html = render(
