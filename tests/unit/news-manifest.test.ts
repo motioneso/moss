@@ -54,3 +54,31 @@ describe("news assistant tools and publisher keys (#2008)", () => {
     expect(tool?.inputSchema).toEqual({ type: "object", properties: {} });
   });
 });
+
+// #2282: the settings screen and the add-source feature now cover subreddits as well as
+// publications, so their app-map copy must say so and the new migration must be declared.
+describe("news manifest wording and migrations (#2282)", () => {
+  it("describes the News settings screen as covering publications and subreddits", () => {
+    const setting = newsModuleManifest.settings.find((candidate) => candidate.id === "news.prefs");
+    expect(setting?.description).toBe(
+      "Choose news topics, manage built-in, connected, and excluded publishers, and the " +
+        "sources you add: a publication or a subreddit. Adding a source needs an AI model; " +
+        "discovering topics across the web also needs web search."
+    );
+    expect(setting?.description).not.toContain("custom, and excluded publishers");
+  });
+
+  it("describes the add-source feature as accepting an r/name subreddit input", () => {
+    const feature = newsModuleManifest.features?.find(
+      (candidate) => candidate.id === "news.add_source"
+    );
+    expect(feature?.description).toContain("r/name");
+    expect(feature?.description).toContain("articles linked from");
+  });
+
+  it("declares the subreddit-sources migration", () => {
+    expect(newsModuleManifest.database.migrations).toContain(
+      "sql/0218_news_source_kinds.sql"
+    );
+  });
+});

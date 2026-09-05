@@ -129,7 +129,7 @@ export const newsModuleManifest = {
       id: "news.prefs",
       label: "News",
       description:
-        "Choose news topics, manage built-in, connected, custom, and excluded publishers, and story preferences. Adding a publication needs an AI model; discovering topics across the web also needs web search.",
+        "Choose news topics, manage built-in, connected, and excluded publishers, and the sources you add: a publication or a subreddit. Adding a source needs an AI model; discovering topics across the web also needs web search.",
       path: "/settings/modules/news",
       scope: "user",
       order: 34,
@@ -502,9 +502,10 @@ export const newsModuleManifest = {
     {
       id: "news.add_source",
       description:
-        "Find a publisher by URL or name and add it to personalized News. A forward to the " +
-        "same publisher's own site is followed, with a note naming the switch. A forward to " +
-        "an unrelated site is refused; try that address directly instead.",
+        "Find a publisher by URL or name, or a subreddit with an r/name input, and add it to " +
+        "personalized News. A subreddit source contributes the articles linked from its own " +
+        "hot feed. A forward to the same publisher's own site is followed, with a note naming " +
+        "the switch. A forward to an unrelated site is refused; try that address directly instead.",
       requires: newsAddSourceRequirement,
       remediations: [
         {
