@@ -378,7 +378,7 @@ function rowToCandidate(row: Record<string, unknown>): CommitmentCandidate {
   };
 }
 
-/** The 0216 columns, present only once that migration has run (and only set on email items). */
+/** The 0221 columns, present only once that migration has run (and only set on email items). */
 function emailColumns(row: Record<string, unknown>): Partial<CommitmentCandidate> {
   if (!("thread_ref" in row)) return {};
   const actions = row["proposed_actions"];

@@ -29,7 +29,7 @@ export const commitmentsModuleManifest: MossModuleManifest = {
   availability: { defaultEnabled: true, required: true },
   compatibility: { jarv1s: ">=0.0.0" },
   database: {
-    migrations: ["0125_commitment_candidates.sql", "0216_commitment_email_items.sql"],
+    migrations: ["0125_commitment_candidates.sql", "0221_commitment_email_items.sql"],
     ownedTables: [
       "app.commitment_candidates",
       "app.commitment_candidate_sources",

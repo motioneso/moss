@@ -384,9 +384,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0212", name: "0212_ai_configured_models_origin.sql" },
         { version: "0213", name: "0213_sports_reddit_sources.sql" },
         // #2274 — the email thread judgement reads a whole thread by owner and thread id.
-        { version: "0215", name: "0215_email_thread_lookup.sql" },
+        { version: "0220", name: "0220_email_thread_lookup.sql" },
         // #2274 — email candidates carry proposed actions; one judgement record per thread.
-        { version: "0216", name: "0216_commitment_email_items.sql" }
+        { version: "0221", name: "0221_commitment_email_items.sql" }
       ]);
     } finally {
       await client.end();

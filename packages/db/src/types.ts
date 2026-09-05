@@ -977,7 +977,7 @@ export interface CommitmentCandidatesTable {
   expires_at: NullableTimestampColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
-  // 0216 (email chief of staff): email-thread candidates. thread_ref is unique per owner; the
+  // 0221 (email chief of staff): email-thread candidates. thread_ref is unique per owner; the
   // judgement never stores a body, only the capped why lines and the proposed actions.
   counterparty_person_id: ColumnType<string | null, string | null | undefined, string | null>;
   counterparty_address: ColumnType<string | null, string | null | undefined, string | null>;
