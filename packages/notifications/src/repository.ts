@@ -4,6 +4,7 @@ import { sql, type SqlBool } from "kysely";
 
 import { assertDataContextDb, type DataContextDb, type Notification } from "@moss/db";
 
+import { isSameOriginAppPath } from "./app-path.js";
 import { projectNotificationMetadata } from "./metadata.js";
 
 export interface NotificationWithReadState extends Notification {
@@ -197,7 +198,8 @@ export async function resolveTimezone(
  */
 function validateHref(href: string | null | undefined): string | null {
   if (href === undefined || href === null) return null;
-  if (href.length === 0 || !href.startsWith("/") || href.startsWith("//") || href.includes(":")) {
+  // #743 security finding 4: one shared rule, see app-path.ts for what it refuses and why.
+  if (!isSameOriginAppPath(href)) {
     throw new Error("href must be a same-origin path");
   }
   return href;

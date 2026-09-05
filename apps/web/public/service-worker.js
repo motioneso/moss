@@ -121,13 +121,30 @@ self.addEventListener("push", (event) => {
   );
 });
 
+// #743 security finding 4: a click only ever opens a page on this app's own origin. The
+// server already refuses foreign links, but the payload crosses a third-party push service,
+// so the browser side checks again: anything that parses to another origin (an absolute
+// URL, "//host", "/\\host", or a value that does not parse) opens the app's home page.
+function resolveClickTarget(href) {
+  const home = new URL("/", self.location.origin).href;
+  if (typeof href !== "string" || href.length === 0) {
+    return home;
+  }
+  let target;
+  try {
+    target = new URL(href, self.location.origin);
+  } catch {
+    return home;
+  }
+  return target.origin === self.location.origin ? target.href : home;
+}
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const href = event.notification.data?.href ?? "/";
+  const targetUrl = resolveClickTarget(event.notification.data?.href);
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      const targetUrl = new URL(href, self.location.origin).href;
       const existing = clients.find((client) => client.url === targetUrl);
       if (existing) {
         return existing.focus();

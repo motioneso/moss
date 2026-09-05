@@ -1,3 +1,5 @@
+import { sameOriginAppPathOrNull } from "./app-path.js";
+
 const TITLE_MAX_LENGTH = 60;
 const BODY_MAX_LENGTH = 120;
 
@@ -25,7 +27,8 @@ export function buildPushPayload(notification: {
     id: notification.id,
     title: truncate(notification.title, TITLE_MAX_LENGTH),
     body: truncate(firstBodyLine, BODY_MAX_LENGTH),
-    href: notification.href ?? null
+    // #743 security finding 4: a link that could leave the app is dropped, not sent.
+    href: sameOriginAppPathOrNull(notification.href)
   };
 }
 

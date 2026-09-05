@@ -54,4 +54,30 @@ describe("buildPushPayload", () => {
     const payload = buildPushPayload({ id: "notif-6", title: "t", body: "b" });
     expect(payload.href).toBeNull();
   });
+
+  // #743 security finding 4: a link that could leave the app is dropped, not sent.
+  it.each([
+    "https://evil.example.com/x",
+    "//evil.example.com/x",
+    "/\\evil.example.com/x",
+    "/\\\\evil.example.com",
+    "javascript:alert(1)",
+    "/tasks/1\n",
+    "/tasks/\t1",
+    "relative/path",
+    ""
+  ])("drops an href that is not a same-origin path: %j", (href) => {
+    const payload = buildPushPayload({ id: "notif-5", title: "t", body: "b", href });
+    expect(payload.href).toBeNull();
+  });
+
+  it("keeps a same-origin path with a query and fragment", () => {
+    const payload = buildPushPayload({
+      id: "notif-6",
+      title: "t",
+      body: "b",
+      href: "/tasks/1?tab=notes#top"
+    });
+    expect(payload.href).toBe("/tasks/1?tab=notes#top");
+  });
 });

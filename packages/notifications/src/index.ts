@@ -5,6 +5,7 @@
 // to a browser, not a second notification system. See the manifest docblock for the full model
 // and the specs (docs/superpowers/specs/2026-06-19-notifications-actor-scoped-hardening.md,
 // docs/superpowers/specs/2026-09-04-743-web-push-notifications.md).
+export * from "./app-path.js";
 export * from "./manifest.js";
 export * from "./metadata.js";
 export * from "./digest.js";
