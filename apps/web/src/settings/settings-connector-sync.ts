@@ -1,4 +1,11 @@
+import { explainConnectorSync } from "@moss/shared";
 import type { ConnectorAccountDto, ConnectorSyncCounts } from "@moss/shared";
+
+/**
+ * Thin adapter over the shared `explainConnectorSync` wording. This file only maps that
+ * shared explanation onto the exact strings this settings pane has always shown — the
+ * words themselves live in `packages/shared/src/connector-sync-explain.ts`.
+ */
 
 export type ConnectorAccountHealth = {
   readonly indicator: "ready" | "error" | "idle";
@@ -49,64 +56,100 @@ export function getConnectorAccountHealth(
     };
   }
 
-  if (account.lastSyncStatus === "failed") {
-    const isAuthFailure = account.lastSyncError === "auth-error";
-    return {
-      indicator: "error",
-      badgeTone: "amber",
-      label: "Sign-in expired",
-      alert: isAuthFailure
-        ? `Last sync failed because ${account.providerType === "google" ? "Google" : "email"} access needs to be reconnected. Reconnect to resume syncing.`
-        : syncAlert("Last sync failed", account.lastSyncError, account.lastSyncCounts),
-      canReconnect: isAuthFailure || account.providerType === "google"
-    };
-  }
+  const explained = explainConnectorSync(
+    {
+      providerType: account.providerType,
+      status: account.status,
+      lastSyncStartedAt: account.lastSyncStartedAt,
+      lastSyncFinishedAt: account.lastSyncFinishedAt,
+      lastSyncStatus: account.lastSyncStatus,
+      lastSyncError: account.lastSyncError,
+      lastSyncCounts: account.lastSyncCounts,
+      pending: null,
+      nextRunAt: null,
+      deferredAi: null
+    },
+    new Date()
+  );
 
-  if (account.status === "error") {
-    return {
-      indicator: "error",
-      badgeTone: "amber",
-      label: "Connection error",
-      alert:
-        account.providerType === "google"
-          ? "Google reported a connection error. Reconnect to restore syncing."
-          : "This email account reported a connection error. Reconnect to restore syncing.",
-      canReconnect: true
-    };
-  }
+  switch (explained.code) {
+    case "sign-in-expired":
+      return {
+        indicator: "error",
+        badgeTone: "amber",
+        label: "Sign-in expired",
+        alert: `Last sync failed because ${account.providerType === "google" ? "Google" : "email"} access needs to be reconnected. Reconnect to resume syncing.`,
+        canReconnect: true
+      };
 
-  if (account.lastSyncStatus === "partial") {
-    const capped = account.lastSyncCounts?.truncated && !account.lastSyncError;
-    return {
-      indicator: "error",
-      badgeTone: "amber",
-      label: capped ? "Message cap reached" : "Partial sync",
-      alert: syncAlert(
-        capped ? "Last sync reached its message cap" : "Last sync completed with errors",
-        account.lastSyncError,
-        account.lastSyncCounts
-      ),
-      canReconnect: false
-    };
-  }
+    case "connection-error":
+      // Two different situations both land here: a failed run with a non-auth error, or
+      // the account itself reporting a connection problem outside of a run.
+      if (account.lastSyncStatus === "failed") {
+        return {
+          indicator: "error",
+          badgeTone: "amber",
+          label: "Sign-in expired",
+          alert: syncAlert("Last sync failed", account.lastSyncError, account.lastSyncCounts),
+          canReconnect: account.providerType === "google"
+        };
+      }
+      return {
+        indicator: "error",
+        badgeTone: "amber",
+        label: "Connection error",
+        alert:
+          account.providerType === "google"
+            ? "Google reported a connection error. Reconnect to restore syncing."
+            : "This email account reported a connection error. Reconnect to restore syncing.",
+        canReconnect: true
+      };
 
-  if (account.lastSyncStatus === null) {
-    return {
-      indicator: "idle",
-      badgeTone: "neutral",
-      label: "Awaiting first sync",
-      alert: "First sync hasn't run yet — new data will appear once it completes.",
-      canReconnect: false
-    };
-  }
+    case "capped":
+      return {
+        indicator: "error",
+        badgeTone: "amber",
+        label: "Message cap reached",
+        alert: syncAlert(
+          "Last sync reached its message cap",
+          account.lastSyncError,
+          account.lastSyncCounts
+        ),
+        canReconnect: false
+      };
 
-  return {
-    indicator: "ready",
-    badgeTone: "forest",
-    label: "Synced",
-    alert: null,
-    canReconnect: false
-  };
+    case "partial":
+      return {
+        indicator: "error",
+        badgeTone: "amber",
+        label: "Partial sync",
+        alert: syncAlert(
+          "Last sync completed with errors",
+          account.lastSyncError,
+          account.lastSyncCounts
+        ),
+        canReconnect: false
+      };
+
+    case "not-scheduled":
+    case "first-run-pending":
+      return {
+        indicator: "idle",
+        badgeTone: "neutral",
+        label: "Awaiting first sync",
+        alert: "First sync hasn't run yet — new data will appear once it completes.",
+        canReconnect: false
+      };
+
+    default:
+      return {
+        indicator: "ready",
+        badgeTone: "forest",
+        label: "Synced",
+        alert: null,
+        canReconnect: false
+      };
+  }
 }
 
 function parseTimestamp(value: string | null): number | null {

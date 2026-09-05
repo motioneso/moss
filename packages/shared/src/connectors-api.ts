@@ -16,6 +16,11 @@ export interface ConnectorSyncCounts {
   readonly emailFailures?: number;
   readonly escalations?: number;
   readonly truncated?: boolean;
+  /**
+   * How many email messages Google sync set aside for a later retry this run (never more
+   * than emailUpserted). Distinct from emailFailures, which is a permanent per-message error.
+   */
+  readonly emailDeferred?: number;
 }
 
 export interface ConnectorProviderDto {
@@ -130,7 +135,8 @@ const connectorSyncCountsSchema = {
     emailUpserted: { type: "number" },
     emailFailures: { type: "number" },
     escalations: { type: "number" },
-    truncated: { type: "boolean" }
+    truncated: { type: "boolean" },
+    emailDeferred: { type: "number" }
   }
 } as const;
 

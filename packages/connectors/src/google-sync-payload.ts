@@ -38,7 +38,8 @@ export function assertGoogleSyncContinuationPayload(payload: GoogleSyncContinuat
     payload.calendarReconciled,
     payload.emailUpserted,
     payload.emailFailures,
-    payload.escalations
+    payload.escalations,
+    payload.emailDeferred
   ];
   if (counts.some((value) => !Number.isSafeInteger(value) || value < 0 || value > 1_000_000)) {
     throw new Error("invalid continuation count");

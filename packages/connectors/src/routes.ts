@@ -136,7 +136,8 @@ export function registerConnectorsRoutes(
             {
               actorUserId: accessContext.actorUserId,
               kind: "google-sync" as const,
-              idempotencyKey: randomUUID()
+              idempotencyKey: randomUUID(),
+              trigger: "on-connect" as const
             },
             { singletonKey: accessContext.actorUserId }
           );
@@ -184,7 +185,12 @@ export function registerConnectorsRoutes(
         const jobId = await sendJob(
           dependencies.boss,
           GOOGLE_SYNC_QUEUE,
-          { actorUserId: accessContext.actorUserId, kind: "google-sync" as const, idempotencyKey },
+          {
+            actorUserId: accessContext.actorUserId,
+            kind: "google-sync" as const,
+            idempotencyKey,
+            trigger: "manual" as const
+          },
           // Per-actor singletonKey: a manual click racing sync-on-connect (or a second click)
           // collapses to one in-flight job. A null jobId means the collision happened — report
           // dedupe, not a fresh enqueue (briefings null-jobId precedent).

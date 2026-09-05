@@ -126,6 +126,7 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "startedAt",
   "calendarSeenSince",
   "calendarUpserted",
+  "emailDeferred",
   "calendarReconciled",
   "emailUpserted",
   "emailFailures",
@@ -134,7 +135,8 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "buildId",
   "step",
   "workflowRunId",
-  "stepRunId"
+  "stepRunId",
+  "trigger"
 ]);
 
 export function assertMetadataOnlyPayload(payload: unknown): void {

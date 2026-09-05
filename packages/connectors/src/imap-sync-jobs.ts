@@ -13,7 +13,7 @@ import { buildEmailExtractDeps, type BuildEmailExtractDepsOptions } from "./extr
 import type { EmailReadProvider } from "./email-read-provider.js";
 import { ImapEmailReadProvider, IMAP_DEFAULT_FOLDER } from "./imap-email-read-provider.js";
 import { decryptImapConnectionSecret, type ImapConnectionSecret } from "./imap-secret.js";
-import { ConnectorsRepository } from "./repository.js";
+import { ConnectorsRepository, type ConnectorSyncTrigger } from "./repository.js";
 import { withSavepoint, type SyncLogger } from "./sync-jobs.js";
 
 export const IMAP_SYNC_QUEUE = "connectors.imap-sync";
@@ -36,6 +36,8 @@ export interface ImapSyncPayload extends ActorScopedJobPayload {
   readonly kind: "imap-sync";
   readonly connectorAccountId: string;
   readonly idempotencyKey?: string;
+  /** What caused this run to start. Today only the recurring schedule enqueues IMAP syncs. */
+  readonly trigger: ConnectorSyncTrigger;
 }
 
 export interface ImapSyncResult {
@@ -55,6 +57,8 @@ export interface RunImapSyncDeps {
   readonly emailRepository?: EmailRepository;
   readonly now?: () => Date;
   readonly logger?: SyncLogger;
+  /** What caused this run to start. Defaults to "schedule" when a caller does not specify one. */
+  readonly trigger?: ConnectorSyncTrigger;
 }
 
 export async function runImapSync(
@@ -70,7 +74,10 @@ export async function runImapSync(
   let emailUpserted = 0;
   let emailFailures = 0;
 
-  await deps.repository.markSyncStarted(scopedDb, connectorAccountId, now());
+  await deps.repository.markSyncStarted(scopedDb, connectorAccountId, {
+    startedAt: now(),
+    trigger: deps.trigger ?? "schedule"
+  });
 
   let secret: ImapConnectionSecret;
   try {
@@ -83,7 +90,8 @@ export async function runImapSync(
         finishedAt: now(),
         status: "failed",
         error: "no-active-connection",
-        counts: { emailUpserted: 0, emailFailures: 0, truncated: false }
+        counts: { emailUpserted: 0, emailFailures: 0, truncated: false },
+        isContinuation: false
       });
       return {
         emailUpserted: 0,
@@ -99,7 +107,8 @@ export async function runImapSync(
       finishedAt: now(),
       status: "failed",
       error: "auth-error",
-      counts: { emailUpserted: 0, emailFailures: 0, truncated: false }
+      counts: { emailUpserted: 0, emailFailures: 0, truncated: false },
+      isContinuation: false
     });
     return { emailUpserted: 0, emailFailures: 0, errors: ["auth-error"], truncated: false };
   }
@@ -145,7 +154,8 @@ export async function runImapSync(
     finishedAt: now(),
     status,
     error: errors[0] ?? null,
-    counts: { emailUpserted, emailFailures, truncated: false }
+    counts: { emailUpserted, emailFailures, truncated: false },
+    isContinuation: false
   });
 
   return { emailUpserted, emailFailures, errors, truncated: false };
@@ -182,7 +192,8 @@ export async function registerImapSyncWorker(
         repository,
         cipher,
         emailExtractDeps,
-        logger: deps.logger
+        logger: deps.logger,
+        trigger: job.data.trigger
       });
       deps.onResult?.(job, result);
       return result;

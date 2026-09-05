@@ -43,6 +43,10 @@ interface PhaseProgress {
   emailFailures: number;
   escalations: number;
   readonly errors: string[];
+  /** Messages set aside for a later retry this run (never more than emailUpserted). */
+  emailDeferred: number;
+  /** The most recent reason a message was deferred, for the sync-status "why" text. */
+  deferredReason: string | null;
 }
 
 interface PhaseContext {
@@ -489,6 +493,10 @@ export async function runGoogleEmailPhase(
     if (error instanceof EmailExtractRetryableError) {
       if (!extractionScope) throw error;
       context.progress.emailFailures += 1;
+      // The queue's retryLimit is 1, so this fires at most once per message unit this run —
+      // emailDeferred can never run ahead of emailUpserted.
+      context.progress.emailDeferred += 1;
+      context.progress.deferredReason = error.reason;
       if (!context.progress.errors.includes("email-message-error")) {
         context.progress.errors.push("email-message-error");
       }
