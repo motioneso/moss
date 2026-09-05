@@ -207,7 +207,9 @@ describe("Notifications module M5", () => {
     expect(registrations.map((item) => item.manifest.id)).toEqual(expectedBuiltInModuleIds);
     expect(manifest?.database?.ownedTables).toEqual([
       "app.notifications",
-      "app.notification_reads"
+      "app.notification_reads",
+      "app.push_subscriptions",
+      "app.push_signing_key"
     ]);
     // No sidebar nav entry: notifications are reached via the topbar bell (AppShell).
     // The route + APIs remain registered; only the module-nav link was retired.
