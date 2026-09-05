@@ -22,3 +22,24 @@ export interface PushSummaryJobPayload {
   readonly recipientUserId: string;
   readonly releaseAt: string;
 }
+
+/**
+ * Retry policy for both push queues (#743 security finding 8): four attempts in all, thirty
+ * seconds apart with exponential backoff, so a brief push-service outage or throttling does
+ * not lose the notification. Mirrors the AI job queues. Structural (no pg-boss import) for
+ * the same package-cycle reason as the payloads above.
+ */
+export const PUSH_QUEUE_RETRY_OPTIONS = {
+  retryLimit: 3,
+  retryDelay: 30,
+  retryBackoff: true
+} as const;
+
+/**
+ * Work options for both push workers. `includeMetadata` gives the handler the job's
+ * `retryCount` and `retryLimit`, which is how it knows whether an attempt is the last one.
+ */
+export const PUSH_WORK_OPTIONS = {
+  pollingIntervalSeconds: 2,
+  includeMetadata: true
+} as const;

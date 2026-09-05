@@ -144,7 +144,8 @@ describe("Push subscriptions (#743)", () => {
       id: registered.id,
       endpoint,
       p256dh: P256DH,
-      auth: AUTH
+      auth: AUTH,
+      lastDeliveredKey: null
     });
 
     // Re-registering the same endpoint hits the hash-based uniqueness key, not a new row.
@@ -221,7 +222,7 @@ describe("Push subscriptions (#743)", () => {
     // Bookkeeping writes from another actor's context touch nothing either.
     await dataContext.withDataContext(userBContext(), async (scopedDb) => {
       await repository.recordDeliveryFailure(scopedDb, registered.id);
-      await repository.recordDeliverySuccess(scopedDb, registered.id);
+      await repository.recordDeliverySuccess(scopedDb, registered.id, "not-mine");
     });
     const stillOwned = await dataContext.withDataContext(userAContext(), (scopedDb) =>
       repository.listForActor(scopedDb)
@@ -230,6 +231,7 @@ describe("Push subscriptions (#743)", () => {
     expect(row).toBeDefined();
     expect(row?.failure_count).toBe(0);
     expect(row?.last_used_at).toBeNull();
+    expect(row?.last_delivered_key).toBeNull();
   });
 
   it("finding 3: DELETE answers 404 for a device the caller does not own, and after removal", async () => {
@@ -353,5 +355,27 @@ describe("Push subscriptions (#743)", () => {
     } finally {
       await observer.end();
     }
+  });
+
+  it("finding 8: a delivery records the payload key, so a retry can skip that device", async () => {
+    const registered = (await registerAs(ids.sessionA, endpointFor("retry-key"))).json<{
+      device: { id: string };
+    }>().device;
+
+    const before = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.listActiveForDelivery(scopedDb)
+    );
+    expect(before.find((target) => target.id === registered.id)?.lastDeliveredKey).toBeNull();
+
+    await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.recordDeliverySuccess(scopedDb, registered.id, "notification-key-1")
+    );
+
+    const after = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.listActiveForDelivery(scopedDb)
+    );
+    expect(after.find((target) => target.id === registered.id)?.lastDeliveredKey).toBe(
+      "notification-key-1"
+    );
   });
 });

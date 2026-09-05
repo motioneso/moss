@@ -379,6 +379,8 @@ export interface PushSubscriptionsTable {
   last_used_at: NullableTimestampColumn;
   failure_count: ColumnType<number, number | undefined, number>;
   disabled_at: NullableTimestampColumn;
+  /** Key of the last payload delivered to this device; a retry skips rows holding its key. */
+  last_delivered_key: string | null;
 }
 
 export interface PushSigningKeyTable {

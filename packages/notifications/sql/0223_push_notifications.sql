@@ -14,6 +14,10 @@ CREATE TABLE IF NOT EXISTS app.push_subscriptions (
   last_used_at timestamptz,
   failure_count integer NOT NULL DEFAULT 0,
   disabled_at timestamptz,
+  -- Security review 1, finding 8: the key of the last payload delivered to this device
+  -- (a notification id, or summary:<release time>). A pg-boss retry of the same job skips
+  -- devices that already hold its key, so a retried delivery never repeats a success.
+  last_delivered_key text,
   CONSTRAINT push_subscriptions_owner_endpoint_key UNIQUE (owner_user_id, endpoint_hash)
 );
 

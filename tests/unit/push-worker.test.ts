@@ -41,11 +41,17 @@ const fakeScopedDb = {
   db: {}
 } as unknown as DataContextDb;
 
-function deliverJob(data: PushDeliverJobPayload): Job<PushDeliverJobPayload> {
+// `attempt` mirrors the retry metadata pg-boss attaches when a worker is registered with
+// includeMetadata; a job without it is treated as its final attempt (#743 finding 8).
+function deliverJob(
+  data: PushDeliverJobPayload,
+  attempt: { retryCount: number; retryLimit: number } | undefined = undefined
+): Job<PushDeliverJobPayload> {
   return {
     id: "job-1",
     name: "notifications.push.deliver",
-    data
+    data,
+    ...attempt
   } as unknown as Job<PushDeliverJobPayload>;
 }
 
@@ -142,7 +148,7 @@ describe("runPushDeliverJob", () => {
     );
 
     expect(sendWebPush).toHaveBeenCalledTimes(1);
-    expect(recordDeliverySuccess).toHaveBeenCalledWith(fakeScopedDb, "sub-1");
+    expect(recordDeliverySuccess).toHaveBeenCalledWith(fakeScopedDb, "sub-1", "n1");
     expect(recordDeliveryFailure).not.toHaveBeenCalled();
     expect(del).not.toHaveBeenCalled();
   });
@@ -240,7 +246,9 @@ describe("runPushDeliverJob", () => {
       }
     );
 
-    const options = sendWebPush.mock.calls[0]?.[2] as { agent?: { options?: { lookup?: unknown } } };
+    const options = sendWebPush.mock.calls[0]?.[2] as {
+      agent?: { options?: { lookup?: unknown } };
+    };
     expect(typeof options.agent?.options?.lookup).toBe("function");
   });
 
@@ -401,7 +409,7 @@ describe("runPushDeliverJob", () => {
     );
 
     expect(recordDeliveryFailure).toHaveBeenCalledWith(fakeScopedDb, "sub-a");
-    expect(recordDeliverySuccess).toHaveBeenCalledWith(fakeScopedDb, "sub-b");
+    expect(recordDeliverySuccess).toHaveBeenCalledWith(fakeScopedDb, "sub-b", "n1");
   });
 });
 
@@ -522,5 +530,229 @@ describe("runPushSummaryJob", () => {
     const payload = JSON.parse(payloadJson);
     expect(payload.body).toBe("3 notifications while you were away");
     expect(payload.id).toBe("summary:2026-09-04T08:00:00.000Z");
+  });
+});
+
+// #743 security finding 8: temporary push-service failures are retried by pg-boss instead of
+// being swallowed; a device only earns a failure mark on the final attempt; a retry never
+// sends a payload twice to a device that already received it; a send that never answers is
+// a temporary failure, not a hang.
+describe("push delivery retries (#743 security finding 8)", () => {
+  const JOB = { actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+    mockGetOrGeneratePushSigningKey.mockResolvedValue(FIXED_SIGNING_KEY);
+  });
+
+  function repositoryWith(targets: readonly Record<string, unknown>[]) {
+    return {
+      listActiveForDelivery: vi.fn().mockResolvedValue(targets),
+      recordDeliverySuccess: vi.fn(),
+      recordDeliveryFailure: vi.fn(),
+      delete: vi.fn()
+    };
+  }
+
+  async function run(
+    job: Job<PushDeliverJobPayload>,
+    repository: ReturnType<typeof repositoryWith>,
+    sendWebPush: ReturnType<typeof vi.fn>
+  ) {
+    const { runPushDeliverJob } = await import("@moss/notifications");
+    return runPushDeliverJob(job, fakeScopedDb, {
+      notificationsRepository: {
+        getById: vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null })
+      } as never,
+      subscriptionsRepository: repository as never,
+      cipher: {} as never,
+      sendWebPush: sendWebPush as never
+    });
+  }
+
+  const rejectWith = (statusCode: number) =>
+    vi.fn().mockRejectedValue(Object.assign(new Error("push service said no"), { statusCode }));
+
+  it("leaves the device untouched after a temporary failure while attempts remain", async () => {
+    const repository = repositoryWith([fakeSubscription()]);
+
+    const outcome = await run(
+      deliverJob(JOB, { retryCount: 0, retryLimit: 3 }),
+      repository,
+      rejectWith(503)
+    );
+
+    expect(outcome.temporaryFailures).toBe(1);
+    expect(outcome.reasons).toEqual(["503"]);
+    expect(repository.recordDeliveryFailure).not.toHaveBeenCalled();
+    expect(repository.delete).not.toHaveBeenCalled();
+    expect(repository.recordDeliverySuccess).not.toHaveBeenCalled();
+  });
+
+  it("treats service throttling (429) as temporary", async () => {
+    const repository = repositoryWith([fakeSubscription()]);
+
+    const outcome = await run(
+      deliverJob(JOB, { retryCount: 1, retryLimit: 3 }),
+      repository,
+      rejectWith(429)
+    );
+
+    expect(outcome.temporaryFailures).toBe(1);
+    expect(repository.recordDeliveryFailure).not.toHaveBeenCalled();
+  });
+
+  it("counts the device failure on the final attempt", async () => {
+    const repository = repositoryWith([fakeSubscription()]);
+
+    const outcome = await run(
+      deliverJob(JOB, { retryCount: 3, retryLimit: 3 }),
+      repository,
+      rejectWith(503)
+    );
+
+    expect(outcome.temporaryFailures).toBe(1);
+    expect(repository.recordDeliveryFailure).toHaveBeenCalledWith(fakeScopedDb, "sub-1");
+  });
+
+  it("treats a job without retry metadata as its final attempt", async () => {
+    const repository = repositoryWith([fakeSubscription()]);
+
+    await run(deliverJob(JOB), repository, rejectWith(503));
+
+    expect(repository.recordDeliveryFailure).toHaveBeenCalledWith(fakeScopedDb, "sub-1");
+  });
+
+  it("still removes a gone subscription (410) while attempts remain", async () => {
+    const repository = repositoryWith([fakeSubscription()]);
+
+    const outcome = await run(
+      deliverJob(JOB, { retryCount: 0, retryLimit: 3 }),
+      repository,
+      rejectWith(410)
+    );
+
+    expect(outcome.temporaryFailures).toBe(0);
+    expect(repository.delete).toHaveBeenCalledWith(fakeScopedDb, "sub-1");
+    expect(repository.recordDeliveryFailure).not.toHaveBeenCalled();
+  });
+
+  it("counts a rejection the service will never accept (403) against the device at once", async () => {
+    const repository = repositoryWith([fakeSubscription()]);
+
+    const outcome = await run(
+      deliverJob(JOB, { retryCount: 0, retryLimit: 3 }),
+      repository,
+      rejectWith(403)
+    );
+
+    expect(outcome.temporaryFailures).toBe(0);
+    expect(repository.recordDeliveryFailure).toHaveBeenCalledWith(fakeScopedDb, "sub-1");
+    expect(repository.delete).not.toHaveBeenCalled();
+  });
+
+  it("records the payload id as the delivered key, and a retry skips a device that has it", async () => {
+    const repository = repositoryWith([
+      fakeSubscription({ id: "sub-1", lastDeliveredKey: "n1" }),
+      fakeSubscription({
+        id: "sub-2",
+        endpoint: "https://push.example/ep2",
+        lastDeliveredKey: null
+      })
+    ]);
+    const sendWebPush = vi.fn().mockResolvedValue(undefined);
+
+    const outcome = await run(
+      deliverJob(JOB, { retryCount: 1, retryLimit: 3 }),
+      repository,
+      sendWebPush
+    );
+
+    expect(sendWebPush).toHaveBeenCalledTimes(1);
+    expect((sendWebPush.mock.calls[0]?.[0] as { endpoint: string }).endpoint).toBe(
+      "https://push.example/ep2"
+    );
+    expect(repository.recordDeliverySuccess).toHaveBeenCalledTimes(1);
+    expect(repository.recordDeliverySuccess).toHaveBeenCalledWith(fakeScopedDb, "sub-2", "n1");
+    expect(outcome).toEqual({
+      delivered: 1,
+      alreadyDelivered: 1,
+      temporaryFailures: 0,
+      reasons: []
+    });
+  });
+
+  it("counts a send that never answers as a temporary failure", async () => {
+    const { PUSH_SEND_DEADLINE_MS } = await import("@moss/notifications");
+    const repository = repositoryWith([fakeSubscription()]);
+    const sendWebPush = vi.fn().mockReturnValue(new Promise(() => undefined));
+    vi.useFakeTimers();
+
+    const pending = run(deliverJob(JOB, { retryCount: 0, retryLimit: 3 }), repository, sendWebPush);
+    await vi.advanceTimersByTimeAsync(PUSH_SEND_DEADLINE_MS + 1);
+    const outcome = await pending;
+
+    expect(outcome.temporaryFailures).toBe(1);
+    expect(outcome.reasons).toEqual(["timeout"]);
+    expect(repository.recordDeliveryFailure).not.toHaveBeenCalled();
+    expect(repository.recordDeliverySuccess).not.toHaveBeenCalled();
+  });
+
+  it("the retry signal carries counts and status codes only, never an address or body", async () => {
+    const { PushDeliveryRetryError, throwIfPushRetryNeeded } = await import("@moss/notifications");
+
+    expect(() =>
+      throwIfPushRetryNeeded({
+        delivered: 1,
+        alreadyDelivered: 0,
+        temporaryFailures: 0,
+        reasons: []
+      })
+    ).not.toThrow();
+
+    let thrown: unknown;
+    try {
+      throwIfPushRetryNeeded({
+        delivered: 0,
+        alreadyDelivered: 0,
+        temporaryFailures: 2,
+        reasons: ["503", "timeout"]
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(PushDeliveryRetryError);
+    expect((thrown as Error).message).toBe(
+      "push delivery: 2 device(s) failed temporarily (503, timeout)"
+    );
+    expect(Object.keys(thrown as object)).not.toContain("endpoint");
+    expect(Object.keys(thrown as object)).not.toContain("body");
+  });
+
+  it("the summary push records summary:<releaseAt> as the delivered key", async () => {
+    const { runPushSummaryJob } = await import("@moss/notifications");
+    mockCountRows = [{ count: "2" }];
+    const repository = repositoryWith([fakeSubscription()]);
+
+    await runPushSummaryJob(
+      summaryJob({
+        actorUserId: "u1",
+        recipientUserId: "u1",
+        releaseAt: "2026-09-04T08:00:00.000Z"
+      }),
+      fakeScopedDb,
+      {
+        subscriptionsRepository: repository as never,
+        cipher: {} as never,
+        sendWebPush: vi.fn().mockResolvedValue(undefined)
+      }
+    );
+
+    expect(repository.recordDeliverySuccess).toHaveBeenCalledWith(
+      fakeScopedDb,
+      "sub-1",
+      "summary:2026-09-04T08:00:00.000Z"
+    );
   });
 });

@@ -192,10 +192,14 @@ import {
   NotificationsRepository,
   DIGEST_COMPOSE_QUEUE,
   PUSH_DELIVER_QUEUE,
+  PUSH_QUEUE_RETRY_OPTIONS,
   PUSH_SUMMARY_QUEUE,
+  PUSH_WORK_OPTIONS,
   runPushDeliverJob,
   runPushSummaryJob,
+  throwIfPushRetryNeeded,
   type PushDeliverJobPayload,
+  type PushDeliveryOutcome,
   type PushSummaryJobPayload,
   type NotificationPreferencePort,
   runNotificationDigestCompose,
@@ -1720,8 +1724,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [notificationsModuleSqlMigrationDirectory],
     queueDefinitions: [
       { name: DIGEST_COMPOSE_QUEUE, options: { retryLimit: 0 } },
-      { name: PUSH_DELIVER_QUEUE, options: { retryLimit: 0 } },
-      { name: PUSH_SUMMARY_QUEUE, options: { retryLimit: 0 } }
+      // #743 security finding 8: temporary push-service failures (throttling, 5xx, a send
+      // that never answers) retry with backoff; the worker asks for the retry only after its
+      // transaction commits, and skips devices that already received the payload.
+      { name: PUSH_DELIVER_QUEUE, options: PUSH_QUEUE_RETRY_OPTIONS },
+      { name: PUSH_SUMMARY_QUEUE, options: PUSH_QUEUE_RETRY_OPTIONS }
     ],
     registerRoutes: registerNotificationsRoutes,
     registerWorkers: async (boss, deps) => [
@@ -1739,17 +1746,21 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             sender: createNotificationDigestSender()
           })
       ),
-      await registerDataContextWorker<PushDeliverJobPayload, void>(
+      await registerDataContextWorker<PushDeliverJobPayload, PushDeliveryOutcome>(
         boss,
         PUSH_DELIVER_QUEUE,
         deps.dataContext,
-        (job, scopedDb) => runPushDeliverJob(job, scopedDb)
+        (job, scopedDb) => runPushDeliverJob(job, scopedDb),
+        PUSH_WORK_OPTIONS,
+        { afterCommit: throwIfPushRetryNeeded }
       ),
-      await registerDataContextWorker<PushSummaryJobPayload, void>(
+      await registerDataContextWorker<PushSummaryJobPayload, PushDeliveryOutcome>(
         boss,
         PUSH_SUMMARY_QUEUE,
         deps.dataContext,
-        (job, scopedDb) => runPushSummaryJob(job, scopedDb)
+        (job, scopedDb) => runPushSummaryJob(job, scopedDb),
+        PUSH_WORK_OPTIONS,
+        { afterCommit: throwIfPushRetryNeeded }
       )
     ]
   },

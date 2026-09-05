@@ -116,6 +116,9 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(payload.title, {
       body: payload.body,
       icon: "/icons/icon.svg",
+      // #743 security finding 8: the payload id is the tag, so if a retried delivery ever
+      // reaches this device twice the second copy replaces the first instead of stacking.
+      tag: typeof payload.id === "string" && payload.id.length > 0 ? payload.id : undefined,
       data: { href: payload.href ?? null }
     })
   );

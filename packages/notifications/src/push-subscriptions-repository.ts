@@ -19,6 +19,12 @@ export interface PushDeliveryTarget {
   readonly endpoint: string;
   readonly p256dh: string;
   readonly auth: string;
+  /**
+   * Key of the last payload this device received (#743 finding 8). The worker compares it
+   * with the payload it is about to send and skips the device on a retry that would repeat
+   * an earlier success.
+   */
+  readonly lastDeliveredKey: string | null;
 }
 
 const MAX_SUBSCRIPTIONS_PER_USER = 10;
@@ -38,7 +44,8 @@ const DEVICE_COLUMNS = [
   "created_at",
   "last_used_at",
   "failure_count",
-  "disabled_at"
+  "disabled_at",
+  "last_delivered_key"
 ] as const;
 
 /**
@@ -88,13 +95,15 @@ export class PushSubscriptionsRepository {
     assertDataContextDb(scopedDb);
     const rows = await scopedDb.db
       .selectFrom("app.push_subscriptions")
-      .select(["id", "credentials_ciphertext"])
+      .select(["id", "credentials_ciphertext", "last_delivered_key"])
       .where(ownerIsActor)
       .where("disabled_at", "is", null)
       .orderBy("created_at", "asc")
       .execute();
 
-    return rows.map((row) => this.openCredentials(row.id, row.credentials_ciphertext));
+    return rows.map((row) =>
+      this.openCredentials(row.id, row.credentials_ciphertext, row.last_delivered_key)
+    );
   }
 
   /**
@@ -181,11 +190,19 @@ export class PushSubscriptionsRepository {
     return (result.numDeletedRows ?? 0n) > 0n;
   }
 
-  async recordDeliverySuccess(scopedDb: DataContextDb, id: string): Promise<void> {
+  /**
+   * A success resets the failure count and records `deliveredKey`, the payload's id, so a
+   * retry of the same job can tell this device already has it (#743 finding 8).
+   */
+  async recordDeliverySuccess(
+    scopedDb: DataContextDb,
+    id: string,
+    deliveredKey: string
+  ): Promise<void> {
     assertDataContextDb(scopedDb);
     await scopedDb.db
       .updateTable("app.push_subscriptions")
-      .set({ failure_count: 0, last_used_at: new Date() })
+      .set({ failure_count: 0, last_used_at: new Date(), last_delivered_key: deliveredKey })
       .where(ownerIsActor)
       .where("id", "=", id)
       .execute();
@@ -203,12 +220,16 @@ export class PushSubscriptionsRepository {
     `.execute(scopedDb.db);
   }
 
-  private openCredentials(id: string, envelope: unknown): PushDeliveryTarget {
+  private openCredentials(
+    id: string,
+    envelope: unknown,
+    lastDeliveredKey: string | null
+  ): PushDeliveryTarget {
     const decrypted = this.cipher.decryptJson(this.cipher.parseEnvelope(envelope));
     const { endpoint, p256dh, auth } = decrypted;
     if (typeof endpoint !== "string" || typeof p256dh !== "string" || typeof auth !== "string") {
       throw new Error("push subscription envelope is missing its endpoint or keys");
     }
-    return { id, endpoint, p256dh, auth };
+    return { id, endpoint, p256dh, auth, lastDeliveredKey };
   }
 }
