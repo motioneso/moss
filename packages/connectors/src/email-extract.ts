@@ -203,7 +203,6 @@ export interface EmailSignals {
   readonly skipped?: "otp";
 }
 
-
 export function otpSkippedResult(): EmailExtractResult {
   return { summary: null, signals: { skipped: "otp", confidence: 0 } };
 }

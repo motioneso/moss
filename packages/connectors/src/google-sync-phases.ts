@@ -256,9 +256,9 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
     const prior = input.seen.get(parsed.externalId);
     const unchanged = Boolean(
       parsed.historyId &&
-        prior?.historyId === parsed.historyId &&
-        prior.hasSummary &&
-        prior.hasCompleteTriage
+      prior?.historyId === parsed.historyId &&
+      prior.hasSummary &&
+      prior.hasCompleteTriage
     );
     if (looksLikeOneTimeCodeEmail(parsed)) {
       try {
