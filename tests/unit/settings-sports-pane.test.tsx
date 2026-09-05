@@ -646,6 +646,24 @@ describe("SportsSettings", () => {
     expect(nflGroup).not.toContain("ARS");
   });
 
+  it("a league that matched by name alone keeps its Follow-all row but renders no empty team grid (#2278 review)", () => {
+    const html = renderToString(
+      createElement(SearchResults, {
+        query: "nfl",
+        results: [],
+        partial: false,
+        isError: false,
+        competitions: TWO_LEAGUES,
+        followsByKey: new Map(),
+        onToggle: () => {},
+        onRetry: () => {},
+        actionState: null
+      })
+    );
+    expect(html).toContain("Follow all of NFL");
+    expect(html).not.toContain("sp-teamgrid");
+  });
+
   it("a team whose league is missing from the catalog still sits under its own heading (#2278 review)", () => {
     const ncaaState = { ...DAL, teamKey: "ncst", competitionKey: "ncaa.mbb", name: "NC State" };
     const ncaaFootball = { ...ncaaState, competitionKey: "ncaa.fb" };

@@ -458,6 +458,9 @@ export function SearchResults(props: {
         );
         const state = followControlState("league", competition.label, wholeActive, pendingHere);
         const matched = matchedLeagueKeys.has(competition.competitionKey);
+        // A league that matched by name alone has no team tiles: keep its Follow-all row but
+        // never render an empty grid beneath it.
+        const teams = teamsByLeague.get(competition.competitionKey) ?? [];
         return (
           <div className="sp-search__group" key={`g-${competition.competitionKey}`}>
             {matched ? (
@@ -484,9 +487,7 @@ export function SearchResults(props: {
             ) : (
               <div className="jds-eyebrow sp-search__group-heading">{competition.label}</div>
             )}
-            <div className="sp-teamgrid">
-              {(teamsByLeague.get(competition.competitionKey) ?? []).map(renderTeam)}
-            </div>
+            {teams.length > 0 ? <div className="sp-teamgrid">{teams.map(renderTeam)}</div> : null}
           </div>
         );
       })}
