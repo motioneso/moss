@@ -269,7 +269,8 @@ function buildApp(
     personalizationRepository: personalization,
     availability: {
       hasJsonModel: async () => overrides.hasJsonModel ?? true,
-      hasWebSearch: async () => overrides.hasWebSearch ?? true
+      hasWebSearch: async () => overrides.hasWebSearch ?? true,
+      webSearchReason: async () => (overrides.hasWebSearch ?? true ? null : "no-key-no-native-model")
     },
     discovery: overrides.discovery ?? {
       fetch: async () => ({ ok: false, reason: "network" }),

@@ -217,7 +217,11 @@ function buildNewsServer(options: {
     } as unknown as DataContextRunner,
     resolveAccessContext: async () => user,
     datasetClient: unusedDatasetClient,
-    availability: { hasJsonModel: async () => true, hasWebSearch: async () => true },
+    availability: {
+      hasJsonModel: async () => true,
+      hasWebSearch: async () => true,
+      webSearchReason: async () => null
+    },
     discovery: {
       fetch: servePages(options.pages),
       image: async () => ({ ok: false, reason: "network" }),

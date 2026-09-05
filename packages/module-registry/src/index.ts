@@ -872,6 +872,19 @@ function buildSportsDiscoveryPorts(
 }
 
 /**
+ * #2228: News' web search availability, resolved once per call through the actor's effective
+ * chat model. Shared by hasWebSearch and webSearchReason so the model lookup and engine
+ * resolution only happen a single time per call site.
+ */
+async function resolveNewsWebSearch(scopedDb: DataContextDb) {
+  const model = await new AiRepository().selectChatModelForUser(scopedDb);
+  return resolveWebSearchEngine(
+    scopedDb,
+    model ? { id: model.id, capabilities: model.capabilities } : null
+  );
+}
+
+/**
  * #1110: UAT-only. Deterministically fakes a transient News source-preview error for one
  * sentinel input, so the app-map-grounding UAT spec can prove the "no invented fix" path
  * without a live upstream. Both env vars are set unconditionally in the UAT app container's
@@ -2188,12 +2201,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
               )
             ).model !== null,
           hasWebSearch: async (scopedDb) => {
-            const model = await new AiRepository().selectChatModelForUser(scopedDb);
-            const resolution = await resolveWebSearchEngine(
-              scopedDb,
-              model ? { id: model.id, capabilities: model.capabilities } : null
-            );
+            const resolution = await resolveNewsWebSearch(scopedDb);
             return resolution.engine !== "none";
+          },
+          webSearchReason: async (scopedDb) => {
+            const resolution = await resolveNewsWebSearch(scopedDb);
+            return resolution.engine === "none" ? resolution.reason : null;
           }
         }
       });

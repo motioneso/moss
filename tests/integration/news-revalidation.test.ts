@@ -709,7 +709,11 @@ describe("news revalidation schedule (#975 Slice 4)", () => {
         actorUserId: String(request.headers["x-user-id"] ?? ids.userA),
         requestId: crypto.randomUUID()
       }),
-      availability: { hasJsonModel: async () => true, hasWebSearch: async () => true },
+      availability: {
+        hasJsonModel: async () => true,
+        hasWebSearch: async () => true,
+        webSearchReason: async () => null
+      },
       discovery: {
         fetch: async (url) => ({
           ok: true,
