@@ -287,11 +287,20 @@
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
 }
+/* Icon on a light tile so a dark publisher mark still reads on the dark theme (#2290); the
+   tile's colour, ring and radius live in packages/ui components-news.css. */
+.nw-twlist__favicon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  vertical-align: text-bottom;
+}
 .nw-twlist__favicon {
-  display: inline-block;
+  display: block;
   width: 14px;
   height: 14px;
-  vertical-align: text-bottom;
   object-fit: contain;
 }
 .nw-twlist__title {

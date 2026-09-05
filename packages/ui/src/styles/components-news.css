@@ -327,6 +327,14 @@
   font-size: var(--text-2xs);
   color: var(--text-muted);
 }
+/* --white is the one surface token that stays white on the dark theme, which is the point: a
+   dark publisher mark keeps its contrast whichever theme is on. The hairline ring is what makes
+   the tile visible against the light theme's paper (#2290). */
+.nw-twlist__favicon-tile {
+  background: var(--white);
+  border-radius: var(--radius-xs);
+  box-shadow: var(--shadow-xs);
+}
 .nw-twlist__title {
   font-family: var(--font-sans);
   font-size: var(--text-sm);

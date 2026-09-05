@@ -21,6 +21,7 @@ import { NewsPrefsRepository } from "./repository.js";
 import { NewsService, type NewsPrefsReader } from "./news-service.js";
 import type {
   NewsAiPort,
+  NewsFaviconFetchPort,
   NewsImageFetchPort,
   NewsSafeFetchPort,
   NewsWebSearchPort
@@ -76,6 +77,8 @@ export interface NewsRoutesDependencies {
   readonly discovery: {
     readonly fetch: NewsSafeFetchPort;
     readonly image: NewsImageFetchPort;
+    /** #2291: favicon bytes without the robots gate; see NewsFaviconFetchPort. */
+    readonly favicon: NewsFaviconFetchPort;
     readonly search: NewsWebSearchPort;
     readonly ai: NewsAiPort;
   };
@@ -287,7 +290,7 @@ export function registerNewsRoutes(
 
   registerNewsFaviconRoute(server, {
     resolveAccessContext: dependencies.resolveAccessContext,
-    fetchImage: dependencies.discovery.image,
+    fetchImage: dependencies.discovery.favicon,
     dataContext: dependencies.dataContext,
     customSources: personalization
   });

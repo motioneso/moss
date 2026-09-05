@@ -57,6 +57,16 @@ export type NewsImageFetchPort = (
     }
 >;
 
+/**
+ * Fetches a publisher's favicon: same host-pinning, HTTPS, size cap and per-host rate limit as
+ * `NewsImageFetchPort`, but no robots.txt gate. A favicon is the same asset a browser requests to
+ * draw a tab, not crawled content, and robots rules are written for crawlers: NPR serves its icon
+ * from media.npr.org, whose robots file disallows everything, so the gate refused the hop and NPR
+ * never got an icon (#2291). The allow-list still binds every hop, so nothing is fetched from a
+ * host the catalog does not declare. Same posture as the sports source-icon route (#2211).
+ */
+export type NewsFaviconFetchPort = NewsImageFetchPort;
+
 export interface NewsWebSearchPort {
   search(
     scopedDb: DataContextDb,

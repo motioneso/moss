@@ -274,6 +274,7 @@ function buildApp(
     discovery: overrides.discovery ?? {
       fetch: async () => ({ ok: false, reason: "network" }),
       image: async () => ({ ok: false, reason: "network" }),
+      favicon: async () => ({ ok: false, reason: "network" }),
       search: { search: async () => ({ results: [] }) },
       ai: {
         generateJson: async () => ({
@@ -674,6 +675,7 @@ describe("news personalization routes (#958 Slice 2)", () => {
           truncated: false
         }),
         image: async () => ({ ok: false, reason: "network" }),
+        favicon: async () => ({ ok: false, reason: "network" }),
         search: { search: async () => ({ results: [] }) },
         ai: {
           generateJson: async () => ({
@@ -750,6 +752,7 @@ describe("news personalization routes (#958 Slice 2)", () => {
       discovery: {
         fetch: async () => ({ ok: false, reason: "network" }),
         image: async () => ({ ok: false, reason: "network" }),
+        favicon: async () => ({ ok: false, reason: "network" }),
         search: { search: async () => ({ results: [] }) },
         ai: {
           generateJson: async () => ({

@@ -736,6 +736,16 @@ function buildNewsDiscoveryPorts(
         maxBytes,
         ...(allowedHosts ? { allowedHosts } : {})
       }),
+    // #2291: a favicon is the asset a browser requests to draw a tab, not crawled content, so it
+    // skips the robots gate (NPR serves its icon from media.npr.org, whose robots file disallows
+    // everything). Host pinning, HTTPS, the size cap and the rate limit all still apply.
+    favicon: (url: string, maxBytes: number, allowedHosts?: readonly string[]) =>
+      fetchWebResourceBytes(url, {
+        requireHttps: true,
+        rateLimiter: newsHostRateLimiter,
+        maxBytes,
+        ...(allowedHosts ? { allowedHosts } : {})
+      }),
     search: {
       async search(
         scopedDb: DataContextDb,

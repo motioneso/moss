@@ -16,21 +16,28 @@ const WIDGET_CAP = 4;
  * text otherwise (Ben: show the icon, keep the name as the image's alt text and tooltip). Tracks
  * the URL that failed, not a bare flag, so a later story from a publisher whose icon loaded fine
  * doesn't stay stuck showing text because an earlier request for the same URL once failed.
+ *
+ * The icon sits on a small tile that stays light in both themes (#2290): most publisher icons
+ * are dark marks on a transparent background and vanished on the dark theme when drawn straight
+ * onto the page. One tile, no second fetch, and the approved-host rule for the icon itself is
+ * untouched.
  */
 function SourceTag(props: { faviconUrl: string | null; label: string }): ReactNode {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   if (props.faviconUrl && props.faviconUrl !== failedUrl) {
     return (
-      <img
-        className="nw-twlist__favicon"
-        src={props.faviconUrl}
-        alt={props.label}
-        title={props.label}
-        width={14}
-        height={14}
-        loading="lazy"
-        onError={() => setFailedUrl(props.faviconUrl)}
-      />
+      <span className="nw-twlist__favicon-tile">
+        <img
+          className="nw-twlist__favicon"
+          src={props.faviconUrl}
+          alt={props.label}
+          title={props.label}
+          width={14}
+          height={14}
+          loading="lazy"
+          onError={() => setFailedUrl(props.faviconUrl)}
+        />
+      </span>
     );
   }
   return <>{props.label}</>;

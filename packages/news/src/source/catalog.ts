@@ -202,6 +202,14 @@ export const NEWS_IMAGE_HOSTS: readonly string[] = sortedUnion(
   NEWS_CATALOG.map((e) => e.imageHosts)
 );
 
+function homepageHost(entry: NewsSourceEntry): string | null {
+  try {
+    return new URL(entry.homepageUrl).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Every catalog entry's own homepage host, lower-cased. This is the publisher allow-list the
  * favicon route checks a requested domain against — the icon route otherwise has no per-article
@@ -209,10 +217,23 @@ export const NEWS_IMAGE_HOSTS: readonly string[] = sortedUnion(
  */
 export const NEWS_HOMEPAGE_HOSTS: readonly string[] = sortedUnion(
   NEWS_CATALOG.map((e) => {
-    try {
-      return [new URL(e.homepageUrl).hostname.toLowerCase()];
-    } catch {
-      return [];
-    }
+    const host = homepageHost(e);
+    return host ? [host] : [];
   })
 );
+
+const BY_HOMEPAGE_HOST = new Map(
+  NEWS_CATALOG.flatMap((e) => {
+    const host = homepageHost(e);
+    return host ? [[host, e] as const] : [];
+  })
+);
+
+/**
+ * The catalog entry whose homepage is served from `host` (case-insensitive), or undefined for a
+ * host no built-in publisher owns — a user's custom source, for instance. The favicon route uses
+ * this to learn which other hosts a publisher has declared its artwork comes from (#2291).
+ */
+export function sourceEntryForHomepageHost(host: string): NewsSourceEntry | undefined {
+  return BY_HOMEPAGE_HOST.get(host.toLowerCase());
+}

@@ -89,6 +89,14 @@ describe("News Today widget", () => {
     expect(html).toContain('src="/api/news/favicon/example.com"');
     expect(html).toContain('alt="Wire"');
     expect(html).toContain('title="Wire"');
+    // Each favicon sits on the light tile (#2290): the image is the tile span's direct child, so
+    // dark or transparent icons read in both themes. Dropping the tile would fail this line.
+    expect(html).toContain(
+      '<span class="nw-twlist__favicon-tile"><img class="nw-twlist__favicon" src="/api/news/favicon/example.com"'
+    );
+    // Exactly one tile per favicon row (stories 3 and 4), and none around the text fallback.
+    expect(html.match(/class="nw-twlist__favicon-tile"/g)).toHaveLength(2);
+    expect(html).not.toContain('nw-twlist__favicon-tile">Wire<');
     // Story 2 has no favicon, so its brief row falls back to the plain publisher name.
     expect(html).toContain(">Wire<");
   });

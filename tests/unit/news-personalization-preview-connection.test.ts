@@ -221,6 +221,7 @@ function buildNewsServer(options: {
     discovery: {
       fetch: servePages(options.pages),
       image: async () => ({ ok: false, reason: "network" }),
+      favicon: async () => ({ ok: false, reason: "network" }),
       search: {
         search: async () => ({
           results: (options.searchResults ?? []).map((url) => ({
