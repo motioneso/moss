@@ -1,7 +1,13 @@
+/* Workshop surfaces. Layout only, by module contract — every colour, border and type rule below
+   comes from a token or a jds-* primitive in apps/web/src/styles. */
+
+/* 1220px matches the Today screen, the widest authored page in the app. The first cut used 920px,
+   which on a normal desktop left roughly half the window as empty gutter (Ben, 2026-09-05:
+   "the design is very bland ... it just doesn't look like a final polished UI"). */
 .workshop-page {
-  max-width: 920px;
+  max-width: 1220px;
   margin: 0 auto;
-  padding: var(--space-6) var(--space-6) var(--space-11);
+  padding: var(--space-7) var(--space-8) var(--space-11);
 }
 
 .workshop-head {
@@ -10,7 +16,8 @@
 
 .workshop-lede {
   margin: var(--space-2) 0 0;
-  max-width: 56ch;
+  max-width: 62ch;
+  color: var(--text-muted);
 }
 
 .workshop-groups {
@@ -58,16 +65,104 @@
   gap: var(--space-1);
 }
 
-.workshop-project-heading,
-.workshop-project-row {
+/* ---- Page heading: title block on the left, primary action pinned right, ruled off ---- */
+
+.workshop-project-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-6);
+  flex-wrap: wrap;
+  padding-bottom: var(--space-5);
+  margin-bottom: var(--space-7);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.workshop-project-heading__text {
+  min-width: 0;
+  flex: 1 1 34ch;
+}
+
+.workshop-project-heading h1 {
+  margin: var(--space-1) 0 0;
+  /* A saved request can be a long sentence; wrap it rather than letting it clip. */
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.workshop-project-heading__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
-.workshop-project-list,
+.workshop-back {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+/* ---- Project list: a card grid, so a wide window shows several projects side by side ---- */
+
+.workshop-project-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-7);
+}
+
+.workshop-project-list .jds-card {
+  /* Equal-height cards across a row, with the meta line settling to the bottom edge. */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  height: 100%;
+  position: relative;
+}
+
+.workshop-project-card__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  overflow-wrap: anywhere;
+}
+
+/* The title link covers the whole card, so the card is clickable without nesting interactive
+   elements inside a link (which would break the keyboard order and the accessible name). */
+.workshop-project-card__title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.workshop-project-card__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-3);
+}
+
+/* The authored empty state has no spacing of its own between the description and a slotted
+   action, so the call to action supplies it here rather than in the shared primitive. */
+.workshop-empty-action {
+  margin-top: var(--space-5);
+}
+
+.workshop-project-more {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-7);
+}
+
+.workshop-project-footer {
+  margin: 0;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
+}
+
 .workshop-project-messages,
 .workshop-project-form form,
 .workshop-project-pane {
@@ -76,31 +171,43 @@
   gap: var(--space-4);
 }
 
-.workshop-project-list,
-.workshop-project-heading,
 .workshop-project-messages {
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-2);
 }
 
 .workshop-project-form {
-  max-width: 640px;
+  max-width: 720px;
 }
 
+/* The conversation carries the writing and gets the wider column; the work pane is a status
+   sidebar until planning ships. Both stay above 320px at the page's minimum desktop width. */
 .workshop-project-detail {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--space-8);
+  align-items: start;
+}
+
+.workshop-project-pane > h2 {
+  margin: 0;
+  font-size: var(--text-md);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-subtle);
 }
 
 .workshop-project-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  margin: var(--space-1) 0 0;
 }
 
 .workshop-project-excerpt {
+  margin: 0;
+  color: var(--text-muted);
   overflow-wrap: anywhere;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -109,13 +216,25 @@
   display: none;
 }
 
+@media (max-width: 1024px) {
+  .workshop-page {
+    padding: var(--space-6);
+  }
+
+  .workshop-project-detail {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+}
+
 @media (max-width: 767px) {
   .workshop-page {
     padding: var(--space-4);
   }
 
-  .workshop-project-detail {
-    grid-template-columns: minmax(0, 1fr);
+  .workshop-project-heading {
+    align-items: flex-start;
+    margin-bottom: var(--space-5);
   }
 
   .workshop-mobile-tabs {

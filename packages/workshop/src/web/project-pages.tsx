@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
-import { Button, ButtonLink, Card, EmptyState } from "@moss/ui";
-import { ApiError } from "@moss/module-web-sdk";
+import { Badge, Button, ButtonLink, Card, EmptyState } from "@moss/ui";
+import { ApiError, randomUuid } from "@moss/module-web-sdk";
 import type { WorkshopProjectCursor } from "@moss/shared";
 import {
   createProject,
@@ -12,6 +12,18 @@ import {
   projectKeys,
   saveMessage
 } from "./project-client.js";
+
+/**
+ * A short, local-time date for a project card's meta line.
+ *
+ * A row that fails to parse simply loses its date rather than crashing the list — the timestamp is
+ * decoration here, and the project itself is still readable and openable without it.
+ */
+function formatStartedOn(createdAt: string): string {
+  const at = new Date(createdAt);
+  if (Number.isNaN(at.getTime())) return "recently";
+  return at.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
 
 export function ProjectError({ title, retry }: { title: string; retry: () => void }) {
   return (
@@ -39,12 +51,16 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
   return (
     <>
       <header className="workshop-project-heading">
-        <div>
+        <div className="workshop-project-heading__text">
+          <p className="jds-eyebrow">Workshop</p>
           <h1>Your Workshop</h1>
-          <p>Start with an idea. Keep your projects and their conversations here.</p>
+          <p className="workshop-lede">
+            Start with an idea. Keep your projects and their conversations here.
+          </p>
         </div>
         <ButtonLink
           href="/workshop/new"
+          size="lg"
           aria-disabled={!canMutate}
           onClick={(event) => {
             if (!canMutate) event.preventDefault();
@@ -64,33 +80,50 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
         <EmptyState
           title="A small idea is a good start."
           description="Your projects will stay here, from the first question to a finished module."
-        />
-      ) : null}
-      <div className="workshop-project-list">
-        {projects.map((project) => (
-          <Card key={project.id}>
-            <div className="workshop-project-row">
-              <div>
-                <h2>
-                  <Link to={`/workshop/${project.id}`}>{project.title}</Link>
-                </h2>
-                <p className="workshop-project-excerpt">{project.initialRequest}</p>
-              </div>
-              <span>Only you</span>
-            </div>
-          </Card>
-        ))}
-      </div>
-      {query.hasNextPage ? (
-        <Button
-          variant="secondary"
-          disabled={query.isFetching || !canMutate}
-          onClick={() => void query.fetchNextPage()}
         >
-          {query.isFetchingNextPage ? "Loading…" : "More projects"}
-        </Button>
+          <div className="workshop-empty-action">
+            <ButtonLink
+              href="/workshop/new"
+              aria-disabled={!canMutate}
+              onClick={(event) => {
+                if (!canMutate) event.preventDefault();
+              }}
+            >
+              Start a project
+            </ButtonLink>
+          </div>
+        </EmptyState>
       ) : null}
-      <p>
+      {projects.length > 0 ? (
+        <div className="workshop-project-list">
+          {projects.map((project) => (
+            <Card key={project.id} interactive>
+              <h2 className="workshop-project-card__title">
+                <Link to={`/workshop/${project.id}`}>{project.title}</Link>
+              </h2>
+              <p className="workshop-project-excerpt">{project.initialRequest}</p>
+              <div className="workshop-project-card__foot">
+                <Badge tone="steel" pill dot>
+                  Only you
+                </Badge>
+                <span className="jds-caption">Started {formatStartedOn(project.createdAt)}</span>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : null}
+      {query.hasNextPage ? (
+        <div className="workshop-project-more">
+          <Button
+            variant="secondary"
+            disabled={query.isFetching || !canMutate}
+            onClick={() => void query.fetchNextPage()}
+          >
+            {query.isFetchingNextPage ? "Loading…" : "More projects"}
+          </Button>
+        </div>
+      ) : null}
+      <p className="workshop-project-footer">
         <Link to="/workshop/legacy">Earlier builds and installed modules</Link>
       </p>
     </>
@@ -100,7 +133,7 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
 export function WorkshopProjectCreate({ canMutate }: { canMutate: boolean }) {
   const navigate = useNavigate();
   const client = useQueryClient();
-  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
+  const [requestKey, setRequestKey] = useState(() => randomUuid());
   const [title, setTitle] = useState("");
   const [initialRequest, setInitialRequest] = useState("");
   const [context, setContext] = useState("");
@@ -113,13 +146,15 @@ export function WorkshopProjectCreate({ canMutate }: { canMutate: boolean }) {
   });
   const changed = () => {
     if (mutation.isError) {
-      setRequestKey(crypto.randomUUID());
+      setRequestKey(randomUuid());
       mutation.reset();
     }
   };
   return (
     <section className="workshop-project-form">
-      <Link to="/workshop">← Your projects</Link>
+      <Link className="workshop-back" to="/workshop">
+        ← Your projects
+      </Link>
       <h1>What would you like to make?</h1>
       <p>Start with what you want it to do. This project is private to you.</p>
       <form
@@ -221,7 +256,7 @@ function WorkshopProjectContent({
   const client = useQueryClient();
   const [pane, setPane] = useState<"conversation" | "work">("conversation");
   const [text, setText] = useState("");
-  const [messageId, setMessageId] = useState(() => crypto.randomUUID());
+  const [messageId, setMessageId] = useState(() => randomUuid());
   const [saved, setSaved] = useState(false);
   const project = useQuery({
     queryKey: projectKeys.detail(projectId),
@@ -241,7 +276,7 @@ function WorkshopProjectContent({
     mutationFn: (input: { messageId: string; text: string }) => saveMessage(projectId, input),
     onSuccess: () => {
       setText("");
-      setMessageId(crypto.randomUUID());
+      setMessageId(randomUuid());
       setSaved(true);
       void client.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
     }
@@ -250,7 +285,9 @@ function WorkshopProjectContent({
     if (project.isError)
       return (
         <>
-          <Link to="/workshop">← Your projects</Link>
+          <Link className="workshop-back" to="/workshop">
+            ← Your projects
+          </Link>
           <ProjectError
             title={
               project.error instanceof ApiError && project.error.status === 404
@@ -272,10 +309,20 @@ function WorkshopProjectContent({
     !messages.isFetching;
   return (
     <>
-      <Link to="/workshop">← Your projects</Link>
+      <Link className="workshop-back" to="/workshop">
+        ← Your projects
+      </Link>
       <header className="workshop-project-heading">
-        <h1>{record.title}</h1>
-        <span>Only you</span>
+        <div className="workshop-project-heading__text">
+          <p className="jds-eyebrow">Project</p>
+          <h1>{record.title}</h1>
+        </div>
+        <div className="workshop-project-heading__meta">
+          <Badge tone="steel" pill dot>
+            Only you
+          </Badge>
+          <span className="jds-caption">Started {formatStartedOn(record.createdAt)}</span>
+        </div>
       </header>
       {project.isError ? (
         <ProjectError
@@ -312,17 +359,14 @@ function WorkshopProjectContent({
         >
           <h2>Conversation</h2>
           <div className="workshop-project-messages">
-            <Card>
-              <strong>Your idea</strong>
+            <Card title="Your idea">
               <p className="workshop-project-text">{record.initialRequest}</p>
             </Card>
             {messages.data?.pages
               .flatMap((page) => page.entries)
               .map((entry) => (
-                <Card key={entry.messageId}>
-                  <strong>You</strong>
+                <Card key={entry.messageId} title="You" meta="Saved · awaiting delivery">
                   <p className="workshop-project-text">{entry.text}</p>
-                  <p className="jds-hint">Saved · awaiting delivery</p>
                 </Card>
               ))}
           </div>
@@ -362,7 +406,7 @@ function WorkshopProjectContent({
                 disabled={mutation.isPending}
                 onChange={(event) => {
                   if (mutation.isError) {
-                    setMessageId(crypto.randomUUID());
+                    setMessageId(randomUuid());
                     mutation.reset();
                   }
                   setSaved(false);
@@ -398,8 +442,7 @@ function WorkshopProjectContent({
             description="Your idea and messages are saved. Planning is not available yet."
           />
           {record.context ? (
-            <Card>
-              <h3>Already decided</h3>
+            <Card title="Already decided">
               <p className="workshop-project-text">{record.context}</p>
             </Card>
           ) : null}
