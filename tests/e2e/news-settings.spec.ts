@@ -179,7 +179,7 @@ test("described topics: empty state, create via Enter, edit, and remove", async 
   await page.goto("/settings?section=modules&module=news");
   await expect(page.getByRole("heading", { name: "News" })).toBeVisible();
   await expect(page.getByText("Topics across the web")).toBeVisible();
-  await expect(page.getByText("News still uses your selected publications.")).toBeVisible();
+  await expect(page.getByText("News still uses your selected sources.")).toBeVisible();
 
   // Create via Enter from the label input (no explicit button click).
   await page.getByRole("button", { name: "Add a topic" }).click();
@@ -240,7 +240,7 @@ test("described topics: empty state, create via Enter, edit, and remove", async 
   ]);
   expect(deleteRequest.method()).toBe("DELETE");
   await expect(page.getByRole("status")).toContainText("Topic removed");
-  await expect(page.getByText("News still uses your selected publications.")).toBeVisible();
+  await expect(page.getByText("News still uses your selected sources.")).toBeVisible();
 });
 
 test("topic success waits for the refreshed row before announcing completion", async ({ page }) => {
