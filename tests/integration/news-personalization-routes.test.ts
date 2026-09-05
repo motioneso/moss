@@ -70,6 +70,7 @@ describe("news personalization routes", () => {
           truncated: false
         }),
         image,
+        favicon: image,
         search: { search: async () => ({ results: [] }) },
         ai: {
           fingerprint: async () => "opaque-test-fingerprint",

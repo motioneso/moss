@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError, handleRouteError } from "@moss/module-sdk";
 
-import type { NewsImageFetchPort } from "./discovery/ports.js";
+import type { NewsFaviconFetchPort } from "./discovery/ports.js";
 import {
   NEWS_HOMEPAGE_HOSTS,
   NEWS_IMAGE_HOSTS,
@@ -35,7 +35,8 @@ export interface NewsFaviconCustomSourcePort {
 
 interface NewsFaviconRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
-  readonly fetchImage: NewsImageFetchPort;
+  /** Host-pinned, size-capped favicon bytes with no robots gate (see NewsFaviconFetchPort). */
+  readonly fetchImage: NewsFaviconFetchPort;
   readonly dataContext: DataContextRunner;
   readonly customSources: NewsFaviconCustomSourcePort;
 }
