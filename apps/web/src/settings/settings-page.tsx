@@ -388,7 +388,9 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const familyKeysQuery = useQuery({
     queryKey: queryKeys.ai.familyKeys,
     queryFn: getFamilyKeys,
-    retry: false
+    retry: false,
+    // Non-admins have no admin surface: never let their browser call an admin endpoint.
+    enabled: isAdmin
   });
   const missingFamilyKeys = (familyKeysQuery.data?.keys ?? []).filter(
     (key) => key.source === "missing"
