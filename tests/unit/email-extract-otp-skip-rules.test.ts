@@ -5,6 +5,7 @@ import {
   extractEmailSignalsBatch,
   looksLikeOneTimeCodeEmail,
   otpSkippedResult,
+  signInCodeDecision,
   type ParsedEmail
 } from "../../packages/connectors/src/email-extract.js";
 
