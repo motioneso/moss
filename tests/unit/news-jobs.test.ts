@@ -79,6 +79,7 @@ describe("registerNewsJobWorkers", () => {
           }
         ]
       },
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
       fetch: async (url) => {
         fetchCount += 1;
         if (fetchCount === 1) {
@@ -205,6 +206,7 @@ describe("registerNewsJobWorkers", () => {
           }
         ]
       },
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
       fetch: async (url) => {
         fetches += 1;
         return {

@@ -3,7 +3,12 @@ import type { PgBoss } from "pg-boss";
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import type { ToolExecute, ToolResult, ToolSummarize } from "@moss/module-sdk";
 
-import type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "./discovery/ports.js";
+import type {
+  NewsAiPort,
+  NewsFetchPort,
+  NewsSafeFetchPort,
+  NewsWebSearchPort
+} from "./discovery/ports.js";
 import type { NewsCredentialStore } from "./credential-repository.js";
 import { validateTopic } from "./discovery/policy-validation.js";
 import { resolveSourceInput, type SourceResolutionResult } from "./discovery/source-resolution.js";
@@ -38,6 +43,8 @@ export interface NewsChatToolDependencies {
   readonly previews: NewsSourcePreviewStore;
   readonly discovery: {
     readonly fetch: NewsSafeFetchPort;
+    /** #2282: optional here so existing test fakes keep working; the composition root always passes it. */
+    readonly fetchWithOptions?: NewsFetchPort;
     readonly search: NewsWebSearchPort;
     readonly ai: NewsAiPort;
   };

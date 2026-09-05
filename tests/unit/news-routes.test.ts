@@ -281,6 +281,7 @@ function buildApp(
           : (overrides.webSearchReason ?? "no-key-no-native-model")
     },
     discovery: overrides.discovery ?? {
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
       fetch: async () => ({ ok: false, reason: "network" }),
       image: async () => ({ ok: false, reason: "network" }),
       favicon: async () => ({ ok: false, reason: "network" }),
@@ -679,6 +680,7 @@ describe("news personalization routes (#958 Slice 2)", () => {
   it("previews and confirms a verified source without exposing its fingerprint", async () => {
     const { app, personalization } = buildApp({
       discovery: {
+        fetchWithOptions: async () => ({ ok: false, reason: "network" }),
         fetch: async (url) => ({
           ok: true,
           status: 200,
@@ -763,6 +765,7 @@ describe("news personalization routes (#958 Slice 2)", () => {
   it("rejects a topic when the provider policy does not affirm it", async () => {
     const { app, personalization } = buildApp({
       discovery: {
+        fetchWithOptions: async () => ({ ok: false, reason: "network" }),
         fetch: async () => ({ ok: false, reason: "network" }),
         image: async () => ({ ok: false, reason: "network" }),
         favicon: async () => ({ ok: false, reason: "network" }),

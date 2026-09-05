@@ -1,7 +1,12 @@
 import type { DataContextDb } from "@moss/db";
 import type { StoryRelevanceCandidate, StoryRelevanceFailure } from "@moss/shared";
 
-import type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "../discovery/ports.js";
+import type {
+  NewsAiPort,
+  NewsFetchPort,
+  NewsSafeFetchPort,
+  NewsWebSearchPort
+} from "../discovery/ports.js";
 import type { NewsPrefsReader } from "../news-service.js";
 import {
   assertSnapshotPayload,
@@ -79,6 +84,8 @@ export async function compilePersonalizedNews(
   scopedDb: DataContextDb,
   deps: {
     fetch: NewsSafeFetchPort;
+    /** #2282: handed on to the collector for its Reddit branch (task 1.7). */
+    fetchWithOptions?: NewsFetchPort;
     search: NewsWebSearchPort;
     ai: NewsAiPort;
     repo: CompilationRepository;
@@ -107,6 +114,7 @@ export async function compilePersonalizedNews(
       scopedDb,
       {
         fetch: deps.fetch,
+        ...(deps.fetchWithOptions ? { fetchWithOptions: deps.fetchWithOptions } : {}),
         search: deps.search,
         ai: deps.ai,
         repo: deps.repo,

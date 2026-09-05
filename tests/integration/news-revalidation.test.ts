@@ -439,6 +439,7 @@ describe("news revalidation jobs (#975 Slice 4)", () => {
     revalidationLogger?: { info: (fields: NewsRevalidationLogFields) => void };
   }) {
     return registerNewsJobWorkers(workerBoss, workerContext, {
+      fetchWithOptions: overrides.fetch ?? fetchOk,
       fetch: overrides.fetch ?? fetchOk,
       search: { search: async () => ({ results: [] }) },
       ai: overrides.ai,

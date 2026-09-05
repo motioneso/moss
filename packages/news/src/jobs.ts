@@ -16,7 +16,12 @@ import {
   type CompilationRepository,
   type MetadataLogger
 } from "./compilation/compile.js";
-import type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "./discovery/ports.js";
+import type {
+  NewsAiPort,
+  NewsFetchPort,
+  NewsSafeFetchPort,
+  NewsWebSearchPort
+} from "./discovery/ports.js";
 import { NEWS_MODULE_ID } from "./module-id.js";
 import { NewsPersonalizationRepository } from "./personalization-repository.js";
 import type { NewsStoryFeedbackPort } from "./story-feedback-port.js";
@@ -98,6 +103,8 @@ export async function registerNewsJobWorkers(
   dataContext: DataContextRunner,
   deps: {
     readonly fetch: NewsSafeFetchPort;
+    /** #2282: the options-capable port the Reddit collector branch uses; `fetch` stays URL-only. */
+    readonly fetchWithOptions: NewsFetchPort;
     readonly search: NewsWebSearchPort;
     readonly ai: NewsAiPort;
     readonly logger: MetadataLogger;
@@ -135,6 +142,7 @@ export async function registerNewsJobWorkers(
               scopedDb,
               {
                 fetch: deps.fetch,
+                fetchWithOptions: deps.fetchWithOptions,
                 search: deps.search,
                 ai: deps.ai,
                 repo: repository,
@@ -212,6 +220,7 @@ export async function registerNewsJobWorkers(
     assertMetadataOnlyPayload(job.data);
     const outcome = await revalidateOwnerNews(scopedDb, {
       fetch: deps.fetch,
+      fetchWithOptions: deps.fetchWithOptions,
       ai: deps.ai,
       repository,
       logger: revalidationLogger

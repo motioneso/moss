@@ -223,6 +223,7 @@ function buildNewsServer(options: {
       webSearchReason: async () => null
     },
     discovery: {
+      fetchWithOptions: servePages(options.pages),
       fetch: servePages(options.pages),
       image: async () => ({ ok: false, reason: "network" }),
       favicon: async () => ({ ok: false, reason: "network" }),
