@@ -134,3 +134,85 @@ and stopped instead of relaying. Nothing else in the plan is started.
 Open questions carried from the plan: which service or tier hint selects the user's chat model in
 `resolveModelForService` (task 3.1); the fetch helper's rate-limit field is `retryAfter?: string`
 on the Sports port type, confirm on the News port before task 1.5.
+
+## Lane notes: build-2282-p1a stop (2026-09-05)
+
+PLAIN ENGLISH RULE for whoever picks this up: every message to a human is plain English. No
+jargon, no coined shorthand, ASCII punctuation only, at most one backtick per sentence.
+
+This lane hit the 70 percent context warning during task 1.3, so per its brief it committed the
+work in progress as one clearly labelled UNVERIFIED commit (`7b9f8a9c9`, pushed), did not relay,
+and stopped. Nothing in it has passed a test run yet. Tasks 1.4 and 1.5 are not started. No PR is
+open. Reading cost most of the budget; the successor should read only the "What the next lane
+needs" list below plus the plan's task text, and build.
+
+### What is on the branch from this lane (all unverified)
+
+- `packages/news/sql/0218_news_source_kinds.sql`: the plan's DDL verbatim plus comments.
+  Migration number 0218 was re-confirmed free at the start of this lane against origin/main and
+  all 414 remote branch heads (0220 to 0223 are taken by other branches; 0218 and 0219 free).
+- `packages/news/src/manifest.ts` migrations list: 0218 added at the end.
+- `tests/integration/foundation-schema-catalog.test.ts`: 0218 row added after 0217.
+- `packages/db/src/types.ts` `NewsCustomSourcesTable`: `retrieval_method` gains "reddit";
+  new `icon_url`, `confirmed_fetch_hosts: string[]`, `consecutive_failures` (insert-optional).
+- `packages/shared/src/news-api.ts`: both `retrievalMethod` type sites and both JSON schema
+  enum sites gain "reddit" (a plain find and replace; 2 and 2 hits).
+- `tests/integration/news-personalization-repository.test.ts`: new last describe block
+  "news source kinds schema (#2282 migration 0218)" with eight cases matching the plan's list,
+  each asserting on the constraint or index name so a missing one fails.
+
+### What the next lane needs to do first (task 1.3 to green)
+
+1. The migration drops the default on `confirmed_fetch_hosts` and requires 1 to 8 hosts, so every
+   raw INSERT into that table must now supply it. Five sites still omit it and will fail:
+   `tests/integration/news-revalidation.test.ts:367`, `tests/integration/news-credentials.test.ts:181`,
+   `tests/integration/data-export.test.ts:377`, and two in
+   `tests/integration/news-personalization-repository.test.ts` (the "custom sources and topics
+   list/count" case and `seedValidationRows`). Add the column with `ARRAY['news.example.com']`
+   (or the seeded domain).
+2. Run the one file the plan names, unpiped, exactly as written in the plan's task 1.3
+   verification line. With `JARVIS_PGDATABASE` unset (it is unset in this lane's shell) the
+   runner `scripts/test-integration.ts` creates a random `jarvis_test_*` database and drops it
+   after, so it never touches the live dev database; that is the project's scratch recipe for a
+   single integration file. Expect several minutes; run it in the background.
+3. Then `pnpm tsc --noEmit -p tsconfig.tests.json` style typecheck on the tree, lint and format
+   on the changed files. Nothing here has been typechecked.
+4. Rewrite the WIP commit message or add a follow-up commit once green; do not leave
+   "UNVERIFIED" in the final history.
+
+### Facts verified for tasks 1.4 and 1.5 (so the successor need not re-read)
+
+- The web fetch helper's rate-limit field is `retryAfter?: string` (raw header value) on
+  `FetchWebResourceFailure` in `packages/web-research/src/reader.ts:234-253`, alongside
+  `detail?: "aborted" | "invalid_response" | "response_too_large" | "unsupported_content_type"`.
+  So `NewsSafeFetchFailure` should gain `detail?: string` and `retryAfter?: string`, not
+  `retryAfterMs`. The Reddit reader's `RedditFetchResult` already expects `detail?: string`.
+- `RedditFetchOptions` (`packages/news/src/source/reddit-reader.ts:56-68`) is what
+  `NewsFetchOptions` must accept: allowedHosts, requestHeaders, userAgent, allowedContentTypes,
+  beforeRequest(hop), maxBytes, rejectOversizedResponses, timeoutMs, signal, `skipRobots: true`.
+- Composition root: `buildNewsDiscoveryPorts` at `packages/module-registry/src/index.ts:710`
+  returns `{ fetch, image, search, ai }`; add `fetchWithOptions` there, built like Sports' port
+  at `:795-822` but with `robots: options?.skipRobots ? undefined : newsRobotsGate` and the News
+  rate limiter. Consumers to thread it into: `packages/news/src/routes.ts:77`,
+  `packages/news/src/personalization-routes.ts:131`, `packages/news/src/jobs.ts:100`,
+  `chat-tools.ts:40`, `revalidation.ts:42`, and the internal deps of `resolveSourceInput`
+  (`discovery/source-resolution.ts:232`) and `collectCandidates` (`compilation/candidates.ts:271`).
+  Suggested: required on the composition-facing types, optional on the internal function deps so
+  the many unit-test fakes of those functions do not all change in this slice.
+- The adapter test to extend for the skipRobots assertion is
+  `tests/unit/module-registry-news-discovery-adapter.test.ts`: it already captures the
+  discovery object through a mocked `registerNewsRoutes`; mock `@moss/web-research`'s
+  `fetchWebResource` the same way to capture the options object and assert `robots` is
+  undefined when `skipRobots` is set and defined by default.
+- Repository (task 1.4) call sites that must pass the new `confirmedFetchHosts` and `iconUrl`
+  input fields: `packages/news/src/personalization-routes.ts:50-72` (the store interface) and
+  `:277-287` (the write), `packages/news/src/credential-routes.ts:153`, and the `sourceInput`
+  helper in `tests/integration/news-discovery-repository.test.ts:52`. Untargeted
+  `ON CONFLICT DO NOTHING` pattern to copy: `packages/sports/src/repository.ts:55-70`.
+- Adding `workaround: boolean` to `NewsCustomSourceDto` (required) touches its JSON schema at
+  `packages/shared/src/news-api.ts:497-525` (add the property and the required entry, or the
+  serializer drops it) and about 8 literal DTO sites in tests (typecheck lists them).
+- A recording Kysely driver for repository unit tests already exists in
+  `tests/unit/news-credential-repository.test.ts:44-90` (copy `makeRecordingDb`).
+- The worker grant check in the repository integration test uses `has_table_privilege`, which
+  column grants do not flip, so the new column grant keeps that older case green.
