@@ -40,7 +40,7 @@ export const aiConfiguredModelOriginSchema = {
 
 export const aiModelCapabilitySchema = {
   type: "string",
-  enum: ["chat", "tool-use", "json", "vision", "summarization", "transcription"]
+  enum: ["chat", "tool-use", "json", "vision", "summarization", "transcription", "web-search"]
 } as const;
 
 const aiCapabilityParamsSchema = {

@@ -58,7 +58,8 @@ describe("news personalization routes", () => {
       } as DatasetClient,
       availability: {
         hasJsonModel: async () => true,
-        hasWebSearch: async () => true
+        hasWebSearch: async () => true,
+        webSearchReason: async () => null
       },
       discovery: {
         fetch: async (url) => ({

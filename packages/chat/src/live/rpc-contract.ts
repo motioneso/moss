@@ -273,6 +273,8 @@ export interface RpcLaunchParams {
    *  cli-runner root can't drift from the in-process root on which calls keep the bounded print
    *  engine regardless of the persistent-runtime flag. */
   readonly needsStructuredOutput?: boolean;
+  /** #2228: enable the CLI's own web search tool for this launch. See EngineLaunchOpts.nativeSearch. */
+  readonly nativeSearch?: boolean;
   /**
    * Rendered persona CONTENT (NOT a path). cli-runner writes it to the persona file under the
    * server-derived neutralDir, then passes that path to the CLI (e.g. --append-system-prompt-file).

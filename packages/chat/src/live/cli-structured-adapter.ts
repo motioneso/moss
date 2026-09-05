@@ -11,12 +11,14 @@ import type {
   StructuredProviderAdapter,
   StructuredProviderResult,
   StructuredRunPriority,
+  StructuredSource,
   StructuredTelemetryEvent
 } from "@moss/ai";
+import { dedupeStructuredSources } from "@moss/ai";
 
 import { CliChatUnavailableError } from "./errors.js";
 import { selectEngineFactory, type ChatEngineFactory } from "./runtime.js";
-import type { CliChatEngine } from "./types.js";
+import type { CliChatEngine, TranscriptRecord } from "./types.js";
 
 /** #1422: one fixed directory per calling service so the CLI's cwd (near the top of its system
  * prompt) stays identical across one-shot calls and the prompt-cache prefix can hit. Destroyed and
@@ -157,9 +159,9 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       });
       const generated = this.run(activeEngine, neutralDir, personaPath, input);
       try {
-        const rawText = await Promise.race([generated, stopped]);
+        const { rawText, sources } = await Promise.race([generated, stopped]);
         exit = "complete";
-        return { rawText, usage: { inputTokens: 0, outputTokens: 0 } };
+        return withSources({ rawText, usage: { inputTokens: 0, outputTokens: 0 } }, sources);
       } catch (error) {
         await activeEngine.kill().catch(() => undefined);
         const final = await activeEngine.readNew(0).catch(() => null);
@@ -170,7 +172,10 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
         if (reply !== undefined) {
           emit({ kind: "late-read" });
           exit = timedOut ? "timeout" : "complete";
-          return { rawText: reply, usage: { inputTokens: 0, outputTokens: 0 } };
+          return withSources(
+            { rawText: reply, usage: { inputTokens: 0, outputTokens: 0 } },
+            collectRecordSources(final?.records ?? [])
+          );
         }
         exit = timedOut
           ? "timeout"
@@ -335,14 +340,17 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
     neutralDir: string,
     personaPath: string,
     input: GenerateStructuredProviderInput
-  ): Promise<string> {
+  ): Promise<{ readonly rawText: string; readonly sources: StructuredSource[] }> {
     let firstReadable = false;
+    // #2228: sources the CLI's own web search reported, gathered across every read of this turn.
+    const sources: StructuredSource[] = [];
     let offset = (
       await engine.launch({
         neutralDir,
         personaPath,
         personaText: "You produce structured JSON only.",
-        model: input.model.provider_model_id
+        model: input.model.provider_model_id,
+        ...(input.nativeSearch ? { nativeSearch: true } : {})
       })
     ).offset;
     await engine.submit(buildCliStructuredPrompt(input));
@@ -350,13 +358,16 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
     for (;;) {
       const next = await engine.readNew(offset);
       offset = next.offset;
+      sources.push(...collectRecordSources(next.records));
       const reply = [...next.records].reverse().find((record) => record.kind === "reply")?.text;
       if (reply !== undefined && !firstReadable) {
         firstReadable = true;
         input.telemetry?.emit({ kind: "first-readable", priority: input.priority ?? "foreground" });
       }
       if (next.complete) {
-        if (reply !== undefined) return reply;
+        if (reply !== undefined) {
+          return { rawText: reply, sources: dedupeStructuredSources(sources) };
+        }
         throw new CliChatUnavailableError("CLI structured generation completed without a reply");
       }
       if (!(await engine.isAlive())) {
@@ -365,6 +376,21 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       await new Promise((resolve) => setTimeout(resolve, this.pollMs));
     }
   }
+}
+
+/** #2228: every source the CLI's search tool reported on the records read so far. */
+function collectRecordSources(records: readonly TranscriptRecord[]): StructuredSource[] {
+  return dedupeStructuredSources(records.flatMap((record) => record.sources ?? []));
+}
+
+function withSources(
+  result: {
+    readonly rawText: string;
+    readonly usage: { inputTokens: number; outputTokens: number };
+  },
+  sources: readonly StructuredSource[]
+): StructuredProviderResult {
+  return sources.length > 0 ? { ...result, sources } : result;
 }
 
 type ScopedStructuredSession = {

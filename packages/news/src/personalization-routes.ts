@@ -22,6 +22,7 @@ import {
   type NewsCustomSourceDto,
   type NewsCustomTopicDto,
   type NewsRefreshStateDto,
+  type NewsWebSearchUnavailableReason,
   type NewsPublisherConnectionOfferDto,
   type NewsSourceExclusionDto,
   type NewsSourcePreviewRequest,
@@ -126,6 +127,7 @@ export interface PersonalizationRouteDependencies {
   readonly availability: {
     hasJsonModel(scopedDb: DataContextDb): Promise<boolean>;
     hasWebSearch(scopedDb: DataContextDb): Promise<boolean>;
+    webSearchReason(scopedDb: DataContextDb): Promise<NewsWebSearchUnavailableReason | null>;
   };
   readonly discovery: {
     readonly fetch: NewsSafeFetchPort;
@@ -323,15 +325,23 @@ export function registerNewsPersonalizationRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         return await dependencies.dataContext.withDataContext(accessContext, async (db) => {
-          const [customSources, customTopics, sourceExclusions, snapshot, jsonModel, webSearch] =
-            await Promise.all([
-              repository.listCustomSources(db),
-              repository.listCustomTopics(db),
-              repository.listExclusions(db),
-              repository.readLatestSnapshot(db),
-              dependencies.availability.hasJsonModel(db),
-              dependencies.availability.hasWebSearch(db)
-            ]);
+          const [
+            customSources,
+            customTopics,
+            sourceExclusions,
+            snapshot,
+            jsonModel,
+            webSearch,
+            webSearchReason
+          ] = await Promise.all([
+            repository.listCustomSources(db),
+            repository.listCustomTopics(db),
+            repository.listExclusions(db),
+            repository.readLatestSnapshot(db),
+            dependencies.availability.hasJsonModel(db),
+            dependencies.availability.hasWebSearch(db),
+            dependencies.availability.webSearchReason(db)
+          ]);
           let refresh = await repository.readRefreshState(db);
           if (!isNewsSnapshotFresh(snapshot)) {
             await triggerNewsRefresh(
@@ -358,6 +368,7 @@ export function registerNewsPersonalizationRoutes(
             availability: {
               aiConfigured: jsonModel,
               webSearchConfigured: webSearch,
+              webSearchReason: webSearch ? null : webSearchReason,
               customSourceByUrlEnabled: jsonModel,
               customSourceByNameEnabled: jsonModel && webSearch,
               freeformTopicsEnabled: jsonModel && webSearch

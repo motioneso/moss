@@ -473,7 +473,8 @@ export class CliChatEngineImpl implements CliChatEngine {
 
     const records: TranscriptRecord[] = parsed.events.map((e) => ({
       kind: e.kind as ChatRecordKind,
-      text: e.text
+      text: e.text,
+      ...(e.sources ? { sources: e.sources } : {})
     }));
     if (parsed.complete && parsed.reply !== null) {
       records.push({ kind: "reply", text: parsed.reply });

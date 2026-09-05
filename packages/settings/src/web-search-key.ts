@@ -9,6 +9,7 @@ import {
 
 import { WEB_SEARCH_API_KEY_SETTING } from "./instance-settings-keys.js";
 import type { SettingsRepository } from "./repository.js";
+import { readNativeSearchEnabled } from "./web-search-engine-resolver.js";
 
 /**
  * AES-256-GCM envelope for the instance-wide Brave Search API key. The plaintext key is
@@ -83,6 +84,7 @@ export async function hasInstanceWebSearchKey(scopedDb: DataContextDb): Promise<
 export interface WebSearchKeyConfig {
   readonly configured: boolean;
   readonly source: "instance" | "env" | null;
+  readonly nativeSearchEnabled: boolean;
 }
 
 /**
@@ -93,13 +95,14 @@ export async function getWebSearchKeyConfig(
   scopedDb: DataContextDb,
   env: NodeJS.ProcessEnv = process.env
 ): Promise<WebSearchKeyConfig> {
+  const nativeSearchEnabled = await readNativeSearchEnabled(scopedDb);
   if (await hasInstanceWebSearchKey(scopedDb)) {
-    return { configured: true, source: "instance" };
+    return { configured: true, source: "instance", nativeSearchEnabled };
   }
   if ((resolveMossEnv(env, "JARVIS_BRAVE_SEARCH_API_KEY") ?? "").length > 0) {
-    return { configured: true, source: "env" };
+    return { configured: true, source: "env", nativeSearchEnabled };
   }
-  return { configured: false, source: null };
+  return { configured: false, source: null, nativeSearchEnabled };
 }
 
 /** Encrypt and upsert the instance Brave key. The plaintext never reaches audit metadata. */

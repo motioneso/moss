@@ -11,6 +11,8 @@ export * from "./locale-routes.js";
 export * from "./notification-preferences-routes.js";
 export * from "./web-search-key.js";
 export * from "./web-search-key-routes.js";
+export * from "./web-search-engine-resolver.js";
+export * from "./instance-settings-keys.js";
 export * from "./runtime-config-keys.js";
 export * from "./runtime-config-resolver.js";
 export * from "./runtime-config-routes.js";
