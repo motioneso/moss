@@ -59,11 +59,7 @@ import {
 import { createModuleLogger, CORE_VERSION } from "@moss/module-sdk";
 // #917: /api/modules reads enablement through the public settings API; this is legitimate
 // composition-root wiring, not a module cross-import.
-import {
-  INTEGRATIONS_FAMILY,
-  SettingsRepository,
-  loadFamilyKeyring
-} from "@moss/settings";
+import { INTEGRATIONS_FAMILY, SettingsRepository, loadFamilyKeyring } from "@moss/settings";
 import {
   type ExternalModuleWorkerRuntime,
   createExternalModuleDiscoveryHolder,

@@ -129,9 +129,7 @@ export function registerIntegrationsRoutes(
         async (scopedDb) => {
           const cipher = await cipherForRequest(scopedDb);
           const credentialEnvelope =
-            body.credential !== undefined
-              ? cipher.encryptJson({ secret: body.credential })
-              : null;
+            body.credential !== undefined ? cipher.encryptJson({ secret: body.credential }) : null;
           const created = await repository.createConnection(scopedDb, {
             name: body.name,
             kind: body.kind,
