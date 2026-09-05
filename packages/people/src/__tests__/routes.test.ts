@@ -281,6 +281,22 @@ body
 
     await app.close();
   });
+
+  it("saves the exact folder that was checked, including a trailing space in its name", async () => {
+    const folder = join(notesRoot, "QA987Trailing ");
+    await mkdir(folder, { recursive: true });
+    const app = buildApp();
+    await app.ready();
+
+    const put = await chooseFolder(app, folder);
+    expect(put.statusCode).toBe(200);
+    expect(JSON.parse(put.body)).toEqual({ folder });
+
+    const read = await app.inject({ method: "GET", url: "/api/people/notes-settings" });
+    expect(JSON.parse(read.body)).toEqual({ folder });
+
+    await app.close();
+  });
 });
 
 describe("People note write routes", () => {

@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import { stat } from "node:fs/promises";
 import { isAbsolute, resolve, sep } from "node:path";
 
 import type { PgBoss } from "pg-boss";
@@ -100,12 +99,14 @@ function hash(value: string): string {
  * no longer be saved, so a re-save always moves the user onto the new shape.
  */
 function normalizeFolder(folder: string | null): string | null {
+  // Store exactly what the caller validated, the way the notes source save does (#449): the
+  // route has already opened this path through the guarded folder access, so trimming or
+  // rewriting it here would persist a different folder from the one that was checked.
   if (folder === null) return null;
-  const trimmed = folder.trim();
-  if (!trimmed || !isAbsolute(trimmed) || trimmed.split(/[\\/]/).includes("..")) {
+  if (!isAbsolute(folder) || folder.split(/[\\/]/).includes("..")) {
     throw new PeopleNotesFolderUnavailableError();
   }
-  return trimmed.length > 1 ? trimmed.replace(/\/+$/g, "") : trimmed;
+  return folder;
 }
 
 /** Inside a context rooted at the People folder, every note path is relative to that folder. */
@@ -155,9 +156,11 @@ export class PeopleNotesService {
    *
    * An absolute value is used as-is; the containment check belongs to withVaultContextAt, which
    * re-validates against the allowed notes roots on every open, so this never grants reach.
-   * A value written before #2268 is relative to the private per-user vault. Rather than guess,
-   * it is resolved against the current notes source and only when that folder really exists —
-   * anything else returns null and the People pane shows its existing "choose another" state.
+   * A value written before #2268 is relative to the private per-user vault. Rather than guess, it
+   * is resolved against the current notes source, and refused if it climbs out of it. This does
+   * only path arithmetic and never touches the disk: whether the folder actually exists is
+   * decided by withVaultContextAt, so the allowed-root guard always runs before any file access.
+   * When that open fails, the People pane shows its existing "choose another folder" state.
    */
   async resolveFolder(scopedDb: DataContextDb): Promise<string | null> {
     const stored = await this.preferencesRepository.get(
@@ -176,11 +179,6 @@ export class PeopleNotesService {
 
     const candidate = resolve(notesSource, stored);
     if (candidate !== notesSource && !candidate.startsWith(notesSource + sep)) return null;
-    try {
-      if (!(await stat(candidate)).isDirectory()) return null;
-    } catch {
-      return null;
-    }
     return candidate;
   }
 

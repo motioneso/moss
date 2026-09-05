@@ -133,6 +133,7 @@ export function side(
     score: null,
     record: null,
     winner: false,
+    scorers: null,
     ...overrides
   };
 }
@@ -483,8 +484,57 @@ describe("SportsService.getOverview", () => {
     expect(card?.resultMatch).toEqual({
       opponentName: "Toronto Blue Jays",
       opponentCrestUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/tor.png",
-      // result + scores only; NO "vs Toronto" tail — the crest carries the opponent identity
-      scoreText: "L 3–9"
+      // result + scores only; NO "vs Toronto" tail — the crest carries the opponent identity.
+      // Scores are in home/away order (dal is home): homeScore is dal's own 3, not "followed
+      // team first" — see #2253.
+      resultLabel: "L",
+      homeScore: 3,
+      awayScore: 9,
+      homeAway: "home",
+      ownScorers: null,
+      opponentScorers: null
+    });
+  });
+
+  it("keeps the score in home/away order when the followed team played away (#2253)", async () => {
+    // dal is away here and lost 1–3. The old code put dal's own score first ("L 1–3") even
+    // though the crest layout always draws home on the left — the numbers landed on the wrong
+    // side of the scoreline. homeScore/awayScore must read 3/1 (home's score first), not 1/3.
+    const service = new SportsService(
+      makeDeps({
+        source: makeSource({
+          getScoreboard: async () => [
+            {
+              id: "gf",
+              competitionKey: "nfl",
+              startsAt: `${TODAY}T17:00:00.000Z`,
+              state: "final",
+              statusDetail: "FT",
+              home: side({
+                teamKey: "tor",
+                shortName: "TOR",
+                name: "Toronto Blue Jays",
+                score: 3,
+                winner: true,
+                crestUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/tor.png"
+              }),
+              away: side({ teamKey: "dal", shortName: "DAL", name: "Dallas Cowboys", score: 1 })
+            }
+          ]
+        })
+      })
+    );
+    const overview = await service.getOverview(userA);
+    const card = overview.followed.find((c) => c.teamKey === "dal");
+    expect(card?.resultMatch).toEqual({
+      opponentName: "Toronto Blue Jays",
+      opponentCrestUrl: "https://a.espncdn.com/i/teamlogos/mlb/500/tor.png",
+      resultLabel: "L",
+      homeScore: 3,
+      awayScore: 1,
+      homeAway: "away",
+      ownScorers: null,
+      opponentScorers: null
     });
   });
 

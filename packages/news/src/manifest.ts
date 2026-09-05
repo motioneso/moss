@@ -127,7 +127,7 @@ export const newsModuleManifest = {
       id: "news.prefs",
       label: "News",
       description:
-        "Choose news topics, manage built-in, connected, custom, and excluded publishers, and story preferences.",
+        "Choose news topics, manage built-in, connected, custom, and excluded publishers, and story preferences. Adding a publication needs an AI model; discovering topics across the web also needs web search.",
       path: "/settings/modules/news",
       scope: "user",
       order: 34,
@@ -485,6 +485,13 @@ export const newsModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "news.story_pictures",
+      description:
+        "Show a picture with a story. If a publisher's feed doesn't name one (such as NPR), News " +
+        "looks in the story's own text instead. The address must be on that publisher's approved " +
+        "list, and a tracking image is never shown as story art."
+    },
     {
       id: "news.add_source",
       description:

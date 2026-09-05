@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ChevronRight, Folder, FolderCheck, FolderOpen, HardDrive } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@moss/ui";
+import { Button, InfoTip } from "@moss/ui";
 import { getNotesSourceDirectories } from "../api/notes-client";
 import { queryKeys } from "../api/query-keys";
 import { ApiError } from "../api/client";
@@ -67,7 +67,13 @@ export function VaultChooser(props: {
         </span>
         <div className="gflow__introtx">
           <div className="gflow__title">{title}</div>
-          <div className="gflow__sub">Browsing mapped server folders</div>
+          <div className="gflow__sub">
+            Browsing folders available on the server
+            <InfoTip label="How a folder becomes available">
+              Folders show up here after whoever manages this server adds them to the server setup
+              and restarts it. If the folder you want isn't listed, ask them to add it.
+            </InfoTip>
+          </div>
         </div>
       </div>
 
@@ -97,7 +103,7 @@ export function VaultChooser(props: {
               disabled={path === null}
               onClick={() => go(null)}
             >
-              Mapped folders
+              Available folders
             </button>
             {path ? (
               <>

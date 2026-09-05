@@ -103,6 +103,10 @@ _No enum or boolean props._
 - **status** (required): `ready`, `drift`, `error`, `idle`
 - **live** (optional boolean flag)
 
+## info-tip
+
+_No enum or boolean props._
+
 ## legend-swatch
 
 - **tone** (required): `hard`, `hold`

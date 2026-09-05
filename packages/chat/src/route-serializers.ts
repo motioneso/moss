@@ -13,14 +13,29 @@ import { readAttachments } from "./attachments-routes.js";
 import { readStoredProvenance, provenanceCards } from "./live/answer-provenance.js";
 import { toIsoString } from "./memory-serializers.js";
 
-export function serializeThread(thread: ChatThread): ChatThreadDto {
+/** First non-blank line of a message body, capped for a list row. Never a code name or path. */
+function firstLinePreview(body: string | null | undefined): string | null {
+  if (!body) return null;
+  const line = body
+    .split("\n")
+    .map((part) => part.trim())
+    .find((part) => part.length > 0);
+  if (!line) return null;
+  return line.length > 140 ? `${line.slice(0, 140).trimEnd()}…` : line;
+}
+
+export function serializeThread(
+  thread: ChatThread & { readonly lastMessageBody?: string | null }
+): ChatThreadDto {
   return {
     id: thread.id,
     ownerUserId: thread.owner_user_id,
     title: thread.title,
     incognito: thread.incognito,
     createdAt: toIsoString(thread.created_at),
-    updatedAt: toIsoString(thread.updated_at)
+    updatedAt: toIsoString(thread.updated_at),
+    lastActiveAt: toIsoString(thread.last_active_at),
+    lastMessagePreview: firstLinePreview(thread.lastMessageBody)
   };
 }
 

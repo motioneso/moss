@@ -26,6 +26,7 @@ export { createEspnDatasetAdapter } from "./source/espn-source.js";
 export { SportsBrowserBroker, SportsBrowserBrokerServer } from "./source/browser-broker.js";
 export { SportsBrowserClient } from "./source/browser-client.js";
 export { SPORTS_BROWSER_SOCKETS } from "./source/browser-protocol.js";
+export { SportsPhotoStore } from "./source/photo-store.js";
 export { SportsPublicSourceReader } from "./source/public-source-reader.js";
 export { createSportsPreviewStore } from "./source/preview-store.js";
 export { SportsSourcesRepository } from "./source/repository.js";

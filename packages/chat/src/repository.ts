@@ -32,13 +32,30 @@ export interface CreateChatThreadInput {
  * removed in the retire-legacy-chat-model change.
  */
 export class ChatRepository {
-  async listThreads(scopedDb: DataContextDb, surface?: ChatSurface): Promise<ChatThread[]> {
+  async listThreads(
+    scopedDb: DataContextDb,
+    surface?: ChatSurface
+  ): Promise<(ChatThread & { readonly lastMessageBody: string | null })[]> {
     assertDataContextDb(scopedDb);
     const chatSurface = normalizeChatSurface(surface);
 
     return scopedDb.db
       .selectFrom("app.chat_threads")
-      .selectAll()
+      .selectAll("app.chat_threads")
+      .select((eb) =>
+        eb
+          .selectFrom("app.chat_messages")
+          .select("body")
+          .whereRef("app.chat_messages.thread_id", "=", "app.chat_threads.id")
+          // A saved turn stores the person's message and the reply at the same
+          // instant, so ties on created_at must break toward the reply — that is
+          // the message the preview should show.
+          .orderBy("created_at", "desc")
+          .orderBy(sql<number>`CASE WHEN role = 'user' THEN 0 ELSE 1 END`, "desc")
+          .orderBy("id")
+          .limit(1)
+          .as("lastMessageBody")
+      )
       .where("incognito", "=", false)
       .where("surface", "=", chatSurface)
       .orderBy("last_active_at", "desc")

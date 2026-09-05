@@ -424,6 +424,44 @@ describe("NewsSettings write flows (#975 Task 9)", () => {
   });
 });
 
+// Adding a publication by web address never calls out to a search engine — only looking up
+// topics across the web does. The "Publications you add" group must not claim it needs a
+// prerequisite it does not use; "Topics across the web" is where that claim belongs.
+describe("News settings prerequisite badges (news-badge)", () => {
+  it("shows only the AI model badge for publications you add, not a web search badge", () => {
+    const html = render(
+      personalization({
+        availability: { ...allOn, webSearchConfigured: false },
+        customSources: [storedSource("approved")]
+      })
+    );
+    const publicationsGroup = html.slice(html.indexOf("Publications you add"));
+    expect(publicationsGroup).toContain("AI model <!-- -->ready");
+    expect(publicationsGroup).not.toContain("Web search");
+  });
+
+  it("shows both the AI model and web search badges for topics across the web", () => {
+    const html = render(personalization({ availability: allOn }));
+    const topicsGroup = html.slice(
+      html.indexOf("Topics across the web"),
+      html.indexOf("Publications you add")
+    );
+    expect(topicsGroup).toContain("AI model <!-- -->ready");
+    expect(topicsGroup).toContain("Web search <!-- -->ready");
+  });
+
+  it("shows the web search badge as needed for topics across the web when it is missing", () => {
+    const html = render(
+      personalization({ availability: { ...allOn, webSearchConfigured: false } })
+    );
+    const topicsGroup = html.slice(
+      html.indexOf("Topics across the web"),
+      html.indexOf("Publications you add")
+    );
+    expect(topicsGroup).toContain("Web search <!-- -->needed");
+  });
+});
+
 // Pure helpers behind the add flows — the interactive states (preview results, mutation
 // errors) can't be reached through renderToString, so their copy mapping is tested directly.
 describe("add-flow error/candidate helpers (#975 Task 9)", () => {

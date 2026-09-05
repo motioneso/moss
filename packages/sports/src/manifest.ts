@@ -131,6 +131,16 @@ export const sportsModuleManifest = {
       id: "sports.story_feedback",
       description:
         "Rate a sports story with More like this or Less like this from the dots that appear in its top-right corner while it is hovered or focused, on Today and on Sports. Less like this asks for a reason and hides the story."
+    },
+    {
+      id: "sports.result_scorers",
+      description:
+        "A finished soccer or hockey game on Today and Sports shows home scorers, home logo, score, away logo, away scorers, home on the left. Soccer scorers carry goal minutes, as in Isak 6, 8; hockey has none and may list fewer names than goals."
+    },
+    {
+      id: "sports.source_photos",
+      description:
+        "Stories from your own sources show a photo when the source's feed supplies one, or when the article page offers the picture it uses for sharing."
     }
   ],
   navigation: [
@@ -313,6 +323,11 @@ export const sportsModuleManifest = {
     {
       method: "GET",
       path: "/api/sports/sources/:sourceId/icon",
+      permissionId: "sports.view"
+    },
+    {
+      method: "GET",
+      path: "/api/sports/headlines/:headlineId/photo",
       permissionId: "sports.view"
     }
   ],

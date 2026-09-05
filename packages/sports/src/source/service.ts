@@ -31,6 +31,7 @@ import {
   type VerifiedSportsSourceCandidate,
   type VerifiedSportsSourceTarget
 } from "./discovery.js";
+import type { SportsPhotoStore } from "./photo-store.js";
 import type { createSportsPreviewStore } from "./preview-store.js";
 import { sportsSourceIdentityKey } from "./reddit.js";
 import type { SportsPublicSourceReader } from "./public-source-reader.js";
@@ -73,6 +74,8 @@ interface SportsSourceServiceDependencies {
     ): Promise<T>;
   };
   readonly reader?: Pick<SportsPublicSourceReader, "refresh">;
+  /** #2237 omitted where a caller never deletes a source, such as preview-only tests. */
+  readonly photos?: Pick<SportsPhotoStore, "removeSource">;
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {
@@ -604,8 +607,25 @@ export class SportsSourceService {
     return { kind: "builtin", id: "espn", label: "ESPN", ...coverage };
   }
 
-  removeSource(scopedDb: DataContextDb, sourceId: string): Promise<boolean> {
-    return this.dependencies.sources.remove(scopedDb, sourceId);
+  /**
+   * #2237 removing a source removes its stored photos in the same request. The vault half is
+   * best-effort: a filesystem hiccup must not turn an otherwise successful delete into an error,
+   * and the retention sweep collects anything left behind.
+   */
+  async removeSource(
+    scopedDb: DataContextDb,
+    sourceId: string,
+    accessContext?: AccessContext
+  ): Promise<boolean> {
+    const removed = await this.dependencies.sources.remove(scopedDb, sourceId);
+    if (removed && accessContext && this.dependencies.photos) {
+      try {
+        await this.dependencies.photos.removeSource(accessContext, sourceId);
+      } catch {
+        // Housekeeping only; see above.
+      }
+    }
+    return removed;
   }
 
   private async resolveTarget(

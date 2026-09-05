@@ -333,19 +333,30 @@ export function nextMatchAcross(
   };
 }
 
-// Result payload for the featured strip's score slot (Ben 2026-07-08 /sports #2). scoreText is
-// resultLine() WITHOUT its "vs <opponent>" tail — the opponent crest carries that identity, the
-// same crest-leads treatment nextMatchFor uses for the fixture footer. Returns null when the game
-// has no resolvable two sides (fully degraded source), so the card falls back to the text slot.
+// Result payload for the featured strip's score slot (Ben 2026-07-08 /sports #2). The opponent
+// crest carries the identity, the same crest-leads treatment nextMatchFor uses for the fixture
+// footer. Scores come back in home/away order — NOT followed-team-first — because the client
+// always draws the home crest on the left and the away crest on the right (#2253: a
+// followed-team-first string put the numbers on the wrong side whenever the followed team played
+// away). Returns null when the game has no resolvable two sides (fully degraded source), so the
+// card falls back to the text slot.
 export function resultMatchFor(game: GameSummary, teamKey: string): FollowedResultMatch | null {
   const side = sideFor(game, teamKey);
   const opponent = opponentFor(game, teamKey);
   if (!side || !opponent) return null;
   const result = resultOf(side, opponent);
+  const homeAway = game.home.teamKey === side.teamKey ? "home" : "away";
+  const homeScore = homeAway === "home" ? (side.score ?? 0) : (opponent.score ?? 0);
+  const awayScore = homeAway === "home" ? (opponent.score ?? 0) : (side.score ?? 0);
   return {
     opponentName: opponent.name,
     opponentCrestUrl: opponent.crestUrl,
-    scoreText: `${result} ${side.score ?? 0}–${opponent.score ?? 0}`
+    resultLabel: result,
+    homeScore,
+    awayScore,
+    homeAway,
+    ownScorers: side.scorers ?? null,
+    opponentScorers: opponent.scorers ?? null
   };
 }
 
