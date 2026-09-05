@@ -77,8 +77,7 @@ describe("connector sync records a trigger and a previous-run snapshot (#2239 sl
         finishedAt,
         status: "success",
         error: null,
-        counts: { calendarUpserted: 3, emailUpserted: 40 },
-        isContinuation: false
+        counts: { calendarUpserted: 3, emailUpserted: 40 }
       })
     );
 
@@ -102,8 +101,7 @@ describe("connector sync records a trigger and a previous-run snapshot (#2239 sl
         finishedAt: new Date("2026-09-04T10:05:00.000Z"),
         status: "success",
         error: null,
-        counts: { calendarUpserted: 3, emailUpserted: 40 },
-        isContinuation: false
+        counts: { calendarUpserted: 3, emailUpserted: 40 }
       })
     );
 
@@ -118,8 +116,7 @@ describe("connector sync records a trigger and a previous-run snapshot (#2239 sl
         finishedAt: new Date("2026-09-04T11:02:00.000Z"),
         status: "failed",
         error: "auth-error",
-        counts: {},
-        isContinuation: false
+        counts: {}
       })
     );
 
@@ -136,43 +133,53 @@ describe("connector sync records a trigger and a previous-run snapshot (#2239 sl
     expect(row?.previous_sync?.finishedAt).toBe("2026-09-04T10:05:00.000Z");
   });
 
-  it("does not touch previous_sync for a mid-run continuation chunk", async () => {
+  it("keeps an already-populated previous_sync through a mid-run continuation chunk", async () => {
     const accountId = await createTestAccount();
 
+    // Run one: succeeds. Run two: starts, so run one becomes the previous run.
     await dataContext.withDataContext(userAContext(), (scopedDb) =>
       repository.markSyncStarted(scopedDb, accountId, {
-        startedAt: new Date("2026-09-04T10:00:00.000Z"),
+        startedAt: new Date("2026-09-04T09:00:00.000Z"),
         trigger: "schedule"
       })
     );
     await dataContext.withDataContext(userAContext(), (scopedDb) =>
       repository.markSyncFinished(scopedDb, accountId, {
-        finishedAt: new Date("2026-09-04T10:05:00.000Z"),
+        finishedAt: new Date("2026-09-04T09:05:00.000Z"),
         status: "success",
         error: null,
-        counts: { calendarUpserted: 1 },
-        isContinuation: false
+        counts: { calendarUpserted: 7, emailUpserted: 11 }
+      })
+    );
+    await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.markSyncStarted(scopedDb, accountId, {
+        startedAt: new Date("2026-09-04T10:00:00.000Z"),
+        trigger: "manual"
       })
     );
     const beforeRow = await getAccountById(dataContext, repository, accountId);
-    expect(beforeRow?.previous_sync).toBeFalsy();
+    expect(beforeRow?.previous_sync).toMatchObject({ status: "success" });
 
-    // A later chunk of a still-running sync fails without ever completing the run —
-    // isContinuation must stop this from clobbering (or creating) a previous_sync snapshot.
+    // A later chunk of that still-running sync records its own outcome. The good run from
+    // 09:05 must survive it — this is the case that catches a change which clears it.
     await dataContext.withDataContext(userAContext(), (scopedDb) =>
       repository.markSyncFinished(scopedDb, accountId, {
-        finishedAt: new Date("2026-09-04T11:02:00.000Z"),
+        finishedAt: new Date("2026-09-04T10:02:00.000Z"),
         status: "failed",
         error: "auth-error",
-        counts: {},
-        isContinuation: true
+        counts: {}
       })
     );
 
     const row = await getAccountById(dataContext, repository, accountId);
 
     expect(row?.last_sync_status).toBe("failed");
-    expect(row?.previous_sync).toBeFalsy();
+    expect(row?.previous_sync).toMatchObject({
+      status: "success",
+      trigger: "schedule",
+      counts: { calendarUpserted: 7, emailUpserted: 11 }
+    });
+    expect(row?.previous_sync?.finishedAt).toBe("2026-09-04T09:05:00.000Z");
   });
 });
 

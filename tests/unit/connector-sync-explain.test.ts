@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  deferredReasonSentence,
+  explainConnectorAccountHealth,
   explainConnectorSync,
+  resolveConnectorSyncPendingState,
+  WAITING_FOR_WORKER_GRACE_MS,
   type ExplainConnectorSyncInput
 } from "../../packages/shared/src/connector-sync-explain.js";
 
@@ -80,6 +84,35 @@ describe("explainConnectorSync", () => {
     expect(result.label).toBe("Waiting for worker");
     expect(result.reason).toBe("Queued 41 minutes ago and not picked up.");
     expect(result.next).toBe("The background worker may not be running.");
+    // The badge is red, not neutral: nothing is happening and the user should notice.
+    expect(result.tone).toBe("red");
+    // Asking for another sync while one is already queued only queues a second one.
+    expect(result.canSyncNow).toBe(false);
+  });
+
+  it("a queued job is still just queued one second inside the grace period", () => {
+    const since = new Date(NOW.getTime() - (WAITING_FOR_WORKER_GRACE_MS - 1000)).toISOString();
+    expect(resolveConnectorSyncPendingState("created", since, NOW)).toBe("queued");
+  });
+
+  it("a queued job crosses to waiting for worker one second past the grace period", () => {
+    const since = new Date(NOW.getTime() - (WAITING_FOR_WORKER_GRACE_MS + 1000)).toISOString();
+    expect(resolveConnectorSyncPendingState("created", since, NOW)).toBe("waiting-for-worker");
+    expect(resolveConnectorSyncPendingState("retry", since, NOW)).toBe("waiting-for-worker");
+    // A job a worker has actually picked up is never "waiting", however long it has run.
+    expect(resolveConnectorSyncPendingState("active", since, NOW)).toBe("active");
+  });
+
+  it("each deferred-work code has one fixed sentence", () => {
+    expect(deferredReasonSentence("assistant-login-expired")).toBe(
+      "The assistant's sign-in has expired."
+    );
+    expect(deferredReasonSentence("assistant-unavailable")).toBe(
+      "The assistant was not available in time."
+    );
+    expect(deferredReasonSentence("structured-output")).toBe(
+      "The assistant did not answer in the form the app expects."
+    );
   });
 
   it("an expired Google sign-in asks for reconnect, not a generic connection error", () => {
@@ -171,5 +204,71 @@ describe("explainConnectorSync", () => {
       NOW
     );
     expect(result.reason).toBe("some new code");
+  });
+});
+
+describe("explainConnectorAccountHealth", () => {
+  it("a revoked account beats everything else, with no warning line", () => {
+    const health = explainConnectorAccountHealth(
+      { ...base, status: "revoked", lastSyncStatus: "failed", syncInFlight: false },
+      NOW
+    );
+    expect(health.label).toBe("Revoked");
+    expect(health.alert).toBeNull();
+    expect(health.canReconnect).toBe(false);
+  });
+
+  it("a run still going says Syncing", () => {
+    const health = explainConnectorAccountHealth({ ...base, syncInFlight: true }, NOW);
+    expect(health.label).toBe("Syncing");
+    expect(health.alert).toBeNull();
+  });
+
+  it("an expired Google sign-in keeps its long-standing sentence", () => {
+    const health = explainConnectorAccountHealth(
+      { ...base, lastSyncStatus: "failed", lastSyncError: "auth-error", syncInFlight: false },
+      NOW
+    );
+    expect(health.label).toBe("Sign-in expired");
+    expect(health.alert).toBe(
+      "Last sync failed because Google access needs to be reconnected. Reconnect to resume syncing."
+    );
+    expect(health.canReconnect).toBe(true);
+  });
+
+  it("a failed run names the failure and the tallies worth naming", () => {
+    const health = explainConnectorAccountHealth(
+      {
+        ...base,
+        lastSyncStatus: "failed",
+        lastSyncError: "email-error",
+        lastSyncCounts: { emailUpserted: 2, emailFailures: 1, truncated: true },
+        syncInFlight: false
+      },
+      NOW
+    );
+    expect(health.alert).toBe(
+      "Last sync failed: Email sync failed \u00b7 1 email message failed, message cap reached. Cached Google data may be stale."
+    );
+  });
+
+  it("a clean run says Synced with nothing to warn about", () => {
+    const health = explainConnectorAccountHealth({ ...base, syncInFlight: false }, NOW);
+    expect(health.label).toBe("Synced");
+    expect(health.alert).toBeNull();
+  });
+
+  it("an account that has never synced says so", () => {
+    const health = explainConnectorAccountHealth(
+      {
+        ...base,
+        lastSyncStartedAt: null,
+        lastSyncFinishedAt: null,
+        lastSyncStatus: null,
+        syncInFlight: false
+      },
+      NOW
+    );
+    expect(health.label).toBe("Awaiting first sync");
   });
 });

@@ -2,38 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   deriveNotWorking,
-  type ConnectorCapabilityMap,
   type ConnectorNotWorkingFacts
 } from "../../packages/shared/src/connector-sync-explain.js";
+// The real declarations, not a copy: a copy is exactly why the wrong reconnect link in the
+// shipped Google and IMAP maps went unnoticed.
+import { GOOGLE_CAPABILITIES } from "../../packages/connectors/src/google-capabilities.js";
+import { IMAP_CAPABILITIES } from "../../packages/connectors/src/imap-capabilities.js";
 
 const NOW = new Date("2026-09-04T14:00:00.000Z");
 
-const CAPABILITIES: ConnectorCapabilityMap = [
-  {
-    ability: "Calendar on the Calendar screen and Today is current",
-    notWorkingLabel: "Calendar is out of date",
-    dependsOn: "calendar",
-    requiresAiStep: false,
-    staleAfterMs: 60 * 60 * 1000,
-    fix: { label: "Reconnect", path: "/settings?section=connectors" }
-  },
-  {
-    ability: "Tasks and follow-ups are created from new email",
-    notWorkingLabel: "Tasks are not being created from email",
-    dependsOn: "email",
-    requiresAiStep: true,
-    staleAfterMs: 60 * 60 * 1000,
-    fix: { label: "Reconnect", path: "/settings?section=connectors" }
-  },
-  {
-    ability: "Moss can answer about recent email",
-    notWorkingLabel: "Moss cannot see recent email",
-    dependsOn: "email",
-    requiresAiStep: false,
-    staleAfterMs: 60 * 60 * 1000,
-    fix: { label: "Reconnect", path: "/settings?section=connectors" }
-  }
-];
+const CAPABILITIES = GOOGLE_CAPABILITIES;
 
 const freshFacts: ConnectorNotWorkingFacts = {
   providerType: "google",
@@ -44,7 +22,8 @@ const freshFacts: ConnectorNotWorkingFacts = {
   lastSyncCounts: null,
   calendarLastGoodAt: "2026-09-04T13:50:00.000Z",
   emailLastGoodAt: "2026-09-04T13:50:00.000Z",
-  deferredAi: null
+  deferredAi: null,
+  pending: null
 };
 
 describe("deriveNotWorking", () => {
@@ -85,12 +64,12 @@ describe("deriveNotWorking", () => {
   it("an email phase that succeeded but the assistant's step was deferred only flags the AI-dependent ability", () => {
     const entries = deriveNotWorking(
       CAPABILITIES,
-      { ...freshFacts, deferredAi: { count: 3, reason: "the assistant's login has expired" } },
+      { ...freshFacts, deferredAi: { count: 3, reason: "assistant-login-expired" } },
       NOW
     );
     expect(entries).toHaveLength(1);
     expect(entries[0]?.ability).toBe("Tasks are not being created from email");
-    expect(entries[0]?.reason).toBe("the assistant's login has expired");
+    expect(entries[0]?.reason).toBe("the assistant's sign-in has expired");
     expect(entries[0]?.fix.path).toBe("/settings?section=assistant");
   });
 
@@ -120,13 +99,48 @@ describe("deriveNotWorking", () => {
     expect(entries).toEqual([]);
   });
 
-  it("an IMAP-style map with no calendar entry never mentions calendars", () => {
-    const emailOnly = CAPABILITIES.filter((capability) => capability.dependsOn === "email");
+  it("the real IMAP map has no calendar entry and never mentions calendars", () => {
+    const emailOnly = IMAP_CAPABILITIES;
     const entries = deriveNotWorking(
       emailOnly,
       { ...freshFacts, failedKinds: ["calendar", "email"], lastSyncError: "email-error" },
       NOW
     );
     expect(entries.every((entry) => !entry.ability.toLowerCase().includes("calendar"))).toBe(true);
+  });
+  it("every shipped reconnect link points at the Connected accounts section", () => {
+    for (const capability of [...GOOGLE_CAPABILITIES, ...IMAP_CAPABILITIES]) {
+      expect(capability.fix.path).toBe("/settings?section=connected");
+    }
+  });
+
+  it("an overdue account whose job nobody picked up gets the worker reason and a Sync now button", () => {
+    const entries = deriveNotWorking(
+      CAPABILITIES,
+      {
+        ...freshFacts,
+        calendarLastGoodAt: "2026-09-04T12:00:00.000Z",
+        emailLastGoodAt: "2026-09-04T12:00:00.000Z",
+        pending: { state: "waiting-for-worker", since: "2026-09-04T13:00:00.000Z" }
+      },
+      NOW
+    );
+    expect(entries).toHaveLength(GOOGLE_CAPABILITIES.length);
+    for (const entry of entries) {
+      expect(entry.reason).toBe("the background worker has not picked up the sync");
+      expect(entry.fix).toEqual({ label: "Sync now", path: "/settings?section=connected" });
+    }
+  });
+
+  it("an account waiting for a worker but still fresh loses nothing", () => {
+    const entries = deriveNotWorking(
+      CAPABILITIES,
+      {
+        ...freshFacts,
+        pending: { state: "waiting-for-worker", since: "2026-09-04T13:00:00.000Z" }
+      },
+      NOW
+    );
+    expect(entries).toEqual([]);
   });
 });

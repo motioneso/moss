@@ -299,9 +299,9 @@ export class ConnectorsRepository {
    * a bounded error label (or null), and the small counts object. Like markSyncStarted it
    * never touches `status`/`revoked_at`. Never touches `previous_sync` — that snapshot is
    * captured by `markSyncStarted`, the only point where the prior run's status is still on
-   * the row (see that method's doc comment). `isContinuation` is kept on this call's shape so
-   * callers can record whether a terminal outcome belongs to a continued run, even though this
-   * method itself no longer branches on it.
+   * the row (see that method's doc comment). Because the snapshot is taken at run start, this
+   * call needs no continuation flag: a mid-run chunk writing an outcome cannot disturb a
+   * snapshot it never touches.
    */
   async markSyncFinished(
     scopedDb: DataContextDb,
@@ -310,8 +310,7 @@ export class ConnectorsRepository {
       finishedAt: Date;
       status: ConnectorSyncStatus;
       error: string | null;
-      counts: Record<string, number | boolean>;
-      isContinuation: boolean;
+      counts: ConnectorSyncCounts;
     }
   ): Promise<void> {
     assertDataContextDb(scopedDb);
@@ -321,7 +320,7 @@ export class ConnectorsRepository {
         last_sync_finished_at: input.finishedAt,
         last_sync_status: input.status,
         last_sync_error: input.error,
-        last_sync_counts: input.counts,
+        last_sync_counts: input.counts as unknown as Record<string, unknown>,
         updated_at: input.finishedAt
       })
       .where("id", "=", accountId)

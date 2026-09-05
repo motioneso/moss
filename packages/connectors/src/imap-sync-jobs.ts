@@ -90,8 +90,7 @@ export async function runImapSync(
         finishedAt: now(),
         status: "failed",
         error: "no-active-connection",
-        counts: { emailUpserted: 0, emailFailures: 0, truncated: false },
-        isContinuation: false
+        counts: { emailUpserted: 0, emailFailures: 0, truncated: false }
       });
       return {
         emailUpserted: 0,
@@ -107,8 +106,7 @@ export async function runImapSync(
       finishedAt: now(),
       status: "failed",
       error: "auth-error",
-      counts: { emailUpserted: 0, emailFailures: 0, truncated: false },
-      isContinuation: false
+      counts: { emailUpserted: 0, emailFailures: 0, truncated: false }
     });
     return { emailUpserted: 0, emailFailures: 0, errors: ["auth-error"], truncated: false };
   }
@@ -154,8 +152,7 @@ export async function runImapSync(
     finishedAt: now(),
     status,
     error: errors[0] ?? null,
-    counts: { emailUpserted, emailFailures, truncated: false },
-    isContinuation: false
+    counts: { emailUpserted, emailFailures, truncated: false }
   });
 
   return { emailUpserted, emailFailures, errors, truncated: false };

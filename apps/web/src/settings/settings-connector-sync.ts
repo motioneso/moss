@@ -1,10 +1,10 @@
-import { explainConnectorSync } from "@moss/shared";
-import type { ConnectorAccountDto, ConnectorSyncCounts } from "@moss/shared";
+import { explainConnectorAccountHealth } from "@moss/shared";
+import type { ConnectorAccountDto, ConnectorSyncExplainCode, ConnectorSyncTone } from "@moss/shared";
 
 /**
- * Thin adapter over the shared `explainConnectorSync` wording. This file only maps that
- * shared explanation onto the exact strings this settings pane has always shown — the
- * words themselves live in `packages/shared/src/connector-sync-explain.ts`.
+ * Display adaptation only. Every user-visible word for a connected account now comes from
+ * `packages/shared/src/connector-sync-explain.ts`; this file just turns the shared status
+ * code and tone into the indicator dot and badge tone this pane's markup understands.
  */
 
 export type ConnectorAccountHealth = {
@@ -36,27 +36,7 @@ export function getConnectorAccountHealth(
     | "lastSyncCounts"
   >
 ): ConnectorAccountHealth {
-  if (account.status === "revoked") {
-    return {
-      indicator: "idle",
-      badgeTone: "neutral",
-      label: "Revoked",
-      alert: null,
-      canReconnect: false
-    };
-  }
-
-  if (isConnectorSyncInFlight(account)) {
-    return {
-      indicator: "idle",
-      badgeTone: "neutral",
-      label: "Syncing",
-      alert: null,
-      canReconnect: false
-    };
-  }
-
-  const explained = explainConnectorSync(
+  const health = explainConnectorAccountHealth(
     {
       providerType: account.providerType,
       status: account.status,
@@ -67,88 +47,51 @@ export function getConnectorAccountHealth(
       lastSyncCounts: account.lastSyncCounts,
       pending: null,
       nextRunAt: null,
-      deferredAi: null
+      deferredAi: null,
+      syncInFlight: isConnectorSyncInFlight(account)
     },
     new Date()
   );
 
-  switch (explained.code) {
+  return {
+    indicator: indicatorFor(health.code),
+    badgeTone: badgeToneFor(health.tone),
+    label: health.label,
+    alert: health.alert,
+    canReconnect: health.canReconnect
+  };
+}
+
+/** The coloured dot beside the account name. */
+function indicatorFor(code: ConnectorSyncExplainCode): ConnectorAccountHealth["indicator"] {
+  switch (code) {
     case "sign-in-expired":
-      return {
-        indicator: "error",
-        badgeTone: "amber",
-        label: "Sign-in expired",
-        alert: `Last sync failed because ${account.providerType === "google" ? "Google" : "email"} access needs to be reconnected. Reconnect to resume syncing.`,
-        canReconnect: true
-      };
-
     case "connection-error":
-      // Two different situations both land here: a failed run with a non-auth error, or
-      // the account itself reporting a connection problem outside of a run.
-      if (account.lastSyncStatus === "failed") {
-        return {
-          indicator: "error",
-          badgeTone: "amber",
-          label: "Sign-in expired",
-          alert: syncAlert("Last sync failed", account.lastSyncError, account.lastSyncCounts),
-          canReconnect: account.providerType === "google"
-        };
-      }
-      return {
-        indicator: "error",
-        badgeTone: "amber",
-        label: "Connection error",
-        alert:
-          account.providerType === "google"
-            ? "Google reported a connection error. Reconnect to restore syncing."
-            : "This email account reported a connection error. Reconnect to restore syncing.",
-        canReconnect: true
-      };
-
     case "capped":
-      return {
-        indicator: "error",
-        badgeTone: "amber",
-        label: "Message cap reached",
-        alert: syncAlert(
-          "Last sync reached its message cap",
-          account.lastSyncError,
-          account.lastSyncCounts
-        ),
-        canReconnect: false
-      };
-
     case "partial":
-      return {
-        indicator: "error",
-        badgeTone: "amber",
-        label: "Partial sync",
-        alert: syncAlert(
-          "Last sync completed with errors",
-          account.lastSyncError,
-          account.lastSyncCounts
-        ),
-        canReconnect: false
-      };
-
-    case "not-scheduled":
+    case "waiting-for-worker":
+      return "error";
+    case "revoked":
+    case "syncing":
+    case "queued":
     case "first-run-pending":
-      return {
-        indicator: "idle",
-        badgeTone: "neutral",
-        label: "Awaiting first sync",
-        alert: "First sync hasn't run yet — new data will appear once it completes.",
-        canReconnect: false
-      };
-
+    case "not-scheduled":
+      return "idle";
     default:
-      return {
-        indicator: "ready",
-        badgeTone: "forest",
-        label: "Synced",
-        alert: null,
-        canReconnect: false
-      };
+      return "ready";
+  }
+}
+
+/** This pane's badge has no red, so a shared red reads as amber here. */
+function badgeToneFor(tone: ConnectorSyncTone): ConnectorAccountHealth["badgeTone"] {
+  switch (tone) {
+    case "forest":
+      return "forest";
+    case "amber":
+    case "red":
+      return "amber";
+    default:
+      return "neutral";
   }
 }
 
@@ -156,46 +99,4 @@ function parseTimestamp(value: string | null): number | null {
   if (!value) return null;
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function syncAlert(
-  prefix: string,
-  error: string | null,
-  counts: ConnectorSyncCounts | null
-): string {
-  const details = [syncErrorLabel(error), syncCountsLabel(counts)].filter(Boolean).join(" · ");
-  return details
-    ? `${prefix}: ${details}. Cached Google data may be stale.`
-    : `${prefix}. Cached Google data may be stale.`;
-}
-
-function syncErrorLabel(error: string | null): string | null {
-  switch (error) {
-    case "calendar-error":
-      return "Calendar sync failed";
-    case "calendar-item-error":
-      return "Some calendar items could not be saved";
-    case "email-error":
-      return "Email sync failed";
-    case "email-message-error":
-      return "Some email messages could not be saved";
-    case "no-active-connection":
-      return "No active Google connection";
-    case null:
-      return null;
-    default:
-      return error.replace(/-/g, " ");
-  }
-}
-
-function syncCountsLabel(counts: ConnectorSyncCounts | null): string | null {
-  if (!counts) return null;
-  const parts: string[] = [];
-  if (counts.emailFailures) {
-    parts.push(
-      `${counts.emailFailures} email message${counts.emailFailures === 1 ? "" : "s"} failed`
-    );
-  }
-  if (counts.truncated) parts.push("message cap reached");
-  return parts.length > 0 ? parts.join(", ") : null;
 }

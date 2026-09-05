@@ -13,7 +13,7 @@ export const GOOGLE_CAPABILITIES: ConnectorCapabilityMap = [
     dependsOn: "calendar",
     requiresAiStep: false,
     staleAfterMs: 60 * 60 * 1000,
-    fix: { label: "Reconnect", path: "/settings?section=connectors" }
+    fix: { label: "Reconnect", path: "/settings?section=connected" }
   },
   {
     ability: "Tasks and follow-ups are created from new email",
@@ -21,7 +21,7 @@ export const GOOGLE_CAPABILITIES: ConnectorCapabilityMap = [
     dependsOn: "email",
     requiresAiStep: true,
     staleAfterMs: 60 * 60 * 1000,
-    fix: { label: "Reconnect", path: "/settings?section=connectors" }
+    fix: { label: "Reconnect", path: "/settings?section=connected" }
   },
   {
     ability: "Moss can answer about recent email",
@@ -29,6 +29,6 @@ export const GOOGLE_CAPABILITIES: ConnectorCapabilityMap = [
     dependsOn: "email",
     requiresAiStep: false,
     staleAfterMs: 60 * 60 * 1000,
-    fix: { label: "Reconnect", path: "/settings?section=connectors" }
+    fix: { label: "Reconnect", path: "/settings?section=connected" }
   }
 ];

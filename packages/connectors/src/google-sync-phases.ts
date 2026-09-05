@@ -1,5 +1,6 @@
 import { sql } from "kysely";
 
+import type { ConnectorSyncDeferredReason } from "@moss/shared";
 import type { DataContextDb } from "@moss/db";
 import type { CalendarRepository } from "@moss/calendar";
 import type { EmailRepository } from "@moss/email";
@@ -13,6 +14,7 @@ import {
   looksLikeOneTimeCodeEmail,
   otpSkippedResult,
   type EmailExtractResult,
+  type EmailExtractRetryableReason,
   type ParsedEmail
 } from "./email-extract.js";
 import { GoogleEmailReadProvider, GMAIL_READ_FOLDER } from "./email-read-provider.js";
@@ -20,6 +22,7 @@ import { projectEmailActions } from "./monitor-jobs.js";
 import { listSavedEmailContext } from "./source-context/email.js";
 import type { ConnectorsRepository } from "./repository.js";
 import type { GoogleSyncDeps, SyncLogger } from "./sync-jobs.js";
+import { MAX_DEFERRED_KEYS } from "./google-sync-payload.js";
 
 export const GOOGLE_EMAIL_CHUNK_SIZE = 8;
 export const GOOGLE_CURRENT_DAY_EMAIL_PAGE_SIZE = 500;
@@ -45,8 +48,14 @@ interface PhaseProgress {
   readonly errors: string[];
   /** Messages set aside for a later retry this run (never more than emailUpserted). */
   emailDeferred: number;
+  /**
+   * The ids of the messages currently set aside. Membership, not arithmetic, is what makes
+   * the count distinct: retrying the same page re-adds an id that is already there, and a
+   * later success removes it.
+   */
+  readonly deferredKeys: Set<string>;
   /** The most recent reason a message was deferred, for the sync-status "why" text. */
-  deferredReason: string | null;
+  deferredReason: ConnectorSyncDeferredReason | null;
 }
 
 interface PhaseContext {
@@ -299,6 +308,9 @@ export async function runGoogleEmailPhase(
   phase: "email-current-day" | "email"
 ): Promise<{ readonly nextCursor: string | undefined; readonly retry: boolean }> {
   let nextCursor: string | undefined;
+  // Which messages are inside the extraction call right now. The deferral is caught outside
+  // the batch loop, so without this the run knows a message was deferred but not which one.
+  let inFlightKeys: readonly string[] = [];
   const query = phase === "email-current-day" ? CURRENT_DAY_EMAIL_QUERY : EMAIL_QUERY;
   const pageLimit =
     phase === "email-current-day" ? GOOGLE_CURRENT_DAY_EMAIL_PAGE_SIZE : GOOGLE_EMAIL_CHUNK_SIZE;
@@ -422,6 +434,7 @@ export async function runGoogleEmailPhase(
     const batches = pending.map((message) => [message]);
     for (const [batchIndex, batch] of batches.entries()) {
       let batchResults: EmailExtractResult[];
+      inFlightKeys = batch.map((message) => message.externalId);
       try {
         batchResults = await extractEmailSignalsBatch(batch, context.deps.emailExtractDeps, {
           priority: phase === "email-current-day" ? "foreground" : "background",
@@ -458,6 +471,8 @@ export async function runGoogleEmailPhase(
           const extracted = batchResults[index]!;
           if (extracted.escalated) context.progress.escalations += 1;
           await persistEmail(batch[index]!, extracted);
+          // This message got through on a later attempt, so it is no longer set aside.
+          context.progress.deferredKeys.delete(batch[index]!.externalId);
           projectedKeys.push(batch[index]!.externalId);
         } catch (error) {
           context.progress.emailFailures += 1;
@@ -493,10 +508,14 @@ export async function runGoogleEmailPhase(
     if (error instanceof EmailExtractRetryableError) {
       if (!extractionScope) throw error;
       context.progress.emailFailures += 1;
-      // The queue's retryLimit is 1, so this fires at most once per message unit this run —
-      // emailDeferred can never run ahead of emailUpserted.
-      context.progress.emailDeferred += 1;
-      context.progress.deferredReason = error.reason;
+      // Count message units, not attempts: retrying the same page re-adds ids that are
+      // already in the set, so emailDeferred can never run ahead of emailUpserted.
+      for (const key of inFlightKeys) {
+        if (context.progress.deferredKeys.size >= MAX_DEFERRED_KEYS) break;
+        context.progress.deferredKeys.add(key);
+      }
+      context.progress.emailDeferred = context.progress.deferredKeys.size;
+      context.progress.deferredReason = deferredReasonCode(error.reason);
       if (!context.progress.errors.includes("email-message-error")) {
         context.progress.errors.push("email-message-error");
       }
@@ -526,4 +545,16 @@ export async function runGoogleEmailPhase(
     if (!context.progress.errors.includes(errorLabel)) context.progress.errors.push(errorLabel);
   }
   return { nextCursor, retry: false };
+}
+
+/** Map the extraction layer's retry reason onto the fixed code the shared wording uses. */
+function deferredReasonCode(reason: EmailExtractRetryableReason): ConnectorSyncDeferredReason {
+  switch (reason) {
+    case "login-expired":
+      return "assistant-login-expired";
+    case "structured-output":
+      return "structured-output";
+    default:
+      return "assistant-unavailable";
+  }
 }

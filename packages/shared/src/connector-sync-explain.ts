@@ -2,6 +2,7 @@ import type {
   ConnectorAccountStatus,
   ConnectorProviderType,
   ConnectorSyncCounts,
+  ConnectorSyncDeferredReason,
   ConnectorSyncStatus
 } from "./connectors-api.js";
 
@@ -31,8 +32,29 @@ export interface ConnectorSyncPending {
 export interface ConnectorDeferredAi {
   /** How many messages this run set aside for the assistant to catch up on later. */
   readonly count: number;
-  /** Already human-readable — the AI router's reported reason, not a raw error code. */
-  readonly reason: string;
+  /**
+   * A fixed code, not a message. This module owns the sentence each code turns into, so a
+   * provider string can never reach a screen and the wording lives in exactly one place.
+   */
+  readonly reason: ConnectorSyncDeferredReason;
+}
+
+/**
+ * Maps the job state pg-boss reports for the newest sync job onto the state the wording
+ * rules use. A `created` or `retry` job younger than the grace period is still just
+ * queued; past it, the background worker is the story. Exported so the boundary itself is
+ * testable and so every caller agrees on where it sits.
+ */
+export function resolveConnectorSyncPendingState(
+  jobState: "created" | "retry" | "active",
+  since: string,
+  now: Date
+): ConnectorSyncPendingState {
+  if (jobState === "active") return "active";
+  const queuedAt = Date.parse(since);
+  if (!Number.isFinite(queuedAt)) return "queued";
+  const waitedMs = now.getTime() - queuedAt;
+  return waitedMs > WAITING_FOR_WORKER_GRACE_MS ? "waiting-for-worker" : "queued";
 }
 
 export type ConnectorSyncExplainCode =
@@ -113,12 +135,14 @@ export function explainConnectorSync(
         canSyncNow: false
       });
     }
+    // Work is still queued, so a second request would only pile another job behind the
+    // first — the remedy for this state is on the not-working notice, not another sync.
     return build("waiting-for-worker", {
       summary: "Sync has not started.",
       reason: `Queued ${formatRelative(input.pending.since, nowMs)} and not picked up.`,
       next: "The background worker may not be running.",
       canReconnect: false,
-      canSyncNow: true
+      canSyncNow: false
     });
   }
 
@@ -218,7 +242,7 @@ const TONES: Record<ConnectorSyncExplainCode, ConnectorSyncTone> = {
   revoked: "neutral",
   syncing: "neutral",
   queued: "neutral",
-  "waiting-for-worker": "neutral",
+  "waiting-for-worker": "red",
   "sign-in-expired": "red",
   "connection-error": "red",
   partial: "amber",
@@ -310,6 +334,28 @@ function errorCodeClause(error: string | null, counts: ConnectorSyncCounts | nul
   return clause.charAt(0).toLowerCase() + clause.slice(1);
 }
 
+/**
+ * The one place a deferred-work code becomes words. Callers store the code with the run's
+ * counts; nothing but this table ever turns it into a sentence.
+ */
+export function deferredReasonSentence(reason: ConnectorSyncDeferredReason): string {
+  switch (reason) {
+    case "assistant-login-expired":
+      return "The assistant's sign-in has expired.";
+    case "assistant-unavailable":
+      return "The assistant was not available in time.";
+    case "structured-output":
+      return "The assistant did not answer in the form the app expects.";
+  }
+}
+
+/** Lowercase clause form of the same table, for "because <reason>." sentences. */
+function deferredReasonClause(reason: ConnectorSyncDeferredReason): string {
+  const sentence = deferredReasonSentence(reason);
+  const clause = sentence.endsWith(".") ? sentence.slice(0, -1) : sentence;
+  return clause.charAt(0).toLowerCase() + clause.slice(1);
+}
+
 function formatRelative(iso: string | null, nowMs: number): string {
   if (!iso) return "recently";
   const then = Date.parse(iso);
@@ -385,12 +431,25 @@ export interface ConnectorNotWorkingFacts {
   readonly calendarLastGoodAt: string | null;
   readonly emailLastGoodAt: string | null;
   readonly deferredAi: ConnectorDeferredAi | null;
+  /**
+   * The newest sync job for this account, when one is still waiting or running. An account
+   * that has gone stale because nothing picked its job up is a worker problem, not a
+   * connection problem, and gets a different sentence and a different remedy.
+   */
+  readonly pending: ConnectorSyncPending | null;
 }
 
 const ASSISTANT_FIX: ConnectorNotWorkingFix = {
   label: "Log the assistant in",
   path: "/settings?section=assistant"
 };
+
+const SYNC_NOW_FIX: ConnectorNotWorkingFix = {
+  label: "Sync now",
+  path: "/settings?section=connected"
+};
+
+const WAITING_FOR_WORKER_REASON = "the background worker has not picked up the sync";
 
 /**
  * Turns a capability map and the current run facts into the list of lost abilities to
@@ -414,12 +473,25 @@ export function deriveNotWorking(
   }
 
   const nowMs = now.getTime();
+  const waitingForWorker = facts.pending?.state === "waiting-for-worker";
   const entries: ConnectorNotWorkingEntry[] = [];
 
   for (const capability of map) {
     const lastGoodAt = lastGoodFor(capability, facts);
     const failedThisRun = facts.failedKinds.includes(capability.dependsOn);
     const stale = lastGoodAt === null || nowMs - Date.parse(lastGoodAt) > capability.staleAfterMs;
+
+    // An overdue account whose job nobody has picked up is a worker problem: say so, and
+    // offer the sync the user can actually press rather than a pointless reconnect.
+    if (waitingForWorker && stale) {
+      entries.push({
+        ability: capability.notWorkingLabel,
+        since: lastGoodAt,
+        reason: WAITING_FOR_WORKER_REASON,
+        fix: SYNC_NOW_FIX
+      });
+      continue;
+    }
 
     if (failedThisRun || stale) {
       entries.push({
@@ -437,7 +509,7 @@ export function deriveNotWorking(
       entries.push({
         ability: capability.notWorkingLabel,
         since: lastGoodAt,
-        reason: facts.deferredAi.reason,
+        reason: deferredReasonClause(facts.deferredAi.reason),
         fix: ASSISTANT_FIX
       });
     }
@@ -448,4 +520,160 @@ export function deriveNotWorking(
 
 function lastGoodFor(capability: ConnectorCapability, facts: ConnectorNotWorkingFacts): string | null {
   return capability.dependsOn === "calendar" ? facts.calendarLastGoodAt : facts.emailLastGoodAt;
+}
+
+/* ---------------------------------------------------------------------------------- */
+/* Connected accounts row wording                                                      */
+/* ---------------------------------------------------------------------------------- */
+
+/**
+ * The words the Connected accounts row shows for one account. These live here, not in the
+ * web pane, so the row, the status endpoint and the Moss status tool can never drift into
+ * three different vocabularies. The pane only turns `code` and `tone` into its own
+ * indicator and badge colour.
+ */
+export interface ConnectorAccountHealthText {
+  readonly code: ConnectorSyncExplainCode;
+  readonly tone: ConnectorSyncTone;
+  /** Short badge text for the row. */
+  readonly label: string;
+  /** The longer line under the row, or null when there is nothing to warn about. */
+  readonly alert: string | null;
+  readonly canReconnect: boolean;
+}
+
+export interface ConnectorAccountHealthInput extends ExplainConnectorSyncInput {
+  /** True while this account's own timestamps say a run has started and not finished. */
+  readonly syncInFlight: boolean;
+}
+
+export function explainConnectorAccountHealth(
+  input: ConnectorAccountHealthInput,
+  now: Date
+): ConnectorAccountHealthText {
+  if (input.status === "revoked") {
+    return { code: "revoked", tone: "neutral", label: "Revoked", alert: null, canReconnect: false };
+  }
+  if (input.syncInFlight) {
+    return { code: "syncing", tone: "neutral", label: "Syncing", alert: null, canReconnect: false };
+  }
+
+  const explained = explainConnectorSync(input, now);
+  const isGoogle = input.providerType === "google";
+
+  switch (explained.code) {
+    case "sign-in-expired":
+      return {
+        code: explained.code,
+        tone: explained.tone,
+        label: "Sign-in expired",
+        alert: `Last sync failed because ${isGoogle ? "Google" : "email"} access needs to be reconnected. Reconnect to resume syncing.`,
+        canReconnect: true
+      };
+
+    case "connection-error":
+      // Two different situations both land here: a failed run with a non-auth error, or
+      // the account itself reporting a connection problem outside of a run.
+      if (input.lastSyncStatus === "failed") {
+        return {
+          code: explained.code,
+          tone: explained.tone,
+          label: "Sign-in expired",
+          alert: rowAlert("Last sync failed", input.lastSyncError, input.lastSyncCounts),
+          canReconnect: isGoogle
+        };
+      }
+      return {
+        code: explained.code,
+        tone: explained.tone,
+        label: "Connection error",
+        alert: isGoogle
+          ? "Google reported a connection error. Reconnect to restore syncing."
+          : "This email account reported a connection error. Reconnect to restore syncing.",
+        canReconnect: true
+      };
+
+    case "capped":
+      return {
+        code: explained.code,
+        tone: explained.tone,
+        label: "Message cap reached",
+        alert: rowAlert(
+          "Last sync reached its message cap",
+          input.lastSyncError,
+          input.lastSyncCounts
+        ),
+        canReconnect: false
+      };
+
+    case "partial":
+      return {
+        code: explained.code,
+        tone: explained.tone,
+        label: "Partial sync",
+        alert: rowAlert("Last sync completed with errors", input.lastSyncError, input.lastSyncCounts),
+        canReconnect: false
+      };
+
+    case "not-scheduled":
+    case "first-run-pending":
+      return {
+        code: explained.code,
+        tone: explained.tone,
+        label: "Awaiting first sync",
+        alert: "First sync hasn't run yet — new data will appear once it completes.",
+        canReconnect: false
+      };
+
+    case "syncing":
+    case "queued":
+    case "waiting-for-worker":
+      return {
+        code: explained.code,
+        tone: explained.tone,
+        label: explained.label,
+        alert: [explained.reason, explained.next].filter(Boolean).join(" ") || null,
+        canReconnect: false
+      };
+
+    default:
+      return { code: "synced", tone: "forest", label: "Synced", alert: null, canReconnect: false };
+  }
+}
+
+/** The row's longer line: what went wrong, plus the bounded tallies worth naming. */
+function rowAlert(prefix: string, error: string | null, counts: ConnectorSyncCounts | null): string {
+  const details = [rowErrorLabel(error), rowCountsLabel(counts)].filter(Boolean).join(" · ");
+  return details
+    ? `${prefix}: ${details}. Cached Google data may be stale.`
+    : `${prefix}. Cached Google data may be stale.`;
+}
+
+function rowErrorLabel(error: string | null): string | null {
+  switch (error) {
+    case "calendar-error":
+      return "Calendar sync failed";
+    case "calendar-item-error":
+      return "Some calendar items could not be saved";
+    case "email-error":
+      return "Email sync failed";
+    case "email-message-error":
+      return "Some email messages could not be saved";
+    case "no-active-connection":
+      return "No active Google connection";
+    case null:
+      return null;
+    default:
+      return error.replace(/-/g, " ");
+  }
+}
+
+function rowCountsLabel(counts: ConnectorSyncCounts | null): string | null {
+  if (!counts) return null;
+  const parts: string[] = [];
+  if (counts.emailFailures) {
+    parts.push(`${counts.emailFailures} email message${counts.emailFailures === 1 ? "" : "s"} failed`);
+  }
+  if (counts.truncated) parts.push("message cap reached");
+  return parts.length > 0 ? parts.join(", ") : null;
 }

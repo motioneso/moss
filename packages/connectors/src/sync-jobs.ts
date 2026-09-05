@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Job, PgBoss, WorkOptions } from "pg-boss";
 import type { Kysely } from "kysely";
 
+import type { ConnectorSyncDeferredReason } from "@moss/shared";
 import type { ActorScopedJobPayload, QueueDefinition } from "@moss/jobs";
 import type { ConnectorSyncStatus, DataContextDb, DataContextRunner, MossDatabase } from "@moss/db";
 import { hasInFlightJob, sendJob, toAccessContext } from "@moss/jobs";
@@ -88,8 +89,18 @@ export interface GoogleSyncContinuationPayload extends ActorScopedJobPayload {
   readonly emailUpserted: number;
   readonly emailFailures: number;
   readonly escalations: number;
-  /** Messages set aside for a later retry this run (never more than emailUpserted). */
-  readonly emailDeferred: number;
+  /**
+   * Distinct messages set aside for a later retry this run (never more than emailUpserted).
+   * Absent on a job queued before this field existed; such a job is read as zero.
+   */
+  readonly emailDeferred?: number;
+  /**
+   * The message ids currently set aside, so retrying the same page cannot count one message
+   * twice and a later success can take it back off the list. Bounded by MAX_DEFERRED_KEYS.
+   */
+  readonly deferredKeys?: readonly string[];
+  /** Why email work was set aside, as a fixed code the shared wording module understands. */
+  readonly deferredReason?: ConnectorSyncDeferredReason | null;
   readonly errors: readonly string[];
 }
 
@@ -220,7 +231,12 @@ export async function runGoogleSyncChunk(
   let emailUpserted = continuation?.emailUpserted ?? 0;
   let emailFailures = continuation?.emailFailures ?? 0;
   let escalations = continuation?.escalations ?? 0;
-  let emailDeferred = continuation?.emailDeferred ?? 0;
+  // An old queued job carries only a total. Freeze that total as a baseline and count new
+  // deferrals by distinct message id on top of it.
+  const carriedDeferred = continuation?.deferredKeys === undefined ? (continuation?.emailDeferred ?? 0) : 0;
+  const deferredKeys = new Set<string>(continuation?.deferredKeys ?? []);
+  let deferredReason: ConnectorSyncDeferredReason | null = continuation?.deferredReason ?? null;
+  let emailDeferred = carriedDeferred + deferredKeys.size;
 
   const account = await deps.getActiveAccount(scopedDb);
   if (!account) {
@@ -280,9 +296,10 @@ export async function runGoogleSyncChunk(
           emailUpserted: 0,
           emailFailures: 0,
           escalations: 0,
+          emailDeferred,
+          deferredReason,
           truncated: false
-        },
-        isContinuation: continuation !== undefined
+        }
       });
     } catch (persistErr) {
       logger.warn({ err: persistErr }, "google-sync: failed to persist auth-failure outcome");
@@ -322,7 +339,8 @@ export async function runGoogleSyncChunk(
     emailFailures,
     escalations,
     emailDeferred,
-    deferredReason: null as string | null,
+    deferredKeys,
+    deferredReason,
     errors
   };
   const phaseContext = {
@@ -367,6 +385,8 @@ export async function runGoogleSyncChunk(
       emailFailures,
       escalations,
       emailDeferred,
+      deferredKeys: [...deferredKeys],
+      deferredReason,
       errors
     }
   });
@@ -387,7 +407,8 @@ export async function runGoogleSyncChunk(
     emailUpserted = progress.emailUpserted;
     emailFailures = progress.emailFailures;
     escalations = progress.escalations;
-    emailDeferred = progress.emailDeferred;
+    emailDeferred = carriedDeferred + progress.deferredKeys.size;
+    deferredReason = progress.deferredReason;
     if (result.retry) return next(phase, phaseCursor);
     if (result.nextCursor) return next(phase, result.nextCursor);
     if (phase === "email-current-day") return next("email");
@@ -422,9 +443,9 @@ export async function runGoogleSyncChunk(
         emailFailures,
         escalations,
         emailDeferred,
+        deferredReason,
         truncated: false
-      },
-      isContinuation: false
+      }
     });
   } catch (error) {
     logger.warn({ err: error }, "google-sync: failed to persist sync outcome; not retrying job");
