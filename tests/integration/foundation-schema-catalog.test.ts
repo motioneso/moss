@@ -382,7 +382,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0211", name: "0211_moss_audit_log_outcome_widen_suppressed_refused.sql" },
         // #2208 — model rows record whether discovery or a person added them.
         { version: "0212", name: "0212_ai_configured_models_origin.sql" },
-        { version: "0213", name: "0213_sports_reddit_sources.sql" }
+        { version: "0213", name: "0213_sports_reddit_sources.sql" },
+        // #2274 — the email thread judgement reads a whole thread by owner and thread id.
+        { version: "0215", name: "0215_email_thread_lookup.sql" }
       ]);
     } finally {
       await client.end();
