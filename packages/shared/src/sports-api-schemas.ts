@@ -107,6 +107,8 @@ const headlineSchema = {
     "url",
     "publishedAt",
     "imageUrl",
+    "imageWidth",
+    "imageHeight",
     "summary",
     "teamKeys",
     "publisherLabel",
@@ -124,6 +126,10 @@ const headlineSchema = {
     url: { type: "string" },
     publishedAt: { type: "string" },
     imageUrl: { type: ["string", "null"] },
+    // Always emitted, null when unknown (#2237). A key this schema does not know is stripped on
+    // the wire, so the lead-story preference for a wide photo would never see a width.
+    imageWidth: { type: ["number", "null"] },
+    imageHeight: { type: ["number", "null"] },
     summary: { type: "string" },
     teamKeys: { type: "array", items: { type: "string" } },
     publisherLabel: { type: "string" },

@@ -69,6 +69,10 @@ export interface Headline {
   readonly url: string;
   readonly publishedAt: string;
   readonly imageUrl: string | null; // first "header" image, else first image, else null
+  // Pixel size of the stored copy behind `imageUrl` (#2237). Always present: null where the photo
+  // size is not known, so a reader never has to distinguish "absent" from "unknown".
+  readonly imageWidth: number | null;
+  readonly imageHeight: number | null;
   readonly summary: string; // short article blurb from the source; "" when absent (#840)
   readonly teamKeys: readonly string[]; // filled by the service join (Task 4); source emits []
   readonly publisherLabel: string;

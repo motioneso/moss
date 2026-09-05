@@ -293,6 +293,7 @@ import {
   SportsBrowserBrokerServer,
   SportsBrowserClient,
   SportsEspnCoverageRepository,
+  SportsPhotoStore,
   SportsPublicSourceReader,
   SportsService,
   type RegisteredStory,
@@ -2031,10 +2032,17 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       );
       const sourcesRepository = new SportsSourcesRepository();
       const espnCoverageRepository = new SportsEspnCoverageRepository();
+      // #2237 story photos are copied into the owner's own vault and served from our origin, so
+      // the vault runner and the byte fetch port are built here rather than inside the module.
+      const sportsPhotoStore = new SportsPhotoStore({
+        vault: new VaultContextRunner(getVaultBaseDir()),
+        fetchBytes: discovery.fetchBytes
+      });
       const publicSourceReader = new SportsPublicSourceReader({
         dataContext: deps.dataContext,
         repository: sourcesRepository,
         fetch: discovery.fetch,
+        photos: sportsPhotoStore,
         cache: new DatasetCache({ maxEntries: 500 })
       });
       const followsRepository = new SportsFollowsRepository();
@@ -2096,7 +2104,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveTeams: async (competitionKey) =>
           (await sourceTeamResolver.getLeagueTeams(competitionKey)).teams,
         dataContext: deps.dataContext,
-        reader: publicSourceReader
+        reader: publicSourceReader,
+        photos: sportsPhotoStore
       });
       configureSportsChatTools(datasetClient, followsRepository, sourceService);
       registerSportsRoutes(server, {
@@ -2110,6 +2119,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         publicSourceReader,
         previews,
         sourceService,
+        photos: sportsPhotoStore,
         storyRelevance: sportsStoryRelevance,
         storyFeedback: sportsStoryFeedback
       });

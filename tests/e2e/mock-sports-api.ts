@@ -95,6 +95,8 @@ function headline(id: string, competitionKey: string, title: string): Headline {
     url: `https://example.test/${id}`,
     publishedAt: "2026-07-06T18:00:00Z",
     imageUrl: null,
+    imageWidth: null,
+    imageHeight: null,
     summary: "",
     teamKeys: [],
     publisherLabel: "ESPN",

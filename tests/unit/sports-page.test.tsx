@@ -12,7 +12,12 @@ import type {
   StandingsGroup
 } from "@moss/shared";
 
-import { hasLiveGame, SportsPage } from "../../packages/sports/src/web/sports-page.js";
+import {
+  findFeaturedStory,
+  hasLiveGame,
+  leadWidePhotoFirst,
+  SportsPage
+} from "../../packages/sports/src/web/sports-page.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
 // Root suite renders @moss/web components with react-dom/server (no jsdom /
@@ -123,6 +128,8 @@ function headline(
     url: "https://example.test/" + id,
     publishedAt: "2026-07-01T18:00:00Z",
     imageUrl: null,
+    imageWidth: null,
+    imageHeight: null,
     summary: "",
     teamKeys: [],
     publisherLabel: "ESPN",
@@ -858,5 +865,67 @@ describe("hasLiveGame (#762)", () => {
       ]
     });
     expect(hasLiveGame(overview)).toBe(true);
+  });
+});
+
+describe("the lead story prefers a wide photo (#2237)", () => {
+  it("moves the first story with a wide photo to the front", () => {
+    const stories = [
+      headline("a", "nfl", "Narrow", { imageUrl: "/a", imageWidth: 400 }),
+      headline("b", "nfl", "No photo"),
+      headline("c", "nfl", "Wide", { imageUrl: "/c", imageWidth: 1280 }),
+      headline("d", "nfl", "Also wide", { imageUrl: "/d", imageWidth: 900 })
+    ];
+
+    expect(leadWidePhotoFirst(stories).map((story) => story.id)).toEqual(["c", "a", "b", "d"]);
+  });
+
+  it("changes nothing when no story has a wide photo, or when the first already does", () => {
+    const narrow = [
+      headline("a", "nfl", "Narrow", { imageUrl: "/a", imageWidth: 400 }),
+      headline("b", "nfl", "No photo")
+    ];
+    expect(leadWidePhotoFirst(narrow)).toBe(narrow);
+
+    const alreadyWide = [
+      headline("a", "nfl", "Wide", { imageUrl: "/a", imageWidth: 1200 }),
+      headline("b", "nfl", "Narrow", { imageUrl: "/b", imageWidth: 300 })
+    ];
+    expect(leadWidePhotoFirst(alreadyWide)).toBe(alreadyWide);
+  });
+
+  it("keeps every story: this is a preference, not a filter", () => {
+    const stories = [
+      headline("a", "nfl", "No photo"),
+      headline("b", "nfl", "Wide", { imageUrl: "/b", imageWidth: 1280 })
+    ];
+    expect(leadWidePhotoFirst(stories)).toHaveLength(2);
+  });
+
+  it("picks a wide photo for the game band too, and falls back when there is none", () => {
+    const game = liveGame();
+    const about = (id: string, overrides: Partial<Headline>) =>
+      headline(id, "nfl", "Vikings hold off the Cowboys", {
+        teamKeys: ["min", "dal"],
+        ...overrides
+      });
+
+    const withWide = makeOverview({
+      topStories: [
+        about("narrow", { imageUrl: "/narrow", imageWidth: 400, summary: "A dek" }),
+        about("wide", { imageUrl: "/wide", imageWidth: 1280 })
+      ],
+      hero: gamedayHero(game)
+    });
+    expect(findFeaturedStory(game, withWide)?.id).toBe("wide");
+
+    const noWide = makeOverview({
+      topStories: [
+        about("plain", { imageUrl: "/plain", imageWidth: 400 }),
+        about("dek", { imageUrl: "/dek", imageWidth: 300, summary: "A dek" })
+      ],
+      hero: gamedayHero(game)
+    });
+    expect(findFeaturedStory(game, noWide)?.id).toBe("dek");
   });
 });
