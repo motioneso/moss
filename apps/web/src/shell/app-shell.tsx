@@ -14,7 +14,8 @@ import { NavLink, useLocation, useNavigate } from "react-router";
 import { listNotifications, listThemes, sendChatTurn, signOut } from "../api/client";
 import { useAssistantName } from "../api/use-assistant-name";
 import { getWeatherToday } from "../api/weather-client";
-import { buildShellNavigation, resolvePageHeading } from "../app-route-metadata";
+import { buildShellNavigation, resolvePageHeading, webRoutes } from "../app-route-metadata";
+import { ModuleSettingsButton } from "./module-settings-button";
 import { useUserLocale } from "../locale/locale-format";
 import { queryKeys, resolveQueryKeyToken } from "../api/query-keys";
 import { ChatDrawer } from "../chat/chat-drawer";
@@ -48,6 +49,26 @@ import {
   type ModuleDto,
   type ModuleNavigationEntryDto
 } from "@moss/shared";
+
+const KNOWN_MODULES_WITH_SETTINGS = new Set(["calendar", "news", "sports", "tasks", "wellness"]);
+
+export function hasModuleSettings(moduleId: string, modules: readonly ModuleDto[] = []): boolean {
+  if (KNOWN_MODULES_WITH_SETTINGS.has(moduleId)) return true;
+  return modules.some(
+    (m) => m.id === moduleId && Array.isArray(m.settings) && m.settings.length > 0
+  );
+}
+
+export function resolveActiveModuleId(pathname: string): string | null {
+  const externalMatch = pathname.match(/^\/m\/([^/]+)/)?.[1];
+  if (externalMatch) return externalMatch;
+  const route = webRoutes.find((item) => item.match(pathname));
+  if (!route) return null;
+  if (route.id !== "today" && route.id !== "notifications" && route.id !== "settings") {
+    return route.id;
+  }
+  return null;
+}
 
 interface AppShellProps {
   readonly children: ReactNode;
@@ -289,6 +310,9 @@ export function AppShell(props: AppShellProps) {
     locale,
     props.modules
   );
+  const activeModuleId = resolveActiveModuleId(location.pathname);
+  const showSettingsButton =
+    activeModuleId !== null && hasModuleSettings(activeModuleId, props.modules);
   const closeMobileNav = () => setMobileNavOpen(false);
 
   // #1756: exactly one ChatDrawer element, rendered in one of two spots below (docked beside
@@ -387,7 +411,12 @@ export function AppShell(props: AppShellProps) {
           </button>
 
           <div className="topbar-titles">
-            <span className="topbar-title">{title}</span>
+            <div className="topbar-title-row">
+              <span className="topbar-title">{title}</span>
+              {showSettingsButton ? (
+                <ModuleSettingsButton moduleId={activeModuleId} moduleName={title} />
+              ) : null}
+            </div>
             {subtitle ? <span className="topbar-subtitle">{subtitle}</span> : null}
           </div>
 
@@ -484,6 +513,11 @@ function RailUserMenu(props: {
       <button
         className={`jds-usermenu__trigger ${open ? "is-open" : ""}`}
         type="button"
+        aria-label={
+          props.unreadCount > 0
+            ? `Account menu, ${formatUnreadCount(props.unreadCount)} unread notification${props.unreadCount === 1 ? "" : "s"}`
+            : "Account menu"
+        }
         onClick={() => setOpen((o) => !o)}
       >
         <span className="jds-usermenu__av">
@@ -493,6 +527,11 @@ function RailUserMenu(props: {
           <span className="jds-usermenu__nm">{name}</span>
           <span className="jds-usermenu__sub">{props.me.user.email}</span>
         </span>
+        {!open && props.unreadCount > 0 ? (
+          <span className="jds-badge-count" aria-hidden="true">
+            {formatUnreadCount(props.unreadCount)}
+          </span>
+        ) : null}
         <span className="jds-usermenu__chev">
           <ChevronUp size={16} aria-hidden="true" />
         </span>

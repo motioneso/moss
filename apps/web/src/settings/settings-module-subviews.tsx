@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Bell, MessageSquare, MessagesSquare, MoonStar, Sunrise } from "lucide-react";
+import { ArrowLeft, Bell, MoonStar, Sunrise } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import type { ChatResponseStyle, NotificationDigestCadenceDto } from "@moss/shared";
+import type { NotificationDigestCadenceDto } from "@moss/shared";
 
 import {
   DEFAULT_NOTIFICATIONS,
@@ -11,15 +11,12 @@ import {
 } from "./settings-sample-data";
 import {
   createBriefingDefinition,
-  getChatSettings,
   getNotificationDigestPreference,
   getNotificationPreferences,
   getLocaleSettings,
   listSourceBehaviors,
   listAiAssistantTools,
   listBriefingDefinitions,
-  lookupAiCapabilityRoute,
-  putChatSettings,
   putNotificationDigestPreference,
   putNotificationPreference,
   putSourceBehavior,
@@ -36,18 +33,7 @@ import {
   targetTimeFor,
   updateDefinitionRequest
 } from "../briefings/briefing-settings-model";
-import {
-  Badge,
-  Choice,
-  Field,
-  Group,
-  NotWired,
-  Note,
-  Row,
-  Segmented,
-  Select,
-  Switch
-} from "./settings-ui";
+import { Badge, Field, Group, NotWired, Note, Row, Segmented, Select, Switch } from "./settings-ui";
 import {
   BRIEFING_SOURCE_BEHAVIORS,
   findSourceBehaviorEnabled,
@@ -246,88 +232,6 @@ export function BriefingSettings(props: { readonly onBack: () => void }) {
           />
         ))}
       </Group>
-    </ModuleSub>
-  );
-}
-
-export function ChatSettingsView(props: {
-  readonly onBack: () => void;
-  readonly onCat?: (id: string) => void;
-}) {
-  const queryClient = useQueryClient();
-  const assistantName = useAssistantName();
-  const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1);
-  const settingsQuery = useQuery({
-    queryKey: queryKeys.chat.settings,
-    queryFn: getChatSettings
-  });
-  const mutation = useMutation({
-    mutationFn: putChatSettings,
-    onSuccess: (data) => queryClient.setQueryData(queryKeys.chat.settings, data)
-  });
-  const style = settingsQuery.data?.chat.responseStyle ?? "balanced";
-  const error = settingsQuery.error ?? mutation.error;
-
-  // Voice input (#738) has no settings of its own here — Chat settings only reflects whether the
-  // shared "transcription" AI capability route is configured+healthy, and links out to the one
-  // place that configures it. No duplicate provider UI, no separate "enable voice" toggle.
-  const transcriptionRouteQuery = useQuery({
-    queryKey: queryKeys.ai.capability("transcription"),
-    queryFn: () => lookupAiCapabilityRoute("transcription")
-  });
-  const voiceAvailable = Boolean(transcriptionRouteQuery.data?.route?.available);
-
-  return (
-    <ModuleSub
-      icon={<MessagesSquare size={21} aria-hidden="true" />}
-      name="Chat"
-      sub={`How ${assistantName} talks with you`}
-      onBack={props.onBack}
-    >
-      {error ? <NotWired>{readError(error)}</NotWired> : null}
-      <Group title="Replies">
-        <Choice
-          key={style}
-          label="Response style"
-          hint="Saved default for generated chat answers."
-          value={cap(style)}
-          options={["Concise", "Balanced", "Detailed"]}
-          onChange={(v) =>
-            mutation.mutate({ chat: { responseStyle: v.toLowerCase() as ChatResponseStyle } })
-          }
-        />
-      </Group>
-
-      <Group title="Input">
-        <Row
-          name="Voice input"
-          desc={
-            voiceAvailable
-              ? "A transcription model is configured — tap the mic in the composer to dictate."
-              : "Set up a transcription model in Assistant & AI (admin) to enable the composer's mic."
-          }
-          control={
-            voiceAvailable ? (
-              <Badge tone="forest">Ready</Badge>
-            ) : (
-              <button
-                type="button"
-                className="note__link"
-                onClick={() => props.onCat?.("aiproviders")}
-              >
-                Set up
-              </button>
-            )
-          }
-        />
-      </Group>
-      <Note icon={<MessageSquare size={13} />}>
-        {assistantName}'s voice and directness are set once in{" "}
-        <button type="button" className="note__link" onClick={() => props.onCat?.("assistant")}>
-          Assistant &amp; AI
-        </button>
-        , these only shape the chat surface.
-      </Note>
     </ModuleSub>
   );
 }

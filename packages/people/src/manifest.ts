@@ -53,7 +53,9 @@ export const peopleModuleManifest: MossModuleManifest = {
     {
       id: "people-notes",
       name: "People notes",
-      description: "People records projected from the configured People notes folder.",
+      description:
+        "People records projected from the People notes folder, which is chosen from the same " +
+        "list of available folders as the notes folder and lives inside the chosen notes folder.",
       behaviors: [
         {
           id: "people.notes.suggest-updates",

@@ -215,7 +215,7 @@
 
 .chatd-msg:hover .feedback-menu--corner,
 .chatd-msg:focus-within .feedback-menu--corner,
-.feedback-menu--corner:has(.feedback-menu__details[open]),
+.feedback-menu--corner:has(.jds-menu__trigger[aria-expanded="true"]),
 .feedback-menu--corner.is-saved {
   opacity: 1;
 }
@@ -226,56 +226,9 @@
   }
 }
 
-.feedback-menu--corner .feedback-menu__list {
-  left: auto;
-  right: 0;
-}
-
-.feedback-menu__details {
-  position: relative;
-}
-
-.feedback-menu__trigger {
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  list-style: none;
-}
-
-.feedback-menu__trigger::-webkit-details-marker {
-  display: none;
-}
-
-.feedback-menu__list {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 6px);
-  left: 0;
-  min-width: 150px;
-  padding: 5px;
-}
-
-.chatd-msg--me .feedback-menu__list {
-  left: auto;
-  right: 0;
-}
-
-.feedback-menu__list button,
 .feedback-menu__status button {
   font: inherit;
   cursor: pointer;
-}
-
-.feedback-menu__list button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 8px;
-  text-align: left;
 }
 
 .feedback-menu__status {
@@ -357,9 +310,18 @@
 .chatd-sess__main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .chatd-sess__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chatd-sess__preview {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

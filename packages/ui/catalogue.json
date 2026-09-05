@@ -300,6 +300,15 @@
       "flags": [{ "prop": "live", "optional": true }]
     },
     {
+      "name": "info-tip",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/info-tip.tsx", "type": "registry:ui" }],
+      "dependencies": ["lucide-react"],
+      "exports": ["InfoTip"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "legend-swatch",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/legend-swatch.tsx", "type": "registry:ui" }],

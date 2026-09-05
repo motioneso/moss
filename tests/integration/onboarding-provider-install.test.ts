@@ -59,6 +59,10 @@ interface FakeRpc {
   probeStatus: "ready" | "needs_login" | "not_installed" | "multiplexer_unavailable" | "error";
   installCalls: string[];
   probeCalls: string[];
+  // #2242: every probeProvider call this fake received, in full — lets a test tell a real
+  // (forceFresh) check apart from an ordinary one instead of only seeing which provider was
+  // checked.
+  probeCallParams: { provider: string; forceFresh?: boolean }[];
 }
 
 function makeFakeConnection(state: FakeRpc): RpcConnection {
@@ -67,8 +71,9 @@ function makeFakeConnection(state: FakeRpc): RpcConnection {
       state.installCalls.push(provider);
       return state.installResult;
     },
-    probeProvider: async ({ provider }: { provider: string }) => {
+    probeProvider: async ({ provider, forceFresh }: { provider: string; forceFresh?: boolean }) => {
       state.probeCalls.push(provider);
+      state.probeCallParams.push({ provider, forceFresh });
       return { status: state.probeStatus };
     }
   } as unknown as RpcConnection;
@@ -86,7 +91,8 @@ describe("Phase 2 onboarding — provider-install seam (REAL wiring)", () => {
     installResult: { state: "installed", version: "2.1.183" },
     probeStatus: "ready",
     installCalls: [],
-    probeCalls: []
+    probeCalls: [],
+    probeCallParams: []
   };
 
   beforeAll(async () => {
@@ -279,6 +285,31 @@ describe("Phase 2 onboarding — provider-install seam (REAL wiring)", () => {
     expect(await readPersisted("openai-compatible")).toMatchObject({ state: "installed" });
   });
 
+  it("#2242: a `ready` row's status-load recheck asks for a real answer, not a saved one", async () => {
+    // Persist a `ready` row directly (simulating a login that was saved earlier and has since
+    // expired, with nothing having re-checked it yet).
+    await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "req-seed-ready" },
+      (scopedDb) =>
+        repository.upsertProviderInstallState(scopedDb, {
+          provider: "anthropic",
+          state: "ready"
+        })
+    );
+
+    fake.probeStatus = "ready";
+    fake.probeCalls = [];
+    fake.probeCallParams = [];
+    const res = await server.inject({ method: "GET", url: "/api/onboarding/status" });
+    expect(res.statusCode).toBe(200);
+
+    // The reconcile must have asked for a forced, real recheck of the saved `ready` row — not
+    // an ordinary check that could just repeat back a saved answer without truly looking.
+    const anthropicCalls = fake.probeCallParams.filter((c) => c.provider === "anthropic");
+    expect(anthropicCalls.length).toBeGreaterThan(0);
+    expect(anthropicCalls.every((c) => c.forceFresh === true)).toBe(true);
+  });
+
   it("leaves a stale `installing` row UNCHANGED when the probe is untrusted (transient)", async () => {
     await dataContext.withDataContext(
       { actorUserId: ownerUserId, requestId: "req-seed-stale2" },
@@ -325,7 +356,8 @@ describe("#1081 H2 — binaryChanged forwarding + session-drop trigger (REAL wir
     installResult: { state: "installed", version: "2.1.183" },
     probeStatus: "ready",
     installCalls: [],
-    probeCalls: []
+    probeCalls: [],
+    probeCallParams: []
   };
 
   beforeAll(async () => {

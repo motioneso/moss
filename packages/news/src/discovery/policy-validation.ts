@@ -49,12 +49,17 @@ export async function decideSourcePolicy(
     canonicalDomain: string;
     description: string;
     sampleHeadlines: readonly string[];
-  }
+  },
+  options: { allowModelCall?: boolean } = {}
 ): Promise<{ verdict: "approved" | "rejected"; fingerprint: string } | { verdict: "unavailable" }> {
   const fingerprint = await deps.ai.fingerprint(scopedDb);
   if (!fingerprint) return { verdict: "unavailable" };
   const cached = await deps.repo.readPolicyVerdict(scopedDb, input.canonicalDomain, fingerprint);
   if (cached) return { verdict: cached, fingerprint };
+  // A domain with no saved verdict yet reads as "unavailable" here instead of asking a model,
+  // so a caller that must stay model-free end to end (a followed publisher redirect) never
+  // makes this call, rather than silently dropping the content-safety check.
+  if (options.allowModelCall === false) return { verdict: "unavailable" };
 
   const data = {
     canonicalDomain: input.canonicalDomain,

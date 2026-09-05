@@ -4,8 +4,9 @@ import { resolveModuleSettingsDeepLink } from "../../apps/web/src/settings/modul
 
 describe("resolveModuleSettingsDeepLink", () => {
   it("routes built-in module settings surfaces directly", () => {
-    expect(resolveModuleSettingsDeepLink("chat", () => false)).toBe("chat");
+    expect(resolveModuleSettingsDeepLink("briefings", () => false)).toBe("briefings");
     expect(resolveModuleSettingsDeepLink("notifications", () => false)).toBe("notifications");
+    expect(resolveModuleSettingsDeepLink("chat", () => false)).toBeNull();
   });
 
   it("routes contributed module surfaces by module id", () => {

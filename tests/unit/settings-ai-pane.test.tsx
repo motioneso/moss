@@ -15,7 +15,11 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ChatArchiveSettingsResponse, MeResponse } from "@moss/shared";
+import type {
+  ChatArchiveSettingsResponse,
+  GetChatModelOverrideSettingsResponse,
+  MeResponse
+} from "@moss/shared";
 
 const personaGet = vi.fn(async () => ({
   persona: { assistantName: "Moss", personaText: "Be direct and a little dry." }
@@ -26,13 +30,8 @@ const personaPut = vi.fn(
   })
 );
 
-vi.mock("../../apps/web/src/api/client.js", () => ({
-  getPersonaSettings: () => personaGet(),
-  putPersonaSettings: (body: unknown) => personaPut(body as never),
-  previewPersona: vi.fn(),
-  // ChatModel and YoloMode (siblings inside AssistantPane) run their own queries; give them inert
-  // responses so they render without erroring and stay out of the way of the assertion.
-  getChatModelOverrideSettings: vi.fn(async () => ({
+const chatModelOverrideGet = vi.fn(
+  async (): Promise<GetChatModelOverrideSettingsResponse> => ({
     settings: {
       overrideEnabled: false,
       currentOverrideModelId: null,
@@ -41,7 +40,20 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
       selectedModel: null,
       selectableOverrideModels: []
     }
-  })),
+  })
+);
+
+vi.mock("../../apps/web/src/api/client.js", () => ({
+  getPersonaSettings: () => personaGet(),
+  putPersonaSettings: (body: unknown) => personaPut(body as never),
+  previewPersona: vi.fn(),
+  // Response style moved into this pane from the retired Chat settings page (#2222); give it the
+  // default so the picker renders without a network call.
+  getChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" } })),
+  putChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" } })),
+  // ChatModel and YoloMode (siblings inside AssistantPane) run their own queries; give them inert
+  // responses so they render without erroring and stay out of the way of the assertion.
+  getChatModelOverrideSettings: () => chatModelOverrideGet(),
   putChatModelOverride: vi.fn(),
   getYoloSettings: vi.fn(async () => ({
     instanceEnabled: false,
@@ -149,6 +161,89 @@ describe("Persona save acknowledgement", () => {
 
     const text = renderedText(renderer.toJSON());
     expect(text).toContain("Saved. This is Alfred's current voice.");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe("Response style visibility", () => {
+  it("shows Response style on the default view, without picking guided dials", async () => {
+    const renderer = await renderAssistantPane();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Response style");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("shows an example answer under Response style that matches the saved length, and it changes when the length changes (#boot-settings-polish)", async () => {
+    const renderer = await renderAssistantPane();
+
+    let text = renderedText(renderer.toJSON());
+    expect(text).toContain("Balanced example:");
+    expect(text).not.toContain("Concise example:");
+    expect(text).not.toContain("Detailed example:");
+
+    const putChatSettings = vi.mocked(
+      (await import("../../apps/web/src/api/client.js")).putChatSettings
+    );
+    putChatSettings.mockResolvedValueOnce({ chat: { responseStyle: "concise" } });
+
+    const conciseButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Concise"));
+    if (!conciseButton) throw new Error("Concise option button not found");
+    await act(async () => {
+      conciseButton.props.onClick();
+    });
+    await flush();
+
+    text = renderedText(renderer.toJSON());
+    expect(text).toContain("Concise example:");
+    expect(text).not.toContain("Balanced example:");
+    expect(text).not.toContain("Detailed example:");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe("Transcription setup note", () => {
+  it("tells the reader a transcription model turns on the chat microphone", async () => {
+    chatModelOverrideGet.mockResolvedValueOnce({
+      settings: {
+        overrideEnabled: false,
+        currentOverrideModelId: null,
+        effectiveOverrideModelId: null,
+        defaultModel: {
+          id: "m1",
+          providerConfigId: "p1",
+          providerKind: "anthropic",
+          providerDisplayName: "Anthropic",
+          providerStatus: "active",
+          providerModelId: "claude",
+          displayName: "Claude",
+          capabilities: ["chat"],
+          status: "active",
+          tier: "interactive",
+          allowUserOverride: true,
+          origin: "discovered",
+          createdAt: "2026-09-04T00:00:00.000Z",
+          updatedAt: "2026-09-04T00:00:00.000Z"
+        },
+        selectedModel: null,
+        selectableOverrideModels: []
+      }
+    });
+    const renderer = await renderAssistantPane();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("A transcription model enables the microphone in chat.");
 
     await act(async () => {
       renderer.unmount();

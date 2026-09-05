@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
-import { isAbsolute } from "node:path";
+import { isAbsolute, resolve, sep } from "node:path";
 
 import type { PgBoss } from "pg-boss";
 
 import type { DataContextDb } from "@moss/db";
 import { scheduleVaultIngestNudge } from "@moss/memory";
+import { NOTES_SOURCE_PREFERENCE_KEY } from "@moss/settings";
 import { PreferencesRepository } from "@moss/structured-state";
 import {
   listVaultFilesRecursive,
@@ -91,14 +92,25 @@ function hash(value: string): string {
   return createHash("sha256").update(value).digest("hex").slice(0, 32);
 }
 
+/**
+ * #2268 — the People folder is now chosen with the same picker as the notes source, so a saved
+ * value is an absolute path inside an allowed notes root. Values written before #2268 were
+ * relative to the private per-user vault; those are still readable (see resolveFolder) but can
+ * no longer be saved, so a re-save always moves the user onto the new shape.
+ */
 function normalizeFolder(folder: string | null): string | null {
+  // Store exactly what the caller validated, the way the notes source save does (#449): the
+  // route has already opened this path through the guarded folder access, so trimming or
+  // rewriting it here would persist a different folder from the one that was checked.
   if (folder === null) return null;
-  const trimmed = folder.trim();
-  if (!trimmed || isAbsolute(trimmed) || trimmed.split(/[\\/]/).includes("..")) {
-    throw new Error("People notes folder must be a relative folder");
+  if (!isAbsolute(folder) || folder.split(/[\\/]/).includes("..")) {
+    throw new PeopleNotesFolderUnavailableError();
   }
-  return trimmed.replace(/\/+$/g, "");
+  return folder;
 }
+
+/** Inside a context rooted at the People folder, every note path is relative to that folder. */
+const PEOPLE_ROOT = ".";
 
 function slugName(displayName: string): string {
   const slug = displayName
@@ -138,6 +150,35 @@ export class PeopleNotesService {
     return { folder: typeof stored === "string" && stored.length > 0 ? stored : null };
   }
 
+  /**
+   * #2268 — turns the stored preference into the absolute folder the caller should root a vault
+   * context at, or null when there is nothing usable to open.
+   *
+   * An absolute value is used as-is; the containment check belongs to withVaultContextAt, which
+   * re-validates against the allowed notes roots on every open, so this never grants reach.
+   * A value written before #2268 is relative to the private per-user vault. Rather than guess, it
+   * is resolved against the current notes source, and refused if it climbs out of it. This does
+   * only path arithmetic and never touches the disk: whether the folder actually exists is
+   * decided by withVaultContextAt, so the allowed-root guard always runs before any file access.
+   * When that open fails, the People pane shows its existing "choose another folder" state.
+   */
+  async resolveFolder(scopedDb: DataContextDb): Promise<string | null> {
+    const stored = await this.preferencesRepository.get(
+      scopedDb,
+      PEOPLE_NOTES_FOLDER_PREFERENCE_KEY
+    );
+    if (typeof stored !== "string" || stored.length === 0) return null;
+    if (isAbsolute(stored)) return stored;
+    if (stored.split(/[\\/]/).includes("..")) return null;
+
+    const notesSource = await this.preferencesRepository.get(scopedDb, NOTES_SOURCE_PREFERENCE_KEY);
+    if (typeof notesSource !== "string" || !isAbsolute(notesSource)) return null;
+
+    const candidate = resolve(notesSource, stored);
+    if (candidate !== notesSource && !candidate.startsWith(notesSource + sep)) return null;
+    return candidate;
+  }
+
   async putSettings(
     scopedDb: DataContextDb,
     _ownerUserId: string,
@@ -153,10 +194,7 @@ export class PeopleNotesService {
     vaultCtx: VaultContext,
     ownerUserId: string
   ): Promise<PeopleNotesRefreshResult> {
-    const { folder } = await this.getSettings(scopedDb, ownerUserId);
-    if (!folder) return { discovered: 0, projected: 0, ignored: 0, candidates: 0 };
-
-    const loaded = await this.loadPeopleNotes(vaultCtx, folder);
+    const loaded = await this.loadPeopleNotes(vaultCtx);
     const notes = loaded.notes;
     const byPersonId = new Map<string, LoadedPeopleNote[]>();
     let candidates = 0;
@@ -206,11 +244,8 @@ export class PeopleNotesService {
     ownerUserId: string,
     input: CreatePersonNoteInput
   ): Promise<PeopleNoteWriteResult> {
-    const { folder } = await this.getSettings(scopedDb, ownerUserId);
-    if (!folder) throw new Error("People notes folder is not configured");
-
     const personId = randomUUID();
-    const notePath = await this.nextNotePath(vaultCtx, folder, input.displayName, personId);
+    const notePath = await this.nextNotePath(vaultCtx, input.displayName, personId);
     const body = replaceMossManagedSection(
       `# ${input.displayName}\n`,
       managedSummary({
@@ -254,7 +289,7 @@ export class PeopleNotesService {
     personId: string,
     patch: UpdatePersonNoteInput
   ): Promise<PeopleNoteWriteResult> {
-    const note = await this.findCanonicalNote(scopedDb, vaultCtx, ownerUserId, personId);
+    const note = await this.findCanonicalNote(vaultCtx, personId);
     const frontmatter = {
       ...note.parsed.frontmatter,
       jarvisPersonId: personId,
@@ -300,12 +335,11 @@ export class PeopleNotesService {
   }
 
   private async loadPeopleNotes(
-    vaultCtx: VaultContext,
-    folder: string
+    vaultCtx: VaultContext
   ): Promise<{ notes: LoadedPeopleNote[]; discovered: number; ignored: number }> {
     let allPaths: string[];
     try {
-      allPaths = await listVaultFilesRecursive(vaultCtx, folder);
+      allPaths = await listVaultFilesRecursive(vaultCtx, PEOPLE_ROOT);
     } catch (error) {
       translateVaultOperationError(error);
     }
@@ -327,14 +361,10 @@ export class PeopleNotesService {
   }
 
   private async findCanonicalNote(
-    scopedDb: DataContextDb,
     vaultCtx: VaultContext,
-    ownerUserId: string,
     personId: string
   ): Promise<LoadedPeopleNote> {
-    const { folder } = await this.getSettings(scopedDb, ownerUserId);
-    if (!folder) throw new Error("People notes folder is not configured");
-    const matches = (await this.loadPeopleNotes(vaultCtx, folder)).notes.filter(
+    const matches = (await this.loadPeopleNotes(vaultCtx)).notes.filter(
       (note) => note.parsed.frontmatter.jarvisPersonId === personId
     );
     if (matches.length !== 1) throw new CanonicalNoteNotFoundError(personId);
@@ -430,11 +460,10 @@ export class PeopleNotesService {
 
   private async nextNotePath(
     vaultCtx: VaultContext,
-    folder: string,
     displayName: string,
     personId: string
   ): Promise<string> {
-    const base = `${folder}/${slugName(displayName)}`;
+    const base = slugName(displayName);
     const first = `${base}.md`;
     if (!(await vaultFileExists(vaultCtx, first))) return first;
     return `${base}-${personId.slice(0, 8)}.md`;

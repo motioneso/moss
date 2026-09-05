@@ -65,8 +65,15 @@ export interface LoginServiceDeps {
   readonly io: TmuxIo;
   /** The validated login-adapter registry (§L.1). A provider absent ⇒ login-blocked. */
   readonly adapters: LoginAdapterRegistry;
-  /** Completion signal: the §4.8 provider auth probe (reused; no token, no replay). */
-  readonly probe: (provider: RpcProviderKind) => Promise<ProbeProviderResult>;
+  /**
+   * Completion signal: the §4.8 provider auth probe (reused; no token, no replay). #2242:
+   * accepts `forceFresh` so an explicit re-login can demand a real check instead of a saved
+   * answer that may have gone stale (a login can be revoked after that answer was saved).
+   */
+  readonly probe: (
+    provider: RpcProviderKind,
+    opts?: { readonly forceFresh?: boolean }
+  ) => Promise<ProbeProviderResult>;
   /** auth/home base for the 0600 paste temp file (§L.6.3). Default /data/cli-auth. */
   readonly homeBase?: string;
   /** Overall login lifetime bound (§L.3.1). A hung browser round-trip MUST NOT freeze the gate. */
@@ -107,6 +114,16 @@ interface LoginFlow {
   submitted: boolean;
   /** Overall-lifetime reaper; cleared on settle/cancel. */
   timer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * #2242: the real (forceFresh) probe `start()` kicked off for this flow, kept around until
+   * that first real answer is consumed. A second beginLogin for the SAME provider that arrives
+   * while this is still pending (engine-host's reuse path, §L.6.1) calls `poll()` -> `deriveStatus`
+   * on the SAME in-memory flow; without this, that overlapping call would run its OWN ordinary
+   * probe, which can still read the OLD cached "ready" answer and report success before the first
+   * request's real check ever reports the login is actually broken. Sharing this promise means
+   * every caller waiting on this flow's readiness waits on the SAME real result.
+   */
+  initialProbe?: Promise<ProbeProviderResult>;
 }
 
 export class LoginService {
@@ -155,6 +172,17 @@ export class LoginService {
   }
 
   /**
+   * #2232: the loginId of the CURRENT in-memory flow, but only if it is for `provider`. Lets the
+   * admission gate reuse a same-provider double begin (e.g. a StrictMode double-mount sending two
+   * begin requests back to back) instead of refusing the second one outright. `undefined` when
+   * there is no in-memory flow, or the active flow is for a different provider, or the "active"
+   * signal is only a disk session with no flow in memory (nothing to reuse).
+   */
+  activeLoginId(provider: RpcProviderKind): string | undefined {
+    return this.flow && this.flow.provider === provider ? this.flow.loginId : undefined;
+  }
+
+  /**
    * §L.6.1 reserve: SYNCHRONOUSLY claim the single login slot (called inside the admission
    * mutex so a concurrent launch/begin sees it). Returns the minted loginId. Throws
    * LoginBadRequestError if a flow already exists (defensive — the gate should have rejected).
@@ -182,8 +210,17 @@ export class LoginService {
       // late — it has already read its settings and painted its menu.
       if (this.deps.prepareProvider) await this.deps.prepareProvider(flow.provider);
 
-      // Already authenticated? (a re-login of a ready provider) — short-circuit.
-      const pre = await this.deps.probe(flow.provider);
+      // Already authenticated? (a re-login of a ready provider) — short-circuit. #2242: this
+      // MUST be a real check (forceFresh), never a saved answer — a person pressing Log in is
+      // explicitly asking to fix a broken login, so a stale "it was fine a moment ago" answer
+      // must never close this screen without ever opening a fresh place to sign in. The promise
+      // is held on the flow (not just awaited locally) so an overlapping poll() on the SAME flow
+      // (engine-host's reuse path) shares this exact real result instead of racing a separate,
+      // cache-hitting probe of its own (§L.6.1 overlap).
+      const probePromise = this.deps.probe(flow.provider, { forceFresh: true });
+      flow.initialProbe = probePromise;
+      const pre = await probePromise;
+      if (flow.initialProbe === probePromise) flow.initialProbe = undefined;
       if (pre.status === "ready") {
         return this.settle(flow, "ready");
       }
@@ -368,7 +405,15 @@ export class LoginService {
 
   /** §L.2.3/§L.9.1: probe → (on ready) runtime smoke → ready/error; else refresh surface. */
   private async deriveStatus(flow: LoginFlow): Promise<LoginFlowOutcome> {
-    const probe = await this.deps.probe(flow.provider);
+    // #2242: a real (forceFresh) check for this SAME flow may still be in flight (started() by
+    // an overlapping beginLogin for the same provider, §L.6.1 reuse). Wait on that SAME promise
+    // instead of issuing a fresh ordinary probe of our own — an ordinary probe can still read the
+    // OLD cached "ready" answer and report success before the in-flight real check comes back
+    // with the true (expired) status, which is exactly how two overlapping requests could report
+    // a false success.
+    const probe = flow.initialProbe
+      ? await flow.initialProbe
+      : await this.deps.probe(flow.provider);
     if (probe.status === "ready") {
       // §L.9.1 runtime smoke: a bounded non-interactive re-confirmation that auth actually works
       // (a second clean probe), not merely a printed success line.

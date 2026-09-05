@@ -77,6 +77,28 @@ export const NEWS_CATALOG: readonly NewsSourceEntry[] = [
     imageHosts: ["i.guim.co.uk"]
   },
   {
+    // AP News publishes no public first-party RSS feed (its page source declares index.rss,
+    // which returns HTTP 401 Invalid client credentials). Uses Open RSS (openrss.org) as a
+    // third-party feed provider for top headlines and topic desks.
+    sourceKey: "ap",
+    label: "AP News",
+    homepageUrl: "https://apnews.com",
+    defaultEnabled: true,
+    topFeedUrl: "https://openrss.org/feed/apnews.com",
+    topicFeeds: {
+      world: "https://openrss.org/feed/apnews.com/world-news",
+      us: "https://openrss.org/feed/apnews.com/us-news",
+      politics: "https://openrss.org/feed/apnews.com/politics",
+      business: "https://openrss.org/feed/apnews.com/business",
+      technology: "https://openrss.org/feed/apnews.com/technology",
+      science: "https://openrss.org/feed/apnews.com/science",
+      health: "https://openrss.org/feed/apnews.com/health",
+      culture: "https://openrss.org/feed/apnews.com/entertainment"
+    },
+    feedHosts: ["openrss.org"],
+    imageHosts: ["dims.apnews.com", "assets.apnews.com"]
+  },
+  {
     sourceKey: "nytimes",
     label: "The New York Times",
     homepageUrl: "https://www.nytimes.com",
@@ -112,7 +134,8 @@ export const NEWS_CATALOG: readonly NewsSourceEntry[] = [
       culture: "https://feeds.npr.org/1008/rss.xml"
     },
     feedHosts: ["feeds.npr.org"],
-    // NPR's RSS carries no media tags today; hosts declared for forward-compat if they add them.
+    // NPR's RSS carries no media:content/media:thumbnail/enclosure tags; the story image comes
+    // from the first <img> in content:encoded instead, so these hosts gate that fallback too.
     imageHosts: ["media.npr.org", "npr.brightspotcdn.com"]
   },
   {

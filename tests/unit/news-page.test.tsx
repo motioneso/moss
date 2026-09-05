@@ -75,11 +75,9 @@ describe("personalized News page", () => {
     expect(html).not.toContain("images.example");
   });
 
-  // #1759: the only link to News' settings used to live in the "Choose your sources" empty
-  // state, so the moment a user picked a source it disappeared and there was no way back to
-  // change it. Rendering a populated page is the whole point of this case — asserting against
-  // the empty state would have passed before the fix.
-  it("still offers a way to change sources once the feed has stories in it", () => {
+  // The News settings link now lives next to the section name in the topbar (replaced the
+  // #1759 masthead text link).
+  it("renders a populated feed without the empty state once stories exist", () => {
     const data: NewsOverviewResponse = {
       topStories: [story("1")],
       rankedStories: [story("1")],
@@ -99,7 +97,6 @@ describe("personalized News page", () => {
     const html = renderNews(data);
 
     expect(html).not.toContain("Choose your sources");
-    expect(html).toContain("/settings?section=modules&amp;module=news");
   });
 
   it("uses null for All so a custom topic literally named All remains filterable", () => {
