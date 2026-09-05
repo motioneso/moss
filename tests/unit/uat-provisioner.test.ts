@@ -376,6 +376,8 @@ describe("buildUatComposeArgs", () => {
       "uat-abc",
       "-f",
       "infra/docker-compose.prod.yml",
+      "-f",
+      "tests/uat/compose.override.yml",
       "up",
       "-d"
     ]);

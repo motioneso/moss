@@ -281,7 +281,11 @@ import {
   wellnessModuleSqlMigrationDirectory
 } from "@moss/wellness";
 import { registerWeatherRoutes, weatherModuleManifest } from "@moss/weather";
-import { workshopModuleManifest } from "@moss/workshop";
+import {
+  workshopModuleManifest,
+  workshopModuleSqlMigrationDirectory,
+  registerWorkshopProjectRoutes
+} from "@moss/workshop";
 import {
   configureSportsBriefingService,
   configureSportsChatTools,
@@ -2352,8 +2356,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   },
   {
     manifest: workshopModuleManifest,
-    sqlMigrationDirectories: [],
-    queueDefinitions: []
+    sqlMigrationDirectories: [workshopModuleSqlMigrationDirectory],
+    queueDefinitions: [],
+    registerRoutes: (server, deps) =>
+      registerWorkshopProjectRoutes(server, {
+        resolveAccessContext: deps.resolveAccessContext,
+        dataContext: deps.dataContext
+      })
   }
 ];
 

@@ -82,6 +82,8 @@ export interface SeedOptions {
   readonly workflowApprovalFixture?: boolean;
   /** #2175: seed three audit-log rows (suppressed, refused, success with a duration) for Activity. */
   readonly activityOutcomeFixture?: boolean;
+  /** #2267: install the trusted Workshop storage proof module as the UAT admin's draft. */
+  readonly withWorkshopStorageFixture?: boolean;
   /**
    * #1121: when set, seeds a neutral scripted AI provider/model (see
    * ./chunks/chat-script.ts) and writes JARVIS_UAT_SCRIPTED_PROVIDER_BIN (#1659 defect 4) so the

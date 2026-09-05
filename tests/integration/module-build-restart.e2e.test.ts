@@ -1,7 +1,7 @@
 // #1754: proves a module build survives a job-queue restart mid-step. The build job
 // (packages/jobs/src/module-build-jobs.ts) and the resume logic
 // (packages/ai/src/module-build/run-build-step.ts) are both real; only the piece that would
-// launch a real paid coding agent (launchLiveAgent) is faked. The queue connection is stopped
+// generate source or accept it in an isolated runtime is faked. The queue connection is stopped
 // and a fresh one started against the same database to simulate a worker-process restart.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -55,11 +55,9 @@ describe("module build restart survival (#1754 seam 3)", () => {
           if (!row) throw new Error(`build ${payload.buildId} not found`);
           const result = await runModuleBuildStep(
             {
-              launchLiveAgent: async () => ({ wroteFiles: [], testsPassing: true }),
-              resolveWorkingDir: () => "/tmp/fake-build-dir",
-              recordFetchedUrl: async () => {},
-              recordWrittenFile: async () => {},
-              finishBuild: async () => ({ moduleId: "fake-module" })
+              assertExecutionAvailable: () => {},
+              generateSource: async () => ({ files: [{ path: "SPEC.md", content: "test" }] }),
+              acceptSource: async () => ({ moduleId: "fake-module" })
             },
             row
           );

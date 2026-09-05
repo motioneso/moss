@@ -1,11 +1,40 @@
-/**
- * Workshop contracts — #1888: asking Moss for a module in chat.
- *
- * The plan schema is the SANITIZATION BOUNDARY for the assistant tool: the gateway projects the
- * tool's result through `outputSchema` before it reaches the model or (for a tool that opts into
- * `streamsStructuredResult`) the browser. Anything not declared here is dropped, so keep this
- * schema to exactly the fields the plan card renders.
- */
+/** Workshop contracts. Tool result schemas allowlist fields before model/browser delivery. */
+
+export const WORKSHOP_MODULE_ID = "workshop";
+
+export interface WorkshopFeedInput {
+  readonly messageId: string;
+  readonly text: string;
+}
+
+export interface WorkshopFeedEntry extends WorkshopFeedInput {
+  readonly projectId: string;
+  readonly sequence: string;
+  readonly kind: "user_message";
+  readonly delivery: "pending";
+  readonly createdAt: string;
+}
+
+export interface WorkshopProject {
+  readonly id: string;
+  readonly title: string;
+  readonly initialRequest: string;
+  readonly context: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface CreateWorkshopProjectInput {
+  readonly requestKey: string;
+  readonly title: string;
+  readonly initialRequest: string;
+  readonly context?: string;
+}
+
+export interface WorkshopProjectCursor {
+  readonly createdAt: string;
+  readonly id: string;
+}
 
 export const moduleBuildPlanSchema = {
   type: "object",
@@ -31,31 +60,20 @@ export const moduleBuildPlanSchema = {
 export const workshopBuildModuleInputSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["description"],
+  required: ["requestKey", "description"],
   properties: {
+    requestKey: {
+      type: "string",
+      format: "uuid",
+      description:
+        "A UUID for this project request. Reuse it unchanged when retrying the same request."
+    },
     description: {
       type: "string",
       minLength: 1,
       maxLength: 4000,
       description: "What the user wants the new module to do, in their own words."
-    },
-    conversationExcerpt: {
-      type: "string",
-      maxLength: 8000,
-      description:
-        "The part of this conversation that establishes the requirements, so the planner has the details the description leaves out."
     }
-  }
-} as const;
-
-export const workshopBuildModuleResultSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["buildId", "awaitingApproval", "plan"],
-  properties: {
-    buildId: { type: "string" },
-    awaitingApproval: { type: "boolean" },
-    plan: moduleBuildPlanSchema
   }
 } as const;
 
@@ -178,3 +196,159 @@ export interface WorkshopLiveModuleSummary {
   readonly version: string;
   readonly scope: "you" | "everyone";
 }
+
+export interface CreateWorkshopProjectResponse {
+  readonly project: WorkshopProject;
+  readonly created: boolean;
+  readonly destination: string;
+}
+export interface ListWorkshopProjectsResponse {
+  readonly projects: readonly WorkshopProject[];
+  readonly nextCursor: WorkshopProjectCursor | null;
+}
+export interface GetWorkshopProjectResponse {
+  readonly project: WorkshopProject;
+}
+export interface ListWorkshopMessagesResponse {
+  readonly entries: readonly WorkshopFeedEntry[];
+  readonly nextCursor: string;
+}
+export interface CreateWorkshopMessageResponse {
+  readonly entry: WorkshopFeedEntry;
+  readonly created: boolean;
+}
+
+const workshopUuidSchema = { type: "string", format: "uuid" } as const;
+const workshopTimestampSchema = { type: "string", format: "date-time" } as const;
+const workshopPageLimitSchema = { type: "integer", minimum: 1, maximum: 100 } as const;
+export const workshopProjectParamsSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["projectId"],
+  properties: { projectId: workshopUuidSchema }
+} as const;
+export const createWorkshopProjectInputSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["requestKey", "title", "initialRequest"],
+  properties: {
+    requestKey: workshopUuidSchema,
+    title: { type: "string", minLength: 1, maxLength: 160 },
+    initialRequest: { type: "string", minLength: 1, maxLength: 16384 },
+    context: { type: "string", maxLength: 16384 }
+  }
+} as const;
+export const listWorkshopProjectsQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  dependencies: { beforeId: ["beforeCreatedAt"], beforeCreatedAt: ["beforeId"] },
+  properties: {
+    limit: workshopPageLimitSchema,
+    beforeId: workshopUuidSchema,
+    beforeCreatedAt: workshopTimestampSchema
+  }
+} as const;
+export const listWorkshopMessagesQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    limit: workshopPageLimitSchema,
+    after: { type: "string", pattern: "^(0|[1-9][0-9]{0,18})$" }
+  }
+} as const;
+export const createWorkshopMessageInputSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["messageId", "text"],
+  properties: {
+    messageId: workshopUuidSchema,
+    text: { type: "string", minLength: 1, maxLength: 16384 }
+  }
+} as const;
+export const workshopProjectSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "title", "initialRequest", "context", "createdAt", "updatedAt"],
+  properties: {
+    id: workshopUuidSchema,
+    title: { type: "string" },
+    initialRequest: { type: "string" },
+    context: { type: "string" },
+    createdAt: workshopTimestampSchema,
+    updatedAt: workshopTimestampSchema
+  }
+} as const;
+export const workshopFeedEntrySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["projectId", "messageId", "sequence", "kind", "text", "delivery", "createdAt"],
+  properties: {
+    projectId: workshopUuidSchema,
+    messageId: workshopUuidSchema,
+    sequence: { type: "string" },
+    kind: { type: "string", const: "user_message" },
+    text: { type: "string" },
+    delivery: { type: "string", const: "pending" },
+    createdAt: workshopTimestampSchema
+  }
+} as const;
+export const createWorkshopProjectResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["project", "created", "destination"],
+  properties: {
+    project: workshopProjectSchema,
+    created: { type: "boolean" },
+    destination: { type: "string" }
+  }
+} as const;
+export const getWorkshopProjectResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["project"],
+  properties: { project: workshopProjectSchema }
+} as const;
+export const listWorkshopProjectsResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["projects", "nextCursor"],
+  properties: {
+    projects: { type: "array", items: workshopProjectSchema },
+    nextCursor: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["id", "createdAt"],
+          properties: { id: workshopUuidSchema, createdAt: workshopTimestampSchema }
+        }
+      ]
+    }
+  }
+} as const;
+export const listWorkshopMessagesResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["entries", "nextCursor"],
+  properties: {
+    entries: { type: "array", items: workshopFeedEntrySchema },
+    nextCursor: { type: "string" }
+  }
+} as const;
+export const createWorkshopMessageResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["entry", "created"],
+  properties: { entry: workshopFeedEntrySchema, created: { type: "boolean" } }
+} as const;
+export const workshopErrorResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["error"],
+  properties: { error: { type: "string" } }
+} as const;
+
+export type WorkshopProjectCreationResult = CreateWorkshopProjectResponse;
+
+export const workshopBuildModuleResultSchema = createWorkshopProjectResponseSchema;

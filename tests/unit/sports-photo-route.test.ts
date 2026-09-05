@@ -53,7 +53,10 @@ function store(overrides: Partial<RoutePhotos> = {}): RoutePhotos {
 describe("sports headline photo route (#2237)", () => {
   it("serves the stored copy with a private, long-lived cache header and a tag", async () => {
     const app = buildApp({ photos: store() });
-    const response = await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/sports/headlines/${headlineId}/photo`
+    });
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-type"]).toContain("image/webp");
     expect(response.headers["cache-control"]).toBe(SPORTS_PHOTO_CACHE_CONTROL);
@@ -76,28 +79,40 @@ describe("sports headline photo route (#2237)", () => {
 
   it("answers 404 when no copy is stored for that headline", async () => {
     const app = buildApp({ photos: store({ keyForHeadline: () => null }) });
-    const response = await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/sports/headlines/${headlineId}/photo`
+    });
     expect(response.statusCode).toBe(404);
     await app.close();
   });
 
   it("answers 404 when the stored file has gone", async () => {
     const app = buildApp({ photos: store({ read: async () => null }) });
-    const response = await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/sports/headlines/${headlineId}/photo`
+    });
     expect(response.statusCode).toBe(404);
     await app.close();
   });
 
   it("answers 404 for a headline whose source this actor does not own", async () => {
     const app = buildApp({ knownSourceId: "someone-else", photos: store() });
-    const response = await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/sports/headlines/${headlineId}/photo`
+    });
     expect(response.statusCode).toBe(404);
     await app.close();
   });
 
   it("answers 404 for a headline id that names no source", async () => {
     const app = buildApp({ photos: store() });
-    const response = await app.inject({ method: "GET", url: "/api/sports/headlines/nosource/photo" });
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/sports/headlines/nosource/photo"
+    });
     expect(response.statusCode).toBe(404);
     await app.close();
   });
@@ -150,10 +165,16 @@ describe("sports headline photo route (#2237)", () => {
       })
     });
 
-    const first = await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
+    const first = await app.inject({
+      method: "GET",
+      url: `/api/sports/headlines/${headlineId}/photo`
+    });
     present = false;
     for (const listener of listeners) listener(key);
-    const second = await app.inject({ method: "GET", url: `/api/sports/headlines/${headlineId}/photo` });
+    const second = await app.inject({
+      method: "GET",
+      url: `/api/sports/headlines/${headlineId}/photo`
+    });
 
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(404);

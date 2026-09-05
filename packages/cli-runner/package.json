@@ -15,6 +15,7 @@
     "@moss/ai": "workspace:*",
     "@moss/chat": "workspace:*",
     "@moss/db": "workspace:*",
+    "@moss/shared": "workspace:*",
     "node-pty": "^1.1.0"
   }
 }

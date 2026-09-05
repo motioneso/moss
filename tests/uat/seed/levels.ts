@@ -12,6 +12,7 @@ import { seedTasksChunk } from "./chunks/tasks.js";
 import { seedCalendarChunk } from "./chunks/calendar.js";
 import { seedNotesChunk } from "./chunks/notes.js";
 import { seedFinanceChunk } from "./chunks/finance.js";
+import { installWorkshopStorageFixture } from "./chunks/workshop-storage.js";
 import { UAT_SEED_BASE_TIMESTAMP } from "./timestamps.js";
 import type { SeedOptions, UatSeedChunk } from "./types.js";
 
@@ -143,6 +144,9 @@ export async function seedLevel(options: SeedOptions): Promise<void> {
       await seedJobSearchAiProviderChunk(runner, adminUserId, options.jobSearchAiProviderBaseUrl);
     }
     await seedDataChunks(runner, adminUserId, exclude);
+    if (options.withWorkshopStorageFixture) {
+      await installWorkshopStorageFixture(runner, adminUserId);
+    }
     if (options.sportsPublicSourceFixtures) {
       await seedSportsPublicSourceFixtures(runner, adminUserId);
     }

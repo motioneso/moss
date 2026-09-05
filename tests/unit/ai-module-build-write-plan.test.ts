@@ -42,6 +42,16 @@ describe("writeModuleBuildPlan", () => {
 
     expect(plan.whatItReaches).toContain("YouTube's public feed for two channels");
     expect(fakeGenerateStructured).toHaveBeenCalledOnce();
+    expect(fakeGenerateStructured).toHaveBeenCalledWith(
+      scopedDb,
+      expect.objectContaining({
+        service: "module.workshop.plan",
+        tierHint: "reasoning",
+        requiredTier: "reasoning",
+        sourceGeneration: true
+      }),
+      expect.objectContaining({ createCliStructuredAdapter: undefined })
+    );
   });
 
   it("never names a specific AI provider or model in the call it makes", async () => {
@@ -71,6 +81,6 @@ describe("writeModuleBuildPlan", () => {
         { generateStructured: fakeGenerateStructured, generateStructuredDeps },
         minimalInput
       )
-    ).rejects.toThrow();
+    ).rejects.toThrow("/settings?section=aiproviders");
   });
 });

@@ -48,6 +48,8 @@ import { YoloAdminGroup } from "./settings-yolo-admin-group";
 import { WebSearchKeyGroup } from "./settings-web-search-key-group";
 import { VoiceConfigGroup } from "./settings-voice-config-group";
 import {
+  WORKSHOP_PLAN_SERVICE_KEY,
+  isModuleServiceKey,
   type AiAuthMethod,
   type AiConfiguredModelDto,
   type AiModelCapability,
@@ -81,12 +83,20 @@ const SERVICE_ROWS: readonly {
   name: string;
   desc: string;
   requireExplicitBinding?: boolean;
+  requiredTier?: AiModelTier;
 }[] = [
   {
     k: "chat",
     capability: "chat",
     name: "Chat & briefing",
     desc: "Everyday conversation and the daily reading voice."
+  },
+  {
+    k: WORKSHOP_PLAN_SERVICE_KEY,
+    capability: "json",
+    name: "Workshop planning",
+    desc: "Creates and revises Workshop plans. Requires a reasoning model; Chat lock takes precedence.",
+    requiredTier: "reasoning"
   },
   {
     k: "module.connectors.email-extract",
@@ -329,7 +339,7 @@ function ServiceRow(props: {
   const routeQuery = useQuery({
     queryKey: queryKeys.ai.capability(props.service.capability),
     queryFn: () => lookupAiCapabilityRoute(props.service.capability),
-    enabled: !props.service.requireExplicitBinding,
+    enabled: !props.service.requireExplicitBinding && !props.service.requiredTier,
     retry: false
   });
 
@@ -358,7 +368,11 @@ function ServiceRow(props: {
       model.status === "active" &&
       model.providerStatus === "active" &&
       providerReady &&
-      model.capabilities.includes(props.service.capability)
+      model.capabilities.includes(props.service.capability) &&
+      (!props.service.requiredTier ||
+        (model.tier === props.service.requiredTier &&
+          model.providerModelId !== "default" &&
+          provider.authMethod !== "cli"))
     );
   });
 
@@ -371,7 +385,7 @@ function ServiceRow(props: {
         ? `mode:${binding.tier}`
         : props.service.requireExplicitBinding
           ? ""
-          : "mode:interactive";
+          : `mode:${props.service.requiredTier ?? "interactive"}`;
 
   const onChange = (raw: string) => {
     if (raw.startsWith("model:")) {
@@ -411,13 +425,35 @@ function ServiceRow(props: {
               Choose a model or mode
             </option>
           ) : null}
-          <optgroup label="Mode (uses the default provider)">
-            {MODEL_TIERS.map((tier) => (
-              <option key={tier} value={`mode:${tier}`}>
+          <optgroup
+            label={
+              isModuleServiceKey(props.service.k)
+                ? "Mode (automatic routing)"
+                : "Mode (uses the default provider)"
+            }
+          >
+            {MODEL_TIERS.filter(
+              (tier) =>
+                !props.service.requiredTier ||
+                tier === props.service.requiredTier ||
+                currentValue === `mode:${tier}`
+            ).map((tier) => (
+              <option
+                key={tier}
+                value={`mode:${tier}`}
+                disabled={Boolean(
+                  props.service.requiredTier && tier !== props.service.requiredTier
+                )}
+              >
                 {TIERS[tier].label}
               </option>
             ))}
           </optgroup>
+          {binding?.kind === "model" && props.service.requiredTier && !boundModel ? (
+            <option value={`model:${binding.modelId}`} disabled>
+              Selected model needs configuration
+            </option>
+          ) : null}
           {capableModels.length ? (
             <optgroup label="Specific model">
               {capableModels.map((model) => (
@@ -428,7 +464,9 @@ function ServiceRow(props: {
             </optgroup>
           ) : null}
         </Select>
-        {needsConfig ? (
+        {props.service.requiredTier ? (
+          <span className="rt__none">Routing and connection checked when planning.</span>
+        ) : needsConfig ? (
           <span className="rt__none">
             <MinusCircle size={13} aria-hidden="true" />
             Needs configuration

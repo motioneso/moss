@@ -29,6 +29,7 @@ import { ActionRequestCard } from "./action-request-card";
 import { formatAttachmentSize } from "./attachments";
 import { MarkdownMessage } from "./markdown-message";
 import { ModuleBuildPlanRecord, parseModuleBuildPlanResult } from "./module-build-plan-record";
+import { WorkshopProjectRecord, parseWorkshopProjectResult } from "./workshop-project-record";
 import { WorkflowApprovalCard } from "./workflow-approval-card";
 import type { ChatRecordKind, TranscriptRecord } from "./use-chat-stream";
 
@@ -239,9 +240,10 @@ function RecordRow(props: {
   }
 
   if (kind === "action_result") {
-    // #1888 — workshop.buildModule hands back a plan for the user to approve. It is the only
-    // action result that owns a card; everything else stays the one-line outcome note below.
+    // New handoffs open a saved project. Retain rendering for historical plan records.
     if (props.record.toolName === "workshop.buildModule") {
+      const project = parseWorkshopProjectResult(props.record.result);
+      if (project) return <WorkshopProjectRecord {...project} />;
       const parsed = parseModuleBuildPlanResult(props.record.result);
       if (parsed) {
         return (

@@ -43,6 +43,7 @@ describe("buildChatGatewayDependencies", () => {
 
     expect(deps.actionPolicy).toBeDefined();
     expect(deps.readToolTrustBoundary).toBeDefined();
+    expect(deps.toolServices).toHaveProperty("moduleBuildStart.start", expect.any(Function));
 
     const mockRepo = {
       getActionPolicyTier: vi.fn().mockResolvedValue(undefined)

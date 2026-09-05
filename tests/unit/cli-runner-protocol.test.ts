@@ -207,6 +207,47 @@ describe("serveConnection (§3.4/§3.7)", () => {
     };
   }
 
+  it.each(["beginLogin", "pollLogin", "submitLoginToken", "cancelLogin"] as const)(
+    "%s validates and forwards the exact login scope before host dispatch",
+    async (method) => {
+      const host = fakeHost();
+      const call = vi
+        .spyOn(host, method)
+        .mockResolvedValue({ loginId: "login-1", status: "awaiting_token", ok: true });
+      const channel = new FakeChannel();
+      serveConnection(channel, deps(host));
+      authenticate(channel);
+      const params = { provider: "anthropic", loginId: "login-1", token: "synthetic-code" };
+      const bad = [
+        null,
+        [],
+        {},
+        { actorUserId: "a" },
+        { actorUserId: "a", providerConfigId: "../b" },
+        { actorUserId: "a", providerConfigId: "b", extra: true }
+      ];
+      for (const [id, scope] of bad.entries())
+        channel.feed(encodeFrame({ t: "req", id, method, params: { ...params, scope } }));
+      await new Promise((r) => setTimeout(r, 5));
+      expect(call).not.toHaveBeenCalled();
+      for (const id of bad.keys()) {
+        expect(
+          (channel.decodeAll().find((f) => (f as RpcErr).id === id) as RpcErr).error.code
+        ).toBe("bad_request");
+      }
+      const scope = { actorUserId: "actor-a", providerConfigId: "config-a" };
+      channel.feed(encodeFrame({ t: "req", id: 99, method, params: { ...params, scope } }));
+      await new Promise((r) => setTimeout(r, 5));
+      const args = [
+        "anthropic",
+        ...(method !== "beginLogin" ? ["login-1"] : []),
+        ...(method === "submitLoginToken" ? ["synthetic-code"] : []),
+        scope
+      ];
+      expect(call).toHaveBeenCalledExactlyOnceWith(...args);
+    }
+  );
+
   it("listLiveSessions round-trips after a successful handshake", async () => {
     const host = fakeHost();
     vi.spyOn(host, "listLiveSessions").mockResolvedValue(["alice"]);
@@ -221,6 +262,79 @@ describe("serveConnection (§3.4/§3.7)", () => {
     expect(ok.t).toBe("ok");
     expect(ok.bootId).toBe(BOOT);
     expect(ok.result).toEqual({ sessionKeys: ["alice"] });
+  });
+
+  it("validates source-generation launch params before dispatch", async () => {
+    const host = fakeHost();
+    const launch = vi.spyOn(host, "launchSourceGeneration").mockResolvedValue({ offset: 0 });
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
+
+    channel.feed(
+      encodeFrame({
+        t: "req",
+        id: 8,
+        method: "launchSourceGeneration",
+        sessionKey: "u1",
+        params: {
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          personaText: "source only",
+          schema: { type: "object", properties: {} },
+          command: "docker run"
+        }
+      })
+    );
+    await new Promise((r) => setTimeout(r, 5));
+
+    const err = channel.decodeAll().find((f) => (f as RpcErr).id === 8) as RpcErr;
+    expect(err.error.code).toBe("bad_request");
+    expect(launch).not.toHaveBeenCalled();
+    expect(channel.closed).toBe(false);
+  });
+
+  it("requires a valid source scope and forwards it without weakening the source contract", async () => {
+    const host = fakeHost();
+    const launch = vi.spyOn(host, "launchSourceGeneration").mockResolvedValue({ offset: 0 });
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
+    const params = {
+      provider: "anthropic",
+      model: "configured-model",
+      personaText: "source only",
+      schema: { type: "object" }
+    };
+    for (const [id, scope] of [undefined, null, { actorUserId: "actor-a" }].entries()) {
+      channel.feed(
+        encodeFrame({
+          t: "req",
+          id,
+          method: "launchSourceGeneration",
+          sessionKey: "source-1",
+          params: { ...params, ...(scope !== undefined ? { scope } : {}) }
+        })
+      );
+    }
+    await new Promise((r) => setTimeout(r, 5));
+    expect(launch).not.toHaveBeenCalled();
+    for (const id of [0, 1, 2])
+      expect((channel.decodeAll().find((f) => (f as RpcErr).id === id) as RpcErr).error.code).toBe(
+        "bad_request"
+      );
+    const scope = { actorUserId: "actor-a", providerConfigId: "config-a" };
+    channel.feed(
+      encodeFrame({
+        t: "req",
+        id: 10,
+        method: "launchSourceGeneration",
+        sessionKey: "source-1",
+        params: { ...params, scope }
+      })
+    );
+    await new Promise((r) => setTimeout(r, 5));
+    expect(launch).toHaveBeenCalledExactlyOnceWith("source-1", { ...params, scope });
   });
 
   // #2208: the model-list verb is non-session (no sessionKey) and every non-ok outcome is a normal

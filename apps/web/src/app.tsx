@@ -11,7 +11,7 @@ import {
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { MODULE_WEB_CONTRIBUTIONS, MODULE_WEB_ROUTES } from "virtual:moss-module-web";
 import { confineModuleCss } from "@moss/module-css-confine";
-import { WORKSHOP_MODULE_ID, workshopModuleManifest } from "@moss/workshop";
+import { WORKSHOP_MODULE_ID } from "@moss/shared";
 
 import {
   ApiError,
@@ -78,7 +78,7 @@ const WellnessPage = lazy(() =>
  * shell actually registers.
  */
 const WORKSHOP_PATH =
-  workshopModuleManifest.navigation.find((item) => item.id === WORKSHOP_MODULE_ID)?.path ?? "/";
+  MODULE_WEB_ROUTES.find((route) => route.moduleId === WORKSHOP_MODULE_ID)?.path ?? "/workshop";
 
 const moduleRoutes = MODULE_WEB_ROUTES.map((route) => ({
   path: route.path,
@@ -310,7 +310,7 @@ export function App() {
             {moduleRoutes.map(({ path, moduleId, Component }) => (
               <Route
                 key={path}
-                path={path}
+                path={moduleId === WORKSHOP_MODULE_ID ? `${path}/*` : path}
                 element={
                   <ModuleGatedRoute gate={myModulesEnabled(moduleId)}>
                     <Component />

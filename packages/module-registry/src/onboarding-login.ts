@@ -18,7 +18,7 @@
  * CLIs live in the cli-runner container); absent ⇒ the login routes fail closed (500).
  */
 
-import type { AiAutoRegisterPort, CliModelLister } from "@moss/ai";
+import { AiRepository, type AiAutoRegisterPort, type CliModelLister } from "@moss/ai";
 import { CliChatUnavailableError, type RpcConnection } from "@moss/chat";
 import { LOGIN_ADAPTERS } from "@moss/cli-runner";
 import type { AiProviderKind } from "@moss/db";
@@ -87,6 +87,7 @@ export function buildOnboardingLogin(deps: {
   readonly enabled: boolean;
   readonly getConnection: () => RpcConnection | undefined;
   readonly repository: SettingsRepository;
+  readonly providerRepository?: Pick<AiRepository, "findLoginTargetProvider">;
   /**
    * #367: on login `ready`, idempotently register a default chat-capable model so chat works with
    * zero manual entry. Optional — absent ⇒ `ready` persists exactly as before (no registration).
@@ -132,16 +133,16 @@ export function buildOnboardingLogin(deps: {
   };
 
   const loginClient: ProviderLoginClient = {
-    begin: async (provider) =>
-      mapOutcome(await runLoginRpc(() => requireConn().beginLogin({ provider }))),
-    poll: async (provider, loginId) =>
-      mapOutcome(await runLoginRpc(() => requireConn().pollLogin({ provider, loginId }))),
-    submitToken: async (provider, loginId, token) =>
+    begin: async (provider, scope) =>
+      mapOutcome(await runLoginRpc(() => requireConn().beginLogin({ provider, scope }))),
+    poll: async (provider, loginId, scope) =>
+      mapOutcome(await runLoginRpc(() => requireConn().pollLogin({ provider, loginId, scope }))),
+    submitToken: async (provider, loginId, token, scope) =>
       mapOutcome(
-        await runLoginRpc(() => requireConn().submitLoginToken({ provider, loginId, token }))
+        await runLoginRpc(() => requireConn().submitLoginToken({ provider, loginId, token, scope }))
       ),
-    cancel: async (provider, loginId) => {
-      await runLoginRpc(() => requireConn().cancelLogin({ provider, loginId }));
+    cancel: async (provider, loginId, scope) => {
+      await runLoginRpc(() => requireConn().cancelLogin({ provider, loginId, scope }));
     }
   };
 
@@ -194,5 +195,20 @@ export function buildOnboardingLogin(deps: {
     }
   };
 
-  return { loginability, loginClient, stateStore };
+  const providerRepository = deps.providerRepository ?? new AiRepository();
+  return {
+    loginability,
+    loginClient,
+    stateStore,
+    assertProviderConfig: async (scopedDb, provider, scope) => {
+      const target = await providerRepository.findLoginTargetProvider(
+        scopedDb,
+        scope.providerConfigId,
+        provider
+      );
+      if (!target || target.owner_user_id !== scope.actorUserId) {
+        throw new HttpError(404, "Provider login configuration is unavailable.");
+      }
+    }
+  };
 }

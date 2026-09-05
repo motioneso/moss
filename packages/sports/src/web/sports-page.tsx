@@ -344,7 +344,9 @@ export function findFeaturedStory(
 const LEAD_MIN_PHOTO_WIDTH = 800;
 
 export function leadWidePhotoFirst(headlines: readonly Headline[]): readonly Headline[] {
-  const index = headlines.findIndex((headline) => (headline.imageWidth ?? 0) >= LEAD_MIN_PHOTO_WIDTH);
+  const index = headlines.findIndex(
+    (headline) => (headline.imageWidth ?? 0) >= LEAD_MIN_PHOTO_WIDTH
+  );
   if (index <= 0) return headlines;
   const chosen = headlines[index];
   if (!chosen) return headlines;

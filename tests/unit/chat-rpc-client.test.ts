@@ -284,6 +284,66 @@ describe("verified-submit RPC client", () => {
       expect.objectContaining({ persistentRuntimeEnabled: false })
     );
   });
+
+  it("uses only the dedicated source launch and does not read persistent config", async () => {
+    const launch = vi.fn();
+    const launchSourceGeneration = vi.fn().mockResolvedValue({ offset: 7 });
+    const readPersistent = vi.fn().mockRejectedValue(new Error("must not be called"));
+    const client = new ChatEngineRpcClient(
+      "anthropic",
+      "u1",
+      { launch, launchSourceGeneration } as unknown as RpcConnection,
+      "interactive",
+      readPersistent,
+      true
+    );
+
+    await expect(
+      client.launchStructured({
+        neutralDir: "/unused",
+        personaPath: "/unused/p.md",
+        personaText: "source only",
+        model: "claude-sonnet-4-6",
+        schema: { type: "object", properties: {} },
+        sourceCredentialScope: { actorUserId: "user-1", providerConfigId: "provider-1" },
+        sourceGeneration: true
+      })
+    ).resolves.toEqual({ offset: 7 });
+    expect(launchSourceGeneration).toHaveBeenCalledWith("u1", {
+      scope: { actorUserId: "user-1", providerConfigId: "provider-1" },
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      personaText: "source only",
+      schema: { type: "object", properties: {} }
+    });
+    expect(launch).not.toHaveBeenCalled();
+    expect(readPersistent).not.toHaveBeenCalled();
+  });
+
+  it("does not fall back to ordinary launch when an older runner rejects the source method", async () => {
+    const launch = vi.fn();
+    const launchSourceGeneration = vi.fn().mockRejectedValue(new Error("unknown method"));
+    const client = new ChatEngineRpcClient(
+      "anthropic",
+      "u1",
+      { launch, launchSourceGeneration } as unknown as RpcConnection,
+      "interactive",
+      undefined,
+      true
+    );
+
+    await expect(
+      client.launchStructured({
+        neutralDir: "/unused",
+        personaPath: "/unused/p.md",
+        model: "claude-sonnet-4-6",
+        schema: { type: "object", properties: {} },
+        sourceCredentialScope: { actorUserId: "user-1", providerConfigId: "provider-1" },
+        sourceGeneration: true
+      })
+    ).rejects.toThrow("unknown method");
+    expect(launch).not.toHaveBeenCalled();
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

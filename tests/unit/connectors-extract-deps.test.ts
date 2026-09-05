@@ -139,7 +139,7 @@ describe("buildEmailExtractDeps", () => {
     );
   });
 
-  it("recovers a valid final CLI reply before releasing the slot after a caller timeout", async () => {
+  it("rejects a late reply after caller cancellation and releases the slot for the next call", async () => {
     const repository = {
       resolveModelForService: vi.fn(async () => ({
         model: MODEL,
@@ -152,8 +152,11 @@ describe("buildEmailExtractDeps", () => {
       }))
     } as unknown as AiRepository;
     let engineIndex = 0;
+    const killed = new Set<number>();
+    let cancelledEngineStoppedBeforeNext = false;
     const engineFactory: ChatEngineFactory = vi.fn(() => {
       const index = engineIndex++;
+      if (index === 2) cancelledEngineStoppedBeforeNext = killed.has(1);
       return {
         provider: "anthropic" as const,
         launch: vi.fn(async () => ({ offset: 0 })),
@@ -168,7 +171,9 @@ describe("buildEmailExtractDeps", () => {
         }),
         interrupt: vi.fn(async () => undefined),
         isAlive: vi.fn(async () => false),
-        kill: vi.fn(async () => undefined)
+        kill: vi.fn(async () => {
+          killed.add(index);
+        })
       };
     });
     const warn = vi.fn();
@@ -216,9 +221,11 @@ describe("buildEmailExtractDeps", () => {
       `sanitized outcomes: ${JSON.stringify(outcomes)}`
     ).toEqual([
       { summary: true, complete: true, category: "ok" },
-      { summary: true, complete: true, category: "ok" },
+      // A caller timeout cancels authority to accept even a valid late reply.
+      { summary: false, complete: false, category: "caller_timeout" },
       { summary: true, complete: true, category: "ok" }
     ]);
+    expect(cancelledEngineStoppedBeforeNext).toBe(true);
     expect(warn).not.toHaveBeenCalledWith(
       expect.objectContaining({ message: "CLI structured generation is already busy" }),
       "ai.structured provider error"

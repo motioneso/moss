@@ -1,0 +1,22 @@
+# This image's build context excludes app code, credentials, local state and host dependencies.
+**
+!infra/
+!infra/workshop/
+!infra/workshop/*.json
+!infra/workshop/*.mjs
+!infra/workshop/Dockerfile
+!packages/
+!packages/module-sdk/
+!packages/module-sdk/src/
+!packages/module-sdk/src/**
+!packages/module-web-sdk/
+!packages/module-web-sdk/src/
+!packages/module-web-sdk/src/**
+!packages/ui/
+!packages/ui/src/
+!packages/ui/src/**
+!apps/
+!apps/web/
+!apps/web/src/
+!apps/web/src/styles/
+!apps/web/src/styles/tokens.css

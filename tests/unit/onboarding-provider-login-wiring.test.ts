@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { CliChatUnavailableError } from "@moss/chat";
 import { HttpError } from "@moss/module-sdk";
@@ -75,5 +75,61 @@ describe("onboarding provider-login wiring", () => {
     });
     await expect(down!("anthropic")).rejects.toBeInstanceOf(HttpError);
     await expect(down!("anthropic")).rejects.toMatchObject({ statusCode: 503 });
+  });
+});
+
+describe("verified login configuration wiring", () => {
+  it("rejects missing or foreign configurations and carries scope over all RPC verbs", async () => {
+    const scope = { actorUserId: "actor-a", providerConfigId: "config-a" };
+    const outcome = { loginId: "login-a", status: "awaiting_token" as const };
+    const conn = {
+      beginLogin: vi.fn(async () => outcome),
+      pollLogin: vi.fn(async () => outcome),
+      submitLoginToken: vi.fn(async () => outcome),
+      cancelLogin: vi.fn(async () => ({ ok: true }))
+    };
+    const findLoginTargetProvider = vi.fn();
+    const seam = buildOnboardingLogin({
+      enabled: true,
+      getConnection: () => conn as never,
+      repository,
+      providerRepository: { findLoginTargetProvider }
+    })!;
+    const db = {} as never;
+    for (const row of [undefined, { owner_user_id: "actor-b" }]) {
+      findLoginTargetProvider.mockResolvedValueOnce(row);
+      await expect(seam.assertProviderConfig!(db, "anthropic", scope)).rejects.toMatchObject({
+        statusCode: 404
+      });
+      expect(conn.beginLogin).not.toHaveBeenCalled();
+    }
+    findLoginTargetProvider.mockResolvedValueOnce({ owner_user_id: scope.actorUserId });
+    await seam.assertProviderConfig!(db, "anthropic", scope);
+    expect(findLoginTargetProvider).toHaveBeenLastCalledWith(
+      db,
+      scope.providerConfigId,
+      "anthropic"
+    );
+    await seam.loginClient.begin("anthropic", scope);
+    await seam.loginClient.poll("anthropic", "login-a", scope);
+    await seam.loginClient.submitToken("anthropic", "login-a", "synthetic-code", scope);
+    await seam.loginClient.cancel("anthropic", "login-a", scope);
+    expect(conn.beginLogin).toHaveBeenCalledWith({ provider: "anthropic", scope });
+    expect(conn.pollLogin).toHaveBeenCalledWith({
+      provider: "anthropic",
+      loginId: "login-a",
+      scope
+    });
+    expect(conn.submitLoginToken).toHaveBeenCalledWith({
+      provider: "anthropic",
+      loginId: "login-a",
+      token: "synthetic-code",
+      scope
+    });
+    expect(conn.cancelLogin).toHaveBeenCalledWith({
+      provider: "anthropic",
+      loginId: "login-a",
+      scope
+    });
   });
 });

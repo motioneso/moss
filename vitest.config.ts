@@ -236,6 +236,12 @@ export default defineConfig({
         )
       },
       {
+        find: "virtual:moss-module-settings",
+        replacement: fileURLToPath(
+          new URL("./tests/fixtures/virtual-moss-module-settings.ts", import.meta.url)
+        )
+      },
+      {
         find: "@moss/notes",
         replacement: fileURLToPath(new URL("./packages/notes/src/index.ts", import.meta.url))
       },

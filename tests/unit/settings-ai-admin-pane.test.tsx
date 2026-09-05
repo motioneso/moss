@@ -9,6 +9,7 @@ import { renderToString } from "react-dom/server";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { AiProviderConfigDto } from "@moss/shared";
 
 const createAiProvider = vi.fn(async (_input: unknown) => ({
   provider: {
@@ -22,9 +23,11 @@ const createAiProvider = vi.fn(async (_input: unknown) => ({
     isInstanceDefault: false
   }
 }));
+const putAiServiceBinding = vi.fn(async (_service: unknown, _input: unknown) => ({}));
+const listAiProviders = vi.fn(async () => ({ providers: [] as AiProviderConfigDto[] }));
 
 vi.mock("../../apps/web/src/api/client.js", () => ({
-  listAiProviders: vi.fn(async () => ({ providers: [] })),
+  listAiProviders: () => listAiProviders(),
   listAiModels: vi.fn(async () => ({ models: [] })),
   listAiServiceBindings: vi.fn(async () => ({ bindings: {} })),
   getChatModelOverrideSettings: vi.fn(async () => ({
@@ -47,7 +50,7 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   setInstanceDefaultProvider: vi.fn(),
   testAiProvider: vi.fn(),
   putAdminChatModelOverrideEnabled: vi.fn(),
-  putAiServiceBinding: vi.fn(),
+  putAiServiceBinding: (service: unknown, input: unknown) => putAiServiceBinding(service, input),
   lookupAiCapabilityRoute: vi.fn(async () => ({ route: null })),
   getVoiceEndpoint: vi.fn(async () => ({ endpoint: null })),
   putVoiceEndpoint: vi.fn(),
@@ -109,6 +112,52 @@ function clickButtonByText(renderer: ReactTestRenderer, text: string): void {
 }
 
 describe("AiProvidersPane provider picker (#1325)", () => {
+  it("uses the existing Workshop planning control with reasoning default and saves its namespaced binding", async () => {
+    putAiServiceBinding.mockClear();
+    listAiProviders.mockResolvedValueOnce({
+      providers: [
+        {
+          id: "p1",
+          providerKind: "openai-compatible",
+          displayName: "Planning provider",
+          baseUrl: null,
+          authMethod: "api_key",
+          executionMode: "interactive",
+          status: "active",
+          hasCredential: true,
+          cliAvailable: false,
+          isInstanceDefault: true,
+          revokedAt: null,
+          createdAt: "2026-09-05T00:00:00.000Z",
+          updatedAt: "2026-09-05T00:00:00.000Z"
+        }
+      ]
+    });
+    const renderer = await renderPane();
+    try {
+      const select = renderer.root
+        .findAllByType("select")
+        .find((item) => item.props["aria-label"] === "Binding for Workshop planning");
+      expect(select?.props.value).toBe("mode:reasoning");
+      expect(select?.findAllByType("option").map((item) => item.props.value)).toEqual([
+        "mode:reasoning"
+      ]);
+      await act(async () => {
+        select?.props.onChange({ target: { value: "mode:reasoning" } });
+      });
+      await flush();
+      expect(putAiServiceBinding).toHaveBeenCalledWith("module.workshop.plan", {
+        binding: { kind: "mode", tier: "reasoning" }
+      });
+      expect(JSON.stringify(renderer.toJSON())).toContain("Chat lock takes precedence");
+      expect(JSON.stringify(renderer.toJSON())).toContain(
+        "Routing and connection checked when planning"
+      );
+    } finally {
+      await act(async () => renderer.unmount());
+    }
+  });
+
   beforeEach(() => {
     createAiProvider.mockClear();
   });

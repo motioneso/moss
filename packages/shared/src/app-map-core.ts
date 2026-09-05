@@ -173,7 +173,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "aiproviders",
     label: "Assistant & AI",
     description:
-      "Configure instance AI providers, models, and bindings. Each provider card lists its models " +
+      "Configure instance AI providers, models, and bindings. Settings login requires an owned, usable CLI configuration; " +
+      "a login handle cannot be reused or cancelled from another configuration. Claude and Gemini sign-in authenticate afresh " +
+      "for the clicked configuration; a failed sign-in preserves its previous credential. Installed command-line providers " +
+      "are detected immediately after installation. Each provider card lists its models " +
       "with a Refresh models button (asks the provider for its current list; the line under the " +
       "list then reads 'Refreshed: N models', 'Not logged in', 'This provider cannot list its " +
       "models yet', 'The sign-in helper is not running', or 'Could not reach the provider') and an " +
@@ -182,7 +185,11 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
       "is struck through), " +
       "a minus button (disable) and a trash button (remove after confirmation; the provider's " +
-      "default entry cannot be removed). The Models section collapses from its header.",
+      "default entry cannot be removed). The Models section collapses from its header. " +
+      "Services includes Workshop planning, which defaults to reasoning and requires JSON capability. " +
+      "Planning checks the actual route and owner-bound connection before use. If unavailable, " +
+      "choose a compatible reasoning model here and change or unlock Chat lock (this account) " +
+      "if it conflicts, then retry planning. Workshop execution remains unavailable.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },

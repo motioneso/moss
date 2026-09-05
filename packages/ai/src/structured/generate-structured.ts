@@ -17,6 +17,7 @@ import {
 } from "../adapters/http-api-structured.js";
 import type { ProviderKind } from "../adapters/transcript-reader.js";
 import { parseAiApiKeyCredential } from "../credentials.js";
+import { DEFAULT_MODEL_SENTINEL } from "../auto-register.js";
 import type { AiSecretCipher } from "../crypto.js";
 import type { AiRepository } from "../repository.js";
 import {
@@ -83,6 +84,8 @@ export type GenerateStructuredInput = {
   readonly schema: Record<string, unknown>;
   readonly prompt: string;
   readonly tierHint?: AiModelTier;
+  /** Validate the selected route without overriding a binding or account pin. */
+  readonly requiredTier?: AiModelTier;
   readonly requireExplicitBinding?: boolean;
   readonly maxOutputTokens?: number;
   readonly signal?: AbortSignal;
@@ -90,6 +93,7 @@ export type GenerateStructuredInput = {
   readonly priority?: StructuredRunPriority;
   readonly scope?: StructuredRunScope;
   readonly closeScope?: boolean;
+  readonly sourceGeneration?: true;
 };
 
 export type GenerateStructuredResult =
@@ -114,12 +118,27 @@ export async function generateStructured(
   });
   if (!route.model) return { ok: false, error: "needs_config" };
   const model = route.model;
+  if (input.requiredTier && model.tier !== input.requiredTier)
+    return { ok: false, error: "needs_config" };
+  if (
+    input.sourceGeneration &&
+    (!model.provider_model_id.trim() || model.provider_model_id.trim() === DEFAULT_MODEL_SENTINEL)
+  )
+    return { ok: false, error: "needs_config" };
 
   const provider = await deps.repository.selectProviderWithCredential(
     scopedDb,
-    model.provider_config_id
+    model.provider_config_id,
+    input.sourceGeneration ? { ownerOnly: true } : undefined
   );
-  if (!provider) return { ok: false, error: "needs_config" };
+  if (
+    !provider ||
+    (input.sourceGeneration &&
+      (provider.id !== model.provider_config_id ||
+        provider.owner_user_id !== model.owner_user_id ||
+        provider.provider_kind !== model.provider_kind))
+  )
+    return { ok: false, error: "needs_config" };
 
   if (
     model.provider_kind !== "anthropic" &&
@@ -180,8 +199,20 @@ export async function generateStructured(
         telemetry: input.telemetry,
         priority: input.priority,
         scope: input.scope,
-        closeScope: input.closeScope
+        closeScope: input.closeScope,
+        ...(input.sourceGeneration
+          ? {
+              sourceGeneration: true as const,
+              sourceCredentialScope: {
+                actorUserId: provider.owner_user_id,
+                providerConfigId: provider.id
+              }
+            }
+          : {})
       });
+      // The adapter may resolve after cancellation (for example, a subprocess can finish while
+      // its abort cleanup is racing). Never parse, validate, repair, or accept that result.
+      if (input.signal?.aborted) return { ok: false, error: "aborted" };
       if ("rawText" in generated) {
         try {
           result = { rawObject: JSON.parse(unfence(generated.rawText)), usage: generated.usage };

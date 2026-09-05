@@ -1,11 +1,10 @@
 import type { DataContextDb } from "@moss/db";
+import { WORKSHOP_PLAN_SERVICE_KEY } from "@moss/shared";
 
 import type {
   generateStructured,
   GenerateStructuredDeps
 } from "../structured/generate-structured.js";
-
-const MODULE_BUILD_PLAN_SERVICE = "module.moss.workshop-build-plan" as const;
 
 const MODULE_BUILD_PLAN_SCHEMA = {
   type: "object",
@@ -60,14 +59,28 @@ export async function writeModuleBuildPlan(
   const result = await deps.generateStructured(
     scopedDb,
     {
-      service: MODULE_BUILD_PLAN_SERVICE,
+      service: WORKSHOP_PLAN_SERVICE_KEY,
+      tierHint: "reasoning",
+      requiredTier: "reasoning",
+      sourceGeneration: true,
       schema: MODULE_BUILD_PLAN_SCHEMA,
       prompt
     },
-    deps.generateStructuredDeps
+    {
+      ...deps.generateStructuredDeps,
+      // Provider-global CLI tokens cannot establish the planning actor's credential ownership.
+      createCliStructuredAdapter: undefined
+    }
   );
 
   if (!result.ok) {
+    if (result.error === "needs_config") {
+      throw new Error(
+        "Workshop planning needs an available reasoning model with an owner-bound connection. " +
+          "Configure Workshop planning in Settings → Administration → AI providers " +
+          "(/settings?section=aiproviders). Change or unlock Chat lock if it conflicts, then retry."
+      );
+    }
     throw new Error(`writeModuleBuildPlan: generateStructured failed with ${result.error}`);
   }
 

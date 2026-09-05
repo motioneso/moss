@@ -1,30 +1,27 @@
-# Jarvis Module Developer Guide
+# Moss Module Developer Guide
 
-How to build a module for Jarvis: a self-contained feature (its own tables, routes, jobs,
-frontend surfaces, and external data sources) that docks into the platform through declared
-seams instead of hand-wired edits across the app.
+Code-grounded authoring guidance, refreshed 2026-09-04 against `~/Jarv1s` at `bedfb0382`.
 
-**Current state (read this first).** Jarvis has one product concept: **Modules**. Bundled modules
-ship with core as workspace packages under `packages/` and are registered in the composition root
-(`packages/module-registry/src/index.ts`). Downloaded modules are distributed as hash-verified GitHub
-Release artifacts and installed separately without rebuilding core — see
-[§13 Distribution](#13-distribution). The docking seams (manifest, data lifecycle, dataset
-connector, web registry) are the stable contract for both paths; only delivery differs. `external`
-remains an internal name for the downloaded-module loader and its security boundary, not a second
-kind of module in the product.
+Moss presents one product concept, **Modules**, through two different authoring contracts:
 
-**Parity status.** Navigation, runtime web UI, assistant tools, queued jobs, credentials, and
-platform KV work for downloaded modules today. Per-user module toggles, module-contributed settings,
-notifications, briefings, host-diagnostics counts, and account export/delete for downloaded
-module-owned database tables are not unified yet. Job Search is KV-only, so its current user data is
-already covered by the generic module-KV export/delete path. Do not design a downloaded module that
-depends on the remaining surfaces until the sensitive parity work under epic #860 has an approved
-spec; the target is for delivery to be the only product-level difference.
+- **Built-in modules** are compiled workspace packages under `packages/`. Sections 2–12 describe
+  that contract: a TypeScript `MossModuleManifest`, public package APIs, and build-time web exports.
+- **Custom/installable modules**, including Workshop output, ship `jarvis.module.json` and built
+  worker/web files. Start at [§13](#13-custom-and-installable-modules). Their JSON manifest and
+  host RPC APIs are different; copying a built-in manifest does not create a valid custom module.
 
-Authoritative deep references: the four seam specs under `docs/superpowers/specs/`
-(`2026-07-04-module-boundary-enforcement.md`, `-data-lifecycle-ports.md`,
-`-dataset-connector-sdk.md`, `-web-registry.md`) and `docs/DEVELOPMENT_STANDARDS.md`.
-The best living example is `packages/sports` — it exercises every seam in this guide.
+The existing `jarvis.module.json` filename, `compatibility.jarv1s` key, and internal `external`
+identifiers remain API names. Use current `@moss/*` package imports.
+
+Source code is authoritative when historical comments or older specs disagree. The main references
+are `packages/module-sdk/src/index.ts`, `packages/module-sdk/src/external-module.ts`,
+`packages/module-sdk/src/worker.ts`, `packages/module-registry/src/external/validate.ts`, and
+`apps/web/src/external-modules/loader.ts`. Product/design rules live in
+[DEVELOPMENT_STANDARDS.md](DEVELOPMENT_STANDARDS.md).
+
+This guide describes current contracts, not proof of a functioning Workshop build. The
+[Workshop assessment and redesign requirements](reviews/2026-09-04-workshop-assessment.md)
+separate agreed behavior from missing implementation and open product decisions.
 
 ---
 
@@ -37,10 +34,11 @@ registration, by CI gates, or in review — they are not conventions.
    module-owned table gets Row-Level Security; admins get no data bypass (admin power is
    configuration power only).
 2. **Module isolation.** Modules collaborate only through declared public APIs and events.
-   Never import another module's internals (`@jarv1s/other/src/...`) or query another module's
+   Never import another module's internals (`@moss/other/src/...`) or query another module's
    tables. Two automated gates enforce this (see §10).
-3. **`DataContextDb` only.** Repositories accept the branded `DataContextDb` handle, never a
-   root Kysely instance. All vault (filesystem) I/O goes through `VaultContext`, never raw `fs`.
+3. **Host-scoped data access.** Built-in repositories accept the branded `DataContextDb`, never a
+   root Kysely instance; vault I/O uses `VaultContext`. Custom module workers use the host RPC
+   ports in §13 rather than importing database or vault internals.
 4. **`AccessContext` is `{ actorUserId, requestId }`.** Nothing else. Do not add fields.
 5. **Secrets never escape.** Credentials, tokens, and password hashes never reach frontend
    responses, logs, job payloads, exports, or AI prompts.
@@ -60,7 +58,7 @@ packages/<your-module>/
 │   └── 0134_your_tables.sql
 ├── src/
 │   ├── index.ts          # public API — the ONLY thing other packages may import
-│   ├── manifest.ts       # the JarvisModuleManifest (the docking contract)
+│   ├── manifest.ts       # the MossModuleManifest (the docking contract)
 │   ├── routes.ts         # Fastify route registration
 │   ├── repository.ts     # data access (DataContextDb only)
 │   ├── source/           # external-data adapter(s), if any (§8)
@@ -74,7 +72,7 @@ packages/<your-module>/
 
 ```jsonc
 {
-  "name": "@jarv1s/your-module",
+  "name": "@moss/your-module",
   "private": true,
   "type": "module",
   "exports": {
@@ -83,21 +81,21 @@ packages/<your-module>/
     "./web": "./src/web/index.tsx" // frontend contribution (optional)
   },
   "dependencies": {
-    "@jarv1s/module-sdk": "workspace:*", // manifest types (always)
-    "@jarv1s/db": "workspace:*", // DataContextDb (backend)
-    "@jarv1s/module-web-sdk": "workspace:*", // only if you ship "./web"
-    "@jarv1s/datasets": "workspace:*" // only if you declare externalSources
+    "@moss/module-sdk": "workspace:*", // manifest types (always)
+    "@moss/db": "workspace:*", // DataContextDb (backend)
+    "@moss/module-web-sdk": "workspace:*", // only if you ship "./web"
+    "@moss/datasets": "workspace:*" // only if you declare externalSources
   }
 }
 ```
 
 Declare **every** package you import. The `check:package-deps` gate fails on undeclared
 imports (they only work by accident of pnpm hoisting) and on declared-but-unused
-`@jarv1s/*` dependencies.
+`@moss/*` dependencies.
 
 ## 3. The manifest
 
-`src/manifest.ts` exports one `JarvisModuleManifest` object — the single declaration the
+`src/manifest.ts` exports one `MossModuleManifest` object — the single declaration the
 platform reads to dock your module. Core fields:
 
 ```ts
@@ -125,7 +123,7 @@ export const yourModuleManifest = {
   externalSources: [
     /* only if you fetch external data — §8 */
   ]
-} satisfies JarvisModuleManifest;
+} satisfies MossModuleManifest;
 ```
 
 Other optional manifest surfaces (see `packages/module-sdk/src/index.ts` for the full types):
@@ -152,8 +150,7 @@ missing `dataLifecycle` (for new modules), invalid `fetchHosts`, and `credential
     test (`tests/integration/module-data-lifecycle-cascade.test.ts`) verifies this for every
     table you declare in `dataLifecycle.deletion.tables`, so a missing cascade fails CI.
 - `tests/integration/foundation.test.ts` asserts the **full** migration list with `toEqual` —
-  add your migration's row there and run the full `test:integration` suite, or it breaks
-  latently for the next person.
+  add your migration's row there and verify through the isolated verify-gate procedure.
 
 ## 5. Backend data access and routes
 
@@ -177,7 +174,7 @@ the payload.
 
 ## 7. Data lifecycle: deletion and export
 
-Every new module must declare `dataLifecycle` — this is how "delete my account" and "export my
+Every new built-in module must declare `dataLifecycle` — this is how "delete my account" and "export my
 data" stay complete without anyone editing central scripts.
 
 ```ts
@@ -218,7 +215,7 @@ pattern to follow.
 
 If your module fetches data from the outside world, you do **not** call `fetch`. You declare
 the source in the manifest and implement an adapter; the platform runs your fetches inside a
-hardened runtime (`@jarv1s/datasets`).
+hardened runtime (`@moss/datasets`).
 
 Declare the source:
 
@@ -271,13 +268,13 @@ be part of `params`. Full worked example: `packages/sports/src/source/espn-sourc
 ## 9. Frontend: the module web registry
 
 Your UI docks into the shell through the `"./web"` subpath export — no edits to `apps/web`.
-A build-time scanner (`virtual:jarvis-module-web`) discovers every workspace package declaring
+A build-time scanner (`virtual:moss-module-web`) discovers every workspace package declaring
 that export, validates it, and generates the wiring.
 
 `src/web/index.tsx` default-exports a `ModuleWebContribution`:
 
 ```tsx
-import type { ModuleWebContribution } from "@jarv1s/module-web-sdk";
+import type { ModuleWebContribution } from "@moss/module-web-sdk";
 
 const contribution: ModuleWebContribution = {
   moduleId: "your-module", // must equal the manifest id
@@ -306,25 +303,25 @@ Rules the scanner and tests enforce:
 
 Conventions:
 
-- **HTTP**: use `requestJson` from `@jarv1s/module-web-sdk` — identical behavior to the shell's
+- **HTTP**: use `requestJson` from `@moss/module-web-sdk` — identical behavior to the shell's
   client (cookie credentials, `X-Timezone`, typed `ApiError`). Paths are relative (`/api/...`).
 - **React Query keys**: `[moduleId, ...]` tuples, e.g. `["your-module", "overview"]`.
-- **Design system**: use the authored `jds-*` primitives and existing patterns (serif headings,
-  mono eyebrows, sans body). Raw CSS colors belong in `apps/web/src/styles/tokens.css` only.
+- **Design system**: use the authored `jds-*` primitives and current typography tokens
+  (`--font-display` for headings, `--font-sans` for body and labels; no new mono or serif styles). Raw CSS colors belong in `apps/web/src/styles/tokens.css` only.
   Empty/loading states reuse existing authored patterns. The lucide `Sparkles` icon is banned
   (lint-enforced).
 - **Settings pane**: declare a `settings` surface in the manifest with `entry: "./settings"`
-  and export it from `./settings` — same scanner mechanism (`virtual:jarvis-module-settings`).
+  and export it from `./settings` — same scanner mechanism (`virtual:moss-module-settings`).
 
 ## 10. Boundary gates (what will fail your build)
 
 Two complementary gates, both in `pnpm verify:foundation`:
 
 - **ESLint `no-restricted-imports`** on all `packages/*/src` and `apps/*/src`: bans
-  `@jarv1s/*/src/*` deep imports, package-crossing relative imports, and `**/packages/*/src/*`
+  `@moss/*/src/*` deep imports, package-crossing relative imports, and `**/packages/*/src/*`
   path imports. Test directories are exempt.
 - **`scripts/check-package-deps.ts`**: every import must be declared in your `package.json`;
-  every declared `@jarv1s/*` dependency must actually be imported.
+  every declared `@moss/*` dependency must actually be imported.
 
 Also enforced repo-wide: `check:file-size` caps every source file (CSS included) at 1000
 lines — split by section rather than fighting it.
@@ -375,93 +372,218 @@ A bundled module is activated by one entry in `BUILT_IN_MODULES`
 The `LOADER-SEAM(sports)` comments in that file mark every touchpoint a future dynamic loader
 will replace — keep your entry to the same shape.
 
-## 13. Distribution
+## 13. Custom and installable modules
 
-Downloaded modules ship as GitHub Release artifacts and install separately without rebuilding
-core. Once installed, they use the same product model and the host contracts exposed by the
-downloaded-module ABI. This section covers only the distribution-specific surface — manifest
-authoring, RLS, and the web entry are unchanged from the rest of this guide. Internal source paths,
-loader APIs, and security checks retain the name `external`.
+This is the contract Workshop must target. Use `JsonMossModuleManifest`, the custom worker SDK,
+and the external web loader; sections 2–12 are not a template for this path.
 
-**Publishing.** `scripts/publish-module-registry.ts` builds the publication set: for each module
-source directory under the internal `external-modules/` path (dockerignored — the core image never
-ships it), it runs the JS-01 bundler, validates the manifest, and packs a portable gzip tarball of
-exactly the on-disk trust set (`jarvis.module.json` + `dist/**` + `sql/**`) as
-`<id>-<version>.tgz` (a bare filename, never a URL — `ARTIFACT_FILENAME_RE` in
-`packages/module-registry/src/distribution/index-schema.ts` rejects anything else and the whole
-registry entry is dropped, fail-closed). It also emits `index.json`, retaining the current version
-plus the 4 previous per module (`REGISTRY_RETAINED_VERSIONS = 5`). `.github/workflows/
-modules-registry.yml` runs this in CI on release; run the script locally to test a publish before
-tagging. **Bump the manifest and package version for every trust-set change.** Update detection is
-version-based, and the publisher rejects a same-version artifact when its filename, SHA-256, or size
-differs; only an identical idempotent rerun is allowed.
+### 13.1 Package and manifest
 
-**Declaring owned tables and migrations.** No distribution-specific syntax beyond what §4 already
-covers: `database.ownedTables` in the manifest plus a `sql/` migrations directory is exactly what
-both the bundled and downloaded install paths consume.
+A source directory is independent of the core workspace. The host's
+`scripts/build-external-module.ts` builds these conventional entrypoints:
 
-**Install lifecycle.** Downloaded-module discovery is always on; do not set
-`JARVIS_ENABLE_EXTERNAL_MODULES`. Admins use **Settings → Instance modules** to download and stage a
-package, then restart Jarvis so boot reconciliation validates and installs it. The same settings
-surface handles enable/disable/remove/purge
-(`ModuleRegistrySection`, `apps/web/src/settings/settings-module-registry-section.tsx`) through the
-admin routes documented for `routes-module-registry.ts`. Boot reconcile applies migrations and
-creates the module's Postgres roles
-(`jarvis_mod_<slug>_runtime`, `jarvis_mod_<slug>_install`), remove disables without touching data,
-purge drops owned tables and roles. The admin registry list reflects a boot-time-only discovery
-snapshot of the downloaded package directory (`discoverExternalModules` is the internal function
-name in `apps/api/src/server.ts`) — a
-process restart is required to see on-disk changes; this is a deliberate startup-only design, not
-a bug.
+```text
+<module>/
+├── jarvis.module.json
+├── src/worker/index.ts      # defineModuleWorker from @moss/module-sdk/worker
+├── src/web/index.ts         # optional web entry; may import sibling .tsx components
+├── sql/                    # optional, installed by the privileged host migration path
+└── dist/
+    ├── worker.js           # bundled Node CJS
+    └── web/index.js        # browser ESM using the host React runtime
+```
 
-**`JARVIS_MODULES_ENSURE`.** Comma/whitespace-separated `id` or `id@version` tokens
-(`packages/module-registry/src/distribution/ensure-list.ts`), parsed leniently: invalid IDs and
-duplicates become non-fatal parse errors rather than a boot crash, and the first entry wins on a
-duplicate ID. Boot reconcile downloads and installs every listed module that isn't already
-present, applying migrations as it would for an admin-triggered install.
+A minimal manifest for a module with a worker and page is:
 
-**Dev parity.** `pnpm db:reconcile` (`tsx scripts/module-reconcile.ts`) runs the same reconcile
-pass boot uses, against your local registry and `JARVIS_MODULES_ENSURE` — use it to test an
-install/update/purge cycle without restarting the whole server. #1468: once a target has a
-bootstrap owner, this confirms `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL` matches that owner's email
-before proceeding (fresh installs are exempted).
+```json
+{
+  "schemaVersion": 1,
+  "id": "example-module",
+  "name": "Example module",
+  "version": "0.1.0",
+  "publisher": "Module author",
+  "lifecycle": "optional",
+  "compatibility": { "jarv1s": ">=0.1.0" },
+  "runtime": { "workerEntrypoint": "dist/worker.js", "workerContractVersion": 1 },
+  "web": { "entrypoint": "dist/web/index.js", "contractVersion": 2 },
+  "navigation": [{ "id": "example-module", "label": "Example module", "path": "/" }]
+}
+```
 
-### Runtime credential writes (`ctx.auth.setCredential`)
+The example is a structural starting point. Choose a compatibility range matching the actual
+APIs used; add only capabilities the module needs. The validator is
+`validateExternalModuleManifest` in `packages/module-registry/src/external/validate.ts`.
+Its normalized result is the host contract; unknown fields can be dropped and must not be treated
+as supported. Certain built-in fields are explicitly rejected.
 
-Workers may persist runtime-minted secrets (e.g. the access token from an
-OAuth-style exchange) with `await ctx.auth.setCredential(authId, value)`:
+| Need                            | Custom JSON declaration or API                                                                                                                 |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity and core compatibility | `schemaVersion`, `id`, `name`, `version`, `publisher`, `lifecycle`, `compatibility`                                                            |
+| Assistant tools                 | `assistantTools` with handler names, bounded input schemas, honest risk, and module-prefixed names/permission IDs; handlers live in the worker |
+| Approval/action policy          | `assistantActionFamilies` and supported tool policy fields; an automatic policy requires a matching declared family allowing it                |
+| External network access         | Top-level `fetchHosts`; request through worker `ctx.fetch`                                                                                     |
+| Credentials                     | `auth` declarations and host-managed slots; worker `ctx.auth`                                                                                  |
+| Stored records                  | `storage` namespaces and scopes; worker `ctx.kv`                                                                                               |
+| Owned database tables           | `database.ownedTables`, package SQL, and host provisioning; worker `ctx.db.query`                                                              |
+| Scheduled/background work       | `worker.queues`, `worker.schedules`, `worker.reconcileJobs`; not built-in `jobs`                                                               |
+| Page and navigation             | `web` contract v2 and `navigation` paths relative to `/m/<moduleId>`                                                                           |
+| Host-rendered settings          | `preferences` (currently boolean or integer, with nullable integer support), not a `settings` component                                        |
+| Briefing contribution           | `briefing` with worker handler and supported sections                                                                                          |
+| Notifications                   | Worker `ctx.notify.post`; not a top-level `notifications` manifest field                                                                       |
+| Assistant onboarding            | `assistantOnboarding`                                                                                                                          |
 
-- `authId` must be a declared `auth` entry with `scope: "user"`. Instance-scope
-  credentials are always human-entered via admin settings.
-- Only write-risk tool invocations may call it; the value must be a non-empty
-  string of at most 32 KiB.
-- One slot holds one string. Modules needing per-item tokens store a JSON map
-  inside a single declared slot — and must serialize their own
-  read-modify-write (run token-touching work on a single per-user queue;
-  concurrent writers are last-writer-wins and will drop each other's entries).
-- The written value is treated like a resolved secret for the rest of the
-  invocation: it is redacted from worker output and rejected from `ctx.ai` /
-  `ctx.fetch` inputs.
+Do not copy built-in `availability`, `permissions`, `settings`, `routes`, `jobs`, `dataLifecycle`,
+`externalSources`, or executable provider fields into this JSON. The full forbidden-field list
+and individual validation rules are in the validator; the public declaration types are in
+`packages/module-sdk/src/external-module.ts`.
 
-### Instance KV write policy (`instanceWritePolicy`)
+### 13.2 Worker access and authority
 
-Instance-scoped KV writes from handlers are admin-gated by default. A storage
-declaration with `"instanceWritePolicy": "module"` opts that namespace into
-handler writes for any acting user — use it for module-managed shared pools.
-The admin approves this as part of the reviewed, hash-pinned manifest.
+Register named handlers using `defineModuleWorker` from `@moss/module-sdk/worker`. Handler input
+arrives as `ctx.input`; validate it and the data returned by outside services. Never import core
+repositories or another module's internals, open a direct database connection, or obtain data by
+reading host files. Stdout carries the JSON-RPC protocol; do not write application logs to it.
+
+`ModuleWorkerContext` in `packages/module-sdk/src/worker.ts` exposes:
+
+- Declared storage through `ctx.kv`; user scope is actor-bound by the host. Instance scope is
+  shared state, not private user storage. Declare any intentional sharing. Instance writes default
+  to admin-only; `instanceWritePolicy: "module"` explicitly permits handler writes by other actors.
+- Declared credentials through `ctx.auth.getCredential`. Runtime token refresh is supported by
+  `setCredential` only for declared user-scoped slots on write-risk invocations. A module can read
+  its authorized secret to contact its service; it must never return that secret to the browser,
+  AI, logs, exports, or queue payloads. The Workshop builder must not receive credential values.
+- Host-mediated fetch through `ctx.fetch`, with exact declared hosts and redirect checks. Optional
+  `fetchHostGrantsNamespace` adds actor-specific host grants from a declared user KV namespace;
+  this broadens authority and needs an explicit reviewed grant flow, not blanket network access.
+- Parameterized queries through `ctx.db.query` against owned tables, under the module role and RLS.
+  Interactive SQL is restricted to SELECT/INSERT/UPDATE/DELETE, with read-risk enforcement,
+  a 5-second statement timeout, 5,000-row cap, and 5 MiB result cap. No runtime DDL.
+- Structured AI through `ctx.ai.generateStructured({ schema, prompt, tierHint })`, embeddings
+  through `ctx.embed`, actor-scoped extracted attachment text through `ctx.attachments.readText`,
+  and bounded notifications through `ctx.notify.post`. Host configuration and invocation risk
+  still apply; a port's presence does not mean every call will succeed.
+- Resolved `ctx.preferences`, `ctx.localTimezone`, and `ctx.deadlineAt`. Use the user's timezone
+  for calendar-day behavior. Handle an unset integer preference as unset, not zero.
+
+Enforcement is in `packages/module-registry/src/external/worker-rpc-host.ts` and
+`packages/db/src/module-storage-rpc.ts`. Read-only invocations cannot mutate KV/credentials or post
+notifications. Respect deadlines; declared queue timeouts cannot exceed `MAX_INVOCATION_MS`.
+Keep queue payloads metadata-only and make retryable/scheduled work safe to repeat.
+
+**Enforcement limit:** `external/worker-runtime.ts` launches a Node subprocess with a restricted
+environment and host RPC checks. That launcher does not establish an OS filesystem/network sandbox.
+Using only the SDK is an authoring rule, not proof that arbitrary module code cannot bypass RPC via
+Node APIs. The Workshop redesign must resolve execution confinement before claiming that stronger
+security guarantee. Do not weaken host checks or represent prompt instructions as a sandbox.
+
+### 13.3 Database schema and user-data lifecycle
+
+The custom database manifest contains only `ownedTables`. Table names must use the module's
+normalized prefix, such as `app.example_module_items`. SQL belongs in the module's `sql/` directory;
+never change applied files. The custom migration validator currently accepts one statement per file
+from its explicit command allowlist. Do not copy the built-in global migration procedure.
+
+The privileged host installer (`scripts/module-install.ts`) creates scoped roles, runs accepted
+migrations, and generates table RLS through `packages/db/src/module-rls-emitter.ts`. Authors declare
+schema; they do not grant roles or supply replacement security policies. Use the expected
+`owner_user_id` ownership/cascade structure and stable row IDs; host export reads order by `id`.
+
+The host derives custom table export/deletion coverage from `database.ownedTables`, rather than a
+function-valued `dataLifecycle` field. See `readExternalModuleExportRows` in
+`packages/settings/src/data-export.ts` and `getExternalModuleDeletionTables` in
+`packages/module-registry/src/index.ts`. Generic host KV covers its own account export/deletion.
+Test ownership, export, deletion, and data-preserving upgrades for the chosen schema.
+
+**Workshop limit:** `installModuleDraft` validates the manifest, hashes/stages the folder, and
+writes the draft row. It does not call the database installer. SQL support in the ordinary
+installation path does not prove live SQL-backed Workshop drafts work. Until that path is supplied
+and verified, Workshop must disclose this limitation during requirements gathering. Host KV may
+satisfy a request without custom tables; do not substitute it silently if it changes the requirements.
+
+### 13.4 Web UI and integration with Moss
+
+The custom web entry exports `{ contractVersion: 2, Root, css? }`, as in
+`external-modules/finance/src/web/index.ts`. It does not export the built-in `ModuleWebContribution`.
+`Root` receives host actions and an optional assistant-surface handle. Use the supported host APIs;
+do not import `apps/web` internals. The loader in `apps/web/src/external-modules/loader.ts` currently
+renders an empty component on incompatible/malformed exports, so successful bundling is not enough.
+
+Use components and runtime hooks exported by `@moss/module-web-sdk`; the bundler maps React to the
+host runtime. Never ship a second React copy. Browser code must stay free of Node/database/secrets.
+Module tool reads use the host's read-tool invocation API. Mutations must use a supported write
+path with host approval/risk enforcement; a read-only tool endpoint is not a general write API.
+
+Export CSS as the contribution's `css` string. The host confines it to the module and owns style
+mount/unmount; do not inject a global style tag. Follow the host design tokens and `jds-*` primitives,
+including accessible inputs, keyboard/focus behavior, user timezone, and useful empty/loading/error
+states. Keep module CSS for supported layout; do not redefine Moss's global visual identity.
+
+Keep navigation labels/paths, tool descriptions, and preferences truthful. App-map truthfulness
+also requires feature/error/remediation metadata. **Current gap:** the custom JSON type has no
+`features` field, and the app-map reader queries a built artifact. Merely inventing that field in
+`jarvis.module.json` will not register a generated module's features. The Workshop design needs a
+supported host declaration/refresh path for that metadata; record this as a prerequisite.
+
+### 13.5 Build, install, draft, and shipping are distinct operations
+
+A developer/host can bundle an authorized source directory from `~/Jarv1s` with:
+
+```sh
+pnpm exec tsx scripts/build-external-module.ts <module-source-directory>
+```
+
+This runs esbuild, not generated tests, database migrations, or live UI acceptance checks. The
+current Workshop builder is instructed not to run shell commands; host code owns this operation.
+Run meaningful module checks separately and exercise the real page/tools before declaring success.
+
+For distributed packages, publication validates and packs the trust set (`jarvis.module.json`,
+`dist/**`, `sql/**`) and updates the signed catalog. The installed manifest/package hashes and
+version identify the accepted artifact. Bump the version when that trust set changes. Download,
+SQL provisioning, staged update acceptance, and purge use the privileged host reconcile lifecycle;
+reconcile is not a command generated module code may run.
+
+Live discovery exists: `POST /api/admin/modules/rescan` refreshes the API's discovered modules and
+signals the worker. Discovery does not provision a schema or accept every staged update.
+Workshop's “Look at the draft” currently requests a rescan before navigating to its page.
+
+A draft is owned by its author. `POST /api/admin/modules/:id/ship` is admin- and owner-checked;
+`shipExternalModule` changes it to enabled and clears draft ownership. This currently combines
+finishing with wider availability; it does not implement a separate finished-but-private state.
+Draft deletion uses `DELETE /api/admin/modules/:id/draft`; ordinary module removal/purge follow
+separate host lifecycle operations. Specify effects on saved data before destructive actions.
+
+Workshop generation/refinement still needs its own end-to-end proof. Do not treat validation,
+installation, or a closed issue as evidence that the module works for its user.
 
 ## 14. Pre-flight checklist
 
-Before opening a PR:
+For built-in modules, before opening a PR:
 
 - [ ] Approved spec in `docs/superpowers/specs/` + GitHub `task` issue (in-repo modules).
 - [ ] Manifest declares `dataLifecycle` (explicit empty `exportSections` if truly none).
 - [ ] Every owned table: RLS policies + `ON DELETE CASCADE` chain to `app.users`.
 - [ ] Migration row added to `tests/integration/foundation.test.ts`; full
-      `pnpm test:integration` run.
+      integration verification through the verify-gate skill.
 - [ ] All external fetches go through a declared source + adapter (`ctx.fetchFn` only).
 - [ ] `./web` entry is browser-safe (no `node:*`, no manifest import) and mirrors manifest
       navigation literally.
 - [ ] No deep imports of other modules; `package.json` deps exactly match imports.
 - [ ] Shared API contracts in `packages/shared/*-api.ts`; permissions declared and used.
-- [ ] `pnpm verify:foundation` green locally (record commands + exit codes if CI is down).
+- [ ] Repository verification through the verify-gate skill; never run DB-touching gates bare.
+
+For custom modules and Workshop output:
+
+- [ ] Requirements and acceptance examples fit the installed custom-module capabilities.
+- [ ] Manifest passes the existing validator; every declared handler and artifact exists.
+- [ ] Supported SDK access, input validation, owner isolation, and credential boundaries hold.
+- [ ] Meaningful tests run and the actual module renders/behaves through real navigation.
+- [ ] Settings, navigation, tool descriptions, and app-map coverage match shipped behavior.
+- [ ] Data survives supported changes; export/delete and removal behavior are verified.
+- [ ] Draft, approval, sharing, restart, and cleanup behavior are demonstrated, with failures visible.
+
+Run formatter/static checks appropriate to changed files. Any DB-touching verification uses
+`.claude/skills/verify-gate/SKILL.md` and its isolated database procedure. User-facing repository PRs
+also need live-path evidence and the release-note/app-map requirements in DEVELOPMENT_STANDARDS.md.
+These are developer checks; do not give the generated builder authority to run core deployment or
+database administration commands.

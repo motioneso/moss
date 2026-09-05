@@ -76,9 +76,11 @@ export function ProviderLoginDialog(props: {
   const assistantName = useAssistantName();
   const [state, setState] = useState<LoginState>(INITIAL_STATE);
   const closedRef = useRef(false);
-  const sessionRef = useRef<{ providerKind: AutomatedLoginProviderKind; loginId: string } | null>(
-    null
-  );
+  const sessionRef = useRef<{
+    providerKind: AutomatedLoginProviderKind;
+    loginId: string;
+    providerConfigId: string;
+  } | null>(null);
   // #2232: React's StrictMode runs the mount effect, its cleanup, then the effect again, all
   // before the first "begin" request comes back. Without a guard that fires two begin requests
   // in the same instant — the first gets cancelled by the cleanup, the second is refused by the
@@ -141,7 +143,7 @@ export function ProviderLoginDialog(props: {
         token: ""
       }));
     },
-    [finish, provider.providerKind]
+    [finish, provider.id, provider.providerKind]
   );
 
   const beginLogin = useCallback(async () => {
@@ -155,11 +157,16 @@ export function ProviderLoginDialog(props: {
       if (closedRef.current) {
         void cancelOnboardingProviderLogin({
           providerKind: provider.providerKind,
-          loginId: response.loginId
-        });
+          loginId: response.loginId,
+          providerConfigId: provider.id
+        }).catch(() => undefined);
         return;
       }
-      sessionRef.current = { providerKind: provider.providerKind, loginId: response.loginId };
+      sessionRef.current = {
+        providerKind: provider.providerKind,
+        loginId: response.loginId,
+        providerConfigId: provider.id
+      };
       if (response.status === "ready") {
         finish();
         return;
@@ -179,7 +186,7 @@ export function ProviderLoginDialog(props: {
     } catch (error) {
       if (!closedRef.current) setState({ phase: "error", token: "", error: errorText(error) });
     }
-  }, [finish, pollLogin, provider.providerKind]);
+  }, [finish, pollLogin, provider.id, provider.providerKind]);
 
   useEffect(() => {
     closedRef.current = false;
@@ -202,7 +209,7 @@ export function ProviderLoginDialog(props: {
         deferredCancelRef.current = null;
         const session = sessionRef.current;
         sessionRef.current = null;
-        if (session) void cancelOnboardingProviderLogin(session);
+        if (session) void cancelOnboardingProviderLogin(session).catch(() => undefined);
       }, 0);
     };
   }, [beginLogin]);
@@ -210,7 +217,7 @@ export function ProviderLoginDialog(props: {
   const close = () => {
     const session = sessionRef.current;
     sessionRef.current = null;
-    if (session) void cancelOnboardingProviderLogin(session);
+    if (session) void cancelOnboardingProviderLogin(session).catch(() => undefined);
     props.onClose();
   };
 

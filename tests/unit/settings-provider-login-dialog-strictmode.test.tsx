@@ -115,4 +115,31 @@ describe("ProviderLoginDialog under a StrictMode double mount (#2232)", () => {
     await renderDialog(false);
     expect(beginMock).toHaveBeenCalledTimes(1);
   });
+  it("cancels with the clicked configuration when begin resolves after unmount", async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof beginMock>>) => void;
+    beginMock.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        })
+    );
+    const renderer = await renderDialog(true);
+    await act(async () => {
+      renderer.unmount();
+    });
+    await flush();
+    cancelMock.mockRejectedValueOnce(new Error("runner unavailable"));
+    await act(async () => {
+      resolve({
+        loginId: "late-login",
+        status: "awaiting_token",
+        authorizationUrl: "https://example.com/authorize"
+      });
+    });
+    expect(cancelMock).toHaveBeenCalledExactlyOnceWith({
+      providerKind: "anthropic",
+      providerConfigId: provider.id,
+      loginId: "late-login"
+    });
+  });
 });

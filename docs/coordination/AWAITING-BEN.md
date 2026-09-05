@@ -75,6 +75,7 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
+
 <!-- Resolved 2026-09-03: false alarm. Home Assistant was never disconnected. It lives in the new
 integrations table (packages/integrations), not the old connector_definitions table the proof lane
 queried. On 2026-09-03 the dev API listed it enabled with 75/75 tools and a live refresh returned 200.
@@ -133,3 +134,10 @@ an ordinary process on the dev box, driving the Claude command-line tool already
 NO BEN ACTION NEEDED right now - this entry is not blocking him.
 Detail: https://github.com/motioneso/moss/issues/2175#issuecomment-5531759370 -->
 -->
+
+- **Resolved — Workshop R1c task publication:** Ben approved all actions needed tonight for
+  the Workshop goal, with cleanup limited to this task's resources. Published as #2289. Exact text in
+  `docs/handoffs/workshop-r1c-task-draft.md` to `motioneso/moss` under #2023. Implementation
+  scope is already approved. Automatic approval review rejected this new task as a new
+  external disclosure of architecture/runtime details; it recognized prior approval only
+  for R1a/M2 (#2288); subsequent explicit approval resolved that rejection. Local R1a/M2 code and checks are complete; runtime execution stays disabled.

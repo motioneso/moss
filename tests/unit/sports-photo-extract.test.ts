@@ -13,9 +13,30 @@ describe("sports feed photo extraction (#2237)", () => {
     const found = extractFeedPhoto({
       link: "https://example.com/a",
       media: [
-        { tag: "enclosure", url: "https://example.com/e.jpg", type: "image/jpeg", medium: null, width: null, height: null },
-        { tag: "media:thumbnail", url: "https://example.com/t.jpg", type: null, medium: null, width: null, height: null },
-        { tag: "media:content", url: "https://example.com/c.jpg", type: "image/jpeg", medium: null, width: null, height: null }
+        {
+          tag: "enclosure",
+          url: "https://example.com/e.jpg",
+          type: "image/jpeg",
+          medium: null,
+          width: null,
+          height: null
+        },
+        {
+          tag: "media:thumbnail",
+          url: "https://example.com/t.jpg",
+          type: null,
+          medium: null,
+          width: null,
+          height: null
+        },
+        {
+          tag: "media:content",
+          url: "https://example.com/c.jpg",
+          type: "image/jpeg",
+          medium: null,
+          width: null,
+          height: null
+        }
       ]
     });
     expect(found).toEqual({ url: "https://example.com/c.jpg", origin: "feed" });
@@ -25,8 +46,22 @@ describe("sports feed photo extraction (#2237)", () => {
     const found = extractFeedPhoto({
       link: "https://example.com/a",
       media: [
-        { tag: "media:content", url: "https://example.com/small.jpg", type: null, medium: "image", width: 200, height: 100 },
-        { tag: "media:content", url: "https://example.com/big.jpg", type: null, medium: "image", width: 1200, height: 600 }
+        {
+          tag: "media:content",
+          url: "https://example.com/small.jpg",
+          type: null,
+          medium: "image",
+          width: 200,
+          height: 100
+        },
+        {
+          tag: "media:content",
+          url: "https://example.com/big.jpg",
+          type: null,
+          medium: "image",
+          width: 1200,
+          height: 600
+        }
       ]
     });
     expect(found?.url).toBe("https://example.com/big.jpg");
@@ -36,7 +71,14 @@ describe("sports feed photo extraction (#2237)", () => {
     const found = extractFeedPhoto({
       link: "https://example.com/a",
       media: [
-        { tag: "media:content", url: "https://example.com/clip.mp4", type: "video/mp4", medium: "video", width: 1920, height: 1080 }
+        {
+          tag: "media:content",
+          url: "https://example.com/clip.mp4",
+          type: "video/mp4",
+          medium: "video",
+          width: 1920,
+          height: 1080
+        }
       ]
     });
     expect(found).toBeNull();
@@ -99,7 +141,9 @@ describe("sports photo candidate rules (#2237)", () => {
 
   it("accepts the publisher's own host and its subdomains", () => {
     expect(isUsablePhotoCandidate("https://example.com/a.jpg", { publisherHost })).toBe(true);
-    expect(isUsablePhotoCandidate("https://images.example.com/a.jpg", { publisherHost })).toBe(true);
+    expect(isUsablePhotoCandidate("https://images.example.com/a.jpg", { publisherHost })).toBe(
+      true
+    );
   });
 
   it("accepts a host on the built-in image host list", () => {
@@ -114,7 +158,9 @@ describe("sports photo candidate rules (#2237)", () => {
 
   it("rejects a sibling host that merely shares the publisher's parent domain", () => {
     expect(
-      isUsablePhotoCandidate("https://other.example.com/a.jpg", { publisherHost: "sports.example.com" })
+      isUsablePhotoCandidate("https://other.example.com/a.jpg", {
+        publisherHost: "sports.example.com"
+      })
     ).toBe(false);
     expect(
       isUsablePhotoCandidate("https://example.com/a.jpg", { publisherHost: "sports.example.com" })
@@ -134,7 +180,9 @@ describe("sports photo candidate rules (#2237)", () => {
 
   it("rejects site furniture and a declared tracking pixel", () => {
     expect(isUsablePhotoCandidate("https://example.com/logo.png", { publisherHost })).toBe(false);
-    expect(isUsablePhotoCandidate("https://example.com/favicon.ico", { publisherHost })).toBe(false);
+    expect(isUsablePhotoCandidate("https://example.com/favicon.ico", { publisherHost })).toBe(
+      false
+    );
     expect(isUsablePhotoCandidate("https://example.com/px.gif?w=1&h=1", { publisherHost })).toBe(
       false
     );

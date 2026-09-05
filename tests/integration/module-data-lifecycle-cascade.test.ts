@@ -148,7 +148,10 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.workflow_approvals",
         "app.workflow_artifacts",
         // #2162 integrations foundation — owner-keyed connections cascade with the user.
-        "app.integration_connections"
+        "app.integration_connections",
+        // Workshop projects own their durable feed; both cascade with their owner.
+        "app.workshop_projects",
+        "app.workshop_project_feed"
       ].sort()
     );
   });

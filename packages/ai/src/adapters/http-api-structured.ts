@@ -1,4 +1,4 @@
-import type { ModuleServiceKey } from "@moss/shared";
+import type { ModuleServiceKey, ProviderLoginScope } from "@moss/shared";
 
 import type { ProviderKind } from "./transcript-reader.js";
 
@@ -58,6 +58,8 @@ export type GenerateStructuredProviderInput = {
   readonly priority?: StructuredRunPriority;
   readonly scope?: StructuredRunScope;
   readonly closeScope?: boolean;
+  readonly sourceGeneration?: true;
+  readonly sourceCredentialScope?: ProviderLoginScope;
 };
 
 export type StructuredProviderResult =

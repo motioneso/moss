@@ -1,5 +1,6 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
-import { renderToPipeableStream, renderToString } from "react-dom/server";
+import { renderToPipeableStream, renderToString as renderHtml } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { Writable } from "node:stream";
 import type { ReactNode } from "react";
@@ -11,6 +12,14 @@ vi.mock("../../apps/web/src/api/use-assistant-name.js", () => ({
   useAssistantName: () => "Moss"
 }));
 
+function withQueries(element: ReactNode) {
+  return <QueryClientProvider client={new QueryClient()}>{element}</QueryClientProvider>;
+}
+
+function renderToString(element: ReactNode): string {
+  return renderHtml(withQueries(element));
+}
+
 function renderAll(element: ReactNode): Promise<string> {
   return new Promise((resolve, reject) => {
     let html = "";
@@ -21,7 +30,7 @@ function renderAll(element: ReactNode): Promise<string> {
       }
     });
     destination.on("finish", () => resolve(html));
-    const { pipe } = renderToPipeableStream(element, {
+    const { pipe } = renderToPipeableStream(withQueries(element), {
       onAllReady: () => pipe(destination),
       onError: reject
     });

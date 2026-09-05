@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Workshop · Moss · State sheet</title>
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/tokens.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles/components-core.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles/components-forms.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles/components-empty.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles/components-moss.css" />
+    <link rel="stylesheet" href="states.css" />
+    <script src="states.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to state</a>
+    <aside class="state-bar" aria-label="State sheet controls">
+      <div>
+        <strong>Supplementary state sheet</strong>
+        <span>Simulated controls · design review only</span>
+      </div>
+      <div class="state-controls">
+        <label for="state-select">Show a state</label>
+        <select id="state-select" class="jds-select">
+          <optgroup label="Project and conversation">
+            <option value="list-loading">Project list · loading</option>
+            <option value="list-failure">Project list · fetch failed</option>
+            <option value="detail-loading">Project detail · loading</option>
+            <option value="detail-failure">Project detail · fetch failed</option>
+            <option value="create-pending">Create project · pending</option>
+            <option value="approve-pending">Approve plan · pending</option>
+            <option value="stop-pending">Stop build · pending</option>
+            <option value="send-failure">Send failed · text retained</option>
+            <option value="stale-approval">Approval superseded</option>
+            <option value="offline">Offline · reconnect</option>
+            <option value="capability">Planning model unavailable</option>
+          </optgroup>
+          <optgroup label="MockupV1 preview">
+            <option value="mockup-generation">Mockup generation failed</option>
+            <option value="mockup-loading">Mockup artifact loading</option>
+            <option value="mockup-missing">Mockup artifact missing</option>
+            <option value="mockup-ready">Mockup · host navigation</option>
+          </optgroup>
+          <optgroup label="Saved words storage">
+            <option value="storage-pending">Save/remove · pending</option>
+            <option value="storage-failure">Save/remove · failed</option>
+            <option value="storage-dedup">Save · already queued</option>
+            <option value="storage-timeout">Save · timed out</option>
+            <option value="storage-429">Save · rate limited</option>
+          </optgroup>
+        </select>
+      </div>
+    </aside>
+    <header class="shell">
+      <a class="brand" href="index.html" aria-label="Moss Workshop home"
+        >moss<span>/ Workshop</span></a
+      >
+      <span class="muted">Supplementary states · no network or product code</span>
+    </header>
+    <main id="main" tabindex="-1"></main>
+    <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+  </body>
+</html>

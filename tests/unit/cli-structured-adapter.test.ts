@@ -39,37 +39,203 @@ describe("CliStructuredAdapter (#982/#869/#981)", () => {
     expect(submit.mock.calls[0]?.[0]).toContain("Respond with ONLY a JSON object");
   });
 
-  it("keeps a valid reply that becomes readable during bounded CLI teardown", async () => {
-    let tornDown = false;
-    const factory: ChatEngineFactory = () => ({
-      provider: "anthropic",
-      launch: vi.fn(async () => ({ offset: 0 })),
-      submit: vi.fn(async () => undefined),
-      readNew: vi.fn(async () =>
-        tornDown
-          ? {
-              records: [{ kind: "reply" as const, text: '{"ok":true}' }],
-              offset: 12,
-              complete: true
-            }
-          : { records: [], offset: 0, complete: false }
-      ),
-      interrupt: vi.fn(async () => undefined),
-      isAlive: vi.fn(async () => !tornDown),
-      kill: vi.fn(async () => {
-        tornDown = true;
+  it("uses a unique, closed structured stream for source generation", async () => {
+    const launchStructured = vi.fn(async (_opts: { sourceGeneration?: true }) => ({ offset: 0 }));
+    const readStructured = vi.fn(async () => ({
+      text: '{"ok":true}',
+      offset: 1,
+      complete: true
+    }));
+    const kill = vi.fn(async () => undefined);
+    const factory: ChatEngineFactory = () =>
+      ({
+        provider: "anthropic",
+        launch: vi.fn(async () => ({ offset: 0 })),
+        submit: vi.fn(async () => undefined),
+        readNew: vi.fn(async () => ({ records: [], offset: 0, complete: false })),
+        interrupt: vi.fn(async () => undefined),
+        isAlive: vi.fn(async () => true),
+        kill,
+        launchStructured,
+        submitStructured: vi.fn(async () => undefined),
+        readStructured
+      }) as never;
+    const adapter = new CliStructuredAdapter("anthropic", factory, 1_000, 0);
+    const input = {
+      model: { provider_kind: "anthropic" as const, provider_model_id: "configured-model" },
+      messages: [{ role: "user" as const, content: "find the source" }],
+      schema: { type: "object" },
+      maxOutputTokens: 100,
+      sourceCredentialScope: { actorUserId: "user-1", providerConfigId: "provider-1" },
+      sourceGeneration: true as const
+    };
+
+    await adapter.generateStructured(input);
+    await adapter.generateStructured(input);
+
+    expect(launchStructured).toHaveBeenCalledTimes(2);
+    expect(launchStructured).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        sourceCredentialScope: { actorUserId: "user-1", providerConfigId: "provider-1" },
+        sourceGeneration: true
       })
-    });
-    const adapter = new CliStructuredAdapter("anthropic", factory, 5, 0);
+    );
+    expect(launchStructured).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        sourceCredentialScope: { actorUserId: "user-1", providerConfigId: "provider-1" },
+        sourceGeneration: true
+      })
+    );
+    expect(kill).toHaveBeenCalledTimes(2);
+  });
+
+  it("aborts and closes a source-generation stream", async () => {
+    const controller = new AbortController();
+    const kill = vi.fn(async () => undefined);
+    const factory: ChatEngineFactory = () =>
+      ({
+        provider: "anthropic",
+        launch: vi.fn(async () => ({ offset: 0 })),
+        submit: vi.fn(async () => undefined),
+        readNew: vi.fn(async () => ({ records: [], offset: 0, complete: false })),
+        interrupt: vi.fn(async () => undefined),
+        isAlive: vi.fn(async () => true),
+        kill,
+        launchStructured: vi.fn(async () => ({ offset: 0 })),
+        submitStructured: vi.fn(async () => controller.abort()),
+        readStructured: vi.fn(async () => ({ text: '{"ok":true}', offset: 1, complete: true }))
+      }) as never;
+    const adapter = new CliStructuredAdapter("anthropic", factory, 1_000, 0);
 
     await expect(
       adapter.generateStructured({
         model: { provider_kind: "anthropic", provider_model_id: "configured-model" },
+        messages: [{ role: "user", content: "find the source" }],
+        schema: { type: "object" },
+        maxOutputTokens: 100,
+        sourceCredentialScope: { actorUserId: "user-1", providerConfigId: "provider-1" },
+        sourceGeneration: true,
+        signal: controller.signal
+      })
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(kill).toHaveBeenCalled();
+  });
+
+  it.each(["exit", "timeout"])(
+    "only recovers teardown replies after %s when authority remains",
+    async (reason) => {
+      let tornDown = false;
+      const factory: ChatEngineFactory = () => ({
+        provider: "anthropic",
+        launch: vi.fn(async () => ({ offset: 0 })),
+        submit: vi.fn(async () => undefined),
+        readNew: vi.fn(async () =>
+          tornDown
+            ? {
+                records: [{ kind: "reply" as const, text: '{"ok":true}' }],
+                offset: 12,
+                complete: true
+              }
+            : { records: [], offset: 0, complete: false }
+        ),
+        interrupt: vi.fn(async () => undefined),
+        isAlive: vi.fn(async () => reason === "timeout" && !tornDown),
+        kill: vi.fn(async () => {
+          tornDown = true;
+        })
+      });
+      const adapter = new CliStructuredAdapter("anthropic", factory, 5, 0);
+
+      const generated = adapter.generateStructured({
+        model: { provider_kind: "anthropic", provider_model_id: "configured-model" },
         messages: [{ role: "user", content: "Extract a value" }],
         schema: { type: "object", required: ["ok"] },
         maxOutputTokens: 100
+      });
+      if (reason === "timeout") {
+        await expect(generated).rejects.toMatchObject({ name: "CliChatUnavailableError" });
+      } else {
+        await expect(generated).resolves.toMatchObject({ rawText: '{"ok":true}' });
+      }
+    }
+  );
+
+  it.each([
+    [false, "factory"],
+    [false, "submit"],
+    [false, "read"],
+    [false, "cleanup"],
+    [true, "factory"],
+    [true, "submit"],
+    [true, "read"],
+    [true, "cleanup"],
+    [true, "pending-read"]
+  ] as const)("rejects cancellation (scoped=%s, stage=%s)", async (scoped, stage) => {
+    const controller = new AbortController();
+    const exits: string[] = [];
+    const abortAt = (current: string) => {
+      if (stage === current) controller.abort();
+    };
+    const launch = vi.fn(async () => ({ offset: 0 }));
+    const submit = vi.fn(async () => abortAt("submit"));
+    let releaseRead: (() => void) | undefined;
+    const read = vi.fn(async () => {
+      if (stage === "pending-read") {
+        await new Promise<void>((resolve) => {
+          releaseRead = resolve;
+          queueMicrotask(() => controller.abort());
+        });
+      }
+      abortAt("read");
+      return { text: '{"ok":true}', offset: 1, complete: true };
+    });
+    const kill = vi.fn(async () => {
+      abortAt("cleanup");
+      releaseRead?.();
+    });
+    const factory: ChatEngineFactory = async () => {
+      abortAt("factory");
+      return {
+        provider: "anthropic",
+        launch,
+        submit,
+        readNew: async () => {
+          const result = await read();
+          return { ...result, records: [{ kind: "reply", text: result.text }] };
+        },
+        interrupt: vi.fn(async () => undefined),
+        isAlive: vi.fn(async () => true),
+        kill,
+        launchStructured: launch,
+        submitStructured: submit,
+        readStructured: read
+      };
+    };
+    const adapter = new CliStructuredAdapter("anthropic", factory, 100, 0);
+    await expect(
+      adapter.generateStructured({
+        model: { provider_kind: "anthropic", provider_model_id: "configured-model" },
+        messages: [{ role: "user", content: "synthetic" }],
+        schema: { type: "object" },
+        maxOutputTokens: 100,
+        signal: controller.signal,
+        closeScope: true,
+        telemetry: {
+          emit: (event) => {
+            if (event.kind === "exit" && event.exit) exits.push(event.exit);
+          }
+        },
+        ...(scoped
+          ? { scope: { actorUserId: "actor", connectorAccountId: "account", lineageId: "run" } }
+          : {})
       })
-    ).resolves.toMatchObject({ rawText: '{"ok":true}' });
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(kill).toHaveBeenCalled();
+    expect(exits).toEqual(["timeout"]);
+    if (stage === "factory") expect(launch).not.toHaveBeenCalled();
+    if (stage === "submit") expect(read).not.toHaveBeenCalled();
   });
 
   it("selects a waiting foreground call before FIFO background calls", async () => {

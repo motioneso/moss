@@ -177,6 +177,9 @@ services:
       JARVIS_EMBED_MODEL: ${JARVIS_EMBED_MODEL:-}
       JARVIS_MODULES_DIR: /data/modules
       MOSS_SPORTS_RENDERER_SOCKET: /run/moss-sports-browser/renderer.sock
+      # Optional fixed-operation host control. Never mount Docker or the host journal.
+      MOSS_WORKSHOP_CONTROL_SOCKET: ${MOSS_WORKSHOP_CONTROL_SOCKET:-}
+      MOSS_WORKSHOP_CONTROL_KEY_FILE: ${MOSS_WORKSHOP_CONTROL_KEY_FILE:-}
       # #1468: start-jarv1s.ts runs module-reconcile.ts as a mandatory boot one-shot, which
       # calls assertReconcileTargetIdentity — without this, prod crash-loops on boot the moment
       # app.users has a bootstrap owner (fresh installs are exempted). See the module-install
@@ -209,6 +212,7 @@ services:
       - jarv1s-cli-auth:/data/cli-auth
       - jarv1s-cli-socket:/run/jarv1s
       - jarv1s-sports-browser-socket:/run/moss-sports-browser
+      - ${MOSS_WORKSHOP_CONTROL_DIR:-./workshop-control}:/run/moss-workshop:ro
       - jarv1s-modules:/data/modules
     depends_on:
       postgres:

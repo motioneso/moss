@@ -8,54 +8,44 @@ export interface ModuleBuildRow {
   readonly plan: Record<string, unknown> | null;
 }
 
-export interface LaunchLiveAgentResult {
-  readonly wroteFiles: readonly string[];
-  readonly testsPassing?: boolean;
-  readonly fetchedUrls?: readonly string[];
+export interface ModuleBuildSource {
+  readonly files: readonly { readonly path: string; readonly content: string }[];
 }
 
 export interface RunModuleBuildStepDeps {
-  /**
-   * Composed by the caller from `buildLaunchCommand` + `writeClaudePermissionHook`
-   * (packages/chat/src/live), scoped to `workingDir` — this module never launches a
-   * CLI or writes a permission hook itself, it only drives the step sequence.
-   */
-  readonly launchLiveAgent: (input: {
-    readonly workingDir: string;
+  /** Checks host runtime availability before spending a provider call. */
+  readonly assertExecutionAvailable: () => void | Promise<void>;
+  readonly generateSource: (input: {
     readonly step: ModuleBuildStep;
     readonly plan: Record<string, unknown> | null;
-  }) => Promise<LaunchLiveAgentResult>;
-  readonly resolveWorkingDir: (buildId: string) => string;
-  readonly recordFetchedUrl: (buildId: string, url: string) => Promise<void>;
-  readonly recordWrittenFile: (buildId: string, path: string) => Promise<void>;
-  readonly finishBuild: (
-    buildId: string,
-    workingDir: string
-  ) => Promise<{ readonly moduleId: string }>;
+    readonly signal?: AbortSignal;
+  }) => Promise<ModuleBuildSource>;
+  /** Host-owned acceptance, persistence and verification; source cannot report success. */
+  readonly acceptSource: (input: {
+    readonly buildId: string;
+    readonly step: ModuleBuildStep;
+    readonly source: ModuleBuildSource;
+    readonly signal?: AbortSignal;
+  }) => Promise<{ readonly moduleId?: string }>;
 }
 
 export async function runModuleBuildStep(
   deps: RunModuleBuildStepDeps,
-  build: ModuleBuildRow
+  build: ModuleBuildRow,
+  signal?: AbortSignal
 ): Promise<ModuleBuildStepResult> {
-  const skipSpecAndTests = build.plan?.["skipSpecAndTests"] === true;
-  const step = currentBuildStep(build.step, skipSpecAndTests);
-  const workingDir = deps.resolveWorkingDir(build.id);
-
-  const result = await deps.launchLiveAgent({ workingDir, step, plan: build.plan });
-
-  for (const url of result.fetchedUrls ?? []) {
-    await deps.recordFetchedUrl(build.id, url);
-  }
-
-  for (const path of result.wroteFiles) {
-    await deps.recordWrittenFile(build.id, path);
-  }
-
+  signal?.throwIfAborted();
+  await deps.assertExecutionAvailable();
+  signal?.throwIfAborted();
+  const step = currentBuildStep(build.step, build.plan?.["skipSpecAndTests"] === true);
+  const source = await deps.generateSource({ step, plan: build.plan, signal });
+  signal?.throwIfAborted();
+  const accepted = await deps.acceptSource({ buildId: build.id, step, source, signal });
+  signal?.throwIfAborted();
   const next = nextBuildStep(step);
   if (next === null) {
-    const finished = await deps.finishBuild(build.id, workingDir);
-    return { deferred: false, moduleId: finished.moduleId };
+    if (!accepted.moduleId) throw new Error("module build acceptance did not return a module");
+    return { deferred: false, moduleId: accepted.moduleId };
   }
   return { deferred: true, continuation: { buildId: build.id, step: next } };
 }

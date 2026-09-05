@@ -22,6 +22,7 @@ import {
   isBoundedFallbackEngine
 } from "../../packages/chat/src/live/engine-selection.js";
 import { ClaudePrintChatEngine } from "../../packages/chat/src/live/claude-print-chat-engine.js";
+import { CliSourceEngine } from "../../packages/chat/src/live/cli-source-engine.js";
 import { GeminiPrintChatEngine } from "../../packages/chat/src/live/gemini-print-chat-engine.js";
 import { CliChatEngineImpl } from "../../packages/chat/src/live/cli-chat-engine.js";
 
@@ -59,6 +60,7 @@ function makeHost(io: TmuxIo): CliChatEngineHost {
   return new CliChatEngineHost({
     io,
     neutralBase: NEUTRAL_BASE,
+    homeBase: "/tmp/workshop-synthetic-credential-home",
     // The single-active-user gate is OFF in prod; keep it off here so nothing but the
     // engine choice can influence the outcome.
     singleUser: false,
@@ -124,5 +126,81 @@ describe("#1350 EngineHost.launchOnce honours execution_mode at the RPC seam", (
     });
 
     expect(tmuxVerbs).toContain("new-session");
+  });
+
+  it("does not let a source launch replace an active ordinary session", async () => {
+    const { io, tmuxVerbs } = makeRecordingIo();
+    const host = makeHost(io);
+
+    await host.launch("alice", {
+      provider: "anthropic",
+      personaText: "You are Jarvis.",
+      executionMode: "interactive"
+    });
+
+    await expect(
+      host.launchSourceGeneration("alice", {
+        scope: { actorUserId: "user-1", providerConfigId: "provider-1" },
+        provider: "anthropic",
+        model: "claude-sonnet-4-6",
+        personaText: "source only",
+        schema: { type: "object", properties: {} }
+      })
+    ).rejects.toThrow("launch is already active");
+    expect(tmuxVerbs.filter((verb) => verb === "new-session")).toHaveLength(1);
+  });
+
+  it("rejects unsupported source providers before creating an engine", async () => {
+    const { io } = makeRecordingIo();
+    const host = makeHost(io);
+
+    await expect(
+      host.launchSourceGeneration("alice", {
+        scope: { actorUserId: "user-1", providerConfigId: "provider-1" },
+        provider: "google",
+        model: "gemini-2.5-pro",
+        personaText: "source only",
+        schema: { type: "object", properties: {} }
+      })
+    ).rejects.toThrow("source generation is unavailable");
+    expect(host.liveEngineCount()).toBe(0);
+  });
+
+  it("kills a timed-out source engine again if its launch later succeeds", async () => {
+    const { io } = makeRecordingIo();
+    const host = new CliChatEngineHost({
+      io,
+      neutralBase: NEUTRAL_BASE,
+      homeBase: "/tmp/workshop-synthetic-credential-home",
+      singleUser: false,
+      cliPresent: async () => true,
+      launchTimeoutMs: 5
+    });
+    let finish!: (value: { offset: number }) => void;
+    const launch = vi.spyOn(CliSourceEngine.prototype, "launchStructured").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const kill = vi.spyOn(CliSourceEngine.prototype, "kill").mockResolvedValue();
+    try {
+      await expect(
+        host.launchSourceGeneration("source-delayed", {
+          scope: { actorUserId: "user-1", providerConfigId: "provider-1" },
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          personaText: "source only",
+          schema: {}
+        })
+      ).rejects.toThrow();
+      expect(kill).toHaveBeenCalledTimes(1);
+      finish({ offset: 0 });
+      await vi.waitFor(() => expect(kill).toHaveBeenCalledTimes(2));
+      expect(host.liveEngineCount()).toBe(0);
+    } finally {
+      launch.mockRestore();
+      kill.mockRestore();
+    }
   });
 });

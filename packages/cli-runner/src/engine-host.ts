@@ -1,3 +1,4 @@
+import { createScopedSourceEngine } from "./source-engine.js";
 /**
  * CliChatEngineHost — the server-side engine registry + RPC method dispatch for the
  * cli-runner. It hosts a `Map<sessionKey, CliChatEngineImpl>`, serializes operations
@@ -8,6 +9,8 @@
  * (a server-wide mutex, NOT the per-sessionKey queue). See `launch` for the full TOCTOU
  * argument.
  */
+
+import type { ProviderLoginScope } from "@moss/shared";
 
 import { createHash } from "node:crypto";
 
@@ -24,8 +27,7 @@ import {
   removeNeutralDir,
   sanitizeSessionKey,
   type CliChatEngine,
-  // #1350: type-only now — the host builds its engine through `createChatEngine`, never by
-  // naming an implementation. Kept solely for the `hasVerifiedSubmit` capability narrow.
+  // Type-only capability narrow for verified ordinary-chat submit.
   type CliChatEngineImpl,
   type ProbeProviderResult,
   type RpcBeginLoginResult,
@@ -33,6 +35,7 @@ import {
   type RpcInstallProviderResult,
   type RpcLaunchParams,
   type RpcLaunchResult,
+  type RpcSourceGenerationLaunchParams,
   type RpcKillParams,
   type RpcListProviderModelsResult,
   type RpcPollLoginResult,
@@ -194,8 +197,9 @@ export class CliChatEngineHost {
   private readonly engines = new Map<string, CliChatEngine>();
   /** §4.0 per-sessionKey serialization queues (submit can't interleave a kill). */
   private readonly queues = new Map<string, Promise<unknown>>();
-  /** §4.1.0a server-side in-flight-launch reservations (NOT the api's launching map). */
-  private readonly reservations = new Set<string>();
+  /** In-flight reservations; true marks a source launch that cannot share its key. */
+  private readonly reservations = new Map<string, boolean>();
+  private readonly sourceEngines = new WeakSet<CliChatEngine>();
   /** §4.1.0a admission critical section (a SERVER-WIDE mutex, not the per-key queue). */
   private readonly admissionMutex = new Mutex();
   private readonly launchTimeoutMs: number;
@@ -301,6 +305,27 @@ export class CliChatEngineHost {
     return promise;
   }
 
+  async launchSourceGeneration(
+    sessionKey: string,
+    params: RpcSourceGenerationLaunchParams
+  ): Promise<RpcLaunchResult> {
+    if (params.provider !== "anthropic" || !params.scope || !this.deps.homeBase) {
+      throw new CliChatUnavailableError("source generation is unavailable for this provider");
+    }
+    return this.launchOnce(
+      sessionKey,
+      {
+        provider: params.provider,
+        executionMode: "non_interactive",
+        needsStructuredOutput: true,
+        personaText: params.personaText,
+        model: params.model,
+        schema: params.schema
+      },
+      createScopedSourceEngine(this.deps.homeBase, params)
+    );
+  }
+
   /**
    * #1554 — refresh the shared live-config holder from a launch's params. This is the ONLY way the
    * api's DB-backed persistent-runtime settings reach the cli-runner (it has no DB access and the
@@ -318,50 +343,50 @@ export class CliChatEngineHost {
     live.idleReapMinutes = positiveIntOr(params.persistentIdleReapMinutes, live.idleReapMinutes);
   }
 
-  private async launchOnce(sessionKey: string, params: RpcLaunchParams): Promise<RpcLaunchResult> {
+  private async launchOnce(
+    sessionKey: string,
+    params: RpcLaunchParams,
+    source?: CliChatEngine
+  ): Promise<RpcLaunchResult> {
+    const sourceGeneration = source !== undefined;
     this.applyPersistentRuntimeParams(params);
     const key = sanitizeSessionKey(sessionKey);
 
-    // (1) ADMISSION under the server-wide mutex. Compute liveKeys = mux ∪ reservations
-    // and admit only if no DIFFERENT key is live; then atomically reserve K. This closes
-    // the cross-key concurrent-launch TOCTOU (two launches both passing the gate before
-    // either's jarv1s-live-<K> session exists).
+    // Source keys cannot be reused; ordinary same-key relaunch behavior stays unchanged.
     const release = await this.admissionMutex.acquire();
     // #347: declared before the try so it is accessible after the mutex block.
     let sessionIo = this.deps.io;
     try {
+      const liveKeys = await this.currentLiveKeys();
+      const existingEngine = this.engines.get(key);
+      if (
+        liveKeys.has(key) &&
+        (sourceGeneration ||
+          this.reservations.get(key) ||
+          (existingEngine && this.sourceEngines.has(existingEngine)))
+      ) {
+        throw new CliChatUnavailableError("a launch is already active for this session");
+      }
       if (this.deps.singleUser) {
-        const liveKeys = await this.currentLiveKeys();
         for (const live of liveKeys) {
           if (live !== key) {
             throw new CliChatUnavailableError("live chat is busy with another session");
           }
         }
-        // §L.6.1 UNIFIED exclusivity gate: a chat launch is also blocked while a provider login
-        // is in flight (the login CLI runs same-UID and touches the auth volume — "at most one
-        // untrusted CLI at a time", the #347 stand-in). Reuses the `unavailable` code, no wire change.
+        // A provider login uses the same auth volume and is mutually exclusive with chat.
         if (this.deps.loginService && (await this.deps.loginService.isLoginActive())) {
           throw new CliChatUnavailableError("a provider login is in progress");
         }
       }
-      // #347: allocate the UID slot under the mutex so concurrent launches for different users
-      // cannot race on the slot file (the read-modify-write is not atomic end-to-end, only the
-      // final tmp→rename is). Done before reservations.add so a slot-allocation failure leaves no
-      // orphan reservation. Falls back to the shared root io when homeBase is absent (test /
-      // in-process host scenarios).
-      //
-      // Gated on `perUserUid` (default OFF): when off, `sessionIo` stays as `this.deps.io`, so the
-      // CLI runs as the cli-runner's own process UID (the host operator uid that owns the auth +
-      // neutral volumes) — no setuid, no foreign-uid spawn into a uid-1000-owned dir. The per-user
-      // setuid path requires a root container AND the (in-progress) file-permission model; see the
-      // `perUserUid` doc on EngineHostDeps.
+      // Allocate UID slots under the mutex; a failed allocation leaves no reservation. With the
+      // feature off, the shared sanitized IO preserves the single-identity deployment path.
       if (this.deps.perUserUid && this.deps.homeBase) {
         const slot = allocateUidSlot(this.deps.homeBase, key);
         const neutralDirForMigration = deriveNeutralDir(this.deps.neutralBase, key);
         migrateNeutralDir(neutralDirForMigration, slot.uid, slot.gid);
         sessionIo = createSanitizedTmuxIo(process.env, slot);
       }
-      this.reservations.add(key);
+      this.reservations.set(key, sourceGeneration);
     } catch (err) {
       if (err instanceof CliChatUnavailableError) throw err;
       throw new CliChatUnavailableError(
@@ -371,47 +396,33 @@ export class CliChatEngineHost {
       release();
     }
 
-    // (2) Out-of-lock mux-create + launch, BOUNDED by a timeout (§4.1.0a). The finally
-    // releases the reservation on success OR any failure OR timeout — a wedged tmux can
-    // never strand K and freeze the gate (fail-safe; release guaranteed by settle AND
-    // by timeout).
+    // Launch out of lock under a timeout; the finally block always releases the reservation.
 
-    // #1350: the engine is chosen by the ONE shared selector, so a provider configured
-    // `non_interactive` gets the one-shot (`claude -p` / agy exec) engine here exactly as it
-    // does in the in-process factory. Before this the runner ALWAYS built the tmux REPL
-    // engine, which made #1239's flip a no-op on every containerized deploy and took prod
-    // chat down completely.
-    const engine = await createChatEngine(params.provider as ProviderKind, key, sessionIo, {
-      mux: this.deps.mux,
-      homeBase: this.deps.homeBase,
-      ownsDrain: true,
-      executionMode: params.executionMode,
-      needsStructuredOutput: params.needsStructuredOutput,
-      // #1554: the pin is lifted — the RPC root selects the persistent adapter when a pool was
-      // wired in AND `chat.persistent_runtime.enabled` is currently on. The flag arrives per
-      // launch in the RPC params (the plan's live-reload channel for this topology), so flipping
-      // it drains to the bounded-fallback engine on the next launch without a redeploy. With no
-      // live-config holder wired, pool presence alone gates it (pre-#1554 behavior).
-      persistentRuntimeEnabled:
-        this.deps.persistentRuntimePool !== undefined &&
-        (this.deps.persistentLiveConfig?.enabled ?? true),
-      persistentPool: this.deps.persistentRuntimePool,
-      // #363: the 0600 token file the claude launch reads CLAUDE_CODE_OAUTH_TOKEN from at
-      // runtime (claude-scoped; only used by buildClaudeCommand, only if the file exists).
-      credentialFile: this.deps.homeBase
-        ? providerTokenPath(this.deps.homeBase, params.provider)
-        : undefined,
-      // #1157: surface silently-discarded composer input (char count only — never content) so
-      // a stuck previous turn is visible in daemon logs instead of vanishing without a trace.
-      onDiagnostic: (event) =>
-        console.warn(`[engine-host] ${key} diagnostic ${event.kind} paneChars=${event.paneChars}`)
-    });
+    // The shared selector keeps RPC and in-process execution-mode behavior aligned.
+    const engine =
+      source ??
+      (await createChatEngine(params.provider as ProviderKind, key, sessionIo, {
+        mux: this.deps.mux,
+        homeBase: this.deps.homeBase,
+        ownsDrain: true,
+        executionMode: params.executionMode,
+        needsStructuredOutput: params.needsStructuredOutput,
+        // Persistent runtime selection is controlled by the runner's live launch configuration.
+        persistentRuntimeEnabled:
+          this.deps.persistentRuntimePool !== undefined &&
+          (this.deps.persistentLiveConfig?.enabled ?? true),
+        persistentPool: this.deps.persistentRuntimePool,
+        credentialFile: this.deps.homeBase
+          ? providerTokenPath(this.deps.homeBase, params.provider)
+          : undefined,
+        onDiagnostic: (event) =>
+          console.warn(`[engine-host] ${key} diagnostic ${event.kind} paneChars=${event.paneChars}`)
+      }));
     const neutralDir = deriveNeutralDir(this.deps.neutralBase, key);
+    if (sourceGeneration) this.sourceEngines.add(engine);
 
-    // #342: seed the provider CLI's first-run state (claude onboarding + per-dir trust) BEFORE
-    // launch so the engine-launched REPL skips its wizard and starts authenticated (the token is
-    // already injected via the launch line). Per-provider; non-claude providers no-op.
-    if (this.deps.homeBase) {
+    // Normal chat seeds provider onboarding/trust; source launches use isolated policy state.
+    if (this.deps.homeBase && !sourceGeneration) {
       await ensureProviderLaunchReady(
         this.deps.homeBase,
         params.provider as ProviderKind,
@@ -419,11 +430,7 @@ export class CliChatEngineHost {
       );
     }
 
-    // Review B4 follow-up — `params.schema` present means this is a structured one-shot call
-    // (email extraction via `CliStructuredAdapter`). `createChatEngine` already built the bounded
-    // print engine for it (`needsStructuredOutput` above), so the launch call itself must be
-    // `launchStructured`, not the ordinary `launch` — the ordinary one never spawns the
-    // JSON-stream child process the structured submit/read verbs below depend on.
+    // Structured calls require the print engine's structured launch/read methods.
     if (params.schema && !hasStructuredMethods(engine)) {
       this.reservations.delete(key);
       throw new CliChatUnavailableError("CLI structured stream is unavailable");
@@ -440,7 +447,8 @@ export class CliChatEngineHost {
       replayBatch: params.replayBatch,
       replayAttemptId: params.replayAttemptId,
       // #367: forward the resolved model id so buildClaudeCommand emits `--model <id>`.
-      model: params.model
+      model: params.model,
+      sourceGeneration: sourceGeneration || undefined
     };
     // Keep a handle on the RAW launch promise (separate from the timeout race) so that a
     // mux-create which SUCCEEDS *after* the timeout already released the reservation can be
@@ -461,32 +469,29 @@ export class CliChatEngineHost {
       this.tombstoneOrder.delete(key);
       return { offset: result.offset };
     } catch (err) {
-      // POST-mux-create failure handling is done inside engine.launch (it kills the mux
-      // session by canonical name BEFORE removing the dir, §6.5). For a TIMEOUT the engine
-      // may still be mid-create; best-effort kill the canonical name + remove the dir so a
-      // late orphan can't enter liveKeys and block the gate (§4.1.0a).
-      await killMuxSessionByName(this.deps.io, key, this.deps.homeBase).catch(() => undefined);
-      await removeNeutralDir(this.deps.io, this.deps.neutralBase, key).catch(() => undefined);
+      // Source launches own a direct process and private home, not a mux session.
+      if (sourceGeneration) await engine.kill().catch(() => undefined);
+      else {
+        await killMuxSessionByName(this.deps.io, key, this.deps.homeBase).catch(() => undefined);
+        await removeNeutralDir(this.deps.io, this.deps.neutralBase, key).catch(() => undefined);
+      }
       this.engines.delete(key);
-      // LATE-SUCCESS ORPHAN REAP (§4.1.0a, ~the 144-147 race): when we timed out, the raw
-      // launch promise is still running and may create the jarv1s-live-<key> mux session
-      // AFTER the catch's one-shot kill (which fired before the create finished). Attach a
-      // continuation that kills the late orphan the instant the launch settles — so a wedged
-      // tmux that frees up late can never strand a foreign live session that blocks the gate.
+      // A launch can resolve after the timeout cleanup; reap its captured engine on arrival.
       if (timedOut) {
-        void launchPromise
-          .then(
-            () => true, // resolved late = a live mux session now exists; reap it
-            () => false // rejected late = no late session created; nothing to reap
-          )
-          .then(async (resolvedLate) => {
-            if (!resolvedLate) return;
+        void launchPromise.then(
+          async () => {
+            if (sourceGeneration) {
+              await engine.kill().catch(() => undefined);
+              return;
+            }
             await killMuxSessionByName(this.deps.io, key, this.deps.homeBase).catch(
               () => undefined
             );
             await removeNeutralDir(this.deps.io, this.deps.neutralBase, key).catch(() => undefined);
-            this.engines.delete(key);
-          });
+            if (this.engines.get(key) === engine) this.engines.delete(key);
+          },
+          () => undefined
+        );
       }
       if (err instanceof CliChatUnavailableError) throw err;
       throw new CliChatUnavailableError("could not start the live chat session");
@@ -499,7 +504,7 @@ export class CliChatEngineHost {
   private async currentLiveKeys(): Promise<Set<string>> {
     const byMux = await listLiveMuxSessions(this.deps.io, this.deps.homeBase);
     const set = new Set<string>(byMux);
-    for (const r of this.reservations) set.add(r);
+    for (const r of this.reservations.keys()) set.add(r);
     for (const key of this.engines.keys()) set.add(key);
     return set;
   }
@@ -769,19 +774,11 @@ export class CliChatEngineHost {
 
   // ─── login verbs (§L.2) — non-session; unified §L.6.1 exclusivity gate ─────────
 
-  /**
-   * §L.2.2 beginLogin: admit ONLY when no live chat session AND no other login is in flight
-   * (the §L.6.1 unified exclusivity gate, under the SAME admission mutex as launch). Reserve the
-   * single login slot inside the lock, then start the flow outside it. A blocked/no-adapter
-   * provider throws `LoginBadRequestError` (→ bad_request); a chat/login-busy rejection throws
-   * `CliChatUnavailableError` (→ unavailable). No wire-contract change.
-   *
-   * #2232: if a login for this SAME provider is already in flight (e.g. two begin requests fired
-   * back to back by a double-mounted dialog), this reports that flow's current status instead of
-   * refusing — the caller sees the login it already started, not an error. A different provider,
-   * or a login only visible as a stray disk session, still gets the busy rejection.
-   */
-  async beginLogin(provider: RpcProviderKind): Promise<RpcBeginLoginResult> {
+  /** Reserve under the admission mutex; reuse only an identical provider and login scope. */
+  async beginLogin(
+    provider: RpcProviderKind,
+    scope?: ProviderLoginScope
+  ): Promise<RpcBeginLoginResult> {
     const svc = this.deps.loginService;
     if (!svc) throw new LoginBadRequestError("login not available on this build");
     if (!svc.hasAdapter(provider)) {
@@ -796,39 +793,48 @@ export class CliChatEngineHost {
       }
       // One login at a time regardless of the single-user flag (one flow slot, §L.3.1).
       if (await svc.isLoginActive()) {
-        reuseLoginId = svc.activeLoginId(provider);
+        reuseLoginId = svc.activeLoginId(provider, scope);
         if (reuseLoginId === undefined) {
           throw new CliChatUnavailableError("a provider login is already in progress");
         }
       } else {
-        loginId = svc.reserve(provider); // SYNC slot claim inside the lock (§L.6.1)
+        loginId = svc.reserve(provider, scope); // SYNC slot claim inside the lock (§L.6.1)
       }
     } finally {
       release();
     }
-    if (reuseLoginId !== undefined) return svc.poll(provider, reuseLoginId);
+    if (reuseLoginId !== undefined) return svc.poll(provider, reuseLoginId, scope);
     // Start the flow OUTSIDE the lock (the reservation holds the slot). On any failure the
     // service clears the flow + reaps the session (§L.3.1).
     return svc.start(loginId!);
   }
 
   /** §L.2.3 pollLogin — re-derive status (probe + runtime smoke); a stale loginId ⇒ bad_request. */
-  pollLogin(provider: RpcProviderKind, loginId: string): Promise<RpcPollLoginResult> {
-    return this.requireLogin().poll(provider, loginId);
+  pollLogin(
+    provider: RpcProviderKind,
+    loginId: string,
+    scope?: ProviderLoginScope
+  ): Promise<RpcPollLoginResult> {
+    return this.requireLogin().poll(provider, loginId, scope);
   }
 
   /** §L.2.3 submitLoginToken — feed the pasted code argv-free (§L.6.3); a stale loginId ⇒ bad_request. */
   submitLoginToken(
     provider: RpcProviderKind,
     loginId: string,
-    token: string
+    token: string,
+    scope?: ProviderLoginScope
   ): Promise<RpcSubmitLoginTokenResult> {
-    return this.requireLogin().submitToken(provider, loginId, token);
+    return this.requireLogin().submitToken(provider, loginId, token, scope);
   }
 
   /** §L.2.3 cancelLogin — kill the login session + release the slot. Idempotent. */
-  async cancelLogin(provider: RpcProviderKind, loginId: string): Promise<RpcCancelLoginResult> {
-    await this.requireLogin().cancel(provider, loginId);
+  async cancelLogin(
+    provider: RpcProviderKind,
+    loginId: string,
+    scope?: ProviderLoginScope
+  ): Promise<RpcCancelLoginResult> {
+    await this.requireLogin().cancel(provider, loginId, scope);
     return { ok: true };
   }
 

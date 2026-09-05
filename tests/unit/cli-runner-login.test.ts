@@ -75,7 +75,7 @@ function makeLoginIo(
   const run = vi.fn(async (cmd: string, args: readonly string[]) => {
     calls.push({ cmd, args: [...args] });
     if (cmd === "tmux") {
-      const verb = args[0] === "-S" ? args[2] : args[0];
+      const verb = args[0] === "-S" ? (args[2] === "-f" ? args[4] : args[2]) : args[0];
       if (verb === "new-session") {
         // A gate lets a test wedge the session create past the start timeout (§L.3.1 late reap).
         if (opts.newSessionGate) await opts.newSessionGate;
@@ -140,6 +140,7 @@ function makeService(
     io,
     adapters: LOGIN_ADAPTERS,
     probe,
+    validateFreshToken: async () => true,
     homeBase,
     settleMs: 0,
     startTimeoutMs: 5_000,
@@ -566,6 +567,42 @@ describe("§L.6.1 unified exclusivity gate (engine-host)", () => {
     });
   }
 
+  it("binds every login verb to the same actor/config and rejects stale cancellation", async () => {
+    const f = makeLoginIo("https://claude.ai/oauth/authorize?code=abc");
+    const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
+    const host = makeHost(f.io, svc);
+    const scope = { actorUserId: "actor-a", providerConfigId: "config-a" };
+    const first = await host.beginLogin("anthropic", scope);
+    try {
+      expect((await host.beginLogin("anthropic", { ...scope })).loginId).toBe(first.loginId);
+      for (const other of [
+        undefined,
+        { ...scope, actorUserId: "actor-b" },
+        { ...scope, providerConfigId: "config-b" }
+      ]) {
+        await expect(host.beginLogin("anthropic", other)).rejects.toBeInstanceOf(
+          CliChatUnavailableError
+        );
+        await expect(host.pollLogin("anthropic", first.loginId, other)).rejects.toBeInstanceOf(
+          LoginBadRequestError
+        );
+        await expect(
+          host.submitLoginToken("anthropic", first.loginId, "synthetic-code", other)
+        ).rejects.toBeInstanceOf(LoginBadRequestError);
+        await expect(host.cancelLogin("anthropic", first.loginId, other)).rejects.toBeInstanceOf(
+          LoginBadRequestError
+        );
+      }
+      await expect(host.cancelLogin("anthropic", "stale-id", scope)).rejects.toBeInstanceOf(
+        LoginBadRequestError
+      );
+      expect(svc.activeLoginId("anthropic", scope)).toBe(first.loginId);
+      expect(f.live.has(`${LOGIN_SESSION_PREFIX}anthropic`)).toBe(true);
+    } finally {
+      await host.cancelLogin("anthropic", first.loginId, scope);
+    }
+  });
+
   it("rejects a chat launch while a login is in flight", async () => {
     const f = makeLoginIo("https://claude.ai/oauth/authorize?code=abc");
     const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
@@ -879,7 +916,7 @@ describe("#2027 first-run seeding runs before the login session opens", () => {
       io: {
         ...f.io,
         run: (async (cmd: string, args: readonly string[]) => {
-          const verb = args[0] === "-S" ? args[2] : args[0];
+          const verb = args[0] === "-S" ? (args[2] === "-f" ? args[4] : args[2]) : args[0];
           if (cmd === "tmux" && verb === "new-session") order.push("launch");
           return (f.io.run as unknown as (c: string, a: readonly string[]) => Promise<unknown>)(
             cmd,

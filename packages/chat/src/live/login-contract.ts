@@ -17,6 +17,8 @@
  * Grounded-on: login-contract spec FROZEN v1, install-contract FROZEN v2/R6, base FROZEN v2.
  */
 
+import type { ProviderLoginScope } from "@moss/shared";
+
 import type { RpcProviderKind } from "./rpc-contract.js";
 
 // ---------------------------------------------------------------------------
@@ -115,6 +117,7 @@ export type LoginFlowStatus =
 
 /** params for "beginLogin" (§L.2.2) — NON-SESSION (no sessionKey). */
 export interface RpcBeginLoginParams {
+  readonly scope?: ProviderLoginScope;
   readonly provider: RpcProviderKind;
 }
 /** result for "beginLogin" (§L.2.2). */
@@ -131,6 +134,7 @@ export interface RpcBeginLoginResult {
 
 /** params for "pollLogin" (§L.2.3). */
 export interface RpcPollLoginParams {
+  readonly scope?: ProviderLoginScope;
   readonly provider: RpcProviderKind;
   readonly loginId: string;
 }
@@ -145,6 +149,7 @@ export interface RpcPollLoginResult {
 
 /** params for "submitLoginToken" (paste mode, §L.2.3). The `token` is AUTH MATERIAL (§L.6.3). */
 export interface RpcSubmitLoginTokenParams {
+  readonly scope?: ProviderLoginScope;
   readonly provider: RpcProviderKind;
   readonly loginId: string;
   /**
@@ -166,6 +171,7 @@ export interface RpcSubmitLoginTokenResult {
 
 /** params for "cancelLogin" (§L.2.3). */
 export interface RpcCancelLoginParams {
+  readonly scope?: ProviderLoginScope;
   readonly provider: RpcProviderKind;
   readonly loginId: string;
 }

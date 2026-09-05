@@ -43,6 +43,11 @@ export * from "./rpc-contract.js";
 export * from "./login-contract.js";
 export * from "./install-contract.js";
 export * from "./errors.js";
+export {
+  parseGeminiSourceCredential,
+  readGeminiNativeCredential,
+  GEMINI_SOURCE_RESTRICTIONS
+} from "./gemini-source-policy.js";
 export * from "./private-transcript-cleanup.js";
 export * from "./terminal-rpc-client.js";
 // #1554 Decision 3 — the composition-root-owned idle-reap timer that drives
@@ -55,3 +60,5 @@ export * from "./persistent-runtime-pool.js";
 // per-call-fresh-io pattern `createRealEngineFactory` in `runtime.ts` uses), so cli-runner needs
 // the concrete runtime class, not just the pool that wraps it.
 export * from "./claude-persistent-runtime.js";
+
+export { CliSourceEngine, type SourceCredentialRefresh } from "./cli-source-engine.js";

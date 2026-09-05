@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import type { ConstructorOptions, PgBoss } from "pg-boss";
 import { pino, type Logger as PinoLogger } from "pino";
 import type { FastifyBaseLogger } from "fastify";
@@ -45,31 +44,16 @@ import {
   ExternalModuleJobReconciler,
   ExternalModuleWorkerRuntime,
   createExternalModuleDiscoveryHolder,
-  installModuleDraft,
-  resolveBuildSourceDir,
-  resolveModuleBuildsDir,
-  resolveModulesDir,
-  validateExternalModuleManifest
+  resolveModulesDir
 } from "@moss/module-registry/node";
-import {
-  AiRepository,
-  runModuleBuildStep,
-  TmuxMultiplexer,
-  type ProviderKind,
-  type TmuxIo
-} from "@moss/ai";
-import { createSanitizedTmuxIo } from "@moss/cli-runner";
+import { AiRepository, runModuleBuildStep, createAiSecretCipher } from "@moss/ai";
 import { ChatAttachmentsService } from "@moss/chat";
-import { ensureProviderLaunchReady } from "@moss/cli-runner/provider-first-run";
 import { NotificationsRepository, type CreateNotificationInput } from "@moss/notifications";
 import {
   createModuleCredentialSecretCipher,
   getModuleBuild,
-  SettingsRepository,
   touchModuleBuildActivity,
-  updateModuleBuildStatus,
-  appendModuleBuildFetchedUrl,
-  appendModuleBuildWrittenFile
+  updateModuleBuildStatus
 } from "@moss/settings";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
@@ -78,7 +62,7 @@ import { buildDiscoveryLookup } from "./external-module-discovery.js";
 import { createExternalBriefingInvoker } from "./external-module-invoke.js";
 import { createExternalModuleJobHandler } from "./external-module-job-handler.js";
 import { createIsModuleEnabled } from "./worker-module-gate.js";
-import { createModuleBuildLiveAgent } from "./module-build-live-agent.js";
+import { createModuleBuildSourceGenerator } from "./module-build-source.js";
 import {
   createRunModuleBuildStepForJob,
   ModuleBuildSafeError
@@ -116,6 +100,12 @@ export function logScheduleMode(): void {
   console.log(JSON.stringify({ event: "pgboss.schedule_mode", schedule: true }));
 }
 
+export function workshopExecutionUnavailable(): never {
+  throw new ModuleBuildSafeError(
+    "Workshop execution is unavailable until its isolated runtime is verified."
+  );
+}
+
 export interface WorkerHandle {
   readonly boss: PgBoss;
   shutdown(): Promise<void>;
@@ -125,27 +115,6 @@ export function resolveExternalWorkerConfig(env: NodeJS.ProcessEnv = process.env
   readonly modulesDir: string;
 } {
   return { modulesDir: resolveModulesDir(env) };
-}
-
-export function resolveModuleBuildCliHome(
-  env: NodeJS.ProcessEnv = process.env,
-  osHome: string = homedir()
-): string {
-  return (
-    resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? resolveMossEnv(env, "JARVIS_CLI_HOME") ?? osHome
-  );
-}
-
-/**
- * The module-build composition root's I/O boundary: every subprocess a module build launches
- * (tmux, the provider CLI, post-write build commands) runs with the sanitized allowlisted env
- * (§7.2), not the worker's full environment — closing the same door the chat path already closed.
- */
-export function createModuleBuildIo(
-  moduleBuildCliHome: string,
-  env: NodeJS.ProcessEnv = process.env
-): TmuxIo {
-  return createSanitizedTmuxIo({ ...env, HOME: moduleBuildCliHome });
 }
 
 /**
@@ -234,74 +203,26 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     );
   }
 
-  const moduleBuildsDir = resolveModuleBuildsDir(process.env);
-  const modulesDir = resolveModulesDir(process.env);
-  const moduleBuildCliHome = resolveModuleBuildCliHome(process.env);
-  const moduleBuildIo = createModuleBuildIo(moduleBuildCliHome, process.env);
-  const moduleBuildMux = new TmuxMultiplexer(moduleBuildIo, { homeBase: moduleBuildCliHome });
   const aiRepository = new AiRepository();
+  const moduleBuildCipher = createAiSecretCipher();
   const moduleBuildNotifications = new NotificationsRepository(
     undefined,
     createNotificationPreferencePort()
   );
-  const moduleBuildSettings = new SettingsRepository();
-  const builtInModuleIds = new Set(getBuiltInModuleManifests().map((manifest) => manifest.id));
   const runModuleBuildStepForJob = createRunModuleBuildStepForJob({
     dataContext,
     getModuleBuild,
     touchModuleBuildActivity,
     updateModuleBuildStatus,
-    prepareRunStepDeps: async (scopedDb) => {
-      const model = await aiRepository.selectChatModelForUser(scopedDb);
-      if (!model) throw new ModuleBuildSafeError("no chat model is configured for module build");
-      const moduleBuildLiveAgent = createModuleBuildLiveAgent({
-        io: moduleBuildIo,
-        mux: moduleBuildMux,
-        provider: model.provider_kind as ProviderKind,
-        ensureProviderLaunchReady: (provider, workingDir) =>
-          ensureProviderLaunchReady(moduleBuildCliHome, provider, workingDir)
-      });
-      return {
-        launchLiveAgent: moduleBuildLiveAgent,
-        resolveWorkingDir: (buildId) => resolveBuildSourceDir(moduleBuildsDir, buildId),
-        recordFetchedUrl: (buildId, url) => appendModuleBuildFetchedUrl(scopedDb, buildId, url),
-        recordWrittenFile: (buildId, path) => appendModuleBuildWrittenFile(scopedDb, buildId, path),
-        finishBuild: async (buildId, workingDir) => {
-          const current = await getModuleBuild(scopedDb, buildId);
-          if (!current || current.status === "cancelled") {
-            throw new ModuleBuildSafeError("module build was cancelled");
-          }
-          const installed = await installModuleDraft(
-            {
-              modulesDir,
-              validateExternalModuleManifest,
-              isModuleIdAvailable: async (moduleId) =>
-                !builtInModuleIds.has(moduleId) &&
-                !(await moduleBuildSettings.listExternalModuleStates(scopedDb)).some(
-                  (module) => module.id === moduleId
-                ),
-              writeDraftRow: ({ id, manifestHash, packageHash, ownerUserId }) =>
-                moduleBuildSettings.setExternalModuleDraft(scopedDb, {
-                  id,
-                  manifestHash,
-                  packageHash,
-                  ownerUserId,
-                  actorUserId: current.ownerUserId,
-                  requestId: `module-build:${buildId}:install`
-                })
-            },
-            workingDir,
-            current.ownerUserId
-          );
-          if (!installed.ok) {
-            throw new ModuleBuildSafeError(
-              `generated module failed validation: ${installed.errors.join("; ")}`
-            );
-          }
-          return { moduleId: installed.moduleId };
-        }
-      };
-    },
+    prepareRunStepDeps: async (scopedDb, access) => ({
+      assertExecutionAvailable: workshopExecutionUnavailable,
+      generateSource: createModuleBuildSourceGenerator(scopedDb, access.actorUserId, {
+        repository: aiRepository,
+        cipher: moduleBuildCipher,
+        logger: workerLogger
+      }),
+      acceptSource: workshopExecutionUnavailable
+    }),
     runStep: runModuleBuildStep,
     notifyFinished: (scopedDb, buildId) =>
       moduleBuildNotifications.create(scopedDb, buildModuleBuildNotification(buildId, "finished")),

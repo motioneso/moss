@@ -1,0 +1,13 @@
+{
+  "name": "moss-workshop-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "esbuild": "0.25.12",
+    "playwright-core": "1.60.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "lucide-react": "0.468.0"
+  }
+}

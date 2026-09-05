@@ -299,13 +299,13 @@ straight to "stopped working".
 Each source row in Sports settings shows a photo status next to its health badge, and Moss can
 read it through the sources tool. The states and their exact wording:
 
-| Status          | Row wording               | Shown when                                                    |
-| --------------- | ------------------------- | ------------------------------------------------------------- |
-| working         | Photos: working           | Last refresh attached a photo to at least one story.          |
-| none            | Photos: none found        | Last refresh had stories and none got a photo.                |
-| previewing      | Photos: preview ready     | A verified preview is waiting for Use these photos or Not right. |
-| stopped_working | Photos: stopped working   | Moss's own re-look also found nothing.                        |
-| pending         | Photos: checking          | No refresh with stories has completed yet.                    |
+| Status          | Row wording             | Shown when                                                       |
+| --------------- | ----------------------- | ---------------------------------------------------------------- |
+| working         | Photos: working         | Last refresh attached a photo to at least one story.             |
+| none            | Photos: none found      | Last refresh had stories and none got a photo.                   |
+| previewing      | Photos: preview ready   | A verified preview is waiting for Use these photos or Not right. |
+| stopped_working | Photos: stopped working | Moss's own re-look also found nothing.                           |
+| pending         | Photos: checking        | No refresh with stories has completed yet.                       |
 
 A source whose photos come from a rule Moss found shows plain "Photos: working"; the owner
 does not need to know how. The row offers "Stop using Moss's photos" only for such a source,

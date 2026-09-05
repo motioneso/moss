@@ -16,6 +16,7 @@ import { createModuleCredentialSecretCipher } from "@moss/settings";
 import type { Kysely } from "kysely";
 
 import { createModuleWorkerAiBridge } from "../../apps/worker/src/external-module-ai-bridge.js";
+import { createExternalBriefingInvoker } from "../../apps/worker/src/external-module-invoke.js";
 import {
   createExternalModuleJobHandler,
   type ExternalModuleJobHandlerDeps
@@ -103,6 +104,7 @@ interface Captured {
 // runtime.invoke is stubbed so the test can drive the rpc the module would see.
 function buildHandler(overrides: Partial<ExternalModuleJobHandlerDeps> = {}): {
   handler: (job: Job<ExternalModuleJobPayload>) => Promise<unknown>;
+  briefing: ReturnType<typeof createExternalBriefingInvoker>;
   invocations: Captured[];
 } {
   const invocations: Captured[] = [];
@@ -128,7 +130,11 @@ function buildHandler(overrides: Partial<ExternalModuleJobHandlerDeps> = {}): {
     }),
     ...overrides
   };
-  return { handler: createExternalModuleJobHandler(deps), invocations };
+  return {
+    handler: createExternalModuleJobHandler(deps),
+    briefing: createExternalBriefingInvoker(deps),
+    invocations
+  };
 }
 
 function jobOf(data: unknown, id = "job-1"): Job<ExternalModuleJobPayload> {
@@ -150,6 +156,27 @@ async function capturedRpc(): Promise<RpcHandler> {
 }
 
 describe("external module queue job handler", () => {
+  it("invokes an active owner's draft with matching hashes", async () => {
+    await bootstrap.query(
+      `UPDATE app.external_modules
+       SET status = 'draft', owner_user_id = $1, enabled_at = NULL, enabled_by = NULL
+       WHERE id = 'acme-a'`,
+      [ids.userA]
+    );
+    try {
+      const { handler, invocations } = buildHandler();
+      await handler(jobOf(validPayload));
+      expect(invocations).toHaveLength(1);
+    } finally {
+      await bootstrap.query(
+        `UPDATE app.external_modules
+         SET status = 'enabled', owner_user_id = NULL, enabled_at = now(), enabled_by = $1
+         WHERE id = 'acme-a'`,
+        [ids.adminUser]
+      );
+    }
+  });
+
   it("invokes the runtime with metadata-only input and a live rpc", async () => {
     const { handler, invocations } = buildHandler();
     await handler(jobOf(validPayload));
@@ -190,6 +217,45 @@ describe("external module queue job handler", () => {
     });
     await expect(drifted.handler(jobOf(validPayload))).rejects.toThrow(/declined: hash-mismatch/);
     expect(drifted.invocations).toHaveLength(0);
+  });
+
+  it("allows write-risk scheduled jobs to persist declared user storage", async () => {
+    const { handler, invocations } = buildHandler();
+    await handler(jobOf(validPayload));
+    const rpc = invocations[0]!.rpc;
+    const params = { namespace: "acme-a.state", scope: "user", key: "scheduled" };
+    try {
+      await expect(
+        rpc("kv.set", { ...params, value: { word: "saved" } }, () => {})
+      ).resolves.toBeUndefined();
+      await expect(rpc("kv.get", params, () => {})).resolves.toEqual({ word: "saved" });
+    } finally {
+      await rpc("kv.delete", params, () => {});
+    }
+  });
+
+  it("keeps read-risk briefing invocations from mutating declared user storage", async () => {
+    const { briefing, invocations } = buildHandler();
+    await briefing({
+      moduleId: moduleA.id,
+      handler: "briefing",
+      actorUserId: ids.userA,
+      requestId: "read-risk-proof",
+      section: "morning"
+    });
+    expect(invocations).toHaveLength(1);
+    await expect(
+      invocations[0]!.rpc(
+        "kv.set",
+        {
+          namespace: "acme-a.state",
+          scope: "user",
+          key: "saved",
+          value: { word: "immutable" }
+        },
+        () => undefined
+      )
+    ).rejects.toMatchObject({ code: "forbidden_kv_mutation" });
   });
 });
 

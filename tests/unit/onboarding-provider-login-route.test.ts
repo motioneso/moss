@@ -41,6 +41,7 @@ interface BuildOptions {
   readonly loginability?: OnboardingLoginDependencies["loginability"];
   readonly loginClient?: Partial<OnboardingLoginDependencies["loginClient"]>;
   readonly omitLogin?: boolean;
+  readonly assertProviderConfig?: OnboardingLoginDependencies["assertProviderConfig"];
 }
 
 function buildServer(options: BuildOptions = {}): { server: FastifyInstance; log: CallLog } {
@@ -119,7 +120,14 @@ function buildServer(options: BuildOptions = {}): { server: FastifyInstance; log
     assertBootstrapOwnerAdminUser,
     requireRequestId: (ctx) => ctx.requestId ?? "req",
     handleRouteError: (error, reply) => handleRouteError(error, reply),
-    onboardingLogin: options.omitLogin ? undefined : { loginability, loginClient, stateStore }
+    onboardingLogin: options.omitLogin
+      ? undefined
+      : {
+          loginability,
+          loginClient,
+          stateStore,
+          assertProviderConfig: options.assertProviderConfig
+        }
   };
 
   const server = Fastify({ logger: false });
@@ -242,5 +250,67 @@ describe("onboarding provider-login routes (§L.5)", () => {
       providerKind: "anthropic"
     });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+describe("configuration-bound login admission", () => {
+  it.each(["begin", "poll", "submit-token", "cancel"])(
+    "verifies ownership before %s reaches the runner",
+    async (verb) => {
+      const { server, log } = buildServer({
+        assertProviderConfig: async (db, provider, scope) => {
+          expect(db).toBe(SCOPED_DB);
+          expect(provider).toBe("anthropic");
+          expect(scope).toEqual({ actorUserId: ADMIN_USER_ID, providerConfigId: "foreign-config" });
+          throw new HttpError(404, "Provider login configuration is unavailable.");
+        },
+        loginClient: {
+          poll: async () => {
+            throw new Error("must not reach runner");
+          },
+          cancel: async () => {
+            throw new Error("must not reach runner");
+          }
+        }
+      });
+      try {
+        const body = {
+          providerKind: "anthropic",
+          providerConfigId: "foreign-config",
+          ...(verb !== "begin" ? { loginId: "login-1" } : {}),
+          ...(verb === "submit-token" ? { token: "synthetic-code" } : {})
+        };
+        const res = await post(server, `/api/onboarding/provider-login/${verb}`, ADMIN_TOKEN, body);
+        expect(res.statusCode).toBe(404);
+        expect(log.events).toEqual(["admin-gate"]);
+      } finally {
+        await server.close();
+      }
+    }
+  );
+
+  it("forwards the server actor and clicked configuration after verification", async () => {
+    const { server } = buildServer({
+      assertProviderConfig: async () => {},
+      loginClient: {
+        begin: async (provider, scope) => {
+          expect(provider).toBe("anthropic");
+          expect(scope).toEqual({ actorUserId: ADMIN_USER_ID, providerConfigId: "owned-config" });
+          return { loginId: "login-1", status: "awaiting_token" };
+        }
+      }
+    });
+    try {
+      expect(
+        (
+          await post(server, "/api/onboarding/provider-login/begin", ADMIN_TOKEN, {
+            providerKind: "anthropic",
+            providerConfigId: "owned-config"
+          })
+        ).statusCode
+      ).toBe(200);
+    } finally {
+      await server.close();
+    }
   });
 });

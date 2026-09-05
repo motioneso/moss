@@ -22,6 +22,7 @@ import {
 } from "@moss/db";
 import {
   MODULE_WORKER_SERVICE_KEY,
+  WORKSHOP_PLAN_SERVICE_KEY,
   isModuleServiceKey,
   type ActionAuditInputSummary,
   type AiCapabilityRouteReason,
@@ -37,7 +38,11 @@ import {
 import type { EncryptedAiSecret } from "./crypto.js";
 import type { MossActionPermissionTier } from "@moss/module-sdk";
 import { parseCapabilityRouteMap } from "./capability-route-map.js";
-import { parseModuleServiceBindingMap, parseServiceBindingMap } from "./service-binding-map.js";
+import {
+  LEGACY_WORKSHOP_PLAN_SERVICE_KEY,
+  parseModuleServiceBindingMap,
+  parseServiceBindingMap
+} from "./service-binding-map.js";
 import {
   CHAT_MODEL_OVERRIDE_PREFERENCE_KEY,
   CHAT_MODEL_OVERRIDE_SETTING_KEY,
@@ -827,6 +832,25 @@ export class AiRepository {
     return parseModuleServiceBindingMap(row?.value);
   }
 
+  /** AI-owned, idempotent migration; called only from the authenticated admin settings API. */
+  async migrateWorkshopPlanningBinding(scopedDb: DataContextDb): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await scopedDb.db
+      .updateTable("app.instance_settings")
+      .set({
+        value: sql<Record<string, unknown>>`
+        (value - ${LEGACY_WORKSHOP_PLAN_SERVICE_KEY}) ||
+        case when value ? ${WORKSHOP_PLAN_SERVICE_KEY} then '{}'::jsonb
+          else jsonb_build_object(${WORKSHOP_PLAN_SERVICE_KEY}::text, value -> ${LEGACY_WORKSHOP_PLAN_SERVICE_KEY}) end
+      `,
+        updated_at: new Date()
+      })
+      .where("key", "=", AI_SERVICE_BINDINGS_SETTING_KEY)
+      .where(sql<boolean>`value ? ${LEGACY_WORKSHOP_PLAN_SERVICE_KEY}`)
+      .where(sql<boolean>`jsonb_typeof(value) = 'object'`)
+      .execute();
+  }
+
   async getModuleServiceBinding(
     scopedDb: DataContextDb,
     service: ModuleServiceKey
@@ -849,7 +873,10 @@ export class AiRepository {
     await scopedDb.db
       .updateTable("app.instance_settings")
       .set({
-        value: sql`instance_settings.value - ${service}`,
+        value:
+          service === WORKSHOP_PLAN_SERVICE_KEY
+            ? sql`instance_settings.value - ${service} - ${LEGACY_WORKSHOP_PLAN_SERVICE_KEY}`
+            : sql`instance_settings.value - ${service}`,
         updated_by_user_id: actorUserId,
         updated_at: new Date()
       })
@@ -1415,6 +1442,7 @@ export class AiRepository {
         .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
         .where("models.tier", "=", t)
         // 0214: the newest RELEASE wins inside a tier; registration order only breaks ties.
+        .clearOrderBy()
         .orderBy(sql`models.released_at desc nulls last`)
         .orderBy("models.created_at", "desc")
         .orderBy("models.id", "desc")
@@ -1429,6 +1457,7 @@ export class AiRepository {
       .where("providers.status", "=", "active")
       .where("providers.purpose", "=", "assistant")
       .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
+      .clearOrderBy()
       .orderBy(sql`models.released_at desc nulls last`)
       .orderBy("models.created_at", "desc")
       .orderBy("models.id", "desc")
@@ -1755,7 +1784,8 @@ export class AiRepository {
    */
   async selectProviderWithCredential(
     scopedDb: DataContextDb,
-    providerId: string
+    providerId: string,
+    options?: { readonly ownerOnly?: true }
   ): Promise<AiProviderWithSealedCredential | undefined> {
     assertDataContextDb(scopedDb);
 
@@ -1782,6 +1812,9 @@ export class AiRepository {
         "encrypted_credential"
       ])
       .where("id", "=", providerId)
+      .$if(options?.ownerOnly === true, (query) =>
+        query.where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      )
       .executeTakeFirst() as Promise<AiProviderWithSealedCredential | undefined>;
   }
 

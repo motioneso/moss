@@ -48,11 +48,14 @@ export interface RunModuleBuildStepForJobDeps {
   readonly getModuleBuild: typeof getModuleBuildFn;
   readonly touchModuleBuildActivity: typeof touchModuleBuildActivityFn;
   readonly updateModuleBuildStatus: typeof updateModuleBuildStatusFn;
-  /** Builds the step deps (live agent, working dir, fetched/written recorders) for this build. */
-  readonly prepareRunStepDeps: (scopedDb: DataContextDb) => Promise<RunModuleBuildStepDeps>;
+  readonly prepareRunStepDeps: (
+    scopedDb: DataContextDb,
+    access: AccessContext
+  ) => Promise<RunModuleBuildStepDeps>;
   readonly runStep: (
     deps: RunModuleBuildStepDeps,
-    build: ModuleBuild
+    build: ModuleBuild,
+    signal?: AbortSignal
   ) => Promise<ModuleBuildStepResult>;
   readonly notifyFinished: (scopedDb: DataContextDb, buildId: string) => Promise<unknown>;
   readonly notifyFailed: (scopedDb: DataContextDb, buildId: string) => Promise<unknown>;
@@ -64,6 +67,7 @@ export function createRunModuleBuildStepForJob(
   return async (payload) => {
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     let heartbeatPending = false;
+    const controller = new AbortController();
     const access: AccessContext = {
       actorUserId: payload.actorUserId,
       requestId: `module-build:${payload.buildId}`
@@ -71,28 +75,41 @@ export function createRunModuleBuildStepForJob(
     try {
       return await deps.dataContext.withDataContext(access, async (scopedDb) => {
         const build = await deps.getModuleBuild(scopedDb, payload.buildId);
-        if (!build) throw new ModuleBuildSafeError("module build was not found");
+        if (!build || build.ownerUserId !== access.actorUserId)
+          throw new ModuleBuildSafeError("module build was not found");
         if (build.status === "cancelled" || build.status === "failed") {
           return { deferred: false };
         }
 
-        const stepDeps = await deps.prepareRunStepDeps(scopedDb);
+        const stepDeps = await deps.prepareRunStepDeps(scopedDb, access);
         heartbeat = setInterval(() => {
           if (heartbeatPending) return;
           heartbeatPending = true;
           void deps.dataContext
-            .withDataContext(access, (heartbeatDb) =>
-              deps.touchModuleBuildActivity(heartbeatDb, build.id)
-            )
-            .catch(() => {})
+            .withDataContext(access, async (heartbeatDb) => {
+              const current = await deps.getModuleBuild(heartbeatDb, build.id);
+              if (controller.signal.aborted) return;
+              if (
+                !current ||
+                current.ownerUserId !== access.actorUserId ||
+                current.status === "cancelled" ||
+                current.status === "failed"
+              ) {
+                controller.abort();
+                return;
+              }
+              await deps.touchModuleBuildActivity(heartbeatDb, build.id);
+            })
+            .catch(() => controller.abort())
             .finally(() => {
               heartbeatPending = false;
             });
         }, 5_000);
-        const result = await deps.runStep(stepDeps, build);
+        const result = await deps.runStep(stepDeps, build, controller.signal);
         if (await wasCancelledSince(deps, scopedDb, build.id)) {
           return { deferred: false };
         }
+        controller.signal.throwIfAborted();
         const statusInput: UpdateModuleBuildStatusInput = {
           status: result.continuation ? "building" : "awaiting_change",
           ...(result.continuation
@@ -108,7 +125,8 @@ export function createRunModuleBuildStepForJob(
     } catch (error) {
       await deps.dataContext.withDataContext(access, async (scopedDb) => {
         const build = await deps.getModuleBuild(scopedDb, payload.buildId);
-        if (!build || build.status === "cancelled") return;
+        if (!build || build.ownerUserId !== access.actorUserId || build.status === "cancelled")
+          return;
         await deps.updateModuleBuildStatus(scopedDb, build.id, {
           status: "failed",
           error: safeModuleBuildErrorMessage(error)
@@ -118,6 +136,7 @@ export function createRunModuleBuildStepForJob(
       throw error;
     } finally {
       if (heartbeat) clearInterval(heartbeat);
+      controller.abort();
     }
   };
 }

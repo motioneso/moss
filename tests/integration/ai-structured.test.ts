@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
+import Fastify from "fastify";
 
 import {
   AiRepository,
@@ -12,6 +13,7 @@ import { DataContextRunner, createDatabase, type AccessContext, type MossDatabas
 import { createApiServer } from "../../apps/api/src/server.js";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { createModuleBuildSourceGenerator } from "../../apps/worker/src/module-build-source.js";
 
 // #915 slice 3: module service bindings, service-aware resolution, and generateStructured.
 // Suites are STATEFUL and order-dependent (shared instance_settings blob + seeded models) —
@@ -105,6 +107,137 @@ afterAll(async () => {
   globalThis.fetch = realFetch;
   if (previousSecretKey === undefined) delete process.env.JARVIS_AI_SECRET_KEY;
   else process.env.JARVIS_AI_SECRET_KEY = previousSecretKey;
+});
+
+describe("Workshop source credential ownership", () => {
+  it("restricts credential lookup to the authenticated database actor", async () => {
+    await dataContext.withDataContext(adminContext(), async (db) => {
+      const owned = await repository.selectProviderWithCredential(db, providerId, {
+        ownerOnly: true
+      });
+      expect(owned?.id).toBe(providerId);
+      expect(owned?.owner_user_id).toBe(ids.adminUser);
+    });
+    await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "workshop-foreign-provider" },
+      async (db) => {
+        expect(
+          await repository.selectProviderWithCredential(db, providerId, { ownerOnly: true })
+        ).toBeUndefined();
+      }
+    );
+  });
+
+  it("routes real HTTP source generation with owner credentials and rejects foreign actors and conflicting pins", async () => {
+    const provider = Fastify({ logger: false, bodyLimit: 131_072, requestTimeout: 5_000 });
+    const received: string[] = [];
+    const source = { files: [{ path: "SPEC.md", content: "Synthetic owner-only proposal." }] };
+    provider.post<{ Body: { model: string; messages: unknown; tools?: unknown } }>(
+      "/v1/chat/completions",
+      async (request) => {
+        expect(request.headers.authorization).toBe("Bearer workshop-http-synthetic-secret");
+        expect(JSON.stringify(request.body.messages)).toContain("workshop-owner-plan");
+        expect(JSON.stringify(request.body.messages)).not.toContain("synthetic-secret");
+        expect(request.body.tools).toBeUndefined();
+        received.push(request.body.model);
+        return {
+          choices: [{ message: { content: JSON.stringify(source) } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        };
+      }
+    );
+    const baseUrl = await provider.listen({ host: "127.0.0.1", port: 0 });
+    const blockedFetch = globalThis.fetch;
+    let fixtureProviderId: string | undefined;
+    // Exercise the default production HTTP adapter, allowing only this synthetic endpoint.
+    globalThis.fetch = (input, init) => {
+      if (String(input) !== `${baseUrl}/v1/chat/completions`) {
+        throw new Error("network disabled outside Workshop fixture");
+      }
+      return realFetch(input, { ...init, redirect: "error" });
+    };
+    try {
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/ai/providers",
+        headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+        payload: {
+          providerKind: "openai-compatible",
+          displayName: "Workshop local HTTP fixture",
+          baseUrl,
+          credentialPayload: { apiKey: "workshop-http-synthetic-secret" }
+        }
+      });
+      expect(created.statusCode).toBe(201);
+      expect(created.json().provider.baseUrl).toBe(baseUrl);
+      fixtureProviderId = created.json().provider.id as string;
+      const reasoning = await seedModel(
+        fixtureProviderId,
+        "workshop-http-reasoning",
+        ["json"],
+        "reasoning"
+      );
+      const interactive = await seedModel(
+        fixtureProviderId,
+        "workshop-http-interactive",
+        ["json"],
+        "interactive"
+      );
+      await dataContext.withDataContext(adminContext(), async (db) => {
+        await repository.setServiceBinding(
+          db,
+          "module.workshop.plan",
+          { kind: "model", modelId: reasoning },
+          ids.adminUser
+        );
+        await repository.setServiceBinding(
+          db,
+          "module.workshop",
+          { kind: "model", modelId: interactive },
+          ids.adminUser
+        );
+      });
+      const generate = (actorUserId: string, step: "writing_spec" | "writing_code") =>
+        dataContext.withDataContext({ actorUserId, requestId: "workshop-http-proof" }, (db) =>
+          createModuleBuildSourceGenerator(db, actorUserId, {
+            repository,
+            cipher: createAiSecretCipher(process.env)
+          })({ step, plan: { description: "workshop-owner-plan" } })
+        );
+
+      await expect(generate(ids.adminUser, "writing_spec")).resolves.toEqual(source);
+      await expect(generate(ids.adminUser, "writing_code")).resolves.toEqual(source);
+      await expect(generate(ids.userA, "writing_code")).rejects.toThrow("owner-bound connection");
+      expect(received).toEqual(["workshop-http-reasoning", "workshop-http-interactive"]);
+
+      await dataContext.withDataContext(adminContext(), (db) =>
+        repository.setAdminPinnedModel(db, reasoning)
+      );
+      await expect(generate(ids.adminUser, "writing_code")).resolves.toEqual(source);
+      await dataContext.withDataContext(adminContext(), (db) =>
+        repository.setAdminPinnedModel(db, interactive)
+      );
+      await expect(generate(ids.adminUser, "writing_spec")).rejects.toThrow(
+        "owner-bound connection"
+      );
+      expect(received).toEqual([
+        "workshop-http-reasoning",
+        "workshop-http-interactive",
+        "workshop-http-reasoning"
+      ]);
+    } finally {
+      globalThis.fetch = blockedFetch;
+      await provider.close();
+      await dataContext.withDataContext(adminContext(), async (db) => {
+        await repository.setAdminPinnedModel(db, null);
+        await repository.deleteModuleServiceBinding(db, "module.workshop", ids.adminUser);
+        await repository.deleteModuleServiceBinding(db, "module.workshop.plan", ids.adminUser);
+        if (fixtureProviderId) {
+          await repository.updateProvider(db, fixtureProviderId, { status: "disabled" });
+        }
+      });
+    }
+  });
 });
 
 describe("module service binding CRUD (repository)", () => {
@@ -260,6 +393,113 @@ describe("resolveModelForService precedence", () => {
 
 describe("module service binding routes", () => {
   const auth = { authorization: `Bearer ${ids.sessionAdmin}` };
+
+  it("migrates legacy Workshop planning via admin API, preserves a new binding, and never resurrects deletion", async () => {
+    const legacy = "module.moss.workshop-build-plan";
+    const current = "module.workshop.plan";
+    try {
+      for (const explicit of [false, true]) {
+        await dataContext.withDataContext(adminContext(), async (db) => {
+          await repository.deleteModuleServiceBinding(db, current, ids.adminUser);
+          await repository.setServiceBinding(
+            db,
+            legacy,
+            { kind: "mode", tier: "reasoning" },
+            ids.adminUser
+          );
+          if (explicit)
+            await repository.setServiceBinding(
+              db,
+              current,
+              { kind: "mode", tier: "interactive" },
+              ids.adminUser
+            );
+          expect(await repository.getModuleServiceBinding(db, current)).toEqual({
+            kind: "mode",
+            tier: explicit ? "interactive" : "reasoning"
+          });
+        });
+        for (let count = 0; count < 2; count += 1) {
+          const response = await server.inject({
+            method: "GET",
+            url: "/api/ai/service-bindings",
+            headers: auth
+          });
+          expect(response.statusCode, response.body).toBe(200);
+          expect(response.json().bindings[current]).toEqual({
+            kind: "mode",
+            tier: explicit ? "interactive" : "reasoning"
+          });
+          expect(response.json().bindings).not.toHaveProperty(legacy);
+        }
+        await dataContext.withDataContext(adminContext(), async (db) => {
+          const stored = await db.db
+            .selectFrom("app.instance_settings")
+            .select("value")
+            .where("key", "=", "ai.service_bindings")
+            .executeTakeFirstOrThrow();
+          expect(stored.value).not.toHaveProperty(legacy);
+        });
+      }
+      await dataContext.withDataContext(adminContext(), (db) =>
+        repository.setServiceBinding(db, legacy, { kind: "mode", tier: "reasoning" }, ids.adminUser)
+      );
+      const deleted = await server.inject({
+        method: "DELETE",
+        url: `/api/ai/services/${current}/binding`,
+        headers: auth
+      });
+      expect(deleted.statusCode, deleted.body).toBe(200);
+      const list = await server.inject({
+        method: "GET",
+        url: "/api/ai/service-bindings",
+        headers: auth
+      });
+      expect(list.json().bindings).not.toHaveProperty(current);
+    } finally {
+      await dataContext.withDataContext(adminContext(), (db) =>
+        repository.deleteModuleServiceBinding(db, current, ids.adminUser)
+      );
+    }
+  });
+
+  it("round-trips the installed Workshop planning key and rejects a selected non-reasoning route before provider access", async () => {
+    const service = "module.workshop.plan";
+    try {
+      const put = await server.inject({
+        method: "PUT",
+        url: `/api/ai/services/${service}/binding`,
+        headers: auth,
+        payload: { binding: { kind: "model", modelId: modelEconomyJsonId } }
+      });
+      expect(put.statusCode, put.body).toBe(200);
+      const result = await dataContext.withDataContext(adminContext(), (db) =>
+        generateStructured(
+          db,
+          {
+            service,
+            schema: { type: "object" },
+            prompt: "plan",
+            tierHint: "reasoning",
+            requiredTier: "reasoning"
+          },
+          {
+            repository,
+            cipher: {
+              decryptJson: () => {
+                throw new Error("must reject before credential access");
+              }
+            }
+          }
+        )
+      );
+      expect(result).toEqual({ ok: false, error: "needs_config" });
+    } finally {
+      await dataContext.withDataContext(adminContext(), (db) =>
+        repository.deleteModuleServiceBinding(db, service, ids.adminUser)
+      );
+    }
+  });
 
   it("PUT + GET round-trip a module.worker binding (fjs must not strip module keys)", async () => {
     const put = await server.inject({

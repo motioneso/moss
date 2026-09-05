@@ -16,6 +16,7 @@ import {
 import type { ChatRecordKind, CliChatEngine, EngineLaunchOpts, TranscriptRecord } from "./types.js";
 import { writeClaudeOneShotPermissionHook } from "./claude-permission-hook.js";
 import { vaultReadOnlyToolPatterns } from "./vault-allowlist.js";
+import { CliSourceEngine } from "./cli-source-engine.js";
 
 const PROMPT_FILENAME = ".jarvis-claude-print-prompt.txt";
 const PERSONA_FILENAME = "persona.md";
@@ -87,6 +88,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   private structuredProcess: ChildProcessWithoutNullStreams | null = null;
   private structuredOutput = "";
   private structuredExited = false;
+  private sourceEngine: CliSourceEngine | null = null;
   private hasSubmitted = false;
   /** #1353 — one warning per unreadable-transcript streak, not one per 25ms poll. */
   private warnedUnreadable = false;
@@ -190,9 +192,16 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   }
 
   async launchStructured(
-    opts: EngineLaunchOpts & { readonly schema: Record<string, unknown> }
+    opts: EngineLaunchOpts & {
+      readonly schema: Record<string, unknown>;
+      readonly sourceGeneration?: true;
+    }
   ): Promise<{ readonly offset: number }> {
     this.launchOpts = opts;
+    if (opts.sourceGeneration) {
+      this.sourceEngine = new CliSourceEngine("anthropic", this.credentialFile);
+      return this.sourceEngine.launchStructured(opts);
+    }
     this.personaPath = await this.resolvePersonaPath(opts);
     const command = await this.buildStructuredCommand(opts);
     const child = spawn("bash", ["-lc", command], {
@@ -218,6 +227,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   }
 
   async submitStructured(text: string): Promise<void> {
+    if (this.sourceEngine) return this.sourceEngine.submitStructured(text);
     const child = this.structuredProcess;
     if (child === null || child.stdin.destroyed) {
       throw new Error("ClaudePrintChatEngine structured stream is unavailable");
@@ -236,6 +246,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     readonly offset: number;
     readonly complete: boolean;
   }> {
+    if (this.sourceEngine) return this.sourceEngine.readStructured(afterOffset);
     const slice = this.structuredOutput.slice(afterOffset);
     const lines = slice.split("\n");
     const completeLines = lines.slice(0, -1);
@@ -295,6 +306,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   }
 
   async isAlive(): Promise<boolean> {
+    if (this.sourceEngine) return this.sourceEngine.isAlive();
     if (this.structuredProcess !== null) {
       return this.structuredProcess.exitCode === null && this.structuredProcess.signalCode === null;
     }
@@ -306,6 +318,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   }
 
   async interrupt(): Promise<void> {
+    if (this.sourceEngine) return this.sourceEngine.interrupt();
     if (this.structuredProcess !== null) {
       this.structuredProcess.kill("SIGINT");
       return;
@@ -314,6 +327,11 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   }
 
   async kill(): Promise<void> {
+    if (this.sourceEngine) return this.sourceEngine.kill();
+    await this.killProcess();
+  }
+
+  private async killProcess(): Promise<void> {
     const child = this.structuredProcess ?? this.currentProcess;
     this.structuredProcess = null;
     this.currentProcess = null;

@@ -1,0 +1,11 @@
+# Workshop R1b — Spec review
+
+Reviewed the 24-file frozen WIP patch `/tmp/workshop-r1b-review.patch` against fixed base `c372784983038ed3e722e7edb75cec54333efde0` (no new commits), in `~/Jarv1s/.claude/worktrees/workshop-phase-a-0904`.
+
+**Verdict: no concrete Spec defects found in this bounded candidate; full R1b acceptance remains incomplete.**
+
+- **Missing/partial requirements — acceptance evidence, not implementation findings.** The plan's R1b row (`docs/superpowers/plans/2026-09-04-workshop-projects-and-supervised-builds.md:307`) requires “For Claude, Codex and Gemini, installed-version evidence” and “Test actual runner composition.” Gemini's four installed-engine fixture cases pass, including native refresh, forced-tool rejection and cancellation after refresh. They do not establish real browser/vendor login or deployed actor-scoped Gemini RPC behavior. `packages/cli-runner/src/engine-host.ts:312` correctly keeps Gemini and Codex source dispatch unavailable. Codex's unsafe native-tool policy remains an unresolved provider acceptance item; all-provider scope has not been dropped.
+- **Unrequested behavior/scope creep: none found.** Plan lines 255–259 say “keep the existing provider scope and ordinary chat behavior” and retain execution/deployment/R1e gates. Shared source-engine selection remains separate from ordinary chat (`packages/cli-runner/src/engine-host.ts:399`); the changed Settings app-map text still declares Workshop execution unavailable.
+- **Incorrect implementation: none substantiated.** Fresh login validates the native account before synchronous current-flow publication; source paths derive from actor/configuration scope; refreshed credentials use a version fence; late/cancelled reads reject. Process-local multi-file rollback is explicitly documented, not represented as crash-atomic storage (`docs/handoffs/workshop-cli-provenance-task.md:85`).
+
+Evidence inspected: supplied 14-test lifecycle/RPC, 8-test routing and 76-test regression logs; four-case installed-engine log; actual tmux fresh-login proof. These use synthetic credentials. No tests, vendor calls, deployment actions or product edits performed during review. Preserve the current dispatch and downstream gates.

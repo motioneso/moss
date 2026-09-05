@@ -169,10 +169,11 @@ export function createVerifiedExternalModuleInvoker(
     }
     const state = await deps.workerDb
       .selectFrom("app.external_modules")
-      .select(["status", "manifest_hash", "package_hash"])
+      .select(["status", "manifest_hash", "package_hash", "owner_user_id"])
       .where("id", "=", args.moduleId)
       .executeTakeFirst();
-    if (state?.status !== "enabled") {
+    const canInvokeDraft = state?.status === "draft" && state.owner_user_id === args.actorUserId;
+    if (state?.status !== "enabled" && !canInvokeDraft) {
       return reject("not-enabled", args, { status: state?.status ?? null });
     }
     // Compare package_hash, not manifest_hash alone (F10): manifest_hash goes stale on a

@@ -76,6 +76,8 @@ export function registerAiServiceRoutes(
         const bindings = await dependencies.dataContext.withDataContext(
           accessContext,
           async (scopedDb) => {
+            const user = await repository.getUserById(scopedDb, accessContext.actorUserId);
+            if (user?.is_instance_admin) await repository.migrateWorkshopPlanningBinding(scopedDb);
             const result: Record<string, AiServiceBinding> = {};
             for (const service of BINDABLE_SERVICES) {
               const binding = await repository.getServiceBinding(scopedDb, service);

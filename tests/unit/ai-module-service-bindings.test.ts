@@ -23,6 +23,20 @@ describe("isModuleServiceKey", () => {
 });
 
 describe("parseModuleServiceBindingMap", () => {
+  it("migrates the legacy Workshop key in reads while preserving an explicit new choice", () => {
+    const legacy = { kind: "mode", tier: "reasoning" };
+    expect(parseModuleServiceBindingMap({ "module.moss.workshop-build-plan": legacy })).toEqual({
+      "module.workshop.plan": legacy
+    });
+    const explicit = { kind: "mode", tier: "interactive" };
+    expect(
+      parseModuleServiceBindingMap({
+        "module.moss.workshop-build-plan": legacy,
+        "module.workshop.plan": explicit
+      })
+    ).toEqual({ "module.workshop.plan": explicit });
+  });
+
   it("keeps validated module.* keys and drops capabilities, junk keys, and malformed bindings", () => {
     const parsed = parseModuleServiceBindingMap({
       chat: { kind: "mode", tier: "reasoning" },

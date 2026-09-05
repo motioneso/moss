@@ -165,6 +165,10 @@ services:
     environment:
       CI: "true"
       JARVIS_WORKER_DATABASE_URL: postgres://jarvis_worker_runtime:worker_password@postgres:5432/jarv1s
+      # Optional host control is already reachable through the dev workspace mount.
+      # Empty defaults keep Workshop unavailable; R1e must supply the gated caller.
+      MOSS_WORKSHOP_CONTROL_SOCKET: ${MOSS_WORKSHOP_CONTROL_SOCKET:-}
+      MOSS_WORKSHOP_CONTROL_KEY_FILE: ${MOSS_WORKSHOP_CONTROL_KEY_FILE:-}
     command: sh -c "corepack enable && apt-get update && apt-get install -y --no-install-recommends python3 make g++ && pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store && pnpm start:worker"
     restart: unless-stopped
     depends_on:

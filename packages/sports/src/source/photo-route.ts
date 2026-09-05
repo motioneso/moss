@@ -23,10 +23,7 @@ export interface SportsHeadlinePhotoRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly repository: SportsPhotoSourceRepository;
   /** Absent only where the composition root built no vault runner; every request then 404s. */
-  readonly photos?: Pick<
-    SportsPhotoStore,
-    "read" | "keyForHeadline" | "touch" | "onCopyRemoved"
-  >;
+  readonly photos?: Pick<SportsPhotoStore, "read" | "keyForHeadline" | "touch" | "onCopyRemoved">;
 }
 
 export function registerSportsHeadlinePhotoRoute(

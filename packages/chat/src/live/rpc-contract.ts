@@ -1,3 +1,4 @@
+import type { ProviderLoginScope } from "@moss/shared";
 /**
  * FROZEN RPC WIRE CONTRACT — the api ⇄ cli-runner boundary for in-container CLI chat (#342).
  *
@@ -149,6 +150,7 @@ export const HELLO_PROOF_TAG_CLIENT = "C";
 
 export type RpcMethod =
   | "launch"
+  | "launchSourceGeneration"
   | "submit"
   | "cancelSubmit"
   | "readNew"
@@ -326,6 +328,17 @@ export interface RpcLaunchParams {
    * method's `{offset}` return shape, so "launch" is reused rather than adding a new method.
    */
   readonly schema?: Record<string, unknown>;
+}
+
+/** Server-owned source-generation launch. Deliberately separate from `launch`: older runners
+ * reject this method instead of silently dropping a safety policy field. */
+export interface RpcSourceGenerationLaunchParams {
+  readonly scope: ProviderLoginScope;
+  readonly provider: RpcProviderKind;
+  /** Concrete provider model; the `default` sentinel is not accepted. */
+  readonly model: string;
+  readonly personaText: string;
+  readonly schema: Record<string, unknown>;
 }
 
 /**

@@ -1,4 +1,7 @@
 import { exec } from "node:child_process";
+import { constants } from "node:fs";
+import { access, stat } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { resolveMossEnv } from "@moss/db";
@@ -35,9 +38,22 @@ const PROVIDER_BINARY_ALIASES: Record<ProviderKind, readonly string[]> = {
   google: ["agy"]
 };
 
-async function defaultWhich(binary: string): Promise<string | null> {
+async function defaultWhich(
+  binary: string,
+  env: NodeJS.ProcessEnv = process.env
+): Promise<string | null> {
+  const prefix = resolveMossEnv(env, "JARVIS_CLI_TOOLS_PREFIX");
+  if (prefix) {
+    const installed = join(prefix, "bin", binary);
+    try {
+      await access(installed, constants.X_OK);
+      if ((await stat(installed)).isFile()) return installed;
+    } catch {
+      // An absent managed install can still be supplied by the host PATH.
+    }
+  }
   try {
-    const { stdout } = await execAsync(`command -v ${binary}`);
+    const { stdout } = await execAsync(`command -v ${binary}`, { env });
     const trimmed = stdout.trim();
     return trimmed.length > 0 ? trimmed : null;
   } catch {
@@ -74,7 +90,7 @@ function declaredHostCliAvailable(
  * Returns true if the CLI binary for the given provider kind is present.
  * Presence-only — no auth probing. In a containerized deploy, consults the
  * operator-declared `JARVIS_HOST_CLIS` contract FIRST (the container cannot see
- * host CLIs); when that is unset/empty it falls back to the local PATH
+ * host CLIs); when that is unset/empty it checks the managed tools prefix, then the local PATH
  * `command -v` probe, which tries the kind's primary binary and then its
  * aliases (unchanged behavior for host installs + tests: the primary name is
  * still probed first).
@@ -83,7 +99,7 @@ export async function cliAvailable(providerKind: ProviderKind, deps?: WhichDeps)
   const env = deps?.env ?? process.env;
   const declared = declaredHostCliAvailable(env, providerKind);
   if (declared !== null) return declared;
-  const which = deps?.which ?? defaultWhich;
+  const which = deps?.which ?? ((binary: string) => defaultWhich(binary, env));
   // #2026/#2028: try the primary name first, then the kind's aliases. The installed Gemini package
   // only ever produces a command called `gemini`, so probing the old Antigravity name alone
   // reported a successful install as missing forever.

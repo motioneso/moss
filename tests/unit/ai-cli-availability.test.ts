@@ -1,7 +1,32 @@
-import { describe, it, expect } from "vitest";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it, expect, vi } from "vitest";
 import { cliAvailable, tmuxAvailable } from "../../packages/ai/src/cli-availability.js";
 
 describe("cliAvailable", () => {
+  it("finds a newly installed managed CLI even when the API PATH omits its bin directory", async () => {
+    const prefix = await mkdtemp(join(tmpdir(), "cli-availability-"));
+    try {
+      vi.stubEnv("MOSS_HOST_CLIS", "");
+      vi.stubEnv("JARVIS_HOST_CLIS", "");
+      vi.stubEnv("JARVIS_CLI_TOOLS_PREFIX", prefix);
+      vi.stubEnv("PATH", "/nonexistent");
+      await mkdir(join(prefix, "bin"));
+      const binary = join(prefix, "bin", "gemini");
+      expect(await cliAvailable("google")).toBe(false);
+      await writeFile(binary, "#!/bin/sh\nexit 0\n", { mode: 0o600 });
+      expect(await cliAvailable("google")).toBe(false);
+      await chmod(binary, 0o700);
+      expect(await cliAvailable("google")).toBe(true);
+      expect(await cliAvailable("anthropic")).toBe(false);
+      vi.stubEnv("MOSS_HOST_CLIS", "claude");
+      expect(await cliAvailable("google")).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+      await rm(prefix, { recursive: true, force: true });
+    }
+  });
   it("maps anthropic to claude binary and returns true when found", async () => {
     const deps = { which: async (bin: string) => (bin === "claude" ? "/usr/bin/claude" : null) };
     expect(await cliAvailable("anthropic", deps)).toBe(true);

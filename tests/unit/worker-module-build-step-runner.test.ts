@@ -86,6 +86,63 @@ describe("createRunModuleBuildStepForJob", () => {
     }
   });
 
+  it("aborts active generation when the owner cancels, without changing status", async () => {
+    vi.useFakeTimers();
+    let cancelled = false;
+    let observedSignal: AbortSignal | undefined;
+    const updateModuleBuildStatus = vi.fn(async () => {});
+    const notifyFailed = vi.fn(async () => {});
+    const touchModuleBuildActivity = vi.fn(async () => {});
+    const runJob = createRunModuleBuildStepForJob({
+      dataContext: fakeDataContext(),
+      getModuleBuild: vi.fn(async () => build({ status: cancelled ? "cancelled" : "building" })),
+      updateModuleBuildStatus,
+      touchModuleBuildActivity,
+      prepareRunStepDeps: async () => ({}) as never,
+      runStep: async (_deps, _build, signal) => {
+        observedSignal = signal;
+        return new Promise<ModuleBuildStepResult>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      },
+      notifyFinished: vi.fn(async () => {}),
+      notifyFailed
+    });
+    try {
+      const pending = runJob(payload());
+      const rejected = expect(pending).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(observedSignal?.aborted).toBe(false);
+      cancelled = true;
+      await vi.advanceTimersByTimeAsync(5_000);
+      await rejected;
+      expect(observedSignal?.aborted).toBe(true);
+      expect(touchModuleBuildActivity).not.toHaveBeenCalled();
+      expect(updateModuleBuildStatus).not.toHaveBeenCalled();
+      expect(notifyFailed).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects another owner's build before preparing generation or writing failure", async () => {
+    const prepareRunStepDeps = vi.fn(async () => ({}) as never);
+    const updateModuleBuildStatus = vi.fn(async () => {});
+    const runJob = createRunModuleBuildStepForJob({
+      dataContext: fakeDataContext(),
+      getModuleBuild: vi.fn(async () => build({ ownerUserId: "another-owner" })),
+      touchModuleBuildActivity: vi.fn(async () => {}),
+      updateModuleBuildStatus,
+      prepareRunStepDeps,
+      runStep: async () => ({ deferred: false }),
+      notifyFinished: vi.fn(async () => {}),
+      notifyFailed: vi.fn(async () => {})
+    });
+    await expect(runJob(payload())).rejects.toThrow("not found");
+    expect(prepareRunStepDeps).not.toHaveBeenCalled();
+    expect(updateModuleBuildStatus).not.toHaveBeenCalled();
+  });
+
   it("never runs the step or writes a status for a build that is already cancelled", async () => {
     const getModuleBuild = vi.fn(async () => build({ status: "cancelled" }));
     const updateModuleBuildStatus = vi.fn(async () => {});

@@ -1,19 +1,7 @@
 // @vitest-environment jsdom
-// Regression coverage for PR 2220: Chat settings' "Set up" button targets the admin-only
-// aiproviders section while the settings page is showing personal sections. The old
-// section switcher checked the requested id only against whichever list (personal or admin)
-// the page was already showing, so from personal settings it silently fell back to the first
-// personal section instead of switching into admin mode.
-//
-// This renders Chat's real settings screen, with its real "Set up" button, wired into the real
-// settings page exactly the way the app wires it (settings-personal-data-panes.tsx passes the
-// page's own section-switch handler straight through as that screen's onCat prop). Only the
-// screen that lists all the other modules is stood in for, so the test does not also have to
-// fake every module's data; the button under test is never touched. This way, restoring the old,
-// broken section-switching code makes the click miss its target and the test catches it, instead
-// of a stand-in button papering over the bug.
-// Same jsdom + react-test-renderer pattern as tests/unit/settings-ai-admin-pane.test.tsx (this
-// repo has no @testing-library/react).
+// PR 2220 regression: a personal pane requesting an admin section must switch modes
+// for an admin and deny the same destination to an ordinary user. The former Chat
+// settings view was removed; exercise the owning SettingsPage navigation contract.
 import { createElement } from "react";
 import { MemoryRouter } from "react-router";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
@@ -21,30 +9,28 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PaneProps } from "../../apps/web/src/settings/settings-types.js";
-import type * as ClientModule from "../../apps/web/src/api/client.js";
+
+vi.mock("virtual:moss-module-settings", () => ({
+  MODULE_SETTINGS_SURFACES: [],
+  MODULE_SETTINGS_COMPONENTS: {},
+  MODULE_SETTING_KEYWORDS: {}
+}));
 
 vi.mock("../../apps/web/src/api/use-assistant-name.js", () => ({
   useAssistantName: () => "Moss"
 }));
 
-vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof ClientModule>();
-  return {
-    ...actual,
-    getChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" } })),
-    putChatSettings: vi.fn(),
-    lookupAiCapabilityRoute: vi.fn(async () => ({ route: null }))
-  };
-});
-
-// The screen that lists every module is not what this test is about (the bug and the fix are
-// both in how settings-page.tsx picks which section to show once asked, not in how the module
-// list gets to Chat's screen), so it is stood in with a minimal replacement that goes straight to
-// Chat's real screen. That screen, and its "Set up" button, are the genuine article — not a
-// stand-in — wired up with the same handler the real module list passes it.
+// Supply a pane callback, while the real SettingsPage owns destination authorization.
 vi.mock("../../apps/web/src/settings/settings-personal-data-panes.js", () => ({
   ModulesPane: ({ onSelectSection }: PaneProps) =>
-    createElement(ChatSettingsView, { onBack: () => {}, onCat: onSelectSection })
+    createElement(
+      "button",
+      {
+        type: "button",
+        onClick: () => onSelectSection?.("aiproviders")
+      },
+      "Open provider settings"
+    )
 }));
 
 // The destination screen is not what this test is about (the bug and the fix are both in how
@@ -54,7 +40,6 @@ vi.mock("../../apps/web/src/settings/settings-ai-admin-pane.js", () => ({
   AiProvidersPane: () => createElement("div", null, "AI providers pane")
 }));
 
-import { ChatSettingsView } from "../../apps/web/src/settings/settings-module-subviews.js";
 import { SettingsPage } from "../../apps/web/src/settings/settings-page.js";
 
 const nonAdminMe = {
@@ -140,11 +125,11 @@ function pageText(renderer: ReactTestRenderer): string {
 }
 
 describe("settings setup link crosses from personal to admin sections (PR 2220)", () => {
-  it("takes an admin from Chat's real Set up button in personal settings to the admin AI section", async () => {
+  it("takes an admin from a personal pane to the requested admin AI section", async () => {
     const renderer = await renderModulesFor(adminMe);
     await flush();
 
-    clickButtonByText(renderer, "Set up");
+    clickButtonByText(renderer, "Open provider settings");
     await flush();
 
     const text = pageText(renderer);
@@ -161,11 +146,11 @@ describe("settings setup link crosses from personal to admin sections (PR 2220)"
     });
   });
 
-  it("does not let an ordinary user land on the admin section from the same real button", async () => {
+  it("does not let an ordinary user land on the requested admin section", async () => {
     const renderer = await renderModulesFor(nonAdminMe);
     await flush();
 
-    clickButtonByText(renderer, "Set up");
+    clickButtonByText(renderer, "Open provider settings");
     await flush();
 
     const text = pageText(renderer);

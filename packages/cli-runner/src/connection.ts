@@ -8,7 +8,9 @@
  * bytes }. Error messages are redacted server-side before crossing the wire.
  */
 
-import { redactSecrets } from "@moss/ai";
+import type { ProviderLoginScope } from "@moss/shared";
+
+import { assertBoundedStructuredSchema, redactSecrets } from "@moss/ai";
 
 import {
   CliChatUnavailableError,
@@ -27,6 +29,7 @@ import {
   type RpcKillParams,
   type RpcKillTerminalParams,
   type RpcLaunchParams,
+  type RpcSourceGenerationLaunchParams,
   type RpcListProviderModelsParams,
   type RpcOk,
   type RpcOpenTerminalParams,
@@ -318,6 +321,11 @@ async function invoke(
       }
       return host.launch(key, params as RpcLaunchParams);
     }
+    case "launchSourceGeneration": {
+      const key = requireSessionKey(req);
+      const params = parseSourceGenerationParams(req.params);
+      return host.launchSourceGeneration(key, params);
+    }
     case "submit": {
       const key = requireSessionKey(req);
       const params = isRecord(req.params) ? req.params : {};
@@ -442,7 +450,7 @@ async function invoke(
       // (no adapter / agy) lives in the login service (LoginBadRequestError → bad_request).
       const provider = (req.params as RpcBeginLoginParams).provider;
       if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
-      return host.beginLogin(provider);
+      return host.beginLogin(provider, parseLoginScope((req.params as RpcBeginLoginParams).scope));
     }
     case "pollLogin": {
       const p = req.params as RpcPollLoginParams;
@@ -450,7 +458,7 @@ async function invoke(
       if (typeof p.loginId !== "string" || p.loginId.length === 0) {
         throw new BadRequestError("missing loginId");
       }
-      return host.pollLogin(p.provider, p.loginId);
+      return host.pollLogin(p.provider, p.loginId, parseLoginScope(p.scope));
     }
     case "submitLoginToken": {
       const p = req.params as RpcSubmitLoginTokenParams;
@@ -462,7 +470,7 @@ async function invoke(
       if (typeof p.token !== "string" || p.token.length === 0) {
         throw new BadRequestError("missing token");
       }
-      return host.submitLoginToken(p.provider, p.loginId, p.token);
+      return host.submitLoginToken(p.provider, p.loginId, p.token, parseLoginScope(p.scope));
     }
     case "cancelLogin": {
       const p = req.params as RpcCancelLoginParams;
@@ -470,7 +478,7 @@ async function invoke(
       if (typeof p.loginId !== "string" || p.loginId.length === 0) {
         throw new BadRequestError("missing loginId");
       }
-      return host.cancelLogin(p.provider, p.loginId);
+      return host.cancelLogin(p.provider, p.loginId, parseLoginScope(p.scope));
     }
     // #1059 owner terminal — non-session verbs (no sessionKey, mirrors listLiveSessions):
     // the terminal is a single instance-wide resource, not per-chat-session.
@@ -560,6 +568,36 @@ function isProviderKind(value: unknown): value is RpcProviderKind {
   return value === "anthropic" || value === "openai-compatible" || value === "google";
 }
 
+function parseSourceGenerationParams(value: unknown): RpcSourceGenerationLaunchParams {
+  if (
+    !isRecord(value) ||
+    Object.keys(value).sort().join(",") !== "model,personaText,provider,schema,scope"
+  ) {
+    throw new BadRequestError("invalid source-generation launch params");
+  }
+  const { model, personaText, provider, schema } = value;
+  if (
+    !isProviderKind(provider) ||
+    typeof model !== "string" ||
+    model.length === 0 ||
+    model === "default" ||
+    model.length > 256 ||
+    typeof personaText !== "string" ||
+    Buffer.byteLength(personaText, "utf8") > 65_536 ||
+    !isRecord(schema)
+  ) {
+    throw new BadRequestError("invalid source-generation launch params");
+  }
+  try {
+    assertBoundedStructuredSchema(schema);
+  } catch {
+    throw new BadRequestError("invalid source-generation schema");
+  }
+  const scope = parseLoginScope(value.scope);
+  if (!scope) throw new BadRequestError("source credential scope is required");
+  return { provider, model, personaText, schema, scope };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -576,4 +614,22 @@ class BadRequestError extends Error {
     super(message);
     this.name = "BadRequestError";
   }
+}
+
+function parseLoginScope(value: unknown): ProviderLoginScope | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new BadRequestError("invalid login scope");
+  const scope = value as Record<string, unknown>;
+  if (
+    Object.keys(scope).length !== 2 ||
+    ![scope.actorUserId, scope.providerConfigId].every(
+      (id) => typeof id === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(id)
+    )
+  )
+    throw new BadRequestError("invalid login scope");
+  return {
+    actorUserId: scope.actorUserId as string,
+    providerConfigId: scope.providerConfigId as string
+  };
 }

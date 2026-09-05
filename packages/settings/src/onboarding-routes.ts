@@ -10,6 +10,7 @@ import {
   onboardingSkipRouteSchema,
   type OnboardingProviderCheckResponse,
   type OnboardingProviderKind,
+  type ProviderLoginScope,
   type ProviderInstallState
 } from "@moss/shared";
 
@@ -285,17 +286,26 @@ export type ProviderLoginabilityPort = (provider: OnboardingProviderKind) => Pro
  * never logged/persisted/echoed.
  */
 export interface ProviderLoginClient {
-  readonly begin: (provider: OnboardingProviderKind) => Promise<ProviderLoginOutcome>;
+  readonly begin: (
+    provider: OnboardingProviderKind,
+    scope?: ProviderLoginScope
+  ) => Promise<ProviderLoginOutcome>;
   readonly poll: (
     provider: OnboardingProviderKind,
-    loginId: string
+    loginId: string,
+    scope?: ProviderLoginScope
   ) => Promise<ProviderLoginOutcome>;
   readonly submitToken: (
     provider: OnboardingProviderKind,
     loginId: string,
-    token: string
+    token: string,
+    scope?: ProviderLoginScope
   ) => Promise<ProviderLoginOutcome>;
-  readonly cancel: (provider: OnboardingProviderKind, loginId: string) => Promise<void>;
+  readonly cancel: (
+    provider: OnboardingProviderKind,
+    loginId: string,
+    scope?: ProviderLoginScope
+  ) => Promise<void>;
 }
 
 /** Persists the §L.4 login transitions under the ADMIN-scoped DataContextDb the route resolves. */
@@ -334,9 +344,29 @@ export interface ProviderLoginStateStore {
 
 /** The injected login seam (login-contract §L.5). Absent ⇒ the login routes fail closed (500). */
 export interface OnboardingLoginDependencies {
+  readonly assertProviderConfig?: (
+    scopedDb: DataContextDb,
+    provider: OnboardingProviderKind,
+    scope: ProviderLoginScope
+  ) => Promise<void>;
   readonly loginability: ProviderLoginabilityPort;
   readonly loginClient: ProviderLoginClient;
   readonly stateStore: ProviderLoginStateStore;
+}
+
+async function verifiedLoginScope(
+  login: OnboardingLoginDependencies,
+  scopedDb: DataContextDb,
+  provider: OnboardingProviderKind,
+  actorUserId: string,
+  providerConfigId?: string
+): Promise<ProviderLoginScope | undefined> {
+  if (providerConfigId === undefined) return undefined;
+  if (!login.assertProviderConfig)
+    throw new HttpError(503, "Provider login is currently unavailable.");
+  const scope = { actorUserId, providerConfigId };
+  await login.assertProviderConfig(scopedDb, provider, scope);
+  return scope;
 }
 
 /** Response for the begin/poll/submit-token login routes — the flow status + persisted lifecycle. */
@@ -735,8 +765,15 @@ export function registerOnboardingRoutes(
         }
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
           await dependencies.assertBootstrapOwnerAdminUser(scopedDb, accessContext.actorUserId);
+          const scope = await verifiedLoginScope(
+            login,
+            scopedDb,
+            providerKind,
+            accessContext.actorUserId,
+            providerConfigId
+          );
           await login.stateStore.persistNeedsLogin(scopedDb, { provider: providerKind, requestId });
-          const outcome = await login.loginClient.begin(providerKind);
+          const outcome = await login.loginClient.begin(providerKind, scope);
           const installState = await login.stateStore.persistLoginTerminal(scopedDb, {
             provider: providerKind,
             status: outcome.status,
@@ -767,7 +804,14 @@ export function registerOnboardingRoutes(
         const requestId = dependencies.requireRequestId(accessContext);
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
           await dependencies.assertBootstrapOwnerAdminUser(scopedDb, accessContext.actorUserId);
-          const outcome = await login.loginClient.poll(providerKind, loginId);
+          const scope = await verifiedLoginScope(
+            login,
+            scopedDb,
+            providerKind,
+            accessContext.actorUserId,
+            providerConfigId
+          );
+          const outcome = await login.loginClient.poll(providerKind, loginId, scope);
           const installState = await login.stateStore.persistLoginTerminal(scopedDb, {
             provider: providerKind,
             status: outcome.status,
@@ -804,7 +848,14 @@ export function registerOnboardingRoutes(
         const requestId = dependencies.requireRequestId(accessContext);
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
           await dependencies.assertBootstrapOwnerAdminUser(scopedDb, accessContext.actorUserId);
-          const outcome = await login.loginClient.submitToken(providerKind, loginId, token);
+          const scope = await verifiedLoginScope(
+            login,
+            scopedDb,
+            providerKind,
+            accessContext.actorUserId,
+            providerConfigId
+          );
+          const outcome = await login.loginClient.submitToken(providerKind, loginId, token, scope);
           const installState = await login.stateStore.persistLoginTerminal(scopedDb, {
             provider: providerKind,
             status: outcome.status,
@@ -830,11 +881,18 @@ export function registerOnboardingRoutes(
           request.log.error("onboarding provider-login/cancel mounted without onboardingLogin");
           throw new HttpError(500, "onboarding login service not configured");
         }
-        const { providerKind, loginId } = parseLoginHandleBody(request.body);
+        const { providerKind, loginId, providerConfigId } = parseLoginHandleBody(request.body);
         const accessContext = await dependencies.resolveAccessContext(request);
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
           await dependencies.assertBootstrapOwnerAdminUser(scopedDb, accessContext.actorUserId);
-          await login.loginClient.cancel(providerKind, loginId);
+          const scope = await verifiedLoginScope(
+            login,
+            scopedDb,
+            providerKind,
+            accessContext.actorUserId,
+            providerConfigId
+          );
+          await login.loginClient.cancel(providerKind, loginId, scope);
           const installState = await login.stateStore.readState(scopedDb, providerKind);
           const result: OnboardingProviderLoginCancelResponse = {
             providerKind,

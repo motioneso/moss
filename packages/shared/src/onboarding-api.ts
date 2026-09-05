@@ -11,6 +11,12 @@ import { errorResponseSchema } from "./schema-fragments.js";
 /** Single, unambiguous onboarding lifecycle state (replaces two booleans). */
 export type OnboardingState = "pending" | "completed" | "skipped";
 
+/** Server-verified login handle ownership; not proof of credential provenance. */
+export interface ProviderLoginScope {
+  readonly actorUserId: string;
+  readonly providerConfigId: string;
+}
+
 export type OnboardingProviderKind = "anthropic" | "openai-compatible" | "google";
 
 /**

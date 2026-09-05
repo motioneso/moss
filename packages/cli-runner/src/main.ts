@@ -10,7 +10,7 @@
  * governs the CLI SUBPROCESS env it builds, which drops all three.
  */
 
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 
 import { cliAvailable, tmuxAvailable, type ProviderKind } from "@moss/ai";
 
@@ -29,6 +29,8 @@ import { InstallService } from "./install-service.js";
 import { LOGIN_ADAPTERS } from "./login-adapters.js";
 import { ensureGeminiOnboarded } from "./provider-first-run.js";
 import { readProviderCredentialEnv } from "./provider-token-store.js";
+import { validateFreshGeminiCredential } from "./fresh-gemini-login.js";
+import { validateFreshClaudeToken } from "./fresh-cli-login.js";
 import { LoginService } from "./login-service.js";
 import { createSanitizedTmuxIo } from "./runner-io.js";
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
@@ -200,6 +202,9 @@ export function createCliRunner(
   // in the host's §L.6.1 unified exclusivity gate (login ⟂ chat).
   const loginService = new LoginService({
     io,
+    validateFreshGemini: validateFreshGeminiCredential,
+    validateFreshToken: (home, token, signal) =>
+      validateFreshClaudeToken(join(config.toolsPrefix, "bin", "claude"), home, token, signal),
     adapters: LOGIN_ADAPTERS,
     homeBase: config.homeBase,
     // Completion signal: the §4.8 provider auth probe (no token, no replay) — same deps the

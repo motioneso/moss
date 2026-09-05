@@ -1,3 +1,4 @@
+import type { ProviderLoginScope } from "@moss/shared";
 /**
  * ChatEngineRpcClient — the api-side RPC client for the cli-runner sidecar (#342).
  *
@@ -59,6 +60,7 @@ import {
   type RpcKillResult,
   type RpcLaunchParams,
   type RpcLaunchResult,
+  type RpcSourceGenerationLaunchParams,
   type RpcListLiveSessionsResult,
   type RpcListProviderModelsParams,
   type RpcListProviderModelsResult,
@@ -274,6 +276,8 @@ export class RpcConnection {
         // for, since a hung submit/readNew then takes that long to free the per-user turn lock.
         // Keep the override modest; it is a ceiling on recovery latency, not just on launch.
         return Math.max(this.turnTimeoutMs, LAUNCH_RPC_TIMEOUT_MS);
+      case "launchSourceGeneration":
+        return Math.max(this.turnTimeoutMs, LAUNCH_RPC_TIMEOUT_MS);
       default:
         // installProvider / begin|poll|submit|cancelLogin / probeProvider / listLiveSessions:
         // server-budgeted, may run for minutes — no client-side deadline.
@@ -285,6 +289,13 @@ export class RpcConnection {
 
   launch(sessionKey: string, params: RpcLaunchParams): Promise<RpcLaunchResult> {
     return this.call<RpcLaunchResult>("launch", sessionKey, params);
+  }
+
+  launchSourceGeneration(
+    sessionKey: string,
+    params: RpcSourceGenerationLaunchParams
+  ): Promise<RpcLaunchResult> {
+    return this.call<RpcLaunchResult>("launchSourceGeneration", sessionKey, params);
   }
 
   async submit(sessionKey: string, params: RpcSubmitParams): Promise<RpcSubmitResult> {
@@ -827,8 +838,30 @@ export class ChatEngineRpcClient implements CliChatEngine {
    * `isCliStructuredEngine()` recognize an RPC-backed engine as structured-capable.
    */
   async launchStructured(
-    opts: EngineLaunchOpts & { readonly schema: Record<string, unknown> }
+    opts: EngineLaunchOpts & {
+      readonly schema: Record<string, unknown>;
+      readonly sourceGeneration?: true;
+      readonly sourceCredentialScope?: ProviderLoginScope;
+    }
   ): Promise<{ readonly offset: number }> {
+    if (opts.sourceGeneration) {
+      if (
+        this.provider !== "anthropic" ||
+        !opts.model ||
+        opts.model === "default" ||
+        !opts.sourceCredentialScope
+      ) {
+        throw new CliChatUnavailableError("source generation is unavailable for this route");
+      }
+      const result = await this.conn.launchSourceGeneration(this.sessionKey, {
+        provider: this.provider,
+        model: opts.model,
+        personaText: opts.personaText ?? "",
+        schema: opts.schema,
+        scope: opts.sourceCredentialScope
+      });
+      return { offset: result.offset };
+    }
     const params = await this.buildLaunchParams(opts);
     const result = await this.conn.launch(this.sessionKey, { ...params, schema: opts.schema });
     return { offset: result.offset };

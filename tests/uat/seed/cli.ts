@@ -89,6 +89,8 @@ async function main(): Promise<void> {
     resolveMossEnv(process.env, "JARVIS_UAT_WORKFLOW_APPROVAL_FIXTURE") === "1";
   const activityOutcomeFixture =
     resolveMossEnv(process.env, "JARVIS_UAT_ACTIVITY_OUTCOME_FIXTURE") === "1";
+  const withWorkshopStorageFixture =
+    resolveMossEnv(process.env, "JARVIS_UAT_WORKSHOP_STORAGE_FIXTURE") === "1";
   const chatScript = parseUatChatScript(
     resolveMossEnv(process.env, "JARVIS_UAT_SEED_CHAT_SCRIPT") ?? ""
   );
@@ -101,6 +103,7 @@ async function main(): Promise<void> {
     sportsPublicSourceFixtures,
     workflowApprovalFixture,
     activityOutcomeFixture,
+    withWorkshopStorageFixture,
     chatScript
   });
   console.log(
