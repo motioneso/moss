@@ -106,6 +106,7 @@ export type ModuleServiceKey = `module.${string}`;
 export type AiServiceKey = AiModelCapability | ModuleServiceKey;
 
 export const MODULE_WORKER_SERVICE_KEY = "module.worker" as const;
+export const WORKSHOP_PLAN_SERVICE_KEY = "module.workshop.plan" as const;
 
 // "module." + id: lowercase alnum start, then alnum/underscore/dot/dash, ≤64 chars after the
 // prefix. Kept as a plain string so JSON-schema `pattern` fields can embed it verbatim

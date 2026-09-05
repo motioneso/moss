@@ -1,6 +1,6 @@
 import type { ModuleWebContribution } from "@moss/module-web-sdk";
 
-import { WorkshopPage } from "./workshop-page.js";
+import { WorkshopProjectRoutes } from "./project-routes.js";
 
 // `moduleId`/`path`/`icon`/`order` below are literals mirroring
 // `packages/workshop/src/manifest.ts`'s `id`/`navigation[].path/icon/order` (asserted by
@@ -15,7 +15,7 @@ const workshopWebContribution: ModuleWebContribution = {
       title: "The Workshop",
       icon: "wrench",
       order: 900,
-      element: <WorkshopPage />
+      element: <WorkshopProjectRoutes />
     }
   ]
 };
