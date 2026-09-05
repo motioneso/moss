@@ -193,7 +193,12 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "counts as expired for that provider, so the next check asks for a fresh login instead of " +
       "repeating an old success, until a fresh login is accepted. Pressing Log in on a provider " +
       "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
-      "genuinely broken sign-in always gets a fresh place to sign back in.",
+      "genuinely broken sign-in always gets a fresh place to sign back in. A " +
+      "separate Web search group has a 'Use your model's built-in web search' switch, on by " +
+      "default, with a status line reading 'On, using Brave', 'On, using each person's chat " +
+      "model', or 'Off. Add a Brave key or turn on built-in search.' A Brave Search API key " +
+      "field below it is described as giving consistent results for every model, including " +
+      "local ones.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },

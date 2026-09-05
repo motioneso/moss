@@ -144,6 +144,33 @@ describe("AI provider model refresh (#2208)", () => {
     ]);
   });
 
+  it("re-marks an existing row with web-search on refresh, keeping its other capabilities (#2228)", async () => {
+    const providerId = await createCliProvider();
+    // A row discovered before the CLI's search tool was declared carries no web-search flag.
+    await dataContext.withDataContext(userContext(ids.userA), (db) =>
+      repository.upsertDiscoveredModels(db, providerId, [
+        {
+          providerModelId: "claude-fable-5-1",
+          displayName: "claude-fable-5-1",
+          capabilities: ["chat", "tool-use", "json", "summarization"],
+          tier: "reasoning",
+          status: "active"
+        }
+      ])
+    );
+    listerAnswer = { status: "ok", models: [{ id: "claude-fable-5-1" }] };
+
+    const response = await refresh(providerId);
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{ models: { providerModelId: string; capabilities: string[] }[] }>();
+    const row = body.models.find((m) => m.providerModelId === "claude-fable-5-1");
+    expect(row?.capabilities).toEqual(["chat", "tool-use", "json", "summarization", "web-search"]);
+    // The sentinel is not on the vendor's list, so it is left exactly as it was.
+    const sentinel = body.models.find((m) => m.providerModelId === "default");
+    expect(sentinel?.capabilities).toEqual(["chat"]);
+  });
+
   it("prunes discovered rows that left the list but keeps manual rows and the sentinel", async () => {
     const providerId = await createCliProvider();
     listerAnswer = { status: "ok", models: [{ id: "claude-old" }, { id: "claude-kept" }] };

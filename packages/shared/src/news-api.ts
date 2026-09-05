@@ -132,9 +132,19 @@ export interface DeleteNewsPrefResponse {
 // module-private revalidation markers and must never reach the browser.
 // ---------------------------------------------------------------------------
 
+/**
+ * #2228: why web search is unavailable for this actor, driving the settings status line and the
+ * described-topics prerequisite gate copy. Null/absent when web search is available.
+ */
+export type NewsWebSearchUnavailableReason =
+  | "no-key-no-native-model"
+  | "native-disabled"
+  | "model-has-no-search";
+
 export interface NewsPersonalizationAvailabilityDto {
   readonly aiConfigured: boolean;
   readonly webSearchConfigured: boolean;
+  readonly webSearchReason?: NewsWebSearchUnavailableReason | null;
   readonly customSourceByUrlEnabled: boolean;
   readonly customSourceByNameEnabled: boolean;
   readonly freeformTopicsEnabled: boolean;
@@ -613,6 +623,10 @@ export const getNewsPersonalizationSchema = {
           properties: {
             aiConfigured: { type: "boolean" },
             webSearchConfigured: { type: "boolean" },
+            webSearchReason: {
+              type: ["string", "null"],
+              enum: ["no-key-no-native-model", "native-disabled", "model-has-no-search", null]
+            },
             customSourceByUrlEnabled: { type: "boolean" },
             customSourceByNameEnabled: { type: "boolean" },
             freeformTopicsEnabled: { type: "boolean" }

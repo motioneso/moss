@@ -156,7 +156,7 @@ import {
   type GoogleApiClient,
   type GoogleConnectionService
 } from "@moss/connectors";
-import type { ActiveModulesResolver } from "@moss/ai";
+import type { ActiveModulesResolver, AiSecretCipher } from "@moss/ai";
 import {
   resolveMossEnv,
   type AccessContext,
@@ -206,8 +206,9 @@ import {
 import {
   EXPORT_QUEUE_DEFINITIONS,
   createWebSearchSecretCipher,
-  getWebSearchKeyConfig,
+  type WebSearchSecretCipher,
   readBraveSearchApiKey,
+  resolveWebSearchEngine,
   registerSettingsJobWorkers,
   registerSettingsRoutes,
   registerRuntimeConfigRoutes,
@@ -269,7 +270,9 @@ import {
   fetchWebResourceBytes,
   invalidateWebSearchProviderCache,
   resolveWebSearchProvider,
+  setModelNativeSearchResolver,
   setWebSearchKeyResolver,
+  type ModelNativeSearchResolver,
   webModuleManifest
 } from "@moss/web-research";
 import {
@@ -882,6 +885,116 @@ function buildSportsDiscoveryPorts(
 }
 
 /**
+ * #2228: News' web search availability, resolved once per call through the actor's effective
+ * chat model. Shared by hasWebSearch and webSearchReason so the model lookup and engine
+ * resolution only happen a single time per call site.
+ */
+export async function resolveNewsWebSearch(scopedDb: DataContextDb) {
+  const model = await new AiRepository().selectChatModelForUser(scopedDb);
+  return resolveWebSearchEngine(
+    scopedDb,
+    model ? { id: model.id, capabilities: model.capabilities } : null
+  );
+}
+
+/**
+ * #2228: the composition-root seam behind model-native (built-in) web search for list-shaped
+ * callers (News described topics, source-by-name, the web.search tool). Per request it looks up
+ * the actor's effective chat model, asks the engine resolver whether built-in search is active
+ * for that model, and if so returns a runner that executes ONE structured request against that
+ * exact model with the provider's search tool enabled. The runner closes over the request's
+ * scoped data context, so it is built per call and never shared across actors.
+ */
+export function buildModelNativeSearchResolver(deps: {
+  readonly repository: Pick<
+    AiRepository,
+    "selectChatModelForUser" | "resolveModelForService" | "selectProviderWithCredential"
+  >;
+  readonly cipher: Pick<AiSecretCipher, "decryptJson">;
+  readonly logger?: Pick<FastifyBaseLogger, "info" | "warn">;
+  readonly createCliStructuredAdapter?: ReturnType<typeof createCliStructuredAdapterFactory>;
+  readonly resolveEngine?: typeof resolveWebSearchEngine;
+  readonly generate?: typeof generateStructured;
+}): ModelNativeSearchResolver {
+  const resolveEngine = deps.resolveEngine ?? resolveWebSearchEngine;
+  const generate = deps.generate ?? generateStructured;
+  return async (scopedDbUnknown) => {
+    const scopedDb = scopedDbUnknown as DataContextDb;
+    const model = await deps.repository.selectChatModelForUser(scopedDb);
+    const resolution = await resolveEngine(
+      scopedDb,
+      model ? { id: model.id, capabilities: model.capabilities } : null
+    );
+    if (resolution.engine !== "model-native" || !model) return null;
+    return {
+      modelId: model.id,
+      runner: async (input) => {
+        const generated = await generate(
+          scopedDb,
+          {
+            service: "module.web-research",
+            schema: input.schema,
+            prompt: input.prompt,
+            nativeSearch: true,
+            explicitModel: {
+              id: model.id,
+              provider_config_id: model.provider_config_id,
+              provider_kind: model.provider_kind,
+              provider_model_id: model.provider_model_id
+            }
+          },
+          {
+            repository: deps.repository,
+            cipher: deps.cipher,
+            logger: deps.logger,
+            createCliStructuredAdapter: deps.createCliStructuredAdapter
+          }
+        );
+        if (!generated.ok) return null;
+        return { object: generated.object, sources: generated.sources };
+      }
+    };
+  };
+}
+
+/**
+ * #2228: connect the web-research module's search engines. The module stays db-free, so this
+ * composition root injects two per-request resolvers: the decrypt-at-use Brave key reader, and
+ * the model-native (built-in) search resolver that runs against the actor's own chat model.
+ * Called from BOTH the web server startup (registerRoutes) and the background worker startup
+ * (registerWorkers): they are separate processes, and News topic refresh searches from the
+ * worker. Without the worker half, the News gate unlocks but every background refresh silently
+ * finds no stories (review 2 of PR #2280).
+ */
+export function installWebSearchResolvers(deps: {
+  readonly webSearchCipher: WebSearchSecretCipher;
+  readonly logger?: Pick<FastifyBaseLogger, "info" | "warn">;
+  readonly createCliStructuredAdapter?: ReturnType<typeof createCliStructuredAdapterFactory>;
+}): void {
+  setModelNativeSearchResolver(
+    buildModelNativeSearchResolver({
+      repository: new AiRepository(),
+      cipher: createAiSecretCipher(),
+      logger: deps.logger,
+      createCliStructuredAdapter: deps.createCliStructuredAdapter
+    })
+  );
+  setWebSearchKeyResolver(
+    (scopedDb) => readBraveSearchApiKey(scopedDb as DataContextDb, deps.webSearchCipher),
+    {
+      // Metadata-only observability event. NEVER include the key/ciphertext/envelope/derived
+      // value (Hard Invariant: secrets never escape). An operator pairs this with the setting
+      // key to diagnose a keyring/rotation problem without exposing secret material.
+      onDecryptFailed: () =>
+        deps.logger?.warn(
+          { event: "web_search.key_decrypt_failed" },
+          "Stored Brave Search key failed to decrypt; falling back to env key"
+        )
+    }
+  );
+}
+
+/**
  * #1110: UAT-only. Deterministically fakes a transient News source-preview error for one
  * sentinel input, so the app-map-grounding UAT spec can prove the "no invented fix" path
  * without a live upstream. Both env vars are set unconditionally in the UAT app container's
@@ -1432,9 +1545,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         fetchFn: deps.fetchFn
       });
       // Instance-wide Brave Search key: dedicated admin routes (the key is AES-256-GCM
-      // encrypted at rest, never returned). The web-research module stays db-free; this
-      // composition root injects the decrypt-at-use resolver so the tool resolves the key
-      // per request. invalidateWebSearchProviderCache on save/revoke = no restart needed.
+      // encrypted at rest, never returned). invalidateWebSearchProviderCache on save/revoke = no
+      // restart needed. The search engines themselves are connected by installWebSearchResolvers.
       const webSearchCipher = createWebSearchSecretCipher();
       registerWebSearchKeyRoutes(server, {
         dataContext: deps.dataContext,
@@ -1448,22 +1560,28 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveAccessContext,
         repository: new SettingsRepository()
       });
-      setWebSearchKeyResolver(
-        (scopedDb) => readBraveSearchApiKey(scopedDb as DataContextDb, webSearchCipher),
-        {
-          // Metadata-only observability event. NEVER include the key/ciphertext/envelope/derived
-          // value (Hard Invariant: secrets never escape). An operator pairs this with the setting
-          // key to diagnose a keyring/rotation problem without exposing secret material.
-          onDecryptFailed: () =>
-            server.log.warn(
-              { event: "web_search.key_decrypt_failed" },
-              "Stored Brave Search key failed to decrypt; falling back to env key"
-            )
-        }
-      );
+      installWebSearchResolvers({
+        webSearchCipher,
+        logger: server.log,
+        createCliStructuredAdapter: deps.createCliStructuredAdapter
+      });
     },
-    registerWorkers: (boss, deps) =>
-      registerSettingsJobWorkers(boss, deps.dataContext, deps.rootDb, getBuiltInModuleManifests)
+    registerWorkers: async (boss, deps) => {
+      // #2228 (fix round 2): the worker is a separate process, so the search engines installed
+      // by registerRoutes never reach it. News topic refresh runs here and calls web search, so
+      // without this every background refresh silently returned no stories.
+      installWebSearchResolvers({
+        webSearchCipher: createWebSearchSecretCipher(),
+        logger: deps.logger,
+        createCliStructuredAdapter: createCliStructuredAdapterFactory()
+      });
+      return registerSettingsJobWorkers(
+        boss,
+        deps.dataContext,
+        deps.rootDb,
+        getBuiltInModuleManifests
+      );
+    }
   },
   {
     manifest: connectorsModuleManifest,
@@ -1767,6 +1885,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         localePreferences: new PreferencesRepository(),
         agencyPreferences: new PreferencesRepository(),
         priorityPreferences: new PreferencesRepository(),
+        // #2228: the gateway hides the web.search tool only when the actor has no search engine
+        // (no Brave key and no chat model with built-in search, or built-in search switched off).
+        webSearchEngineForActor: (actorUserId) =>
+          deps.dataContext.withDataContext(
+            { actorUserId, requestId: "gateway:web-search-engine" },
+            async (scopedDb) => (await resolveNewsWebSearch(scopedDb)).engine
+          ),
         notesRecall: deps.notesRecall,
         googleConnectionService: deps.googleConnectionService,
         googleApiClient: deps.googleApiClient,
@@ -2197,7 +2322,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
                 }
               )
             ).model !== null,
-          hasWebSearch: async (scopedDb) => (await getWebSearchKeyConfig(scopedDb)).configured
+          hasWebSearch: async (scopedDb) => {
+            const resolution = await resolveNewsWebSearch(scopedDb);
+            return resolution.engine !== "none";
+          },
+          webSearchReason: async (scopedDb) => {
+            const resolution = await resolveNewsWebSearch(scopedDb);
+            return resolution.engine === "none" ? resolution.reason : null;
+          }
         }
       });
     },

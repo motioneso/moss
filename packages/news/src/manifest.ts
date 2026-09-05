@@ -533,6 +533,53 @@ export const newsModuleManifest = {
             "to directly, as its own address."
         }
       ]
+    },
+    {
+      id: "news.described_topics",
+      description:
+        "Describe a topic in your own words and have News find matching stories across the web.",
+      // #2228: one remediation per reason web search can be off for a person, each pointing
+      // where that fix lives (the same copy the settings gate shows).
+      remediations: [
+        {
+          id: "news.described_topics.pick_searching_model",
+          description:
+            "Your chat model has no built-in search. Pick a model under Assistant settings, or ask an admin to add a Brave key.",
+          path: "/settings?section=assistant"
+        },
+        {
+          id: "news.described_topics.enable_native_search",
+          description:
+            "Built-in web search is switched off for this instance. Turn it on or add a Brave key under AI providers.",
+          path: "/settings?section=aiproviders"
+        },
+        {
+          id: "news.described_topics.enable_web_search",
+          description:
+            "No web search is set up. Add a model with built-in search or a Brave key under AI providers.",
+          path: "/settings?section=aiproviders"
+        }
+      ],
+      errors: [
+        {
+          code: "news.described_topics.model_has_no_search",
+          class: "prerequisite",
+          remediationRef: "news.described_topics.pick_searching_model",
+          description: "Your chat model has no built-in web search."
+        },
+        {
+          code: "news.described_topics.native_search_disabled",
+          class: "prerequisite",
+          remediationRef: "news.described_topics.enable_native_search",
+          description: "Built-in web search is switched off for this instance."
+        },
+        {
+          code: "news.described_topics.no_web_search",
+          class: "prerequisite",
+          remediationRef: "news.described_topics.enable_web_search",
+          description: "Described topics need an AI model and web search."
+        }
+      ]
     }
   ],
   dataLifecycle: {

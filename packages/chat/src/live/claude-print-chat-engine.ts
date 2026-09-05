@@ -19,6 +19,8 @@ import { vaultReadOnlyToolPatterns } from "./vault-allowlist.js";
 
 const PROMPT_FILENAME = ".jarvis-claude-print-prompt.txt";
 const PERSONA_FILENAME = "persona.md";
+/** #2228: the Claude CLI's built-in web search tool name (`--tools` / `--allowedTools`). */
+const CLAUDE_WEB_SEARCH_TOOL = "WebSearch";
 const CLAUDE_MCP_FILENAME = ".jarvis-claude-mcp.json";
 
 /**
@@ -286,7 +288,8 @@ export class ClaudePrintChatEngine implements CliChatEngine {
       text: event.text,
       toolName: event.toolName,
       ...(event.toolCallId ? { toolCallId: event.toolCallId } : {}),
-      ...(event.rejected ? { rejected: event.rejected } : {})
+      ...(event.rejected ? { rejected: event.rejected } : {}),
+      ...(event.sources ? { sources: event.sources } : {})
     }));
     if (parsed.complete && parsed.reply !== null) {
       records.push({ kind: "reply", text: parsed.reply });
@@ -376,9 +379,17 @@ export class ClaudePrintChatEngine implements CliChatEngine {
       });
       parts.push(`--mcp-config ${shellQuote(mcpConfigPath)}`);
       parts.push(`--settings ${shellQuote(settingsPath)}`);
-      const allowedTools = ["mcp__jarvis__*", ...vaultReadOnlyToolPatterns()].join(" ");
+      // #2228: with nativeSearch the CLI's own WebSearch tool is switched on too, so the model
+      // can search and the transcript reader can pick up the pages it used as sources.
+      const searchTools = opts.nativeSearch ? [CLAUDE_WEB_SEARCH_TOOL] : [];
+      const allowedTools = ["mcp__jarvis__*", ...vaultReadOnlyToolPatterns(), ...searchTools].join(
+        " "
+      );
       parts.push(`--allowedTools ${shellQuote(allowedTools)}`);
-      parts.push('--tools "Read,Glob,Grep"');
+      parts.push(`--tools "${["Read", "Glob", "Grep", ...searchTools].join(",")}"`);
+    } else if (opts.nativeSearch) {
+      parts.push(`--tools "${CLAUDE_WEB_SEARCH_TOOL}"`);
+      parts.push(`--allowedTools "${CLAUDE_WEB_SEARCH_TOOL}"`);
     } else {
       parts.push('--tools ""');
     }

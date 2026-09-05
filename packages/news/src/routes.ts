@@ -12,7 +12,8 @@ import {
   newsPrefsResponseSchema,
   type CreateNewsPrefRequest,
   type NewsPrefDto,
-  type NewsSourcePreviewResponse
+  type NewsSourcePreviewResponse,
+  type NewsWebSearchUnavailableReason
 } from "@moss/shared";
 
 import { configureNewsChatTools } from "./chat-tools.js";
@@ -62,6 +63,8 @@ export interface NewsPrefsWriter extends NewsPrefsReader {
 export interface NewsPersonalizationAvailabilityPort {
   hasJsonModel(scopedDb: DataContextDb): Promise<boolean>;
   hasWebSearch(scopedDb: DataContextDb): Promise<boolean>;
+  /** #2228: reason web search is unavailable for the actor; null when it is available. */
+  webSearchReason(scopedDb: DataContextDb): Promise<NewsWebSearchUnavailableReason | null>;
 }
 
 export interface NewsRoutesDependencies {

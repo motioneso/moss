@@ -861,6 +861,7 @@ export class ChatEngineRpcClient implements CliChatEngine {
       ...(opts.replayBatch !== undefined ? { replayBatch: opts.replayBatch } : {}),
       ...(opts.replayBatch ? { replayAttemptId: opts.replayAttemptId ?? randomUUID() } : {}),
       ...(opts.model !== undefined ? { model: opts.model } : {}),
+      ...(opts.nativeSearch !== undefined ? { nativeSearch: opts.nativeSearch } : {}),
       ...(persistent
         ? {
             persistentRuntimeEnabled: persistent.enabled,

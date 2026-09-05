@@ -36,6 +36,7 @@ import {
 } from "./settings-persona-preview";
 import { readError, type PaneProps } from "./settings-types";
 import {
+  Badge,
   Choice,
   Field,
   Group,
@@ -345,6 +346,10 @@ function ChatModel() {
       ? settings.currentOverrideModelId
       : null;
   const value = currentOverride ?? "default";
+  const selectedModel = currentOverride
+    ? (selectableOverrideModels.find((m) => m.id === currentOverride) ?? null)
+    : defaultModel;
+  const hasWebSearch = selectedModel?.capabilities.includes("web-search") ?? false;
 
   return (
     <Group
@@ -375,11 +380,13 @@ function ChatModel() {
                   </option>
                 ))}
               </Select>
+              {hasWebSearch ? <Badge tone="steel">Web search</Badge> : null}
             </Field>
           ) : (
             <Row
               name="Powering your chat"
               desc={`${defaultModel.providerDisplayName} · ${defaultModel.providerModelId} — Managed by admin.`}
+              control={hasWebSearch ? <Badge tone="steel">Web search</Badge> : undefined}
             />
           )}
           <Note>

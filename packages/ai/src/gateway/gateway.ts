@@ -16,7 +16,7 @@ import type {
 import type { ActionAuditInputSummary, AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
-import { AiRepository, type InsertAuditLogInput } from "../repository.js";
+import type { AiRepository, InsertAuditLogInput } from "../repository.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import {
@@ -25,7 +25,11 @@ import {
   safeErrorName
 } from "./dependency-failure.js";
 import { validateToolInput } from "./input-validation.js";
-import { renderAndCap, sanitizeAssistantToolResult } from "./output-validation.js";
+import {
+  liveStreamResult,
+  renderAndCap,
+  sanitizeAssistantToolResult
+} from "./output-validation.js";
 import { resolvePolicy } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
 import {
@@ -111,6 +115,19 @@ export interface AssistantToolGatewayDependencies {
    * format user-visible date/time strings (e.g. calendar approval cards) use the correct timezone.
    */
   readonly resolveLocalTimezone?: (actorUserId: string) => Promise<string | null>;
+  /**
+   * Returns which web search engine is active for this actor: "brave" (the web.search tool calls
+   * the Brave API directly), "model-native" (the web.search tool runs one structured search
+   * through the actor's own chat model), or "none" (no key and no searching model, or built-in
+   * search switched off). Chat turns only ever run through a CLI engine whose own search is
+   * blocked by the permission hook, so web.search is the only chat search path and is offered for
+   * both engines; it is hidden only for "none". Injected by the composition root via
+   * `resolveWebSearchEngine` (module isolation: the gateway must not import settings).
+   * Omitted (e.g. in tests) means always list web.search, matching pre-#2228 behavior.
+   */
+  readonly webSearchEngineForActor?: (
+    actorUserId: string
+  ) => Promise<"brave" | "model-native" | "none">;
   /** Defaults to a console.error(JSON.stringify(...)) shim when omitted. */
   readonly logger?: GatewayLogger;
 }
@@ -139,24 +156,6 @@ export interface NativeToolPermissionRequest {
 export interface NativeToolPermissionResponse {
   readonly decision: "allow" | "deny";
   readonly reason: string;
-}
-
-export function createUnwiredActionResolver(deps: {
-  readonly runner: DataContextRunner;
-  readonly repository?: AiRepository;
-}): AssistantToolGateway["resolveActionRequest"] {
-  const repository = deps.repository ?? new AiRepository();
-  return async (actorUserId, actionRequestId, status) => {
-    if (status === "confirmed") {
-      throw new HttpError(503, "Assistant action resolution is not available");
-    }
-
-    const access: AccessContext = { actorUserId, requestId: `unwired_${randomUUID()}` };
-    const resolved = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-      repository.resolveAssistantAction(scopedDb, actionRequestId, { status })
-    );
-    return resolved ? "resolved" : "not_found";
-  };
 }
 
 const NATIVE_TOOL_MODULE_ID = "claude-native";
@@ -861,10 +860,19 @@ export class AssistantToolGateway {
   private async executableTools(actorUserId: string): Promise<ExecutableTool[]> {
     const modules: readonly MossModuleManifest[] =
       await this.deps.resolveActiveModules(actorUserId);
+    // #2228: web.search is backed by Brave or by the actor's model-native provider; it is the only
+    // search path a chat turn can reach (CLI engines cannot search on their own here), so it is
+    // hidden only when the actor has no engine at all. Resolved once per listing, not per tool.
+    const webSearchEngine = this.deps.webSearchEngineForActor
+      ? await this.deps.webSearchEngineForActor(actorUserId)
+      : "brave";
     const out: ExecutableTool[] = [];
     for (const module of modules) {
       for (const tool of module.assistantTools ?? []) {
         if (typeof tool.execute !== "function") {
+          continue;
+        }
+        if (tool.name === "web.search" && webSearchEngine === "none") {
           continue;
         }
         // Fail closed #0: a centrally excluded (self-operation) tool is never listed and never
@@ -976,23 +984,4 @@ export class AssistantToolGateway {
       opts
     );
   }
-}
-
-/**
- * What rides the `action_result` live stream record as `result`.
- *
- * By default this is the rendered `{ text }` the model saw — deliberately narrow, so a module
- * handler cannot push arbitrary shapes at the browser. A tool that owns an inline card opts in
- * with `streamsStructuredResult`, and then gets the schema-sanitized structured result instead
- * (`sanitizeAssistantToolResult` has already dropped every key the tool's own output schema does
- * not declare, so this widens what reaches the browser only as far as that schema).
- */
-export function liveStreamResult(
-  tool: { readonly streamsStructuredResult?: boolean },
-  result: Extract<GatewayToolResponse, { ok: true }>
-): Record<string, unknown> {
-  if (tool.streamsStructuredResult === true && result.structuredData !== undefined) {
-    return result.structuredData;
-  }
-  return result.data;
 }
