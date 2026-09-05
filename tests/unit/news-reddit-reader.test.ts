@@ -1,23 +1,23 @@
+/**
+ * #2282 The shared subreddit reader now lives in @moss/news. These cases moved from
+ * tests/unit/sports-reddit-source.test.ts unchanged in intent; Sports keeps only its own identity
+ * and candidate-mapping cases there.
+ */
 import { describe, expect, it, vi } from "vitest";
 
-import type { DataContextDb } from "@moss/db";
-import type { NewsAiPort } from "@moss/news";
-
-import {
-  resolveSportsSourceInput,
-  type SportsSafeFetchPort
-} from "../../packages/sports/src/source/discovery.js";
 import {
   parseRedditFeed,
   parseSubredditInput,
   readSubreddit,
   redditEntryToHeadline,
   redditFailureReason,
-  sportsSourceIdentityKey
-} from "../../packages/sports/src/source/reddit.js";
-
-const db = {} as DataContextDb;
-const ai = {} as NewsAiPort;
+  redditFetchOptions,
+  redditHotFeedUrl,
+  redditSubredditUrl,
+  subredditNameFromUrl,
+  type RedditFetchPort,
+  type RedditFetchResult
+} from "../../packages/news/src/source/reddit-reader.js";
 
 const FEED_URL = "https://www.reddit.com/r/nfl/hot.rss";
 const FEED_URL_UPPER = "https://www.reddit.com/r/NFL/hot.rss";
@@ -31,7 +31,7 @@ interface EntryOverrides {
 }
 
 /** One Atom entry the way Reddit writes it: escaped HTML content ending in the [link] anchor. */
-function entry(overrides: EntryOverrides = {}): string {
+export function redditEntry(overrides: EntryOverrides = {}): string {
   const id = overrides.id ?? "t3_abc123";
   const title = overrides.title ?? "Chiefs sign a new kicker";
   const link =
@@ -55,7 +55,7 @@ function entry(overrides: EntryOverrides = {}): string {
   );
 }
 
-function feed(entries: string[], head?: { term?: string; title?: string }): string {
+export function redditFeed(entries: string[], head?: { term?: string; title?: string }): string {
   return (
     `<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">` +
     `<category term="${head?.term ?? "nfl"}" label="r/${head?.term ?? "nfl"}"/>` +
@@ -69,15 +69,14 @@ function feed(entries: string[], head?: { term?: string; title?: string }): stri
   );
 }
 
-type FetchResult = Awaited<ReturnType<SportsSafeFetchPort>>;
-
-function fetchMap(entries: Record<string, FetchResult>): SportsSafeFetchPort {
+function fetchMap(entries: Record<string, RedditFetchResult>): RedditFetchPort {
   return vi.fn(
-    async (url: string): Promise<FetchResult> => entries[url] ?? { ok: false, reason: "network" }
+    async (url: string): Promise<RedditFetchResult> =>
+      entries[url] ?? { ok: false, reason: "network" }
   );
 }
 
-function okAtom(url: string, body: string): FetchResult {
+function okAtom(url: string, body: string): RedditFetchResult {
   return {
     ok: true,
     status: 200,
@@ -117,11 +116,19 @@ describe("subreddit input detection", () => {
   ])("leaves %s to the publication path", (raw) => {
     expect(parseSubredditInput(raw)).toBeNull();
   });
+
+  it("builds the homepage and hot feed URLs and reads the name back out of them", () => {
+    expect(redditSubredditUrl("NFL")).toBe("https://www.reddit.com/r/NFL/");
+    expect(redditHotFeedUrl("NFL")).toBe(FEED_URL_UPPER);
+    expect(subredditNameFromUrl(FEED_URL_UPPER)).toBe("NFL");
+    expect(subredditNameFromUrl("https://espn.com/nfl")).toBeNull();
+    expect(subredditNameFromUrl(null)).toBeNull();
+  });
 });
 
 describe("subreddit entry filtering", () => {
-  it("keeps a linked article and credits the registrable publisher domain", () => {
-    expect(redditEntryToHeadline(entry())).toEqual({
+  it("keeps a linked article and credits the publisher domain without www", () => {
+    expect(redditEntryToHeadline(redditEntry())).toEqual({
       id: "t3_abc123",
       title: "Chiefs sign a new kicker",
       url: "https://www.espn.com/nfl/story/_/id/1/chiefs-sign-kicker",
@@ -131,9 +138,24 @@ describe("subreddit entry filtering", () => {
     });
   });
 
+  it("lets the caller supply its own publisher domain rule", () => {
+    const link = "https://news.bbc.co.uk/sport/1";
+    expect(redditEntryToHeadline(redditEntry({ link }))).toMatchObject({
+      publisherDomain: "news.bbc.co.uk"
+    });
+    expect(
+      redditEntryToHeadline(redditEntry({ link }), { publisherDomain: () => "bbc.co.uk" })
+    ).toMatchObject({ publisherLabel: "bbc.co.uk", publisherDomain: "bbc.co.uk" });
+    expect(
+      redditEntryToHeadline(redditEntry({ link }), { publisherDomain: () => "reddit.com" })
+    ).toBeNull();
+  });
+
   it("decodes entities in the outbound link and tolerates a missing date", () => {
     expect(
-      redditEntryToHeadline(entry({ link: "https://news.example/story?a=1&b=2", published: null }))
+      redditEntryToHeadline(
+        redditEntry({ link: "https://news.example/story?a=1&b=2", published: null })
+      )
     ).toMatchObject({ url: "https://news.example/story?a=1&b=2", publishedAt: null });
   });
 
@@ -148,24 +170,26 @@ describe("subreddit entry filtering", () => {
     ["non-http link", { link: "ftp://files.example/report" }],
     ["entry with no title", { title: "" }]
   ])("drops a %s", (_label, overrides) => {
-    expect(redditEntryToHeadline(entry(overrides))).toBeNull();
+    expect(redditEntryToHeadline(redditEntry(overrides))).toBeNull();
   });
 
   it("caps a feed at forty linked articles and dedupes repeated links", () => {
     const entries = Array.from({ length: 60 }, (_, index) =>
-      entry({ id: `t3_p${index}`, link: `https://news.example/story/${index % 50}` })
+      redditEntry({ id: `t3_p${index}`, link: `https://news.example/story/${index % 50}` })
     );
-    const parsed = parseRedditFeed(feed(entries), "nfl");
+    const parsed = parseRedditFeed(redditFeed(entries), "nfl");
     expect(parsed.ok && parsed.feed.headlines).toHaveLength(40);
-    expect(parseRedditFeed(feed([entry(), entry()]), "nfl")).toMatchObject({
+    expect(parseRedditFeed(redditFeed([redditEntry(), redditEntry()]), "nfl")).toMatchObject({
       ok: true,
       feed: { headlines: [{ id: "t3_abc123" }] }
     });
+    const capped = parseRedditFeed(redditFeed(entries), "nfl", { limit: 10 });
+    expect(capped.ok && capped.feed.headlines).toHaveLength(10);
   });
 
   it("takes the subreddit's casing and title from the feed head, or the typed name", () => {
     expect(
-      parseRedditFeed(feed([], { term: "LiverpoolFC", title: "Liverpool FC" }), "liverpoolfc")
+      parseRedditFeed(redditFeed([], { term: "LiverpoolFC", title: "Liverpool FC" }), "liverpoolfc")
     ).toEqual({
       ok: true,
       feed: {
@@ -178,7 +202,7 @@ describe("subreddit entry filtering", () => {
         headlines: []
       }
     });
-    const noTerm = feed([]).replace(/<category[^>]*\/>/, "");
+    const noTerm = redditFeed([]).replace(/<category[^>]*\/>/, "");
     expect(parseRedditFeed(noTerm, "nfl")).toMatchObject({
       ok: true,
       feed: { subreddit: { displayName: "nfl" } }
@@ -214,40 +238,11 @@ describe("subreddit failure mapping", () => {
   });
 });
 
-describe("subreddit identity and icon", () => {
-  it("treats r/nfl and r/NFL as the same source and keeps publications by domain", () => {
-    const lower = sportsSourceIdentityKey({
-      retrievalMethod: "reddit",
-      canonicalDomain: "reddit.com",
-      feedUrl: "https://www.reddit.com/r/nfl/hot.rss"
-    });
-    const upper = sportsSourceIdentityKey({
-      retrievalMethod: "reddit",
-      canonicalDomain: "reddit.com",
-      feedUrl: "https://www.reddit.com/r/NFL/hot.rss"
-    });
-    expect(lower).toBe(upper);
-    expect(lower).toBe("reddit:nfl");
-    expect(
-      sportsSourceIdentityKey({
-        retrievalMethod: "feed",
-        canonicalDomain: "espn.com",
-        feedUrl: null
-      })
-    ).toBe("domain:espn.com");
-    expect(
-      sportsSourceIdentityKey({
-        retrievalMethod: "feed",
-        canonicalDomain: "reddit.com",
-        feedUrl: null
-      })
-    ).not.toBe(lower);
-  });
-});
-
 describe("reading a subreddit", () => {
-  it("makes one feed call pinned to www.reddit.com with Atom types, a byte cap, and a descriptive agent", async () => {
-    const fetch = fetchMap({ [FEED_URL_UPPER]: okAtom(FEED_URL_UPPER, feed([entry()])) });
+  it("makes one feed call pinned to www.reddit.com with Atom types, a byte cap, a descriptive agent, and no robots gate", async () => {
+    const fetch = fetchMap({
+      [FEED_URL_UPPER]: okAtom(FEED_URL_UPPER, redditFeed([redditEntry()]))
+    });
     const result = await readSubreddit(fetch, "NFL");
     expect(result).toMatchObject({
       ok: true,
@@ -271,16 +266,28 @@ describe("reading a subreddit", () => {
     ]);
     expect(options?.maxBytes).toBe(1_000_000);
     expect(options?.rejectOversizedResponses).toBe(true);
+    expect(options?.skipRobots).toBe(true);
     expect(options?.userAgent).toMatch(/^Moss\//);
     expect(options?.requestHeaders?.accept).toMatch(/^application\/atom\+xml/);
     const guard = options?.beforeRequest;
-    expect(await guard?.({ url: new URL(FEED_URL_UPPER), redirectCount: 0 })).toBe(true);
+    expect(guard?.({ url: new URL(FEED_URL_UPPER), redirectCount: 0 })).toBe(true);
+    expect(guard?.({ url: new URL("https://www.reddit.com/search?q=nfl"), redirectCount: 1 })).toBe(
+      false
+    );
     expect(
-      await guard?.({ url: new URL("https://www.reddit.com/search?q=nfl"), redirectCount: 1 })
+      guard?.({ url: new URL("https://old.reddit.com/r/NFL/hot.rss"), redirectCount: 0 })
     ).toBe(false);
     expect(
-      await guard?.({ url: new URL("https://old.reddit.com/r/NFL/hot.rss"), redirectCount: 0 })
+      guard?.({ url: new URL("https://www.reddit.com:8443/r/NFL/hot.rss"), redirectCount: 0 })
     ).toBe(false);
+  });
+
+  it("passes a timeout and abort signal through when asked", () => {
+    const controller = new AbortController();
+    const options = redditFetchOptions(FEED_URL, { timeoutMs: 6_000, signal: controller.signal });
+    expect(options.timeoutMs).toBe(6_000);
+    expect(options.signal).toBe(controller.signal);
+    expect(redditFetchOptions(FEED_URL)).not.toHaveProperty("timeoutMs");
   });
 
   it("reports a missing subreddit whether Reddit answers 404 or a non-feed body", async () => {
@@ -294,96 +301,15 @@ describe("reading a subreddit", () => {
       await readSubreddit(fetchMap({ [FEED_URL]: okAtom(FEED_URL, "<html>blocked</html>") }), "nfl")
     ).toEqual({ ok: false, reason: "not_found" });
   });
-});
-
-describe("resolveSportsSourceInput for a subreddit", () => {
-  const body = feed([
-    entry(),
-    entry({ id: "t3_self1", link: "https://www.reddit.com/r/nfl/comments/self1/x/" }),
-    entry({
-      id: "t3_two",
-      title: "Bills extend their coach",
-      link: "https://theathletic.com/nfl/bills-coach"
-    })
-  ]);
-  const deps = () => ({
-    fetch: fetchMap({
-      [FEED_URL]: okAtom(FEED_URL, body),
-      [FEED_URL_UPPER]: okAtom(FEED_URL_UPPER, body)
-    }),
-    ai
-  });
-
-  it("builds a reddit candidate with the feed URL as the one target for every scope", async () => {
-    const result = await resolveSportsSourceInput(db, deps(), {
-      rawUrl: "r/NFL",
-      targets: [
-        { target: { kind: "sport", sportKey: "football" }, label: "Football", scope: "sport" },
-        {
-          target: { kind: "follow", followId: "follow-1" },
-          label: "Kansas City Chiefs",
-          scope: "team"
-        }
-      ]
-    });
-    expect(result).toMatchObject({
-      status: "ok",
-      candidate: {
-        label: "r/nfl",
-        canonicalDomain: "reddit.com",
-        homepageUrl: "https://www.reddit.com/r/nfl/",
-        feedUrl: FEED_URL,
-        retrievalMethod: "reddit",
-        recipe: null,
-        recipeFingerprint: null,
-        iconUrl: null,
-        confirmedFetchHosts: ["www.reddit.com"],
-        sampleCount: 2,
-        samples: [
-          { headline: "Chiefs sign a new kicker" },
-          { headline: "Bills extend their coach" }
-        ],
-        targets: [
-          { targetUrl: FEED_URL, parameters: {} },
-          { targetUrl: FEED_URL, parameters: {} }
-        ]
-      }
-    });
-  });
 
   it.each([
-    ["not_found", { ok: false, reason: "http_error", status: 404 }],
     ["auth_required", { ok: false, reason: "http_error", status: 403 }],
     ["rate_limited", { ok: false, reason: "http_error", status: 429 }],
-    ["unreachable", { ok: false, reason: "http_error", status: 502 }]
-  ] as const)("rejects with %s", async (reason, failure) => {
-    const result = await resolveSportsSourceInput(
-      db,
-      { fetch: fetchMap({ [FEED_URL]: failure }), ai },
-      { rawUrl: "r/nfl" }
-    );
-    expect(result).toEqual({ status: "rejected", reason });
-  });
-
-  it("rejects a malformed name without fetching", async () => {
-    const fetch = fetchMap({});
-    expect(await resolveSportsSourceInput(db, { fetch, ai }, { rawUrl: "r/no" })).toEqual({
-      status: "rejected",
-      reason: "invalid_input"
+    ["unreachable", { ok: false, reason: "network" }]
+  ] as const)("surfaces %s from the feed call", async (reason, failure) => {
+    expect(await readSubreddit(fetchMap({ [FEED_URL]: failure }), "nfl")).toEqual({
+      ok: false,
+      reason
     });
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it("refuses a saved row whose authority is not reddit pinned to www.reddit.com", async () => {
-    const result = await resolveSportsSourceInput(db, deps(), {
-      rawUrl: FEED_URL,
-      persistedAuthority: {
-        canonicalDomain: "reddit.com",
-        recipeJson: null,
-        recipeFingerprint: null,
-        confirmedFetchHosts: ["old.reddit.com"]
-      }
-    });
-    expect(result).toEqual({ status: "rejected", reason: "unsupported" });
   });
 });
