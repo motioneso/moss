@@ -1,68 +1,270 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   looksLikeBulkMail,
   extractEmailSignals,
+  extractEmailSignalsBatch,
   parseEmail,
   type EmailExtractDeps,
+  type EmailExtractResult,
   type ParsedEmail
 } from "../../packages/connectors/src/email-extract.js";
+import {
+  sortFetchedEmails,
+  type SavedEmailMarker
+} from "../../packages/connectors/src/google-sync-phases.js";
 
-function parsedEmail(overrides: Partial<ParsedEmail> = {}): ParsedEmail {
+/**
+ * #2271 round 2. The earlier version of this file handed the extractor a fixed "noise" answer and
+ * then checked that particular words appeared in the instructions, so it proved almost nothing.
+ * These tests run a set of invented emails through the real path instead: the real bulk-mail rule,
+ * the real sign-in-code rule, the real sorting step that decides what reaches the model, the real
+ * prompt builder, and the real code that turns a verdict into stored triage and suggested tasks.
+ *
+ * What a unit test cannot do is judge the model: the category itself comes back from the model, so
+ * these tests supply a per-email verdict and prove the code around it behaves. Evidence that the
+ * rewritten instructions actually sort a promotion into noise has to come from the live re-judge
+ * run on dev, which is why the pull request still says code-complete, unverified.
+ */
+
+const OWN_ADDRESS = "ben@example.com";
+
+interface Corpus {
+  /** Plain name used in test output. */
+  readonly name: string;
+  readonly email: ParsedEmail;
+  /** What the real bulk-mail rule should say about it. */
+  readonly bulk: boolean;
+  /** A plausible verdict for this email, in the compact shape the model actually returns. */
+  readonly verdict: Record<string, unknown>;
+}
+
+function email(overrides: Partial<ParsedEmail> & Pick<ParsedEmail, "externalId">): ParsedEmail {
   return {
-    externalId: "msg-1",
     threadId: null,
     historyId: null,
-    subject: "A Refresh On Your Favorite Run Gear",
-    from: "Roark <news@roark.example>",
-    recipients: ["ben@example.com"],
+    subject: "Subject",
+    from: "someone@example.com",
+    recipients: [OWN_ADDRESS],
     receivedAt: "2026-09-01T12:00:00.000Z",
     labelIds: ["INBOX", "IMPORTANT"],
-    snippet: "New colours just dropped",
-    body: "New colours just dropped. Act now, this ends tonight.",
+    snippet: "",
+    body: "",
     bodyTruncated: false,
     ...overrides
   };
 }
 
-const REPLY = {
-  summary: "A clothing sale.",
-  billsDue: [],
-  actionItems: [],
-  deadlines: [],
-  mayGetLostInShuffle: false,
-  importance: "normal",
-  confidence: 0.9,
-  actionability: { category: "noise" }
-};
+const UNSUBSCRIBE_FOOTER = "\n\nDo not want these? Unsubscribe at any time.";
 
-/** Runs one extraction and hands back the prompt the model was given. */
-async function promptFor(parsed: ParsedEmail): Promise<string> {
-  let seen = "";
+/**
+ * Invented mail modelled on the real misfiled messages from Ben's inbox: a clothing sale, a ticket
+ * drop, an advocacy campaign, a terms update, a sign-in notice, a listening party and a drill, plus
+ * the obligations that must survive - a rent reminder that carries an unsubscribe link, a declined
+ * payment, a recruiter, and a sign-in code that must never reach the model at all.
+ */
+const CORPUS: readonly Corpus[] = [
+  {
+    name: "a clothing sale with urgent wording",
+    email: email({
+      externalId: "promo-run-gear",
+      subject: "A refresh on your favourite run gear",
+      from: "Roark <news@roark.example>",
+      body: "New colours just dropped. Act now, this ends tonight." + UNSUBSCRIBE_FOOTER
+    }),
+    bulk: true,
+    verdict: { category: "noise", reason: "A clothing sale.", confidence: 0.9 }
+  },
+  {
+    name: "a ticket on-sale announcement",
+    email: email({
+      externalId: "promo-tickets",
+      subject: "Tickets go on sale Friday",
+      from: "Public Service Broadcasting <mail@band.example>",
+      body: "Presale opens at 10am and these always sell out fast." + UNSUBSCRIBE_FOOTER
+    }),
+    bulk: true,
+    verdict: { category: "noise", reason: "A ticket release.", confidence: 0.85 }
+  },
+  {
+    name: "an advocacy campaign asking for action",
+    email: email({
+      externalId: "promo-campaign",
+      subject: "Action required: tell your senator today",
+      from: "Breakthrough T1D <advocacy@charity.example>",
+      body: "Add your name before the vote. This is our last chance." + UNSUBSCRIBE_FOOTER
+    }),
+    bulk: true,
+    verdict: { category: "noise", reason: "A fundraising campaign.", confidence: 0.8 }
+  },
+  {
+    name: "a terms-of-service update",
+    email: email({
+      externalId: "policy-terms",
+      subject: "We are updating our terms",
+      from: "Spotify <no-reply@spotify.example>",
+      body: "The changes take effect next month. No action is needed." + UNSUBSCRIBE_FOOTER
+    }),
+    bulk: true,
+    verdict: { category: "fyi", reason: "A policy update.", confidence: 0.9 }
+  },
+  {
+    name: "a new-sign-in notice where nothing failed",
+    email: email({
+      externalId: "security-signin",
+      subject: "New sign-in on a Windows device",
+      from: "Google <no-reply@accounts.google.example>",
+      body: "You signed in on a new device. If this was you, there is nothing to do."
+    }),
+    bulk: false,
+    verdict: { category: "fyi", reason: "A routine security notice.", confidence: 0.9 }
+  },
+  {
+    name: "a listening party starting soon",
+    email: email({
+      externalId: "promo-listening-party",
+      subject: "Starting in 30 minutes",
+      from: "Bandcamp <noreply@bandcamp.example>",
+      body: "Join the artist and listen along with everyone else." + UNSUBSCRIBE_FOOTER
+    }),
+    bulk: true,
+    verdict: { category: "noise", reason: "An event promo.", confidence: 0.85 }
+  },
+  {
+    name: "a scheduled emergency-alert drill",
+    email: email({
+      externalId: "promo-drill",
+      subject: "This is a test of the emergency notification system",
+      from: "SDGE <alerts@utility.example>",
+      body: "No action is required. This is only a test." + UNSUBSCRIBE_FOOTER
+    }),
+    bulk: true,
+    verdict: { category: "noise", reason: "A scheduled test alert.", confidence: 0.9 }
+  },
+  {
+    name: "a rent reminder that also carries an unsubscribe link",
+    email: email({
+      externalId: "obligation-rent",
+      subject: "Your September rent statement",
+      from: "Parkside Residences <billing@landlord.example>",
+      body: "A balance of 2,150 dollars is due on the first of the month." + UNSUBSCRIBE_FOOTER
+    }),
+    bulk: true,
+    verdict: {
+      category: "needs_action",
+      reason: "Rent is due.",
+      action: "Pay the rent",
+      dueDate: "2026-10-01",
+      confidence: 0.95
+    }
+  },
+  {
+    name: "a declined payment",
+    email: email({
+      externalId: "obligation-payment",
+      subject: "We could not process your payment",
+      from: "PayPal <service@paypal.example>",
+      body: "Your card was declined, so the transaction did not go through."
+    }),
+    bulk: false,
+    verdict: {
+      category: "needs_action",
+      reason: "A payment failed.",
+      action: "Update the card on file",
+      dueDate: "2026-09-08",
+      confidence: 0.9
+    }
+  },
+  {
+    name: "a recruiter asking for times",
+    email: email({
+      externalId: "obligation-reply",
+      subject: "Chat this week?",
+      from: "Dana Okafor <dana@recruiting.example>",
+      body: "Which afternoons suit you? Happy to work around your schedule."
+    }),
+    bulk: false,
+    verdict: {
+      category: "needs_reply",
+      reason: "A person is waiting.",
+      action: "Send Dana some times",
+      confidence: 0.9
+    }
+  },
+  {
+    name: "a sign-in code",
+    email: email({
+      externalId: "code-verification",
+      subject: "Your verification code",
+      from: "Google <no-reply@accounts.google.example>",
+      body: "482910 is your Google verification code. Do not share it with anyone."
+    }),
+    bulk: false,
+    verdict: { category: "unknown", confidence: 0 }
+  }
+];
+
+const byId = new Map(CORPUS.map((entry) => [entry.email.externalId, entry]));
+const SIGN_IN_CODE_ID = "code-verification";
+
+/**
+ * Stands in for the model. It answers from the corpus, keyed off the subject line it can see in
+ * the prompt, and records every prompt it was given so the tests can check what was actually sent.
+ */
+function fakeModel(): { deps: EmailExtractDeps; prompts: string[] } {
+  const prompts: string[] = [];
   const deps: EmailExtractDeps = {
-    runChat: async (prompt) => {
-      seen = prompt;
-      return { text: JSON.stringify(REPLY) };
+    runChat: async (prompt: string) => {
+      prompts.push(prompt);
+      const entry = CORPUS.find((candidate) =>
+        prompt.includes(`Subject: ${candidate.email.subject}`)
+      );
+      if (!entry) throw new Error(`no corpus entry matched the prompt: ${prompt.slice(0, 80)}`);
+      return { text: JSON.stringify(entry.verdict) };
     }
   };
-  await extractEmailSignals(parsed, deps);
-  return seen;
+  return { deps, prompts };
 }
 
-describe("recognizing bulk mail", () => {
-  it("counts a message that carried an unsubscribe header", () => {
+/** Runs the corpus through the real sorting step and then the real extractor, as the sync does. */
+async function runWholeCorpus(): Promise<{
+  readonly pending: ParsedEmail[];
+  readonly otpKeys: string[];
+  readonly prompts: string[];
+  readonly results: Map<string, EmailExtractResult>;
+}> {
+  const progress = { emailUpserted: 0, emailFailures: 0, errors: [] as string[] };
+  const { pending, otpKeys } = await sortFetchedEmails({
+    parsedMessages: CORPUS.map((entry) => entry.email),
+    seen: new Map<string, SavedEmailMarker>(),
+    persistEmail: async () => {},
+    progress,
+    onFailure: (error) => {
+      throw error;
+    }
+  });
+  const { deps, prompts } = fakeModel();
+  const results = new Map<string, EmailExtractResult>();
+  // One message per call, exactly as the sync batches them.
+  for (const message of pending) {
+    const [result] = await extractEmailSignalsBatch([message], deps);
+    results.set(message.externalId, result!);
+  }
+  return { pending, otpKeys, prompts, results };
+}
+
+describe("the bulk-mail rule itself", () => {
+  it("agrees with every invented email in the corpus", () => {
+    for (const entry of CORPUS) {
+      expect(looksLikeBulkMail(entry.email), entry.name).toBe(entry.bulk);
+    }
+  });
+
+  it("counts a message that carried an unsubscribe header even with no such word in the body", () => {
     expect(looksLikeBulkMail({ hasListUnsubscribe: true, body: "Nothing here." })).toBe(true);
   });
 
-  it("counts a message whose body offers to unsubscribe when no header was seen", () => {
-    expect(looksLikeBulkMail({ body: "Not interested? Unsubscribe here." })).toBe(true);
-    expect(looksLikeBulkMail({ hasListUnsubscribe: false, body: "Click to unsubscribe" })).toBe(
-      true
-    );
-  });
-
-  it("does not count ordinary mail, or the word buried inside a longer one", () => {
-    expect(looksLikeBulkMail({ body: "Hey, are you free Thursday?" })).toBe(false);
+  it("does not count the word buried inside a longer one", () => {
     expect(looksLikeBulkMail({ hasListUnsubscribe: false, body: "unsubscribable_link" })).toBe(
       false
     );
@@ -93,101 +295,108 @@ describe("reading the header off a fetched Gmail message", () => {
   });
 });
 
-describe("the bulk-mail line in the prompt", () => {
-  it("is present when the header was there", async () => {
-    const prompt = await promptFor(parsedEmail({ hasListUnsubscribe: true, body: "Sale on now." }));
-    expect(prompt).toContain("Bulk mail: yes (carries an unsubscribe link)");
+describe("what the sync sends to the model", () => {
+  it("holds back the sign-in code and sends every other invented email, bulk mail included", async () => {
+    const { pending, otpKeys } = await runWholeCorpus();
+    expect(otpKeys).toEqual([SIGN_IN_CODE_ID]);
+    const sent = pending.map((message) => message.externalId).sort();
+    const expected = CORPUS.map((entry) => entry.email.externalId)
+      .filter((id) => id !== SIGN_IN_CODE_ID)
+      .sort();
+    // Bulk mail is deliberately still judged: rent and loan reminders carry unsubscribe links too.
+    expect(sent).toEqual(expected);
   });
 
-  it("is present when only the body says unsubscribe", async () => {
-    const prompt = await promptFor(
-      parsedEmail({ body: "Tickets on sale now. Unsubscribe from these emails." })
-    );
-    expect(prompt).toContain("Bulk mail: yes");
-  });
-
-  it("is absent for a message from a person", async () => {
-    const prompt = await promptFor(
-      parsedEmail({
-        subject: "Hey",
-        from: "Sam <sam@example.com>",
-        body: "Are you around this weekend?"
-      })
-    );
-    // The rules themselves mention bulk mail, so this checks for the marker line that only ever
-    // appears alongside the message's own subject and sender.
-    expect(prompt).not.toContain("Bulk mail: yes (carries an unsubscribe link)");
-  });
-});
-
-describe("the triage instructions", () => {
-  it("say urgent wording alone is not evidence", async () => {
-    const prompt = await promptFor(parsedEmail());
-    expect(prompt).toContain("Urgent wording is not evidence on its own");
-    expect(prompt).toContain("action required");
-  });
-
-  it("list the things that are only worth knowing about", async () => {
-    const prompt = await promptFor(parsedEmail());
-    expect(prompt).toContain("new-sign-in and security-alert notices where");
-    expect(prompt).toContain("nothing actually failed");
-    expect(prompt).toContain("terms-of-service, privacy and policy updates");
-    expect(prompt).toContain("account activity");
-    expect(prompt).toContain("calendar notifications");
-    expect(prompt).toContain("shipping notices");
-  });
-
-  it("list the things that are not worth surfacing at all", async () => {
-    const prompt = await promptFor(parsedEmail());
-    expect(prompt).toContain("ticket releases and on-sale announcements");
-    expect(prompt).toContain("fundraising and");
-    expect(prompt).toContain("advocacy campaigns, petitions, event promos and listening parties");
-    expect(prompt).toContain("newsletters and digests");
-    expect(prompt).toContain("test alerts and scheduled drills");
-    expect(prompt).toContain("product update and release announcements");
-  });
-
-  it("keep time-sensitive news to things that affect this person", async () => {
-    const prompt = await promptFor(parsedEmail());
-    expect(prompt).toContain("it affects this user directly and it expires");
-    expect(prompt).toContain("Never a seller's or an artist's event");
-  });
-
-  it("tell the model a bill can still carry an unsubscribe link", async () => {
-    const prompt = await promptFor(parsedEmail());
-    expect(prompt).toContain("A real bill or bank alert can still carry an unsubscribe link");
-  });
-
-  it("still ask whether the message hands over a sign-in code", async () => {
-    const prompt = await promptFor(parsedEmail());
-    expect(prompt).toContain("deliversSignInCode: true only when this message hands the recipient");
-    expect(prompt).toContain("Never repeat the code itself anywhere in your answer.");
+  it("marks exactly the bulk mail in the prompt, and always sends the rules", async () => {
+    const { prompts } = await runWholeCorpus();
+    for (const prompt of prompts) {
+      const entry = CORPUS.find((candidate) =>
+        prompt.includes(`Subject: ${candidate.email.subject}`)
+      );
+      expect(entry, "every prompt belongs to a corpus email").toBeDefined();
+      const marked = prompt.includes("Bulk mail: yes (carries an unsubscribe link)");
+      expect(marked, entry!.name).toBe(entry!.bulk);
+      expect(prompt).toContain("Urgent wording is not evidence on its own");
+      expect(prompt).toContain("A real bill or bank alert can still carry an unsubscribe link");
+      expect(prompt).toContain(
+        "deliversSignInCode: true only when this message hands the recipient"
+      );
+    }
   });
 });
 
-describe("what gets stored", () => {
-  it("records bulk mail as a plain yes, and never the unsubscribe address", async () => {
-    const result = await extractEmailSignals(
-      parsedEmail({ hasListUnsubscribe: true, body: "Sale on now. mailto:stop@roark.example" }),
-      { runChat: async () => ({ text: JSON.stringify(REPLY) }) }
-    );
-    expect(result.signals.bulk).toBe(true);
-    expect(JSON.stringify(result.signals)).not.toContain("stop@roark.example");
+describe("what comes back out", () => {
+  it("stores the verdict and the bulk yes-or-no for every invented email", async () => {
+    const { results } = await runWholeCorpus();
+    for (const [externalId, result] of results) {
+      const entry = byId.get(externalId)!;
+      expect(result.signals.actionability?.category, entry.name).toBe(entry.verdict.category);
+      expect(result.signals.bulk, entry.name).toBe(entry.bulk ? true : undefined);
+      expect(JSON.stringify(result.signals)).not.toContain("Unsubscribe at any time");
+    }
   });
 
-  it("leaves the flag off ordinary mail", async () => {
-    const result = await extractEmailSignals(
-      parsedEmail({ subject: "Hey", from: "Sam <sam@example.com>", body: "Free Thursday?" }),
-      { runChat: async () => ({ text: JSON.stringify(REPLY) }) }
+  it("turns none of the sales, campaigns, policy updates or drills into a task", async () => {
+    const { results } = await runWholeCorpus();
+    const quiet = CORPUS.filter(
+      (entry) => entry.verdict.category === "noise" || entry.verdict.category === "fyi"
     );
-    expect(result.signals.bulk).toBeUndefined();
+    expect(quiet.length).toBeGreaterThan(5);
+    for (const entry of quiet) {
+      const result = results.get(entry.email.externalId)!;
+      expect(result.signals.actionability?.suggestedTasks ?? [], entry.name).toEqual([]);
+      // Only the three actionable categories carry a subject through to a flag on Today.
+      expect(result.signals.actionability?.inferredSubject, entry.name).toBeUndefined();
+    }
   });
 
-  it("does not change what a noise verdict turns into", async () => {
-    const result = await extractEmailSignals(parsedEmail({ hasListUnsubscribe: true }), {
-      runChat: async () => ({ text: JSON.stringify(REPLY) })
+  it("still raises the rent reminder that carries an unsubscribe link", async () => {
+    const { results } = await runWholeCorpus();
+    const rent = results.get("obligation-rent")!;
+    expect(rent.signals.bulk).toBe(true);
+    expect(rent.signals.actionability?.category).toBe("needs_action");
+    expect(rent.signals.actionability?.suggestedTasks).toEqual([
+      { text: "Pay the rent", dueDate: "2026-10-01" }
+    ]);
+    expect(rent.signals.actionability?.inferredSubject).toBe("Your September rent statement");
+  });
+
+  it("still raises the declined payment and the recruiter", async () => {
+    const { results } = await runWholeCorpus();
+    expect(results.get("obligation-payment")!.signals.actionability?.category).toBe("needs_action");
+    expect(results.get("obligation-payment")!.signals.actionability?.suggestedTasks).toEqual([
+      { text: "Update the card on file", dueDate: "2026-09-08" }
+    ]);
+    const recruiter = results.get("obligation-reply")!;
+    expect(recruiter.signals.actionability?.category).toBe("needs_reply");
+    expect(recruiter.signals.bulk).toBeUndefined();
+  });
+
+  it("never asks the model about the sign-in code", async () => {
+    const { prompts } = await runWholeCorpus();
+    for (const prompt of prompts) {
+      expect(prompt).not.toContain("482910");
+    }
+  });
+});
+
+describe("a message the sorting step passes straight to the extractor", () => {
+  it("marks bulk mail when only the header said so, with no such word in the body", async () => {
+    const seen = vi.fn(async (prompt: string) => {
+      expect(prompt).toContain("Bulk mail: yes (carries an unsubscribe link)");
+      return { text: JSON.stringify({ category: "noise", confidence: 0.9 }) };
     });
-    expect(result.signals.actionability?.category).toBe("noise");
-    expect(result.signals.actionability?.suggestedTasks ?? []).toEqual([]);
+    const result = await extractEmailSignals(
+      email({
+        externalId: "header-only",
+        subject: "Weekend hours",
+        from: "Shop <news@shop.example>",
+        hasListUnsubscribe: true,
+        body: "We are open late on Saturday."
+      }),
+      { runChat: seen }
+    );
+    expect(seen).toHaveBeenCalledTimes(1);
+    expect(result.signals.bulk).toBe(true);
   });
 });
