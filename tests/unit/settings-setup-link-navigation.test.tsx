@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 // Regression coverage for PR 2220: a button in personal settings that jumps to the admin-only
 // AI providers section needs to work even while the settings page is showing personal sections.
 // The old section switcher checked the requested id only against whichever list (personal or
@@ -25,6 +24,15 @@ import type * as ClientModule from "../../apps/web/src/api/client.js";
 
 vi.mock("../../apps/web/src/api/use-assistant-name.js", () => ({
   useAssistantName: () => "Moss"
+}));
+
+// This test runs under the plain vitest config, which does not load the Vite plugin that
+// normally supplies this module's contents at build time. Stand in an empty module list, since
+// this test does not need a real one.
+vi.mock("virtual:moss-module-settings", () => ({
+  MODULE_SETTINGS_SURFACES: [],
+  MODULE_SETTINGS_COMPONENTS: {},
+  MODULE_SETTING_KEYWORDS: {}
 }));
 
 vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => {
