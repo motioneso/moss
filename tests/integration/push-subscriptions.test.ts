@@ -152,6 +152,48 @@ describe("Push subscriptions (#743)", () => {
     expect(again.statusCode).toBe(200);
     expect(again.json<{ device: { id: string } }>().device.id).toBe(registered.id);
   });
+  it("finding 1: the route refuses addresses that are not a public https push service", async () => {
+    const refused = [
+      "http://push.example.test/send/plain",
+      "https://user:secret@push.example.test/send/creds",
+      "https://127.0.0.1/send/loopback",
+      "https://192.168.50.36:3000/send/lan",
+      "https://[::1]/send/v6-loopback",
+      "https://localhost/send/local",
+      "https://printer.local/send/mdns",
+      `https://push.example.test/send/${"a".repeat(2100)}`
+    ];
+    for (const endpoint of refused) {
+      const response = await registerAs(ids.sessionA, endpoint);
+      expect(response.statusCode, endpoint).toBe(400);
+    }
+
+    // Malformed keys are refused by the request schema before the handler runs.
+    const badKeys = await server.inject({
+      method: "POST",
+      url: "/api/notifications/push/subscriptions",
+      headers: { authorization: `Bearer ${ids.sessionA}` },
+      payload: { endpoint: endpointFor("keys"), keys: { p256dh: "short", auth: AUTH } }
+    });
+    expect(badKeys.statusCode).toBe(400);
+
+    // None of the refused addresses left a row behind: the device list grows by exactly
+    // one when a public address is finally accepted.
+    const listDevices = async () => {
+      const response = await server.inject({
+        method: "GET",
+        url: "/api/notifications/push/config",
+        headers: { authorization: `Bearer ${ids.sessionA}` }
+      });
+      expect(response.statusCode).toBe(200);
+      return response.json<{ enabledDevices: { id: string }[] }>().enabledDevices;
+    };
+    const before = (await listDevices()).length;
+    const accepted = await registerAs(ids.sessionA, endpointFor("public"));
+    expect(accepted.statusCode).toBe(200);
+    expect((await listDevices()).length).toBe(before + 1);
+  });
+
   it("finding 3: another user and the admin role can neither see nor delete a device", async () => {
     const endpoint = endpointFor("owner");
     const registered = (await registerAs(ids.sessionA, endpoint)).json<{ device: { id: string } }>()

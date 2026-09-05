@@ -17,6 +17,10 @@ import {
 import { projectNotificationMetadata } from "./metadata.js";
 import { createPushSigningCipher, getOrGeneratePushSigningKey } from "./push-crypto.js";
 import {
+  PushSubscriptionInvalidError,
+  validatePushSubscriptionInput
+} from "./push-endpoint-policy.js";
+import {
   PushSubscriptionLimitError,
   PushSubscriptionsRepository,
   type PushSubscriptionDevice
@@ -142,17 +146,29 @@ export function registerNotificationsRoutes(
         const accessContext = await dependencies.resolveAccessContext(request);
         const userAgentLabel = parseUserAgentLabel(request.headers["user-agent"]);
 
+        // #743 security finding 1: the JSON schema only checks shape. This parses the
+        // address and refuses non-https, credentials, IP literals and private hosts
+        // before anything is stored or ever contacted.
+        const input = validatePushSubscriptionInput({
+          endpoint: request.body.endpoint,
+          p256dh: request.body.keys.p256dh,
+          auth: request.body.keys.auth
+        });
+
         const device = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
           pushSubscriptionsRepository.upsert(scopedDb, {
-            endpoint: request.body.endpoint,
-            p256dh: request.body.keys.p256dh,
-            auth: request.body.keys.auth,
+            endpoint: input.endpoint,
+            p256dh: input.p256dh,
+            auth: input.auth,
             userAgentLabel
           })
         );
 
         return { device: serializePushDevice(device) };
       } catch (error) {
+        if (error instanceof PushSubscriptionInvalidError) {
+          return handleRouteError(new HttpError(400, error.message), reply);
+        }
         if (error instanceof PushSubscriptionLimitError) {
           return handleRouteError(new HttpError(409, error.message), reply);
         }

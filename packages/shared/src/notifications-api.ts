@@ -217,17 +217,34 @@ export const pushConfigResponseSchema = {
   }
 } as const;
 
+/**
+ * Push delivery addresses must be https URLs (the browser only hands out those) and the
+ * server refuses anything else before it ever stores or contacts the address. The key
+ * lengths are fixed by the Web Push encryption spec: a 65-byte uncompressed P-256 point
+ * (87 base64url characters) and a 16-byte auth secret (22 characters).
+ */
+export const PUSH_ENDPOINT_MIN_LENGTH = 12;
+export const PUSH_ENDPOINT_MAX_LENGTH = 2048;
+export const PUSH_ENDPOINT_PATTERN = "^https://";
+export const PUSH_P256DH_PATTERN = "^[A-Za-z0-9_-]{87}=?$";
+export const PUSH_AUTH_PATTERN = "^[A-Za-z0-9_-]{22}(==)?$";
+
 export const registerPushSubscriptionRequestSchema = {
   type: "object",
   required: ["endpoint", "keys"],
   properties: {
-    endpoint: { type: "string", minLength: 1 },
+    endpoint: {
+      type: "string",
+      minLength: PUSH_ENDPOINT_MIN_LENGTH,
+      maxLength: PUSH_ENDPOINT_MAX_LENGTH,
+      pattern: PUSH_ENDPOINT_PATTERN
+    },
     keys: {
       type: "object",
       required: ["p256dh", "auth"],
       properties: {
-        p256dh: { type: "string", minLength: 1 },
-        auth: { type: "string", minLength: 1 }
+        p256dh: { type: "string", pattern: PUSH_P256DH_PATTERN },
+        auth: { type: "string", pattern: PUSH_AUTH_PATTERN }
       }
     }
   }

@@ -185,6 +185,96 @@ describe("runPushDeliverJob", () => {
     });
   });
 
+  // #743 security finding 1: every send goes through the guarded https agent with a
+  // bounded socket timeout, so a hostile address can neither reach the box's network
+  // (DNS rebinding) nor hold a worker open forever.
+  it("sends through the guarded https agent with a bounded timeout", async () => {
+    const { runPushDeliverJob } = await import("@moss/notifications");
+    const httpsAgent = { fake: "agent" } as never;
+    const sendWebPush = vi.fn().mockResolvedValue(undefined);
+
+    await runPushDeliverJob(
+      deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
+      fakeScopedDb,
+      {
+        notificationsRepository: {
+          getById: vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null })
+        } as never,
+        subscriptionsRepository: {
+          listActiveForDelivery: vi.fn().mockResolvedValue([fakeSubscription()]),
+          recordDeliverySuccess: vi.fn(),
+          recordDeliveryFailure: vi.fn(),
+          delete: vi.fn()
+        } as never,
+        cipher: {} as never,
+        sendWebPush,
+        httpsAgent
+      }
+    );
+
+    expect(sendWebPush).toHaveBeenCalledTimes(1);
+    const options = sendWebPush.mock.calls[0]?.[2] as { timeout?: number; agent?: unknown };
+    expect(options.timeout).toBe(10_000);
+    expect(options.agent).toBe(httpsAgent);
+  });
+
+  it("uses a real guarded agent when none is injected", async () => {
+    const { runPushDeliverJob } = await import("@moss/notifications");
+    const sendWebPush = vi.fn().mockResolvedValue(undefined);
+
+    await runPushDeliverJob(
+      deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
+      fakeScopedDb,
+      {
+        notificationsRepository: {
+          getById: vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null })
+        } as never,
+        subscriptionsRepository: {
+          listActiveForDelivery: vi.fn().mockResolvedValue([fakeSubscription()]),
+          recordDeliverySuccess: vi.fn(),
+          recordDeliveryFailure: vi.fn(),
+          delete: vi.fn()
+        } as never,
+        cipher: {} as never,
+        sendWebPush
+      }
+    );
+
+    const options = sendWebPush.mock.calls[0]?.[2] as { agent?: { options?: { lookup?: unknown } } };
+    expect(typeof options.agent?.options?.lookup).toBe("function");
+  });
+
+  it("drops a stored address that fails the send-time policy without contacting it", async () => {
+    const { runPushDeliverJob } = await import("@moss/notifications");
+    const sendWebPush = vi.fn().mockResolvedValue(undefined);
+    const del = vi.fn();
+    const recordDeliveryFailure = vi.fn();
+
+    await runPushDeliverJob(
+      deliverJob({ actorUserId: "u1", notificationId: "n1", recipientUserId: "u1" }),
+      fakeScopedDb,
+      {
+        notificationsRepository: {
+          getById: vi.fn().mockResolvedValue({ id: "n1", title: "Hi", body: "there", href: null })
+        } as never,
+        subscriptionsRepository: {
+          listActiveForDelivery: vi
+            .fn()
+            .mockResolvedValue([fakeSubscription({ endpoint: "http://192.168.50.36:3000/ep" })]),
+          recordDeliverySuccess: vi.fn(),
+          recordDeliveryFailure,
+          delete: del
+        } as never,
+        cipher: {} as never,
+        sendWebPush
+      }
+    );
+
+    expect(sendWebPush).not.toHaveBeenCalled();
+    expect(del).toHaveBeenCalledWith(fakeScopedDb, "sub-1");
+    expect(recordDeliveryFailure).not.toHaveBeenCalled();
+  });
+
   it("deletes the subscription when the push service reports it gone (404)", async () => {
     const { runPushDeliverJob } = await import("@moss/notifications");
     const subscription = fakeSubscription();

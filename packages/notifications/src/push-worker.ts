@@ -1,3 +1,5 @@
+import type https from "node:https";
+
 import { sql } from "kysely";
 import webpush from "web-push";
 
@@ -10,6 +12,12 @@ import {
   getOrGeneratePushSigningKey,
   resolveVapidSubject
 } from "./push-crypto.js";
+import {
+  PUSH_SEND_TIMEOUT_MS,
+  PushSubscriptionInvalidError,
+  createPushHttpsAgent,
+  validatePushEndpoint
+} from "./push-endpoint-policy.js";
 import type { PushDeliverJobPayload, PushSummaryJobPayload } from "./push-jobs.js";
 import {
   PushSubscriptionsRepository,
@@ -23,6 +31,21 @@ export interface PushWorkerDependencies {
   readonly cipher?: ReturnType<typeof createPushSigningCipher>;
   /** Test seam: real code always goes through the `web-push` library. */
   readonly sendWebPush?: typeof webpush.sendNotification;
+  /**
+   * The https agent every send goes through. Defaults to one whose DNS lookup refuses
+   * private, loopback and link-local answers (#743 security finding 1, DNS rebinding).
+   */
+  readonly httpsAgent?: https.Agent;
+}
+
+let defaultHttpsAgent: https.Agent | undefined;
+
+function resolveHttpsAgent(deps: PushWorkerDependencies): https.Agent {
+  if (deps.httpsAgent) {
+    return deps.httpsAgent;
+  }
+  defaultHttpsAgent ??= createPushHttpsAgent();
+  return defaultHttpsAgent;
 }
 
 /**
@@ -72,6 +95,7 @@ async function deliverToSubscriptions(
   scopedDb: DataContextDb,
   subscriptionsRepository: PushSubscriptionsRepository,
   sendWebPush: typeof webpush.sendNotification,
+  httpsAgent: https.Agent,
   subscriptions: readonly PushDeliveryTarget[],
   vapidDetails: VapidDetails,
   payload: WebPushPayload
@@ -81,18 +105,22 @@ async function deliverToSubscriptions(
   await Promise.all(
     subscriptions.map(async (subscription) => {
       try {
+        // Re-check the stored address at send time so a row written before the policy
+        // existed, or under a weaker one, can never turn a send into a private request.
+        const endpoint = validatePushEndpoint(subscription.endpoint);
         await sendWebPush(
           {
-            endpoint: subscription.endpoint,
+            endpoint,
             keys: { p256dh: subscription.p256dh, auth: subscription.auth }
           },
           serialized,
-          { vapidDetails }
+          { vapidDetails, timeout: PUSH_SEND_TIMEOUT_MS, agent: httpsAgent }
         );
         await subscriptionsRepository.recordDeliverySuccess(scopedDb, subscription.id);
       } catch (error) {
         const statusCode = (error as { statusCode?: number }).statusCode;
-        if (statusCode === 404 || statusCode === 410) {
+        if (statusCode === 404 || statusCode === 410 || error instanceof PushSubscriptionInvalidError) {
+          // Gone, or an address the policy will never send to: drop the row.
           await subscriptionsRepository.delete(scopedDb, subscription.id);
         } else {
           await subscriptionsRepository.recordDeliveryFailure(scopedDb, subscription.id);
@@ -134,6 +162,7 @@ export async function runPushDeliverJob(
     scopedDb,
     subscriptionsRepository,
     sendWebPush,
+    resolveHttpsAgent(deps),
     subscriptions,
     buildVapidDetails(signingKey),
     buildPushPayload({
@@ -187,6 +216,7 @@ export async function runPushSummaryJob(
     scopedDb,
     subscriptionsRepository,
     sendWebPush,
+    resolveHttpsAgent(deps),
     subscriptions,
     buildVapidDetails(signingKey),
     {

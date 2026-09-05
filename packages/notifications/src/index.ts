@@ -11,6 +11,7 @@ export * from "./digest.js";
 export * from "./repository.js";
 export * from "./routes.js";
 export * from "./push-crypto.js";
+export * from "./push-endpoint-policy.js";
 export * from "./push-jobs.js";
 export * from "./push-payload.js";
 export * from "./push-subscriptions-repository.js";
