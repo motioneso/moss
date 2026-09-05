@@ -16,7 +16,7 @@ import type {
 import type { ActionAuditInputSummary, AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
-import { AiRepository, type InsertAuditLogInput } from "../repository.js";
+import type { AiRepository, InsertAuditLogInput } from "../repository.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import {
@@ -25,7 +25,11 @@ import {
   safeErrorName
 } from "./dependency-failure.js";
 import { validateToolInput } from "./input-validation.js";
-import { renderAndCap, sanitizeAssistantToolResult } from "./output-validation.js";
+import {
+  liveStreamResult,
+  renderAndCap,
+  sanitizeAssistantToolResult
+} from "./output-validation.js";
 import { resolvePolicy } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
 import {
@@ -152,24 +156,6 @@ export interface NativeToolPermissionRequest {
 export interface NativeToolPermissionResponse {
   readonly decision: "allow" | "deny";
   readonly reason: string;
-}
-
-export function createUnwiredActionResolver(deps: {
-  readonly runner: DataContextRunner;
-  readonly repository?: AiRepository;
-}): AssistantToolGateway["resolveActionRequest"] {
-  const repository = deps.repository ?? new AiRepository();
-  return async (actorUserId, actionRequestId, status) => {
-    if (status === "confirmed") {
-      throw new HttpError(503, "Assistant action resolution is not available");
-    }
-
-    const access: AccessContext = { actorUserId, requestId: `unwired_${randomUUID()}` };
-    const resolved = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-      repository.resolveAssistantAction(scopedDb, actionRequestId, { status })
-    );
-    return resolved ? "resolved" : "not_found";
-  };
 }
 
 const NATIVE_TOOL_MODULE_ID = "claude-native";
@@ -998,23 +984,4 @@ export class AssistantToolGateway {
       opts
     );
   }
-}
-
-/**
- * What rides the `action_result` live stream record as `result`.
- *
- * By default this is the rendered `{ text }` the model saw — deliberately narrow, so a module
- * handler cannot push arbitrary shapes at the browser. A tool that owns an inline card opts in
- * with `streamsStructuredResult`, and then gets the schema-sanitized structured result instead
- * (`sanitizeAssistantToolResult` has already dropped every key the tool's own output schema does
- * not declare, so this widens what reaches the browser only as far as that schema).
- */
-export function liveStreamResult(
-  tool: { readonly streamsStructuredResult?: boolean },
-  result: Extract<GatewayToolResponse, { ok: true }>
-): Record<string, unknown> {
-  if (tool.streamsStructuredResult === true && result.structuredData !== undefined) {
-    return result.structuredData;
-  }
-  return result.data;
 }
