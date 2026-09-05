@@ -41,7 +41,8 @@ export const emailModuleManifest = {
     migrations: [
       "sql/0012_email_module.sql",
       "sql/0067_email_summary_signals_columns.sql",
-      "sql/0068_email_worker_grants_and_google_insert.sql"
+      "sql/0068_email_worker_grants_and_google_insert.sql",
+      "sql/0219_email_thread_lookup.sql"
     ],
     migrationDirectories: ["packages/email/sql"],
     ownedTables: ["app.email_messages"]
@@ -71,6 +72,13 @@ export const emailModuleManifest = {
         "An email that clearly hands over a sign-in code is set aside without analysis. " +
         "When the message is unclear, the model decides, so requests for help, replies, " +
         "forwards and door, booking or discount codes still come through."
+    },
+    {
+      id: "email.flag-only-real-obligations",
+      description:
+        "An email is only flagged or turned into a task when something is genuinely owed - a " +
+        "bill, an appointment, a form, a deadline, an account problem. Urgent wording in a " +
+        "sale, a newsletter or a security notice is not enough on its own."
     }
   ],
   permissions: [
@@ -115,8 +123,8 @@ export const emailModuleManifest = {
           id: "email.capture-tasks",
           name: "Capture tasks",
           description:
-            "Turn emails into tasks when they imply an action. Suggested by default; " +
-            "auto modes are opt-in per user.",
+            "Turn emails into tasks when someone is genuinely waiting on you. Suggested by " +
+            "default; auto modes are opt-in per user.",
           default: "default-on"
         },
         {

@@ -2,18 +2,21 @@ import type { GmailMessageFull, GmailPayloadPart } from "./google-api-client.js"
 import type { StructuredRunPriority, StructuredRunScope, StructuredTelemetry } from "@moss/ai";
 import { resolveMossEnv } from "@moss/db";
 
+import { looksLikeBulkMail } from "./email-bulk-rule.js";
 import {
   looksLikeOneTimeCodeEmail,
   signInCodeDecision,
   type OneTimeCodeEmailInput
-} from "./email-otp-rule.js";
+} from "@moss/shared/email-otp-rule";
+
+export { looksLikeBulkMail, type BulkMailInput } from "./email-bulk-rule.js";
 
 export {
   looksLikeOneTimeCodeEmail,
   signInCodeDecision,
   type OneTimeCodeEmailInput,
   type SignInCodeDecision
-} from "./email-otp-rule.js";
+} from "@moss/shared/email-otp-rule";
 
 /** Max decoded body length sent to the LLM (bounded to protect prompt limits, spec risk #6). */
 export const MAX_BODY_CHARS = 20_000;
@@ -58,6 +61,12 @@ export interface ParsedEmail {
   readonly snippet: string | null;
   readonly body: string;
   readonly bodyTruncated: boolean;
+  /**
+   * Whether the message carried a List-Unsubscribe header. A yes/no answer only — the address
+   * in that header is never read out, stored or logged. Absent when the provider does not
+   * expose headers, in which case the body word is the fallback (see email-bulk-rule.ts).
+   */
+  readonly hasListUnsubscribe?: boolean;
 }
 
 function header(part: GmailPayloadPart | undefined, name: string): string | undefined {
@@ -137,7 +146,10 @@ export function parseEmail(message: GmailMessageFull): ParsedEmail {
     labelIds: [...(message.labelIds ?? [])],
     snippet: message.snippet ?? null,
     body,
-    bodyTruncated: truncated
+    bodyTruncated: truncated,
+    // Presence only. Gmail returns every header with format=full, so this needs no extra call,
+    // and the header's value (a mailto: or an opt-out URL) is deliberately never captured.
+    hasListUnsubscribe: header(payload, "List-Unsubscribe") !== undefined
   };
 }
 
@@ -165,6 +177,18 @@ export type EmailActionabilityCategory =
   | "fyi"
   | "noise"
   | "unknown";
+
+/**
+ * Spec 2026-09-04-email-chief-of-staff §3.1: the first-pass gate. `nothing` stores no summary and
+ * a noise verdict; `worth_knowing` keeps a one-line summary and an fyi verdict; `maybe_owed` stores
+ * neither and marks the message for the per-thread second pass in Commitments.
+ */
+export type EmailGateOutcome = "nothing" | "worth_knowing" | "maybe_owed";
+export const EMAIL_GATE_OUTCOMES: readonly EmailGateOutcome[] = [
+  "nothing",
+  "worth_knowing",
+  "maybe_owed"
+];
 
 const ACTIONABILITY_CATEGORIES: readonly EmailActionabilityCategory[] = [
   "needs_reply",
@@ -194,6 +218,13 @@ export interface EmailSignals {
   readonly importance?: "low" | "normal" | "high";
   readonly confidence?: number;
   readonly truncated?: boolean;
+  /**
+   * Set when the message looks like it went to a mailing list rather than to this person. A
+   * yes/no answer only — the unsubscribe address is never stored. Decided before the model call
+   * and shown to the model, so a later look at a stored row explains why a sales mail with
+   * urgent wording was left alone.
+   */
+  readonly bulk?: boolean;
   /** Set when a message was recognized as handing over a sign-in code: either by the
    * deterministic rule, which skips the model call entirely, or by the model's own yes/no
    * answer when that rule was unsure. No `actionability` is ever attached to a skipped
@@ -201,6 +232,8 @@ export interface EmailSignals {
    * already invisible to the Today briefing filter and to suggested-task creation, both of
    * which require an inferred subject that a skipped message never gets. */
   readonly skipped?: "otp";
+  /** The gate said maybe_owed: no verdict yet, the thread's judgement worker decides. */
+  readonly pendingJudgement?: boolean;
 }
 
 export function otpSkippedResult(): EmailExtractResult {
@@ -210,6 +243,8 @@ export function otpSkippedResult(): EmailExtractResult {
 export interface EmailExtractResult {
   readonly summary: string | null;
   readonly signals: EmailSignals;
+  /** First-pass gate outcome. Absent on an otp skip and on answers that carried no gate. */
+  readonly gate?: EmailGateOutcome;
   /** True when the pass escalated to a higher tier (telemetry; counted by the handler). */
   readonly escalated?: boolean;
 }
@@ -259,6 +294,13 @@ export interface EmailExtractOptions {
   readonly priority?: StructuredRunPriority;
   readonly scope?: StructuredRunScope;
   readonly closeScope?: boolean;
+  /**
+   * Single-message path: the sender is someone the user already deals with (in their People or
+   * previously replied to). The gate is told to lean toward maybe_owed, but it is not proof.
+   */
+  readonly knownSender?: boolean;
+  /** Batch path: lower-cased sender addresses (see senderAddress) that count as known senders. */
+  readonly knownSenders?: ReadonlySet<string>;
 }
 
 export const EMAIL_EXTRACT_BATCH_MAX_ITEMS = 48;
@@ -302,22 +344,68 @@ async function withTimeout<T>(
   }
 }
 
+const GATE_INSTRUCTIONS = [
+  "First decide the gate. Answer exactly one of: nothing, worth_knowing, maybe_owed.",
+  "nothing: ordinary mail, bulk or not, that asks nothing of this user: newsletters, sales,",
+  "receipts, shipping notices, ticket releases, fundraising, petitions, event promos, product",
+  "updates, social notifications, test alerts, terms of service and policy updates, sign-in and",
+  "security notices where nothing failed, routine back-and-forth that asks nothing.",
+  "worth_knowing: the user would want to glance at it but it asks nothing: a parcel arrived, a",
+  "payment went through, a friend's news, a calendar notification, an account activity summary.",
+  "maybe_owed: a person or institution the user already deals with may be waiting on them, or a",
+  "date may bind them: a bill or payment problem, an appointment or form, a deadline from an",
+  "employer, school, landlord, bank, insurer or doctor, a question from someone they know. Urgent",
+  "wording (act now, action required, final notice) is not evidence by itself. Mail with an",
+  "unsubscribe link can still be maybe_owed (rent reminders, loan statements).",
+  "When you cannot tell, answer maybe_owed; a stronger reader decides later.",
+  "Only write a summary when the gate is worth_knowing."
+].join("\n");
+
 const EMAIL_TRIAGE_INSTRUCTIONS = [
   "You are an email triage assistant. Read the email and reply with one JSON object only:",
-  '{ category: "needs_reply"|"needs_action"|"time_sensitive_info"|"waiting_on_someone"|"fyi"|"noise"|"unknown",',
+  '{ gate: "nothing"|"worth_knowing"|"maybe_owed",',
+  '  category: "needs_reply"|"needs_action"|"time_sensitive_info"|"waiting_on_someone"|"fyi"|"noise"|"unknown",',
   "  confidence: number, reason?: string, action?: string, dueDate?: string,",
   "  deliversSignInCode: boolean }",
-  "confidence is 0..1. Use ISO dates. Keep reason and action concise.",
+  GATE_INSTRUCTIONS,
+  "confidence is 0..1. Use ISO dates (YYYY-MM-DD). Keep reason and action concise.",
+  "Each email is preceded by the date it arrived (Received) and today's date (Today). Use them to",
+  'resolve relative wording such as "tomorrow", "Friday" or "this week".',
+  "dueDate is the date the user's own reply or action is owed. It is NOT the date of the event,",
+  "meeting, interview, appointment or booking window the message is about. When someone asks the",
+  "user to suggest, choose or confirm times, what is owed is the answer, so the due date is within",
+  "one business day of Received unless the sender names an earlier deadline - never the date of the",
+  "slot being arranged. When a message states its own deadline for the user (a payment date, a form",
+  "cut-off, an RSVP date), use that date.",
+  "Only a real obligation justifies needs_reply, needs_action or time_sensitive_info: a person",
+  "or an institution the user already has a relationship with expects something from them, or",
+  "the user has already committed to something. Urgent wording is not evidence on its own -",
+  '"act now", "important", "action required", "final notice", "last chance", "ends tonight",',
+  "a countdown or a red banner all appear in ordinary marketing. When nothing is actually owed,",
+  "choose fyi or noise, however the message is worded.",
   "Actionability rules:",
   "- needs_reply: a real person is waiting on the user's answer. NEVER use it for marketing,",
   "  newsletters, receipts, or automated notifications, whatever the subject line claims.",
-  "- needs_action: the user must do something (pay a bill, submit, book, review). Include a",
-  "  short action and due date when concrete.",
-  "- time_sensitive_info: no action required but it expires (flight change, outage window).",
+  "- needs_action: a bill or a payment problem, an appointment, a form to fill in, a deadline",
+  "  set by an employer, a school, a landlord, a bank, an insurer or a doctor, or something the",
+  "  user signed up for that now needs a step from them. Include a short action and due date",
+  "  when concrete.",
+  "- time_sensitive_info: no action required, but it affects this user directly and it expires:",
+  "  their flight, their appointment, a delivery already on its way, an outage at their address.",
+  "  Never a seller's or an artist's event, sale window, ticket release, stream or party.",
   "- waiting_on_someone: the user is owed a response or delivery by someone else.",
-  "- fyi: informational, no urgency (receipts, confirmations, status updates).",
-  "- noise: marketing, promotions, newsletters, social notifications. No suggestedTasks.",
+  "- fyi: informational, no urgency. Use it for new-sign-in and security-alert notices where",
+  "  nothing actually failed, terms-of-service, privacy and policy updates, account activity",
+  "  summaries, calendar notifications, shipping notices, receipts and confirmations.",
+  "- noise: sales and promotions, ticket releases and on-sale announcements, fundraising and",
+  "  advocacy campaigns, petitions, event promos and listening parties, newsletters and digests,",
+  "  test alerts and scheduled drills, product update and release announcements, social",
+  "  notifications. No suggestedTasks.",
   "- unknown: only when genuinely unclassifiable.",
+  'Mail marked "Bulk mail: yes" went to a list, not to this person: treat it as noise or fyi',
+  "unless it is a bill, a payment problem, an appointment or a problem with this user's own",
+  "account. A real bill or bank alert can still carry an unsubscribe link, so do not dismiss it",
+  "on that alone.",
   "reason must be one short sentence.",
   "deliversSignInCode: true only when this message hands the recipient a fresh sign-in,",
   "verification or two-step code to type in. False for help requests, replies, forwards,",
@@ -325,12 +413,42 @@ const EMAIL_TRIAGE_INSTRUCTIONS = [
   "Never repeat the code itself anywhere in your answer."
 ].join("\n");
 
-function promptInput(parsed: ParsedEmail): string {
-  return [`Subject: ${parsed.subject}`, `From: ${parsed.from}`, "", parsed.body].join("\n");
+/** Calendar date as YYYY-MM-DD, or null when the value is missing or unreadable. */
+function calendarDate(value: string | Date): string | null {
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
 }
 
-function buildPrompt(parsed: ParsedEmail): string {
-  return [EMAIL_TRIAGE_INSTRUCTIONS, promptInput(parsed)].join("\n\n");
+/**
+ * The email as the model sees it. The two date lines are load-bearing: without them the model has
+ * no idea when the message arrived or what day it is, so it anchors a due date to whatever date the
+ * body mentions. That is how a request to suggest interview times came back due on the date of the
+ * interview window rather than the day the reply was owed (#2271 round 3). Dates only, no times -
+ * enough to settle "tomorrow" or "within a day", and nothing extra to leak back into a stored field.
+ */
+/** The bare, lower-cased address from a From header such as `Sarah Kim <Sarah@Kim.Example>`. */
+export function senderAddress(from: string): string {
+  const m = from.match(/<([^>]+)>/);
+  return (m ? m[1]! : from).trim().toLowerCase();
+}
+
+const KNOWN_SENDER_LINE =
+  "Sender: someone this user already deals with (in their People or previously replied to). Lean toward maybe_owed, but it is not proof.";
+
+function promptInput(parsed: ParsedEmail, knownSender = false, now: Date = new Date()): string {
+  const header = [`Subject: ${parsed.subject}`, `From: ${parsed.from}`];
+  if (knownSender) header.push(KNOWN_SENDER_LINE);
+  const received = calendarDate(parsed.receivedAt);
+  if (received !== null) header.push(`Received: ${received}`);
+  const today = calendarDate(now);
+  if (today !== null) header.push(`Today: ${today}`);
+  if (looksLikeBulkMail(parsed)) header.push("Bulk mail: yes (carries an unsubscribe link)");
+  return [...header, "", parsed.body].join("\n");
+}
+
+function buildPrompt(parsed: ParsedEmail, knownSender = false): string {
+  return [EMAIL_TRIAGE_INSTRUCTIONS, promptInput(parsed, knownSender)].join("\n\n");
 }
 
 /**
@@ -472,8 +590,17 @@ function safeParseSignals(
     // returns the first MAX_SUMMARY_CHARS of a longer body slip a near-complete body prefix past a
     // containment check (the guard could no longer "see" the full body inside the summary).
     const summary = typeof obj.summary === "string" ? obj.summary : null;
+    // A present-but-unknown gate value means "nothing" (the safe side); an absent gate leaves the
+    // legacy single-pass behaviour untouched so older answers and fixtures keep their verdict.
+    const gate =
+      obj.gate === undefined
+        ? undefined
+        : EMAIL_GATE_OUTCOMES.includes(obj.gate as EmailGateOutcome)
+          ? (obj.gate as EmailGateOutcome)
+          : "nothing";
     return {
       summary,
+      ...(gate === undefined ? {} : { gate }),
       signals: {
         billsDue: compact ? [] : safeBills(obj.billsDue, normalizedBody),
         actionItems: compact ? [] : safeActionItems(obj.actionItems, normalizedBody),
@@ -604,20 +731,52 @@ function sanitizeExtractResult(
   }
 
   result = { ...result, signals: stripIfBodyReconstructed(result.signals, normalizedBody) };
-  return {
+  // Applied after the reconstruction guard, which rebuilds the signals object from a fixed set
+  // of fields: setting the flag earlier would have it dropped on exactly the messages that
+  // tripped the guard. It is a deterministic boolean, so no body text can ride along with it.
+  const signals = looksLikeBulkMail(parsed) ? { ...result.signals, bulk: true } : result.signals;
+  return applyGate({
     ...result,
-    signals: parsed.bodyTruncated ? { ...result.signals, truncated: true } : result.signals,
+    signals: parsed.bodyTruncated ? { ...signals, truncated: true } : signals,
     escalated: false
-  };
+  });
 }
 
-function buildBatchPrompt(messages: readonly ParsedEmail[]): string {
+/**
+ * The gate decides what the single pass may store (spec §3.1): `nothing` keeps no summary and a
+ * bare noise verdict, `worth_knowing` keeps the summary under an fyi verdict, `maybe_owed` keeps
+ * neither and flags the message for the thread judgement. Runs after every other guard so a
+ * deterministic fallback summary cannot sneak back in for mail the gate said to leave alone.
+ */
+function applyGate(result: EmailExtractResult): EmailExtractResult {
+  const { gate, signals } = result;
+  if (gate === undefined) return result;
+  if (gate === "nothing") {
+    const { pendingJudgement: _pending, ...rest } = signals;
+    return { ...result, summary: null, signals: { ...rest, actionability: { category: "noise" } } };
+  }
+  if (gate === "worth_knowing") {
+    return { ...result, signals: { ...signals, actionability: { category: "fyi" } } };
+  }
+  const { actionability: _drop, ...rest } = signals;
+  return { ...result, summary: null, signals: { ...rest, pendingJudgement: true } };
+}
+
+function buildBatchPrompt(
+  messages: readonly ParsedEmail[],
+  knownSenders?: ReadonlySet<string>
+): string {
   return [
     EMAIL_TRIAGE_INSTRUCTIONS,
     "Apply those rules to every numbered input.",
     'Return one JSON object: {"results":[{"index":0,"value":<triage object>}, ...]}.',
     "Include every index exactly once and no extra indexes.",
-    JSON.stringify(messages.map((message, index) => ({ index, email: promptInput(message) })))
+    JSON.stringify(
+      messages.map((message, index) => ({
+        index,
+        email: promptInput(message, knownSenders?.has(senderAddress(message.from)) ?? false)
+      }))
+    )
   ].join("\n\n");
 }
 
@@ -724,7 +883,7 @@ export async function extractEmailSignalsBatch(
         const reply = await withTimeout(
           (signal) =>
             deps.runChat(
-              buildPrompt(message),
+              buildPrompt(message, options.knownSenders?.has(senderAddress(message.from)) ?? false),
               signal,
               1,
               telemetry,
@@ -746,7 +905,7 @@ export async function extractEmailSignalsBatch(
       const reply = await withTimeout(
         (signal) =>
           deps.runChat(
-            buildBatchPrompt(batch),
+            buildBatchPrompt(batch, options.knownSenders),
             signal,
             batch.length,
             telemetry,
@@ -813,7 +972,7 @@ export async function extractEmailSignals(
         String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
     );
 
-  const prompt = buildPrompt(parsed);
+  const prompt = buildPrompt(parsed, options.knownSender ?? false);
   let result: EmailExtractResult;
   try {
     const reply = await withTimeout((signal) => deps.runChat(prompt, signal), timeoutMs);

@@ -390,6 +390,10 @@ describe("MVP foundation schema catalog", () => {
         // #2236 slice 1 — the scratchpad's single owner-only table.
         { version: "0216", name: "0216_scratchpads.sql" },
         { version: "0217", name: "0217_sports_follows_source_team_id.sql" },
+        // #2274 — the email thread judgement reads a whole thread by owner and thread id.
+        { version: "0219", name: "0219_email_thread_lookup.sql" },
+        // #2274 — email candidates carry proposed actions; one judgement record per thread.
+        { version: "0220", name: "0220_commitment_email_items.sql" },
         // #2237 slice 2 — per-source photo rule and photo status on app.sports_custom_sources.
         { version: "0222", name: "0222_sports_source_photos.sql" },
         // #743 web push: subscriptions, delivery ledger, per-user push settings.

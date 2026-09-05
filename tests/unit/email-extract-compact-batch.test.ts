@@ -4,8 +4,6 @@ import type { GenerateStructuredProviderInput } from "@moss/ai";
 import type { DataContextDb } from "@moss/db";
 
 import { buildEmailExtractDeps } from "../../packages/connectors/src/extract-deps.js";
-import { projectActionRows } from "../../packages/briefings/src/action-rows.js";
-import { planEmailTasks } from "../../packages/connectors/src/source-context/email-tasks.js";
 import {
   extractEmailSignalsBatch,
   type EmailExtractDeps,
@@ -108,24 +106,46 @@ const FIXTURES: readonly ParsedEmail[] = [
 
 const MODEL_RESULTS = [
   {
+    gate: "maybe_owed",
     category: "needs_reply",
     confidence: 0.94,
     reason: "A reply is requested.",
     action: "Send Q2 numbers to Alice"
   },
   {
+    gate: "maybe_owed",
     category: "needs_action",
     confidence: 0.91,
     reason: "A payment is due.",
     action: "Pay the electric bill",
     dueDate: "2026-08-07"
   },
-  { category: "time_sensitive_info", confidence: 0.88, reason: "The gate changed." },
-  { category: "waiting_on_someone", confidence: 0.82, reason: "A delivery is pending." },
-  { category: "fyi", confidence: 0.9, reason: "The appointment is confirmed." },
-  { category: "noise", confidence: 0.98, reason: "This is a newsletter." },
-  { category: "unknown", confidence: 0.55, reason: "No action is apparent." }
+  {
+    gate: "worth_knowing",
+    category: "time_sensitive_info",
+    confidence: 0.88,
+    reason: "The gate changed."
+  },
+  {
+    gate: "worth_knowing",
+    category: "waiting_on_someone",
+    confidence: 0.82,
+    reason: "A delivery is pending."
+  },
+  {
+    gate: "worth_knowing",
+    category: "fyi",
+    confidence: 0.9,
+    reason: "The appointment is confirmed."
+  },
+  { gate: "nothing", category: "noise", confidence: 0.98, reason: "This is a newsletter." },
+  { gate: "worth_knowing", category: "unknown", confidence: 0.55, reason: "No action is apparent." }
 ] as const;
+
+// What the first-pass gate lets each row keep (spec 2026-09-04-email-chief-of-staff §3.1):
+// maybe_owed rows carry no verdict until the thread judgement runs, worth_knowing rows read as
+// fyi, nothing rows read as noise.
+const GATED_CATEGORIES = [undefined, undefined, "fyi", "fyi", "fyi", "noise", "fyi"];
 
 describe("compact email extraction batch contract", () => {
   it("completes the exact seven-fixture workload with compact indexed results", async () => {
@@ -170,84 +190,25 @@ describe("compact email extraction batch contract", () => {
 
     expect(results).toHaveLength(7);
     expect(results.map((result) => result.signals.actionability?.category)).toEqual(
-      MODEL_RESULTS.map(({ category }) => category)
+      GATED_CATEGORIES
     );
     expect(results.map((result) => result.signals.confidence)).toEqual(
       MODEL_RESULTS.map(({ confidence }) => confidence)
     );
-    expect(results[0]?.summary).toBe(FIXTURES[0]?.snippet);
-    expect(results[0]?.signals.actionability?.inferredSubject).toBe(FIXTURES[0]?.subject);
-    expect(results[0]?.signals.actionability?.suggestedTasks).toEqual([
-      { text: "Send Q2 numbers to Alice" }
-    ]);
-    expect(results[1]?.signals.actionability?.suggestedTasks).toEqual([
-      { text: "Pay the electric bill", dueDate: "2026-08-07" }
-    ]);
-    expect(results[2]?.signals.actionability?.inferredSubject).toBe(FIXTURES[2]?.subject);
-    expect(results[2]?.signals.actionability?.suggestedTasks ?? []).toEqual([]);
-    expect(results[5]?.signals.actionability?.suggestedTasks ?? []).toEqual([]);
+    expect(results.map((result) => result.gate)).toEqual(MODEL_RESULTS.map(({ gate }) => gate));
+    expect(results[0]?.summary).toBeNull();
+    expect(results[0]?.signals.pendingJudgement).toBe(true);
+    expect(results[1]?.signals.pendingJudgement).toBe(true);
+    expect(results[2]?.summary).toBe(FIXTURES[2]?.snippet);
+    expect(results[5]?.summary).toBeNull();
+    expect(
+      results.every((result) => result.signals.actionability?.suggestedTasks === undefined)
+    ).toBe(true);
     expect(results.every((result) => result.signals.billsDue?.length === 0)).toBe(true);
     expect(results.every((result) => result.signals.actionItems?.length === 0)).toBe(true);
     expect(results.every((result) => result.signals.deadlines?.length === 0)).toBe(true);
     expect(results.every((result) => result.signals.importance === "normal")).toBe(true);
 
-    const first = results[0]!;
-    const actionability = first.signals.actionability!;
-    const planned = planEmailTasks({
-      mode: "suggest",
-      now: "2026-08-03T12:10:00.000Z",
-      items: [
-        {
-          messageKey: FIXTURES[0]!.externalId,
-          account: {
-            connectorAccountId: "account-0",
-            providerId: "provider-0",
-            providerLabel: "Synthetic Mail"
-          },
-          sender: FIXTURES[0]!.from,
-          recipients: FIXTURES[0]!.recipients,
-          subject: FIXTURES[0]!.subject,
-          receivedAt: FIXTURES[0]!.receivedAt,
-          threadId: FIXTURES[0]!.threadId ?? null,
-          sourceHref: "https://mail.example.invalid/thread-0",
-          snippet: FIXTURES[0]!.snippet,
-          summary: first.summary,
-          actionability: actionability.category,
-          importance: first.signals.importance ?? "normal",
-          confidence: first.signals.confidence ?? 0,
-          reason: actionability.reason ?? null,
-          inferredSubject: actionability.inferredSubject ?? null,
-          dueDate: actionability.dueDate ?? null,
-          suggestedTasks: (actionability.suggestedTasks ?? []).map((task) => ({
-            title: task.text,
-            dueDate: task.dueDate ?? null
-          })),
-          source: "live",
-          degradedReason: null,
-          cacheMessageId: "cache-0"
-        }
-      ]
-    });
-    expect(planned).toHaveLength(1);
-    const rowProjection = projectActionRows([
-      {
-        id: "task-0",
-        title: planned[0]!.title,
-        description: planned[0]!.description,
-        dueAt: planned[0]!.dueAt,
-        updatedAt: "2026-08-03T12:10:00.000Z",
-        source: "email",
-        sourceRef: planned[0]!.sourceRef,
-        suggestionMetadata: planned[0]!.suggestionMetadata
-      }
-    ]);
-    expect(rowProjection.payload.actionRows).toMatchObject([
-      {
-        taskId: "task-0",
-        title: "Send Q2 numbers to Alice",
-        category: "needs_reply"
-      }
-    ]);
     expect(generateStructured).toHaveBeenCalledTimes(1);
     expect(inputs).toHaveLength(1);
     const prompt = inputs[0]?.messages[0]?.content ?? "";

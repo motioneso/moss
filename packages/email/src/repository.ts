@@ -4,6 +4,12 @@ import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb, type EmailMessage } from "@moss/db";
 
+/** The bare, lower-cased address from a header value such as `Sarah Kim <Sarah@Kim.Example>`. */
+function bareAddress(value: string): string {
+  const m = value.match(/<([^>]+)>/);
+  return (m ? m[1]! : value).trim().toLowerCase();
+}
+
 function hasCompleteTriage(signals: unknown): boolean {
   if (!signals || typeof signals !== "object" || Array.isArray(signals)) return false;
   const actionability = (signals as Record<string, unknown>).actionability;
@@ -120,6 +126,21 @@ export class EmailRepository {
       .selectFrom("app.email_messages")
       .selectAll()
       .where("connector_account_id", "=", connectorAccountId)
+      .where("external_id", "=", externalId)
+      .executeTakeFirst();
+  }
+
+  /** #2274: a thread reference that is really one message id (IMAP has no thread ids). */
+  async getByOwnerAndExternalId(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    externalId: string
+  ): Promise<EmailMessage | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.email_messages")
+      .selectAll()
+      .where("owner_user_id", "=", ownerUserId)
       .where("external_id", "=", externalId)
       .executeTakeFirst();
   }
@@ -243,6 +264,29 @@ export class EmailRepository {
   }
 
   /**
+   * Wipe the stored analysis (summary + signals) from the actor's recently received messages so
+   * the next sync sends them back through the model instead of skipping them as unchanged. The
+   * skip check in the sync phase requires a stored summary AND complete triage, so emptying both
+   * is exactly what re-opens them. Nothing else about the message is touched.
+   *
+   * The owner predicate is load-bearing, not belt-and-braces: the UPDATE policy in
+   * sql/0068_email_worker_grants_and_google_insert.sql also admits rows shared to the actor with
+   * 'manage', so RLS alone would let this wipe another owner's messages — and only the actor's
+   * own sync would ever re-judge them, leaving the other owner blank. Owner-only keeps the reset
+   * to mail this actor's own connector accounts brought in.
+   */
+  async clearRecentTriage(scopedDb: DataContextDb, receivedSince: Date): Promise<number> {
+    assertDataContextDb(scopedDb);
+    const result = await scopedDb.db
+      .updateTable("app.email_messages")
+      .set({ summary: null, signals: {}, updated_at: new Date() })
+      .where("received_at", ">=", receivedSince)
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows ?? 0);
+  }
+
+  /**
    * Lightweight per-account sync markers for skip-unchanged: external_id, the stored Gmail
    * historyId (read from external_metadata), whether a non-null summary exists, and whether
    * actionable triage has the subject/task fields required for projection. The handler skips the
@@ -272,5 +316,131 @@ export class EmailRepository {
       hasSummary: r.summary !== null,
       hasCompleteTriage: hasCompleteTriage(r.signals)
     }));
+  }
+
+  /** Hard cap on the messages one thread judgement reads (spec 2026-09-04-email-chief-of-staff). */
+  static readonly THREAD_MESSAGE_LIMIT = 50;
+
+  /**
+   * Every cached message in one provider thread, oldest first. Owner-only on purpose: the SELECT
+   * policy also admits shared rows, but a judgement about what the actor owes must only ever read
+   * the actor's own mail.
+   */
+  /** Most cached inbox mail is addressed to the mailbox owner, so the recipients that appear on
+   *  at least this share of the owner's newest messages are treated as the owner's own addresses. */
+  static readonly OWN_ADDRESS_SAMPLE = 500;
+  static readonly OWN_ADDRESS_MIN_SHARE = 0.2;
+
+  /**
+   * Recipient addresses that appear on at least a fifth of the owner's newest cached messages
+   * (#2274). The connected-account record does not hold the mailbox address, so this is how the
+   * composition root learns which messages in a thread the user wrote. Raw header values; the
+   * caller normalises.
+   */
+  async listFrequentRecipientAddresses(
+    scopedDb: DataContextDb,
+    ownerUserId: string
+  ): Promise<string[]> {
+    assertDataContextDb(scopedDb);
+    const rows = await scopedDb.db
+      .selectFrom("app.email_messages")
+      .select("recipients")
+      .where("owner_user_id", "=", ownerUserId)
+      .orderBy("received_at", "desc")
+      .limit(EmailRepository.OWN_ADDRESS_SAMPLE)
+      .execute();
+    if (rows.length === 0) return [];
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const seen = new Set<string>();
+      for (const raw of row.recipients ?? []) {
+        const address = bareAddress(raw);
+        if (!address || seen.has(address)) continue;
+        seen.add(address);
+        counts.set(address, (counts.get(address) ?? 0) + 1);
+      }
+    }
+    const floor = rows.length * EmailRepository.OWN_ADDRESS_MIN_SHARE;
+    return [...counts.entries()].filter(([, n]) => n >= floor).map(([address]) => address);
+  }
+
+  /**
+   * Distinct recipient addresses of cached messages sent from any of the given addresses: the
+   * people the user has written to (#2274 known senders). Raw header values; the caller
+   * normalises. Empty when no sender addresses are given.
+   */
+  async listRecipientAddressesOfSenders(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    senders: ReadonlySet<string>
+  ): Promise<string[]> {
+    assertDataContextDb(scopedDb);
+    if (senders.size === 0) return [];
+    const rows = await scopedDb.db
+      .selectFrom("app.email_messages")
+      .select(["sender", "recipients"])
+      .where("owner_user_id", "=", ownerUserId)
+      .orderBy("received_at", "desc")
+      .limit(EmailRepository.OWN_ADDRESS_SAMPLE)
+      .execute();
+    const out = new Set<string>();
+    for (const row of rows) {
+      if (!senders.has(bareAddress(row.sender))) continue;
+      for (const raw of row.recipients ?? []) {
+        const address = bareAddress(raw);
+        if (address) out.add(address);
+      }
+    }
+    return [...out];
+  }
+
+  async listByThread(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    threadId: string
+  ): Promise<EmailMessage[]> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.email_messages")
+      .selectAll()
+      .where("owner_user_id", "=", ownerUserId)
+      .where(sql<string>`external_metadata->>'threadId'`, "=", threadId)
+      .orderBy("received_at", "asc")
+      .orderBy("id")
+      .limit(EmailRepository.THREAD_MESSAGE_LIMIT)
+      .execute();
+  }
+
+  /**
+   * For each thread, the newest cached message received after the named message, when there is
+   * one. Threads with nothing newer are left out.
+   */
+  async listNewerInThreads(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    pairs: readonly { threadId: string; afterExternalId: string }[]
+  ): Promise<{ threadId: string; message: EmailMessage }[]> {
+    assertDataContextDb(scopedDb);
+    const out: { threadId: string; message: EmailMessage }[] = [];
+    for (const pair of pairs) {
+      const after = scopedDb.db
+        .selectFrom("app.email_messages")
+        .select("received_at")
+        .where("owner_user_id", "=", ownerUserId)
+        .where("external_id", "=", pair.afterExternalId)
+        .limit(1);
+      const row = await scopedDb.db
+        .selectFrom("app.email_messages")
+        .selectAll()
+        .where("owner_user_id", "=", ownerUserId)
+        .where(sql<string>`external_metadata->>'threadId'`, "=", pair.threadId)
+        .where("received_at", ">", after)
+        .orderBy("received_at", "desc")
+        .orderBy("id")
+        .limit(1)
+        .executeTakeFirst();
+      if (row) out.push({ threadId: pair.threadId, message: row });
+    }
+    return out;
   }
 }

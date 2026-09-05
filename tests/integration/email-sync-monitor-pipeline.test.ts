@@ -29,6 +29,10 @@ const ACTIONABLE_SIGNALS = {
   action: "Approve the launch plan"
 };
 
+// The structured (schema-validated) path requires the first-pass gate (#2274). A maybe_owed row
+// stores no verdict and no task: the thread judgement worker decides later.
+const GATED_SIGNALS = { ...ACTIONABLE_SIGNALS, gate: "maybe_owed" };
+
 const incompleteCompactExtractDeps: EmailExtractDeps = {
   runChat: async (_prompt, _signal, batchSize = 1) => {
     expect(batchSize).toBe(1);
@@ -156,7 +160,7 @@ describe("Google sync → source context → email monitor", () => {
       launch: vi.fn(async () => ({ offset: 0 })),
       submit: vi.fn(async () => undefined),
       readNew: vi.fn(async () => ({
-        records: [{ kind: "reply" as const, text: JSON.stringify(ACTIONABLE_SIGNALS) }],
+        records: [{ kind: "reply" as const, text: JSON.stringify(GATED_SIGNALS) }],
         offset: 1,
         complete: true
       })),
@@ -188,7 +192,7 @@ describe("Google sync → source context → email monitor", () => {
       errors: [],
       truncated: false
     });
-    expect(await emailTaskCount(tasksRepository, context, messageId)).toBe(1);
+    expect(await emailTaskCount(tasksRepository, context, messageId)).toBe(0);
     expect(engineFactory).toHaveBeenCalledTimes(1);
   });
 

@@ -1,6 +1,7 @@
 import { sql } from "kysely";
 
 import type { ConnectorSyncDeferredReason } from "@moss/shared";
+import type { StructuredRunScope } from "@moss/ai";
 import type { DataContextDb } from "@moss/db";
 import type { CalendarRepository } from "@moss/calendar";
 import type { EmailRepository } from "@moss/email";
@@ -13,6 +14,7 @@ import {
   extractEmailSignalsBatch,
   looksLikeOneTimeCodeEmail,
   otpSkippedResult,
+  type EmailExtractOptions,
   type EmailExtractResult,
   type EmailExtractRetryableReason,
   type ParsedEmail
@@ -23,6 +25,7 @@ import { listSavedEmailContext } from "./source-context/email.js";
 import type { ConnectorsRepository } from "./repository.js";
 import type { GoogleSyncDeps, SyncLogger } from "./sync-jobs.js";
 import { MAX_DEFERRED_KEYS } from "./google-sync-payload.js";
+import type { EmailThreadJudgementRequester } from "@moss/module-sdk";
 
 export const GOOGLE_EMAIL_CHUNK_SIZE = 8;
 export const GOOGLE_CURRENT_DAY_EMAIL_PAGE_SIZE = 500;
@@ -303,6 +306,87 @@ export async function sortFetchedEmails(input: SortFetchedEmailsInput): Promise<
   return { pending, unchangedKeys, otpKeys };
 }
 
+export interface EmailBatchExtractOptionsInput {
+  readonly phase: "email" | "email-current-day";
+  readonly extractionScope?: StructuredRunScope;
+  readonly closeScope: boolean;
+  readonly knownSenders?: ReadonlySet<string>;
+  readonly runId?: string;
+  readonly logger: SyncLogger;
+}
+
+/** The per-batch options handed to the first-pass gate. Metadata only; no message content. */
+export function buildEmailBatchExtractOptions(
+  input: EmailBatchExtractOptionsInput
+): EmailExtractOptions {
+  return {
+    priority: input.phase === "email-current-day" ? "foreground" : "background",
+    scope: input.extractionScope,
+    closeScope: input.closeScope,
+    knownSenders: input.knownSenders,
+    telemetry: (telemetryBatchIndex, telemetryBatchSize) => ({
+      emit: (event) =>
+        input.logger.info(
+          {
+            stage: "email-extraction",
+            jobId: input.runId,
+            batchIndex: telemetryBatchIndex,
+            batchSize: telemetryBatchSize,
+            ...event
+          },
+          "google-sync email extraction telemetry"
+        )
+    })
+  };
+}
+
+export interface PersistExtractedBatchInput {
+  readonly batch: readonly ParsedEmail[];
+  readonly batchResults: readonly EmailExtractResult[];
+  readonly persistEmail: (parsed: ParsedEmail, extracted: EmailExtractResult) => Promise<unknown>;
+  readonly progress: {
+    emailFailures: number;
+    escalations?: number;
+    errors: string[];
+  };
+  readonly onFailure: (error: unknown) => void;
+  readonly actorUserId?: string;
+  readonly threadJudgementRequester?: EmailThreadJudgementRequester;
+}
+
+/**
+ * Save each gated result, then (spec 2026-09-04-email-chief-of-staff §3.2) ask for a thread
+ * judgement on every maybe_owed message. The queue collapses repeats per thread; only ids cross.
+ * Returns the ids that saved, for action projection.
+ */
+export async function persistExtractedBatch(input: PersistExtractedBatchInput): Promise<string[]> {
+  const projectedKeys: string[] = [];
+  for (let index = 0; index < input.batch.length; index += 1) {
+    const parsed = input.batch[index]!;
+    try {
+      const extracted = input.batchResults[index]!;
+      if (extracted.escalated && input.progress.escalations !== undefined) {
+        input.progress.escalations += 1;
+      }
+      await input.persistEmail(parsed, extracted);
+      projectedKeys.push(parsed.externalId);
+      if (extracted.gate === "maybe_owed" && input.threadJudgementRequester && input.actorUserId) {
+        await input.threadJudgementRequester.requestThreadJudgement(
+          input.actorUserId,
+          parsed.threadId ?? parsed.externalId
+        );
+      }
+    } catch (error) {
+      input.progress.emailFailures += 1;
+      if (!input.progress.errors.includes("email-message-error")) {
+        input.progress.errors.push("email-message-error");
+      }
+      input.onFailure(error);
+    }
+  }
+  return projectedKeys;
+}
+
 export async function runGoogleEmailPhase(
   context: PhaseContext,
   phase: "email-current-day" | "email"
@@ -432,28 +516,26 @@ export async function runGoogleEmailPhase(
     // batch — only ever cover messages that actually go to the model.
     let processed = 0;
     const batches = pending.map((message) => [message]);
+    const knownSenders =
+      context.deps.knownSenderAddresses && context.deps.actorUserId
+        ? await context.deps.knownSenderAddresses(context.scopedDb, context.deps.actorUserId)
+        : undefined;
     for (const [batchIndex, batch] of batches.entries()) {
       let batchResults: EmailExtractResult[];
       inFlightKeys = batch.map((message) => message.externalId);
       try {
-        batchResults = await extractEmailSignalsBatch(batch, context.deps.emailExtractDeps, {
-          priority: phase === "email-current-day" ? "foreground" : "background",
-          scope: extractionScope,
-          closeScope: batchIndex === batches.length - 1,
-          telemetry: (telemetryBatchIndex, telemetryBatchSize) => ({
-            emit: (event) =>
-              context.logger.info(
-                {
-                  stage: "email-extraction",
-                  jobId: context.runId,
-                  batchIndex: telemetryBatchIndex,
-                  batchSize: telemetryBatchSize,
-                  ...event
-                },
-                "google-sync email extraction telemetry"
-              )
+        batchResults = await extractEmailSignalsBatch(
+          batch,
+          context.deps.emailExtractDeps,
+          buildEmailBatchExtractOptions({
+            phase,
+            extractionScope,
+            closeScope: batchIndex === batches.length - 1,
+            knownSenders,
+            runId: context.runId,
+            logger: context.logger
           })
-        });
+        );
       } catch (error) {
         if (!(error instanceof EmailExtractNeedsConfigurationError)) throw error;
         if (!context.progress.errors.includes("email-needs-config")) {
@@ -465,20 +547,12 @@ export async function runGoogleEmailPhase(
         );
         break;
       }
-      const projectedKeys: string[] = [];
-      for (let index = 0; index < batch.length; index += 1) {
-        try {
-          const extracted = batchResults[index]!;
-          if (extracted.escalated) context.progress.escalations += 1;
-          await persistEmail(batch[index]!, extracted);
-          // This message got through on a later attempt, so it is no longer set aside.
-          context.progress.deferredKeys.delete(batch[index]!.externalId);
-          projectedKeys.push(batch[index]!.externalId);
-        } catch (error) {
-          context.progress.emailFailures += 1;
-          if (!context.progress.errors.includes("email-message-error")) {
-            context.progress.errors.push("email-message-error");
-          }
+      const projectedKeys = await persistExtractedBatch({
+        batch,
+        batchResults,
+        persistEmail,
+        progress: context.progress,
+        onFailure: (error) => {
           context.logger.warn(
             {
               stage: "email-message",
@@ -487,9 +561,17 @@ export async function runGoogleEmailPhase(
             },
             "google-sync email message failed"
           );
-        }
-      }
+        },
+        actorUserId: context.deps.actorUserId,
+        threadJudgementRequester: context.deps.threadJudgementRequester
+      });
       await projectKeys(projectedKeys);
+      // These messages just went through extraction without a retryable error, so any of them
+      // still marked deferred from an earlier attempt on this run are resolved now.
+      for (const key of inFlightKeys) {
+        context.progress.deferredKeys.delete(key);
+      }
+      context.progress.emailDeferred = context.progress.deferredKeys.size;
       processed += batch.length;
       context.logger.info(
         {
