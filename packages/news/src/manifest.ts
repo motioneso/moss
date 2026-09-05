@@ -503,9 +503,8 @@ export const newsModuleManifest = {
       id: "news.add_source",
       description:
         "Find a publisher by URL or name, or a subreddit with an r/name input, and add it to " +
-        "personalized News. A subreddit source contributes the articles linked from its own " +
-        "hot feed. A forward to the same publisher's own site is followed, with a note naming " +
-        "the switch. A forward to an unrelated site is refused; try that address directly instead.",
+        "personalized News. A subreddit source contributes articles linked from its hot feed. " +
+        "A forward to an unrelated site is refused.",
       requires: newsAddSourceRequirement,
       remediations: [
         {
