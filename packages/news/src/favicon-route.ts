@@ -3,8 +3,12 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError, handleRouteError } from "@moss/module-sdk";
 
-import type { NewsImageFetchPort } from "./discovery/ports.js";
-import { NEWS_HOMEPAGE_HOSTS, NEWS_IMAGE_HOSTS } from "./source/catalog.js";
+import type { NewsFaviconFetchPort } from "./discovery/ports.js";
+import {
+  NEWS_HOMEPAGE_HOSTS,
+  NEWS_IMAGE_HOSTS,
+  sourceEntryForHomepageHost
+} from "./source/catalog.js";
 
 export const NEWS_FAVICON_MAX_BYTES = 256 * 1024;
 const NEWS_FAVICON_CACHE_MAX_ENTRIES = 128;
@@ -31,7 +35,8 @@ export interface NewsFaviconCustomSourcePort {
 
 interface NewsFaviconRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
-  readonly fetchImage: NewsImageFetchPort;
+  /** Host-pinned, size-capped favicon bytes with no robots gate (see NewsFaviconFetchPort). */
+  readonly fetchImage: NewsFaviconFetchPort;
   readonly dataContext: DataContextRunner;
   readonly customSources: NewsFaviconCustomSourcePort;
 }
@@ -59,6 +64,20 @@ async function isApprovedPublisherHost(
     dependencies.customSources.listCustomSources(db)
   );
   return customDomains.some((source) => source.canonicalDomain.toLowerCase() === lower);
+}
+
+/**
+ * Hosts the favicon download (every redirect hop included) may land on: the requested domain
+ * itself, plus — for a built-in publisher — the hosts that publisher already declares its
+ * artwork comes from. NPR answers its favicon request with a redirect to media.npr.org, a host
+ * it lists as an image host, and a same-host-only rule refused that hop, so NPR never got an
+ * icon (#2291). A custom source declares no image hosts, so it stays same-host-only. Nothing
+ * here widens the PR 2252 rule: the set is fixed by the catalog, never by the request.
+ */
+export function faviconFetchHosts(domain: string): readonly string[] {
+  const lower = domain.toLowerCase();
+  const declared = sourceEntryForHomepageHost(lower)?.imageHosts ?? [];
+  return [...new Set([lower, ...declared.map((host) => host.toLowerCase())])];
 }
 
 function hasPrefix(body: Uint8Array, bytes: readonly number[]): boolean {
@@ -150,7 +169,11 @@ export function registerNewsFaviconRoute(
         if (fromCache) return sendFavicon(reply, fromCache);
 
         const faviconUrl = `https://${domain}/favicon.ico`;
-        const fetched = await dependencies.fetchImage(faviconUrl, NEWS_FAVICON_MAX_BYTES, [domain]);
+        const fetched = await dependencies.fetchImage(
+          faviconUrl,
+          NEWS_FAVICON_MAX_BYTES,
+          faviconFetchHosts(domain)
+        );
         if (!fetched.ok || fetched.truncated || fetched.body.byteLength > NEWS_FAVICON_MAX_BYTES) {
           throw new HttpError(404, "Favicon not found");
         }

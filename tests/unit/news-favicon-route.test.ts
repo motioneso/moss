@@ -6,6 +6,7 @@ import { HttpError } from "@moss/module-sdk";
 
 import {
   NEWS_FAVICON_MAX_BYTES,
+  faviconFetchHosts,
   registerNewsFaviconRoute,
   sniffedFaviconType,
   type NewsFaviconCustomSourcePort
@@ -224,6 +225,54 @@ describe("news favicon route", () => {
     await app.close();
   });
 
+  it("lets a built-in publisher's download follow a redirect onto its declared image hosts, and nowhere else (#2291)", async () => {
+    // NPR answers /favicon.ico with a redirect to media.npr.org, which the catalog already lists
+    // as one of NPR's image hosts. The fetch port refuses any hop outside this list, so the
+    // list itself is the rule under test.
+    let hostsGiven: readonly string[] | undefined;
+    const app = buildApp({
+      customSources: noCustomSources,
+      fetchImage: async (url, _maxBytes, allowedHosts) => {
+        expect(url).toBe("https://www.npr.org/favicon.ico");
+        hostsGiven = allowedHosts;
+        return { ok: true, contentType: "image/x-icon", body: ico, truncated: false };
+      }
+    });
+
+    const response = await app.inject({ method: "GET", url: "/api/news/favicon/www.npr.org" });
+
+    expect(response.statusCode).toBe(200);
+    expect(hostsGiven).toEqual(
+      expect.arrayContaining(["www.npr.org", "media.npr.org", "npr.brightspotcdn.com"])
+    );
+    // Only NPR's own hosts: another publisher's image host is not a place NPR's icon may come from.
+    expect(hostsGiven).not.toContain("ichef.bbci.co.uk");
+    expect(hostsGiven).not.toContain("static01.nyt.com");
+    await app.close();
+  });
+
+  it("keeps a custom source's download on its own host, since it declares no image hosts", async () => {
+    let hostsGiven: readonly string[] | undefined;
+    const app = buildApp({
+      customSources: {
+        listCustomSources: async () => [{ canonicalDomain: "readers-own-source.example" }]
+      },
+      fetchImage: async (_url, _maxBytes, allowedHosts) => {
+        hostsGiven = allowedHosts;
+        return { ok: true, contentType: "image/x-icon", body: ico, truncated: false };
+      }
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/news/favicon/readers-own-source.example"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(hostsGiven).toEqual(["readers-own-source.example"]);
+    await app.close();
+  });
+
   it("requires authentication", async () => {
     const app = buildApp({
       resolveAccessContext: async () => {
@@ -233,6 +282,19 @@ describe("news favicon route", () => {
     const response = await app.inject({ method: "GET", url: "/api/news/favicon/example.com" });
     expect(response.statusCode).toBe(401);
     await app.close();
+  });
+});
+
+describe("faviconFetchHosts", () => {
+  it("is the requested host plus the catalog publisher's declared image hosts, lower-cased and deduplicated", () => {
+    const hosts = faviconFetchHosts("WWW.NPR.ORG");
+    expect(hosts[0]).toBe("www.npr.org");
+    expect(hosts).toContain("media.npr.org");
+    expect(new Set(hosts).size).toBe(hosts.length);
+  });
+
+  it("is just the requested host for a domain no built-in publisher owns", () => {
+    expect(faviconFetchHosts("readers-own-source.example")).toEqual(["readers-own-source.example"]);
   });
 });
 
