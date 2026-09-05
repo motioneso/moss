@@ -82,6 +82,7 @@ export function runtimeSource(options: {
   hosts?: readonly string[];
   fingerprint?: string;
   scope?: SportsNewsScope;
+  photoRule?: SportsRuntimeSource["photoRule"];
 }): SportsRuntimeSource {
   const recipe = options.recipe === undefined ? jsonRecipe : options.recipe;
   return {
@@ -97,6 +98,7 @@ export function runtimeSource(options: {
     confirmedFetchHosts:
       options.hosts ??
       (recipe && Array.isArray(recipe.fetchHosts) ? (recipe.fetchHosts as string[]) : []),
+    photoRule: options.photoRule ?? null,
     assignments: [
       {
         id: `assignment-${options.id}`,

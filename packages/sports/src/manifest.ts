@@ -6,6 +6,7 @@ import {
   createSportsFollowRequestSchema,
   createSportsFollowResponseSchema,
   deleteSportsCustomSourceSchema,
+  deleteSportsSourcePhotosSchema,
   deleteSportsFollowResponseSchema,
   resolveSportsFollowTeamRequestSchema,
   resolveSportsFollowTeamResponseSchema,
@@ -108,7 +109,8 @@ export const sportsModuleManifest = {
       "sql/0193_sports_legacy_feed_assignment_repair.sql",
       "sql/0196_sports_news_source_scopes.sql",
       "sql/0213_sports_reddit_sources.sql",
-      "sql/0217_sports_follows_source_team_id.sql"
+      "sql/0217_sports_follows_source_team_id.sql",
+      "sql/0222_sports_source_photos.sql"
     ],
     migrationDirectories: ["packages/sports/sql"],
     ownedTables: [
@@ -144,7 +146,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.source_photos",
       description:
-        "Stories from your own sources show a photo when the source's feed supplies one, or when the article page offers the picture it uses for sharing."
+        "Stories from your own sources show a photo from the feed or the article page. Each source's row in Sports settings says whether photos are working, none were found, are still being checked, or have stopped working."
     },
     {
       id: "sports.team_identity",
@@ -168,7 +170,7 @@ export const sportsModuleManifest = {
       id: "sports.follows",
       label: "Sports",
       description:
-        "Choose the teams and leagues shown in Sports, and add custom news sources. Follows are tied to the provider's permanent team number; a team saved before that asks once which team was meant.",
+        "Choose the teams and leagues shown in Sports, and add custom news sources: a homepage or a subreddit. Each source's row says whether its stories are getting photos. A team saved before permanent team numbers asks once which team was meant.",
       path: "/settings/modules/sports",
       scope: "user",
       order: 35,
@@ -334,6 +336,12 @@ export const sportsModuleManifest = {
       method: "DELETE",
       path: "/api/sports/sources/:id",
       responseSchema: deleteSportsCustomSourceSchema,
+      permissionId: "sports.sources"
+    },
+    {
+      method: "DELETE",
+      path: "/api/sports/sources/:id/photos",
+      responseSchema: deleteSportsSourcePhotosSchema,
       permissionId: "sports.sources"
     },
     {

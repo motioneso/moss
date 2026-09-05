@@ -103,6 +103,8 @@ type MutationScenario = {
   failPost?: boolean;
   deleteGate?: Promise<void>;
   failDelete?: boolean;
+  /** #2237 sources already present when the screen loads, so a photo line can be asserted. */
+  seedSources?: ReadonlyArray<Record<string, unknown>>;
 };
 
 /** Stateful mock local to this spec (spec Slice 3) — catalog, follows, search, roster, and
@@ -193,7 +195,7 @@ async function mockSportsSettings(
   });
 
   // #2211 custom sources added through the two-phase preview/confirm flow, kept in memory.
-  const customSources: Array<Record<string, unknown>> = [];
+  const customSources: Array<Record<string, unknown>> = [...(scenario.seedSources ?? [])];
   await page.route("**/api/sports/sources", (route) => {
     if (route.request().method() === "POST") {
       const body = route.request().postDataJSON() as { canonicalDomain: string };
@@ -212,6 +214,8 @@ async function mockSportsSettings(
         lastCheckedAt: new Date().toISOString(),
         lastSuccessAt: new Date().toISOString(),
         recipeStatus: "feed",
+        photoStatus: "none",
+        photosFoundByMoss: false,
         assignedFollowIds: [],
         assignments: [],
         createdAt: new Date().toISOString()
@@ -542,6 +546,64 @@ test.describe("Sports settings follow picker (#989)", () => {
 
     await expect(page.getByText("Source added.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Remove r/nfl" })).toBeVisible();
+  });
+
+  // #2237 the settings row tells the reader, in the spec's words, whether a source's stories are
+  // getting photos.
+  test("each source row says whether its stories are getting photos (#2237)", async ({ page }) => {
+    await mockApi(page, {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: [],
+      notifications: [],
+      tasks: []
+    });
+    const base = {
+      kind: "custom",
+      canonicalDomain: "publisher.example",
+      homepageUrl: "https://publisher.example/",
+      feedUrl: null,
+      retrievalMethod: "feed",
+      enabled: true,
+      healthState: "healthy",
+      healthReasonCode: null,
+      healthMessage: null,
+      lastCheckedAt: "2026-07-12T00:00:00.000Z",
+      lastSuccessAt: "2026-07-12T00:00:00.000Z",
+      recipeStatus: "feed",
+      assignedFollowIds: [],
+      assignments: [],
+      createdAt: "2026-07-12T00:00:00.000Z"
+    };
+    await mockSportsSettings(page, {
+      seedSources: [
+        {
+          ...base,
+          id: "source-working",
+          label: "Working Publisher",
+          photoStatus: "working",
+          photosFoundByMoss: false
+        },
+        {
+          ...base,
+          id: "source-broken",
+          label: "Broken Publisher",
+          photoStatus: "stopped_working",
+          photosFoundByMoss: true
+        }
+      ]
+    });
+    await gotoSportsSettings(page);
+
+    await expect(page.getByText("Photos: working")).toBeVisible();
+    await expect(page.getByText("Photos: stopped working")).toBeVisible();
+    // Only the source whose photos Moss found offers a way to stop using them.
+    await expect(
+      page.getByRole("button", { name: "Stop using Moss's photos for Broken Publisher" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Stop using Moss's photos for Working Publisher" })
+    ).toHaveCount(0);
   });
 
   test("saved leagues and follows assemble into one keyboard-accessible standings picker", async ({

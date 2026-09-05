@@ -32,6 +32,7 @@ import {
   type VerifiedSportsSourceTarget
 } from "./discovery.js";
 import type { SportsPhotoStore } from "./photo-store.js";
+import { clearSportsPhotoRule } from "./photo-storage.js";
 import type { createSportsPreviewStore } from "./preview-store.js";
 import { sportsSourceIdentityKey } from "./reddit.js";
 import type { SportsPublicSourceReader } from "./public-source-reader.js";
@@ -626,6 +627,22 @@ export class SportsSourceService {
       }
     }
     return removed;
+  }
+
+  /**
+   * #2237 "Stop using Moss's photos": forgets the photo instruction Moss found for this source.
+   * The source keeps whatever photos its own feed and article pages already give, so this never
+   * leaves it worse off than a source Moss was never asked about.
+   */
+  async stopUsingFoundPhotos(
+    scopedDb: DataContextDb,
+    sourceId: string
+  ): Promise<SportsCustomSourceDto> {
+    await clearSportsPhotoRule(scopedDb, sourceId);
+    const sources = await this.dependencies.sources.list(scopedDb);
+    const source = sources.find((candidate) => candidate.id === sourceId);
+    if (!source) throw new SportsSourceRequestError(404, "Source not found");
+    return source;
   }
 
   private async resolveTarget(

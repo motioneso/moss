@@ -137,6 +137,8 @@ describe("sports source recovery routes", () => {
       lastCheckedAt: "2026-08-24T12:00:00.000Z",
       lastSuccessAt: "2026-08-24T12:00:00.000Z",
       recipeStatus: "feed",
+      photoStatus: "pending",
+      photosFoundByMoss: false,
       assignedFollowIds: [],
       assignments: [],
       createdAt: "2026-08-21T00:00:00.000Z"

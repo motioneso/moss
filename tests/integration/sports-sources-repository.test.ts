@@ -13,6 +13,11 @@ import type { Kysely } from "kysely";
 import { NEWS_MAX_CUSTOM_SOURCES } from "@moss/news";
 import { SportsEspnCoverageRepository } from "../../packages/sports/src/source/espn-coverage-repository.js";
 import { SportsSourcesRepository } from "../../packages/sports/src/source/repository.js";
+import {
+  clearSportsPhotoRule,
+  recordSportsPhotoOutcome,
+  setSportsPhotoRule
+} from "../../packages/sports/src/source/photo-storage.js";
 import type { VerifiedSportsSourceCandidate } from "../../packages/sports/src/source/discovery.js";
 import { sportsModuleSqlMigrationDirectory } from "../../packages/sports/src/manifest.js";
 import {
@@ -233,6 +238,102 @@ describe("sports sources repository", () => {
 
     expect(await asActor(ids.userA, (db) => repo.remove(db, created.id))).toBe(true);
     await expect(asActor(ids.userA, (db) => repo.list(db))).resolves.toEqual([]);
+  });
+
+  it("gives up on a saved photo place after three empty refreshes, and comes back on a hit", async () => {
+    const created = await asActor(ids.userA, (db) => repo.create(db, { candidate: candidate(1) }));
+    if ("limitExceeded" in created) throw new Error("unexpected limit");
+    const rule = {
+      version: 1,
+      kind: "html",
+      fetchHosts: ["publisher-1.example.com"],
+      photo: { selector: "meta[property='og:image']", source: "attribute", attribute: "content" },
+      fallback: "share_image"
+    };
+    await expect(
+      asActor(ids.userA, (db) => setSportsPhotoRule(db, created.id, rule, "in_use"))
+    ).resolves.toBe(true);
+
+    const photoState = async () => {
+      const row = await bootstrap.query<{
+        photo_rule_state: string;
+        photo_miss_streak: number;
+        photo_last_outcome: string | null;
+        photo_relook_at: Date | null;
+      }>(
+        `SELECT photo_rule_state, photo_miss_streak, photo_last_outcome, photo_relook_at
+           FROM app.sports_custom_sources WHERE id = $1`,
+        [created.id]
+      );
+      return row.rows[0]!;
+    };
+
+    for (const expected of [1, 2]) {
+      await asActor(ids.userA, (db) => recordSportsPhotoOutcome(db, created.id, "none"));
+      const state = await photoState();
+      expect(state).toMatchObject({
+        photo_rule_state: "in_use",
+        photo_miss_streak: expected,
+        photo_last_outcome: "none"
+      });
+      expect(state.photo_relook_at).toBeNull();
+    }
+
+    const at = new Date("2026-09-04T12:00:00.000Z");
+    await asActor(ids.userA, (db) => recordSportsPhotoOutcome(db, created.id, "none", at));
+    const gaveUp = await photoState();
+    expect(gaveUp).toMatchObject({ photo_rule_state: "stale", photo_miss_streak: 3 });
+    expect(gaveUp.photo_relook_at?.toISOString()).toBe("2026-09-05T12:00:00.000Z");
+    await expect(asActor(ids.userA, (db) => repo.list(db))).resolves.toMatchObject([
+      { photoStatus: "stopped_working", photosFoundByMoss: true }
+    ]);
+
+    await asActor(ids.userA, (db) => recordSportsPhotoOutcome(db, created.id, "working"));
+    const recovered = await photoState();
+    expect(recovered).toMatchObject({
+      photo_rule_state: "in_use",
+      photo_miss_streak: 0,
+      photo_last_outcome: "working"
+    });
+    expect(recovered.photo_relook_at).toBeNull();
+    await expect(asActor(ids.userA, (db) => repo.list(db))).resolves.toMatchObject([
+      { photoStatus: "working", photosFoundByMoss: true }
+    ]);
+
+    await expect(asActor(ids.userA, (db) => clearSportsPhotoRule(db, created.id))).resolves.toBe(
+      true
+    );
+    await expect(asActor(ids.userA, (db) => repo.list(db))).resolves.toMatchObject([
+      { photoStatus: "working", photosFoundByMoss: false }
+    ]);
+  });
+
+  it("keeps one owner's saved photo place out of another owner's reach", async () => {
+    const created = await asActor(ids.userA, (db) => repo.create(db, { candidate: candidate(1) }));
+    if ("limitExceeded" in created) throw new Error("unexpected limit");
+    const rule = {
+      version: 1,
+      kind: "html",
+      fetchHosts: ["publisher-1.example.com"],
+      photo: { selector: "meta[property='og:image']", source: "attribute", attribute: "content" },
+      fallback: "share_image"
+    };
+    await asActor(ids.userA, (db) => setSportsPhotoRule(db, created.id, rule, "in_use"));
+
+    await expect(
+      asActor(ids.userB, (db) => setSportsPhotoRule(db, created.id, rule, "in_use"))
+    ).resolves.toBe(false);
+    await expect(asActor(ids.userB, (db) => clearSportsPhotoRule(db, created.id))).resolves.toBe(
+      false
+    );
+    await expect(
+      asActor(ids.userB, (db) => repo.listRuntimeSources(db, created.id))
+    ).resolves.toEqual([]);
+    await expect(
+      asActor(ids.userA, (db) => repo.listRuntimeSources(db, created.id))
+    ).resolves.toMatchObject([{ photoRule: { photo: { attribute: "content" } } }]);
+    await asActor(ids.userA, (db) => recordSportsPhotoOutcome(db, created.id, "working"));
+    await expect(asActor(ids.userB, (db) => repo.list(db))).resolves.toEqual([]);
   });
 
   it("persists confirmed feed authority without a scrape recipe", async () => {

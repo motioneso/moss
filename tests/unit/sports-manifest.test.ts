@@ -25,7 +25,8 @@ describe("sports manifest", () => {
       "sql/0193_sports_legacy_feed_assignment_repair.sql",
       "sql/0196_sports_news_source_scopes.sql",
       "sql/0213_sports_reddit_sources.sql",
-      "sql/0217_sports_follows_source_team_id.sql"
+      "sql/0217_sports_follows_source_team_id.sql",
+      "sql/0222_sports_source_photos.sql"
     ]);
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
     expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");
@@ -35,7 +36,8 @@ describe("sports manifest", () => {
         "/api/sports/standings-preferences",
         "/api/sports/sources/:id/retry",
         "/api/sports/sources/:id/rebuild/preview",
-        "/api/sports/sources/:id/rebuild"
+        "/api/sports/sources/:id/rebuild",
+        "/api/sports/sources/:id/photos"
       ])
     );
     expect(sportsModuleManifest.dataLifecycle?.exportSections).toEqual([
