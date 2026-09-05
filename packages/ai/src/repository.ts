@@ -1414,7 +1414,10 @@ export class AiRepository {
         .where("providers.purpose", "=", "assistant")
         .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
         .where("models.tier", "=", t)
-        // 0214: the newest RELEASE wins inside a tier; registration order only breaks ties.
+        // safeModelQuery already orders by created_at desc; clear that before applying the 0214
+        // order (newest RELEASE wins inside a tier, registration order only breaks ties), or the
+        // base order wins first and registration order decides again.
+        .clearOrderBy()
         .orderBy(sql`models.released_at desc nulls last`)
         .orderBy("models.created_at", "desc")
         .orderBy("models.id", "desc")
@@ -1429,6 +1432,7 @@ export class AiRepository {
       .where("providers.status", "=", "active")
       .where("providers.purpose", "=", "assistant")
       .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
+      .clearOrderBy()
       .orderBy(sql`models.released_at desc nulls last`)
       .orderBy("models.created_at", "desc")
       .orderBy("models.id", "desc")
