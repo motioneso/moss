@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Publisher icons no longer touch the headline text.** In the news list on the Today page, the small publisher icon now has a little space between it and the headline instead of being pressed right up against it. [PR #2311](https://github.com/motioneso/moss/pull/2311)
 - **Complete first-run setup.** New installations now generate all required credential keys and keep the selected release version during setup. [PR #2299](https://github.com/motioneso/moss/pull/2299)
 - **News publisher icons.** Publisher icons on the Today news card now show for NPR and read clearly in both light and dark mode. [PR #2294](https://github.com/motioneso/moss/pull/2294)
 - **Sports search results grouped by league.** Searching for a team in Sports settings now shows results grouped under their own league or sport, so teams with the same name in different sports are no longer mixed together. [PR #2281](https://github.com/motioneso/moss/pull/2281)
