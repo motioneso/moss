@@ -7,12 +7,13 @@ import {
 } from "../../packages/sports/src/follow-identity.js";
 import type { SourceTeamRef } from "../../packages/sports/src/source/sports-source.js";
 
-// Review finding S1 (2026-09-04): a saved follow only stores one string. Once two teams can share
-// a short name, that string can mean the still-unique short name, a permanent number saved while
-// it was shared, or a short name that has since started being shared. These tests prove the
-// resolver picks the right team in every case and refuses to guess when it truly cannot tell,
-// which the pre-fix code (a plain lookup by the saved string against the current team list) gets
-// wrong in three of the four scenarios below.
+// Review finding S1, round 5 (2026-09-04). Four earlier rounds tried to work out which team a
+// saved short name meant, and every round the reviewer found a path where the reading picked the
+// wrong team. Since round 5 a saved follow carries the provider's permanent team id, and that id
+// is the only thing anything is matched on. These tests pin both halves of the rule:
+//   - a follow WITH an id resolves to exactly that team and matches only rows carrying that id;
+//   - a follow WITHOUT one (saved before the change) matches nothing at all, in any situation,
+//     and instead produces the "which team did you mean?" question.
 
 function team(overrides: Partial<SourceTeamRef> & { teamKey: string }): SourceTeamRef {
   return {
@@ -26,173 +27,105 @@ function team(overrides: Partial<SourceTeamRef> & { teamKey: string }): SourceTe
   };
 }
 
-describe("resolveFollowIdentity", () => {
-  it("resolves a still-unique short name directly", () => {
-    const teams = [team({ teamKey: "dal", sourceTeamId: "6" })];
-    const identity = resolveFollowIdentity("dal", teams);
-    expect(identity.ambiguous).toBe(false);
-    expect(identity.team?.teamKey).toBe("dal");
-    expect(identity.sourceTeamId).toBe("6");
-  });
+const LUTES = team({
+  teamKey: "pac.129700",
+  sourceTeamId: "129700",
+  abbreviation: "pac",
+  name: "Pacific Lutheran Lutes"
+});
+const TIGERS = team({
+  teamKey: "pac.413",
+  sourceTeamId: "413",
+  abbreviation: "pac",
+  name: "Pacific Tigers"
+});
 
-  // Blocker 2: Pacific Lutheran was saved as its numeric id (129700) because it was ambiguous
-  // with Pacific Tigers at save time. On this fetch Pacific Tigers is gone, so the list gives
-  // Pacific Lutheran back its plain short name "pac" as teamKey. A plain lookup by the saved
-  // numeric string against teamKey values would find nothing and the follow would stop
-  // resolving; the permanent-number check here must find it instead.
-  it("resolves a saved permanent number to its team even after the team's short name is no longer shared", () => {
-    const teams = [
-      team({
-        teamKey: "pac",
-        sourceTeamId: "129700",
-        abbreviation: "pac",
-        name: "Pacific Lutheran Lutes"
-      })
-    ];
-    const identity = resolveFollowIdentity("129700", teams);
-    expect(identity.ambiguous).toBe(false);
+describe("resolveFollowIdentity with a permanent team id saved", () => {
+  it("finds the team by its permanent id even though two teams share the short name", () => {
+    const identity = resolveFollowIdentity(
+      { teamKey: "pac", sourceTeamId: "129700" },
+      [LUTES, TIGERS]
+    );
+    expect(identity.needsChoice).toBe(false);
     expect(identity.team?.name).toBe("Pacific Lutheran Lutes");
-    expect(identity.catalogKey).toBe("pac");
+    expect(identity.catalogKey).toBe("pac.129700");
     expect(identity.sourceTeamId).toBe("129700");
   });
 
-  // Blocker 1: a follow saved as the plain short name "pac", back when only one PAC team
-  // existed. A second PAC team has since appeared, so today's list gives both teams a numeric
-  // teamKey and neither carries a plain "pac" teamKey any more. The saved follow can no longer
-  // tell the two teams apart and must say so rather than silently pick one.
-  it("marks a once-unique saved short name as ambiguous once a second team shares it, instead of guessing", () => {
-    const teams = [
-      team({
-        teamKey: "129700",
-        sourceTeamId: "129700",
-        abbreviation: "pac",
-        name: "Pacific Lutheran Lutes"
-      }),
-      team({ teamKey: "413", sourceTeamId: "413", abbreviation: "pac", name: "Pacific Tigers" })
-    ];
-    const identity = resolveFollowIdentity("pac", teams);
-    expect(identity.ambiguous).toBe(true);
+  it("keeps the saved id but offers no key when today's team list has no such team", () => {
+    const identity = resolveFollowIdentity({ teamKey: "pac", sourceTeamId: "129700" }, [TIGERS]);
+    expect(identity.needsChoice).toBe(false);
+    expect(identity.team).toBeNull();
+    // No key means nothing can borrow another team's key on this follow's behalf.
+    expect(identity.catalogKey).toBeNull();
+    expect(identity.sourceTeamId).toBe("129700");
+  });
+
+  it("never reads the saved short name, even when it names a different team outright", () => {
+    // "413" is Pacific Tigers' permanent id and also the short name of a different club. The
+    // saved id wins outright; the short name is not consulted at all.
+    const other = team({ teamKey: "413", sourceTeamId: "9001", abbreviation: "413", name: "Team 413" });
+    const identity = resolveFollowIdentity({ teamKey: "413", sourceTeamId: "413" }, [other, TIGERS]);
+    expect(identity.team?.name).toBe("Pacific Tigers");
+    expect(identity.sourceTeamId).toBe("413");
+  });
+});
+
+describe("resolveFollowIdentity with no permanent team id saved", () => {
+  it("asks which team was meant and offers the teams answering to the saved short name", () => {
+    const identity = resolveFollowIdentity({ teamKey: "pac", sourceTeamId: null }, [LUTES, TIGERS]);
+    expect(identity.needsChoice).toBe(true);
     expect(identity.team).toBeNull();
     expect(identity.sourceTeamId).toBeNull();
-    expect(identity.candidates.map((c) => c.name).sort()).toEqual([
+    expect(identity.catalogKey).toBeNull();
+    expect(identity.teamListLoaded).toBe(true);
+    expect(identity.candidates.map((candidate) => candidate.name).sort()).toEqual([
       "Pacific Lutheran Lutes",
       "Pacific Tigers"
     ]);
   });
 
-  // Re-review 3 blocker 2: the saved value "413" is BOTH Pacific Tigers' permanent number and
-  // another club's own short name. The old order read it as a short name first and silently
-  // handed the follow to Team 413, whose real number is 9001. Two readings, two different clubs:
-  // the person has to be asked, and both candidates offered.
-  it("asks which team was meant when a saved value is one team's number and another's short name", () => {
-    const teams = [
-      team({ teamKey: "413", sourceTeamId: "9001", abbreviation: "413", name: "Team 413" }),
-      team({ teamKey: "pac.413", sourceTeamId: "413", abbreviation: "pac", name: "Pacific Tigers" })
-    ];
-    const identity = resolveFollowIdentity("413", teams);
-    expect(identity.ambiguous).toBe(true);
+  it("offers the whole competition when nothing answers to the saved short name", () => {
+    const identity = resolveFollowIdentity({ teamKey: "gone", sourceTeamId: null }, [LUTES, TIGERS]);
     expect(identity.needsChoice).toBe(true);
-    expect(identity.team).toBeNull();
-    expect(identity.sourceTeamId).toBeNull();
-    expect(identity.candidates.map((c) => c.name).sort()).toEqual(["Pacific Tigers", "Team 413"]);
+    expect(identity.candidates).toHaveLength(2);
   });
 
-  // The other half of the same rule: with no rival club wearing "413" as a name, the saved number
-  // stays attached to its own team rather than being dropped.
-  it("keeps a saved number attached to its own team when nothing else answers to it", () => {
-    const teams = [
-      team({ teamKey: "pac.413", sourceTeamId: "413", abbreviation: "pac", name: "Pacific Tigers" }),
-      team({
-        teamKey: "pac.129700",
-        sourceTeamId: "129700",
-        abbreviation: "pac",
-        name: "Pacific Lutheran Lutes"
-      })
-    ];
-    const identity = resolveFollowIdentity("413", teams);
-    expect(identity.ambiguous).toBe(false);
-    expect(identity.team?.name).toBe("Pacific Tigers");
-    expect(identity.sourceTeamId).toBe("413");
-  });
-
-  // Re-review 3 blocker 1: with no team list there is nothing to check the saved short name
-  // against, so the follow is marked unchecked. It keeps the saved name only as a last resort for
-  // data that carries nothing else, and the caller shows the person the recovery prompt.
-  it("marks a follow as unchecked when no team list loaded at all", () => {
-    const identity = resolveFollowIdentity("pac", []);
-    expect(identity.verified).toBe(false);
-    expect(identity.team).toBeNull();
-    expect(identity.sourceTeamId).toBeNull();
-    expect(identity.catalogKey).toBe("pac");
+  it("reports that no team list loaded, so no choice can be offered yet", () => {
+    const identity = resolveFollowIdentity({ teamKey: "pac", sourceTeamId: null }, []);
+    expect(identity.needsChoice).toBe(true);
+    expect(identity.teamListLoaded).toBe(false);
+    expect(identity.candidates).toHaveLength(0);
   });
 });
 
-describe("matchTargetFor", () => {
-  it("matches on the permanent number, so a shared short name on a game row can't attach to the wrong team", () => {
-    const teams = [
-      team({
-        teamKey: "pac.129700",
-        sourceTeamId: "129700",
-        abbreviation: "pac",
-        name: "Pacific Lutheran Lutes"
-      })
-    ];
-    const identity = resolveFollowIdentity("pac.129700", teams);
-    const target = matchTargetFor(identity);
+describe("matchTargetFor and sideMatchesTarget", () => {
+  it("matches a row by permanent id and refuses the other team wearing the same short name", () => {
+    const target = matchTargetFor(
+      resolveFollowIdentity({ teamKey: "pac", sourceTeamId: "129700" }, [LUTES, TIGERS])
+    );
     expect(target?.sourceTeamId).toBe("129700");
-    // The other school's row wears the same short name and its own number.
-    expect(sideMatchesTarget({ teamKey: "pac", sourceTeamId: "413" }, target!)).toBe(false);
     expect(sideMatchesTarget({ teamKey: "pac", sourceTeamId: "129700" }, target!)).toBe(true);
+    expect(sideMatchesTarget({ teamKey: "pac", sourceTeamId: "413" }, target!)).toBe(false);
   });
 
-  it("still matches an older cached row that carries no permanent number", () => {
-    const teams = [
-      team({
-        teamKey: "pac",
-        sourceTeamId: "129700",
-        abbreviation: "pac",
-        name: "Pacific Lutheran Lutes"
-      })
-    ];
-    const target = matchTargetFor(resolveFollowIdentity("pac", teams));
-    expect(sideMatchesTarget({ teamKey: "pac" }, target!)).toBe(true);
-  });
-
-  // Re-review 3 blocker 1, second half: the saved follow is Pacific Lutheran by number, the team
-  // list shows both PAC schools, and an older cached Tigers row has lost its number. "pac" means
-  // two clubs today, so it may not settle anything — the row is withheld, not handed over.
-  it("will not use a shared short name on a number-less row, even for a follow that has a number", () => {
-    const teams = [
-      team({
-        teamKey: "pac.129700",
-        sourceTeamId: "129700",
-        abbreviation: "pac",
-        name: "Pacific Lutheran Lutes"
-      }),
-      team({ teamKey: "pac.413", sourceTeamId: "413", abbreviation: "pac", name: "Pacific Tigers" })
-    ];
-    const target = matchTargetFor(resolveFollowIdentity("pac.129700", teams));
-    expect(target?.sourceTeamId).toBe("129700");
-    expect(target?.safeShortNames).not.toContain("pac");
+  // Re-review 4, scenario 1: an older cached game row that carries no permanent id. It used to be
+  // claimed on its short name. It can no longer be claimed by anyone, because claiming it means
+  // comparing short names, which is what put a Pacific Tigers score on a Pacific Lutheran card.
+  it("will not claim an older row that carries no permanent id, even for a followed team", () => {
+    const target = matchTargetFor(
+      resolveFollowIdentity({ teamKey: "pac", sourceTeamId: "129700" }, [LUTES, TIGERS])
+    );
     expect(sideMatchesTarget({ teamKey: "pac" }, target!)).toBe(false);
+    expect(sideMatchesTarget({ teamKey: "pac", sourceTeamId: null }, target!)).toBe(false);
   });
 
-  // Re-review 3 blocker 1, first half: no team list, so the saved short name was never checked.
-  // It may not be used against a game row that carries a permanent number of its own, because
-  // that row's identity is checkable and we have nothing to check it against.
-  it("will not claim a numbered game row for a follow the team list never confirmed", () => {
-    const target = matchTargetFor(resolveFollowIdentity("pac", []))!;
-    expect(target.verified).toBe(false);
-    expect(sideMatchesTarget({ teamKey: "pac", sourceTeamId: "413" }, target)).toBe(false);
-    // Older cached data that carries no number anywhere still works as it always did.
-    expect(sideMatchesTarget({ teamKey: "pac" }, target)).toBe(true);
-  });
-
-  it("refuses to match anything for a saved team that can no longer be told apart", () => {
-    const teams = [
-      team({ teamKey: "pac.129700", sourceTeamId: "129700", abbreviation: "pac" }),
-      team({ teamKey: "pac.413", sourceTeamId: "413", abbreviation: "pac" })
-    ];
-    expect(matchTargetFor(resolveFollowIdentity("pac", teams))).toBeNull();
+  // Re-review 4, scenario 1 again, with the team list down as well: a follow saved before the
+  // change plus an old row with no id is the worst case, and it still matches nothing.
+  it("gives a follow with no permanent id nothing to match with, list or no list", () => {
+    expect(matchTargetFor(resolveFollowIdentity({ teamKey: "pac", sourceTeamId: null }, []))).toBeNull();
+    expect(
+      matchTargetFor(resolveFollowIdentity({ teamKey: "pac", sourceTeamId: null }, [LUTES, TIGERS]))
+    ).toBeNull();
   });
 });

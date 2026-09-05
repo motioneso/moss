@@ -47,6 +47,7 @@ describe("id→url story keying (#858)", () => {
       id: "f1",
       competitionKey: "nfl",
       teamKey: null,
+      sourceTeamId: null,
       createdAt: "2026-06-01T00:00:00.000Z"
     };
     const h0: SourceHeadline = {
@@ -100,12 +101,14 @@ describe("id→url story keying (#858)", () => {
       id: "f1",
       competitionKey: "nfl",
       teamKey: null,
+      sourceTeamId: null,
       createdAt: "2026-06-01T00:00:00.000Z"
     };
     const nbaFollow: SportsFollowDto = {
       id: "f2",
       competitionKey: "nba",
       teamKey: null,
+      sourceTeamId: null,
       createdAt: "2026-06-01T00:00:00.000Z"
     };
     // nfl feed: an editorial lead (tier-1 top story, excluded from leagueNews) followed by the
@@ -231,12 +234,14 @@ describe("id→url story keying (#858)", () => {
       id: "f-nba",
       competitionKey: "nba",
       teamKey: null,
+      sourceTeamId: null,
       createdAt: "2026-06-01T00:00:00.000Z"
     };
     const nflFollow: SportsFollowDto = {
       id: "f-nfl",
       competitionKey: "nfl",
       teamKey: "dal",
+      sourceTeamId: "6",
       createdAt: "2026-06-01T00:00:00.000Z"
     };
     const headline = (competitionKey: "nba" | "nfl", id: string, url: string): SourceHeadline => ({
@@ -335,12 +340,14 @@ describe("id→url story keying (#858)", () => {
       id: "league-follow",
       competitionKey: "nfl",
       teamKey: null,
+      sourceTeamId: null,
       createdAt: "2026-06-01T00:00:00.000Z"
     };
     const teamFollow: SportsFollowDto = {
       id: "team-follow",
       competitionKey: "nfl",
       teamKey: "dal",
+      sourceTeamId: "6",
       createdAt: "2026-06-02T00:00:00.000Z"
     };
     const sharedUrl = "https://publisher.example/shared-story";
@@ -364,7 +371,20 @@ describe("id→url story keying (#858)", () => {
           getScoreboard: async () => [],
           getSchedule: async () => [],
           getStandings: async () => ({ sections: [] }),
-          getHeadlines: async () => []
+          getHeadlines: async () => [],
+          // A story is tagged with the key today's team list gives the team, so that list has to
+          // serve the Cowboys for the tag to reach the card (review finding S1, round 5).
+          listTeams: async (competitionKey) => [
+            {
+              teamKey: "dal",
+              competitionKey,
+              name: "Dallas Cowboys",
+              shortName: "Cowboys",
+              crestUrl: null,
+              sourceTeamId: "6",
+              abbreviation: "dal"
+            }
+          ]
         })
       }),
       publicSourceReader: {
@@ -400,6 +420,7 @@ describe("id→url story keying (#858)", () => {
       id: "f1",
       competitionKey: "nfl",
       teamKey: "dal",
+      sourceTeamId: "6",
       createdAt: "2026-06-01T00:00:00.000Z"
     };
     // h0 is the tier-1 pick (front of feed, unconditional) — not tagged to any team.

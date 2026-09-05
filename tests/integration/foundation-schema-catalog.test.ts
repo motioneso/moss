@@ -384,7 +384,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0212", name: "0212_ai_configured_models_origin.sql" },
         { version: "0213", name: "0213_sports_reddit_sources.sql" },
         // #2236 slice 1 — the scratchpad's single owner-only table.
-        { version: "0216", name: "0216_scratchpads.sql" }
+        { version: "0216", name: "0216_scratchpads.sql" },
+        { version: "0214", name: "0214_sports_follows_source_team_id.sql" }
       ]);
     } finally {
       await client.end();

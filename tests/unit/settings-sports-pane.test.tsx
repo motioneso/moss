@@ -276,6 +276,7 @@ describe("SportsSettings", () => {
               id: "22222222-2222-2222-2222-222222222222",
               competitionKey: "nfl",
               teamKey: null,
+              sourceTeamId: null,
               createdAt: "2026-08-24T12:00:00.000Z"
             }
           ],
@@ -306,6 +307,7 @@ describe("SportsSettings", () => {
             id: "22222222-2222-2222-2222-222222222222",
             competitionKey: "nfl",
             teamKey: null,
+            sourceTeamId: null,
             createdAt: "2026-08-24T12:00:00.000Z"
           }
         ],
@@ -333,6 +335,7 @@ describe("SportsSettings", () => {
               id: "22222222-2222-2222-2222-222222222222",
               competitionKey: "nfl",
               teamKey: null,
+              sourceTeamId: null,
               createdAt: "2026-08-24T12:00:00.000Z"
             }
           ],
@@ -470,6 +473,7 @@ describe("SportsSettings", () => {
               id: "follow-ars",
               competitionKey: "epl",
               teamKey: ARS.teamKey,
+              sourceTeamId: "id-ars",
               createdAt: "2026-01-01T00:00:00Z"
             }
           ]
@@ -499,7 +503,7 @@ describe("SportsSettings", () => {
     });
     client.setQueryData(FOLLOWS_KEY, {
       follows: [
-        { id: "f1", competitionKey: "epl", teamKey: "team.ars", createdAt: "2026-01-01T00:00:00Z" }
+        { id: "f1", competitionKey: "epl", teamKey: "team.ars", sourceTeamId: "id-team.ars", createdAt: "2026-01-01T00:00:00Z" }
       ]
     });
     // Followed-chip roster resolution fetches the league's teams via the shared leagueTeams key
@@ -520,7 +524,7 @@ describe("SportsSettings", () => {
     });
     client.setQueryData(FOLLOWS_KEY, {
       follows: [
-        { id: "f1", competitionKey: "epl", teamKey: "team.ars", createdAt: "2026-01-01T00:00:00Z" }
+        { id: "f1", competitionKey: "epl", teamKey: "team.ars", sourceTeamId: "id-team.ars", createdAt: "2026-01-01T00:00:00Z" }
       ]
     });
     client.setQueryData(sportsQueryKeys.leagueTeams("epl"), {
@@ -537,7 +541,7 @@ describe("SportsSettings", () => {
     client.setQueryData(CATALOG_KEY, { competitions: TWO_LEAGUES, degraded: false });
     client.setQueryData(FOLLOWS_KEY, {
       follows: [
-        { id: "f1", competitionKey: "epl", teamKey: "team.ars", createdAt: "2026-01-01T00:00:00Z" }
+        { id: "f1", competitionKey: "epl", teamKey: "team.ars", sourceTeamId: "id-team.ars", createdAt: "2026-01-01T00:00:00Z" }
       ]
     });
     client.setQueryData(sportsQueryKeys.leagueTeams("epl"), { teams: [ARS], degraded: false });
@@ -554,7 +558,7 @@ describe("SportsSettings", () => {
     client.setQueryData(CATALOG_KEY, { competitions: TWO_LEAGUES, degraded: false });
     client.setQueryData(FOLLOWS_KEY, {
       follows: [
-        { id: "fl", competitionKey: "nfl", teamKey: null, createdAt: "2026-01-01T00:00:00Z" }
+        { id: "fl", competitionKey: "nfl", teamKey: null, sourceTeamId: null, createdAt: "2026-01-01T00:00:00Z" }
       ]
     });
     const html = renderWithQuery(client);
@@ -570,6 +574,7 @@ describe("SportsSettings", () => {
           id: "orphan1",
           competitionKey: "xyz.retired",
           teamKey: null,
+          sourceTeamId: null,
           createdAt: "2026-01-01T00:00:00Z"
         }
       ]
@@ -610,7 +615,7 @@ describe("is-active styling coverage (#691)", () => {
   const followed = new Map([
     [
       "epl::team.ars",
-      { id: "f1", competitionKey: "epl", teamKey: "team.ars", createdAt: "2026-01-01T00:00:00Z" }
+      { id: "f1", competitionKey: "epl", teamKey: "team.ars", sourceTeamId: "id-team.ars", createdAt: "2026-01-01T00:00:00Z" }
     ]
   ]);
 

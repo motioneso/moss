@@ -112,7 +112,10 @@ export interface CompetitionRef {
 export interface SportsFollowDto {
   readonly id: string;
   readonly competitionKey: string;
-  readonly teamKey: string | null; // null = whole competition
+  readonly teamKey: string | null; // null = whole competition; otherwise the display short name
+  // The provider's permanent team id — the only identity anything is matched on. Null on a follow
+  // saved before that column existed; such a follow matches nothing until the person picks a team.
+  readonly sourceTeamId: string | null;
   readonly createdAt: string;
 }
 
@@ -124,13 +127,27 @@ export interface FollowedTeamRef {
   readonly sourceTeamId: string | null;
 }
 
-// A saved follow whose short name is currently shared by more than one team, with no permanent
-// number on file to break the tie (S1). Kept out of every card, score and standings match; the
-// person is asked which team they meant instead of the app guessing.
+// A saved follow with no permanent team id on it — every follow saved before the id column
+// existed. It is kept out of every card, score, standings row, briefing fact and story, and the
+// person is asked once which team they meant. Answering writes the id and the follow works again.
+export interface AmbiguousFollowCandidate {
+  readonly sourceTeamId: string;
+  readonly name: string;
+  readonly crestUrl: string | null;
+}
+
 export interface AmbiguousFollowedTeamRef {
+  readonly followId: string;
   readonly competitionKey: string;
   readonly savedTeamKey: string;
-  readonly candidateNames: readonly string[];
+  // Teams to offer. Empty when the team list could not be loaded, which `teamListLoaded` reports
+  // so the page can say so instead of showing an empty choice.
+  readonly candidates: readonly AmbiguousFollowCandidate[];
+  readonly teamListLoaded: boolean;
+}
+
+export interface ResolveSportsFollowTeamRequest {
+  readonly sourceTeamId: string;
 }
 
 // A whole-competition follow (teamKey: null on the DTO) — surfaced separately from

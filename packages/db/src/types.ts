@@ -1176,7 +1176,13 @@ export interface SportsFollowsTable {
   id: ColumnType<string, string | undefined, string>;
   owner_user_id: string;
   competition_key: string;
+  // The team's short name, for display and for suggesting candidates in the one-time "which team
+  // did you mean?" prompt. NULL still means "follow the whole competition". Never matched on.
   team_key: string | null;
+  // The provider's permanent team id: the only identity used to match games, standings, briefing
+  // facts and news (0214). NULL on a follow saved before that migration; such a row matches
+  // nothing until the person picks a team.
+  source_team_id: ColumnType<string | null, string | null | undefined, string | null>;
   created_at: TimestampColumn;
 }
 

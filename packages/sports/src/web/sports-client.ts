@@ -12,6 +12,7 @@ import type {
   PreviewSportsSourceAssignmentsResponse,
   PreviewSportsSourceRecipeResponse,
   PreviewSportsSourceResponse,
+  ResolveSportsFollowTeamRequest,
   SportsCatalogResponse,
   SportsCustomSourceDto,
   SportsNewsSourcesResponse,
@@ -68,6 +69,17 @@ export async function createSportsFollow(
     method: "POST",
     body: input
   });
+}
+
+/** Answers "which team did you mean?" for one older saved follow. */
+export async function resolveSportsFollowTeam(
+  id: string,
+  input: ResolveSportsFollowTeamRequest
+): Promise<{ follow: SportsFollowDto }> {
+  return requestJson<{ follow: SportsFollowDto }>(
+    `/api/sports/follows/${encodeURIComponent(id)}/team`,
+    { method: "POST", body: input }
+  );
 }
 
 export async function deleteSportsFollow(id: string): Promise<{ ok: boolean }> {

@@ -34,7 +34,7 @@ function liveGame(): GameSummary {
     statusDetail: "Q3 4:12",
     home: {
       teamKey: "min",
-      sourceTeamId: null,
+      sourceTeamId: "16",
       name: "Minnesota Vikings",
       shortName: "MIN",
       crestUrl: null,
@@ -45,7 +45,7 @@ function liveGame(): GameSummary {
     },
     away: {
       teamKey: "dal",
-      sourceTeamId: null,
+      sourceTeamId: "6",
       name: "Dallas Cowboys",
       shortName: "DAL",
       crestUrl: null,
@@ -91,7 +91,7 @@ function standingsGroup(): StandingsGroup {
         rows: [
           {
             teamKey: "ars",
-            sourceTeamId: null,
+            sourceTeamId: "359",
             name: "Arsenal",
             rank: 1,
             points: 40,
@@ -176,7 +176,7 @@ function makeOverview(overrides: Partial<SportsOverviewResponse> = {}): SportsOv
       }
     ],
     standings: [standingsGroup()],
-    followedTeams: [{ competitionKey: "nfl", teamKey: "min", sourceTeamId: null }],
+    followedTeams: [{ competitionKey: "nfl", teamKey: "min", sourceTeamId: "16" }],
     followedLeagues: [],
     followedLeagueCards: [],
     ambiguousFollows: [],
@@ -360,8 +360,8 @@ describe("SportsPage", () => {
     const html = render(
       makeOverview({
         followedTeams: [
-          { competitionKey: "nfl", teamKey: "min", sourceTeamId: null },
-          { competitionKey: "eng.1", teamKey: "ars", sourceTeamId: null }
+          { competitionKey: "nfl", teamKey: "min", sourceTeamId: "16" },
+          { competitionKey: "eng.1", teamKey: "ars", sourceTeamId: "359" }
         ]
       })
     );
@@ -434,7 +434,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "min",
-                    sourceTeamId: null,
+                    sourceTeamId: "16",
                     name: "Minnows FC",
                     rank: 5,
                     points: 30,
@@ -548,7 +548,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "ars",
-                    sourceTeamId: null,
+                    sourceTeamId: "359",
                     name: "Arsenal",
                     rank: 1,
                     points: 40,
@@ -565,7 +565,7 @@ describe("SportsPage", () => {
             ]
           }
         ],
-        followedTeams: [{ competitionKey: "eng.1", teamKey: "ars", sourceTeamId: null }]
+        followedTeams: [{ competitionKey: "eng.1", teamKey: "ars", sourceTeamId: "359" }]
       })
     );
     expect(html).toContain("sp-legend");
@@ -586,7 +586,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "ars",
-                    sourceTeamId: null,
+                    sourceTeamId: "359",
                     name: "Arsenal",
                     rank: 1,
                     points: 40,

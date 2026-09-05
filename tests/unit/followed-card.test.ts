@@ -5,11 +5,12 @@ import type { GameSide, GameSummary } from "@moss/shared";
 import { findTeamGame, sideFor, standingLine } from "../../packages/sports/src/followed-card.js";
 import type { StandingsTable } from "../../packages/sports/src/source/sports-source.js";
 
-// Review finding S1 (2026-09-04): a scoreboard/standings fetch is per competition, so it cannot
-// see that two teams share an abbreviation the way the team list can. When that happens, both
-// teams' games and standings rows still carry the same, shared teamKey — only their own numeric
-// provider id tells them apart. These tests prove that a lookup by the right numeric id gets the
-// right team's data, not whichever of the two teams happened to match first.
+// Review finding S1 (2026-09-04, round 5): a scoreboard/standings fetch is per competition, so it
+// cannot see that two teams share an abbreviation the way the team list can. When that happens,
+// both teams' games and standings rows still carry the same, shared teamKey — only the provider's
+// permanent team id tells them apart. Since round 5 that id is the ONLY thing these lookups are
+// given: the target is a permanent id and nothing else, so there is no short name left to fall
+// back to. These tests prove a lookup by the right permanent id gets the right team's data.
 
 function side(overrides: Partial<GameSide> & { sourceTeamId: string | null }): GameSide {
   return {
@@ -39,13 +40,13 @@ describe("followed-card team matching under a shared abbreviation", () => {
   };
 
   it("sideFor returns the Lutes' own side when asked for the Lutes' numeric id, not the Tigers'", () => {
-    expect(sideFor(game, "129700")).toBe(lutesSide);
-    expect(sideFor(game, "413")).toBe(tigersSide);
+    expect(sideFor(game, { sourceTeamId: "129700" })).toBe(lutesSide);
+    expect(sideFor(game, { sourceTeamId: "413" })).toBe(tigersSide);
   });
 
   it("findTeamGame still finds the game by either team's numeric id", () => {
-    expect(findTeamGame([game], "129700")).toBe(game);
-    expect(findTeamGame([game], "413")).toBe(game);
+    expect(findTeamGame([game], { sourceTeamId: "129700" })).toBe(game);
+    expect(findTeamGame([game], { sourceTeamId: "413" })).toBe(game);
   });
 
   it("standingLine tells the two teams' rows apart by their numeric id", () => {
@@ -85,7 +86,7 @@ describe("followed-card team matching under a shared abbreviation", () => {
         ]
       }
     ];
-    expect(standingLine(sections, "129700")).toContain("3");
-    expect(standingLine(sections, "413")).toContain("9");
+    expect(standingLine(sections, { sourceTeamId: "129700" })).toContain("3");
+    expect(standingLine(sections, { sourceTeamId: "413" })).toContain("9");
   });
 });

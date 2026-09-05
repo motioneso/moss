@@ -24,7 +24,8 @@ describe("sports manifest", () => {
       "sql/0192_sports_legacy_feed_assignments_verified.sql",
       "sql/0193_sports_legacy_feed_assignment_repair.sql",
       "sql/0196_sports_news_source_scopes.sql",
-      "sql/0213_sports_reddit_sources.sql"
+      "sql/0213_sports_reddit_sources.sql",
+      "sql/0214_sports_follows_source_team_id.sql"
     ]);
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
     expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");

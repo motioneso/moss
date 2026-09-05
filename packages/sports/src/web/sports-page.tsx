@@ -16,7 +16,7 @@ import type {
   SportsOverviewResponse
 } from "@moss/shared";
 
-import { getSportsOverview } from "./sports-client.js";
+import { getSportsOverview, resolveSportsFollowTeam } from "./sports-client.js";
 import { sportsQueryKeys } from "./query-keys.js";
 import { formatTime, useUserLocale } from "./locale.js";
 import { teamBarColor } from "./team-colors.js";
@@ -647,10 +647,11 @@ function BroadsheetGrid(props: {
 
 /* -------------------------------------------- Saved team we can no longer identify */
 
-// A saved team whose short name is now shared by more than one team, with nothing on file to
-// say which one was meant (review finding S1). The page refuses to guess, so without this the
-// card would simply vanish and the person would have no idea why their team stopped appearing.
-// Says what happened, names the teams it could be, and links to the one screen that fixes it.
+// A saved team from before follows carried the provider's permanent team number. There is
+// nothing on file to say which team was meant, so the page refuses to guess (review finding S1,
+// round 5). Without this the card would simply vanish and the person would have no idea why
+// their team stopped appearing. It says what happened, offers the teams it could be as buttons,
+// and writes the answer onto the saved team the moment one is picked.
 function AmbiguousFollowNotice(props: {
   follows: readonly AmbiguousFollowedTeamRef[] | undefined;
 }) {
@@ -661,25 +662,69 @@ function AmbiguousFollowNotice(props: {
       <div className="sp-empty__inner">
         <h2 className="sp-empty__title">Which team did you mean?</h2>
         {follows.map((follow) => (
-          <p className="sp-empty__lede" key={`${follow.competitionKey}:${follow.savedTeamKey}`}>
-            {`More than one team now goes by ${follow.savedTeamKey.toUpperCase()}: `}
-            {joinNames(follow.candidateNames)}
-            {". Scores and standings are on hold for this team until you pick the right one."}
-          </p>
+          <AmbiguousFollowChoice follow={follow} key={follow.followId} />
         ))}
-        <a className="sp-nofollow__btn" href={SETTINGS_HREF}>
-          Pick the right team
-        </a>
       </div>
     </section>
   );
 }
 
-function joinNames(names: readonly string[]): string {
-  if (names.length === 0) return "two different teams";
-  if (names.length === 1) return names[0]!;
-  if (names.length === 2) return `${names[0]} and ${names[1]}`;
-  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+function AmbiguousFollowChoice(props: { follow: AmbiguousFollowedTeamRef }) {
+  const { follow } = props;
+  const queryClient = useQueryClient();
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const choose = useCallback(
+    async (sourceTeamId: string) => {
+      setSaving(sourceTeamId);
+      setError(null);
+      try {
+        await resolveSportsFollowTeam(follow.followId, { sourceTeamId });
+        await queryClient.invalidateQueries({ queryKey: sportsQueryKeys.overview });
+        await queryClient.invalidateQueries({ queryKey: sportsQueryKeys.follows });
+      } catch {
+        setError("That choice could not be saved. Please try again.");
+      } finally {
+        setSaving(null);
+      }
+    },
+    [follow.followId, queryClient]
+  );
+
+  const savedName = follow.savedTeamKey.toUpperCase();
+
+  // The team list is what the choice would be checked against, so with no list there is nothing
+  // safe to offer. Say so plainly rather than showing an empty question.
+  if (!follow.teamListLoaded || follow.candidates.length === 0) {
+    return (
+      <p className="sp-empty__lede">
+        {`We saved a team called ${savedName}, but today's team list could not be loaded, so we cannot ask which team you meant. Scores and standings stay on hold for this team until the list is back.`}
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <p className="sp-empty__lede">
+        {`We saved a team called ${savedName} before teams were pinned to a permanent number. Pick the right one and it comes straight back; until then its scores and standings are on hold.`}
+      </p>
+      {follow.candidates.map((candidate) => (
+        <button
+          className="sp-nofollow__btn"
+          type="button"
+          key={candidate.sourceTeamId}
+          disabled={saving !== null}
+          onClick={() => {
+            void choose(candidate.sourceTeamId);
+          }}
+        >
+          {saving === candidate.sourceTeamId ? `Saving ${candidate.name}...` : candidate.name}
+        </button>
+      ))}
+      {error === null ? null : <p className="sp-empty__lede">{error}</p>}
+    </div>
+  );
 }
 
 /* ---------------------------------------------------------------- Empty state */

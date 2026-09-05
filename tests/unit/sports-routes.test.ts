@@ -5,7 +5,6 @@ import type { DatasetClient, DatasetEnvelope } from "@moss/datasets";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 import type {
-  CreateSportsFollowRequest,
   GameSide,
   GameSummary,
   SportsFollowDto,
@@ -13,6 +12,7 @@ import type {
 } from "@moss/shared";
 import { SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT } from "@moss/shared";
 
+import type { CreateSportsFollowInput } from "../../packages/sports/src/repository.js";
 import {
   registerSportsRoutes,
   type SportsRoutesDependencies
@@ -181,17 +181,26 @@ export function makeSource(overrides: FakeSourceHandlers = {}): DatasetClient {
 
 interface FakeRepo {
   list(scopedDb: DataContextDb): Promise<SportsFollowDto[]>;
-  create(scopedDb: DataContextDb, input: CreateSportsFollowRequest): Promise<SportsFollowDto>;
+  create(scopedDb: DataContextDb, input: CreateSportsFollowInput): Promise<SportsFollowDto>;
+  setSourceTeamId(
+    scopedDb: DataContextDb,
+    id: string,
+    sourceTeamId: string,
+    teamKey: string | null
+  ): Promise<SportsFollowDto | undefined>;
   remove(scopedDb: DataContextDb, id: string): Promise<boolean>;
-  created: CreateSportsFollowRequest[];
+  created: CreateSportsFollowInput[];
+  chosen: { id: string; sourceTeamId: string; teamKey: string | null }[];
   removed: string[];
 }
 
 export function makeRepo(initial: SportsFollowDto[]): FakeRepo {
-  const created: CreateSportsFollowRequest[] = [];
+  const created: CreateSportsFollowInput[] = [];
+  const chosen: { id: string; sourceTeamId: string; teamKey: string | null }[] = [];
   const removed: string[] = [];
   return {
     created,
+    chosen,
     removed,
     list: async () => initial,
     create: async (_db, input) => {
@@ -200,8 +209,15 @@ export function makeRepo(initial: SportsFollowDto[]): FakeRepo {
         id: "new-follow",
         competitionKey: input.competitionKey,
         teamKey: input.teamKey ?? null,
+        sourceTeamId: input.sourceTeamId ?? null,
         createdAt: "2026-07-01T00:00:00.000Z"
       };
+    },
+    setSourceTeamId: async (_db, id, sourceTeamId, teamKey) => {
+      chosen.push({ id, sourceTeamId, teamKey });
+      const row = initial.find((follow) => follow.id === id);
+      if (!row || row.teamKey === null) return undefined;
+      return { ...row, sourceTeamId, teamKey };
     },
     remove: async (_db, id) => {
       removed.push(id);
@@ -218,6 +234,7 @@ export function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?:
         id: "11111111-1111-1111-1111-111111111111",
         competitionKey: "nfl",
         teamKey: "dal",
+        sourceTeamId: "6",
         createdAt: "2026-06-01T00:00:00.000Z"
       }
     ]);
@@ -403,7 +420,7 @@ describe("sports routes", () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.follow.competitionKey).toBe("nba");
-    expect(repo.created).toEqual([{ competitionKey: "nba", teamKey: null }]);
+    expect(repo.created).toEqual([{ competitionKey: "nba", teamKey: null, sourceTeamId: null }]);
     await app.close();
   });
 
@@ -516,6 +533,7 @@ describe("sports routes", () => {
           id: "f1",
           competitionKey: "eng.1",
           teamKey: null,
+          sourceTeamId: null,
           createdAt: "2026-06-01T00:00:00.000Z"
         }
       ])

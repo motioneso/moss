@@ -10,60 +10,54 @@
 
 import type { Headline, SportsNewsGroup } from "@moss/shared";
 
-// Which teams the reader follows, kept in two SEPARATE collections on purpose (S1 re-review 3).
-// A permanent number and a short name are different kinds of thing and are never interchanged: a
-// club whose short name happens to be another club's number must not be marked "you". A game or
-// standings row always carries the raw, possibly-shared short name as its own key, so the number
-// is the only identity that can be trusted when both sides have one.
+// Which teams the reader follows. Identity is the provider's permanent team id and nothing else
+// (review finding S1, round 5). Short names are never compared: two teams in one competition can
+// share one, and comparing them is what put a Pacific Tigers score on a Pacific Lutheran card.
 export interface FollowedTeamIndex {
-  /** `competition:permanentNumber` for every followed team whose number is known. */
+  /** `competition:permanentId` for every followed team. A follow with no permanent id is not in
+   *  here at all — it matches nothing until the person says which team they meant. */
   readonly byNumber: ReadonlySet<string>;
-  /** `competition:listKey` — the identity today's team list gives the team, which is what
-   *  team-tagged news is tagged with. Unique within a league by construction. */
+  /** `competition:listKey` for those same teams, and only for those. A team-tagged story carries
+   *  no permanent id on the wire, only the key today's team list gave the team it was tagged
+   *  with — and that key is worked out from the permanent id at both ends, so matching on it is
+   *  matching on the id by another name. Nothing else is ever looked up here. */
   readonly byCatalogKey: ReadonlySet<string>;
-  /** `competition:shortName`, and ONLY for followed teams with no permanent number known. A
-   *  followed team that has a number is matched by that number alone. */
-  readonly byShortName: ReadonlySet<string>;
 }
 
 export const EMPTY_FOLLOWED_TEAMS: FollowedTeamIndex = {
   byNumber: new Set<string>(),
-  byCatalogKey: new Set<string>(),
-  byShortName: new Set<string>()
+  byCatalogKey: new Set<string>()
 };
 
-/** Builds the index from the response's followed-team references. A reference carries the team's
- *  list key and, when the source knows it, the permanent number. */
+/** Builds the index from the response's followed-team references. A reference is only sent for a
+ *  follow whose permanent id is known, so a reference without one contributes nothing. */
 export function followedTeamIndex(
   refs: readonly { competitionKey: string; teamKey: string; sourceTeamId?: string | null }[]
 ): FollowedTeamIndex {
   const byNumber = new Set<string>();
   const byCatalogKey = new Set<string>();
-  const byShortName = new Set<string>();
   for (const ref of refs) {
+    if (ref.sourceTeamId == null) continue;
+    byNumber.add(`${ref.competitionKey}:${ref.sourceTeamId}`);
     byCatalogKey.add(`${ref.competitionKey}:${ref.teamKey}`);
-    if (ref.sourceTeamId != null) byNumber.add(`${ref.competitionKey}:${ref.sourceTeamId}`);
-    else byShortName.add(`${ref.competitionKey}:${ref.teamKey}`);
   }
-  return { byNumber, byCatalogKey, byShortName };
+  return { byNumber, byCatalogKey };
 }
 
 /** Does this game side, standings row or tagged story belong to a team the reader follows?
  *
- *  The row's permanent number is checked against followed numbers only, and its key against
- *  followed keys only — the two are never crossed. A bare short name settles it only for a
- *  followed team with no number on file. */
+ *  A row that carries a permanent id is settled by that id alone — if the id is not a followed
+ *  one, the answer is no, full stop. There is no falling through to the short name, which is what
+ *  marked Pacific Lutheran as followed on a page where only Pacific Tigers was. Only a row with no
+ *  id at all (a tagged story) falls to the list key, which is itself derived from ids. */
 export function isFollowed(
   followed: FollowedTeamIndex,
   competitionKey: string,
   teamKey: string,
   sourceTeamId?: string | null
 ): boolean {
-  if (sourceTeamId != null && followed.byNumber.has(`${competitionKey}:${sourceTeamId}`)) {
-    return true;
-  }
-  if (followed.byCatalogKey.has(`${competitionKey}:${teamKey}`)) return true;
-  return followed.byShortName.has(`${competitionKey}:${teamKey}`);
+  if (sourceTeamId != null) return followed.byNumber.has(`${competitionKey}:${sourceTeamId}`);
+  return followed.byCatalogKey.has(`${competitionKey}:${teamKey}`);
 }
 
 // Written-article detector (mrb5reqq "some can have more text (especially if they are a written

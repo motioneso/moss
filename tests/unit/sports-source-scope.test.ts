@@ -62,12 +62,14 @@ describe("sports news source scopes", () => {
         id: "league",
         competitionKey: "eng.1",
         teamKey: null,
+        sourceTeamId: null,
         createdAt: "2026-08-25T00:00:00.000Z"
       },
       {
         id: "team",
         competitionKey: "usa.1",
         teamKey: "sd",
+        sourceTeamId: "id-sd",
         createdAt: "2026-08-25T00:00:00.000Z"
       }
     ];

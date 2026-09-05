@@ -7,6 +7,8 @@ import {
   createSportsFollowResponseSchema,
   deleteSportsCustomSourceSchema,
   deleteSportsFollowResponseSchema,
+  resolveSportsFollowTeamRequestSchema,
+  resolveSportsFollowTeamResponseSchema,
   previewSportsSourceSchema,
   previewSportsSourceAssignmentsSchema,
   previewSportsSourceRecipeSchema,
@@ -105,7 +107,8 @@ export const sportsModuleManifest = {
       "sql/0192_sports_legacy_feed_assignments_verified.sql",
       "sql/0193_sports_legacy_feed_assignment_repair.sql",
       "sql/0196_sports_news_source_scopes.sql",
-      "sql/0213_sports_reddit_sources.sql"
+      "sql/0213_sports_reddit_sources.sql",
+      "sql/0214_sports_follows_source_team_id.sql"
     ],
     migrationDirectories: ["packages/sports/sql"],
     ownedTables: [
@@ -146,7 +149,7 @@ export const sportsModuleManifest = {
     {
       id: "sports.team_identity",
       description:
-        "When two teams share a short name, Sports keeps each followed team's scores and standing attached to the right one. If a saved team can no longer be told apart, the Sports page asks which team you meant instead of guessing."
+        "Follows are tied to the provider's permanent team number, so two teams sharing a short name never swap scores. A team saved before that is put on hold and Sports asks once which team was meant; picking one brings it back."
     }
   ],
   navigation: [
@@ -165,7 +168,7 @@ export const sportsModuleManifest = {
       id: "sports.follows",
       label: "Sports",
       description:
-        "Choose the teams and leagues shown in Sports, and add custom news sources: a publication's homepage or a subreddit such as r/nfl.",
+        "Choose the teams and leagues shown in Sports, and add custom news sources. Follows are tied to the provider's permanent team number; a team saved before that asks once which team was meant.",
       path: "/settings/modules/sports",
       scope: "user",
       order: 35,
@@ -252,6 +255,13 @@ export const sportsModuleManifest = {
       path: "/api/sports/follows",
       requestSchema: createSportsFollowRequestSchema,
       responseSchema: createSportsFollowResponseSchema,
+      permissionId: "sports.follow"
+    },
+    {
+      method: "POST",
+      path: "/api/sports/follows/:id/team",
+      requestSchema: resolveSportsFollowTeamRequestSchema,
+      responseSchema: resolveSportsFollowTeamResponseSchema,
       permissionId: "sports.follow"
     },
     {

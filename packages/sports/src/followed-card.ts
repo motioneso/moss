@@ -8,11 +8,7 @@ import type {
   GameSummary
 } from "@moss/shared";
 
-import {
-  shortNameTarget,
-  sideMatchesTarget,
-  type TeamMatchTarget
-} from "./follow-identity.js";
+import { sideMatchesTarget, type TeamMatchTarget } from "./follow-identity.js";
 import { storyRefFields, type StoryRefFor } from "./headline-composition.js";
 import type { SourceHeadline, StandingsTable } from "./source/sports-source.js";
 
@@ -37,19 +33,18 @@ export function joinLabels(labels: readonly string[]): string {
   return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
 }
 
-// A team whose short name collided with another team's (review finding S1, 2026-09-04) gets a
-// teamKey built from that short name plus the source's numeric id, but a scoreboard, schedule or
-// standings row for the same team still carries the old, shared short name as ITS teamKey (it
-// comes from a separate fetch with no visibility into the collision), and an older cached row
-// carries no number at all. `TeamMatchTarget` holds both halves so every mix lines up; a bare
-// string is still accepted and means "this short name and nothing else".
-export type TeamMatchInput = string | TeamMatchTarget;
+// A scoreboard, schedule or standings row comes from its own fetch, one competition at a time, so
+// it cannot see that two teams share a short name — and two teams in one competition really do
+// (review finding S1, 2026-09-04). So a short name is not accepted here at all: every lookup takes
+// the provider's permanent team id, supplied on its own, and a row is only ever claimed when its
+// own permanent id is the same one. A row that carries no id is claimed by nobody.
+export type TeamMatchInput = TeamMatchTarget;
 
 function sameTeam(
   side: { teamKey: string; sourceTeamId?: string | null },
   teamKey: TeamMatchInput
 ): boolean {
-  return sideMatchesTarget(side, typeof teamKey === "string" ? shortNameTarget(teamKey) : teamKey);
+  return sideMatchesTarget(side, teamKey);
 }
 
 export function findTeamGame(

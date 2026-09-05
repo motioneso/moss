@@ -246,6 +246,7 @@ async function mockSportsSettings(
         id: `f${nextId++}`,
         competitionKey: body.competitionKey,
         teamKey: body.teamKey ?? null,
+        sourceTeamId: body.teamKey == null ? null : `id-${body.teamKey}`,
         createdAt: "2026-07-12T00:00:00.000Z"
       };
       follows = [...follows, follow];

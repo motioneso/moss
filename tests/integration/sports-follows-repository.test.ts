@@ -73,7 +73,7 @@ describe("sports follows repository RLS", () => {
 
     const created = await dataCtx.withDataContext(
       { actorUserId: alice, requestId: "sports-1a" },
-      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: "min" })
+      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: "min", sourceTeamId: "16" })
     );
     expect(created.competitionKey).toBe("nfl");
     expect(created.teamKey).toBe("min");
@@ -94,7 +94,7 @@ describe("sports follows repository RLS", () => {
     const bob = await signUp("Bob", "sports2-bob@example.com");
 
     await dataCtx.withDataContext({ actorUserId: alice, requestId: "sports-2a" }, (scopedDb) =>
-      repo.create(scopedDb, { competitionKey: "nfl", teamKey: "min" })
+      repo.create(scopedDb, { competitionKey: "nfl", teamKey: "min", sourceTeamId: "16" })
     );
 
     const bobList = await dataCtx.withDataContext(
@@ -112,11 +112,11 @@ describe("sports follows repository RLS", () => {
 
     const first = await dataCtx.withDataContext(
       { actorUserId: alice, requestId: "sports-3a" },
-      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null })
+      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
     );
     const second = await dataCtx.withDataContext(
       { actorUserId: alice, requestId: "sports-3b" },
-      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null })
+      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
     );
     // The repository guards whole-competition (null-team) duplicates with an explicit
     // existence check, so the second create returns the existing row, not a new one.
@@ -158,7 +158,7 @@ describe("sports follows repository RLS", () => {
       async (scopedDb) => {
         resolveAReady();
         await gate;
-        return repo.create(scopedDb, { competitionKey: "nfl", teamKey: null });
+        return repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null });
       }
     );
     const sideB = dataCtx.withDataContext(
@@ -166,7 +166,7 @@ describe("sports follows repository RLS", () => {
       async (scopedDb) => {
         resolveBReady();
         await gate;
-        return repo.create(scopedDb, { competitionKey: "nfl", teamKey: null });
+        return repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null });
       }
     );
 
@@ -192,11 +192,11 @@ describe("sports follows repository RLS", () => {
 
     const aliceFollow = await dataCtx.withDataContext(
       { actorUserId: alice, requestId: "sports-5a" },
-      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null })
+      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
     );
     const bobFollow = await dataCtx.withDataContext(
       { actorUserId: bob, requestId: "sports-5b" },
-      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null })
+      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
     );
 
     expect(aliceFollow.id).not.toBe(bobFollow.id);
@@ -214,6 +214,97 @@ describe("sports follows repository RLS", () => {
     );
     expect(bobListed).toHaveLength(1);
     expect(bobListed[0]?.id).toBe(bobFollow.id);
+  });
+
+  // Review finding S1, round 5: two teams in one competition can answer to the same short name
+  // (two schools both called "PAC"). Before this round the table allowed only one row per short
+  // name, so the second follow silently collapsed onto the first. Identity is now the provider's
+  // permanent team id, and both follows must survive.
+  it("keeps two follows that share a short name but have different permanent team ids", async () => {
+    const admin = await signUp("Admin", "sports6-admin@example.com");
+    void admin;
+    await disableApproval();
+    const alice = await signUp("Alice", "sports6-alice@example.com");
+
+    const lutes = await dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-6a" },
+      (scopedDb) =>
+        repo.create(scopedDb, {
+          competitionKey: "ncaa-baseball",
+          teamKey: "pac",
+          sourceTeamId: "129700"
+        })
+    );
+    const tigers = await dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-6b" },
+      (scopedDb) =>
+        repo.create(scopedDb, {
+          competitionKey: "ncaa-baseball",
+          teamKey: "pac",
+          sourceTeamId: "413"
+        })
+    );
+    expect(lutes.id).not.toBe(tigers.id);
+
+    // Saving the same permanent id again returns the row that already exists.
+    const again = await dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-6c" },
+      (scopedDb) =>
+        repo.create(scopedDb, {
+          competitionKey: "ncaa-baseball",
+          teamKey: "pac",
+          sourceTeamId: "413"
+        })
+    );
+    expect(again.id).toBe(tigers.id);
+
+    const listed = await dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-6d" },
+      (scopedDb) => repo.list(scopedDb)
+    );
+    expect(listed).toHaveLength(2);
+  });
+
+  // The recovery path for a follow saved before round 5: answering "which team did you mean?"
+  // writes the permanent id onto that row. A whole-competition follow must never be turned into
+  // a team follow this way.
+  it("writes a permanent team id onto an older follow, and refuses to do it to a whole-league follow", async () => {
+    const admin = await signUp("Admin", "sports7-admin@example.com");
+    void admin;
+    await disableApproval();
+    const alice = await signUp("Alice", "sports7-alice@example.com");
+    const bob = await signUp("Bob", "sports7-bob@example.com");
+
+    const old = await dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-7a" },
+      (scopedDb) =>
+        repo.create(scopedDb, { competitionKey: "ncaa-baseball", teamKey: "pac", sourceTeamId: null })
+    );
+    const wholeLeague = await dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-7b" },
+      (scopedDb) =>
+        repo.create(scopedDb, { competitionKey: "nfl", teamKey: null, sourceTeamId: null })
+    );
+
+    const chosen = await dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-7c" },
+      (scopedDb) => repo.setSourceTeamId(scopedDb, old.id, "129700", "pac")
+    );
+    expect(chosen?.sourceTeamId).toBe("129700");
+    expect(chosen?.teamKey).toBe("pac");
+
+    const refusedWholeLeague = await dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-7d" },
+      (scopedDb) => repo.setSourceTeamId(scopedDb, wholeLeague.id, "129700", "pac")
+    );
+    expect(refusedWholeLeague).toBeUndefined();
+
+    // Another person cannot answer the question on Alice's behalf.
+    const refusedOtherOwner = await dataCtx.withDataContext(
+      { actorUserId: bob, requestId: "sports-7e" },
+      (scopedDb) => repo.setSourceTeamId(scopedDb, old.id, "413", "pac")
+    );
+    expect(refusedOtherOwner).toBeUndefined();
   });
 });
 

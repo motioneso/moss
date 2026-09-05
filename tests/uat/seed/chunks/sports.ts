@@ -8,10 +8,14 @@ import { SportsFollowsRepository, SportsSourcesRepository } from "@moss/sports";
 // only enumerates competitions) — real team keys come from live ESPN dataset fetches,
 // unavailable at seed time, so guessing one (e.g. "nfl-sf-49ers") risks seeding a row
 // the real data never resolves. Following whole competitions is real, valid data.
-const UAT_SPORTS_FOLLOWS: ReadonlyArray<{ competitionKey: string; teamKey: null }> = [
-  { competitionKey: "nfl", teamKey: null },
-  { competitionKey: "nba", teamKey: null },
-  { competitionKey: "eng.1", teamKey: null }
+const UAT_SPORTS_FOLLOWS: ReadonlyArray<{
+  competitionKey: string;
+  teamKey: null;
+  sourceTeamId: null;
+}> = [
+  { competitionKey: "nfl", teamKey: null, sourceTeamId: null },
+  { competitionKey: "nba", teamKey: null, sourceTeamId: null },
+  { competitionKey: "eng.1", teamKey: null, sourceTeamId: null }
 ];
 
 export async function seedSportsChunk(
@@ -32,6 +36,9 @@ const RAW_FEED_URL =
 const DRIFT_FEED_URL =
   "https://raw.githack.com/motioneso/moss/build/1909-sports-public-sources/tests/fixtures/sports/1909-shared-feed.xml";
 const ARSENAL_TEAM_KEY = "ars"; // ESPN's canonical abbreviation-backed team key.
+// The provider's permanent number for Arsenal. Since review round 5 this, not the short name,
+// is what a saved follow is matched on.
+const ARSENAL_SOURCE_TEAM_ID = "359";
 
 function fixtureFingerprint(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -83,9 +90,13 @@ export async function seedSportsPublicSourceFixtures(
 ): Promise<void> {
   const follows = new SportsFollowsRepository();
   await runner.withDataContext({ actorUserId }, async (db) => {
-    const league = await follows.create(db, { competitionKey: "eng.1", teamKey: null });
-    const team = await follows.create(db, { competitionKey: "eng.1", teamKey: ARSENAL_TEAM_KEY });
-    const nfl = await follows.create(db, { competitionKey: "nfl", teamKey: null });
+    const league = await follows.create(db, { competitionKey: "eng.1", teamKey: null, sourceTeamId: null });
+    const team = await follows.create(db, {
+      competitionKey: "eng.1",
+      teamKey: ARSENAL_TEAM_KEY,
+      sourceTeamId: ARSENAL_SOURCE_TEAM_ID
+    });
+    const nfl = await follows.create(db, { competitionKey: "nfl", teamKey: null, sourceTeamId: null });
 
     const assignmentFixture = await createFeedSource(db, {
       label: "FotMob assignment fixture",

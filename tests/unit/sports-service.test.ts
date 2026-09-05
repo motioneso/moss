@@ -124,12 +124,18 @@ export const userA: AccessContext = {
   requestId: "req-a"
 };
 
+// Round 5 of review finding S1: a game side is matched to a followed team on the provider's
+// permanent team id and nothing else, so every side in these fixtures carries one. Dallas keeps
+// the same id ("6") the fake team list and the team-tagged headlines use; every other side just
+// uses its own key as its id, which is enough to tell the sides apart.
+const PROVIDER_TEAM_IDS: Record<string, string> = { dal: "6" };
+
 export function side(
   overrides: Partial<GameSide> & { teamKey: string; shortName: string }
 ): GameSide {
   return {
     name: overrides.shortName,
-    sourceTeamId: null,
+    sourceTeamId: PROVIDER_TEAM_IDS[overrides.teamKey] ?? overrides.teamKey,
     crestUrl: null,
     score: null,
     record: null,
@@ -209,7 +215,7 @@ const nflStandings: StandingsTable = {
       rows: [
         {
           teamKey: "dal",
-          sourceTeamId: null,
+          sourceTeamId: "6",
           name: "Dallas Cowboys",
           rank: 1,
           points: null,
@@ -245,10 +251,24 @@ const nflHeadlines: SourceHeadline[] = [
   }
 ];
 
+/** The Cowboys as today's team list gives them. Since round 5 of review finding S1 a saved
+ *  follow is only active when its permanent id is in this list, so the default fake source has
+ *  to serve it. */
+export const dalTeamRef: SourceTeamRef = {
+  teamKey: "dal",
+  competitionKey: "nfl",
+  name: "Dallas Cowboys",
+  shortName: "DAL",
+  crestUrl: null,
+  sourceTeamId: "6",
+  abbreviation: "dal"
+};
+
 const dalTeamFollow: SportsFollowDto = {
   id: "f1",
   competitionKey: "nfl",
   teamKey: "dal",
+  sourceTeamId: "6",
   createdAt: "2026-06-01T00:00:00.000Z"
 };
 
@@ -285,6 +305,9 @@ export function makeDeps(
     },
     repository: {
       list: async () => follows,
+      async setSourceTeamId() {
+        throw new Error("not exercised by this test file — see sports-service-follows.test.ts");
+      },
       async create() {
         throw new Error("not exercised by this test file — see sports-service-follows.test.ts");
       },
@@ -298,7 +321,9 @@ export function makeDeps(
 
 describe("SportsService.getOverview", () => {
   it("returns a gameday hero when a followed team plays today", async () => {
-    const service = new SportsService(makeDeps());
+    const service = new SportsService(
+      makeDeps({ source: makeSource({ listTeams: async () => [dalTeamRef] }) })
+    );
     const overview = await service.getOverview(userA);
     expect(overview.hero.mode).toBe("gameday");
     expect(overview.followedTeams.map((f) => f.teamKey)).toContain("dal");
@@ -330,6 +355,7 @@ describe("SportsService.getOverview", () => {
             id: "f2",
             competitionKey: "nfl",
             teamKey: "phi",
+            sourceTeamId: "phi",
             createdAt: "2026-06-02T00:00:00.000Z"
           }
         ]
@@ -356,6 +382,7 @@ describe("SportsService.getOverview", () => {
             id: "f2",
             competitionKey: "nfl",
             teamKey: "min",
+            sourceTeamId: "min",
             createdAt: "2026-06-02T00:00:00.000Z"
           }
         ]
@@ -368,10 +395,12 @@ describe("SportsService.getOverview", () => {
   });
 
   it("emits followed teams as competition-scoped pairs", async () => {
-    const service = new SportsService(makeDeps());
+    // Only a follow whose permanent id is in today's team list is sent to the browser, so the
+    // list has to serve the Cowboys here (review finding S1, round 5).
+    const service = new SportsService(makeDeps({ source: makeSource({ listTeams: async () => [dalTeamRef] }) }));
     const overview = await service.getOverview(userA);
     expect(overview.followedTeams).toEqual([
-      { competitionKey: "nfl", teamKey: "dal", sourceTeamId: null }
+      { competitionKey: "nfl", teamKey: "dal", sourceTeamId: "6" }
     ]);
   });
 
@@ -739,6 +768,7 @@ describe("SportsService.getOverview", () => {
       id: "f2",
       competitionKey: "nba",
       teamKey: null,
+      sourceTeamId: null,
       createdAt: "2026-06-01T00:00:00.000Z"
     };
     const nbaHeadline: SourceHeadline = {
@@ -1150,16 +1180,6 @@ const ordinaryFromTeamFeed = relevanceHeadline({
   title: ORDINARY_TITLE,
   url: "https://example.com/story/ordinary#comments"
 });
-
-const dalTeamRef: SourceTeamRef = {
-  teamKey: "dal",
-  competitionKey: "nfl",
-  name: "Dallas Cowboys",
-  shortName: "DAL",
-  crestUrl: null,
-  sourceTeamId: "6",
-  abbreviation: "dal"
-};
 
 /** A source whose league feed and per-team feed both carry the ordinary story. */
 function relevanceSource(overrides: FakeSourceHandlers = {}): DatasetClient {

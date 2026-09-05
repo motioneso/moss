@@ -185,11 +185,12 @@ const competitionRefSchema = {
 const followDtoSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["id", "competitionKey", "teamKey", "createdAt"],
+  required: ["id", "competitionKey", "teamKey", "sourceTeamId", "createdAt"],
   properties: {
     id: { type: "string" },
     competitionKey: { type: "string" },
     teamKey: { type: ["string", "null"] },
+    sourceTeamId: { type: ["string", "null"] },
     createdAt: { type: "string" }
   }
 } as const;
@@ -516,18 +517,38 @@ export const sportsOverviewResponseSchema = {
             }
           }
         },
-        // Saved teams that can no longer be told apart from another team with the same short
-        // name. The page asks the person which one they meant instead of dropping the card.
+        // Saved follows with no permanent team id on them. The page asks the person which team
+        // they meant instead of guessing a score for them.
         ambiguousFollows: {
           type: "array",
           items: {
             type: "object",
             additionalProperties: false,
-            required: ["competitionKey", "savedTeamKey", "candidateNames"],
+            required: [
+              "followId",
+              "competitionKey",
+              "savedTeamKey",
+              "candidates",
+              "teamListLoaded"
+            ],
             properties: {
+              followId: { type: "string" },
               competitionKey: { type: "string" },
               savedTeamKey: { type: "string" },
-              candidateNames: { type: "array", items: { type: "string" } }
+              candidates: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["sourceTeamId", "name", "crestUrl"],
+                  properties: {
+                    sourceTeamId: { type: "string" },
+                    name: { type: "string" },
+                    crestUrl: { type: ["string", "null"] }
+                  }
+                }
+              },
+              teamListLoaded: { type: "boolean" }
             }
           }
         },
@@ -675,6 +696,43 @@ export const createSportsFollowResponseSchema = {
     },
     400: errorResponseSchema,
     401: errorResponseSchema
+  }
+} as const;
+
+// POST /api/sports/follows/:id/team — the answer to "which team did you mean?". Writes the
+// permanent id onto one older saved follow. This is the only route that turns an inactive follow
+// back into a working one.
+export const resolveSportsFollowTeamRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sourceTeamId"],
+  properties: {
+    sourceTeamId: { type: "string", minLength: 1, maxLength: 100 }
+  }
+} as const;
+
+export const resolveSportsFollowTeamResponseSchema = {
+  params: {
+    type: "object",
+    additionalProperties: false,
+    required: ["id"],
+    properties: {
+      id: { type: "string", format: "uuid" }
+    }
+  },
+  body: resolveSportsFollowTeamRequestSchema,
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["follow"],
+      properties: {
+        follow: followDtoSchema
+      }
+    },
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema
   }
 } as const;
 

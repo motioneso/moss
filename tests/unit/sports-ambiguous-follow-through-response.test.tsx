@@ -10,11 +10,14 @@ import { SportsPage } from "../../packages/sports/src/web/sports-page.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 import { buildApp, makeRepo, makeSource } from "./sports-routes.test.js";
 
-// Review finding S1, blockers 3 and 4 (2026-09-04). Both failures had the same shape: the page
-// was fixed but the fix never reached the browser, because the response schema silently drops any
-// field it does not list. So nothing here hands the page a hand-built object. It starts the real
-// server, asks for the overview over HTTP, and renders the real page component from exactly the
-// bytes that came back.
+// Review finding S1, round 5 (2026-09-04). Earlier rounds were fixed on the page but the fix never
+// reached the browser, because the response schema silently drops any field it does not list. So
+// nothing here hands the page a hand-built object. It starts the real server, asks for the overview
+// over HTTP, and renders the real page component from exactly the bytes that came back.
+//
+// Since round 5 a saved follow means the provider's permanent team number and nothing else. A
+// follow saved before that carries no number, matches nothing, and produces the "which team did you
+// mean?" question instead.
 
 const PACIFIC_TEAMS = [
   {
@@ -68,13 +71,17 @@ const sharedShortNameStandings: StandingsTable = {
   ]
 };
 
-async function overviewOverHttp(savedTeamKey = "pac"): Promise<SportsOverviewResponse> {
+async function overviewOverHttp(
+  savedTeamKey = "pac",
+  savedSourceTeamId: string | null = null
+): Promise<SportsOverviewResponse> {
   const { app } = buildApp({
     repo: makeRepo([
       {
         id: "11111111-1111-1111-1111-111111111111",
         competitionKey: "nfl",
         teamKey: savedTeamKey,
+        sourceTeamId: savedSourceTeamId,
         createdAt: "2026-06-01T00:00:00.000Z"
       }
     ]),
@@ -99,16 +106,23 @@ function renderPage(overview: SportsOverviewResponse): string {
   return renderToString(createElement(QueryClientProvider, { client }, createElement(SportsPage)));
 }
 
-describe("a saved team that can no longer be told apart, all the way to the page", () => {
-  it("carries the affected follow and each team's permanent number over the wire", async () => {
+describe("a follow saved before teams were pinned to a number, all the way to the page", () => {
+  it("carries the question, its candidates and each team's number over the wire", async () => {
     const body = await overviewOverHttp();
     expect(body.ambiguousFollows).toEqual([
       {
+        followId: "11111111-1111-1111-1111-111111111111",
         competitionKey: "nfl",
         savedTeamKey: "pac",
-        candidateNames: ["Pacific Lutheran Lutes", "Pacific Tigers"]
+        teamListLoaded: true,
+        candidates: [
+          { sourceTeamId: "129700", name: "Pacific Lutheran Lutes", crestUrl: null },
+          { sourceTeamId: "413", name: "Pacific Tigers", crestUrl: null }
+        ]
       }
     ]);
+    // Nothing is claimed for this follow anywhere, because it has no number to claim it with.
+    expect(body.followed).toEqual([]);
     const rows = body.standings[0]?.sections[0]?.rows ?? [];
     expect(rows.map((row) => row.sourceTeamId)).toEqual(["129700", "413"]);
   });
@@ -118,14 +132,13 @@ describe("a saved team that can no longer be told apart, all the way to the page
     expect(html).toContain("Which team did you mean?");
     expect(html).toContain("Pacific Lutheran Lutes");
     expect(html).toContain("Pacific Tigers");
-    expect(html).toContain("Pick the right team");
   });
 
   it("marks only the saved team's own standings row as yours", async () => {
     // The two rows differ only by the permanent number the response now carries. Before this
     // change the number never reached the browser at all, so nothing on the table could tell the
     // two Pacific rows apart and the reader's own row was left unmarked.
-    const html = renderPage(await overviewOverHttp("pac.413"));
+    const html = renderPage(await overviewOverHttp("pac", "413"));
     const rows = html
       .split("<tr")
       .slice(1)
@@ -172,7 +185,8 @@ async function lookalikeOverviewOverHttp(): Promise<SportsOverviewResponse> {
       {
         id: "22222222-2222-2222-2222-222222222222",
         competitionKey: "nfl",
-        teamKey: "pac.413",
+        teamKey: "pac",
+        sourceTeamId: "413",
         createdAt: "2026-06-01T00:00:00.000Z"
       }
     ]),

@@ -17,12 +17,14 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
     id: "f-epl",
     competitionKey: "eng.1",
     teamKey: "liv",
+    sourceTeamId: "364",
     createdAt: "2026-06-01T00:00:00.000Z"
   };
   const livcFollow: SportsFollowDto = {
     id: "f-ucl",
     competitionKey: "uefa.champions",
     teamKey: "livc",
+    sourceTeamId: "364",
     createdAt: "2026-06-15T00:00:00.000Z" // newer, but eng.1 is a league → still primary
   };
 
@@ -244,16 +246,17 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
     expect(deps.__teamHeadlineCalls()).toBe(2);
   });
 
-  it("does not merge a follow whose sourceTeamId is unresolved, even if it would collide", async () => {
-    const unresolved: SportsFollowDto = {
-      id: "f-unresolved",
+  it("does not merge two follows with different permanent ids, even when one is not in today's list", async () => {
+    const otherClub: SportsFollowDto = {
+      id: "f-other-club",
       competitionKey: "usa.1",
       teamKey: "liv2",
+      sourceTeamId: "999",
       createdAt: "2026-06-20T00:00:00.000Z"
     };
     const service = new SportsService(
       makeDeps({
-        follows: [livFollow, unresolved],
+        follows: [livFollow, otherClub],
         source: makeDatasetClient({
           listTeams: async (competitionKey) =>
             competitionKey === "eng.1"
@@ -268,7 +271,7 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
                     abbreviation: "liv"
                   }
                 ]
-              : [], // usa.1 team lookup misses → sourceTeamId resolves to null for f-unresolved
+              : [], // usa.1 team lookup misses, so this follow has no team from today's list
           getScoreboard: async () => [],
           getStandings: async () => ({ sections: [] }),
           getSchedule: async () => [],
@@ -278,5 +281,24 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
     );
     const overview = await service.getOverview(userA);
     expect(overview.followed).toHaveLength(2);
+  });
+
+  // Review finding S1, round 5: a follow saved before permanent ids existed has no card at all.
+  // It cannot be merged, matched or shown, because there is nothing to say which club it means.
+  it("gives a follow with no permanent id no card, and asks which team was meant instead", async () => {
+    const savedBeforeIds: SportsFollowDto = {
+      id: "f-old",
+      competitionKey: "eng.1",
+      teamKey: "liv",
+      sourceTeamId: null,
+      createdAt: "2026-06-20T00:00:00.000Z"
+    };
+    const service = new SportsService(makeMergedDeps({ follows: [savedBeforeIds] }));
+    const overview = await service.getOverview(userA);
+    expect(overview.followed).toHaveLength(0);
+    expect(overview.ambiguousFollows).toHaveLength(1);
+    expect(overview.ambiguousFollows[0]?.followId).toBe("f-old");
+    expect(overview.ambiguousFollows[0]?.teamListLoaded).toBe(true);
+    expect(overview.ambiguousFollows[0]?.candidates.map((c) => c.name)).toEqual(["Liverpool"]);
   });
 });
