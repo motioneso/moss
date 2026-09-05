@@ -22,7 +22,6 @@ import {
 } from "@moss/db";
 import {
   MODULE_WORKER_SERVICE_KEY,
-  WORKSHOP_PLAN_SERVICE_KEY,
   isModuleServiceKey,
   type ActionAuditInputSummary,
   type AiCapabilityRouteReason,
@@ -38,11 +37,7 @@ import {
 import type { EncryptedAiSecret } from "./crypto.js";
 import type { MossActionPermissionTier } from "@moss/module-sdk";
 import { parseCapabilityRouteMap } from "./capability-route-map.js";
-import {
-  LEGACY_WORKSHOP_PLAN_SERVICE_KEY,
-  parseModuleServiceBindingMap,
-  parseServiceBindingMap
-} from "./service-binding-map.js";
+import { parseModuleServiceBindingMap, parseServiceBindingMap } from "./service-binding-map.js";
 import {
   CHAT_MODEL_OVERRIDE_PREFERENCE_KEY,
   CHAT_MODEL_OVERRIDE_SETTING_KEY,
@@ -847,25 +842,6 @@ export class AiRepository {
     return parseModuleServiceBindingMap(row?.value);
   }
 
-  /** AI-owned, idempotent migration; called only from the authenticated admin settings API. */
-  async migrateWorkshopPlanningBinding(scopedDb: DataContextDb): Promise<void> {
-    assertDataContextDb(scopedDb);
-    await scopedDb.db
-      .updateTable("app.instance_settings")
-      .set({
-        value: sql<Record<string, unknown>>`
-        (value - ${LEGACY_WORKSHOP_PLAN_SERVICE_KEY}) ||
-        case when value ? ${WORKSHOP_PLAN_SERVICE_KEY} then '{}'::jsonb
-          else jsonb_build_object(${WORKSHOP_PLAN_SERVICE_KEY}::text, value -> ${LEGACY_WORKSHOP_PLAN_SERVICE_KEY}) end
-      `,
-        updated_at: new Date()
-      })
-      .where("key", "=", AI_SERVICE_BINDINGS_SETTING_KEY)
-      .where(sql<boolean>`value ? ${LEGACY_WORKSHOP_PLAN_SERVICE_KEY}`)
-      .where(sql<boolean>`jsonb_typeof(value) = 'object'`)
-      .execute();
-  }
-
   async getModuleServiceBinding(
     scopedDb: DataContextDb,
     service: ModuleServiceKey
@@ -888,10 +864,7 @@ export class AiRepository {
     await scopedDb.db
       .updateTable("app.instance_settings")
       .set({
-        value:
-          service === WORKSHOP_PLAN_SERVICE_KEY
-            ? sql`instance_settings.value - ${service} - ${LEGACY_WORKSHOP_PLAN_SERVICE_KEY}`
-            : sql`instance_settings.value - ${service}`,
+        value: sql`instance_settings.value - ${service}`,
         updated_by_user_id: actorUserId,
         updated_at: new Date()
       })

@@ -116,7 +116,7 @@ export function registerWorkshopProjectRoutes(
               beforeId && beforeCreatedAt ? { id: beforeId, createdAt: beforeCreatedAt } : undefined
           });
           const last = rows.at(-1);
-          // ponytail: a full final page needs one empty fetch; add lookahead if that round trip matters.
+          // A full final page needs one empty fetch; add lookahead if that round trip matters.
           return {
             projects: rows,
             nextCursor:

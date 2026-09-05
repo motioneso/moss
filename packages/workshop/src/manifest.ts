@@ -122,52 +122,6 @@ export const workshopModuleManifest = {
           description: "This chat cannot authorize saving a project. No chat content was copied."
         }
       ]
-    },
-    {
-      id: "workshop.source_generation",
-      description:
-        "Workshop requests source data with the owner's model: reasoning for specifications, " +
-        "interactive for authoring. Execution is unavailable until its isolated runtime is " +
-        "verified; the application worker cannot compile or install source.",
-      remediations: [
-        {
-          id: "workshop.execution.verify_runtime",
-          description:
-            "An operator must complete isolated runtime verification before Workshop can build. " +
-            "There is no setting that bypasses this requirement.",
-          path: "/workshop"
-        },
-        {
-          id: "workshop.source_generation.configure_model",
-          description:
-            "Configure an available model with an owner-bound connection. Shared CLI sign-ins " +
-            "cannot currently be used for Workshop source generation.",
-          path: "/settings?section=aiproviders"
-        }
-      ],
-      errors: [
-        {
-          code: "workshop.source_generation.needs_config",
-          class: "prerequisite",
-          remediationRef: "workshop.source_generation.configure_model",
-          description: "Workshop cannot use the selected model or verify connection ownership."
-        },
-        {
-          code: "workshop.execution.unavailable",
-          class: "prerequisite",
-          remediationRef: "workshop.execution.verify_runtime",
-          description:
-            "Builds cannot start until the isolated execution runtime has been verified. " +
-            "Changing model settings does not remove this requirement."
-        }
-      ]
-    },
-    {
-      id: "workshop.private_draft_storage",
-      description:
-        "An installed private draft can run declared background actions and save user data " +
-        "only for its owner, with verified files. Other admins cannot run it. Queued actions " +
-        "remain pending until the module confirms the saved state."
     }
   ],
   assistantActionFamilies: [

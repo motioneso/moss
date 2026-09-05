@@ -1,6 +1,5 @@
 import {
   AI_MODEL_CAPABILITIES,
-  WORKSHOP_PLAN_SERVICE_KEY,
   isModuleServiceKey,
   type AiModelCapability,
   type AiModelTier,
@@ -17,7 +16,6 @@ import {
 
 const RECOGNIZED_CAPABILITIES = new Set<AiModelCapability>(AI_MODEL_CAPABILITIES);
 const RECOGNIZED_TIERS = new Set<AiModelTier>(["reasoning", "interactive", "economy"]);
-export const LEGACY_WORKSHOP_PLAN_SERVICE_KEY = "module.moss.workshop-build-plan" as const;
 
 /** Parse a single binding value; returns null if the shape is unrecognized. */
 export function parseServiceBinding(value: unknown): AiServiceBinding | null {
@@ -62,13 +60,5 @@ export function parseModuleServiceBindingMap(value: unknown): ModuleServiceBindi
     const binding = parseServiceBinding(raw);
     if (binding) bindings[key] = binding;
   }
-  // Preserve the legacy choice even before an admin visits the settings migration API.
-  if (
-    !Object.hasOwn(value, WORKSHOP_PLAN_SERVICE_KEY) &&
-    bindings[LEGACY_WORKSHOP_PLAN_SERVICE_KEY]
-  ) {
-    bindings[WORKSHOP_PLAN_SERVICE_KEY] = bindings[LEGACY_WORKSHOP_PLAN_SERVICE_KEY];
-  }
-  delete bindings[LEGACY_WORKSHOP_PLAN_SERVICE_KEY];
   return bindings;
 }
