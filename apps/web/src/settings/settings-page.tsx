@@ -393,7 +393,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
     enabled: isAdmin
   });
   const missingFamilyKeys = (familyKeysQuery.data?.keys ?? []).filter(
-    (key) => key.source === "missing"
+    (key) => key.source === "missing" || key.source === "broken"
   );
 
   const [mode, setMode] = useState<"personal" | "admin">(() =>

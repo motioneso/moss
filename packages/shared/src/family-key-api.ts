@@ -6,7 +6,7 @@ import { errorResponseSchema } from "./schema-fragments.js";
  * name plus where its key comes from: the environment, the encrypted store row, or
  * nowhere yet (`missing`, meaning the feature is paused for setup).
  */
-export type FamilyKeySource = "env" | "store" | "missing";
+export type FamilyKeySource = "env" | "store" | "missing" | "broken";
 
 export interface FamilyKeyStatusDto {
   readonly family: string;
@@ -35,7 +35,7 @@ const familyKeyStatusSchema = {
   required: ["family", "source"],
   properties: {
     family: { type: "string" },
-    source: { type: "string", enum: ["env", "store", "missing"] }
+    source: { type: "string", enum: ["env", "store", "missing", "broken"] }
   }
 } as const;
 

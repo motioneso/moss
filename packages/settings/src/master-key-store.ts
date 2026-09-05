@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 import {
   JsonSecretCipher,
@@ -18,6 +18,18 @@ import { INTEGRATIONS_FAMILY_KEY_SETTING } from "./instance-settings-keys.js";
  * Env values win when set so existing installs keep working untouched; a missing
  * family resolves to null (degraded feature), never a throw — nothing here may
  * break startup. Slice 1 covers integrations only; slice 2 appends families.
+ *
+ * Security note on placement: migration 0059's comment justifies the open read
+ * policy on this table with "non-secret config only". That premise no longer holds
+ * — this table now holds sealed key envelopes — so the comment there is stale (left
+ * untouched: applied migrations are checksum-tracked). The posture stays safe
+ * because the values are ciphertext under the master keyring and no endpoint
+ * returns the row; only presence ("env", "store", "missing", "broken") leaves.
+ *
+ * Rotation note: retired keys accumulate in the row and nothing re-encrypts old
+ * data, so the row grows with history and rotation alone reduces no exposure. That
+ * is a deliberate slice-1 tradeoff for never losing readable credentials; a future
+ * re-encryption pass can trim it.
  */
 
 export interface FamilyKeyDescriptor {
@@ -97,6 +109,23 @@ async function readFamilySettingValue(
     .executeTakeFirst();
   if (!row) return null;
   return (row.value as { value?: unknown } | null)?.value ?? null;
+}
+
+type FamilyRowState = "missing" | "broken" | "ok";
+
+/**
+ * A row that exists but cannot be decrypted (master secret changed without
+ * keeping the old one) is BROKEN, not missing: the screen must say the feature
+ * is stopped and offer replacement, never report healthy or silently overwrite.
+ */
+function familyRowState(stored: unknown, cipher: MasterKeyStoreCipher): FamilyRowState {
+  if (stored == null) return "missing";
+  try {
+    cipher.decryptJson(cipher.parseEnvelope(stored));
+    return "ok";
+  } catch {
+    return "broken";
+  }
 }
 
 function readStoredFamilyKey(
@@ -194,9 +223,11 @@ export interface FamilyKeyStore {
   ): Promise<unknown>;
 }
 
-function nextKeyId(current: string | null): string {
+function nextKeyId(current: string | null, taken: ReadonlySet<string>): string {
   const match = current ? /^s(\d+)$/.exec(current) : null;
-  return `s${match ? Number(match[1]) + 1 : 1}`;
+  let next = match ? Number(match[1]) + 1 : 1;
+  while (taken.has(`s${next}`)) next += 1;
+  return `s${next}`;
 }
 
 /**
@@ -212,22 +243,37 @@ export async function generateFamilyKey(
 ): Promise<void> {
   const env = input.env ?? process.env;
   const cipher = createMasterKeyStoreCipher(env);
-  const existing = readStoredFamilyKey(
-    await readFamilySettingValue(scopedDb, input.family.settingKey),
-    cipher
-  );
-  const envSecret = resolveMossEnv(env, input.family.keyEnvVar);
+  const stored = await readFamilySettingValue(scopedDb, input.family.settingKey);
+  const existing = readStoredFamilyKey(stored, cipher);
+  // Replacing a row that exists but no longer decrypts is a recovery, not a
+  // first setup: record it in the audit trail because anything sealed under the
+  // old key stays unreadable afterwards.
+  const recovered = stored != null && existing == null;
+  // Moving a family out of the settings file must carry EVERY key that file holds —
+  // current plus the whole retired list — or credentials sealed under a retired key
+  // become permanently unreadable once the file values are removed. resolveKeyring
+  // already folds the retired-keys value into one keyring, so take all its entries.
   const retired: { keyId: string; secret: string }[] = [...(existing?.retired ?? [])];
   if (existing) {
     retired.push({ keyId: existing.keyId, secret: existing.secret });
-  } else if (envSecret !== undefined) {
-    retired.push({
-      keyId: resolveMossEnv(env, input.family.keyIdEnvVar) ?? "v1",
-      secret: createHash("sha256").update(envSecret).digest("hex")
-    });
+  } else if (resolveMossEnv(env, input.family.keyEnvVar) !== undefined) {
+    const envKeyring = resolveKeyring(
+      input.family.keyEnvVar,
+      input.family.keyIdEnvVar,
+      input.family.keysEnvVar,
+      input.family.devDefault,
+      env
+    );
+    for (const [keyId, secret] of envKeyring.keys) {
+      if (!retired.some((entry) => entry.keyId === keyId)) {
+        retired.push({ keyId, secret: secret.toString("hex") });
+      }
+    }
   }
+  const taken = new Set([existing?.keyId, ...retired.map((entry) => entry.keyId)]);
+  taken.delete(undefined);
   const payload: StoredFamilyKey = {
-    keyId: nextKeyId(existing?.keyId ?? null),
+    keyId: nextKeyId(existing?.keyId ?? null, taken as ReadonlySet<string>),
     secret: randomBytes(32).toString("hex"),
     retired
   };
@@ -242,24 +288,25 @@ export async function generateFamilyKey(
     updatedByUserId: input.actorUserId,
     requestId: input.requestId,
     action: "instance_setting.family_key.set",
-    metadata: { key: input.family.settingKey }
+    metadata: recovered
+      ? { key: input.family.settingKey, recoveredFromUnreadable: true }
+      : { key: input.family.settingKey }
   });
-  invalidateFamilyKeyCache(input.family);
 }
 
-/** Rotate an existing family key; throws 404 when there is nothing to rotate. */
+/**
+ * Rotate a family key. A row that exists but no longer decrypts is recoverable by
+ * replacement (the audit trail records it); only a family with no row and no env
+ * key 404s. Cache invalidation stays with the caller so it lands after commit.
+ */
 export async function rotateFamilyKey(
   scopedDb: DataContextDb,
   repository: FamilyKeyStore,
   input: FamilyKeyWrite
 ): Promise<void> {
   const env = input.env ?? process.env;
-  const cipher = createMasterKeyStoreCipher(env);
-  const existing = readStoredFamilyKey(
-    await readFamilySettingValue(scopedDb, input.family.settingKey),
-    cipher
-  );
-  if (!existing && resolveMossEnv(env, input.family.keyEnvVar) === undefined) {
+  const stored = await readFamilySettingValue(scopedDb, input.family.settingKey);
+  if (stored == null && resolveMossEnv(env, input.family.keyEnvVar) === undefined) {
     throw new HttpError(404, `No ${input.family.name} key to rotate`);
   }
   await generateFamilyKey(scopedDb, repository, input);
@@ -267,22 +314,32 @@ export async function rotateFamilyKey(
 
 export interface FamilyKeyStatus {
   readonly family: string;
-  readonly source: "env" | "store" | "missing";
+  readonly source: "env" | "store" | "missing" | "broken";
 }
 
-/** Presence-only status for every known family; never carries key material. */
+/**
+ * Presence-only status for every known family; never carries key material. A row
+ * that exists but no longer decrypts reports "broken" so the screen tells the
+ * truth instead of showing healthy.
+ */
 export async function getFamilyKeyStatus(
   scopedDb: DataContextDb,
   env: NodeJS.ProcessEnv = process.env
 ): Promise<FamilyKeyStatus[]> {
+  const cipher = createMasterKeyStoreCipher(env);
   const statuses: FamilyKeyStatus[] = [];
   for (const family of FAMILIES) {
     if (resolveMossEnv(env, family.keyEnvVar) !== undefined) {
       statuses.push({ family: family.name, source: "env" });
-    } else if ((await readFamilySettingValue(scopedDb, family.settingKey)) != null) {
-      statuses.push({ family: family.name, source: "store" });
     } else {
-      statuses.push({ family: family.name, source: "missing" });
+      const state = familyRowState(
+        await readFamilySettingValue(scopedDb, family.settingKey),
+        cipher
+      );
+      statuses.push({
+        family: family.name,
+        source: state === "ok" ? "store" : state
+      });
     }
   }
   return statuses;

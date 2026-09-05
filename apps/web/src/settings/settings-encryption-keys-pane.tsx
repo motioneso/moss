@@ -29,6 +29,8 @@ function familyLabel(family: string): { label: string; desc: string } {
 function statusText(status: FamilyKeyStatusDto): string {
   if (status.source === "env") return "Ready (env file)";
   if (status.source === "store") return "Ready (stored)";
+  if (status.source === "broken")
+    return "Stopped: the stored key no longer opens. Features using it are paused.";
   return "Needs attention";
 }
 
@@ -81,6 +83,7 @@ export function EncryptionKeysPane() {
         const meta = familyLabel(status.family);
         const missing = status.source === "missing";
         const fromEnv = status.source === "env";
+        const broken = status.source === "broken";
         const busy = generateMutation.isPending || rotateMutation.isPending;
         return (
           <Row
@@ -98,6 +101,23 @@ export function EncryptionKeysPane() {
                   onClick={() => generateMutation.mutate(status.family)}
                 >
                   {generateMutation.isPending ? "Generating…" : "Generate"}
+                </Button>
+              ) : broken ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "Replace this key? Anything locked under the old one stays unreadable."
+                      )
+                    ) {
+                      rotateMutation.mutate(status.family);
+                    }
+                  }}
+                >
+                  {rotateMutation.isPending ? "Replacing…" : "Replace key"}
                 </Button>
               ) : fromEnv ? undefined : (
                 <Button
