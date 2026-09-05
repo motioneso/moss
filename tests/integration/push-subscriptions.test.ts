@@ -9,6 +9,7 @@ import pg from "pg";
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import {
+  AuthSessionResolver,
   DataContextRunner,
   createDatabase,
   type DataContextDb,
@@ -17,7 +18,7 @@ import {
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import { PushSubscriptionsRepository } from "@moss/notifications";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
-import { userAContext } from "./notifications-harness.js";
+import { userAContext, userBContext } from "./notifications-harness.js";
 
 const { Client } = pg;
 
@@ -33,6 +34,7 @@ function endpointFor(tag: string): string {
 
 describe("Push subscriptions (#743)", () => {
   let appDb: Kysely<MossDatabase>;
+  let auth: AuthSessionResolver;
   let dataContext: DataContextRunner;
   let repository: PushSubscriptionsRepository;
   let boss: PgBoss;
@@ -45,6 +47,7 @@ describe("Push subscriptions (#743)", () => {
       connectionString: connectionStrings.app,
       maxConnections: 1
     });
+    auth = new AuthSessionResolver(appDb);
     dataContext = new DataContextRunner(appDb);
     repository = new PushSubscriptionsRepository();
     boss = createPgBossClient(connectionStrings.app, { connectionTimeoutMillis: 25_000 });
@@ -141,5 +144,76 @@ describe("Push subscriptions (#743)", () => {
     const again = await registerAs(ids.sessionA, endpoint);
     expect(again.statusCode).toBe(200);
     expect(again.json<{ device: { id: string } }>().device.id).toBe(registered.id);
+  });
+  it("finding 3: another user and the admin role can neither see nor delete a device", async () => {
+    const endpoint = endpointFor("owner");
+    const registered = (await registerAs(ids.sessionA, endpoint)).json<{ device: { id: string } }>()
+      .device;
+    const adminContext = await auth.resolveAccessContext(ids.sessionAdmin, "request:admin-push");
+
+    const asB = await dataContext.withDataContext(userBContext(), async (scopedDb) => ({
+      devices: await repository.listForActor(scopedDb),
+      targets: await repository.listActiveForDelivery(scopedDb),
+      deleted: await repository.delete(scopedDb, registered.id)
+    }));
+    const asAdmin = await dataContext.withDataContext(adminContext, async (scopedDb) => ({
+      devices: await repository.listForActor(scopedDb),
+      targets: await repository.listActiveForDelivery(scopedDb),
+      deleted: await repository.delete(scopedDb, registered.id)
+    }));
+
+    expect(asB.devices.map((row) => row.id)).not.toContain(registered.id);
+    expect(asB.targets.map((row) => row.id)).not.toContain(registered.id);
+    expect(asB.deleted).toBe(false);
+    expect(asAdmin.devices.map((row) => row.id)).not.toContain(registered.id);
+    expect(asAdmin.targets.map((row) => row.id)).not.toContain(registered.id);
+    expect(asAdmin.deleted).toBe(false);
+
+    // Bookkeeping writes from another actor's context touch nothing either.
+    await dataContext.withDataContext(userBContext(), async (scopedDb) => {
+      await repository.recordDeliveryFailure(scopedDb, registered.id);
+      await repository.recordDeliverySuccess(scopedDb, registered.id);
+    });
+    const stillOwned = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.listForActor(scopedDb)
+    );
+    const row = stillOwned.find((device) => device.id === registered.id);
+    expect(row).toBeDefined();
+    expect(row?.failure_count).toBe(0);
+    expect(row?.last_used_at).toBeNull();
+  });
+
+  it("finding 3: DELETE answers 404 for a device the caller does not own, and after removal", async () => {
+    const endpoint = endpointFor("delete");
+    const registered = (await registerAs(ids.sessionA, endpoint)).json<{ device: { id: string } }>()
+      .device;
+    const url = `/api/notifications/push/subscriptions/${registered.id}`;
+
+    const byOtherUser = await server.inject({
+      method: "DELETE",
+      url,
+      headers: { authorization: `Bearer ${ids.sessionB}` }
+    });
+    const byAdmin = await server.inject({
+      method: "DELETE",
+      url,
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` }
+    });
+    const byOwner = await server.inject({
+      method: "DELETE",
+      url,
+      headers: { authorization: `Bearer ${ids.sessionA}` }
+    });
+    const byOwnerAgain = await server.inject({
+      method: "DELETE",
+      url,
+      headers: { authorization: `Bearer ${ids.sessionA}` }
+    });
+
+    expect(byOtherUser.statusCode).toBe(404);
+    expect(byAdmin.statusCode).toBe(404);
+    expect(byOwner.statusCode).toBe(200);
+    expect(byOwner.json<{ success: boolean }>().success).toBe(true);
+    expect(byOwnerAgain.statusCode).toBe(404);
   });
 });

@@ -41,6 +41,14 @@ const DEVICE_COLUMNS = [
   "disabled_at"
 ] as const;
 
+/**
+ * Explicit owner predicate on every statement. RLS (migration 0223) already restricts the
+ * table to the current actor, but security review 1 finding 3 asked for the scoping to be
+ * visible in the query itself, so a future policy edit or a role with wider grants cannot
+ * silently widen these methods.
+ */
+const ownerIsActor = sql<boolean>`owner_user_id = app.current_actor_user_id()`;
+
 /** sha256 hex of the endpoint URL: the uniqueness key, never reversible to the URL. */
 export function hashPushEndpoint(endpoint: string): string {
   return createHash("sha256").update(endpoint, "utf8").digest("hex");
@@ -66,6 +74,7 @@ export class PushSubscriptionsRepository {
     return scopedDb.db
       .selectFrom("app.push_subscriptions")
       .select(DEVICE_COLUMNS)
+      .where(ownerIsActor)
       .orderBy("created_at", "asc")
       .execute();
   }
@@ -80,6 +89,7 @@ export class PushSubscriptionsRepository {
     const rows = await scopedDb.db
       .selectFrom("app.push_subscriptions")
       .select(["id", "credentials_ciphertext"])
+      .where(ownerIsActor)
       .where("disabled_at", "is", null)
       .orderBy("created_at", "asc")
       .execute();
@@ -109,6 +119,7 @@ export class PushSubscriptionsRepository {
     const existingCount = await scopedDb.db
       .selectFrom("app.push_subscriptions")
       .select(({ fn }) => fn.countAll<string>().as("count"))
+      .where(ownerIsActor)
       .where("endpoint_hash", "!=", endpointHash)
       .executeTakeFirst();
 
@@ -146,11 +157,15 @@ export class PushSubscriptionsRepository {
     return row;
   }
 
-  /** Owner-only delete; returns whether a row was removed. */
+  /**
+   * Owner-only delete; returns whether a row was removed. `false` for a missing id and for
+   * another user's id alike, so the route's 404 cannot be used to probe for existence.
+   */
   async delete(scopedDb: DataContextDb, id: string): Promise<boolean> {
     assertDataContextDb(scopedDb);
     const result = await scopedDb.db
       .deleteFrom("app.push_subscriptions")
+      .where(ownerIsActor)
       .where("id", "=", id)
       .executeTakeFirst();
     return (result.numDeletedRows ?? 0n) > 0n;
@@ -161,6 +176,7 @@ export class PushSubscriptionsRepository {
     await scopedDb.db
       .updateTable("app.push_subscriptions")
       .set({ failure_count: 0, last_used_at: new Date() })
+      .where(ownerIsActor)
       .where("id", "=", id)
       .execute();
   }
@@ -173,6 +189,7 @@ export class PushSubscriptionsRepository {
       SET failure_count = failure_count + 1,
           disabled_at = CASE WHEN failure_count + 1 >= 5 THEN now() ELSE disabled_at END
       WHERE id = ${id}
+        AND owner_user_id = app.current_actor_user_id()
     `.execute(scopedDb.db);
   }
 

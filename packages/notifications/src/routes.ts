@@ -170,6 +170,12 @@ export function registerNotificationsRoutes(
           pushSubscriptionsRepository.delete(scopedDb, request.params.id)
         );
 
+        // Missing and not-owned are indistinguishable (security review 1, finding 3):
+        // the repository's owner predicate returns false for both.
+        if (!success) {
+          return reply.code(404).send({ error: "Push device not found" });
+        }
+
         return { success };
       } catch (error) {
         return handleRouteError(error, reply);
