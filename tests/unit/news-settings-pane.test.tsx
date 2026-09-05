@@ -356,7 +356,7 @@ describe("NewsSettings described-topics section (#990)", () => {
   it("renames the section and explains the empty state honestly", () => {
     const html = render(personalization({ availability: allOn }));
     expect(html).toContain("Topics across the web");
-    expect(html).toContain("News still uses your selected publications.");
+    expect(html).toContain("News still uses your selected sources.");
   });
 
   it("renders an Edit affordance per stored topic alongside Remove", () => {
@@ -380,12 +380,12 @@ describe("NewsSettings described-topics section (#990)", () => {
   it("shows authored personalization loading/error states without false topic UI", () => {
     const loading = renderPersonalizationState("pending");
     expect(loading).toContain("Loading personalized news settings");
-    expect(loading).not.toContain("News still uses your selected publications.");
+    expect(loading).not.toContain("News still uses your selected sources.");
     expect(loading).not.toContain('id="nw-addtopic-label"');
 
     const error = renderPersonalizationState("error");
     expect(error).toContain("Could not load personalized news settings. Try again.");
-    expect(error).not.toContain("News still uses your selected publications.");
+    expect(error).not.toContain("News still uses your selected sources.");
     expect(error).not.toContain('id="nw-addtopic-label"');
   });
 });

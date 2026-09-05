@@ -210,7 +210,7 @@ export function AddSourceFlow() {
         <div className="nw-set__candidate">
           <Card sunken padding="lg">
             {preview?.duplicateOfSourceId ? (
-              <Note>That publication is already in your personalized sources.</Note>
+              <Note>That source is already in your personalized sources.</Note>
             ) : null}
             {candidates.length > 1 ? (
               <p className="nw-set__hint">We found more than one match — pick the right one.</p>

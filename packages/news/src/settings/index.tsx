@@ -527,7 +527,7 @@ export default function NewsSettings() {
         <div className="nw-set__head">
           <h2 className="jds-section-title">Topics</h2>
           <p className="jds-section-sub">
-            Follow desks from your publications or describe interests and exclusions across the web.
+            Follow desks from your sources or describe interests and exclusions across the web.
           </p>
         </div>
 
@@ -596,7 +596,7 @@ export default function NewsSettings() {
         <div className="nw-set__head">
           <h2 className="jds-section-title">Publishers</h2>
           <p className="jds-section-sub">
-            Choose built-in publications, connect accounts, add your own, or exclude domains.
+            Choose built-in sources, connect accounts, add your own, or exclude domains.
           </p>
         </div>
 
