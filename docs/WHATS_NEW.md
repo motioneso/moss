@@ -35,6 +35,9 @@ feature that is not present in the image you are running.
 
 - **Today's news list shows publisher icons.** The News desk widget on Today now shows each story's publisher as a small icon instead of just the name, with the name still available if you hover over it. [PR #2252](https://github.com/motioneso/moss/pull/2252)
 
+#### Fixed
+
+- **Settings search finds module settings.** Searching settings (for example, typing News) now also finds a module's own settings and takes you straight there. [PR #2254](https://github.com/motioneso/moss/pull/2254)
 ### 2026-09-01
 
 #### Added
