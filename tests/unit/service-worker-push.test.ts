@@ -146,7 +146,7 @@ describe("service worker notificationclick (#743 security finding 4)", () => {
 });
 
 describe("service worker push (#743)", () => {
-  it("shows the payload's title, body and href only", async () => {
+  it("shows the payload's title, body, href and id-as-tag only", async () => {
     const sandbox = loadServiceWorker();
     const pending: Promise<unknown>[] = [];
     const event = {
@@ -162,7 +162,12 @@ describe("service worker push (#743)", () => {
     expect(sandbox.shown).toEqual([
       {
         title: "Hi",
-        options: { body: "there", icon: "/icons/icon.svg", data: { href: "/tasks/1" } }
+        options: {
+          body: "there",
+          icon: "/icons/icon.svg",
+          tag: "n1",
+          data: { href: "/tasks/1" }
+        }
       }
     ]);
   });
