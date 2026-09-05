@@ -165,22 +165,24 @@ describe("resolveWebSearchProvider with model-native search", () => {
     expect(provider.name).toBe("unavailable");
   });
 
-  it("reuses the cached provider for the same model id and rebuilds it when the model id changes", async () => {
+  it("never reuses one actor's runner for another actor on the same model", async () => {
     setWebSearchKeyResolver(async () => null);
-    let calls = 0;
-    let modelId = "model-a";
-    setModelNativeSearchResolver(async () => {
-      calls += 1;
-      return { modelId, runner: async () => ({ object: { results: [] } }) };
-    });
+    const runnerCalls: string[] = [];
+    // The composition root binds the runner to the request's scoped data context; here the
+    // "scoped db" is just a label naming the actor so the test can see whose runner ran.
+    setModelNativeSearchResolver(async (scopedDb) => ({
+      modelId: "shared-model",
+      runner: async () => {
+        runnerCalls.push(String(scopedDb));
+        return { object: { results: [] } };
+      }
+    }));
 
-    const first = await resolveWebSearchProvider({});
-    const second = await resolveWebSearchProvider({});
-    expect(first).toBe(second);
-    expect(calls).toBe(2);
+    const forUserA = await resolveWebSearchProvider("user-a");
+    await forUserA.search({ query: "q", limit: 1 });
+    const forUserB = await resolveWebSearchProvider("user-b");
+    await forUserB.search({ query: "q", limit: 1 });
 
-    modelId = "model-b";
-    const third = await resolveWebSearchProvider({});
-    expect(third).not.toBe(second);
+    expect(runnerCalls).toEqual(["user-a", "user-b"]);
   });
 });

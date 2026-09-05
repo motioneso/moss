@@ -192,11 +192,12 @@ export function createModelNativeProvider(runner: ModelNativeSearchRunner): WebS
 export type WebSearchKeyResolver = (scopedDb: unknown) => Promise<string | null>;
 
 /**
- * Resolves the model-native search runner for the current actor, plus an identifier for the
- * model behind it (used to key the provider cache — a different actor or a changed model
- * binding must not reuse another actor's closure). Injected by the composition root; returns
- * null when model-native search is not currently active (disabled, no model, model lacks the
- * capability). Same `unknown` typing rationale as {@link WebSearchKeyResolver}.
+ * Resolves the model-native search runner for the current actor and request. The runner closes
+ * over the actor's scoped data context and credentials, so it is NEVER cached or shared across
+ * requests: a second actor on the same model must get their own runner (private by default).
+ * `modelId` is metadata for tracing only. Injected by the composition root; returns null when
+ * model-native search is not currently active (disabled, no model, model lacks the capability).
+ * Same `unknown` typing rationale as {@link WebSearchKeyResolver}.
  */
 export interface ModelNativeSearchResolution {
   readonly runner: ModelNativeSearchRunner;
@@ -209,7 +210,6 @@ export type ModelNativeSearchResolver = (
 let testSearchProvider: WebSearchProvider | undefined;
 let keyResolver: WebSearchKeyResolver | undefined;
 let modelNativeResolver: ModelNativeSearchResolver | undefined;
-let modelNativeProviderCache: { modelId: string; provider: WebSearchProvider } | undefined;
 // Fired when the injected key resolver throws (bad keyring / corrupted envelope) so the
 // composition root can emit a metadata-only warn. web-research stays db/dependency-free; the
 // callback carries NO secret material — only the event name is produced here.
@@ -253,28 +253,17 @@ export function setWebSearchKeyResolver(
 /** Composition-root seam: install the resolver for model-native (built-in) search. */
 export function setModelNativeSearchResolver(resolver: ModelNativeSearchResolver | undefined): void {
   modelNativeResolver = resolver;
-  modelNativeProviderCache = undefined;
 }
 
-/** Drop the cached providers so the next request re-resolves the key/model (save/revoke hook). */
+/** Drop the cached Brave provider so the next request re-resolves the key (save/revoke hook). */
 export function invalidateWebSearchProviderCache(): void {
   providerCache = undefined;
-  modelNativeProviderCache = undefined;
 }
 
 function providerForKey(apiKey: string): WebSearchProvider {
   if (providerCache && providerCache.apiKey === apiKey) return providerCache.provider;
   const provider = createBraveSearchProvider(apiKey);
   providerCache = { apiKey, provider };
-  return provider;
-}
-
-function providerForModelNative(resolution: ModelNativeSearchResolution): WebSearchProvider {
-  if (modelNativeProviderCache && modelNativeProviderCache.modelId === resolution.modelId) {
-    return modelNativeProviderCache.provider;
-  }
-  const provider = createModelNativeProvider(resolution.runner);
-  modelNativeProviderCache = { modelId: resolution.modelId, provider };
   return provider;
 }
 
@@ -306,7 +295,9 @@ export async function resolveWebSearchProvider(scopedDb: unknown): Promise<WebSe
 
   if (modelNativeResolver) {
     const resolution = await modelNativeResolver(scopedDb);
-    if (resolution) return providerForModelNative(resolution);
+    // Built per request, never cached: the runner is bound to this actor's data context and
+    // credentials, and a cache keyed by model id alone would hand one actor's runner to another.
+    if (resolution) return createModelNativeProvider(resolution.runner);
   }
 
   return unavailableSearchProvider;
@@ -315,7 +306,6 @@ export async function resolveWebSearchProvider(scopedDb: unknown): Promise<WebSe
 export function setWebSearchProviderForTests(provider: WebSearchProvider | undefined): void {
   testSearchProvider = provider;
   // Reset the resolved-key cache so tests that swap or clear the provider never get a stale
-  // Brave or model-native instance from a prior resolveWebSearchProvider call.
+  // Brave instance from a prior resolveWebSearchProvider call.
   providerCache = undefined;
-  modelNativeProviderCache = undefined;
 }
