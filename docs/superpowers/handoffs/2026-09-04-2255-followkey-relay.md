@@ -52,3 +52,24 @@ Relay depth is 1. Do not relay again; if the meter fires, push what is green and
   (search route fixture lacked the permanent id and 500ed on the strict schema; chip test asserted
   the full name where the chip shows the short name). Second run: 41 files, 613 tests, exit 0.
 - Migration stays 0217. Pushed with --force-with-lease; PR comment posted. Lane done.
+
+## Round 7 and the stacked check branch (2026-09-05)
+
+- Round 7 blockers fixed and pushed: 3a712b41c (a tile with a permanent id never claims a follow
+  carrying a different id; key fallback only for saves with no id) and 88c77f117 (prettier pass over
+  the 14 rejected files). Format 0, lint 0, typecheck 0, sports unit 0 (42 files, 624 tests),
+  browser test 0. PR comment "Fix round 7" posted.
+- Check branch check/2255-plus-2281 in worktree 2255-numbers rebuilt on 88c77f117 with the five
+  2281 cherry-picks, head 8dbb0bdba, NOT pushed. Conflict resolution: take 2281's grouped return in
+  SearchResults and port two lines into its renderTeam helper (active via followFor with
+  team.sourceTeamId; pass team.sourceTeamId as the fifth onToggle argument); in the browser test's
+  mock search filter keep ALL_TEAMS and match on name or short name. Same two edits will be needed
+  when 2281 is rebased onto main after 2255 merges.
+- Stacked branch: typecheck 0, lint 0, unit 0 (63), browser test 0 (8 passed). Prettier check on the
+  three touched files exited 1 (2281's own commits are unformatted there); not fixed, check branch only.
+- Live on 5198 after restarting vite from apps/web (new pid in /tmp/sports-dev-pids.txt; the stale
+  server crashed the settings page with a missing MODULE_SETTING_KEYWORDS export): search "pac",
+  results grouped under six league headings, Pacific Tigers tile highlighted with ESPN logo 279,
+  followed chip "Pacific" shows the same logo. Ben's earlier attempts left several Pacific follows
+  across leagues; they all render with a crest now.
+- Context meter hit 70 percent at the end; lane is complete, nothing left to relay.
