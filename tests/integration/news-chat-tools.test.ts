@@ -19,7 +19,6 @@
 // Discovery/availability stubs: tests/integration/news-personalization-routes.test.ts.
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import pg from "pg";
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import {
@@ -27,7 +26,6 @@ import {
   SessionTokenRegistry,
   createPlatformDiagnosticsService
 } from "@moss/ai";
-import { createPgBossClient } from "@moss/jobs";
 import {
   createNewsDiagnosticsProvider,
   enqueueNewsRefresh,
