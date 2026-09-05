@@ -28,7 +28,11 @@ type FetchOutcome = Awaited<ReturnType<NewsFetchPort>>;
 function retryDelayMs(failure: NewsSafeFetchFailure, remainingMs: number): number | null {
   if (failure.reason !== "rate_limited" || !failure.retryAfter) return null;
   const seconds = Number(failure.retryAfter);
-  if (!Number.isFinite(seconds) || seconds <= 0 || seconds > REDDIT_REFRESH_LIMITS.maxRetryAfterSeconds) {
+  if (
+    !Number.isFinite(seconds) ||
+    seconds <= 0 ||
+    seconds > REDDIT_REFRESH_LIMITS.maxRetryAfterSeconds
+  ) {
     return null;
   }
   const delayMs = seconds * 1000;

@@ -20,7 +20,12 @@ function feed(items: { title: string; url: string; date?: string }[]): string {
 }
 
 /** One Reddit Atom entry whose "[link]" anchor points out to a publisher. */
-function redditEntry(id: string, title: string, url: string, published = "2026-07-11T11:00:00+00:00"): string {
+function redditEntry(
+  id: string,
+  title: string,
+  url: string,
+  published = "2026-07-11T11:00:00+00:00"
+): string {
   return (
     `<entry><id>${id}</id><published>${published}</published><updated>${published}</updated>` +
     `<title>${title}</title><content type="html">&lt;a href="${url}"&gt;[link]&lt;/a&gt;</content></entry>`
@@ -371,7 +376,9 @@ describe("collectCandidates", () => {
       result.candidates.map((candidate) => ({ ...candidate, matchedTopics: [] })),
       { exclusions: [], approvedDomains: new Set(["reddit.com"]), now }
     );
-    const storyZeroCount = filtered.filter((c) => c.url === "https://publisher.example/story-0").length;
+    const storyZeroCount = filtered.filter(
+      (c) => c.url === "https://publisher.example/story-0"
+    ).length;
     expect(storyZeroCount).toBe(1);
   });
 
