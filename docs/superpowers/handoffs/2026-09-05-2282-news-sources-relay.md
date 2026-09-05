@@ -594,3 +594,59 @@ Tasks 1.7 and 1.8 are both still unbuilt. Nothing pushed this lane. The draft pu
 was not commented (there is nothing new to report on it). Whoever continues 1.7/1.8 should be able
 to start writing tests and code immediately from the notes above without re-reading the plan or
 spec sections again.
+
+## Lane notes: build-2282-p1c stop (2026-09-05)
+
+PLAIN ENGLISH RULE for whoever picks this up: every message to a human is plain English. No
+jargon, no coined shorthand, ASCII punctuation only, at most one backtick per sentence. Pass this
+rule on verbatim to any agent you spawn.
+
+Stopped at 70 percent context, as the standing rule requires. Head is now 24bfcd4ab. PR 2298 was
+commented with this summary.
+
+Task 1.7 is done and green (commit fb654a4e7): `readSubredditsBounded` in the new file
+`packages/news/src/compilation/reddit-refresh.ts`, wired into `collectCandidates` in
+`packages/news/src/compilation/candidates.ts`. Typecheck passes, and both
+`tests/unit/news-candidates.test.ts` and the new `tests/unit/news-reddit-refresh.test.ts` pass
+when run directly and unpiped. Nothing left to do here.
+
+Task 1.8 (wording) is partly done (commit 24bfcd4ab), in
+`packages/news/src/settings/index.tsx` only:
+- Line ~523 pane helper text: "sources" swapped in.
+- Line ~537 topic kicker and ~542-543 topic helper: "sources" swapped in.
+- Line ~608 built-in section heading: now "Built-in sources".
+- Line ~654 personal section heading: now "Sources you add"; line ~659 helper text: now "Sources
+  you add yourself, verified before they join your feed. Verified sources contribute recent
+  headlines to News and briefings." (the second sentence was not present before; confirmed no
+  duplicate exists elsewhere in the file).
+
+Still to do for task 1.8, none of it started:
+- `packages/news/src/settings/add-source.tsx`: lines 31 (policy error), 34 (invalid_input error,
+  keep the em-dash), 54 (fallback error), 171 (request error), 177 (add box label "Publication
+  homepage or domain" to "Source homepage or domain"), and 185 (placeholder
+  `theatlantic.com` to `politico.com or r/technology`). Exact wording for the four error strings
+  is in the spec at `docs/superpowers/specs/2026-09-04-news-sources-subreddits-and-feed-finder.md`,
+  section "Settings and app map", the "Preview policy/invalid-input/fallback/request error"
+  bullets.
+- `packages/news/src/manifest.ts`: settings description (around line 128) and the `news.prefs`
+  feature area need the wording from the plan
+  (`docs/superpowers/plans/2026-09-05-2282-news-sources.md`, Task 1.8 section): "Choose news
+  topics, manage built-in, connected, and excluded publishers, and the sources you add: a
+  publication or a subreddit. Adding a source needs an AI model; discovering topics across the
+  web also needs web search." Plus the `news.add_source` feature description should mention the
+  `r/name` input and that a subreddit contributes its linked articles, and the migrations list
+  needs 0218 added. Not yet located precisely in the file this lane; read from around line 100 to
+  170 first thing next session.
+- `tests/unit/news-settings-pane.test.tsx` and `tests/unit/news-manifest.test.ts`: not opened this
+  lane. Need new assertions for every replacement string above, and the spec says these tests
+  should fail on any missed copy (i.e. assert the old strings are gone too).
+
+The spec's full exact-wording list for task 1.8 is at
+`docs/superpowers/specs/2026-09-04-news-sources-subreddits-and-feed-finder.md` lines 354-372 ("The
+exact settings copy changes are:"). Read that section directly rather than re-deriving it; it has
+already been checked once against the current file for line 523, 530, 537, 542-543, 599, 608, 654,
+659 (see the note above about what changed and why 530 and 599 were left alone).
+
+Nothing further pushed or attempted this lane beyond what is described above. Whoever continues
+task 1.8 should be able to start on add-source.tsx immediately without re-reading the plan or spec
+again.
