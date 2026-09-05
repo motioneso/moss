@@ -2,6 +2,22 @@ import type { GmailMessageFull, GmailPayloadPart } from "./google-api-client.js"
 import type { StructuredRunPriority, StructuredRunScope, StructuredTelemetry } from "@moss/ai";
 import { resolveMossEnv } from "@moss/db";
 
+import { looksLikeBulkMail } from "./email-bulk-rule.js";
+import {
+  looksLikeOneTimeCodeEmail,
+  signInCodeDecision,
+  type OneTimeCodeEmailInput
+} from "./email-otp-rule.js";
+
+export { looksLikeBulkMail, type BulkMailInput } from "./email-bulk-rule.js";
+
+export {
+  looksLikeOneTimeCodeEmail,
+  signInCodeDecision,
+  type OneTimeCodeEmailInput,
+  type SignInCodeDecision
+} from "./email-otp-rule.js";
+
 /** Max decoded body length sent to the LLM (bounded to protect prompt limits, spec risk #6). */
 export const MAX_BODY_CHARS = 20_000;
 
@@ -45,6 +61,12 @@ export interface ParsedEmail {
   readonly snippet: string | null;
   readonly body: string;
   readonly bodyTruncated: boolean;
+  /**
+   * Whether the message carried a List-Unsubscribe header. A yes/no answer only — the address
+   * in that header is never read out, stored or logged. Absent when the provider does not
+   * expose headers, in which case the body word is the fallback (see email-bulk-rule.ts).
+   */
+  readonly hasListUnsubscribe?: boolean;
 }
 
 function header(part: GmailPayloadPart | undefined, name: string): string | undefined {
@@ -124,7 +146,10 @@ export function parseEmail(message: GmailMessageFull): ParsedEmail {
     labelIds: [...(message.labelIds ?? [])],
     snippet: message.snippet ?? null,
     body,
-    bodyTruncated: truncated
+    bodyTruncated: truncated,
+    // Presence only. Gmail returns every header with format=full, so this needs no extra call,
+    // and the header's value (a mailto: or an opt-out URL) is deliberately never captured.
+    hasListUnsubscribe: header(payload, "List-Unsubscribe") !== undefined
   };
 }
 
@@ -181,6 +206,24 @@ export interface EmailSignals {
   readonly importance?: "low" | "normal" | "high";
   readonly confidence?: number;
   readonly truncated?: boolean;
+  /**
+   * Set when the message looks like it went to a mailing list rather than to this person. A
+   * yes/no answer only — the unsubscribe address is never stored. Decided before the model call
+   * and shown to the model, so a later look at a stored row explains why a sales mail with
+   * urgent wording was left alone.
+   */
+  readonly bulk?: boolean;
+  /** Set when a message was recognized as handing over a sign-in code: either by the
+   * deterministic rule, which skips the model call entirely, or by the model's own yes/no
+   * answer when that rule was unsure. No `actionability` is ever attached to a skipped
+   * message, so it is
+   * already invisible to the Today briefing filter and to suggested-task creation, both of
+   * which require an inferred subject that a skipped message never gets. */
+  readonly skipped?: "otp";
+}
+
+export function otpSkippedResult(): EmailExtractResult {
+  return { summary: null, signals: { skipped: "otp", confidence: 0 } };
 }
 
 export interface EmailExtractResult {
@@ -276,23 +319,75 @@ async function withTimeout<T>(
 const EMAIL_TRIAGE_INSTRUCTIONS = [
   "You are an email triage assistant. Read the email and reply with one JSON object only:",
   '{ category: "needs_reply"|"needs_action"|"time_sensitive_info"|"waiting_on_someone"|"fyi"|"noise"|"unknown",',
-  "  confidence: number, reason?: string, action?: string, dueDate?: string }",
-  "confidence is 0..1. Use ISO dates. Keep reason and action concise.",
+  "  confidence: number, reason?: string, action?: string, dueDate?: string,",
+  "  deliversSignInCode: boolean }",
+  "confidence is 0..1. Use ISO dates (YYYY-MM-DD). Keep reason and action concise.",
+  "Each email is preceded by the date it arrived (Received) and today's date (Today). Use them to",
+  'resolve relative wording such as "tomorrow", "Friday" or "this week".',
+  "dueDate is the date the user's own reply or action is owed. It is NOT the date of the event,",
+  "meeting, interview, appointment or booking window the message is about. When someone asks the",
+  "user to suggest, choose or confirm times, what is owed is the answer, so the due date is within",
+  "one business day of Received unless the sender names an earlier deadline - never the date of the",
+  "slot being arranged. When a message states its own deadline for the user (a payment date, a form",
+  "cut-off, an RSVP date), use that date.",
+  "Only a real obligation justifies needs_reply, needs_action or time_sensitive_info: a person",
+  "or an institution the user already has a relationship with expects something from them, or",
+  "the user has already committed to something. Urgent wording is not evidence on its own -",
+  '"act now", "important", "action required", "final notice", "last chance", "ends tonight",',
+  "a countdown or a red banner all appear in ordinary marketing. When nothing is actually owed,",
+  "choose fyi or noise, however the message is worded.",
   "Actionability rules:",
   "- needs_reply: a real person is waiting on the user's answer. NEVER use it for marketing,",
   "  newsletters, receipts, or automated notifications, whatever the subject line claims.",
-  "- needs_action: the user must do something (pay a bill, submit, book, review). Include a",
-  "  short action and due date when concrete.",
-  "- time_sensitive_info: no action required but it expires (flight change, outage window).",
+  "- needs_action: a bill or a payment problem, an appointment, a form to fill in, a deadline",
+  "  set by an employer, a school, a landlord, a bank, an insurer or a doctor, or something the",
+  "  user signed up for that now needs a step from them. Include a short action and due date",
+  "  when concrete.",
+  "- time_sensitive_info: no action required, but it affects this user directly and it expires:",
+  "  their flight, their appointment, a delivery already on its way, an outage at their address.",
+  "  Never a seller's or an artist's event, sale window, ticket release, stream or party.",
   "- waiting_on_someone: the user is owed a response or delivery by someone else.",
-  "- fyi: informational, no urgency (receipts, confirmations, status updates).",
-  "- noise: marketing, promotions, newsletters, social notifications. No suggestedTasks.",
+  "- fyi: informational, no urgency. Use it for new-sign-in and security-alert notices where",
+  "  nothing actually failed, terms-of-service, privacy and policy updates, account activity",
+  "  summaries, calendar notifications, shipping notices, receipts and confirmations.",
+  "- noise: sales and promotions, ticket releases and on-sale announcements, fundraising and",
+  "  advocacy campaigns, petitions, event promos and listening parties, newsletters and digests,",
+  "  test alerts and scheduled drills, product update and release announcements, social",
+  "  notifications. No suggestedTasks.",
   "- unknown: only when genuinely unclassifiable.",
-  "reason must be one short sentence."
+  'Mail marked "Bulk mail: yes" went to a list, not to this person: treat it as noise or fyi',
+  "unless it is a bill, a payment problem, an appointment or a problem with this user's own",
+  "account. A real bill or bank alert can still carry an unsubscribe link, so do not dismiss it",
+  "on that alone.",
+  "reason must be one short sentence.",
+  "deliversSignInCode: true only when this message hands the recipient a fresh sign-in,",
+  "verification or two-step code to type in. False for help requests, replies, forwards,",
+  "error reports, policy notices, and door, booking or discount codes.",
+  "Never repeat the code itself anywhere in your answer."
 ].join("\n");
 
-function promptInput(parsed: ParsedEmail): string {
-  return [`Subject: ${parsed.subject}`, `From: ${parsed.from}`, "", parsed.body].join("\n");
+/** Calendar date as YYYY-MM-DD, or null when the value is missing or unreadable. */
+function calendarDate(value: string | Date): string | null {
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
+/**
+ * The email as the model sees it. The two date lines are load-bearing: without them the model has
+ * no idea when the message arrived or what day it is, so it anchors a due date to whatever date the
+ * body mentions. That is how a request to suggest interview times came back due on the date of the
+ * interview window rather than the day the reply was owed (#2271 round 3). Dates only, no times -
+ * enough to settle "tomorrow" or "within a day", and nothing extra to leak back into a stored field.
+ */
+function promptInput(parsed: ParsedEmail, now: Date = new Date()): string {
+  const header = [`Subject: ${parsed.subject}`, `From: ${parsed.from}`];
+  const received = calendarDate(parsed.receivedAt);
+  if (received !== null) header.push(`Received: ${received}`);
+  const today = calendarDate(now);
+  if (today !== null) header.push(`Today: ${today}`);
+  if (looksLikeBulkMail(parsed)) header.push("Bulk mail: yes (carries an unsubscribe link)");
+  return [...header, "", parsed.body].join("\n");
 }
 
 function buildPrompt(parsed: ParsedEmail): string {
@@ -570,9 +665,13 @@ function sanitizeExtractResult(
   }
 
   result = { ...result, signals: stripIfBodyReconstructed(result.signals, normalizedBody) };
+  // Applied after the reconstruction guard, which rebuilds the signals object from a fixed set
+  // of fields: setting the flag earlier would have it dropped on exactly the messages that
+  // tripped the guard. It is a deterministic boolean, so no body text can ride along with it.
+  const signals = looksLikeBulkMail(parsed) ? { ...result.signals, bulk: true } : result.signals;
   return {
     ...result,
-    signals: parsed.bodyTruncated ? { ...result.signals, truncated: true } : result.signals,
+    signals: parsed.bodyTruncated ? { ...signals, truncated: true } : signals,
     escalated: false
   };
 }
@@ -608,6 +707,24 @@ export function partitionEmailExtractionBatches(messages: readonly ParsedEmail[]
   return batches;
 }
 
+/**
+ * True when the message was one the deterministic rule could not settle and the model answered
+ * that it really does hand a sign-in code over. The answer is read here and nowhere else: it is
+ * never stored in the signals and never written to a log.
+ */
+function modelSaysItHandsOverACode(replyText: string, message: OneTimeCodeEmailInput): boolean {
+  if (signInCodeDecision(message) !== "unclear") return false;
+  try {
+    const start = replyText.indexOf("{");
+    const end = replyText.lastIndexOf("}");
+    if (start < 0 || end < start) return false;
+    const obj = JSON.parse(replyText.slice(start, end + 1)) as Record<string, unknown>;
+    return obj.deliversSignInCode === true;
+  } catch {
+    return false;
+  }
+}
+
 function retryableReason(error: unknown): EmailExtractRetryableReason {
   if (error instanceof EmailExtractRetryableError) return error.reason;
   const name = error instanceof Error ? error.name : "";
@@ -637,9 +754,24 @@ export async function extractEmailSignalsBatch(
       resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ??
         String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
     );
+  // Callers are expected to have already routed one-time-code messages to otpSkippedResult()
+  // themselves (see google-sync-phases.ts) rather than pass them in here: this function's
+  // closeScope option finalizes a scoped CLI session keyed to the *call*, and a call whose
+  // only message got silently skipped would never fire that close and would leak the session.
+  const results: EmailExtractResult[] = new Array(messages.length);
+  const toProcess: ParsedEmail[] = [];
+  const toProcessIndexes: number[] = [];
+  messages.forEach((message, index) => {
+    if (looksLikeOneTimeCodeEmail(message)) {
+      results[index] = otpSkippedResult();
+    } else {
+      toProcess.push(message);
+      toProcessIndexes.push(index);
+    }
+  });
   const extracted: EmailExtractResult[] = [];
 
-  for (const [batchIndex, batch] of partitionEmailExtractionBatches(messages).entries()) {
+  for (const [batchIndex, batch] of partitionEmailExtractionBatches(toProcess).entries()) {
     const telemetry = options.telemetry?.(batchIndex, batch.length);
     try {
       if (batch.length === 1) {
@@ -658,7 +790,12 @@ export async function extractEmailSignalsBatch(
           timeoutMs,
           () => telemetry?.emit({ kind: "timeout", priority: options.priority })
         );
-        extracted.push(sanitizeExtractResult(message, parseBatchSignals(reply.text, message)));
+        const parsedReply = parseBatchSignals(reply.text, message);
+        extracted.push(
+          modelSaysItHandsOverACode(reply.text, message)
+            ? otpSkippedResult()
+            : sanitizeExtractResult(message, parsedReply)
+        );
         continue;
       }
       const reply = await withTimeout(
@@ -697,11 +834,13 @@ export async function extractEmailSignalsBatch(
       }
       for (let index = 0; index < batch.length; index += 1) {
         if (!byIndex.has(index)) throw new Error("email-extract-batch-result-index");
+        const message = batch[index]!;
+        const answer = JSON.stringify(byIndex.get(index));
+        const parsedReply = parseBatchSignals(answer, message);
         extracted.push(
-          sanitizeExtractResult(
-            batch[index]!,
-            parseBatchSignals(JSON.stringify(byIndex.get(index)), batch[index]!)
-          )
+          modelSaysItHandsOverACode(answer, message)
+            ? otpSkippedResult()
+            : sanitizeExtractResult(message, parsedReply)
         );
       }
     } catch (error) {
@@ -709,7 +848,10 @@ export async function extractEmailSignalsBatch(
       throw new EmailExtractRetryableError(retryableReason(error));
     }
   }
-  return extracted;
+  toProcessIndexes.forEach((originalIndex, i) => {
+    results[originalIndex] = extracted[i]!;
+  });
+  return results;
 }
 
 export async function extractEmailSignals(
@@ -717,6 +859,8 @@ export async function extractEmailSignals(
   deps: EmailExtractDeps,
   options: EmailExtractOptions = {}
 ): Promise<EmailExtractResult> {
+  if (looksLikeOneTimeCodeEmail(parsed)) return otpSkippedResult();
+
   const timeoutMs =
     options.callTimeoutMs ??
     Number(
@@ -728,6 +872,7 @@ export async function extractEmailSignals(
   let result: EmailExtractResult;
   try {
     const reply = await withTimeout((signal) => deps.runChat(prompt, signal), timeoutMs);
+    if (modelSaysItHandsOverACode(reply.text, parsed)) return otpSkippedResult();
     result = safeParseSignals(reply.text, parsed);
   } catch (error) {
     if (error instanceof EmailExtractNeedsConfigurationError) throw error;
