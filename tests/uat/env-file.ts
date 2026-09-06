@@ -70,15 +70,11 @@ export function writeUatEnvFile(input: {
         "BETTER_AUTH_SECRET=uat-only-not-a-real-secret-00000000000",
         "JARVIS_CONNECTOR_SECRET_KEY=00000000000000000000000000000000",
         "JARVIS_AI_SECRET_KEY=11111111111111111111111111111111",
-        // #1024/#1000: required in any non-development/test NODE_ENV since #918 Slice 2
-        // (resolveKeyring enforces >=32 bytes) — matches .github/workflows/ci.yml's convention.
-        // Caught live by Task 7 (this plan predates #918 landing on main).
+        // #2322 slice 2: these values are simply an install that already has keys —
+        // a set value always wins. Missing keys no longer crash the boot; the loader
+        // resolves lazily and the feature pauses with setup guidance instead.
         "JARVIS_MODULE_CREDENTIAL_SECRET_KEY=22222222222222222222222222222222",
-        // #2005 — same boot-crash class as the line above: resolveKeyring throws at
-        // startup when this is missing outside development/test.
         "JARVIS_NEWS_CREDENTIAL_SECRET_KEY=22222222222222222222222222222222",
-        // #2173: same boot-crash class — resolveKeyring throws at startup when this is missing
-        // outside development/test. Real crash caught by the cached-image UAT repro.
         "JARVIS_INTEGRATIONS_SECRET_KEY=33333333333333333333333333333333",
         `JARVIS_CLI_RUNNER_RPC_SECRET=${UAT_CLI_RUNNER_RPC_SECRET}`,
         // #1883: this one chat script needs a real, local embedding provider so notes.search

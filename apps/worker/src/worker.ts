@@ -347,7 +347,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   //
   // Moved above registerBuiltInModuleWorkers (#1282 Task 2): the briefings module
   // needs externalBriefingManifests + invokeExternalBriefing at registration time,
-  // and both are built from this same discovery/runtime/cipher setup. Building it
+  // and both are built from this same discovery/runtime setup. Building it
   // once here and threading it down avoids a second discovery scan.
   const externalConfig = resolveExternalWorkerConfig();
   const reservedQueueNames = new Set(getAllQueueDefinitions().map((queue) => queue.name));

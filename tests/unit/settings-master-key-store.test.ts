@@ -7,6 +7,7 @@ import { createIntegrationsCipherFromKeyring } from "@moss/integrations";
 
 import {
   createMasterKeyStoreCipher,
+  createModuleCredentialCipherFromKeyring,
   decryptWithFamilyKeyRefresh,
   familyByName,
   FAMILY_KEY_CACHE_TTL_MS,
@@ -115,6 +116,52 @@ describe("family key store (#2312 slice 1, #2322 slice 2)", () => {
       .update("jarv1s-development-module-credential-secret")
       .digest("hex");
     expect(keyring?.keys.get("v1")?.toString("hex")).toBe(expected);
+  });
+
+  it("a present but unusable settings value reads as broken, not ready", async () => {
+    invalidateFamilyKeyCache();
+    const { scopedDb } = createMockDb();
+    const status = await getFamilyKeyStatus(scopedDb, {
+      NODE_ENV: "production",
+      ...MASTER_ENV,
+      MOSS_MODULE_CREDENTIAL_SECRET_KEY: "too-short"
+    });
+    expect(status.find((s) => s.family === "module_credential")).toEqual({
+      family: "module_credential",
+      source: "broken"
+    });
+    expect(status.find((s) => s.family === "integrations")).toEqual({
+      family: "integrations",
+      source: "missing"
+    });
+  });
+
+  it("Generate on a dev-default install keeps data saved before the first key", async () => {
+    invalidateFamilyKeyCache();
+    const { scopedDb, store } = createMockDb();
+    const repository = createMockRepository(store);
+    const devEnv = { ...MASTER_ENV };
+    // Saved before any family key exists: sealed under the development default,
+    // exactly like the old constructor did.
+    const before = await loadFamilyKeyring(scopedDb, MODULE_CREDENTIAL_FAMILY, devEnv);
+    const envelope = createModuleCredentialCipherFromKeyring(before!).encryptJson({
+      value: "saved-before-generate"
+    });
+    // The admin sees the banner and presses Generate, as the screen asks.
+    await generateFamilyKey(scopedDb, repository, {
+      family: MODULE_CREDENTIAL_FAMILY,
+      actorUserId: "u1",
+      requestId: "r1",
+      env: devEnv
+    });
+    invalidateFamilyKeyCache();
+    const value = await decryptWithFamilyKeyRefresh(
+      scopedDb,
+      MODULE_CREDENTIAL_FAMILY,
+      devEnv,
+      (keyring) => createModuleCredentialCipherFromKeyring(keyring).decryptJson(envelope)
+    );
+    expect(value).toEqual({ value: "saved-before-generate" });
   });
 
   it("status lists all three families as missing on an empty store", async () => {

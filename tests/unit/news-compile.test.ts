@@ -21,7 +21,7 @@ function source(index = 1) {
     retrievalMethod: "feed" as const,
     workaround: false,
     validationStatus: "approved" as const,
-    healthStatus: "healthy" as const,
+    healthStatus: "healthy" as "healthy" | "authentication_failed" | "temporarily_unavailable",
     createdAt: now.toISOString()
   };
 }
@@ -154,6 +154,49 @@ describe("compilePersonalizedNews", () => {
       )
     ).resolves.toEqual({ outcome: "kept_last_good", failureKind: "fetch" });
     expect(unavailable).toEqual(["source-1"]);
+  });
+
+  it("a source flagged for a missing key clears itself once the key exists, with no re-save", async () => {
+    const health: Array<{ sourceId: string; health: string }> = [];
+    const failingSource = { ...source(1), healthStatus: "authentication_failed" as const };
+    let attempt = 0;
+    const base = dependencies({ sources: [failingSource] });
+    const deps = {
+      ...base,
+      repo: {
+        ...base.repo,
+        updateSourceHealth: async (_db: DataContextDb, sourceId: string, next: string) => {
+          health.push({ sourceId, health: next });
+        }
+      },
+      credentials: {
+        readStatuses: async () => [{ sourceId: "source-1" }]
+      },
+      credentialedSource: async () => {
+        attempt += 1;
+        if (attempt === 1) return { failure: "authentication_failed" as const };
+        return {
+          items: [
+            {
+              id: "recovered-1",
+              url: "https://publisher-1.example.com/recovered",
+              title: "Recovered headline",
+              publishedAt: "2026-07-11T11:00:00.000Z",
+              summary: "Back online",
+              imageUrl: null,
+              providerName: "Publisher 1"
+            }
+          ]
+        };
+      }
+    };
+    await compilePersonalizedNews(db, deps, { now, generation: 1, ownerUserId: "owner-1" });
+    expect(health).toEqual([{ sourceId: "source-1", health: "authentication_failed" }]);
+    await compilePersonalizedNews(db, deps, { now, generation: 2, ownerUserId: "owner-1" });
+    expect(health).toEqual([
+      { sourceId: "source-1", health: "authentication_failed" },
+      { sourceId: "source-1", health: "healthy" }
+    ]);
   });
 
   it("publishes an empty snapshot after a successful collection with no candidates", async () => {

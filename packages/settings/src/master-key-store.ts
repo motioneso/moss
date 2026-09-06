@@ -378,6 +378,29 @@ export async function generateFamilyKey(
         retired.push({ keyId, secret: secret.toString("hex") });
       }
     }
+  } else {
+    // No row, no settings value: outside hardened environments the data may still
+    // be sealed under the development default, so carry that key forward exactly
+    // like the settings branch above. Otherwise pressing Generate on a dev install
+    // would orphan everything saved before the first key existed. In a hardened
+    // environment resolveKeyring throws for the missing key and there is nothing
+    // to carry, which the empty catch keeps quiet.
+    try {
+      const devKeyring = resolveKeyring(
+        input.family.keyEnvVar,
+        input.family.keyIdEnvVar,
+        input.family.keysEnvVar,
+        input.family.devDefault,
+        env
+      );
+      for (const [keyId, secret] of devKeyring.keys) {
+        if (!retired.some((entry) => entry.keyId === keyId)) {
+          retired.push({ keyId, secret: secret.toString("hex") });
+        }
+      }
+    } catch {
+      // Hardened environment with nothing set: nothing to preserve.
+    }
   }
   const taken = new Set([existing?.keyId, ...retired.map((entry) => entry.keyId)]);
   taken.delete(undefined);
@@ -439,7 +462,20 @@ export async function getFamilyKeyStatus(
   const statuses: FamilyKeyStatus[] = [];
   for (const family of FAMILIES) {
     if (resolveMossEnv(env, family.keyEnvVar) !== undefined) {
-      statuses.push({ family: family.name, source: "env" });
+      // Present does not mean usable: a blank or too-short value is rejected by
+      // the loader, so the screen must ask for attention instead of ready.
+      try {
+        resolveKeyring(
+          family.keyEnvVar,
+          family.keyIdEnvVar,
+          family.keysEnvVar,
+          family.devDefault,
+          env
+        );
+        statuses.push({ family: family.name, source: "env" });
+      } catch {
+        statuses.push({ family: family.name, source: "broken" });
+      }
     } else {
       const state = familyRowState(
         await readFamilySettingValue(scopedDb, family.settingKey),

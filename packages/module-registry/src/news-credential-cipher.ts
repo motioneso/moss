@@ -80,12 +80,11 @@ export async function resolveNewsCredentialCipherPort(
 
 /**
  * Dedicated key family so News publisher keys rotate independently of module,
- * connector and AI keys. Hardened env requires a >=32-byte secret via
- * JARVIS_NEWS_CREDENTIAL_SECRET_KEY (resolveKeyring enforces this and THROWS AT BOOT
- * when it is missing outside development/test); the dev default is only ever used
- * outside hardened mode. The variable is registered in infra/env.production.example,
- * .github/workflows/ci.yml, tests/uat/provisioner.ts and scripts/smoke-compose.ts —
- * a missing key of exactly this kind crash-looped the app container in #918.
+ * connector and AI keys. Legacy constructor, kept for tests and seeding: nothing
+ * resolves a key at boot any more. Production code loads the family lazily through
+ * the master store, so JARVIS_NEWS_CREDENTIAL_SECRET_KEY is optional — Generate on
+ * the Encryption keys screen is the normal path — and is only honored when set.
+ * The dev default is only ever used outside hardened mode.
  */
 export function createNewsCredentialSecretCipher(
   env: NodeJS.ProcessEnv = process.env
