@@ -358,6 +358,52 @@ describe("family key store (#2312 slice 1, #2322 slice 2)", () => {
     expect(opened.secret).toBe("old-data");
   });
 
+  it("generate with a rejected settings value still carries its current key", async () => {
+    invalidateFamilyKeyCache();
+    const env = {
+      NODE_ENV: "production",
+      ...MASTER_ENV,
+      JARVIS_INTEGRATIONS_SECRET_KEY: "short",
+      JARVIS_INTEGRATIONS_SECRET_KEYS: "not-json"
+    };
+    const { scopedDb, store } = createMockDb();
+    const repository = createMockRepository(store);
+
+    // Seal under the short current value alone, so the test fails if the
+    // rejected value is dropped instead of carried.
+    const shortKeyring = {
+      currentKeyId: "v1",
+      keys: new Map([["v1", createHash("sha256").update("short").digest()]]),
+      legacyCandidates: [createHash("sha256").update("short").digest()]
+    };
+    const sealed = new JsonSecretCipher(shortKeyring, "test").encryptJson({
+      secret: "pre-promotion-data"
+    });
+
+    await generateFamilyKey(scopedDb, repository, {
+      family: INTEGRATIONS_FAMILY,
+      actorUserId: "u1",
+      requestId: "r1",
+      env
+    });
+    invalidateFamilyKeyCache();
+    const after = await loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, {
+      NODE_ENV: "production",
+      ...MASTER_ENV
+    });
+    const opened = new JsonSecretCipher(after!, "test").decryptJson(
+      new JsonSecretCipher(after!, "test").parseEnvelope(sealed)
+    );
+    expect(opened.secret).toBe("pre-promotion-data");
+    // The value itself is still unusable, so the status keeps saying so.
+    const statuses = await getFamilyKeyStatus(scopedDb, env);
+    expect(statuses.find((status) => status.family === "integrations")).toEqual({
+      family: "integrations",
+      source: "broken",
+      cause: "env"
+    });
+  });
+
   it("a row that no longer decrypts reports broken and recovers by replacement", async () => {
     invalidateFamilyKeyCache();
     const masterA = { ...MASTER_ENV };

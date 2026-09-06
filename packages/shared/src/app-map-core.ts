@@ -234,7 +234,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "enckeys",
     label: "Encryption keys",
     description:
-      "Generate and rotate the encryption keys that lock stored credentials. A banner here and on the settings home names any key that still needs attention; a key that no longer opens shows as stopped with a Replace key remediation. Keys are never shown.",
+      "Generate and rotate the encryption keys that lock stored credentials. A banner here and on the settings home names any key that still needs attention; a stored key that no longer opens shows as stopped with a Replace key remediation, while an unusable value in the settings file shows as stopped with guidance to fix or remove it there and no button. Keys are never shown.",
     path: "/settings?section=enckeys",
     scope: "admin"
   }

@@ -79,9 +79,7 @@ test("a broken key tells the truth and replaces with confirmation", async ({ pag
   expect(dialogShown).toBe(true);
 });
 
-test("a settings-file cause offers no button, only the fix-it-there sentence", async ({
-  page
-}) => {
+test("a settings-file cause offers no button, only the fix-it-there sentence", async ({ page }) => {
   await mockApi(page, {
     authenticated: true,
     isInstanceAdmin: true,
@@ -103,13 +101,9 @@ test("a settings-file cause offers no button, only the fix-it-there sentence", a
       "Stopped: the value in the settings file cannot be used. Fix or remove it there."
     )
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Replace key" })
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Replace key" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Rotate" })).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Generate", exact: true })
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Generate", exact: true })).toHaveCount(0);
 });
 
 test("admin generates each of the three family keys from the screen", async ({ page }) => {

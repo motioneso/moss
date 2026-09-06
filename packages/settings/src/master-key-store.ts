@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import {
   JsonSecretCipher,
@@ -366,11 +366,14 @@ export async function generateFamilyKey(
   if (existing) {
     retired.push({ keyId: existing.keyId, secret: existing.secret });
   } else if (resolveMossEnv(env, input.family.keyEnvVar) !== undefined) {
-    // A present value can still be unusable (blank or too short): resolveKeyring
-    // rejects it, and there is nothing to catch it into except proceeding without
-    // a carried key. That is fine here — an unusable value could never have sealed
-    // anything in the first place — so the fresh key stands alone and the status
-    // keeps reporting broken until the value itself is fixed or removed.
+    // A present value can still be unusable as a whole (blank, too short for a
+    // hardened environment, or next to a malformed retired list): resolveKeyring
+    // rejects it. Its current key alone may still have sealed real data — a short
+    // value accepted before the install was promoted, or a good current value
+    // beside a bad retired list — so carry just that key rather than dropping
+    // everything. A blank value sealed nothing (the loader falls back to the
+    // development default), so there is nothing to carry for it. The status keeps
+    // reporting broken until the value itself is fixed or removed.
     try {
       const envKeyring = resolveKeyring(
         input.family.keyEnvVar,
@@ -385,7 +388,16 @@ export async function generateFamilyKey(
         }
       }
     } catch {
-      // Unusable settings value: nothing to preserve, generate fresh.
+      const currentSecret = resolveMossEnv(env, input.family.keyEnvVar);
+      if (typeof currentSecret === "string" && currentSecret !== "") {
+        const currentKeyId = resolveMossEnv(env, input.family.keyIdEnvVar) ?? "v1";
+        if (!retired.some((entry) => entry.keyId === currentKeyId)) {
+          retired.push({
+            keyId: currentKeyId,
+            secret: createHash("sha256").update(currentSecret).digest("hex")
+          });
+        }
+      }
     }
   } else {
     // No row, no settings value: outside hardened environments the data may still
