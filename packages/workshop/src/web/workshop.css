@@ -55,6 +55,13 @@
   font-size: var(--text-sm);
 }
 
+/* Supporting status lines on the project list share the excerpt treatment. */
+.workshop-status {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-subtle);
+}
+
 /* The authored empty state has no spacing of its own between the description and a slotted
    action, so the call to action supplies it here rather than in the shared primitive. */
 .workshop-empty-action {

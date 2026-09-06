@@ -39,7 +39,7 @@ export function ProjectError({ title, retry }: { title: string; retry: () => voi
   return (
     <Card>
       <div role="alert">
-        <p>{title}</p>
+        <p className="workshop-status">{title}</p>
         <Button variant="secondary" onClick={retry}>
           Try again
         </Button>
@@ -78,7 +78,11 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
           </ButtonLink>
         }
       />
-      {query.isPending ? <p role="status">Loading your projects…</p> : null}
+      {query.isPending ? (
+        <p className="workshop-status" role="status">
+          Loading your projects…
+        </p>
+      ) : null}
       {query.isError ? (
         <ProjectError
           title="Your projects could not be loaded. Try again to get the latest saved work."
@@ -111,10 +115,7 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
               title={<Link to={`/workshop/${project.id}`}>{project.title}</Link>}
               excerpt={project.initialRequest}
               meta={
-                <>
-                  <Badge tone="neutral">Talking it through</Badge>
-                  <span className="jds-caption">{formatStartedOn(project.createdAt, locale)}</span>
-                </>
+                <span className="jds-caption">{formatStartedOn(project.createdAt, locale)}</span>
               }
             />
           ))}

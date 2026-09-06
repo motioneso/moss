@@ -153,7 +153,7 @@
   background: var(--masthead-action-bg);
   color: var(--masthead-action-fg);
   border-color: var(--masthead-action-bg);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
 .jds-btn--field:hover {
   background: var(--gold-strong);
