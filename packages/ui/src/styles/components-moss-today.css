@@ -667,7 +667,7 @@
 /* RowIndex: a ruled list of full-width rows, never a filled block on hover. */
 .jds-index {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: minmax(auto, 24ch) 1fr auto;
   column-gap: clamp(1rem, 3vw, 2.75rem);
   margin-bottom: var(--space-8);
 }
@@ -698,6 +698,7 @@
   font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
   line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
 }
 .jds-index__excerpt {
   grid-column: 2;
