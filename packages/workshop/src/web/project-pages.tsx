@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
 import {
-  Badge,
   Button,
   ButtonLink,
   Card,
@@ -11,7 +10,7 @@ import {
   RowIndex,
   RowIndexItem
 } from "@moss/ui";
-import { ApiError, randomUuid } from "@moss/module-web-sdk";
+import { ApiError, randomUuid, usePageTrail } from "@moss/module-web-sdk";
 import type { LocaleSettingsDto, WorkshopProjectCursor } from "@moss/shared";
 import { formatDate, useUserLocale } from "./locale.js";
 import {
@@ -292,22 +291,27 @@ function WorkshopProjectContent({
       void client.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
     }
   });
+  // The top bar carries the project's name while this page is mounted; before the project
+  // loads there is no name to show, so the trail stays clear and the plain section title stands.
+  usePageTrail(
+    project.data
+      ? {
+          name: project.data.project.title,
+          meta: `Started ${formatStartedOn(project.data.project.createdAt, locale)}`
+        }
+      : { name: "" }
+  );
   if (!project.data) {
     if (project.isError)
       return (
-        <>
-          <Link className="workshop-back" to="/workshop">
-            ← Your projects
-          </Link>
-          <ProjectError
-            title={
-              project.error instanceof ApiError && project.error.status === 404
-                ? "This project is not available to you."
-                : "This project could not be loaded."
-            }
-            retry={() => void project.refetch()}
-          />
-        </>
+        <ProjectError
+          title={
+            project.error instanceof ApiError && project.error.status === 404
+              ? "This project is not available to you."
+              : "This project could not be loaded."
+          }
+          retry={() => void project.refetch()}
+        />
       );
     return <p role="status">Loading your project…</p>;
   }
@@ -320,21 +324,6 @@ function WorkshopProjectContent({
     !messages.isFetching;
   return (
     <>
-      <Link className="workshop-back" to="/workshop">
-        ← Your projects
-      </Link>
-      <header className="workshop-project-heading">
-        <div className="workshop-project-heading__text">
-          <p className="jds-eyebrow">Project</p>
-          <h1>{record.title}</h1>
-        </div>
-        <div className="workshop-project-heading__meta">
-          <Badge tone="steel" pill dot>
-            Only you
-          </Badge>
-          <span className="jds-caption">Started {formatStartedOn(record.createdAt, locale)}</span>
-        </div>
-      </header>
       {project.isError ? (
         <ProjectError
           title="The project could not be refreshed. Reload it before making changes."

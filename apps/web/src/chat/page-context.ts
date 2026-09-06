@@ -37,6 +37,7 @@ import type {
 } from "@moss/shared";
 
 import { resolvePageHeading } from "../app-route-metadata.js";
+import { getPageTrailName } from "../shell/page-trail.js";
 
 const MAX_HEADINGS = 12;
 const MAX_BUTTONS = 20;
@@ -349,6 +350,10 @@ export function capturePageContextSnapshot(): PageContextSnapshotDto {
   } catch {
     // fall back to the raw route
   }
+  // Inside a project the top bar carries the trail, so the page title alone only says which
+  // section this is — append the trail's name so Moss knows which project you are in.
+  const trailName = getPageTrailName();
+  if (trailName) pageTitle = `${pageTitle} / ${trailName}`;
 
   try {
     const { candidates, focused, selectedText, errors } = collectPageContextCandidates(

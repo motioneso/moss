@@ -9,7 +9,7 @@ import {
   useState,
   useSyncExternalStore
 } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router";
+import { Link, NavLink, useLocation, useNavigate } from "react-router";
 
 import { listNotifications, listThemes, sendChatTurn, signOut } from "../api/client";
 import { useAssistantName } from "../api/use-assistant-name";
@@ -34,6 +34,7 @@ import { HeaderWeather } from "../today/header-weather";
 import { applyThemeTokens } from "../theme/theme-runtime";
 import { CommandPalette } from "./command-palette";
 import { NAV_ICON_MAP } from "./nav-icons";
+import { PageTrailProvider, usePageTrailDisplay } from "./page-trail";
 import { WORKSHOP_MODULE_ID } from "@moss/shared";
 import {
   loadShellColorMode,
@@ -346,6 +347,7 @@ export function AppShell(props: AppShellProps) {
 
   return (
     <div className="app-frame">
+      <PageTrailProvider>
       <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
         <div className="brand-lockup">
           <span className="brand-mark">
@@ -410,15 +412,12 @@ export function AppShell(props: AppShellProps) {
             <Menu size={20} aria-hidden="true" />
           </button>
 
-          <div className="topbar-titles">
-            <div className="topbar-title-row">
-              <span className="topbar-title">{title}</span>
-              {showSettingsButton ? (
-                <ModuleSettingsButton moduleId={activeModuleId} moduleName={title} />
-              ) : null}
-            </div>
-            {subtitle ? <span className="topbar-subtitle">{subtitle}</span> : null}
-          </div>
+          <TopbarTitles
+            title={title}
+            subtitle={subtitle}
+            showSettingsButton={showSettingsButton}
+            moduleId={activeModuleId}
+          />
 
           {onTodayPage ? (
             <div className="topbar-context">
@@ -474,6 +473,51 @@ export function AppShell(props: AppShellProps) {
       />
 
       {dockChat ? null : chatDrawer}
+      </PageTrailProvider>
+    </div>
+  );
+}
+
+/**
+ * The top bar's title area. While a page holds the trail (a Workshop project), the bar shows
+ * the section as the way back, then the page name and its meta note — in place of the plain
+ * title, never beside it. Otherwise the ordinary title and subtitle render unchanged.
+ */
+function TopbarTitles(props: {
+  readonly title: string;
+  readonly subtitle: string;
+  readonly showSettingsButton: boolean;
+  readonly moduleId: string | null;
+}) {
+  const trail = usePageTrailDisplay();
+  if (!trail) {
+    return (
+      <div className="topbar-titles">
+        <div className="topbar-title-row">
+          <span className="topbar-title">{props.title}</span>
+          {props.showSettingsButton && props.moduleId ? (
+            <ModuleSettingsButton moduleId={props.moduleId} moduleName={props.title} />
+          ) : null}
+        </div>
+        {props.subtitle ? <span className="topbar-subtitle">{props.subtitle}</span> : null}
+      </div>
+    );
+  }
+  return (
+    <div className="topbar-titles">
+      <div className="topbar-title-row topbar-crumb">
+        <Link className="topbar-title topbar-title--link" to={trail.sectionPath}>
+          {trail.sectionLabel}
+        </Link>
+        <span className="topbar-crumb__sep" aria-hidden="true">
+          /
+        </span>
+        <span className="topbar-crumb__now">{trail.name}</span>
+        {trail.meta ? <span className="topbar-crumb__meta">{trail.meta}</span> : null}
+        {props.showSettingsButton && props.moduleId ? (
+          <ModuleSettingsButton moduleId={props.moduleId} moduleName={trail.name} />
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -57,7 +57,9 @@ export const workshopModuleManifest = {
     {
       id: "workshop",
       label: "The Workshop",
-      description: "Create projects, save requirements and messages, and revisit your work.",
+      description:
+        "Create projects, save requirements and messages, and revisit your work. Inside a " +
+        "project the top bar shows The Workshop as the way back, followed by the project name.",
       path: "/workshop",
       icon: "wrench",
       order: 900,

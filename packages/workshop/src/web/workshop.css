@@ -17,38 +17,8 @@
   flex-wrap: wrap;
 }
 
-/* ---- Page heading: title block on the left, primary action pinned right, ruled off ---- */
-
-.workshop-project-heading {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-6);
-  flex-wrap: wrap;
-  padding-bottom: var(--space-5);
-  margin-bottom: var(--space-7);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.workshop-project-heading__text {
-  min-width: 0;
-  flex: 1 1 34ch;
-}
-
-.workshop-project-heading h1 {
-  margin: var(--space-1) 0 0;
-  /* A saved request can be a long sentence; wrap it rather than letting it clip. */
-  overflow-wrap: anywhere;
-  text-wrap: balance;
-}
-
-.workshop-project-heading__meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
+/* The create form keeps its own back link until slice 5 replaces the form; the detail page's
+   back link is gone with its heading. */
 .workshop-back {
   display: inline-block;
   margin-bottom: var(--space-4);
@@ -131,11 +101,6 @@
 @media (max-width: 767px) {
   .workshop-page {
     padding: var(--space-4);
-  }
-
-  .workshop-project-heading {
-    align-items: flex-start;
-    margin-bottom: var(--space-5);
   }
 
   .workshop-mobile-tabs {

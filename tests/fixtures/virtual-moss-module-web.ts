@@ -8,8 +8,8 @@ import type { ModuleWebContribution } from "@moss/module-web-sdk";
  * does, without every consuming test needing its own `vi.mock("virtual:moss-module-web", ...)`.
  *
  * Mirrors exactly what `packages/settings-ui/src/scanner.ts`'s `scanModuleWeb` would emit for the
- * modules with a `./web` export (sports, news) — keep this in sync if a future phase docks
- * another module's `./web` contribution.
+ * modules with a `./web` export (sports, news, workshop) — keep this in sync if a future phase
+ * docks another module's `./web` contribution.
  */
 export const MODULE_WEB_ROUTES = [
   {
@@ -31,6 +31,16 @@ export const MODULE_WEB_ROUTES = [
     icon: "trophy",
     order: 35,
     permissionId: "sports.view"
+  },
+  {
+    moduleId: "workshop",
+    moduleName: "Workshop",
+    id: "workshop",
+    label: "The Workshop",
+    path: "/workshop",
+    icon: "wrench",
+    order: 900,
+    permissionId: "workshop.view"
   }
 ];
 
@@ -39,5 +49,6 @@ export const MODULE_WEB_CONTRIBUTIONS: ReadonlyArray<{
   readonly load: () => Promise<{ readonly default: ModuleWebContribution }>;
 }> = [
   { moduleId: "news", load: () => import("@moss/news/web") },
-  { moduleId: "sports", load: () => import("@moss/sports/web") }
+  { moduleId: "sports", load: () => import("@moss/sports/web") },
+  { moduleId: "workshop", load: () => import("@moss/workshop/web") }
 ];

@@ -6,6 +6,10 @@ import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MeResponse, WorkshopFeedEntry, WorkshopProject } from "@moss/shared";
 import { WorkshopProjectRoutes } from "../../packages/workshop/src/web/project-routes.js";
+import {
+  PageTrailProvider,
+  usePageTrailValue
+} from "../../apps/web/src/shell/page-trail.js";
 
 const project: WorkshopProject = {
   id: "a0000000-0000-4000-8000-000000000001",
@@ -57,6 +61,12 @@ function Location() {
     </>
   );
 }
+// Slice 3: the detail page carries no in-page heading — its title lives in the shell's top-bar
+// trail, so this probe stands in for the top bar and asserts what the page published there.
+function TrailName() {
+  const trail = usePageTrailValue();
+  return <output aria-label="Page trail">{trail?.name ?? ""}</output>;
+}
 async function flush() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -76,10 +86,13 @@ async function render(path: string) {
     root.render(
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={[path]}>
-          <Location />
-          <Routes>
-            <Route path="/workshop/*" element={<WorkshopProjectRoutes />} />
-          </Routes>
+          <PageTrailProvider>
+            <Location />
+            <TrailName />
+            <Routes>
+              <Route path="/workshop/*" element={<WorkshopProjectRoutes />} />
+            </Routes>
+          </PageTrailProvider>
         </MemoryRouter>
       </QueryClientProvider>
     );
@@ -324,7 +337,9 @@ describe("Workshop project browser interactions", () => {
       container.querySelector<HTMLAnchorElement>(`a[href="/workshop/${otherProject.id}"]`)!.click()
     );
     await eventually(() =>
-      expect(container.querySelector("h1")?.textContent).toBe(otherProject.title)
+      expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe(
+        otherProject.title
+      )
     );
     expect(field("project-message").value).toBe("");
   });

@@ -21,6 +21,7 @@ import type { ReactNode } from "react";
  * `./runtime`'s `h`/`Fragment` as the JSX pragma target.
  */
 export * from "@moss/ui";
+export * from "./page-trail.js";
 export * from "./runtime.js";
 export interface ModuleWebContribution {
   /** Must match the module's backend manifest `id` — asserted at scan/test time. */
