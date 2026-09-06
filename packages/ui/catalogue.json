@@ -76,7 +76,7 @@
         {
           "prop": "variant",
           "kind": "enum",
-          "values": ["primary", "secondary", "quiet", "accentSoft", "danger"],
+          "values": ["primary", "secondary", "quiet", "accentSoft", "danger", "field"],
           "optional": true,
           "default": "primary"
         },
@@ -100,7 +100,7 @@
         {
           "prop": "variant",
           "kind": "enum",
-          "values": ["primary", "secondary", "quiet", "accentSoft", "danger"],
+          "values": ["primary", "secondary", "quiet", "accentSoft", "danger", "field"],
           "optional": true,
           "default": "primary"
         },
@@ -376,6 +376,15 @@
       "files": [{ "path": "packages/ui/src/peek-panel.tsx", "type": "registry:ui" }],
       "dependencies": [],
       "exports": ["PeekPanel"],
+      "options": [],
+      "flags": []
+    },
+    {
+      "name": "row-index",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/row-index.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["RowIndex", "RowIndexItem"],
       "options": [],
       "flags": []
     },

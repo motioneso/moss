@@ -10,59 +10,11 @@
   padding: var(--space-7) var(--space-8) var(--space-11);
 }
 
-.workshop-head {
-  padding-bottom: var(--space-6);
-}
-
-.workshop-lede {
-  margin: var(--space-2) 0 0;
-  max-width: 62ch;
-  color: var(--text-muted);
-}
-
-.workshop-groups {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-}
-
-.workshop-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.workshop-row .jds-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
 .workshop-actions {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
-}
-
-.workshop-spacer {
-  flex: 1;
-}
-
-.workshop-log {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--text-sm);
-}
-
-.workshop-log-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
 }
 
 /* ---- Page heading: title block on the left, primary action pinned right, ruled off ---- */
@@ -103,45 +55,11 @@
   font-size: var(--text-sm);
 }
 
-/* ---- Project list: a card grid, so a wide window shows several projects side by side ---- */
-
-.workshop-project-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: var(--space-4);
-  margin-bottom: var(--space-7);
-}
-
-.workshop-project-list .jds-card {
-  /* Equal-height cards across a row, with the meta line settling to the bottom edge. */
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  height: 100%;
-  position: relative;
-}
-
-.workshop-project-card__title {
+/* Supporting status lines on the project list share the excerpt treatment. */
+.workshop-status {
   margin: 0;
-  font-size: var(--text-lg);
-  overflow-wrap: anywhere;
-}
-
-/* The title link covers the whole card, so the card is clickable without nesting interactive
-   elements inside a link (which would break the keyboard order and the accessible name). */
-.workshop-project-card__title a::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-}
-
-.workshop-project-card__foot {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: auto;
-  padding-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-subtle);
 }
 
 /* The authored empty state has no spacing of its own between the description and a slotted
@@ -154,13 +72,6 @@
   display: flex;
   justify-content: center;
   margin-bottom: var(--space-7);
-}
-
-.workshop-project-footer {
-  margin: 0;
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border-subtle);
-  font-size: var(--text-sm);
 }
 
 .workshop-project-messages,
@@ -200,16 +111,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: var(--space-1) 0 0;
-}
-
-.workshop-project-excerpt {
-  margin: 0;
-  color: var(--text-muted);
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .workshop-mobile-tabs {

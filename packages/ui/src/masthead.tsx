@@ -1,19 +1,26 @@
 import { type ReactNode } from "react";
 
+export type MastheadTone = "default" | "field";
+
 export interface MastheadProps {
-  readonly eyebrow: ReactNode;
+  readonly eyebrow?: ReactNode;
   readonly title: ReactNode;
   readonly accent?: ReactNode;
   readonly lede?: ReactNode;
   readonly aside?: ReactNode;
+  readonly tone?: MastheadTone;
 }
 
 export function Masthead(props: MastheadProps) {
+  const { tone = "default" } = props;
+  const classes = ["jds-masthead", tone === "field" ? "jds-masthead--field" : null]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <header className="jds-masthead">
+    <header className={classes}>
       <div className="jds-masthead__row">
         <div className="jds-masthead__main">
-          <p className="jds-masthead__eyebrow">{props.eyebrow}</p>
+          {props.eyebrow ? <p className="jds-masthead__eyebrow">{props.eyebrow}</p> : null}
           <h1 className="jds-masthead__title">
             <span>{props.title}</span>
             {props.accent ? (
