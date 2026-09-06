@@ -1,6 +1,12 @@
 import { type AnchorHTMLAttributes, type ReactNode } from "react";
 
-export type ButtonLinkVariant = "primary" | "secondary" | "quiet" | "accentSoft" | "danger" | "field";
+export type ButtonLinkVariant =
+  | "primary"
+  | "secondary"
+  | "quiet"
+  | "accentSoft"
+  | "danger"
+  | "field";
 export type ButtonLinkSize = "sm" | "md" | "lg";
 
 export interface ButtonLinkProps extends Omit<

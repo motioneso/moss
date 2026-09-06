@@ -1,7 +1,16 @@
 import { useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
-import { Badge, Button, ButtonLink, Card, EmptyState, Masthead, RowIndex, RowIndexItem } from "@moss/ui";
+import {
+  Badge,
+  Button,
+  ButtonLink,
+  Card,
+  EmptyState,
+  Masthead,
+  RowIndex,
+  RowIndexItem
+} from "@moss/ui";
 import { ApiError, randomUuid } from "@moss/module-web-sdk";
 import type { LocaleSettingsDto, WorkshopProjectCursor } from "@moss/shared";
 import { formatDate, useUserLocale } from "./locale.js";
@@ -106,9 +115,7 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
               meta={
                 <>
                   <Badge tone="neutral">Talking it through</Badge>
-                  <span className="jds-caption">
-                    {formatStartedOn(project.createdAt, locale)}
-                  </span>
+                  <span className="jds-caption">{formatStartedOn(project.createdAt, locale)}</span>
                 </>
               }
             />
