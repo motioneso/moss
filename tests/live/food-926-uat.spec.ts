@@ -2,7 +2,9 @@
 // real API, real Postgres with RLS, real module install. Nothing here is mocked — no
 // page.route(), no fixtures. See docs/DEVELOPMENT_STANDARDS.md → Live-Path Gate.
 //
-// Run with:  npx playwright test --config playwright.live.config.ts
+// Run with:
+//   LIVE_OWNER_PASSWORD=... \
+//     npx playwright test --config playwright.live.config.ts food-926
 // Requires:  pnpm dev:api (:3000) + pnpm dev:web (:5173), Food staged in data/modules/.
 //
 // SCOPE — read this before trusting a green run.

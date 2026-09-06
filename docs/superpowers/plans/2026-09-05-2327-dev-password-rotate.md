@@ -3,6 +3,16 @@
 Spec: issue #2327 body carries Ben's ruling directly; no separate spec doc. Not a UI/module
 feature, so the module mockup gate does not apply.
 
+## Honest status (read this first)
+
+Scrubbing the working files does nothing for the past. The old password is still present
+in 88 commits of public history and in 30 files on the main branch, readable by anyone,
+whether or not this work merges. Nothing here removes it from history. Rotating the
+password is therefore the only thing that actually closes this, not an optional follow-up
+step — and rotation is deliberately scheduled for the very end of the run, after every
+dependent lane is clear, so this pull request may well merge before the password changes.
+A green regression guard means the working files are clean, never that the password is gone.
+
 ## Seams check
 
 - Four live test files hardcode the owner credential the same way:
