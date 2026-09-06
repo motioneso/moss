@@ -58,7 +58,7 @@ export const workshopModuleManifest = {
       id: "workshop",
       label: "The Workshop",
       description:
-        "Create private projects, save requirements and messages, and revisit your work.",
+        "Create projects, save requirements and messages, and revisit your work.",
       path: "/workshop",
       icon: "wrench",
       order: 900,
@@ -69,7 +69,7 @@ export const workshopModuleManifest = {
     {
       id: "workshop.view",
       label: "View the workshop",
-      description: "Manage your private Workshop projects and see your earlier module builds.",
+      description: "Manage your Workshop projects.",
       scope: "admin",
       actions: ["view"]
     }
