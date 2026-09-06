@@ -30,7 +30,7 @@ _No enum or boolean props._
 
 ## button-link
 
-- **variant** (optional, default `primary`): `primary`, `secondary`, `quiet`, `accentSoft`, `danger`
+- **variant** (optional, default `primary`): `primary`, `secondary`, `quiet`, `accentSoft`, `danger`, `field`
 - **size** (optional, default `md`): `sm`, `md`, `lg`
 - **block** (optional boolean flag)
 

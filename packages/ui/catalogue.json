@@ -76,7 +76,7 @@
         {
           "prop": "variant",
           "kind": "enum",
-          "values": ["primary", "secondary", "quiet", "accentSoft", "danger"],
+          "values": ["primary", "secondary", "quiet", "accentSoft", "danger", "field"],
           "optional": true,
           "default": "primary"
         },
