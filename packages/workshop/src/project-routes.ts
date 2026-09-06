@@ -42,7 +42,7 @@ export function registerWorkshopProjectRoutes(
 ): void {
   // Encapsulation keeps these curated errors local to Workshop, including schema failures.
   void server.register(async (app) => {
-    app.setErrorHandler((error, _request, reply) => {
+    app.setErrorHandler((error, request, reply) => {
       if (error instanceof WorkshopAdminRequiredError)
         return reply.code(403).send({ error: error.message });
       if (
@@ -63,6 +63,9 @@ export function registerWorkshopProjectRoutes(
         });
       if ((error as { statusCode?: number }).statusCode === 401)
         return reply.code(401).send({ error: "Sign in to open Workshop." });
+      // The browser keeps the generic message (an unexpected error can carry
+      // private content); the real cause goes to the server log only.
+      request.log.error({ err: error }, "workshop request failed");
       return reply
         .code(500)
         .send({ error: "Workshop could not complete this request. Try again." });

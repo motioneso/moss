@@ -116,4 +116,29 @@ describe("generateStructured", () => {
     expect(result.ok).toBe(true);
     expect(result).not.toHaveProperty("sources");
   });
+
+  it("throws away a late answer that arrives after the caller already cancelled (#2276)", async () => {
+    const controller = new AbortController();
+    const deps: GenerateStructuredDeps = {
+      ...buildDeps({}),
+      createCliStructuredAdapter: () => ({
+        generateStructured: async () => {
+          controller.abort();
+          return { rawText: '{"ok":true}', usage: { inputTokens: 1, outputTokens: 1 } };
+        }
+      })
+    };
+    const result = await generateStructured(
+      scopedDb,
+      {
+        service: "module.web-research",
+        schema: { type: "object", properties: {} },
+        prompt: "x",
+        signal: controller.signal
+      },
+      deps
+    );
+
+    expect(result).toEqual({ ok: false, error: "aborted" });
+  });
 });
