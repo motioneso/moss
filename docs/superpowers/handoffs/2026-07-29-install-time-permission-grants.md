@@ -80,7 +80,7 @@ needs a new migration plus a six-site contract sweep. The plan's Tasks 3–5 do 
 ## Environment
 
 Dev API `3097`, web `5197`, reachable at `http://100.64.98.99:5197`. Ben's dev login is
-`ben@ben.com` / `jarvistest123!` — **dev DB only**. Postgres schema is `app`, not `public`:
+the development sign-in details (kept outside the repository) — **dev DB only**. Postgres schema is `app`, not `public`:
 `docker exec jarv1s-postgres psql -U postgres -d jarv1s`. `jarv1s-prod-*` containers and the
 `10.252` subnet are PROD — never touch. **Ben is mid-test on the shared dev instance: message him
 before you restart the API or worker.**

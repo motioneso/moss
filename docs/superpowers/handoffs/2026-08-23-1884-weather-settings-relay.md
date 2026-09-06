@@ -30,7 +30,7 @@ Plan itself is committed at `d1c2a4c83`.
 ## Not yet done — next steps in order
 
 1. **Run the UAT spec live** on the dev instance (see CLAUDE.md/memory: dev instance
-   `http://192.168.50.36:5173`, API `:3000`, login `ben@ben.com` / `jarvistest123!`). Use the `run`
+   `http://192.168.50.36:5173`, API `:3000`, login using the development sign-in details (kept outside the repository)). Use the `run`
    skill or the project's normal Playwright UAT invocation for
    `tests/uat/specs/1571-weather-location-and-units.uat.spec.ts`. This is the live-path proof
    required before wrap-up — confirms the combined card renders, both `C`/`F` states show

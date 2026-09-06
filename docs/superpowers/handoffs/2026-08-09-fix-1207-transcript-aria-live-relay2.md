@@ -30,7 +30,7 @@ collide with other sessions:
   `dom-proof-1207.mjs`'s comments / this doc; recreate if the file's gone: see
   `JARVIS_AUTH_TRUSTED_ORIGINS="http://localhost:3210,http://localhost:5210,http://192.168.50.36:5210,http://localhost:3000"`,
   `BETTER_AUTH_SECRET="dev-throwaway-secret-1207"`).
-- Sign-in works: `ben@ben.com` / `jarvistest123!` (Ben's standing dev credential, see
+- Sign-in works with Ben's standing dev credential, kept outside the repository (see
   `dev-instance-lan-spinup-trusted-origins` memory).
 - Confirm still alive before reusing: `ss -ltnp | grep -E ':3210|:5210'`. If dead, restart per
   `dev-preview-recipe` / `host-dev-install-seam-env-pair` memories (`memory_recall` those two

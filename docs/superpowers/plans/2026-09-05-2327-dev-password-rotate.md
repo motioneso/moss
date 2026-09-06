@@ -6,7 +6,7 @@ feature, so the module mockup gate does not apply.
 ## Seams check
 
 - Four live test files hardcode the owner credential the same way:
-  `const OWNER = { email: "ben@ben.com", password: "jarvistest123!" };` —
+  `const OWNER = { email: "ben@ben.com", password: "<old dev password>" };` —
   `tests/live/food-926-uat.spec.ts:29`, `tests/live/integrations-2162-uat.spec.ts:15`,
   `tests/live/workshop-1888-uat.spec.ts:10`, `tests/live/workshop-1945-uat.spec.ts:15`.
 - Existing convention for live-test env vars: `process.env.LIVE_*` with a default, and
@@ -42,16 +42,16 @@ feature, so the module mockup gate does not apply.
   ```
 - Owner email stays a literal (not a secret); only the password moves to the environment.
 - Verify: `LIVE_OWNER_PASSWORD= tsx -e "require('./tests/live/food-926-uat.spec.ts')"` is not
-  meaningful for a Playwright spec, so verification is instead: `grep -c jarvistest123
-  tests/live/*.ts` → expect `0` for all four, and a manual read of each diff confirming the throw
+  meaningful for a Playwright spec, so verification is instead: a grep for the old dev
+  password across `tests/live/*.ts` (see the repo-wide grep below) → expect no matches, and a manual read of each diff confirming the throw
   message names `LIVE_OWNER_PASSWORD`.
 
 **Task 2 — scrub the 26 documents.**
-- Replace each occurrence of `` `ben@ben.com` / `jarvistest123!` `` (and any inline variant found
+- Replace each occurrence of the old dev credential pair (and any inline variant found
   by grep) with a short clause: "the development sign-in details are kept outside the repository."
   Keep surrounding sentence structure readable — this is prose editing, not a mechanical strip.
 - Do not delete any file.
-- Verify: `grep -rl jarvistest123 docs/ STATE-1759-1762.md` → expect no output (exit 1 from grep,
+- Verify: a grep for the old dev password across `docs/` and `STATE-1759-1762.md` → expect no output (exit 1 from grep,
   captured as `EXIT=$?` not piped).
 
 **Task 3 — add the regression guard.**
@@ -109,9 +109,9 @@ pnpm check:no-dev-password > /tmp/check-pw.log 2>&1; echo "EXIT=$?"
 pnpm lint > /tmp/lint.log 2>&1; echo "EXIT=$?"
 pnpm format:check > /tmp/fmt.log 2>&1; echo "EXIT=$?"
 pnpm typecheck > /tmp/tc.log 2>&1; echo "EXIT=$?"
-grep -rl jarvistest123 . --exclude-dir=node_modules --exclude-dir=.git > /tmp/grep-pw.log 2>&1; echo "EXIT=$?"
+grep -rl "<old dev password, see the coord-briefs record>" . --exclude-dir=node_modules --exclude-dir=.git > /tmp/grep-pw.log 2>&1; echo "EXIT=$?"
 ```
 Expected: all `EXIT=0` except the final grep, which must be `EXIT=1` (no matches) once the old
 password string itself is no longer present in plaintext anywhere the guard's own obfuscation
-doesn't hide it from a plain grep — the checker's self-reference must not reintroduce a plain
-`jarvistest123` token, so this grep is the real proof, not the check script's own exit code.
+doesn't hide it from a plain grep — the checker's self-reference must not reintroduce the plain
+old-password token, so this grep is the real proof, not the check script's own exit code.

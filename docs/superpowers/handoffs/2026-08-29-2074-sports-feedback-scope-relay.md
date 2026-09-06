@@ -31,7 +31,7 @@ Sign every message to it with your own pane id.
     `localhost:5173` and reachable on the LAN at `http://192.168.50.36:5173`.
   - Remember to stop both by these exact PIDs when done - never kill by name pattern, prod's own
     worker process looks the same in `ps`.
-- Test account `ben@ben.com` / `jarvistest123!` had no followed teams, so the Followed strip on
+- Test account the development sign-in details (kept outside the repository) had no followed teams, so the Followed strip on
   `/sports` was empty (just a "Follow your teams" prompt) and nothing could be visually checked.
   Fixed by following the Los Angeles Lakers through Settings > Modules > Sports > the "Find a team
   or league..." search box > click the "Follow Los Angeles Lakers" result. That team is now

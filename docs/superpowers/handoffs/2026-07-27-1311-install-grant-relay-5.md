@@ -72,7 +72,7 @@ TDD this like finding #1: commit separately from Task 3.
 4. **Task 4**: live-path UAT proof. Dev instance still up, reuse — **re-check PIDs first, they
    drift across relays**: API :3099 (confirmed alive this relay, actual PID `1085121` not the
    stale `928691/928754` from relay-4 — `ss -ltnp | grep 3099` to get the current one), web :5175
-   (PID `929441` confirmed alive). Login `ben@ben.com` / `jarvistest123!`
+   (PID `929441` confirmed alive). Login using the development sign-in details (kept outside the repository)
    (`6dc52034-a0ee-4944-9bfc-ef477af4370b`). Log at `/tmp/1311-dev/api.log`. Record bounded DOM,
    network, and DB assertions in a `gh pr comment`.
 5. **Task 5**: PR description per plan lines 165-177 — tasks-was-broken correction,

@@ -52,7 +52,7 @@ trust a pane number from this doc; it has already relayed itself once mid-run).
    to coordinator.
 3. Live diagnosis (spec requires this AFTER the fix ships): call `/api/mcp` `notes.search` on the
    real dev instance (`http://192.168.50.36:5173` / API `:3000`, login `ben@ben.com` /
-   `jarvistest123!`) and read the surfaced `cause` in the error text to identify what's actually
+   the development sign-in details (kept outside the repository)) and read the surfaced `cause` in the error text to identify what's actually
    broken in the current live vault-search outage. Record the finding in the PR. Do not fix an
    unrelated dependency without that evidence — spec non-goal.
 

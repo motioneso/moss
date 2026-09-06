@@ -56,7 +56,7 @@ Do not re-ask for approval. Continue straight to finishing the build and opening
     200.
   - This is a normal from-source dev instance against the shared dev Postgres (`jarv1s-postgres`
     :55433, db `jarv1s`) — the same one described in memory `dev-preview-recipe`. Login
-    `ben@ben.com` / `jarvistest123!`.
+    the development sign-in details (kept outside the repository).
   - **You must stop both PIDs by exact PID (`kill 931471 931688`, confirm with `ps -p`) once the
     live-proof step below is done, before you report to the coordinator.** Never kill by name
     pattern — a stray unrelated `pnpm dev:api` process (PID 1121269, not listening on any port, not
