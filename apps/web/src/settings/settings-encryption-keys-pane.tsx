@@ -14,6 +14,14 @@ const FAMILY_LABELS: Record<string, { label: string; desc: string }> = {
   integrations: {
     label: "Integrations connections",
     desc: "Locks saved connection credentials for integrations."
+  },
+  module_credential: {
+    label: "Module credentials",
+    desc: "Locks saved credentials for external modules."
+  },
+  news_credential: {
+    label: "News publisher keys",
+    desc: "Locks saved publisher keys for news sources."
   }
 };
 

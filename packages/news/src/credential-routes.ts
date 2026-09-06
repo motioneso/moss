@@ -61,7 +61,7 @@ export type NewsCredentialSourceStore = Pick<
 export interface NewsCredentialRouteDependencies {
   readonly dataContext: DataContextRunner;
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
-  readonly cipher: NewsCredentialCipherPort;
+  readonly resolveCipher: (scopedDb: DataContextDb) => Promise<NewsCredentialCipherPort | null>;
   readonly connections: NewsPublisherConnectionPort;
   readonly sources: NewsCredentialSourceStore;
   readonly boss?: PgBoss | null;
@@ -177,7 +177,19 @@ export function registerNewsCredentialRoutes(
 ): void {
   const credentials: NewsCredentialStore =
     dependencies.credentials ?? new NewsCredentialRepository();
-  const { connections, cipher, sources } = dependencies;
+  const { connections, resolveCipher, sources } = dependencies;
+
+  async function encryptCredential(db: DataContextDb, apiKey: string) {
+    const cipher = await resolveCipher(db);
+    if (!cipher) {
+      throw new HttpError(
+        503,
+        "News credentials are paused until an encryption key is set up. " +
+          "Ask an admin to open Settings, Encryption keys, and press Generate."
+      );
+    }
+    return cipher.encrypt({ apiKey });
+  }
 
   server.post(
     "/api/news/sources/credentialed",
@@ -194,12 +206,15 @@ export function registerNewsCredentialRoutes(
         const outcome = await validateKeySafely(connections, input.connectionId, input.apiKey);
         if (!outcome.ok) throw validationFailure(outcome.reason);
 
-        const envelope = cipher.encrypt({ apiKey: input.apiKey });
         // withDataContext is one transaction: the source and the credential commit
         // together or not at all.
         const created = await dependencies.dataContext.withDataContext(
           accessContext,
           async (db) => {
+            // The family key is resolved per use inside the same transaction: it
+            // can rotate under a running process, and a cipher built once at boot
+            // would keep the old key.
+            const envelope = await encryptCredential(db, input.apiKey);
             const source = await createSourceForConnection(db, sources, descriptor);
             const row = await credentials.insertCredential(db, {
               sourceId: source.id,
@@ -262,10 +277,10 @@ export function registerNewsCredentialRoutes(
         );
         if (!outcome.ok) throw validationFailure(outcome.reason);
 
-        const envelope = cipher.encrypt({ apiKey: input.apiKey });
         const rotated = await dependencies.dataContext.withDataContext(
           accessContext,
           async (db) => {
+            const envelope = await encryptCredential(db, input.apiKey);
             const result = await credentials.rotateCredential(db, id, envelope);
             if (!result) return null;
             await sources.updateSourceHealth(db, id, "healthy");

@@ -6,8 +6,6 @@ import {
   createNewsCredentialLookup,
   type NewsCredentialEnvelopeReader
 } from "../../packages/news/src/source/credential-lookup.js";
-import type { NewsCredentialCipherPort } from "../../packages/news/src/credential-cipher-port.js";
-
 const PLAINTEXT_KEY = "the-persons-own-key";
 const CIPHER_DETAIL = "keyring entry news-2026 is missing";
 
@@ -43,24 +41,27 @@ function reader(
   };
 }
 
-function cipher(behaviour: "ok" | "throws" | "empty"): NewsCredentialCipherPort {
-  return {
-    encrypt: () => ENVELOPE,
-    decrypt: () => {
-      if (behaviour === "throws") throw new Error(CIPHER_DETAIL);
-      return { apiKey: behaviour === "empty" ? "" : PLAINTEXT_KEY };
-    }
+function decryptApiKey(
+  behaviour: "ok" | "throws" | "empty" | "missing"
+): (
+  credentialContext: DataContextDb,
+  envelope: EncryptedSecret
+) => Promise<{ readonly apiKey: string } | null> {
+  return async () => {
+    if (behaviour === "missing") return null;
+    if (behaviour === "throws") throw new Error(CIPHER_DETAIL);
+    return { apiKey: behaviour === "empty" ? "" : PLAINTEXT_KEY };
   };
 }
 
 function lookupWith(
   readerResult: Parameters<typeof reader>[0],
-  cipherBehaviour: "ok" | "throws" | "empty" = "ok"
+  cipherBehaviour: "ok" | "throws" | "empty" | "missing" = "ok"
 ) {
   const envelopeReader = reader(readerResult);
   const port = createNewsCredentialLookup({
     reader: envelopeReader,
-    cipher: cipher(cipherBehaviour)
+    decryptApiKey: decryptApiKey(cipherBehaviour)
   });
   return {
     envelopeReader,
@@ -138,6 +139,15 @@ describe("news credential lookup", () => {
       expect(JSON.stringify(failure)).not.toContain(PLAINTEXT_KEY);
       expect(Object.keys(failure)).toEqual(["ok", "reason"]);
     }
+  });
+
+  it("reports a missing key when the family key exists nowhere, and the run can carry on", async () => {
+    const result = await lookupWith(
+      { status: "configured", connectionId: "connection-1", envelope: ENVELOPE, generation: "1" },
+      "missing"
+    ).call();
+
+    expect(result).toEqual({ ok: false, reason: "missing" });
   });
 
   it("asks the reader for the source it was given", async () => {

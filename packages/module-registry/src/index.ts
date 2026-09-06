@@ -411,7 +411,10 @@ import {
   createPersistentRuntimeConfigLiveReader,
   type LiveChatMultiplexerStatus
 } from "./chat-multiplexer.js";
-import { createNewsCredentialCipherPort } from "./news-credential-cipher.js";
+import {
+  createNewsCredentialDecryptor,
+  resolveNewsCredentialCipherPort
+} from "./news-credential-cipher.js";
 import { buildOnboardingInstall } from "./onboarding-install.js";
 import { buildCliModelLister, buildOnboardingLogin } from "./onboarding-login.js";
 
@@ -2400,8 +2403,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           discovery.ai,
           createModuleLogger(server.log, "news")
         ),
-        // #2005: the composition root owns key resolution; News only holds the port.
-        credentialCipher: createNewsCredentialCipherPort(),
+        // #2005/#2322: the composition root owns key resolution; News only
+        // holds a per-use resolver, never key material.
+        resolveCredentialCipher: (scopedDb) => resolveNewsCredentialCipherPort(scopedDb),
         // #2008/#2006: the reviewed connection list and its bounded key check.
         publisherConnections: createRegistryNewsPublisherConnectionPort(),
         credentialRepository: new NewsCredentialRepository(),
@@ -2441,7 +2445,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const credentialedSource = createNewsCredentialedSourceReader({
         connection,
         credentials,
-        cipher: createNewsCredentialCipherPort()
+        decryptApiKey: createNewsCredentialDecryptor()
       });
       return registerNewsJobWorkers(boss, deps.dataContext, {
         ...discovery,
