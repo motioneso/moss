@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { assertDataContextDb, assertUuid, type DataContextDb } from "@moss/db";
 import { WorkshopInputError } from "./projects-repository.js";
 import type { WorkshopFeedEntry, WorkshopFeedInput } from "@moss/shared";
@@ -21,9 +22,9 @@ type FeedRow = {
   project_id: string;
   message_id: string;
   sequence: string;
-  kind: "user_message";
+  kind: "user_message" | "assistant_message";
   text: string;
-  delivery: "pending";
+  delivery: "pending" | "delivered";
   created_at: Date;
 };
 function entry(row: FeedRow): WorkshopFeedEntry {
@@ -86,6 +87,61 @@ export class WorkshopProjectFeed {
       .returning(columns)
       .executeTakeFirstOrThrow();
     return { entry: entry(row), created: true };
+  }
+
+  /**
+   * Delivers a reply to an already-saved user message: flips that row's delivery to
+   * "delivered" (only if still "pending", so a repeat call is a no-op) and inserts the
+   * assistant's own row in the same project sequence. Returns null when the project is
+   * gone or the target row is missing/already delivered.
+   */
+  async appendAssistantReply(
+    scopedDb: DataContextDb,
+    projectId: string,
+    text: string,
+    deliveredMessageId: string
+  ) {
+    assertDataContextDb(scopedDb);
+    assertUuid(projectId, "Project id");
+    assertUuid(deliveredMessageId, "Message id");
+    if (!text.trim() || text.includes("\0") || Buffer.byteLength(text) > 16384)
+      throw new WorkshopInputError("Invalid project reply");
+    // Held until the caller commits, same as append: sequence order is also commit order.
+    const project = await scopedDb.db
+      .selectFrom("app.workshop_projects")
+      .select("id")
+      .where("id", "=", projectId)
+      .forUpdate()
+      .executeTakeFirst();
+    if (!project) return null;
+    const delivered = await scopedDb.db
+      .updateTable("app.workshop_project_feed")
+      .set({ delivery: "delivered" })
+      .where("project_id", "=", projectId)
+      .where("message_id", "=", deliveredMessageId)
+      .where("delivery", "=", "pending")
+      .returning("message_id")
+      .executeTakeFirst();
+    if (!delivered) return null;
+    const counter = await scopedDb.db
+      .updateTable("app.workshop_projects")
+      .set((eb) => ({ feed_sequence: eb("feed_sequence", "+", "1"), updated_at: new Date() }))
+      .where("id", "=", projectId)
+      .returning("feed_sequence")
+      .executeTakeFirstOrThrow();
+    const row = await scopedDb.db
+      .insertInto("app.workshop_project_feed")
+      .values({
+        project_id: projectId,
+        message_id: randomUUID(),
+        sequence: counter.feed_sequence,
+        kind: "assistant_message",
+        text,
+        delivery: "delivered"
+      })
+      .returning(columns)
+      .executeTakeFirstOrThrow();
+    return { entry: entry(row) };
   }
 
   async list(
