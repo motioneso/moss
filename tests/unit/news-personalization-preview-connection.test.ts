@@ -253,10 +253,10 @@ function buildNewsServer(options: {
       remove: async () => true
     },
     personalizationRepository: emptyPersonalizationStore(),
-    credentialCipher: {
+    resolveCredentialCipher: async () => ({
       encrypt: () => ({ version: 1, algorithm: "aes-256-gcm", iv: "", tag: "", ciphertext: "" }),
       decrypt: () => ({ apiKey: "unused" })
-    },
+    }),
     ...(options.wireConnections === false
       ? {}
       : { publisherConnections: createRegistryNewsPublisherConnectionPort() })

@@ -296,6 +296,7 @@ export async function collectCandidates(
   fetchFailures: number;
   sourcesMarkedUnavailable: string[];
   sourceFailures: readonly { sourceId: string; reason: NewsSourceFailureReason }[];
+  credentialedRecovered: readonly string[];
 }> {
   const [sources, topics, exclusionRows, prefs] = await Promise.all([
     deps.repo.listCustomSources(scopedDb),
@@ -314,11 +315,21 @@ export async function collectCandidates(
     )
   );
 
+  const credentialedRecovered: string[] = [];
   for (const source of sources) {
+    const credentialed = credentialedSourceIds.has(source.id);
+    // A credentialed source stuck on a failure is re-attempted rather than skipped:
+    // the key may have been generated since the last run, and only a real attempt
+    // can clear the flag (#2322 slice 2). Every other unhealthy source keeps the
+    // existing skip behavior.
+    const failingCredentialed =
+      credentialed &&
+      (source.healthStatus === "authentication_failed" ||
+        source.healthStatus === "temporarily_unavailable");
     if (
       source.retrievalMethod === "reddit" ||
       source.validationStatus !== "approved" ||
-      source.healthStatus !== "healthy" ||
+      (!failingCredentialed && source.healthStatus !== "healthy") ||
       excluded(source.canonicalDomain, exclusions)
     ) {
       continue;
@@ -327,13 +338,15 @@ export async function collectCandidates(
       now: opts.now,
       exclusions,
       actorUserId: opts.actorUserId,
-      credentialed: credentialedSourceIds.has(source.id)
+      credentialed
     });
     collected.push(...result.candidates);
     if (result.failure) {
       fetchFailures += 1;
       sourceFailures.push({ sourceId: source.id, reason: result.failure });
       if (result.failure === "temporarily_unavailable") sourcesMarkedUnavailable.push(source.id);
+    } else if (credentialed) {
+      credentialedRecovered.push(source.id);
     }
   }
 
@@ -492,6 +505,7 @@ export async function collectCandidates(
     })),
     fetchFailures,
     sourcesMarkedUnavailable: [...new Set(sourcesMarkedUnavailable)],
-    sourceFailures
+    sourceFailures,
+    credentialedRecovered
   };
 }

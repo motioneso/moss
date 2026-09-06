@@ -118,7 +118,6 @@ function buildHandler(overrides: Partial<ExternalModuleJobHandlerDeps> = {}): {
     },
     workerDb,
     dataContext: new DataContextRunner(workerDb),
-    cipher: createModuleCredentialSecretCipher(),
     getDiscoveryById: (id: string) => (id === moduleA.id ? moduleA : undefined),
     listDiscoveredModuleIds: () => [moduleA.id],
     listActiveUserIds: async () => [ids.userA],

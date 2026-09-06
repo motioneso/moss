@@ -5,7 +5,6 @@
 // #2005 landed before this slice was built, so this is wired to its real repository rather than
 // left as a stand-in. The plaintext key exists only inside the returned success value, which the
 // runtime hands straight to the adapter and then drops; nothing here logs, caches or rethrows it.
-import type { NewsCredentialCipherPort } from "../credential-cipher-port.js";
 import type { DataContextDb, EncryptedSecret } from "@moss/db";
 
 import type { NewsCredentialLookupPort } from "./credential-lookup-port.js";
@@ -29,7 +28,16 @@ export interface NewsCredentialEnvelopeReader {
 
 export function createNewsCredentialLookup(deps: {
   readonly reader: NewsCredentialEnvelopeReader;
-  readonly cipher: NewsCredentialCipherPort;
+  /**
+   * Per-use credential reader, built in the composition root where key
+   * resolution lives (never in this feature module). Null means the family key
+   * exists nowhere and maps to missing; a throw means unreadable. Either way
+   * the refresh carries on with the other sources.
+   */
+  readonly decryptApiKey: (
+    credentialContext: DataContextDb,
+    envelope: EncryptedSecret
+  ) => Promise<{ readonly apiKey: string } | null>;
 }): NewsCredentialLookupPort {
   return async ({ sourceId, credentialContext }) => {
     // No owner filter here on purpose: the row is fetched under the acting person's row
@@ -41,7 +49,9 @@ export function createNewsCredentialLookup(deps: {
 
     let apiKey: string;
     try {
-      apiKey = deps.cipher.decrypt(row.envelope).apiKey;
+      const decrypted = await deps.decryptApiKey(credentialContext, row.envelope);
+      if (!decrypted) return { ok: false, reason: "missing" };
+      apiKey = decrypted.apiKey;
     } catch {
       // Swallowed deliberately: a cipher error names the keyring entry and sometimes the
       // envelope, and neither belongs in anything the caller can see or log.

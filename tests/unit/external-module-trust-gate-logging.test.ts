@@ -21,7 +21,6 @@ import type { DataContextDb, DataContextRunner, MossDatabase } from "@moss/db";
 import type { ExternalModuleJobPayload } from "@moss/jobs";
 import type { ExternalModuleDiscovery } from "@moss/module-registry";
 import type { ExternalModuleQueueDeclaration } from "@moss/module-sdk";
-import type { ModuleCredentialCipher } from "@moss/settings";
 
 import { createExternalModuleJobHandler } from "../../apps/worker/src/external-module-job-handler.js";
 
@@ -100,7 +99,6 @@ function fixture(
       withDataContext: async (_access: unknown, fn: (db: DataContextDb) => unknown) =>
         fn({} as DataContextDb)
     } as unknown as DataContextRunner,
-    cipher: {} as unknown as ModuleCredentialCipher,
     runtime: { invoke },
     listActiveUserIds: async () => overrides.activeUsers ?? [OWNER],
     logger: { warn }
@@ -195,7 +193,6 @@ describe("external module trust-gate rejection logging", () => {
         withDataContext: async (_access: unknown, fn: (db: DataContextDb) => unknown) =>
           fn({} as DataContextDb)
       } as unknown as DataContextRunner,
-      cipher: {} as unknown as ModuleCredentialCipher,
       runtime: { invoke: vi.fn() },
       listActiveUserIds: async () => [OWNER]
     });

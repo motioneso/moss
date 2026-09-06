@@ -33,7 +33,6 @@ import type {
 } from "@moss/module-registry/node";
 import type { ExternalModuleQueueDeclaration } from "@moss/module-sdk";
 import type { CreateNotificationInput } from "@moss/notifications";
-import type { ModuleCredentialCipher } from "@moss/settings";
 
 import { createVerifiedExternalModuleInvoker } from "./external-module-invoke.js";
 
@@ -136,7 +135,6 @@ export interface ExternalModuleJobHandlerDeps {
   readonly runtime: Pick<ExternalModuleWorkerRuntime, "invoke">;
   readonly workerDb: Kysely<MossDatabase>;
   readonly dataContext: DataContextRunner;
-  readonly cipher: ModuleCredentialCipher;
   readonly getDiscoveryById: (moduleId: string) => ExternalModuleDiscovery | undefined;
   readonly listDiscoveredModuleIds: () => readonly string[];
   readonly listActiveUserIds: (moduleId: string) => Promise<readonly string[]>;
@@ -187,7 +185,6 @@ export function createExternalModuleJobHandler(
     getDiscoveryById: deps.getDiscoveryById,
     listDiscoveredModuleIds: deps.listDiscoveredModuleIds,
     dataContext: deps.dataContext,
-    cipher: deps.cipher,
     runtime: deps.runtime,
     listActiveUserIds: deps.listActiveUserIds,
     ai: deps.ai,

@@ -62,7 +62,6 @@ describe("external worker attachments.readText port (#1194)", () => {
       actorUserId,
       requestId: randomUUID(),
       workerDataContext: null as unknown as DataContextRunner,
-      cipher: null as never,
       isActorAdmin: async () => false,
       // Required dep (#1281); these tests never reach an embed.* method.
       embeddingProvider: async () => new StubEmbeddingProvider(),
@@ -105,7 +104,6 @@ describe("external worker attachments.readText port (#1194)", () => {
       actorUserId: ownerUserId,
       requestId: randomUUID(),
       workerDataContext: null as unknown as DataContextRunner,
-      cipher: null as never,
       isActorAdmin: async () => false,
       // Required dep (#1281); these tests never reach an embed.* method.
       embeddingProvider: async () => new StubEmbeddingProvider()

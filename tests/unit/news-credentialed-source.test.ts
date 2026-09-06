@@ -394,7 +394,7 @@ describe("News credentialed source reader", () => {
     return createNewsCredentialedSourceReader({
       connection: newsApiConnection,
       credentials: { readCredentialForUse: async () => credential },
-      cipher: { encrypt: () => credential as never, decrypt: () => ({ apiKey: API_KEY }) },
+      decryptApiKey: async () => ({ apiKey: API_KEY }),
       createFetch: () => fetchFn
     });
   }
@@ -425,6 +425,45 @@ describe("News credentialed source reader", () => {
 
     expect(result).toEqual({ failure: "authentication_failed" });
     expect(calls).toHaveLength(0);
+  });
+
+  it("a refresh over mixed sources skips the broken key and carries on with the rest", async () => {
+    const goodEnvelope = {
+      version: 1 as const,
+      algorithm: "aes-256-gcm" as const,
+      iv: "a",
+      tag: "b",
+      ciphertext: "good"
+    };
+    const brokenEnvelope = { ...goodEnvelope, ciphertext: "broken" };
+    const { fetchFn, calls } = recordingFetch(() => jsonResponse(okBody([article()])));
+    const read = createNewsCredentialedSourceReader({
+      connection: newsApiConnection,
+      credentials: {
+        readCredentialForUse: async (_db, sourceId: string) => ({
+          status: "configured" as const,
+          connectionId: newsApiConnection.id,
+          envelope: sourceId === "source-broken" ? brokenEnvelope : goodEnvelope,
+          generation: "1"
+        })
+      },
+      // The retry has already been spent inside: broken stays broken.
+      decryptApiKey: async (_db, envelope) => {
+        if (envelope.ciphertext === "broken") throw new Error("keyring entry gone");
+        return { apiKey: API_KEY };
+      },
+      createFetch: () => fetchFn
+    });
+
+    const broken = await read(db, { actorUserId: "owner-1", sourceId: "source-broken" });
+    const good = await read(db, { actorUserId: "owner-1", sourceId: "source-good" });
+
+    // The broken source is skipped as a named failure, never an exception, and
+    // the run carries on: the good source still returns its items.
+    expect(broken).toEqual({ failure: "authentication_failed" });
+    expect(good).toMatchObject({ items: [{ title: "A headline" }] });
+    expect(calls).toHaveLength(1);
+    expect(JSON.stringify(broken)).not.toContain(API_KEY);
   });
 });
 

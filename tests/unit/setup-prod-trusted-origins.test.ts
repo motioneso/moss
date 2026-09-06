@@ -376,10 +376,16 @@ describe("setup-prod.ts subprocess (#1505)", () => {
       expect(result.exitCode).toBe(0);
       const env = parseEnv(readFileSync(join(outDir, "env.production.local"), "utf8"));
       expect(env.NODE_ENV).toBe("production");
-      const stores = ["CONNECTOR", "INTEGRATIONS", "AI", "MODULE_CREDENTIAL", "NEWS_CREDENTIAL"];
+      const stores = ["CONNECTOR", "AI"];
       const secrets = stores.map((store) => env[`MOSS_${store}_SECRET_KEY`]);
       for (const secret of secrets) expect(secret).toMatch(/^[a-f0-9]{64}$/);
       expect(new Set(secrets).size).toBe(stores.length);
+      // Master key store (#2322 slice 2): setup writes no family keys, so the
+      // admin Generate path in Settings is the only way they come to exist.
+      for (const store of ["INTEGRATIONS", "MODULE_CREDENTIAL", "NEWS_CREDENTIAL"]) {
+        expect(env[`MOSS_${store}_SECRET_KEY`]).toBeUndefined();
+        expect(env[`JARVIS_${store}_SECRET_KEY`]).toBeUndefined();
+      }
       for (const store of stores) {
         expect(() =>
           resolveKeyring(

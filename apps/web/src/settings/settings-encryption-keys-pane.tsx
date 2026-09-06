@@ -14,6 +14,14 @@ const FAMILY_LABELS: Record<string, { label: string; desc: string }> = {
   integrations: {
     label: "Integrations connections",
     desc: "Locks saved connection credentials for integrations."
+  },
+  module_credential: {
+    label: "Module credentials",
+    desc: "Locks saved credentials for external modules."
+  },
+  news_credential: {
+    label: "News publisher keys",
+    desc: "Locks saved publisher keys for news sources."
   }
 };
 
@@ -29,6 +37,8 @@ function familyLabel(family: string): { label: string; desc: string } {
 function statusText(status: FamilyKeyStatusDto): string {
   if (status.source === "env") return "Ready (env file)";
   if (status.source === "store") return "Ready (stored)";
+  if (status.source === "broken" && status.cause === "env")
+    return "Stopped: the value in the settings file cannot be used. Fix or remove it there.";
   if (status.source === "broken")
     return "Stopped: the stored key no longer opens. Features using it are paused.";
   return "Needs attention";
@@ -86,6 +96,10 @@ export function EncryptionKeysPane() {
           const missing = status.source === "missing";
           const fromEnv = status.source === "env";
           const broken = status.source === "broken";
+          // A broken row caused by the settings file offers no button: the value
+          // there wins over anything stored, so replacing would write a key that
+          // never takes effect while the row keeps saying stopped. The status
+          // sentence telling them to fix or remove the value is the whole action.
           const busy = generateMutation.isPending || rotateMutation.isPending;
           return (
             <Row
@@ -104,7 +118,7 @@ export function EncryptionKeysPane() {
                   >
                     {generateMutation.isPending ? "Generating…" : "Generate"}
                   </Button>
-                ) : broken ? (
+                ) : broken && status.cause !== "env" ? (
                   <Button
                     variant="secondary"
                     size="sm"
@@ -121,7 +135,7 @@ export function EncryptionKeysPane() {
                   >
                     {rotateMutation.isPending ? "Replacing…" : "Replace key"}
                   </Button>
-                ) : fromEnv ? undefined : (
+                ) : broken || fromEnv ? undefined : (
                   <Button
                     variant="quiet"
                     size="sm"

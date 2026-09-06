@@ -79,6 +79,80 @@ test("a broken key tells the truth and replaces with confirmation", async ({ pag
   expect(dialogShown).toBe(true);
 });
 
+test("a settings-file cause offers no button, only the fix-it-there sentence", async ({ page }) => {
+  await mockApi(page, {
+    authenticated: true,
+    isInstanceAdmin: true,
+    connectorAccounts: [],
+    connectorProviders: [],
+    notifications: [],
+    tasks: []
+  });
+  await page.route("**/api/admin/settings/encryption-keys", (route) =>
+    route.fulfill({
+      json: {
+        keys: [{ family: "integrations", source: "broken", cause: "env" }]
+      }
+    })
+  );
+  await page.goto("/settings?section=enckeys");
+  await expect(
+    page.getByText(
+      "Stopped: the value in the settings file cannot be used. Fix or remove it there."
+    )
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Replace key" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Rotate" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Generate", exact: true })).toHaveCount(0);
+});
+
+test("admin generates each of the three family keys from the screen", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockApi(page, {
+    authenticated: true,
+    isInstanceAdmin: true,
+    connectorAccounts: [],
+    connectorProviders: [],
+    notifications: [],
+    tasks: []
+  });
+  const sources: Record<string, KeySource> = {
+    integrations: "missing",
+    module_credential: "missing",
+    news_credential: "missing"
+  };
+  const payload = () => ({
+    json: {
+      keys: Object.entries(sources).map(([family, source]) => ({ family, source }))
+    }
+  });
+  await page.route("**/api/admin/settings/encryption-keys", (route) => {
+    if (route.request().method() === "PUT") {
+      const body = route.request().postDataJSON() as { family?: string };
+      if (body.family && body.family in sources) sources[body.family] = "store";
+    }
+    return route.fulfill(payload());
+  });
+  await page.route("**/api/admin/settings/encryption-keys/rotate", (route) =>
+    route.fulfill(payload())
+  );
+  await page.goto("/settings?section=enckeys");
+
+  await expect(page.getByText("Module credentials")).toBeVisible();
+  await expect(page.getByText("News publisher keys")).toBeVisible();
+  const generateButtons = page.getByRole("button", { name: "Generate", exact: true });
+  await expect(generateButtons).toHaveCount(3);
+  // Buttons leave the screen as each family is generated: click the first one
+  // still showing, then wait for it to clear before the next click, or two
+  // rapid clicks land on the same row before it re-renders.
+  for (let remaining = 3; remaining > 0; remaining--) {
+    await generateButtons.first().click();
+    await expect(generateButtons).toHaveCount(remaining - 1);
+  }
+  await expect(page.getByText("Ready (stored).")).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "Generate", exact: true })).toHaveCount(0);
+});
+
 test("non-admin sees no keys surface and makes no key requests", async ({ page }) => {
   await mockApi(page, {
     authenticated: true,

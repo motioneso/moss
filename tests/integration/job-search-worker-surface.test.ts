@@ -38,7 +38,6 @@ import {
   hashExternalPackage
 } from "@moss/module-registry/node";
 import type { JsonMossModuleManifest } from "@moss/module-sdk";
-import { createModuleCredentialSecretCipher } from "@moss/settings";
 import type { Kysely } from "kysely";
 
 import { createApiServer } from "../../apps/api/src/server.js";
@@ -479,7 +478,6 @@ describe("job-search module through the real API + worker RPC surface (#1305, te
       getDiscoveryById: (id: string) => (id === realModuleId ? realDiscovery : undefined),
       listDiscoveredModuleIds: () => [realModuleId],
       dataContext: new DataContextRunner(heavyWorkerDb),
-      cipher: createModuleCredentialSecretCipher(),
       runtime: workerRuntime,
       listActiveUserIds: async () => [scenario.actorUserId]
     });
@@ -503,7 +501,6 @@ describe("job-search module through the real API + worker RPC surface (#1305, te
       getDiscoveryById: (id: string) => (id === realModuleId ? realDiscovery : undefined),
       listDiscoveredModuleIds: () => [realModuleId],
       dataContext: new DataContextRunner(heavyWorkerDb),
-      cipher: createModuleCredentialSecretCipher(),
       runtime: workerRuntime,
       listActiveUserIds: async () => [scenario.actorUserId]
     });
@@ -538,7 +535,6 @@ describe("job-search module through the real API + worker RPC surface (#1305, te
       getDiscoveryById: (id: string) => (id === realModuleId ? realDiscovery : undefined),
       listDiscoveredModuleIds: () => [realModuleId],
       dataContext: new DataContextRunner(heavyWorkerDb),
-      cipher: createModuleCredentialSecretCipher(),
       runtime: workerRuntime,
       listActiveUserIds: async () => [scenario.actorUserId]
     });
@@ -660,7 +656,6 @@ describe("job-search module through the real API + worker RPC surface (#1305, te
       getDiscoveryById: (id: string) => (id === realModuleId ? realDiscovery : undefined),
       listDiscoveredModuleIds: () => [realModuleId],
       dataContext: new DataContextRunner(heavyWorkerDb),
-      cipher: createModuleCredentialSecretCipher(),
       runtime: workerRuntime,
       listActiveUserIds: async () => [briefingScenario.actorUserId]
     });
