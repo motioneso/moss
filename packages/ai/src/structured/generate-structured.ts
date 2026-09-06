@@ -206,6 +206,7 @@ export async function generateStructured(
         scope: input.scope,
         closeScope: input.closeScope
       });
+      if (input.signal?.aborted) return { ok: false, error: "aborted" };
       if ("rawText" in generated) {
         try {
           result = {
