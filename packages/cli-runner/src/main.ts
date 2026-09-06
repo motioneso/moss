@@ -101,7 +101,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): CliRunnerConfi
     perUserUid: env.JARVIS_CLI_PER_USER_UID === "1",
     neutralBase: resolveMossEnv(env, "JARVIS_CLI_NEUTRAL_BASE") ?? DEFAULT_NEUTRAL_BASE,
     homeBase,
-    toolsPrefix: env.JARVIS_CLI_TOOLS_PREFIX ?? env.NPM_CONFIG_PREFIX ?? resolveDefaultToolsPrefix(),
+    toolsPrefix:
+      env.JARVIS_CLI_TOOLS_PREFIX ?? env.NPM_CONFIG_PREFIX ?? resolveDefaultToolsPrefix(),
     // #1554 — see CliRunnerConfig's doc comments: bootstrap values only; RPC launch params carry
     // the live settings from the api on every launch.
     persistentRuntimeEnabled: env.MOSS_CHAT_PERSISTENT_RUNTIME_ENABLED === "1",

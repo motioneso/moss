@@ -176,7 +176,8 @@ export class InstallService {
       await mkdir(this.toolsPrefix, { recursive: true });
     } catch (cause) {
       throw new Error(
-        `could not create the tools folder at ${this.toolsPrefix}: ${(cause as Error).message}`
+        `could not create the tools folder at ${this.toolsPrefix}: ${(cause as Error).message}`,
+        { cause }
       );
     }
   }
