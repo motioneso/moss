@@ -45,6 +45,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Moss replies in Workshop projects.** When you save a message in a Workshop project, Moss now writes back a reply in the same conversation instead of leaving it waiting forever. [PR #2365](https://github.com/motioneso/moss/pull/2365)
 - **Workshop projects.** You can now start a Workshop project, give it a name and a first request, and come back to it later with everything you have written saved. [PR #2307](https://github.com/motioneso/moss/pull/2307)
 
 ### 2026-09-05
