@@ -174,7 +174,13 @@ export type RpcMethod =
   | "openTerminal"
   | "writeTerminal"
   | "resizeTerminal"
-  | "killTerminal";
+  | "killTerminal"
+  // #2369 slice 1 — ACP agent tunnel. The runner spawns the ACP adapter as the session
+  // user and pipes its stdio lines; all protocol intelligence stays API-side in @moss/acp.
+  | "acpSpawn"
+  | "acpSend"
+  | "acpRead"
+  | "acpKill";
 
 export type RpcErrorCode =
   | "unavailable" // engine could not launch / multiplexer down / NOT_LAUNCHED → CliChatUnavailableError (retryable HTTP 503)
@@ -509,4 +515,67 @@ export interface RpcResizeTerminalParams {
 /** params for method "killTerminal": terminate the PTY + its process tree. */
 export interface RpcKillTerminalParams {
   readonly terminalId: string;
+}
+
+// #2369 slice 1 — ACP tunnel params/results (interface-pair pattern, mirrors RpcSubmit*).
+// The runner is a line pipe: it never parses the ACP JSON, it only frames stdout lines.
+// Secrets cross only inside these socket payloads, never argv or env of an unrelated process.
+/** params for method "acpSpawn": start the ACP adapter for this session key. */
+export interface RpcAcpSpawnParams {
+  /**
+   * Project the agent works in (Workshop project id). The runner creates
+   * `<session-dir>/<projectId>/` as the adapter's working folder; path characters
+   * outside `[A-Za-z0-9_-]` are rejected.
+   */
+  readonly projectId: string;
+}
+/** result for method "acpSpawn": the runner-side working folder the client hands to session/new. */
+export interface RpcAcpSpawnResult {
+  readonly cwd: string;
+  /**
+   * Session generation, monotonic per runner process. A later spawn of the same
+   * key evicts the earlier one; `acpKill` with a stale generation is a no-op so
+   * a dropped connection can never kill another connection's live session.
+   */
+  readonly generation: number;
+}
+/** params for method "acpSend": one client-to-agent JSON-RPC line (no trailing newline). */
+export interface RpcAcpSendParams {
+  readonly line: string;
+}
+/** result for method "acpSend". */
+export interface RpcAcpSendResult {
+  readonly accepted: true;
+}
+/** params for method "acpRead": drain adapter stdout lines after a sequence cursor. */
+export interface RpcAcpReadParams {
+  readonly afterSeq: number;
+}
+/** result for method "acpRead": buffered lines plus liveness. */
+export interface RpcAcpReadResult {
+  readonly lines: readonly string[];
+  /**
+   * Sequence number of `lines[0]` (1-based line counter); the next cursor is
+   * `firstSeq + lines.length - 1`, or the passed cursor when lines is empty.
+   * The reader must advance by lines delivered, never by `nextSeq`, or a reply
+   * cut by the total cap would skip lines forever.
+   */
+  readonly firstSeq: number;
+  readonly nextSeq: number;
+  readonly exited: boolean;
+  readonly exitCode: number | null;
+  /** True when this reply — or an earlier one — was cut (see AcpHost). */
+  readonly truncated: boolean;
+}
+/** params for method "acpKill": stop the adapter for this session key. */
+export interface RpcAcpKillParams {
+  /**
+   * When present, kill only if the live session still has this generation (the
+   * connection-close path). Absent means unconditional (explicit lifecycle).
+   */
+  readonly generation?: number;
+}
+/** result for method "acpKill". */
+export interface RpcAcpKillResult {
+  readonly ok: true;
 }

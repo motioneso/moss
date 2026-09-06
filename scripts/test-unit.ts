@@ -14,7 +14,11 @@ const UNIT_VITEST_ARGS: readonly string[] = ["--fileParallelism", "--maxWorkers=
 // package-local test directory vitest.config.ts's `include` also lists (packages/scratchpad,
 // packages/people, ...), because none of those paths contain the substring "tests/unit". Each
 // package-local suite has to be named explicitly here or CI never runs it.
-const DEFAULT_VITEST_ARGS: readonly string[] = ["tests/unit", "packages/scratchpad/src/__tests__"];
+const DEFAULT_VITEST_ARGS: readonly string[] = [
+  "tests/unit",
+  "packages/scratchpad/src/__tests__",
+  "packages/acp/src"
+];
 
 export function resolveVitestArgs(cliArgs: readonly string[]): string[] {
   return [...UNIT_VITEST_ARGS, ...(cliArgs.length > 0 ? cliArgs : DEFAULT_VITEST_ARGS)];

@@ -280,6 +280,37 @@ describe("serveConnection (§3.4/§3.7)", () => {
     expect(channel.closed).toBe(false); // connection stays open (§3.7)
   });
 
+  // #2369 slice 1 — a dropped socket kills this connection's agent sessions with
+  // the generation it saw, so a respawned session on another connection survives.
+  it("closing the connection kills its agent sessions with their generation", async () => {
+    const host = fakeHost();
+    vi.spyOn(host, "acpSpawn").mockResolvedValue({
+      cwd: "/tmp/neutral-base/workshop:u:p/acp/p",
+      generation: 7
+    });
+    const kill = vi.spyOn(host, "acpKill").mockReturnValue(undefined);
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
+
+    channel.feed(
+      encodeFrame({
+        t: "req",
+        id: 31,
+        method: "acpSpawn",
+        sessionKey: "workshop:u:p",
+        params: { projectId: "p" }
+      })
+    );
+    await new Promise((r) => setTimeout(r, 5));
+    const ok = channel.decodeAll().find((f) => (f as RpcOk).id === 31) as RpcOk;
+    expect(ok.t).toBe("ok");
+    expect((ok.result as { generation: number }).generation).toBe(7);
+
+    channel.triggerClose();
+    expect(kill).toHaveBeenCalledWith("workshop:u:p", { generation: 7 });
+  });
+
   it("a session method with a missing sessionKey returns bad_request (stays open)", async () => {
     const channel = new FakeChannel();
     serveConnection(channel, deps());
