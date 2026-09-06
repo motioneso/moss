@@ -32,8 +32,9 @@ bulk mail and sign-in notices as tasks). Worktree: this folder, branch `fix/emai
      Root process id **2416525** — the exact id to kill at cleanup.
    - No new migrations in this PR, so it is safe that both instances point at the same dev
      Postgres (`localhost:55433`, db `jarv1s`) as the shared instance.
-   - Login confirmed working through the real UI: `ben@ben.com` / `jarvistest123!` at
-     `http://localhost:5183`.
+   - Login confirmed working through the real UI at `http://localhost:5183`, using the usual
+     test account credentials (see memory, not repeated here since this file is checked into a
+     public repository).
    - Confirmed through Settings, Connected accounts (`/settings?section=connected`): a **live
      Google account is already connected** with email access, status "Live connection / Syncing".
      This is the existing test mailbox the brief refers to — no need to connect a new one.
@@ -114,7 +115,7 @@ const browser = await chromium.launch();
 const page = await browser.newPage();
 await page.goto("http://localhost:5183/");
 await page.getByLabel(/email/i).fill("ben@ben.com");
-await page.getByLabel(/password/i).fill("jarvistest123!");
+await page.getByLabel(/password/i).fill("<the usual test account password, see memory>");
 await page.locator("form").getByRole("button", { name: /sign in/i }).click();
 await page.waitForSelector('nav', { timeout: 20000 });
 ```
