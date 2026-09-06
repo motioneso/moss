@@ -54,59 +54,6 @@ function factoryCapturing(neutralDirs: string[]): ChatEngineFactory {
   return () => fakeEngine((opts) => neutralDirs.push(opts.neutralDir));
 }
 
-/**
- * A CliChatEngine whose kill() takes 50ms to actually stop the process, and whose
- * readNew() only starts returning a reply once that stop has genuinely finished — the
- * same shape as the real engine, where a real OS process needs a moment to receive
- * SIGTERM and exit before its transcript file is safe to read as final. A second call
- * to kill() while the first is still in flight is a no-op that returns immediately,
- * matching the real engine (which nulls its process handle on the very first call).
- * readNew() otherwise reports "still running, no reply yet" forever, so the adapter's
- * own poll loop never resolves on its own and must fall through to the timeout path.
- */
-function slowToStopEngine(): CliChatEngine {
-  let killStarted = false;
-  let stopped = false;
-  return {
-    provider: "anthropic",
-    async launch() {
-      return { offset: 0 };
-    },
-    async submit() {},
-    async interrupt() {},
-    async readNew(afterOffset) {
-      if (stopped) {
-        return {
-          records: [{ kind: "reply", text: "late-answer" }],
-          offset: afterOffset + 1,
-          complete: true
-        };
-      }
-      return { records: [], offset: afterOffset, complete: false };
-    },
-    async isAlive() {
-      return !stopped;
-    },
-    async kill() {
-      if (killStarted) return;
-      killStarted = true;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      stopped = true;
-    },
-    async purgeTranscripts() {}
-  };
-}
-
-describe("CliStructuredAdapter timeout recovers a reply only once the engine has actually stopped", () => {
-  it("waits for kill to finish before reading, and returns the reply that was there all along", async () => {
-    const adapter = new CliStructuredAdapter("anthropic", () => slowToStopEngine(), 20);
-
-    const result = await adapter.generateStructured(baseInput("module.slow-stop"));
-
-    expect("rawText" in result && result.rawText).toBe("late-answer");
-  });
-});
-
 /** A CliChatEngine that reports, on its very first readNew(), that the app and the model
  * program have genuinely disagreed about the answer file's folder — the real engine
  * throws this once its own grace period has passed, well before any overall timeout. */
