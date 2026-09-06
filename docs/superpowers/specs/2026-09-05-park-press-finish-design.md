@@ -1,8 +1,11 @@
 # Design: finishing Park Press, and the Workshop project workspace
 
-Status: approved by Ben 2026-09-05 ("Ok, write this up, looks great!")
+Status: approved by Ben 2026-09-05 ("Ok, write this up, looks great!"); build-readiness review by
+Fable 5.1, 2026-09-05, folded in below
 Direction: PARK PRESS, approved 2026-07-03 — `2026-07-03-park-press-design-language-design.md`, EPIC #726
 Mockup: `docs/superpowers/specs/assets/2026-09-05-park-press-finish/`
+Builds on: `2026-09-04-workshop-projects-and-supervised-builds.md` (PR 2307's spec) — its build
+statuses, its mockup format, and its slice plan are the substrate this spec lays a design over.
 
 Plain English, no jargon, in every message and every prompt written for another agent. Pass this
 rule on.
@@ -34,7 +37,13 @@ review shell `index.html` switches screen, display face, page colour, and before
 
 The artifact screens (`detail-artifact`, `detail-design`, `detail-files`, `detail-file`,
 `detail-preview`, `detail-preview-wide`) do contain invented content — a plausible plan, file list and preview for
-the word-of-the-day project — because no real build exists yet.
+the word-of-the-day project — because no real build exists yet. The three drawn screens on the
+Design tab are hand-written HTML standing in for the pictures Moss will actually produce (see "The
+Design tab" below); they show what the tab looks like, not how it is fed.
+
+The frozen markup still carries PR 2307's page heading, back link and mobile switch inside a
+project; `park-press.css` hides the heading and back link (section 17) because Ben ruled them out.
+Production removes that markup rather than hiding it.
 
 ## Part 1 — finishing Park Press
 
@@ -50,22 +59,40 @@ those licences forbids. Archivo is openly licensed and can ship in-repo.
 
 **Production must self-host the woff2 in-repo.** The mockup uses a Google Fonts `@import`; that is
 what tripped the content-security policy on 2026-08-01 and it must not ship. Subset to latin,
-weights 400/500/700/800.
+weights 400/500/700/800. The `@font-face` rules go in the slot the comment at the top of
+`tokens.css` reserves for them, served from our own origin; the content-security policy already
+allows fonts from our own origin (`font-src 'self'` in `apps/api/src/static-web.ts`), so no policy
+change is needed. Check the browser console for policy violations in the live proof anyway.
 
-`--font-display` must keep the exact fallback chain of `--font-sans` (Ben, 2026-07-08).
+`--font-display` must keep the exact fallback chain of `--font-sans` (Ben, 2026-07-08): the token
+becomes Archivo followed by `var(--font-sans)`, never a hand-typed list.
 
 ### Page colour: bone
 
 | Token | Today | New |
 | --- | --- | --- |
 | `--paper` | `#ece4d1` (oat) | `#f2eee4` (bone) |
-| `--surface` | | `#fffdf7` |
-| `--surface-2` | | `#f7f3e9` |
-| `--border` | | `#d9d1bf` |
-| `--border-subtle` | | `#e6dfd0` |
+| `--surface` | `#f6f0e1` | `#fffdf7` |
+| `--surface-2` | `#e3dac4` | `#f7f3e9` |
+| `--border` | alias of `--line`, ink at 11% | `#d9d1bf` |
+| `--border-subtle` | alias of `--line-subtle`, ink at 6% | `#e6dfd0` |
 
 The old flatness came from page and card being nearly the same oat. Bone plus warm-white surfaces
-gives a card something to sit on. Dark mode is unchanged by this spec and needs its own pass.
+gives a card something to sit on.
+
+Three things a builder needs to know that the table does not say:
+
+- `--border` and `--border-subtle` are aliases of `--line` and `--line-subtle` today, and a dozen
+  rules use `--line` directly. Retone `--line` and `--line-subtle` and let the aliases follow; do not
+  retone the aliases and leave `--line` behind in oat.
+- `--surface-2` flips character. Today it is darker than the page (a sunken tone: inputs, the
+  assistant bubble, `--bg-sunken`); after this it is lighter than the page. About 140 rules use it.
+  Nothing needs rewriting, but the live proof must walk inputs, the chat drawer and one settings
+  pane to confirm nothing now reads as raised that should read as sunken. `--surface-3` is not
+  retoned.
+- The four accent themes (sage, canyon, teal, dusk) override only the accent ramp, so they inherit
+  bone automatically. Dark mode overrides paper and surfaces itself and is untouched by this table;
+  the muted text tones were tuned for contrast on oat and only gain contrast on bone.
 
 ### The masthead
 
@@ -82,6 +109,20 @@ project it is a title bar over a title bar and earns nothing. So the Workshop ho
 masthead; a project workspace has none, and the whole area under the top bar is the conversation
 and what Moss made.
 
+**Where it lives in code.** The app already has one masthead primitive — `Masthead` in
+`packages/ui`, styled by `jds-masthead__*`, used only by Today (eyebrow, title, lede, an aside for
+the dateline and clock, ink on paper). The green field is a variant of that primitive, not a second
+one: add the reversed treatment there and have Workshop's home page render `Masthead` instead of
+its own `workshop-project-heading` markup. A module's CSS is layout-only by contract, so the field
+cannot live in Workshop's stylesheet. Today keeps its own ink-on-paper masthead for now; whether it
+takes the green field is an open question below, and other section home pages adopt the variant as
+each is next touched, one product change per page.
+
+**In dark mode** the accent is a light green (`--forest` becomes `#65b889`), and the reversed light
+text would fail on it. Until dark mode gets its own pass, the field in dark mode is `--forest-soft`
+(a dark green) with the same light text and gold rule. Reviewer's call, 2026-09-05, to keep the
+tokens PR from breaking dark mode; Ben has not seen it.
+
 ### Names on screen
 
 - A page's name lives in the **top bar**, and that name is the link back to the section. There is no
@@ -89,11 +130,20 @@ and what Moss made.
 - Inside a thing that belongs to a section, the top bar carries the trail: the section name as a
   link, then the name of what you are in, then any small meta ("Started Sep 5"). The "Only you"
   badge moves to the top bar's right, beside the assistant button, and both meta and badge drop out
-  below 900px.
+  below 900px. A long name truncates with an ellipsis rather than wrapping the bar.
 - The masthead says what the page is about in the page's own words ("Your projects"), not the
   section name again.
 - Nothing is said twice. Ben flagged the word "Workshop" appearing three times on one screen as
   what makes a screen look amateur.
+
+**What this needs from the shell.** Today the top bar's title is looked up from the route table and
+module navigation labels (`resolvePageHeading` in `apps/web/src/app-route-metadata.ts`); a page
+cannot add to it, and a module cannot reach into the shell. So the shell gains a small way for the
+page on screen to set the trail — the current name, its meta, and a badge — while it is mounted,
+cleared when it leaves, exposed to modules through the module web SDK. When a trail is set, the
+shell renders the section label as the link. The same trail must feed the page context Moss reads
+in chat (`apps/web/src/chat/page-context.ts` uses the same lookup), so Moss knows which project you
+are in and not only which section.
 
 ### Lists
 
@@ -102,6 +152,9 @@ marooned-card complaint. Lists become a **ruled row index**: full width, a heavy
 one hairline per row, name in one column, excerpt in the next, meta right-aligned. Hover is a gold
 rule down the left edge plus a forest-green title — never a filled block, which reads as
 "selected".
+
+The rules and the hover are visual identity, so the row index is a host primitive in `packages/ui`
+(working name `jds-index`), not Workshop layout CSS. Workshop's list is its first user.
 
 ### Words
 
@@ -124,17 +177,34 @@ Turns use the chat drawer's existing message parts (`chatd-msg`, `chatd-msg--me`
 a second one:
 
 - **Moss** — a small round green mark, then running text at a reading measure. Steps it lists inside
-  a turn get gold ticks rather than becoming boxed cards.
+  a turn are a line each with a mark in front: a gold tick for a step that is done, a quiet dot for
+  one that is not. They never become boxed cards.
 - **You** — a bubble on the right in `--surface-2` with a hairline border, corner squared on the
   side it came from.
 
+**Sharing the parts for real.** The classes live in the shared UI package
+(`packages/ui/src/styles/components-chat.css`), but the React parts that render them — the
+transcript (`Thread`, which draws Moss turns, your turns and step groups) and the "Thinking"
+activity line (`ActivityPeek`) — live in the web app (`apps/web/src/chat/message-row.tsx`), which a
+module may not import. Move those two components into `@moss/ui` so the drawer and Workshop render
+one transcript; do not copy the markup into Workshop. They take the drawer's transcript record
+shape, so Workshop maps its project messages into that shape rather than the component growing a
+second input. That is a small host change and belongs in the same pull request as the chat window.
+
+**States the window keeps from PR 2307.** A message you sent that has not reached Moss shows a
+quiet caption under your bubble, "Saved, not yet delivered". A send that fails shows the error under
+the composer and keeps your text. While Moss is working, the drawer's activity line ("Thinking",
+with the step count) sits at the foot of the transcript. Older turns load from a quiet "Earlier
+messages" link at the top of the transcript. A project that cannot be loaded shows the existing
+error-with-retry state in place of the transcript, never an empty chat.
+
 The composer is pinned to the foot of the pane: one bordered box, placeholder instead of a visible
 label, **Send** inside the box at the bottom right. The label stays in the markup for screen
-readers.
+readers. The keys are the chat drawer's keys.
 
 **When the chat has the width to itself** — a new project, or any project before Moss has made
-anything — the transcript and the composer keep a reading measure rather than running the full
-window. Once the panel appears the column is narrow enough to need all of it.
+anything — the transcript and the composer keep a reading measure (56rem) rather than running the
+full window. Once the panel appears the column is narrow enough to need all of it.
 
 ### Starting a project has no form
 
@@ -142,6 +212,24 @@ The new-project form is gone, including the "Already decided (optional)" field. 
 the same chat window with an empty transcript and one place to type. **The project takes its name
 from the first thing you say**, and can be renamed later. This replaces the name/idea/context form
 that PR 2307 ships.
+
+The empty window is an invitation, not an empty-state notice: the Moss mark, "What would you like
+to make?", one sentence ("Say it in your own words. Moss will ask a few questions, show you the
+screens, then build it."), and three example ideas as small pills. Pressing a pill writes it into
+the box; it does not send. The examples are fixed copy.
+
+**How the name happens.** Sending the first message creates the project — the message is its
+opening request — and the window becomes `/workshop/<id>` without a reload. The name at that moment
+is the first line of the message, trimmed to about sixty characters; Moss's first reply gives the
+project its proper short name ("Random Word of the Day" from "I want a word of the day generator,
+a random interesting word with definition"), and the top bar and the row index take it. If Moss is
+unavailable the provisional name stands. The row index shows the name in one column and the opening
+request as the excerpt, so the two are never the same text.
+
+The create call therefore stops requiring a title, and the "context" field stops being offered on
+screen (the column stays; the chat handoff tool that creates a project from the main chat still
+fills the title itself). PR 2307's app-map text that points people at "the create form" or "the
+new-project form" is rewritten to say "start a new project" — there is no form to point at.
 
 ### The artifact panel
 
@@ -156,11 +244,45 @@ runs.
 | --- | --- |
 | **Plan** | Numbered steps, each a title and a sentence. Newest step marked "just added". Foot: Approve and build / Ask for changes. |
 | **Design** | A picture of each screen the module will have, drawn before any code. Takes most of the width; the chat narrows to a column. A redrawn screen is marked "just redrawn". Foot: Approve the design and build / Ask for changes. See below. |
-| **Files** | What Moss wrote, name plus what it is for, changes since your last look marked in gold. Click one to read it in the same column; a back arrow returns to the list. |
+| **Files** | What Moss wrote, name plus what it is for, changes since Moss's last reply marked in gold. Click one to read it in the same column; a back arrow returns to the list. The file itself is read-only in a monospace block — the one place the retired mono face is still right, as `tokens.css` allows for genuine code. |
 | **Preview** | The module itself, running. Takes most of the width, exactly as Design does — it is the same thing one step later, a screen you are looking at rather than a list you are reading. Foot: Install in Moss / Ask for changes. |
 
 The panel bar also carries a state chip ("Waiting on you", "Built, not installed") and the foot
 carries the action that matters at that moment (Approve and build, then Install in Moss).
+
+**Which tab is open.** When the panel first appears, or when a tab gains content that needs you,
+that tab opens: the plan when it is written, the design when it is drawn, the preview when the
+build is ready. While Moss is working the panel stays on whatever tab you left it on.
+
+### What the panel shows in each state
+
+PR 2307's contract already has the build statuses (planning, waiting for plan approval, building,
+waiting for a change, ready, failed, cancelled); the design step adds one, waiting for design
+approval. The panel is a projection of that status. Nothing else on the screen changes with it —
+Moss says what is happening in the chat, in words, and the panel shows the thing itself.
+
+| Moment | Panel | Chip | Foot |
+| --- | --- | --- | --- |
+| Before Moss has made anything, including while it is writing the plan | Not rendered. The chat has the whole width; the activity line says Moss is thinking. | | |
+| Plan written, waiting for you | Plan | Waiting on you | Approve and build / Ask for changes |
+| Plan approved, Moss drawing the screens | Plan (read-only, marked approved) | Drawing the screens | Stop |
+| Design drawn, waiting for you | Plan, Design | Waiting on you | Approve the design and build / Ask for changes |
+| Building | Plan, Design, and Files from the first file written; the file list grows as Moss writes | Building, plus the current step's name | Stop |
+| Moss stopped to ask you something | As before | Waiting on you | Ask for changes (the question itself is a Moss turn; you answer in the composer) |
+| Built, checks passed, not installed | Plan, Design, Files, Preview | Built, not installed | Install in Moss / Ask for changes |
+| Build failed | Plan, Design, Files (what was written stays readable); Preview only if a previous version still runs, showing that version | Build failed, or "Last change failed" when a previous version still runs | Try again / Ask for changes |
+| You pressed Stop | Same as failed | Stopped | Try again / Ask for changes |
+| Installed | Plan, Design, Files, Preview (the copy under review — never two live versions) | Installed | Open it (the module in the rail) / Ask for changes |
+
+Approving, asking for changes, stopping and installing all wait for the server's answer with the
+button in its pending state; on failure the button returns and the error is a Moss-side line in the
+chat with what to do next, in the words PR 2307's spec already requires. On reload the panel is
+rebuilt from the server's status, never from what the browser remembers.
+
+For a module with no screens (a background job, a connector), Moss says so in the chat and goes
+straight from Plan to the build; there is never an empty Design tab. Preview for such a module is
+whatever the module gives Moss to show — a settings pane, a log — and if it has nothing, there is no
+Preview tab and "Install in Moss" sits under Files.
 
 ### Moss designs before it codes
 
@@ -180,30 +302,89 @@ So the artifact panel gains a **Design** tab, and the run order is:
 | 4 | Preview | Use the real thing |
 
 **A tab you look at takes the room; a tab you read does not.** Plan and Files are a side column
-beside a wide chat. Design and Preview are the other way round: they take most of the space and the
-conversation narrows to a column on the left, the way Claude Design works. Ben, 2026-09-05, on
-Preview: "basically the same thing" as Design.
+beside a wide chat — about a quarter of the window, never narrower than 320px nor wider than
+460px. Design and Preview are the other way round: they take most of the space and the
+conversation narrows to a column on the left of the same proportions (never narrower than 300px
+nor wider than 400px), the way Claude Design works. Ben, 2026-09-05, on Preview: "basically the
+same thing" as Design. So the panel's width is a property of what is in it, not one fixed number.
 
-**The design takes the room, and the chat gives it up.** While you are still talking about the
-project the chat is full width. When it is time to design, the drawing appears and takes most of the
-space on the right, and the conversation moves to a narrow column on the left — the way Claude
-Design works. So the panel's width is a property of what is in it, not one fixed number: the Plan
-tab is a side column beside a wide chat; the Design tab is the other way round.
+### The Design tab
 
 The Design tab holds a picture of each screen, not a running module — it is cheap to redraw, which
 is the whole point of showing it before the build. Once the build starts, the Design tab stays as
 the record of what was agreed, and Preview becomes the live version. Same rule as every other tab:
 Design does not exist until Moss has drawn something.
 
-For a module with no screens (a background job, a connector), Moss says so and goes straight from
-Plan to the build rather than showing an empty Design tab.
+**What the drawings are.** This was flagged as unresolved — real markup shown with nothing wired,
+or a picture. PR 2307's spec already settled it and this spec follows it: a drawing is a **picture**.
+Moss's mockup is a small manifest of one to sixteen screens, each with a title, a one-line
+description, a state (default, empty, loading, broken) and a desktop and a phone image; the images
+are PNG or WebP, produced in the confined build task by laying the screen out with the app's own
+`jds-*` primitives and capturing it, and approval is of those exact images. Model-written markup
+never runs in the signed-in page, which is why it is not live markup; and because the sketch was
+laid out with the real primitives, what Moss builds afterwards is held to match the picture.
 
-**Expanding.** The preview can take the whole area under the top bar; "Back to the conversation"
-replaces the expand button. The top bar still names the project, so you always know where you are. The
-divider between chat and panel is draggable.
+On screen, each picture sits in a frame with its title and description underneath, the way the
+mockup shows. Where Moss drew a screen's empty, loading or broken states, or its phone layout, they
+sit under the frame as a small switch; the mockup shows only the default state. "Just redrawn" means
+the image changed since you last approved. A drawing of a whole page sits on page colour so the
+card inside it reads as a card; a drawing of one component sits on the surface tone.
+
+If Moss cannot produce a picture (capture failed, no capable model), the design step does not
+silently pass: Moss says so in the chat and the build waits, per PR 2307's spec.
+
+**Expanding.** Design and Preview can take the whole area under the top bar; "Back to the
+conversation" replaces the expand button. Plan and Files never expand. The top bar still names the
+project, so you always know where you are.
+
+**The divider.** The divider between chat and panel is draggable. A width you set is kept for that
+kind of tab — one for the reading tabs, one for the looking tabs — until you leave the project;
+switching between the two kinds returns to that kind's width. This is the last thing in the panel
+to build, after Preview exists.
+
+**Preview, technically.** The preview mounts the draft module's screen through the module loader
+the rail already uses, so there is no second runtime and no second copy; it is only shown after the
+host's checks have passed (PR 2307's verification slice). A caption above the stage names the screen
+("As it will look on Today"); a module with more than one screen gets the same caption as a switch.
+The preview follows the current theme because it is live; a design picture is captured in the
+light theme and stays light in dark mode, which is correct for a picture of a screen.
 
 **After it is installed** the module lives in the left rail like any other. The Preview tab keeps
 showing the copy under review, so there are never two live versions.
+
+### On a phone
+
+PR 2307's spec requires the workspace at 320, 375, 414 and 768 pixels and this spec keeps that.
+Below 768px the chat and the panel cannot share the window, so the workspace shows one at a time
+with a two-way switch under the top bar: "Conversation" and the name of the open tab ("The plan",
+"The design", "Files", "Preview"). The switch is not rendered when there is no panel — an empty
+project on a phone is just the chat. Switching keeps unsent text and your place in the transcript.
+The looking-tabs-take-the-room rule and the expand button do not apply here; everything is full
+width. The top bar drops the meta and badge (already below 900px) and truncates the project name.
+
+Between 768px and about 1024px the two panes sit side by side at their minimum widths; the mockup
+was reviewed at desktop widths only and the live proof must include one pass at 800px.
+
+## What happens to PR 2307's screens
+
+PR 2307 is open and not merged (as of 2026-09-05). Its spec carries the data layer, the build
+statuses, the API, the app-map declarations and the mockup format, and all of that stands. What
+this spec replaces is its three screens, and it replaces them after 2307 merges, not on it:
+
+- **Kept:** the routes (`/workshop`, `/workshop/new`, `/workshop/<id>`, `/workshop/legacy`), the
+  project client, the message feed and its "earlier messages" paging, the error-and-retry states,
+  the mobile switch, export and deletion, the manifest.
+- **Replaced:** the card grid (row index), the create page's form (empty chat window), the
+  "Project work" pane with "No plan yet" and "Already decided" (artifact panel, rendered only with
+  content), the in-page heading and back link (top bar trail), and turns rendered as `Card`
+  (chat drawer message parts).
+- **Changed in the contract:** create no longer requires a title; a rename call exists; the build
+  status gains "waiting for design approval".
+
+Every one of these is a product change, so the app map declarations move in the same pull request
+as the screen they describe: the Workshop manifest's `navigation` description and the
+`workshop.projects` and `workshop.chat_handoff` feature text and remediations (which today name a
+form), plus a `features` entry for the artifact panel and its states once it exists.
 
 ## What this changes in code
 
@@ -211,44 +392,77 @@ App-wide, in `apps/web/src/styles/tokens.css` and the shared styles:
 
 - Self-host Archivo as woff2 in-repo and point `--font-display` at it, keeping the `--font-sans`
   fallback chain.
-- Retone `--paper`, `--surface`, `--surface-2`, `--border`, `--border-subtle` to the bone set.
-- Add the masthead treatment to the shared page-heading pattern, on section home pages only.
-- Make the top-bar page name a link back to its section, and let a page inside a section add its own
-  name, meta and a badge to that bar.
+- Retone `--paper`, `--surface`, `--surface-2`, `--line` and `--line-subtle` to the bone set (the
+  border aliases follow).
+- Add the green-field variant to the shared `Masthead` primitive, with the dark-mode field above,
+  and a row-index primitive.
+- Let the page on screen set the top bar's trail (name, meta, badge) through the module web SDK,
+  and make the section name a link when it does; feed the same trail to Moss's page context.
+- Move the chat drawer's transcript and activity-line components into `@moss/ui`.
 
 Workshop, in `packages/workshop/src/web/`:
 
-- The project list becomes a ruled row index; the "Earlier builds and installed modules" footer link
-  moves out of the page foot (account menu or an overflow beside "New project" — still to decide).
-- `project-pages.tsx` renders the workspace as a chat window using the chat drawer's message parts,
-  with the composer pinned.
+- The project list becomes a row index rendered with the shared primitive; the "Earlier builds and
+  installed modules" link moves out of the page foot (account menu or an overflow beside "New
+  project" — still to decide; the route and its map entry stay either way).
+- The workspace renders as a chat window using the shared turn components, with the composer
+  pinned and the empty-window invitation.
 - New project routes into the empty workspace; the create form is removed and the name is derived
-  from the first message.
-- The artifact panel is added, rendered only when there is an artifact, with the Plan tab first. Its
-  width follows the open tab: a side column for Plan and Files, most of the width for Design and
-  Preview. Design, Files and Preview follow the build work and are out of scope until there is something to
+  from the first message as above.
+- The artifact panel is added, rendered only when there is an artifact, with the Plan tab first and
+  the state table above driving chip, foot and which tabs exist. Its width follows the open tab.
+  Design, Files and Preview follow the build work and are out of scope until there is something to
   show.
 - The build side gains a design step between plan approval and code, which is a change to how a
   supervised build runs, not only to how it looks. It needs its own spec work under the Workshop
   build milestone.
 
-Every one of these is a product change, so the app map declarations move in the same pull request.
-
 ## Sequencing
 
-1. **Tokens and type, app-wide.** Archivo self-hosted, bone page colour, masthead. Its own pull
-   request, its own live proof, because it changes every screen.
-2. **Workshop list and workspace.** Row index, chat window, no-form new project.
-3. **The artifact panel, Plan tab.** Needs the build side to produce a plan first.
+The earlier draft said the type and colour change could ship on its own pull request ahead of the
+Workshop work. That is true of the tokens and false of the masthead, so step 1 is now tokens only.
+
+1. **Tokens and type, app-wide.** Archivo self-hosted, bone page colour. Touches `tokens.css` and
+   the font files and nothing else, so it can ship now, independent of PR 2307. Its own pull
+   request, its own live proof, because it changes every screen: on the dev instance, a heading's
+   computed font is Archivo and the page colour is bone; the console shows no content-security
+   violation; walk Today, Settings, the chat drawer and one module page, and check inputs and the
+   assistant bubble given the `--surface-2` flip; `pnpm check:design-tokens` passes.
+2. **After PR 2307 merges: masthead, top bar trail, list and workspace.** The `Masthead` variant
+   and the row-index primitive in `packages/ui`; the top bar trail in the shell and the module web
+   SDK; the transcript and activity-line components moved to `@moss/ui`; Workshop's home page on the masthead and the
+   row index; the workspace as a chat window; no-form new project. One pull request if it fits one
+   session's worth of work, otherwise the host primitives first and Workshop's adoption second, but
+   the masthead does not ship without a page that shows it. Live proof: start a project by typing,
+   see it named and listed, send a message, reload and find it; the top bar reads section / project.
+3. **The artifact panel, Plan tab.** Needs the build side to produce a plan first (PR 2307's
+   planning slice). Live proof: a real plan appears beside a real conversation, "Approve and build"
+   changes the server status, and the panel is absent on a project with no plan.
 4. **Design tab, and the design step in a build.** Moss draws the screens and waits for approval
-   before writing code. This is build behaviour as much as UI, so it needs its own spec.
-5. **Files and Preview.** After a build actually writes files and can run.
+   before writing code. Needs PR 2307's mockup slice (the manifest, the confined capture, the image
+   serving) plus the new status. This is build behaviour as much as UI, so it needs its own spec.
+5. **Files and Preview.** After a build actually writes files and can run, and the host's checks
+   pass. The divider comes last.
 
 This must not ride in on PR 2307.
 
 ## Open
 
-- Where "Earlier builds and installed modules" goes.
-- Dark mode against the bone/warm-white set.
-- Whether a project can be renamed from the masthead, given the name now comes from the first
-  message.
+- Where "Earlier builds and installed modules" goes. The route survives regardless and its app-map
+  entry must name wherever the link lands.
+- Dark mode against the bone/warm-white set. The masthead's dark-mode field above is a stopgap
+  until then.
+- Renaming. There is no masthead inside a project now, so the earlier question is moot; the choice
+  is between renaming by telling Moss in the chat ("call it Daily Word") and clicking the name in
+  the top bar. Reviewer's suggestion: chat only, since the top bar name is a link back to the
+  section and a name that is also a link and also an edit field is three things in one.
+- Whether Today's masthead takes the green field too, or stays ink on paper as the one section
+  home that already had a masthead.
+
+## Worth reconsidering
+
+The "Only you" badge in a project's top bar. Every project is private to its owner today and
+sharing is a later slice of PR 2307's plan, so until then the badge is true of every project and
+says nothing the screen does not already say — which is the standard Ben applied to the "No plan
+yet" panel. It would earn its place the day a project can be shared, when "Only you" becomes a
+fact about this project rather than about all of them. Ben's call; the mockup keeps it.

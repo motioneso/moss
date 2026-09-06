@@ -15,7 +15,7 @@
    1. THE DISPLAY FACE — the thing Park Press never shipped
    ============================================================ */
 
-html[data-face="archivo"]  { --font-display: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+html[data-face="archivo"]  { --font-display: "Archivo", var(--font-sans); }
 html[data-face="space"]    { --font-display: "Space Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif; }
 html[data-face="bricolage"]{ --font-display: "Bricolage Grotesque", "Helvetica Neue", Helvetica, Arial, sans-serif; }
 html[data-face="none"]     { --font-display: var(--font-sans); }
