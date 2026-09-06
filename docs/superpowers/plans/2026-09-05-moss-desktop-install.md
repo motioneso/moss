@@ -82,29 +82,29 @@ Parity means: a person who installs the desktop build can do everything a person
 production install can do, through the same screens, with the same privacy guarantees. The table
 is the contract. A capability is "delivered" only when its live proof is recorded.
 
-| Capability today (Docker prod)                                        | Desktop mechanism                                                                                              | Lane   |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------ |
-| PostgreSQL 17 + pgvector, four locked-down roles, RLS                 | Bundled cluster on 127.0.0.1 at a free port, scram auth, generated passwords, same bootstrap and grants SQL     | A4     |
-| Migrate, then reconcile, then boot (ordering enforced)                | Same supervisor code extracted from the Docker launcher                                                         | A5     |
-| API serves the web build, worker runs jobs                            | Same `dist/` bundles, same env names, produced from one data directory                                          | A1, A5 |
-| Secrets generated once by the setup container                         | Generated once into an owner-only file in the data directory, same key names                                    | A2     |
-| Vault, modules, CLI home, model cache, control dir on volumes         | Subfolders of the data directory                                                                                | A1     |
-| CLI runner over a 0600 Unix socket with a secret handshake            | Unix socket on Linux/macOS, named pipe on Windows, same handshake                                                | A3     |
-| tmux multiplexer for provider CLIs                                    | node-pty multiplexer backend (tmux stays the Docker default)                                                    | A6     |
-| Provider CLIs installed into a tools prefix at image build            | Installed on demand into the data directory with the bundled Node, from the existing onboarding probe          | A7     |
-| Sports renderer: Playwright Chromium sidecar over a Unix socket       | Same sidecar, Chromium downloaded on demand into the data directory, endpoint from A3                          | A8     |
-| Local embeddings with an on-disk model cache                          | Same library, cache in the data directory, ONNX prebuild per platform                                           | A1, C  |
-| Host restart button (sentinel file + host cron script)                | Launcher watches the same sentinel and restarts the tree                                                        | A5     |
-| Module install: drop files in the modules dir, run reconcile          | Admin-gated in-app upload writes to the modules dir and runs reconcile in-process; folder watch is dev opt-in  | B2     |
-| Reconcile's owner-email confirmation from the env file                | Auto-populated by the launcher after first-admin onboarding                                                     | A5     |
-| Access from another device via trusted origins in the env file        | Origins computed at boot from the bound port, LAN addresses and `moss.local`; recomputed on network change      | B3     |
-| Opt-in HTTPS via Caddy                                                | Opt-in HTTPS served by the launcher with a locally generated CA; CA export by QR                                 | B4     |
-| Updates by pulling a new image tag                                    | In-app update check; update stops the cluster before swapping files; refuses a Postgres major mismatch          | B5     |
-| Backups by snapshotting volumes (documented procedure)                | `moss backup` command and an admin button producing one archive (dump + vault + modules + secrets)              | B6     |
-| Start on boot (Docker restart policy)                                 | Tray "Start at login" using the platform's login-item mechanism                                                 | B1     |
-| Linux x86_64 image                                                    | AppImage x86_64 and arm64                                                                                        | C3     |
-| (none)                                                                | macOS DMG, arm64 and x86_64, signed and notarized                                                               | C1     |
-| (none)                                                                | Windows NSIS installer, x64, signed, firewall rule at install                                                    | C2     |
+| Capability today (Docker prod)                                  | Desktop mechanism                                                                                             | Lane   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------ |
+| PostgreSQL 17 + pgvector, four locked-down roles, RLS           | Bundled cluster on 127.0.0.1 at a free port, scram auth, generated passwords, same bootstrap and grants SQL   | A4     |
+| Migrate, then reconcile, then boot (ordering enforced)          | Same supervisor code extracted from the Docker launcher                                                       | A5     |
+| API serves the web build, worker runs jobs                      | Same `dist/` bundles, same env names, produced from one data directory                                        | A1, A5 |
+| Secrets generated once by the setup container                   | Generated once into an owner-only file in the data directory, same key names                                  | A2     |
+| Vault, modules, CLI home, model cache, control dir on volumes   | Subfolders of the data directory                                                                              | A1     |
+| CLI runner over a 0600 Unix socket with a secret handshake      | Unix socket on Linux/macOS, named pipe on Windows, same handshake                                             | A3     |
+| tmux multiplexer for provider CLIs                              | node-pty multiplexer backend (tmux stays the Docker default)                                                  | A6     |
+| Provider CLIs installed into a tools prefix at image build      | Installed on demand into the data directory with the bundled Node, from the existing onboarding probe         | A7     |
+| Sports renderer: Playwright Chromium sidecar over a Unix socket | Same sidecar, Chromium downloaded on demand into the data directory, endpoint from A3                         | A8     |
+| Local embeddings with an on-disk model cache                    | Same library, cache in the data directory, ONNX prebuild per platform                                         | A1, C  |
+| Host restart button (sentinel file + host cron script)          | Launcher watches the same sentinel and restarts the tree                                                      | A5     |
+| Module install: drop files in the modules dir, run reconcile    | Admin-gated in-app upload writes to the modules dir and runs reconcile in-process; folder watch is dev opt-in | B2     |
+| Reconcile's owner-email confirmation from the env file          | Auto-populated by the launcher after first-admin onboarding                                                   | A5     |
+| Access from another device via trusted origins in the env file  | Origins computed at boot from the bound port, LAN addresses and `moss.local`; recomputed on network change    | B3     |
+| Opt-in HTTPS via Caddy                                          | Opt-in HTTPS served by the launcher with a locally generated CA; CA export by QR                              | B4     |
+| Updates by pulling a new image tag                              | In-app update check; update stops the cluster before swapping files; refuses a Postgres major mismatch        | B5     |
+| Backups by snapshotting volumes (documented procedure)          | `moss backup` command and an admin button producing one archive (dump + vault + modules + secrets)            | B6     |
+| Start on boot (Docker restart policy)                           | Tray "Start at login" using the platform's login-item mechanism                                               | B1     |
+| Linux x86_64 image                                              | AppImage x86_64 and arm64                                                                                     | C3     |
+| (none)                                                          | macOS DMG, arm64 and x86_64, signed and notarized                                                             | C1     |
+| (none)                                                          | Windows NSIS installer, x64, signed, firewall rule at install                                                 | C2     |
 
 Not parity, stated openly: per-user Unix UID isolation for CLI subprocesses is off in the desktop
 build, exactly as it is off by default in production. Cross-account isolation on desktop is RLS in
@@ -115,28 +115,28 @@ downgrade with the threat model written out.
 
 Source capabilities at the baseline, not live-test claims.
 
-| Capability                       | Current evidence                                                                                                  | Decision                                                                                                                                       |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Process tree and ordering        | `scripts/start-jarv1s.ts:139-154`: migrate, reconcile, then cli-runner, worker, api; `:181` spawns with uid/gid    | Extract into `packages/supervisor`; uid/gid drop only when running as root on POSIX. Docker launcher becomes a thin caller.                    |
-| Env shaping per child            | `scripts/start-jarv1s.ts:40-60` strips CLI-runner keys from api/worker; `:86,111` MCP URL                          | Keep the same allow/deny lists; the launcher feeds the same env names from the data layout.                                                    |
-| Role bootstrap                   | `infra/postgres/bootstrap/0000_roles.sql`; `packages/db/src/role-bootstrap.ts:43` derives role passwords from URLs | Unchanged. The launcher generates four role passwords and builds the five connection URLs the migrate step already expects.                    |
-| Migration and DDL serialization  | `scripts/migrate.ts:26`; `packages/db/src/cluster-ddl-lock.ts`; reconcile advisory lock `module-reconcile.ts:232`  | Unchanged. In-process reconcile from the UI reuses the same lock.                                                                              |
-| Reconcile owner confirmation     | `scripts/module-reconcile.ts:151-155` throws unless env email equals the first owner                              | Keep the guard. The API writes `owner-email` into the control dir on first-admin creation; the launcher passes it as the confirm env.           |
-| CLI runner socket                | `packages/cli-runner/src/server.ts:66-89` mkdir 0700, unlink stale, listen on path, chmod 0600                     | Path becomes an IPC endpoint from A3. On win32 the endpoint is a named pipe and the chmod steps are skipped.                                    |
-| RPC client                       | `packages/chat/src/live/chat-engine-rpc-client.ts:580,615` opens the socket path and realpaths it                  | Accept an endpoint string; skip realpath for pipe endpoints.                                                                                   |
-| Sports sidecar sockets           | `packages/sports/src/source/browser-protocol.ts:19-21` hard-codes `/run/moss-sports-browser/*.sock`                | Constants become defaults; runtime reads endpoints from env populated by the layout.                                                           |
-| Chromium                         | `Dockerfile:62,78` installs Playwright Chromium at build; `browser-sidecar.ts:246` launches it                     | Desktop downloads Chromium on demand with Playwright's own installer into the data directory.                                                   |
-| Multiplexer                      | `packages/ai/src/adapters/multiplexer.ts:31-59` contract; `multiplexer-resolve.ts:20` kinds `tmux`, `herdr`        | Add kind `pty`. Contract tests run against all backends.                                                                                       |
-| Provider CLI install             | `Dockerfile:67-87`, `JARVIS_CLI_TOOLS_PREFIX`                                                                      | Launcher installs into `layout.cliToolsPrefix` with bundled Node and npm.                                                                      |
-| Vault root                       | `packages/vault/src/vault-config.ts:6` reads `JARVIS_VAULT_ROOT`                                                   | Fed from the layout. No code change.                                                                                                           |
-| Web build serving                | `apps/api/src/static-web.ts:51` reads `JARVIS_WEB_DIST_DIR`                                                        | Fed from the bundle path. No code change.                                                                                                      |
-| Embedding cache                  | `packages/memory/src/transformers-cache-dir.ts:9-19` honours `HF_HOME`                                             | Fed from the layout. No code change.                                                                                                           |
-| Host restart                     | `packages/settings/src/host-restart-routes.ts:34,44,103` sentinel and alive files in the control dir               | Launcher owns the watcher: touches alive, consumes the sentinel, restarts residents.                                                            |
-| Trusted origins                  | `packages/auth/src/runtime-config.ts:12` reads a fixed list; `docs/operations/deploy.md:40-50`                     | B3 verifies whether better-auth 1.6 accepts a resolver function; if not, the launcher rewrites the list and restarts api on network change.     |
-| Secrets generation               | `scripts/setup-prod.ts:10-28` writes `env.production.local` non-interactively                                      | Extract the generator into `packages/data-dir` and reuse it for both Docker setup and desktop.                                                 |
-| Secret key names                 | `infra/env.production.example`                                                                                     | Desktop writes the same names. Rotation docs (`docs/operations/secret-key-rotation.md`) apply unchanged.                                       |
-| Host settings screen             | `packages/shared/src/app-map-core.ts:227-230` "Advanced host setup"                                                | New desktop rows (cluster status, LAN address, Chromium install, backup) are declared here in the same PR that adds them.                       |
-| Prior estimate                   | #1827 body: "bundled-Postgres launcher for Mac + Linux: a few weeks; Windows roughly doubles it"                    | Consistent with this plan. Signing and notarization need paperwork and money from Ben (see rulings).                                           |
+| Capability                      | Current evidence                                                                                                   | Decision                                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Process tree and ordering       | `scripts/start-jarv1s.ts:139-154`: migrate, reconcile, then cli-runner, worker, api; `:181` spawns with uid/gid    | Extract into `packages/supervisor`; uid/gid drop only when running as root on POSIX. Docker launcher becomes a thin caller.                 |
+| Env shaping per child           | `scripts/start-jarv1s.ts:40-60` strips CLI-runner keys from api/worker; `:86,111` MCP URL                          | Keep the same allow/deny lists; the launcher feeds the same env names from the data layout.                                                 |
+| Role bootstrap                  | `infra/postgres/bootstrap/0000_roles.sql`; `packages/db/src/role-bootstrap.ts:43` derives role passwords from URLs | Unchanged. The launcher generates four role passwords and builds the five connection URLs the migrate step already expects.                 |
+| Migration and DDL serialization | `scripts/migrate.ts:26`; `packages/db/src/cluster-ddl-lock.ts`; reconcile advisory lock `module-reconcile.ts:232`  | Unchanged. In-process reconcile from the UI reuses the same lock.                                                                           |
+| Reconcile owner confirmation    | `scripts/module-reconcile.ts:151-155` throws unless env email equals the first owner                               | Keep the guard. The API writes `owner-email` into the control dir on first-admin creation; the launcher passes it as the confirm env.       |
+| CLI runner socket               | `packages/cli-runner/src/server.ts:66-89` mkdir 0700, unlink stale, listen on path, chmod 0600                     | Path becomes an IPC endpoint from A3. On win32 the endpoint is a named pipe and the chmod steps are skipped.                                |
+| RPC client                      | `packages/chat/src/live/chat-engine-rpc-client.ts:580,615` opens the socket path and realpaths it                  | Accept an endpoint string; skip realpath for pipe endpoints.                                                                                |
+| Sports sidecar sockets          | `packages/sports/src/source/browser-protocol.ts:19-21` hard-codes `/run/moss-sports-browser/*.sock`                | Constants become defaults; runtime reads endpoints from env populated by the layout.                                                        |
+| Chromium                        | `Dockerfile:62,78` installs Playwright Chromium at build; `browser-sidecar.ts:246` launches it                     | Desktop downloads Chromium on demand with Playwright's own installer into the data directory.                                               |
+| Multiplexer                     | `packages/ai/src/adapters/multiplexer.ts:31-59` contract; `multiplexer-resolve.ts:20` kinds `tmux`, `herdr`        | Add kind `pty`. Contract tests run against all backends.                                                                                    |
+| Provider CLI install            | `Dockerfile:67-87`, `JARVIS_CLI_TOOLS_PREFIX`                                                                      | Launcher installs into `layout.cliToolsPrefix` with bundled Node and npm.                                                                   |
+| Vault root                      | `packages/vault/src/vault-config.ts:6` reads `JARVIS_VAULT_ROOT`                                                   | Fed from the layout. No code change.                                                                                                        |
+| Web build serving               | `apps/api/src/static-web.ts:51` reads `JARVIS_WEB_DIST_DIR`                                                        | Fed from the bundle path. No code change.                                                                                                   |
+| Embedding cache                 | `packages/memory/src/transformers-cache-dir.ts:9-19` honours `HF_HOME`                                             | Fed from the layout. No code change.                                                                                                        |
+| Host restart                    | `packages/settings/src/host-restart-routes.ts:34,44,103` sentinel and alive files in the control dir               | Launcher owns the watcher: touches alive, consumes the sentinel, restarts residents.                                                        |
+| Trusted origins                 | `packages/auth/src/runtime-config.ts:12` reads a fixed list; `docs/operations/deploy.md:40-50`                     | B3 verifies whether better-auth 1.6 accepts a resolver function; if not, the launcher rewrites the list and restarts api on network change. |
+| Secrets generation              | `scripts/setup-prod.ts:10-28` writes `env.production.local` non-interactively                                      | Extract the generator into `packages/data-dir` and reuse it for both Docker setup and desktop.                                              |
+| Secret key names                | `infra/env.production.example`                                                                                     | Desktop writes the same names. Rotation docs (`docs/operations/secret-key-rotation.md`) apply unchanged.                                    |
+| Host settings screen            | `packages/shared/src/app-map-core.ts:227-230` "Advanced host setup"                                                | New desktop rows (cluster status, LAN address, Chromium install, backup) are declared here in the same PR that adds them.                   |
+| Prior estimate                  | #1827 body: "bundled-Postgres launcher for Mac + Linux: a few weeks; Windows roughly doubles it"                   | Consistent with this plan. Signing and notarization need paperwork and money from Ben (see rulings).                                        |
 
 ### Unproven capabilities and accountable decisions
 
@@ -475,7 +475,7 @@ export async function writeSettings(file: string, next: LauncherSettings): Promi
   `windows-latest`
 - Test: `tests/unit/ipc-named-pipe.test.ts` (creates a `net.Server` on a pipe endpoint from
   `ipcEndpoint(..., "win32")`, connects, exchanges one line; skipped unless `process.platform ===
-  "win32"`), plus existing cli-runner server tests extended with a pipe case that asserts no
+"win32"`), plus existing cli-runner server tests extended with a pipe case that asserts no
   `chmod` call is made (inject the fs deps the server already takes).
 
 - [ ] **Step 1: Failing test for `resolveSportsSockets`** (defaults equal today's constants; env
@@ -553,9 +553,16 @@ export async function assertVectorExtension(info: ClusterInfo): Promise<void>;
 
 // packages/embedded-postgres/src/urls.ts
 export interface RolePasswords {
-  migrationOwner: string; appRuntime: string; workerRuntime: string; authRuntime: string;
+  migrationOwner: string;
+  appRuntime: string;
+  workerRuntime: string;
+  authRuntime: string;
 }
-export function connectionUrls(info: ClusterInfo, db: string, roles: RolePasswords): {
+export function connectionUrls(
+  info: ClusterInfo,
+  db: string,
+  roles: RolePasswords
+): {
   JARVIS_BOOTSTRAP_DATABASE_URL: string; // postgres superuser
   JARVIS_MIGRATION_DATABASE_URL: string;
   JARVIS_APP_DATABASE_URL: string;
@@ -575,17 +582,31 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { clusterState, ensureCluster, startCluster, stopCluster, assertVectorExtension } from "@moss/embedded-postgres";
+import {
+  clusterState,
+  ensureCluster,
+  startCluster,
+  stopCluster,
+  assertVectorExtension
+} from "@moss/embedded-postgres";
 
 const binDir = process.env.MOSS_PG_BUNDLE_BIN!; // set by the fetch script's output
 let root: string;
 const paths = () => ({
-  binDir, dataDir: join(root, "data"), portFile: join(root, "port"),
-  passwordFile: join(root, "pw"), logFile: join(root, "pg.log")
+  binDir,
+  dataDir: join(root, "data"),
+  portFile: join(root, "port"),
+  passwordFile: join(root, "pw"),
+  logFile: join(root, "pg.log")
 });
 
-beforeAll(async () => { root = await mkdtemp(join(tmpdir(), "moss-pg-")); });
-afterAll(async () => { await stopCluster(paths()).catch(() => undefined); await rm(root, { recursive: true, force: true }); });
+beforeAll(async () => {
+  root = await mkdtemp(join(tmpdir(), "moss-pg-"));
+});
+afterAll(async () => {
+  await stopCluster(paths()).catch(() => undefined);
+  await rm(root, { recursive: true, force: true });
+});
 
 describe("embedded postgres", () => {
   it("initialises, starts on loopback at a free port, and has pgvector", async () => {
@@ -659,7 +680,12 @@ in the package.
 ```ts
 // packages/supervisor/src/plan.ts
 export type ChildRole = "api" | "worker" | "cli-runner" | "sports-renderer";
-export interface ProcessSpec { readonly role: ChildRole; readonly command: readonly string[]; readonly env: NodeJS.ProcessEnv; readonly cwd: string }
+export interface ProcessSpec {
+  readonly role: ChildRole;
+  readonly command: readonly string[];
+  readonly env: NodeJS.ProcessEnv;
+  readonly cwd: string;
+}
 export interface SupervisorPlan {
   readonly oneShots: readonly ProcessSpec[]; // migrate, then reconcile, in order
   readonly residents: readonly ProcessSpec[];
@@ -675,19 +701,37 @@ export function buildDesktopPlan(input: {
 }): SupervisorPlan;
 
 // packages/supervisor/src/run.ts
-export interface Supervised { shutdown(signal: NodeJS.Signals): Promise<void>; readonly exited: Promise<number> }
+export interface Supervised {
+  shutdown(signal: NodeJS.Signals): Promise<void>;
+  readonly exited: Promise<number>;
+}
 export async function runOneShots(plan: SupervisorPlan): Promise<void>;
-export function startResidents(plan: SupervisorPlan, onExit: (role: ChildRole, code: number | null) => void): Supervised;
+export function startResidents(
+  plan: SupervisorPlan,
+  onExit: (role: ChildRole, code: number | null) => void
+): Supervised;
 export async function runSupervisor(plan: SupervisorPlan): Promise<number>; // one-shots then residents, SIGTERM/SIGINT handling as today
 
 // packages/supervisor/src/restart-watcher.ts
-export function startRestartWatcher(controlDir: string, onRequest: () => Promise<void>, intervalMs?: number): { stop(): void };
+export function startRestartWatcher(
+  controlDir: string,
+  onRequest: () => Promise<void>,
+  intervalMs?: number
+): { stop(): void };
 // touches <controlDir>/watcher-alive every interval; when <controlDir>/restart-requested exists,
 // unlinks it and calls onRequest.
 
 // apps/launcher/src/boot.ts
-export interface BootResult { readonly layout: DataLayout; readonly cluster: ClusterInfo; readonly settings: LauncherSettings; readonly env: NodeJS.ProcessEnv }
-export async function bootDataDir(root: string, bundle: { pgBinDir: string; appDir: string; nodeBin: string }): Promise<BootResult>;
+export interface BootResult {
+  readonly layout: DataLayout;
+  readonly cluster: ClusterInfo;
+  readonly settings: LauncherSettings;
+  readonly env: NodeJS.ProcessEnv;
+}
+export async function bootDataDir(
+  root: string,
+  bundle: { pgBinDir: string; appDir: string; nodeBin: string }
+): Promise<BootResult>;
 // ensureLayoutDirs -> ensureSecrets -> ensureCluster/startCluster -> assertVectorExtension ->
 // read settings -> env = { ...layoutToEnv, ...connectionUrls, ...secrets, HOST, PORT,
 //   JARVIS_WEB_PORT, JARVIS_WEB_DIST_DIR, JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL (from
@@ -772,7 +816,7 @@ exactly. `attachCommand(handle)` returns `moss attach <handle>` (the launcher ga
 - Create: `apps/launcher/src/commands/tools.ts` (`moss tools install <claude|codex|all>`,
   `moss tools status`)
 - Modify: the provider validation response and its UI copy (`packages/ai/src/provider-validation-routes.ts`; find the screen with `grep -rn "provider-validation"
-  apps/web/src`) so that a missing CLI on a desktop install says "Install from Host settings"
+apps/web/src`) so that a missing CLI on a desktop install says "Install from Host settings"
   and links to the new row; app map remediation entry added in the same PR.
 - Modify: `packages/settings` host routes: a `POST /api/host/tools/install` that writes
   `<controlDir>/tools-install-requested` with the tool name; the launcher's restart watcher gains a
