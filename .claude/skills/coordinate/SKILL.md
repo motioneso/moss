@@ -95,6 +95,25 @@ runs cheap and spends up only where same-lens review demonstrably misses things.
 booted Opus. This applies to build agents, Herdr-fallback QA, and relay successors (yours and
 theirs).
 
+**Build lanes run as Muse Spark agents (Ben's standing ruling, reaffirmed 2026-09-06).** Review
+stays on Opus and the resident coordinator loop stays on Opus; do not use Codex. Muse is a separate
+command-line coding agent at `/home/ben/.local/bin/muse`, whose settings already default to the
+Spark model, so the plain command gets it and there is no model flag to pass.
+
+Herdr has **no Muse agent kind**, so `herdr agent start` cannot launch one and a Muse lane never
+appears in `herdr agent list`. Split a pane in the Builders tab, then launch it in that pane:
+
+```bash
+herdr pane split <builders-tab-pane> --direction down --cwd <worktree> --no-focus
+herdr pane run <new-pane> "muse --yolo --reasoning-effort high 'Read the file <brief-path> in full. It is your task brief. Follow it exactly.'"
+```
+
+`--yolo` is what turns off its approval prompts so the lane can work unattended. Track a Muse lane
+by pane id and pane label only — set a clear pane label, because that is the only handle you get.
+Message it with `herdr pane run` against its pane, never `herdr agent prompt`, then read the pane
+bounded to confirm the message landed. Everything else in this skill — brief file, relay triggers,
+gate discipline, live-path gate — applies to a Muse lane unchanged.
+
 **Opus escalation** happens via one-shot subagents — never reason through these inline:
 
 - **Hard triggers (always Opus):** agent message contains `[SECURITY]` / `[AUTH]` / `[RLS]` /
@@ -605,6 +624,7 @@ Fired by the relay triggers (Context discipline / Phase 3 step 7):
 | ---- | --------------- |
 | Manifest / handoff templates | `.claude/skills/coordinate/templates/{manifest,handoff}.md` |
 | Isolated worktree | `git worktree add .claude/worktrees/<slug> -b <slug> origin/main` |
+| Spawn a Muse Spark build lane | `herdr pane split <builders-tab-pane> --direction down --cwd <worktree> --no-focus` → `herdr pane run <new-pane> "muse --yolo --reasoning-effort high '<one-line pointer to a brief file>'"` → track by pane label; message it with `herdr pane run`, never `agent prompt` |
 | Spawn build agent | `herdr pane split <pane> --direction down --cwd <worktree> --no-focus` → `herdr agent start <lowercase-name> --kind claude --pane <new-pane> -- --model sonnet --permission-mode bypassPermissions "<one-line pointer to a brief file>"` → confirm pane says "Sonnet" |
 | Name a lane (both namespaces) | `herdr agent rename <pane> <lowercase-work-name>` **and** `herdr pane rename <pane> "<Human Label>"` |
 | Name a coordinator | `herdr agent rename "$HERDR_PANE_ID" coordinator` **and** `herdr pane rename "$HERDR_PANE_ID" Coordinator` |
