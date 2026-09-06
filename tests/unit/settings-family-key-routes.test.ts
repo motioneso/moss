@@ -105,6 +105,38 @@ describe("family key admin routes (#2312 slice 1)", () => {
     expect(rotate.statusCode).toBe(404);
   });
 
+  it("rotate with an unusable settings value answers plainly instead of a server error", async () => {
+    const savedNodeEnv = process.env.NODE_ENV;
+    const savedMaster = process.env.JARVIS_AI_SECRET_KEY;
+    const savedFamily = process.env.MOSS_INTEGRATIONS_SECRET_KEY;
+    process.env.NODE_ENV = "production";
+    process.env.JARVIS_AI_SECRET_KEY = "m".repeat(40);
+    process.env.MOSS_INTEGRATIONS_SECRET_KEY = "too-short";
+    try {
+      const { app } = createHarness(true);
+      const rotate = await app.inject({
+        method: "POST",
+        url: "/api/admin/settings/encryption-keys/rotate",
+        payload: { family: "integrations" }
+      });
+      expect(rotate.statusCode).toBe(200);
+      expect(rotate.json()).toEqual({
+        keys: [
+          { family: "integrations", source: "broken", cause: "env" },
+          { family: "module_credential", source: "missing" },
+          { family: "news_credential", source: "missing" }
+        ]
+      });
+    } finally {
+      if (savedNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = savedNodeEnv;
+      if (savedMaster === undefined) delete process.env.JARVIS_AI_SECRET_KEY;
+      else process.env.JARVIS_AI_SECRET_KEY = savedMaster;
+      if (savedFamily === undefined) delete process.env.MOSS_INTEGRATIONS_SECRET_KEY;
+      else process.env.MOSS_INTEGRATIONS_SECRET_KEY = savedFamily;
+    }
+  });
+
   it("rotates an existing key and keeps the endpoint admin-only", async () => {
     const { app } = createHarness(true);
     await app.inject({

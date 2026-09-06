@@ -37,6 +37,8 @@ function familyLabel(family: string): { label: string; desc: string } {
 function statusText(status: FamilyKeyStatusDto): string {
   if (status.source === "env") return "Ready (env file)";
   if (status.source === "store") return "Ready (stored)";
+  if (status.source === "broken" && status.cause === "env")
+    return "Stopped: the value in the settings file cannot be used. Fix or remove it there.";
   if (status.source === "broken")
     return "Stopped: the stored key no longer opens. Features using it are paused.";
   return "Needs attention";

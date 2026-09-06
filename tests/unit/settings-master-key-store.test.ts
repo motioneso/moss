@@ -128,7 +128,8 @@ describe("family key store (#2312 slice 1, #2322 slice 2)", () => {
     });
     expect(status.find((s) => s.family === "module_credential")).toEqual({
       family: "module_credential",
-      source: "broken"
+      source: "broken",
+      cause: "env"
     });
     expect(status.find((s) => s.family === "integrations")).toEqual({
       family: "integrations",
@@ -377,7 +378,7 @@ describe("family key store (#2312 slice 1, #2322 slice 2)", () => {
     invalidateFamilyKeyCache();
     const status = await getFamilyKeyStatus(scopedDb, envB);
     expect(status).toEqual([
-      { family: "integrations", source: "broken" },
+      { family: "integrations", source: "broken", cause: "store" },
       { family: "module_credential", source: "missing" },
       { family: "news_credential", source: "missing" }
     ]);

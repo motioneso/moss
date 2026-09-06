@@ -366,17 +366,26 @@ export async function generateFamilyKey(
   if (existing) {
     retired.push({ keyId: existing.keyId, secret: existing.secret });
   } else if (resolveMossEnv(env, input.family.keyEnvVar) !== undefined) {
-    const envKeyring = resolveKeyring(
-      input.family.keyEnvVar,
-      input.family.keyIdEnvVar,
-      input.family.keysEnvVar,
-      input.family.devDefault,
-      env
-    );
-    for (const [keyId, secret] of envKeyring.keys) {
-      if (!retired.some((entry) => entry.keyId === keyId)) {
-        retired.push({ keyId, secret: secret.toString("hex") });
+    // A present value can still be unusable (blank or too short): resolveKeyring
+    // rejects it, and there is nothing to catch it into except proceeding without
+    // a carried key. That is fine here — an unusable value could never have sealed
+    // anything in the first place — so the fresh key stands alone and the status
+    // keeps reporting broken until the value itself is fixed or removed.
+    try {
+      const envKeyring = resolveKeyring(
+        input.family.keyEnvVar,
+        input.family.keyIdEnvVar,
+        input.family.keysEnvVar,
+        input.family.devDefault,
+        env
+      );
+      for (const [keyId, secret] of envKeyring.keys) {
+        if (!retired.some((entry) => entry.keyId === keyId)) {
+          retired.push({ keyId, secret: secret.toString("hex") });
+        }
       }
+    } catch {
+      // Unusable settings value: nothing to preserve, generate fresh.
     }
   } else {
     // No row, no settings value: outside hardened environments the data may still
@@ -447,6 +456,12 @@ export async function rotateFamilyKey(
 export interface FamilyKeyStatus {
   readonly family: string;
   readonly source: "env" | "store" | "missing" | "broken";
+  /**
+   * Why a broken family is broken. Present only with source "broken": "env" means
+   * the value in the settings file itself cannot be used, "store" means the stored
+   * row no longer decrypts. The screen words each case without claiming the other.
+   */
+  readonly cause?: "env" | "store";
 }
 
 /**
@@ -474,7 +489,7 @@ export async function getFamilyKeyStatus(
         );
         statuses.push({ family: family.name, source: "env" });
       } catch {
-        statuses.push({ family: family.name, source: "broken" });
+        statuses.push({ family: family.name, source: "broken", cause: "env" });
       }
     } else {
       const state = familyRowState(
@@ -483,7 +498,8 @@ export async function getFamilyKeyStatus(
       );
       statuses.push({
         family: family.name,
-        source: state === "ok" ? "store" : state
+        source: state === "ok" ? "store" : state,
+        ...(state === "broken" ? { cause: "store" as const } : {})
       });
     }
   }

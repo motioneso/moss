@@ -70,6 +70,73 @@ function repo(overrides: Record<string, unknown> = {}) {
 const emptyCatalog: readonly never[] = [];
 
 describe("collectCandidates", () => {
+  it("never sends switched-off, unsupported, unapproved, or credential-less sources to the credentialed reader", async () => {
+    const base = (id: string) => ({
+      id,
+      label: `Pinned ${id}`,
+      canonicalDomain: `${id}.example.com`,
+      homepageUrl: `https://${id}.example.com`,
+      feedUrl: `https://${id}.example.com/feed.xml`,
+      retrievalMethod: "feed",
+      validationStatus: "approved",
+      healthStatus: "healthy",
+      createdAt: now.toISOString()
+    });
+    const sources = [
+      { ...base("s-disabled"), healthStatus: "disabled" },
+      { ...base("s-unsupported"), healthStatus: "unsupported" },
+      { ...base("s-pending"), validationStatus: "pending" },
+      base("s-nocred"),
+      base("s-control")
+    ];
+    const credentialedCalls: string[] = [];
+    let feedFetches = 0;
+    const result = await collectCandidates(
+      db,
+      {
+        fetch: async (url: string) => {
+          feedFetches += 1;
+          return {
+            ok: true,
+            status: 200,
+            finalUrl: url,
+            contentType: "application/rss+xml",
+            body: feed([]),
+            truncated: false
+          };
+        },
+        search: { search: async () => ({ results: [] }) },
+        ai: {
+          fingerprint: async () => "fp",
+          generateJson: async () => ({ ok: false, error: "provider_error" })
+        },
+        repo: repo({ listCustomSources: async () => sources }),
+        prefs: { list: async () => [] },
+        catalog: emptyCatalog,
+        credentials: {
+          readStatuses: async () => [
+            { sourceId: "s-disabled" },
+            { sourceId: "s-unsupported" },
+            { sourceId: "s-pending" },
+            { sourceId: "s-control" }
+          ]
+        },
+        credentialedSource: (async (sdb: unknown, input: { sourceId: string }) => {
+          credentialedCalls.push(input.sourceId);
+          return { items: [] };
+        }) as never
+      },
+      { now, actorUserId: "owner-1" }
+    );
+    // Only the approved, healthy, credentialed source reaches the reader. The
+    // credential-less source stays on the plain feed path; the other three are
+    // skipped outright with no failure recorded.
+    expect(credentialedCalls).toEqual(["s-control"]);
+    expect(feedFetches).toBe(1);
+    expect(result.sourceFailures).toEqual([]);
+    expect(result.credentialedRecovered).toEqual(["s-control"]);
+  });
+
   it("never fetches an excluded source", async () => {
     let fetches = 0;
     const result = await collectCandidates(
