@@ -42,7 +42,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
-- **Workshop projects.** You can now start a Workshop project, give it a name and a first request, and come back [PR #2307](https://github.com/motioneso/moss/pull/2307)
+- **Workshop projects.** You can now start a Workshop project, give it a name and a first request, and come back to it later with everything you have written saved. [PR #2307](https://github.com/motioneso/moss/pull/2307)
 
 ### 2026-09-05
 
