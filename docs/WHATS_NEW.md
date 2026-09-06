@@ -36,6 +36,10 @@ feature that is not present in the image you are running.
 - **A new display typeface and a lighter page colour across the app.** Headings use a new typeface and pages sit on a lighter background across the app. [PR #2333](https://github.com/motioneso/moss/pull/2333)
 - **The assistant no longer asks permission every time it reads a web page.** When the assistant reads a web page for you, it now just does it, the same way it already does for a web search, instead of stopping to ask you to approve every single page it looks at. [PR #2331](https://github.com/motioneso/moss/pull/2331)
 
+#### Fixed
+
+- **App no longer sticks on the loading screen on slow days.** The app used to get stuck on its loading screen when one startup check was slow, and now it waits for the answer instead of asking again until nothing responds. [PR #2344](https://github.com/motioneso/moss/pull/2344)
+
 ### 2026-09-05
 
 #### Fixed
