@@ -150,7 +150,10 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         // #2162 integrations foundation — owner-keyed connections cascade with the user.
         "app.integration_connections",
         // #2236 scratchpad — one owner-keyed row per user, cascades with the user.
-        "app.scratchpads"
+        "app.scratchpads",
+        // Workshop projects own their durable feed; both cascade with their owner.
+        "app.workshop_projects",
+        "app.workshop_project_feed"
       ].sort()
     );
   });

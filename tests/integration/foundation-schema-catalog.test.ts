@@ -398,8 +398,10 @@ describe("MVP foundation schema catalog", () => {
         { version: "0220", name: "0220_commitment_email_items.sql" },
         // #2237 slice 2 — per-source photo rule and photo status on app.sports_custom_sources.
         { version: "0222", name: "0222_sports_source_photos.sql" },
+        // Workshop projects own their durable feed; both arrive together.
+        { version: "0223", name: "0223_workshop_projects.sql" },
+        { version: "0224", name: "0224_workshop_project_feed.sql" },
         // #743 web push: subscriptions, delivery ledger, per-user push settings.
-        // 0219-0221, 0223-0224 are taken by other in-flight branches (see migration numbering in #743 PR notes).
         { version: "0225", name: "0225_push_notifications.sql" }
       ]);
     } finally {

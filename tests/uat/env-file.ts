@@ -1,5 +1,6 @@
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { deriveTrustedOrigins } from "../../scripts/setup-prod-origins.js";
@@ -54,7 +55,7 @@ export function writeUatEnvFile(input: {
         // localhost are distinct origins for its exact-string check, so login was rejected with
         // "Invalid origin" until this was added. Reuses the same deriveTrustedOrigins helper
         // scripts/setup-prod.ts uses for real deploys (#379) rather than hand-rolling the list.
-        `JARVIS_AUTH_TRUSTED_ORIGINS=${deriveTrustedOrigins({ webPort: String(input.webPort), publicOrigin: "127.0.0.1" })}`,
+        `JARVIS_AUTH_TRUSTED_ORIGINS=${appendReachableOrigins(deriveTrustedOrigins({ webPort: String(input.webPort), publicOrigin: "127.0.0.1" }), input.webPort)}`,
         `JARVIS_DOCKER_SUBNET=${input.subnet}`,
         `POSTGRES_PASSWORD=${UAT_POSTGRES_PASSWORD}`,
         "JARVIS_BOOTSTRAP_DATABASE_URL=postgres://postgres:postgres@postgres:5432/jarv1s",
@@ -131,4 +132,56 @@ export function writeUatEnvFile(input: {
     throw error;
   }
   return { path, cleanup: () => rmSync(dir, { force: true, recursive: true }) };
+}
+
+// A UAT instance publishes its web port on 0.0.0.0, so it is already reachable from other
+// machines — but better-auth compares the browser's Origin header against an exact string list,
+// so a sign-in from any address other than localhost/127.0.0.1 was rejected with "Invalid
+// origin". Ben's ruling, 2026-09-05: a held-open instance must be usable from his laptop over
+// both the LAN and the tailnet, so every address this host actually answers on is trusted.
+// UAT instances are throwaway, seeded with a published test password, and never a prod
+// deployment — scripts/setup-prod-origins.ts still governs real deploys and is untouched.
+function uatReachableHosts(): readonly string[] {
+  const hosts = new Set<string>();
+
+  for (const addresses of Object.values(networkInterfaces())) {
+    for (const address of addresses ?? []) {
+      // Loopback is already in the derived list; link-local answers nothing useful here, and on
+      // this box the IPv6 half of it is ~100 fe80:: entries from every docker bridge.
+      const isLinkLocal =
+        address.address.startsWith("169.254.") || address.address.toLowerCase().startsWith("fe80:");
+      if (address.internal || isLinkLocal) continue;
+      // IPv6 literals need brackets in a URL, and better-auth compares the exact origin string.
+      hosts.add(address.family === "IPv6" ? `[${address.address}]` : address.address);
+    }
+  }
+
+  // The tailnet DNS name is the address a human actually types. Absent tailscale, or a node that
+  // is logged out, simply contributes nothing.
+  try {
+    const status = JSON.parse(
+      execFileSync("tailscale", ["status", "--json"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: 5_000
+      })
+    ) as { Self?: { DNSName?: string } };
+    const dnsName = status.Self?.DNSName?.replace(/\.$/, "");
+    if (dnsName) hosts.add(dnsName);
+  } catch {
+    // no tailscale on this box — LAN addresses above are enough
+  }
+
+  // Escape hatch for an address this host cannot discover itself (a reverse proxy, a port
+  // forward on another machine). Comma-separated bare hostnames, no scheme or port.
+  for (const host of (process.env.JARVIS_UAT_EXTRA_ORIGIN_HOSTS ?? "").split(",")) {
+    const trimmed = host.trim();
+    if (trimmed) hosts.add(trimmed);
+  }
+
+  return [...hosts];
+}
+
+function appendReachableOrigins(origins: string, webPort: number): string {
+  return [origins, ...uatReachableHosts().map((host) => `http://${host}:${webPort}`)].join(",");
 }
