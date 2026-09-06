@@ -15,7 +15,13 @@ export interface AcpTunnel {
   read(
     sessionKey: string,
     afterSeq: number
-  ): Promise<{ lines: readonly string[]; nextSeq: number; exited: boolean }>;
+  ): Promise<{
+    lines: readonly string[];
+    firstSeq: number;
+    nextSeq: number;
+    exited: boolean;
+    truncated: boolean;
+  }>;
   /** Stop the adapter for a session key. Idempotent. */
   kill(sessionKey: string): Promise<void>;
 }

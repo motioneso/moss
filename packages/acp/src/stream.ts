@@ -61,7 +61,15 @@ export function createTunnelStream(
               }
               throw error;
             }
-            seq = result.nextSeq;
+            // Advance by lines actually delivered, never by the session total:
+            // a reply cut by the runner's cap resumes where it stopped instead
+            // of skipping lines forever.
+            if (result.lines.length > 0) {
+              seq = result.firstSeq + result.lines.length - 1;
+            }
+            if (result.truncated) {
+              console.warn("[acp] runner cut buffered adapter lines for this session");
+            }
             let delivered = false;
             for (const line of result.lines) {
               let parsed: unknown;

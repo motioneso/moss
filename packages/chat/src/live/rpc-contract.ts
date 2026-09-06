@@ -532,6 +532,12 @@ export interface RpcAcpSpawnParams {
 /** result for method "acpSpawn": the runner-side working folder the client hands to session/new. */
 export interface RpcAcpSpawnResult {
   readonly cwd: string;
+  /**
+   * Session generation, monotonic per runner process. A later spawn of the same
+   * key evicts the earlier one; `acpKill` with a stale generation is a no-op so
+   * a dropped connection can never kill another connection's live session.
+   */
+  readonly generation: number;
 }
 /** params for method "acpSend": one client-to-agent JSON-RPC line (no trailing newline). */
 export interface RpcAcpSendParams {
@@ -548,12 +554,27 @@ export interface RpcAcpReadParams {
 /** result for method "acpRead": buffered lines plus liveness. */
 export interface RpcAcpReadResult {
   readonly lines: readonly string[];
+  /**
+   * Sequence number of `lines[0]` (1-based line counter); the next cursor is
+   * `firstSeq + lines.length - 1`, or the passed cursor when lines is empty.
+   * The reader must advance by lines delivered, never by `nextSeq`, or a reply
+   * cut by the total cap would skip lines forever.
+   */
+  readonly firstSeq: number;
   readonly nextSeq: number;
   readonly exited: boolean;
   readonly exitCode: number | null;
+  /** True when this reply — or an earlier one — was cut (see AcpHost). */
+  readonly truncated: boolean;
 }
-/** params for method "acpKill": stop the adapter for this session key. No params. */
-export type RpcAcpKillParams = Record<string, never>;
+/** params for method "acpKill": stop the adapter for this session key. */
+export interface RpcAcpKillParams {
+  /**
+   * When present, kill only if the live session still has this generation (the
+   * connection-close path). Absent means unconditional (explicit lifecycle).
+   */
+  readonly generation?: number;
+}
 /** result for method "acpKill". */
 export interface RpcAcpKillResult {
   readonly ok: true;

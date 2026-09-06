@@ -128,7 +128,10 @@ export class CliChatEngineHost {
    * #2369 slice 1 — ACP tunnel verbs. Thin delegates: admission, policy, and the
    * protocol all live elsewhere (API-side client, gateway); the host only pipes lines.
    */
-  async acpSpawn(sessionKey: string, projectId: string): Promise<{ cwd: string }> {
+  async acpSpawn(
+    sessionKey: string,
+    projectId: string
+  ): Promise<{ cwd: string; generation: number }> {
     return this.acp.spawn(sessionKey, projectId);
   }
 
@@ -139,12 +142,19 @@ export class CliChatEngineHost {
   acpRead(
     sessionKey: string,
     afterSeq: number
-  ): { lines: readonly string[]; nextSeq: number; exited: boolean; exitCode: number | null } {
+  ): {
+    lines: readonly string[];
+    firstSeq: number;
+    nextSeq: number;
+    exited: boolean;
+    exitCode: number | null;
+    truncated: boolean;
+  } {
     return this.acp.read(sessionKey, afterSeq);
   }
 
-  acpKill(sessionKey: string): void {
-    this.acp.kill(sessionKey);
+  acpKill(sessionKey: string, opts: { generation?: number } = {}): void {
+    this.acp.kill(sessionKey, opts.generation);
   }
 
   /** Registers a listener for session-reaped events; returns an unregister function. */

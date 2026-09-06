@@ -13,9 +13,10 @@ class ScriptedAgent implements AcpTunnel {
   readonly sent: string[] = [];
   private readonly outbox: string[] = [];
   private seq = 0;
+  hangPrompt = false;
 
-  async spawn(): Promise<{ cwd: string }> {
-    return { cwd: "/runner/session/acp/proj" };
+  async spawn(): Promise<{ cwd: string; generation: number }> {
+    return { cwd: "/runner/session/acp/proj", generation: 1 };
   }
 
   async send(_sessionKey: string, line: string): Promise<void> {
@@ -26,6 +27,7 @@ class ScriptedAgent implements AcpTunnel {
     } else if (msg.method === "session/new") {
       this.emit({ jsonrpc: "2.0", id: msg.id, result: { sessionId: "agent-sess-1" } });
     } else if (msg.method === "session/prompt") {
+      if (this.hangPrompt) return;
       this.emit({
         jsonrpc: "2.0",
         method: "session/update",
@@ -58,9 +60,15 @@ class ScriptedAgent implements AcpTunnel {
   async read(
     _sessionKey: string,
     afterSeq: number
-  ): Promise<{ lines: readonly string[]; nextSeq: number; exited: boolean }> {
+  ): Promise<{
+    lines: readonly string[];
+    firstSeq: number;
+    nextSeq: number;
+    exited: boolean;
+    truncated: boolean;
+  }> {
     const lines = this.outbox.slice(afterSeq);
-    return { lines, nextSeq: this.seq, exited: false };
+    return { lines, firstSeq: afterSeq + 1, nextSeq: this.seq, exited: false, truncated: false };
   }
 
   async kill(): Promise<void> {}
@@ -114,6 +122,28 @@ describe("MossAcpClient", () => {
       .find((msg) => msg.method === "initialize");
     expect(init.params.protocolVersion).toBe(1);
     expect(init.params.clientCapabilities ?? {}).toEqual({});
+    // The agent's own tools are switched off: files and commands are Moss tools.
+    const opened = agent.sent
+      .map((line) => JSON.parse(line))
+      .find((msg) => msg.method === "session/new");
+    expect(opened.params._meta).toEqual({ disableBuiltInTools: true });
+    await client.close(handle);
+  });
+
+  it("gives up on a hung agent instead of hanging the caller", async () => {
+    // An agent that answers the handshake but never the prompt.
+    const agent = new ScriptedAgent();
+    agent.hangPrompt = true;
+    const client = new MossAcpClient(agent);
+    const handle = await client.openSession("workshop:user:proj", "proj");
+    await expect(client.prompt(handle, "hello?", { timeoutMs: 50 })).rejects.toThrow(
+      /timed out after 50 ms/
+    );
+    // The deadline cancels the turn on the way out.
+    const cancels = agent.sent
+      .map((line) => JSON.parse(line))
+      .filter((msg) => msg.method === "session/cancel");
+    expect(cancels).toHaveLength(1);
     await client.close(handle);
   });
 

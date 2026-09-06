@@ -48,6 +48,7 @@ import { performClientHello } from "./rpc-handshake.js";
 import {
   decodeFrame,
   encodeFrame,
+  type RpcAcpKillParams,
   type RpcAcpKillResult,
   type RpcAcpReadParams,
   type RpcAcpReadResult,
@@ -360,8 +361,8 @@ export class RpcConnection {
     return this.call<RpcAcpReadResult>("acpRead", sessionKey, params);
   }
 
-  acpKill(sessionKey: string): Promise<RpcAcpKillResult> {
-    return this.call<RpcAcpKillResult>("acpKill", sessionKey, {});
+  acpKill(sessionKey: string, params: RpcAcpKillParams = {}): Promise<RpcAcpKillResult> {
+    return this.call<RpcAcpKillResult>("acpKill", sessionKey, params);
   }
 
   /**

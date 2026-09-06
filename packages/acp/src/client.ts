@@ -37,6 +37,16 @@ export interface AcpClientEvents {
   onSessionUpdate?: (notification: SessionNotification) => void;
 }
 
+export interface AcpPromptOptions {
+  /**
+   * Caller-side deadline for one prompt turn. A hung agent cancels instead of
+   * hanging the caller forever. Defaults to ten minutes.
+   */
+  readonly timeoutMs?: number;
+}
+
+const DEFAULT_PROMPT_TIMEOUT_MS = 10 * 60 * 1000;
+
 /**
  * Phase 1 permission posture: anything the policy does not explicitly allow is
  * denied, and slice 1 allows nothing yet — the shared approval card arrives with
@@ -71,25 +81,50 @@ export class MossAcpClient {
       clientInfo: { name: "moss", version: "0.1.0" }
     });
     checkAgentCapabilities(surface, init);
-    const session = await connection.newSession({ cwd, mcpServers: [] });
+    const session = await connection.newSession({
+      cwd,
+      mcpServers: [],
+      // The agent's own file and shell tools stay off on purpose: files and
+      // commands are Moss tools, and the vendor default prompt is not a policy
+      // we accept. The runner-side settings file denies them a second time.
+      _meta: { disableBuiltInTools: true }
+    });
     this.connections.set(session.sessionId, connection);
     this.texts.set(session.sessionId, []);
     this.toolCalls.set(session.sessionId, 0);
     return { sessionId: session.sessionId, cwd };
   }
 
-  async prompt(handle: AcpSessionHandle, text: string): Promise<AcpPromptResult> {
+  async prompt(
+    handle: AcpSessionHandle,
+    text: string,
+    options: AcpPromptOptions = {}
+  ): Promise<AcpPromptResult> {
     const connection = this.requireConnection(handle.sessionId);
-    const response = await connection.prompt({
-      sessionId: handle.sessionId,
-      prompt: [{ type: "text", text }]
-    });
-    const chunks = this.texts.get(handle.sessionId) ?? [];
-    return {
-      stopReason: response.stopReason,
-      text: chunks.join(""),
-      toolCallsSeen: this.toolCalls.get(handle.sessionId) ?? 0
-    };
+    const timeoutMs = options.timeoutMs ?? DEFAULT_PROMPT_TIMEOUT_MS;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      const response = await Promise.race([
+        connection.prompt({
+          sessionId: handle.sessionId,
+          prompt: [{ type: "text", text }]
+        }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            void connection.cancel({ sessionId: handle.sessionId }).catch(() => undefined);
+            reject(new Error(`ACP prompt timed out after ${timeoutMs} ms`));
+          }, timeoutMs);
+        })
+      ]);
+      const chunks = this.texts.get(handle.sessionId) ?? [];
+      return {
+        stopReason: response.stopReason,
+        text: chunks.join(""),
+        toolCallsSeen: this.toolCalls.get(handle.sessionId) ?? 0
+      };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   async cancel(handle: AcpSessionHandle): Promise<void> {
