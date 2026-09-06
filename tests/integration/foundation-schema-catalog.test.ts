@@ -402,7 +402,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0223", name: "0223_workshop_projects.sql" },
         { version: "0224", name: "0224_workshop_project_feed.sql" },
         // #743 web push: subscriptions, delivery ledger, per-user push settings.
-        { version: "0225", name: "0225_push_notifications.sql" }
+        { version: "0225", name: "0225_push_notifications.sql" },
+        // #2267 — lets an owner invoke their own module draft's worker jobs.
+        { version: "0226", name: "0226_module_kv_worker_owner_draft.sql" }
       ]);
     } finally {
       await client.end();
