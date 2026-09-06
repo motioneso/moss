@@ -185,9 +185,9 @@ and the two must stay separately tunable).
 
 ---
 
-## PR B - after PR 2307 merges
+## Slice 2 - on its own as PR 2364
 
-Branch fresh from `main` once slice 2 is in. One worktree, one pull request, slices 3 to 7 in order. Decided 2026-09-06: slice 2 stands on its own, and holding it would park working code for five more sessions, each of which has to hand-build its own database (issue 2366).
+Slice 2 goes out on its own as PR 2364. PR B below starts fresh from `main` once that pull request has landed.
 
 ### Slice 2 - the green masthead, the row index, and the Workshop home page on them
 
@@ -255,6 +255,12 @@ Must not: put the field or the rules in `workshop.css`; name a colour anywhere i
 (tokens only; the contrast test guards the tokens, not a literal); give Today or any other page
 the green field (Ben, 2026-09-05: later, as its own work); add a second masthead component; keep
 the older page "for now" behind a flag or a hidden route.
+
+---
+
+## PR B - after PR 2307 merges
+
+Branch fresh from `main` once slice 2 is in. One worktree, one pull request, slices 3 to 7 in order. Decided 2026-09-06: slice 2 stands on its own, and holding it would park working code for five more sessions, each of which has to hand-build its own database (issue 2366).
 
 ### Slice 3 - the top bar carries the trail
 
