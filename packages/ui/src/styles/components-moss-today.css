@@ -79,6 +79,33 @@
   margin-left: var(--space-1);
 }
 
+/* Masthead, field tone: a reversed, full-bleed band for a section home page. */
+.jds-masthead--field {
+  background: var(--masthead-bg);
+  color: var(--masthead-fg);
+  margin: 0 0 var(--space-8);
+  padding: clamp(1.25rem, 2.6vw, 2rem) clamp(1.5rem, 4vw, 4rem) clamp(1.5rem, 2.6vw, 2rem);
+  border-bottom: 4px solid var(--masthead-rule);
+}
+.jds-masthead--field .jds-masthead__row {
+  align-items: flex-end;
+}
+.jds-masthead--field .jds-masthead__title {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  line-height: 0.94;
+  letter-spacing: -0.025em;
+  color: var(--masthead-fg);
+  margin-top: 0.15em;
+}
+.jds-masthead--field .jds-masthead__eyebrow {
+  color: var(--masthead-accent);
+}
+.jds-masthead--field .jds-masthead__lede {
+  color: var(--masthead-fg-muted);
+  font-size: var(--text-lg);
+  max-width: 46ch;
+}
+
 /* StatTile */
 .jds-stat-tile {
   display: flex;

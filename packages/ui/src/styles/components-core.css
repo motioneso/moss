@@ -149,6 +149,16 @@
   background: var(--danger-hover);
   border-color: var(--danger-hover);
 }
+.jds-btn--field {
+  background: var(--masthead-action-bg);
+  color: var(--masthead-action-fg);
+  border-color: var(--masthead-action-bg);
+  font-weight: 700;
+}
+.jds-btn--field:hover {
+  background: var(--gold-strong);
+  border-color: var(--gold-strong);
+}
 
 .jds-btn[disabled],
 .jds-btn[aria-disabled="true"] {
