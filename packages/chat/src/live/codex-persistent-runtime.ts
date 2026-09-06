@@ -15,7 +15,12 @@
 import { join } from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 
-import { DEFAULT_MODEL_SENTINEL, type ProviderKind, type TmuxIo } from "@moss/ai";
+import {
+  DEFAULT_MODEL_SENTINEL,
+  buildSanitizedCliEnv,
+  type ProviderKind,
+  type TmuxIo
+} from "@moss/ai";
 
 import { neutralizeSeedFraming } from "./prompt-safety.js";
 import {
@@ -65,6 +70,9 @@ const TOTAL_BUFFERED_EXCEEDED_REASON =
 export interface CodexPersistentRuntimeOpts {
   readonly io: Pick<TmuxIo, "run" | "writeFile">;
   readonly tokenEnvPath?: string;
+  /** #2348 — passed into the default spawn's env as HOME, so the child agrees with the app
+   *  about where its home folder (and therefore its transcript folder) lives. */
+  readonly homeBase?: string;
   /** Injected for tests; production callers rely on the default (piped-stdio spawn). */
   readonly spawnChild?: (command: string, cwd: string) => ChildProcessWithoutNullStreams;
 }
@@ -77,6 +85,7 @@ export class CodexPersistentRuntime implements ProviderChatRuntime {
 
   private readonly io: Pick<TmuxIo, "run" | "writeFile">;
   private readonly tokenEnvPath?: string;
+  private readonly homeBase?: string;
   private readonly spawnChild: (command: string, cwd: string) => ChildProcessWithoutNullStreams;
 
   private launchOpts: PersistentLaunchOpts | null = null;
@@ -102,13 +111,17 @@ export class CodexPersistentRuntime implements ProviderChatRuntime {
   constructor(opts: CodexPersistentRuntimeOpts) {
     this.io = opts.io;
     this.tokenEnvPath = opts.tokenEnvPath;
+    this.homeBase = opts.homeBase;
     this.spawnChild =
       opts.spawnChild ??
       ((command, cwd) =>
         spawn("bash", ["-lc", command], {
           cwd,
           detached: true,
-          stdio: ["pipe", "pipe", "pipe"]
+          stdio: ["pipe", "pipe", "pipe"],
+          ...(this.homeBase === undefined
+            ? {}
+            : { env: { ...buildSanitizedCliEnv(process.env), HOME: this.homeBase } })
         }) as ChildProcessWithoutNullStreams);
   }
 

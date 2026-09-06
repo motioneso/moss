@@ -32,6 +32,7 @@ export * from "./adapters/multiplexer.js";
 export * from "./adapters/tmux-multiplexer.js";
 export * from "./adapters/herdr-multiplexer.js";
 export * from "./adapters/binary-probe.js";
+export * from "./adapters/sanitized-env.js";
 export * from "./adapters/multiplexer-resolve.js";
 export * from "./adapters/root-workspace.js";
 export { redactSecrets, redactExact } from "./adapters/redact.js";

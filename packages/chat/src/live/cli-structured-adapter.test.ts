@@ -7,6 +7,7 @@ import { describe, expect, it, afterAll } from "vitest";
 import type { GenerateStructuredProviderInput } from "@moss/ai";
 
 import { CliStructuredAdapter } from "./cli-structured-adapter.js";
+import { CliTranscriptLocationMismatchError } from "./errors.js";
 import type { CliChatEngine, EngineLaunchOpts } from "./types.js";
 import type { ChatEngineFactory } from "./runtime.js";
 
@@ -52,6 +53,49 @@ function fakeEngine(onLaunch: (opts: EngineLaunchOpts) => void): CliChatEngine {
 function factoryCapturing(neutralDirs: string[]): ChatEngineFactory {
   return () => fakeEngine((opts) => neutralDirs.push(opts.neutralDir));
 }
+
+/** A CliChatEngine that reports, on its very first readNew(), that the app and the model
+ * program have genuinely disagreed about the answer file's folder — the real engine
+ * throws this once its own grace period has passed, well before any overall timeout. */
+function mismatchedFolderEngine(readNewCalls: { count: number }): CliChatEngine {
+  return {
+    provider: "anthropic",
+    async launch() {
+      return { offset: 0 };
+    },
+    async submit() {},
+    async interrupt() {},
+    async readNew() {
+      readNewCalls.count += 1;
+      throw new CliTranscriptLocationMismatchError(
+        "the app expects the answer file under /wrong/folder, but that folder was never created"
+      );
+    },
+    async isAlive() {
+      return true;
+    },
+    async kill() {},
+    async purgeTranscripts() {}
+  };
+}
+
+describe("CliStructuredAdapter reports a genuine location mismatch immediately", () => {
+  it("fails with the specific mismatch error, well before the overall timeout, and does not attempt a late read", async () => {
+    const readNewCalls = { count: 0 };
+    // A generous overall timeout (5s) proves this failure is driven by the detected
+    // mismatch, not by the clock running out.
+    const adapter = new CliStructuredAdapter(
+      "anthropic",
+      () => mismatchedFolderEngine(readNewCalls),
+      5000
+    );
+
+    await expect(adapter.generateStructured(baseInput("module.mismatch"))).rejects.toThrow(
+      CliTranscriptLocationMismatchError
+    );
+    expect(readNewCalls.count).toBe(1);
+  });
+});
 
 describe("CliStructuredAdapter one-shot cwd", () => {
   it("reuses the identical neutralDir across two calls for the same service", async () => {
