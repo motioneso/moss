@@ -62,6 +62,14 @@ with `{"providerKind":"anthropic"}`, then `POST /api/onboarding/provider-login/b
 same body. The first begin call is what registers the model; a later poll call returns a 500
 because the sign-in is already finished, which is harmless.
 
+## Do not delete the other Workshop folder
+
+A coordinator-audit session reported that `~/Jarv1s/.claude/worktrees/workshop-phase-a-0904` holds
+a large, diverged version of the Workshop feature - five hundred plus files - with no pull request
+open for it, and a background program still running inside it. It does not match PR 2307. Nobody
+should delete or reuse that folder on the assumption 2307 already covers it; someone has to read
+it and decide first. The audit's full report is at `~/.coord-briefs/worktree-audit-report.md`.
+
 ## Traps this session hit
 
 - **A new test instance on a port an old one used will hang on the loading screen.** Ben's browser
