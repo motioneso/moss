@@ -13,9 +13,10 @@ you write for another agent. Pass this rule on.
 
 - One slice is one working session. Do not start a slice you cannot finish in one session; if it
   turns out bigger than that, split it before building, do not relay a half-built change.
-- **Three pull requests.** PR A is slice 1 alone, because it changes every screen in the app and
-  needs its own live proof. PR B is slices 2 to 7, one worktree, committed slice by slice, merged
-  once its live proof is on the pull request. PR C is slice 8 alone. Slices 9 to 12 each wait on
+- **Four pull requests.** PR A is slice 1 alone, because it changes every screen in the app and
+  needs its own live proof. Slice 2 merges on its own. PR B is slices 3 to 7, one worktree,
+  committed slice by slice, merged once its live proof is on the pull request. PR C is slice 8
+  alone. Slices 9 to 12 each wait on
   build-side work from PR 2307's plan that does not exist yet; group them into pull requests as
   that work lands, never one pull request per slice, and never a pull request held open for
   weeks waiting on a slice that cannot start.
@@ -186,7 +187,7 @@ and the two must stay separately tunable).
 
 ## PR B - after PR 2307 merges
 
-Branch from `main` once PR 2307 is in. One worktree, one pull request, slices 2 to 7 in order.
+Branch fresh from `main` once slice 2 is in. One worktree, one pull request, slices 3 to 7 in order. Decided 2026-09-06: slice 2 stands on its own, and holding it would park working code for five more sessions, each of which has to hand-build its own database (issue 2366).
 
 ### Slice 2 - the green masthead, the row index, and the Workshop home page on them
 
