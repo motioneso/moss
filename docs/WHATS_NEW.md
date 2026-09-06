@@ -43,6 +43,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Encryption keys screen covers all three key families.** Owners can now generate and rotate all three encryption keys from the Settings screen, and fresh installs start with a banner that walks them through setup instead of needing hand-edited secret files. [PR #2323](https://github.com/motioneso/moss/pull/2323)
 - **Encryption keys screen in Admin settings.** Admins can now set up missing encryption keys from a new Encryption keys page instead of editing server files, and Moss tells them when a key needs attention. [PR #2315](https://github.com/motioneso/moss/pull/2315)
 - **Push notifications.** You can now turn on browser push notifications so you see notifications from Moss even when the tab isn't open, from Settings -> Notifications. [PR #2234](https://github.com/motioneso/moss/pull/2234)
 - **Web search is now on by default for chat.** Chat can now search the web automatically using your AI model's own built-in search, or a Brave Search key if you add one, so answers can include current information with sources shown. [PR #2280](https://github.com/motioneso/moss/pull/2280)
