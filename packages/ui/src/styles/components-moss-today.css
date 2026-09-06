@@ -695,3 +695,19 @@
   gap: var(--space-4);
   white-space: nowrap;
 }
+/* Narrow screens: stack the row so the meta wraps instead of clipping. */
+@media (max-width: 560px) {
+  .jds-index__row {
+    grid-template-columns: 1fr;
+  }
+  .jds-index__title,
+  .jds-index__excerpt,
+  .jds-index__meta {
+    grid-column: 1;
+  }
+  .jds-index__meta {
+    grid-row: auto;
+    white-space: normal;
+    flex-wrap: wrap;
+  }
+}

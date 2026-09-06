@@ -248,8 +248,12 @@ export function WorkshopProjectCreate({ canMutate }: { canMutate: boolean }) {
   );
 }
 
+const PROJECT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function WorkshopProjectDetail({ canMutate }: { canMutate: boolean }) {
   const { projectId = "" } = useParams();
+  if (!PROJECT_ID_RE.test(projectId))
+    return <EmptyState title="This Workshop page was not found" />;
   return <WorkshopProjectContent key={projectId} projectId={projectId} canMutate={canMutate} />;
 }
 
