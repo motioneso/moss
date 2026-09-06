@@ -3,7 +3,7 @@ import { type ReactNode } from "react";
 export type MastheadTone = "default" | "field";
 
 export interface MastheadProps {
-  readonly eyebrow: ReactNode;
+  readonly eyebrow?: ReactNode;
   readonly title: ReactNode;
   readonly accent?: ReactNode;
   readonly lede?: ReactNode;
@@ -20,7 +20,7 @@ export function Masthead(props: MastheadProps) {
     <header className={classes}>
       <div className="jds-masthead__row">
         <div className="jds-masthead__main">
-          <p className="jds-masthead__eyebrow">{props.eyebrow}</p>
+          {props.eyebrow ? <p className="jds-masthead__eyebrow">{props.eyebrow}</p> : null}
           <h1 className="jds-masthead__title">
             <span>{props.title}</span>
             {props.accent ? (

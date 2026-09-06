@@ -63,9 +63,7 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
     <>
       <Masthead
         tone="field"
-        eyebrow="Workshop"
-        title="Your projects"
-        lede="Start with an idea, and pick it back up whenever you're ready."
+        title="What would you like to build today?"
         aside={
           <ButtonLink
             href="/workshop/new"
