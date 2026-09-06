@@ -143,3 +143,22 @@ Kill gate: if `attemptProjectReply` cannot get a working CLI or HTTP adapter for
 provider on the dev instance during live-path testing (not just "no provider configured", but a
 call that should work and doesn't), stop and report to the coordinator rather than loosening the
 fail-closed contract or reaching into unrelated provider/adapter code. Owner: this session.
+
+## Note for the next session: the model call, worked out but not yet typed in
+
+Package `packages/workshop` needs `@moss/ai` added as a dependency (precedent for a feature
+package calling the model directly: `packages/tasks/src/search-interpret-route.ts`).
+
+Split the work into three steps so a slow model never holds a database lock or leaves the save
+waiting past a fixed limit:
+
+1. **Pick the model and provider** in one short database call: `aiRepository.selectModelForCapability(scopedDb, "chat", "interactive")`, then `selectProviderWithCredential`. This is quick, no network call, so it is fine inside a short transaction. Return which of the two routes below applies, plus what that route needs (nothing else — do not keep the transaction open past this point).
+2. **Get the reply text**, outside of any database transaction, so a slow or hung model never holds a connection or a lock:
+   - Command line tool login (`provider.auth_method === "cli"`): build the adapter with `createCliStructuredAdapter(kind)` (passed in from the route registration in `packages/module-registry/src/index.ts`, which already has this factory available — see `deps.createCliStructuredAdapter` on `BuiltInRouteDependencies`), then call `.generateStructured({ model, messages, schema: {type:"object", properties:{text:{type:"string"}}, required:["text"], additionalProperties:false}, maxOutputTokens })`. Read the reply the same way `readPersonaPreviewResult` does in `packages/module-registry/src/built-in-module-helpers.ts:173`.
+   - Stored key (anything else): `new HttpApiAdapter(kind, apiKey, {baseUrl})` then `.generateChat({model, messages, maxOutputTokens})`, reading `.text` from the result. Decrypt the stored key first with `parseAiApiKeyCredential(cipher.decryptJson(provider.encrypted_credential))`.
+   - Wrap whichever call in a race against a timer (about 45 seconds). If the timer wins, treat it exactly like a failure — the row stays pending, nothing is written, and the leftover model call is left to finish or fail in the background with its own error caught and logged so it cannot crash the process.
+3. **Write the result** in a second short database call: `feed.appendAssistantReply(scopedDb, projectId, replyText, userMessageId)` — this method already exists and is committed (see `packages/workshop/src/project-feed.ts`).
+
+Any failure at any step (no model configured, no provider, no credential, the call itself throwing,
+or the timer running out) must be caught and simply mean "leave it pending" — never let it stop the
+save from succeeding.
