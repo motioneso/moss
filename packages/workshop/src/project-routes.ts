@@ -1,3 +1,9 @@
+import type {
+  AiRepository,
+  AiSecretCipher,
+  ProviderKind,
+  StructuredProviderAdapter
+} from "@moss/ai";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
@@ -21,6 +27,7 @@ import {
   WorkshopProjectsRepository
 } from "./projects-repository.js";
 import { WorkshopMessageConflictError, WorkshopProjectFeed } from "./project-feed.js";
+import { attemptProjectReply } from "./project-reply.js";
 import {
   createWorkshopProject,
   requireWorkshopAdmin,
@@ -30,6 +37,12 @@ import {
 export interface WorkshopProjectRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
+  readonly aiRepository: Pick<
+    AiRepository,
+    "selectModelForCapability" | "selectProviderWithCredential"
+  >;
+  readonly cipher: Pick<AiSecretCipher, "decryptJson">;
+  readonly createCliStructuredAdapter?: (kind: ProviderKind) => StructuredProviderAdapter;
 }
 
 const errors = Object.fromEntries(
@@ -174,12 +187,28 @@ export function registerWorkshopProjectRoutes(
         }
       },
       async (request, reply) => {
-        const result = await withAdmin(request, (db) =>
-          feed.append(db, request.params.projectId, request.body)
-        );
-        return result
-          ? reply.code(result.created ? 201 : 200).send(result)
-          : reply.code(404).send({ error: "Workshop project not found." });
+        const access = await deps.resolveAccessContext(request);
+        const { result, project } = await deps.dataContext.withDataContext(access, async (db) => {
+          await requireWorkshopAdmin(db);
+          const result = await feed.append(db, request.params.projectId, request.body);
+          const project = result ? await projects.get(db, request.params.projectId) : null;
+          return { result, project };
+        });
+        if (!result) return reply.code(404).send({ error: "Workshop project not found." });
+        if (result.created && project) {
+          await attemptProjectReply(
+            {
+              dataContext: deps.dataContext,
+              aiRepository: deps.aiRepository,
+              cipher: deps.cipher,
+              createCliStructuredAdapter: deps.createCliStructuredAdapter
+            },
+            access,
+            project,
+            result.entry
+          );
+        }
+        return reply.code(result.created ? 201 : 200).send(result);
       }
     );
   });
