@@ -49,6 +49,7 @@ after the model call returns (or fails). No guidance prompt beyond the persona t
 ## Data model — new migration
 
 `packages/workshop/sql/0225_workshop_project_feed_reply.sql`:
+
 - Find the live constraint names first (`information_schema.check_constraints` or a prior migration
   in this repo widening a similar CHECK) before writing `DROP CONSTRAINT` — do not guess the name.
 - Widen `kind` CHECK to allow `'assistant_message'` alongside `'user_message'`.
@@ -80,7 +81,7 @@ export async function attemptProjectReply(
   db: DataContextDb,
   deps: { aiRepository: AiRepository; adapters: BuiltInRouteDependencies },
   project: WorkshopProject,
-  userEntry: WorkshopFeedEntry,
+  userEntry: WorkshopFeedEntry
 ): Promise<ProjectReplyResult>;
 ```
 
@@ -100,6 +101,7 @@ client re-fetches the list.
 ## Front end
 
 `packages/workshop/src/web/project-pages.tsx`:
+
 - Line 373: wrap `"Saved · awaiting delivery"` in a check for `entry.delivery === "pending"` on
   `user_message` rows only.
 - Add a plain, unstyled render branch for `kind === "assistant_message"` rows (no new `jds-*`
