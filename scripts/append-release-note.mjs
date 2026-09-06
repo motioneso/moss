@@ -175,7 +175,10 @@ function selfTest() {
   // A blank line must separate the last bullet of the newest date group from the next,
   // older date heading right after it — issue 2334, the missing-blank-line bug that broke
   // the documents check on pull requests 2286 and 2319.
-  assert.match(withChanged, /- \*\*New behavior\.\*\* It behaves differently now\. \[PR #43\]\(https:\/\/example\.com\/43\)\n\n### 2026-08-14/);
+  assert.match(
+    withChanged,
+    /- \*\*New behavior\.\*\* It behaves differently now\. \[PR #43\]\(https:\/\/example\.com\/43\)\n\n### 2026-08-14/
+  );
 
   const withLaterDate = appendReleaseNote(
     withChanged,
