@@ -60,7 +60,10 @@ const allowlist = new Set<string>([
   // #877 finding 1: sports' own copy of the sanctioned formatter (module isolation forbids
   // importing apps/web/src/* internals — see packages/sports/src/web/locale.ts's file-level
   // comment — so it duplicates the formatter, not the bug).
-  "packages/sports/src/web/locale.ts"
+  "packages/sports/src/web/locale.ts",
+  // Issue 2329: workshop's own copy of the sanctioned formatter, same module-isolation
+  // reason as sports — see packages/workshop/src/web/locale.ts's file-level comment.
+  "packages/workshop/src/web/locale.ts"
 ]);
 
 /** Repo-relative paths exempt from the ambient-NOW day-bucketing ban (finding 5 pattern). */

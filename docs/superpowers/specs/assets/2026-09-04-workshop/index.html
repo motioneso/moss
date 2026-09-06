@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Workshop · Moss · Interaction prototype</title>
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/tokens.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles/components-core.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles/components-forms.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles/components-empty.css" />
+    <link rel="stylesheet" href="prototype.css" />
+    <script src="prototype.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to Workshop</a>
+    <aside class="prototype-bar" aria-label="Prototype controls">
+      <div>
+        <strong>Interaction prototype</strong
+        ><span>Scripted Word of the Day example. No AI calls or installation.</span>
+      </div>
+      <div class="controls">
+        <label for="scenario">Try a state</label>
+        <select id="scenario" class="jds-select">
+          <option value="list">Project list</option>
+          <option value="empty">Empty Workshop</option>
+          <option value="handoff">Arrive from Moss</option>
+          <option value="brief">Requirements question</option>
+          <option value="review">Plan + mockup</option>
+          <option value="building">Building</option>
+          <option value="question">Build question</option>
+          <option value="failed">Failed check</option>
+          <option value="stopped">Stopped</option>
+          <option value="draft">Running draft</option>
+          <option value="finished">Finished privately</option>
+          <option value="model">Model unavailable</option>
+        </select>
+        <button id="advance" class="jds-btn jds-btn--secondary" hidden>Next simulated event</button>
+      </div>
+    </aside>
+    <header class="shell">
+      <a href="#list" class="brand" aria-label="Moss Workshop home">moss<span>/ Workshop</span></a>
+      <span class="muted">Admin workspace</span>
+    </header>
+    <main id="main" tabindex="-1"></main>
+    <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+    <dialog id="share-dialog" aria-labelledby="share-title">
+      <h2 id="share-title">Make this module available to everyone?</h2>
+      <p>
+        Other people in Moss will be able to use Word of the Day. Your project conversation and
+        saved words stay private.
+      </p>
+      <p class="muted">You can keep using it privately without sharing.</p>
+      <div class="actions">
+        <button class="jds-btn jds-btn--secondary" data-action="close-share" autofocus>
+          Keep private
+        </button>
+        <button class="jds-btn jds-btn--primary" data-action="share">Share module</button>
+      </div>
+    </dialog>
+  </body>
+</html>
