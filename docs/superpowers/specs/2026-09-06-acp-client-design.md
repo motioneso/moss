@@ -1,6 +1,6 @@
 # Spec: Moss as an Agent Client Protocol (ACP) client
 
-**Status:** Draft for review (Fitz, Muse). Decided in the "Moss Work" room on 2026-09-06 after a
+**Status:** Approved (Fitz, Muse review; Ben rulings folded in). Decided in the "Moss Work" room on 2026-09-06 after a
 for/against debate (Fable for, Foble against, Fitz facilitating, Muse researching) and a measured
 spike. Build issue: to be opened once this spec is approved.
 
@@ -177,7 +177,9 @@ login. Codex and others are added by filling in a row, not by editing code paths
 
 - **Settings → AI providers** gains an "agent" choice per surface (chat, Workshop) listing only
   agents that pass section 7 for that surface, with the shared-login sentence shown beside CLI
-  providers. Model choice stays with the router's picker; the sentinel `default` continues to mean
+  providers. The admin sets the household default per surface and users override where they can
+  override the provider today. That is the existing choose-a-provider behaviour carried over; only
+  the way the chosen agent is launched and spoken to changes (Ben, 2026-09-06). Model choice stays with the router's picker; the sentinel `default` continues to mean
   "the agent's own account model".
 - App-map entries for the new setting, the two surfaces' new behaviour, and the "not approved,
   ask the user" error are updated in the build PR (core screens in
@@ -210,8 +212,8 @@ selectively is the difference between a feature and a bill.
    Fork A resolved, approval wiring (section 6), settings + app map. Live-path proof: a real
    project, a real build command, a real approval card answered by a person on dev.
 2. **Chat.** Same adapter, chat launch profile (scratch folder, writes and shell off). The old
-   CLI bridge stays one release behind a setting, off by default, as the fallback; it is deleted
-   after chat has passed live proof and run one clean release (review decision, 2026-09-06). Live-path proof: "add
+   CLI bridge (`packages/chat/src/live/`) is deleted in this slice, no fallback setting (Ben,
+   2026-09-06, overriding the reviewers' keep-one-release vote). Live-path proof: "add
    lunch with Sam" approved in the drawer and one event in the calendar.
 3. **Gemini and others.** Only when a row in section 7 turns green on this box.
 
@@ -223,9 +225,9 @@ end to end on dev, stop and reassess before touching chat.
 Moss as an ACP agent; agent-to-agent messaging inside the protocol; building on v2 now; a new
 credential model; per-user vendor subscriptions; a module marketplace; real OAuth callbacks.
 
-## 13. Open questions for reviewers
+## 13. Review record
 
-1. Fork A (command execution as a Moss tool vs ACP terminal) — any reason to prefer (2)?
-2. Should the bridge be deleted in slice 2 or kept one release as a fallback switch?
-3. Idle-process reaping interval for chat, and whether the Workshop process survives a browser
-   reload.
+Reviewed by Fitz and Muse on 2026-09-06, approved. The three open questions were resolved as
+recorded in sections 4 (Fork A: Moss tool), 5 (reaping and reload) and 11 (bridge). Ben ruled
+on 2026-09-06: delete the bridge in slice 2, and the agent choice follows today's provider
+choice (admin default per surface, user override where it exists). No open questions remain.
