@@ -281,6 +281,11 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
           this.readScopedTurn(session, input, controller.signal),
           stopped
         ]);
+        if (controller.signal.aborted) {
+          const error = new Error("aborted");
+          error.name = "AbortError";
+          throw error;
+        }
         exit = "complete";
         succeeded = true;
         return { rawText, usage: { inputTokens: 0, outputTokens: 0 } };

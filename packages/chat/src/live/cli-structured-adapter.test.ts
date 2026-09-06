@@ -192,7 +192,15 @@ describe("CliStructuredAdapter cancellation (#2276)", () => {
     expect(result).toMatchObject({ rawText: "{}" });
   });
 
-  it("discards a late answer from the scoped path when the timeout fires first", async () => {
+  it("discards a late answer from the scoped path when it lands the same instant as a cancel (#2276)", async () => {
+    // A real race against the internal timer would be flaky by nature (it depends on exact
+    // event-loop timing), so this drives the same code path deterministically: the fake reply
+    // triggers the cancel itself, then hands back a complete, valid answer in the same call,
+    // before returning control. That reproduces "the answer lands the same instant the cancel
+    // fires" without relying on chance. The guard under test reads the same aborted flag that
+    // both the internal timeout and an external cancel set, so proving it here proves both.
+    const controller = new AbortController();
+    let readCalls = 0;
     const engine = {
       provider: "anthropic",
       async launch() {
@@ -213,6 +221,11 @@ describe("CliStructuredAdapter cancellation (#2276)", () => {
       },
       async submitStructured() {},
       async readStructured() {
+        readCalls += 1;
+        if (readCalls === 1) {
+          controller.abort();
+          return { text: "late answer", offset: 1, complete: true };
+        }
         return new Promise(() => undefined);
       }
     } as unknown as CliChatEngine;
@@ -221,6 +234,7 @@ describe("CliStructuredAdapter cancellation (#2276)", () => {
     await expect(
       adapter.generateStructured({
         ...baseInput("module.job-fit"),
+        signal: controller.signal,
         scope: { actorUserId: "user-1", connectorAccountId: "conn-1", lineageId: "lineage-1" }
       })
     ).rejects.toThrow();
