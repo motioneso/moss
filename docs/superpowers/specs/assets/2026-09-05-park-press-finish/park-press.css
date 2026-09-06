@@ -1,0 +1,1566 @@
+/* Park Press, finished — mockup override layer.
+ *
+ * This file is a REVIEW ARTIFACT, not product code. It loads on top of the real
+ * compiled Moss stylesheets and changes only the design layer: a display
+ * typeface, the page ground, and the grid. No markup was altered.
+ *
+ * Three free, openly-licensed display faces are loaded so the reviewer can
+ * compare them on the real screen. Production must self-host woff2 in-repo —
+ * a CDN @import is what tripped the content-security policy on 2026-08-01.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&display=swap");
+
+/* ============================================================
+   1. THE DISPLAY FACE — the thing Park Press never shipped
+   ============================================================ */
+
+html[data-face="archivo"] {
+  --font-display: "Archivo", var(--font-sans);
+}
+html[data-face="space"] {
+  --font-display: "Space Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+html[data-face="bricolage"] {
+  --font-display: "Bricolage Grotesque", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+html[data-face="none"] {
+  --font-display: var(--font-sans);
+}
+
+html {
+  --font-display: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.workshop-project-card__title,
+.jds-card__title,
+.jds-empty__title,
+.brand-wordmark,
+.topbar-title {
+  font-family: var(--font-display);
+}
+
+/* ============================================================
+   2. THE GROUND — break the flat oat field
+   ------------------------------------------------------------
+   The complaint "bland" comes from page and card being nearly the
+   same colour. Ground goes lighter and cleaner; surfaces go to warm
+   paper white; the weight moves onto committed colour fields.
+   ============================================================ */
+
+html[data-ground="bone"]:not([data-color-mode="dark"]) {
+  --paper: #f2eee4;
+  --surface: #fffdf7;
+  --surface-2: #f7f3e9;
+  --border: #d9d1bf;
+  --border-subtle: #e6dfd0;
+}
+
+html[data-ground="sage"]:not([data-color-mode="dark"]) {
+  --paper: #e6e9dd;
+  --surface: #fbfbf5;
+  --surface-2: #f1f3e9;
+  --border: #cdd3c0;
+  --border-subtle: #dde1d3;
+}
+
+html[data-ground="oat"] {
+  /* today's colour, for comparison */
+}
+
+/* ============================================================
+   3. THE MASTHEAD — Park Press's reversed feature block
+   ------------------------------------------------------------
+   A committed forest field running the full width, gold rule under
+   it, headline reversed out and set BIG. This is the single largest
+   change and it is what makes the screen read as designed.
+   ============================================================ */
+
+html[data-masthead="on"] .workshop-page {
+  max-width: none;
+  padding: 0 0 var(--space-11);
+}
+
+html[data-masthead="on"] .content-surface {
+  padding: 0;
+}
+
+/* Ben, 2026-09-05: the field's colours are tokens the themes set, never a
+   named green. These mirror the block production adds to tokens.css; every
+   masthead rule below names one of them and nothing else. The values were
+   chosen against a contrast check across every shipped theme (see the spec). */
+html[data-masthead="on"] {
+  --masthead-bg: var(--forest);
+  --masthead-fg: var(--rail-fg);
+  --masthead-fg-muted: rgba(237, 229, 210, 0.85);
+  --masthead-accent: var(--gold-soft);
+  --masthead-rule: var(--gold);
+  --masthead-action-bg: var(--gold);
+  --masthead-action-fg: #241a06;
+}
+html[data-masthead="on"][data-theme="canyon"] {
+  --masthead-fg-muted: rgba(237, 229, 210, 0.9);
+}
+html[data-masthead="on"][data-theme="teal"] {
+  --masthead-fg-muted: var(--masthead-fg);
+}
+html[data-masthead="on"][data-color-mode="dark"] {
+  --masthead-bg: var(--forest-soft);
+  --masthead-accent: var(--gold-ink);
+}
+
+html[data-masthead="on"] .workshop-project-heading {
+  background: var(--masthead-bg);
+  color: var(--masthead-fg);
+  margin: 0 0 var(--space-8);
+  padding: clamp(1.25rem, 2.6vw, 2rem) clamp(1.5rem, 4vw, 4rem) clamp(1.5rem, 2.6vw, 2rem);
+  border-bottom: 4px solid var(--masthead-rule);
+  align-items: flex-end;
+}
+
+html[data-masthead="on"] .workshop-project-heading h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 800;
+  line-height: 0.94;
+  letter-spacing: -0.025em;
+  color: var(--masthead-fg);
+  margin: 0.15em 0 0;
+}
+
+html[data-masthead="on"] .workshop-project-heading .jds-eyebrow {
+  color: var(--masthead-accent);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+}
+
+html[data-masthead="on"] .workshop-project-heading .workshop-lede {
+  color: var(--masthead-fg-muted);
+  font-size: var(--text-lg);
+  max-width: 46ch;
+  margin-top: var(--space-3);
+}
+
+/* The primary action has to hold its own against a green field. */
+html[data-masthead="on"] .workshop-project-heading .jds-btn--primary {
+  background: var(--masthead-action-bg);
+  border-color: var(--masthead-action-bg);
+  color: var(--masthead-action-fg);
+  font-weight: 700;
+  border-radius: 2px;
+}
+html[data-masthead="on"] .workshop-project-heading .jds-btn--primary:hover {
+  background: var(--gold-strong);
+  border-color: var(--gold-strong);
+}
+
+/* Everything below the masthead keeps a normal reading measure. */
+html[data-masthead="on"] .workshop-project-list,
+html[data-masthead="on"] .workshop-project-footer,
+html[data-masthead="on"] .workshop-project-detail,
+html[data-masthead="on"] .workshop-actions,
+html[data-masthead="on"] .workshop-mobile-tabs {
+  max-width: 1220px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: clamp(1.5rem, 4vw, 4rem);
+  padding-right: clamp(1.5rem, 4vw, 4rem);
+}
+
+/* ============================================================
+   4. THE KEYLINE GRID — printed table, not floating boxes
+   ------------------------------------------------------------
+   Ben's taste notes: "thin keyline grids / hairline panel borders
+   dividing regions". Cards lose their rounded drop-in look and
+   become cells ruled off from one another.
+   ============================================================ */
+
+/* A card grid leaves empty tracks whenever the project count does not fill a
+   row — which is exactly the marooned-card complaint. A ruled row index always
+   spans the full width, however many projects there are, and reads as printed
+   matter rather than as boxes dropped on a page. */
+
+html[data-grid="keyline"] .workshop-project-list {
+  display: block;
+  border-top: 2px solid var(--ink);
+  margin-bottom: var(--space-8);
+}
+
+html[data-grid="keyline"] .workshop-project-list .jds-card {
+  display: grid;
+  grid-template-columns: minmax(18ch, 30ch) 1fr auto;
+  align-items: baseline;
+  column-gap: clamp(1rem, 3vw, 2.75rem);
+  row-gap: var(--space-1);
+  height: auto;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  padding: var(--space-5) var(--space-2);
+  box-shadow: inset 3px 0 0 transparent;
+  transition: box-shadow 0.12s ease;
+}
+
+/* Superseded: a full wheat fill on hover read as a selected block, not a
+   pointer. A gold rule at the left edge plus a forest title is quieter and
+   still unmistakable. */
+html[data-grid="keyline"] .workshop-project-list .jds-card:hover {
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+
+html[data-grid="keyline"] .workshop-project-list .jds-card:hover .workshop-project-card__title a {
+  color: var(--forest);
+}
+
+html[data-grid="keyline"] .workshop-project-card__title {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  line-height: 1.15;
+  grid-column: 1;
+}
+
+html[data-grid="keyline"] .workshop-project-card__title a {
+  text-decoration: none;
+  color: var(--ink);
+}
+
+html[data-grid="keyline"] .workshop-project-excerpt {
+  grid-column: 2;
+  margin: 0;
+  color: var(--text-subtle);
+  max-width: 68ch;
+}
+
+html[data-grid="keyline"] .workshop-project-card__foot {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  white-space: nowrap;
+}
+
+/* Superseded: the trailing invitation row repeated what the masthead lede
+   already says, and read as an unclickable list item. The index now simply
+   ends on its own rule. */
+
+/* The lede should not be squeezed into a narrow column by the action button. */
+html[data-masthead="on"] .workshop-project-heading__text {
+  flex: 1 1 40ch;
+}
+html[data-masthead="on"] .workshop-project-heading .workshop-lede {
+  max-width: 60ch;
+}
+
+/* The bar above already says "The Workshop"; the masthead says it louder.
+   Let the small one step back rather than compete. */
+html[data-masthead="on"] .topbar-title {
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+html[data-masthead="on"] .workshop-project-footer a {
+  font-size: var(--text-sm);
+  color: var(--text-subtle);
+}
+
+/* ============================================================
+   5. SMALL CORRECTIONS the scanner flagged
+   ============================================================ */
+
+/* The topbar was a second, competing title bar above the masthead. */
+html[data-masthead="on"] .topbar {
+  border-bottom: 1px solid var(--border-subtle);
+}
+html[data-masthead="on"] .topbar-title {
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+/* Wordmark gets the display face it was always meant to have. */
+.brand-wordmark {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* ============================================================
+   6. METADATA ON THE GREEN FIELD
+   ------------------------------------------------------------
+   Superseded 2026-09-05: the "Only you" badge is gone (Ben: it says
+   nothing until sharing exists) and the in-page project heading with
+   it. Kept for the record; nothing in the screens matches it now.
+   The project heading carried a privacy badge and a start date. Both
+   inherit dark ink, which is unreadable once the heading became a
+   committed colour field. Lift them onto the reversed palette.
+   ============================================================ */
+
+html[data-masthead="on"] .workshop-project-heading__meta,
+html[data-masthead="on"] .workshop-project-heading__meta .jds-caption {
+  color: rgba(244, 239, 226, 0.72);
+}
+
+html[data-masthead="on"] .workshop-project-heading__meta .jds-badge {
+  background: rgba(251, 247, 236, 0.14);
+  border-color: rgba(251, 247, 236, 0.28);
+  color: #f4efe2;
+}
+
+html[data-masthead="on"] .workshop-project-heading__meta .jds-badge__dot {
+  background: var(--gold);
+}
+
+/* Long project names should not collide with the meta block. */
+html[data-masthead="on"] .workshop-project-heading__meta {
+  align-self: flex-end;
+  padding-bottom: 0.35rem;
+}
+
+/* Section labels above the two panes read as printed column heads. */
+html[data-masthead="on"] .workshop-project-pane > .jds-eyebrow,
+html[data-masthead="on"] .workshop-project-detail .jds-eyebrow {
+  color: var(--forest-ink);
+  letter-spacing: 0.16em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-2);
+  display: block;
+  margin-bottom: var(--space-4);
+}
+
+/* ============================================================
+   7. THE BACK LINK, AND THE HEADER MEETING THE TOP BAR
+   ------------------------------------------------------------
+   Ben, 2026-09-05: the back link "looks out of place ... it should
+   also be consistent", and the header should touch the bar across
+   the top. Both come from the same cause — the link used to sit on
+   a strip of page colour above the header, pushing the green field
+   down and away from the bar. It now lives inside the field, in the
+   same place on every screen.
+   ============================================================ */
+
+html[data-masthead="on"] .workshop-back {
+  display: inline-block;
+  margin: 0 0 var(--space-4);
+  color: rgba(244, 239, 226, 0.7);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(244, 239, 226, 0.28);
+  padding-bottom: 2px;
+}
+
+html[data-masthead="on"] .workshop-back:hover {
+  color: #fbf7ec;
+  border-bottom-color: var(--gold);
+}
+
+/* The New project screen wraps its header in a section, so the section
+   must not impose the reading measure on the full-bleed green field. */
+html[data-masthead="on"] .workshop-project-form {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+html[data-masthead="on"] .workshop-project-form > *:not(.workshop-project-heading) {
+  max-width: 1220px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: clamp(1.5rem, 4vw, 4rem);
+  padding-right: clamp(1.5rem, 4vw, 4rem);
+}
+
+/* Nothing may sit between the top bar and the green field. */
+html[data-masthead="on"] .workshop-page > :first-child,
+html[data-masthead="on"] .workshop-project-form > :first-child {
+  margin-top: 0;
+}
+
+/* ============================================================
+   8. STOP SAYING "WORKSHOP"
+   ------------------------------------------------------------
+   Ben, 2026-09-05: the repetition "stands out as amateur". The list
+   screen said it four times — in the menu, in the bar across the
+   top, in the gold kicker, and in the headline.
+
+   The menu keeps it, because that is the name of the destination.
+   The bar across the top is hidden while a masthead is on screen:
+   the masthead already names the screen, far louder. The kicker and
+   the headline were saying the same word to each other, so the list
+   screen now drops the kicker and its headline names what is
+   actually below it — the projects.
+
+   The other two screens keep their kicker, because there it does
+   real work: "Project" and "New project" are not the headline.
+   ============================================================ */
+
+/* Superseded 2026-09-05: Ben ruled the top bar is where page names live,
+   so it keeps "The Workshop" and becomes the way back to it. */
+
+/* ============================================================
+   9. THE TOP BAR CARRIES THE WAY BACK
+   ------------------------------------------------------------
+   Ben, 2026-09-05: page names live in the bar across the top, and
+   that name should be the way back to the Workshop. With the bar
+   doing that job, the separate "Your projects" link inside the
+   masthead is redundant, so it goes.
+   ============================================================ */
+
+html[data-masthead="on"] .workshop-back {
+  display: none;
+}
+
+.topbar-title--link {
+  color: var(--forest-ink);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.topbar-title--link:hover {
+  color: var(--forest);
+  border-bottom-color: var(--gold);
+}
+
+/* Superseded: the "Earlier builds and installed modules" link named an
+   internal distinction the reader has no reason to hold. Hidden here so the
+   page ends cleanly; the real screen needs a decision on where that route
+   lives. */
+html[data-masthead="on"] .workshop-project-footer {
+  display: none;
+}
+
+/* ============================================================
+   10. THE PROJECT WORKSPACE AS A CHAT WINDOW
+   ------------------------------------------------------------
+   Ben, 2026-09-05: the conversation area reads like a bulletin
+   board — every message is a separate boxed card pinned to a page
+   that scrolls the whole screen, and the composer is a labelled
+   form field parked at the bottom of the document. A desktop chat
+   app does the opposite: the window is fixed to the viewport, the
+   transcript scrolls inside it, turns are typographic rather than
+   boxed, and the composer is always in the same place at the foot
+   of the pane.
+
+   All of this is layout and type. No message markup is invented —
+   the same cards, heads and form the real screen already renders.
+   ============================================================ */
+
+/* --- the window fills the viewport, and only the transcript scrolls --- */
+
+html[data-masthead="on"] .workspace-area {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+html[data-masthead="on"] .workspace-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+html[data-masthead="on"] .workspace-body > .content-surface {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+}
+
+html[data-masthead="on"] .workshop-page:has(.workshop-project-detail) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+}
+
+/* Flex, not grid: a panel that is not rendered should take no space at
+   all, and the chat should keep its measure either way. */
+html[data-masthead="on"] .workshop-project-detail {
+  display: flex;
+  width: 100%;
+  align-self: stretch;
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  padding: 0;
+  gap: 0;
+  align-items: stretch;
+  border-top: 1px solid var(--border);
+}
+
+/* Ben, 2026-09-05: everything under the masthead is the chat window. */
+html[data-masthead="on"] .workshop-project-detail > .workshop-project-pane:first-child {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+html[data-masthead="on"]
+  .workshop-project-detail
+  > .workshop-project-pane
+  + .workshop-project-pane {
+  flex: 0 0 clamp(320px, 26vw, 460px);
+}
+
+/* --- the conversation pane --- */
+
+html[data-masthead="on"] .workshop-project-detail .workshop-project-pane {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--surface);
+  padding: 0;
+}
+
+/* Right-hand pane is the work panel, set off by a single hairline. */
+html[data-masthead="on"] .workshop-project-pane + .workshop-project-pane {
+  border-left: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+/* Pane headings become quiet window titles on a bar, not page headings. */
+html[data-masthead="on"] .workshop-project-pane > h2 {
+  flex: 0 0 auto;
+  padding: var(--space-3) clamp(1rem, 2.5vw, 2rem);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  font-size: var(--text-xs);
+  letter-spacing: 0.16em;
+  color: var(--text-subtle);
+}
+
+html[data-masthead="on"] .workshop-project-pane + .workshop-project-pane > h2 {
+  background: var(--surface-2);
+}
+
+/* --- the transcript --- */
+
+html[data-masthead="on"] .workshop-project-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  gap: var(--space-6);
+  padding: clamp(1.25rem, 2.5vw, 2rem) clamp(1rem, 2.5vw, 2rem);
+  margin: 0;
+  scroll-behavior: smooth;
+}
+
+/* A turn is type on the page, not a card. */
+html[data-masthead="on"] .workshop-project-messages .jds-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  display: block;
+  max-width: 78ch;
+}
+
+html[data-masthead="on"] .workshop-project-messages .jds-card__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+  border: 0;
+  padding: 0;
+  background: none;
+}
+
+html[data-masthead="on"] .workshop-project-messages .jds-card__title {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--forest);
+}
+
+html[data-masthead="on"] .workshop-project-messages .jds-card__meta {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+html[data-masthead="on"] .workshop-project-messages .workshop-project-text {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.62;
+  color: var(--ink);
+}
+
+/* The opening idea is the one turn that is not a message. Give it a
+   quiet gold rule so the transcript has a visible beginning. */
+html[data-masthead="on"] .workshop-project-messages .jds-card:first-child {
+  border-left: 2px solid var(--gold);
+  padding-left: var(--space-4);
+}
+
+/* --- the composer, pinned to the foot of the pane --- */
+
+html[data-masthead="on"] .workshop-project-pane > form {
+  flex: 0 0 auto;
+  gap: 0;
+  --gutter: clamp(1rem, 2.5vw, 2rem);
+  padding: clamp(0.75rem, 1.6vw, 1.15rem) var(--gutter) clamp(1rem, 2vw, 1.4rem);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  display: block;
+  position: relative;
+}
+
+html[data-masthead="on"] .workshop-project-pane > form .jds-field {
+  margin: 0;
+}
+
+/* The label names the box out loud; in a chat window the box says it
+   itself. Kept for screen readers, taken off the page. */
+html[data-masthead="on"] .workshop-project-pane > form .jds-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+html[data-masthead="on"] .workshop-project-pane > form .jds-textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  padding: var(--space-3) var(--space-4) 3.1rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  resize: none;
+  min-height: 6.5rem;
+}
+
+html[data-masthead="on"] .workshop-project-pane > form .jds-textarea:focus {
+  outline: 0;
+  border-color: var(--forest);
+  box-shadow: 0 0 0 3px rgba(41, 75, 57, 0.12);
+}
+
+/* Send sits inside the box, bottom right, the way every chat app puts it. */
+html[data-masthead="on"] .workshop-project-pane > form > .jds-btn {
+  position: absolute;
+  right: calc(var(--gutter) + 0.6rem);
+  bottom: calc(clamp(1rem, 2vw, 1.4rem) + 0.6rem);
+  margin: 0;
+}
+
+/* --- the work panel --- */
+
+html[data-masthead="on"] .workshop-project-pane + .workshop-project-pane .jds-empty {
+  margin: auto;
+  padding: var(--space-6);
+  text-align: center;
+  background: none;
+  border: 0;
+}
+
+/* ============================================================
+   11. STARTING A PROJECT IS THE SAME CHAT WINDOW, EMPTY
+   ------------------------------------------------------------
+   Ben, 2026-09-05: the new-project form is unnecessary — an
+   "Already decided (optional)" box especially — and starting a
+   project should go straight to the chat. So the new screen is
+   the project workspace with an empty transcript: one window, one
+   place to type, and the project takes its name from what you
+   write. No separate form to fill in first.
+   ============================================================ */
+
+html[data-masthead="on"] .workshop-project-messages .jds-empty {
+  margin: auto;
+  max-width: 44ch;
+  text-align: center;
+  border: 0;
+  background: none;
+  padding: var(--space-6);
+}
+
+html[data-masthead="on"] .workshop-project-messages .jds-empty__title {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+/* ============================================================
+   12. NOTHING ON SCREEN THAT DOES NOTHING
+   ------------------------------------------------------------
+   Ben, 2026-09-05: an empty "Project work / No plan yet" panel
+   should not be on the page at all. Nothing shows up across the
+   site unless it does something useful. The plan appears only
+   once it exists, in a panel beside the chat — an artifact
+   browser, the way a builder assistant shows what it made.
+
+   Here that is expressed as: a pane whose only content is an
+   empty state is not rendered, and the chat takes the window.
+   In the real screen this is a render condition, not a CSS
+   rule — the panel should not be in the markup until there is
+   an artifact to put in it.
+   ============================================================ */
+
+html[data-masthead="on"] .workshop-project-pane + .workshop-project-pane:has(.jds-empty) {
+  display: none;
+}
+
+/* The window has no title bar to write on: the masthead names the project
+   and the whole area below it is the conversation. */
+html[data-masthead="on"] .workshop-project-detail .workshop-project-pane > h2 {
+  display: none;
+}
+
+/* The chat window starts where the masthead ends — no strip of page
+   colour between the gold rule and the transcript. */
+html[data-masthead="on"] .workshop-page:has(.workshop-project-detail) .workshop-project-heading {
+  margin-bottom: 0;
+}
+
+/* ============================================================
+   13. THE TRANSCRIPT LOOKS LIKE A CHAT, NOT A NOTICE BOARD
+   ------------------------------------------------------------
+   Ben, 2026-09-05: "make the chat window look more like it will
+   too, not bulletin boarded". The turns now use the same message
+   parts the chat drawer already renders — an avatar and plain
+   text for Moss, a bubble on the right for you — so this is the
+   app's own chat component wearing Park Press, not a new one.
+   ============================================================ */
+
+html[data-masthead="on"] .workshop-project-messages {
+  gap: 0;
+  padding: clamp(1.5rem, 3vw, 2.5rem) clamp(1.25rem, 3vw, 2.5rem) var(--space-8);
+}
+
+html[data-masthead="on"] .workshop-project-messages .chatd-msg {
+  margin-bottom: var(--space-6);
+  max-width: 74ch;
+}
+
+/* Moss speaks as running text with a small mark beside it. */
+html[data-masthead="on"] .workshop-av {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--forest);
+  color: #f4efe2;
+}
+
+html[data-masthead="on"] .workshop-project-messages .chatd-bubble .chatd-md {
+  font-size: var(--text-md);
+  line-height: 1.62;
+  color: var(--ink);
+}
+
+html[data-masthead="on"] .workshop-project-messages .chatd-md p {
+  margin: 0 0 var(--space-3);
+}
+
+html[data-masthead="on"] .workshop-project-messages .chatd-md p:last-child {
+  margin-bottom: 0;
+}
+
+/* Your turn is a bubble on the right, in paper stock against the surface. */
+html[data-masthead="on"] .workshop-project-messages .chatd-msg--me {
+  margin-left: auto;
+}
+
+html[data-masthead="on"] .workshop-project-messages .chatd-msg--me .chatd-bubble {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px 10px 2px 10px;
+  padding: var(--space-3) var(--space-4);
+  max-width: 56ch;
+}
+
+/* Steps Moss lists inside a turn read as work, not as prose. */
+html[data-masthead="on"] .workshop-step {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+html[data-masthead="on"] .workshop-step__mark {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+html[data-masthead="on"] .workshop-step--todo .workshop-step__mark {
+  color: var(--border);
+}
+
+/* ============================================================
+   14. THE ARTIFACT PANEL
+   ------------------------------------------------------------
+   What Moss made, beside the conversation that made it: the plan
+   now, the files and a preview once they exist. It appears only
+   when there is something in it (section 12).
+   ============================================================ */
+
+html[data-masthead="on"] .workshop-artifact {
+  background: var(--surface-2);
+  border-left: 1px solid var(--border);
+}
+
+html[data-masthead="on"] .workshop-artifact__bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+html[data-masthead="on"] .workshop-artifact__tabs {
+  display: flex;
+  gap: var(--space-1);
+}
+
+html[data-masthead="on"] .workshop-artifact__tab {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-subtle);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: var(--space-2) var(--space-2);
+  cursor: pointer;
+}
+
+html[data-masthead="on"] .workshop-artifact__tab[aria-pressed="true"] {
+  color: var(--forest);
+  border-bottom-color: var(--gold);
+}
+
+html[data-masthead="on"] .workshop-artifact__state {
+  font-size: var(--text-xs);
+}
+
+html[data-masthead="on"] .workshop-artifact__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: clamp(1.25rem, 2.2vw, 1.75rem) clamp(1rem, 2vw, 1.5rem);
+}
+
+html[data-masthead="on"] .workshop-artifact__body h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  margin: var(--space-1) 0 var(--space-2);
+}
+
+html[data-masthead="on"] .workshop-artifact__lede {
+  margin: 0 0 var(--space-5);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+html[data-masthead="on"] .workshop-artifact__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+html[data-masthead="on"] .workshop-artifact__steps li {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+html[data-masthead="on"] .workshop-artifact__n {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--gold-strong);
+  padding-top: 0.15rem;
+}
+
+html[data-masthead="on"] .workshop-artifact__steps strong {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+html[data-masthead="on"] .workshop-artifact__steps p {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+html[data-masthead="on"] .workshop-artifact__steps li.is-new .workshop-artifact__n {
+  color: var(--forest);
+}
+
+html[data-masthead="on"] .workshop-artifact__steps li.is-new::after {
+  content: "just added";
+  grid-column: 2;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--gold-strong);
+  margin-top: var(--space-2);
+}
+
+html[data-masthead="on"] .workshop-artifact__foot {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* ============================================================
+   15. THE PANEL'S OTHER TABS
+   ------------------------------------------------------------
+   Files is a list you drill into and come back out of; Preview
+   is the module itself, running at panel width, with room to
+   take the whole window while you poke at it. Both stay inside
+   the one column — no tab opens a page.
+   ============================================================ */
+
+html[data-masthead="on"] .workshop-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+html[data-masthead="on"] .workshop-files li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 var(--space-3);
+  padding: var(--space-3) var(--space-1);
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+}
+
+html[data-masthead="on"] .workshop-files li:hover {
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+
+html[data-masthead="on"] .workshop-files__name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+
+html[data-masthead="on"] .workshop-files__note {
+  grid-column: 1;
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+html[data-masthead="on"] .workshop-files__mark {
+  grid-row: 1;
+  grid-column: 2;
+  align-self: center;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--gold-strong);
+}
+
+html[data-masthead="on"] .workshop-artifact__back {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0 0 var(--space-4);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--text-subtle);
+}
+
+html[data-masthead="on"] .workshop-artifact__back:hover {
+  color: var(--forest);
+}
+
+html[data-masthead="on"] .workshop-artifact__back--bar {
+  margin: 0 var(--space-3) 0 0;
+  white-space: nowrap;
+}
+
+html[data-masthead="on"] .workshop-file__title {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-md);
+  margin: 0;
+}
+
+html[data-masthead="on"] .workshop-file__sub {
+  margin: var(--space-1) 0 var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--gold-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+html[data-masthead="on"] .workshop-code {
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ink);
+}
+
+/* --- preview --- */
+
+html[data-masthead="on"] .workshop-artifact__expand {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-subtle);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 7px;
+  margin-right: var(--space-3);
+}
+
+html[data-masthead="on"] .workshop-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+}
+
+html[data-masthead="on"] .workshop-preview__chrome {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-subtle);
+}
+
+html[data-masthead="on"] .workshop-preview__stage {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--paper);
+  padding: clamp(1rem, 2vw, 2rem);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+html[data-masthead="on"] .workshop-wotd {
+  width: min(420px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: var(--space-5);
+}
+
+html[data-masthead="on"] .workshop-wotd h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: var(--space-2) 0 0;
+}
+
+html[data-masthead="on"] .workshop-wotd__pos {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xs);
+  font-style: italic;
+  color: var(--text-subtle);
+}
+
+html[data-masthead="on"] .workshop-wotd__def {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+html[data-masthead="on"] .workshop-wotd__ex {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--gold);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+html[data-masthead="on"] .workshop-wotd__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+html[data-masthead="on"] .workshop-wotd__link {
+  font-size: var(--text-xs);
+  color: var(--forest);
+}
+
+/* Expanded: the panel takes the window, the conversation waits behind it. */
+html[data-masthead="on"] .workshop-project-detail > .workshop-project-pane.workshop-artifact--wide {
+  flex: 1 1 auto;
+  border-left: 0;
+}
+
+html[data-masthead="on"]
+  .workshop-project-detail:has(.workshop-artifact--wide)
+  > .workshop-project-pane:first-child {
+  display: none;
+}
+
+/* ============================================================
+   16. THE DESIGN TAB
+   ------------------------------------------------------------
+   Moss draws the screens before it writes any code, and you say
+   yes to a picture rather than to a paragraph. A picture is
+   cheap to redraw, which is the whole reason it comes first.
+
+   The layout answers Ben's ruling of 2026-09-05: the chat is
+   full width while you are talking about the project, and when
+   it is time to design, the drawing takes most of the room and
+   the conversation moves to a narrow column on the left. So the
+   panel's proportions are a property of what is in the panel,
+   not a fixed number.
+   ============================================================ */
+
+html[data-masthead="on"]
+  .workshop-project-detail
+  > .workshop-project-pane.workshop-artifact--design,
+html[data-masthead="on"] .workshop-project-detail > .workshop-project-pane.workshop-artifact--show {
+  flex: 1 1 auto;
+}
+
+html[data-masthead="on"]
+  .workshop-project-detail:has(.workshop-artifact--design)
+  > .workshop-project-pane:first-child,
+html[data-masthead="on"]
+  .workshop-project-detail:has(.workshop-artifact--show)
+  > .workshop-project-pane:first-child {
+  flex: 0 0 clamp(300px, 26vw, 400px);
+  min-width: 0;
+}
+
+/* The stage the drawings sit on: page colour, so a screen mock
+   reads as a thing being looked at rather than panel furniture. */
+html[data-masthead="on"] .workshop-design {
+  background: var(--paper);
+  padding: clamp(1.25rem, 2.4vw, 2rem);
+}
+
+html[data-masthead="on"] .workshop-design__intro {
+  max-width: 62ch;
+  margin: 0 0 clamp(1.25rem, 2.4vw, 1.75rem);
+}
+
+html[data-masthead="on"] .workshop-design__intro p:last-child {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+html[data-masthead="on"] .workshop-design__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: clamp(1rem, 2vw, 1.75rem);
+  align-items: start;
+}
+
+html[data-masthead="on"] .workshop-design__screen {
+  margin: 0;
+}
+
+html[data-masthead="on"] .workshop-design__screen--wide {
+  grid-column: 1 / -1;
+}
+
+html[data-masthead="on"] .workshop-design__frame {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow:
+    0 1px 0 var(--border-subtle),
+    0 10px 24px -18px rgba(31, 27, 20, 0.5);
+  padding: clamp(0.9rem, 1.6vw, 1.4rem);
+  overflow: hidden;
+}
+
+html[data-masthead="on"] .workshop-design__screen figcaption {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-subtle);
+}
+
+html[data-masthead="on"] .workshop-design__screen figcaption span {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-muted);
+}
+
+/* A drawing marked as changed since you last looked, same gold
+   language the Files list uses. */
+html[data-masthead="on"] .workshop-design__screen.is-new .workshop-design__frame {
+  border-color: var(--gold);
+  box-shadow:
+    inset 3px 0 0 var(--gold),
+    0 10px 24px -18px rgba(31, 27, 20, 0.5);
+}
+
+html[data-masthead="on"] .workshop-design__screen.is-new figcaption::after {
+  content: "just redrawn";
+  margin-left: auto;
+  color: var(--gold-strong);
+}
+
+/* --- the drawn screens themselves ------------------------- */
+
+html[data-masthead="on"] .wotd-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: clamp(1rem, 1.8vw, 1.5rem);
+  background: var(--surface);
+}
+
+html[data-masthead="on"] .wotd-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+html[data-masthead="on"] .wotd-word {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 2.6vw, 2.1rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: var(--space-1) 0 0;
+  color: var(--forest);
+}
+
+html[data-masthead="on"] .wotd-say {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-subtle);
+  font-style: italic;
+}
+
+html[data-masthead="on"] .wotd-def {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-base);
+  line-height: 1.6;
+}
+
+html[data-masthead="on"] .wotd-eg {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--gold);
+  font-size: var(--text-sm);
+  font-style: italic;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+html[data-masthead="on"] .wotd-star {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+html[data-masthead="on"] .wotd-list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+html[data-masthead="on"] .wotd-list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+html[data-masthead="on"] .wotd-list b {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  flex: 0 0 8.5rem;
+}
+
+html[data-masthead="on"] .wotd-list span {
+  flex: 1;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-masthead="on"] .wotd-list em {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  font-style: normal;
+}
+
+html[data-masthead="on"] .wotd-kept {
+  color: var(--gold-strong);
+}
+
+/* A drawing of a whole page sits on page colour, so the card
+   inside it reads as a card on Today rather than a second box. */
+html[data-masthead="on"] .workshop-design__frame--page {
+  background: var(--paper);
+}
+
+/* Keep a caption on one line: the label and the "just redrawn"
+   mark never wrap, and the description gives way instead. */
+html[data-masthead="on"] .workshop-design__screen figcaption {
+  white-space: nowrap;
+}
+
+html[data-masthead="on"] .workshop-design__screen figcaption span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================
+   17. NO MASTHEAD INSIDE A PROJECT
+   ------------------------------------------------------------
+   Ben, 2026-09-05: once you are in the chat the masthead earns
+   nothing - it is a title bar over a title bar. The masthead
+   stays on the Workshop home page, where it says what the page
+   is; inside a project the name moves to the top bar, which is
+   also the way back, and everything under the top bar is the
+   conversation and what Moss made.
+   ============================================================ */
+
+html[data-masthead="on"] .workshop-page:has(.workshop-project-detail) .workshop-project-heading {
+  display: none;
+}
+
+/* The chat then meets the top bar directly, so it must not draw
+   a second line under it. */
+html[data-masthead="on"] .workshop-page:has(.workshop-project-detail) .workshop-project-detail {
+  border-top: 0;
+}
+
+/* The top bar carries the trail: section, then where you are. */
+html[data-masthead="on"] .topbar-crumb {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+html[data-masthead="on"] .topbar-crumb__sep {
+  color: var(--border);
+  font-size: var(--text-sm);
+}
+
+html[data-masthead="on"] .topbar-crumb__now {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html[data-masthead="on"] .topbar-crumb__meta {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+html[data-masthead="on"] .topbar-crumb .topbar-title--link {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+html[data-masthead="on"] .topbar-crumb .topbar-title--link:hover {
+  color: var(--forest);
+}
+
+/* Superseded: the "Only you" badge sat at the right of the top bar.
+   Ben, 2026-09-05: every project is private until sharing exists, so
+   it said nothing the screen did not already say. */
+
+/* The name is a button that looks like text. Ben, 2026-09-05: click
+   to rename, in place. Hover draws a hairline gold underline so the
+   name reads as something you can touch without shouting about it. */
+html[data-masthead="on"] button.topbar-crumb__now {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: text;
+  text-align: left;
+  box-shadow: 0 1px 0 transparent;
+  transition: box-shadow 0.12s ease;
+}
+
+html[data-masthead="on"] button.topbar-crumb__now:hover {
+  box-shadow: 0 1px 0 var(--gold);
+}
+
+html[data-masthead="on"] button.topbar-crumb__now:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+
+/* Renaming: the field takes the name's place and the meta steps out.
+   Save and Cancel sit beside it; Enter saves, Escape cancels. */
+html[data-masthead="on"] .topbar-rename {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+html[data-masthead="on"] .topbar-rename__input {
+  flex: 1 1 24ch;
+  min-width: 0;
+  max-width: 40ch;
+  height: 2rem;
+  padding: 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Hide the meta before the top bar gets tight. */
+@media (max-width: 900px) {
+  html[data-masthead="on"] .topbar-crumb__meta {
+    display: none;
+  }
+}
+
+/* ============================================================
+   18. THE OPENING OF A NEW PROJECT
+   ------------------------------------------------------------
+   An empty chat is a lot of nothing, so the first screen is an
+   invitation rather than an empty-state notice. The examples
+   are not decoration: pressing one writes it into the box.
+   ============================================================ */
+
+html[data-masthead="on"] .workshop-open {
+  margin: auto;
+  max-width: 46ch;
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+
+html[data-masthead="on"] .workshop-open__mark {
+  display: inline-flex;
+  margin-bottom: var(--space-4);
+}
+
+html[data-masthead="on"] .workshop-open__mark .workshop-av {
+  width: 40px;
+  height: 40px;
+}
+
+html[data-masthead="on"] .workshop-open__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--forest);
+}
+
+html[data-masthead="on"] .workshop-open__sub {
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+html[data-masthead="on"] .workshop-open__eg {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
+
+html[data-masthead="on"] .workshop-open__eg button {
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+html[data-masthead="on"] .workshop-open__eg button:hover {
+  border-color: var(--gold);
+  color: var(--forest);
+}
+
+/* When the chat has the whole width to itself - a new project, or
+   any project before Moss has made anything - the text keeps a
+   reading measure instead of running the full window. The moment
+   the panel appears the column is narrow enough to need it all. */
+html[data-masthead="on"]
+  .workshop-project-detail:not(:has(.workshop-artifact))
+  .workshop-project-pane
+  > form {
+  --gutter: max(clamp(1rem, 2.5vw, 2rem), calc((100% - 56rem) / 2));
+}
+
+html[data-masthead="on"]
+  .workshop-project-detail:not(:has(.workshop-artifact))
+  .workshop-project-messages {
+  padding-left: max(clamp(1rem, 2.5vw, 2rem), calc((100% - 56rem) / 2));
+  padding-right: max(clamp(1rem, 2.5vw, 2rem), calc((100% - 56rem) / 2));
+}

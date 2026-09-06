@@ -36,3 +36,8 @@ docs/superpowers/specs/job-search-mockup/
 # (external-worker-runtime, external-module-invocation-budget, module-sdk-worker); a
 # concurrent format:check run could otherwise flag a generated file inside one mid-test.
 .tmp-*/
+
+# Same rule again: the Park Press finish mockup. `screens/` holds the real Workshop screens frozen
+# byte-for-byte out of the running app so the design layer is provably the only change; the app's
+# own built markup does not parse as standalone HTML. Formatting them would destroy the proof.
+docs/superpowers/specs/assets/2026-09-05-park-press-finish/screens/
