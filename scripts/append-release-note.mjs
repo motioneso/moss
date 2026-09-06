@@ -95,8 +95,11 @@ export function appendReleaseNote(markdown, note, { prNumber, prUrl, today }) {
         }, dateSection.length);
       const absoluteInsertAt = dateIndex + insertAt;
       const before = edgeSection.slice(0, absoluteInsertAt).replace(/\n+$/, "\n");
-      const after = edgeSection.slice(absoluteInsertAt);
-      edgeSection = `${before}\n${categoryHeading}\n\n${bullet}\n` + after.replace(/^\n+/, "\n");
+      const after = edgeSection.slice(absoluteInsertAt).replace(/^\n+/, "");
+      // A blank line must separate the new bullet from whatever heading follows it (the next
+      // category, or the next date group) — but not when nothing follows at all.
+      const tail = after.length === 0 ? "\n" : `\n\n${after}`;
+      edgeSection = `${before}\n${categoryHeading}\n\n${bullet}${tail}`;
     }
   } else {
     const firstDate = edgeSection.match(/^### (\d{4}-\d{2}-\d{2})$/m);
@@ -169,6 +172,10 @@ function selfTest() {
     /### 2026-08-20\n\n#### Fixed\n[\s\S]*#### Changed\n\n- \*\*New behavior\./
   );
   assert.equal((withChanged.match(/### 2026-08-20\n/g) ?? []).length, 1);
+  // A blank line must separate the last bullet of the newest date group from the next,
+  // older date heading right after it — issue 2334, the missing-blank-line bug that broke
+  // the documents check on pull requests 2286 and 2319.
+  assert.match(withChanged, /- \*\*New behavior\.\*\* It behaves differently now\. \[PR #43\]\(https:\/\/example\.com\/43\)\n\n### 2026-08-14/);
 
   const withLaterDate = appendReleaseNote(
     withChanged,
