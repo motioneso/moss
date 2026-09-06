@@ -60,7 +60,7 @@ section only. Task 3 lines 136-154, Task 4 lines 156-163, Task 5 lines 165-177, 
    and the tool auto-executes (inverse of #1310's pre-fix reproduction: card appeared, timed out
    at 150s). This also resolves the coordinator's open kill-gate A/B validity concern. Re-check dev
    instance PIDs first (API :3099, web :5175 — drift every relay, `ss -ltnp | grep -E '3099|5175'`).
-   Login using the development sign-in details (kept outside the repository). Trap: `/api/chat/turn` blocks synchronously on
+   Login using the development sign-in details (kept outside the repository (see the memory note named dev-instance-lan-spinup-trusted-origins)). Trap: `/api/chat/turn` blocks synchronously on
    confirm/timeout; unblock via POST `/api/chat/action-requests/<id>/resolve`
    `{"status":"confirmed"|"rejected"|"cancelled"}`.
 3. **Task 5**: PR description per plan lines 165-177 — cover: tasks-was-broken correction,

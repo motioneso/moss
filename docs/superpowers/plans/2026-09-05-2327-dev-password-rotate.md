@@ -29,6 +29,7 @@ feature, so the module mockup gate does not apply.
 ## Task order (must run in this order — rotating first strands every other agent)
 
 **Task 1 — test files read credentials from the environment.**
+
 - Files: the four live spec files above.
 - Change each to:
   ```ts
@@ -47,6 +48,7 @@ feature, so the module mockup gate does not apply.
   message names `LIVE_OWNER_PASSWORD`.
 
 **Task 2 — scrub the 26 documents.**
+
 - Replace each occurrence of the old dev credential pair (and any inline variant found
   by grep) with a short clause: "the development sign-in details are kept outside the repository."
   Keep surrounding sentence structure readable — this is prose editing, not a mechanical strip.
@@ -55,6 +57,7 @@ feature, so the module mockup gate does not apply.
   captured as `EXIT=$?` not piped).
 
 **Task 3 — add the regression guard.**
+
 - New file `scripts/check-no-dev-password.ts`, same shape as `check-no-ambient-dates.ts`
   (walk the repo, skip `node_modules`/`.git`/`dist`, report offending `file:line`).
 - Two independent checks:
@@ -74,6 +77,7 @@ feature, so the module mockup gate does not apply.
   file after the smoke check, never commit it).
 
 **Task 4 — rotate the password on the dev instance.**
+
 - Only after tasks 1-3 are committed. Use `scripts/admin-reset-password.ts` (or whatever the
   existing admin path is — confirm by reading the script before running) against the dev instance
   (`192.168.50.36:5173` / API `:3000`), never port 1533.
@@ -81,12 +85,14 @@ feature, so the module mockup gate does not apply.
   message.
 
 **Task 5 — record the new password outside the repository.**
+
 - Update in place (do not add a new file) `MEMORY.md:12` and
   `dev-instance-lan-spinup-trusted-origins.md:18` with the new password.
 - Write a new file under `~/.coord-briefs/` (e.g. `dev-instance-credentials.txt`) with the new
   password and the date rotated.
 
 **Task 6 — live proof.**
+
 - Sign in to the dev instance UI with the new password by hand (or via the admin script's own
   verification) and note what was observed.
 - Run at least one of the four live tests against the dev instance with
@@ -111,6 +117,7 @@ pnpm format:check > /tmp/fmt.log 2>&1; echo "EXIT=$?"
 pnpm typecheck > /tmp/tc.log 2>&1; echo "EXIT=$?"
 grep -rl "<old dev password, see the coord-briefs record>" . --exclude-dir=node_modules --exclude-dir=.git > /tmp/grep-pw.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: all `EXIT=0` except the final grep, which must be `EXIT=1` (no matches) once the old
 password string itself is no longer present in plaintext anywhere the guard's own obfuscation
 doesn't hide it from a plain grep — the checker's self-reference must not reintroduce the plain

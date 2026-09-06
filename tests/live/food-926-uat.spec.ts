@@ -29,7 +29,9 @@ const API = process.env.LIVE_API_URL ?? "http://127.0.0.1:3000";
 const OWNER_PASSWORD = process.env.LIVE_OWNER_PASSWORD;
 if (!OWNER_PASSWORD) {
   throw new Error(
-    "Set LIVE_OWNER_PASSWORD to the development instance sign-in password before running this test."
+    "Set LIVE_OWNER_PASSWORD to the development instance sign-in password before running this " +
+      "test. The current password is not in this repository; it is kept in the memory note " +
+      "named dev-instance-lan-spinup-trusted-origins."
   );
 }
 const OWNER = { email: "ben@ben.com", password: OWNER_PASSWORD };

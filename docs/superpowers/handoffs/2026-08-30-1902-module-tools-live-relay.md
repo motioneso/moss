@@ -58,7 +58,7 @@ the build does not compile as-is. That's the very next step.
 8. **`coordinated-wrap-up`** — push, open PR (release note is in the original task brief:
    Category Added, title "Modules Moss builds can add new things it can do").
 9. **Live-path proof** — on the dev instance (http://192.168.50.36:5173, login using the
-   development sign-in details kept outside the repository): ask Moss/Workshop to build a module with one chat tool, then
+   development sign-in details, kept in the memory note named dev-instance-lan-spinup-trusted-origins, not in this repository): ask Moss/Workshop to build a module with one chat tool, then
    without restarting anything, use that tool in chat in the same session. Post the transcript/
    evidence as a `gh pr comment`. This is a hard exit criterion — do not report done without it.
 

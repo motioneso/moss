@@ -78,7 +78,7 @@ Two rules follow, and the script enforces both:
 If it has already vanished, `GET /api/admin/external-modules` will show
 `status: disabled, drifted: true` with that reason. Re-running the script fixes it.
 
-Ports: API 3097, web 5197, LAN `192.168.50.36`. Login using the development sign-in details (kept outside the repository) (dev only).
+Ports: API 3097, web 5197, LAN `192.168.50.36`. Login using the development sign-in details, kept in the memory note named dev-instance-lan-spinup-trusted-origins, not in this repository (dev only).
 Postgres: `docker exec jarv1s-postgres psql -U postgres -d jarv1s` (`psql` is not on PATH).
 **`jarv1s-prod-*` containers and the 10.252 subnet are PROD — never touch.**
 

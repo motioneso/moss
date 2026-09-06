@@ -37,7 +37,7 @@ prior explicit enable action produces NO confirm card, live on a real dev instan
   929312 (parent)/929440/929441 (vite child).
 - Both point at shared dev Postgres (`jarv1s-postgres` container, db `jarv1s`) — standard recipe,
   not an isolated gate DB (that's only for the final `verify:foundation` run).
-- Login: the development sign-in details (kept outside the repository) (id `6dc52034-a0ee-4944-9bfc-ef477af4370b`).
+- Login: the development sign-in details (kept outside the repository (see the memory note named dev-instance-lan-spinup-trusted-origins)) (id `6dc52034-a0ee-4944-9bfc-ef477af4370b`).
 
 **Chosen test tool:** `news.addTopic` — `packages/news/src/manifest.ts` ~line 334-356. Family
 `news_personalization`, `selfOperationGrant: "granted_at_install"`, module `news` has

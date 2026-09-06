@@ -43,9 +43,9 @@ const hardcodedCredentialViolations: Violation[] = [];
 // email and a literal `password: "..."` value, in either order.
 const ownerCredentialObjectPattern = new RegExp(
   "\\{[^{}]*(?:" +
-    '["\'\']ben@ben\\.com["\'][^{}]*password\\s*:\\s*["\'][^"\'$]+["\']' +
+    "[\"'']ben@ben\\.com[\"'][^{}]*password\\s*:\\s*[\"'][^\"'$]+[\"']" +
     "|" +
-    'password\\s*:\\s*["\'][^"\'$]+["\'][^{}]*["\'\']ben@ben\\.com["\']' +
+    "password\\s*:\\s*[\"'][^\"'$]+[\"'][^{}]*[\"'']ben@ben\\.com[\"']" +
     ")[^{}]*\\}",
   "s"
 );

@@ -46,7 +46,7 @@ Plan (full decisions, exact CSS moved): `docs/superpowers/plans/2026-08-22-1500-
    the moved checkbox/switch declarations render identically.
    Dev instance: `http://192.168.50.36:5173` (start with `pnpm dev:api` + `pnpm dev:web` from
    `~/Jarv1s` if not already running — check first, don't blindly restart). Login `ben@ben.com` /
-   the development sign-in details (kept outside the repository).
+   the development sign-in details (kept outside the repository (see the memory note named dev-instance-lan-spinup-trusted-origins)).
    **Kill gate (plan):** if any post-move screenshot differs beyond antialiasing noise, stop,
    revert the CSS move, escalate to the coordinator with the specific selector/property — do not
    open the PR.
