@@ -49,6 +49,7 @@ import { sourceSelfUpdateDisableEnv } from "../../packages/cli-runner/src/main.j
 import { buildSanitizedCliEnv } from "../../packages/cli-runner/src/sanitized-env.js";
 import { PROVIDER_CATALOG } from "../../packages/cli-runner/src/catalog.js";
 import { createSanitizedTmuxIo } from "../../packages/cli-runner/src/runner-io.js";
+import { resolveDefaultToolsPrefix } from "../../packages/cli-runner/src/tools-prefix.js";
 import type { RpcProviderKind } from "../../packages/chat/src/live/rpc-contract.js";
 
 // ─── A fake TmuxIo that simulates npm ci + --version + ls against a real temp tree ──
@@ -858,4 +859,15 @@ describe("InstallService — GUARDED-LIVE real npm ci + §A.1.3 placement (netwo
     },
     600_000
   );
+});
+
+describe("InstallService — default toolsPrefix (#2340)", () => {
+  it("falls back to resolveDefaultToolsPrefix() when no override is given", () => {
+    const { io } = makeFakeIo({ installedVersion: PINNED });
+    const svc = new InstallService({ io, catalog: PROVIDER_CATALOG, homeBase });
+
+    expect((svc as unknown as { toolsPrefix: string }).toolsPrefix).toBe(
+      resolveDefaultToolsPrefix()
+    );
+  });
 });
