@@ -85,7 +85,7 @@ const enabled = (): State => ({
   owner_user_id: null
 });
 
-const draft = (ownerUserId = OWNER): State => ({
+const draft = (ownerUserId: string | null = OWNER): State => ({
   status: "draft",
   manifest_hash: MANIFEST_HASH,
   package_hash: PACKAGE_HASH,
@@ -127,6 +127,26 @@ describe("verified external module invocation draft gate", () => {
       });
       expect(fixture.invoke).not.toHaveBeenCalled();
     }
+  });
+
+  it("rejects a draft with no recorded owner", async () => {
+    const noOwner = build({ state: draft(null) });
+    await expect(noOwner.invoker(args())).resolves.toEqual({ ok: false, reason: "not-enabled" });
+    expect(noOwner.invoke).not.toHaveBeenCalled();
+  });
+
+  it("rejects a disabled module even when the actor is its owner", async () => {
+    // The most important negative case: owning a module must never substitute for it
+    // being enabled. If this check were loosened to "any non-enabled module the actor
+    // owns", only this test would notice.
+    const disabledOwned = build({
+      state: { ...enabled(), status: "disabled", owner_user_id: OWNER }
+    });
+    await expect(disabledOwned.invoker(args())).resolves.toEqual({
+      ok: false,
+      reason: "not-enabled"
+    });
+    expect(disabledOwned.invoke).not.toHaveBeenCalled();
   });
 
   it("preserves enabled behavior and rejects disabled, missing, and undiscovered modules", async () => {
