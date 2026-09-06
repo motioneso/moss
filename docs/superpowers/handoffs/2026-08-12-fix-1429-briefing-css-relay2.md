@@ -29,8 +29,8 @@ partly executed; don't redo).
      saved to this worktree's scratchpad `seed-user-id.txt`, but that's a session-specific tmp
      path — treat the id in this doc as authoritative).
    - `app.auth_accounts` row: `provider_id='credential'`, `account_id=<same uuid>`,
-     `password` = scrypt hash for **`jarvistest123!`** (Ben's standard throwaway dev password per
-     [[dev-instance-lan-spinup-trusted-origins]] memory).
+     `password` = scrypt hash of the development sign-in password, kept outside the repository
+     (see [[dev-instance-lan-spinup-trusted-origins]] memory).
    - Verified both rows exist (`select` came back non-empty after insert).
 4. **Important tooling trap hit and solved:** `docker exec jarv1s-postgres psql -U postgres -d
    jarv1s -v uid=... -c "..."` — psql `-v`/`:'var'` interpolation **silently fails with a syntax
@@ -86,7 +86,7 @@ partly executed; don't redo).
    for teardown (`prod-worker-looks-like-a-dev-orphan-in-ps` memory: never kill by name pattern).
 5. **Drive real UI** with an ad hoc Playwright script (inside this worktree, `@playwright/test`,
    wait on `domcontentloaded` not `networkidle` per memory) — POST `/api/auth/sign-in/email` with
-   `ben@ben.com` / `jarvistest123!` first to confirm 200 (delete the response, it holds a session
+   the development sign-in details (kept outside the repository) first to confirm 200 (delete the response, it holds a session
    token), then drive the browser: sign in via UI, navigate `/today`, wait for `.jds-brief` /
    `.loose-row`, screenshot to a scratchpad path.
 6. **Verify screenshot via cropped-region reads only** — never pull a full-page screenshot into

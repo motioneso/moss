@@ -54,9 +54,11 @@ jobs:
             echo "Docs-only change — running formatting and file-size checks only."
           fi
 
-  # Docs-only PRs still have to pass the two gates that actually cover markdown:
-  # prettier (format:check runs over `.`) and check:file-size (its extension list
-  # includes .md). Skipping these would let unformatted docs reach main and break
+  # Docs-only PRs still have to pass the gates that actually cover markdown:
+  # prettier (format:check runs over `.`), check:file-size (its extension list
+  # includes .md), and check:no-dev-password (a pasted password in a handoff note
+  # is the most likely way the old dev password comes back, and that is exactly a
+  # docs-only change). Skipping these would let unformatted docs reach main and break
   # the NEXT PR's format:check — the failure mode this filter must not introduce.
   docs-gate:
     name: Verify docs
@@ -88,6 +90,9 @@ jobs:
 
       - name: Check file size
         run: pnpm check:file-size
+
+      - name: Check for dev password
+        run: pnpm check:no-dev-password
 
   verify:
     name: Verify static checks and unit tests

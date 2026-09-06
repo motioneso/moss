@@ -15,7 +15,7 @@ rows), Verification lines 188-210.
 ## Kill gate: PASSED, personally observed before AND after (do not re-run)
 
 Dev instance still up, reuse: API :3099 (PID 928691/928754, log `/tmp/1311-dev/api.log`), web
-:5175 (PID 929312/929440/929441). Login `ben@ben.com` / `jarvistest123!`
+:5175 (PID 929312/929440/929441). Login using the development sign-in details (kept outside the repository (see the memory note named dev-instance-lan-spinup-trusted-origins))
 (`6dc52034-a0ee-4944-9bfc-ef477af4370b`). Both point at shared dev Postgres (`jarv1s-postgres`,
 db `jarv1s`) — not the isolated gate DB.
 

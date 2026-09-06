@@ -43,7 +43,7 @@
      `which chromium-cli` availability when this relay was triggered — check it fresh). Fallback
      if unavailable: adapt `_electron`-style Playwright REPL per that doc (`chromium.launch({args:
      ['--no-sandbox']})`).
-   - Sign in as `ben@ben.com` / `jarvistest123!` (dev seed user).
+   - Sign in using the development sign-in details (kept outside the repository) (dev seed user).
    - Follow two competitions via the real UI. Natural clicks won't produce an exact `created_at`
      tie — force it with a direct `psql` `UPDATE` against the two new follow rows (record both row
      ids for teardown!), then reload multiple times and assert the **same**

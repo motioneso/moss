@@ -8,7 +8,7 @@ format-fix `67abfa8bf`) is done — **only the live-path proof is left**, then r
 ## Only remaining task: fix the Playwright sign-in, get live DOM proof, comment on PR
 
 Script: `.scratch-livepath/live-path-1115.mjs` (run with cwd = repo root, not `/tmp` — ESM
-resolution needs the workspace `node_modules`). It signs in as `ben@ben.com` / `jarvistest123!`,
+resolution needs the workspace `node_modules`). It signs in using the development sign-in details (kept outside the repository (see the memory note named dev-instance-lan-spinup-trusted-origins)),
 goes to `/tasks`, creates `E2E-1115-<ts> overdue proof task` with a due date 3 days in the past via
 the Details dialog (`#task-due-input`, submit button is `"Add task"` not `"Save"`), asserts the row
 has exactly one "Overdue", toggles the checkbox done, and asserts the badge remains the sole

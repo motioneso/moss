@@ -129,7 +129,7 @@ re-verify in isolation; low risk, standard flake pattern.
    re-resolve pane via `herdr pane list`, was `w1:p14D` last relay — drifts). Same tool
    (`settings.themeMode.set`, `granted_at_install`), same real dev instance, assert NO card appears
    and the tool auto-executes. Re-check dev instance PIDs first (API :3099, web :5175 —
-   `ss -ltnp | grep -E '3099|5175'`, drift every relay). Login `ben@ben.com` / `jarvistest123!`.
+   `ss -ltnp | grep -E '3099|5175'`, drift every relay). Login using the development sign-in details (kept outside the repository (see the memory note named dev-instance-lan-spinup-trusted-origins)).
    Trap: `/api/chat/turn` blocks synchronously on confirm/timeout; unblock via POST
    `/api/chat/action-requests/<id>/resolve` `{"status":"confirmed"|"rejected"|"cancelled"}`.
    Do NOT write a new harness.
