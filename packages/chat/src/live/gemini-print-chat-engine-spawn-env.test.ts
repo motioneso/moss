@@ -6,6 +6,7 @@ import { EventEmitter } from "node:events";
 import { describe, expect, it, afterEach, vi } from "vitest";
 
 import type { TmuxIo } from "@moss/ai";
+import type * as NodeChildProcess from "node:child_process";
 
 /**
  * #2348 — proves the gemini engine's one spawn passes the engine's configured home folder
@@ -14,15 +15,15 @@ import type { TmuxIo } from "@moss/ai";
  */
 const spawnCalls: Array<{ command: string; options: Record<string, unknown> }> = [];
 
-function fakeChild() {
-  const child: any = new EventEmitter();
+function fakeChild(): EventEmitter & Record<string, unknown> {
+  const child = new EventEmitter() as EventEmitter & Record<string, unknown>;
   child.unref = () => {};
   child.kill = () => true;
   return child;
 }
 
 vi.mock("node:child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:child_process")>();
+  const actual = await importOriginal<typeof NodeChildProcess>();
   return {
     ...actual,
     spawn: (command: string, args: string[], options: Record<string, unknown>) => {

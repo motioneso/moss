@@ -6,6 +6,7 @@ import { EventEmitter } from "node:events";
 import { describe, expect, it, afterEach, vi } from "vitest";
 
 import type { TmuxIo } from "@moss/ai";
+import type * as NodeChildProcess from "node:child_process";
 
 /**
  * #2348 — proves the two spawns in this file (submit() and launchStructured()) pass the
@@ -16,13 +17,15 @@ import type { TmuxIo } from "@moss/ai";
  */
 const spawnCalls: Array<{ command: string; options: Record<string, unknown> }> = [];
 
-function fakeChild() {
-  const child: any = new EventEmitter();
-  child.stdout = new EventEmitter();
-  child.stdout.setEncoding = () => {};
-  child.stderr = new EventEmitter();
-  child.stderr.setEncoding = () => {};
-  child.stderr.resume = () => {};
+function fakeChild(): EventEmitter & Record<string, unknown> {
+  const child = new EventEmitter() as EventEmitter & Record<string, unknown>;
+  const stdout = new EventEmitter() as EventEmitter & Record<string, unknown>;
+  stdout.setEncoding = () => {};
+  child.stdout = stdout;
+  const stderr = new EventEmitter() as EventEmitter & Record<string, unknown>;
+  stderr.setEncoding = () => {};
+  stderr.resume = () => {};
+  child.stderr = stderr;
   child.stdin = { destroyed: false, write: () => {}, end: () => {} };
   child.unref = () => {};
   child.kill = () => true;
@@ -30,7 +33,7 @@ function fakeChild() {
 }
 
 vi.mock("node:child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:child_process")>();
+  const actual = await importOriginal<typeof NodeChildProcess>();
   return {
     ...actual,
     spawn: (command: string, args: string[], options: Record<string, unknown>) => {
