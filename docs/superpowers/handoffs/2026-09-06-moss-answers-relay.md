@@ -168,7 +168,7 @@ infrastructure. Confirm this in the plan rather than assuming.
 - Plain English in every message a human reads: status updates, this doc, spawn prompts — no
   jargon, no invented shorthand, plain keyboard punctuation, at most one piece of code formatting
   per sentence. Pass this rule on to every agent you spawn, word for word.
-- Dev instance: `http://192.168.50.36:5173`, API port 3000, login `ben@ben.com` /
-  `jarvistest123!`. Port 1533 is production, never a test target.
+- Dev instance: `http://192.168.50.36:5173`, API port 3000, login `ben@ben.com` (password in
+  memory, not repeated here). Port 1533 is production, never a test target.
 - Your own slice must finish this session. A second relay is not available — if it still does not
   fit, report to the coordinator for a re-slice instead of relaying again.
