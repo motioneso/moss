@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Park Press, finished — Workshop review</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: #1c1a16;
+    color: #ece7dc;
+  }
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid #3a352b;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 22px;
+    align-items: center;
+  }
+  h1 { font-size: 15px; margin: 0 12px 0 0; font-weight: 700; letter-spacing: -0.01em; }
+  .set { display: flex; align-items: center; gap: 7px; }
+  .set > span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #9c9384; }
+  button {
+    font: inherit;
+    font-size: 13px;
+    padding: 5px 11px;
+    border-radius: 3px;
+    border: 1px solid #4a4437;
+    background: #262319;
+    color: #ddd6c7;
+    cursor: pointer;
+  }
+  button:hover { background: #322e22; }
+  button[aria-pressed="true"] {
+    background: #c2872b;
+    border-color: #c2872b;
+    color: #241a06;
+    font-weight: 700;
+  }
+  .big { border-color: #c2872b; color: #e8c98b; }
+  iframe { width: 100%; height: calc(100vh - 108px); border: 0; display: block; background: #fff; }
+  .note { padding: 7px 20px; font-size: 12px; color: #9c9384; border-bottom: 1px solid #3a352b; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Park Press, finished</h1>
+
+  <div class="set">
+    <span>Screen</span>
+    <button data-screen="list" aria-pressed="true">Project list</button>
+    <button data-screen="new" aria-pressed="false">New project</button>
+    <button data-screen="detail" aria-pressed="false">Project workspace</button>
+    <button data-screen="detail-artifact" aria-pressed="false">Plan</button>
+    <button data-screen="detail-design" aria-pressed="false">Design</button>
+    <button data-screen="detail-files" aria-pressed="false">Files</button>
+    <button data-screen="detail-file" aria-pressed="false">One file</button>
+    <button data-screen="detail-preview" aria-pressed="false">Preview</button>
+    <button data-screen="detail-preview-wide" aria-pressed="false">Preview, expanded</button>
+  </div>
+
+  <div class="set">
+    <span>Compare</span>
+    <button class="big" id="before" aria-pressed="false">Show today's version</button>
+  </div>
+
+  <div class="set">
+    <span>Display face</span>
+    <button data-face="archivo" aria-pressed="true">Archivo</button>
+    <button data-face="space" aria-pressed="false">Space Grotesk</button>
+    <button data-face="bricolage" aria-pressed="false">Bricolage</button>
+    <button data-face="none" aria-pressed="false">None (today)</button>
+  </div>
+
+  <div class="set">
+    <span>Page colour</span>
+    <button data-ground="bone" aria-pressed="true">Bone</button>
+    <button data-ground="sage" aria-pressed="false">Sage</button>
+    <button data-ground="oat" aria-pressed="false">Oat (today)</button>
+  </div>
+</header>
+
+<div class="note">
+  These are the real Workshop screens, frozen from the running app. Only typography, page colour and
+  the grid have been changed — no markup was edited, so what you see is what the design layer alone does.
+</div>
+
+<iframe id="stage" src="screens/list.html" title="Workshop screen"></iframe>
+
+<script>
+  var state = { screen: "list", face: "archivo", ground: "bone", masthead: "on", grid: "keyline" };
+  var before = false;
+  var stage = document.getElementById("stage");
+
+  function paint() {
+    var d = stage.contentDocument;
+    if (!d || !d.documentElement) return;
+    var r = d.documentElement;
+    if (before) {
+      r.setAttribute("data-face", "none");
+      r.setAttribute("data-ground", "oat");
+      r.setAttribute("data-masthead", "off");
+      r.setAttribute("data-grid", "default");
+    } else {
+      r.setAttribute("data-face", state.face);
+      r.setAttribute("data-ground", state.ground);
+      r.setAttribute("data-masthead", state.masthead);
+      r.setAttribute("data-grid", state.grid);
+    }
+  }
+
+  stage.addEventListener("load", paint);
+
+  function press(group, value) {
+    document.querySelectorAll("[data-" + group + "]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-" + group) === value));
+    });
+  }
+
+  document.querySelectorAll("[data-screen]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      state.screen = b.getAttribute("data-screen");
+      press("screen", state.screen);
+      stage.src = "screens/" + state.screen + ".html";
+    });
+  });
+
+  ["face", "ground"].forEach(function (group) {
+    document.querySelectorAll("[data-" + group + "]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        state[group] = b.getAttribute("data-" + group);
+        press(group, state[group]);
+        before = false;
+        document.getElementById("before").setAttribute("aria-pressed", "false");
+        document.getElementById("before").textContent = "Show today's version";
+        paint();
+      });
+    });
+  });
+
+  document.getElementById("before").addEventListener("click", function () {
+    before = !before;
+    this.setAttribute("aria-pressed", String(before));
+    this.textContent = before ? "Back to the new version" : "Show today's version";
+    paint();
+  });
+</script>
+
+</body>
+</html>
