@@ -112,15 +112,20 @@ Do not build against a guess of what those will look like. If one has not landed
 
 ## PR A
 
-### Slice 1 - Archivo and the bone page colour
+### Slice 1 - Archivo, the bone page colour, and the masthead tokens
 
-Spec: "Display typeface: Archivo", "Page colour: bone". Ships alone, before anything else, and
-does not depend on PR 2307.
+Spec: "Display typeface: Archivo", "Page colour: bone", and the token tables under "The masthead".
+Ships alone, before anything else, and does not depend on PR 2307.
 
 **Already there:** `--font-display` in `apps/web/src/styles/tokens.css` is an alias of
 `--font-sans`; the comment at the top of that file reserves the slot for a self-hosted font. The
 content-security policy in `apps/api/src/static-web.ts` already allows fonts from our own origin.
-**Replaced:** the oat page and its surfaces. **New:** the font files and the `@font-face` rules.
+The rail already has its own field tokens (`--rail-bg`, `--rail-fg` and friends) and switches to a
+dark ground in dark mode; the masthead tokens follow that pattern. The app's contrast arithmetic
+is `contrastRatio` in `apps/web/src/settings/settings-appearance-pane.tsx`. **Replaced:** the oat
+page and its surfaces. **New:** the font files, the `@font-face` rules, seven masthead tokens
+(`--masthead-bg`, `--masthead-fg`, `--masthead-fg-muted`, `--masthead-accent`, `--masthead-rule`,
+`--masthead-action-bg`, `--masthead-action-fg`) and the test that keeps them readable.
 
 Files:
 
@@ -130,23 +135,47 @@ Files:
 - `apps/web/src/styles/tokens.css` - the `@font-face` rules in the reserved slot;
   `--font-display: "Archivo", var(--font-sans);` (never a hand-typed fallback list); retone
   `--paper`, `--surface`, `--surface-2`, `--line`, `--line-subtle` to the spec's table. Do not touch
-  `--border` and `--border-subtle` (they alias `--line`), `--surface-3`, or any dark-mode value.
+  `--border` and `--border-subtle` (they alias `--line`), `--surface-3`, or any dark-mode paper or
+  surface value. Then the masthead tokens, exactly as the spec's first masthead table gives them:
+  the seven in the light `:root` block beside the rail tokens (field `var(--forest)`, text
+  `var(--rail-fg)`, quieter text as the 0.85 wash, eyebrow `var(--gold-soft)`, rule `var(--gold)`,
+  button `var(--gold)` and `#241a06`); in the dark block, field `var(--forest-soft)` and eyebrow
+  `var(--gold-ink)`; in the Canyon block the quieter text at 0.9; in the Teal block the quieter text
+  aliased to `var(--masthead-fg)`. Every value is an alias of an existing token or one of the two
+  literals the spec names; no theme block names a colour for the field.
+- `tests/unit/masthead-tokens-contrast.test.ts` (new) - reads `tokens.css`, finds every theme block
+  (`:root`, each `[data-theme=...]`, the dark block, and each dark-plus-theme block), resolves the
+  masthead tokens through their `var()` chains the way the browser would for that block (block
+  first, then the dark block if the block is a dark one, then `:root`), composites any transparency
+  onto the field, and asserts heading, quieter text and eyebrow are at least 4.5:1 on the field.
+  The spec's second masthead table gives the numbers it should find; assert on the 4.5 line, not on
+  those exact numbers. Use `contrastRatio` from the appearance pane, or move it to a small helper if
+  importing the pane drags React into the test. A theme block added later is picked up without
+  editing the test.
 
-Acceptance: `pnpm check:design-tokens`, `pnpm lint`, `pnpm typecheck`; a unit test is not needed
-for a token change, but `grep -n 'Helvetica' apps/web/src/styles/tokens.css` must show the font
-name only inside `--font-sans`.
+Acceptance: `pnpm check:design-tokens`, `pnpm lint`, `pnpm typecheck`, and `pnpm test:unit` running
+the new test (through the `verify-gate` skill; the module worker suite fails locally and is not
+yours). `grep -n 'Helvetica' apps/web/src/styles/tokens.css` must show the font name only inside
+`--font-sans`.
 
 Live proof: on the dev instance, a heading's computed font is Archivo (browser dev tools, computed
 styles) and the page colour is `#f2eee4`; the console shows no content-security violation; walk
 Today, Settings, the chat drawer and one module page; check text inputs and Moss's chat bubble read
-as sunken, not raised, now that `--surface-2` is lighter than the page; screenshots of Today and
-the chat drawer before and after on the pull request.
+as sunken, not raised, now that `--surface-2` is lighter than the page; in Settings switch through
+the four accent themes and dark mode and confirm the page follows and nothing regresses; in dev
+tools read the computed value of `--masthead-bg` on the page in the default theme, in Canyon, and in
+dark mode, and confirm it is the theme's accent, then the theme's dark ground; screenshots of Today
+and the chat drawer before and after on the pull request. The tokens have no screen using them
+yet; that is deliberate, and the masthead that uses them is slice 2.
 
 App map: none (no screen, setting or path changes). Release note: Changed, "A new display
 typeface and a lighter page colour across the app."
 
 Must not: use a Google Fonts `@import` (that is what tripped the content-security policy on
-2026-08-01); commit a licensed font (the repo is public); touch any Workshop file.
+2026-08-01); commit a licensed font (the repo is public); touch any Workshop file; write a colour
+into a masthead token where an existing token will do (the two literals the spec names are the
+only ones); reuse the rail tokens directly for the masthead (the rail's field is a darker ground
+and the two must stay separately tunable).
 
 ---
 
@@ -166,10 +195,15 @@ heading and a footer link. **Replaced:** the Workshop home page's heading and ca
 
 Files:
 
-- `packages/ui/src/masthead.tsx` - a `tone` (or similar) prop with the reversed green treatment:
-  field in `--forest` touching the top bar, gold rule at the bottom, reversed text, full-bleed, no
-  stripe or hatch. In dark mode the field is `--forest-soft` with the same light text (the spec's
-  stopgap). Today keeps rendering the ink-on-paper default and is not touched.
+- `packages/ui/src/masthead.tsx` - a `tone` (or similar) prop with the reversed treatment: field
+  touching the top bar, rule at the bottom, reversed text, full-bleed, no stripe or hatch. Every
+  colour in the variant is one of slice 1's masthead tokens (`--masthead-bg` for the field,
+  `--masthead-fg` for heading and lede, `--masthead-fg-muted` for meta, `--masthead-accent` for the
+  eyebrow, `--masthead-rule` for the rule, the two action tokens for the one button on the field);
+  the variant has no dark-mode rule of its own and no theme rule of its own, because the tokens
+  carry both. The button on the field is a `jds-btn` variant coloured by the action tokens (there
+  is no gold button variant today; `jds-btn--accent` is a soft fill and will not read on the field).
+  Today keeps rendering the ink-on-paper default and is not touched.
 - `packages/ui/src/styles/components-moss-today.css` (or a new `components-masthead.css` if the
   file is already at its size limit) - the variant's rules.
 - `packages/ui/src/index-list.tsx` (working name `jds-index`; pick the name with the
@@ -195,10 +229,13 @@ name, excerpt and meta in that order.
 Live proof: on the dev instance, `/workshop` shows the green field touching the top bar with the
 gold rule, the row index with one hairline per row, a hover that draws the gold edge, and the
 chip "Talking it through" on each row; at 800px and 375px the rows stack sensibly; Today is
-unchanged. Screenshots at desktop and phone width on the pull request.
+unchanged; switch to Canyon and to dark mode in Settings and the field follows the theme with the
+text still readable. Screenshots at desktop and phone width, plus one in Canyon and one in dark
+mode for Ben, on the pull request.
 
-Must not: put the field or the rules in `workshop.css`; give Today or any other page the green
-field (Ben, 2026-09-05: later, as its own work); add a second masthead component.
+Must not: put the field or the rules in `workshop.css`; name a colour anywhere in the variant
+(tokens only; the contrast test guards the tokens, not a literal); give Today or any other page
+the green field (Ben, 2026-09-05: later, as its own work); add a second masthead component.
 
 ### Slice 3 - the top bar carries the trail
 
@@ -515,5 +552,7 @@ width return; expand and come back.
 - Where "Export this project" and "Delete this project" live in the workspace (the spec's Open
   list has a suggestion for Ben: a small "More" button at the right of the top bar). Slice 9 folds
   the old page's "Discard this draft" into delete, so this needs an answer before slice 9.
-- The `--forest-soft` dark-mode field for the masthead is a stopgap Ben has not seen; slice 2
-  ships it and the pull request should show him a dark-mode screenshot.
+- The masthead's dark field is `--forest-soft`, which passes every check but which Ben has not
+  seen; `--forest-soft-2` also passes and stands out more from the page, at the cost of matching
+  the rail's dark ground. Slice 2's pull request should show him a dark-mode screenshot and let him
+  choose; changing it is a one-line token edit.

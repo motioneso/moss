@@ -39,7 +39,7 @@ h1, h2, h3,
    paper white; the weight moves onto committed colour fields.
    ============================================================ */
 
-html[data-ground="bone"] {
+html[data-ground="bone"]:not([data-color-mode="dark"]) {
   --paper: #f2eee4;
   --surface: #fffdf7;
   --surface-2: #f7f3e9;
@@ -47,7 +47,7 @@ html[data-ground="bone"] {
   --border-subtle: #e6dfd0;
 }
 
-html[data-ground="sage"] {
+html[data-ground="sage"]:not([data-color-mode="dark"]) {
   --paper: #e6e9dd;
   --surface: #fbfbf5;
   --surface-2: #f1f3e9;
@@ -74,12 +74,32 @@ html[data-masthead="on"] .content-surface {
   padding: 0;
 }
 
+/* Ben, 2026-09-05: the field's colours are tokens the themes set, never a
+   named green. These mirror the block production adds to tokens.css; every
+   masthead rule below names one of them and nothing else. The values were
+   chosen against a contrast check across every shipped theme (see the spec). */
+html[data-masthead="on"] {
+  --masthead-bg: var(--forest);
+  --masthead-fg: var(--rail-fg);
+  --masthead-fg-muted: rgba(237, 229, 210, 0.85);
+  --masthead-accent: var(--gold-soft);
+  --masthead-rule: var(--gold);
+  --masthead-action-bg: var(--gold);
+  --masthead-action-fg: #241a06;
+}
+html[data-masthead="on"][data-theme="canyon"] { --masthead-fg-muted: rgba(237, 229, 210, 0.9); }
+html[data-masthead="on"][data-theme="teal"]   { --masthead-fg-muted: var(--masthead-fg); }
+html[data-masthead="on"][data-color-mode="dark"] {
+  --masthead-bg: var(--forest-soft);
+  --masthead-accent: var(--gold-ink);
+}
+
 html[data-masthead="on"] .workshop-project-heading {
-  background: var(--forest);
-  color: #f4efe2;
+  background: var(--masthead-bg);
+  color: var(--masthead-fg);
   margin: 0 0 var(--space-8);
   padding: clamp(1.25rem, 2.6vw, 2rem) clamp(1.5rem, 4vw, 4rem) clamp(1.5rem, 2.6vw, 2rem);
-  border-bottom: 4px solid var(--gold);
+  border-bottom: 4px solid var(--masthead-rule);
   align-items: flex-end;
 }
 
@@ -89,18 +109,18 @@ html[data-masthead="on"] .workshop-project-heading h1 {
   font-weight: 800;
   line-height: 0.94;
   letter-spacing: -0.025em;
-  color: #fbf7ec;
+  color: var(--masthead-fg);
   margin: 0.15em 0 0;
 }
 
 html[data-masthead="on"] .workshop-project-heading .jds-eyebrow {
-  color: var(--gold);
+  color: var(--masthead-accent);
   font-size: 12px;
   letter-spacing: 0.18em;
 }
 
 html[data-masthead="on"] .workshop-project-heading .workshop-lede {
-  color: rgba(244, 239, 226, 0.78);
+  color: var(--masthead-fg-muted);
   font-size: var(--text-lg);
   max-width: 46ch;
   margin-top: var(--space-3);
@@ -108,9 +128,9 @@ html[data-masthead="on"] .workshop-project-heading .workshop-lede {
 
 /* The primary action has to hold its own against a green field. */
 html[data-masthead="on"] .workshop-project-heading .jds-btn--primary {
-  background: var(--gold);
-  border-color: var(--gold);
-  color: #241a06;
+  background: var(--masthead-action-bg);
+  border-color: var(--masthead-action-bg);
+  color: var(--masthead-action-fg);
   font-weight: 700;
   border-radius: 2px;
 }

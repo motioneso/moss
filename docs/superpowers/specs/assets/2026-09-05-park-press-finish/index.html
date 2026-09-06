@@ -84,17 +84,34 @@
     <button data-ground="sage" aria-pressed="false">Sage</button>
     <button data-ground="oat" aria-pressed="false">Oat (today)</button>
   </div>
+
+  <div class="set">
+    <span>Theme</span>
+    <button data-theme="light" aria-pressed="true">Default</button>
+    <button data-theme="sage" aria-pressed="false">Sage</button>
+    <button data-theme="canyon" aria-pressed="false">Canyon</button>
+    <button data-theme="teal" aria-pressed="false">Teal</button>
+    <button data-theme="dusk" aria-pressed="false">Dusk</button>
+  </div>
+
+  <div class="set">
+    <span>Mode</span>
+    <button data-mode="light" aria-pressed="true">Light</button>
+    <button data-mode="dark" aria-pressed="false">Dark</button>
+  </div>
 </header>
 
 <div class="note">
   These are the real Workshop screens, frozen from the running app. Only typography, page colour and
   the grid have been changed — no markup was edited, so what you see is what the design layer alone does.
+  Theme and Mode set the same attributes the real app sets, so the masthead's colours come from the
+  app's own theme tokens, not from this mockup.
 </div>
 
 <iframe id="stage" src="screens/list.html" title="Workshop screen"></iframe>
 
 <script>
-  var state = { screen: "list", face: "archivo", ground: "bone", masthead: "on", grid: "keyline" };
+  var state = { screen: "list", face: "archivo", ground: "bone", masthead: "on", grid: "keyline", theme: "light", mode: "light" };
   var before = false;
   var stage = document.getElementById("stage");
 
@@ -107,11 +124,15 @@
       r.setAttribute("data-ground", "oat");
       r.setAttribute("data-masthead", "off");
       r.setAttribute("data-grid", "default");
+      r.setAttribute("data-theme", "light");
+      r.setAttribute("data-color-mode", "light");
     } else {
       r.setAttribute("data-face", state.face);
       r.setAttribute("data-ground", state.ground);
       r.setAttribute("data-masthead", state.masthead);
       r.setAttribute("data-grid", state.grid);
+      r.setAttribute("data-theme", state.theme);
+      r.setAttribute("data-color-mode", state.mode);
     }
   }
 
@@ -131,7 +152,7 @@
     });
   });
 
-  ["face", "ground"].forEach(function (group) {
+  ["face", "ground", "theme", "mode"].forEach(function (group) {
     document.querySelectorAll("[data-" + group + "]").forEach(function (b) {
       b.addEventListener("click", function () {
         state[group] = b.getAttribute("data-" + group);

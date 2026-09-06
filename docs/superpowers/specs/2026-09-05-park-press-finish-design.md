@@ -2,7 +2,8 @@
 
 Status: approved by Ben 2026-09-05 ("Ok, write this up, looks great!"); build-readiness review by
 Fable 5.1, 2026-09-05, folded in below; Ben's rulings of 2026-09-05 on the four open items (renaming,
-the "Only you" badge, earlier builds, the green field app-wide) folded in
+the "Only you" badge, earlier builds, the green field app-wide) folded in; his fifth, that the
+masthead's colours are tokens the themes set, folded in the same day
 Direction: PARK PRESS, approved 2026-07-03 — `2026-07-03-park-press-design-language-design.md`, EPIC #726
 Mockup: `docs/superpowers/specs/assets/2026-09-05-park-press-finish/`
 Builds on: `2026-09-04-workshop-projects-and-supervised-builds.md` (PR 2307's spec) — its build
@@ -34,7 +35,10 @@ So this is two pieces of work that were mocked together:
 The three live Workshop screens were frozen from the running app into
 `assets/2026-09-05-park-press-finish/screens/`, with a single stylesheet, `park-press.css`, layered
 on top. Nothing but the design layer changed, so the result is provably not invented markup. The
-review shell `index.html` switches screen, display face, page colour, and before/after.
+review shell `index.html` switches screen, display face, page colour, theme, light or dark mode, and
+before/after. The theme and mode switches were added on 2026-09-05 so the masthead can be seen in
+every shipped theme; they set the same attributes the real app sets, and the screens carry the
+app's own stylesheet, so what they show is the app's theme blocks doing the work.
 
 The artifact screens (`detail-artifact`, `detail-design`, `detail-files`, `detail-file`,
 `detail-preview`, `detail-preview-wide`) do contain invented content — a plausible plan, file list and preview for
@@ -97,11 +101,12 @@ Three things a builder needs to know that the table does not say:
 
 ### The masthead
 
-A page heading is a committed green field that **touches the top bar** — no strip of page colour
-above it — with a gold rule along its bottom edge. It carries an eyebrow, the page name in Archivo
-at a display size, an optional lede, and any page-level action or meta on the right. Text on it
-uses the reversed palette (`#fbf7ec` heading, `rgba(244,239,226,0.72)` meta, translucent light
-badge with a gold dot). Full-bleed: it ignores the content measure that everything below it keeps.
+A page heading is a committed colour field that **touches the top bar** — no strip of page colour
+above it — with a rule along its bottom edge. It carries an eyebrow, the page name in Archivo at a
+display size, an optional lede, and any page-level action or meta on the right. Text on it is
+reversed out, light on the field. Full-bleed: it ignores the content measure that everything below
+it keeps. In the default theme the field is forest green and the rule is gold; in every other theme
+it is that theme's colour, which is the next section.
 
 No angled stripe or hatch textures. The existing riso grain stays.
 
@@ -120,10 +125,59 @@ Workshop home.** Ben, 2026-09-05: carrying the finished language to Today and ev
 the app is its own piece of work, later, not scoped here (see "Follow-on work" at the end). Today
 keeps its ink-on-paper masthead and no other page changes.
 
-**In dark mode** the accent is a light green (`--forest` becomes `#65b889`), and the reversed light
-text would fail on it. Until dark mode gets its own pass, the field in dark mode is `--forest-soft`
-(a dark green) with the same light text and gold rule. Reviewer's call, 2026-09-05, to keep the
-tokens PR from breaking dark mode; Ben has not seen it.
+**The field's colours are tokens, not a green.** Ben, 2026-09-05: "the green band needs to fit in
+with the other themes as well, so that mast header needs to be a token." The app ships five light
+themes (the default, Sage, Canyon, Teal, Dusk), a dark mode that combines with each of them, and
+custom themes a user makes in Settings. Each of those re-points `--forest` and its ramp; nothing in
+the masthead may name a colour, only these tokens, which `tokens.css` defines beside the rail's
+(`--rail-bg`, `--rail-fg`), the one committed colour field the app already has:
+
+| Token | What it colours | Light, default | Light, Sage / Canyon / Teal / Dusk | Dark, with any theme |
+| --- | --- | --- | --- | --- |
+| `--masthead-bg` | the field | `var(--forest)` = `#294b39` | `var(--forest)` as the theme sets it: `#4a5d3a` / `#8a4b2b` / `#2f6d6a` / `#4b4a63` | `var(--forest-soft)`: `#22392c` default, `#293624` / `#432b20` / `#203937` / `#302f43` |
+| `--masthead-fg` | heading and lede | `var(--rail-fg)` = `#ede5d2`, the off-white already on the green rail | same | same |
+| `--masthead-fg-muted` | quieter text: meta, dates | `rgba(237, 229, 210, 0.85)` | Sage and Dusk `0.85`; Canyon `0.9`; Teal has no wash that passes and falls back to `var(--masthead-fg)` | `rgba(237, 229, 210, 0.85)` |
+| `--masthead-accent` | the eyebrow, and "just added" marks | `var(--gold-soft)` = `#f1e2c2` | same | `var(--gold-ink)` = `#ecca8b` |
+| `--masthead-rule` | the rule along the bottom | `var(--gold)` = `#c2872b` | same | `var(--gold)` = `#d9a04b` |
+| `--masthead-action-bg`, `--masthead-action-fg` | the one button on the field ("New project") | `var(--gold)`, `#241a06` | same | same: gold is light enough for dark ink in both modes |
+
+Why these and not the mockup's literals: in dark mode `--forest` is a light tint for text duty
+(`#65b889` in the default dark theme), and light text on it reads 1.9:1, so the dark field is the
+ramp's dark ground, `--forest-soft`, the way `--rail-bg` already switches to a dark ground in dark
+mode. The mockup's gold eyebrow reads 3.1:1 on the default field, under the line for small text,
+so the eyebrow takes a pale gold; its `0.72` meta wash reads 3.3:1 on Teal, so the quieter text is
+a heavier wash, and none at all on Teal. A custom theme sets its own accent, the runtime writes it
+to `--forest` and derives `--forest-soft` from it, so the field follows a custom theme without any
+special case.
+
+**Readable in every theme is a check, not a hope.** Measured 2026-09-05 with the app's own
+contrast arithmetic (the `contrastRatio` in the appearance pane), transparency composited onto the
+field, small text needing 4.5:1:
+
+| Theme | Heading and lede on the field | Quieter text | Eyebrow | Rule (decorative) |
+| --- | --- | --- | --- | --- |
+| Light, default | 7.8 | 6.1 | 7.6 | 3.1 |
+| Light, Sage | 5.7 | 4.7 | 5.6 | 2.3 |
+| Light, Canyon | 5.4 | 4.7 | 5.3 | 2.2 |
+| Light, Teal | 4.8 | 4.8 | 4.7 | 1.9 |
+| Light, Dusk | 6.8 | 5.5 | 6.7 | 2.8 |
+| Dark, any theme | 9.8 to 10.4 | 7.6 to 8.0 | 7.9 to 8.3 | 5.3 to 5.7 |
+
+The check a builder runs: a unit test in `tests/unit/` reads `apps/web/src/styles/tokens.css`,
+resolves the masthead tokens for every theme block in it (the default, the four accent themes, dark,
+and dark combined with each accent theme, so a theme added later is covered without editing the
+test), composites any transparency onto the field, and fails if heading, quieter text or eyebrow
+read under 4.5:1 on the field. `pnpm test:unit` runs it. The rule is decorative, not text or a
+control, so no ratio applies to it; it stays gold in every theme because gold is Park Press's mark,
+exactly as the rail's marker is `--gold` on every theme's rail. Custom themes cannot be checked at
+build time; the appearance pane already shows "Paper on accent" when you make one, and the
+masthead text is close enough to paper for that number to be a fair guide (a dedicated readout is
+follow-on work).
+
+Dark mode has not had a pass against bone, and Ben has not seen the dark field; `--forest-soft-2`
+also passes every check and stands out more from the page, but it is the rail's dark ground, so the
+band and the rail would be one colour. The pull request that ships the tokens should show him a
+dark screenshot.
 
 ### Names on screen
 
@@ -444,8 +498,10 @@ App-wide, in `apps/web/src/styles/tokens.css` and the shared styles:
   fallback chain.
 - Retone `--paper`, `--surface`, `--surface-2`, `--line` and `--line-subtle` to the bone set (the
   border aliases follow).
-- Add the green-field variant to the shared `Masthead` primitive, with the dark-mode field above,
-  and a row-index primitive.
+- Add the masthead tokens to `tokens.css` (the table above), and the contrast test that keeps them
+  readable in every theme.
+- Add the reversed variant to the shared `Masthead` primitive, coloured only by those tokens, and a
+  row-index primitive.
 - Let the page on screen set the top bar's trail (name, meta, badge) through the module web SDK,
   and make the section name a link when it does; feed the same trail to Moss's page context.
 - Move the chat drawer's transcript and activity-line components into `@moss/ui`.
@@ -473,12 +529,15 @@ Workshop, in `packages/workshop/src/web/`:
 The earlier draft said the type and colour change could ship on its own pull request ahead of the
 Workshop work. That is true of the tokens and false of the masthead, so step 1 is now tokens only.
 
-1. **Tokens and type, app-wide.** Archivo self-hosted, bone page colour. Touches `tokens.css` and
-   the font files and nothing else, so it can ship now, independent of PR 2307. Its own pull
-   request, its own live proof, because it changes every screen: on the dev instance, a heading's
-   computed font is Archivo and the page colour is bone; the console shows no content-security
-   violation; walk Today, Settings, the chat drawer and one module page, and check inputs and the
-   assistant bubble given the `--surface-2` flip; `pnpm check:design-tokens` passes.
+1. **Tokens and type, app-wide.** Archivo self-hosted, bone page colour, and the masthead tokens
+   with their contrast test. Touches `tokens.css`, the font files and one unit test and nothing
+   else, so it can ship now, independent of PR 2307. Its own pull request, its own live proof,
+   because it changes every screen: on the dev instance, a heading's computed font is Archivo and
+   the page colour is bone; the console shows no content-security violation; walk Today, Settings,
+   the chat drawer and one module page, and check inputs and the assistant bubble given the
+   `--surface-2` flip; switch through every theme and dark mode in Settings and confirm the page
+   colour follows; `pnpm check:design-tokens` and the contrast test pass. The tokens ship with no
+   screen using them yet; the masthead that uses them is step 2.
 2. **After PR 2307 merges: masthead, top bar trail, list and workspace.** The `Masthead` variant
    and the row-index primitive in `packages/ui`; the top bar trail in the shell and the module web
    SDK; the transcript and activity-line components moved to `@moss/ui`; Workshop's home page on
@@ -506,8 +565,8 @@ This must not ride in on PR 2307.
 
 ## Open
 
-- Dark mode against the bone/warm-white set. The masthead's dark-mode field above is a stopgap
-  until then.
+- Dark mode against the bone/warm-white set. The masthead's dark field is the token's dark value
+  and passes the check, but Ben has not seen it; see "The masthead" for the one alternative.
 - Where "Export this project" and "Delete this project" live. PR 2307 promises both (its removal
   and export slice) and the legacy page's "Discard this draft" folds into delete, but the workspace
   as designed has no place for them: the top bar name is the rename, the panel foot is for the
@@ -520,4 +579,6 @@ This must not ride in on PR 2307.
   Today, Settings and every other area of the app. Ben, 2026-09-05: a later piece of work of its
   own, one product change per page, not part of these pull requests.
 - The dark-mode pass above.
+- A "Masthead text on accent" readout in the appearance pane, so a custom theme's field is checked
+  the way the shipped ones are.
 - Sharing a project, and with it the day a badge on a project says something true.
