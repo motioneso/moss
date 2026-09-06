@@ -145,10 +145,16 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       engine = activeEngine;
       const stopped = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
+          // #2348: do NOT kill the engine here. `kill()` nulls the engine's process
+          // handle on its first call and returns instantly on every call after that,
+          // so an unawaited kill fired from this timer "wins" the race against the
+          // `catch` block below (which awaits its own `kill()` call before reading) —
+          // that second, awaited call becomes a no-op, and the transcript gets read
+          // before the process has actually stopped. Only reject here; the `catch`
+          // block does the one real, awaited kill-then-read.
           timedOut = true;
           cancelled = true;
           emit({ kind: "timeout" });
-          void activeEngine.kill().catch(() => undefined);
           reject(new CliChatUnavailableError("CLI structured generation timed out"));
         }, this.timeoutMs);
         abort = () => {
