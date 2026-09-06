@@ -160,6 +160,51 @@
   border-color: var(--gold-strong);
 }
 
+/* RowIndex: a ruled list of full-width rows, never a filled block on hover. */
+.jds-index {
+  display: block;
+  border-top: 2px solid var(--ink);
+  margin-bottom: var(--space-8);
+}
+.jds-index__row {
+  display: grid;
+  grid-template-columns: minmax(18ch, 30ch) 1fr auto;
+  align-items: baseline;
+  column-gap: clamp(1rem, 3vw, 2.75rem);
+  row-gap: var(--space-1);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-5) var(--space-2);
+  box-shadow: inset 3px 0 0 transparent;
+  transition: box-shadow 0.12s ease;
+}
+.jds-index__row:hover {
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+.jds-index__row:hover .jds-index__title a {
+  color: var(--forest);
+}
+.jds-index__title {
+  grid-column: 1;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  line-height: 1.15;
+}
+.jds-index__excerpt {
+  grid-column: 2;
+  margin: 0;
+  color: var(--text-subtle);
+  max-width: 68ch;
+}
+.jds-index__meta {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  white-space: nowrap;
+}
+
 .jds-btn[disabled],
 .jds-btn[aria-disabled="true"] {
   opacity: 0.45;

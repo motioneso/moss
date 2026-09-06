@@ -36,7 +36,7 @@ _No enum or boolean props._
 
 ## button
 
-- **variant** (optional, default `primary`): `primary`, `secondary`, `quiet`, `accentSoft`, `danger`
+- **variant** (optional, default `primary`): `primary`, `secondary`, `quiet`, `accentSoft`, `danger`, `field`
 - **size** (optional, default `md`): `sm`, `md`, `lg`
 - **block** (optional boolean flag)
 - **active** (optional boolean flag)
@@ -132,6 +132,10 @@ _No enum or boolean props._
 _No enum or boolean props._
 
 ## peek-panel
+
+_No enum or boolean props._
+
+## row-index
 
 _No enum or boolean props._
 

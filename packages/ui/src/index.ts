@@ -41,7 +41,14 @@ export type { InfoTipProps } from "./info-tip.js";
 export { LegendSwatch } from "./legend-swatch.js";
 export type { LegendSwatchProps, LegendSwatchTone } from "./legend-swatch.js";
 export { Masthead, MastheadClock, MastheadDateline } from "./masthead.js";
-export type { MastheadClockProps, MastheadDatelineProps, MastheadProps } from "./masthead.js";
+export type {
+  MastheadClockProps,
+  MastheadDatelineProps,
+  MastheadProps,
+  MastheadTone
+} from "./masthead.js";
+export { RowIndex, RowIndexItem } from "./row-index.js";
+export type { RowIndexProps, RowIndexItemProps } from "./row-index.js";
 export { Menu } from "./menu.js";
 export type { MenuItem, MenuProps } from "./menu.js";
 export { MonthChip } from "./month-chip.js";
