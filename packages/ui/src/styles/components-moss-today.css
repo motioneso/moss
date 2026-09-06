@@ -661,14 +661,16 @@
 
 /* RowIndex: a ruled list of full-width rows, never a filled block on hover. */
 .jds-index {
-  display: block;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  column-gap: clamp(1rem, 3vw, 2.75rem);
   margin-bottom: var(--space-8);
 }
 .jds-index__row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: baseline;
-  column-gap: clamp(1rem, 3vw, 2.75rem);
   row-gap: var(--space-1);
   border-bottom: 1px solid var(--border);
   padding: var(--space-5) var(--space-2);
