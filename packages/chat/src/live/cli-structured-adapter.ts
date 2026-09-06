@@ -16,7 +16,7 @@ import type {
 } from "@moss/ai";
 import { dedupeStructuredSources } from "@moss/ai";
 
-import { CliChatUnavailableError } from "./errors.js";
+import { CliChatUnavailableError, CliTranscriptLocationMismatchError } from "./errors.js";
 import { selectEngineFactory, type ChatEngineFactory } from "./runtime.js";
 import type { CliChatEngine, TranscriptRecord } from "./types.js";
 
@@ -178,6 +178,15 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
         return withSources({ rawText, usage: { inputTokens: 0, outputTokens: 0 } }, sources);
       } catch (error) {
         await activeEngine.kill().catch(() => undefined);
+        // #2348 — a genuine location disagreement means there is nothing to recover: the
+        // model program never wrote to where the app is looking, so a late-read attempt
+        // can only ever come back empty. Skip straight to reporting it, with its own
+        // specific message intact, instead of losing it inside the generic "no reply"
+        // path below.
+        if (error instanceof CliTranscriptLocationMismatchError) {
+          exit = "error";
+          throw error;
+        }
         const final = cancelled ? null : await activeEngine.readNew(0).catch(() => null);
         const reply = final?.records
           .slice()

@@ -114,7 +114,13 @@ export interface CliChatEngine {
   submit(text: string): Promise<void>; // paste prompt + send
   /** Send a non-destructive Escape/interrupt to the active turn. */
   interrupt(): Promise<void>;
-  /** Read transcript records appended since the given byte offset; returns the new offset. */
+  /**
+   * Read transcript records appended since the given byte offset; returns the new offset.
+   * #2348 — may reject with `CliTranscriptLocationMismatchError` when the app and the model
+   * program have genuinely disagreed about the answer file's folder for longer than a
+   * short grace period; callers should treat that as a real, reportable failure, not an
+   * ordinary empty-miss.
+   */
   readNew(
     afterOffset: number
   ): Promise<{ records: TranscriptRecord[]; offset: number; complete: boolean }>;
