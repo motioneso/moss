@@ -5,7 +5,6 @@ import { Routes, Route } from "react-router";
 import { Button, EmptyState } from "@moss/ui";
 import { requestJson } from "@moss/module-web-sdk";
 import type { MeResponse } from "@moss/shared";
-import { WorkshopPage } from "./workshop-page.js";
 import {
   ProjectError,
   WorkshopProjectCreate,
@@ -99,7 +98,6 @@ export function WorkshopProjectRoutes() {
       <Routes>
         <Route index element={<WorkshopProjectList canMutate={canMutate} />} />
         <Route path="new" element={<WorkshopProjectCreate canMutate={canMutate} />} />
-        <Route path="legacy" element={<WorkshopPage />} />
         <Route path=":projectId" element={<WorkshopProjectDetail canMutate={canMutate} />} />
         <Route path="*" element={<EmptyState title="This Workshop page was not found" />} />
       </Routes>
