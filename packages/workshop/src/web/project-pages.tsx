@@ -3,7 +3,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { Link, useNavigate, useParams } from "react-router";
 import { Badge, Button, ButtonLink, Card, EmptyState } from "@moss/ui";
 import { ApiError, randomUuid } from "@moss/module-web-sdk";
-import type { WorkshopProjectCursor } from "@moss/shared";
+import type { LocaleSettingsDto, WorkshopProjectCursor } from "@moss/shared";
+import { formatDate, useUserLocale } from "./locale.js";
 import {
   createProject,
   getProject,
@@ -14,15 +15,15 @@ import {
 } from "./project-client.js";
 
 /**
- * A short, local-time date for a project card's meta line.
+ * A short, user-locale date for a project card's meta line.
  *
  * A row that fails to parse simply loses its date rather than crashing the list — the timestamp is
  * decoration here, and the project itself is still readable and openable without it.
  */
-function formatStartedOn(createdAt: string): string {
+function formatStartedOn(createdAt: string, locale: LocaleSettingsDto): string {
   const at = new Date(createdAt);
   if (Number.isNaN(at.getTime())) return "recently";
-  return at.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  return formatDate(createdAt, locale);
 }
 
 export function ProjectError({ title, retry }: { title: string; retry: () => void }) {
@@ -39,6 +40,7 @@ export function ProjectError({ title, retry }: { title: string; retry: () => voi
 }
 
 export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
+  const locale = useUserLocale();
   const query = useInfiniteQuery({
     queryKey: projectKeys.list,
     queryFn: ({ pageParam }) => listProjects(pageParam),
@@ -106,7 +108,9 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
                 <Badge tone="steel" pill dot>
                   Only you
                 </Badge>
-                <span className="jds-caption">Started {formatStartedOn(project.createdAt)}</span>
+                <span className="jds-caption">
+                  Started {formatStartedOn(project.createdAt, locale)}
+                </span>
               </div>
             </Card>
           ))}
@@ -254,6 +258,7 @@ function WorkshopProjectContent({
   canMutate: boolean;
 }) {
   const client = useQueryClient();
+  const locale = useUserLocale();
   const [pane, setPane] = useState<"conversation" | "work">("conversation");
   const [text, setText] = useState("");
   const [messageId, setMessageId] = useState(() => randomUuid());
@@ -321,7 +326,7 @@ function WorkshopProjectContent({
           <Badge tone="steel" pill dot>
             Only you
           </Badge>
-          <span className="jds-caption">Started {formatStartedOn(record.createdAt)}</span>
+          <span className="jds-caption">Started {formatStartedOn(record.createdAt, locale)}</span>
         </div>
       </header>
       {project.isError ? (
