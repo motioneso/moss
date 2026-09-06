@@ -5,6 +5,7 @@
 //
 // Run with:
 //   LIVE_BASE_URL=http://127.0.0.1:5173 \
+//   LIVE_OWNER_PASSWORD=... \
 //   LIVE_HA_MCP_URL=... LIVE_HA_TOKEN=... \
 //   LIVE_RADARR_URL=... LIVE_RADARR_KEY=... LIVE_RADARR_SPEC_FILE=... \
 //     npx playwright test --config playwright.live.config.ts integrations-2162
@@ -12,7 +13,15 @@ import { readFileSync } from "node:fs";
 
 import { expect, test, type Page } from "@playwright/test";
 
-const OWNER = { email: "ben@ben.com", password: "jarvistest123!" };
+const OWNER_PASSWORD = process.env.LIVE_OWNER_PASSWORD;
+if (!OWNER_PASSWORD) {
+  throw new Error(
+    "Set LIVE_OWNER_PASSWORD to the development instance sign-in password before running this " +
+      "test. The current password is not in this repository; it is kept in the memory note " +
+      "named dev-instance-lan-spinup-trusted-origins."
+  );
+}
+const OWNER = { email: "ben@ben.com", password: OWNER_PASSWORD };
 
 const HA_MCP_URL = process.env.LIVE_HA_MCP_URL ?? "";
 const HA_TOKEN = process.env.LIVE_HA_TOKEN ?? "";

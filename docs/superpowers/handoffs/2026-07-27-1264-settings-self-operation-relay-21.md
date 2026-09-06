@@ -140,8 +140,8 @@ Coordinator's explicit instruction this session).
   `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate section for the exact expected proof shape
   before improvising.
 - Need a **live dev instance** — check `docs/dev-preview-recipe` pattern (memory:
-  `dev-preview-recipe.md`) — preview ports :5173/:3000, prod :1533 is off-limits. Ben's dev login:
-  `ben@ben.com` / `jarvistest123!` (memory: `dev-instance-lan-spinup-trusted-origins.md`).
+  `dev-preview-recipe.md`) — preview ports :5173/:3000, prod :1533 is off-limits. Ben's dev
+  sign-in details are kept outside the repository (memory: `dev-instance-lan-spinup-trusted-origins.md`).
 - Drive a real browser (not mocked routes) against that instance, do a real chat turn that invokes
   `settings.themeMode.set`, assert before/after DOM state, confirm DOM text/visible state changed with
   no reload.

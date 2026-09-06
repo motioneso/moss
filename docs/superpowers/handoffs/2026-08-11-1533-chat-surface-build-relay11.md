@@ -56,7 +56,7 @@ this step. Everything else in this doc is real and independently verified.
    shared dev instance). Coordinator notified via herdr this relay — do not re-attempt without
    one of those landing.
 2. Once unblocked: stand up host-dev API+web (ports 3002/3004 or similar were free at relay10's
-   scan — re-scan, may have changed), sign in `ben@ben.com` / `jarvistest123!`
+   scan — re-scan, may have changed), sign in using the development sign-in details (kept outside the repository)
    ([[dev-instance-lan-spinup-trusted-origins]] has the trusted-origins/auth-secret recipe),
    then execute spec lines 296-319 exactly via a real Playwright browser (screenshot + network
    capture required, reload/timeout explicitly disallowed as proof).

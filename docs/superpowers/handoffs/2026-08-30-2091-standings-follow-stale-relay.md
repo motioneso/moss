@@ -41,7 +41,7 @@ Commit `c6db634b5`: `fix(sports): refresh standings overview cache on team follo
    live dev, per project CLAUDE.md).
 
 4. **Live-path proof** (this is a UI fix, gate applies): on the live dev instance
-   (`http://192.168.50.36:5173`, login `ben@ben.com` / `jarvistest123!`), follow a team, open the
+   (`http://192.168.50.36:5173`, login using the development sign-in details (kept outside the repository (see the memory note named dev-instance-lan-spinup-trusted-origins))), follow a team, open the
    standings dropdown, confirm it shows followed; unfollow in Settings; return to standings without
    a tab-switch or wait and confirm it updates immediately. Screenshot or note as PR evidence.
 

@@ -2,7 +2,9 @@
 // real API, real Postgres with RLS, real module install. Nothing here is mocked — no
 // page.route(), no fixtures. See docs/DEVELOPMENT_STANDARDS.md → Live-Path Gate.
 //
-// Run with:  npx playwright test --config playwright.live.config.ts
+// Run with:
+//   LIVE_OWNER_PASSWORD=... \
+//     npx playwright test --config playwright.live.config.ts food-926
 // Requires:  pnpm dev:api (:3000) + pnpm dev:web (:5173), Food staged in data/modules/.
 //
 // SCOPE — read this before trusting a green run.
@@ -26,7 +28,15 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 
 const API = process.env.LIVE_API_URL ?? "http://127.0.0.1:3000";
 
-const OWNER = { email: "ben@ben.com", password: "jarvistest123!" };
+const OWNER_PASSWORD = process.env.LIVE_OWNER_PASSWORD;
+if (!OWNER_PASSWORD) {
+  throw new Error(
+    "Set LIVE_OWNER_PASSWORD to the development instance sign-in password before running this " +
+      "test. The current password is not in this repository; it is kept in the memory note " +
+      "named dev-instance-lan-spinup-trusted-origins."
+  );
+}
+const OWNER = { email: "ben@ben.com", password: OWNER_PASSWORD };
 const OTHER = { email: "uat-owner2@jarv1s.local", password: "uat-owner2-password-1030" };
 
 test.describe.configure({ mode: "serial" });

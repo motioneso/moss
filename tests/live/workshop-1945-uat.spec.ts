@@ -9,10 +9,19 @@
 //
 // Run with:
 //   LIVE_BASE_URL=http://127.0.0.1:5184 LIVE_API_URL=http://127.0.0.1:3033 \
+//   LIVE_OWNER_PASSWORD=... \
 //     npx playwright test --config playwright.live.config.ts workshop-1945
 import { expect, test, type Page } from "@playwright/test";
 
-const OWNER = { email: "ben@ben.com", password: "jarvistest123!" };
+const OWNER_PASSWORD = process.env.LIVE_OWNER_PASSWORD;
+if (!OWNER_PASSWORD) {
+  throw new Error(
+    "Set LIVE_OWNER_PASSWORD to the development instance sign-in password before running this " +
+      "test. The current password is not in this repository; it is kept in the memory note " +
+      "named dev-instance-lan-spinup-trusted-origins."
+  );
+}
+const OWNER = { email: "ben@ben.com", password: OWNER_PASSWORD };
 
 async function signInThroughUi(page: Page) {
   await page.goto("/");

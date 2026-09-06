@@ -65,7 +65,7 @@ Read only if you need it (don't re-read in full unless stuck):
          (`.claude/skills/run/SKILL.md` via the `run` skill or examples under
          `examples/server.md`) may have the pattern; I hadn't finished reading it when I hit the
          relay trigger.
-   3. Once you have a live render: log in as `ben@ben.com` / `jarvistest123!` (admin), navigate to
+   3. Once you have a live render: log in using the development sign-in details (kept outside the repository (see the memory note named dev-instance-lan-spinup-trusted-origins)) (admin), navigate to
       `/workshop`, confirm the page renders with the Needs you / Building now / Live groups (or
       their `EmptyState` fallback, since #1752/#1753 backend data may still be absent — say
       explicitly which you saw), and post a `gh pr comment` on #1804 with a screenshot or bounded
