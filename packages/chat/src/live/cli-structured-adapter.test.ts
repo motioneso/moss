@@ -76,7 +76,11 @@ function slowToStopEngine(): CliChatEngine {
     async interrupt() {},
     async readNew(afterOffset) {
       if (stopped) {
-        return { records: [{ kind: "reply", text: "late-answer" }], offset: afterOffset + 1, complete: true };
+        return {
+          records: [{ kind: "reply", text: "late-answer" }],
+          offset: afterOffset + 1,
+          complete: true
+        };
       }
       return { records: [], offset: afterOffset, complete: false };
     },
@@ -116,7 +120,9 @@ function mismatchedFolderEngine(readNewCalls: { count: number }): CliChatEngine 
     async interrupt() {},
     async readNew() {
       readNewCalls.count += 1;
-      throw new CliTranscriptLocationMismatchError("the app expects the answer file under /wrong/folder, but that folder was never created");
+      throw new CliTranscriptLocationMismatchError(
+        "the app expects the answer file under /wrong/folder, but that folder was never created"
+      );
     },
     async isAlive() {
       return true;
@@ -131,7 +137,11 @@ describe("CliStructuredAdapter reports a genuine location mismatch immediately",
     const readNewCalls = { count: 0 };
     // A generous overall timeout (5s) proves this failure is driven by the detected
     // mismatch, not by the clock running out.
-    const adapter = new CliStructuredAdapter("anthropic", () => mismatchedFolderEngine(readNewCalls), 5000);
+    const adapter = new CliStructuredAdapter(
+      "anthropic",
+      () => mismatchedFolderEngine(readNewCalls),
+      5000
+    );
 
     await expect(adapter.generateStructured(baseInput("module.mismatch"))).rejects.toThrow(
       CliTranscriptLocationMismatchError

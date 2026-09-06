@@ -16,6 +16,7 @@ Exactly three items. Nothing else in this pull request.
 
 Not in this pull request (found during investigation, reported to the coordinator,
 will get their own issue and lane):
+
 - About ninety leftover answer-file folders under the wrong home folder. Caller not
   yet identified.
 - Why the model program is slow to answer in the first place. Confirmed: background
@@ -103,7 +104,7 @@ No front-end mockup gate applies either — no user-facing screen changes here.
     correct precedent for this exact pattern already exists in the codebase:
     `packages/cli-runner/src/terminal-session.ts` lines 46-51, which spawns with
     `env: { ...buildSanitizedCliEnv(process.env), HOME: opts.homeBase, TERM: ...,
-    PATH: ... }`.
+PATH: ... }`.
   - This is a code fix (pass the already-configured `homeBase` value explicitly into
     each spawn's `env`), not a new environment variable, so it does not trigger the
     "a PR that adds a required setting must update every deployment config" rule —
@@ -149,6 +150,7 @@ Files: `packages/chat/src/live/claude-print-chat-engine.ts` (`readNew()`, lines
 `packages/chat/src/live/errors.ts` (new error class).
 
 - New error class in `errors.ts`, alongside `CliChatUnavailableError`:
+
   ```
   export class CliTranscriptLocationMismatchError extends Error {
     constructor(message: string) {
@@ -157,6 +159,7 @@ Files: `packages/chat/src/live/claude-print-chat-engine.ts` (`readNew()`, lines
     }
   }
   ```
+
   Operator-safe message only (the expected folder path — no prompt or reply content,
   matching the existing rule already followed by the console.warn at line 278).
 
