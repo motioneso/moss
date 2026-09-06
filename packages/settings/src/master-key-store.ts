@@ -371,8 +371,8 @@ export async function generateFamilyKey(
     // rejects it. Its current key alone may still have sealed real data — a short
     // value accepted before the install was promoted, or a good current value
     // beside a bad retired list — so carry just that key rather than dropping
-    // everything. A blank value sealed nothing (the loader falls back to the
-    // development default), so there is nothing to carry for it. The status keeps
+    // everything. A blank value is skipped: a key derived from an empty string
+    // is a fixed public value, so carrying it protects nothing. The status keeps
     // reporting broken until the value itself is fixed or removed.
     try {
       const envKeyring = resolveKeyring(
