@@ -55,8 +55,8 @@ subscription. Those stay Moss's problems.
    live-path gate.
 2. **Chat launches through the per-user runner**, never from the box's login. The cli-runner
    engine host already allocates a Unix account per user (`packages/cli-runner/src/uid-allocator.ts`)
-   with a scrubbed environment and its own home folder. The spike ran as Ben's own account and
-   inherited Ben's hooks, global instructions and plugins into the Moss session. The runner is the
+   with a scrubbed environment and its own home folder. The spike ran as the box's own login and
+   inherited that login's hooks, global instructions and plugins into the Moss session. The runner is the
    fix, and the same per-account home folder is where the agent's settings file lives.
 3. **Shell and file writes off in chat.** File reads, file search, web search and web fetch may
    stay on (the spike's third condition: five read-only built-ins offered, zero used on calendar
@@ -112,10 +112,10 @@ only `actorUserId` and `requestId` by ruling.
 | agent built-in shell / file-write | off | on, inside project folder | condition 3 |
 | agent built-in read / search / web | on | on | spike third condition |
 
-**Fork A — how the Workshop runs commands.** Ranked: (1) a Moss tool that runs a command inside
-the project sandbox and streams output, v2-proof and audited like every other tool; (2) advertise
-ACP `terminal/*` and migrate later. Pick (1) unless the plan finds the tool cannot stream well
-enough for a build log; record the reason if (2) wins.
+**Fork A — how the Workshop runs commands. Decided (review, 2026-09-06): (1).** A Moss tool runs
+the command inside the project sandbox and streams output, v2-proof and audited like every other
+tool. (2), advertising ACP `terminal/*`, is taken only if the slice 1 live proof shows the tool
+cannot stream a build log well enough; record the reason in the plan if so.
 
 **Conversation history.** Postgres stays the record, under row-level access. A fresh agent
 session gets history replayed by Moss, the way a stateless model call does today. The agent's own
@@ -124,8 +124,11 @@ supports it and the process is still alive.
 
 ## 5. Sessions and lifecycle
 
-- One agent process per (user, surface, conversation). Idle processes are reaped on a timer the
-  plan sets; the Workshop keeps its process for the life of the project tab.
+- One agent process per (user, surface, conversation). Chat processes are reaped after the same
+  idle timeout chat already uses for its sessions (the plan reads the existing value rather than
+  inventing one). The Workshop keeps its process for the life of the project tab, and a browser
+  reload is not closing the tab: reconnect to the live process if it is still up (`session/load`
+  where supported), otherwise replay from Postgres.
 - `session/cancel` is wired to the chat drawer's stop button and the Workshop's cancel.
 - Stop reasons and errors surface to the UI as typed events, never as parsed text.
 - Session ids are the agent's; conversation ids are Moss's. They are stored in separate columns
@@ -206,8 +209,9 @@ selectively is the difference between a feature and a bill.
 1. **Adapter + Workshop.** Adapter package, launch through the runner, tool server handed in,
    Fork A resolved, approval wiring (section 6), settings + app map. Live-path proof: a real
    project, a real build command, a real approval card answered by a person on dev.
-2. **Chat.** Same adapter, chat launch profile (scratch folder, writes and shell off), bridge
-   removed behind a setting, then deleted once chat has passed live proof. Live-path proof: "add
+2. **Chat.** Same adapter, chat launch profile (scratch folder, writes and shell off). The old
+   CLI bridge stays one release behind a setting, off by default, as the fallback; it is deleted
+   after chat has passed live proof and run one clean release (review decision, 2026-09-06). Live-path proof: "add
    lunch with Sam" approved in the drawer and one event in the calendar.
 3. **Gemini and others.** Only when a row in section 7 turns green on this box.
 
