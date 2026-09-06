@@ -673,18 +673,23 @@
 }
 .jds-index__row:hover .jds-index__title a {
   color: var(--forest);
+  text-decoration: none;
+}
+.jds-index__title a {
+  text-decoration: none;
 }
 .jds-index__title {
   grid-column: 1;
   font-family: var(--font-display);
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   font-weight: 700;
   letter-spacing: -0.012em;
-  line-height: 1.15;
+  line-height: var(--leading-tight);
 }
 .jds-index__excerpt {
   grid-column: 2;
   margin: 0;
+  font-size: var(--text-sm);
   color: var(--text-subtle);
   max-width: 68ch;
 }
