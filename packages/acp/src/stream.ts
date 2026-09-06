@@ -44,7 +44,23 @@ export function createTunnelStream(
       void (async () => {
         try {
           while (!stopped) {
-            const result = await tunnel.read(sessionKey, seq);
+            let result;
+            try {
+              result = await tunnel.read(sessionKey, seq);
+            } catch (error) {
+              // The session going away under a live poll (kill racing read) is
+              // an expected shutdown, not a transport failure: end quietly.
+              // Anything else still surfaces to the toolkit.
+              if (
+                error instanceof Error &&
+                /ACP session (is not running|has exited)/.test(error.message)
+              ) {
+                controller.close();
+                stopped = true;
+                return;
+              }
+              throw error;
+            }
             seq = result.nextSeq;
             let delivered = false;
             for (const line of result.lines) {
@@ -62,8 +78,11 @@ export function createTunnelStream(
               controller.enqueue(parsed);
               delivered = true;
             }
-            if (result.exited && !delivered) {
+            if (result.exited) {
+              // Drain first: lines already enqueued above still reach the
+              // toolkit; with nothing left the stream ends and the pump stops.
               controller.close();
+              stopped = true;
               return;
             }
             if (!delivered) {

@@ -126,10 +126,14 @@ export class AcpHost {
     const spawnChild =
       this.deps.spawnChild ??
       ((opts) =>
+        // detached: the adapter owns a process group, so kill takes down the
+        // whole tree (the agent SDK's own CLI grandchild included) — a plain
+        // child.kill would orphan it. Same shape as the persistent chat runtime.
         spawn(process.execPath, [opts.entry], {
           cwd: opts.cwd,
           env: opts.env,
           stdio: ["pipe", "pipe", "pipe"],
+          detached: true,
           ...(opts.uid !== undefined ? { uid: opts.uid } : {}),
           ...(opts.gid !== undefined ? { gid: opts.gid } : {})
         }) as ChildProcessWithoutNullStreams);
@@ -226,6 +230,17 @@ export class AcpHost {
     const session = this.sessions.get(key);
     this.sessions.delete(key);
     if (!session || session.exited) return;
+    // Kill the group first (adapter plus any CLI grandchild), then fall back to
+    // the direct child. Every step is best-effort: the process may already be gone.
+    const pid = session.child.pid;
+    if (pid !== undefined) {
+      try {
+        process.kill(-pid, "SIGTERM");
+        return;
+      } catch {
+        /* fall through to the direct kill */
+      }
+    }
     try {
       session.child.kill("SIGTERM");
     } catch {
