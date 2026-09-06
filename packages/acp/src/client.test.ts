@@ -127,6 +127,31 @@ describe("MossAcpClient", () => {
       .map((line) => JSON.parse(line))
       .find((msg) => msg.method === "session/new");
     expect(opened.params._meta).toEqual({ disableBuiltInTools: true });
+    // No tool server handed over unless the caller provides one.
+    expect(opened.params.mcpServers).toEqual([]);
+    await client.close(handle);
+  });
+
+  it("hands Moss's tool server over inside the session opening", async () => {
+    const agent = new ScriptedAgent();
+    const client = new MossAcpClient(agent);
+    const handle = await client.openSession("workshop:user:proj", "proj", "workshop", {
+      url: "http://moss.local/api/mcp",
+      bearer: "jst_test-token"
+    });
+    expect(handle.sessionId).toBe("agent-sess-1");
+
+    const opened = agent.sent
+      .map((line) => JSON.parse(line))
+      .find((msg) => msg.method === "session/new");
+    expect(opened.params.mcpServers).toEqual([
+      {
+        type: "http",
+        name: "moss",
+        url: "http://moss.local/api/mcp",
+        headers: [{ name: "Authorization", value: "Bearer jst_test-token" }]
+      }
+    ]);
     await client.close(handle);
   });
 

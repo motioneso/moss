@@ -6,13 +6,15 @@
  * the cli-runner host; this client owns the protocol over the line tunnel.
  *
  * Slice 1 advertises no file or terminal capabilities (files and commands are
- * Moss tools, so a later protocol version never touches file handling) and hands
- * over no tool server yet — that arrives in the next phase.
+ * Moss tools, so a later protocol version never touches file handling). The
+ * caller hands over Moss's own tool server at session open: its address plus a
+ * per-session Bearer, carried inside the session request over the runner socket.
  */
 
 import {
   ClientSideConnection,
   type Client,
+  type McpServer,
   type RequestPermissionResponse,
   type SessionNotification,
   type StopReason
@@ -25,6 +27,17 @@ import type { AcpTunnel } from "./tunnel.js";
 export interface AcpSessionHandle {
   readonly sessionId: string;
   readonly cwd: string;
+}
+
+/**
+ * Moss's own tool server, handed to the agent when a session opens. The URL is
+ * the address the agent reaches the tool server at, and the Bearer is the
+ * per-session token minted for that session. Both travel inside the
+ * `session/new` payload over the runner socket, never on a command line.
+ */
+export interface AcpToolServer {
+  readonly url: string;
+  readonly bearer: string;
 }
 
 export interface AcpPromptResult {
@@ -57,6 +70,20 @@ function denyPermission(): RequestPermissionResponse {
   return { outcome: { outcome: "cancelled" } };
 }
 
+/**
+ * The session opening carries one tool server entry: Moss's own, over HTTP,
+ * with the session Bearer as an Authorization header. The capability gate
+ * already proved the agent takes HTTP tool servers before we get here.
+ */
+function toMcpServerEntry(toolServer: AcpToolServer): McpServer {
+  return {
+    type: "http",
+    name: "moss",
+    url: toolServer.url,
+    headers: [{ name: "Authorization", value: `Bearer ${toolServer.bearer}` }]
+  };
+}
+
 export class MossAcpClient {
   private readonly connections = new Map<string, ClientSideConnection>();
   private readonly texts = new Map<string, string[]>();
@@ -70,7 +97,8 @@ export class MossAcpClient {
   async openSession(
     sessionKey: string,
     projectId: string,
-    surface: AcpSurface = "workshop"
+    surface: AcpSurface = "workshop",
+    toolServer?: AcpToolServer
   ): Promise<AcpSessionHandle> {
     const { cwd } = await this.tunnel.spawn(sessionKey, projectId);
     const stream = createTunnelStream(this.tunnel, sessionKey);
@@ -83,7 +111,7 @@ export class MossAcpClient {
     checkAgentCapabilities(surface, init);
     const session = await connection.newSession({
       cwd,
-      mcpServers: [],
+      mcpServers: toolServer ? [toMcpServerEntry(toolServer)] : [],
       // The agent's own file and shell tools stay off on purpose: files and
       // commands are Moss tools, and the vendor default prompt is not a policy
       // we accept. The runner-side settings file denies them a second time.
