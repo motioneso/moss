@@ -776,8 +776,9 @@ describe("AssistantToolGateway self-operation", () => {
       }
     }
 
-    // web.read has no actionFamilyId, while Sports source writes share a non-promotable family;
-    // all remain explicit confirmation-only declarations.
+    // Sports source writes share a non-promotable family; all remain explicit confirmation-only
+    // declarations. web.read was on this list until Ben's ruling, 2026-09-05 (#2326), moved it to
+    // risk "read" instead (it never confirms now, so it is no longer a confirm_always tool).
     expect(confirmAlwaysTools.sort()).toEqual(
       [
         "email.sendReply",
@@ -788,8 +789,7 @@ describe("AssistantToolGateway self-operation", () => {
         "sports.confirmSourceAssignments",
         "sports.confirmSourceRecipe",
         "sports.removeSource",
-        "sports.retrySource",
-        "web.read"
+        "sports.retrySource"
       ].sort()
     );
   });

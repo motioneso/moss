@@ -41,13 +41,16 @@ describe("web research manifest", () => {
     expect(tools.find((t) => t.name === "web.search")?.risk).toBe("read");
 
     // web.read fetches arbitrary URLs (#359) and is the v0.1.0 audit's prompt-injection-to-
-    // exfiltration finding — it stays confirm_always with no actionFamilyId/executionPolicy so
-    // policy.ts:40 confirms every call (Opus security review, PR #1268; #1263 Task 5).
+    // exfiltration finding. It used to confirm every call for that reason (Opus security review,
+    // PR #1268; #1263 Task 5), but Ben ruled, 2026-09-05 (#2326), that asking every time made the
+    // turn never finish and he accepted the remaining risk, so it now runs like web.search: risk
+    // "read", never confirms, and still never gets an actionFamilyId/executionPolicy so it can
+    // never be promoted to a trusted, auto-run family either.
     const webRead = tools.find((t) => t.name === "web.read");
-    expect(webRead?.risk).toBe("write");
+    expect(webRead?.risk).toBe("read");
     expect(webRead?.actionFamilyId).toBeUndefined();
     expect(webRead?.executionPolicy).toBeUndefined();
-    expect(webRead?.selfOperationGrant).toBe("confirm_always");
+    expect(webRead?.selfOperationGrant).toBeUndefined();
   });
 });
 

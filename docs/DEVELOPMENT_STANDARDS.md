@@ -149,6 +149,23 @@ Two things the discussion must settle, because both were wrong on Food:
 - **What the screen shows when it is empty, loading, or broken.** These are screens, not
   afterthoughts, and they are the states a new module is most often seen in.
 
+### Design comes before the spec is finished, not after
+
+Ben's ruling, 2026-09-05, after the Workshop redesign: an idea discussion is not enough to write a
+spec from. Draw the screens next, because designing them decides functionality that talking about
+the idea never surfaces.
+
+That session is the evidence. Mocking the Workshop project workspace is what produced, in order: the
+new-project form should not exist at all and creating a project should drop straight into the chat;
+a project takes its name from the first message; an empty "No plan yet" panel should never render;
+and the plan, the files and a running preview belong in one artifact panel beside the chat whose
+tabs appear only as they gain content. Every one of those is a functional decision with routes,
+state and API shape behind it, and not one of them came out of the idea discussion that preceded it.
+
+So the order for any feature with a screen is: discuss the idea, agree the design with Ben, then
+write the spec against the agreed screens. A spec written before the design is a guess at what the
+feature does, and it will be rewritten.
+
 ## Agent Knowledge Tools
 
 Agents working in this repository should keep project knowledge current while they work.

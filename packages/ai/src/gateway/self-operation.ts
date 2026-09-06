@@ -191,18 +191,19 @@ export function isSelfOperationExcluded(
 
 /**
  * The only tools ever allowed to declare `confirm_always` (planned, per #1263 chassis plan).
- * web.read is the deliberate odd one out, risk "write" not "destructive" — it's
- * here because no approved spec covers web-research and it is the v0.1.0 audit's web.read
- * prompt-injection-to-exfiltration finding; an auto-run family would reopen that HIGH. Do not
- * "tidy" it to risk "destructive" to match the other four, and do not give it a family (Opus
- * security review, PR #1268, #1263).
+ * web.read used to be on this list (Opus security review, PR #1268; #1263): it fetches arbitrary
+ * pages, and page text is untrusted, so a confirmation card was the human control against a
+ * hidden instruction telling the assistant to fetch a second address and carry data out. Ben
+ * ruled, 2026-09-05 (#2326), that asking on every call made the turn never finish and he accepted
+ * that remaining risk, so web.read moved to risk "read" (never confirms, same as web.search)
+ * instead. It must still never gain an actionFamilyId or executionPolicy — that would open a path
+ * to trusted-auto promotion, which was not part of what Ben approved.
  */
 const PLANNED_CONFIRM_ALWAYS_TOOLS: readonly string[] = [
   "memory.forget",
   "people.merge",
   "people.splitIdentity",
   "email.sendReply",
-  "web.read",
   "sports.confirmSource",
   "sports.confirmSourceAssignments",
   "sports.confirmSourceRecipe",
@@ -412,8 +413,10 @@ export function assertBuiltInSelfOperationManifests(
         // #1263 Task 4 hardening (b): a confirm_always tool must never be promotable, or the
         // guarantee that protects it (policy.ts:40 confirms every call for a family-less/non-auto
         // tool) silently stops holding. Deliberately NOT "confirm_always implies risk destructive"
-        // — web.read is confirm_always at risk "write" (PR #1268 Opus security review, #1263) and
-        // must keep passing this check. Instead: no executionPolicy "auto", and either no
+        // — email.sendReply and the People/Sports tools on this list are risk "destructive", but a
+        // future addition need not be (web.read used to be the odd one out here, at risk "write",
+        // until Ben's 2026-09-05 ruling (#2326) moved it to risk "read" instead — see the comment
+        // on PLANNED_CONFIRM_ALWAYS_TOOLS above). Instead: no executionPolicy "auto", and either no
         // actionFamilyId at all or a family whose allowedTiers cannot reach trusted_auto.
         const promotable =
           tool.executionPolicy === "auto" ||
