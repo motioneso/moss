@@ -61,6 +61,7 @@ import type {
 import { findRepoRoot } from "./catalog.js";
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { Mutex } from "./mutex.js";
+import { resolveDefaultToolsPrefix } from "./tools-prefix.js";
 
 // ─── Errors the dispatcher maps (§A.2.3) ──────────────────────────────────────
 
@@ -129,7 +130,6 @@ export interface InstallServiceDeps {
   readonly hostArch?: string;
 }
 
-const DEFAULT_TOOLS_PREFIX = "/data/cli-tools";
 const DEFAULT_HOME_BASE = "/data/cli-auth";
 const DEFAULT_INSTALL_TIMEOUT_MS = 300_000;
 
@@ -159,11 +159,26 @@ export class InstallService {
   private readonly pinnedHash = new Map<RpcProviderKind, string>();
 
   constructor(private readonly deps: InstallServiceDeps) {
-    this.toolsPrefix = deps.toolsPrefix ?? DEFAULT_TOOLS_PREFIX;
+    this.toolsPrefix = deps.toolsPrefix ?? resolveDefaultToolsPrefix();
     this.homeBase = deps.homeBase ?? DEFAULT_HOME_BASE;
     this.installerEnv = buildSanitizedInstallerEnv(deps.env ?? process.env);
     this.installTimeoutMs = deps.installTimeoutMs ?? DEFAULT_INSTALL_TIMEOUT_MS;
     this.hostArch = deps.hostArch ?? osArch();
+  }
+
+  /**
+   * #2340: make sure the tools folder exists before anything tries to install or run a
+   * provider out of it. Called once at startup; a failure here must not crash the process,
+   * since providers already installed elsewhere may still work.
+   */
+  async ensureToolsPrefixWritable(): Promise<void> {
+    try {
+      await mkdir(this.toolsPrefix, { recursive: true });
+    } catch (cause) {
+      throw new Error(
+        `could not create the tools folder at ${this.toolsPrefix}: ${(cause as Error).message}`
+      );
+    }
   }
 
   // ─── public entry (called by CliChatEngineHost.installProvider) ─────────────

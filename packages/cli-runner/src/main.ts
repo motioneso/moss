@@ -193,6 +193,13 @@ export function createCliRunner(
     toolsPrefix: config.toolsPrefix,
     homeBase: config.homeBase
   });
+  // #2340: make sure the tools folder exists before anything tries to use it. Best-effort —
+  // providers already installed elsewhere may still work even if this fails, so log and move on
+  // rather than crashing the process.
+  installService.ensureToolsPrefixWritable().then(
+    () => log?.(`tools folder ready at ${config.toolsPrefix}`),
+    (err: Error) => log?.(`warning: ${err.message}`)
+  );
 
   // §L.3 login service (Phase 3). It drives the provider login flow in a captured
   // `jarv1s-login-*` tmux session (auth-volume HOME), surfaces ONLY the allowlisted URL/code
