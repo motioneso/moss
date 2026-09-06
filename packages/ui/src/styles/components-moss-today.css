@@ -100,6 +100,9 @@
   .jds-masthead--field .jds-masthead__title {
     font-size: var(--text-3xl);
   }
+  .jds-masthead--field .jds-masthead__row {
+    align-items: flex-start;
+  }
 }
 .jds-masthead--field .jds-masthead__eyebrow {
   color: var(--masthead-accent);
