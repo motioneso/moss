@@ -45,9 +45,11 @@ Production requires these secrets:
 
 - `BETTER_AUTH_SECRET` for Better Auth session signing
 - `JARVIS_CONNECTOR_SECRET_KEY` for connector token encryption
-- `JARVIS_INTEGRATIONS_SECRET_KEY` for integration connection credential encryption, generated the
-  same way as the other secret keys above (a 32-byte base64 or hex secret)
 - `JARVIS_AI_SECRET_KEY` for AI provider credential encryption
+
+The family keys (integrations, module credential, news credential) are not set by hand. An admin
+creates them with Generate on the Settings Encryption keys screen after the install is up. An
+install that already has them set in its settings file keeps working exactly as before.
 
 Keep `JARVIS_AUTH_BASE_URL` and `JARVIS_AUTH_TRUSTED_ORIGINS` aligned with the deployed Moss
 origin before enabling browser login or external identity providers. OAuth/OIDC variables configure
