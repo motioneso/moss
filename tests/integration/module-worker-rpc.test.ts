@@ -170,7 +170,6 @@ describe("external module worker RLS", () => {
       actorUserId: ids.userA,
       requestId: "rpc-auth",
       workerDataContext: new DataContextRunner(workerDb),
-      cipher: createModuleCredentialSecretCipher(),
       isActorAdmin: async () => false,
       // Required dep (#1281); these tests never reach an embed.* method.
       embeddingProvider: async () => new StubEmbeddingProvider()
@@ -198,7 +197,6 @@ describe("external module worker RLS", () => {
       actorUserId: ids.userA,
       requestId: "rpc-setcred",
       workerDataContext: new DataContextRunner(workerDb),
-      cipher: createModuleCredentialSecretCipher(),
       isActorAdmin: async () => false,
       // Required dep (#1281); these tests never reach an embed.* method.
       embeddingProvider: async () => new StubEmbeddingProvider()
@@ -269,7 +267,6 @@ describe("external module worker RLS", () => {
       actorUserId: ids.userA,
       requestId: "rpc-kv-policy",
       workerDataContext: new DataContextRunner(workerDb),
-      cipher: createModuleCredentialSecretCipher(),
       isActorAdmin: async () => false,
       // Required dep (#1281); these tests never reach an embed.* method.
       embeddingProvider: async () => new StubEmbeddingProvider()
@@ -288,7 +285,6 @@ describe("external module worker RLS", () => {
       actorUserId: ids.userA,
       requestId: "rpc-kv-policy-read",
       workerDataContext: new DataContextRunner(workerDb),
-      cipher: createModuleCredentialSecretCipher(),
       isActorAdmin: async () => false,
       // Required dep (#1281); these tests never reach an embed.* method.
       embeddingProvider: async () => new StubEmbeddingProvider()
@@ -308,7 +304,6 @@ describe("external module worker RLS", () => {
       actorUserId: ids.userA,
       requestId: "rpc-kv",
       workerDataContext: new DataContextRunner(workerDb),
-      cipher: createModuleCredentialSecretCipher(),
       isActorAdmin: async () => false,
       // Required dep (#1281); these tests never reach an embed.* method.
       embeddingProvider: async () => new StubEmbeddingProvider()
@@ -350,7 +345,6 @@ describe("external module worker RLS", () => {
       actorUserId: ids.userA,
       requestId: "rpc-fetch",
       workerDataContext: new DataContextRunner(workerDb),
-      cipher: createModuleCredentialSecretCipher(),
       isActorAdmin: async () => false,
       // Required dep (#1281); these tests never reach an embed.* method.
       embeddingProvider: async () => new StubEmbeddingProvider(),
@@ -401,7 +395,6 @@ describe("external module fetch.request runtime host grants (#1309)", () => {
       actorUserId,
       requestId: `rpc-fetch-grants-${actorUserId}`,
       workerDataContext: new DataContextRunner(workerDb),
-      cipher: createModuleCredentialSecretCipher(),
       isActorAdmin: async () => false,
       // Required dep (#1281); these tests never reach an embed.* method.
       embeddingProvider: async () => new StubEmbeddingProvider(),
@@ -551,7 +544,6 @@ describe("ai.generateStructured", () => {
     actorUserId: ids.userA,
     requestId: "req-ai",
     workerDataContext: new DataContextRunner(workerDb),
-    cipher: createModuleCredentialSecretCipher(),
     isActorAdmin: async () => false,
     // Required dep (#1281); these tests never reach an embed.* method.
     embeddingProvider: async () => new StubEmbeddingProvider()
@@ -808,7 +800,6 @@ describe("db.query (#1167)", () => {
       actorUserId: ids.userA,
       requestId: "rpc-db-1",
       workerDataContext: new DataContextRunner(workerDb),
-      cipher: createModuleCredentialSecretCipher(),
       isActorAdmin: async () => false,
       // Required dep (#1281); these tests never reach an embed.* method.
       embeddingProvider: async () => new StubEmbeddingProvider()
@@ -821,7 +812,6 @@ describe("db.query (#1167)", () => {
       actorUserId: ids.userA,
       requestId: "rpc-db-2",
       workerDataContext: new DataContextRunner(workerDb),
-      cipher: createModuleCredentialSecretCipher(),
       isActorAdmin: async () => false,
       // Required dep (#1281); these tests never reach an embed.* method.
       embeddingProvider: async () => new StubEmbeddingProvider()

@@ -64,7 +64,6 @@ import { ChatAttachmentsService } from "@moss/chat";
 import { ensureProviderLaunchReady } from "@moss/cli-runner/provider-first-run";
 import { NotificationsRepository, type CreateNotificationInput } from "@moss/notifications";
 import {
-  createModuleCredentialSecretCipher,
   getModuleBuild,
   SettingsRepository,
   touchModuleBuildActivity,
@@ -358,10 +357,10 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   });
   const externalRuntime = new ExternalModuleWorkerRuntime({ logger: workerLogger });
   const runtime = externalRuntime;
-  const cipher = createModuleCredentialSecretCipher();
   // ctx.ai for queued module jobs (JS-07 Step 0, spec D6): one repository and
   // one bridge at composition time — the bridge's AiSecretCipher is a separate
-  // key domain (JARVIS_AI_SECRET_KEY) from the ModuleCredentialCipher above.
+  // key domain (JARVIS_AI_SECRET_KEY), separate from the module credential
+  // family key, which RPC handlers now resolve per call from the master store.
   // Only the module-job registration below receives it; every other handler
   // path stays without an ai dep and fails closed in the rpc host.
   const moduleAiBridge = createModuleWorkerAiBridge({
@@ -429,7 +428,6 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     getDiscoveryById,
     listDiscoveredModuleIds,
     dataContext,
-    cipher,
     runtime,
     listActiveUserIds,
     ai: moduleAiBridge,
@@ -485,7 +483,6 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
           runtime,
           workerDb,
           dataContext,
-          cipher,
           getDiscoveryById,
           listDiscoveredModuleIds,
           listActiveUserIds,

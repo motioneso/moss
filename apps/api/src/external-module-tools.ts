@@ -21,7 +21,7 @@ import {
   type ExternalToolInvoker
 } from "@moss/module-registry/node";
 import { NotificationsRepository } from "@moss/notifications";
-import { createModuleCredentialSecretCipher, type SettingsRepository } from "@moss/settings";
+import { type SettingsRepository } from "@moss/settings";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
 export function createExternalModuleTools(input: {
@@ -46,7 +46,6 @@ export function createExternalModuleTools(input: {
 } {
   if (!input.workerDataContext) return { getManifests: () => [] };
   const runtime = new ExternalModuleWorkerRuntime({ logger: input.logger });
-  const cipher = createModuleCredentialSecretCipher();
   const attachments = new ChatAttachmentsService(new VaultContextRunner(getVaultBaseDir()));
   // ctx.notify (Task 2b, #1283): no quiet-hours port, matching
   // registerUpgradeNotifyWorker's own NotificationsRepository construction
@@ -64,7 +63,6 @@ export function createExternalModuleTools(input: {
       actorUserId: context.actorUserId,
       requestId: context.requestId,
       workerDataContext: input.workerDataContext!,
-      cipher,
       isActorAdmin: () =>
         input.appDataContext.withDataContext(
           { actorUserId: context.actorUserId, requestId: context.requestId },

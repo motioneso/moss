@@ -14,14 +14,18 @@ import { EMBED_BATCH_MAX } from "@moss/module-sdk";
 import type { ModuleFetchRequest, ModuleFetchResponse } from "@moss/module-sdk";
 import { createHostPinnedFetch } from "@moss/host-fetch";
 import {
+  createModuleCredentialCipherFromKeyring,
+  decryptWithFamilyKeyRefresh,
   deleteModuleKvKey,
+  FamilyKeyMissingError,
   getModuleKvValue,
   listModuleKvKeys,
+  loadFamilyKeyring,
+  MODULE_CREDENTIAL_FAMILY,
   readModuleCredentialSecret,
   recordAuditEvent,
   setModuleKvValue,
-  upsertModuleCredential,
-  type ModuleCredentialCipher
+  upsertModuleCredential
 } from "@moss/settings";
 
 import type { ExternalModuleDiscovery } from "./types.js";
@@ -48,7 +52,11 @@ export class ExternalModuleRpcError extends Error {
       // not post a notification, because unlike db.query there is no degraded read-only
       // mode to fall back into. rate_limited is the per-invocation cap tripping.
       | "forbidden_notify_mutation"
-      | "rate_limited",
+      | "rate_limited"
+      // #2322 slice 2: the family key exists nowhere, so the feature is paused
+      // for setup. The module sees only the code; the detail names the fix for
+      // host logs.
+      | "credential_store_paused",
     /**
      * Human-readable reason. Never crosses the worker boundary to the module —
      * it is for host logs and tests. The module still sees only the code.
@@ -124,13 +132,27 @@ const AI_MAX_OUTPUT_TOKENS_CAP = 32_768;
 // hundreds is the failure mode this caps, not a legitimate burst.
 export const NOTIFY_CALLS_PER_INVOCATION_CAP = 5;
 
+/**
+ * Cipher for a credential write: always the current family key, never a held
+ * object, so post-rotation writes land under the new key (#2322 slice 2).
+ */
+async function resolveCipherForWrite(scopedDb: DataContextDb) {
+  const keyring = await loadFamilyKeyring(scopedDb, MODULE_CREDENTIAL_FAMILY, process.env);
+  if (!keyring) {
+    throw new ExternalModuleRpcError(
+      "credential_store_paused",
+      "Ask an admin to open Settings, Encryption keys, and press Generate."
+    );
+  }
+  return createModuleCredentialCipherFromKeyring(keyring);
+}
+
 export function createExternalModuleRpcHandler(input: {
   readonly module: ExternalModuleDiscovery;
   readonly toolRisk: ModuleAssistantToolRisk;
   readonly actorUserId: string;
   readonly requestId: string;
   readonly workerDataContext: DataContextRunner;
-  readonly cipher: ModuleCredentialCipher;
   readonly isActorAdmin: () => Promise<boolean>;
   /**
    * Resolver for the instance embedder behind ctx.embed (#1281). Required, not
@@ -384,7 +406,27 @@ export function createExternalModuleRpcHandler(input: {
             ownerUserId: declaration.scope === "user" ? input.actorUserId : null
           });
           if (!envelope) throw new ExternalModuleRpcError("credential_missing");
-          const value = input.cipher.decryptJson(envelope).value;
+          // Rotation-safe: a worker holding a pre-rotation key reloads once
+          // and retries instead of failing the call (#2322 slice 2).
+          let value: unknown;
+          try {
+            value = (
+              await decryptWithFamilyKeyRefresh(
+                scopedDb,
+                MODULE_CREDENTIAL_FAMILY,
+                process.env,
+                (keyring) => createModuleCredentialCipherFromKeyring(keyring).decryptJson(envelope)
+              )
+            ).value;
+          } catch (error) {
+            if (error instanceof FamilyKeyMissingError) {
+              throw new ExternalModuleRpcError(
+                "credential_store_paused",
+                "Ask an admin to open Settings, Encryption keys, and press Generate."
+              );
+            }
+            throw error;
+          }
           if (typeof value !== "string") throw new ExternalModuleRpcError("credential_missing");
           rememberSecret(value);
           resolvedSecrets.add(value);
@@ -421,7 +463,7 @@ export function createExternalModuleRpcHandler(input: {
               scope: "user",
               ownerUserId: input.actorUserId,
               displayName: declaration.displayName,
-              encryptedSecret: input.cipher.encryptJson({ value }),
+              encryptedSecret: (await resolveCipherForWrite(scopedDb)).encryptJson({ value }),
               actorUserId: input.actorUserId,
               requestId: input.requestId
             },

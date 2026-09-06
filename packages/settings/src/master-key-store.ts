@@ -116,7 +116,35 @@ interface StoredFamilyKey {
 
 const SECRET_FIELD = "secret";
 
-const familyKeyringCache = new Map<string, Keyring>();
+/**
+ * How long a loaded family keyring stays in memory. The cache is per process
+ * and the save/rotate refresh hook only runs in the interface process, so a
+ * background worker would otherwise keep a pre-rotation key indefinitely and
+ * fail to read anything written after the rotation. A short life bounds that
+ * staleness everywhere; the reload-and-retry helper below covers the gap.
+ */
+export const FAMILY_KEY_CACHE_TTL_MS = 60_000;
+
+interface CachedFamilyKeyring {
+  readonly keyring: Keyring;
+  readonly loadedAtMs: number;
+}
+
+const familyKeyringCache = new Map<string, CachedFamilyKeyring>();
+
+function readCachedFamilyKeyring(family: FamilyKeyDescriptor): Keyring | null {
+  const cached = familyKeyringCache.get(family.settingKey);
+  if (!cached) return null;
+  if (Date.now() - cached.loadedAtMs >= FAMILY_KEY_CACHE_TTL_MS) {
+    familyKeyringCache.delete(family.settingKey);
+    return null;
+  }
+  return cached.keyring;
+}
+
+function storeCachedFamilyKeyring(family: FamilyKeyDescriptor, keyring: Keyring): void {
+  familyKeyringCache.set(family.settingKey, { keyring, loadedAtMs: Date.now() });
+}
 
 /** Drop cached family keyrings (all, or one family) after save/rotate. */
 export function invalidateFamilyKeyCache(family?: FamilyKeyDescriptor): void {
@@ -193,7 +221,7 @@ export async function loadFamilyKeyring(
   family: FamilyKeyDescriptor,
   env: NodeJS.ProcessEnv = process.env
 ): Promise<Keyring | null> {
-  const cached = familyKeyringCache.get(family.settingKey);
+  const cached = readCachedFamilyKeyring(family);
   if (cached) return cached;
 
   if (resolveMossEnv(env, family.keyEnvVar) !== undefined) {
@@ -204,7 +232,7 @@ export async function loadFamilyKeyring(
       family.devDefault,
       env
     );
-    familyKeyringCache.set(family.settingKey, keyring);
+    storeCachedFamilyKeyring(family, keyring);
     return keyring;
   }
 
@@ -224,8 +252,44 @@ export async function loadFamilyKeyring(
     legacyCandidates.push(previous);
   }
   const keyring: Keyring = { currentKeyId: stored.keyId, keys, legacyCandidates };
-  familyKeyringCache.set(family.settingKey, keyring);
+  storeCachedFamilyKeyring(family, keyring);
   return keyring;
+}
+
+/**
+ * Run one decrypt against the family's keyring, reloading once and retrying
+ * when the first attempt fails. Covers the cross-process gap: a worker holding
+ * a pre-rotation keyring fails the first decrypt, drops its stale entry, reads
+ * the fresh row, and succeeds — instead of surfacing the rotation as an error.
+ * A second failure means the data is genuinely unreadable, so it rethrows.
+ */
+/**
+ * Thrown when a family key exists nowhere: no env value, no store row. Callers
+ * map this to their layer's paused/setup-guidance signal (never a crash).
+ */
+export class FamilyKeyMissingError extends Error {
+  constructor(readonly familyName: string) {
+    super(`No ${familyName} key available`);
+    this.name = "FamilyKeyMissingError";
+  }
+}
+
+export async function decryptWithFamilyKeyRefresh<T>(
+  scopedDb: DataContextDb,
+  family: FamilyKeyDescriptor,
+  env: NodeJS.ProcessEnv,
+  attempt: (keyring: Keyring) => T
+): Promise<T> {
+  const first = await loadFamilyKeyring(scopedDb, family, env);
+  if (!first) throw new FamilyKeyMissingError(family.name);
+  try {
+    return attempt(first);
+  } catch {
+    invalidateFamilyKeyCache(family);
+    const fresh = await loadFamilyKeyring(scopedDb, family, env);
+    if (!fresh) throw new FamilyKeyMissingError(family.name);
+    return attempt(fresh);
+  }
 }
 
 export interface FamilyKeyWrite {

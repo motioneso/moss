@@ -1,10 +1,15 @@
 import { createHash } from "node:crypto";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { dataContextBrand, JsonSecretCipher, type DataContextDb } from "@moss/db";
 
+import { createIntegrationsCipherFromKeyring } from "@moss/integrations";
+
 import {
+  createMasterKeyStoreCipher,
+  decryptWithFamilyKeyRefresh,
   familyByName,
+  FAMILY_KEY_CACHE_TTL_MS,
   generateFamilyKey,
   getFamilyKeyStatus,
   INTEGRATIONS_FAMILY,
@@ -66,8 +71,16 @@ describe("family key store (#2312 slice 1, #2322 slice 2)", () => {
     const { scopedDb } = createMockDb();
     const base = { NODE_ENV: "production", ...MASTER_ENV };
     for (const [family, mossName, jarvisName] of [
-      [MODULE_CREDENTIAL_FAMILY, "MOSS_MODULE_CREDENTIAL_SECRET_KEY", "JARVIS_MODULE_CREDENTIAL_SECRET_KEY"],
-      [NEWS_CREDENTIAL_FAMILY, "MOSS_NEWS_CREDENTIAL_SECRET_KEY", "JARVIS_NEWS_CREDENTIAL_SECRET_KEY"]
+      [
+        MODULE_CREDENTIAL_FAMILY,
+        "MOSS_MODULE_CREDENTIAL_SECRET_KEY",
+        "JARVIS_MODULE_CREDENTIAL_SECRET_KEY"
+      ],
+      [
+        NEWS_CREDENTIAL_FAMILY,
+        "MOSS_NEWS_CREDENTIAL_SECRET_KEY",
+        "JARVIS_NEWS_CREDENTIAL_SECRET_KEY"
+      ]
     ] as const) {
       invalidateFamilyKeyCache();
       const fromMoss = await loadFamilyKeyring(scopedDb, family, {
@@ -346,5 +359,88 @@ describe("family key store (#2312 slice 1, #2322 slice 2)", () => {
     expect(typeof material).toBe("string");
     expect(JSON.stringify(status)).not.toContain(material);
     expect(SECRET_INSTANCE_SETTING_KEYS.has("keys.integrations")).toBe(true);
+  });
+
+  it("a second process holding a pre-rotation key decrypts post-rotation data after one reload", async () => {
+    invalidateFamilyKeyCache();
+    const { scopedDb, store } = createMockDb();
+    const repository = createMockRepository(store);
+    const write = { family: INTEGRATIONS_FAMILY, actorUserId: "u1", requestId: "r1" };
+    await generateFamilyKey(scopedDb, repository, { ...write, env: MASTER_ENV });
+    // The worker loads early and never sees the refresh call.
+    const workerKeyring = await loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, {
+      ...MASTER_ENV,
+      NODE_ENV: "production"
+    });
+    expect(workerKeyring).not.toBeNull();
+    // Admin rotates in another process: the row moves on, this cache does not.
+    await rotateFamilyKey(scopedDb, repository, { ...write, env: MASTER_ENV });
+    // Post-rotation envelope, built from the row without touching this cache.
+    const masterCipher = createMasterKeyStoreCipher({ ...MASTER_ENV });
+    const rotated = masterCipher.decryptJson(
+      masterCipher.parseEnvelope(store.get("keys.integrations"))
+    ) as { keyId: string; secret: string };
+    const freshCipher = createIntegrationsCipherFromKeyring({
+      currentKeyId: rotated.keyId,
+      keys: new Map([[rotated.keyId, Buffer.from(rotated.secret, "hex")]]),
+      legacyCandidates: [Buffer.from(rotated.secret, "hex")]
+    });
+    const envelope = freshCipher.encryptJson({ value: "post-rotation" });
+    // The stale worker object genuinely cannot read it: this is the live hole.
+    const workerCipher = createIntegrationsCipherFromKeyring(workerKeyring!);
+    await expect((async () => workerCipher.decryptJson(envelope))()).rejects.toThrow();
+    // Through the retry helper the same worker succeeds after one reload.
+    const value = await decryptWithFamilyKeyRefresh(
+      scopedDb,
+      INTEGRATIONS_FAMILY,
+      { ...MASTER_ENV, NODE_ENV: "production" },
+      (keyring) => createIntegrationsCipherFromKeyring(keyring).decryptJson(envelope)
+    );
+    expect(value).toEqual({ value: "post-rotation" });
+  });
+
+  it("genuinely unreadable data still throws after the single retry", async () => {
+    invalidateFamilyKeyCache();
+    const { scopedDb, store } = createMockDb();
+    const repository = createMockRepository(store);
+    await generateFamilyKey(scopedDb, repository, {
+      family: INTEGRATIONS_FAMILY,
+      actorUserId: "u1",
+      requestId: "r1",
+      env: MASTER_ENV
+    });
+    const envelope = { keyId: "nope", ciphertext: "AA==", iv: "AA==" } as never;
+    await expect(
+      decryptWithFamilyKeyRefresh(
+        scopedDb,
+        INTEGRATIONS_FAMILY,
+        { ...MASTER_ENV, NODE_ENV: "production" },
+        (keyring) => createIntegrationsCipherFromKeyring(keyring).decryptJson(envelope)
+      )
+    ).rejects.toThrow();
+  });
+
+  it("expired cache entries reload instead of serving stale keys", async () => {
+    vi.useFakeTimers();
+    try {
+      invalidateFamilyKeyCache();
+      const { scopedDb, store } = createMockDb();
+      const repository = createMockRepository(store);
+      await generateFamilyKey(scopedDb, repository, {
+        family: INTEGRATIONS_FAMILY,
+        actorUserId: "u1",
+        requestId: "r1",
+        env: MASTER_ENV
+      });
+      const env = { ...MASTER_ENV, NODE_ENV: "production" };
+      expect(await loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, env)).not.toBeNull();
+      // The row disappears while cached: before expiry the cache hides that.
+      store.delete("keys.integrations");
+      expect(await loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, env)).not.toBeNull();
+      vi.advanceTimersByTime(FAMILY_KEY_CACHE_TTL_MS + 1);
+      expect(await loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, env)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
