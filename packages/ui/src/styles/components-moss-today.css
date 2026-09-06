@@ -93,6 +93,7 @@
 .jds-masthead--field .jds-masthead__title {
   font-size: var(--text-4xl);
   line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-snug);
   color: var(--masthead-fg);
   margin-top: 0.15em;
 }
@@ -689,7 +690,6 @@
   font-family: var(--font-display);
   font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-tight);
   line-height: var(--leading-tight);
 }
 .jds-index__excerpt {
