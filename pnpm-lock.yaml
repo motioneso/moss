@@ -1429,6 +1429,9 @@ importers:
 
   packages/workshop:
     dependencies:
+      '@moss/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@moss/db':
         specifier: workspace:*
         version: link:../db
