@@ -96,6 +96,10 @@ export function EncryptionKeysPane() {
           const missing = status.source === "missing";
           const fromEnv = status.source === "env";
           const broken = status.source === "broken";
+          // A broken row caused by the settings file offers no button: the value
+          // there wins over anything stored, so replacing would write a key that
+          // never takes effect while the row keeps saying stopped. The status
+          // sentence telling them to fix or remove the value is the whole action.
           const busy = generateMutation.isPending || rotateMutation.isPending;
           return (
             <Row
@@ -114,7 +118,7 @@ export function EncryptionKeysPane() {
                   >
                     {generateMutation.isPending ? "Generating…" : "Generate"}
                   </Button>
-                ) : broken ? (
+                ) : broken && status.cause !== "env" ? (
                   <Button
                     variant="secondary"
                     size="sm"
@@ -131,7 +135,7 @@ export function EncryptionKeysPane() {
                   >
                     {rotateMutation.isPending ? "Replacing…" : "Replace key"}
                   </Button>
-                ) : fromEnv ? undefined : (
+                ) : broken || fromEnv ? undefined : (
                   <Button
                     variant="quiet"
                     size="sm"
