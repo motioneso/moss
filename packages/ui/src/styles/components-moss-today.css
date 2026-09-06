@@ -84,7 +84,8 @@
   background: var(--masthead-bg);
   color: var(--masthead-fg);
   margin: 0 0 var(--space-8);
-  padding: clamp(1.25rem, 2.6vw, 2rem) var(--space-2) clamp(1.5rem, 2.6vw, 2rem);
+  padding: calc(clamp(1.25rem, 2.6vw, 2rem) + var(--space-4)) var(--space-8)
+    calc(clamp(1.5rem, 2.6vw, 2rem) + var(--space-4));
   border-bottom: 4px solid var(--masthead-rule);
 }
 .jds-masthead--field .jds-masthead__row {
@@ -98,6 +99,10 @@
   margin-top: 0.15em;
 }
 @media (max-width: 720px) {
+  .jds-masthead--field {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
   .jds-masthead--field .jds-masthead__title {
     font-size: var(--text-3xl);
   }
