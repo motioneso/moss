@@ -98,7 +98,10 @@ export function App() {
   const queryClient = useQueryClient();
   const bootstrapQuery = useQuery({
     queryKey: queryKeys.auth.bootstrap,
-    queryFn: getBootstrapStatus
+    queryFn: getBootstrapStatus,
+    // #2343: boot asks once. The global default retries every query once, which
+    // doubles the start up burst when the first attempt is merely slow.
+    retry: false
   });
   const meQuery = useQuery({
     queryKey: queryKeys.auth.me,
@@ -181,7 +184,7 @@ export function App() {
     enabled: activeForOnboarding,
     queryKey: queryKeys.onboarding.status,
     queryFn: getOnboardingStatus,
-    retry: false // getOnboardingStatus is itself bounded by a 4s timeout (client.ts)
+    retry: false // getOnboardingStatus is itself bounded by a 30s timeout (client.ts)
   });
   // Kept as a background prefetch only — useAssistantName (and other consumers) read this
   // same cache entry and fall back gracefully while it's pending, so boot must not gate on it.
@@ -189,7 +192,7 @@ export function App() {
     queryKey: queryKeys.settings.persona,
     queryFn: getPersonaSettings,
     enabled: meQuery.isSuccess,
-    retry: false // getPersonaSettings is itself bounded by a 4s timeout (client.ts)
+    retry: false // getPersonaSettings is itself bounded by a 30s timeout (client.ts)
   });
 
   const handleAuthenticated = async () => {
@@ -237,7 +240,7 @@ export function App() {
   }
 
   if (activeForOnboarding) {
-    // A hung status read cannot trap the user: getOnboardingStatus is bounded to 4s, so
+    // A hung status read cannot trap the user: getOnboardingStatus is bounded to 30s, so
     // isLoading resolves to data-or-error within that window. We show a bounded loader only
     // on first boot (avoids a shell flash before the wizard); on error/timeout
     // onboardingQuery.data is undefined ⇒ we fall through to the app shell below.
