@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { ServerResponse } from "node:http";
 
 import type {
   AssistantToolGateway,
@@ -33,12 +34,24 @@ interface McpRequest {
 interface McpToolCallParams {
   name: string;
   arguments?: unknown;
+  _meta?: {
+    progressToken?: string | number;
+  };
 }
 
 export interface McpTransportDependencies {
   readonly gateway: AssistantToolGateway;
   readonly tokens: SessionTokenRegistry;
+  /**
+   * How often to send a progress beat while a tools/call is still running.
+   * Production default is 20 s, inside the client library's 60 s silence
+   * limit, so a 150 s approval hold stays alive. Tests pass a small value.
+   */
+  readonly progressHeartbeatMs?: number;
 }
+
+/** Production heartbeat: a progress beat every 20 s while a call is held. */
+export const MCP_PROGRESS_HEARTBEAT_MS = 20_000;
 
 /**
  * Registers the MCP JSON-RPC over HTTP endpoint.
@@ -124,6 +137,32 @@ export function registerMcpTransportRoute(
         if (!params?.name) {
           return reply.code(200).send(jsonRpcError(id, -32602, "tools/call requires params.name"));
         }
+        const progressToken = params._meta?.progressToken;
+        if (progressToken !== undefined && acceptsEventStream(request.headers.accept)) {
+          // Held-call heartbeat (spec section 6.1): the caller reads progress
+          // notifications, so keep them coming every 20 s while the gateway
+          // hold runs, then close the stream with the real result. Any other
+          // caller gets today's single held response below, never worse.
+          const call = deps.gateway
+            .callTool(token, params.name, params.arguments ?? {})
+            .catch((err) => {
+              request.log.error({ err }, "mcp tools/call failed");
+              return null;
+            });
+          reply.hijack();
+          const raw = reply.raw;
+          raw.writeHead(200, {
+            "content-type": "text/event-stream",
+            "cache-control": "no-cache",
+            connection: "keep-alive"
+          });
+          await streamToolCallWithProgress(raw, call, {
+            id,
+            progressToken,
+            heartbeatMs: deps.progressHeartbeatMs ?? MCP_PROGRESS_HEARTBEAT_MS
+          });
+          return;
+        }
         let response: GatewayToolResponse;
         try {
           response = await deps.gateway.callTool(token, params.name, params.arguments ?? {});
@@ -144,6 +183,71 @@ export function registerMcpTransportRoute(
       return reply.code(200).send(jsonRpcError(id, -32601, `Method not found: ${method}`));
     }
   );
+}
+
+/**
+ * True when the caller reads server-sent events: its Accept header names the
+ * event-stream media type. Only then can progress notifications reach it.
+ */
+export function acceptsEventStream(accept: string | string[] | undefined): boolean {
+  if (typeof accept !== "string") return false;
+  return accept.split(",").some((part) => part.split(";")[0]?.trim() === "text/event-stream");
+}
+
+export interface ProgressStreamOptions {
+  readonly id: string | number | null;
+  readonly progressToken: string | number;
+  readonly heartbeatMs: number;
+}
+
+/**
+ * Sends a progress beat every heartbeat while the tool call is still running,
+ * then closes the stream with the real result. Each beat echoes the caller's
+ * progress token so its client clock resets instead of timing the held call
+ * out. Resolves once the stream is ended; a dropped connection just stops.
+ */
+export async function streamToolCallWithProgress(
+  raw: ServerResponse,
+  call: Promise<GatewayToolResponse | null>,
+  options: ProgressStreamOptions
+): Promise<void> {
+  let beats = 0;
+  let closed = false;
+  const onClose = (): void => {
+    closed = true;
+    clearInterval(timer);
+  };
+  raw.on("close", onClose);
+  const timer = setInterval(() => {
+    if (closed) return;
+    beats += 1;
+    raw.write(
+      `data: ${JSON.stringify({
+        jsonrpc: "2.0",
+        method: "notifications/progress",
+        params: {
+          progressToken: options.progressToken,
+          progress: beats,
+          message: "Approval still pending"
+        }
+      })}\n\n`
+    );
+  }, options.heartbeatMs);
+  let frame: unknown;
+  try {
+    const response = await call;
+    frame =
+      response === null
+        ? jsonRpcError(options.id, -32603, "Internal error")
+        : { jsonrpc: "2.0", id: options.id, result: gatewayResponseToMcp(response) };
+  } finally {
+    clearInterval(timer);
+  }
+  if (!closed) {
+    raw.write(`data: ${JSON.stringify(frame)}\n\n`);
+    raw.end();
+  }
+  raw.off("close", onClose);
 }
 
 export function registerNativePermissionRoute(
