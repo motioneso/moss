@@ -38,6 +38,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **A private module you are still building can now actually run.** A private module the owner is still building can now run and save its own data while it is still a draft, and nobody else can see or use it. [PR #2353](https://github.com/motioneso/moss/pull/2353)
 - **App no longer sticks on the loading screen on slow days.** The app used to get stuck on its loading screen when one startup check was slow, and now it waits for the answer instead of asking again until nothing responds. [PR #2344](https://github.com/motioneso/moss/pull/2344)
 
 #### Added
