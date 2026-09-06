@@ -131,6 +131,7 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let abort: (() => void) | undefined;
     let timedOut = false;
+    let cancelled = false;
 
     try {
       neutralDir = oneShotStructuredDir(input.service);
@@ -145,11 +146,13 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       const stopped = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
           timedOut = true;
+          cancelled = true;
           emit({ kind: "timeout" });
           void activeEngine.kill().catch(() => undefined);
           reject(new CliChatUnavailableError("CLI structured generation timed out"));
         }, this.timeoutMs);
         abort = () => {
+          cancelled = true;
           void activeEngine.interrupt().catch(() => undefined);
           const error = new Error("aborted");
           error.name = "AbortError";
@@ -160,18 +163,23 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       const generated = this.run(activeEngine, neutralDir, personaPath, input);
       try {
         const { rawText, sources } = await Promise.race([generated, stopped]);
+        if (cancelled) {
+          const error = new Error("aborted");
+          error.name = "AbortError";
+          throw error;
+        }
         exit = "complete";
         return withSources({ rawText, usage: { inputTokens: 0, outputTokens: 0 } }, sources);
       } catch (error) {
         await activeEngine.kill().catch(() => undefined);
-        const final = await activeEngine.readNew(0).catch(() => null);
+        const final = cancelled ? null : await activeEngine.readNew(0).catch(() => null);
         const reply = final?.records
           .slice()
           .reverse()
           .find((record) => record.kind === "reply")?.text;
         if (reply !== undefined) {
           emit({ kind: "late-read" });
-          exit = timedOut ? "timeout" : "complete";
+          exit = "complete";
           return withSources(
             { rawText: reply, usage: { inputTokens: 0, outputTokens: 0 } },
             collectRecordSources(final?.records ?? [])
