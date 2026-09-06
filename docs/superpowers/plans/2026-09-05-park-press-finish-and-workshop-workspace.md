@@ -15,7 +15,7 @@ you write for another agent. Pass this rule on.
   turns out bigger than that, split it before building, do not relay a half-built change.
 - **Three pull requests.** PR A is slice 1 alone, because it changes every screen in the app and
   needs its own live proof. PR B is slices 2 to 7, one worktree, committed slice by slice, merged
-  once its live proof is on the pull request. PR C is slices 8 and 9. Slices 10 to 13 each wait on
+  once its live proof is on the pull request. PR C is slice 8 alone. Slices 9 to 12 each wait on
   build-side work from PR 2307's plan that does not exist yet; group them into pull requests as
   that work lands, never one pull request per slice, and never a pull request held open for
   weeks waiting on a slice that cannot start.
@@ -41,6 +41,11 @@ Read from `feat/workshop-projects-phase-a` on 2026-09-05. Nothing here is on `ma
   `workshop-groups.tsx`) listing module builds and installed modules with Build it / Stop / Look
   at the draft / Discard / Ship actions against `/api/ai/module-builds/*` and
   `/api/admin/modules/*`.
+- **There are no earlier builds anywhere.** Ben, 2026-09-05: "We don't have any earlier builds
+  anywhere, the workshop has never worked." The older page lists nothing on any install, so
+  nothing in this plan carries anything forward from it: no one-off server step, no rows for old
+  builds, no wording for a project with no conversation. The one list starts empty and fills as
+  projects are made. The page, its route and its tests are simply deleted in slice 2.
 - **No Moss replies yet.** A message you send is saved and shown as awaiting delivery; nothing
   answers. Planning, building, plans attached to projects and mockups are later slices of PR
   2307's own plan (its M3, D3/D4, M4 and onward).
@@ -99,11 +104,11 @@ Read from `feat/workshop-projects-phase-a` on 2026-09-05. Nothing here is on `ma
   manifest only exist on its branch.
 - **Slice 8 (the panel and the Plan tab)** needs, from PR 2307's own plan: a build linked to its
   project (its D3/D4 tasks), Moss producing a plan for a project (M3), and approve / ask-for-changes
-  routes for that plan. Slice 9 needs the same link for the older builds.
-- **Slice 10 (Design)** needs the mockup manifest, the confined capture and the image serving
+  routes for that plan.
+- **Slice 9 (Design)** needs the mockup manifest, the confined capture and the image serving
   (M4, P0/R1), and a spec of its own for the design step in a build.
-- **Slice 11 (Files)** needs a build that actually writes files under supervision (R-tasks).
-- **Slice 12 (Preview and install)** needs verified drafts loadable through the module loader (V2,
+- **Slice 10 (Files)** needs a build that actually writes files under supervision (R-tasks).
+- **Slice 11 (Preview and install)** needs verified drafts loadable through the module loader (V2,
   L1) and the private-finish route (L4).
 
 Do not build against a guess of what those will look like. If one has not landed, the slice waits.
@@ -190,8 +195,10 @@ Spec: "The masthead", "Lists", "Words", "Names on screen". Mockup: `screens/list
 **Already there:** `Masthead` in `packages/ui/src/masthead.tsx` (eyebrow, title, lede, aside; ink
 on paper; styled by `jds-masthead__*` in `packages/ui/src/styles/components-moss-today.css`; used
 only by Today); a `jds-tab` primitive; the Workshop list page as a card grid with an in-page
-heading and a footer link. **Replaced:** the Workshop home page's heading and card grid.
-**New:** a green-field variant of `Masthead`; a row index primitive; the state on every row.
+heading and a footer link to the older `/workshop/legacy` page. **Replaced:** the Workshop home
+page's heading and card grid. **Deleted:** the footer link, the older page, its route and its
+tests (nothing replaces them; there are no earlier builds anywhere). **New:** a green-field
+variant of `Masthead`; a row index primitive; the state on every row.
 
 Files:
 
@@ -216,26 +223,38 @@ Files:
   each row: name (link), the opening request as the excerpt, and at the right a `jds-badge` state
   chip and the date of last activity. In this slice every project is "Talking it through"
   (neutral), because no build is attached to a project yet; the full state table arrives in slice
-  8. Keep the "Earlier builds and installed modules" footer link for now (the spec says why; it
-  goes in slice 9). Remove the copy that leans on privacy.
-- `packages/workshop/src/web/workshop.css` - drop the card-grid rules; layout only.
+  8. Remove the "Earlier builds and installed modules" footer link. Remove the copy that leans on
+  privacy.
+- Delete `packages/workshop/src/web/workshop-page.tsx`, `workshop-groups.tsx`, the `legacy` route
+  in `project-routes.tsx`, and the three unit tests that cover them
+  (`tests/unit/workshop-page.test.tsx`, `tests/unit/workshop-groups-actions.test.tsx`,
+  `tests/unit/workshop-groups.test.tsx`). Nothing else on the branch imports them (checked
+  2026-09-05; the `draft-workshop-page` class in `apps/web` is the draft preview, not this page).
+  There is no data to carry over and no one-off step to write.
+- `packages/workshop/src/web/workshop.css` - drop the card-grid rules and the `.workshop-groups`
+  rules; layout only.
 - `packages/workshop/src/manifest.ts` - navigation description and `workshop.view` description to
-  match the new page (drop "private"); `workshop.projects` unchanged.
+  match the new page (drop "private" and "see your earlier module builds"); `workshop.projects`
+  unchanged.
 
 Acceptance: `pnpm check:ui-catalogue` passes with the new primitive; the existing integration tests
 still pass (`tests/integration/workshop-projects.test.ts`); a unit test for the row index renders
-name, excerpt and meta in that order.
+name, excerpt and meta in that order; `pnpm build:app-map` passes with the wording changed; a
+search of the branch for `workshop/legacy`, `workshop-page` and `workshop-groups` finds nothing.
 
 Live proof: on the dev instance, `/workshop` shows the green field touching the top bar with the
 gold rule, the row index with one hairline per row, a hover that draws the gold edge, and the
-chip "Talking it through" on each row; at 800px and 375px the rows stack sensibly; Today is
-unchanged; switch to Canyon and to dark mode in Settings and the field follows the theme with the
-text still readable. Screenshots at desktop and phone width, plus one in Canyon and one in dark
-mode for Ben, on the pull request.
+chip "Talking it through" on each row; the footer link is gone and `/workshop/legacy` shows the
+not-found state; at 800px and 375px the rows stack sensibly; Today is unchanged; switch to Canyon
+and to dark mode in Settings and the field follows the theme with the text still readable.
+Screenshots at desktop and phone width, plus one in Canyon and one in dark mode for Ben, on the
+pull request (Ben, 2026-09-05: he has not seen the dark field and wants to; the dark screenshot is
+the one he decides on).
 
 Must not: put the field or the rules in `workshop.css`; name a colour anywhere in the variant
 (tokens only; the contrast test guards the tokens, not a literal); give Today or any other page
-the green field (Ben, 2026-09-05: later, as its own work); add a second masthead component.
+the green field (Ben, 2026-09-05: later, as its own work); add a second masthead component; keep
+the older page "for now" behind a flag or a hidden route.
 
 ### Slice 3 - the top bar carries the trail
 
@@ -370,12 +389,15 @@ request as its name. Screenshots on the pull request.
 Must not: keep the form reachable anywhere; send when a pill is pressed; let the handoff tool
 break (it must still pass a title).
 
-### Slice 6 - rename in place from the top bar
+### Slice 6 - rename in place from the top bar, and the "More" button with delete
 
-Spec: "Renaming a project". Mockup: `screens/detail-rename.html`.
+Spec: "Renaming a project"; the "More" bullet under "Names on screen". Mockup:
+`screens/detail-rename.html`; the "More" icon at the right of the top bar on the workspace screens.
 
-**Already there:** nothing - PR 2307 cannot change a title. **New:** the rename call and the
-editing state in the top bar.
+**Already there:** nothing - PR 2307 cannot change a title or delete a project (its plan promises
+delete and export later, in its export and removal work). **New:** the rename call and the editing
+state in the top bar; the delete call; the "More" button at the right of the top bar holding
+"Delete this project", and "Export this project" only once PR 2307's export exists.
 
 Files:
 
@@ -386,8 +408,19 @@ Files:
   context; blank titles rejected with the usual error shape; `updatedAt` moves.
 - `packages/workshop/src/manifest.ts` - declare the route (the server refuses to start otherwise);
   add a `workshop.projects` remediation or error for a rename that fails.
-- `packages/workshop/src/web/project-client.ts` - `renameProject`.
+- `packages/shared/src/workshop-api.ts`, `projects-repository.ts`, `project-service.ts`,
+  `project-routes.ts`, `manifest.ts` - DELETE `/api/workshop/projects/:projectId`; owner only
+  through the existing data context; removes the project and its messages (the feed rows from
+  `sql/0224_workshop_project_feed.sql`) in one transaction; another user gets the same 404 as a
+  missing project. It ships before any build can be attached to a project, so there is nothing
+  else to clean up; when PR 2307's build link lands, its removal work extends this route to the
+  attached build, and until that lands the route refuses a project with a build attached (409,
+  "Stop the build first") rather than orphaning it. Declare the route in the manifest.
+- `packages/workshop/src/web/project-client.ts` - `renameProject`, `deleteProject`.
 - `apps/web/src/shell/page-trail.tsx`, `app-shell.tsx`, `apps/web/src/styles.css` - the hook takes
+  an optional `actions` list; when given, a small "More" `icon-button` (three dots, label "More")
+  sits at the bar's right beside the assistant button and opens a `jds-menu` with those items and
+  nothing else. The shell owns the button so every module gets the same one. The hook also takes
   an optional `onRename(name)`; when given, the name is a button that looks like text (hover: a
   hairline gold underline, text cursor, tooltip "Click to rename"); click or Enter swaps it for a
   text field in place, pre-filled and selected, with Save and Cancel; the meta steps out while
@@ -398,19 +431,32 @@ Files:
   bar and Save and Cancel sit under it. The shell owns this so every module renames the same way.
 - `packages/workshop/src/web/project-pages.tsx` - pass `onRename` that calls `renameProject`,
   updates the query cache for the project and the list, and lets the trail (and Moss's page
-  context) pick up the new name.
+  context) pick up the new name; pass one action, "Delete this project", which asks "Delete
+  <name> and its conversation? This cannot be undone." with Delete and Cancel (`jds-dialog` or the
+  app's existing confirm), calls `deleteProject`, drops the project from the list cache, and
+  navigates to `/workshop`. Do not add "Export this project" in this slice: PR 2307's export does
+  not exist yet, and a menu item that does nothing is not shown.
 - `tests/integration/workshop-project-routes.test.ts` - rename as owner succeeds, blank is
-  rejected, another user gets the same 404 as a missing project.
-- `tests/unit/` - the trail's editing state machine (click, Enter, Escape, blur, blank, failure).
+  rejected, another user gets the same 404 as a missing project; delete as owner removes the
+  project and its messages, a second delete is 404, another user gets 404 and the project is still
+  there.
+- `tests/unit/` - the trail's editing state machine (click, Enter, Escape, blur, blank, failure);
+  the "More" button renders only when actions are given and lists exactly them.
 
-Acceptance: those tests; `pnpm check:ui-classes` (the field is `jds-input`, the buttons `jds-btn`).
+Acceptance: those tests; `pnpm check:ui-classes` (the field is `jds-input`, the buttons `jds-btn`,
+the menu `jds-menu`, the confirm `jds-dialog`; if the audit names a different existing primitive,
+use that one and never invent a class).
 
 Live proof: on the dev instance, click the name, type a new one, press Enter; the top bar, the
 list row and Moss ("which project am I in?") all say the new name after a reload; press Escape
 mid-edit and the old name is back; try a blank name and Save is disabled; stop the API and try a
-rename to see the red line. Screenshots on the pull request.
+rename to see the red line; open "More", choose "Delete this project", cancel and the project is
+still there, do it again and confirm, and land on the list without it (and it is still gone after
+a reload). Screenshots on the pull request.
 
-Must not: rename by chat; make the section link editable; keep an edit alive across navigation.
+Must not: rename by chat; make the section link editable; keep an edit alive across navigation;
+delete without the confirm; show "Export this project" before there is an export; put the "More"
+button anywhere but the bar's right.
 
 ### Slice 7 - PR B live proof and merge
 
@@ -465,46 +511,11 @@ and switching keeps unsent text. Screenshots on the pull request.
 Must not: show a tab with nothing in it; make a tab open a page; render the panel from what the
 browser remembers.
 
-### Slice 9 - the one list made whole, and the old page retired
-
-Spec: "One list" under "Lists", "What happens to PR 2307's screens".
-
-**Already there:** `/workshop/legacy` (`workshop-page.tsx`, `workshop-groups.tsx`) for instance
-admins, its actions, the footer link on the list, and the build-to-project link from PR 2307's
-work. **Replaced:** that page, its link, and the "earlier module builds" wording in the map.
-**New:** a project for each older build; its row; its actions in the panel foot.
-
-Files:
-
-- A one-time server step in `packages/workshop/src/project-service.ts` (run at module start or as
-  a declared migration in `packages/workshop/sql/`, whichever the build-link work made possible) -
-  for each of the owner's builds with no project, create a project with the plan's "what it does"
-  as the name, an empty opening request, and the link. Only through the settings package's public
-  build API; no Workshop SQL reads settings tables.
-- `packages/workshop/src/web/project-pages.tsx` - the row excerpt for such a project reads "Built
-  before projects existed, so there is no conversation to show"; opening it shows the panel with
-  what the record has and one Moss line saying so; the old actions (build it, stop, look at the
-  draft, discard, ship) map to the panel foot for that state. Remove the footer link.
-- Delete `workshop-page.tsx`, `workshop-groups.tsx` and the `legacy` route; remove the
-  `/workshop/legacy` remediation or navigation entries and the "earlier module builds" wording from
-  `manifest.ts`; update `workshop.view`'s description.
-- Tests: the integration test for the backfill (one project per build, idempotent on a second run);
-  a unit test that a legacy row renders the honest excerpt.
-
-Acceptance: those tests; the map build (`pnpm build:app-map`) passes with the entries removed.
-
-Live proof: on the dev instance with at least one older build in the database, `/workshop` shows
-it as a row with its real state; opening it shows the panel and the one Moss line; `/workshop/legacy`
-is gone (the not-found state); the footer link is gone. Screenshots on the pull request.
-
-Must not: invent a conversation for an older build; replay an old queued build through the new
-runner; delete a build or an installed module in the transition.
-
 ---
 
 ## Later pull requests - each gated on build-side work
 
-### Slice 10 - the Design tab and the design step
+### Slice 9 - the Design tab and the design step
 
 Spec: "Moss designs before it codes", "The Design tab". Mockup: `screens/detail-design.html`.
 Gate: PR 2307's mockup work (the manifest of screens, the confined capture, image serving) and a
@@ -518,7 +529,7 @@ conversation"; `ModuleBuildStatus` gains the new value in `packages/shared/src/w
 and every switch over it is updated; the manifest's panel feature gains the state. Live proof: a
 real drawing appears, approval changes the status, no code is written before it.
 
-### Slice 11 - the Files tab
+### Slice 10 - the Files tab
 
 Spec: the Files row of the panel table. Mockup: `screens/detail-files.html`, `detail-file.html`.
 Gate: a supervised build that writes files and reports them. Shape: the list of what Moss wrote
@@ -527,7 +538,7 @@ same column with a back arrow, read-only monospace block (the one place the mono
 The tab exists from the first file written, including while building and after a failure. Live
 proof: a real build's files appear as it writes them; one opens and reads.
 
-### Slice 12 - Preview and Install
+### Slice 11 - Preview and Install
 
 Spec: the Preview row, "Preview, technically", "After it is installed". Mockup:
 `screens/detail-preview.html`. Gate: verified drafts loadable through the module loader and the
@@ -537,9 +548,9 @@ looking-tab width; "Install in Moss" / "Ask for changes"; after install, "Open i
 tab keeps showing the copy under review. Live proof: the real draft runs in the panel, installs,
 appears in the rail, and the panel still shows the same copy.
 
-### Slice 13 - expanding and the divider
+### Slice 12 - expanding and the divider
 
-Spec: "Expanding", "The divider". Mockup: `screens/detail-preview-wide.html`. Gate: slice 12. Shape:
+Spec: "Expanding", "The divider". Mockup: `screens/detail-preview-wide.html`. Gate: slice 11. Shape:
 Design and Preview expand to the whole area under the top bar with "Back to the conversation"; the
 divider drags, one remembered width for reading tabs and one for looking tabs, forgotten on
 leaving the project. Last thing in the panel to build. Live proof: drag, switch tab kinds, see each
@@ -549,10 +560,9 @@ width return; expand and come back.
 
 ## Decisions this plan could not make
 
-- Where "Export this project" and "Delete this project" live in the workspace (the spec's Open
-  list has a suggestion for Ben: a small "More" button at the right of the top bar). Slice 9 folds
-  the old page's "Discard this draft" into delete, so this needs an answer before slice 9.
 - The masthead's dark field is `--forest-soft`, which passes every check but which Ben has not
   seen; `--forest-soft-2` also passes and stands out more from the page, at the cost of matching
-  the rail's dark ground. Slice 2's pull request should show him a dark-mode screenshot and let him
-  choose; changing it is a one-line token edit.
+  the rail's dark ground. Slice 2's pull request shows him a dark-mode screenshot and lets him
+  choose (Ben, 2026-09-05: agreed); changing it is a one-line token edit. Dark mode is not a
+  special case in the tokens: it sets the same seven names as every other theme, so there is no
+  separate dark rule to drop once he has chosen.

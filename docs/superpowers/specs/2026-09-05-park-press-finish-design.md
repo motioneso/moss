@@ -3,7 +3,9 @@
 Status: approved by Ben 2026-09-05 ("Ok, write this up, looks great!"); build-readiness review by
 Fable 5.1, 2026-09-05, folded in below; Ben's rulings of 2026-09-05 on the four open items (renaming,
 the "Only you" badge, earlier builds, the green field app-wide) folded in; his fifth, that the
-masthead's colours are tokens the themes set, folded in the same day
+masthead's colours are tokens the themes set, folded in the same day; his answers of the same day
+on the two things left open (export and delete live in a "More" button in the top bar; there are no
+earlier builds anywhere) folded in
 Direction: PARK PRESS, approved 2026-07-03 — `2026-07-03-park-press-design-language-design.md`, EPIC #726
 Mockup: `docs/superpowers/specs/assets/2026-09-05-park-press-finish/`
 Builds on: `2026-09-04-workshop-projects-and-supervised-builds.md` (PR 2307's spec) — its build
@@ -174,10 +176,13 @@ build time; the appearance pane already shows "Paper on accent" when you make on
 masthead text is close enough to paper for that number to be a fair guide (a dedicated readout is
 follow-on work).
 
-Dark mode has not had a pass against bone, and Ben has not seen the dark field; `--forest-soft-2`
-also passes every check and stands out more from the page, but it is the rail's dark ground, so the
-band and the rail would be one colour. The pull request that ships the tokens should show him a
-dark screenshot.
+Dark mode is not a special case here. It sets the same seven names as every other theme (the dark
+column of the table above), so there is no separate dark-mode rule for the masthead to keep and
+nothing to drop later. Dark mode has not had a pass against bone, though, and Ben has not seen the
+dark field; `--forest-soft-2` also passes every check and stands out more from the page, but it is
+the rail's dark ground, so the band and the rail would be one colour. The pull request that first
+shows the masthead on a real page should show him a dark-mode screenshot (Ben, 2026-09-05:
+agreed); changing it is a one-line token edit.
 
 ### Names on screen
 
@@ -187,6 +192,12 @@ dark screenshot.
   link, then the name of what you are in, then any small meta ("Started Sep 5"). The meta drops out
   below 900px. A long name truncates with an ellipsis rather than wrapping the bar. There is no
   "Only you" badge (see "Words").
+- At the right of the top bar, beside the assistant button, a small **"More" button** holds
+  "Export this project" and "Delete this project" and nothing else. Decided by Ben, 2026-09-05
+  ("your suggestion stands"). Delete asks you to confirm in plain words before it does anything,
+  then returns you to the list. Export is one of PR 2307's later promises (its export and removal
+  work) and appears in the menu only once it exists; a menu item that does nothing is not shown.
+  The button is on the workspace screens in the mockup; the open menu is not mocked.
 - The masthead says what the page is about in the page's own words ("Your projects"), not the
   section name again.
 - Nothing is said twice. Ben flagged the word "Workshop" appearing three times on one screen as
@@ -228,9 +239,11 @@ The rules and the hover are visual identity, so the row index is a host primitiv
 (working name `jds-index`), not Workshop layout CSS. Workshop's list is its first user.
 
 **One list.** Every project is on it, whatever state it is in — talking, planning, building, built,
-failed, installed — and so are the builds from before projects existed. Ben, 2026-09-05: "it should
-just be part of the list." There is no "earlier builds and installed modules" page, link, or menu.
-Newest activity first, no grouping. Each row has the name, the opening request as the excerpt, and
+failed, installed. Ben, 2026-09-05: "it should just be part of the list." There is no "earlier
+builds and installed modules" page, link, or menu, and nothing to put on one: Ben, the same day,
+"We don't have any earlier builds anywhere, the workshop has never worked." The list starts empty
+and fills as projects are made; nothing is carried over from anywhere. Newest activity first, no
+grouping. Each row has the name, the opening request as the excerpt, and
 at the right the state and the date of the last activity:
 
 | Where the project is | The row says |
@@ -247,13 +260,6 @@ at the right the state and the date of the last activity:
 
 The words are the panel's chip words, so the row and the workspace never disagree. Gold marks
 anything waiting on you; those rows are the ones to look for.
-
-A build from before projects existed becomes a row like any other: the plan's "what it does" as
-the name, the honest excerpt "Built before projects existed, so there is no conversation to show",
-and its real state. Opening it is the workspace with what the record has (the plan, the files, the
-preview if it still runs) and an empty conversation with one Moss line saying so; nothing is
-invented. Its old actions (build it, stop, look at the draft, discard, ship) become the panel's
-foot. The old page at `/workshop/legacy` and its map entry retire when those rows exist.
 
 ### Words
 
@@ -474,16 +480,16 @@ this spec replaces is its three screens, and it replaces them after 2307 merges,
 
 - **Kept:** the routes `/workshop`, `/workshop/new` and `/workshop/<id>`, the project client, the
   message feed and its "earlier messages" paging, the error-and-retry states, the mobile switch,
-  export and deletion, the manifest. `/workshop/legacy` and its page stay only until the builds it
-  lists are rows in the one list, then retire.
+  the manifest, and the export and deletion its plan promises (they get a home in the top bar's
+  "More" button; see "Names on screen").
 - **Replaced:** the card grid (row index with a state on every row), the create page's form (empty
   chat window), the "Project work" pane with "No plan yet" and "Already decided" (artifact panel,
   rendered only with content), the in-page heading, back link and "Only you" badge (top bar trail,
   no badge), turns rendered as `Card` (chat drawer message parts), and the "Earlier builds and
-  installed modules" footer link and page (rows in the one list).
-- **Changed in the contract:** create no longer requires a title; a rename call is added; the build
-  status gains "waiting for design approval"; builds from before projects existed are linked to a
-  project each so they can be rows.
+  installed modules" footer link, the `/workshop/legacy` page and its route (deleted outright, with
+  nothing in their place: there are no earlier builds anywhere, so they have nothing to show).
+- **Changed in the contract:** create no longer requires a title; a rename call and a delete call
+  are added; the build status gains "waiting for design approval".
 
 Every one of these is a product change, so the app map declarations move in the same pull request
 as the screen they describe: the Workshop manifest's `navigation` description and the
@@ -509,8 +515,8 @@ App-wide, in `apps/web/src/styles/tokens.css` and the shared styles:
 Workshop, in `packages/workshop/src/web/`:
 
 - The project list becomes a row index rendered with the shared primitive, one row per project
-  with its state, newest activity first; the "Earlier builds and installed modules" link and page
-  go once the builds they list are rows too.
+  with its state, newest activity first; the "Earlier builds and installed modules" link, the
+  `/workshop/legacy` page, its route and its map wording are deleted in the same change.
 - The project name in the top bar renames in place, backed by a new rename call.
 - The workspace renders as a chat window using the shared turn components, with the composer
   pinned and the empty-window invitation.
@@ -542,19 +548,18 @@ Workshop work. That is true of the tokens and false of the masthead, so step 1 i
    and the row-index primitive in `packages/ui`; the top bar trail in the shell and the module web
    SDK; the transcript and activity-line components moved to `@moss/ui`; Workshop's home page on
    the masthead and the row index with a state on every row; the workspace as a chat window;
-   no-form new project; rename in place. One pull request, slice by slice, with the host primitives
-   before the Workshop screens that show them; the masthead does not ship without a page that
-   shows it. The "Earlier builds" footer link stays through this step, because the builds it lists
-   cannot be rows until step 3 links them to projects; it is the one thing on the list Ben ruled
-   out that still shows, and it goes in step 3. Live proof: start a project by typing, see it named
-   and listed with its state, rename it from the top bar, send a message, reload and find it; the
-   top bar reads section / project.
-3. **The artifact panel, Plan tab, and the one list made whole.** Needs the build side to produce
-   a plan and to link a build to its project (PR 2307's planning and durable-project slices). The
-   builds from before projects existed get a project each and become rows; `/workshop/legacy` and
-   its map entry retire; the footer link goes. Live proof: a real plan appears beside a real
-   conversation, "Approve and build" changes the server status, the panel is absent on a project
-   with no plan, and an earlier build shows on the list with its real state and opens.
+   no-form new project; rename in place; the "More" button with delete. One pull request, slice by
+   slice, with the host primitives before the Workshop screens that show them; the masthead does
+   not ship without a page that shows it. The "Earlier builds" footer link and the old page behind
+   it are deleted in this step, not later: there are no earlier builds anywhere, so nothing on it
+   waits for the build side. Live proof: start a project by typing, see it named and listed with
+   its state, rename it from the top bar, send a message, reload and find it; delete it from the
+   "More" button and land on the list without it; the top bar reads section / project; the footer
+   link and `/workshop/legacy` are gone.
+3. **The artifact panel and the Plan tab.** Needs the build side to produce a plan and to link a
+   build to its project (PR 2307's planning and durable-project slices). Live proof: a real plan
+   appears beside a real conversation, "Approve and build" changes the server status, and the
+   panel is absent on a project with no plan.
 4. **Design tab, and the design step in a build.** Moss draws the screens and waits for approval
    before writing code. Needs PR 2307's mockup slice (the manifest, the confined capture, the image
    serving) plus the new status. This is build behaviour as much as UI, so it needs its own spec.
@@ -567,11 +572,6 @@ This must not ride in on PR 2307.
 
 - Dark mode against the bone/warm-white set. The masthead's dark field is the token's dark value
   and passes the check, but Ben has not seen it; see "The masthead" for the one alternative.
-- Where "Export this project" and "Delete this project" live. PR 2307 promises both (its removal
-  and export slice) and the legacy page's "Discard this draft" folds into delete, but the workspace
-  as designed has no place for them: the top bar name is the rename, the panel foot is for the
-  build, and the chat is the chat. Suggestion for Ben: a small "More" button at the right of the
-  top bar, where the badge was, holding those two and nothing else. Not mocked.
 
 ## Follow-on work, not scoped here
 
