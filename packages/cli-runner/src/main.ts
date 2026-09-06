@@ -24,6 +24,7 @@ import {
 import { resolveMossEnv } from "@moss/db";
 
 import { PROVIDER_CATALOG } from "./catalog.js";
+import { resolveDefaultToolsPrefix } from "./tools-prefix.js";
 import { CliChatEngineHost, type PersistentRuntimeLiveConfig } from "./engine-host.js";
 import { InstallService } from "./install-service.js";
 import { LOGIN_ADAPTERS } from "./login-adapters.js";
@@ -68,7 +69,6 @@ export interface CliRunnerConfig {
 const DEFAULT_SOCKET = "/run/jarv1s/cli-runner.sock";
 const DEFAULT_NEUTRAL_BASE = "/data/cli-auth/chat";
 const DEFAULT_HOME = "/data/cli-auth";
-const DEFAULT_TOOLS_PREFIX = "/data/cli-tools";
 // #1554 task #5 — mirror the `@moss/settings` registry defaults (`chat.persistent_pool_cap` /
 // `chat.persistent_idle_reap_minutes`) without taking a dependency on that package.
 const DEFAULT_PERSISTENT_POOL_CAP = 4;
@@ -101,7 +101,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): CliRunnerConfi
     perUserUid: env.JARVIS_CLI_PER_USER_UID === "1",
     neutralBase: resolveMossEnv(env, "JARVIS_CLI_NEUTRAL_BASE") ?? DEFAULT_NEUTRAL_BASE,
     homeBase,
-    toolsPrefix: env.JARVIS_CLI_TOOLS_PREFIX ?? env.NPM_CONFIG_PREFIX ?? DEFAULT_TOOLS_PREFIX,
+    toolsPrefix: env.JARVIS_CLI_TOOLS_PREFIX ?? env.NPM_CONFIG_PREFIX ?? resolveDefaultToolsPrefix(),
     // #1554 — see CliRunnerConfig's doc comments: bootstrap values only; RPC launch params carry
     // the live settings from the api on every launch.
     persistentRuntimeEnabled: env.MOSS_CHAT_PERSISTENT_RUNTIME_ENABLED === "1",
