@@ -140,7 +140,13 @@ describe("buildEmailExtractDeps", () => {
     );
   });
 
-  it("recovers a valid final CLI reply before releasing the slot after a caller timeout", async () => {
+  it("drops a valid final CLI reply that only lands after a caller timeout, and still releases the slot cleanly (#2276)", async () => {
+    // Before #2276, the middle fixture's slow reply used to be rescued and counted as a
+    // success even though the caller had already given up on it at callTimeoutMs. That
+    // reliance was accidental: this test's real point is that a slow call does not wedge
+    // the concurrency slot for the next call (see the "not busy" check below), not that a
+    // late answer should count. #2276 says a late answer after a caller timeout must not
+    // be handed back, so the middle fixture is now expected to time out.
     const repository = {
       resolveModelForService: vi.fn(async () => ({
         model: MODEL,
@@ -217,7 +223,7 @@ describe("buildEmailExtractDeps", () => {
       `sanitized outcomes: ${JSON.stringify(outcomes)}`
     ).toEqual([
       { summary: true, complete: true, category: "ok" },
-      { summary: true, complete: true, category: "ok" },
+      { summary: false, complete: false, category: "caller_timeout" },
       { summary: true, complete: true, category: "ok" }
     ]);
     expect(warn).not.toHaveBeenCalledWith(
