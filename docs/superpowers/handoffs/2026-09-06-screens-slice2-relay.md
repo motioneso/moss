@@ -116,8 +116,9 @@ already exact:
   test for the row index (name, excerpt, meta in that order), and `pnpm build:app-map` all pass.
 - A repository search for `workshop/legacy`, `workshop-page`, and `workshop-groups` finds nothing
   (already true once the deletions above are done).
-- Live proof on the development instance (http://192.168.50.36:5173, login ben@ben.com / password
-  jarvistest123!): the Workshop home page shows the green field touching the top bar with the gold
+- Live proof on the development instance (http://192.168.50.36:5173, login ben@ben.com; password is
+  in the memory note named dev-instance-lan-spinup-trusted-origins, not written here): the Workshop
+  home page shows the green field touching the top bar with the gold
   rule, the row index with a hairline per row, hover drawing the gold edge, and the "Talking it
   through" chip on each row. The old link is gone and visiting `/workshop/legacy` shows the
   not-found page. It reads sensibly at 800 pixels and 375 pixels wide. Today's page is unchanged.
