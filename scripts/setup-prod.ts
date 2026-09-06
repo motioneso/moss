@@ -87,11 +87,11 @@ try {
 // BETTER_AUTH_SECRET drives session + JWT signing (48 bytes -> base64).
 const betterAuthSecret = randomBytes(48).toString("base64");
 // Independent at-rest encryption keys for each credential store — 32 bytes -> hex.
+// Master key store (#2322 slice 2): setup no longer writes the three family keys
+// (integrations, module credential, news credential). The admin creates them with
+// Generate in Settings, Encryption keys, so there is exactly one path that makes them.
 const connectorSecretKey = randomBytes(32).toString("hex");
-const integrationsSecretKey = randomBytes(32).toString("hex");
 const aiSecretKey = randomBytes(32).toString("hex");
-const moduleCredentialSecretKey = randomBytes(32).toString("hex");
-const newsCredentialSecretKey = randomBytes(32).toString("hex");
 // POSTGRES_PASSWORD is the superuser password for FIRST volume init. base64url
 // (18 bytes) keeps it URL-safe since it is also embedded in the bootstrap URL below.
 const postgresPassword = randomBytes(18).toString("base64url");
@@ -167,10 +167,7 @@ const content = [
   "# Required production secrets (generate once; keep stable across restarts).",
   `BETTER_AUTH_SECRET=${betterAuthSecret}`,
   `MOSS_CONNECTOR_SECRET_KEY=${connectorSecretKey}`,
-  `MOSS_INTEGRATIONS_SECRET_KEY=${integrationsSecretKey}`,
   `MOSS_AI_SECRET_KEY=${aiSecretKey}`,
-  `MOSS_MODULE_CREDENTIAL_SECRET_KEY=${moduleCredentialSecretKey}`,
-  `MOSS_NEWS_CREDENTIAL_SECRET_KEY=${newsCredentialSecretKey}`,
   "",
   "# The image tag this deploy runs (pin a concrete version; never :edge/:latest).",
   `JARVIS_IMAGE_TAG=${imageTag}`,

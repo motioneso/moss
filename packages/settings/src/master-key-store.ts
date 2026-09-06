@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import {
   JsonSecretCipher,
@@ -10,7 +10,11 @@ import {
 } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 
-import { INTEGRATIONS_FAMILY_KEY_SETTING } from "./instance-settings-keys.js";
+import {
+  INTEGRATIONS_FAMILY_KEY_SETTING,
+  MODULE_CREDENTIAL_FAMILY_KEY_SETTING,
+  NEWS_CREDENTIAL_FAMILY_KEY_SETTING
+} from "./instance-settings-keys.js";
 
 /**
  * Master key store (#2312 slice 1): per-family key-encryption keys kept as
@@ -50,7 +54,29 @@ export const INTEGRATIONS_FAMILY: FamilyKeyDescriptor = {
   devDefault: "jarv1s-development-integrations-secret"
 };
 
-const FAMILIES: readonly FamilyKeyDescriptor[] = [INTEGRATIONS_FAMILY];
+export const MODULE_CREDENTIAL_FAMILY: FamilyKeyDescriptor = {
+  name: "module_credential",
+  settingKey: MODULE_CREDENTIAL_FAMILY_KEY_SETTING,
+  keyEnvVar: "JARVIS_MODULE_CREDENTIAL_SECRET_KEY",
+  keyIdEnvVar: "JARVIS_MODULE_CREDENTIAL_SECRET_KEY_ID",
+  keysEnvVar: "JARVIS_MODULE_CREDENTIAL_SECRET_KEYS",
+  devDefault: "jarv1s-development-module-credential-secret"
+};
+
+export const NEWS_CREDENTIAL_FAMILY: FamilyKeyDescriptor = {
+  name: "news_credential",
+  settingKey: NEWS_CREDENTIAL_FAMILY_KEY_SETTING,
+  keyEnvVar: "JARVIS_NEWS_CREDENTIAL_SECRET_KEY",
+  keyIdEnvVar: "JARVIS_NEWS_CREDENTIAL_SECRET_KEY_ID",
+  keysEnvVar: "JARVIS_NEWS_CREDENTIAL_SECRET_KEYS",
+  devDefault: "jarv1s-development-news-credential-secret"
+};
+
+const FAMILIES: readonly FamilyKeyDescriptor[] = [
+  INTEGRATIONS_FAMILY,
+  MODULE_CREDENTIAL_FAMILY,
+  NEWS_CREDENTIAL_FAMILY
+];
 
 /** Look up a family by the name the admin routes receive. */
 export function familyByName(name: string): FamilyKeyDescriptor | null {
@@ -90,7 +116,35 @@ interface StoredFamilyKey {
 
 const SECRET_FIELD = "secret";
 
-const familyKeyringCache = new Map<string, Keyring>();
+/**
+ * How long a loaded family keyring stays in memory. The cache is per process
+ * and the save/rotate refresh hook only runs in the interface process, so a
+ * background worker would otherwise keep a pre-rotation key indefinitely and
+ * fail to read anything written after the rotation. A short life bounds that
+ * staleness everywhere; the reload-and-retry helper below covers the gap.
+ */
+export const FAMILY_KEY_CACHE_TTL_MS = 60_000;
+
+interface CachedFamilyKeyring {
+  readonly keyring: Keyring;
+  readonly loadedAtMs: number;
+}
+
+const familyKeyringCache = new Map<string, CachedFamilyKeyring>();
+
+function readCachedFamilyKeyring(family: FamilyKeyDescriptor): Keyring | null {
+  const cached = familyKeyringCache.get(family.settingKey);
+  if (!cached) return null;
+  if (Date.now() - cached.loadedAtMs >= FAMILY_KEY_CACHE_TTL_MS) {
+    familyKeyringCache.delete(family.settingKey);
+    return null;
+  }
+  return cached.keyring;
+}
+
+function storeCachedFamilyKeyring(family: FamilyKeyDescriptor, keyring: Keyring): void {
+  familyKeyringCache.set(family.settingKey, { keyring, loadedAtMs: Date.now() });
+}
 
 /** Drop cached family keyrings (all, or one family) after save/rotate. */
 export function invalidateFamilyKeyCache(family?: FamilyKeyDescriptor): void {
@@ -167,7 +221,7 @@ export async function loadFamilyKeyring(
   family: FamilyKeyDescriptor,
   env: NodeJS.ProcessEnv = process.env
 ): Promise<Keyring | null> {
-  const cached = familyKeyringCache.get(family.settingKey);
+  const cached = readCachedFamilyKeyring(family);
   if (cached) return cached;
 
   if (resolveMossEnv(env, family.keyEnvVar) !== undefined) {
@@ -178,7 +232,7 @@ export async function loadFamilyKeyring(
       family.devDefault,
       env
     );
-    familyKeyringCache.set(family.settingKey, keyring);
+    storeCachedFamilyKeyring(family, keyring);
     return keyring;
   }
 
@@ -187,7 +241,26 @@ export async function loadFamilyKeyring(
     await readFamilySettingValue(scopedDb, family.settingKey),
     cipher
   );
-  if (!stored) return null;
+  if (!stored) {
+    // No env value, no store row. Outside hardened environments the loader keeps
+    // the old constructor behavior and falls back to the development default, so
+    // a fresh dev install keeps working with zero setup (#2322 slice 2). In a
+    // hardened environment resolveKeyring throws for the missing key and that
+    // maps to null below: paused with setup guidance, never a boot throw.
+    try {
+      const fallback = resolveKeyring(
+        family.keyEnvVar,
+        family.keyIdEnvVar,
+        family.keysEnvVar,
+        family.devDefault,
+        env
+      );
+      storeCachedFamilyKeyring(family, fallback);
+      return fallback;
+    } catch {
+      return null;
+    }
+  }
   const current = Buffer.from(stored.secret, "hex");
   const keys = new Map<string, Buffer>([[stored.keyId, current]]);
   const legacyCandidates: Buffer[] = [current];
@@ -198,8 +271,44 @@ export async function loadFamilyKeyring(
     legacyCandidates.push(previous);
   }
   const keyring: Keyring = { currentKeyId: stored.keyId, keys, legacyCandidates };
-  familyKeyringCache.set(family.settingKey, keyring);
+  storeCachedFamilyKeyring(family, keyring);
   return keyring;
+}
+
+/**
+ * Run one decrypt against the family's keyring, reloading once and retrying
+ * when the first attempt fails. Covers the cross-process gap: a worker holding
+ * a pre-rotation keyring fails the first decrypt, drops its stale entry, reads
+ * the fresh row, and succeeds — instead of surfacing the rotation as an error.
+ * A second failure means the data is genuinely unreadable, so it rethrows.
+ */
+/**
+ * Thrown when a family key exists nowhere: no env value, no store row. Callers
+ * map this to their layer's paused/setup-guidance signal (never a crash).
+ */
+export class FamilyKeyMissingError extends Error {
+  constructor(readonly familyName: string) {
+    super(`No ${familyName} key available`);
+    this.name = "FamilyKeyMissingError";
+  }
+}
+
+export async function decryptWithFamilyKeyRefresh<T>(
+  scopedDb: DataContextDb,
+  family: FamilyKeyDescriptor,
+  env: NodeJS.ProcessEnv,
+  attempt: (keyring: Keyring) => T
+): Promise<T> {
+  const first = await loadFamilyKeyring(scopedDb, family, env);
+  if (!first) throw new FamilyKeyMissingError(family.name);
+  try {
+    return attempt(first);
+  } catch {
+    invalidateFamilyKeyCache(family);
+    const fresh = await loadFamilyKeyring(scopedDb, family, env);
+    if (!fresh) throw new FamilyKeyMissingError(family.name);
+    return attempt(fresh);
+  }
 }
 
 export interface FamilyKeyWrite {
@@ -257,17 +366,61 @@ export async function generateFamilyKey(
   if (existing) {
     retired.push({ keyId: existing.keyId, secret: existing.secret });
   } else if (resolveMossEnv(env, input.family.keyEnvVar) !== undefined) {
-    const envKeyring = resolveKeyring(
-      input.family.keyEnvVar,
-      input.family.keyIdEnvVar,
-      input.family.keysEnvVar,
-      input.family.devDefault,
-      env
-    );
-    for (const [keyId, secret] of envKeyring.keys) {
-      if (!retired.some((entry) => entry.keyId === keyId)) {
-        retired.push({ keyId, secret: secret.toString("hex") });
+    // A present value can still be unusable as a whole (blank, too short for a
+    // hardened environment, or next to a malformed retired list): resolveKeyring
+    // rejects it. Its current key alone may still have sealed real data — a short
+    // value accepted before the install was promoted, or a good current value
+    // beside a bad retired list — so carry just that key rather than dropping
+    // everything. A blank value is skipped: a key derived from an empty string
+    // is a fixed public value, so carrying it protects nothing. The status keeps
+    // reporting broken until the value itself is fixed or removed.
+    try {
+      const envKeyring = resolveKeyring(
+        input.family.keyEnvVar,
+        input.family.keyIdEnvVar,
+        input.family.keysEnvVar,
+        input.family.devDefault,
+        env
+      );
+      for (const [keyId, secret] of envKeyring.keys) {
+        if (!retired.some((entry) => entry.keyId === keyId)) {
+          retired.push({ keyId, secret: secret.toString("hex") });
+        }
       }
+    } catch {
+      const currentSecret = resolveMossEnv(env, input.family.keyEnvVar);
+      if (typeof currentSecret === "string" && currentSecret !== "") {
+        const currentKeyId = resolveMossEnv(env, input.family.keyIdEnvVar) ?? "v1";
+        if (!retired.some((entry) => entry.keyId === currentKeyId)) {
+          retired.push({
+            keyId: currentKeyId,
+            secret: createHash("sha256").update(currentSecret).digest("hex")
+          });
+        }
+      }
+    }
+  } else {
+    // No row, no settings value: outside hardened environments the data may still
+    // be sealed under the development default, so carry that key forward exactly
+    // like the settings branch above. Otherwise pressing Generate on a dev install
+    // would orphan everything saved before the first key existed. In a hardened
+    // environment resolveKeyring throws for the missing key and there is nothing
+    // to carry, which the empty catch keeps quiet.
+    try {
+      const devKeyring = resolveKeyring(
+        input.family.keyEnvVar,
+        input.family.keyIdEnvVar,
+        input.family.keysEnvVar,
+        input.family.devDefault,
+        env
+      );
+      for (const [keyId, secret] of devKeyring.keys) {
+        if (!retired.some((entry) => entry.keyId === keyId)) {
+          retired.push({ keyId, secret: secret.toString("hex") });
+        }
+      }
+    } catch {
+      // Hardened environment with nothing set: nothing to preserve.
     }
   }
   const taken = new Set([existing?.keyId, ...retired.map((entry) => entry.keyId)]);
@@ -315,6 +468,12 @@ export async function rotateFamilyKey(
 export interface FamilyKeyStatus {
   readonly family: string;
   readonly source: "env" | "store" | "missing" | "broken";
+  /**
+   * Why a broken family is broken. Present only with source "broken": "env" means
+   * the value in the settings file itself cannot be used, "store" means the stored
+   * row no longer decrypts. The screen words each case without claiming the other.
+   */
+  readonly cause?: "env" | "store";
 }
 
 /**
@@ -330,7 +489,20 @@ export async function getFamilyKeyStatus(
   const statuses: FamilyKeyStatus[] = [];
   for (const family of FAMILIES) {
     if (resolveMossEnv(env, family.keyEnvVar) !== undefined) {
-      statuses.push({ family: family.name, source: "env" });
+      // Present does not mean usable: a blank or too-short value is rejected by
+      // the loader, so the screen must ask for attention instead of ready.
+      try {
+        resolveKeyring(
+          family.keyEnvVar,
+          family.keyIdEnvVar,
+          family.keysEnvVar,
+          family.devDefault,
+          env
+        );
+        statuses.push({ family: family.name, source: "env" });
+      } catch {
+        statuses.push({ family: family.name, source: "broken", cause: "env" });
+      }
     } else {
       const state = familyRowState(
         await readFamilySettingValue(scopedDb, family.settingKey),
@@ -338,7 +510,8 @@ export async function getFamilyKeyStatus(
       );
       statuses.push({
         family: family.name,
-        source: state === "ok" ? "store" : state
+        source: state === "ok" ? "store" : state,
+        ...(state === "broken" ? { cause: "store" as const } : {})
       });
     }
   }

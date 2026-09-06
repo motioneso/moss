@@ -11,6 +11,7 @@ export type FamilyKeySource = "env" | "store" | "missing" | "broken";
 export interface FamilyKeyStatusDto {
   readonly family: string;
   readonly source: FamilyKeySource;
+  readonly cause?: "env" | "store";
 }
 
 export interface GetFamilyKeysResponse {
@@ -35,7 +36,8 @@ const familyKeyStatusSchema = {
   required: ["family", "source"],
   properties: {
     family: { type: "string" },
-    source: { type: "string", enum: ["env", "store", "missing", "broken"] }
+    source: { type: "string", enum: ["env", "store", "missing", "broken"] },
+    cause: { type: "string", enum: ["env", "store"] }
   }
 } as const;
 

@@ -96,12 +96,16 @@ export interface NewsRoutesDependencies {
   /** #1110: UAT-only deterministic override for the source-preview route; see module-registry's buildUatNewsPreviewOverride(). */
   readonly previewOverride?: (input: string) => NewsSourcePreviewResponse | undefined;
   /**
-   * #2005: the encryption seam for publisher access keys. Required, not optional: the
-   * route guard rejects a manifest routes[] entry with no registered route, so the
-   * credential routes must always register. News never resolves key material itself, so
-   * the composition root supplies this.
+   * #2005/#2322: the encryption seam for publisher access keys. Required, not
+   * optional: the route guard rejects a manifest routes[] entry with no
+   * registered route, so the credential routes must always register. News never
+   * resolves key material itself, so the composition root supplies a per-use
+   * resolver; null means the family key exists nowhere and the route pauses
+   * with setup guidance.
    */
-  readonly credentialCipher: NewsCredentialCipherPort;
+  readonly resolveCredentialCipher: (
+    scopedDb: DataContextDb
+  ) => Promise<NewsCredentialCipherPort | null>;
   /**
    * #2005: the reviewed publisher connections. Defaults to the implementation that knows
    * no connections, so until #2007 lands every connect attempt answers "unsupported".
@@ -282,7 +286,7 @@ export function registerNewsRoutes(
   registerNewsCredentialRoutes(server, {
     dataContext: dependencies.dataContext,
     resolveAccessContext: dependencies.resolveAccessContext,
-    cipher: dependencies.credentialCipher,
+    resolveCipher: dependencies.resolveCredentialCipher,
     connections: publisherConnections,
     sources: personalization,
     boss: dependencies.boss,
