@@ -153,7 +153,8 @@ async function admitPersistentOrFallback(
     return new ClaudePersistentRuntimeEngine(sessionKey, io, {
       provider,
       credentialFile: opts.credentialFile,
-      runtime: result.runtime
+      runtime: result.runtime,
+      homeBase: opts.homeBase
     });
   }
   return buildFallbackEngine(provider, sessionKey, io, opts);
@@ -198,7 +199,8 @@ export function createChatEngine(
     }
     return new ClaudePersistentRuntimeEngine(sessionKey, io, {
       provider,
-      credentialFile: opts.credentialFile
+      credentialFile: opts.credentialFile,
+      homeBase: opts.homeBase
     });
   }
 

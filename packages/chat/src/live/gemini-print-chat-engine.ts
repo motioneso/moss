@@ -27,7 +27,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
-import { parseTranscript, type Multiplexer, type TmuxIo } from "@moss/ai";
+import { buildSanitizedCliEnv, parseTranscript, type Multiplexer, type TmuxIo } from "@moss/ai";
 
 import { modelOverrideFlag, sanitizeInput, shellQuote } from "./cli-engine-helpers.js";
 import {
@@ -113,7 +113,10 @@ export class GeminiPrintChatEngine implements CliChatEngine {
     this.currentProcess = spawn("bash", ["-lc", parts.join(" ")], {
       cwd: this.neutralDir,
       detached: true,
-      stdio: "ignore"
+      stdio: "ignore",
+      ...(this.homeBase === undefined
+        ? {}
+        : { env: { ...buildSanitizedCliEnv(process.env), HOME: this.homeBase } })
     });
     this.currentProcess.on("error", () => undefined);
     this.currentProcess.unref();

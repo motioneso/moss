@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 
 import {
   DEFAULT_MODEL_SENTINEL,
+  buildSanitizedCliEnv,
   parseTranscript,
   redactExact,
   redactSecrets,
@@ -159,7 +160,10 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     this.currentProcess = spawn("bash", ["-lc", launchLine], {
       cwd: this.launchOpts.neutralDir,
       detached: true,
-      stdio: ["ignore", "ignore", "pipe"]
+      stdio: ["ignore", "ignore", "pipe"],
+      ...(this.homeBase === undefined
+        ? {}
+        : { env: { ...buildSanitizedCliEnv(process.env), HOME: this.homeBase } })
     });
     this.currentProcess.on("error", () => undefined);
     // #2164 r21 — bounded (oldest-dropped) stderr capture for last-submit diagnostics. Security
@@ -219,7 +223,10 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     const child = spawn("bash", ["-lc", command], {
       cwd: opts.neutralDir,
       detached: true,
-      stdio: ["pipe", "pipe", "pipe"]
+      stdio: ["pipe", "pipe", "pipe"],
+      ...(this.homeBase === undefined
+        ? {}
+        : { env: { ...buildSanitizedCliEnv(process.env), HOME: this.homeBase } })
     });
     this.structuredProcess = child;
     this.structuredExited = false;

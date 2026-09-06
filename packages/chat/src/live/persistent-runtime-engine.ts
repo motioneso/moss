@@ -44,6 +44,10 @@ export interface ClaudePersistentRuntimeEngineOpts {
   /** Injected for tests; production callers rely on the default runtime for `provider`. */
   readonly runtime?: ProviderChatRuntime;
   readonly spawnChild?: ClaudePersistentRuntimeOpts["spawnChild"];
+  /** #2348 — the app's own home folder, passed down so the runtime's default spawn sets the
+   *  child's HOME to the same place, instead of leaving the app and the model program to
+   *  disagree about where the transcript folder is. */
+  readonly homeBase?: string;
 }
 
 /** No provider transcript ever exists to purge (P1.0: `--no-session-persistence` adopted) —
@@ -76,13 +80,15 @@ export class ClaudePersistentRuntimeEngine implements CliChatEngine {
       this.runtime = new CodexPersistentRuntime({
         io,
         tokenEnvPath: opts.credentialFile,
-        spawnChild: opts.spawnChild
+        spawnChild: opts.spawnChild,
+        homeBase: opts.homeBase
       });
     } else {
       this.runtime = new ClaudePersistentRuntime({
         io,
         credentialFile: opts.credentialFile,
-        spawnChild: opts.spawnChild
+        spawnChild: opts.spawnChild,
+        homeBase: opts.homeBase
       });
     }
   }
