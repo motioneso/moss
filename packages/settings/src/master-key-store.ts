@@ -241,7 +241,26 @@ export async function loadFamilyKeyring(
     await readFamilySettingValue(scopedDb, family.settingKey),
     cipher
   );
-  if (!stored) return null;
+  if (!stored) {
+    // No env value, no store row. Outside hardened environments the loader keeps
+    // the old constructor behavior and falls back to the development default, so
+    // a fresh dev install keeps working with zero setup (#2322 slice 2). In a
+    // hardened environment resolveKeyring throws for the missing key and that
+    // maps to null below: paused with setup guidance, never a boot throw.
+    try {
+      const fallback = resolveKeyring(
+        family.keyEnvVar,
+        family.keyIdEnvVar,
+        family.keysEnvVar,
+        family.devDefault,
+        env
+      );
+      storeCachedFamilyKeyring(family, fallback);
+      return fallback;
+    } catch {
+      return null;
+    }
+  }
   const current = Buffer.from(stored.secret, "hex");
   const keys = new Map<string, Buffer>([[stored.keyId, current]]);
   const legacyCandidates: Buffer[] = [current];

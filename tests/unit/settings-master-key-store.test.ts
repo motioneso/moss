@@ -102,6 +102,21 @@ describe("family key store (#2312 slice 1, #2322 slice 2)", () => {
     }
   });
 
+  it("falls back to the development default outside hardened environments", async () => {
+    invalidateFamilyKeyCache();
+    const { scopedDb } = createMockDb();
+    // No NODE_ENV, no keys anywhere: the old constructor behavior, so a fresh
+    // dev install works with zero setup.
+    const keyring = await loadFamilyKeyring(scopedDb, MODULE_CREDENTIAL_FAMILY, {
+      ...MASTER_ENV
+    });
+    expect(keyring).not.toBeNull();
+    const expected = createHash("sha256")
+      .update("jarv1s-development-module-credential-secret")
+      .digest("hex");
+    expect(keyring?.keys.get("v1")?.toString("hex")).toBe(expected);
+  });
+
   it("status lists all three families as missing on an empty store", async () => {
     invalidateFamilyKeyCache();
     const { scopedDb } = createMockDb();
