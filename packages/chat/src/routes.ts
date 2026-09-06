@@ -107,6 +107,13 @@ export interface ChatRoutesDependencies {
   readonly personaPreferences?: PersonaPreferencesPort;
   readonly chatPreferences?: PreferencesPort;
   readonly localePreferences?: PreferencesPort;
+  /**
+   * #2228: which web search engine is active for an actor (composition root resolves it through
+   * the settings module). The gateway hides the web.search tool only when it returns "none".
+   */
+  readonly webSearchEngineForActor?: (
+    actorUserId: string
+  ) => Promise<"brave" | "model-native" | "none">;
   readonly agencyPreferences?: PreferencesPort;
   /** Priority preferences port — forwarded to the chat runtime for cross-tool context ranking (#721). */
   readonly priorityPreferences?: PreferencesPort;
@@ -262,7 +269,8 @@ export function registerChatRoutes(
               appMapService: dependencies.appMapService,
               platformDiagnostics: dependencies.platformDiagnostics,
               agencyPreferences: dependencies.agencyPreferences,
-              localePreferences: dependencies.localePreferences
+              localePreferences: dependencies.localePreferences,
+              webSearchEngineForActor: dependencies.webSearchEngineForActor
             })
           );
 

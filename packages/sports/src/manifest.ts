@@ -6,7 +6,10 @@ import {
   createSportsFollowRequestSchema,
   createSportsFollowResponseSchema,
   deleteSportsCustomSourceSchema,
+  deleteSportsSourcePhotosSchema,
   deleteSportsFollowResponseSchema,
+  resolveSportsFollowTeamRequestSchema,
+  resolveSportsFollowTeamResponseSchema,
   previewSportsSourceSchema,
   previewSportsSourceAssignmentsSchema,
   previewSportsSourceRecipeSchema,
@@ -63,7 +66,8 @@ const ARTICLE_BODY_TTL_MS = 6 * 60 * 60 * 1000;
 
 // Input bound for the two auto-running follow tools' catalog keys (#1265 security QA
 // BLOCKING-1b). Competition keys are lowercase alphanumeric with dots ("nfl", "eng.1"); ESPN team
-// keys are a lowercased abbreviation or a bare numeric id (espn-source.ts `listTeams`). Nothing in
+// keys are a lowercased abbreviation, a numeric id, or the two joined by a dot when a short name
+// is shared by two teams ("pac.413", espn-source.ts `listTeams`). Nothing in
 // either shape can traverse or escape a URL path segment, which is where these values eventually
 // land (espn-source.ts `getSchedule`). This is a schema-level belt only — the service still closes
 // teamKey against the live league roster, and the URL site still percent-encodes.
@@ -104,7 +108,9 @@ export const sportsModuleManifest = {
       "sql/0192_sports_legacy_feed_assignments_verified.sql",
       "sql/0193_sports_legacy_feed_assignment_repair.sql",
       "sql/0196_sports_news_source_scopes.sql",
-      "sql/0213_sports_reddit_sources.sql"
+      "sql/0213_sports_reddit_sources.sql",
+      "sql/0217_sports_follows_source_team_id.sql",
+      "sql/0222_sports_source_photos.sql"
     ],
     migrationDirectories: ["packages/sports/sql"],
     ownedTables: [
@@ -125,12 +131,27 @@ export const sportsModuleManifest = {
     {
       id: "sports.subreddit_sources",
       description:
-        "The Add a source box in Sports settings also accepts a subreddit (r/nfl or a reddit.com link). Posts that link out to articles become headlines credited to the real publisher; self posts, media, stickied posts, and crossposts are skipped."
+        "The Add a source box in Sports settings also accepts a subreddit (r/nfl or a reddit.com link). Posts linking out to articles become headlines credited to the real publisher; self posts, media, and Reddit-only links are skipped."
     },
     {
       id: "sports.story_feedback",
       description:
         "Rate a sports story with More like this or Less like this from the dots that appear in its top-right corner while it is hovered or focused, on Today and on Sports. Less like this asks for a reason and hides the story."
+    },
+    {
+      id: "sports.result_scorers",
+      description:
+        "A finished soccer or hockey game on Today and Sports shows home scorers, home logo, score, away logo, away scorers, home on the left. Soccer scorers carry goal minutes, as in Isak 6, 8; hockey has none and may list fewer names than goals."
+    },
+    {
+      id: "sports.source_photos",
+      description:
+        "Your own sources' stories get a feed or article-page photo. Rows in Sports settings say if photos are working, none found, checking, or stopped working. Stop using Moss's photos forgets Moss's instruction; feed and article photos stay."
+    },
+    {
+      id: "sports.team_identity",
+      description:
+        "Follows are tied to the provider's permanent team number, so two teams sharing a short name never swap scores. A team saved before that is put on hold and Sports asks once which team was meant; picking one brings it back."
     }
   ],
   navigation: [
@@ -149,7 +170,7 @@ export const sportsModuleManifest = {
       id: "sports.follows",
       label: "Sports",
       description:
-        "Choose the teams and leagues shown in Sports, and add custom news sources: a publication's homepage or a subreddit such as r/nfl.",
+        "Pick teams and leagues; add news sources (homepage or subreddit). Rows show photo status; Stop using Moss's photos forgets Moss's instruction, feed and article photos stay. A team saved before permanent numbers asks once which was meant.",
       path: "/settings/modules/sports",
       scope: "user",
       order: 35,
@@ -239,6 +260,13 @@ export const sportsModuleManifest = {
       permissionId: "sports.follow"
     },
     {
+      method: "POST",
+      path: "/api/sports/follows/:id/team",
+      requestSchema: resolveSportsFollowTeamRequestSchema,
+      responseSchema: resolveSportsFollowTeamResponseSchema,
+      permissionId: "sports.follow"
+    },
+    {
       method: "DELETE",
       path: "/api/sports/follows/:id",
       responseSchema: deleteSportsFollowResponseSchema,
@@ -311,8 +339,19 @@ export const sportsModuleManifest = {
       permissionId: "sports.sources"
     },
     {
+      method: "DELETE",
+      path: "/api/sports/sources/:id/photos",
+      responseSchema: deleteSportsSourcePhotosSchema,
+      permissionId: "sports.sources"
+    },
+    {
       method: "GET",
       path: "/api/sports/sources/:sourceId/icon",
+      permissionId: "sports.view"
+    },
+    {
+      method: "GET",
+      path: "/api/sports/headlines/:headlineId/photo",
       permissionId: "sports.view"
     }
   ],
@@ -345,7 +384,7 @@ export const sportsModuleManifest = {
     {
       name: "sports.followTeam",
       description:
-        "Follow a team or an entire competition/league (e.g. 'the Yankees' or 'the Premier League'). Resolve the name to a catalog competitionKey (and teamKey for a specific team) via the sports catalog/search first, then call this with the exact keys.",
+        "Follow a team or a whole competition (e.g. 'the Yankees' or 'the Premier League'). Resolve the name to a catalog competitionKey, plus a teamKey for a single team, through the sports catalog or search, then call this with those keys.",
       permissionId: "sports.follow",
       actionFamilyId: "sports_follows",
       risk: "write",

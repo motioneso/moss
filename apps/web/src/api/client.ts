@@ -24,7 +24,12 @@ import type {
   GetChatSettingsResponse,
   GetPersonaSettingsResponse,
   GetChatModelOverrideSettingsResponse,
+  GetFamilyKeysResponse,
   GetWebSearchKeyResponse,
+  PutFamilyKeyRequest,
+  PutFamilyKeyResponse,
+  RotateFamilyKeyRequest,
+  RotateFamilyKeyResponse,
   PutWebSearchKeyRequest,
   PutWebSearchKeyResponse,
   PutYoloSelfRequest,
@@ -59,6 +64,10 @@ import type {
   PutNotificationPreferenceResponse,
   PutNotificationDigestPreferenceRequest,
   PutNotificationDigestPreferenceResponse,
+  PushConfigResponse,
+  RegisterPushSubscriptionRequest,
+  RegisterPushSubscriptionResponse,
+  DeletePushSubscriptionResponse,
   PutQuietHoursSettingsRequest,
   PutQuietHoursSettingsResponse,
   PutPersonaSettingsRequest,
@@ -297,6 +306,26 @@ export async function putNotificationDigestPreference(
       method: "PUT",
       body
     }
+  );
+}
+
+export async function getPushConfig(): Promise<PushConfigResponse> {
+  return requestJson<PushConfigResponse>("/api/notifications/push/config");
+}
+
+export async function registerPushSubscription(
+  body: RegisterPushSubscriptionRequest
+): Promise<RegisterPushSubscriptionResponse> {
+  return requestJson<RegisterPushSubscriptionResponse>("/api/notifications/push/subscriptions", {
+    method: "POST",
+    body
+  });
+}
+
+export async function deletePushSubscription(id: string): Promise<DeletePushSubscriptionResponse> {
+  return requestJson<DeletePushSubscriptionResponse>(
+    `/api/notifications/push/subscriptions/${encodeURIComponent(id)}`,
+    { method: "DELETE" }
   );
 }
 
@@ -1334,6 +1363,26 @@ export async function putWebSearchKey(
 export async function deleteWebSearchKey(): Promise<DeleteWebSearchKeyResponse> {
   return requestJson<DeleteWebSearchKeyResponse>("/api/admin/settings/web-search", {
     method: "DELETE"
+  });
+}
+
+export async function getFamilyKeys(): Promise<GetFamilyKeysResponse> {
+  return requestJson<GetFamilyKeysResponse>("/api/admin/settings/encryption-keys");
+}
+
+export async function putFamilyKey(input: PutFamilyKeyRequest): Promise<PutFamilyKeyResponse> {
+  return requestJson<PutFamilyKeyResponse>("/api/admin/settings/encryption-keys", {
+    method: "PUT",
+    body: input
+  });
+}
+
+export async function rotateFamilyKey(
+  input: RotateFamilyKeyRequest
+): Promise<RotateFamilyKeyResponse> {
+  return requestJson<RotateFamilyKeyResponse>("/api/admin/settings/encryption-keys/rotate", {
+    method: "POST",
+    body: input
   });
 }
 

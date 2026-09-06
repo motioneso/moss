@@ -13,7 +13,8 @@ describe("reconcileGoogleAccountSchedule", () => {
       {
         actorUserId: "actor-1",
         kind: "google-sync",
-        idempotencyKey: "schedule:actor-1"
+        idempotencyKey: "schedule:actor-1",
+        trigger: "schedule"
       },
       { tz: "UTC", key: "actor-1", singletonKey: "actor-1" }
     );

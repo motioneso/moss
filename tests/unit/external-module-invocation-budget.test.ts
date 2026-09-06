@@ -34,7 +34,6 @@ import {
   validateExternalModuleManifest
 } from "@moss/module-registry/node";
 import type { ExternalModuleQueueDeclaration } from "@moss/module-sdk";
-import type { ModuleCredentialCipher } from "@moss/settings";
 
 import { createExternalModuleJobHandler } from "../../apps/worker/src/external-module-job-handler.js";
 import { createExternalBriefingInvoker } from "../../apps/worker/src/external-module-invoke.js";
@@ -461,7 +460,6 @@ function verifiedInvokerDeps(
       withDataContext: async (_access: unknown, fn: (db: DataContextDb) => unknown) =>
         fn({} as DataContextDb)
     } as unknown as DataContextRunner,
-    cipher: {} as unknown as ModuleCredentialCipher,
     runtime: { invoke },
     listActiveUserIds: async () => [OWNER_A]
   };
@@ -614,7 +612,6 @@ describe("createExternalModuleRpcHandler cancellation forwarding (#1286 Task 2e)
         withDataContext: async (_access: unknown, fn: (db: DataContextDb) => unknown) =>
           fn(fakeScopedDb())
       } as unknown as DataContextRunner,
-      cipher: {} as unknown as ModuleCredentialCipher,
       isActorAdmin: () => Promise.resolve(false),
       embeddingProvider: () => Promise.reject(new Error("not used by fetch.request")),
       // Bypasses createHostPinnedFetch's SSRF host allowlist so the test can target its
@@ -648,7 +645,6 @@ describe("createExternalModuleRpcHandler cancellation forwarding (#1286 Task 2e)
         withDataContext: async (_access: unknown, fn: (db: DataContextDb) => unknown) =>
           fn(fakeScopedDb())
       } as unknown as DataContextRunner,
-      cipher: {} as unknown as ModuleCredentialCipher,
       isActorAdmin: () => Promise.resolve(false),
       embeddingProvider: () => Promise.reject(new Error("not used by ai.generateStructured")),
       // Stands in for generateStructured (packages/ai, out of this module's reach by

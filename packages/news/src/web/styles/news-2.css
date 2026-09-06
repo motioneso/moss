@@ -286,6 +286,27 @@
 .nw-twlist__tag {
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
+  /* Keeps the publisher icon (or, when it fails to load, the publisher name) clear of the headline
+     that follows it. The gap on .nw-twlist__link can't do this job: .nw-twlist__row's rule below
+     resets that link to display:block, and gap only applies in flex/grid. Margin here works in
+     either layout mode and covers the text fallback as well as the icon. */
+  margin-right: var(--space-2);
+}
+/* Icon on a light tile so a dark publisher mark still reads on the dark theme (#2290); the
+   tile's colour, ring and radius live in packages/ui components-news.css. */
+.nw-twlist__favicon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  vertical-align: text-bottom;
+}
+.nw-twlist__favicon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
 }
 .nw-twlist__title {
   line-height: 1.4;

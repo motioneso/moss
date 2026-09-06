@@ -1,15 +1,43 @@
 /*
- * Webfonts — none. The last remaining @import pulled IBM Plex Mono from fonts.googleapis.com,
- * left behind when --font-mono was retired 2026-07-08 (see the note at --font-display below):
- * no rule in the app has referenced that face since, so it downloaded nothing anyone used. It
- * was also the only stylesheet the app requested off-origin, so every page load logged a CSP
- * `style-src-elem` violation against `style-src 'self' 'unsafe-inline'` (Ben 2026-08-01 console
- * report). Deleting it removes the violation and the request together — nothing to allowlist.
- * If a self-hosted woff2 lands later it belongs in this slot, served from our own origin.
+ * Webfonts — self-hosted Archivo (OFL licence in the same folder), latin subset,
+ * weights 400/500/700/800, served from our own origin under /fonts/archivo/.
+ * Allowed by `font-src 'self'` in apps/api/src/static-web.ts, so no policy change
+ * was needed. The last remaining remote @import (retired with --font-mono
+ * 2026-07-08) was the only off-origin request and logged a `style-src-elem` CSP
+ * violation on every page load (Ben 2026-08-01 console report). Never add a
+ * remote font @import here.
  */
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/archivo/archivo-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/archivo/archivo-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/archivo/archivo-latin-700-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/fonts/archivo/archivo-latin-800-normal.woff2") format("woff2");
+}
 
 /*
- * Jarv1s token layer — PARK PRESS (epic #726): a warm OAT-paper canvas with
+ * Jarv1s token layer — PARK PRESS (epic #726): a warm bone-paper canvas with
  * ONE living accent, FOREST, plus a decorative GOLD co-accent (straps, labels,
  * active markers — never semantic). Amber = normal human drift (anti-shame,
  * never error-red); Red = true error only; Steel = quiet info. Dark theme is
@@ -27,16 +55,16 @@
   /* ============ COLOR — primitives ============ */
   /* User themes may override aesthetic variables only: paper/surface/ink/line/accent.
      Semantic red/amber/steel stay locked so error/caution/info meaning remains stable. */
-  /* Neutrals: warm oat paper & ink (Park Press) */
-  --paper: #ece4d1;
-  --surface: #f6f0e1;
-  --surface-2: #e3dac4;
+  /* Neutrals: warm bone paper & ink (Park Press) */
+  --paper: #f2eee4;
+  --surface: #fffdf7;
+  --surface-2: #f7f3e9;
   --surface-3: #d9cfb5;
   --scrim: rgba(46, 40, 30, 0.42);
   --white: #ffffff;
 
-  --line-subtle: rgba(46, 40, 30, 0.06);
-  --line: rgba(46, 40, 30, 0.11);
+  --line-subtle: #e6dfd0;
+  --line: #d9d1bf;
   --line-strong: rgba(46, 40, 30, 0.22);
 
   --ink: #292621;
@@ -132,17 +160,19 @@
   --texture-blend: multiply;
 
   /* ============ TYPOGRAPHY ============ */
-  /* INTERIM: Helvetica system stack stands in for self-hosted Neue Haas Grotesk
-     (licensed woff2 wiring is a follow-up under epic #726). */
+  /* Body text keeps the system stack. Display headings use self-hosted Archivo
+     (see the @font-face rules at the top of this file) with that same stack
+     as its fallback, so the two can never drift apart. */
   --font-sans: "Helvetica Neue", Helvetica, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   /* Display MUST share the exact fallback chain of --font-sans (Ben 2026-07-08, /sports
-     annotations #1 + #4). Both previously led with "Helvetica Neue", Helvetica but DIVERGED
-     in fallback (display→Arial, sans→system-ui); on any device lacking both Helvetica faces
-     — e.g. Ben QA'ing over LAN from a non-Mac — the two tokens rendered as *different* fonts,
-     so the FeaturedTeamCard score (sans) looked "out of place" beside the name (display) and
-     the ticker head showed "two different fonts" on one line. Alias to the single source so
-     they can never drift again. (var() forward-reference resolves lazily; declaration order safe.) */
-  --font-display: var(--font-sans);
+     annotations #1 + #4). The two tokens previously DIVERGED in fallback; on any
+     device lacking the first-choice faces — e.g. Ben QA'ing over LAN from a
+     non-Mac — the two tokens rendered as *different* fonts, so the
+     FeaturedTeamCard score (sans) looked "out of place" beside the name
+     (display) and the ticker head showed "two different fonts" on one line.
+     Archivo followed by the single aliased source keeps them together.
+     (var() forward-reference resolves lazily; declaration order safe.) */
+  --font-display: "Archivo", var(--font-sans);
   /* --font-mono retired 2026-07-08 (Ben: "kill mono anywhere in the app, I'm not a fan").
      All former mono surfaces now use --font-sans; numeric columns hold alignment via
      font-variant-numeric: tabular-nums rather than a fixed-width face. Genuine code blocks
@@ -278,6 +308,16 @@
   --rail-divider: rgba(237, 229, 210, 0.14);
   --rail-marker: var(--gold);
 
+  /* Masthead field (slice 1 ships the tokens only; the band itself is slice 2).
+     The field follows the theme through --forest, never a named colour. */
+  --masthead-bg: var(--forest);
+  --masthead-fg: var(--rail-fg);
+  --masthead-fg-muted: rgba(237, 229, 210, 0.85);
+  --masthead-accent: var(--gold-soft);
+  --masthead-rule: var(--gold);
+  --masthead-action-bg: var(--gold);
+  --masthead-action-fg: #241a06;
+
   --state-attention: var(--amber-strong);
   --state-recovery: var(--amber-strong);
   --warning: var(--amber-strong);
@@ -397,6 +437,16 @@
      the old hardcoded #182b21 was too close to light's rail-bg to read as a
      theme switch (#1809). */
   --rail-bg: var(--forest-soft-2);
+
+  /* Dark masthead: the field rides the ramp's dark ground (light --forest is a
+     text-duty tint in dark mode); the eyebrow takes pale gold-ink. */
+  --masthead-bg: var(--forest-soft);
+  --masthead-fg: var(--rail-fg);
+  --masthead-fg-muted: rgba(237, 229, 210, 0.85);
+  --masthead-accent: var(--gold-ink);
+  --masthead-rule: var(--gold);
+  --masthead-action-bg: var(--gold);
+  --masthead-action-fg: #241a06;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -425,6 +475,8 @@
   --focus-ring: rgba(138, 75, 43, 0.45);
   --accent-soft-border: rgb(138 75 43 / 0.45);
   --accent-soft-border-weak: rgb(138 75 43 / 0.32);
+  /* Canyon needs the heavier quiet-text wash to clear 4.5:1 on its field. */
+  --masthead-fg-muted: rgba(237, 229, 210, 0.9);
 }
 
 [data-theme="teal"] {
@@ -437,6 +489,8 @@
   --focus-ring: rgba(47, 109, 106, 0.45);
   --accent-soft-border: rgb(47 109 106 / 0.45);
   --accent-soft-border-weak: rgb(47 109 106 / 0.32);
+  /* No wash clears 4.5:1 on teal, so quiet text falls back to full strength. */
+  --masthead-fg-muted: var(--masthead-fg);
 }
 
 [data-theme="dusk"] {

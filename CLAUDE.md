@@ -62,6 +62,13 @@ Deliberate decisions, each with a real failure behind it. Violating one is a blo
   live end-to-end proof recorded on the PR — installed and exercised through the real UI on a live
   dev instance. Without that the honest status is _code-complete, unverified_: don't merge, don't
   mark Done. Full rule in `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate.
+- **Plan and spec documents are always tracked and committed.** A plan that exists only on one
+  checkout dies with that checkout, and no other session can build from it. Commit
+  `docs/superpowers/plans/*` and `docs/superpowers/specs/*` in the PR that creates them, before any
+  lane starts, even when the work itself is deferred. Docs need a PR like everything else. This
+  repository is public: before committing any document, read it for credentials, private
+  hostnames, LAN addresses and personal data; keep anything that carries them out of the repo.
+  Ben's ruling, 2026-09-05 (#2316).
 - **Every product pull request fills in the "Release note" section of the PR template.** If the
   change is user-facing, give it a Category (Added/Fixed/Changed), a short Title, and a one-sentence
   plain-English Description. After the pull request merges, the release-notes workflow reads that

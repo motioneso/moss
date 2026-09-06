@@ -25,6 +25,7 @@ import {
   MODULE_BUILD_QUEUE,
   MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS,
   createModuleBuildWorker,
+  createPushQueuePort,
   sendJob,
   type ExternalModuleJobPayload,
   type ModuleControlPayload,
@@ -63,7 +64,6 @@ import { ChatAttachmentsService } from "@moss/chat";
 import { ensureProviderLaunchReady } from "@moss/cli-runner/provider-first-run";
 import { NotificationsRepository, type CreateNotificationInput } from "@moss/notifications";
 import {
-  createModuleCredentialSecretCipher,
   getModuleBuild,
   SettingsRepository,
   touchModuleBuildActivity,
@@ -242,7 +242,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   const aiRepository = new AiRepository();
   const moduleBuildNotifications = new NotificationsRepository(
     undefined,
-    createNotificationPreferencePort()
+    createNotificationPreferencePort(),
+    createPushQueuePort(boss)
   );
   const moduleBuildSettings = new SettingsRepository();
   const builtInModuleIds = new Set(getBuiltInModuleManifests().map((manifest) => manifest.id));
@@ -333,7 +334,11 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   });
   await registerUpgradeNotifyWorker(boss, dataContext, {
     logger: workerLogger,
-    repository: new NotificationsRepository(undefined, createNotificationPreferencePort())
+    repository: new NotificationsRepository(
+      undefined,
+      createNotificationPreferencePort(),
+      createPushQueuePort(boss)
+    )
   });
 
   // #996/#860: external-module job reconciliation is always-on now (the
@@ -342,7 +347,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   //
   // Moved above registerBuiltInModuleWorkers (#1282 Task 2): the briefings module
   // needs externalBriefingManifests + invokeExternalBriefing at registration time,
-  // and both are built from this same discovery/runtime/cipher setup. Building it
+  // and both are built from this same discovery/runtime setup. Building it
   // once here and threading it down avoids a second discovery scan.
   const externalConfig = resolveExternalWorkerConfig();
   const reservedQueueNames = new Set(getAllQueueDefinitions().map((queue) => queue.name));
@@ -352,10 +357,10 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   });
   const externalRuntime = new ExternalModuleWorkerRuntime({ logger: workerLogger });
   const runtime = externalRuntime;
-  const cipher = createModuleCredentialSecretCipher();
   // ctx.ai for queued module jobs (JS-07 Step 0, spec D6): one repository and
   // one bridge at composition time — the bridge's AiSecretCipher is a separate
-  // key domain (JARVIS_AI_SECRET_KEY) from the ModuleCredentialCipher above.
+  // key domain (JARVIS_AI_SECRET_KEY), separate from the module credential
+  // family key, which RPC handlers now resolve per call from the master store.
   // Only the module-job registration below receives it; every other handler
   // path stays without an ai dep and fails closed in the rpc host.
   const moduleAiBridge = createModuleWorkerAiBridge({
@@ -368,7 +373,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   // this only avoids implying the module-notify and upgrade-notify paths share a lifecycle.
   const moduleNotifications = new NotificationsRepository(
     undefined,
-    createNotificationPreferencePort()
+    createNotificationPreferencePort(),
+    createPushQueuePort(boss)
   );
   const postModuleNotification = async (
     access: AccessContext,
@@ -422,7 +428,6 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     getDiscoveryById,
     listDiscoveredModuleIds,
     dataContext,
-    cipher,
     runtime,
     listActiveUserIds,
     ai: moduleAiBridge,
@@ -478,7 +483,6 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
           runtime,
           workerDb,
           dataContext,
-          cipher,
           getDiscoveryById,
           listDiscoveredModuleIds,
           listActiveUserIds,

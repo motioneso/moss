@@ -38,6 +38,10 @@ export async function collectSportsSourcesExportSection(
       last_checked_at AS "lastCheckedAt",
       last_success_at AS "lastSuccessAt",
       recipe_status AS "recipeStatus",
+      -- #2237 the export carries what the settings row says about photos, not the instruction
+      -- behind it: the instruction is internal, like the stored icon URL, and never exported.
+      photo_rule_state AS "photoRuleState",
+      photo_last_outcome AS "photoLastOutcome",
       recipe_schema_version AS "recipeSchemaVersion",
       authorization_confirmed_at AS "authorizationConfirmedAt",
       validated_at AS "validatedAt",

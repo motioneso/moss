@@ -232,11 +232,6 @@ export function ProviderModels(props: {
               <RefreshCw size={11} aria-hidden="true" />
               {refreshOutcome}
             </div>
-          ) : props.models.length ? (
-            <div className="prov__synced">
-              <RefreshCw size={11} aria-hidden="true" />
-              Registered for {provider.displayName}.
-            </div>
           ) : null}
           {hasManual ? <div className="prov__manualnote">* Manually added</div> : null}
         </>

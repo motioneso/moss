@@ -36,7 +36,13 @@ export type CancelOutcome = { readonly approvalsResolved: number };
 
 export type RecoveryOutcome =
   | { readonly kind: "resubmitted" } // provably-pre-acceptance only
-  | { readonly kind: "neutral-failure"; readonly reason: string }; // server-composed, no model prose
+  | {
+      readonly kind: "neutral-failure";
+      readonly reason: string; // server-composed, no model prose
+      /** #2242: set when the failure was the provider refusing the saved sign-in, rather than any
+       *  other failure. Kept so callers can tell "log in again" from "try again". */
+      readonly loginRejected?: boolean;
+    };
 
 export interface RuntimeHealth {
   readonly alive: boolean;

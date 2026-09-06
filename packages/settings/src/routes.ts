@@ -74,7 +74,7 @@ import {
   type ReconcileProactiveScheduleFn
 } from "./proactive-monitoring-routes.js";
 import { SettingsRepository } from "./repository.js";
-import { createModuleCredentialSecretCipher } from "./module-credential-crypto.js";
+import { resolveModuleCredentialCipher } from "./module-credential-crypto.js";
 import { registerModuleCredentialRoutes } from "./routes-module-credentials.js";
 // #917: the module-management route family was extracted here for the 1000-line file-size gate.
 import { registerModuleRegistryRoutes } from "./routes-module-registry.js";
@@ -887,7 +887,7 @@ export function registerSettingsRoutes(
     repository,
     assertAdminUser,
     requireRequestId,
-    cipher: createModuleCredentialSecretCipher()
+    resolveCipher: (scopedDb) => resolveModuleCredentialCipher(scopedDb)
   });
 }
 

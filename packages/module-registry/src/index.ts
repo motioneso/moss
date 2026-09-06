@@ -10,14 +10,19 @@ import type { PgBoss } from "pg-boss";
 import {
   commitmentsModuleManifest,
   commitmentsModuleSqlMigrationDirectory,
+  COMMITMENT_EMAIL_JUDGEMENT_QUEUE,
   COMMITMENT_EXTRACTION_QUEUE,
-  CommitmentsRepository
+  CommitmentsRepository,
+  enqueueEmailThreadJudgement,
+  registerEmailThreadJudgementWorker
 } from "@moss/commitments";
 import {
   peopleModuleManifest,
   peopleModuleSqlMigrationDirectory,
   PeopleNotesService,
   PeopleNotesFolderUnavailableError,
+  PeopleRepository,
+  PersonContextService,
   registerPeopleRoutes,
   registerPersonIndexWorker,
   registerSyncPersonMemoryWorker,
@@ -156,7 +161,7 @@ import {
   type GoogleApiClient,
   type GoogleConnectionService
 } from "@moss/connectors";
-import type { ActiveModulesResolver } from "@moss/ai";
+import type { ActiveModulesResolver, AiSecretCipher } from "@moss/ai";
 import {
   resolveMossEnv,
   type AccessContext,
@@ -166,6 +171,7 @@ import {
 } from "@moss/db";
 import { resolveTimeZone, type ProactiveSource } from "@moss/shared";
 import {
+  createEmailThreadProvider,
   emailModuleManifest,
   emailModuleSqlMigrationDirectory,
   EmailRepository,
@@ -173,6 +179,7 @@ import {
 } from "@moss/email";
 import {
   assertMetadataOnlyPayload,
+  createPushQueuePort,
   FOUNDATION_QUEUES,
   registerDataContextWorker,
   sendJob,
@@ -180,6 +187,12 @@ import {
   type QueueDefinition
 } from "@moss/jobs";
 import { createModuleLogger } from "@moss/module-sdk";
+import {
+  buildEmailContextProviders,
+  buildEmailJudgementGenerate,
+  buildKnownSenderAddresses,
+  buildUserAddressesFor
+} from "./email-judgement-wiring.js";
 import type {
   MossModuleManifest,
   JsonMossModuleManifest,
@@ -190,6 +203,16 @@ import type {
 import {
   NotificationsRepository,
   DIGEST_COMPOSE_QUEUE,
+  PUSH_DELIVER_QUEUE,
+  PUSH_QUEUE_RETRY_OPTIONS,
+  PUSH_SUMMARY_QUEUE,
+  PUSH_WORK_OPTIONS,
+  runPushDeliverJob,
+  runPushSummaryJob,
+  throwIfPushRetryNeeded,
+  type PushDeliverJobPayload,
+  type PushDeliveryOutcome,
+  type PushSummaryJobPayload,
   type NotificationPreferencePort,
   runNotificationDigestCompose,
   notificationsModuleManifest,
@@ -206,9 +229,11 @@ import {
 import {
   EXPORT_QUEUE_DEFINITIONS,
   createWebSearchSecretCipher,
-  getWebSearchKeyConfig,
+  type WebSearchSecretCipher,
   readBraveSearchApiKey,
+  resolveWebSearchEngine,
   registerSettingsJobWorkers,
+  registerFamilyKeyRoutes,
   registerSettingsRoutes,
   registerRuntimeConfigRoutes,
   registerWebSearchKeyRoutes,
@@ -235,7 +260,9 @@ import {
   createAppMapReadService,
   createSourceInspector,
   getModuleBuild,
-  updateModuleBuildStatus
+  updateModuleBuildStatus,
+  INTEGRATIONS_FAMILY,
+  loadFamilyKeyring
 } from "@moss/settings";
 import {
   TASKS_QUEUE_DEFINITIONS,
@@ -260,7 +287,8 @@ import {
 import {
   integrationsModuleManifest,
   integrationsModuleSqlMigrationDirectory,
-  registerIntegrationsRoutes
+  registerIntegrationsRoutes,
+  resolverCache
 } from "@moss/integrations";
 import {
   createHostRateLimiter,
@@ -269,7 +297,9 @@ import {
   fetchWebResourceBytes,
   invalidateWebSearchProviderCache,
   resolveWebSearchProvider,
+  setModelNativeSearchResolver,
   setWebSearchKeyResolver,
+  type ModelNativeSearchResolver,
   webModuleManifest
 } from "@moss/web-research";
 import {
@@ -293,6 +323,7 @@ import {
   SportsBrowserBrokerServer,
   SportsBrowserClient,
   SportsEspnCoverageRepository,
+  SportsPhotoStore,
   SportsPublicSourceReader,
   SportsService,
   type RegisteredStory,
@@ -318,6 +349,7 @@ import {
   createRegistryNewsPublisherConnectionPort,
   enqueueNewsRefresh,
   type NewsAiPort,
+  type NewsFetchOptions,
   type NewsRoutesDependencies,
   type NewsStoryFeedbackPort
 } from "@moss/news";
@@ -332,6 +364,11 @@ import {
   registerNotesSyncRoutes,
   registerNotesJobWorkers
 } from "@moss/notes";
+import {
+  registerScratchpadRoutes,
+  scratchpadModuleManifest,
+  scratchpadModuleSqlMigrationDirectory
+} from "@moss/scratchpad";
 import {
   FeedbackTargetVerifierRegistry,
   buildStoryTargetContext,
@@ -374,7 +411,10 @@ import {
   createPersistentRuntimeConfigLiveReader,
   type LiveChatMultiplexerStatus
 } from "./chat-multiplexer.js";
-import { createNewsCredentialCipherPort } from "./news-credential-cipher.js";
+import {
+  createNewsCredentialDecryptor,
+  resolveNewsCredentialCipherPort
+} from "./news-credential-cipher.js";
 import { buildOnboardingInstall } from "./onboarding-install.js";
 import { buildCliModelLister, buildOnboardingLogin } from "./onboarding-login.js";
 
@@ -722,12 +762,41 @@ function buildNewsDiscoveryPorts(
         robots: newsRobotsGate,
         rateLimiter: newsHostRateLimiter
       }),
-    image: (url: string, maxBytes: number) =>
+    // #2282 task 1.5: the options-capable sibling, built like Sports' port. Same HTTPS rule and
+    // the News host rate limiter on every call; the robots gate stays unless the caller (the
+    // Reddit reader, whose host refuses generic agents by robots rule) asks to skip it.
+    fetchWithOptions: (url: string, options?: NewsFetchOptions) =>
+      fetchWebResource(url, {
+        requireHttps: true,
+        robots: options?.skipRobots ? undefined : newsRobotsGate,
+        rateLimiter: newsHostRateLimiter,
+        allowedHosts: options?.allowedHosts,
+        requestHeaders: options?.requestHeaders,
+        userAgent: options?.userAgent,
+        allowedContentTypes: options?.allowedContentTypes,
+        beforeRequest: options?.beforeRequest,
+        maxBytes: options?.maxBytes,
+        rejectOversizedResponses: options?.rejectOversizedResponses,
+        timeoutMs: options?.timeoutMs,
+        signal: options?.signal
+      }),
+    image: (url: string, maxBytes: number, allowedHosts?: readonly string[]) =>
       fetchWebResourceBytes(url, {
         requireHttps: true,
         robots: newsRobotsGate,
         rateLimiter: newsHostRateLimiter,
-        maxBytes
+        maxBytes,
+        ...(allowedHosts ? { allowedHosts } : {})
+      }),
+    // #2291: a favicon is the asset a browser requests to draw a tab, not crawled content, so it
+    // skips the robots gate (NPR serves its icon from media.npr.org, whose robots file disallows
+    // everything). Host pinning, HTTPS, the size cap and the rate limit all still apply.
+    favicon: (url: string, maxBytes: number, allowedHosts?: readonly string[]) =>
+      fetchWebResourceBytes(url, {
+        requireHttps: true,
+        rateLimiter: newsHostRateLimiter,
+        maxBytes,
+        ...(allowedHosts ? { allowedHosts } : {})
       }),
     search: {
       async search(
@@ -865,6 +934,116 @@ function buildSportsDiscoveryPorts(
 }
 
 /**
+ * #2228: News' web search availability, resolved once per call through the actor's effective
+ * chat model. Shared by hasWebSearch and webSearchReason so the model lookup and engine
+ * resolution only happen a single time per call site.
+ */
+export async function resolveNewsWebSearch(scopedDb: DataContextDb) {
+  const model = await new AiRepository().selectChatModelForUser(scopedDb);
+  return resolveWebSearchEngine(
+    scopedDb,
+    model ? { id: model.id, capabilities: model.capabilities } : null
+  );
+}
+
+/**
+ * #2228: the composition-root seam behind model-native (built-in) web search for list-shaped
+ * callers (News described topics, source-by-name, the web.search tool). Per request it looks up
+ * the actor's effective chat model, asks the engine resolver whether built-in search is active
+ * for that model, and if so returns a runner that executes ONE structured request against that
+ * exact model with the provider's search tool enabled. The runner closes over the request's
+ * scoped data context, so it is built per call and never shared across actors.
+ */
+export function buildModelNativeSearchResolver(deps: {
+  readonly repository: Pick<
+    AiRepository,
+    "selectChatModelForUser" | "resolveModelForService" | "selectProviderWithCredential"
+  >;
+  readonly cipher: Pick<AiSecretCipher, "decryptJson">;
+  readonly logger?: Pick<FastifyBaseLogger, "info" | "warn">;
+  readonly createCliStructuredAdapter?: ReturnType<typeof createCliStructuredAdapterFactory>;
+  readonly resolveEngine?: typeof resolveWebSearchEngine;
+  readonly generate?: typeof generateStructured;
+}): ModelNativeSearchResolver {
+  const resolveEngine = deps.resolveEngine ?? resolveWebSearchEngine;
+  const generate = deps.generate ?? generateStructured;
+  return async (scopedDbUnknown) => {
+    const scopedDb = scopedDbUnknown as DataContextDb;
+    const model = await deps.repository.selectChatModelForUser(scopedDb);
+    const resolution = await resolveEngine(
+      scopedDb,
+      model ? { id: model.id, capabilities: model.capabilities } : null
+    );
+    if (resolution.engine !== "model-native" || !model) return null;
+    return {
+      modelId: model.id,
+      runner: async (input) => {
+        const generated = await generate(
+          scopedDb,
+          {
+            service: "module.web-research",
+            schema: input.schema,
+            prompt: input.prompt,
+            nativeSearch: true,
+            explicitModel: {
+              id: model.id,
+              provider_config_id: model.provider_config_id,
+              provider_kind: model.provider_kind,
+              provider_model_id: model.provider_model_id
+            }
+          },
+          {
+            repository: deps.repository,
+            cipher: deps.cipher,
+            logger: deps.logger,
+            createCliStructuredAdapter: deps.createCliStructuredAdapter
+          }
+        );
+        if (!generated.ok) return null;
+        return { object: generated.object, sources: generated.sources };
+      }
+    };
+  };
+}
+
+/**
+ * #2228: connect the web-research module's search engines. The module stays db-free, so this
+ * composition root injects two per-request resolvers: the decrypt-at-use Brave key reader, and
+ * the model-native (built-in) search resolver that runs against the actor's own chat model.
+ * Called from BOTH the web server startup (registerRoutes) and the background worker startup
+ * (registerWorkers): they are separate processes, and News topic refresh searches from the
+ * worker. Without the worker half, the News gate unlocks but every background refresh silently
+ * finds no stories (review 2 of PR #2280).
+ */
+export function installWebSearchResolvers(deps: {
+  readonly webSearchCipher: WebSearchSecretCipher;
+  readonly logger?: Pick<FastifyBaseLogger, "info" | "warn">;
+  readonly createCliStructuredAdapter?: ReturnType<typeof createCliStructuredAdapterFactory>;
+}): void {
+  setModelNativeSearchResolver(
+    buildModelNativeSearchResolver({
+      repository: new AiRepository(),
+      cipher: createAiSecretCipher(),
+      logger: deps.logger,
+      createCliStructuredAdapter: deps.createCliStructuredAdapter
+    })
+  );
+  setWebSearchKeyResolver(
+    (scopedDb) => readBraveSearchApiKey(scopedDb as DataContextDb, deps.webSearchCipher),
+    {
+      // Metadata-only observability event. NEVER include the key/ciphertext/envelope/derived
+      // value (Hard Invariant: secrets never escape). An operator pairs this with the setting
+      // key to diagnose a keyring/rotation problem without exposing secret material.
+      onDecryptFailed: () =>
+        deps.logger?.warn(
+          { event: "web_search.key_decrypt_failed" },
+          "Stored Brave Search key failed to decrypt; falling back to env key"
+        )
+    }
+  );
+}
+
+/**
  * #1110: UAT-only. Deterministically fakes a transient News source-preview error for one
  * sentinel input, so the app-map-grounding UAT spec can prove the "no invented fix" path
  * without a live upstream. Both env vars are set unconditionally in the UAT app container's
@@ -930,6 +1109,16 @@ function buildNewsStoryFeedbackPort(
   });
   return {
     storyRef: (canonicalUrl) => storyFeedbackTargetRef("news", canonicalUrl),
+    listDismissedRefs: async (scopedDb, ownerUserId) => {
+      const rules = await usefulnessFeedbackRepository.listActiveStoryRules(
+        scopedDb,
+        ownerUserId,
+        "news"
+      );
+      return new Set(
+        rules.filter((rule) => rule.direction === "less").map((rule) => rule.targetRef)
+      );
+    },
     registerTargets: async (scopedDb, ownerUserId, rows) => {
       for (const row of rows) {
         await usefulnessFeedbackRepository.upsertTarget(scopedDb, {
@@ -1405,9 +1594,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         fetchFn: deps.fetchFn
       });
       // Instance-wide Brave Search key: dedicated admin routes (the key is AES-256-GCM
-      // encrypted at rest, never returned). The web-research module stays db-free; this
-      // composition root injects the decrypt-at-use resolver so the tool resolves the key
-      // per request. invalidateWebSearchProviderCache on save/revoke = no restart needed.
+      // encrypted at rest, never returned). invalidateWebSearchProviderCache on save/revoke = no
+      // restart needed. The search engines themselves are connected by installWebSearchResolvers.
       const webSearchCipher = createWebSearchSecretCipher();
       registerWebSearchKeyRoutes(server, {
         dataContext: deps.dataContext,
@@ -1416,27 +1604,41 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         cipher: webSearchCipher,
         onKeyChanged: invalidateWebSearchProviderCache
       });
+      // Family encryption keys (#2312): dedicated admin routes. Clearing the
+      // integrations tool cache on change unpauses tools without a restart.
+      registerFamilyKeyRoutes(server, {
+        dataContext: deps.dataContext,
+        resolveAccessContext: deps.resolveAccessContext,
+        repository: new SettingsRepository(),
+        onKeyChanged: () => resolverCache.clear()
+      });
       registerRuntimeConfigRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
         repository: new SettingsRepository()
       });
-      setWebSearchKeyResolver(
-        (scopedDb) => readBraveSearchApiKey(scopedDb as DataContextDb, webSearchCipher),
-        {
-          // Metadata-only observability event. NEVER include the key/ciphertext/envelope/derived
-          // value (Hard Invariant: secrets never escape). An operator pairs this with the setting
-          // key to diagnose a keyring/rotation problem without exposing secret material.
-          onDecryptFailed: () =>
-            server.log.warn(
-              { event: "web_search.key_decrypt_failed" },
-              "Stored Brave Search key failed to decrypt; falling back to env key"
-            )
-        }
-      );
+      installWebSearchResolvers({
+        webSearchCipher,
+        logger: server.log,
+        createCliStructuredAdapter: deps.createCliStructuredAdapter
+      });
     },
-    registerWorkers: (boss, deps) =>
-      registerSettingsJobWorkers(boss, deps.dataContext, deps.rootDb, getBuiltInModuleManifests)
+    registerWorkers: async (boss, deps) => {
+      // #2228 (fix round 2): the worker is a separate process, so the search engines installed
+      // by registerRoutes never reach it. News topic refresh runs here and calls web search, so
+      // without this every background refresh silently returned no stories.
+      installWebSearchResolvers({
+        webSearchCipher: createWebSearchSecretCipher(),
+        logger: deps.logger,
+        createCliStructuredAdapter: createCliStructuredAdapterFactory()
+      });
+      return registerSettingsJobWorkers(
+        boss,
+        deps.dataContext,
+        deps.rootDb,
+        getBuiltInModuleManifests
+      );
+    }
   },
   {
     manifest: connectorsModuleManifest,
@@ -1475,13 +1677,28 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         }
       };
       const actionRowRelevance = createActionRowRelevancePort();
+      // #2274: maybe_owed threads go to the Commitments judgement queue; the gate is told which
+      // senders the user already knows (People identities plus people the user has written to).
+      const emailRepositoryForJudgement = new EmailRepository();
+      const userAddressesFor = buildUserAddressesFor({ email: emailRepositoryForJudgement });
+      const knownSenderAddresses = buildKnownSenderAddresses({
+        people: new PeopleRepository(),
+        email: emailRepositoryForJudgement,
+        userAddressesFor
+      });
+      const threadJudgementRequester = {
+        requestThreadJudgement: (owner: string, thread: string) =>
+          enqueueEmailThreadJudgement(boss, owner, thread)
+      };
       const googleWorkIds = await registerConnectorsJobWorkers(boss, {
         dataContext: deps.dataContext,
         rootDb: deps.rootDb,
         taskPort: emailTaskPort,
         actionRowRelevance,
         createCliStructuredAdapter,
-        logger: deps.logger
+        logger: deps.logger,
+        threadJudgementRequester,
+        knownSenderAddresses
       });
       // #792: self-healing periodic sweep, additive to the connect/manual-sync triggers
       // above. Needs the raw root Kysely handle (not DataContextDb) because it must
@@ -1491,7 +1708,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const googleSweepWorkId = await registerGoogleSyncSweepWorker(boss, deps.rootDb);
       const imapWorkIds = await registerImapSyncWorker(boss, {
         dataContext: deps.dataContext,
-        createCliStructuredAdapter
+        createCliStructuredAdapter,
+        threadJudgementRequester,
+        knownSenderAddresses
       });
       const monitorWorkIds = await registerSourceMonitorWorkers(boss, {
         dataContext: deps.dataContext,
@@ -1555,7 +1774,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     registerRoutes: (server, deps) =>
       registerIntegrationsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
-        dataContext: deps.dataContext
+        dataContext: deps.dataContext,
+        // Master key store (#2312): per-request family key, never eager at boot.
+        resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY)
       })
   },
   {
@@ -1566,7 +1787,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: notificationsModuleManifest,
     sqlMigrationDirectories: [notificationsModuleSqlMigrationDirectory],
-    queueDefinitions: [{ name: DIGEST_COMPOSE_QUEUE, options: { retryLimit: 0 } }],
+    queueDefinitions: [
+      { name: DIGEST_COMPOSE_QUEUE, options: { retryLimit: 0 } },
+      // #743 security finding 8: temporary push-service failures (throttling, 5xx, a send
+      // that never answers) retry with backoff; the worker asks for the retry only after its
+      // transaction commits, and skips devices that already received the payload.
+      { name: PUSH_DELIVER_QUEUE, options: PUSH_QUEUE_RETRY_OPTIONS },
+      { name: PUSH_SUMMARY_QUEUE, options: PUSH_QUEUE_RETRY_OPTIONS }
+    ],
     registerRoutes: registerNotificationsRoutes,
     registerWorkers: async (boss, deps) => [
       await registerDataContextWorker(
@@ -1582,6 +1810,22 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             notificationPreferencePort: createNotificationPreferencePort(),
             sender: createNotificationDigestSender()
           })
+      ),
+      await registerDataContextWorker<PushDeliverJobPayload, PushDeliveryOutcome>(
+        boss,
+        PUSH_DELIVER_QUEUE,
+        deps.dataContext,
+        (job, scopedDb) => runPushDeliverJob(job, scopedDb),
+        PUSH_WORK_OPTIONS,
+        { afterCommit: throwIfPushRetryNeeded }
+      ),
+      await registerDataContextWorker<PushSummaryJobPayload, PushDeliveryOutcome>(
+        boss,
+        PUSH_SUMMARY_QUEUE,
+        deps.dataContext,
+        (job, scopedDb) => runPushSummaryJob(job, scopedDb),
+        PUSH_WORK_OPTIONS,
+        { afterCommit: throwIfPushRetryNeeded }
       )
     ]
   },
@@ -1740,6 +1984,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         localePreferences: new PreferencesRepository(),
         agencyPreferences: new PreferencesRepository(),
         priorityPreferences: new PreferencesRepository(),
+        // #2228: the gateway hides the web.search tool only when the actor has no search engine
+        // (no Brave key and no chat model with built-in search, or built-in search switched off).
+        webSearchEngineForActor: (actorUserId) =>
+          deps.dataContext.withDataContext(
+            { actorUserId, requestId: "gateway:web-search-engine" },
+            async (scopedDb) => (await resolveNewsWebSearch(scopedDb)).engine
+          ),
         notesRecall: deps.notesRecall,
         googleConnectionService: deps.googleConnectionService,
         googleApiClient: deps.googleApiClient,
@@ -1841,7 +2092,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         },
         notificationsRepository: new NotificationsRepository(
           quietHoursPortImpl,
-          createNotificationPreferencePort()
+          createNotificationPreferencePort(),
+          createPushQueuePort(boss)
         ),
         logger: briefingsLogger
       });
@@ -2021,10 +2273,17 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       );
       const sourcesRepository = new SportsSourcesRepository();
       const espnCoverageRepository = new SportsEspnCoverageRepository();
+      // #2237 story photos are copied into the owner's own vault and served from our origin, so
+      // the vault runner and the byte fetch port are built here rather than inside the module.
+      const sportsPhotoStore = new SportsPhotoStore({
+        vault: new VaultContextRunner(getVaultBaseDir()),
+        fetchBytes: discovery.fetchBytes
+      });
       const publicSourceReader = new SportsPublicSourceReader({
         dataContext: deps.dataContext,
         repository: sourcesRepository,
         fetch: discovery.fetch,
+        photos: sportsPhotoStore,
         cache: new DatasetCache({ maxEntries: 500 })
       });
       const followsRepository = new SportsFollowsRepository();
@@ -2086,7 +2345,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveTeams: async (competitionKey) =>
           (await sourceTeamResolver.getLeagueTeams(competitionKey)).teams,
         dataContext: deps.dataContext,
-        reader: publicSourceReader
+        reader: publicSourceReader,
+        photos: sportsPhotoStore
       });
       configureSportsChatTools(datasetClient, followsRepository, sourceService);
       registerSportsRoutes(server, {
@@ -2100,6 +2360,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         publicSourceReader,
         previews,
         sourceService,
+        photos: sportsPhotoStore,
         storyRelevance: sportsStoryRelevance,
         storyFeedback: sportsStoryFeedback
       });
@@ -2142,8 +2403,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           discovery.ai,
           createModuleLogger(server.log, "news")
         ),
-        // #2005: the composition root owns key resolution; News only holds the port.
-        credentialCipher: createNewsCredentialCipherPort(),
+        // #2005/#2322: the composition root owns key resolution; News only
+        // holds a per-use resolver, never key material.
+        resolveCredentialCipher: (scopedDb) => resolveNewsCredentialCipherPort(scopedDb),
         // #2008/#2006: the reviewed connection list and its bounded key check.
         publisherConnections: createRegistryNewsPublisherConnectionPort(),
         credentialRepository: new NewsCredentialRepository(),
@@ -2161,7 +2423,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
                 }
               )
             ).model !== null,
-          hasWebSearch: async (scopedDb) => (await getWebSearchKeyConfig(scopedDb)).configured
+          hasWebSearch: async (scopedDb) => {
+            const resolution = await resolveNewsWebSearch(scopedDb);
+            return resolution.engine !== "none";
+          },
+          webSearchReason: async (scopedDb) => {
+            const resolution = await resolveNewsWebSearch(scopedDb);
+            return resolution.engine === "none" ? resolution.reason : null;
+          }
         }
       });
     },
@@ -2176,7 +2445,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const credentialedSource = createNewsCredentialedSourceReader({
         connection,
         credentials,
-        cipher: createNewsCredentialCipherPort()
+        decryptApiKey: createNewsCredentialDecryptor()
       });
       return registerNewsJobWorkers(boss, deps.dataContext, {
         ...discovery,
@@ -2192,7 +2461,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // owner's per-module notification preference like every other module emitter.
         notificationsRepository: new NotificationsRepository(
           quietHoursPortImpl,
-          createNotificationPreferencePort()
+          createNotificationPreferencePort(),
+          createPushQueuePort(boss)
         ),
         revalidationLogger: {
           info: (fields) => deps.logger?.info(fields, "news revalidation")
@@ -2238,6 +2508,16 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       })
   },
   {
+    manifest: scratchpadModuleManifest,
+    sqlMigrationDirectories: [scratchpadModuleSqlMigrationDirectory],
+    queueDefinitions: [],
+    registerRoutes: (server, deps) =>
+      registerScratchpadRoutes(server, {
+        dataContext: deps.dataContext,
+        resolveAccessContext: deps.resolveAccessContext
+      })
+  },
+  {
     manifest: proactiveMonitoringModuleManifest,
     sqlMigrationDirectories: [proactiveMonitoringSqlMigrationDirectory],
     queueDefinitions: [PROACTIVE_SCAN_SOURCE_QUEUE],
@@ -2273,21 +2553,58 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: commitmentsModuleManifest,
     sqlMigrationDirectories: [commitmentsModuleSqlMigrationDirectory],
-    queueDefinitions: [{ name: COMMITMENT_EXTRACTION_QUEUE, options: {} }],
+    queueDefinitions: [
+      { name: COMMITMENT_EXTRACTION_QUEUE, options: {} },
+      // #2274: one thread judgement per job; retries are spaced out because the reasoning
+      // tier is slow and the debounce already coalesces bursts.
+      {
+        name: COMMITMENT_EMAIL_JUDGEMENT_QUEUE,
+        options: { retryLimit: 5, retryDelay: 120, retryBackoff: true }
+      }
+    ],
     registerRoutes: (server, deps) =>
       registerCommitmentsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
         boss: deps.boss
       }),
-    registerWorkers: async (boss, deps) =>
-      registerCommitmentExtractionWorker(boss, deps.dataContext, {
-        aiRepository: new AiRepository(),
-        cipher: createAiSecretCipher(),
+    registerWorkers: async (boss, deps) => {
+      const logger = deps.logger ? createModuleLogger(deps.logger, "commitments") : undefined;
+      const aiRepository = new AiRepository();
+      const cipher = createAiSecretCipher();
+      const extractionIds = await registerCommitmentExtractionWorker(boss, deps.dataContext, {
+        aiRepository,
+        cipher,
         repository: new CommitmentsRepository(),
         providers: [chatCommitmentProvider, notesCommitmentProvider],
-        logger: deps.logger ? createModuleLogger(deps.logger, "commitments") : undefined
-      })
+        logger
+      });
+      // #2274: the second pass over email. Context comes from the other modules' public read
+      // tools and repositories (module isolation); the email module exposes threads through
+      // the shared EmailThreadProvider contract.
+      const emailRepository = new EmailRepository();
+      const peopleRepository = new PeopleRepository();
+      const userAddressesFor = buildUserAddressesFor({ email: emailRepository });
+      const judgementIds = await registerEmailThreadJudgementWorker(boss, deps.dataContext, {
+        repository: new CommitmentsRepository(),
+        threads: createEmailThreadProvider(emailRepository, userAddressesFor),
+        context: buildEmailContextProviders({
+          manifests: [notesModuleManifest, tasksModuleManifest, calendarModuleManifest],
+          people: new PersonContextService(peopleRepository),
+          timezoneFor: storedTimeZoneFor
+        }),
+        generate: buildEmailJudgementGenerate({
+          aiRepository,
+          cipher,
+          generateStructured,
+          createCliStructuredAdapter: createCliStructuredAdapterFactory(),
+          logger
+        }),
+        timezoneFor: storedTimeZoneFor,
+        logger
+      });
+      return [...extractionIds, ...judgementIds];
+    }
   },
   {
     manifest: peopleManifest,
@@ -2654,6 +2971,12 @@ export async function resolveRequestTimeZoneForRoute(
   const stored = await dataContext.withDataContext(accessContext, (scopedDb) =>
     preferences.get(scopedDb, "locale")
   );
+  return resolveTimeZone(undefined, extractStoredTimeZone(stored));
+}
+
+/** The user's stored timezone (locale preference), or the server default (#2274 worker path). */
+async function storedTimeZoneFor(scopedDb: unknown, _actorUserId: string): Promise<string> {
+  const stored = await new PreferencesRepository().get(scopedDb as DataContextDb, "locale");
   return resolveTimeZone(undefined, extractStoredTimeZone(stored));
 }
 

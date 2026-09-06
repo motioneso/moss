@@ -41,13 +41,16 @@ describe("web research manifest", () => {
     expect(tools.find((t) => t.name === "web.search")?.risk).toBe("read");
 
     // web.read fetches arbitrary URLs (#359) and is the v0.1.0 audit's prompt-injection-to-
-    // exfiltration finding — it stays confirm_always with no actionFamilyId/executionPolicy so
-    // policy.ts:40 confirms every call (Opus security review, PR #1268; #1263 Task 5).
+    // exfiltration finding. It used to confirm every call for that reason (Opus security review,
+    // PR #1268; #1263 Task 5), but Ben ruled, 2026-09-05 (#2326), that asking every time made the
+    // turn never finish and he accepted the remaining risk, so it now runs like web.search: risk
+    // "read", never confirms, and still never gets an actionFamilyId/executionPolicy so it can
+    // never be promoted to a trusted, auto-run family either.
     const webRead = tools.find((t) => t.name === "web.read");
-    expect(webRead?.risk).toBe("write");
+    expect(webRead?.risk).toBe("read");
     expect(webRead?.actionFamilyId).toBeUndefined();
     expect(webRead?.executionPolicy).toBeUndefined();
-    expect(webRead?.selfOperationGrant).toBe("confirm_always");
+    expect(webRead?.selfOperationGrant).toBeUndefined();
   });
 });
 
@@ -697,6 +700,36 @@ describe("fetchWebResource", () => {
     await expect(
       fetchWebResource("https://bare.example/story", { robots: createRobotsGate() })
     ).resolves.toMatchObject({ ok: true, body: "the page" });
+  });
+
+  // Bug (PR 2252, second review round): the site's own rules file (robots.txt) followed
+  // redirects without checking the allowed-host list, so a publisher could point its rules file
+  // at an unapproved site and this request would still go fetch it. Every hop of that fetch must
+  // be checked the same way the page fetch itself is checked.
+  it("refuses a site rules file that redirects to a host outside the allowed list", async () => {
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    let calledUnapprovedHost = false;
+    setWebHttpTransportForTests(async (request) => {
+      if (request.url.hostname === "publisher.example" && request.url.pathname === "/robots.txt") {
+        return new Response(null, {
+          status: 301,
+          headers: { location: "https://not-approved.example/robots.txt" }
+        });
+      }
+      if (request.url.hostname === "not-approved.example") {
+        calledUnapprovedHost = true;
+        return new Response("User-agent: *\nAllow: /", { status: 200 });
+      }
+      return new Response("the page", { status: 200 });
+    });
+
+    await expect(
+      fetchWebResource("https://publisher.example/story", {
+        robots: createRobotsGate(),
+        allowedHosts: ["publisher.example"]
+      })
+    ).resolves.toMatchObject({ ok: false, reason: "robots" });
+    expect(calledUnapprovedHost).toBe(false);
   });
 
   it("maps rate limits, truncation, and timeout", async () => {

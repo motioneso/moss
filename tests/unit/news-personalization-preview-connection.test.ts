@@ -217,10 +217,16 @@ function buildNewsServer(options: {
     } as unknown as DataContextRunner,
     resolveAccessContext: async () => user,
     datasetClient: unusedDatasetClient,
-    availability: { hasJsonModel: async () => true, hasWebSearch: async () => true },
+    availability: {
+      hasJsonModel: async () => true,
+      hasWebSearch: async () => true,
+      webSearchReason: async () => null
+    },
     discovery: {
+      fetchWithOptions: servePages(options.pages),
       fetch: servePages(options.pages),
       image: async () => ({ ok: false, reason: "network" }),
+      favicon: async () => ({ ok: false, reason: "network" }),
       search: {
         search: async () => ({
           results: (options.searchResults ?? []).map((url) => ({
@@ -247,10 +253,10 @@ function buildNewsServer(options: {
       remove: async () => true
     },
     personalizationRepository: emptyPersonalizationStore(),
-    credentialCipher: {
+    resolveCredentialCipher: async () => ({
       encrypt: () => ({ version: 1, algorithm: "aes-256-gcm", iv: "", tag: "", ciphertext: "" }),
       decrypt: () => ({ apiKey: "unused" })
-    },
+    }),
     ...(options.wireConnections === false
       ? {}
       : { publisherConnections: createRegistryNewsPublisherConnectionPort() })

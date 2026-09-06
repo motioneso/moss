@@ -56,6 +56,15 @@ interface EspnCompetitor {
     readonly logos?: readonly { readonly href?: string }[];
   };
   readonly records?: readonly { readonly summary?: string }[];
+  // Hockey scoreboard events carry each side's own "goal leaders" here — see hockeyScorers below
+  // for the caveat that this list can be shorter than the actual number of distinct scorers.
+  readonly leaders?: readonly {
+    readonly name?: string;
+    readonly leaders?: readonly {
+      readonly displayValue?: string;
+      readonly athlete?: { readonly shortName?: string; readonly displayName?: string };
+    }[];
+  }[];
 }
 
 interface EspnEvent {
@@ -64,6 +73,23 @@ interface EspnEvent {
   readonly competitions?: readonly {
     readonly competitors?: readonly EspnCompetitor[];
     readonly status?: { readonly type?: { readonly state?: string; readonly detail?: string } };
+    // Soccer scoreboard events carry every scoring play here (one entry per goal) — see
+    // soccerScorers below.
+    readonly details?: readonly {
+      readonly type?: { readonly text?: string };
+      // ESPN's own "this play was a goal" flag. Authoritative: it is true for every goal
+      // variant text ("Goal", "Goal - Header", "Goal - Volley", ...) and false for cards
+      // and substitutions.
+      readonly scoringPlay?: boolean;
+      readonly team?: { readonly id?: string };
+      // Minute of the goal, e.g. "11'" or "90'+1'" (verified in the saved Everton-Brentford
+      // response) — rendered after the scorer's name as "I. Thiago 11, 51, 88".
+      readonly clock?: { readonly displayValue?: string };
+      readonly athletesInvolved?: readonly {
+        readonly shortName?: string;
+        readonly displayName?: string;
+      }[];
+    }[];
   }[];
 }
 
@@ -112,7 +138,87 @@ function mapState(state: string | undefined): GameSummary["state"] {
   return "pre";
 }
 
-function toSide(competitor: EspnCompetitor | undefined): GameSide {
+// ESPN writes a goal's minute as "11'" or, in added time, "90'+1'". Ben's target line is
+// "Isak 6, 8", so the apostrophes come off and added time keeps its plus ("90+1").
+function goalMinute(displayValue: string | undefined): string | null {
+  const trimmed = (displayValue ?? "").replace(/'/g, "").trim();
+  return /^\d/.test(trimmed) ? trimmed : null;
+}
+
+// One line per scorer, with every minute they scored in: "Isak 6, 8". A goal whose minute the
+// provider left out falls back to the repeat-count form, so a name is never dropped.
+function tallyScorersWithMinutes(
+  goals: readonly { readonly name: string; readonly minute: string | null }[]
+): readonly string[] {
+  const byName = new Map<string, string[]>();
+  const missingMinutes = new Map<string, number>();
+  for (const goal of goals) {
+    const minutes = byName.get(goal.name) ?? [];
+    if (goal.minute != null) minutes.push(goal.minute);
+    else missingMinutes.set(goal.name, (missingMinutes.get(goal.name) ?? 0) + 1);
+    byName.set(goal.name, minutes);
+  }
+  return Array.from(byName.entries()).map(([name, minutes]) => {
+    if (minutes.length > 0) return `${name} ${minutes.join(", ")}`;
+    const count = missingMinutes.get(name) ?? 1;
+    return count > 1 ? `${name} (${count})` : name;
+  });
+}
+
+type EspnScoringDetails = NonNullable<NonNullable<EspnEvent["competitions"]>[number]["details"]>;
+
+// A scoring play in ESPN's soccer detail list. Match on ESPN's own `scoringPlay` flag rather
+// than on the play's label: verified live against ESPN's January 4, 2026 Everton-Brentford
+// scoreboard (#2253), goals arrive under several labels ("Goal", "Goal - Header",
+// "Goal - Volley", "Goal - Penalty", ...), so any label allowlist silently drops real goals —
+// that game lost both Everton goals and one of Brentford's three. The label prefix is only a
+// fallback for a response that omits the flag; cards and substitutions match neither.
+function isSoccerGoal(detail: EspnScoringDetails[number] | undefined): boolean {
+  if (detail?.scoringPlay === true) return true;
+  if (detail?.scoringPlay === false) return false;
+  return (detail?.type?.text ?? "").startsWith("Goal");
+}
+
+// Soccer: `competitions[0].details` is a complete list of scoring plays (one entry per goal,
+// verified live against ESPN's API). Filter to actual goals for the given team, then tally.
+function soccerScorers(
+  details: EspnScoringDetails | undefined,
+  teamId: string | undefined
+): readonly string[] | null {
+  const goals = (details ?? [])
+    .filter((d) => isSoccerGoal(d) && d?.team?.id === teamId)
+    .flatMap((d) =>
+      (d?.athletesInvolved ?? []).map((a) => ({
+        name: a?.shortName ?? a?.displayName,
+        minute: goalMinute(d?.clock?.displayValue)
+      }))
+    )
+    .filter((goal): goal is { name: string; minute: string | null } => goal.name != null);
+  return goals.length === 0 ? null : tallyScorersWithMinutes(goals);
+}
+
+// Hockey: each competitor carries ESPN's own "goals" leaders category. This is ESPN's "goal
+// leaders" list, not a full scoring log, and it can be capped shorter than the number of
+// distinct scorers on a team (verified live: Dallas scored 4 goals, only 3 distinct scorers were
+// listed) — so a team with several different scorers may show one fewer name than goals scored.
+// That is a gap in what the provider hands back, not a bug in this parsing.
+function hockeyScorers(leaders: EspnCompetitor["leaders"]): readonly string[] | null {
+  const goals = (leaders ?? []).find((category) => category?.name === "goals");
+  const names = (goals?.leaders ?? [])
+    .map((leader) => {
+      const name = leader?.athlete?.shortName ?? leader?.athlete?.displayName;
+      if (name == null) return null;
+      const count = Number(leader.displayValue);
+      return count > 1 ? `${name} (${count})` : name;
+    })
+    .filter((name): name is string => name != null);
+  return names.length === 0 ? null : names;
+}
+
+function toSide(
+  competitor: EspnCompetitor | undefined,
+  scorers: readonly string[] | null
+): GameSide {
   const team = competitor?.team;
   const teamKey = (team?.abbreviation ?? team?.id ?? "").toLowerCase();
   // Object-shaped scores come from the /schedule endpoint; Number({...}) is NaN, which used to
@@ -123,6 +229,11 @@ function toSide(competitor: EspnCompetitor | undefined): GameSide {
   const score = scoreValue === undefined || scoreValue === "" ? null : Number(scoreValue);
   return {
     teamKey,
+    // ESPN's own numeric team id, kept alongside teamKey. A scoreboard/schedule fetch only sees
+    // one competition at a time, so it can't tell a shared-abbreviation team apart the way
+    // listTeams can (see the collision check there) — this lets matching code fall back to the
+    // id when two teams share an abbreviation (review finding S1, 2026-09-04).
+    sourceTeamId: team?.id ?? null,
     name: team?.displayName ?? teamKey,
     shortName: team?.shortDisplayName ?? team?.displayName ?? teamKey,
     // `logo` on scoreboard payloads, `logos[0].href` on schedule payloads — without the
@@ -131,7 +242,8 @@ function toSide(competitor: EspnCompetitor | undefined): GameSide {
     crestUrl: team?.logo ?? team?.logos?.[0]?.href ?? null,
     score: score === null || Number.isNaN(score) ? null : score,
     record: competitor?.records?.[0]?.summary ?? null,
-    winner: competitor?.winner === true
+    winner: competitor?.winner === true,
+    scorers
   } satisfies GameSide;
 }
 
@@ -141,14 +253,22 @@ function toGame(event: EspnEvent, competitionKey: string): GameSummary {
   const home = competitors.find((c) => c.homeAway === "home") ?? competitors[0];
   const away = competitors.find((c) => c.homeAway === "away") ?? competitors[1];
   const type = competition?.status?.type;
+  // Safe to call here: getScoreboard already calls resolve() on the same competitionKey before
+  // toGame runs, so an unknown key would have thrown there first.
+  const { sport } = resolve(competitionKey);
+  const scorersFor = (c: EspnCompetitor | undefined): readonly string[] | null => {
+    if (sport === "soccer") return soccerScorers(competition?.details, c?.team?.id);
+    if (sport === "hockey") return hockeyScorers(c?.leaders);
+    return null;
+  };
   return {
     id: event.id ?? "",
     competitionKey,
     startsAt: event.date ?? "",
     state: mapState(type?.state),
     statusDetail: type?.detail ?? "",
-    home: toSide(home),
-    away: toSide(away)
+    home: toSide(home, scorersFor(home)),
+    away: toSide(away, scorersFor(away))
   };
 }
 
@@ -197,6 +317,8 @@ function toStandingsRow(entry: EspnStandingsEntry, index: number): StandingsRow 
   const played = wins + losses + (draws ?? 0);
   return {
     teamKey,
+    // See the matching field on GameSide (toSide, above) for why this rides alongside teamKey.
+    sourceTeamId: entry.team?.id ?? null,
     name: entry.team?.displayName ?? teamKey,
     // US record leagues at ?level=3 carry NO "rank" stat on division entries (verified live
     // 2026-07-07) but arrive standings-sorted, so the position in the section IS the rank.
@@ -288,17 +410,51 @@ async function listTeams(fetchFn: typeof fetch, params: EspnTeamsParams): Promis
     }[];
   };
   const teams = data.sports?.[0]?.leagues?.[0]?.teams ?? [];
-  return teams.map(({ team }) => {
-    const teamKey = (team?.abbreviation ?? team?.id ?? "").toLowerCase();
+  // The college catalog added for #2210 is large enough that the same short abbreviation gets
+  // reused by two different schools within one competition (e.g. two teams both answering "PAC"
+  // in NCAA baseball, review finding S1, 2026-09-04). A follow saved under a shared abbreviation
+  // is a coin flip on which team a person actually gets, so any abbreviation that repeats in this
+  // list is not a safe identity. Those teams get a key that joins the short name to ESPN's own
+  // numeric id ("pac.413"), NOT the bare id: a bare id would sit in the same space as every other
+  // team's short name, and ESPN really does hand out abbreviations that are all digits, so team
+  // 413's key could silently become another team's name. The dot is part of the accepted key
+  // shape already (competition keys like "eng.1"), so this passes the follow tool's input rules.
+  // Every other, non-colliding team keeps the exact same key it has always had, so existing saved
+  // follows for those teams are unaffected.
+  const abbreviationCounts = new Map<string, number>();
+  for (const { team } of teams) {
+    const abbreviation = team?.abbreviation?.toLowerCase();
+    if (!abbreviation) continue;
+    abbreviationCounts.set(abbreviation, (abbreviationCounts.get(abbreviation) ?? 0) + 1);
+  }
+  const refs = teams.map(({ team }) => {
+    const abbreviation = team?.abbreviation?.toLowerCase();
+    const id = (team?.id ?? "").toLowerCase();
+    const isAmbiguous =
+      abbreviation !== undefined && (abbreviationCounts.get(abbreviation) ?? 0) > 1;
+    const teamKey =
+      isAmbiguous && id !== "" ? `${abbreviation}.${id}` : (abbreviation ?? id ?? "").toLowerCase();
     return {
       teamKey,
       competitionKey,
       name: team?.displayName ?? teamKey,
       shortName: team?.shortDisplayName ?? team?.displayName ?? teamKey,
       crestUrl: team?.logos?.[0]?.href ?? null,
-      sourceTeamId: team?.id ?? null
+      sourceTeamId: team?.id ?? null,
+      abbreviation: abbreviation ?? null
     } satisfies SourceTeamRef;
   });
+  // Last-resort guard: two teams must never leave here holding the same key, whatever ESPN sent
+  // (an abbreviation that already contains a dot, two teams with no id at all). A duplicate key
+  // is the exact failure this whole change exists to prevent, so break the tie rather than trust
+  // the shapes above.
+  const keyCounts = new Map<string, number>();
+  for (const ref of refs) keyCounts.set(ref.teamKey, (keyCounts.get(ref.teamKey) ?? 0) + 1);
+  return refs.map((ref, index) =>
+    (keyCounts.get(ref.teamKey) ?? 0) > 1
+      ? { ...ref, teamKey: `${ref.teamKey}.${(ref.sourceTeamId ?? String(index)).toLowerCase()}` }
+      : ref
+  );
 }
 
 async function getScoreboard(

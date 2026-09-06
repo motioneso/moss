@@ -34,8 +34,8 @@ describe("EspnDatasetAdapter", () => {
       okFetch(fixture("nfl-scoreboard.json"))
     )) as {
       state: string;
-      home: { teamKey: string; score: number | null; winner: boolean };
-      away: { teamKey: string };
+      home: { teamKey: string; score: number | null; winner: boolean; scorers: string[] | null };
+      away: { teamKey: string; scorers: string[] | null };
     }[];
     expect(games.length).toBeGreaterThan(0);
     expect(games[0]?.home.teamKey).toBeTypeOf("string");
@@ -45,6 +45,146 @@ describe("EspnDatasetAdapter", () => {
     expect(games[0]?.away.teamKey).toBe("ne");
     expect(["pre", "live", "final"]).toContain(games[0]?.state);
     expect(games[0]?.state).toBe("final");
+    // NFL carries neither field in a form that maps to "goals" — no scorers for any other sport.
+    expect(games[0]?.home.scorers).toBeNull();
+    expect(games[0]?.away.scorers).toBeNull();
+  });
+
+  it("parses soccer scoring plays into each side's goal scorers with their minutes", async () => {
+    const event = {
+      id: "1",
+      date: "2026-01-04T00:00:00Z",
+      competitions: [
+        {
+          competitors: [
+            { homeAway: "home", team: { id: "100", abbreviation: "MIN" } },
+            { homeAway: "away", team: { id: "200", abbreviation: "DAL" } }
+          ],
+          status: { type: { state: "post", detail: "Full Time" } },
+          details: [
+            {
+              type: { text: "Goal" },
+              team: { id: "100" },
+              clock: { displayValue: "6'" },
+              athletesInvolved: [{ shortName: "A. Isak" }]
+            },
+            {
+              type: { text: "Goal" },
+              team: { id: "100" },
+              clock: { displayValue: "8'" },
+              athletesInvolved: [{ shortName: "A. Isak" }]
+            },
+            {
+              type: { text: "Goal" },
+              team: { id: "200" },
+              clock: { displayValue: "90'+2'" },
+              athletesInvolved: [{ shortName: "Z. Benson" }]
+            },
+            // Non-goal scoring plays (e.g. a card) must not be counted as a scorer.
+            {
+              type: { text: "Yellow Card" },
+              team: { id: "200" },
+              athletesInvolved: [{ shortName: "X" }]
+            }
+          ]
+        }
+      ]
+    };
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "usa.1", day: "2026-01-04" },
+      okFetch({ events: [event] })
+    )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
+    // Ben's target line, #2253: one row per scorer, every minute they scored in.
+    expect(games[0]?.home.scorers).toEqual(["A. Isak 6, 8"]);
+    expect(games[0]?.away.scorers).toEqual(["Z. Benson 90+2"]);
+  });
+
+  it("counts every goal ESPN flags, whatever the play is labelled (#2253)", async () => {
+    // The provider's real, saved response for Everton v Brentford on January 4, 2026. Its goals
+    // arrive labelled "Goal", "Goal - Header" and "Goal - Volley"; an earlier label allowlist
+    // dropped both Everton goals and one of Brentford's three from Thiago.
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "eng.1", day: "2026-01-04" },
+      okFetch(fixture("eng1-scoreboard-20260104-everton-brentford.json"))
+    )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
+    expect(games[0]?.home.scorers).toEqual(["Beto 66", "T. Barry 90+1"]);
+    expect(games[0]?.away.scorers).toEqual(["I. Thiago 11, 51, 88", "N. Collins 50"]);
+  });
+
+  it("ignores cards and other non-scoring plays in the same list", async () => {
+    const event = {
+      id: "1",
+      date: "2026-01-04T00:00:00Z",
+      competitions: [
+        {
+          competitors: [
+            { homeAway: "home", team: { id: "100", abbreviation: "EVE" } },
+            { homeAway: "away", team: { id: "200", abbreviation: "BRE" } }
+          ],
+          status: { type: { state: "post", detail: "Full Time" } },
+          details: [
+            {
+              type: { text: "Yellow Card" },
+              scoringPlay: false,
+              team: { id: "100" },
+              athletesInvolved: [{ shortName: "J. Garner" }]
+            },
+            {
+              type: { text: "Goal - Penalty" },
+              scoringPlay: true,
+              team: { id: "100" },
+              athletesInvolved: [{ shortName: "D. Calvert-Lewin" }]
+            }
+          ]
+        }
+      ]
+    };
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "eng.1", day: "2026-01-04" },
+      okFetch({ events: [event] })
+    )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
+    expect(games[0]?.home.scorers).toEqual(["D. Calvert-Lewin"]);
+    expect(games[0]?.away.scorers).toBeNull();
+  });
+
+  it("parses hockey goal leaders into each side's scorers", async () => {
+    const event = {
+      id: "1",
+      date: "2026-01-04T00:00:00Z",
+      competitions: [
+        {
+          competitors: [
+            {
+              homeAway: "home",
+              team: { id: "100", abbreviation: "DAL" },
+              leaders: [
+                {
+                  name: "goals",
+                  leaders: [
+                    { displayValue: "1", athlete: { shortName: "Z. Benson" } },
+                    { displayValue: "1", athlete: { shortName: "T. Hintz" } }
+                  ]
+                }
+              ]
+            },
+            { homeAway: "away", team: { id: "200", abbreviation: "MIN" } }
+          ],
+          status: { type: { state: "post", detail: "Final" } }
+        }
+      ]
+    };
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "nhl", day: "2026-01-04" },
+      okFetch({ events: [event] })
+    )) as { home: { scorers: string[] | null }; away: { scorers: string[] | null } }[];
+    // Dallas scored 4 goals in the real game this fixture is modeled on but ESPN's own "goal
+    // leaders" list only carries these two distinct scorers — that gap is expected here.
+    expect(games[0]?.home.scorers).toEqual(["Z. Benson", "T. Hintz"]);
+    expect(games[0]?.away.scorers).toBeNull();
   });
 
   it("throws a typed error on non-200 (caller degrades)", async () => {
@@ -295,6 +435,85 @@ describe("EspnDatasetAdapter", () => {
       okFetch(fixture("nfl-teams.json"))
     )) as { sourceTeamId: string | null }[];
     expect(teams[0]?.sourceTeamId).toBe("6");
+  });
+
+  // Review finding S1 (2026-09-04): ESPN's college catalog reuses one abbreviation for two
+  // different schools (e.g. Pacific Lutheran and Pacific Tigers both answer "PAC" in NCAA
+  // baseball). On the old code both teams got the same teamKey, so following one silently
+  // returned the other team's games and standings. This proves the two teams now get their own,
+  // separate identity, while a team whose abbreviation is not shared with anyone else in the
+  // same list still gets its plain abbreviation, unchanged.
+  it("gives two teams that share an abbreviation their own separate identity", async () => {
+    const collidingTeams = {
+      sports: [
+        {
+          leagues: [
+            {
+              teams: [
+                {
+                  team: {
+                    id: "129700",
+                    abbreviation: "PAC",
+                    displayName: "Pacific Lutheran Lutes",
+                    shortDisplayName: "Lutes"
+                  }
+                },
+                {
+                  team: {
+                    id: "413",
+                    abbreviation: "PAC",
+                    displayName: "Pacific Tigers",
+                    shortDisplayName: "Tigers"
+                  }
+                },
+                {
+                  team: {
+                    id: "99",
+                    abbreviation: "SOL",
+                    displayName: "Solo University",
+                    shortDisplayName: "Solo"
+                  }
+                },
+                {
+                  // ESPN really does hand out all-digit abbreviations. This team is named "413",
+                  // which is also Pacific Tigers' permanent number — the exact case that made the
+                  // old keys unsafe, because the Tigers' key was the bare number 413 too.
+                  team: {
+                    id: "7001",
+                    abbreviation: "413",
+                    displayName: "Team 413",
+                    shortDisplayName: "413"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    };
+    const teams = (await fetchDataset(
+      "teams",
+      { competitionKey: "ncaa-baseball" },
+      okFetch(collidingTeams)
+    )) as { teamKey: string; sourceTeamId: string | null; name: string }[];
+    const lutes = teams.find((t) => t.name === "Pacific Lutheran Lutes");
+    const tigers = teams.find((t) => t.name === "Pacific Tigers");
+    const solo = teams.find((t) => t.name === "Solo University");
+    const numeric = teams.find((t) => t.name === "Team 413");
+    // The shared short name stays visible, joined to the provider's permanent number. A bare
+    // number would sit in the same space as every other team's short name, which is how a saved
+    // Tigers follow could end up meaning Team 413.
+    expect(lutes?.teamKey).toBe("pac.129700");
+    expect(tigers?.teamKey).toBe("pac.413");
+    // A team with no collision keeps the plain abbreviation it always had.
+    expect(solo?.teamKey).toBe("sol");
+    expect(numeric?.teamKey).toBe("413");
+    // The whole point: every team leaves with an identity no other team in the list holds.
+    expect(new Set(teams.map((t) => t.teamKey)).size).toBe(teams.length);
+    // And no team sharing a short name is identified by a bare number, which is what let one
+    // team's number be read as another team's name.
+    expect(tigers?.teamKey).not.toBe(tigers?.sourceTeamId);
+    expect(lutes?.teamKey).not.toBe(lutes?.sourceTeamId);
   });
 
   it("passes the schedule params through to the teams/competition-scoped endpoint", async () => {

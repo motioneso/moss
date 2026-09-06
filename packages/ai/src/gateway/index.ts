@@ -19,6 +19,7 @@ export {
   sanitizeAssistantToolResult,
   boundedAssistantToolResultData,
   capRenderedToolResult,
+  liveStreamResult,
   renderAndCap
 } from "./output-validation.js";
 export type {
@@ -29,12 +30,11 @@ export type {
 } from "./types.js";
 export {
   AssistantToolGateway,
-  createUnwiredActionResolver,
-  liveStreamResult,
   type AssistantToolGatewayDependencies,
   type NativeToolPermissionRequest,
   type NativeToolPermissionResponse
 } from "./gateway.js";
+export { createUnwiredActionResolver } from "./unwired-action-resolver.js";
 export {
   AutoRunRateLimiter,
   GATEWAY_AUTO_RUN_RATE_LIMIT_DEFAULTS,

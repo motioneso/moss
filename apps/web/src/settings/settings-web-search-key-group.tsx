@@ -7,7 +7,7 @@ import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
 import { useFeedback } from "./settings-feedback";
 import { readError } from "./settings-types";
-import { Field, Group, Note } from "./settings-ui";
+import { Field, Group, Note, Row, Switch } from "./settings-ui";
 import { Button } from "@moss/ui";
 
 export function WebSearchKeyGroup() {
@@ -24,8 +24,15 @@ export function WebSearchKeyGroup() {
   const status = statusQuery.data?.status;
   const configured = status?.configured ?? false;
   const fromEnv = status?.source === "env";
+  const nativeSearchEnabled = status?.nativeSearchEnabled ?? true;
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.ai.webSearchKey });
+
+  const nativeSearchMutation = useMutation({
+    mutationFn: (enabled: boolean) => putWebSearchKey({ nativeSearchEnabled: enabled }),
+    onSuccess: () => void invalidate(),
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
 
   const saveMutation = useMutation({
     mutationFn: (key: string) => putWebSearchKey({ apiKey: key }),
@@ -45,14 +52,32 @@ export function WebSearchKeyGroup() {
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
 
+  const statusLine = configured
+    ? "On, using Brave"
+    : nativeSearchEnabled
+      ? "On, using each person's chat model"
+      : "Off. Add a Brave key or turn on built-in search.";
+
   return (
     <Group
       title="Web search"
-      desc={`${assistantName} searches the live web through Brave Search. Add an instance-wide API key to turn it on for everyone.`}
+      desc={`${assistantName} can search the live web to answer questions. Each person's chat model uses its own built-in search by default; add a Brave Search key for consistent results across every model, including local ones.`}
     >
+      <Row
+        name="Use your model's built-in web search"
+        desc={statusLine}
+        control={
+          <Switch
+            ariaLabel="Use your model's built-in web search"
+            checked={nativeSearchEnabled}
+            disabled={nativeSearchMutation.isPending}
+            onChange={(enabled) => nativeSearchMutation.mutate(enabled)}
+          />
+        }
+      />
       <Field
         label="Brave Search API key"
-        hint="Stored encrypted. Never shown in chat, briefings or logs."
+        hint="Enhanced: consistent results for every model, including local ones. Stored encrypted. Never shown in chat, briefings or logs."
       >
         <input
           className="jds-input"
@@ -99,7 +124,7 @@ export function WebSearchKeyGroup() {
           <>Web search is on. Get or manage keys at the Brave Search API dashboard.</>
         ) : (
           <>
-            Web search is off until a key is added. Get one at{" "}
+            Add a Brave Search key for the same results on every model. Get one at{" "}
             <a href="https://brave.com/search/api/" target="_blank" rel="noreferrer">
               brave.com/search/api
             </a>

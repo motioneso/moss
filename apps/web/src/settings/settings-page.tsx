@@ -18,15 +18,20 @@ import {
   ServerCog,
   ShieldCheck,
   GitCommitHorizontal,
+  KeyRound,
   UserRound,
   Users,
   type LucideIcon
 } from "lucide-react";
 import { Fragment, lazy, Suspense, useEffect, useState, type ComponentType } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useQuery } from "@tanstack/react-query";
+import { MODULE_SETTINGS_SURFACES, MODULE_SETTING_KEYWORDS } from "virtual:moss-module-settings";
 
 import { SettingsSearch, type SettingsSearchItem } from "./settings-search";
 
+import { getFamilyKeys, getMyModules } from "../api/client";
+import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
 import { FeedbackProvider } from "./settings-feedback";
 import { ProfilePane } from "./settings-personal-panes";
@@ -35,13 +40,16 @@ import {
   flattenSettingsGroups,
   type SettingsSectionGroup
 } from "./settings-navigation";
+import { CAT_BY_ID } from "./settings-module-availability";
+import { buildModuleSettingsSearchItems, MODULE_SEARCH_ID_PREFIX } from "./settings-module-search";
 import {
   browserSettingsStorage,
   readSettingsStorage,
   writeSettingsStorage
 } from "./settings-storage";
 import type { PaneProps } from "./settings-types";
-import { PrioritySettings, Segmented } from "./settings-ui";
+import { Button } from "@moss/ui";
+import { Note, PrioritySettings, Segmented } from "./settings-ui";
 import { CORE_APP_SETTINGS, type MeResponse } from "@moss/shared";
 
 type SettingsPane = ComponentType<PaneProps>;
@@ -74,7 +82,14 @@ type PersonalSectionId =
   | "skills"
   | "released";
 
-type AdminSectionId = "people" | "aiproviders" | "instmods" | "audit" | "oversight" | "host";
+type AdminSectionId =
+  | "people"
+  | "aiproviders"
+  | "instmods"
+  | "audit"
+  | "oversight"
+  | "host"
+  | "enckeys";
 
 function lazyPane(loader: () => Promise<{ default: SettingsPane }>) {
   return lazy(loader);
@@ -136,6 +151,11 @@ const OversightPane = lazyPane(() =>
 );
 const HostPane = lazyPane(() =>
   import("./settings-admin-panes").then((module) => ({ default: module.HostPane }))
+);
+const EncryptionKeysPane = lazyPane(() =>
+  import("./settings-encryption-keys-pane").then((module) => ({
+    default: module.EncryptionKeysPane
+  }))
 );
 
 const ASSISTANT_NAME_GROUP_LABEL = "__ASSISTANT_NAME__";
@@ -304,6 +324,13 @@ const ADMIN_GROUPS = [
         label: "Advanced host setup",
         description: coreSettingDescription("host"),
         Pane: HostPane
+      },
+      {
+        id: "enckeys",
+        icon: KeyRound,
+        label: "Encryption keys",
+        description: coreSettingDescription("enckeys"),
+        Pane: EncryptionKeysPane
       }
     ]
   }
@@ -339,7 +366,8 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
   aiproviders: ["api key", "openai", "anthropic", "ollama", "model", "provider"],
   instmods: ["install", "modules", "uninstall", "update"],
   audit: ["log", "history", "who did what"],
-  host: ["server", "domain", "url", "backup", "advanced"]
+  host: ["server", "domain", "url", "backup", "advanced"],
+  enckeys: ["encryption", "keys", "secret", "credentials", "setup"]
 };
 
 interface SettingsPageProps {
@@ -352,6 +380,21 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const isAdmin = me.user.isInstanceAdmin;
   const storage = browserSettingsStorage();
   const assistantName = useAssistantName();
+  const myModulesQuery = useQuery({
+    queryKey: queryKeys.myModules,
+    queryFn: getMyModules,
+    retry: false
+  });
+  const familyKeysQuery = useQuery({
+    queryKey: queryKeys.ai.familyKeys,
+    queryFn: getFamilyKeys,
+    retry: false,
+    // Non-admins have no admin surface: never let their browser call an admin endpoint.
+    enabled: isAdmin
+  });
+  const missingFamilyKeys = (familyKeysQuery.data?.keys ?? []).filter(
+    (key) => key.source === "missing" || key.source === "broken"
+  );
 
   const [mode, setMode] = useState<"personal" | "admin">(() =>
     isAdmin && readSettingsStorage(storage, "mode") === "admin" ? "admin" : "personal"
@@ -398,9 +441,17 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const Pane = activeSection.Pane;
 
   const setActiveSection = (id: PersonalSectionId | AdminSectionId) => {
-    const next = adminMode
-      ? coerceSettingsSectionId(ADMIN_SECTIONS, id)
-      : coerceSettingsSectionId(PERSONAL_SECTIONS, id);
+    // A link from a personal pane may target an admin section (Chat settings' "Set up" points at
+    // AI providers). Resolve across both lists so the URL carries the real id and the mode follows
+    // it; coercing against the current mode's list silently landed on its first entry.
+    const personal = PERSONAL_SECTIONS.find((section) => section.id === id)?.id;
+    const admin = isAdmin ? ADMIN_SECTIONS.find((section) => section.id === id)?.id : undefined;
+    const next =
+      personal ??
+      admin ??
+      (adminMode
+        ? coerceSettingsSectionId(ADMIN_SECTIONS, id)
+        : coerceSettingsSectionId(PERSONAL_SECTIONS, id));
     setSearchParams({ section: next });
   };
 
@@ -409,7 +460,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
     setSearchParams({ section: nextMode === "admin" ? categoryAdmin : categoryPersonal });
   };
 
-  const searchItems: SettingsSearchItem[] = [
+  const sectionSearchItems: SettingsSearchItem[] = [
     ...PERSONAL_GROUPS,
     ...(isAdmin ? ADMIN_GROUPS : [])
   ].flatMap((group) =>
@@ -421,6 +472,23 @@ export function SettingsPage({ me }: SettingsPageProps) {
       keywords: SECTION_KEYWORDS[section.id] ?? []
     }))
   );
+  const moduleSearchItems = buildModuleSettingsSearchItems(
+    myModulesQuery.data?.modules ?? [],
+    MODULE_SETTINGS_SURFACES,
+    assistantName,
+    MODULE_SETTING_KEYWORDS
+  );
+  const searchItems: SettingsSearchItem[] = [...sectionSearchItems, ...moduleSearchItems];
+
+  const pickSearchResult = (id: string) => {
+    if (id.startsWith(MODULE_SEARCH_ID_PREFIX)) {
+      const moduleId = id.slice(MODULE_SEARCH_ID_PREFIX.length);
+      const category = CAT_BY_ID[moduleId];
+      setSearchParams(category ? { section: category } : { section: "modules", module: moduleId });
+      return;
+    }
+    setSearchParams({ section: id });
+  };
 
   return (
     <FeedbackProvider>
@@ -439,7 +507,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
           ) : (
             <span />
           )}
-          <SettingsSearch items={searchItems} onSelect={(id) => setSearchParams({ section: id })} />
+          <SettingsSearch items={searchItems} onSelect={pickSearchResult} />
         </div>
 
         <div className="set2__grid">
@@ -476,6 +544,18 @@ export function SettingsPage({ me }: SettingsPageProps) {
           </nav>
 
           <div className="set2__pane">
+            {adminMode && missingFamilyKeys.length > 0 ? (
+              <Note icon={<KeyRound size={13} />}>
+                Encryption needs attention:{" "}
+                {missingFamilyKeys.length === 1
+                  ? "one key is"
+                  : `${missingFamilyKeys.length} keys are`}{" "}
+                not set up. Some features are paused.{" "}
+                <Button variant="secondary" size="sm" onClick={() => setActiveSection("enckeys")}>
+                  Review
+                </Button>
+              </Note>
+            ) : null}
             <Suspense fallback={<div className="pane__loading">Loading settings...</div>}>
               <Pane
                 me={me}

@@ -252,7 +252,8 @@ export const sportsRetrySourceExecute: ToolExecute = async (
 
 export const sportsRemoveSourceExecute: ToolExecute = async (
   scopedDb,
-  input
+  input,
+  ctx
 ): Promise<ToolResult> => {
   assertDataContextDb(scopedDb);
   const sourceId = stringField(input, "sourceId");
@@ -261,7 +262,16 @@ export const sportsRemoveSourceExecute: ToolExecute = async (
     (item) => item.id === sourceId
   );
   if (!source) return { data: { error: "That sports source was not found." } };
-  return { data: { removed: await requireSourceService().removeSource(scopedDb, sourceId) } };
+  return {
+    data: {
+      // #2237 the actor is required for the stored photos to be removed with the source: without
+      // it the delete succeeds and every saved photo for the source is silently left behind.
+      removed: await requireSourceService().removeSource(scopedDb, sourceId, {
+        actorUserId: ctx.actorUserId,
+        requestId: ctx.requestId
+      })
+    }
+  };
 };
 
 export const summarizeSportsConfirmSource: ToolSummarize = (input) =>

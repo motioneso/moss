@@ -39,7 +39,8 @@ describe("sports follow tools — cross-actor RLS isolation (#1265)", () => {
             name: "Dallas",
             shortName: "DAL",
             crestUrl: null,
-            sourceTeamId: null
+            // Round 5: saving is refused unless the provider gives the team a permanent number.
+            sourceTeamId: "6"
           }
         ],
         degraded: false,

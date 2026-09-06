@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { validateToolInput } from "@moss/ai";
 import { collectSportsSourcesExportSection } from "../../packages/sports/src/data-lifecycle.js";
 import { sportsModuleManifest } from "../../packages/sports/src/manifest.js";
+import { redditEntryToHeadline } from "../../packages/sports/src/source/reddit.js";
 
 describe("sports manifest", () => {
   it("declares owner-only table + nav + settings + routes", () => {
@@ -23,7 +24,9 @@ describe("sports manifest", () => {
       "sql/0192_sports_legacy_feed_assignments_verified.sql",
       "sql/0193_sports_legacy_feed_assignment_repair.sql",
       "sql/0196_sports_news_source_scopes.sql",
-      "sql/0213_sports_reddit_sources.sql"
+      "sql/0213_sports_reddit_sources.sql",
+      "sql/0217_sports_follows_source_team_id.sql",
+      "sql/0222_sports_source_photos.sql"
     ]);
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
     expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");
@@ -33,7 +36,8 @@ describe("sports manifest", () => {
         "/api/sports/standings-preferences",
         "/api/sports/sources/:id/retry",
         "/api/sports/sources/:id/rebuild/preview",
-        "/api/sports/sources/:id/rebuild"
+        "/api/sports/sources/:id/rebuild",
+        "/api/sports/sources/:id/photos"
       ])
     );
     expect(sportsModuleManifest.dataLifecycle?.exportSections).toEqual([
@@ -43,6 +47,23 @@ describe("sports manifest", () => {
         collect: collectSportsSourcesExportSection
       }
     ]);
+  });
+
+  it("tells Moss about the Stop using Moss's photos control and what it does", () => {
+    // #2237 review 1 and review 2 finding 4: the app map must describe the control this slice
+    // ships and its effect (it forgets the instruction Moss found and keeps the ordinary feed and
+    // article-page photos), or Moss cannot explain the setting. Matching "feed" anywhere in the
+    // text proved nothing, so each assertion pins the sentence that states the effect.
+    const feature = sportsModuleManifest.features.find((f) => f.id === "sports.source_photos");
+    expect(feature?.description).toContain("Stop using Moss's photos");
+    expect(feature?.description).toContain(
+      "Stop using Moss's photos forgets Moss's instruction; feed and article photos stay"
+    );
+    const settings = sportsModuleManifest.settings.find((s) => s.id === "sports.follows");
+    expect(settings?.description).toContain("Stop using Moss's photos");
+    expect(settings?.description).toContain(
+      "Stop using Moss's photos forgets Moss's instruction, feed and article photos stay"
+    );
   });
 
   it("exposes follows plus bounded actor-scoped source tools", () => {
@@ -183,5 +204,57 @@ describe("sports manifest", () => {
       ["articleBody", "headlines", "schedule", "scoreboard", "standings", "teams"].sort()
     );
     expect(espn?.datasets.every((d) => d.staleness === "degrade-empty")).toBe(true);
+  });
+  // #2253: an over-long description is not a style nit — the module registry throws while
+  // loading the built-in module list, so the API and the worker both refuse to start.
+  it("keeps every app-map description inside the length the registry enforces", () => {
+    const LIMIT = 240;
+    const entries = [
+      ...sportsModuleManifest.navigation.map((s) => [`navigation ${s.id}`, s.description] as const),
+      ...sportsModuleManifest.settings.map((s) => [`settings ${s.id}`, s.description] as const),
+      ...(sportsModuleManifest.features ?? []).map(
+        (f) => [`feature ${f.id}`, f.description] as const
+      )
+    ];
+    const tooLong = entries
+      .filter(([, description]) => description.trim().length > LIMIT)
+      .map(([label, description]) => `${label}: ${description.trim().length}`);
+    expect(tooLong).toEqual([]);
+    expect(entries.every(([, description]) => description.trim().length > 0)).toBe(true);
+  });
+
+  // The registry validates every built-in module the moment it is loaded, which is what the API
+  // and the worker do on boot — so a successful import here is a real start-up check, not a proxy.
+  it("loads the built-in module list the API and worker boot from", async () => {
+    await expect(import("../../packages/module-registry/src/index.js")).resolves.toBeDefined();
+  });
+});
+
+describe("sports manifest keeps its subreddit-source promise truthful (review #2210, 2026-09-04)", () => {
+  it("does not claim to filter out pinned posts, since Reddit's feed carries no pinned flag to filter on", () => {
+    const entry = sportsModuleManifest.features.find((f) => f.id === "sports.subreddit_sources");
+    expect(entry?.description).not.toMatch(
+      /stick(y|ied)|pinned posts.*(skipped|filtered|removed)/i
+    );
+  });
+
+  it("actually includes a pinned-looking post when it links out, matching the corrected promise", () => {
+    // Reddit's Atom feed has no field marking a post as pinned/stickied at all — a `category`
+    // some subreddits use for an "Announcement" flair is the closest thing, and it is not a
+    // pinned signal. redditEntryToHeadline() only ever looks at the outbound [link] anchor, so a
+    // would-be-pinned post that links to an article comes through like any other post does.
+    const html =
+      `<!-- SC_OFF --><div class="md"><p>Body</p></div><!-- SC_ON --> submitted by ` +
+      `<a href="https://www.reddit.com/user/mods"> /u/mods </a> <br/> ` +
+      `<span><a href="https://www.espn.com/nfl/story/_/id/1/season-preview">[link]</a></span> ` +
+      `<span><a href="https://www.reddit.com/r/nfl/comments/pin1/thread/">[comments]</a></span>`;
+    const escaped = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const entryXml =
+      `<entry><author><name>/u/mods</name></author><category term="nfl" label="r/nfl"/>` +
+      `<content type="html">${escaped}</content><id>t3_pin1</id>` +
+      `<link href="https://www.reddit.com/r/nfl/comments/pin1/thread/" />` +
+      `<updated>2025-09-04T14:13:20+00:00</updated><published>2025-09-04T14:13:20+00:00</published>` +
+      `<title>Season preview megathread</title></entry>`;
+    expect(redditEntryToHeadline(entryXml)).not.toBeNull();
   });
 });

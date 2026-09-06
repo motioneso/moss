@@ -12,6 +12,7 @@ import type {
   PreviewSportsSourceAssignmentsResponse,
   PreviewSportsSourceRecipeResponse,
   PreviewSportsSourceResponse,
+  ResolveSportsFollowTeamRequest,
   SportsCatalogResponse,
   SportsCustomSourceDto,
   SportsNewsSourcesResponse,
@@ -68,6 +69,17 @@ export async function createSportsFollow(
     method: "POST",
     body: input
   });
+}
+
+/** Answers "which team did you mean?" for one older saved follow. */
+export async function resolveSportsFollowTeam(
+  id: string,
+  input: ResolveSportsFollowTeamRequest
+): Promise<{ follow: SportsFollowDto }> {
+  return requestJson<{ follow: SportsFollowDto }>(
+    `/api/sports/follows/${encodeURIComponent(id)}/team`,
+    { method: "POST", body: input }
+  );
 }
 
 export async function deleteSportsFollow(id: string): Promise<{ ok: boolean }> {
@@ -186,6 +198,16 @@ export async function confirmSportsSourceRecipe(
   return requestJson<{ source: SportsCustomSourceDto }>(
     `/api/sports/sources/${encodeURIComponent(id)}/rebuild`,
     { method: "PATCH", body: input }
+  );
+}
+
+/** #2237 "Stop using Moss's photos" on one source's settings row. */
+export async function stopUsingSportsSourcePhotos(
+  id: string
+): Promise<{ source: SportsCustomSourceDto }> {
+  return requestJson<{ source: SportsCustomSourceDto }>(
+    `/api/sports/sources/${encodeURIComponent(id)}/photos`,
+    { method: "DELETE" }
   );
 }
 

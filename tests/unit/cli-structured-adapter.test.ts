@@ -283,3 +283,143 @@ describe("CliStructuredAdapter (#982/#869/#981)", () => {
     expect(killCount).toBe(1);
   });
 });
+
+// ─── #2228: built-in web search for command-line models ───────────────────────────────────────
+describe("CliStructuredAdapter — nativeSearch and sources (#2228)", () => {
+  it("forwards nativeSearch to the launch and returns the sources the CLI's search reported", async () => {
+    const launch = vi.fn(async () => ({ offset: 0 }));
+    let call = 0;
+    const factory: ChatEngineFactory = () => ({
+      provider: "anthropic",
+      launch,
+      submit: vi.fn(async () => undefined),
+      readNew: vi.fn(async () => {
+        call += 1;
+        return call === 1
+          ? {
+              records: [
+                {
+                  kind: "tool" as const,
+                  text: "",
+                  toolCallId: "toolu_1",
+                  sources: [{ title: "A", url: "https://example.com/a" }]
+                }
+              ],
+              offset: 5,
+              complete: false
+            }
+          : {
+              records: [
+                {
+                  kind: "tool" as const,
+                  text: "",
+                  toolCallId: "toolu_2",
+                  sources: [
+                    { title: "A again", url: "https://example.com/a" },
+                    { title: "B", url: "https://example.com/b" }
+                  ]
+                },
+                { kind: "reply" as const, text: '{"ok":true}' }
+              ],
+              offset: 12,
+              complete: true
+            };
+      }),
+      interrupt: vi.fn(async () => undefined),
+      isAlive: vi.fn(async () => true),
+      kill: vi.fn(async () => undefined)
+    });
+    const adapter = new CliStructuredAdapter("anthropic", factory, 1_000, 0);
+
+    const result = await adapter.generateStructured({
+      model: { provider_kind: "anthropic", provider_model_id: "claude-opus-4-8" },
+      messages: [{ role: "user", content: "What happened today?" }],
+      schema: { type: "object", required: ["ok"] },
+      maxOutputTokens: 100,
+      nativeSearch: true
+    });
+
+    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ nativeSearch: true }));
+    expect(result).toEqual({
+      rawText: '{"ok":true}',
+      usage: { inputTokens: 0, outputTokens: 0 },
+      sources: [
+        { title: "A", url: "https://example.com/a" },
+        { title: "B", url: "https://example.com/b" }
+      ]
+    });
+  });
+
+  it("omits nativeSearch from the launch and sources from the result when search was not asked for", async () => {
+    const launch = vi.fn(async (_input: unknown) => ({ offset: 0 }));
+    const factory: ChatEngineFactory = () => ({
+      provider: "anthropic",
+      launch,
+      submit: vi.fn(async () => undefined),
+      readNew: vi.fn(async () => ({
+        records: [{ kind: "reply" as const, text: '{"ok":true}' }],
+        offset: 12,
+        complete: true
+      })),
+      interrupt: vi.fn(async () => undefined),
+      isAlive: vi.fn(async () => false),
+      kill: vi.fn(async () => undefined)
+    });
+    const adapter = new CliStructuredAdapter("anthropic", factory, 1_000, 0);
+
+    const result = await adapter.generateStructured({
+      model: { provider_kind: "anthropic", provider_model_id: "claude-opus-4-8" },
+      messages: [{ role: "user", content: "Extract a value" }],
+      schema: { type: "object", required: ["ok"] },
+      maxOutputTokens: 100
+    });
+
+    expect(launch.mock.calls[0]?.[0]).not.toHaveProperty("nativeSearch");
+    expect(result).not.toHaveProperty("sources");
+  });
+
+  it("keeps sources on a reply that only becomes readable during teardown", async () => {
+    let tornDown = false;
+    const factory: ChatEngineFactory = () => ({
+      provider: "anthropic",
+      launch: vi.fn(async () => ({ offset: 0 })),
+      submit: vi.fn(async () => undefined),
+      readNew: vi.fn(async () =>
+        tornDown
+          ? {
+              records: [
+                {
+                  kind: "tool" as const,
+                  text: "",
+                  sources: [{ title: "Late", url: "https://example.com/late" }]
+                },
+                { kind: "reply" as const, text: '{"ok":true}' }
+              ],
+              offset: 12,
+              complete: true
+            }
+          : { records: [], offset: 0, complete: false }
+      ),
+      interrupt: vi.fn(async () => undefined),
+      isAlive: vi.fn(async () => true),
+      kill: vi.fn(async () => {
+        tornDown = true;
+      })
+    });
+    const adapter = new CliStructuredAdapter("anthropic", factory, 20, 0);
+
+    const result = await adapter.generateStructured({
+      model: { provider_kind: "anthropic", provider_model_id: "claude-opus-4-8" },
+      messages: [{ role: "user", content: "Extract a value" }],
+      schema: { type: "object", required: ["ok"] },
+      maxOutputTokens: 100,
+      nativeSearch: true
+    });
+
+    expect(result).toEqual({
+      rawText: '{"ok":true}',
+      usage: { inputTokens: 0, outputTokens: 0 },
+      sources: [{ title: "Late", url: "https://example.com/late" }]
+    });
+  });
+});

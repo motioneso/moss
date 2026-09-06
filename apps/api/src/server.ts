@@ -24,10 +24,7 @@ import {
   GoogleApiClient,
   createConnectorSecretCipher
 } from "@moss/connectors";
-import {
-  createIntegrationsActiveModulesResolver,
-  createIntegrationsCipher
-} from "@moss/integrations";
+import { createIntegrationsActiveModulesResolver } from "@moss/integrations";
 import {
   DataContextRunner,
   createDatabase,
@@ -62,7 +59,7 @@ import {
 import { createModuleLogger, CORE_VERSION } from "@moss/module-sdk";
 // #917: /api/modules reads enablement through the public settings API; this is legitimate
 // composition-root wiring, not a module cross-import.
-import { SettingsRepository } from "@moss/settings";
+import { INTEGRATIONS_FAMILY, SettingsRepository, loadFamilyKeyring } from "@moss/settings";
 import {
   type ExternalModuleWorkerRuntime,
   createExternalModuleDiscoveryHolder,
@@ -372,6 +369,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       workerDataContext,
       appDataContext: dataContext,
       settingsRepository: externalModulesRepository,
+      boss,
       logger: { warn: (data, message) => server.log.warn(data, message) },
       // ctx.ai bridge for module workers (#932, spec D6).
       ai: createModuleAiBridge({
@@ -442,13 +440,16 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         })
     );
 
-    // Task 7 wired the integrations REST routes (and their cipher) in module-registry,
-    // not here — this is a second cipher instance off the same key chain, used only to
-    // decrypt connection credentials at tool-call time for the synthetic chat tools below.
-    const integrationsCipher = createIntegrationsCipher(process.env);
+    // The integrations family key loads per request from env or the master key
+    // store (#2312) — never eagerly here, so a missing key degrades the tools
+    // instead of failing startup.
     const resolveActiveModulesWithIntegrations = createIntegrationsActiveModulesResolver(
       resolveActiveModules,
-      { dataContext, cipher: integrationsCipher, logger: server.log }
+      {
+        dataContext,
+        resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY),
+        logger: server.log
+      }
     );
 
     // Connector collaborators for the calendar focus-time write tool. A single shared
@@ -589,22 +590,36 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       // #1762: narrowed to the four fields the personal Modules list needs, so the settings
       // package never sees a ReconciledExternalModule (it cannot import that type).
       listInstalledExternalModules: async (accessContext) =>
-        (await listInstalledExternalModules(accessContext)).map((module) => ({
-          id: module.id,
-          name: module.name,
-          version: module.version,
-          hasPreferences: module.preferences.length > 0,
-          // #1759: read from the boot discovery snapshot rather than the reconciled module,
-          // which does not carry credential declarations. A module with user-scope slots and no
-          // switches still needs a settings page — that is exactly Finance.
-          hasUserCredentials: (
+        (await listInstalledExternalModules(accessContext)).map((module) => {
+          const userCredentials = (
             externalModuleHolder.getDiscoveries().find((d) => d.id === module.id)?.manifest.auth ??
             []
-          ).some((declaration) => declaration.scope === "user"),
-          // #1945: the resolver above only ever returns "draft" or "enabled" here (its filter
-          // keeps `active` modules only, and drift-disabled/discovered ones are never active).
-          status: module.status as "draft" | "enabled"
-        })),
+          ).filter((declaration) => declaration.scope === "user");
+          return {
+            id: module.id,
+            name: module.name,
+            version: module.version,
+            hasPreferences: module.preferences.length > 0,
+            // #1759: read from the boot discovery snapshot rather than the reconciled module,
+            // which does not carry credential declarations. A module with user-scope slots and no
+            // switches still needs a settings page — that is exactly Finance.
+            hasUserCredentials: userCredentials.length > 0,
+            // #1945: the resolver above only ever returns "draft" or "enabled" here (its filter
+            // keeps `active` modules only, and drift-disabled/discovered ones are never active).
+            status: module.status as "draft" | "enabled",
+            // Search keywords, never a stored value: each declared switch's label and help text,
+            // plus the display name of each declared user-scope credential slot (e.g. "Plaid
+            // access tokens" for Finance).
+            settingKeywords: [
+              ...module.preferences.flatMap((preference) =>
+                [preference.label, preference.description].filter((text): text is string =>
+                  Boolean(text)
+                )
+              ),
+              ...userCredentials.map((declaration) => declaration.displayName)
+            ]
+          };
+        }),
       moduleDistribution,
       // #1263 Task 15: install-time self-operation grants also apply on (re-)enable. Built here
       // over the one AiRepository instance this file already owns, so settings never imports

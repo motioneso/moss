@@ -86,8 +86,10 @@ try {
 // --- Generate boot secrets once (node:crypto). ------------------------------
 // BETTER_AUTH_SECRET drives session + JWT signing (48 bytes -> base64).
 const betterAuthSecret = randomBytes(48).toString("base64");
-// Connector / AI secret keys are the at-rest encryption keys for connector creds
-// and AI provider config — 32 bytes -> hex.
+// Independent at-rest encryption keys for each credential store — 32 bytes -> hex.
+// Master key store (#2322 slice 2): setup no longer writes the three family keys
+// (integrations, module credential, news credential). The admin creates them with
+// Generate in Settings, Encryption keys, so there is exactly one path that makes them.
 const connectorSecretKey = randomBytes(32).toString("hex");
 const aiSecretKey = randomBytes(32).toString("hex");
 // POSTGRES_PASSWORD is the superuser password for FIRST volume init. base64url
@@ -226,8 +228,10 @@ if (tlsSettings) {
 }
 console.log("  2. BACK THIS FILE UP. It is the only copy of your auth/encryption keys;");
 console.log("     losing it orphans sessions + encrypted connector/AI data.");
-console.log("  3. Bring the stack up:");
+console.log("  3. Add MOSS_RECONCILE_CONFIRM_OWNER_EMAIL=<first-account-email> to this file.");
+console.log("     Use that email when creating your first account.");
+console.log("  4. Bring the stack up (existing installs: retain your original project name):");
 console.log(
-  "     docker compose -p jarv1s-prod -f docker-compose.prod.yml " +
-    "--env-file ./env.production.local up -d --build"
+  "     docker compose -p moss -f docker-compose.prod.yml " +
+    "--env-file ./env.production.local up -d --no-build"
 );

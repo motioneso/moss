@@ -25,6 +25,23 @@ export interface GooglePendingRow {
   readonly encryptedSecret: EncryptedConnectorSecret;
 }
 
+/** What caused a sync run to start: a schedule tick, a manual click, the assistant, or right after connecting an account. */
+export type ConnectorSyncTrigger = "schedule" | "manual" | "assistant" | "on-connect";
+
+/**
+ * Snapshot of the prior finished run, copied here right before the current run's outcome
+ * overwrites the `last_sync_*` columns. Lets the UI/API show "what changed since last time"
+ * without keeping a full history table. Counts only, never message content.
+ */
+export interface PreviousSyncSnapshot {
+  readonly startedAt: string | null;
+  readonly finishedAt: string;
+  readonly status: ConnectorSyncStatus;
+  readonly errorCode: string | null;
+  readonly counts: ConnectorSyncCounts;
+  readonly trigger: ConnectorSyncTrigger | null;
+}
+
 export interface ConnectorAccountSafeRow {
   readonly id: string;
   readonly provider_id: string;
@@ -43,6 +60,10 @@ export interface ConnectorAccountSafeRow {
   readonly last_sync_status: ConnectorSyncStatus | null;
   readonly last_sync_error: string | null;
   readonly last_sync_counts: ConnectorSyncCounts | null;
+  // Optional: the admin-safe metadata SQL function (list_connector_account_safe_metadata)
+  // does not select these yet, so admin rows omit them rather than sending null.
+  readonly last_sync_trigger?: ConnectorSyncTrigger | null;
+  readonly previous_sync?: PreviousSyncSnapshot | null;
 }
 
 export interface CreateConnectorAccountInput {
@@ -219,19 +240,55 @@ export class ConnectorsRepository {
    * health/`updated_at` columns — never `status` or `revoked_at`, so an in-flight sync can
    * never silently un-revoke a revoked account. The `id` predicate runs under owner RLS, so
    * only the actor's visible row is affected.
+   *
+   * Before overwriting, copies the row's current (pre-update) summary into `previous_sync` —
+   * this is the only safe point to do it. `markSyncFinished` clears `last_sync_status` back to
+   * null the moment a new run starts, so by the time that new run's own `markSyncFinished`
+   * call runs, the prior run's status is already gone. Reading it here, before this call's own
+   * write, is what "the last good run" actually means. Skipped when there is no prior finished
+   * run to copy (first sync ever) — an empty snapshot is not useful.
    */
   async markSyncStarted(
     scopedDb: DataContextDb,
     accountId: string,
-    startedAt: Date
+    input: { startedAt: Date; trigger: ConnectorSyncTrigger }
   ): Promise<void> {
     assertDataContextDb(scopedDb);
+    const priorRow = await scopedDb.db
+      .selectFrom("app.connector_accounts")
+      .select([
+        "last_sync_started_at",
+        "last_sync_finished_at",
+        "last_sync_status",
+        "last_sync_error",
+        "last_sync_counts",
+        "last_sync_trigger"
+      ])
+      .where("id", "=", accountId)
+      .executeTakeFirst();
+    let previousSync: PreviousSyncSnapshot | null | undefined;
+    if (priorRow && priorRow.last_sync_finished_at && priorRow.last_sync_status) {
+      previousSync = {
+        startedAt: priorRow.last_sync_started_at
+          ? priorRow.last_sync_started_at.toISOString()
+          : null,
+        finishedAt: priorRow.last_sync_finished_at.toISOString(),
+        status: priorRow.last_sync_status,
+        errorCode: priorRow.last_sync_error,
+        counts: (priorRow.last_sync_counts ?? {}) as ConnectorSyncCounts,
+        trigger: (priorRow.last_sync_trigger as ConnectorSyncTrigger | null) ?? null
+      };
+    }
     await scopedDb.db
       .updateTable("app.connector_accounts")
       .set({
-        last_sync_started_at: startedAt,
+        last_sync_started_at: input.startedAt,
         last_sync_status: null,
-        updated_at: startedAt
+        last_sync_trigger: input.trigger,
+        ...(previousSync !== undefined
+          ? { previous_sync: previousSync as unknown as Record<string, unknown> | null }
+          : {}),
+        updated_at: input.startedAt
       })
       .where("id", "=", accountId)
       .execute();
@@ -240,7 +297,11 @@ export class ConnectorsRepository {
   /**
    * Stamp the outcome of a sync run with aggregate-only health. Writes the bounded status,
    * a bounded error label (or null), and the small counts object. Like markSyncStarted it
-   * never touches `status`/`revoked_at`.
+   * never touches `status`/`revoked_at`. Never touches `previous_sync` — that snapshot is
+   * captured by `markSyncStarted`, the only point where the prior run's status is still on
+   * the row (see that method's doc comment). Because the snapshot is taken at run start, this
+   * call needs no continuation flag: a mid-run chunk writing an outcome cannot disturb a
+   * snapshot it never touches.
    */
   async markSyncFinished(
     scopedDb: DataContextDb,
@@ -249,7 +310,7 @@ export class ConnectorsRepository {
       finishedAt: Date;
       status: ConnectorSyncStatus;
       error: string | null;
-      counts: Record<string, number | boolean>;
+      counts: ConnectorSyncCounts;
     }
   ): Promise<void> {
     assertDataContextDb(scopedDb);
@@ -259,7 +320,7 @@ export class ConnectorsRepository {
         last_sync_finished_at: input.finishedAt,
         last_sync_status: input.status,
         last_sync_error: input.error,
-        last_sync_counts: input.counts,
+        last_sync_counts: input.counts as unknown as Record<string, unknown>,
         updated_at: input.finishedAt
       })
       .where("id", "=", accountId)
@@ -569,7 +630,9 @@ export class ConnectorsRepository {
         "accounts.last_sync_finished_at as last_sync_finished_at",
         "accounts.last_sync_status as last_sync_status",
         "accounts.last_sync_error as last_sync_error",
-        "accounts.last_sync_counts as last_sync_counts"
+        "accounts.last_sync_counts as last_sync_counts",
+        sql<ConnectorSyncTrigger | null>`accounts.last_sync_trigger`.as("last_sync_trigger"),
+        sql<PreviousSyncSnapshot | null>`accounts.previous_sync`.as("previous_sync")
       ])
       .orderBy("accounts.created_at", "desc")
       .orderBy("accounts.id");

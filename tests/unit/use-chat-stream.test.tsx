@@ -49,7 +49,9 @@ function thread(id: string): ChatThreadDto {
     title: id,
     incognito: false,
     createdAt: new Date(0).toISOString(),
-    updatedAt: new Date(0).toISOString()
+    updatedAt: new Date(0).toISOString(),
+    lastActiveAt: new Date(0).toISOString(),
+    lastMessagePreview: null
   };
 }
 

@@ -366,10 +366,11 @@ describe("news revalidation jobs (#975 Slice 4)", () => {
     await bootstrap.query(
       `INSERT INTO app.news_custom_sources
          (owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
-          validation_status, health_status, validation_fingerprint, validated_at, updated_at)
+          confirmed_fetch_hosts, validation_status, health_status, validation_fingerprint,
+          validated_at, updated_at)
        VALUES ($1, $3, 'news.example.com', 'https://news.example.com',
-               'https://news.example.com/feed', 'feed', 'approved', 'healthy', $2,
-               now() - interval '1 day', now() - interval '1 day')`,
+               'https://news.example.com/feed', 'feed', ARRAY['news.example.com'], 'approved',
+               'healthy', $2, now() - interval '1 day', now() - interval '1 day')`,
       [ids.userA, fingerprint, `The Example Times${suffix}`]
     );
     await bootstrap.query(
@@ -438,6 +439,7 @@ describe("news revalidation jobs (#975 Slice 4)", () => {
     revalidationLogger?: { info: (fields: NewsRevalidationLogFields) => void };
   }) {
     return registerNewsJobWorkers(workerBoss, workerContext, {
+      fetchWithOptions: overrides.fetch ?? fetchOk,
       fetch: overrides.fetch ?? fetchOk,
       search: { search: async () => ({ results: [] }) },
       ai: overrides.ai,
@@ -709,7 +711,11 @@ describe("news revalidation schedule (#975 Slice 4)", () => {
         actorUserId: String(request.headers["x-user-id"] ?? ids.userA),
         requestId: crypto.randomUUID()
       }),
-      availability: { hasJsonModel: async () => true, hasWebSearch: async () => true },
+      availability: {
+        hasJsonModel: async () => true,
+        hasWebSearch: async () => true,
+        webSearchReason: async () => null
+      },
       discovery: {
         fetch: async (url) => ({
           ok: true,

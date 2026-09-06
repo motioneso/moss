@@ -174,7 +174,8 @@ export function SettingsPeoplePane() {
   if (choosingFolder) {
     return (
       <VaultChooser
-        mode="people"
+        title="Choose a People folder"
+        backLabel="People"
         current={folderValue}
         onCancel={() => setChoosingFolder(false)}
         onChoose={(folder) => {
@@ -192,7 +193,7 @@ export function SettingsPeoplePane() {
         <Row
           name="Folder"
           desc={
-            configuredFolder ? `Vault folder: ${configuredFolder}` : "No People folder configured."
+            configuredFolder ? `Notes folder: ${configuredFolder}` : "No People folder configured."
           }
           control={
             <span style={{ display: "flex", gap: 8, alignItems: "center" }}>

@@ -62,7 +62,8 @@ describe("google-sync queue contract", () => {
     const payload: GoogleSyncPayload = {
       actorUserId: "00000000-0000-0000-0000-000000000001",
       kind: "google-sync",
-      idempotencyKey: "k"
+      idempotencyKey: "k",
+      trigger: "manual"
     };
     for (const key of Object.keys(payload)) {
       expect(ALLOWED_PAYLOAD_KEYS.has(key)).toBe(true);
@@ -84,6 +85,7 @@ describe("google-sync queue contract", () => {
       calendarReconciled: 0,
       emailUpserted: 8,
       emailFailures: 0,
+      emailDeferred: 0,
       escalations: 0,
       errors: []
     };
@@ -164,6 +166,7 @@ describe("google-sync continuation handoff", () => {
                 calendarReconciled: 0,
                 emailUpserted: 1,
                 emailFailures: 0,
+                emailDeferred: 0,
                 escalations: 0,
                 errors: []
               }
@@ -296,6 +299,7 @@ describe("google-sync continuation handoff", () => {
         calendarReconciled: 0,
         emailUpserted: 8,
         emailFailures: 0,
+        emailDeferred: 0,
         escalations: 0,
         errors: []
       }
@@ -342,7 +346,8 @@ describe("google-sync continuation handoff", () => {
     const scheduledData: GoogleSyncPayload = {
       actorUserId: ids.userA,
       kind: "google-sync",
-      idempotencyKey: `schedule:${ids.userA}`
+      idempotencyKey: `schedule:${ids.userA}`,
+      trigger: "schedule"
     };
     const job: { id: string; data: GoogleSyncPayload } = {
       id: "00000000-0000-0000-0000-000000000327",
@@ -485,7 +490,8 @@ describe("google-sync continuation handoff", () => {
       data: {
         actorUserId: ids.userA,
         kind: "google-sync",
-        idempotencyKey: "schedule:projection-failure"
+        idempotencyKey: "schedule:projection-failure",
+        trigger: "schedule"
       }
     };
 
@@ -605,7 +611,8 @@ describe("POST /api/connectors/google/sync route (G2)", () => {
     expect(Object.keys(captured.sends[0]!.payload).sort()).toEqual([
       "actorUserId",
       "idempotencyKey",
-      "kind"
+      "kind",
+      "trigger"
     ]);
     await server.close();
   });

@@ -42,6 +42,9 @@
   letter-spacing: -0.01em;
 }
 .gflow__sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin-top: 2px;
 }
 .gflow__card {

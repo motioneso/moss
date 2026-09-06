@@ -180,9 +180,10 @@ describe("news credential storage behaviour (#2005)", () => {
     const inserted = await bootstrap.query<{ id: string }>(
       `INSERT INTO app.news_custom_sources
          (owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
-          validation_status, health_status, validation_fingerprint, validated_at)
-       VALUES ($1, 'Example Wire', $2, 'https://' || $2, NULL, 'scrape', 'approved',
-               'healthy', 'connection:example-wire:v1', now())
+          confirmed_fetch_hosts, validation_status, health_status, validation_fingerprint,
+          validated_at)
+       VALUES ($1, 'Example Wire', $2, 'https://' || $2, NULL, 'scrape', ARRAY[lower($2)],
+               'approved', 'healthy', 'connection:example-wire:v1', now())
        RETURNING id`,
       [ownerUserId, domain]
     );

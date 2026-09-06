@@ -112,6 +112,66 @@ describe("rpc framing (§3.2)", () => {
     expect(buf.subarray(second.consumed).length).toBe(0);
   });
 
+  // Review B4 follow-up — the two new one-shot structured-call methods, plus "launch" carrying the
+  // new optional schema field, round-trip through the same length-prefixed wire format as every
+  // other method.
+  it("round-trips a submitStructured request frame through encode → decode", () => {
+    const frame: RpcFrame = {
+      t: "req",
+      id: 5,
+      method: "submitStructured",
+      sessionKey: "u1",
+      params: { text: "extract the signals" }
+    };
+    const decoded = decodeFrame(encodeFrame(frame));
+    expect(decoded.kind).toBe("frame");
+    if (decoded.kind !== "frame") throw new Error("unreachable");
+    expect(JSON.parse(decoded.body.toString("utf8"))).toEqual(frame);
+  });
+
+  it("round-trips a readStructured request and result frame through encode → decode", () => {
+    const reqFrame: RpcFrame = {
+      t: "req",
+      id: 6,
+      method: "readStructured",
+      sessionKey: "u1",
+      params: { afterOffset: 12 }
+    };
+    const reqDecoded = decodeFrame(encodeFrame(reqFrame));
+    expect(reqDecoded.kind).toBe("frame");
+    if (reqDecoded.kind !== "frame") throw new Error("unreachable");
+    expect(JSON.parse(reqDecoded.body.toString("utf8"))).toEqual(reqFrame);
+
+    const resultFrame: RpcFrame = {
+      t: "ok",
+      id: 6,
+      bootId: "boot-a",
+      result: { text: '{"confidence":1}', offset: 30, complete: true }
+    };
+    const resultDecoded = decodeFrame(encodeFrame(resultFrame));
+    expect(resultDecoded.kind).toBe("frame");
+    if (resultDecoded.kind !== "frame") throw new Error("unreachable");
+    expect(JSON.parse(resultDecoded.body.toString("utf8"))).toEqual(resultFrame);
+  });
+
+  it("round-trips a launch request carrying the structured-call schema field", () => {
+    const frame: RpcFrame = {
+      t: "req",
+      id: 7,
+      method: "launch",
+      sessionKey: "u1",
+      params: {
+        neutralDir: "/unused",
+        personaPath: "/unused/persona.md",
+        schema: { type: "object", properties: { confidence: { type: "number" } } }
+      }
+    } as unknown as RpcFrame;
+    const decoded = decodeFrame(encodeFrame(frame));
+    expect(decoded.kind).toBe("frame");
+    if (decoded.kind !== "frame") throw new Error("unreachable");
+    expect(JSON.parse(decoded.body.toString("utf8"))).toEqual(frame);
+  });
+
   it("reports oversize when the declared length exceeds MAX_FRAME_BYTES (§3.7 → close)", () => {
     const header = Buffer.allocUnsafe(FRAME_HEADER_BYTES);
     header.writeUInt32BE(MAX_FRAME_BYTES + 1, 0);
@@ -788,5 +848,85 @@ describe("RpcConnection hello + id-matching + bootId (in-process socket)", () =>
 
     // No in-flight call — must not throw.
     expect(() => conn.resetActivityDeadline("u_nobody")).not.toThrow();
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Review B4 follow-up — a structured one-shot call (email extraction and similar callers) must
+  // no longer be rejected with "CLI structured stream is unavailable" once this client is built
+  // through the real socket factory. Only the transport (the fake in-process server above) is
+  // mocked; RpcConnection and ChatEngineRpcClient are the real classes.
+  // ──────────────────────────────────────────────────────────────────────────
+  it("an RPC-backed engine now exposes all three structured-call methods (real socket, real client)", async () => {
+    const secret = "s";
+    const socketPath = tmpSocket();
+    const server = await startFakeServer(socketPath, secret, {});
+    servers.push(server);
+    const conn = new TestConn({
+      socketPath,
+      rpcSecret: secret,
+      reconnectMinMs: 1,
+      reconnectMaxMs: 2
+    });
+    conns.push(conn);
+
+    const client = new ChatEngineRpcClient("anthropic", "u1", conn, "interactive", undefined, true);
+
+    // Same structural check `isCliStructuredEngine` runs (cli-structured-adapter.ts) before it will
+    // hand a structured call to this engine — before this fix, an RPC-backed client had none of
+    // these three methods and the guard always failed.
+    expect(typeof client.launchStructured).toBe("function");
+    expect(typeof client.submitStructured).toBe("function");
+    expect(typeof client.readStructured).toBe("function");
+  });
+
+  it("carries a structured launch, submit, and read all the way through the real socket", async () => {
+    const secret = "s";
+    const socketPath = tmpSocket();
+    let receivedSchema: unknown;
+    let receivedSubmitText: unknown;
+    let receivedAfterOffset: unknown;
+    const server = await startFakeServer(socketPath, secret, {
+      onRequest: ({ method, params }) => {
+        if (method === "launch") {
+          receivedSchema = (params as { schema?: unknown }).schema;
+          return { offset: 0 };
+        }
+        if (method === "submitStructured") {
+          receivedSubmitText = (params as { text: string }).text;
+          return { ok: true };
+        }
+        if (method === "readStructured") {
+          receivedAfterOffset = (params as { afterOffset: number }).afterOffset;
+          return { text: '{"confidence":1}', offset: 42, complete: true };
+        }
+        return { ok: true };
+      }
+    });
+    servers.push(server);
+    const conn = new TestConn({
+      socketPath,
+      rpcSecret: secret,
+      reconnectMinMs: 1,
+      reconnectMaxMs: 2
+    });
+    conns.push(conn);
+
+    const client = new ChatEngineRpcClient("anthropic", "u1", conn, "interactive", undefined, true);
+    const schema = { type: "object", properties: { confidence: { type: "number" } } };
+
+    const launchResult = await client.launchStructured({
+      neutralDir: "/unused",
+      personaPath: "/unused/persona.md",
+      schema
+    });
+    expect(launchResult).toEqual({ offset: 0 });
+    expect(receivedSchema).toEqual(schema);
+
+    await client.submitStructured("extract the signals");
+    expect(receivedSubmitText).toBe("extract the signals");
+
+    const readResult = await client.readStructured(10);
+    expect(receivedAfterOffset).toBe(10);
+    expect(readResult).toEqual({ text: '{"confidence":1}', offset: 42, complete: true });
   });
 });

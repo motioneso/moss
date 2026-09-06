@@ -93,7 +93,8 @@ export async function handleGoogleSyncSweepJob(
     const payload: GoogleSyncPayload = {
       actorUserId: account.actorUserId,
       kind: "google-sync",
-      idempotencyKey: `sweep:${account.actorUserId}`
+      idempotencyKey: `sweep:${account.actorUserId}`,
+      trigger: "schedule"
     };
     await sendJob(boss, GOOGLE_SYNC_QUEUE, payload, { singletonKey: account.actorUserId });
   }

@@ -156,6 +156,8 @@ export function toPublicHeadline(headline: SourceHeadline, refFor?: StoryRefFor)
     url: canonicalStoryUrl(headline.url) ?? "",
     publishedAt: headline.publishedAt,
     imageUrl: headline.imageUrl,
+    imageWidth: headline.imageWidth ?? null,
+    imageHeight: headline.imageHeight ?? null,
     summary: headline.summary,
     teamKeys: headline.teamKeys,
     publisherLabel: headline.publisherLabel,

@@ -38,10 +38,10 @@ describe("news personalization routes", () => {
       dataContext: new DataContextRunner(appDb),
       // #2005: required by the route guard (a declared route must be registered); these
       // tests exercise personalization, not credentials.
-      credentialCipher: {
+      resolveCredentialCipher: async () => ({
         encrypt: () => ({ version: 1, algorithm: "aes-256-gcm", iv: "", tag: "", ciphertext: "" }),
         decrypt: () => ({ apiKey: "unused" })
-      },
+      }),
       resolveAccessContext: async (request) => {
         if (request.headers.authorization === "none") throw new HttpError(401, "Unauthorized");
         return {
@@ -58,9 +58,11 @@ describe("news personalization routes", () => {
       } as DatasetClient,
       availability: {
         hasJsonModel: async () => true,
-        hasWebSearch: async () => true
+        hasWebSearch: async () => true,
+        webSearchReason: async () => null
       },
       discovery: {
+        fetchWithOptions: async () => ({ ok: false, reason: "network" }),
         fetch: async (url) => ({
           ok: true,
           status: 200,
@@ -70,6 +72,7 @@ describe("news personalization routes", () => {
           truncated: false
         }),
         image,
+        favicon: image,
         search: { search: async () => ({ results: [] }) },
         ai: {
           fingerprint: async () => "opaque-test-fingerprint",

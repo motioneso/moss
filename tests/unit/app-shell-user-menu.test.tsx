@@ -73,17 +73,21 @@ describe("RailUserMenu notification badge", () => {
   it("renders the unread notification badge on the closed user menu when unreadCount > 0", () => {
     const html = renderShellWithUnread(11);
     expect(html).toContain('class="jds-usermenu__trigger "');
-    expect(html).toContain('<span class="jds-badge-count">11</span>');
+    expect(html).toContain('<span class="jds-badge-count"');
+    expect(html).toContain(">11</span>");
+    expect(html).toContain('aria-label="Account menu, 11 unread notifications"');
   });
 
   it("hides the unread notification badge on the closed user menu when unreadCount is 0", () => {
     const html = renderShellWithUnread(0);
     expect(html).toContain('class="jds-usermenu__trigger "');
     expect(html).not.toContain('<span class="jds-badge-count"');
+    expect(html).toContain('aria-label="Account menu"');
   });
 
   it("caps large unread counts at 99+", () => {
     const html = renderShellWithUnread(120);
-    expect(html).toContain('<span class="jds-badge-count">99+</span>');
+    expect(html).toContain('<span class="jds-badge-count"');
+    expect(html).toContain(">99+</span>");
   });
 });

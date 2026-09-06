@@ -52,12 +52,14 @@ const FOLLOWS: readonly SportsFollowDto[] = [
     id: "1",
     competitionKey: "nba",
     teamKey: "lal",
+    sourceTeamId: "id-lal",
     createdAt: "2026-08-29T12:00:00.000Z"
   },
   {
     id: "2",
     competitionKey: "nba",
     teamKey: null,
+    sourceTeamId: null,
     createdAt: "2026-08-28T12:00:00.000Z"
   }
 ];

@@ -80,6 +80,7 @@ export const expectedBuiltInModuleIds = [
   "sports",
   "news",
   "notes",
+  "scratchpad",
   "proactive-monitoring",
   "jarvis.commitments",
   "people",

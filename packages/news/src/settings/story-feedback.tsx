@@ -11,6 +11,7 @@ import {
   removeNewsStoryFeedback,
   updateNewsStoryFeedback
 } from "../web/story-feedback-client.js";
+import { clearStoryDismissed } from "../web/dismissed-story-tracker.js";
 
 function text(metadata: Record<string, unknown>, key: string): string | null {
   const value = metadata[key];
@@ -31,6 +32,9 @@ function StoryFeedbackRow({ feedback }: { readonly feedback: UsefulnessFeedbackD
   const removeMutation = useMutation({
     mutationFn: () => removeNewsStoryFeedback(feedback.id),
     onSuccess: () => {
+      if (feedback.kind === "less_like_this") {
+        clearStoryDismissed(feedback.targetRef);
+      }
       void queryClient.invalidateQueries({ queryKey: newsQueryKeys.feedback });
       void queryClient.invalidateQueries({ queryKey: newsQueryKeys.overview });
     }

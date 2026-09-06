@@ -123,7 +123,7 @@ export class ModelDiscoveryService {
       };
     }
     const models = result.models
-      .map((model) => inferModel(model.id, providerKind))
+      .map((model) => inferModel(model.id, providerKind, model.releasedAt ?? null, { isCli: true }))
       .filter((model): model is AiProviderDiscoveredModelDto => model !== null);
     return { models };
   }
@@ -141,8 +141,8 @@ async function fetchApiKeyModels(
     if (!response.ok) return [];
     // #874 HIGH-2: inferModel returns null for pure speech-to-text models (dropped from assistant
     // discovery); filter them out so only assistant-bindable models reach the admin UI.
-    return extractModelIds(input.providerKind, await response.json())
-      .map((id) => inferModel(id, input.providerKind))
+    return extractModelEntries(input.providerKind, await response.json())
+      .map((entry) => inferModel(entry.id, input.providerKind, entry.releasedAt))
       .filter((model): model is AiProviderDiscoveredModelDto => model !== null);
   } catch {
     return [];
@@ -178,19 +178,46 @@ function doFetch(input: ModelDiscoveryInput, apiKey: string): Promise<Response> 
   }
 }
 
-function extractModelIds(providerKind: AiProviderKind, json: unknown): string[] {
+interface DiscoveredModelEntry {
+  readonly id: string;
+  /** ISO 8601 release date when the provider's list carries one. */
+  readonly releasedAt: string | null;
+}
+
+/**
+ * Anthropic lists `created_at` (ISO string); OpenAI-compatible lists `created` (unix seconds).
+ * Anything unparseable is null so a provider that omits the field simply has no release order.
+ */
+function readReleasedAt(item: Record<string, unknown>): string | null {
+  const iso = item.created_at;
+  if (typeof iso === "string") {
+    const parsed = new Date(iso);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  const epoch = item.created;
+  if (typeof epoch === "number" && Number.isFinite(epoch) && epoch > 0) {
+    return new Date(epoch * 1000).toISOString();
+  }
+  return null;
+}
+
+function extractModelEntries(providerKind: AiProviderKind, json: unknown): DiscoveredModelEntry[] {
   if (!json || typeof json !== "object") return [];
 
   const data = (json as { data?: unknown }).data;
   if (Array.isArray(data)) {
-    let ids = data
-      .map((item) => (item && typeof item === "object" ? (item as { id?: unknown }).id : null))
-      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    let entries = data
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+      .filter(
+        (item): item is Record<string, unknown> & { id: string } =>
+          typeof item.id === "string" && item.id.length > 0
+      )
+      .map((item) => ({ id: item.id, releasedAt: readReleasedAt(item) }));
     if (providerKind === "anthropic") {
       // Include only current claude- models; exclude legacy snapshot versions (contain ":")
-      ids = ids.filter((id) => id.includes("claude-") && !id.includes(":"));
+      entries = entries.filter((entry) => entry.id.includes("claude-") && !entry.id.includes(":"));
     }
-    return ids;
+    return entries;
   }
 
   const models = (json as { models?: unknown }).models;
@@ -201,7 +228,8 @@ function extractModelIds(providerKind: AiProviderKind, json: unknown): string[] 
           ? (item as { name: string }).name.replace(/^models\//, "")
           : null
       )
-      .filter((id): id is string => Boolean(id));
+      .filter((id): id is string => Boolean(id))
+      .map((id) => ({ id, releasedAt: null }));
   }
   return [];
 }
@@ -239,9 +267,69 @@ function inferTierFromModelId(providerKind: AiProviderKind, modelId: string): Ai
   return "interactive";
 }
 
+/**
+ * Which command-line providers ship their own web search tool (#2228). For a CLI-backed model the
+ * search tool belongs to the CLI, not the model family, so the flag is per provider kind. A new
+ * CLI provider adds one row here and teaches its engine to switch the tool on and report sources.
+ */
+const CLI_PROVIDER_SEARCH: Readonly<Record<AiProviderKind, { builtInSearch: boolean }>> = {
+  anthropic: { builtInSearch: true },
+  "openai-compatible": { builtInSearch: true },
+  google: { builtInSearch: false },
+  ollama: { builtInSearch: false },
+  custom: { builtInSearch: false }
+};
+
+export function cliProviderHasBuiltInSearch(providerKind: AiProviderKind): boolean {
+  return CLI_PROVIDER_SEARCH[providerKind].builtInSearch;
+}
+
+/**
+ * Whether a model has a built-in web search tool from its own provider (#2228). For CLI providers
+ * the answer is the CLI's own declaration (`CLI_PROVIDER_SEARCH`), independent of the model id.
+ */
+export function inferWebSearchCapability(
+  providerKind: AiProviderKind,
+  providerModelId: string,
+  isCli = false
+): boolean {
+  if (isCli) return cliProviderHasBuiltInSearch(providerKind);
+  if (providerKind === "ollama" || providerKind === "custom") return false;
+  const id = providerModelId.toLowerCase();
+
+  if (providerKind === "anthropic") {
+    // Ids carry the version either right after "claude-" (claude-3-5-sonnet-20241022) or after
+    // the family name (claude-sonnet-4-20250514, claude-opus-4-1, claude-haiku-4-5-20251001).
+    const match = /claude-(?:[a-z]+-)*(\d+)(?:[-.](\d+))?/.exec(id);
+    if (!match) return false;
+    const major = Number(match[1]);
+    const minor = match[2] !== undefined ? Number(match[2]) : 0;
+    return major > 3 || (major === 3 && minor >= 5);
+  }
+
+  if (providerKind === "openai-compatible") {
+    if (id.startsWith("gpt-4o") || id.startsWith("gpt-4.1")) return true;
+    if (/^o\d/.test(id)) return true;
+    // gpt-5 and every later major (gpt-5-mini, gpt-5.1, ...) accept the Responses API web_search tool.
+    const gpt = /^gpt-(\d+)(?:\.(\d+))?/.exec(id);
+    if (gpt && Number(gpt[1]) >= 5) return true;
+    return false;
+  }
+
+  if (providerKind === "google") {
+    const match = /gemini-(\d+)/.exec(id);
+    if (!match) return false;
+    return Number(match[1]) >= 2;
+  }
+
+  return false;
+}
+
 function inferModel(
   providerModelId: string,
-  providerKind: AiProviderKind
+  providerKind: AiProviderKind,
+  releasedAt: string | null = null,
+  options?: { readonly isCli?: boolean }
 ): AiProviderDiscoveredModelDto | null {
   const lower = providerModelId.toLowerCase();
 
@@ -261,6 +349,9 @@ function inferModel(
   if (lower.includes("vision") || lower.includes("image") || lower.includes("gemini")) {
     capabilities.push("vision");
   }
+  if (inferWebSearchCapability(providerKind, providerModelId, options?.isCli ?? false)) {
+    capabilities.push("web-search");
+  }
   const tier = inferTierFromModelId(providerKind, providerModelId);
-  return { providerModelId, displayName: providerModelId, capabilities, tier };
+  return { providerModelId, displayName: providerModelId, capabilities, tier, releasedAt };
 }

@@ -10,7 +10,8 @@ import type {
   NewsCustomTopicDto,
   NewsPrefDto,
   NewsRefreshStateDto,
-  NewsSourceExclusionDto
+  NewsSourceExclusionDto,
+  NewsWebSearchUnavailableReason
 } from "@moss/shared";
 
 import { NewsPersonalizationLimitError } from "../../packages/news/src/personalization-repository.js";
@@ -116,6 +117,7 @@ const LEAKED_SOURCE_ROW = {
   homepageUrl: "https://custom-wire.example",
   feedUrl: null,
   retrievalMethod: "scrape",
+  workaround: false,
   validationStatus: "approved",
   healthStatus: "healthy",
   createdAt: "2026-07-10T00:00:00.000Z",
@@ -180,6 +182,7 @@ function makePersonalization(overrides: Partial<FakePersonalization> = {}): Fake
     createCustomSource: async (_db, input) => ({
       id: "77777777-7777-7777-7777-777777777777",
       ...input,
+      workaround: false,
       validationStatus: "approved",
       healthStatus: "healthy",
       createdAt: "2026-07-11T00:00:00.000Z"
@@ -187,6 +190,7 @@ function makePersonalization(overrides: Partial<FakePersonalization> = {}): Fake
     replaceCustomSource: async (_db, id, input) => ({
       id,
       ...input,
+      workaround: false,
       validationStatus: "approved",
       healthStatus: "healthy",
       createdAt: "2026-07-11T00:00:00.000Z"
@@ -246,6 +250,7 @@ function buildApp(
     personalization?: FakePersonalization;
     hasJsonModel?: boolean;
     hasWebSearch?: boolean;
+    webSearchReason?: NewsWebSearchUnavailableReason | null;
   } = {}
 ) {
   const repo = overrides.repo ?? makeRepo([SEEDED_TOPIC_PREF]);
@@ -261,19 +266,25 @@ function buildApp(
     resolveAccessContext: overrides.resolveAccessContext ?? (async () => userA),
     // #2005: these tests do not exercise the credential routes; the cipher is required
     // only because the route guard forbids a declared-but-unregistered route.
-    credentialCipher: {
+    resolveCredentialCipher: async () => ({
       encrypt: () => ({ version: 1, algorithm: "aes-256-gcm", iv: "", tag: "", ciphertext: "" }),
       decrypt: () => ({ apiKey: "unused" })
-    },
+    }),
     repository: repo,
     personalizationRepository: personalization,
     availability: {
       hasJsonModel: async () => overrides.hasJsonModel ?? true,
-      hasWebSearch: async () => overrides.hasWebSearch ?? true
+      hasWebSearch: async () => overrides.hasWebSearch ?? true,
+      webSearchReason: async () =>
+        (overrides.hasWebSearch ?? true)
+          ? null
+          : (overrides.webSearchReason ?? "no-key-no-native-model")
     },
     discovery: overrides.discovery ?? {
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
       fetch: async () => ({ ok: false, reason: "network" }),
       image: async () => ({ ok: false, reason: "network" }),
+      favicon: async () => ({ ok: false, reason: "network" }),
       search: { search: async () => ({ results: [] }) },
       ai: {
         generateJson: async () => ({
@@ -467,6 +478,7 @@ describe("news personalization routes (#953 Slice 1)", () => {
     expect(body.availability).toEqual({
       aiConfigured: true,
       webSearchConfigured: true,
+      webSearchReason: null,
       customSourceByUrlEnabled: true,
       customSourceByNameEnabled: true,
       freeformTopicsEnabled: true
@@ -480,6 +492,7 @@ describe("news personalization routes (#953 Slice 1)", () => {
         homepageUrl: "https://custom-wire.example",
         feedUrl: null,
         retrievalMethod: "scrape",
+        workaround: false,
         validationStatus: "approved",
         healthStatus: "healthy",
         createdAt: "2026-07-10T00:00:00.000Z"
@@ -536,6 +549,7 @@ describe("news personalization routes (#953 Slice 1)", () => {
     expect(JSON.parse(res.body).availability).toEqual({
       aiConfigured: true,
       webSearchConfigured: false,
+      webSearchReason: "no-key-no-native-model",
       customSourceByUrlEnabled: true,
       customSourceByNameEnabled: false,
       freeformTopicsEnabled: false
@@ -548,6 +562,7 @@ describe("news personalization routes (#953 Slice 1)", () => {
     expect(JSON.parse(resNoAi.body).availability).toEqual({
       aiConfigured: false,
       webSearchConfigured: true,
+      webSearchReason: null,
       customSourceByUrlEnabled: false,
       customSourceByNameEnabled: false,
       freeformTopicsEnabled: false
@@ -665,6 +680,7 @@ describe("news personalization routes (#958 Slice 2)", () => {
   it("previews and confirms a verified source without exposing its fingerprint", async () => {
     const { app, personalization } = buildApp({
       discovery: {
+        fetchWithOptions: async () => ({ ok: false, reason: "network" }),
         fetch: async (url) => ({
           ok: true,
           status: 200,
@@ -674,6 +690,7 @@ describe("news personalization routes (#958 Slice 2)", () => {
           truncated: false
         }),
         image: async () => ({ ok: false, reason: "network" }),
+        favicon: async () => ({ ok: false, reason: "network" }),
         search: { search: async () => ({ results: [] }) },
         ai: {
           generateJson: async () => ({
@@ -748,8 +765,10 @@ describe("news personalization routes (#958 Slice 2)", () => {
   it("rejects a topic when the provider policy does not affirm it", async () => {
     const { app, personalization } = buildApp({
       discovery: {
+        fetchWithOptions: async () => ({ ok: false, reason: "network" }),
         fetch: async () => ({ ok: false, reason: "network" }),
         image: async () => ({ ok: false, reason: "network" }),
+        favicon: async () => ({ ok: false, reason: "network" }),
         search: { search: async () => ({ results: [] }) },
         ai: {
           generateJson: async () => ({

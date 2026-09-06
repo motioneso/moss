@@ -13,6 +13,14 @@ import type {
 } from "@moss/shared";
 
 import type { VerifiedSportsSourceCandidate } from "./discovery.js";
+import { validateSportsPhotoRule, type SportsPhotoRule } from "./photo-rule.js";
+import {
+  photoStatusFor,
+  photosFoundByMoss,
+  type SportsPhotoOutcome,
+  type SportsPhotoRuleState,
+  type SportsSourcePhotoRecord
+} from "./photo-status.js";
 
 /** Feeds and subreddits (#2211) have no recipe; only a scraped page starts "ready". */
 function recipeStatusFor(candidate: VerifiedSportsSourceCandidate): "feed" | "ready" {
@@ -51,6 +59,10 @@ interface SportsCustomSourceRow {
   last_checked_at: Date | null;
   last_success_at: Date | null;
   recipe_status: "feed" | "ready" | "missing" | "drift";
+  photo_rule_json: Readonly<Record<string, unknown>> | null;
+  photo_rule_state: SportsPhotoRuleState;
+  photo_last_outcome: SportsPhotoOutcome | null;
+  photo_relook_at: Date | null;
   created_at: Date;
 }
 
@@ -95,6 +107,8 @@ export interface SportsRuntimeSource {
   readonly runtimeFingerprint: string;
   readonly recipeJson: Readonly<Record<string, unknown>> | null;
   readonly confirmedFetchHosts: readonly string[];
+  /** #2237 the saved photo instruction, already checked, or null when there is none to run. */
+  readonly photoRule: SportsPhotoRule | null;
   readonly assignments: readonly {
     readonly id: string;
     readonly scope: SportsNewsScope;
@@ -138,6 +152,10 @@ const SOURCE_COLUMNS = [
   "last_checked_at",
   "last_success_at",
   "recipe_status",
+  "photo_rule_json",
+  "photo_rule_state",
+  "photo_last_outcome",
+  "photo_relook_at",
   "created_at"
 ] as const;
 
@@ -174,6 +192,16 @@ function assignmentToDto(row: SportsSourceAssignmentRow): SportsSourceAssignment
   };
 }
 
+/** The five stored photo columns, in the shape the status derivation reads. */
+function photoRecord(row: SportsCustomSourceRow): SportsSourcePhotoRecord {
+  return {
+    photoRuleState: row.photo_rule_state,
+    photoRuleJson: row.photo_rule_json,
+    photoLastOutcome: row.photo_last_outcome,
+    photoRelookAt: row.photo_relook_at
+  };
+}
+
 function toDto(
   row: SportsCustomSourceRow,
   assignmentRows: readonly SportsSourceAssignmentRow[]
@@ -193,12 +221,31 @@ function toDto(
     lastCheckedAt: row.last_checked_at ? row.last_checked_at.toISOString() : null,
     lastSuccessAt: row.last_success_at ? row.last_success_at.toISOString() : null,
     recipeStatus: row.recipe_status,
+    photoStatus: photoStatusFor(photoRecord(row)),
+    photosFoundByMoss: photosFoundByMoss(photoRecord(row)),
     assignedFollowIds: assignments.flatMap((assignment) =>
       assignment.followId === null ? [] : [assignment.followId]
     ),
     assignments,
     createdAt: row.created_at.toISOString()
   };
+}
+
+/**
+ * Only a rule the owner has actually put into use is handed to the refresh, and it is checked
+ * again on the way out: a row could have been written by an older build with a looser shape.
+ */
+function runtimePhotoRule(source: {
+  readonly photo_rule_json: Readonly<Record<string, unknown>> | null;
+  readonly photo_rule_state: SportsPhotoRuleState;
+  readonly confirmed_fetch_hosts: readonly string[];
+}): SportsPhotoRule | null {
+  if (source.photo_rule_state !== "in_use" && source.photo_rule_state !== "stale") return null;
+  if (source.photo_rule_json === null) return null;
+  const checked = validateSportsPhotoRule(source.photo_rule_json, {
+    allowedHosts: source.confirmed_fetch_hosts
+  });
+  return checked.ok ? checked.rule : null;
 }
 
 export class SportsSourcesRepository {
@@ -276,7 +323,9 @@ export class SportsSourcesRepository {
         "validation_fingerprint",
         "recipe_fingerprint",
         "recipe_json",
-        "confirmed_fetch_hosts"
+        "confirmed_fetch_hosts",
+        "photo_rule_json",
+        "photo_rule_state"
       ]);
     sourceQuery = sourceId
       ? sourceQuery.where("id", "=", sourceId)
@@ -322,6 +371,7 @@ export class SportsSourcesRepository {
       runtimeFingerprint: source.recipe_fingerprint ?? source.validation_fingerprint,
       recipeJson: source.recipe_json,
       confirmedFetchHosts: source.confirmed_fetch_hosts,
+      photoRule: runtimePhotoRule(source),
       assignments: (assignmentsBySource.get(source.id) ?? []).map((assignment) => {
         const scope = assignment.sport_key
           ? isSportsSportKey(assignment.sport_key)

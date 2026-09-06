@@ -6,6 +6,7 @@ declare module "virtual:moss-module-settings" {
   export const MODULE_SETTINGS_COMPONENTS: Readonly<
     Record<string, LazyExoticComponent<ComponentType<ModuleSettingsSurfaceProps>>>
   >;
+  export const MODULE_SETTING_KEYWORDS: Readonly<Record<string, readonly string[]>>;
 }
 
 declare module "virtual:moss-module-web" {

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+    <channel>
+        <title><![CDATA[NPR Top Stories]]></title>
+        <description><![CDATA[NPR news, audio, and podcasts. Coverage of breaking stories, national and world news.]]></description>
+        <link>https://www.npr.org/sections/news/</link>
+        <lastBuildDate>Fri, 04 Sep 2026 12:00:00 GMT</lastBuildDate>
+        <atom:link href="https://feeds.npr.org/1001/rss.xml" rel="self" type="application/rss+xml"/>
+        <language><![CDATA[en]]></language>
+        <item>
+            <title><![CDATA[Congress returns to a packed agenda this fall]]></title>
+            <description><![CDATA[Lawmakers face a government funding deadline and several other priorities when they return from recess.]]></description>
+            <link>https://www.npr.org/2026/09/04/congress-returns-fall-agenda</link>
+            <guid isPermaLink="false">https://www.npr.org/2026/09/04/congress-returns-fall-agenda</guid>
+            <pubDate>Fri, 04 Sep 2026 09:15:00 GMT</pubDate>
+            <dc:creator><![CDATA[Domenico Montanaro]]></dc:creator>
+            <content:encoded><![CDATA[<img src="https://npr.brightspotcdn.com/dims4/default/a1b2c3d/2147483647/strip/true/crop/1024x576+0+0/resize/1400/quality/90/format/jpeg/?url=https%3A%2F%2Fnpr-brightspot.s3.amazonaws.com%2Fexample.jpg" alt="The US Capitol" /><p>Lawmakers return to Washington this week facing a crowded fall agenda.</p>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[A new exhibit traces the history of jazz in New Orleans]]></title>
+            <description><![CDATA[<img src="https://npr.brightspotcdn.com/dims4/default/d4e5f6a/2147483647/strip/true/crop/900x506+0+0/resize/1400/quality/90/format/jpeg/?url=https%3A%2F%2Fnpr-brightspot.s3.amazonaws.com%2Fjazz.jpg" alt="Jazz exhibit" />The exhibit opens this weekend at the Presbytere.]]></description>
+            <link>https://www.npr.org/2026/09/04/jazz-exhibit-new-orleans</link>
+            <guid isPermaLink="false">https://www.npr.org/2026/09/04/jazz-exhibit-new-orleans</guid>
+            <pubDate>Fri, 04 Sep 2026 08:30:00 GMT</pubDate>
+            <dc:creator><![CDATA[Debbie Elliott]]></dc:creator>
+        </item>
+        <item>
+            <title><![CDATA[Tracker ad served through a compromised syndication partner]]></title>
+            <description><![CDATA[This item exists only to prove an off-host image gets dropped.]]></description>
+            <link>https://www.npr.org/2026/09/04/tracker-example</link>
+            <guid isPermaLink="false">https://www.npr.org/2026/09/04/tracker-example</guid>
+            <pubDate>Fri, 04 Sep 2026 08:00:00 GMT</pubDate>
+            <content:encoded><![CDATA[<img src="https://evil.example/track.png" alt="" /><p>Body text with no real art.</p>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Weather segment with no accompanying artwork]]></title>
+            <description><![CDATA[A short update with no image anywhere in the item.]]></description>
+            <link>https://www.npr.org/2026/09/04/weather-update-no-art</link>
+            <guid isPermaLink="false">https://www.npr.org/2026/09/04/weather-update-no-art</guid>
+            <pubDate>Fri, 04 Sep 2026 07:45:00 GMT</pubDate>
+            <content:encoded><![CDATA[<p>No images in this story body at all.</p>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Media tag still wins over the body image]]></title>
+            <description><![CDATA[Confirms media:thumbnail is preferred over any <img> found in the story body.]]></description>
+            <link>https://www.npr.org/2026/09/04/media-tag-wins</link>
+            <guid isPermaLink="false">https://www.npr.org/2026/09/04/media-tag-wins</guid>
+            <pubDate>Fri, 04 Sep 2026 07:00:00 GMT</pubDate>
+            <media:thumbnail url="https://media.npr.org/assets/img/2026/09/04/thumb.jpg" width="200"/>
+            <content:encoded><![CDATA[<img src="https://npr.brightspotcdn.com/dims4/default/other/body-image.jpg" alt="" /><p>Body text.</p>]]></content:encoded>
+        </item>
+    </channel>
+</rss>

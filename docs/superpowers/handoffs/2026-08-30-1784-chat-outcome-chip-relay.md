@@ -31,7 +31,7 @@ copy, so it is safe to keep using or to shut down:
   3099, not by process name, since a real running copy of the app also uses similar names).
 - Log files: `/tmp/1784-web.log` and `/tmp/1784-api.log`.
 - It shares the same database as everyone's normal working copy of the app, so log in with the
-  same normal working login: `ben@ben.com` / `jarvistest123!`.
+  same normal working login: the development sign-in details (kept outside the repository).
 - If it needs a restart, see `dev-instance-lan-spinup-trusted-origins` in memory for why a
   non-default port needs an extra setting (`JARVIS_AUTH_TRUSTED_ORIGINS`) or logging in fails with
   an "Invalid origin" error. It's already set correctly on the running copy.

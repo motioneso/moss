@@ -16,6 +16,10 @@ pnpm dev:worker                           # pg-boss worker (must run separately)
 
 Access from another device on the tailnet: `http://<tailscale-ip>:5173` (Tailscale).
 
+Live tests sign in as the dev owner with `LIVE_OWNER_PASSWORD`, set only in the shell
+environment — the value itself lives outside the repository, in the memory note named
+dev-instance-lan-spinup-trusted-origins.
+
 Better Auth automatically trusts `localhost` and `127.0.0.1` on the API's `PORT` in development.
 For any other browser origin, set the exact comma-separated allowlist when starting the API:
 

@@ -148,7 +148,9 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.workflow_approvals",
         "app.workflow_artifacts",
         // #2162 integrations foundation — owner-keyed connections cascade with the user.
-        "app.integration_connections"
+        "app.integration_connections",
+        // #2236 scratchpad — one owner-keyed row per user, cascades with the user.
+        "app.scratchpads"
       ].sort()
     );
   });

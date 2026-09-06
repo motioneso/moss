@@ -208,7 +208,7 @@ describe("runEmailMonitor", () => {
   it("suggest mode (default) stages suggested tasks and persists an ok status", async () => {
     const { deps, taskStore, prefs } = fakePorts(liveResult([item()]));
     const run = await runEmailMonitor(DB, ACCOUNT, deps);
-    expect(run).toEqual({ planned: 1, created: 1, degraded: false });
+    expect(run).toEqual({ planned: 1, created: 1, degraded: false, taskFailures: 0 });
     expect([...taskStore.values()]).toEqual([{ status: "suggested", title: "Approve Q3 budget" }]);
     expect(prefs.get(MONITOR_STATUS_PREF_KEY(ACCOUNT))).toEqual({
       lastRunAt: "2026-07-04T12:00:00.000Z",
@@ -229,7 +229,7 @@ describe("runEmailMonitor", () => {
   it("off mode creates nothing", async () => {
     const { deps, taskStore } = fakePorts(liveResult([item()]), { mode: "off" });
     const run = await runEmailMonitor(DB, ACCOUNT, deps);
-    expect(run).toEqual({ planned: 0, created: 0, degraded: false });
+    expect(run).toEqual({ planned: 0, created: 0, degraded: false, taskFailures: 0 });
     expect(taskStore.size).toBe(0);
   });
 
@@ -246,7 +246,7 @@ describe("runEmailMonitor", () => {
     };
     const { deps, taskStore, prefs } = fakePorts(gapResult);
     const run = await runEmailMonitor(DB, ACCOUNT, deps);
-    expect(run).toEqual({ planned: 0, created: 0, degraded: true });
+    expect(run).toEqual({ planned: 0, created: 0, degraded: true, taskFailures: 0 });
     expect(taskStore.size).toBe(0);
     expect(prefs.get(MONITOR_STATUS_PREF_KEY(ACCOUNT))).toEqual({
       lastRunAt: "2026-07-04T12:00:00.000Z",
@@ -270,7 +270,7 @@ describe("runEmailMonitor", () => {
     };
     const { deps, taskStore, prefs } = fakePorts(cacheResult);
     const run = await runEmailMonitor(DB, ACCOUNT, deps);
-    expect(run).toEqual({ planned: 1, created: 1, degraded: true });
+    expect(run).toEqual({ planned: 1, created: 1, degraded: true, taskFailures: 0 });
     expect(taskStore.size).toBe(1);
     expect(prefs.get(MONITOR_STATUS_PREF_KEY(ACCOUNT))).toMatchObject({ status: "degraded" });
   });
@@ -306,7 +306,7 @@ describe("runEmailMonitor", () => {
     };
     const { deps, taskStore } = fakePorts(mixed);
     const run = await runEmailMonitor(DB, ACCOUNT, deps);
-    expect(run).toEqual({ planned: 1, created: 1, degraded: false });
+    expect(run).toEqual({ planned: 1, created: 1, degraded: false, taskFailures: 0 });
     expect([...taskStore.values()].map((t) => t.title)).toEqual(["Approve Q3 budget"]);
   });
 

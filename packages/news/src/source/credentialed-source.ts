@@ -16,10 +16,9 @@ import {
   type DatasetLogger
 } from "@moss/datasets";
 import type { KeyedDatasetClientDeps } from "@moss/datasets";
-import type { DataContextDb } from "@moss/db";
+import type { DataContextDb, EncryptedSecret } from "@moss/db";
 import type { ExternalSourceAdapter, ExternalSourceAdapterContext } from "@moss/module-sdk";
 
-import type { NewsCredentialCipherPort } from "../credential-cipher-port.js";
 import type { NewsCredentialEnvelopeReader } from "./credential-lookup.js";
 import { createNewsCredentialLookup } from "./credential-lookup.js";
 import type { PublisherConnection, SanitizedPublisherItem } from "./publisher-connection.js";
@@ -187,7 +186,10 @@ const CREDENTIAL_DATASET_TTL_MS = 10 * 60 * 1_000;
 export function createNewsCredentialedSourceReader(deps: {
   readonly connection: PublisherConnection;
   readonly credentials: NewsCredentialEnvelopeReader;
-  readonly cipher: NewsCredentialCipherPort;
+  readonly decryptApiKey: (
+    credentialContext: DataContextDb,
+    envelope: EncryptedSecret
+  ) => Promise<{ readonly apiKey: string } | null>;
   readonly logger?: DatasetLogger;
   readonly createFetch?: KeyedDatasetClientDeps["createFetch"];
 }) {
@@ -202,7 +204,7 @@ export function createNewsCredentialedSourceReader(deps: {
       datasets: [{ key: NEWSAPI_DATASET_KEY, ttlMs: CREDENTIAL_DATASET_TTL_MS }]
     },
     createCredentialedPublisherAdapter(connection),
-    createNewsCredentialLookup({ reader: deps.credentials, cipher: deps.cipher }),
+    createNewsCredentialLookup({ reader: deps.credentials, decryptApiKey: deps.decryptApiKey }),
     {
       ...(deps.logger ? { logger: deps.logger } : {}),
       ...(deps.createFetch ? { createFetch: deps.createFetch } : {})
@@ -260,6 +262,16 @@ export function toCredentialedHeadline(
     url: item.url,
     publishedAt: item.publishedAt,
     imageUrl: item.imageUrl,
+    faviconUrl: faviconProxyUrlForArticle(item.url),
     summary: item.summary
   };
+}
+
+/** Same-origin favicon proxy path for the article's own domain; null when the URL won't parse. */
+function faviconProxyUrlForArticle(url: string): string | null {
+  try {
+    return `/api/news/favicon/${encodeURIComponent(new URL(url).hostname)}`;
+  } catch {
+    return null;
+  }
 }

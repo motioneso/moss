@@ -1,7 +1,12 @@
 import type { DataContextDb } from "@moss/db";
 import type { StoryRelevanceCandidate, StoryRelevanceFailure } from "@moss/shared";
 
-import type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "../discovery/ports.js";
+import type {
+  NewsAiPort,
+  NewsFetchPort,
+  NewsSafeFetchPort,
+  NewsWebSearchPort
+} from "../discovery/ports.js";
 import type { NewsPrefsReader } from "../news-service.js";
 import {
   assertSnapshotPayload,
@@ -71,6 +76,7 @@ export type CompilationRepository = Pick<
   | "readPolicyVerdict"
   | "upsertPolicyVerdict"
   | "updateSourceHealth"
+  | "recordWorkaroundRefreshOutcome"
   | "publishSnapshotIfCurrent"
 >;
 
@@ -78,6 +84,8 @@ export async function compilePersonalizedNews(
   scopedDb: DataContextDb,
   deps: {
     fetch: NewsSafeFetchPort;
+    /** #2282: handed on to the collector for its Reddit branch (task 1.7). */
+    fetchWithOptions?: NewsFetchPort;
     search: NewsWebSearchPort;
     ai: NewsAiPort;
     repo: CompilationRepository;
@@ -106,6 +114,7 @@ export async function compilePersonalizedNews(
       scopedDb,
       {
         fetch: deps.fetch,
+        ...(deps.fetchWithOptions ? { fetchWithOptions: deps.fetchWithOptions } : {}),
         search: deps.search,
         ai: deps.ai,
         repo: deps.repo,
@@ -118,6 +127,11 @@ export async function compilePersonalizedNews(
     );
     for (const failure of collection.sourceFailures) {
       await deps.repo.updateSourceHealth(scopedDb, failure.sourceId, failure.reason);
+    }
+    // A credentialed source that succeeded this run clears a stuck failure flag on
+    // its own: no one has to re-save a key that was always fine (#2322 slice 2).
+    for (const sourceId of collection.credentialedRecovered) {
+      await deps.repo.updateSourceHealth(scopedDb, sourceId, "healthy");
     }
     deps.logger.info({
       event: "news_compile_collection",

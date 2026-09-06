@@ -601,6 +601,52 @@ describe("§L.6.1 unified exclusivity gate (engine-host)", () => {
     await host.cancelLogin("anthropic", first.loginId);
   });
 
+  it("#2242: two overlapping login requests for the same provider cannot report a false success", async () => {
+    // Models the real bug: a saved "the login works" answer is sitting in the cache (perhaps
+    // stale), the first login request starts a real check to prove or disprove it, and — before
+    // that real check comes back — a second overlapping request for the SAME provider arrives
+    // (the engine-host reuse path). The second request must NOT get its own ordinary check that
+    // can still read the old cached "ready" answer; it must wait on and share the first request's
+    // real result. A plain call-count probe stands in for "cache hit on later calls": the FIRST
+    // call is the real (forceFresh) check, gated until the test releases it and reporting the
+    // true, expired status; every call AFTER the first models what an ordinary (non-forced) probe
+    // would still read from a stale cache while the real check is in flight — a false "ready".
+    const f = makeLoginIo("https://claude.ai/oauth/authorize?code=abc");
+    let callCount = 0;
+    let releaseFirstCheck: () => void = () => undefined;
+    const firstCheckGate = new Promise<void>((resolve) => {
+      releaseFirstCheck = resolve;
+    });
+    const probe = async (): Promise<ProbeProviderResult> => {
+      callCount += 1;
+      if (callCount === 1) {
+        await firstCheckGate;
+        return { status: "needs_login" }; // the real check: the saved login has actually expired
+      }
+      return { status: "ready" }; // stands in for a stale cached "ready" answer
+    };
+    const svc = makeService(f.io, probe);
+    const host = makeHost(f.io, svc);
+
+    const first = host.beginLogin("anthropic");
+    const second = host.beginLogin("anthropic");
+    let secondOutcome: { status: string } | undefined;
+    void second.then((r) => {
+      secondOutcome = r;
+    });
+
+    // Flush pending microtasks (mutex acquire/release, the reserve->start handoff) WITHOUT
+    // releasing the gated first check — the second request must still be waiting.
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(secondOutcome).toBeUndefined();
+
+    releaseFirstCheck();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(firstResult.status).not.toBe("ready");
+    expect(secondResult.status).not.toBe("ready");
+  });
+
   it("rejects a 2nd beginLogin for a DIFFERENT provider while a login is in flight", async () => {
     const f = makeLoginIo("https://claude.ai/oauth/authorize?code=abc");
     const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);

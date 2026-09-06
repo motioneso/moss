@@ -43,6 +43,14 @@ export interface MyModuleDto {
    * install-state (`"you"` while still a draft, `"everyone"` once shipped or admin-enabled).
    */
   readonly scope: "you" | "everyone";
+  /**
+   * The label and help text of this module's declared on/off switches and, for an installed
+   * module, its declared credential slots — the same wording those screens render. Lets the
+   * settings search box find a module by a setting's own name, not just the module's name.
+   * Absent (not empty) on a module whose settings are described by a contributed settings page
+   * instead, since that page's own label/description is looked up separately.
+   */
+  readonly settingKeywords?: readonly string[];
 }
 
 /**
@@ -141,7 +149,8 @@ const myModuleSchema = {
     active: { type: "boolean" },
     hasPreferences: { type: "boolean" },
     hasUserCredentials: { type: "boolean" },
-    scope: { type: "string", enum: ["you", "everyone"] }
+    scope: { type: "string", enum: ["you", "everyone"] },
+    settingKeywords: { type: "array", items: { type: "string" } }
   }
 } as const;
 

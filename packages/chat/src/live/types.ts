@@ -27,6 +27,8 @@ export interface TranscriptRecord {
   readonly toolCallId?: string;
   /** #2164 r21 correction — true on a rejection signal record for the call named by `toolCallId`. */
   readonly rejected?: boolean;
+  /** #2228: pages the CLI's own web search tool reported for this call (title + url). */
+  readonly sources?: readonly { readonly title: string; readonly url: string }[];
   readonly summary?: string;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
   /** Live-only structured result for a module-owned inline artifact. */
@@ -87,6 +89,12 @@ export interface EngineLaunchOpts {
    * omit. See rpc-contract.ts RpcLaunchParams.model.
    */
   readonly model?: string;
+  /**
+   * #2228: let the CLI use its own web search tool for this launch and report the pages it used
+   * as `sources` on the tool records. Off by default: chat's ordinary launches route search
+   * through the gateway's `web.search` tool instead.
+   */
+  readonly nativeSearch?: boolean;
 }
 
 /** A persistent per-user CLI session. One instance per live session. */

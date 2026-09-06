@@ -55,6 +55,8 @@ export function makeSourcesRepo(
         lastCheckedAt: input.candidate.checkedAt,
         lastSuccessAt: input.candidate.checkedAt,
         recipeStatus: input.candidate.retrievalMethod === "feed" ? "feed" : "ready",
+        photoStatus: "pending",
+        photosFoundByMoss: false,
         assignedFollowIds: input.candidate.targets.flatMap((target) =>
           target.target.kind === "follow" ? [target.target.followId] : []
         ),

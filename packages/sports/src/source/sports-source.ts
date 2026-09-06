@@ -6,16 +6,31 @@ import type { Headline, StandingsRow, TeamRef } from "@moss/shared";
 // `externalSources` entry in ./manifest.ts; these DTOs are the only thing that stayed here.
 
 export interface SourceTeamRef extends TeamRef {
-  /** Provider-side team id — joins news team tags to catalog teams. Never serialized. */
+  /** Provider-side team id — joins news team tags to catalog teams. Since the follow-key fix it
+   *  is also on the wire (TeamRef.sourceTeamId): the picker matches a saved follow on it. */
   readonly sourceTeamId: string | null;
+  /** The provider's raw short name, kept even when `teamKey` had to become the numeric id because
+   *  two teams in this list share it (review finding S1, 2026-09-04). Lets a saved follow be
+   *  checked against every team that currently answers to its old short name, not just the one
+   *  `teamKey` happens to equal today. Never serialized. */
+  readonly abbreviation: string | null;
 }
-export type EspnSourceHeadline = Headline & {
+/**
+ * The wire type always carries a photo size, but a source that never finds one should not have to
+ * spell out two nulls, so these two are optional on the way in. `toPublicHeadline` fills them.
+ */
+type SourceHeadlineBase = Omit<Headline, "imageWidth" | "imageHeight"> & {
+  readonly imageWidth?: number | null;
+  readonly imageHeight?: number | null;
+};
+
+export type EspnSourceHeadline = SourceHeadlineBase & {
   readonly origin: "espn";
   /** Provider-side team ids tagged on the article; the service resolves these to teamKeys. */
   readonly sourceTeamIds: readonly string[];
 };
 
-export type CustomSourceHeadline = Headline & {
+export type CustomSourceHeadline = SourceHeadlineBase & {
   readonly origin: "custom";
   readonly sourceId: string;
 };

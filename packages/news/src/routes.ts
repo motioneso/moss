@@ -12,7 +12,8 @@ import {
   newsPrefsResponseSchema,
   type CreateNewsPrefRequest,
   type NewsPrefDto,
-  type NewsSourcePreviewResponse
+  type NewsSourcePreviewResponse,
+  type NewsWebSearchUnavailableReason
 } from "@moss/shared";
 
 import { configureNewsChatTools } from "./chat-tools.js";
@@ -21,6 +22,8 @@ import { NewsPrefsRepository } from "./repository.js";
 import { NewsService, type NewsPrefsReader } from "./news-service.js";
 import type {
   NewsAiPort,
+  NewsFaviconFetchPort,
+  NewsFetchPort,
   NewsImageFetchPort,
   NewsSafeFetchPort,
   NewsWebSearchPort
@@ -29,6 +32,7 @@ import type { NewsCredentialCipherPort } from "./credential-cipher-port.js";
 import { NewsCredentialRepository, type NewsCredentialStore } from "./credential-repository.js";
 import type { NewsStoryFeedbackPort } from "./story-feedback-port.js";
 import { registerNewsCredentialRoutes } from "./credential-routes.js";
+import { registerNewsFaviconRoute } from "./favicon-route.js";
 import { registerNewsImageRoute } from "./image-route.js";
 import {
   createEmptyNewsPublisherConnectionPort,
@@ -60,6 +64,8 @@ export interface NewsPrefsWriter extends NewsPrefsReader {
 export interface NewsPersonalizationAvailabilityPort {
   hasJsonModel(scopedDb: DataContextDb): Promise<boolean>;
   hasWebSearch(scopedDb: DataContextDb): Promise<boolean>;
+  /** #2228: reason web search is unavailable for the actor; null when it is available. */
+  webSearchReason(scopedDb: DataContextDb): Promise<NewsWebSearchUnavailableReason | null>;
 }
 
 export interface NewsRoutesDependencies {
@@ -74,7 +80,11 @@ export interface NewsRoutesDependencies {
   readonly availability: NewsPersonalizationAvailabilityPort;
   readonly discovery: {
     readonly fetch: NewsSafeFetchPort;
+    /** #2282: the options-capable port the Reddit reader and feed finder use; `fetch` stays URL-only. */
+    readonly fetchWithOptions: NewsFetchPort;
     readonly image: NewsImageFetchPort;
+    /** #2291: favicon bytes without the robots gate; see NewsFaviconFetchPort. */
+    readonly favicon: NewsFaviconFetchPort;
     readonly search: NewsWebSearchPort;
     readonly ai: NewsAiPort;
   };
@@ -86,12 +96,16 @@ export interface NewsRoutesDependencies {
   /** #1110: UAT-only deterministic override for the source-preview route; see module-registry's buildUatNewsPreviewOverride(). */
   readonly previewOverride?: (input: string) => NewsSourcePreviewResponse | undefined;
   /**
-   * #2005: the encryption seam for publisher access keys. Required, not optional: the
-   * route guard rejects a manifest routes[] entry with no registered route, so the
-   * credential routes must always register. News never resolves key material itself, so
-   * the composition root supplies this.
+   * #2005/#2322: the encryption seam for publisher access keys. Required, not
+   * optional: the route guard rejects a manifest routes[] entry with no
+   * registered route, so the credential routes must always register. News never
+   * resolves key material itself, so the composition root supplies a per-use
+   * resolver; null means the family key exists nowhere and the route pauses
+   * with setup guidance.
    */
-  readonly credentialCipher: NewsCredentialCipherPort;
+  readonly resolveCredentialCipher: (
+    scopedDb: DataContextDb
+  ) => Promise<NewsCredentialCipherPort | null>;
   /**
    * #2005: the reviewed publisher connections. Defaults to the implementation that knows
    * no connections, so until #2007 lands every connect attempt answers "unsupported".
@@ -243,6 +257,7 @@ export function registerNewsRoutes(
     previews,
     discovery: {
       fetch: dependencies.discovery.fetch,
+      fetchWithOptions: dependencies.discovery.fetchWithOptions,
       search: dependencies.discovery.search,
       ai: dependencies.discovery.ai
     },
@@ -271,7 +286,7 @@ export function registerNewsRoutes(
   registerNewsCredentialRoutes(server, {
     dataContext: dependencies.dataContext,
     resolveAccessContext: dependencies.resolveAccessContext,
-    cipher: dependencies.credentialCipher,
+    resolveCipher: dependencies.resolveCredentialCipher,
     connections: publisherConnections,
     sources: personalization,
     boss: dependencies.boss,
@@ -282,5 +297,12 @@ export function registerNewsRoutes(
     resolveAccessContext: dependencies.resolveAccessContext,
     repository: personalization,
     fetchImage: dependencies.discovery.image
+  });
+
+  registerNewsFaviconRoute(server, {
+    resolveAccessContext: dependencies.resolveAccessContext,
+    fetchImage: dependencies.discovery.favicon,
+    dataContext: dependencies.dataContext,
+    customSources: personalization
   });
 }

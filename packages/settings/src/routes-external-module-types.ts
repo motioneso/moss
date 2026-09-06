@@ -52,6 +52,12 @@ export interface InstalledExternalModuleSummary {
    * built.
    */
   readonly status: "draft" | "enabled";
+  /**
+   * The label and help text of this module's declared on/off switches, plus the display name of
+   * each declared credential slot — never a stored credential value. Feeds the settings search
+   * box so a declared setting's own name is searchable, not just the module's name.
+   */
+  readonly settingKeywords: readonly string[];
 }
 
 /**

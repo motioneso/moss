@@ -23,7 +23,8 @@ export const CAP_SHORT: Record<AiModelCapability, string> = {
   json: "JSON",
   vision: "Vision",
   summarization: "Summary",
-  transcription: "Voice"
+  transcription: "Voice",
+  "web-search": "Web search"
 };
 
 export const TIERS: Record<AiModelTier, { label: string; hint: string }> = {

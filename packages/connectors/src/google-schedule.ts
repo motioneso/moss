@@ -22,7 +22,8 @@ export async function reconcileGoogleAccountSchedule(
     const data: GoogleSyncPayload = {
       actorUserId,
       kind: "google-sync",
-      idempotencyKey: `schedule:${actorUserId}`
+      idempotencyKey: `schedule:${actorUserId}`,
+      trigger: "schedule"
     };
     assertMetadataOnlyPayload(data);
     await boss.schedule(GOOGLE_SYNC_QUEUE, GOOGLE_SYNC_CRON, data, {

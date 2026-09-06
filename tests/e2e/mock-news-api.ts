@@ -40,6 +40,7 @@ export function newsHeadline(overrides: Partial<NewsHeadline> = {}): NewsHeadlin
     url: `https://example.com/story-${seq}`,
     publishedAt: "2026-08-22T08:00:00Z",
     imageUrl: null,
+    faviconUrl: null,
     summary: "",
     ...overrides
   };

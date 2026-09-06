@@ -36,6 +36,7 @@ import {
 } from "./settings-persona-preview";
 import { readError, type PaneProps } from "./settings-types";
 import {
+  Badge,
   Choice,
   Field,
   Group,
@@ -49,6 +50,13 @@ import {
 import { Button } from "@moss/ui";
 
 type PersonaState = PersonaDraft;
+
+const RESPONSE_STYLE_EXAMPLE_HINT: Record<ChatResponseStyle, string> = {
+  concise: 'Concise example: "Yes, the meeting moved to 3pm."',
+  balanced: 'Balanced example: "Yes, the meeting moved to 3pm because Sam had a conflict."',
+  detailed:
+    'Detailed example: "Yes, the meeting moved to 3pm because Sam had a conflict. Let me know if that new time doesn\'t work for you."'
+};
 
 const DEFAULT_DESCRIPTION =
   "Be direct and a little dry: skip the pep talks. Hold me to commitments I've actually made, but ease off when I've had a rough day. Lead with what matters and keep it short.";
@@ -238,7 +246,7 @@ function Persona({ who }: { readonly who: string }) {
       <Choice
         key={responseStyle}
         label="Response style"
-        hint="Saved default for how long chat answers are."
+        hint={RESPONSE_STYLE_EXAMPLE_HINT[responseStyle]}
         value={cap(responseStyle)}
         options={["Concise", "Balanced", "Detailed"]}
         onChange={(v) =>
@@ -338,6 +346,10 @@ function ChatModel() {
       ? settings.currentOverrideModelId
       : null;
   const value = currentOverride ?? "default";
+  const selectedModel = currentOverride
+    ? (selectableOverrideModels.find((m) => m.id === currentOverride) ?? null)
+    : defaultModel;
+  const hasWebSearch = selectedModel?.capabilities.includes("web-search") ?? false;
 
   return (
     <Group
@@ -368,11 +380,13 @@ function ChatModel() {
                   </option>
                 ))}
               </Select>
+              {hasWebSearch ? <Badge tone="steel">Web search</Badge> : null}
             </Field>
           ) : (
             <Row
               name="Powering your chat"
               desc={`${defaultModel.providerDisplayName} · ${defaultModel.providerModelId} — Managed by admin.`}
+              control={hasWebSearch ? <Badge tone="steel">Web search</Badge> : undefined}
             />
           )}
           <Note>

@@ -3,11 +3,24 @@ import type { PgBoss } from "pg-boss";
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import type { ToolExecute, ToolResult, ToolSummarize } from "@moss/module-sdk";
 
-import type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "./discovery/ports.js";
+import type {
+  NewsAiPort,
+  NewsFetchPort,
+  NewsSafeFetchPort,
+  NewsWebSearchPort
+} from "./discovery/ports.js";
 import type { NewsCredentialStore } from "./credential-repository.js";
 import { validateTopic } from "./discovery/policy-validation.js";
-import { resolveSourceInput, type SourceResolutionResult } from "./discovery/source-resolution.js";
+import {
+  findDuplicateCustomSource,
+  resolveSourceInput,
+  type SourceResolutionResult
+} from "./discovery/source-resolution.js";
 import { normalizePublisherDomain } from "./personalization-domain.js";
+import {
+  REDDIT_AUTH_REQUIRED_MESSAGE,
+  REDDIT_RATE_LIMIT_MESSAGE
+} from "./source/reddit-messages.js";
 import {
   NewsDuplicateSourceError,
   NewsPersonalizationLimitError
@@ -38,6 +51,8 @@ export interface NewsChatToolDependencies {
   readonly previews: NewsSourcePreviewStore;
   readonly discovery: {
     readonly fetch: NewsSafeFetchPort;
+    /** #2282: optional here so existing test fakes keep working; the composition root always passes it. */
+    readonly fetchWithOptions?: NewsFetchPort;
     readonly search: NewsWebSearchPort;
     readonly ai: NewsAiPort;
   };
@@ -154,6 +169,10 @@ function describeResolutionFailure(result: SourceResolutionResult): string {
         return "Could not reach or verify that publisher.";
       case "blocked":
         return "That publisher's site does not allow automatic access, so it can't be added.";
+      case "rate_limited":
+        return REDDIT_RATE_LIMIT_MESSAGE;
+      case "auth_required":
+        return REDDIT_AUTH_REQUIRED_MESSAGE;
     }
   }
   return "Source discovery is currently unavailable — try again later.";
@@ -200,9 +219,7 @@ export const newsPreviewSourceExecute: ToolExecute = async (
   });
   const existing = await d.repository.listCustomSources(scopedDb);
   const duplicate = result.candidates
-    .map((candidate) =>
-      existing.find((source) => source.canonicalDomain === candidate.canonicalDomain)
-    )
+    .map((candidate) => findDuplicateCustomSource(existing, candidate))
     .find(Boolean);
   return {
     data: {
@@ -210,7 +227,8 @@ export const newsPreviewSourceExecute: ToolExecute = async (
       candidates: result.candidates.map((candidate) => ({
         candidateId: candidate.candidateId,
         label: candidate.label,
-        domain: candidate.canonicalDomain
+        domain: candidate.canonicalDomain,
+        ...(candidate.redirectNote ? { redirectNote: candidate.redirectNote } : {})
       })),
       ...(duplicate ? { duplicateOfSourceId: duplicate.id } : {})
     }

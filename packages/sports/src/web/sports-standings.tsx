@@ -18,6 +18,7 @@ import {
 } from "./sports-client.js";
 import { sportsQueryKeys } from "./query-keys.js";
 import { buildStandingsPickerGroups, StandingsPicker } from "./sports-standings-picker.js";
+import type { FollowedTeamIndex } from "../news-ranking.js";
 import { isFollowed } from "./sports-news.js";
 import { formatDate, formatTime, useUserLocale } from "./locale.js";
 import { TrophyIcon } from "./sports-parts.js";
@@ -91,13 +92,13 @@ function buildViews(sections: readonly StandingsSection[]): StandingsView[] {
 function defaultViewKey(
   views: readonly StandingsView[],
   competitionKey: string,
-  followedPairs: ReadonlySet<string>
+  followedPairs: FollowedTeamIndex
 ): string {
   const hasConference = views.some((v) => v.key.startsWith("conf:"));
   if (hasConference) {
     const sections = views.filter((v) => v.key.startsWith("sec:"));
     const followed = sections.find((v) =>
-      v.sections[0]?.rows.some((row) => isFollowed(followedPairs, competitionKey, row.teamKey))
+      v.sections[0]?.rows.some((row) => isFollowed(followedPairs, competitionKey, row.sourceTeamId))
     );
     if (followed) return followed.key;
     const alphabetical = [...sections].sort((a, b) => a.label.localeCompare(b.label));
@@ -120,7 +121,7 @@ function unwrapStandings(data: SportsStandingsResponse | StandingsGroup | undefi
 
 export function StandingsRail(props: {
   groups: readonly StandingsGroup[];
-  followedPairs: ReadonlySet<string>;
+  followedPairs: FollowedTeamIndex;
 }) {
   const catalogQuery = useQuery({ queryKey: sportsQueryKeys.catalog, queryFn: getSportsCatalog });
   const followsQuery = useQuery({ queryKey: sportsQueryKeys.follows, queryFn: listSportsFollows });
@@ -442,7 +443,7 @@ function StandingsTable(props: {
   group: StandingsGroup;
   section: StandingsSection;
   label: string;
-  followedPairs: ReadonlySet<string>;
+  followedPairs: FollowedTeamIndex;
   // Merged All/conference views mix sections, so ESPN's per-section ranks repeat (two "#1"s in
   // an MLS East+West merge) — renumber by the sorted order instead (mra50mfr).
   renumber?: boolean;
@@ -480,9 +481,12 @@ function StandingsTable(props: {
       <tbody>
         {rows.map((row, index) => (
           <tr
-            key={row.teamKey}
+            // Two teams in one table can share a short name (review finding S1), so the short
+            // name alone is not a unique row identity — pair it with the permanent number, and
+            // fall back to the row position when an older cached table carries no number.
+            key={`${row.teamKey}:${row.sourceTeamId ?? index}`}
             className={
-              isFollowed(props.followedPairs, group.competitionKey, row.teamKey)
+              isFollowed(props.followedPairs, group.competitionKey, row.sourceTeamId)
                 ? "is-you"
                 : undefined
             }

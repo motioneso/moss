@@ -2,28 +2,51 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DataContextDb } from "@moss/db";
 
-import type { NewsAiPort, NewsSafeFetchPort } from "../../packages/news/src/discovery/ports.js";
-import { resolveSourceInput } from "../../packages/news/src/discovery/source-resolution.js";
+import type {
+  NewsAiPort,
+  NewsFetchPort,
+  NewsSafeFetchFailure,
+  NewsSafeFetchPort,
+  NewsSafeFetchResult
+} from "../../packages/news/src/discovery/ports.js";
+import {
+  isKnownSameOwnerAlias,
+  resolveSourceInput
+} from "../../packages/news/src/discovery/source-resolution.js";
 
 const db = {} as DataContextDb;
 const feed = `<rss><channel><item><title>A consequential headline today</title><link>https://one.example/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
 
-function ai(allowed = true): NewsAiPort {
+function ai(allowed = true, category = "news_publisher"): NewsAiPort {
   return {
     fingerprint: async () => "fp",
     generateJson: async () => ({
       ok: true,
-      object: { allowed, category: "news_publisher" }
+      object: { allowed, category }
     })
   };
 }
 
-function repo(exclusions: string[] = []) {
+// A fake model answering as it would for a subreddit: a community, not a publisher.
+function communityAi(allowed = true): NewsAiPort {
+  return ai(allowed, "news_community");
+}
+
+// Same as ai(), but generateJson is a spy so a test can prove the model was never asked.
+function aiSpy(allowed = true): NewsAiPort & { generateJson: ReturnType<typeof vi.fn> } {
+  const generateJson = vi.fn<NewsAiPort["generateJson"]>(async () => ({
+    ok: true,
+    object: { allowed, category: "news_publisher" }
+  }));
+  return { fingerprint: async () => "fp", generateJson };
+}
+
+function repo(exclusions: string[] = [], cachedVerdict: "approved" | "rejected" | null = null) {
   return {
     listExclusions: vi.fn(async () =>
       exclusions.map((canonicalDomain) => ({ id: canonicalDomain, canonicalDomain, createdAt: "" }))
     ),
-    readPolicyVerdict: vi.fn(async () => null),
+    readPolicyVerdict: vi.fn(async () => cachedVerdict),
     upsertPolicyVerdict: vi.fn(async () => {})
   };
 }
@@ -47,6 +70,24 @@ function fetchMap(
 }
 
 const noSearch = { search: vi.fn(async () => ({ results: [] })) };
+
+describe("isKnownSameOwnerAlias", () => {
+  const groups = [["old.example", "new.example"], ["another.example"]];
+
+  it("matches two domains placed in the same hand-confirmed group, in either order", () => {
+    expect(isKnownSameOwnerAlias(groups, "old.example", "new.example")).toBe(true);
+    expect(isKnownSameOwnerAlias(groups, "new.example", "old.example")).toBe(true);
+  });
+
+  it("also matches a subdomain of a group member", () => {
+    expect(isKnownSameOwnerAlias(groups, "www.old.example", "new.example")).toBe(true);
+  });
+
+  it("does not match domains from different groups, or an empty group list", () => {
+    expect(isKnownSameOwnerAlias(groups, "old.example", "another.example")).toBe(false);
+    expect(isKnownSameOwnerAlias([], "old.example", "new.example")).toBe(false);
+  });
+});
 
 describe("resolveSourceInput", () => {
   it("resolves a direct feed URL and carries validation evidence", async () => {
@@ -123,7 +164,7 @@ describe("resolveSourceInput", () => {
     await expect(
       resolveSourceInput(
         db,
-        { fetch, search: noSearch, ai: ai(), repo: repo() },
+        { fetch, search: noSearch, ai: ai(), repo: repo([], "approved") },
         { raw: "https://one.example/article", hasWebSearch: false }
       )
     ).resolves.toMatchObject({
@@ -131,6 +172,43 @@ describe("resolveSourceInput", () => {
       candidates: [{ homepageUrl: "https://one.example/" }]
     });
     expect(fetch).toHaveBeenCalledWith("https://one.example/");
+  });
+
+  // Regression for review round 3, blocker 1: sending a specific page to its own homepage is
+  // still a move, even with no domain change, so it must skip the model call the same way a
+  // cross-domain move does. On the old code this reached the model (no saved decision, so the
+  // request would have failed here) instead of reading the previously saved decision.
+  it("takes a page-to-homepage move through the model-free path, using only a saved decision", async () => {
+    const fetch = fetchMap({
+      "https://one.example/article": {
+        body: `<link rel="canonical" href="https://one.example/canonical-story">`
+      },
+      "https://one.example/": {
+        body: `<title>One News</title><a href="/story">A sufficiently important headline today</a>`
+      }
+    });
+    const spiedAi = aiSpy();
+    const result = await resolveSourceInput(
+      db,
+      { fetch, search: noSearch, ai: spiedAi, repo: repo([], "approved") },
+      { raw: "https://one.example/article", hasWebSearch: false }
+    );
+    expect(result).toMatchObject({ status: "ok" });
+    expect(spiedAi.generateJson).not.toHaveBeenCalled();
+    if (result.status === "ok") {
+      expect(result.candidates[0].redirectNote).not.toBeNull();
+    }
+
+    // With no saved decision at all, the model-free rule means the address reads as
+    // unavailable rather than asking the model — proof the model call was truly skipped, not
+    // just cached.
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://one.example/article", hasWebSearch: false }
+      )
+    ).resolves.toEqual({ status: "unavailable" });
   });
 
   it("resolves names to at most three verified ambiguous publishers", async () => {
@@ -431,5 +509,422 @@ describe("resolveSourceInput", () => {
         `finalUrl=${finalUrl}`
       ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
     }
+  });
+
+  // A page describing itself as its own address is not proof it is owned by the site the user
+  // typed. Before this fix, any final site that labeled itself correctly was accepted — so a
+  // publisher's own open-redirect link could be pointed at a completely unrelated site and Moss
+  // would offer that unrelated site as the "real" publisher. This must now be refused.
+  it("refuses a cross-domain redirect to an unrelated site, even if that site claims itself", async () => {
+    const redirectsToUnrelatedSite: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://new.example/",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<title>New Example</title><link rel="canonical" href="https://new.example/"><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsToUnrelatedSite, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  // Same open-redirect shape as above, but with no self-claiming tag at all — confirms the
+  // refusal does not depend on what the destination page says about itself.
+  it("refuses a cross-domain redirect to an unrelated site with no self-claim either", async () => {
+    const redirectsToUnrelatedSite: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://new.example/",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsToUnrelatedSite, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  // A shortener disguised behind the usual "www" prefix must still be caught — the old code
+  // matched the shortener set by exact domain string only.
+  it("rejects a redirect to a link shortener even behind a www prefix", async () => {
+    const redirectsToWwwShortener: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://www.bit.ly/abc123",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<title>Redirect</title><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsToWwwShortener, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  it("rejects a redirect to a known link shortener", async () => {
+    const redirectsToShortener: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://bit.ly/abc123",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<title>Redirect</title><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsToShortener, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  it("rejects a redirect whose own canonical link points to yet another domain", async () => {
+    const redirectsThenClaimsElsewhere: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://new.example/",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<link rel="canonical" href="https://third.example/"><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: redirectsThenClaimsElsewhere, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+
+  // Regression for review round 3, blockers 1 and 3: a same-domain www move is a real move, so
+  // it must carry a note naming the switch and skip the model call. On the old code this had no
+  // note (readable as "nothing changed") and still asked the model.
+  it("resolves a same-domain www move with a note naming the switch, and no model call", async () => {
+    const wwwRedirect: NewsSafeFetchPort = async (url) => {
+      if (url === "https://example.com/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://www.example.com/",
+          hopCount: 1,
+          contentType: "text/html",
+          body: `<title>Example</title><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    const spiedAi = aiSpy();
+    const result = await resolveSourceInput(
+      db,
+      { fetch: wwwRedirect, search: noSearch, ai: spiedAi, repo: repo([], "approved") },
+      { raw: "https://example.com", hasWebSearch: false }
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      candidates: [{ canonicalDomain: "www.example.com" }]
+    });
+    expect(spiedAi.generateJson).not.toHaveBeenCalled();
+    if (result.status === "ok") {
+      expect(result.candidates[0].redirectNote).toBe(
+        "example.com sends visitors to www.example.com, so that is the site we will follow."
+      );
+    }
+
+    // With no saved decision, the model-free rule reads this as unavailable rather than
+    // reaching for the model — proof the old code's model call is really gone.
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch: wwwRedirect, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://example.com", hasWebSearch: false }
+      )
+    ).resolves.toEqual({ status: "unavailable" });
+  });
+
+  // Regression for review round 3, blocker 2: once a same-site redirect is accepted, the page
+  // can still name a completely unrelated site as its "real" homepage. The ownership check on
+  // that second move must be against the domain the user actually typed, not against the
+  // unrelated site's own claim about itself (which always trivially matches). On the old code
+  // this was accepted as "ok".
+  it("checks a same-site page's declared homepage against the domain the user typed, not against itself", async () => {
+    const fetch: NewsSafeFetchPort = async (url) => {
+      if (url === "https://old.example/article") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://old.example/article",
+          contentType: "text/html",
+          body: `<link rel="canonical" href="https://unrelated.example/">`,
+          truncated: false
+        };
+      }
+      if (url === "https://unrelated.example/") {
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: "https://unrelated.example/",
+          contentType: "text/html",
+          body: `<title>Unrelated</title><a href="/story">A sufficiently important headline today</a>`,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    };
+
+    await expect(
+      resolveSourceInput(
+        db,
+        { fetch, search: noSearch, ai: ai(), repo: repo() },
+        { raw: "https://old.example/article", hasWebSearch: false }
+      )
+    ).resolves.toMatchObject({ status: "rejected", reason: "redirected" });
+  });
+});
+
+/* #2282 Task 1.6 — subreddit resolution. The subreddit branch runs before the publication path
+   and before the web-search prerequisite, so `r/name` never reaches publisher discovery. */
+
+const SUBREDDIT_REQUEST_URL = "https://www.reddit.com/r/nfl/hot.rss";
+
+/** One Atom entry the way Reddit writes it: escaped HTML whose "[link]" anchor leaves Reddit. */
+function subredditEntry(index: number): string {
+  const link = `https://www.espn.com/nfl/story/${index}`;
+  const html =
+    `<!-- SC_OFF --><div class="md"><p>Body</p></div><!-- SC_ON --> submitted by ` +
+    `<a href="https://www.reddit.com/user/fan"> /u/fan </a> <br/> ` +
+    `<span><a href="${link}">[link]</a></span>`;
+  const escaped = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return (
+    `<entry><author><name>/u/fan</name></author><content type="html">${escaped}</content>` +
+    `<id>t3_post${index}</id><link href="https://www.reddit.com/r/NFL/comments/${index}/t/" />` +
+    `<published>2026-09-01T12:00:00+00:00</published><title>Headline number ${index}</title></entry>`
+  );
+}
+
+/** Reddit answers with its own casing of the name in the feed's category term. */
+function subredditFeed(entryCount = 12): string {
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">` +
+    `<category term="NFL" label="r/NFL"/><id>/r/NFL/hot.rss</id>` +
+    `<subtitle>The place for NFL news and discussion.</subtitle>` +
+    `<title>NFL: National Football League Discussion</title>` +
+    Array.from({ length: entryCount }, (_, index) => subredditEntry(index + 1)).join("") +
+    `</feed>`
+  );
+}
+
+function redditFetch(
+  result: NewsSafeFetchResult | NewsSafeFetchFailure
+): NewsFetchPort & ReturnType<typeof vi.fn> {
+  return vi.fn(async (url: string) =>
+    url === SUBREDDIT_REQUEST_URL ? result : { ok: false as const, reason: "network" as const }
+  ) as NewsFetchPort & ReturnType<typeof vi.fn>;
+}
+
+function subredditOk(entryCount = 12): NewsSafeFetchResult {
+  return {
+    ok: true,
+    status: 200,
+    finalUrl: SUBREDDIT_REQUEST_URL,
+    contentType: "application/atom+xml; charset=UTF-8",
+    body: subredditFeed(entryCount),
+    truncated: false
+  };
+}
+
+const EXPECTED_SUBREDDIT_CANDIDATE = {
+  label: "r/NFL",
+  canonicalDomain: "reddit.com",
+  homepageUrl: "https://www.reddit.com/r/NFL/",
+  feedUrl: "https://www.reddit.com/r/NFL/hot.rss",
+  retrievalMethod: "reddit",
+  sampleCount: 10,
+  validationFingerprint: "fp",
+  redirectNote: null,
+  confirmedFetchHosts: ["www.reddit.com"],
+  iconUrl: null,
+  workaround: false,
+  feedHost: null
+};
+
+describe("resolveSourceInput: subreddits", () => {
+  it("resolves the short, slashed and full-link forms to one identical subreddit candidate", async () => {
+    const raws = ["r/nfl", "/r/nfl", "https://www.reddit.com/r/nfl"];
+    const candidates = [];
+    for (const raw of raws) {
+      const result = await resolveSourceInput(
+        db,
+        {
+          fetch: fetchMap({}),
+          fetchWithOptions: redditFetch(subredditOk()),
+          search: noSearch,
+          ai: communityAi(),
+          repo: repo()
+        },
+        { raw, hasWebSearch: false }
+      );
+      expect(result.status).toBe("ok");
+      if (result.status !== "ok") return;
+      expect(result.candidates).toHaveLength(1);
+      const { candidateId, ...rest } = result.candidates[0];
+      expect(candidateId).toEqual(expect.any(String));
+      candidates.push(rest);
+    }
+    expect(candidates[0]).toEqual(EXPECTED_SUBREDDIT_CANDIDATE);
+    expect(candidates[1]).toEqual(candidates[0]);
+    expect(candidates[2]).toEqual(candidates[0]);
+  });
+
+  it("refuses a Reddit-shaped name that breaks Reddit's own rules without fetching anything", async () => {
+    const fetchWithOptions = redditFetch(subredditOk());
+    const result = await resolveSourceInput(
+      db,
+      { fetch: fetchMap({}), fetchWithOptions, search: noSearch, ai: ai(), repo: repo() },
+      { raw: "r/x!", hasWebSearch: true }
+    );
+    expect(result).toEqual({ status: "rejected", reason: "invalid_input" });
+    expect(fetchWithOptions).not.toHaveBeenCalled();
+  });
+
+  it("tells throttling, a private subreddit and a missing one apart", async () => {
+    const cases: { failure: NewsSafeFetchFailure; reason: string }[] = [
+      { failure: { ok: false, reason: "rate_limited", status: 429 }, reason: "rate_limited" },
+      { failure: { ok: false, reason: "http_error", status: 403 }, reason: "auth_required" },
+      { failure: { ok: false, reason: "http_error", status: 404 }, reason: "unreachable" }
+    ];
+    for (const item of cases) {
+      await expect(
+        resolveSourceInput(
+          db,
+          {
+            fetch: fetchMap({}),
+            fetchWithOptions: redditFetch(item.failure),
+            search: noSearch,
+            ai: ai(),
+            repo: repo()
+          },
+          { raw: "r/nfl", hasWebSearch: false }
+        )
+      ).resolves.toEqual({ status: "rejected", reason: item.reason });
+    }
+  });
+
+  it("still applies the content policy and the exclusion list to a subreddit", async () => {
+    await expect(
+      resolveSourceInput(
+        db,
+        {
+          fetch: fetchMap({}),
+          fetchWithOptions: redditFetch(subredditOk()),
+          search: noSearch,
+          ai: communityAi(false),
+          repo: repo()
+        },
+        { raw: "r/nfl", hasWebSearch: false }
+      )
+    ).resolves.toEqual({ status: "rejected", reason: "policy" });
+
+    const excludedFetch = redditFetch(subredditOk());
+    await expect(
+      resolveSourceInput(
+        db,
+        {
+          fetch: fetchMap({}),
+          fetchWithOptions: excludedFetch,
+          search: noSearch,
+          ai: ai(),
+          repo: repo(["reddit.com"])
+        },
+        { raw: "r/nfl", hasWebSearch: false }
+      )
+    ).resolves.toEqual({ status: "rejected", reason: "policy" });
+    expect(excludedFetch).not.toHaveBeenCalled();
+  });
+
+  it("needs no web search for a subreddit, and never asks the search provider", async () => {
+    const search = { search: vi.fn(async () => ({ results: [] })) };
+    const result = await resolveSourceInput(
+      db,
+      {
+        fetch: fetchMap({}),
+        fetchWithOptions: redditFetch(subredditOk()),
+        search,
+        ai: communityAi(),
+        repo: repo()
+      },
+      { raw: "r/nfl", hasWebSearch: false }
+    );
+    expect(result.status).toBe("ok");
+    expect(search.search).not.toHaveBeenCalled();
+  });
+
+  it("judges each subreddit on its own, not once for the whole of Reddit", async () => {
+    const policyRepo = repo();
+    await resolveSourceInput(
+      db,
+      {
+        fetch: fetchMap({}),
+        fetchWithOptions: redditFetch(subredditOk()),
+        search: noSearch,
+        ai: communityAi(),
+        repo: policyRepo
+      },
+      { raw: "r/nfl", hasWebSearch: false }
+    );
+    expect(policyRepo.readPolicyVerdict).toHaveBeenCalledWith(db, "reddit.com/r/nfl", "fp");
+    expect(policyRepo.upsertPolicyVerdict).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ canonicalDomain: "reddit.com/r/nfl" })
+    );
   });
 });

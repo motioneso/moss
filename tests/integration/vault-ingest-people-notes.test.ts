@@ -19,7 +19,9 @@ import {
   registerVaultIngestRootProvider,
   resetVaultIngestRootProvidersForTests
 } from "../../packages/memory/src/vault-ingest-registry.js";
-import { PeopleNotesService, createPeopleVaultIngestProvider } from "@moss/people";
+import { createPeopleVaultIngestProvider } from "@moss/people";
+import { PreferencesRepository } from "@moss/structured-state";
+import { writeVaultFile } from "@moss/vault";
 import { connectionStrings, resetEmptyFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -30,7 +32,7 @@ describe("vault ingest: people notes end-to-end", () => {
   let vaultsBaseDir: string;
   let vaultRunner: VaultContextRunner;
   let repository: MemoryRepository;
-  let notesService: PeopleNotesService;
+  const preferences = new PreferencesRepository();
   const embeddingProvider = new StubEmbeddingProvider();
 
   const owner = "00000000-0000-4000-8300-0000000000c3";
@@ -58,7 +60,6 @@ describe("vault ingest: people notes end-to-end", () => {
     workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 1 });
     dataContext = new DataContextRunner(workerDb);
     repository = new MemoryRepository();
-    notesService = new PeopleNotesService();
 
     // Real provider (not a test fixture) — proves createPeopleVaultIngestProvider's
     // preference-backed root resolution, matching prod module-registry wiring.
@@ -76,19 +77,33 @@ describe("vault ingest: people notes end-to-end", () => {
     return { actorUserId, requestId: `req:vault-ingest-people-${actorUserId}` };
   }
 
-  it("ingests a people-note written through PeopleNotesService, retrieves it, then purges it on delete", async () => {
+  // #2268 — People notes now normally live in the user's own notes folder, which the notes module
+  // already sweeps into memory. What is still swept out of private storage is a People folder saved
+  // before that change: a plain relative name. This test covers exactly that surviving case.
+  it("ingests a people-note left in private storage by an older People folder setting, then purges it on delete", async () => {
     const pipeline = new MemoryIngestPipeline(embeddingProvider, repository);
     const retriever = new MemoryRetriever(embeddingProvider, repository);
     const ac = accessContext(owner);
 
-    const notePath = await vaultRunner.withVaultContext(ac, (vaultCtx) =>
+    const notePath = "people-notes/Ada-Lovelace.md";
+    await vaultRunner.withVaultContext(ac, (vaultCtx) =>
       dataContext.withDataContext(ac, async (scopedDb) => {
-        await notesService.putSettings(scopedDb, owner, { folder: "people-notes" });
-        const { notePath } = await notesService.createPersonNote(scopedDb, vaultCtx, owner, {
-          displayName: "Ada Lovelace",
-          emails: ["ada@example.test"]
-        });
-        return notePath;
+        await preferences.upsert(scopedDb, "people-notes-folder", "people-notes");
+        await writeVaultFile(
+          vaultCtx,
+          notePath,
+          `---
+jarvisPersonId: 00000000-0000-4000-8000-0000000001ad
+displayName: Ada Lovelace
+aliases: []
+emails:
+  - ada@example.test
+phones: []
+status: active
+---
+Ada Lovelace wrote the first algorithm intended for a machine.
+`
+        );
       })
     );
 

@@ -11,6 +11,7 @@ export type WebSearchKeySource = "instance" | "env" | null;
 export interface WebSearchKeyStatusDto {
   readonly configured: boolean;
   readonly source: WebSearchKeySource;
+  readonly nativeSearchEnabled: boolean;
 }
 
 export interface GetWebSearchKeyResponse {
@@ -18,7 +19,8 @@ export interface GetWebSearchKeyResponse {
 }
 
 export interface PutWebSearchKeyRequest {
-  readonly apiKey: string;
+  readonly apiKey?: string;
+  readonly nativeSearchEnabled?: boolean;
 }
 
 export type PutWebSearchKeyResponse = GetWebSearchKeyResponse;
@@ -27,10 +29,11 @@ export type DeleteWebSearchKeyResponse = GetWebSearchKeyResponse;
 const webSearchKeyStatusSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["configured", "source"],
+  required: ["configured", "source", "nativeSearchEnabled"],
   properties: {
     configured: { type: "boolean" },
-    source: { type: ["string", "null"], enum: ["instance", "env", null] }
+    source: { type: ["string", "null"], enum: ["instance", "env", null] },
+    nativeSearchEnabled: { type: "boolean" }
   }
 } as const;
 
@@ -53,9 +56,9 @@ export const putWebSearchKeyRouteSchema = {
   body: {
     type: "object",
     additionalProperties: false,
-    required: ["apiKey"],
     properties: {
-      apiKey: { type: "string", minLength: 1, maxLength: 500 }
+      apiKey: { type: "string", minLength: 1, maxLength: 500 },
+      nativeSearchEnabled: { type: "boolean" }
     }
   },
   response: {

@@ -26,7 +26,6 @@ import type {
   ExternalModuleAttachmentText,
   ExternalModuleWorkerRuntime
 } from "@moss/module-registry/node";
-import type { ModuleCredentialCipher } from "@moss/settings";
 import type { WorkerLane } from "@moss/module-registry/node";
 
 export interface VerifiedExternalModuleInvokeArgs {
@@ -71,7 +70,6 @@ export interface VerifiedExternalModuleInvokerDeps {
   // missing or unreadable; populated-without-this-id means the module alone failed to stage.
   readonly listDiscoveredModuleIds: () => readonly string[];
   readonly dataContext: DataContextRunner;
-  readonly cipher: ModuleCredentialCipher;
   // Structural pick so tests can stub invoke while worker.ts passes the real runtime.
   readonly runtime: Pick<ExternalModuleWorkerRuntime, "invoke">;
   readonly listActiveUserIds: (moduleId: string) => Promise<readonly string[]>;
@@ -199,7 +197,6 @@ export function createVerifiedExternalModuleInvoker(
       actorUserId: args.actorUserId,
       requestId: args.requestId,
       workerDataContext: deps.dataContext,
-      cipher: deps.cipher,
       // ctx.embed (#1281): threaded here too, same as the job path, so a briefing
       // invocation can embed exactly like a scheduled job can.
       embeddingProvider: () =>

@@ -105,6 +105,58 @@ describe("AI service bindings + instance-default resolver", () => {
     expect(resolved.model?.id).toBe(reasoningId);
   });
 
+  it("prefers the newest release inside a tier over the most recently registered row (0214)", async () => {
+    const seed = (providerModelId: string, releasedAt: string) =>
+      dataContext.withDataContext(adminContext(), (scopedDb) =>
+        repository.upsertDiscoveredModels(scopedDb, providerId, [
+          {
+            providerModelId,
+            displayName: providerModelId,
+            capabilities: ["chat", "summarization"],
+            tier: "interactive",
+            status: "active",
+            releasedAt
+          }
+        ])
+      );
+    // The newer release is registered FIRST, so registration order alone would pick the older one.
+    await seed("release-newer", "2026-05-01T00:00:00Z");
+    await seed("release-older", "2025-09-29T00:00:00Z");
+    // Re-discovery of an existing row fills a missing date but never duplicates or clobbers.
+    await seed("release-older", "2020-01-01T00:00:00Z");
+
+    const bind = await server.inject({
+      method: "PUT",
+      url: "/api/ai/services/chat/binding",
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+      payload: { binding: { kind: "mode", tier: "interactive" } }
+    });
+    expect(bind.statusCode).toBe(200);
+
+    const [chat, worker] = await dataContext.withDataContext(adminContext(), (scopedDb) =>
+      Promise.all([
+        repository.resolveModelForCapability(scopedDb, "chat", "interactive"),
+        repository.resolveModelForCapability(scopedDb, "summarization", "interactive")
+      ])
+    );
+    expect(chat.model?.provider_model_id).toBe("release-newer");
+    expect(worker.model?.provider_model_id).toBe("release-newer");
+
+    const rows = await dataContext.withDataContext(adminContext(), (scopedDb) =>
+      scopedDb.db
+        .selectFrom("app.ai_configured_models")
+        .select(["provider_model_id", "released_at"])
+        .where("provider_config_id", "=", providerId)
+        .where("provider_model_id", "like", "release-%")
+        .orderBy("provider_model_id")
+        .execute()
+    );
+    expect(rows.map((row) => [row.provider_model_id, row.released_at?.toISOString()])).toEqual([
+      ["release-newer", "2026-05-01T00:00:00.000Z"],
+      ["release-older", "2025-09-29T00:00:00.000Z"]
+    ]);
+  });
+
   it("resolves a model binding to the exact model and reports needs-config when it is disabled", async () => {
     // #874 HIGH-2: chat is the only bindable service now, so this exercises the model-binding path on
     // chat (was transcription pre-#874). Restored to the mode binding at the end so later, order-

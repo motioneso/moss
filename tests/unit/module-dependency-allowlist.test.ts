@@ -78,6 +78,7 @@ const FEATURE_PACKAGES = new Set([
   "@moss/notifications",
   "@moss/people",
   "@moss/proactive-monitoring",
+  "@moss/scratchpad",
   "@moss/sports",
   "@moss/tasks",
   "@moss/weather",

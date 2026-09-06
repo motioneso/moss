@@ -5,7 +5,17 @@ import type { AccessContext, DataContextDb } from "@moss/db";
 import { isPublicFeedDocument, parsePublicFeedItems } from "@moss/news";
 
 import { catalogEntry } from "./catalog.js";
+import { publisherIdentity } from "./publisher-identity.js";
 import type { SportsSafeFetchPort, SportsWebRequestHop } from "./discovery.js";
+import {
+  type EnsurePhotoResult,
+  type PhotoHostSlot,
+  type SportsPhotoStore,
+  type StoredPhoto
+} from "./photo-store.js";
+import { attachSportsPhotoUrls } from "./photo-pass.js";
+import { recordSportsPhotoOutcome } from "./photo-storage.js";
+import type { SportsPhotoOutcome } from "./photo-status.js";
 import {
   expandSportsSourceRecipe,
   extractSportsSourceRecipe,
@@ -33,16 +43,27 @@ const MAX_ASSIGNMENTS = 20;
 const MAX_REQUESTS = 30;
 const MAX_CONCURRENCY = 4;
 const MAX_DOMAIN_CONCURRENCY = 2;
-const MAX_RESPONSE_BYTES = 1_000_000;
-const FETCH_TIMEOUT_MS = 6_000;
+export const MAX_RESPONSE_BYTES = 1_000_000;
+export const FETCH_TIMEOUT_MS = 6_000;
 const REFRESH_DEADLINE_MS = 12_000;
 const MAX_RETRY_AFTER_MS = 5_000;
 const HEADLINE_TTL_MS = 10 * 60 * 1000;
 
 export type SportsPublicSourceHeadline = CustomSourceHeadline & {
-  readonly imageUrl: null;
+  readonly imageUrl: string | null;
   readonly sportKey: SportsRuntimeSource["assignments"][number]["scope"]["sportKey"];
 };
+
+/** #2237 the deterministic photo pass' budget, per source, per refresh. */
+/** The same margin the photo store applies to its own download, so the two cannot drift apart. */
+/** A failed photo is not retried for as long as its story could still be served from the cache. */
+const PHOTO_FAILURE_TTL_MS = HEADLINE_TTL_MS + DEFAULT_STALE_RETENTION_MS;
+const PHOTO_FAILURE_MAX_ENTRIES = 2_000;
+
+/** Newlines cannot occur in a user id, a source id or a URL, so this join is unambiguous. */
+function photoFailureKey(actorUserId: string, sourceId: string, photoUrl: string): string {
+  return `${actorUserId}\n${sourceId}\n${photoUrl}`;
+}
 
 interface ReaderDataContext {
   withDataContext<T>(
@@ -55,6 +76,8 @@ interface PublicSourceReaderDependencies {
   readonly dataContext: ReaderDataContext;
   readonly repository?: SportsSourcesRepository;
   readonly fetch: SportsSafeFetchPort;
+  /** #2237 omitted in tests that do not exercise photos; the pass is skipped entirely then. */
+  readonly photos?: SportsPhotoStore;
   readonly cache?: DatasetCache;
   readonly now?: () => number;
   readonly sleep?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
@@ -66,12 +89,12 @@ export interface SportsPublicSourceRefreshResult {
   readonly persistedResults: number;
 }
 
-interface RequestAssignment {
+export interface RequestAssignment {
   readonly source: SportsRuntimeSource;
   readonly assignment: SportsRuntimeSource["assignments"][number];
 }
 
-interface RequestGroup {
+export interface RequestGroup {
   readonly identity: string;
   /** #2211 a subreddit feed is parsed as Reddit Atom, everything else as a feed or recipe. */
   readonly kind: "feed" | "scrape" | "reddit";
@@ -83,7 +106,7 @@ interface RequestGroup {
   readonly assignments: RequestAssignment[];
 }
 
-interface ExtractedHeadline {
+export interface ExtractedHeadline {
   readonly id: string;
   readonly title: string;
   readonly url: string;
@@ -92,6 +115,11 @@ interface ExtractedHeadline {
   /** #2211 set for a subreddit's linked article: the real publisher, not the subreddit. */
   readonly publisherLabel?: string;
   readonly publisherDomain?: string;
+  /**
+   * #2237 the publisher's own photo URL, never a per-owner key: this item is cached across every
+   * owner who follows the same source, so an owner-specific value here would leak between vaults.
+   */
+  readonly photoUrl?: string | null;
 }
 
 interface RequestOutcome {
@@ -103,7 +131,7 @@ interface RequestOutcome {
   readonly fromCache: boolean;
 }
 
-class DomainConcurrencyLimiter {
+export class DomainConcurrencyLimiter {
   private readonly active = new Map<string, number>();
   private readonly waiters = new Map<string, Array<() => void>>();
 
@@ -255,30 +283,38 @@ function recipeItems(items: readonly SportsRecipeItem[], requestUrl: string): Ex
 function publicHeadlines(
   pair: RequestAssignment,
   items: readonly ExtractedHeadline[],
-  checkedAt: Date | null
+  checkedAt: Date | null,
+  photos: ReadonlyMap<string, StoredPhoto> = new Map()
 ): SportsPublicSourceHeadline[] {
   const { source, assignment } = pair;
   const competitionKey = assignment.scope.kind === "sport" ? null : assignment.scope.competitionKey;
   const fallbackTime = (checkedAt ?? new Date(0)).toISOString();
-  return items.map((item) => ({
-    origin: "custom",
-    sourceId: source.id,
-    id: `${source.id}:${item.id}`,
-    sportKey: assignment.scope.sportKey,
-    competitionKey,
-    competitionLabel:
-      assignment.scope.kind === "sport"
-        ? SPORTS_SPORT_LABELS[assignment.scope.sportKey]
-        : (catalogEntry(assignment.scope.competitionKey)?.label ?? assignment.scope.competitionKey),
-    title: item.title,
-    url: item.url,
-    publishedAt: item.publishedAt ?? fallbackTime,
-    imageUrl: null,
-    summary: item.summary,
-    teamKeys: assignment.scope.kind === "team" ? [assignment.scope.teamKey] : [],
-    publisherLabel: item.publisherLabel ?? source.label,
-    publisherDomain: item.publisherDomain ?? source.canonicalDomain
-  }));
+  return items.map((item) => {
+    const headlineId = `${source.id}:${item.id}`;
+    const photo = photos.get(item.id) ?? null;
+    return {
+      origin: "custom" as const,
+      sourceId: source.id,
+      id: headlineId,
+      sportKey: assignment.scope.sportKey,
+      competitionKey,
+      competitionLabel:
+        assignment.scope.kind === "sport"
+          ? SPORTS_SPORT_LABELS[assignment.scope.sportKey]
+          : (catalogEntry(assignment.scope.competitionKey)?.label ??
+            assignment.scope.competitionKey),
+      title: item.title,
+      url: item.url,
+      publishedAt: item.publishedAt ?? fallbackTime,
+      imageUrl: photo ? `/api/sports/headlines/${encodeURIComponent(headlineId)}/photo` : null,
+      imageWidth: photo?.width ?? null,
+      imageHeight: photo?.height ?? null,
+      summary: item.summary,
+      teamKeys: assignment.scope.kind === "team" ? [assignment.scope.teamKey] : [],
+      publisherLabel: item.publisherLabel ?? source.label,
+      publisherDomain: item.publisherDomain ?? source.canonicalDomain
+    };
+  });
 }
 
 export class SportsPublicSourceReader {
@@ -286,12 +322,92 @@ export class SportsPublicSourceReader {
   private readonly cache: DatasetCache;
   private readonly now: () => number;
   private readonly sleep: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
+  /** Photo attempt key to the time its "do not retry" memory expires. Insertion-ordered. */
+  private readonly photoFailures = new Map<string, number>();
 
   constructor(private readonly dependencies: PublicSourceReaderDependencies) {
     this.repository = dependencies.repository ?? new SportsSourcesRepository();
     this.cache = dependencies.cache ?? new DatasetCache({ maxEntries: 500 });
     this.now = dependencies.now ?? Date.now;
     this.sleep = dependencies.sleep ?? defaultSleep;
+  }
+
+  /**
+   * Downloads and stores each story's photo into this owner's vault, then records which stored
+   * copy each headline id serves. Returns the copies keyed by feed item id.
+   */
+  private isRememberedPhotoFailure(key: string): boolean {
+    const expiresAt = this.photoFailures.get(key);
+    if (expiresAt === undefined) return false;
+    if (expiresAt > this.now()) return true;
+    this.photoFailures.delete(key);
+    return false;
+  }
+
+  private rememberPhotoFailure(key: string): void {
+    this.photoFailures.delete(key);
+    this.photoFailures.set(key, this.now() + PHOTO_FAILURE_TTL_MS);
+    while (this.photoFailures.size > PHOTO_FAILURE_MAX_ENTRIES) {
+      const oldest = this.photoFailures.keys().next();
+      if (oldest.done) break;
+      this.photoFailures.delete(oldest.value);
+    }
+  }
+
+  private async storePhotos(
+    accessContext: AccessContext,
+    pair: RequestAssignment,
+    items: readonly ExtractedHeadline[],
+    deadline: number,
+    domainLimiter: DomainConcurrencyLimiter,
+    signal?: AbortSignal
+  ): Promise<Map<string, StoredPhoto>> {
+    const stored = new Map<string, StoredPhoto>();
+    const photos = this.dependencies.photos;
+    if (!photos) return stored;
+    // The same limiter the article page fetches use, so a publisher never sees more than two of
+    // our requests at once whichever kind of request they are.
+    const hostSlot: PhotoHostSlot = {
+      acquire: async (host) =>
+        (await domainLimiter.acquireAll([host], deadline, this.now, signal)) !== null,
+      release: (host) => domainLimiter.release(host.toLowerCase())
+    };
+    for (const item of items) {
+      // Past the deadline every remaining story is certain to be skipped, and each call still
+      // does folder and file work before reaching the store's own check, so stop here instead.
+      // The margin is deliberately not applied: inside it a copy we already hold is still worth
+      // returning, and that costs no network.
+      if (signal?.aborted || deadline - this.now() <= 0) break;
+      if (!item.photoUrl) continue;
+      // A photo that already failed is not tried again while the story is still cached: without
+      // this, a permanently broken image is re-downloaded on every single refresh.
+      const failureKey = photoFailureKey(accessContext.actorUserId, pair.source.id, item.photoUrl);
+      if (this.isRememberedPhotoFailure(failureKey)) continue;
+      let result: EnsurePhotoResult;
+      try {
+        result = await photos.ensure(accessContext, pair.source.id, item.photoUrl, {
+          ...(signal ? { signal } : {}),
+          remainingMs: () => deadline - this.now(),
+          hostSlot
+        });
+      } catch {
+        result = { outcome: "unusable" };
+      }
+      // Only a photo we actually learned something bad about is remembered. Running out of
+      // refresh time teaches us nothing, so that photo is tried again on the next refresh.
+      if (result.outcome === "unusable") {
+        this.rememberPhotoFailure(failureKey);
+        continue;
+      }
+      if (result.outcome === "skipped") continue;
+      stored.set(item.id, result.photo);
+      photos.linkHeadline(
+        accessContext.actorUserId,
+        `${pair.source.id}:${item.id}`,
+        result.photo.key
+      );
+    }
+    return stored;
   }
 
   async refresh(
@@ -440,18 +556,80 @@ export class SportsPublicSourceReader {
     const headlines: SportsPublicSourceHeadline[] = [];
     let requestCount = 0;
     const deadline = this.now() + REFRESH_DEADLINE_MS;
-    const pending = [...groups.values()];
-    const running = new Set<Promise<void>>();
     const domainLimiter = new DomainConcurrencyLimiter();
+    const pageBudget = new Map<string, number>();
+    const keptPhotoKeys = new Set<string>();
+    /**
+     * The photo hunt is deliberately held back until every source has its headlines. Sharing one
+     * four-at-a-time budget between the two meant a source whose photos were slow could hold a
+     * slot long enough for an unrelated healthy source never to be fetched at all, which turned a
+     * photo problem into missing headlines for somebody else.
+     */
+    const photoPhase: Array<{
+      readonly group: RequestGroup;
+      readonly outcome: RequestOutcome;
+      readonly feedBody: string | null;
+      /** A cache hit that was already photo-hunted and cached: do neither again. */
+      readonly reuseCached: boolean;
+    }> = [];
+
+    const runAll = async (tasks: ReadonlyArray<() => Promise<void>>): Promise<void> => {
+      const queue = [...tasks];
+      const running = new Set<Promise<void>>();
+      while (queue.length > 0 || running.size > 0) {
+        let scheduled = false;
+        while (running.size < MAX_CONCURRENCY) {
+          const task = queue.shift();
+          if (!task) break;
+          const promise = task().finally(() => {
+            running.delete(promise);
+          });
+          running.add(promise);
+          scheduled = true;
+        }
+        if (running.size > 0 && (!scheduled || running.size >= MAX_CONCURRENCY)) {
+          await Promise.race(running);
+        }
+      }
+    };
+
+    /** Returns how many of the pushed headlines are served with a stored photo. */
+    const pushHeadlines = async (
+      pair: RequestAssignment,
+      items: readonly ExtractedHeadline[],
+      checkedAt: Date | null
+    ): Promise<number> => {
+      const stored = await this.storePhotos(
+        accessContext,
+        pair,
+        items,
+        deadline,
+        domainLimiter,
+        options.signal
+      );
+      for (const copy of stored.values()) keptPhotoKeys.add(copy.key);
+      headlines.push(...publicHeadlines(pair, items, checkedAt, stored));
+      return stored.size;
+    };
 
     const run = async (group: RequestGroup): Promise<void> => {
       const cacheHit = options.bypassCache
         ? undefined
         : this.cache.get<readonly ExtractedHeadline[]>(group.identity, this.now());
       if (cacheHit?.fresh) {
-        for (const pair of group.assignments) {
-          headlines.push(...publicHeadlines(pair, cacheHit.value, null));
-        }
+        photoPhase.push({
+          group,
+          outcome: {
+            items: cacheHit.value,
+            state: "healthy",
+            reason: null,
+            message: null,
+            checkedAt: null,
+            fromCache: true
+          },
+          feedBody: null,
+          reuseCached: true
+        });
         return;
       }
       let budgetDenied = false;
@@ -562,7 +740,7 @@ export class SportsPublicSourceReader {
               fromCache: false
             };
       } else if (group.kind === "reddit") {
-        const listing = parseRedditFeed(response.body, "");
+        const listing = parseRedditFeed(response.body, "", { publisherDomain: publisherIdentity });
         outcome = listing.ok
           ? {
               items: listing.feed.headlines.map((headline) => ({
@@ -623,48 +801,75 @@ export class SportsPublicSourceReader {
           )
         };
       }
-      if (outcome.state === "healthy") {
+      if (outcome.state !== "healthy") degraded = true;
+      photoPhase.push({
+        group,
+        outcome,
+        feedBody: group.kind === "feed" && response.ok ? response.body : null,
+        reuseCached: false
+      });
+    };
+
+    // What each source's stories actually got this time round. A photo counts only once its
+    // download succeeded and the returned story is served with it: a candidate address in the
+    // feed says nothing until the store accepts it. Only a refresh that really went out and
+    // really had stories counts: a cached answer says nothing new about photos.
+    const photoOutcomes = new Map<string, SportsPhotoOutcome>();
+    const finish = async (entry: (typeof photoPhase)[number]): Promise<void> => {
+      let items = entry.outcome.items;
+      if (!entry.reuseCached && entry.outcome.state === "healthy") {
+        if (this.dependencies.photos) {
+          items = await attachSportsPhotoUrls(entry.group, items, entry.feedBody, {
+            deadline,
+            signal: options.signal,
+            domainLimiter,
+            pageBudget,
+            now: this.now,
+            fetch: this.dependencies.fetch
+          });
+        }
         const cachedAt = this.now();
         this.cache.set(
-          group.identity,
-          outcome.items,
+          entry.group.identity,
+          items,
           cachedAt + HEADLINE_TTL_MS,
           cachedAt + HEADLINE_TTL_MS + DEFAULT_STALE_RETENTION_MS
         );
-      } else {
-        degraded = true;
       }
-      for (const pair of group.assignments) {
-        headlines.push(...publicHeadlines(pair, outcome.items, outcome.checkedAt));
-        if (!outcome.fromCache) {
+      const countsForPhotos =
+        this.dependencies.photos !== undefined &&
+        !entry.outcome.fromCache &&
+        entry.outcome.state === "healthy" &&
+        items.length > 0;
+      for (const pair of entry.group.assignments) {
+        const attached = await pushHeadlines(pair, items, entry.outcome.checkedAt);
+        if (countsForPhotos && photoOutcomes.get(pair.source.id) !== "working") {
+          photoOutcomes.set(pair.source.id, attached > 0 ? "working" : "none");
+        }
+        if (!entry.outcome.fromCache) {
           results.push({
             sourceId: pair.source.id,
             assignmentId: pair.assignment.id,
             runtimeFingerprint: pair.source.runtimeFingerprint,
             targetUrl: pair.assignment.targetUrl,
             targetParameters: pair.assignment.targetParameters,
-            healthState: outcome.state,
-            healthReasonCode: outcome.reason,
-            healthMessage: outcome.message,
-            checkedAt: outcome.checkedAt
+            healthState: entry.outcome.state,
+            healthReasonCode: entry.outcome.reason,
+            healthMessage: entry.outcome.message,
+            checkedAt: entry.outcome.checkedAt
           });
         }
       }
     };
 
-    while (pending.length > 0 || running.size > 0) {
-      let scheduled = false;
-      while (running.size < MAX_CONCURRENCY) {
-        const group = pending.shift();
-        if (!group) break;
-        const promise = run(group).finally(() => {
-          running.delete(promise);
-        });
-        running.add(promise);
-        scheduled = true;
-      }
-      if (running.size > 0 && (!scheduled || running.size >= MAX_CONCURRENCY)) {
-        await Promise.race(running);
+    await runAll([...groups.values()].map((group) => () => run(group)));
+    await runAll(photoPhase.map((entry) => () => finish(entry)));
+
+    if (this.dependencies.photos) {
+      try {
+        await this.dependencies.photos.sweep(accessContext, keptPhotoKeys);
+      } catch {
+        // Housekeeping only: an unswept copy expires on the next refresh.
       }
     }
 
@@ -674,6 +879,17 @@ export class SportsPublicSourceReader {
         : await this.dependencies.dataContext.withDataContext(accessContext, (db) =>
             this.repository.persistRuntimeResults(db, results)
           );
+    if (photoOutcomes.size > 0) {
+      try {
+        await this.dependencies.dataContext.withDataContext(accessContext, async (db) => {
+          for (const [sourceId, outcome] of photoOutcomes) {
+            await recordSportsPhotoOutcome(db, sourceId, outcome);
+          }
+        });
+      } catch {
+        // The status line is a courtesy; failing to update it must never fail a refresh.
+      }
+    }
     return { headlines, degraded, persistedResults };
   }
 }

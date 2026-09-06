@@ -15,8 +15,10 @@ import type { ListUsefulnessFeedbackResponse } from "@moss/shared";
 import { ApiError } from "@moss/module-web-sdk";
 
 import NewsSettings from "../../packages/news/src/settings/index.js";
+import { AddSourceFlow } from "../../packages/news/src/settings/add-source.js";
 import {
   NewsAddSourceError,
+  PREVIEW_REQUEST_ERROR_MESSAGE,
   previewOutcomeMessage,
   zipPreviewCandidates
 } from "../../packages/news/src/settings/add-source.js";
@@ -112,6 +114,7 @@ function storedSource(
     homepageUrl: "https://www.theatlantic.com",
     feedUrl: null,
     retrievalMethod: "scrape" as const,
+    workaround: false,
     validationStatus,
     healthStatus,
     createdAt: "2026-07-11T00:00:00.000Z"
@@ -225,6 +228,45 @@ describe("NewsSettings personalization sections (#953)", () => {
     expect(html).not.toContain('class="jds-btn jds-btn--primary jds-btn--sm" disabled=""');
   });
 
+  // #2228 fix round 1, finding 7: the described-topics gate names the fix for each reason and
+  // links where that fix actually lives, not always at Assistant settings.
+  it("gate: a chat model without built-in search points at the Chat model picker", () => {
+    const html = render(
+      personalization({
+        availability: { ...allOff, aiConfigured: true, webSearchReason: "model-has-no-search" }
+      })
+    );
+    expect(html).toContain("Your chat model has no built-in search.");
+    expect(html).toContain('href="/settings?section=assistant"');
+    expect(html).toContain("Pick a model under Assistant settings");
+  });
+
+  it("gate: built-in search switched off points an admin at AI providers", () => {
+    const html = render(
+      personalization({
+        availability: { ...allOff, aiConfigured: true, webSearchReason: "native-disabled" }
+      })
+    );
+    expect(html).toContain("Built-in web search is switched off for this instance.");
+    expect(html).toContain('href="/settings?section=aiproviders"');
+    expect(html).toContain("Turn it on or add a Brave key under AI providers");
+  });
+
+  it("gate: no key and no searching model points at AI providers", () => {
+    const html = render(
+      personalization({
+        availability: {
+          ...allOff,
+          aiConfigured: true,
+          webSearchReason: "no-key-no-native-model"
+        }
+      })
+    );
+    expect(html).toContain("No web search is set up.");
+    expect(html).toContain('href="/settings?section=aiproviders"');
+    expect(html).toContain("Add a model with built-in search or a Brave key under AI providers");
+  });
+
   it("prerequisites met: add-source button and add-topic form are live (#975 Task 9 opens the writes)", () => {
     const html = render(personalization({ availability: allOn }));
     // The Slice-1 closed-write placeholders are gone — real forms render instead.
@@ -247,6 +289,7 @@ describe("NewsSettings personalization sections (#953)", () => {
             homepageUrl: "https://www.theatlantic.com",
             feedUrl: null,
             retrievalMethod: "scrape",
+            workaround: false,
             validationStatus: "approved",
             healthStatus: "healthy",
             createdAt: "2026-07-11T00:00:00.000Z"
@@ -263,7 +306,8 @@ describe("NewsSettings personalization sections (#953)", () => {
         ]
       })
     );
-    expect(html).toContain("Publications you add");
+    expect(html).toContain("Sources you add");
+    expect(html).not.toContain("Publications you add");
     expect(html).toContain("The Atlantic");
     expect(html).toContain("theatlantic.com");
     expect(html).toContain("Watches");
@@ -312,7 +356,7 @@ describe("NewsSettings described-topics section (#990)", () => {
   it("renames the section and explains the empty state honestly", () => {
     const html = render(personalization({ availability: allOn }));
     expect(html).toContain("Topics across the web");
-    expect(html).toContain("News still uses your selected publications.");
+    expect(html).toContain("News still uses your selected sources.");
   });
 
   it("renders an Edit affordance per stored topic alongside Remove", () => {
@@ -336,12 +380,12 @@ describe("NewsSettings described-topics section (#990)", () => {
   it("shows authored personalization loading/error states without false topic UI", () => {
     const loading = renderPersonalizationState("pending");
     expect(loading).toContain("Loading personalized news settings");
-    expect(loading).not.toContain("News still uses your selected publications.");
+    expect(loading).not.toContain("News still uses your selected sources.");
     expect(loading).not.toContain('id="nw-addtopic-label"');
 
     const error = renderPersonalizationState("error");
     expect(error).toContain("Could not load personalized news settings. Try again.");
-    expect(error).not.toContain("News still uses your selected publications.");
+    expect(error).not.toContain("News still uses your selected sources.");
     expect(error).not.toContain('id="nw-addtopic-label"');
   });
 });
@@ -424,6 +468,44 @@ describe("NewsSettings write flows (#975 Task 9)", () => {
   });
 });
 
+// Adding a publication by web address never calls out to a search engine — only looking up
+// topics across the web does. The "Sources you add" group must not claim it needs a
+// prerequisite it does not use; "Topics across the web" is where that claim belongs.
+describe("News settings prerequisite badges (news-badge)", () => {
+  it("shows only the AI model badge for sources you add, not a web search badge", () => {
+    const html = render(
+      personalization({
+        availability: { ...allOn, webSearchConfigured: false },
+        customSources: [storedSource("approved")]
+      })
+    );
+    const publicationsGroup = html.slice(html.indexOf("Sources you add"));
+    expect(publicationsGroup).toContain("AI model <!-- -->ready");
+    expect(publicationsGroup).not.toContain("Web search");
+  });
+
+  it("shows both the AI model and web search badges for topics across the web", () => {
+    const html = render(personalization({ availability: allOn }));
+    const topicsGroup = html.slice(
+      html.indexOf("Topics across the web"),
+      html.indexOf("Sources you add")
+    );
+    expect(topicsGroup).toContain("AI model <!-- -->ready");
+    expect(topicsGroup).toContain("Web search <!-- -->ready");
+  });
+
+  it("shows the web search badge as needed for topics across the web when it is missing", () => {
+    const html = render(
+      personalization({ availability: { ...allOn, webSearchConfigured: false } })
+    );
+    const topicsGroup = html.slice(
+      html.indexOf("Topics across the web"),
+      html.indexOf("Sources you add")
+    );
+    expect(topicsGroup).toContain("Web search <!-- -->needed");
+  });
+});
+
 // Pure helpers behind the add flows — the interactive states (preview results, mutation
 // errors) can't be reached through renderToString, so their copy mapping is tested directly.
 describe("add-flow error/candidate helpers (#975 Task 9)", () => {
@@ -467,6 +549,35 @@ describe("add-flow error/candidate helpers (#975 Task 9)", () => {
       "Custom topic limit reached"
     );
     expect(topicCreateErrorMessage(new Error("boom"))).toBe("Could not add that topic. Try again.");
+  });
+
+  // #2282: the add-source flow now accepts a subreddit as well as a publication, so its
+  // wording talks about "sources" rather than assuming every add is a publication.
+  it("uses source wording, not publication wording, for preview failure and fallback copy", () => {
+    expect(previewOutcomeMessage({ status: "rejected", reason: "policy" })).toBe(
+      "That source isn't allowed by the content policy."
+    );
+    expect(previewOutcomeMessage({ status: "invalid", reason: "invalid_input" })).toBe(
+      "That doesn't look like a source we can check — try a homepage link."
+    );
+    const fallback = previewOutcomeMessage({ status: "rejected", reason: "brand_new_reason" });
+    expect(fallback).toBe("That source can't be added.");
+    expect(fallback).not.toContain("publication");
+  });
+
+  it("labels and hints the add-source box for either a publication or a subreddit", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const html = renderToString(
+      createElement(QueryClientProvider, { client }, createElement(AddSourceFlow))
+    );
+    expect(html).toContain("Source homepage or domain");
+    expect(html).not.toContain("Publication homepage or domain");
+    expect(html).toContain('placeholder="politico.com or r/technology"');
+    expect(html).not.toContain('placeholder="theatlantic.com"');
+  });
+
+  it("uses source wording for the generic check-failed message", () => {
+    expect(PREVIEW_REQUEST_ERROR_MESSAGE).toBe("Could not check that source. Try again.");
   });
 });
 

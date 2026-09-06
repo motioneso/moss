@@ -67,4 +67,53 @@ describe("generateStructured", () => {
     expect(result.ok).toBe(true);
     expect(capture.input?.service).toBe("module.job-fit");
   });
+
+  it("keeps the sources a CLI adapter reports alongside raw text (#2228)", async () => {
+    const deps: GenerateStructuredDeps = {
+      ...buildDeps({}),
+      createCliStructuredAdapter: () => ({
+        generateStructured: async () => ({
+          rawText: '{"ok":true}',
+          usage: { inputTokens: 1, outputTokens: 1 },
+          sources: [{ title: "A", url: "https://example.com/a" }]
+        })
+      })
+    };
+    const result = await generateStructured(
+      scopedDb,
+      {
+        service: "module.web-research",
+        schema: { type: "object", properties: {} },
+        prompt: "search this",
+        nativeSearch: true
+      },
+      deps
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      object: { ok: true },
+      sources: [{ title: "A", url: "https://example.com/a" }]
+    });
+  });
+
+  it("returns no sources key when a CLI adapter reports raw text without any (#2228)", async () => {
+    const deps: GenerateStructuredDeps = {
+      ...buildDeps({}),
+      createCliStructuredAdapter: () => ({
+        generateStructured: async () => ({
+          rawText: '{"ok":true}',
+          usage: { inputTokens: 1, outputTokens: 1 }
+        })
+      })
+    };
+    const result = await generateStructured(
+      scopedDb,
+      { service: "module.web-research", schema: { type: "object", properties: {} }, prompt: "x" },
+      deps
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result).not.toHaveProperty("sources");
+  });
 });

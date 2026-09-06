@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./email-otp-rule": "./src/email-otp-rule.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

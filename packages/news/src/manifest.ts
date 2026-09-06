@@ -94,7 +94,9 @@ export const newsModuleManifest = {
       // #2006 — health states distinguish rejected credentials from temporary outages.
       "sql/0204_news_source_health_states.sql",
       // #2006 QA fix — complete the worker's narrow credential-status read grant.
-      "sql/0205_news_credential_status_worker_grant.sql"
+      "sql/0205_news_credential_status_worker_grant.sql",
+      // #2282 — subreddit sources, per-source fetch-host allowlist, workaround failure count.
+      "sql/0218_news_source_kinds.sql"
     ],
     migrationDirectories: ["packages/news/sql"],
     ownedTables: [
@@ -114,7 +116,8 @@ export const newsModuleManifest = {
     {
       id: "news",
       label: "News",
-      description: "Read personalized headlines from enabled sources.",
+      description:
+        "Read personalized headlines from enabled sources. Marking a story less like this removes it at once and refills its spot from loaded stories. Today's list shows each publisher's icon on a light tile, readable in both themes, name on hover.",
       path: "/news",
       icon: "newspaper",
       order: 34,
@@ -126,7 +129,7 @@ export const newsModuleManifest = {
       id: "news.prefs",
       label: "News",
       description:
-        "Choose news topics, manage built-in, connected, custom, and excluded publishers, and story preferences.",
+        "Choose news topics, manage built-in, connected, and excluded publishers, and the sources you add: a publication or a subreddit. Adding a source needs an AI model; discovering topics across the web also needs web search.",
       path: "/settings/modules/news",
       scope: "user",
       order: 34,
@@ -269,6 +272,11 @@ export const newsModuleManifest = {
     {
       method: "GET",
       path: "/api/news/images/:articleId",
+      permissionId: "news.view"
+    },
+    {
+      method: "GET",
+      path: "/api/news/favicon/:domain",
       permissionId: "news.view"
     },
     // #2005 publisher credentials. news.credentials, never news.prefs.
@@ -485,8 +493,18 @@ export const newsModuleManifest = {
   ],
   features: [
     {
+      id: "news.story_pictures",
+      description:
+        "Show a picture with a story. If a publisher's feed doesn't name one (such as NPR), News " +
+        "looks in the story's own text instead. The address must be on that publisher's approved " +
+        "list, and a tracking image is never shown as story art."
+    },
+    {
       id: "news.add_source",
-      description: "Find a publisher by URL or name and add it to personalized News.",
+      description:
+        "Find a publisher by URL or name, or a subreddit with an r/name input, and add it to " +
+        "personalized News. A subreddit source contributes articles linked from its hot feed. " +
+        "A forward to an unrelated site is refused.",
       requires: newsAddSourceRequirement,
       remediations: [
         {
@@ -507,6 +525,61 @@ export const newsModuleManifest = {
           class: "transient",
           description:
             "Source discovery is temporarily unavailable; retry or contact an administrator."
+        },
+        {
+          code: "news.add_source.redirect_refused",
+          class: "validation",
+          description:
+            "The address given forwards to a different site Moss cannot confirm is the same " +
+            "publisher, so the move is refused. The user is told to try the address it forwards " +
+            "to directly, as its own address."
+        }
+      ]
+    },
+    {
+      id: "news.described_topics",
+      description:
+        "Describe a topic in your own words and have News find matching stories across the web.",
+      // #2228: one remediation per reason web search can be off for a person, each pointing
+      // where that fix lives (the same copy the settings gate shows).
+      remediations: [
+        {
+          id: "news.described_topics.pick_searching_model",
+          description:
+            "Your chat model has no built-in search. Pick a model under Assistant settings, or ask an admin to add a Brave key.",
+          path: "/settings?section=assistant"
+        },
+        {
+          id: "news.described_topics.enable_native_search",
+          description:
+            "Built-in web search is switched off for this instance. Turn it on or add a Brave key under AI providers.",
+          path: "/settings?section=aiproviders"
+        },
+        {
+          id: "news.described_topics.enable_web_search",
+          description:
+            "No web search is set up. Add a model with built-in search or a Brave key under AI providers.",
+          path: "/settings?section=aiproviders"
+        }
+      ],
+      errors: [
+        {
+          code: "news.described_topics.model_has_no_search",
+          class: "prerequisite",
+          remediationRef: "news.described_topics.pick_searching_model",
+          description: "Your chat model has no built-in web search."
+        },
+        {
+          code: "news.described_topics.native_search_disabled",
+          class: "prerequisite",
+          remediationRef: "news.described_topics.enable_native_search",
+          description: "Built-in web search is switched off for this instance."
+        },
+        {
+          code: "news.described_topics.no_web_search",
+          class: "prerequisite",
+          remediationRef: "news.described_topics.enable_web_search",
+          description: "Described topics need an AI model and web search."
         }
       ]
     }

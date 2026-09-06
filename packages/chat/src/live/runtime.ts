@@ -82,7 +82,8 @@ export const MOSS_PERSONA_TOOL_GUIDANCE = [
   "For requests about Moss data or actions — including memory, notes, calendar, email, tasks, and people — use the matching Jarv1s tool through MCP first.",
   "If the matching Jarv1s tool is not listed yet, use ToolSearch to find it before answering.",
   "Do not use native Write, Edit, Bash, or Skill tools for these requests.",
-  "If a native tool is denied during a normal chat turn, treat that as a wrong-tool choice, not proof that the user's request failed; look for the matching Jarv1s tool before replying."
+  "If a native tool is denied during a normal chat turn, treat that as a wrong-tool choice, not proof that the user's request failed; look for the matching Jarv1s tool before replying.",
+  "To look anything up on the public web, call the Jarv1s web.search tool with a descriptive query; there is no other search tool, and search before trying to read a page."
 ].join("\n");
 
 /** App-map tool-call instructions — drawer surface only (#1259: a module surface has no app map). */
@@ -116,7 +117,12 @@ function composeMossPersona(surface: ChatSurface): string {
 export type ChatEngineFactory = (
   provider: ProviderKind,
   sessionKey: string,
-  opts?: { readonly executionMode?: AiProviderExecutionMode }
+  opts?: {
+    readonly executionMode?: AiProviderExecutionMode;
+    /** B4: set only by a structured caller (`CliStructuredAdapter`). See
+     *  `ChatEngineSelectionOpts.needsStructuredOutput` in engine-selection.ts. */
+    readonly needsStructuredOutput?: boolean;
+  }
 ) => CliChatEngine | Promise<CliChatEngine>;
 
 export interface PersonaPreferencesPort {
@@ -202,6 +208,7 @@ export function createRealEngineFactory(
       mux: opts.mux,
       homeBase,
       executionMode: engineOpts?.executionMode,
+      needsStructuredOutput: engineOpts?.needsStructuredOutput,
       // #1557 Phase 1: read from `chat.persistent_runtime.enabled` by the caller
       // (`chat-multiplexer.ts`'s `resolveChatEngineFactory`, the host-dev boot path). The
       // cli-runner RPC root (`engine-host.ts`) never reaches this factory — it calls
@@ -265,7 +272,8 @@ function createRpcEngineFactory(opts: {
       sessionKey,
       connection,
       engineOpts?.executionMode,
-      opts.readPersistentRuntimeConfig
+      opts.readPersistentRuntimeConfig,
+      engineOpts?.needsStructuredOutput
     );
   return { factory, connection };
 }

@@ -70,7 +70,7 @@
  * ───────────────────────────────────────────────────────────────────────────
  */
 
-import type { ChatActivityEvent } from "../chat-adapter.js";
+import type { ChatActivityEvent, ChatSource } from "../chat-adapter.js";
 
 /**
  * #2164 r21 (item 3) — widens the shared `ChatActivityEvent` locally with an optional
@@ -90,6 +90,8 @@ type ChatActivityEventWithToolName = ChatActivityEvent & {
   readonly toolName?: string;
   readonly toolCallId?: string;
   readonly rejected?: boolean;
+  /** #2228: pages the CLI's own web search tool reported for this call (title + url). */
+  readonly sources?: readonly ChatSource[];
 };
 
 export type ProviderKind = "anthropic" | "openai-compatible" | "google";
@@ -290,11 +292,81 @@ function mapAnthropicUserRecord(
   for (const item of content) {
     if (!isRecord(item)) continue;
     if (item["type"] !== "tool_result") continue;
-    if (item["is_error"] !== true) continue;
     const toolUseId = typeof item["tool_use_id"] === "string" ? item["tool_use_id"] : undefined;
     if (!toolUseId) continue;
-    events.push({ kind: "tool", text: "", toolCallId: toolUseId, rejected: true });
+    if (item["is_error"] === true) {
+      events.push({ kind: "tool", text: "", toolCallId: toolUseId, rejected: true });
+      continue;
+    }
+    // #2228: a successful WebSearch result carries the pages the CLI searched. Report them as
+    // sources so a structured caller can cite them exactly like an API-key provider's search.
+    const sources = anthropicToolResultSources(rec, item);
+    if (sources.length > 0) events.push({ kind: "tool", text: "", toolCallId: toolUseId, sources });
   }
+}
+
+/**
+ * #2228: pages a Claude CLI WebSearch call reported. The transcript keeps the tool's structured
+ * output at the record's top-level `toolUseResult.results[].content[]` (objects with title +
+ * url). Older builds only keep the tool_result text, which embeds the same list after a
+ * `Links:` marker as a JSON array, so that is the fallback.
+ */
+function anthropicToolResultSources(
+  rec: Record<string, unknown>,
+  item: Record<string, unknown>
+): ChatSource[] {
+  const found: ChatSource[] = [];
+  const toolUseResult = rec["toolUseResult"];
+  if (isRecord(toolUseResult) && Array.isArray(toolUseResult["results"])) {
+    for (const result of toolUseResult["results"]) {
+      if (!isRecord(result) || !Array.isArray(result["content"])) continue;
+      for (const entry of result["content"]) found.push(...sourceFromCandidate(entry));
+    }
+  }
+  if (found.length === 0) {
+    for (const text of toolResultTexts(item["content"])) {
+      const marker = text.indexOf("Links: [");
+      if (marker < 0) continue;
+      const start = marker + "Links: ".length;
+      const end = text.indexOf("]", start);
+      if (end < 0) continue;
+      try {
+        const parsed: unknown = JSON.parse(text.slice(start, end + 1));
+        if (Array.isArray(parsed)) {
+          for (const entry of parsed) found.push(...sourceFromCandidate(entry));
+        }
+      } catch {
+        // Not a JSON list; the text branch is best-effort only.
+      }
+    }
+  }
+  return dedupeSources(found);
+}
+
+function toolResultTexts(content: unknown): string[] {
+  if (typeof content === "string") return [content];
+  if (!Array.isArray(content)) return [];
+  const texts: string[] = [];
+  for (const block of content) {
+    if (isRecord(block) && typeof block["text"] === "string") texts.push(block["text"]);
+  }
+  return texts;
+}
+
+function sourceFromCandidate(entry: unknown): ChatSource[] {
+  if (!isRecord(entry) || typeof entry["url"] !== "string" || !entry["url"]) return [];
+  const title =
+    typeof entry["title"] === "string" && entry["title"] ? entry["title"] : entry["url"];
+  return [{ title, url: entry["url"] }];
+}
+
+function dedupeSources(sources: readonly ChatSource[]): ChatSource[] {
+  const seen = new Set<string>();
+  return sources.filter((source) => {
+    if (seen.has(source.url)) return false;
+    seen.add(source.url);
+    return true;
+  });
 }
 
 // ─── openai-compatible / Codex mapping ───────────────────────────────────────
@@ -403,6 +475,23 @@ function mapCodexExecItem(
           ? item["tool"]
           : itemType;
     events.push({ kind: "tool", text: label });
+    return;
+  }
+  if (itemType === "web_search") {
+    // #2228: codex reports each search step as its own item: `search` (a query, no urls), then
+    // `open_page` / `find_in_page` with the page url it read. Only opened pages become sources,
+    // so the list names what the model actually consulted, not every hit. Codex gives no
+    // titles, so the url doubles as the title.
+    const action = item["action"];
+    const url = isRecord(action) && typeof action["url"] === "string" ? action["url"] : "";
+    const id = typeof item["id"] === "string" ? item["id"] : undefined;
+    events.push({
+      kind: "tool",
+      text: "web_search",
+      toolName: "web_search",
+      ...(id ? { toolCallId: id } : {}),
+      ...(url ? { sources: [{ title: url, url }] } : {})
+    });
   }
 }
 

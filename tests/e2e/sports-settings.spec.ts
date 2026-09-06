@@ -55,22 +55,44 @@ const COWBOYS: TeamRef = {
   competitionKey: "nfl",
   name: "Dallas Cowboys",
   shortName: "DAL",
-  crestUrl: null
+  crestUrl: null,
+  sourceTeamId: "id-dal"
 };
 const ARSENAL: TeamRef = {
   teamKey: "team.ars",
   competitionKey: "eng.1",
   name: "Arsenal",
   shortName: "ARS",
-  crestUrl: null
+  crestUrl: null,
+  sourceTeamId: "id-team.ars"
+};
+// Two NFL-fixture teams sharing the short name "PAC": the list gives them composite keys while the
+// server saves the follow under the bare short name plus the permanent id (Ben, dev, 2026-09-04).
+const PACIFIC_TIGERS: TeamRef = {
+  teamKey: "pac.413",
+  competitionKey: "nfl",
+  name: "Pacific Tigers",
+  shortName: "PAC",
+  crestUrl: "https://example.com/crests/413.png",
+  sourceTeamId: "413"
+};
+const PACIFIC_LUTES: TeamRef = {
+  teamKey: "pac.129700",
+  competitionKey: "nfl",
+  name: "Pacific Lutheran Lutes",
+  shortName: "PAC",
+  crestUrl: "https://example.com/crests/129700.png",
+  sourceTeamId: "129700"
 };
 const LAKERS: TeamRef = {
   teamKey: "lal",
   competitionKey: "nba",
   name: "Los Angeles Lakers",
   shortName: "LAL",
-  crestUrl: null
+  crestUrl: null,
+  sourceTeamId: "id-lal"
 };
+const ALL_TEAMS: readonly TeamRef[] = [COWBOYS, ARSENAL, LAKERS, PACIFIC_TIGERS, PACIFIC_LUTES];
 
 async function fulfillJson(route: Route, body: unknown, status = 200): Promise<void> {
   await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
@@ -81,6 +103,8 @@ type MutationScenario = {
   failPost?: boolean;
   deleteGate?: Promise<void>;
   failDelete?: boolean;
+  /** #2237 sources already present when the screen loads, so a photo line can be asserted. */
+  seedSources?: ReadonlyArray<Record<string, unknown>>;
 };
 
 /** Stateful mock local to this spec (spec Slice 3) — catalog, follows, search, roster, and
@@ -171,7 +195,7 @@ async function mockSportsSettings(
   });
 
   // #2211 custom sources added through the two-phase preview/confirm flow, kept in memory.
-  const customSources: Array<Record<string, unknown>> = [];
+  const customSources: Array<Record<string, unknown>> = [...(scenario.seedSources ?? [])];
   await page.route("**/api/sports/sources", (route) => {
     if (route.request().method() === "POST") {
       const body = route.request().postDataJSON() as { canonicalDomain: string };
@@ -190,6 +214,8 @@ async function mockSportsSettings(
         lastCheckedAt: new Date().toISOString(),
         lastSuccessAt: new Date().toISOString(),
         recipeStatus: "feed",
+        photoStatus: "none",
+        photosFoundByMoss: false,
         assignedFollowIds: [],
         assignments: [],
         createdAt: new Date().toISOString()
@@ -242,10 +268,16 @@ async function mockSportsSettings(
       await scenario.postGate;
       if (scenario.failPost) return fulfillJson(route, { message: "Follow failed" }, 500);
       const body = route.request().postDataJSON() as CreateSportsFollowRequest;
+      // Mirror the real server (sports-service followTeam): the saved teamKey is the team's bare
+      // short name, not the list key it was clicked under, and the permanent id rides alongside.
+      const team = ALL_TEAMS.find(
+        (t) => t.competitionKey === body.competitionKey && t.teamKey === body.teamKey
+      );
       const follow: SportsFollowDto = {
         id: `f${nextId++}`,
         competitionKey: body.competitionKey,
-        teamKey: body.teamKey ?? null,
+        teamKey: body.teamKey == null ? null : (team?.shortName.toLowerCase() ?? body.teamKey),
+        sourceTeamId: body.teamKey == null ? null : (team?.sourceTeamId ?? `id-${body.teamKey}`),
         createdAt: "2026-07-12T00:00:00.000Z"
       };
       follows = [...follows, follow];
@@ -265,14 +297,24 @@ async function mockSportsSettings(
 
   await page.route("**/api/sports/teams/search*", (route) => {
     const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() ?? "";
-    const teams = [COWBOYS, ARSENAL, LAKERS].filter((t) => t.name.toLowerCase().includes(q));
+    // Name or short name, like the real search: "al" hits Dallas, Arsenal and LAL at once, and
+    // "pac" hits both colliding Pacific teams.
+    const teams = ALL_TEAMS.filter(
+      (t) => t.name.toLowerCase().includes(q) || t.shortName.toLowerCase().includes(q)
+    );
     return fulfillJson(route, { teams, partial: false, degraded: false });
   });
 
   await page.route("**/api/sports/leagues/*/teams", (route) => {
     const key = decodeURIComponent(new URL(route.request().url()).pathname.split("/")[4] ?? "");
     const teams =
-      key === "nfl" ? [COWBOYS] : key === "eng.1" ? [ARSENAL] : key === "nba" ? [LAKERS] : [];
+      key === "nfl"
+        ? [COWBOYS, PACIFIC_TIGERS, PACIFIC_LUTES]
+        : key === "eng.1"
+          ? [ARSENAL]
+          : key === "nba"
+            ? [LAKERS]
+            : [];
     return fulfillJson(route, { teams, degraded: false });
   });
 
@@ -309,7 +351,9 @@ test.describe("Sports settings follow picker (#989)", () => {
     await page.getByRole("button", { name: "Follow Dallas Cowboys" }).click();
     const pendingFollow = page.getByRole("button", { name: "Following…" });
     await expect(pendingFollow).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Follow all of NFL" })).toBeEnabled();
+    // "cowboys" doesn't match the NFL league name itself, so this result shows a plain league
+    // heading, not a Follow-all button — check an unrelated control stays enabled instead.
+    await expect(page.getByRole("searchbox", { name: "Find a team or league" })).toBeEnabled();
     releasePost();
 
     const failedFollow = page.getByRole("button", { name: "Follow Dallas Cowboys" });
@@ -332,7 +376,9 @@ test.describe("Sports settings follow picker (#989)", () => {
     await unfollow.click();
     const pendingUnfollow = page.getByRole("button", { name: "Unfollowing…" });
     await expect(pendingUnfollow).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Follow all of NFL" })).toBeEnabled();
+    // "cowboys" doesn't match the NFL league name itself, so this result shows a plain league
+    // heading, not a Follow-all button — check an unrelated control stays enabled instead.
+    await expect(page.getByRole("searchbox", { name: "Find a team or league" })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Unfollow DAL" })).toBeEnabled();
     releaseDelete();
 
@@ -376,6 +422,24 @@ test.describe("Sports settings follow picker (#989)", () => {
     await page.getByRole("button", { name: "Unfollow Dallas Cowboys" }).click();
     await expect(page.getByRole("button", { name: "Follow Dallas Cowboys" })).toBeVisible();
 
+    // A colliding team (Ben, dev, 2026-09-04): the list key is "pac.413" but the server saves the
+    // follow under the bare short name "pac". The tile must still read as followed, the Following
+    // chip must show that team's own crest, and the other "PAC" team stays unfollowed.
+    await page.getByRole("searchbox", { name: "Find a team or league" }).fill("pacific");
+    await page.getByRole("button", { name: "Follow Pacific Tigers" }).click();
+    const tigersUnfollow = page.getByRole("button", { name: "Unfollow Pacific Tigers" });
+    await expect(tigersUnfollow).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByRole("button", { name: "Follow Pacific Lutheran Lutes" })
+    ).toHaveAttribute("aria-pressed", "false");
+    const chips = page.getByRole("list", { name: "Followed teams and leagues" });
+    await expect(chips.getByRole("listitem").filter({ hasText: "PAC" })).toHaveCount(1);
+    await expect(chips.locator('img[src="https://example.com/crests/413.png"]')).toBeVisible();
+    // The same control now unfollows instead of silently re-following.
+    await tigersUnfollow.click();
+    await expect(page.getByRole("button", { name: "Follow Pacific Tigers" })).toBeVisible();
+    await expect(chips.getByRole("listitem").filter({ hasText: "PAC" })).toHaveCount(0);
+
     // Follow-all a league from search results.
     await page.getByRole("searchbox", { name: "Find a team or league" }).fill("nfl");
     const followAllBtn = page.getByRole("button", { name: "Follow all of NFL" });
@@ -384,6 +448,48 @@ test.describe("Sports settings follow picker (#989)", () => {
 
     await page.getByRole("button", { name: "Unfollow all of NFL" }).click();
     await expect(page.getByRole("button", { name: "Follow all of NFL" })).toBeVisible();
+  });
+
+  test("search results sit under their own league heading, and no league group is empty (#2278)", async ({
+    page
+  }) => {
+    await mockApi(page, {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: [],
+      notifications: [],
+      tasks: []
+    });
+    await mockSportsSettings(page);
+    await gotoSportsSettings(page);
+
+    // "al" hits Dallas Cowboys, Arsenal and LAL: three leagues at once. No league name contains
+    // "al", so every group gets a plain heading rather than a Follow-all row.
+    await page.getByRole("searchbox", { name: "Find a team or league" }).fill("al");
+    await expect(page.getByRole("button", { name: "Follow Dallas Cowboys" })).toBeVisible();
+
+    const groups = page.locator(".sp-search__group");
+    await expect(groups).toHaveCount(3);
+    const expected: ReadonlyArray<readonly [string, string]> = [
+      ["NFL", "Follow Dallas Cowboys"],
+      ["Premier League", "Follow Arsenal"],
+      ["NBA", "Follow Los Angeles Lakers"]
+    ];
+    for (const [i, [league, tile]] of expected.entries()) {
+      const group = groups.nth(i);
+      await expect(group.locator(".sp-search__group-heading")).toHaveText(league);
+      // Exactly this league's tile, and nothing from any other league.
+      await expect(group.getByRole("button", { name: /^Follow / })).toHaveCount(1);
+      await expect(group.getByRole("button", { name: tile })).toBeVisible();
+    }
+    await expect(page.getByRole("button", { name: /^Follow all of/ })).toHaveCount(0);
+
+    // A league that matched by name alone keeps its Follow-all row but shows no empty grid.
+    await page.getByRole("searchbox", { name: "Find a team or league" }).fill("nfl");
+    await expect(page.getByRole("button", { name: "Follow all of NFL" })).toBeVisible();
+    await expect(groups).toHaveCount(1);
+    await expect(groups.first().locator(".sp-teamgrid")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Follow (?!all)/ })).toHaveCount(0);
   });
 
   test("browse leagues disclosure opens only the selected league's roster and preserves loading/retry states", async ({
@@ -490,6 +596,64 @@ test.describe("Sports settings follow picker (#989)", () => {
 
     await expect(page.getByText("Source added.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Remove r/nfl" })).toBeVisible();
+  });
+
+  // #2237 the settings row tells the reader, in the spec's words, whether a source's stories are
+  // getting photos.
+  test("each source row says whether its stories are getting photos (#2237)", async ({ page }) => {
+    await mockApi(page, {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: [],
+      notifications: [],
+      tasks: []
+    });
+    const base = {
+      kind: "custom",
+      canonicalDomain: "publisher.example",
+      homepageUrl: "https://publisher.example/",
+      feedUrl: null,
+      retrievalMethod: "feed",
+      enabled: true,
+      healthState: "healthy",
+      healthReasonCode: null,
+      healthMessage: null,
+      lastCheckedAt: "2026-07-12T00:00:00.000Z",
+      lastSuccessAt: "2026-07-12T00:00:00.000Z",
+      recipeStatus: "feed",
+      assignedFollowIds: [],
+      assignments: [],
+      createdAt: "2026-07-12T00:00:00.000Z"
+    };
+    await mockSportsSettings(page, {
+      seedSources: [
+        {
+          ...base,
+          id: "source-working",
+          label: "Working Publisher",
+          photoStatus: "working",
+          photosFoundByMoss: false
+        },
+        {
+          ...base,
+          id: "source-broken",
+          label: "Broken Publisher",
+          photoStatus: "stopped_working",
+          photosFoundByMoss: true
+        }
+      ]
+    });
+    await gotoSportsSettings(page);
+
+    await expect(page.getByText("Photos: working")).toBeVisible();
+    await expect(page.getByText("Photos: stopped working")).toBeVisible();
+    // Only the source whose photos Moss found offers a way to stop using them.
+    await expect(
+      page.getByRole("button", { name: "Stop using Moss's photos for Broken Publisher" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Stop using Moss's photos for Working Publisher" })
+    ).toHaveCount(0);
   });
 
   test("saved leagues and follows assemble into one keyboard-accessible standings picker", async ({

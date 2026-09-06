@@ -107,13 +107,19 @@ describe("admin web search key", () => {
     expect(nonAdminPut.statusCode).toBe(403);
 
     expect(initial.statusCode).toBe(200);
-    expect(initial.json()).toEqual({ status: { configured: false, source: null } });
+    expect(initial.json()).toEqual({
+      status: { configured: false, source: null, nativeSearchEnabled: true }
+    });
 
     expect(saved.statusCode).toBe(200);
-    expect(saved.json()).toEqual({ status: { configured: true, source: "instance" } });
+    expect(saved.json()).toEqual({
+      status: { configured: true, source: "instance", nativeSearchEnabled: true }
+    });
 
     expect(afterSave.statusCode).toBe(200);
-    expect(afterSave.json()).toEqual({ status: { configured: true, source: "instance" } });
+    expect(afterSave.json()).toEqual({
+      status: { configured: true, source: "instance", nativeSearchEnabled: true }
+    });
     // The plaintext key and ciphertext envelope never appear in any response.
     expect(afterSave.body).not.toContain(BRAVE_KEY);
     expect(afterSave.body).not.toContain("ciphertext");
@@ -131,8 +137,12 @@ describe("admin web search key", () => {
     expect(JSON.stringify(storedRow)).not.toContain(BRAVE_KEY);
 
     expect(revoked.statusCode).toBe(200);
-    expect(revoked.json()).toEqual({ status: { configured: false, source: null } });
-    expect(afterRevoke.json()).toEqual({ status: { configured: false, source: null } });
+    expect(revoked.json()).toEqual({
+      status: { configured: false, source: null, nativeSearchEnabled: true }
+    });
+    expect(afterRevoke.json()).toEqual({
+      status: { configured: false, source: null, nativeSearchEnabled: true }
+    });
   });
 });
 

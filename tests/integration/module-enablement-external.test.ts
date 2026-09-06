@@ -59,7 +59,8 @@ describe("installed external modules appear in the personal Modules list (#1762)
           version: "0.3.0",
           hasPreferences: true,
           hasUserCredentials: false,
-          status: "enabled"
+          status: "enabled",
+          settingKeywords: []
         }
       ]
     });

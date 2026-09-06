@@ -2,6 +2,7 @@ import {
   PgBoss,
   type ConstructorOptions,
   type Job,
+  type JobWithMetadata,
   type Queue,
   type SendOptions,
   type WorkOptions
@@ -117,6 +118,8 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "sourceVersion",
   "sourceKind",
   "sourceRefHash",
+  // #2274: the provider's thread id for one email thread judgement (an id, never content).
+  "threadRef",
   "version",
   "personId",
   "personUpdatedAt",
@@ -126,6 +129,11 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "startedAt",
   "calendarSeenSince",
   "calendarUpserted",
+  "emailDeferred",
+  // Bounded set of provider message ids still awaiting the assistant, plus the fixed
+  // reason code for the wait. Ids and a closed vocabulary only - never message content.
+  "deferredKeys",
+  "deferredReason",
   "calendarReconciled",
   "emailUpserted",
   "emailFailures",
@@ -134,7 +142,11 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "buildId",
   "step",
   "workflowRunId",
-  "stepRunId"
+  "stepRunId",
+  "trigger",
+  "notificationId",
+  "recipientUserId",
+  "releaseAt"
 ]);
 
 export function assertMetadataOnlyPayload(payload: unknown): void {
@@ -340,19 +352,47 @@ export async function migratePgBoss(
   }
 }
 
+/**
+ * The job a data-context worker handler sees. `retryCount` and `retryLimit` are present at
+ * runtime only when the worker was registered with `includeMetadata: true`; a handler that
+ * needs them must treat their absence as the final attempt.
+ */
+export type DataContextJob<TPayload> = Job<TPayload> &
+  Partial<Pick<JobWithMetadata<TPayload>, "retryCount" | "retryLimit">>;
+
+export interface DataContextWorkerHooks<TPayload, TResult> {
+  /**
+   * Runs after the handler's transaction has committed, with the handler's result. A throw
+   * here fails the job, so pg-boss retries it under the queue's retry options, without
+   * rolling back anything the handler wrote. It is the only safe place to ask for a retry
+   * when the handler's own bookkeeping must survive (#743 security finding 8).
+   */
+  readonly afterCommit?: (result: TResult, job: DataContextJob<TPayload>) => void | Promise<void>;
+}
+
 export async function registerDataContextWorker<TPayload extends ActorScopedJobPayload, TResult>(
   boss: PgBoss,
   queueName: string,
   dataContext: DataContextRunner,
-  handler: (job: Job<TPayload>, scopedDb: DataContextDb) => Promise<TResult>,
-  options: WorkOptions = { pollingIntervalSeconds: 2 }
+  handler: (job: DataContextJob<TPayload>, scopedDb: DataContextDb) => Promise<TResult>,
+  options: WorkOptions = { pollingIntervalSeconds: 2 },
+  hooks: DataContextWorkerHooks<TPayload, TResult> = {}
 ): Promise<string> {
   return boss.work<TPayload, TResult>(queueName, options, async ([job]) => {
     if (!job) {
       throw new Error(`pg-boss invoked ${queueName} without a job`);
     }
 
-    return dataContext.withDataContext(toAccessContext(job), (scopedDb) => handler(job, scopedDb));
+    // pg-boss only widens the job with retry metadata when `includeMetadata` is set; the
+    // DataContextJob type keeps those fields optional for exactly that reason.
+    const contextJob = job as DataContextJob<TPayload>;
+    const result = await dataContext.withDataContext(toAccessContext(job), (scopedDb) =>
+      handler(contextJob, scopedDb)
+    );
+    if (hooks.afterCommit) {
+      await hooks.afterCommit(result, contextJob);
+    }
+    return result;
   });
 }
 

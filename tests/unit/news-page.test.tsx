@@ -18,6 +18,7 @@ function story(id: string, overrides: Partial<NewsHeadline> = {}): NewsHeadline 
     url: `https://preferred.example/${id}`,
     publishedAt: "2026-07-11T10:00:00.000Z",
     imageUrl: `/api/news/images/${id}`,
+    faviconUrl: `/api/news/favicon/${id}.example`,
     summary: "A useful summary.",
     ...overrides
   };

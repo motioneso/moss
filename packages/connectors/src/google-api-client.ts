@@ -22,10 +22,30 @@ export const GOOGLE_API_REQUEST_TIMEOUT_MS = 10_000;
 export class GoogleApiError extends Error {
   constructor(
     message: string,
-    readonly statusCode: number
+    readonly statusCode: number,
+    /** Google's own structured error code (e.g. "PERMISSION_DENIED", "RATE_LIMIT_EXCEEDED").
+     *  Non-secret — safe to log and to branch on. Undefined when the body couldn't be parsed. */
+    readonly reason?: string
   ) {
     super(message);
     this.name = "GoogleApiError";
+  }
+}
+
+/**
+ * Google's error responses carry a structured, non-secret status/reason code in the body
+ * (`error.status` or `error.errors[0].reason`) — the same shape already trusted for the
+ * freeBusy per-calendar `reason` codes above. Callers only ever see the status number in
+ * `Error.message`, never this body, so reading it here does not reopen the no-body-leak rule.
+ */
+async function extractGoogleErrorReason(response: Response): Promise<string | undefined> {
+  try {
+    const body = (await response.json()) as {
+      error?: { status?: string; errors?: ReadonlyArray<{ reason?: string }> };
+    };
+    return body.error?.status ?? body.error?.errors?.[0]?.reason;
+  } catch {
+    return undefined;
   }
 }
 
@@ -361,8 +381,9 @@ export class GoogleApiClient {
     if (response.ok) return;
     // Log status only; NEVER embed the response body in Error.message —
     // handleRouteError propagates Error.message to HTTP responses.
-    this.logger.error({ statusCode: response.status, api }, "Google API call failed");
-    throw new GoogleApiError(`Google ${api} returned ${response.status}`, response.status);
+    const reason = await extractGoogleErrorReason(response);
+    this.logger.error({ statusCode: response.status, api, reason }, "Google API call failed");
+    throw new GoogleApiError(`Google ${api} returned ${response.status}`, response.status, reason);
   }
 
   private async getJson<T>(url: string, accessToken: string, api: string): Promise<T> {
@@ -374,8 +395,13 @@ export class GoogleApiClient {
     if (!response.ok) {
       // Log status server-side only; NEVER embed the response body in Error.message —
       // handleRouteError propagates Error.message to HTTP responses (oauth.ts:122).
-      this.logger.error({ statusCode: response.status, api }, "Google API call failed");
-      throw new GoogleApiError(`Google ${api} returned ${response.status}`, response.status);
+      const reason = await extractGoogleErrorReason(response);
+      this.logger.error({ statusCode: response.status, api, reason }, "Google API call failed");
+      throw new GoogleApiError(
+        `Google ${api} returned ${response.status}`,
+        response.status,
+        reason
+      );
     }
     return (await response.json()) as T;
   }
@@ -398,8 +424,13 @@ export class GoogleApiClient {
     if (!response.ok) {
       // Log status server-side only; NEVER embed the response body in Error.message —
       // handleRouteError propagates Error.message to HTTP responses (oauth.ts:122).
-      this.logger.error({ statusCode: response.status, api }, "Google API call failed");
-      throw new GoogleApiError(`Google ${api} returned ${response.status}`, response.status);
+      const reason = await extractGoogleErrorReason(response);
+      this.logger.error({ statusCode: response.status, api, reason }, "Google API call failed");
+      throw new GoogleApiError(
+        `Google ${api} returned ${response.status}`,
+        response.status,
+        reason
+      );
     }
     return (await response.json()) as T;
   }
@@ -422,8 +453,13 @@ export class GoogleApiClient {
     if (!response.ok) {
       // Log status server-side only; NEVER embed the response body in Error.message —
       // handleRouteError propagates Error.message to HTTP responses (oauth.ts:122).
-      this.logger.error({ statusCode: response.status, api }, "Google API call failed");
-      throw new GoogleApiError(`Google ${api} returned ${response.status}`, response.status);
+      const reason = await extractGoogleErrorReason(response);
+      this.logger.error({ statusCode: response.status, api, reason }, "Google API call failed");
+      throw new GoogleApiError(
+        `Google ${api} returned ${response.status}`,
+        response.status,
+        reason
+      );
     }
     return (await response.json()) as T;
   }

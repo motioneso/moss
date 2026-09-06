@@ -27,21 +27,25 @@ function liveGame(): GameSummary {
     statusDetail: "Q3 4:12",
     home: {
       teamKey: "min",
+      sourceTeamId: null,
       name: "Minnesota Vikings",
       shortName: "MIN",
       crestUrl: null,
       score: 21,
       record: "10-2",
-      winner: true
+      winner: true,
+      scorers: null
     },
     away: {
       teamKey: "dal",
+      sourceTeamId: null,
       name: "Dallas Cowboys",
       shortName: "DAL",
       crestUrl: null,
       score: 14,
       record: "8-4",
-      winner: false
+      winner: false,
+      scorers: null
     }
   };
 }
@@ -55,21 +59,25 @@ function finalGame(): GameSummary {
     statusDetail: "FT",
     home: {
       teamKey: "nyy",
+      sourceTeamId: null,
       name: "New York Yankees",
       shortName: "NYY",
       crestUrl: null,
       score: 6,
       record: "58-40",
-      winner: true
+      winner: true,
+      scorers: null
     },
     away: {
       teamKey: "bos",
+      sourceTeamId: null,
       name: "Boston Red Sox",
       shortName: "BOS",
       crestUrl: null,
       score: 3,
       record: "50-48",
-      winner: false
+      winner: false,
+      scorers: null
     }
   };
 }
@@ -91,6 +99,8 @@ function headline(id: string, competitionKey: string, title: string): Headline {
     url: `https://example.test/${id}`,
     publishedAt: "2026-07-06T18:00:00Z",
     imageUrl: null,
+    imageWidth: null,
+    imageHeight: null,
     summary: "",
     teamKeys: [],
     publisherLabel: "ESPN",
@@ -128,6 +138,7 @@ function standingsGroup(): StandingsGroup {
         rows: [
           {
             teamKey: "ars",
+            sourceTeamId: null,
             name: "Arsenal",
             rank: 1,
             points: 40,
@@ -141,6 +152,7 @@ function standingsGroup(): StandingsGroup {
           },
           {
             teamKey: "liv",
+            sourceTeamId: null,
             name: "Liverpool",
             rank: 2,
             points: 38,
@@ -274,21 +286,25 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
           statusDetail: "7:00 PM",
           home: {
             teamKey: "lal",
+            sourceTeamId: null,
             name: "Los Angeles Lakers",
             shortName: "LAL",
             crestUrl: null,
             score: null,
             record: "45-20",
-            winner: false
+            winner: false,
+            scorers: null
           },
           away: {
             teamKey: "gsw",
+            sourceTeamId: null,
             name: "Golden State Warriors",
             shortName: "GSW",
             crestUrl: null,
             score: null,
             record: "40-25",
-            winner: false
+            winner: false,
+            scorers: null
           }
         }
       ]
@@ -318,12 +334,12 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
   ],
   standings: [standingsGroup()],
   followedTeams: [
-    { competitionKey: "nfl", teamKey: "min" },
-    { competitionKey: "nfl", teamKey: "dal" },
-    { competitionKey: "nba", teamKey: "lal" },
-    { competitionKey: "nba", teamKey: "bos" },
-    { competitionKey: "eng.1", teamKey: "ars" },
-    { competitionKey: "mlb", teamKey: "nyy" }
+    { competitionKey: "nfl", teamKey: "min", sourceTeamId: null },
+    { competitionKey: "nfl", teamKey: "dal", sourceTeamId: null },
+    { competitionKey: "nba", teamKey: "lal", sourceTeamId: null },
+    { competitionKey: "nba", teamKey: "bos", sourceTeamId: null },
+    { competitionKey: "eng.1", teamKey: "ars", sourceTeamId: null },
+    { competitionKey: "mlb", teamKey: "nyy", sourceTeamId: null }
   ],
   followedLeagues: [{ competitionKey: "mlb", competitionLabel: "MLB" }],
   // One active followed-league card (Ben 2026-07-09) so the /today Sports desk exercises the
@@ -369,6 +385,7 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
       ]
     }
   ],
+  ambiguousFollows: [],
   degraded: false
 };
 

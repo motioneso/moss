@@ -27,7 +27,8 @@ function externalModule(
     version: "0.1.0",
     hasPreferences: false,
     hasUserCredentials: false,
-    status
+    status,
+    settingKeywords: []
   };
 }
 

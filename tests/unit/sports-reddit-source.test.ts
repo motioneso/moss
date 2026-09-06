@@ -251,7 +251,7 @@ describe("reading a subreddit", () => {
     const result = await readSubreddit(fetch, "NFL");
     expect(result).toMatchObject({
       ok: true,
-      listingUrl: FEED_URL,
+      feedUrl: FEED_URL,
       subreddit: {
         displayName: "nfl",
         title: "NFL: National Football League Discussion",

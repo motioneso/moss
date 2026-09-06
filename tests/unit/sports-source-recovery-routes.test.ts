@@ -45,8 +45,10 @@ function buildApp(sourceService: NonNullable<SportsRoutesDependencies["sourceSer
         id: "follow-id",
         competitionKey: input.competitionKey,
         teamKey: input.teamKey ?? null,
+        sourceTeamId: input.sourceTeamId ?? null,
         createdAt: "2026-08-24T00:00:00.000Z"
       }),
+      setSourceTeamId: async () => undefined,
       remove: async () => false
     },
     now: () => new Date("2026-08-24T12:00:00.000Z"),
@@ -135,6 +137,8 @@ describe("sports source recovery routes", () => {
       lastCheckedAt: "2026-08-24T12:00:00.000Z",
       lastSuccessAt: "2026-08-24T12:00:00.000Z",
       recipeStatus: "feed",
+      photoStatus: "pending",
+      photosFoundByMoss: false,
       assignedFollowIds: [],
       assignments: [],
       createdAt: "2026-08-21T00:00:00.000Z"

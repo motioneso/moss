@@ -14,6 +14,8 @@ export interface ResolverCache {
   set(actorUserId: string, modules: readonly MossModuleManifest[]): void;
   /** Called on every connection add/edit/delete/refresh or tool-curation change for this user. */
   drop(actorUserId: string): void;
+  /** Drop every cached entry — used when the encryption key itself changes (#2312). */
+  clear(): void;
 }
 
 export function createResolverCache(deps?: {
@@ -39,6 +41,9 @@ export function createResolverCache(deps?: {
     },
     drop(actorUserId) {
       entries.delete(actorUserId);
+    },
+    clear() {
+      entries.clear();
     }
   };
 }

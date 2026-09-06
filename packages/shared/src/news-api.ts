@@ -63,6 +63,8 @@ export interface NewsHeadline {
   readonly url: string;
   readonly publishedAt: string | null; // ISO instant; null when the feed omitted/garbled it
   readonly imageUrl: string | null; // curated allow-listed HTTPS URL or authenticated same-origin path
+  /** Same-origin favicon proxy path for the publisher's own domain; null when it has none. */
+  readonly faviconUrl: string | null;
   readonly summary: string; // sanitized plaintext, "" when absent
   /**
    * #2018: the opaque reference the story-feedback API accepts for this story. Present only on
@@ -130,9 +132,19 @@ export interface DeleteNewsPrefResponse {
 // module-private revalidation markers and must never reach the browser.
 // ---------------------------------------------------------------------------
 
+/**
+ * #2228: why web search is unavailable for this actor, driving the settings status line and the
+ * described-topics prerequisite gate copy. Null/absent when web search is available.
+ */
+export type NewsWebSearchUnavailableReason =
+  | "no-key-no-native-model"
+  | "native-disabled"
+  | "model-has-no-search";
+
 export interface NewsPersonalizationAvailabilityDto {
   readonly aiConfigured: boolean;
   readonly webSearchConfigured: boolean;
+  readonly webSearchReason?: NewsWebSearchUnavailableReason | null;
   readonly customSourceByUrlEnabled: boolean;
   readonly customSourceByNameEnabled: boolean;
   readonly freeformTopicsEnabled: boolean;
@@ -144,7 +156,12 @@ export interface NewsCustomSourceDto {
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
   readonly feedUrl: string | null;
-  readonly retrievalMethod: "feed" | "scrape";
+  readonly retrievalMethod: "feed" | "scrape" | "reddit";
+  /**
+   * #2282: true when a feed source is read from a host that is not the publisher itself (a
+   * mirror or bridge). Derived by the server; the host list behind it is never exported.
+   */
+  readonly workaround: boolean;
   readonly validationStatus: "approved" | "needs_revalidation" | "rejected";
   readonly healthStatus:
     | "healthy"
@@ -194,8 +211,9 @@ export interface NewsSourcePreviewCandidate {
   readonly label: string;
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
-  readonly retrievalMethod: "feed" | "scrape";
+  readonly retrievalMethod: "feed" | "scrape" | "reddit";
   readonly sampleCount: number;
+  readonly redirectNote?: string;
 }
 
 export interface NewsSourcePreviewResponse {
@@ -331,6 +349,7 @@ const newsHeadlineSchema = {
     "url",
     "publishedAt",
     "imageUrl",
+    "faviconUrl",
     "summary"
   ],
   properties: {
@@ -344,6 +363,7 @@ const newsHeadlineSchema = {
     url: { type: "string" },
     publishedAt: { type: ["string", "null"] },
     imageUrl: { type: ["string", "null"] },
+    faviconUrl: { type: ["string", "null"] },
     summary: { type: "string" },
     // #2018: optional on purpose - the non-personalized fallback has no target row to verify
     // against. This schema is additionalProperties:false, so an undeclared field is dropped at
@@ -496,6 +516,7 @@ const newsCustomSourceDtoSchema = {
     "homepageUrl",
     "feedUrl",
     "retrievalMethod",
+    "workaround",
     "validationStatus",
     "healthStatus",
     "createdAt"
@@ -506,7 +527,8 @@ const newsCustomSourceDtoSchema = {
     canonicalDomain: { type: "string" },
     homepageUrl: { type: "string" },
     feedUrl: { type: ["string", "null"] },
-    retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
+    retrievalMethod: { type: "string", enum: ["feed", "scrape", "reddit"] },
+    workaround: { type: "boolean" },
     validationStatus: { type: "string", enum: ["approved", "needs_revalidation", "rejected"] },
     healthStatus: {
       type: "string",
@@ -608,6 +630,10 @@ export const getNewsPersonalizationSchema = {
           properties: {
             aiConfigured: { type: "boolean" },
             webSearchConfigured: { type: "boolean" },
+            webSearchReason: {
+              type: ["string", "null"],
+              enum: ["no-key-no-native-model", "native-disabled", "model-has-no-search", null]
+            },
             customSourceByUrlEnabled: { type: "boolean" },
             customSourceByNameEnabled: { type: "boolean" },
             freeformTopicsEnabled: { type: "boolean" }
@@ -725,8 +751,9 @@ export const previewNewsSourceSchema = {
               label: { type: "string" },
               canonicalDomain: { type: "string" },
               homepageUrl: { type: "string" },
-              retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
-              sampleCount: { type: "number" }
+              retrievalMethod: { type: "string", enum: ["feed", "scrape", "reddit"] },
+              sampleCount: { type: "number" },
+              redirectNote: { type: "string" }
             }
           }
         },

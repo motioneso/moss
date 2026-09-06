@@ -513,6 +513,11 @@ function RailUserMenu(props: {
       <button
         className={`jds-usermenu__trigger ${open ? "is-open" : ""}`}
         type="button"
+        aria-label={
+          props.unreadCount > 0
+            ? `Account menu, ${formatUnreadCount(props.unreadCount)} unread notification${props.unreadCount === 1 ? "" : "s"}`
+            : "Account menu"
+        }
         onClick={() => setOpen((o) => !o)}
       >
         <span className="jds-usermenu__av">
@@ -523,7 +528,9 @@ function RailUserMenu(props: {
           <span className="jds-usermenu__sub">{props.me.user.email}</span>
         </span>
         {!open && props.unreadCount > 0 ? (
-          <span className="jds-badge-count">{formatUnreadCount(props.unreadCount)}</span>
+          <span className="jds-badge-count" aria-hidden="true">
+            {formatUnreadCount(props.unreadCount)}
+          </span>
         ) : null}
         <span className="jds-usermenu__chev">
           <ChevronUp size={16} aria-hidden="true" />

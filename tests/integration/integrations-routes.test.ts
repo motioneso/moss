@@ -94,7 +94,10 @@ function buildApp(actorUserId: string) {
   const app = Fastify();
   registerIntegrationsRoutes(app, {
     resolveAccessContext: async () => ({ actorUserId, requestId: "req:integrations-route-test" }),
-    dataContext
+    dataContext,
+    // Routes no longer build a default cipher at registration (#2312): pass one
+    // explicitly, mirroring the production wiring's env path.
+    cipher: createIntegrationsCipher()
   });
   return app;
 }

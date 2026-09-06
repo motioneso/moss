@@ -7,7 +7,7 @@ import {
   looksLikeOneTimeCodeEmail,
   signInCodeDecision,
   type OneTimeCodeEmailInput
-} from "./email-otp-rule.js";
+} from "@moss/shared/email-otp-rule";
 
 export { looksLikeBulkMail, type BulkMailInput } from "./email-bulk-rule.js";
 
@@ -16,7 +16,7 @@ export {
   signInCodeDecision,
   type OneTimeCodeEmailInput,
   type SignInCodeDecision
-} from "./email-otp-rule.js";
+} from "@moss/shared/email-otp-rule";
 
 /** Max decoded body length sent to the LLM (bounded to protect prompt limits, spec risk #6). */
 export const MAX_BODY_CHARS = 20_000;
@@ -178,6 +178,18 @@ export type EmailActionabilityCategory =
   | "noise"
   | "unknown";
 
+/**
+ * Spec 2026-09-04-email-chief-of-staff §3.1: the first-pass gate. `nothing` stores no summary and
+ * a noise verdict; `worth_knowing` keeps a one-line summary and an fyi verdict; `maybe_owed` stores
+ * neither and marks the message for the per-thread second pass in Commitments.
+ */
+export type EmailGateOutcome = "nothing" | "worth_knowing" | "maybe_owed";
+export const EMAIL_GATE_OUTCOMES: readonly EmailGateOutcome[] = [
+  "nothing",
+  "worth_knowing",
+  "maybe_owed"
+];
+
 const ACTIONABILITY_CATEGORIES: readonly EmailActionabilityCategory[] = [
   "needs_reply",
   "needs_action",
@@ -220,6 +232,8 @@ export interface EmailSignals {
    * already invisible to the Today briefing filter and to suggested-task creation, both of
    * which require an inferred subject that a skipped message never gets. */
   readonly skipped?: "otp";
+  /** The gate said maybe_owed: no verdict yet, the thread's judgement worker decides. */
+  readonly pendingJudgement?: boolean;
 }
 
 export function otpSkippedResult(): EmailExtractResult {
@@ -229,6 +243,8 @@ export function otpSkippedResult(): EmailExtractResult {
 export interface EmailExtractResult {
   readonly summary: string | null;
   readonly signals: EmailSignals;
+  /** First-pass gate outcome. Absent on an otp skip and on answers that carried no gate. */
+  readonly gate?: EmailGateOutcome;
   /** True when the pass escalated to a higher tier (telemetry; counted by the handler). */
   readonly escalated?: boolean;
 }
@@ -240,7 +256,12 @@ export class EmailExtractNeedsConfigurationError extends Error {
   }
 }
 
-export type EmailExtractRetryableReason = "busy" | "timeout" | "no-reply" | "structured-output";
+export type EmailExtractRetryableReason =
+  | "busy"
+  | "timeout"
+  | "no-reply"
+  | "login-expired"
+  | "structured-output";
 
 export class EmailExtractRetryableError extends Error {
   readonly retryable = true;
@@ -266,17 +287,32 @@ export interface EmailExtractDeps {
 }
 
 export interface EmailExtractOptions {
-  /** Per-LLM-call timeout in ms (bounds sync latency; default from env, then 20s). */
+  /** Per-LLM-call timeout in ms (bounds sync latency; default from env, then DEFAULT_EMAIL_LLM_TIMEOUT_MS). */
   readonly callTimeoutMs?: number;
   /** Metadata-only telemetry factory; the worker supplies job and batch attribution. */
   readonly telemetry?: (batchIndex: number, batchSize: number) => StructuredTelemetry;
   readonly priority?: StructuredRunPriority;
   readonly scope?: StructuredRunScope;
   readonly closeScope?: boolean;
+  /**
+   * Single-message path: the sender is someone the user already deals with (in their People or
+   * previously replied to). The gate is told to lean toward maybe_owed, but it is not proof.
+   */
+  readonly knownSender?: boolean;
+  /** Batch path: lower-cased sender addresses (see senderAddress) that count as known senders. */
+  readonly knownSenders?: ReadonlySet<string>;
 }
 
 export const EMAIL_EXTRACT_BATCH_MAX_ITEMS = 48;
 export const EMAIL_EXTRACT_BATCH_MAX_PROMPT_BYTES = 48_000;
+
+/**
+ * Default per-call budget (ms) when `JARVIS_EMAIL_LLM_TIMEOUT_MS` is unset. The one-shot engine
+ * that now serves every structured email-extraction call (review B4) can take longer than 20
+ * seconds to start a fresh process and answer, so a 20-second budget timed out every batch. 120
+ * seconds gives that engine room to start and reply under normal load.
+ */
+export const DEFAULT_EMAIL_LLM_TIMEOUT_MS = 120_000;
 
 /** Reject a chat call that exceeds the budget so one slow model can't stall the whole sync. */
 async function withTimeout<T>(
@@ -308,11 +344,30 @@ async function withTimeout<T>(
   }
 }
 
+const GATE_INSTRUCTIONS = [
+  "First decide the gate. Answer exactly one of: nothing, worth_knowing, maybe_owed.",
+  "nothing: ordinary mail, bulk or not, that asks nothing of this user: newsletters, sales,",
+  "receipts, shipping notices, ticket releases, fundraising, petitions, event promos, product",
+  "updates, social notifications, test alerts, terms of service and policy updates, sign-in and",
+  "security notices where nothing failed, routine back-and-forth that asks nothing.",
+  "worth_knowing: the user would want to glance at it but it asks nothing: a parcel arrived, a",
+  "payment went through, a friend's news, a calendar notification, an account activity summary.",
+  "maybe_owed: a person or institution the user already deals with may be waiting on them, or a",
+  "date may bind them: a bill or payment problem, an appointment or form, a deadline from an",
+  "employer, school, landlord, bank, insurer or doctor, a question from someone they know. Urgent",
+  "wording (act now, action required, final notice) is not evidence by itself. Mail with an",
+  "unsubscribe link can still be maybe_owed (rent reminders, loan statements).",
+  "When you cannot tell, answer maybe_owed; a stronger reader decides later.",
+  "Only write a summary when the gate is worth_knowing."
+].join("\n");
+
 const EMAIL_TRIAGE_INSTRUCTIONS = [
   "You are an email triage assistant. Read the email and reply with one JSON object only:",
-  '{ category: "needs_reply"|"needs_action"|"time_sensitive_info"|"waiting_on_someone"|"fyi"|"noise"|"unknown",',
+  '{ gate: "nothing"|"worth_knowing"|"maybe_owed",',
+  '  category: "needs_reply"|"needs_action"|"time_sensitive_info"|"waiting_on_someone"|"fyi"|"noise"|"unknown",',
   "  confidence: number, reason?: string, action?: string, dueDate?: string,",
   "  deliversSignInCode: boolean }",
+  GATE_INSTRUCTIONS,
   "confidence is 0..1. Use ISO dates (YYYY-MM-DD). Keep reason and action concise.",
   "Each email is preceded by the date it arrived (Received) and today's date (Today). Use them to",
   'resolve relative wording such as "tomorrow", "Friday" or "this week".',
@@ -372,8 +427,18 @@ function calendarDate(value: string | Date): string | null {
  * interview window rather than the day the reply was owed (#2271 round 3). Dates only, no times -
  * enough to settle "tomorrow" or "within a day", and nothing extra to leak back into a stored field.
  */
-function promptInput(parsed: ParsedEmail, now: Date = new Date()): string {
+/** The bare, lower-cased address from a From header such as `Sarah Kim <Sarah@Kim.Example>`. */
+export function senderAddress(from: string): string {
+  const m = from.match(/<([^>]+)>/);
+  return (m ? m[1]! : from).trim().toLowerCase();
+}
+
+const KNOWN_SENDER_LINE =
+  "Sender: someone this user already deals with (in their People or previously replied to). Lean toward maybe_owed, but it is not proof.";
+
+function promptInput(parsed: ParsedEmail, knownSender = false, now: Date = new Date()): string {
   const header = [`Subject: ${parsed.subject}`, `From: ${parsed.from}`];
+  if (knownSender) header.push(KNOWN_SENDER_LINE);
   const received = calendarDate(parsed.receivedAt);
   if (received !== null) header.push(`Received: ${received}`);
   const today = calendarDate(now);
@@ -382,8 +447,8 @@ function promptInput(parsed: ParsedEmail, now: Date = new Date()): string {
   return [...header, "", parsed.body].join("\n");
 }
 
-function buildPrompt(parsed: ParsedEmail): string {
-  return [EMAIL_TRIAGE_INSTRUCTIONS, promptInput(parsed)].join("\n\n");
+function buildPrompt(parsed: ParsedEmail, knownSender = false): string {
+  return [EMAIL_TRIAGE_INSTRUCTIONS, promptInput(parsed, knownSender)].join("\n\n");
 }
 
 /**
@@ -525,8 +590,17 @@ function safeParseSignals(
     // returns the first MAX_SUMMARY_CHARS of a longer body slip a near-complete body prefix past a
     // containment check (the guard could no longer "see" the full body inside the summary).
     const summary = typeof obj.summary === "string" ? obj.summary : null;
+    // A present-but-unknown gate value means "nothing" (the safe side); an absent gate leaves the
+    // legacy single-pass behaviour untouched so older answers and fixtures keep their verdict.
+    const gate =
+      obj.gate === undefined
+        ? undefined
+        : EMAIL_GATE_OUTCOMES.includes(obj.gate as EmailGateOutcome)
+          ? (obj.gate as EmailGateOutcome)
+          : "nothing";
     return {
       summary,
+      ...(gate === undefined ? {} : { gate }),
       signals: {
         billsDue: compact ? [] : safeBills(obj.billsDue, normalizedBody),
         actionItems: compact ? [] : safeActionItems(obj.actionItems, normalizedBody),
@@ -661,20 +735,48 @@ function sanitizeExtractResult(
   // of fields: setting the flag earlier would have it dropped on exactly the messages that
   // tripped the guard. It is a deterministic boolean, so no body text can ride along with it.
   const signals = looksLikeBulkMail(parsed) ? { ...result.signals, bulk: true } : result.signals;
-  return {
+  return applyGate({
     ...result,
     signals: parsed.bodyTruncated ? { ...signals, truncated: true } : signals,
     escalated: false
-  };
+  });
 }
 
-function buildBatchPrompt(messages: readonly ParsedEmail[]): string {
+/**
+ * The gate decides what the single pass may store (spec §3.1): `nothing` keeps no summary and a
+ * bare noise verdict, `worth_knowing` keeps the summary under an fyi verdict, `maybe_owed` keeps
+ * neither and flags the message for the thread judgement. Runs after every other guard so a
+ * deterministic fallback summary cannot sneak back in for mail the gate said to leave alone.
+ */
+function applyGate(result: EmailExtractResult): EmailExtractResult {
+  const { gate, signals } = result;
+  if (gate === undefined) return result;
+  if (gate === "nothing") {
+    const { pendingJudgement: _pending, ...rest } = signals;
+    return { ...result, summary: null, signals: { ...rest, actionability: { category: "noise" } } };
+  }
+  if (gate === "worth_knowing") {
+    return { ...result, signals: { ...signals, actionability: { category: "fyi" } } };
+  }
+  const { actionability: _drop, ...rest } = signals;
+  return { ...result, summary: null, signals: { ...rest, pendingJudgement: true } };
+}
+
+function buildBatchPrompt(
+  messages: readonly ParsedEmail[],
+  knownSenders?: ReadonlySet<string>
+): string {
   return [
     EMAIL_TRIAGE_INSTRUCTIONS,
     "Apply those rules to every numbered input.",
     'Return one JSON object: {"results":[{"index":0,"value":<triage object>}, ...]}.',
     "Include every index exactly once and no extra indexes.",
-    JSON.stringify(messages.map((message, index) => ({ index, email: promptInput(message) })))
+    JSON.stringify(
+      messages.map((message, index) => ({
+        index,
+        email: promptInput(message, knownSenders?.has(senderAddress(message.from)) ?? false)
+      }))
+    )
   ].join("\n\n");
 }
 
@@ -721,6 +823,16 @@ function retryableReason(error: unknown): EmailExtractRetryableReason {
   if (error instanceof EmailExtractRetryableError) return error.reason;
   const name = error instanceof Error ? error.name : "";
   const message = error instanceof Error ? error.message : "";
+  const text = `${name} ${message}`;
+  // An expired sign-in on the assistant's own service reads as an authentication failure.
+  // It is worth its own reason because the fix is "sign in again", not "wait and retry".
+  if (
+    /login.?expired|session.?expired|credentials?.?expired|token.?expired|not.?logged.?in|unauthenti?cated|unauthorized|401|invalid_api_key|please (log|sign).?in/i.test(
+      text
+    )
+  ) {
+    return "login-expired";
+  }
   if (/timeout|timed.?out/i.test(`${name} ${message}`)) return "timeout";
   if (/busy/i.test(`${name} ${message}`)) return "busy";
   if (/no.?reply|without a reply/i.test(`${name} ${message}`)) return "no-reply";
@@ -742,7 +854,10 @@ export async function extractEmailSignalsBatch(
 ): Promise<EmailExtractResult[]> {
   const timeoutMs =
     options.callTimeoutMs ??
-    Number(resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ?? "20000");
+    Number(
+      resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ??
+        String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
+    );
   // Callers are expected to have already routed one-time-code messages to otpSkippedResult()
   // themselves (see google-sync-phases.ts) rather than pass them in here: this function's
   // closeScope option finalizes a scoped CLI session keyed to the *call*, and a call whose
@@ -768,7 +883,7 @@ export async function extractEmailSignalsBatch(
         const reply = await withTimeout(
           (signal) =>
             deps.runChat(
-              buildPrompt(message),
+              buildPrompt(message, options.knownSenders?.has(senderAddress(message.from)) ?? false),
               signal,
               1,
               telemetry,
@@ -790,7 +905,7 @@ export async function extractEmailSignalsBatch(
       const reply = await withTimeout(
         (signal) =>
           deps.runChat(
-            buildBatchPrompt(batch),
+            buildBatchPrompt(batch, options.knownSenders),
             signal,
             batch.length,
             telemetry,
@@ -852,9 +967,12 @@ export async function extractEmailSignals(
 
   const timeoutMs =
     options.callTimeoutMs ??
-    Number(resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ?? "20000");
+    Number(
+      resolveMossEnv(process.env, "JARVIS_EMAIL_LLM_TIMEOUT_MS") ??
+        String(DEFAULT_EMAIL_LLM_TIMEOUT_MS)
+    );
 
-  const prompt = buildPrompt(parsed);
+  const prompt = buildPrompt(parsed, options.knownSender ?? false);
   let result: EmailExtractResult;
   try {
     const reply = await withTimeout((signal) => deps.runChat(prompt, signal), timeoutMs);

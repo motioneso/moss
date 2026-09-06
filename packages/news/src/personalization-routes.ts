@@ -22,6 +22,7 @@ import {
   type NewsCustomSourceDto,
   type NewsCustomTopicDto,
   type NewsRefreshStateDto,
+  type NewsWebSearchUnavailableReason,
   type NewsPublisherConnectionOfferDto,
   type NewsSourceExclusionDto,
   type NewsSourcePreviewRequest,
@@ -30,9 +31,14 @@ import {
   type UpdateNewsTopicRequest
 } from "@moss/shared";
 
-import { resolveSourceInput } from "./discovery/source-resolution.js";
+import { findDuplicateCustomSource, resolveSourceInput } from "./discovery/source-resolution.js";
 import { validateTopic } from "./discovery/policy-validation.js";
-import type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "./discovery/ports.js";
+import type {
+  NewsAiPort,
+  NewsFetchPort,
+  NewsSafeFetchPort,
+  NewsWebSearchPort
+} from "./discovery/ports.js";
 import { createPreviewStore } from "./discovery/preview-store.js";
 import { enqueueNewsRefresh, enqueueNewsRevalidation } from "./jobs.js";
 import { normalizePublisherDomain } from "./personalization-domain.js";
@@ -54,7 +60,9 @@ export interface NewsPersonalizationStore {
       canonicalDomain: string;
       homepageUrl: string;
       feedUrl: string | null;
-      retrievalMethod: "feed" | "scrape";
+      retrievalMethod: "feed" | "scrape" | "reddit";
+      confirmedFetchHosts: readonly string[];
+      iconUrl: string | null;
       validationFingerprint: string;
     }
   ): Promise<NewsCustomSourceDto>;
@@ -66,7 +74,9 @@ export interface NewsPersonalizationStore {
       canonicalDomain: string;
       homepageUrl: string;
       feedUrl: string | null;
-      retrievalMethod: "feed" | "scrape";
+      retrievalMethod: "feed" | "scrape" | "reddit";
+      confirmedFetchHosts: readonly string[];
+      iconUrl: string | null;
       validationFingerprint: string;
     }
   ): Promise<NewsCustomSourceDto | null>;
@@ -126,9 +136,12 @@ export interface PersonalizationRouteDependencies {
   readonly availability: {
     hasJsonModel(scopedDb: DataContextDb): Promise<boolean>;
     hasWebSearch(scopedDb: DataContextDb): Promise<boolean>;
+    webSearchReason(scopedDb: DataContextDb): Promise<NewsWebSearchUnavailableReason | null>;
   };
   readonly discovery: {
     readonly fetch: NewsSafeFetchPort;
+    /** #2282: optional here so existing test fakes keep working; the composition root always passes it. */
+    readonly fetchWithOptions?: NewsFetchPort;
     readonly search: NewsWebSearchPort;
     readonly ai: NewsAiPort;
   };
@@ -280,6 +293,10 @@ export async function confirmSourceFromPreview(
       homepageUrl: candidate.homepageUrl,
       feedUrl: candidate.feedUrl,
       retrievalMethod: candidate.retrievalMethod,
+      // #2282 Task 1.6: the preview decided these while it had the evidence in hand; confirming
+      // copies them rather than guessing again from the URLs. The tamper check above is unchanged.
+      confirmedFetchHosts: candidate.confirmedFetchHosts,
+      iconUrl: candidate.iconUrl,
       validationFingerprint: candidate.validationFingerprint
     };
     const created = preview.replaceSourceId
@@ -323,15 +340,23 @@ export function registerNewsPersonalizationRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         return await dependencies.dataContext.withDataContext(accessContext, async (db) => {
-          const [customSources, customTopics, sourceExclusions, snapshot, jsonModel, webSearch] =
-            await Promise.all([
-              repository.listCustomSources(db),
-              repository.listCustomTopics(db),
-              repository.listExclusions(db),
-              repository.readLatestSnapshot(db),
-              dependencies.availability.hasJsonModel(db),
-              dependencies.availability.hasWebSearch(db)
-            ]);
+          const [
+            customSources,
+            customTopics,
+            sourceExclusions,
+            snapshot,
+            jsonModel,
+            webSearch,
+            webSearchReason
+          ] = await Promise.all([
+            repository.listCustomSources(db),
+            repository.listCustomTopics(db),
+            repository.listExclusions(db),
+            repository.readLatestSnapshot(db),
+            dependencies.availability.hasJsonModel(db),
+            dependencies.availability.hasWebSearch(db),
+            dependencies.availability.webSearchReason(db)
+          ]);
           let refresh = await repository.readRefreshState(db);
           if (!isNewsSnapshotFresh(snapshot)) {
             await triggerNewsRefresh(
@@ -358,6 +383,7 @@ export function registerNewsPersonalizationRoutes(
             availability: {
               aiConfigured: jsonModel,
               webSearchConfigured: webSearch,
+              webSearchReason: webSearch ? null : webSearchReason,
               customSourceByUrlEnabled: jsonModel,
               customSourceByNameEnabled: jsonModel && webSearch,
               freeformTopicsEnabled: jsonModel && webSearch
@@ -425,9 +451,7 @@ export function registerNewsPersonalizationRoutes(
           });
           const existing = input.replaceSourceId ? [] : await repository.listCustomSources(db);
           const duplicate = result.candidates
-            .map((candidate) =>
-              existing.find((source) => source.canonicalDomain === candidate.canonicalDomain)
-            )
+            .map((candidate) => findDuplicateCustomSource(existing, candidate))
             .find(Boolean);
           const connection = connectionOfferFor(dependencies.connections, result.candidates);
           return {
@@ -438,7 +462,8 @@ export function registerNewsPersonalizationRoutes(
               canonicalDomain: candidate.canonicalDomain,
               homepageUrl: candidate.homepageUrl,
               retrievalMethod: candidate.retrievalMethod,
-              sampleCount: candidate.sampleCount
+              sampleCount: candidate.sampleCount,
+              ...(candidate.redirectNote ? { redirectNote: candidate.redirectNote } : {})
             })),
             candidateIds: result.candidates.map((candidate) => candidate.candidateId),
             ...(duplicate ? { duplicateOfSourceId: duplicate.id } : {}),

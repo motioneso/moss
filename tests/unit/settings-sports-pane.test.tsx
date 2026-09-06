@@ -8,6 +8,8 @@ import SportsSettings, {
   createFollow,
   deleteFollow,
   followControlState,
+  followFor,
+  indexFollows,
   leagueMatches,
   searchLeagueRows,
   SearchResults
@@ -39,6 +41,7 @@ type TeamRefLite = {
   readonly name: string;
   readonly shortName: string;
   readonly crestUrl: string | null;
+  readonly sourceTeamId: string | null;
 };
 // Mirrors the static catalog contract (#907 Task 6): no `teams` field — the pane resolves
 // rosters via the lazy leagueTeams query instead, seeded per-test below where needed.
@@ -58,14 +61,16 @@ const DAL: TeamRefLite = {
   competitionKey: "nfl",
   name: "Dallas Cowboys",
   shortName: "DAL",
-  crestUrl: null
+  crestUrl: null,
+  sourceTeamId: "id-dal"
 };
 const ARS: TeamRefLite = {
   teamKey: "team.ars",
   competitionKey: "epl",
   name: "Arsenal",
   shortName: "ARS",
-  crestUrl: null
+  crestUrl: null,
+  sourceTeamId: "id-team.ars"
 };
 
 const TWO_LEAGUES: readonly CompetitionLite[] = [
@@ -276,6 +281,7 @@ describe("SportsSettings", () => {
               id: "22222222-2222-2222-2222-222222222222",
               competitionKey: "nfl",
               teamKey: null,
+              sourceTeamId: null,
               createdAt: "2026-08-24T12:00:00.000Z"
             }
           ],
@@ -306,6 +312,7 @@ describe("SportsSettings", () => {
             id: "22222222-2222-2222-2222-222222222222",
             competitionKey: "nfl",
             teamKey: null,
+            sourceTeamId: null,
             createdAt: "2026-08-24T12:00:00.000Z"
           }
         ],
@@ -333,6 +340,7 @@ describe("SportsSettings", () => {
               id: "22222222-2222-2222-2222-222222222222",
               competitionKey: "nfl",
               teamKey: null,
+              sourceTeamId: null,
               createdAt: "2026-08-24T12:00:00.000Z"
             }
           ],
@@ -463,16 +471,14 @@ describe("SportsSettings", () => {
         partial: false,
         isError: false,
         competitions: TWO_LEAGUES,
-        followsByKey: new Map([
-          [
-            "epl::team.ars",
-            {
-              id: "follow-ars",
-              competitionKey: "epl",
-              teamKey: ARS.teamKey,
-              createdAt: "2026-01-01T00:00:00Z"
-            }
-          ]
+        followsByKey: indexFollows([
+          {
+            id: "follow-ars",
+            competitionKey: "epl",
+            teamKey: ARS.teamKey,
+            sourceTeamId: ARS.sourceTeamId,
+            createdAt: "2026-01-01T00:00:00Z"
+          }
         ]),
         onToggle: () => {},
         onRetry: () => {},
@@ -499,7 +505,13 @@ describe("SportsSettings", () => {
     });
     client.setQueryData(FOLLOWS_KEY, {
       follows: [
-        { id: "f1", competitionKey: "epl", teamKey: "team.ars", createdAt: "2026-01-01T00:00:00Z" }
+        {
+          id: "f1",
+          competitionKey: "epl",
+          teamKey: "team.ars",
+          sourceTeamId: "id-team.ars",
+          createdAt: "2026-01-01T00:00:00Z"
+        }
       ]
     });
     // Followed-chip roster resolution fetches the league's teams via the shared leagueTeams key
@@ -520,7 +532,13 @@ describe("SportsSettings", () => {
     });
     client.setQueryData(FOLLOWS_KEY, {
       follows: [
-        { id: "f1", competitionKey: "epl", teamKey: "team.ars", createdAt: "2026-01-01T00:00:00Z" }
+        {
+          id: "f1",
+          competitionKey: "epl",
+          teamKey: "team.ars",
+          sourceTeamId: "id-team.ars",
+          createdAt: "2026-01-01T00:00:00Z"
+        }
       ]
     });
     client.setQueryData(sportsQueryKeys.leagueTeams("epl"), {
@@ -537,7 +555,13 @@ describe("SportsSettings", () => {
     client.setQueryData(CATALOG_KEY, { competitions: TWO_LEAGUES, degraded: false });
     client.setQueryData(FOLLOWS_KEY, {
       follows: [
-        { id: "f1", competitionKey: "epl", teamKey: "team.ars", createdAt: "2026-01-01T00:00:00Z" }
+        {
+          id: "f1",
+          competitionKey: "epl",
+          teamKey: "team.ars",
+          sourceTeamId: "id-team.ars",
+          createdAt: "2026-01-01T00:00:00Z"
+        }
       ]
     });
     client.setQueryData(sportsQueryKeys.leagueTeams("epl"), { teams: [ARS], degraded: false });
@@ -554,7 +578,13 @@ describe("SportsSettings", () => {
     client.setQueryData(CATALOG_KEY, { competitions: TWO_LEAGUES, degraded: false });
     client.setQueryData(FOLLOWS_KEY, {
       follows: [
-        { id: "fl", competitionKey: "nfl", teamKey: null, createdAt: "2026-01-01T00:00:00Z" }
+        {
+          id: "fl",
+          competitionKey: "nfl",
+          teamKey: null,
+          sourceTeamId: null,
+          createdAt: "2026-01-01T00:00:00Z"
+        }
       ]
     });
     const html = renderWithQuery(client);
@@ -570,6 +600,7 @@ describe("SportsSettings", () => {
           id: "orphan1",
           competitionKey: "xyz.retired",
           teamKey: null,
+          sourceTeamId: null,
           createdAt: "2026-01-01T00:00:00Z"
         }
       ]
@@ -606,12 +637,106 @@ describe("SportsSettings", () => {
   });
 });
 
+// Ben, dev, 2026-09-04: following Pacific never showed as followed. Two teams share the short name
+// "PAC", so the team list gives them composite keys ("pac.413", "pac.129700") while the saved follow
+// keeps the bare short name "pac" and the permanent id. Matching on the key can never succeed, so
+// the tile stayed unfollowed, the chip lost its crest, and a second click re-followed instead of
+// unfollowing. These tests match on the permanent id and fail on the key-only page.
+describe("follow key mismatch on a colliding team (Ben, dev, 2026-09-04)", () => {
+  const TIGERS: TeamRefLite = {
+    teamKey: "pac.413",
+    competitionKey: "nfl",
+    name: "Pacific Tigers",
+    shortName: "PAC",
+    crestUrl: "https://example.com/crests/413.png",
+    sourceTeamId: "413"
+  };
+  const LUTES: TeamRefLite = {
+    teamKey: "pac.129700",
+    competitionKey: "nfl",
+    name: "Pacific Lutheran Lutes",
+    shortName: "PAC",
+    crestUrl: "https://example.com/crests/129700.png",
+    sourceTeamId: "129700"
+  };
+  const savedTigers = {
+    id: "f-pac",
+    competitionKey: "nfl",
+    teamKey: "pac",
+    sourceTeamId: "413",
+    createdAt: "2026-09-04T00:00:00Z"
+  };
+
+  it("marks the followed colliding team's tile active, and only that one", () => {
+    const html = renderToString(
+      createElement(SearchResults, {
+        query: "pac",
+        results: [TIGERS, LUTES],
+        partial: false,
+        isError: false,
+        competitions: TWO_LEAGUES,
+        followsByKey: indexFollows([savedTigers]),
+        onToggle: () => {},
+        onRetry: () => {},
+        actionState: null
+      })
+    );
+    expect(html).toContain('aria-label="Unfollow Pacific Tigers"');
+    expect(html).toContain('aria-label="Follow Pacific Lutheran Lutes"');
+    expect(html.match(/sp-team is-active/g)).toHaveLength(1);
+  });
+
+  it("resolves the tile back to the saved follow, so the next click unfollows instead of re-following", () => {
+    const index = indexFollows([savedTigers]);
+    expect(followFor(index, "nfl", TIGERS.teamKey, TIGERS.sourceTeamId)?.id).toBe("f-pac");
+    expect(followFor(index, "nfl", LUTES.teamKey, LUTES.sourceTeamId)).toBeUndefined();
+    // A follow with no permanent id (saved before the id column existed) still matches by key.
+    const legacy = indexFollows([{ ...savedTigers, teamKey: "dal", sourceTeamId: null }]);
+    expect(followFor(legacy, "nfl", "dal", "id-dal")?.id).toBe("f-pac");
+  });
+
+  it("never lends a saved follow to a different team that later takes over its short name (review round 7)", () => {
+    // The Tigers were saved as "pac" with id 413. The list then refreshes with only the Lutes,
+    // who now hold the bare key "pac" with id 129700. The Lutes tile must not read as followed,
+    // and its click must not reach the Tigers follow.
+    const index = indexFollows([savedTigers]);
+    expect(followFor(index, "nfl", "pac", "129700")).toBeUndefined();
+    // The Tigers themselves still resolve, whatever key the list gives them today.
+    expect(followFor(index, "nfl", "pac", "413")?.id).toBe("f-pac");
+    expect(followFor(index, "nfl", "pac.413", "413")?.id).toBe("f-pac");
+    // Only an older save with no id of its own may be claimed through the key.
+    const legacy = indexFollows([{ ...savedTigers, sourceTeamId: null }]);
+    expect(followFor(legacy, "nfl", "pac", "129700")?.id).toBe("f-pac");
+  });
+
+  it("shows the followed colliding team's own crest in the summary chip", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(CATALOG_KEY, { competitions: [TWO_LEAGUES[0]], degraded: false });
+    client.setQueryData(FOLLOWS_KEY, { follows: [savedTigers] });
+    client.setQueryData(sportsQueryKeys.leagueTeams("nfl"), {
+      teams: [LUTES, TIGERS],
+      degraded: false
+    });
+    const html = renderWithQuery(client);
+    expect(html).toContain("sp-chip");
+    expect(html).toContain('src="https://example.com/crests/413.png"');
+    expect(html).not.toContain('src="https://example.com/crests/129700.png"');
+    // The chip shows the roster short name, which proves the roster entry was found by id: a
+    // follow with no roster match falls back to its bare saved key "pac".
+    expect(html).toContain('class="sp-chip__lbl">PAC<');
+    expect(html).toContain('aria-label="Unfollow PAC"');
+  });
+});
+
 describe("is-active styling coverage (#691)", () => {
-  const followed = new Map([
-    [
-      "epl::team.ars",
-      { id: "f1", competitionKey: "epl", teamKey: "team.ars", createdAt: "2026-01-01T00:00:00Z" }
-    ]
+  const followed = indexFollows([
+    {
+      id: "f1",
+      competitionKey: "epl",
+      teamKey: "team.ars",
+      sourceTeamId: "id-team.ars",
+      createdAt: "2026-01-01T00:00:00Z"
+    }
   ]);
 
   it("marks a followed team is-active in search results, unfollowed team not", () => {

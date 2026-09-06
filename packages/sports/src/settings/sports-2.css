@@ -161,6 +161,16 @@
   transition: var(--transition-control);
 }
 
+/* Search results grouped by league (#2278): each league's "Follow all of" row or plain heading
+   sits directly above only that league's own teams, so same-named clubs in different sports
+   never land in one shared grid. */
+.sp-search__group {
+  margin-bottom: 14px;
+}
+.sp-search__group-heading {
+  margin: 0 0 8px;
+}
+
 /* Confederation-grouped browse mode (#907): shown when the search box is empty, replacing the
    old "Search above…" hint. Reuses .sp-whole/.sp-teamgrid/.sp-team for the follow-all button and
    expanded team grid — only the group heading and the expand/collapse row button are new. */

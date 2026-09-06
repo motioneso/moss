@@ -15,6 +15,7 @@
     "@moss/jobs": "workspace:*",
     "@moss/memory": "workspace:*",
     "@moss/module-sdk": "workspace:*",
+    "@moss/settings": "workspace:*",
     "@moss/structured-state": "workspace:*",
     "@moss/vault": "workspace:*",
     "fastify": "^5.8.5",

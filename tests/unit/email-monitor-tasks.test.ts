@@ -498,6 +498,27 @@ describe("runEmailMonitor — relevance evidence", () => {
       created: 0
     });
   });
+
+  it("records a rejected task write as a failure instead of dropping it silently", async () => {
+    const deps: RunEmailMonitorDeps = {
+      savedContext: {
+        listEmailContext: async () => ({ items: [item()], accounts: [], gaps: [] })
+      },
+      taskPort: {
+        create: async () => {
+          throw new Error("task store unavailable");
+        }
+      },
+      preferencesRepository: { get: async () => null, upsert: async () => undefined },
+      now: () => new Date(NOW)
+    };
+
+    await expect(runEmailMonitor(DB, "acct-1", deps)).resolves.toMatchObject({
+      planned: 1,
+      created: 0,
+      taskFailures: 1
+    });
+  });
 });
 
 describe("planEmailTasks — status by mode", () => {
@@ -639,7 +660,8 @@ describe("runEmailMonitor — suppression read failures and message-scoped evide
     await expect(runEmailMonitor(DB, "acct-1", deps)).resolves.toEqual({
       planned: 1,
       created: 1,
-      degraded: true
+      degraded: true,
+      taskFailures: 0
     });
     expect(createCalls).toBe(1);
     expect(prefs.get(MONITOR_STATUS_PREF_KEY("acct-1"))).toMatchObject({

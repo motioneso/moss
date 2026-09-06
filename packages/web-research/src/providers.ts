@@ -85,6 +85,202 @@ function createBraveSearchProvider(apiKey: string): WebSearchProvider {
 }
 
 /**
+ * #2228: search by asking a chat model to use its own built-in web search tool, instead of
+ * calling a search API directly. `runner` is a thin transport the composition root binds to a
+ * structured-output call against the actor's chat model; everything about turning a query into a
+ * prompt and turning the model's reply back into results lives here so it is unit-testable
+ * without a real model.
+ */
+export interface ModelNativeSearchRunnerInput {
+  readonly prompt: string;
+  readonly schema: Record<string, unknown>;
+}
+
+export interface ModelNativeSearchRunnerResult {
+  readonly object: unknown;
+  readonly sources?: readonly { readonly title: string; readonly url: string }[];
+}
+
+export type ModelNativeSearchRunner = (
+  input: ModelNativeSearchRunnerInput
+) => Promise<ModelNativeSearchRunnerResult | null>;
+
+const MODEL_NATIVE_SEARCH_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["results"],
+  properties: {
+    results: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "url", "snippet"],
+        properties: {
+          title: { type: "string" },
+          url: { type: "string" },
+          snippet: { type: "string" }
+        }
+      }
+    }
+  }
+} as const;
+
+function buildModelNativeSearchPrompt(input: WebSearchProviderInput): string {
+  const freshnessLine =
+    input.freshness && input.freshness !== "any"
+      ? ` Prefer results published in the last ${input.freshness}.`
+      : "";
+  return (
+    `Use your web search tool to find up to ${input.limit} results for: ${input.query}.` +
+    `${freshnessLine} Reply with ONLY a JSON object of the shape ` +
+    `{"results": [{"title": string, "url": string, "snippet": string}]}, built from pages you ` +
+    "actually found through search, not invented ones. Copy each url exactly as your search " +
+    "tool returned it, character for character; do not shorten, rewrite, or guess a url."
+  );
+}
+
+const URL_HAS_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+/**
+ * Normalises a url for the loose fallback match only (the cited url is still returned untouched):
+ * lowercases the host, drops the scheme, the fragment, the trailing slash and any utm_* params.
+ * The #2280 live proof showed the model rewriting urls in its JSON body, so none matched a
+ * citation by exact string and every result reached the chat model with an empty snippet and a
+ * generic title. Because this form is lossy (https://a/#/one and https://a/#/two share it), it is
+ * only trusted when it picks out exactly one description; see {@link createModelNativeProvider}.
+ * A url that does not parse falls back to a trimmed, lowercased string with the same trimming.
+ */
+function normalizeUrlForMatch(raw: string): string {
+  const trimmed = raw.trim();
+  try {
+    const parsed = new URL(URL_HAS_SCHEME.test(trimmed) ? trimmed : `https://${trimmed}`);
+    const params = new URLSearchParams(parsed.search);
+    for (const key of [...params.keys()]) {
+      if (key.toLowerCase().startsWith("utm_")) params.delete(key);
+    }
+    const query = params.toString();
+    const path = parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.host.toLowerCase()}${path}${query ? `?${query}` : ""}`;
+  } catch {
+    return trimmed
+      .toLowerCase()
+      .replace(/^[a-z][a-z0-9+.-]*:\/\//, "")
+      .replace(/#.*$/, "")
+      .replace(/\/+$/, "");
+  }
+}
+
+/**
+ * Runs the structured search request. The provider's own citations (the pages its search tool
+ * actually returned) are the ground truth for urls: results come back in citation order, each
+ * enriched with the title and snippet the model wrote for that url in the JSON body. Citations are
+ * deduplicated by exact (trimmed) url only, so two distinct pages that differ by scheme, trailing
+ * slash or fragment both survive. A description is matched to a citation by exact url first; the
+ * {@link normalizeUrlForMatch} form is a fallback used only when it selects exactly one
+ * description that no other citation already owns exactly. An ambiguous fallback is not guessed:
+ * the citation keeps its own url and title and an empty snippet (#2228 review, comment
+ * 5551840638). A url that appears only in the JSON body was never verified by a search hit and is
+ * dropped, and a reply with no citations at all yields an empty list (spec decision 6; #2228
+ * review finding 6).
+ * `trace.undescribed` counts cited urls the JSON body never described, so a proof can tell whether
+ * the model rewrote urls or simply skipped them. Returns an empty list when the runner is
+ * unavailable.
+ */
+export function createModelNativeProvider(runner: ModelNativeSearchRunner): WebSearchProvider {
+  return {
+    name: "model-native",
+    async search(input) {
+      const generated = await runner({
+        prompt: buildModelNativeSearchPrompt(input),
+        schema: MODEL_NATIVE_SEARCH_SCHEMA
+      });
+      if (!generated) {
+        return { results: [], trace: { provider: "model-native", unavailable: true } };
+      }
+
+      const rawResults = Array.isArray((generated.object as { results?: unknown })?.results)
+        ? (generated.object as { results: unknown[] }).results
+        : [];
+      type Described = { url: string; title: string; snippet: string };
+      const describedByExactUrl = new Map<string, Described>();
+      const describedByLooseUrl = new Map<string, Described[]>();
+      for (const entry of rawResults) {
+        if (!entry || typeof entry !== "object") continue;
+        const candidate = entry as { title?: unknown; url?: unknown; snippet?: unknown };
+        if (typeof candidate.url !== "string") continue;
+        const url = candidate.url.trim();
+        if (url.length === 0 || describedByExactUrl.has(url)) continue;
+        const described: Described = {
+          url,
+          title: typeof candidate.title === "string" ? candidate.title : "",
+          snippet: typeof candidate.snippet === "string" ? candidate.snippet : ""
+        };
+        describedByExactUrl.set(url, described);
+        const key = normalizeUrlForMatch(url);
+        if (key.length === 0) continue;
+        const loose = describedByLooseUrl.get(key);
+        if (loose) loose.push(described);
+        else describedByLooseUrl.set(key, [described]);
+      }
+
+      const cited: { title?: string; url: string; matchUrl: string }[] = [];
+      const seen = new Set<string>();
+      for (const source of generated.sources ?? []) {
+        if (typeof source.url !== "string") continue;
+        const matchUrl = source.url.trim();
+        if (matchUrl.length === 0 || seen.has(matchUrl)) continue;
+        seen.add(matchUrl);
+        cited.push({ title: source.title, url: source.url, matchUrl });
+      }
+
+      // A loose match is only trustworthy when exactly one un-exact-matched citation and
+      // exactly one available description share the loose key; two pages competing for the
+      // same shortened address is exactly as ambiguous as one page with two descriptions.
+      const looseKeyCitationCounts = new Map<string, number>();
+      for (const source of cited) {
+        if (describedByExactUrl.has(source.matchUrl)) continue;
+        const key = normalizeUrlForMatch(source.matchUrl);
+        if (key.length === 0) continue;
+        looseKeyCitationCounts.set(key, (looseKeyCitationCounts.get(key) ?? 0) + 1);
+      }
+
+      const findDescription = (matchUrl: string): Described | undefined => {
+        const exact = describedByExactUrl.get(matchUrl);
+        if (exact) return exact;
+        const key = normalizeUrlForMatch(matchUrl);
+        if (key.length === 0) return undefined;
+        if ((looseKeyCitationCounts.get(key) ?? 0) !== 1) return undefined;
+        // Only descriptions no other citation owns by exact url are fair game for the loose
+        // match, and only when the loose form leaves a single candidate.
+        const candidates = (describedByLooseUrl.get(key) ?? []).filter(
+          (described) => !seen.has(described.url)
+        );
+        return candidates.length === 1 ? candidates[0] : undefined;
+      };
+
+      const results: WebSearchProviderResult[] = [];
+      let undescribed = 0;
+      for (const source of cited) {
+        const described = findDescription(source.matchUrl);
+        if (!described) undescribed += 1;
+        results.push({
+          title: described?.title || source.title || source.url,
+          url: source.url,
+          snippet: described?.snippet ?? ""
+        });
+        if (results.length >= input.limit) break;
+      }
+
+      return {
+        results,
+        trace: { provider: "model-native", count: results.length, cited: seen.size, undescribed }
+      };
+    }
+  };
+}
+
+/**
  * Resolves the instance-wide Brave key per request. Injected by the composition root (module
  * isolation: web-research must not import settings/db internals). `scopedDb` is the tool's
  * DataContextDb, typed `unknown` here to keep web-research free of a `@moss/db` dependency;
@@ -92,8 +288,25 @@ function createBraveSearchProvider(apiKey: string): WebSearchProvider {
  */
 export type WebSearchKeyResolver = (scopedDb: unknown) => Promise<string | null>;
 
+/**
+ * Resolves the model-native search runner for the current actor and request. The runner closes
+ * over the actor's scoped data context and credentials, so it is NEVER cached or shared across
+ * requests: a second actor on the same model must get their own runner (private by default).
+ * `modelId` is metadata for tracing only. Injected by the composition root; returns null when
+ * model-native search is not currently active (disabled, no model, model lacks the capability).
+ * Same `unknown` typing rationale as {@link WebSearchKeyResolver}.
+ */
+export interface ModelNativeSearchResolution {
+  readonly runner: ModelNativeSearchRunner;
+  readonly modelId: string;
+}
+export type ModelNativeSearchResolver = (
+  scopedDb: unknown
+) => Promise<ModelNativeSearchResolution | null>;
+
 let testSearchProvider: WebSearchProvider | undefined;
 let keyResolver: WebSearchKeyResolver | undefined;
+let modelNativeResolver: ModelNativeSearchResolver | undefined;
 // Fired when the injected key resolver throws (bad keyring / corrupted envelope) so the
 // composition root can emit a metadata-only warn. web-research stays db/dependency-free; the
 // callback carries NO secret material — only the event name is produced here.
@@ -134,7 +347,14 @@ export function setWebSearchKeyResolver(
   providerCache = undefined;
 }
 
-/** Drop the cached provider so the next request re-resolves the key (save/revoke hook). */
+/** Composition-root seam: install the resolver for model-native (built-in) search. */
+export function setModelNativeSearchResolver(
+  resolver: ModelNativeSearchResolver | undefined
+): void {
+  modelNativeResolver = resolver;
+}
+
+/** Drop the cached Brave provider so the next request re-resolves the key (save/revoke hook). */
 export function invalidateWebSearchProviderCache(): void {
   providerCache = undefined;
 }
@@ -148,9 +368,9 @@ function providerForKey(apiKey: string): WebSearchProvider {
 
 /**
  * Resolve the active web-search provider for a request. Precedence: test override → decrypted
- * instance key → `JARVIS_BRAVE_SEARCH_API_KEY` env fallback → unavailable. Decrypt-at-use means
- * a freshly-saved key works without a restart. A failing resolver (bad keyring/envelope) falls
- * back to the env key rather than breaking chat.
+ * instance key → `JARVIS_BRAVE_SEARCH_API_KEY` env fallback → model-native (built-in) search →
+ * unavailable. Decrypt-at-use means a freshly-saved key works without a restart. A failing key
+ * resolver (bad keyring/envelope) falls back to the env key rather than breaking chat.
  */
 export async function resolveWebSearchProvider(scopedDb: unknown): Promise<WebSearchProvider> {
   if (testSearchProvider) return testSearchProvider;
@@ -170,8 +390,16 @@ export async function resolveWebSearchProvider(scopedDb: unknown): Promise<WebSe
   if (!apiKey) {
     apiKey = resolveMossEnv(process.env, "JARVIS_BRAVE_SEARCH_API_KEY") || null;
   }
-  if (!apiKey) return unavailableSearchProvider;
-  return providerForKey(apiKey);
+  if (apiKey) return providerForKey(apiKey);
+
+  if (modelNativeResolver) {
+    const resolution = await modelNativeResolver(scopedDb);
+    // Built per request, never cached: the runner is bound to this actor's data context and
+    // credentials, and a cache keyed by model id alone would hand one actor's runner to another.
+    if (resolution) return createModelNativeProvider(resolution.runner);
+  }
+
+  return unavailableSearchProvider;
 }
 
 export function setWebSearchProviderForTests(provider: WebSearchProvider | undefined): void {

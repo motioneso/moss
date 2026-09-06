@@ -38,7 +38,8 @@ describe("connectors google sync exclusive singleton recovery (#650)", () => {
     const payload: GoogleSyncPayload = {
       actorUserId,
       kind: "google-sync",
-      idempotencyKey: "sync-wedge-regression"
+      idempotencyKey: "sync-wedge-regression",
+      trigger: "manual"
     };
 
     try {

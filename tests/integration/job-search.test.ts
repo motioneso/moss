@@ -24,7 +24,6 @@ import {
 } from "@moss/module-registry";
 import { ExternalModuleJobReconciler } from "@moss/module-registry/node";
 import type { JsonMossModuleManifest } from "@moss/module-sdk";
-import { createModuleCredentialSecretCipher } from "@moss/settings";
 import type { Kysely } from "kysely";
 
 import {
@@ -119,7 +118,6 @@ function buildInvoker(runtimeResult: unknown = { headline: "Two new leads", item
     getDiscoveryById: (id: string) => (id === moduleId ? discovery : undefined),
     listDiscoveredModuleIds: () => [moduleId],
     dataContext: new DataContextRunner(workerDb),
-    cipher: createModuleCredentialSecretCipher(),
     runtime: { invoke: async () => runtimeResult },
     listActiveUserIds: async () => [ids.userA]
   });
@@ -187,7 +185,6 @@ describe("createVerifiedExternalModuleInvoker hash gate (#1305)", () => {
       getDiscoveryById: (id: string) => (id === moduleId ? discovery : undefined),
       listDiscoveredModuleIds: () => [moduleId],
       dataContext: new DataContextRunner(workerDb),
-      cipher: createModuleCredentialSecretCipher(),
       runtime: {
         invoke: async () => {
           throw new Error("gate must not reach runtime.invoke on a hash mismatch");

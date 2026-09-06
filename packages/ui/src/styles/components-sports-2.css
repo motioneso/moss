@@ -805,3 +805,10 @@
 .sp-standings-tree__toggle:hover > svg {
   color: var(--text);
 }
+
+/* Goal-scorer lists beside the crests on finished games (Today ticker and Sports feature row). */
+.sp-tk__scorers,
+.sp-feat__scorers {
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+}

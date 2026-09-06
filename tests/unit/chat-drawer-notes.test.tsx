@@ -76,8 +76,9 @@ describe("chat drawer: feedback menu on the assistant message (note 3)", () => {
   it("renders the menu pinned to the assistant message corner", () => {
     const html = render([{ kind: "reply", text: "Here you go.", messageId: "m1" }], false);
     expect(html).toContain("feedback-menu feedback-menu--corner");
-    expect(html).toContain("More like this");
-    expect(html).toContain("Not useful");
+    // The item list ("More like this" / "Not useful") is a Menu primitive popover that only
+    // renders once opened by a click, so a static server render only shows its trigger button.
+    expect(html).toContain('aria-label="Feedback"');
   });
 
   it("hides the corner menu until hover/focus and always shows it without a hover device", () => {

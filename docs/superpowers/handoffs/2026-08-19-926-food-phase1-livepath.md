@@ -34,7 +34,7 @@ instance, which is the exact trap in `feedback-dev-environment`.
 
 Recipe: run from source in `~/Jarv1s` on this branch — `pnpm install` → `pnpm db:migrate` →
 `pnpm dev:api` (:3000) → `pnpm dev:web` (Vite :5173, `--host` built in). LAN URL
-**http://192.168.50.36:5173**. Login `ben@ben.com` / `jarvistest123!`. Postgres
+**http://192.168.50.36:5173**. Login using the development sign-in details (kept outside the repository (see the memory note named dev-instance-lan-spinup-trusted-origins)). Postgres
 `jarv1s-postgres:55433`, DB `jarv1s`, schema `app`. **`:1533` is PROD — never target it.**
 
 Food is a downloaded-module artifact package, so it needs `pnpm build:external:food` and an

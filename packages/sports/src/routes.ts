@@ -8,6 +8,7 @@ import {
   confirmSportsSourceSchema,
   createSportsFollowResponseSchema,
   deleteSportsCustomSourceSchema,
+  deleteSportsSourcePhotosSchema,
   deleteSportsFollowResponseSchema,
   previewSportsSourceSchema,
   previewSportsSourceAssignmentsSchema,
@@ -29,6 +30,8 @@ import {
   type ConfirmSportsSourceRequest,
   type ConfirmSportsSourceAssignmentsRequest,
   type CreateSportsFollowRequest,
+  resolveSportsFollowTeamResponseSchema,
+  type ResolveSportsFollowTeamRequest,
   type PreviewSportsSourceRequest,
   type PreviewSportsSourceAssignmentsRequest,
   type UpdateSportsEspnCoverageRequest
@@ -46,6 +49,8 @@ import { SPORTS_CATALOG, catalogEntry } from "./source/catalog.js";
 import { type SportsDiscoveryBrowserPort, type SportsSafeFetchPort } from "./source/discovery.js";
 import { SportsEspnCoverageRepository } from "./source/espn-coverage-repository.js";
 import { registerSportsSourceIconRoute, type SportsIconFetchPort } from "./source/icon-route.js";
+import { registerSportsHeadlinePhotoRoute } from "./source/photo-route.js";
+import type { SportsPhotoStore } from "./source/photo-store.js";
 import { SportsSourcesRepository } from "./source/repository.js";
 import type { SportsPublicSourceReader } from "./source/public-source-reader.js";
 import { createSportsPreviewStore } from "./source/preview-store.js";
@@ -108,6 +113,8 @@ export interface SportsRoutesDependencies {
   readonly sourceService?: SportsSourceService;
   /** Optional injection point for tests; defaults to a private in-memory store. */
   readonly previews?: SportsSourcePreviewStore;
+  /** #2237 the owner's stored story photos; absent means the photo route always answers 404. */
+  readonly photos?: SportsPhotoStore;
 }
 
 export function registerSportsRoutes(
@@ -140,7 +147,8 @@ export function registerSportsRoutes(
       discovery: dependencies.discovery,
       resolveTeams: async (competitionKey) => (await service.getLeagueTeams(competitionKey)).teams,
       dataContext: dependencies.dataContext,
-      reader: dependencies.publicSourceReader
+      reader: dependencies.publicSourceReader,
+      ...(dependencies.photos ? { photos: dependencies.photos } : {})
     });
 
   server.get(
@@ -307,6 +315,28 @@ export function registerSportsRoutes(
     }
   );
 
+  // The answer to "which team did you mean?" on the Sports page. Writes the provider's permanent
+  // team id onto one older saved follow, which is what brings it back into scores, standings,
+  // briefing facts and news. The service checks the chosen team against today's team list first.
+  server.post(
+    "/api/sports/follows/:id/team",
+    { schema: resolveSportsFollowTeamResponseSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { id } = request.params as { id: string };
+        const body = request.body as ResolveSportsFollowTeamRequest;
+        const result = await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          service.resolveFollowTeam(db, { followId: id, sourceTeamId: body.sourceTeamId })
+        );
+        if (!result.ok) throw new HttpError(result.status, result.error);
+        return { follow: result.follow };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
   server.delete(
     "/api/sports/follows/:id",
     { schema: deleteSportsFollowResponseSchema },
@@ -342,6 +372,15 @@ export function registerSportsRoutes(
       }
     }
   );
+
+  // Always registered: the manifest declares this route, and a declared route with no handler
+  // fails the boot-time route-coverage assertion.
+  registerSportsHeadlinePhotoRoute(server, {
+    dataContext: dependencies.dataContext,
+    resolveAccessContext: dependencies.resolveAccessContext,
+    repository: sourcesRepository,
+    ...(dependencies.photos ? { photos: dependencies.photos } : {})
+  });
 
   registerSportsSourceIconRoute(server, {
     dataContext: dependencies.dataContext,
@@ -508,6 +547,26 @@ export function registerSportsRoutes(
   );
 
   server.delete(
+    "/api/sports/sources/:id/photos",
+    { schema: deleteSportsSourcePhotosSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { id } = request.params as { id: string };
+        const source = await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.stopUsingFoundPhotos(db, id)
+        );
+        return { source };
+      } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.delete(
     "/api/sports/sources/:id",
     { schema: deleteSportsCustomSourceSchema },
     async (request, reply) => {
@@ -515,7 +574,7 @@ export function registerSportsRoutes(
         const accessContext = await dependencies.resolveAccessContext(request);
         const { id } = request.params as { id: string };
         const deleted = await dependencies.dataContext.withDataContext(accessContext, (db) =>
-          sourceService.removeSource(db, id)
+          sourceService.removeSource(db, id, accessContext)
         );
         return { deleted };
       } catch (error) {

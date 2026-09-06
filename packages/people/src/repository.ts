@@ -437,6 +437,21 @@ export class PeopleRepository {
     return rowToIdentity(row as Record<string, unknown>);
   }
 
+  /**
+   * Every email address the owner has attached to a person, normalised (#2274). Used to tell the
+   * email gate which senders the user already knows; never leaves the worker.
+   */
+  async listEmailIdentityValues(scopedDb: unknown, ownerUserId: string): Promise<string[]> {
+    assertDataContextDb(scopedDb);
+    const rows = await scopedDb.db
+      .selectFrom("app.person_context_identities as i")
+      .select(["i.normalized_value"])
+      .where("i.owner_user_id", "=", ownerUserId)
+      .where("i.identity_kind", "=", "email_address")
+      .execute();
+    return rows.map((r) => r.normalized_value).filter((v): v is string => typeof v === "string");
+  }
+
   async listIdentities(
     scopedDb: unknown,
     ownerUserId: string,

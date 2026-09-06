@@ -46,6 +46,11 @@ export type StructuredRunScope = {
   readonly lineageId: string;
 };
 
+export type StructuredSource = {
+  readonly title: string;
+  readonly url: string;
+};
+
 export type GenerateStructuredProviderInput = {
   /** Which module/service is calling — lets a CLI-backed adapter key a stable one-shot cwd. */
   readonly service?: ModuleServiceKey;
@@ -53,6 +58,8 @@ export type GenerateStructuredProviderInput = {
   readonly messages: readonly StructuredChatTurn[];
   readonly schema: Record<string, unknown>;
   readonly maxOutputTokens: number;
+  /** #2228: let the model use its own built-in web search tool while producing this result. */
+  readonly nativeSearch?: boolean;
   readonly signal?: AbortSignal;
   readonly telemetry?: StructuredTelemetry;
   readonly priority?: StructuredRunPriority;
@@ -61,8 +68,17 @@ export type GenerateStructuredProviderInput = {
 };
 
 export type StructuredProviderResult =
-  | { readonly rawObject: unknown; readonly usage: StructuredUsage }
-  | { readonly rawText: string; readonly usage: StructuredUsage };
+  | {
+      readonly rawObject: unknown;
+      readonly usage: StructuredUsage;
+      readonly sources?: readonly StructuredSource[];
+    }
+  | {
+      readonly rawText: string;
+      readonly usage: StructuredUsage;
+      /** #2228: sources a CLI's own web search tool reported while producing `rawText`. */
+      readonly sources?: readonly StructuredSource[];
+    };
 
 export class StructuredOutputParseError extends Error {
   readonly rawText: string;
@@ -107,14 +123,45 @@ export function buildStructuredRequest(
               name: STRUCTURED_TOOL_NAME,
               description: "Emit the structured output that answers the request.",
               input_schema: input.schema
-            }
+            },
+            ...(input.nativeSearch
+              ? [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }]
+              : [])
           ],
-          tool_choice: { type: "tool", name: STRUCTURED_TOOL_NAME }
+          // A server-executed search tool cannot run in the same turn as a forced tool
+          // choice, so native search relaxes this to "auto" — the model may search first
+          // and then call the structured tool, or skip straight to it.
+          tool_choice: input.nativeSearch
+            ? { type: "auto" }
+            : { type: "tool", name: STRUCTURED_TOOL_NAME }
         }
       };
     }
     case "openai-compatible": {
       const base = baseUrl ?? "https://api.openai.com";
+      if (input.nativeSearch) {
+        // #2228: OpenAI's built-in web search tool only exists on the Responses API, so this
+        // request (and only this one) switches endpoint. The Responses API carries the same
+        // strict JSON schema under text.format, and url citations come back as annotations.
+        return {
+          url: `${base}/v1/responses`,
+          headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+          body: {
+            model: input.model.provider_model_id,
+            max_output_tokens: input.maxOutputTokens,
+            input: input.messages.map((turn) => ({ role: turn.role, content: turn.content })),
+            tools: [{ type: "web_search" }],
+            text: {
+              format: {
+                type: "json_schema",
+                name: "structured_output",
+                strict: true,
+                schema: input.schema
+              }
+            }
+          }
+        };
+      }
       return {
         url: `${base}/v1/chat/completions`,
         headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
@@ -143,7 +190,8 @@ export function buildStructuredRequest(
             maxOutputTokens: input.maxOutputTokens,
             responseMimeType: "application/json",
             responseSchema: input.schema
-          }
+          },
+          ...(input.nativeSearch ? { tools: [{ google_search: {} }] } : {})
         }
       };
     }
@@ -155,17 +203,61 @@ export function buildStructuredRequest(
 }
 
 type AnthropicPayload = {
-  content?: Array<{ type?: string; name?: string; input?: unknown; text?: string }>;
+  content?: Array<{
+    type?: string;
+    name?: string;
+    input?: unknown;
+    text?: string;
+    citations?: Array<{ url?: string; title?: string }>;
+    /** web_search_tool_result blocks: the search hits the model was shown (#2228). */
+    content?: Array<{ type?: string; url?: string; title?: string }>;
+  }>;
   usage?: { input_tokens?: number; output_tokens?: number };
 };
 type OpenAiPayload = {
   choices?: Array<{ message?: { content?: unknown } }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
 };
+/** Responses API shape, used when the request carried the web_search tool (#2228). */
+type OpenAiResponsesPayload = {
+  output?: Array<{
+    type?: string;
+    content?: Array<{
+      type?: string;
+      text?: unknown;
+      annotations?: Array<{ type?: string; url?: string; title?: string }>;
+    }>;
+  }>;
+  usage?: { input_tokens?: number; output_tokens?: number };
+};
 type GooglePayload = {
-  candidates?: Array<{ content?: { parts?: Array<{ text?: unknown }> } }>;
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: unknown }> };
+    groundingMetadata?: { groundingChunks?: Array<{ web?: { uri?: string; title?: string } }> };
+  }>;
   usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
 };
+
+function normalizeStructuredSource(candidate: {
+  url?: string;
+  title?: string;
+}): StructuredSource | null {
+  if (!candidate.url) return null;
+  return { url: candidate.url, title: candidate.title ?? candidate.url };
+}
+
+export function dedupeStructuredSources(
+  candidates: readonly (StructuredSource | null)[]
+): StructuredSource[] {
+  const seen = new Set<string>();
+  const sources: StructuredSource[] = [];
+  for (const candidate of candidates) {
+    if (!candidate || seen.has(candidate.url)) continue;
+    seen.add(candidate.url);
+    sources.push(candidate);
+  }
+  return sources;
+}
 
 export function extractStructuredResult(
   providerKind: ProviderKind,
@@ -191,9 +283,23 @@ export function extractStructuredResult(
           usage
         );
       }
-      return { rawObject: toolUse.input, usage };
+      // Search hits arrive as web_search_tool_result blocks; text-block citations only exist
+      // when the model wrote prose, which a forced structured tool call rarely does.
+      const sources = dedupeStructuredSources(
+        (record.content ?? [])
+          .flatMap((block) =>
+            block?.type === "web_search_tool_result"
+              ? (block.content ?? []).filter((hit) => hit?.type === "web_search_result")
+              : (block?.citations ?? [])
+          )
+          .map((c) => normalizeStructuredSource(c))
+      );
+      return { rawObject: toolUse.input, usage, ...(sources.length > 0 ? { sources } : {}) };
     }
     case "openai-compatible": {
+      if (Array.isArray((payload as OpenAiResponsesPayload | null)?.output)) {
+        return extractOpenAiResponsesResult(payload as OpenAiResponsesPayload);
+      }
       const record = (payload ?? {}) as OpenAiPayload;
       const usage = {
         inputTokens: numberOrZero(record.usage?.prompt_tokens),
@@ -222,13 +328,49 @@ export function extractStructuredResult(
       if (text.length === 0) {
         throw new StructuredOutputParseError("google response has no text parts", "", usage);
       }
-      return { rawObject: parseJsonOrThrow(text, usage), usage };
+      const sources = dedupeStructuredSources(
+        (record.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [])
+          .map((chunk) => chunk.web)
+          .filter((web): web is { uri?: string; title?: string } => Boolean(web))
+          .map((web) => normalizeStructuredSource({ url: web.uri, title: web.title }))
+      );
+      return {
+        rawObject: parseJsonOrThrow(text, usage),
+        usage,
+        ...(sources.length > 0 ? { sources } : {})
+      };
     }
     default: {
       const exhaustive: never = providerKind;
       throw new Error(`unsupported provider kind: ${String(exhaustive)}`);
     }
   }
+}
+
+function extractOpenAiResponsesResult(record: OpenAiResponsesPayload): StructuredProviderResult {
+  const usage = {
+    inputTokens: numberOrZero(record.usage?.input_tokens),
+    outputTokens: numberOrZero(record.usage?.output_tokens)
+  };
+  const textParts = (record.output ?? [])
+    .filter((item) => item?.type === "message")
+    .flatMap((item) => item.content ?? [])
+    .filter((part) => part?.type === "output_text");
+  const text = textParts.map((part) => (typeof part.text === "string" ? part.text : "")).join("");
+  if (text.length === 0) {
+    throw new StructuredOutputParseError("openai responses payload has no output text", "", usage);
+  }
+  const sources = dedupeStructuredSources(
+    textParts
+      .flatMap((part) => part.annotations ?? [])
+      .filter((annotation) => annotation?.type === "url_citation")
+      .map((annotation) => normalizeStructuredSource(annotation))
+  );
+  return {
+    rawObject: parseJsonOrThrow(text, usage),
+    usage,
+    ...(sources.length > 0 ? { sources } : {})
+  };
 }
 
 function parseJsonOrThrow(text: string, usage: StructuredUsage): unknown {

@@ -7,6 +7,8 @@ import type {
   AiProviderTestResultDto
 } from "@moss/shared";
 
+import { inferWebSearchCapability } from "./model-discovery.js";
+
 export interface ProviderValidationInput {
   readonly providerKind: AiProviderKind;
   readonly authMethod: AiAuthMethod;
@@ -55,7 +57,7 @@ export async function discoverProviderModels(
   try {
     const response = await fetchModels(input, apiKey);
     if (!response.ok) return [];
-    return extractModelIds(await response.json()).map(suggestModel);
+    return extractModelIds(await response.json()).map((id) => suggestModel(id, input.providerKind));
   } catch {
     return [];
   }
@@ -113,11 +115,17 @@ function extractModelIds(json: unknown): string[] {
   return [];
 }
 
-function suggestModel(providerModelId: string): AiProviderDiscoveredModelDto {
+function suggestModel(
+  providerModelId: string,
+  providerKind: AiProviderKind
+): AiProviderDiscoveredModelDto {
   const lower = providerModelId.toLowerCase();
   const capabilities: AiModelCapability[] = ["chat", "tool-use", "json", "summarization"];
   if (lower.includes("vision") || lower.includes("image") || lower.includes("gemini")) {
     capabilities.push("vision");
+  }
+  if (inferWebSearchCapability(providerKind, providerModelId)) {
+    capabilities.push("web-search");
   }
 
   let tier: AiModelTier = "interactive";

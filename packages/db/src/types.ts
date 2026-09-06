@@ -294,6 +294,15 @@ export interface TasksTable {
   updated_at: TimestampColumn;
 }
 
+export interface ScratchpadsTable {
+  user_id: string;
+  body: string;
+  revision: number;
+  sync_to_notes: boolean;
+  shortcut: string;
+  updated_at: TimestampColumn;
+}
+
 export interface TaskActivityTable {
   id: string;
   task_id: string;
@@ -358,6 +367,29 @@ export interface NotificationReadsTable {
   read_at: TimestampColumn;
 }
 
+export interface PushSubscriptionsTable {
+  id: string;
+  owner_user_id: string;
+  /** sha256 hex of the endpoint URL; the plaintext lives only inside the envelope. */
+  endpoint_hash: string;
+  /** AES-256-GCM envelope of `{ endpoint, p256dh, auth }` (migration 0225). */
+  credentials_ciphertext: JsonColumn;
+  user_agent_label: string | null;
+  created_at: TimestampColumn;
+  last_used_at: NullableTimestampColumn;
+  failure_count: ColumnType<number, number | undefined, number>;
+  disabled_at: NullableTimestampColumn;
+  /** Key of the last payload delivered to this device; a retry skips rows holding its key. */
+  last_delivered_key: string | null;
+}
+
+export interface PushSigningKeyTable {
+  id: string;
+  public_key: string;
+  private_key_ciphertext: JsonColumn;
+  created_at: TimestampColumn;
+}
+
 export interface ConnectorDefinitionsTable {
   provider_id: string;
   provider_type: ConnectorProviderType;
@@ -381,6 +413,8 @@ export interface ConnectorAccountsTable {
   last_sync_status: ConnectorSyncStatus | null;
   last_sync_error: string | null;
   last_sync_counts: JsonColumn | null;
+  last_sync_trigger: string | null;
+  previous_sync: JsonColumn | null;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
@@ -508,6 +542,8 @@ export interface AiConfiguredModelsTable {
     AiConfiguredModelOrigin | undefined,
     AiConfiguredModelOrigin
   >;
+  /** The provider's own release date for the model when its list gives one; null otherwise. */
+  released_at: NullableTimestampColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
@@ -977,6 +1013,23 @@ export interface CommitmentCandidatesTable {
   expires_at: NullableTimestampColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
+  // 0220 (email chief of staff): email-thread candidates. thread_ref is unique per owner; the
+  // judgement never stores a body, only the capped why lines and the proposed actions.
+  counterparty_person_id: ColumnType<string | null, string | null | undefined, string | null>;
+  counterparty_address: ColumnType<string | null, string | null | undefined, string | null>;
+  proposed_actions: JsonColumn;
+  why_lines: ColumnType<string[], string[] | undefined, string[]>;
+  thread_ref: ColumnType<string | null, string | null | undefined, string | null>;
+  last_judged_external_id: ColumnType<string | null, string | null | undefined, string | null>;
+  stale: ColumnType<boolean, boolean | undefined, boolean>;
+}
+
+export interface CommitmentEmailThreadJudgementsTable {
+  owner_user_id: string;
+  thread_ref: string;
+  last_judged_external_id: string;
+  outcome: "no_item" | "item";
+  judged_at: TimestampColumn;
 }
 
 export interface CommitmentCandidateSourcesTable {
@@ -1167,7 +1220,13 @@ export interface SportsFollowsTable {
   id: ColumnType<string, string | undefined, string>;
   owner_user_id: string;
   competition_key: string;
+  // The team's short name, for display and for suggesting candidates in the one-time "which team
+  // did you mean?" prompt. NULL still means "follow the whole competition". Never matched on.
   team_key: string | null;
+  // The provider's permanent team id: the only identity used to match games, standings, briefing
+  // facts and news (0217). NULL on a follow saved before that migration; such a row matches
+  // nothing until the person picks a team.
+  source_team_id: ColumnType<string | null, string | null | undefined, string | null>;
   created_at: TimestampColumn;
 }
 
@@ -1191,7 +1250,8 @@ export interface NewsCustomSourcesTable {
   canonical_domain: string;
   homepage_url: string;
   feed_url: string | null;
-  retrieval_method: "feed" | "scrape";
+  // #2282 (0218): 'reddit' rows are pinned to the subreddit shape by a table CHECK.
+  retrieval_method: "feed" | "scrape" | "reddit";
   validation_status: NewsValidationStatus;
   health_status:
     | "healthy"
@@ -1200,6 +1260,11 @@ export interface NewsCustomSourcesTable {
     | "unsupported"
     | "disabled";
   validation_fingerprint: string;
+  // #2282 (0218): https icon (never export data), lowercase fetch-host allowlist (1..8, no
+  // default: every writer supplies it), and the bounded workaround failure count (0..3).
+  icon_url: string | null;
+  confirmed_fetch_hosts: string[];
+  consecutive_failures: ColumnType<number, number | undefined, number>;
   validated_at: TimestampColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
@@ -1294,6 +1359,12 @@ export type SportsSourceHealthState =
   | "auth_required"
   | "disabled";
 
+/** #2237 (0214) the lifecycle of a source's saved photo instruction. */
+export type SportsSourcePhotoRuleState = "none" | "previewing" | "in_use" | "stale";
+
+/** #2237 (0214) what the last refresh that actually had stories saw. */
+export type SportsSourcePhotoOutcome = "working" | "none";
+
 export interface SportsCustomSourcesTable {
   id: ColumnType<string, string | undefined, string>;
   owner_user_id: string;
@@ -1330,6 +1401,28 @@ export interface SportsCustomSourcesTable {
   authorization_confirmed_at: TimestampColumn;
   /** #2211 (0213): a subreddit's community icon URL on Reddit's image hosts; null for publications. */
   icon_url: ColumnType<string | null, string | null | undefined, string | null>;
+  /**
+   * #2237 (0214): the per-source photo record. The saved instruction for finding an article's
+   * lead photo, its lifecycle state, what the last refresh with stories saw, how many refreshes
+   * in a row saw nothing, and when Moss may look at the source again.
+   */
+  photo_rule_json: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >;
+  photo_rule_state: ColumnType<
+    SportsSourcePhotoRuleState,
+    SportsSourcePhotoRuleState | undefined,
+    SportsSourcePhotoRuleState
+  >;
+  photo_miss_streak: ColumnType<number, number | undefined, number>;
+  photo_last_outcome: ColumnType<
+    SportsSourcePhotoOutcome | null,
+    SportsSourcePhotoOutcome | null | undefined,
+    SportsSourcePhotoOutcome | null
+  >;
+  photo_relook_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
@@ -1405,6 +1498,7 @@ export interface MossDatabase {
   "app.module_kv": ModuleKvTable;
   "app.rls_probe_items": RlsProbeItemsTable;
   "app.tasks": TasksTable;
+  "app.scratchpads": ScratchpadsTable;
   "app.task_activity": TaskActivityTable;
   "app.task_lists": TaskListsTable;
   "app.task_tags": TaskTagsTable;
@@ -1412,6 +1506,8 @@ export interface MossDatabase {
   "app.task_preferences": TaskPreferencesTable;
   "app.notifications": NotificationsTable;
   "app.notification_reads": NotificationReadsTable;
+  "app.push_subscriptions": PushSubscriptionsTable;
+  "app.push_signing_key": PushSigningKeyTable;
   "app.connector_definitions": ConnectorDefinitionsTable;
   "app.connector_accounts": ConnectorAccountsTable;
   "app.connector_oauth_pending": ConnectorOauthPendingTable;
@@ -1463,6 +1559,7 @@ export interface MossDatabase {
   "app.commitment_candidate_sources": CommitmentCandidateSourcesTable;
   "app.commitment_candidate_events": CommitmentCandidateEventsTable;
   "app.commitment_extraction_state": CommitmentExtractionStateTable;
+  "app.commitment_email_thread_judgements": CommitmentEmailThreadJudgementsTable;
   "app.workflow_runs": WorkflowRunsTable;
   "app.workflow_step_runs": WorkflowStepRunsTable;
   "app.workflow_approvals": WorkflowApprovalsTable;
@@ -1484,6 +1581,7 @@ export type ModuleEnablementRow = Selectable<ModuleEnablementTable>;
 export type ExternalModuleRow = Selectable<ExternalModulesTable>;
 export type RlsProbeItem = Selectable<RlsProbeItemsTable>;
 export type Task = Selectable<TasksTable>;
+export type Scratchpad = Selectable<ScratchpadsTable>;
 export type EmailActionSuppression = Selectable<EmailActionSuppressionTable>;
 export type EmailActionSuppressionEvidence = Selectable<EmailActionSuppressionEvidenceTable>;
 export type TaskActivity = Selectable<TaskActivityTable>;
@@ -1491,6 +1589,8 @@ export type TaskList = Selectable<TaskListsTable>;
 export type TaskTag = Selectable<TaskTagsTable>;
 export type TaskPreferences = Selectable<TaskPreferencesTable>;
 export type Notification = Selectable<NotificationsTable>;
+export type PushSubscription = Selectable<PushSubscriptionsTable>;
+export type PushSigningKeyRow = Selectable<PushSigningKeyTable>;
 export type ConnectorProvider = Selectable<ConnectorDefinitionsTable>;
 export type CalendarEvent = Selectable<CalendarEventsTable>;
 export type EmailMessage = Selectable<EmailMessagesTable>;

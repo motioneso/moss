@@ -5,9 +5,20 @@ import { useAutoAdvance } from "./use-auto-advance.js";
 // Ranking now lives in a shared pure module (#857) so the server computes the SAME featured pick
 // it needs to fetch the article body for. Re-export `isFollowed` because sports-around-ticker /
 // sports-standings still import it from here.
-import { isWrittenArticle, rankStories, BIG_STORY_WEIGHT } from "../news-ranking.js";
+import {
+  isWrittenArticle,
+  rankStories,
+  BIG_STORY_WEIGHT,
+  type FollowedTeamIndex
+} from "../news-ranking.js";
 import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
-export { isFollowed } from "../news-ranking.js";
+export {
+  isFollowed,
+  isFollowedStoryTeam,
+  followedTeamIndex,
+  EMPTY_FOLLOWED_TEAMS
+} from "../news-ranking.js";
+export type { FollowedTeamIndex } from "../news-ranking.js";
 
 function storyKey(headline: Headline): string {
   return headline.storyRef || headline.url;
@@ -387,7 +398,7 @@ export function NewsBand({
   onStoryChanged = () => undefined
 }: {
   readonly groups: readonly SportsNewsGroup[];
-  readonly followedPairs: ReadonlySet<string>;
+  readonly followedPairs: FollowedTeamIndex;
   readonly hiddenStoryRefs?: ReadonlySet<string>;
   readonly onStoryChanged?: StoryFeedbackChange;
 }) {

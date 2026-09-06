@@ -44,7 +44,7 @@ the page still renders correctly when opened for real, not just proof the unit t
    `pnpm dev:api` + `pnpm dev:web` from `~/Jarv1s`, the real checkout — not this worktree — is
    normally what's already serving `http://192.168.50.36:5173`; check first before starting a
    second copy).
-2. Log in (`ben@ben.com` / `jarvistest123!`) and open the job-search board with real data.
+2. Log in (the development sign-in details (kept outside the repository (see the memory note named dev-instance-lan-spinup-trusted-origins))) and open the job-search board with real data.
 3. Confirm it renders normally — this proves no regression, since the validator only changes
    behavior on a row that fails the shape check, and real data should have none of those.
 4. There is no way to make the real server send a deliberately broken row on demand, so the

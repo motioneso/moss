@@ -1,12 +1,15 @@
 // tests/unit/sports-chat-tools.test.ts
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
 
 import { dataContextBrand, type DataContextDb } from "@moss/db";
-import type {
-  CreateSportsFollowRequest,
-  SportsCustomSourceDto,
-  SportsFollowDto
-} from "@moss/shared";
+import { VaultContextRunner } from "@moss/vault";
+import type { SportsCustomSourceDto, SportsFollowDto } from "@moss/shared";
+import type { CreateSportsFollowInput } from "../../packages/sports/src/repository.js";
 import type { ToolExecute } from "@moss/module-sdk";
 
 import {
@@ -26,6 +29,8 @@ import {
   summarizeSportsConfirmSourceRecipe,
   sportsUnfollowTeamExecute
 } from "../../packages/sports/src/chat-tools.js";
+import { SportsPhotoStore } from "../../packages/sports/src/source/photo-store.js";
+import { SportsSourceService } from "../../packages/sports/src/source/service.js";
 import type { SportsFollowsWriter } from "../../packages/sports/src/sports-service.js";
 
 const FAKE_DB = { db: {} as never, [dataContextBrand]: true } satisfies DataContextDb;
@@ -37,16 +42,27 @@ function makeFakeWriter(): SportsFollowsWriter {
     async list() {
       return rows;
     },
-    async create(_db: DataContextDb, input: CreateSportsFollowRequest) {
+    async setSourceTeamId(_db: DataContextDb, id: string, sourceTeamId: string) {
+      const row = rows.find((r) => r.id === id);
+      if (!row || row.teamKey === null) return undefined;
+      const updated: SportsFollowDto = { ...row, sourceTeamId };
+      rows[rows.indexOf(row)] = updated;
+      return updated;
+    },
+    async create(_db: DataContextDb, input: CreateSportsFollowInput) {
       const teamKey = input.teamKey ?? null;
+      const sourceTeamId = input.sourceTeamId ?? null;
       const existing = rows.find(
-        (r) => r.competitionKey === input.competitionKey && r.teamKey === teamKey
+        (r) =>
+          r.competitionKey === input.competitionKey &&
+          (sourceTeamId === null ? r.teamKey === teamKey : r.sourceTeamId === sourceTeamId)
       );
       if (existing) return existing;
       const created: SportsFollowDto = {
         id: `f-${rows.length + 1}`,
         competitionKey: input.competitionKey,
         teamKey,
+        sourceTeamId,
         createdAt: "2026-07-27T00:00:00.000Z"
       };
       rows.push(created);
@@ -74,7 +90,10 @@ function makeFakeDatasetClient(rosters: Record<string, readonly string[]> = { nf
           name: teamKey.toUpperCase(),
           shortName: teamKey.toUpperCase(),
           crestUrl: null,
-          sourceTeamId: null
+          // Since review round 5 a follow is saved by the provider's permanent team number, so a
+          // roster stand-in has to supply one or the save is refused.
+          sourceTeamId: `id-${teamKey}`,
+          abbreviation: teamKey
         })),
         degraded: false,
         cacheMiss: false
@@ -170,6 +189,8 @@ describe("sports chat tools (#1265)", () => {
       lastCheckedAt: "2026-08-24T12:00:00.000Z",
       lastSuccessAt: "2026-08-24T12:00:00.000Z",
       recipeStatus: "feed",
+      photoStatus: "pending",
+      photosFoundByMoss: false,
       assignedFollowIds: [],
       assignments: [],
       createdAt: "2026-08-24T12:00:00.000Z"
@@ -237,7 +258,47 @@ describe("sports chat tools (#1265)", () => {
       { actorUserId: CTX.actorUserId, requestId: CTX.requestId },
       source.id
     );
-    expect(sources.removeSource).toHaveBeenCalledWith(FAKE_DB, source.id);
+    expect(sources.removeSource).toHaveBeenCalledWith(FAKE_DB, source.id, {
+      actorUserId: CTX.actorUserId,
+      requestId: CTX.requestId
+    });
+  });
+
+  it("deletes the source's stored photos when the source is removed in chat (#2237)", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "sports-chat-photos-"));
+    try {
+      const url = "https://images.publisher.example/story.jpg";
+      const body = await sharp({
+        create: { width: 900, height: 600, channels: 3, background: { r: 10, g: 20, b: 30 } }
+      })
+        .jpeg()
+        .toBuffer();
+      const photos = new SportsPhotoStore({
+        vault: new VaultContextRunner(baseDir),
+        fetchBytes: async () => ({ ok: true, contentType: "image/jpeg", body, truncated: false })
+      });
+      const access = { actorUserId: CTX.actorUserId, requestId: CTX.requestId };
+      await photos.ensure(access, "source-1", url);
+      const photoDir = join(baseDir, CTX.actorUserId, "sports", "photos");
+      expect(await readdir(photoDir)).toHaveLength(2);
+
+      const service = new SportsSourceService({
+        sources: { remove: async () => true },
+        photos
+      } as never);
+      configureSportsChatTools(makeFakeDatasetClient(), makeFakeWriter(), {
+        listSources: async () => [{ id: "source-1" }],
+        removeSource: service.removeSource.bind(service)
+      } as never);
+
+      await expect(callTool(sportsRemoveSourceExecute, { sourceId: "source-1" })).resolves.toEqual({
+        data: { removed: true }
+      });
+
+      expect(await readdir(photoDir)).toHaveLength(0);
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
   });
 
   it("keeps an unknown or cross-owner source indistinguishable from not found", async () => {

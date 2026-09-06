@@ -46,7 +46,7 @@ Verified green already, do not re-run unless you touch the CSS again:
      and `pnpm dev:web` (Vite, proxies `/api` to the API via `JARVIS_API_PROXY_TARGET`, defaults
      to `localhost:3000` — override if the API lands elsewhere), pointed at the shared dev
      Postgres (`jarv1s-postgres` on `:55433`, db `jarv1s`, schema `app`; login
-     `ben@ben.com` / `jarvistest123!`). Use the `run` skill's server pattern
+     the development sign-in details (kept outside the repository)). Use the `run` skill's server pattern
      (`.claude/skills/run/examples/server.md` from the skill's base dir, or `playwright.md` for a
      browser-driven capture) if you need the exact recipe. Take the "after" screenshots on your
      branch; you can compare visually against the spec description or a quick `git stash`-free

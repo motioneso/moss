@@ -146,3 +146,27 @@ describe("buildChatGatewayDependencies → resolveLocalTimezone (#2157)", () => 
     expect(deps.resolveLocalTimezone).toBeUndefined();
   });
 });
+
+describe("buildChatGatewayDependencies → webSearchEngineForActor (#2228)", () => {
+  const base = {
+    resolveActiveModules: async () => [],
+    repository: {} as AiRepository,
+    runner: {} as DataContextRunner,
+    tokens: {} as SessionTokenRegistry,
+    confirmations: {} as ConfirmationRegistry,
+    notifier: {} as SessionNotifier,
+    collaborators: {}
+  };
+
+  it("passes the composition root's engine resolver through to the gateway", async () => {
+    const webSearchEngineForActor = vi.fn(async () => "model-native" as const);
+    const deps = buildChatGatewayDependencies({ ...base, webSearchEngineForActor });
+    await expect(deps.webSearchEngineForActor!("user1")).resolves.toBe("model-native");
+    expect(webSearchEngineForActor).toHaveBeenCalledWith("user1");
+  });
+
+  it("leaves the gateway dependency unset when the root injects nothing", () => {
+    const deps = buildChatGatewayDependencies(base);
+    expect(deps.webSearchEngineForActor).toBeUndefined();
+  });
+});

@@ -19,6 +19,7 @@ import {
   setBraveSearchApiKey,
   type WebSearchSecretCipher
 } from "./web-search-key.js";
+import { setNativeSearchEnabled } from "./web-search-engine-resolver.js";
 
 export interface WebSearchKeyRoutesDependencies {
   readonly dataContext: DataContextRunner;
@@ -71,18 +72,34 @@ export function registerWebSearchKeyRoutes(
     async (request, reply) => {
       try {
         const body = request.body as PutWebSearchKeyRequest;
-        const apiKey = typeof body?.apiKey === "string" ? body.apiKey.trim() : "";
-        if (apiKey.length === 0) {
+        const hasApiKey = typeof body?.apiKey === "string";
+        const hasNativeEnabled = typeof body?.nativeSearchEnabled === "boolean";
+        if (!hasApiKey && !hasNativeEnabled) {
+          return reply
+            .status(400)
+            .send({ error: "Either apiKey or nativeSearchEnabled must be provided" });
+        }
+        if (hasApiKey && body.apiKey!.trim().length === 0) {
           return reply.status(400).send({ error: "API key must not be empty" });
         }
         const accessContext = await resolveAccessContext(request);
         const status = await dataContext.withDataContext(accessContext, async (scopedDb) => {
           await assertAdminUser(repository, scopedDb, accessContext.actorUserId);
-          await setBraveSearchApiKey(scopedDb, repository, cipher, {
-            apiKey,
-            actorUserId: accessContext.actorUserId,
-            requestId: requireRequestId(accessContext)
-          });
+          const reqId = requireRequestId(accessContext);
+          if (hasApiKey) {
+            await setBraveSearchApiKey(scopedDb, repository, cipher, {
+              apiKey: body.apiKey!.trim(),
+              actorUserId: accessContext.actorUserId,
+              requestId: reqId
+            });
+          }
+          if (hasNativeEnabled) {
+            await setNativeSearchEnabled(scopedDb, repository, {
+              enabled: body.nativeSearchEnabled!,
+              actorUserId: accessContext.actorUserId,
+              requestId: reqId
+            });
+          }
           return getWebSearchKeyConfig(scopedDb);
         });
         dependencies.onKeyChanged?.();

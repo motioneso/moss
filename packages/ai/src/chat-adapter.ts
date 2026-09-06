@@ -12,14 +12,23 @@ export interface ChatActivityEvent {
   readonly text: string;
 }
 
+export interface ChatSource {
+  readonly title: string;
+  readonly url: string;
+}
+
 export interface GenerateChatInput {
   readonly model: { readonly provider_kind: string; readonly provider_model_id: string };
   readonly messages: readonly ChatTurn[];
   /** Optional output-token ceiling. When set, clamps the provider's max_tokens. Omitted = provider default. */
   readonly maxOutputTokens?: number;
+  /** #2228: ask the provider to use its own built-in web search tool for this turn. */
+  readonly nativeSearch?: boolean;
   readonly onActivity?: (event: ChatActivityEvent) => void;
 }
 
 export interface ChatProviderAdapter {
-  generateChat(input: GenerateChatInput): Promise<{ readonly text: string }>;
+  generateChat(
+    input: GenerateChatInput
+  ): Promise<{ readonly text: string; readonly sources?: readonly ChatSource[] }>;
 }

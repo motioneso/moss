@@ -5,6 +5,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it } from "vitest";
 import type { Headline, SportsNewsGroup } from "@moss/shared";
 import { NewsBand } from "../../packages/sports/src/web/sports-news.js";
+import { EMPTY_FOLLOWED_TEAMS } from "../../packages/sports/src/news-ranking.js";
 
 // A first-of-league headline with art (+2) + dek (+1) clears BIG_STORY_WEIGHT (4) on the
 // first-of-league bonus (+2) → it becomes the FeatureArticle, which is where the #857 body renders.
@@ -18,6 +19,8 @@ function headline(over: Partial<Headline> = {}): Headline {
     url: "https://www.espn.com/nfl/story/_/id/4567",
     publishedAt: "2026-07-07T12:00:00.000Z",
     imageUrl: "https://a.espncdn.com/photo/cowboys.jpg",
+    imageWidth: null,
+    imageHeight: null,
     summary: "Dallas wrapped up the division on Sunday.",
     teamKeys: [],
     publisherLabel: "ESPN",
@@ -51,7 +54,7 @@ describe("NewsBand featured-article body (#857)", () => {
     const html = renderToString(
       createElement(NewsBand, {
         groups: [group(headline({ body: "First paragraph.\n\nSecond paragraph." }))],
-        followedPairs: new Set<string>()
+        followedPairs: EMPTY_FOLLOWED_TEAMS
       })
     );
     expect(html).toContain("sp-newsband__feature");
@@ -68,7 +71,7 @@ describe("NewsBand featured-article body (#857)", () => {
     const html = renderToString(
       createElement(NewsBand, {
         groups: [group(headline())], // no body
-        followedPairs: new Set<string>()
+        followedPairs: EMPTY_FOLLOWED_TEAMS
       })
     );
     expect(html).toContain("sp-newsband__feature");
@@ -123,7 +126,7 @@ describe("NewsBand majors/mosaic url-keying (#858)", () => {
             headlines: items
           }
         ],
-        followedPairs: new Set<string>()
+        followedPairs: EMPTY_FOLLOWED_TEAMS
       })
     );
     // item0: no imageUrl/no summary, feedRank-0 bonus alone = weight 2 (< BIG_STORY_WEIGHT 4) →
@@ -177,7 +180,7 @@ describe("NewsBand sport filters", () => {
               ]
             }
           ],
-          followedPairs: new Set<string>()
+          followedPairs: EMPTY_FOLLOWED_TEAMS
         })
       );
     });

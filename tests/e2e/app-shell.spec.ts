@@ -32,7 +32,7 @@ test("signs in and renders shell navigation", async ({ page }) => {
   await expect(page.locator(".module-nav").getByRole("link", { name: "Calendar" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Chat with Moss" })).toBeVisible();
 
-  await page.getByRole("button", { name: /Owner User/ }).click();
+  await page.getByRole("button", { name: /Account menu/ }).click();
   await expect(page.getByRole("button", { name: /Notifications/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Settings & permissions/ })).toBeVisible();
 });

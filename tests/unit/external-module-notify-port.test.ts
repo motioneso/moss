@@ -47,7 +47,6 @@ describe("external worker ctx.notify port (Task 2b, #1283)", () => {
       actorUserId: randomUUID(),
       requestId: randomUUID(),
       workerDataContext: null as unknown as DataContextRunner,
-      cipher: null as never,
       isActorAdmin: async () => false,
       embeddingProvider: null as never,
       postNotification
@@ -186,7 +185,6 @@ describe("external worker ctx.notify port (Task 2b, #1283)", () => {
         withDataContext: async (_access: unknown, fn: (db: DataContextDb) => unknown) =>
           fn({ db: scopedDb } as unknown as DataContextDb)
       } as unknown as DataContextRunner,
-      cipher: null as never,
       isActorAdmin: async () => false,
       embeddingProvider: null as never,
       postNotification,

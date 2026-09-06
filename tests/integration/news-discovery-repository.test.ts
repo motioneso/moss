@@ -55,6 +55,8 @@ describe("news discovery repository", () => {
     homepageUrl: `https://publisher-${index}.example.com`,
     feedUrl: null,
     retrievalMethod: "scrape" as const,
+    confirmedFetchHosts: [`publisher-${index}.example.com`],
+    iconUrl: null,
     validationFingerprint: "opaque-fingerprint"
   });
 

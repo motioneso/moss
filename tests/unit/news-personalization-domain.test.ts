@@ -201,10 +201,13 @@ describe("news personalization API schemas", () => {
     // Snapshot exposes metadata only — never the payload.
     const snapshot = response.properties.snapshot;
     expect(JSON.stringify(snapshot)).not.toContain("payload");
-    // DTOs must not leak validation fingerprints or provider identity.
-    expect(JSON.stringify(response)).not.toContain("fingerprint");
-    expect(JSON.stringify(response)).not.toContain("provider");
-    expect(JSON.stringify(response)).not.toContain("model");
+    // DTOs must not leak validation fingerprints or provider identity. Check declared field
+    // names, not the raw JSON: the webSearchReason enum carries category words such as
+    // "model-has-no-search" that name no provider or model (#2228).
+    const fieldNames = collectPropertyNames(response).join(" ");
+    expect(fieldNames).not.toContain("fingerprint");
+    expect(fieldNames).not.toContain("provider");
+    expect(fieldNames).not.toContain("model");
   });
 
   it("create-exclusion request is a single bounded source string", () => {
@@ -219,3 +222,23 @@ describe("news personalization API schemas", () => {
     expect(deleteNewsSourceExclusionSchema.params.properties.id.format).toBe("uuid");
   });
 });
+
+function collectPropertyNames(schema: unknown, names: string[] = []): string[] {
+  if (schema === null || typeof schema !== "object") return names;
+  if (Array.isArray(schema)) {
+    for (const item of schema) collectPropertyNames(item, names);
+    return names;
+  }
+  const record = schema as Record<string, unknown>;
+  const properties = record.properties;
+  if (properties !== null && typeof properties === "object") {
+    for (const [key, value] of Object.entries(properties as Record<string, unknown>)) {
+      names.push(key);
+      collectPropertyNames(value, names);
+    }
+  }
+  for (const key of ["items", "anyOf", "oneOf", "allOf"]) {
+    if (key in record) collectPropertyNames(record[key], names);
+  }
+  return names;
+}

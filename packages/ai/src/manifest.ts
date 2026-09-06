@@ -86,7 +86,8 @@ export const aiModuleManifest = {
       "sql/0150_ai_provider_purpose.sql",
       // #2208 — `origin` ('discovered'|'manual') so discovery prunes only its own rows and never a
       // model an admin added by hand.
-      "sql/0212_ai_configured_models_origin.sql"
+      "sql/0212_ai_configured_models_origin.sql",
+      "sql/0214_ai_configured_models_released_at.sql"
     ],
     migrationDirectories: ["packages/ai/sql"],
     ownedTables: [
@@ -133,7 +134,9 @@ export const aiModuleManifest = {
           code: "ai.refresh_provider_models.not_logged_in",
           class: "prerequisite",
           remediationRef: "ai.refresh_provider_models.log_in",
-          description: "Shown as 'Not logged in': the provider has no stored sign-in to ask with."
+          description:
+            "Shown as 'Not logged in': the provider has no stored sign-in to ask with, or the " +
+            "provider refused the one it has (that sign-in then counts as expired)."
         },
         {
           code: "ai.refresh_provider_models.unsupported",

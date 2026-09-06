@@ -309,12 +309,16 @@ describe("AssistantToolGateway self-operation", () => {
       async list() {
         return rows;
       },
+      async setSourceTeamId() {
+        return undefined;
+      },
       async create(_db, input: CreateSportsFollowRequest) {
         const teamKey = input.teamKey ?? null;
         const created: SportsFollowDto = {
           id: "f-1",
           competitionKey: input.competitionKey,
           teamKey,
+          sourceTeamId: teamKey === null ? null : `id-${teamKey}`,
           createdAt: "2026-07-27T00:00:00.000Z"
         };
         rows.push(created);
@@ -772,8 +776,9 @@ describe("AssistantToolGateway self-operation", () => {
       }
     }
 
-    // web.read has no actionFamilyId, while Sports source writes share a non-promotable family;
-    // all remain explicit confirmation-only declarations.
+    // Sports source writes share a non-promotable family; all remain explicit confirmation-only
+    // declarations. web.read was on this list until Ben's ruling, 2026-09-05 (#2326), moved it to
+    // risk "read" instead (it never confirms now, so it is no longer a confirm_always tool).
     expect(confirmAlwaysTools.sort()).toEqual(
       [
         "email.sendReply",
@@ -784,8 +789,7 @@ describe("AssistantToolGateway self-operation", () => {
         "sports.confirmSourceAssignments",
         "sports.confirmSourceRecipe",
         "sports.removeSource",
-        "sports.retrySource",
-        "web.read"
+        "sports.retrySource"
       ].sort()
     );
   });

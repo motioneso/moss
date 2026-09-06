@@ -12,7 +12,12 @@ import type {
   StandingsGroup
 } from "@moss/shared";
 
-import { hasLiveGame, SportsPage } from "../../packages/sports/src/web/sports-page.js";
+import {
+  findFeaturedStory,
+  hasLiveGame,
+  leadWidePhotoFirst,
+  SportsPage
+} from "../../packages/sports/src/web/sports-page.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
 // Root suite renders @moss/web components with react-dom/server (no jsdom /
@@ -29,21 +34,25 @@ function liveGame(): GameSummary {
     statusDetail: "Q3 4:12",
     home: {
       teamKey: "min",
+      sourceTeamId: "16",
       name: "Minnesota Vikings",
       shortName: "MIN",
       crestUrl: null,
       score: 21,
       record: "10-2",
-      winner: true
+      winner: true,
+      scorers: null
     },
     away: {
       teamKey: "dal",
+      sourceTeamId: "6",
       name: "Dallas Cowboys",
       shortName: "DAL",
       crestUrl: null,
       score: 14,
       record: "8-4",
-      winner: false
+      winner: false,
+      scorers: null
     }
   };
 }
@@ -82,6 +91,7 @@ function standingsGroup(): StandingsGroup {
         rows: [
           {
             teamKey: "ars",
+            sourceTeamId: "359",
             name: "Arsenal",
             rank: 1,
             points: 40,
@@ -121,6 +131,8 @@ function headline(
     url: "https://example.test/" + id,
     publishedAt: "2026-07-01T18:00:00Z",
     imageUrl: null,
+    imageWidth: null,
+    imageHeight: null,
     summary: "",
     teamKeys: [],
     publisherLabel: "ESPN",
@@ -164,9 +176,10 @@ function makeOverview(overrides: Partial<SportsOverviewResponse> = {}): SportsOv
       }
     ],
     standings: [standingsGroup()],
-    followedTeams: [{ competitionKey: "nfl", teamKey: "min" }],
+    followedTeams: [{ competitionKey: "nfl", teamKey: "min", sourceTeamId: "16" }],
     followedLeagues: [],
     followedLeagueCards: [],
+    ambiguousFollows: [],
     degraded: false,
     ...overrides
   };
@@ -347,8 +360,8 @@ describe("SportsPage", () => {
     const html = render(
       makeOverview({
         followedTeams: [
-          { competitionKey: "nfl", teamKey: "min" },
-          { competitionKey: "eng.1", teamKey: "ars" }
+          { competitionKey: "nfl", teamKey: "min", sourceTeamId: "16" },
+          { competitionKey: "eng.1", teamKey: "ars", sourceTeamId: "359" }
         ]
       })
     );
@@ -356,6 +369,57 @@ describe("SportsPage", () => {
     expect(html).toContain("Premier League");
     expect(html).toContain("W-L");
     expect(html).not.toContain(">#<");
+  });
+
+  // Review finding S1, blocker 3: once a short name is shared by two teams, a followed team's
+  // stored key can become a permanent number (see follow-identity.ts) while the scoreboard and
+  // standings rows for that team keep arriving under the raw, still-shared short name — those
+  // fetches have no way to know about the collision. Marking "you" by comparing keys alone would
+  // silently stop working the moment that happens; it must also try the permanent number.
+  it("still marks a followed team as you when its stored key is a number but the row still carries the shared short name (S1)", () => {
+    const sharedShortNameGame: GameSummary = {
+      id: "g-shared",
+      competitionKey: "nfl",
+      startsAt: "2026-07-01T23:20:00Z",
+      state: "live",
+      statusDetail: "Q3 4:12",
+      home: {
+        teamKey: "pac",
+        sourceTeamId: "401",
+        name: "Pacific Lutheran Lutes",
+        shortName: "PAC",
+        crestUrl: null,
+        score: 21,
+        record: "10-2",
+        winner: true,
+        scorers: null
+      },
+      away: {
+        teamKey: "gb",
+        sourceTeamId: null,
+        name: "Green Bay Packers",
+        shortName: "GB",
+        crestUrl: null,
+        score: 14,
+        record: "8-4",
+        winner: false,
+        scorers: null
+      }
+    };
+    const html = render(
+      makeOverview({
+        hero: gamedayHero(sharedShortNameGame),
+        scoreboard: [
+          { competitionKey: "nfl", competitionLabel: "NFL", games: [sharedShortNameGame] }
+        ],
+        // The saved follow now resolves to the permanent number "401", not the shared short name
+        // "pac" the game row still carries.
+        followedTeams: [{ competitionKey: "nfl", teamKey: "129700", sourceTeamId: "401" }]
+      })
+    );
+    const youIndex = html.indexOf("sp-board__side--you");
+    expect(youIndex).toBeGreaterThan(-1);
+    expect(html.slice(youIndex, youIndex + 200)).toContain("Pacific Lutheran Lutes");
   });
 
   it("does not cross-mark a same-teamKey row in another competition (pair-scoped)", () => {
@@ -372,6 +436,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "min",
+                    sourceTeamId: "16",
                     name: "Minnows FC",
                     rank: 5,
                     points: 30,
@@ -411,6 +476,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "nyy",
+                    sourceTeamId: null,
                     name: "New York Yankees",
                     rank: 1,
                     points: 52,
@@ -429,6 +495,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "hou",
+                    sourceTeamId: null,
                     name: "Houston Astros",
                     rank: 1,
                     points: 49,
@@ -483,6 +550,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "ars",
+                    sourceTeamId: "359",
                     name: "Arsenal",
                     rank: 1,
                     points: 40,
@@ -499,7 +567,7 @@ describe("SportsPage", () => {
             ]
           }
         ],
-        followedTeams: [{ competitionKey: "eng.1", teamKey: "ars" }]
+        followedTeams: [{ competitionKey: "eng.1", teamKey: "ars", sourceTeamId: "359" }]
       })
     );
     expect(html).toContain("sp-legend");
@@ -520,6 +588,7 @@ describe("SportsPage", () => {
                 rows: [
                   {
                     teamKey: "ars",
+                    sourceTeamId: "359",
                     name: "Arsenal",
                     rank: 1,
                     points: 40,
@@ -533,6 +602,7 @@ describe("SportsPage", () => {
                   },
                   {
                     teamKey: "shf",
+                    sourceTeamId: null,
                     name: "Sheffield Town",
                     rank: 20,
                     points: 22,
@@ -856,5 +926,67 @@ describe("hasLiveGame (#762)", () => {
       ]
     });
     expect(hasLiveGame(overview)).toBe(true);
+  });
+});
+
+describe("the lead story prefers a wide photo (#2237)", () => {
+  it("moves the first story with a wide photo to the front", () => {
+    const stories = [
+      headline("a", "nfl", "Narrow", { imageUrl: "/a", imageWidth: 400 }),
+      headline("b", "nfl", "No photo"),
+      headline("c", "nfl", "Wide", { imageUrl: "/c", imageWidth: 1280 }),
+      headline("d", "nfl", "Also wide", { imageUrl: "/d", imageWidth: 900 })
+    ];
+
+    expect(leadWidePhotoFirst(stories).map((story) => story.id)).toEqual(["c", "a", "b", "d"]);
+  });
+
+  it("changes nothing when no story has a wide photo, or when the first already does", () => {
+    const narrow = [
+      headline("a", "nfl", "Narrow", { imageUrl: "/a", imageWidth: 400 }),
+      headline("b", "nfl", "No photo")
+    ];
+    expect(leadWidePhotoFirst(narrow)).toBe(narrow);
+
+    const alreadyWide = [
+      headline("a", "nfl", "Wide", { imageUrl: "/a", imageWidth: 1200 }),
+      headline("b", "nfl", "Narrow", { imageUrl: "/b", imageWidth: 300 })
+    ];
+    expect(leadWidePhotoFirst(alreadyWide)).toBe(alreadyWide);
+  });
+
+  it("keeps every story: this is a preference, not a filter", () => {
+    const stories = [
+      headline("a", "nfl", "No photo"),
+      headline("b", "nfl", "Wide", { imageUrl: "/b", imageWidth: 1280 })
+    ];
+    expect(leadWidePhotoFirst(stories)).toHaveLength(2);
+  });
+
+  it("picks a wide photo for the game band too, and falls back when there is none", () => {
+    const game = liveGame();
+    const about = (id: string, overrides: Partial<Headline>) =>
+      headline(id, "nfl", "Vikings hold off the Cowboys", {
+        teamKeys: ["min", "dal"],
+        ...overrides
+      });
+
+    const withWide = makeOverview({
+      topStories: [
+        about("narrow", { imageUrl: "/narrow", imageWidth: 400, summary: "A dek" }),
+        about("wide", { imageUrl: "/wide", imageWidth: 1280 })
+      ],
+      hero: gamedayHero(game)
+    });
+    expect(findFeaturedStory(game, withWide)?.id).toBe("wide");
+
+    const noWide = makeOverview({
+      topStories: [
+        about("plain", { imageUrl: "/plain", imageWidth: 400 }),
+        about("dek", { imageUrl: "/dek", imageWidth: 300, summary: "A dek" })
+      ],
+      hero: gamedayHero(game)
+    });
+    expect(findFeaturedStory(game, noWide)?.id).toBe("dek");
   });
 });

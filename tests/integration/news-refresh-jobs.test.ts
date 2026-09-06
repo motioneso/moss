@@ -94,6 +94,7 @@ describe("news refresh jobs", () => {
     ).resolves.toMatchObject({ rows: [{ requested_generation: "2" }] });
 
     await registerNewsJobWorkers(workerBoss, workerContext, {
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
       fetch: async (url) => ({
         ok: true,
         status: 200,
@@ -131,6 +132,7 @@ describe("news refresh jobs", () => {
     await asActor((db) => repository.bumpRefreshRequest(db));
     await enqueueNewsRefresh(appBoss, ids.userA);
     await registerNewsJobWorkers(workerBoss, workerContext, {
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
       fetch: async (url) => ({
         ok: true,
         status: 200,
@@ -200,6 +202,7 @@ describe("news refresh jobs", () => {
 
     await enqueueNewsRefresh(appBoss, ids.userA);
     await registerNewsJobWorkers(workerBoss, workerContext, {
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
       fetch: async () => ({ ok: false as const, reason: "network" as const, status: 503 }),
       search: { search: async () => ({ results: [] }) },
       ai: { fingerprint: async () => "fp", generateJson: async () => ({ ok: true, object: {} }) },
@@ -251,6 +254,7 @@ describe("news refresh jobs", () => {
     });
     await enqueueNewsRefresh(appBoss, ids.userA);
     await registerNewsJobWorkers(workerBoss, workerContext, {
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
       fetch: async (url) => ({
         ok: true,
         status: 200,

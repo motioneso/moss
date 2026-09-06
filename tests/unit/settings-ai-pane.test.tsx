@@ -179,6 +179,38 @@ describe("Response style visibility", () => {
       renderer.unmount();
     });
   });
+
+  it("shows an example answer under Response style that matches the saved length, and it changes when the length changes (#boot-settings-polish)", async () => {
+    const renderer = await renderAssistantPane();
+
+    let text = renderedText(renderer.toJSON());
+    expect(text).toContain("Balanced example:");
+    expect(text).not.toContain("Concise example:");
+    expect(text).not.toContain("Detailed example:");
+
+    const putChatSettings = vi.mocked(
+      (await import("../../apps/web/src/api/client.js")).putChatSettings
+    );
+    putChatSettings.mockResolvedValueOnce({ chat: { responseStyle: "concise" } });
+
+    const conciseButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Concise"));
+    if (!conciseButton) throw new Error("Concise option button not found");
+    await act(async () => {
+      conciseButton.props.onClick();
+    });
+    await flush();
+
+    text = renderedText(renderer.toJSON());
+    expect(text).toContain("Concise example:");
+    expect(text).not.toContain("Balanced example:");
+    expect(text).not.toContain("Detailed example:");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
 });
 
 describe("Transcription setup note", () => {

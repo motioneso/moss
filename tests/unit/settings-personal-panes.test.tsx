@@ -70,6 +70,20 @@ describe("ProfilePane merged Account & preferences", () => {
     expect(html).not.toContain("Use automatic");
   });
 
+  it("says whether the current place came from Use my location or from a search (#boot-settings-polish)", async () => {
+    const { weatherLocationHint } =
+      await import("../../apps/web/src/settings/settings-personal-panes.js");
+
+    expect(weatherLocationHint(null, null)).toBe(
+      "No place chosen yet, so the forecast is for the main city of your time zone."
+    );
+    expect(weatherLocationHint({ label: "Home" }, null)).toBe("Using Home.");
+    expect(weatherLocationHint({ label: "Home" }, "auto")).toBe(
+      "Using Home, found with Use my location."
+    );
+    expect(weatherLocationHint({ label: "Home" }, "search")).toBe("Using Home, set by searching.");
+  });
+
   it("offers the browser's location next to the place search", async () => {
     const html = await renderProfilePane();
     expect(html).toContain("Use my location");

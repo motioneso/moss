@@ -17,6 +17,7 @@ import type {
   UsefulnessFeedbackDto,
   UsefulnessFeedbackKind
 } from "@moss/shared";
+import { Menu } from "@moss/ui";
 
 import { queryKeys } from "../api/query-keys";
 import {
@@ -382,41 +383,39 @@ function ChatFeedbackMenu(props: {
     .filter(Boolean)
     .join(" ");
 
+  const items = [
+    {
+      id: "more_like_this",
+      label: "More like this",
+      icon: <ThumbsUp size={13} aria-hidden="true" />,
+      disabled: createMutation.isPending
+    },
+    {
+      id: "not_useful",
+      label: "Not useful",
+      icon: <ThumbsDown size={13} aria-hidden="true" />,
+      disabled: createMutation.isPending
+    },
+    ...(props.canRemember
+      ? [
+          {
+            id: "remember_this",
+            label: "Remember this",
+            icon: <BookmarkPlus size={13} aria-hidden="true" />,
+            disabled: createMutation.isPending
+          }
+        ]
+      : [])
+  ];
+
   return (
     <div className={className}>
-      <details className="feedback-menu__details">
-        <summary className="feedback-menu__trigger" aria-label="Feedback" title="Feedback">
-          <MoreHorizontal size={14} aria-hidden="true" />
-        </summary>
-        <div className="feedback-menu__list">
-          <button
-            type="button"
-            onClick={() => createMutation.mutate("more_like_this")}
-            disabled={createMutation.isPending}
-          >
-            <ThumbsUp size={13} aria-hidden="true" />
-            More like this
-          </button>
-          <button
-            type="button"
-            onClick={() => createMutation.mutate("not_useful")}
-            disabled={createMutation.isPending}
-          >
-            <ThumbsDown size={13} aria-hidden="true" />
-            Not useful
-          </button>
-          {props.canRemember ? (
-            <button
-              type="button"
-              onClick={() => createMutation.mutate("remember_this")}
-              disabled={createMutation.isPending}
-            >
-              <BookmarkPlus size={13} aria-hidden="true" />
-              Remember this
-            </button>
-          ) : null}
-        </div>
-      </details>
+      <Menu
+        triggerIcon={<MoreHorizontal size={14} aria-hidden="true" />}
+        triggerLabel="Feedback"
+        items={items}
+        onSelect={(id) => createMutation.mutate(id as UsefulnessFeedbackKind)}
+      />
       {last ? (
         <span className="feedback-menu__status">
           Saved

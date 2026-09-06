@@ -1,21 +1,24 @@
-# Jarv1s production Compose: one Postgres container and one Jarv1s container.
-# The Jarv1s supervisor prepares runtime dirs, runs migrations, then starts the
+# Moss production Compose: Postgres, the Moss app, and a sports renderer.
+# The Moss supervisor prepares runtime dirs, runs migrations, then starts the
 # internal cli-runner RPC server, worker, and API. The API serves the Vite build.
 #
+# Existing installs: retain the original project name to keep using their volumes.
 # First run:
-#   JARVIS_IMAGE_TAG=v0.1.0 POSTGRES_PASSWORD=setup JARVIS_CLI_RUNNER_RPC_SECRET=setup \
-#     docker compose -p jarv1s-prod -f docker-compose.prod.yml --profile setup run --rm setup
-#   docker compose -p jarv1s-prod -f docker-compose.prod.yml \
-#     --env-file ./env.production.local up -d
+#   JARVIS_IMAGE_TAG=stable POSTGRES_PASSWORD=setup JARVIS_CLI_RUNNER_RPC_SECRET=setup \
+#     docker compose -p moss -f docker-compose.prod.yml --profile setup \
+#       run --rm --no-deps --pull always --user "$(id -u):$(id -g)" setup
+#   Add MOSS_RECONCILE_CONFIRM_OWNER_EMAIL=<first-account-email> to env.production.local.
+#   docker compose -p moss -f docker-compose.prod.yml \
+#     --env-file ./env.production.local up -d --no-build
 # Notes-enabled deploys must also pass `-f docker-compose.notes.yml`; it mounts
 # JARVIS_NOTES_VAULT_HOST_PATH at the fixed in-container /data/external-notes path.
 #
 # Manual migration recovery:
-#   docker compose -p jarv1s-prod -f docker-compose.prod.yml --env-file ./env.production.local \
+#   docker compose -p moss -f docker-compose.prod.yml --env-file ./env.production.local \
 #     --profile ops run --rm migrate
 #
 # Reconcile modules (download/install/purge; after placing/removing files under the modules dir):
-#   docker compose -p jarv1s-prod -f docker-compose.prod.yml --env-file ./env.production.local \
+#   docker compose -p moss -f docker-compose.prod.yml --env-file ./env.production.local \
 #     --profile ops run --rm module-install
 
 x-app-env-file: &app-env-file
@@ -142,7 +145,7 @@ services:
       - jarv1s
 
   jarv1s:
-    container_name: moss
+    container_name: ${MOSS_CONTAINER_NAME:-moss}
     image: ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
     build:
       context: ..
@@ -295,6 +298,8 @@ services:
     entrypoint: ["node_modules/.bin/tsx", "scripts/setup-prod.ts"]
     command: ["/deploy"]
     environment:
+      # Preserve the selected release channel in the generated env file.
+      JARVIS_IMAGE_TAG: ${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
       # #1504: forwarded so Child 2's setup script can record the operator's TLS choice.
       # Empty-safe defaults only — see the caddy-init comment below for why a required
       # var here would break a plain `docker compose up`.
@@ -321,7 +326,7 @@ services:
   # tag, not digest, everywhere else — see pgvector/pgvector:pg17 above).
   #
   # Enable with:
-  #   docker compose -p jarv1s-prod -f docker-compose.prod.yml --env-file ./env.production.local \
+  #   docker compose -p moss -f docker-compose.prod.yml --env-file ./env.production.local \
   #     --profile tls up -d
   caddy-init:
     image: caddy:2.10.0-alpine

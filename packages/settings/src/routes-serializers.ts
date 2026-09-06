@@ -71,7 +71,8 @@ export function toMyModuleDtoFromExternal(
     hasUserCredentials: module.hasUserCredentials,
     // #1945: a still-draft external module is visible only to its builder; a shipped one is
     // on for everyone.
-    scope: module.status === "draft" ? "you" : "everyone"
+    scope: module.status === "draft" ? "you" : "everyone",
+    settingKeywords: module.settingKeywords
   };
 }
 

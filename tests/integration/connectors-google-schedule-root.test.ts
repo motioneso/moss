@@ -127,7 +127,8 @@ describe("Google schedule to root job", () => {
       data: {
         actorUserId: ids.userA,
         kind: "google-sync",
-        idempotencyKey: `schedule:${ids.userA}`
+        idempotencyKey: `schedule:${ids.userA}`,
+        trigger: "schedule"
       },
       options: { tz: "UTC", key: ids.userA, singletonKey: ids.userA }
     });
@@ -148,7 +149,8 @@ describe("Google schedule to root job", () => {
       {
         actorUserId: ids.userA,
         kind: "google-sync",
-        idempotencyKey: `schedule:${ids.userA}`
+        idempotencyKey: `schedule:${ids.userA}`,
+        trigger: "manual"
       },
       { singletonKey: ids.userA }
     );
@@ -160,7 +162,8 @@ describe("Google schedule to root job", () => {
     expect(roots[0]?.data).toEqual({
       actorUserId: ids.userA,
       kind: "google-sync",
-      idempotencyKey: `schedule:${ids.userA}`
+      idempotencyKey: `schedule:${ids.userA}`,
+      trigger: "schedule"
     });
   });
 });

@@ -79,13 +79,14 @@ describe("AI provider validation", () => {
       {
         providerModelId: "gpt-4o",
         displayName: "gpt-4o",
-        capabilities: ["chat", "tool-use", "json", "summarization"],
+        // gpt-4o family accepts the Responses API web_search tool (#2228).
+        capabilities: ["chat", "tool-use", "json", "summarization", "web-search"],
         tier: "interactive"
       },
       {
         providerModelId: "gpt-4o-vision",
         displayName: "gpt-4o-vision",
-        capabilities: ["chat", "tool-use", "json", "summarization", "vision"],
+        capabilities: ["chat", "tool-use", "json", "summarization", "vision", "web-search"],
         tier: "interactive"
       }
     ]);

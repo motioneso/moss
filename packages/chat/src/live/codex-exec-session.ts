@@ -130,6 +130,9 @@ export class CodexExecSession {
     // direct-execution path that bypasses the gateway. Hoisted out of the conditional so all tool
     // use is forced through the gateway, mirroring the anthropic engine's unconditional `--tools ""`.
     parts.push(`-c 'features.shell_tool=false'`, `-c 'features.apply_patch_tool=false'`);
+    // #2228: switch on codex's own web search for this launch so the model can look things up and
+    // the transcript reader can report the pages it opened as sources.
+    if (this.launchOpts.nativeSearch) parts.push(`-c 'web_search="live"'`);
 
     if (this.launchOpts.mcpToken && this.launchOpts.mcpServerUrl) {
       parts.push(

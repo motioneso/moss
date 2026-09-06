@@ -23,15 +23,16 @@ async function setup(page: Page): Promise<MockApiState> {
     notesSourcePath: null,
     notesDirectories: {
       "": [{ name: "Mapped notes", path: "/data/external-notes" }],
-      "/data/external-notes": [{ name: "Work", path: "/data/external-notes/Work" }],
-      "/data/external-notes/Work": []
+      "/data/external-notes": [
+        { name: "Work", path: "/data/external-notes/Work" },
+        { name: "Family", path: "/data/external-notes/Family" }
+      ],
+      "/data/external-notes/Work": [],
+      "/data/external-notes/Family": []
     },
     peopleNotesFolder: null,
-    peopleDirectories: {
-      "": [{ name: "People", path: "People" }],
-      People: [{ name: "Family", path: "People/Family" }],
-      "People/Family": []
-    },
+    // #2268 — the People screen opens the same chooser as the notes source, so it browses the
+    // list above. Leaving the old People-only folder list out proves nothing falls back to it.
     peopleRefreshResponses: [
       { discovered: 3, projected: 1, ignored: 1, candidates: 1 },
       { error: "People notes folder is unavailable" }
@@ -126,15 +127,18 @@ async function choosePeopleFamily(page: Page, keyboard = false): Promise<void> {
   } else {
     await choose.click();
   }
-  const root = page.locator(".vroot").filter({ hasText: "People" });
+  // #2268 — this is the shared chooser, so it opens on the same heading and the same list of
+  // available folders the notes source browses.
+  await expect(page.getByText("Choose a People folder", { exact: true })).toBeVisible();
+  const root = page.locator(".vroot").filter({ hasText: "Mapped notes" });
   await activate(root, keyboard);
-  const child = page.getByRole("button", { name: /Family/ });
+  const child = page.locator(".vitem").filter({ hasText: "Family" });
   await activate(child, keyboard);
   const use = page.getByRole("button", { name: "Use this folder" });
   await expect(use).toBeEnabled();
   await activate(use, keyboard);
   await expect(
-    page.locator(".set-row__control").filter({ hasText: "People/Family" })
+    page.locator(".set-row__control").filter({ hasText: "/data/external-notes/Family" })
   ).toBeVisible();
 }
 

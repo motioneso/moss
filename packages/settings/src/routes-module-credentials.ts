@@ -29,7 +29,10 @@ import type { ExternalModuleAuditWriter } from "./repository-external-modules.js
 import { handleRouteError } from "./routes-serializers.js";
 import type { SettingsRoutesDependencies } from "./routes.js";
 
-// Same ctx shape as ModuleRoutesContext (routes-modules.ts), plus the cipher.
+// Same ctx shape as ModuleRoutesContext (routes-modules.ts), plus the cipher
+// resolver. The cipher is resolved per request, never built once at boot: the
+// family key can rotate under a running process, and a held cipher would keep
+// the pre-rotation key indefinitely (#2322 slice 2).
 export interface ModuleCredentialRoutesContext {
   readonly dependencies: SettingsRoutesDependencies;
   readonly repository: SettingsRepository;
@@ -39,7 +42,7 @@ export interface ModuleCredentialRoutesContext {
     userId: string
   ) => Promise<User>;
   readonly requireRequestId: (accessContext: AccessContext) => string;
-  readonly cipher: ModuleCredentialCipher;
+  readonly resolveCipher: (scopedDb: DataContextDb) => Promise<ModuleCredentialCipher>;
 }
 
 /**
@@ -88,7 +91,7 @@ export function registerModuleCredentialRoutes(
   server: FastifyInstance,
   ctx: ModuleCredentialRoutesContext
 ): void {
-  const { dependencies, repository, assertAdminUser, requireRequestId, cipher } = ctx;
+  const { dependencies, repository, assertAdminUser, requireRequestId, resolveCipher } = ctx;
 
   function writeAudit(scopedDb: DataContextDb): ExternalModuleAuditWriter {
     return (event) => repository.insertAuditEvent(scopedDb, event);
@@ -141,7 +144,7 @@ export function registerModuleCredentialRoutes(
           if (!declaration) throw new HttpError(404, "Unknown credential slot");
           // Plaintext lifetime: this handler frame only. Encrypted before it touches
           // the repository; never logged, never audited, never returned.
-          const envelope = cipher.encryptJson({ value });
+          const envelope = (await resolveCipher(scopedDb)).encryptJson({ value });
           await upsertModuleCredential(
             scopedDb,
             {
@@ -250,7 +253,7 @@ export function registerModuleCredentialRoutes(
           if (declarations === null) throw new HttpError(404, "Unknown module");
           const declaration = findDeclaration(declarations, credentialId);
           if (!declaration) throw new HttpError(404, "Unknown credential slot");
-          const envelope = cipher.encryptJson({ value });
+          const envelope = (await resolveCipher(scopedDb)).encryptJson({ value });
           await upsertModuleCredential(
             scopedDb,
             {

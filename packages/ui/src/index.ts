@@ -36,6 +36,8 @@ export { IconButton } from "./icon-button.js";
 export type { IconButtonProps, IconButtonSize, IconButtonVariant } from "./icon-button.js";
 export { Indicator } from "./indicator.js";
 export type { IndicatorProps, IndicatorStatus } from "./indicator.js";
+export { InfoTip } from "./info-tip.js";
+export type { InfoTipProps } from "./info-tip.js";
 export { LegendSwatch } from "./legend-swatch.js";
 export type { LegendSwatchProps, LegendSwatchTone } from "./legend-swatch.js";
 export { Masthead, MastheadClock, MastheadDateline } from "./masthead.js";

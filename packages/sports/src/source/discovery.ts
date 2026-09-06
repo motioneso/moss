@@ -26,7 +26,7 @@ import {
   type SportsRecipeItem,
   type SportsSourceRecipe
 } from "./recipe.js";
-import { sameSportsPublisher } from "./publisher-identity.js";
+import { publisherIdentity, sameSportsPublisher } from "./publisher-identity.js";
 import {
   parseSubredditInput,
   readSubreddit,
@@ -859,9 +859,9 @@ async function resolveSubredditInput(
   if (targets.some((target) => target.exactTargetUrl)) {
     return { status: "rejected", reason: "invalid_input" };
   }
-  const read = await readSubreddit(fetch, name);
+  const read = await readSubreddit(fetch, name, { publisherDomain: publisherIdentity });
   if (!read.ok) return { status: "rejected", reason: read.reason };
-  const displayName = subredditNameFromUrl(read.listingUrl) ?? read.subreddit.displayName;
+  const displayName = subredditNameFromUrl(read.feedUrl) ?? read.subreddit.displayName;
   const checkedAt = new Date().toISOString();
   const samples: SportsRecipeItem[] = read.headlines
     .slice(0, REDDIT_PREVIEW_SAMPLES)
@@ -877,10 +877,10 @@ async function resolveSubredditInput(
       label: `r/${displayName}`,
       canonicalDomain: REDDIT_CANONICAL_DOMAIN,
       homepageUrl: redditSubredditUrl(displayName),
-      feedUrl: read.listingUrl,
+      feedUrl: read.feedUrl,
       retrievalMethod: "reddit",
       sampleCount: read.headlines.length,
-      validationFingerprint: createHash("sha256").update(read.listingUrl).digest("hex"),
+      validationFingerprint: createHash("sha256").update(read.feedUrl).digest("hex"),
       recipe: null,
       recipeFingerprint: null,
       iconUrl: read.subreddit.iconUrl,
@@ -889,7 +889,7 @@ async function resolveSubredditInput(
       samples,
       targets: targets.map((target) => ({
         ...target,
-        targetUrl: read.listingUrl,
+        targetUrl: read.feedUrl,
         parameters: {},
         samples,
         checkedAt

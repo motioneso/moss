@@ -127,3 +127,112 @@ describe("parseTranscript — #2164 r21 correction: rejected mcp__ call is repor
     expect(rejectedEvent).toBeUndefined();
   });
 });
+
+// ─── #2228: sources from the CLI's own web search ─────────────────────────────────────────────
+describe("parseTranscript — #2228 web search sources", () => {
+  function sourcesOf(result: ReturnType<typeof parseTranscript>) {
+    return result.events.flatMap(
+      (e) => (e as { sources?: readonly { title: string; url: string }[] }).sources ?? []
+    );
+  }
+
+  it("reads a Claude WebSearch result's pages from the record's toolUseResult", () => {
+    const jsonl =
+      assistantLine({
+        stopReason: "tool_use",
+        content: [{ type: "tool_use", id: "toolu_ws1", name: "WebSearch", input: { query: "q" } }]
+      }) +
+      "\n" +
+      JSON.stringify({
+        type: "user",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_ws1",
+              content: "Web search results for query: q"
+            }
+          ]
+        },
+        toolUseResult: {
+          query: "q",
+          results: [
+            {
+              tool_use_id: "srvtoolu_1",
+              content: [
+                { title: "First page", url: "https://example.com/a" },
+                { title: "Second page", url: "https://example.com/b" },
+                { title: "Repeat", url: "https://example.com/a" }
+              ]
+            },
+            "Some summary text"
+          ]
+        },
+        uuid: "u3",
+        timestamp: "2026-09-05T00:00:00.000Z"
+      }) +
+      "\n";
+    const result = parseTranscript("anthropic", jsonl, 0);
+    expect(sourcesOf(result)).toEqual([
+      { title: "First page", url: "https://example.com/a" },
+      { title: "Second page", url: "https://example.com/b" }
+    ]);
+    const sourced = result.events.find((e) => (e as { sources?: unknown }).sources) as
+      | { toolCallId?: string; rejected?: boolean }
+      | undefined;
+    expect(sourced?.toolCallId).toBe("toolu_ws1");
+    expect(sourced?.rejected).toBeUndefined();
+  });
+
+  it("falls back to the Links list inside the tool_result text", () => {
+    const text =
+      'Web search results for query: "q"\n\nLinks: [{"title":"Only page","url":"https://example.com/only"}]\n\nSummary.';
+    const jsonl =
+      JSON.stringify({
+        type: "user",
+        message: {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "toolu_ws2", content: [{ type: "text", text }] }
+          ]
+        },
+        uuid: "u4",
+        timestamp: "2026-09-05T00:00:01.000Z"
+      }) + "\n";
+    const result = parseTranscript("anthropic", jsonl, 0);
+    expect(sourcesOf(result)).toEqual([{ title: "Only page", url: "https://example.com/only" }]);
+  });
+
+  it("emits no source event for a successful tool_result without pages", () => {
+    const jsonl = userToolResultLine({ toolUseId: "toolu_04", isError: false }) + "\n";
+    const result = parseTranscript("anthropic", jsonl, 0);
+    expect(result.events).toEqual([]);
+  });
+
+  it("maps codex exec web_search items: opened pages become sources, a bare search does not", () => {
+    const item = (action: Record<string, unknown>, id: string) =>
+      JSON.stringify({
+        type: "item.completed",
+        item: { id, type: "web_search", query: "q", action }
+      });
+    const jsonl =
+      [
+        item({ type: "search", query: "q" }, "ws_1"),
+        item({ type: "open_page", url: "https://example.com/page" }, "ws_2"),
+        item({ type: "find_in_page", url: "https://example.com/page", pattern: "x" }, "ws_3"),
+        JSON.stringify({
+          type: "item.completed",
+          item: { id: "msg_1", type: "agent_message", text: "done" }
+        })
+      ].join("\n") + "\n";
+    const result = parseTranscript("openai-compatible", jsonl, 0);
+    const toolEvents = result.events.filter((e) => e.kind === "tool");
+    expect(toolEvents).toHaveLength(3);
+    expect(sourcesOf(result)).toEqual([
+      { title: "https://example.com/page", url: "https://example.com/page" },
+      { title: "https://example.com/page", url: "https://example.com/page" }
+    ]);
+    expect(result.reply).toBe("done");
+  });
+});

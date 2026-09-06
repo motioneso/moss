@@ -520,27 +520,27 @@ export default function NewsSettings() {
     <>
       <PaneHead
         title="News"
-        desc="Pick the publications your front page draws from, and optionally narrow it to the topics you follow. These choices also shape news in briefings."
+        desc="Pick the sources your front page draws from, and optionally narrow it to the topics you follow. These choices also shape news in briefings."
       />
 
       <section className="nw-set" aria-label="Topics">
         <div className="nw-set__head">
           <h2 className="jds-section-title">Topics</h2>
           <p className="jds-section-sub">
-            Follow desks from your publications or describe interests and exclusions across the web.
+            Follow desks from your sources or describe interests and exclusions across the web.
           </p>
         </div>
 
         <div className="nw-set__group">
           <div className="nw-set__group-head">
             <h3 className="nw-set__subheading">
-              <span>Topics from your publications</span>
+              <span>Topics from your sources</span>
               {topics.length > 0 ? <Badge tone="neutral">{topics.length}</Badge> : null}
             </h3>
           </div>
           <p className="nw-set__hint">
-            Narrow your enabled publications to these desks. With none followed you get each
-            publication&rsquo;s general front page.
+            Narrow your enabled sources to these desks. With none followed you get each
+            source&rsquo;s general front page.
           </p>
           <div className="nw-set__chips">
             {topics.map((topic: NewsTopicOption) => {
@@ -571,6 +571,16 @@ export default function NewsSettings() {
           <p className="nw-set__hint">
             Freeform topics in your own words, including guidance on what to include or leave out.
           </p>
+          {availability ? (
+            <p className="nw-set__prereq">
+              <Badge tone={availability.aiConfigured ? "pine" : "amber"} dot>
+                AI model {availability.aiConfigured ? "ready" : "needed"}
+              </Badge>
+              <Badge tone={availability.webSearchConfigured ? "pine" : "amber"} dot>
+                Web search {availability.webSearchConfigured ? "ready" : "needed"}
+              </Badge>
+            </p>
+          ) : null}
           {personalizationReady ? (
             <DescribeTopics
               customTopics={customTopics}
@@ -586,7 +596,7 @@ export default function NewsSettings() {
         <div className="nw-set__head">
           <h2 className="jds-section-title">Publishers</h2>
           <p className="jds-section-sub">
-            Choose built-in publications, connect accounts, add your own, or exclude domains.
+            Choose built-in sources, connect accounts, add your own, or exclude domains.
           </p>
         </div>
 
@@ -595,7 +605,7 @@ export default function NewsSettings() {
         <div className="nw-set__group">
           <div className="nw-set__group-head">
             <h3 className="nw-set__subheading">
-              <span>Built-in publications</span>
+              <span>Built-in sources</span>
               <Badge tone="neutral">{sources.length}</Badge>
             </h3>
           </div>
@@ -641,20 +651,18 @@ export default function NewsSettings() {
           <div className="nw-set__group">
             <div className="nw-set__group-head">
               <h3 className="nw-set__subheading">
-                <span>Publications you add</span>
+                <span>Sources you add</span>
                 <Badge tone="neutral">{customSources.length}</Badge>
               </h3>
             </div>
             <p className="nw-set__hint">
-              Publications you add yourself, verified before they join your feed.
+              Sources you add yourself, verified before they join your feed. Verified sources
+              contribute recent headlines to News and briefings.
             </p>
             {availability ? (
               <p className="nw-set__prereq">
                 <Badge tone={availability.aiConfigured ? "pine" : "amber"} dot>
                   AI model {availability.aiConfigured ? "ready" : "needed"}
-                </Badge>
-                <Badge tone={availability.webSearchConfigured ? "pine" : "amber"} dot>
-                  Web search {availability.webSearchConfigured ? "ready" : "needed"}
                 </Badge>
               </p>
             ) : null}

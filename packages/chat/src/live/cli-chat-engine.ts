@@ -107,7 +107,9 @@ export {
   SESSION_PREFIX
 } from "./cli-session-lifecycle.js";
 export {
+  invalidateProviderProbeCache,
   probeProvider,
+  recordProviderLoginRejected,
   type ProbeProviderResult,
   type ProbeProviderStatus
 } from "./provider-probe.js";
@@ -471,7 +473,8 @@ export class CliChatEngineImpl implements CliChatEngine {
 
     const records: TranscriptRecord[] = parsed.events.map((e) => ({
       kind: e.kind as ChatRecordKind,
-      text: e.text
+      text: e.text,
+      ...(e.sources ? { sources: e.sources } : {})
     }));
     if (parsed.complete && parsed.reply !== null) {
       records.push({ kind: "reply", text: parsed.reply });

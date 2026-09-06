@@ -66,6 +66,7 @@ const CREATED_SOURCE: NewsCustomSourceDto = {
   homepageUrl: "https://wire.example.com",
   feedUrl: null,
   retrievalMethod: "scrape",
+  workaround: false,
   validationStatus: "approved",
   healthStatus: "healthy",
   createdAt: "2026-08-27T09:00:00.000Z"
@@ -227,6 +228,7 @@ function buildApp(
     connections?: NewsPublisherConnectionPort;
     sources?: FakeSources;
     credentials?: FakeCredentials;
+    resolveCipher?: () => Promise<NewsCredentialCipherPort | null>;
   } = {}
 ) {
   const recorder = overrides.recorder ?? makeRecorder();
@@ -236,7 +238,7 @@ function buildApp(
   const dependencies: NewsCredentialRouteDependencies = {
     dataContext: makeDataContext(recorder),
     resolveAccessContext: async () => ACTOR,
-    cipher: makeCipher(recorder),
+    resolveCipher: overrides.resolveCipher ?? (async () => makeCipher(recorder)),
     connections: overrides.connections ?? makeConnections(recorder),
     sources,
     boss: null,
@@ -281,6 +283,20 @@ describe("news credential routes (#2005)", () => {
     // The key was checked before it was encrypted, and encrypted before it was stored.
     expect(recorder.validated).toEqual([SUBMITTED_KEY]);
     expect(recorder.encrypted).toEqual([SUBMITTED_KEY]);
+    await app.close();
+  });
+
+  it("pauses with setup guidance when the family key exists nowhere", async () => {
+    const { app, sources, credentials } = buildApp({ resolveCipher: async () => null });
+    await app.ready();
+
+    const res = await connect(app);
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toContain("Encryption keys");
+    expect(res.body).not.toContain(SUBMITTED_KEY);
+    expect(sources.created).toBe(0);
+    expect(credentials.inserted).toBe(0);
     await app.close();
   });
 

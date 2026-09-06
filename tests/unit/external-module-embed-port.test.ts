@@ -35,7 +35,6 @@ describe("external worker ctx.embed port (#1281)", () => {
       actorUserId: randomUUID(),
       requestId: randomUUID(),
       workerDataContext: null as unknown as DataContextRunner,
-      cipher: null as never,
       isActorAdmin: async () => false,
       embeddingProvider: async () => provider
     });

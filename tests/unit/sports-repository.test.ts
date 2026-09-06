@@ -11,12 +11,14 @@ describe("SportsFollowsRepository", () => {
       id: "11111111-1111-4111-8111-111111111111",
       competition_key: "nfl",
       team_key: "dal",
+      source_team_id: "6",
       created_at: new Date("2026-01-04T17:30:00.000Z")
     });
     expect(dto).toEqual({
       id: "11111111-1111-4111-8111-111111111111",
       competitionKey: "nfl",
       teamKey: "dal",
+      sourceTeamId: "6",
       createdAt: "2026-01-04T17:30:00.000Z"
     });
   });
@@ -26,16 +28,19 @@ describe("SportsFollowsRepository", () => {
       id: "22222222-2222-4222-8222-222222222222",
       competition_key: "eng.1",
       team_key: null,
+      source_team_id: null,
       created_at: new Date("2026-01-04T00:00:00.000Z")
     });
     expect(dto.teamKey).toBeNull();
+    expect(dto.sourceTeamId).toBeNull();
     expect(dto.competitionKey).toBe("eng.1");
   });
 
-  it("exposes list/create/remove methods", () => {
+  it("exposes list/create/setSourceTeamId/remove methods", () => {
     const repo = new SportsFollowsRepository();
     expect(typeof repo.list).toBe("function");
     expect(typeof repo.create).toBe("function");
+    expect(typeof repo.setSourceTeamId).toBe("function");
     expect(typeof repo.remove).toBe("function");
   });
 });

@@ -19,6 +19,7 @@ const surfaces: GeneratedSettingsSurface[] = [
     moduleName: "Fixture",
     id: "fixture.settings",
     label: "Fixture",
+    description: "Configure the fixture module.",
     path: "/settings/modules/fixture",
     scope: "user",
     order: 10,
