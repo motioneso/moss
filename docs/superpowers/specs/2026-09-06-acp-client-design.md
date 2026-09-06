@@ -105,12 +105,12 @@ only `actorUserId` and `requestId` by ruling.
 
 **Capabilities advertised to the agent.**
 
-| capability | chat | Workshop | why |
-|---|---|---|---|
-| `fs/read_text_file`, `fs/write_text_file` | no | no | v2 removes client file access; serve files as Moss tools scoped to the project folder instead, so the v2 migration does not touch file handling |
-| `terminal/*` | no | no (see fork A) | same reason; commands run through a Moss tool that executes inside the sandbox |
-| agent built-in shell / file-write | off | on, inside project folder | condition 3 |
-| agent built-in read / search / web | on | on | spike third condition |
+| capability                                | chat | Workshop                  | why                                                                                                                                             |
+| ----------------------------------------- | ---- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fs/read_text_file`, `fs/write_text_file` | no   | no                        | v2 removes client file access; serve files as Moss tools scoped to the project folder instead, so the v2 migration does not touch file handling |
+| `terminal/*`                              | no   | no (see fork A)           | same reason; commands run through a Moss tool that executes inside the sandbox                                                                  |
+| agent built-in shell / file-write         | off  | on, inside project folder | condition 3                                                                                                                                     |
+| agent built-in read / search / web        | on   | on                        | spike third condition                                                                                                                           |
 
 **Fork A — how the Workshop runs commands. Decided (review, 2026-09-06): (1).** A Moss tool runs
 the command inside the project sandbox and streams output, v2-proof and audited like every other
@@ -163,12 +163,12 @@ request finished in 16 s with exactly one event written. Not a broken tool; mism
 An agent may be offered on a surface only if it meets that surface's row. Checked at adapter
 start, not assumed.
 
-| requirement | chat | Workshop | Claude Code (via ACP adapter) | Gemini CLI |
-|---|---|---|---|---|
-| ACP v1 `initialize`, `session/new`, `session/prompt`, streaming updates, cancel | yes | yes | yes | yes |
-| accepts `mcpServers` over HTTP with headers at session start | yes | yes | yes | yes |
-| built-in shell and file-write tools can be switched off by the client | yes | no | yes (base tool list, confirmed in source) | no (ignores the setting) |
-| runs headless with a stored login | yes | yes | yes | blocked on this box (needs interactive login) |
+| requirement                                                                     | chat | Workshop | Claude Code (via ACP adapter)             | Gemini CLI                                    |
+| ------------------------------------------------------------------------------- | ---- | -------- | ----------------------------------------- | --------------------------------------------- |
+| ACP v1 `initialize`, `session/new`, `session/prompt`, streaming updates, cancel | yes  | yes      | yes                                       | yes                                           |
+| accepts `mcpServers` over HTTP with headers at session start                    | yes  | yes      | yes                                       | yes                                           |
+| built-in shell and file-write tools can be switched off by the client           | yes  | no       | yes (base tool list, confirmed in source) | no (ignores the setting)                      |
+| runs headless with a stored login                                               | yes  | yes      | yes                                       | blocked on this box (needs interactive login) |
 
 Result today: Claude Code on both surfaces; Gemini CLI Workshop-only, and only once it has a
 login. Codex and others are added by filling in a row, not by editing code paths.
