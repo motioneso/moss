@@ -53,7 +53,7 @@ Read from `feat/workshop-projects-phase-a` on 2026-09-05. Nothing here is on `ma
   (POST `/api/workshop/projects`, requires `requestKey`, `title`, `initialRequest`), list, get,
   list messages, save message. No rename, no delete, no build attached to a project.
 - **Contract** (`packages/shared/src/workshop-api.ts`): `WorkshopProject { id, title,
-  initialRequest, context, createdAt, updatedAt }`; `ModuleBuildStatus` has seven values
+initialRequest, context, createdAt, updatedAt }`; `ModuleBuildStatus` has seven values
   (planning, awaiting_plan_approval, building, awaiting_change, ready, failed, cancelled);
   `ModuleBuildPlan` has five parts (what it does, what it reaches, what it keeps, when it runs,
   rough cost), not numbered steps.
@@ -222,8 +222,7 @@ Files:
   the green tone, eyebrow, "Your projects" and the lede from the mockup; the list as the row index;
   each row: name (link), the opening request as the excerpt, and at the right a `jds-badge` state
   chip and the date of last activity. In this slice every project is "Talking it through"
-  (neutral), because no build is attached to a project yet; the full state table arrives in slice
-  8. Remove the "Earlier builds and installed modules" footer link. Remove the copy that leans on
+  (neutral), because no build is attached to a project yet; the full state table arrives in slice 8. Remove the "Earlier builds and installed modules" footer link. Remove the copy that leans on
   privacy.
 - Delete `packages/workshop/src/web/workshop-page.tsx`, `workshop-groups.tsx`, the `legacy` route
   in `project-routes.tsx`, and the three unit tests that cover them

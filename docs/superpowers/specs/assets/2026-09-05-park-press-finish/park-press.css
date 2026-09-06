@@ -9,20 +9,32 @@
  * a CDN @import is what tripped the content-security policy on 2026-08-01.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&display=swap");
 
 /* ============================================================
    1. THE DISPLAY FACE — the thing Park Press never shipped
    ============================================================ */
 
-html[data-face="archivo"]  { --font-display: "Archivo", var(--font-sans); }
-html[data-face="space"]    { --font-display: "Space Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif; }
-html[data-face="bricolage"]{ --font-display: "Bricolage Grotesque", "Helvetica Neue", Helvetica, Arial, sans-serif; }
-html[data-face="none"]     { --font-display: var(--font-sans); }
+html[data-face="archivo"] {
+  --font-display: "Archivo", var(--font-sans);
+}
+html[data-face="space"] {
+  --font-display: "Space Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+html[data-face="bricolage"] {
+  --font-display: "Bricolage Grotesque", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+html[data-face="none"] {
+  --font-display: var(--font-sans);
+}
 
-html { --font-display: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+html {
+  --font-display: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
 
-h1, h2, h3,
+h1,
+h2,
+h3,
 .workshop-project-card__title,
 .jds-card__title,
 .jds-empty__title,
@@ -55,7 +67,9 @@ html[data-ground="sage"]:not([data-color-mode="dark"]) {
   --border-subtle: #dde1d3;
 }
 
-html[data-ground="oat"] { /* today's colour, for comparison */ }
+html[data-ground="oat"] {
+  /* today's colour, for comparison */
+}
 
 /* ============================================================
    3. THE MASTHEAD — Park Press's reversed feature block
@@ -87,8 +101,12 @@ html[data-masthead="on"] {
   --masthead-action-bg: var(--gold);
   --masthead-action-fg: #241a06;
 }
-html[data-masthead="on"][data-theme="canyon"] { --masthead-fg-muted: rgba(237, 229, 210, 0.9); }
-html[data-masthead="on"][data-theme="teal"]   { --masthead-fg-muted: var(--masthead-fg); }
+html[data-masthead="on"][data-theme="canyon"] {
+  --masthead-fg-muted: rgba(237, 229, 210, 0.9);
+}
+html[data-masthead="on"][data-theme="teal"] {
+  --masthead-fg-muted: var(--masthead-fg);
+}
 html[data-masthead="on"][data-color-mode="dark"] {
   --masthead-bg: var(--forest-soft);
   --masthead-accent: var(--gold-ink);
@@ -232,12 +250,19 @@ html[data-grid="keyline"] .workshop-project-card__foot {
    ends on its own rule. */
 
 /* The lede should not be squeezed into a narrow column by the action button. */
-html[data-masthead="on"] .workshop-project-heading__text { flex: 1 1 40ch; }
-html[data-masthead="on"] .workshop-project-heading .workshop-lede { max-width: 60ch; }
+html[data-masthead="on"] .workshop-project-heading__text {
+  flex: 1 1 40ch;
+}
+html[data-masthead="on"] .workshop-project-heading .workshop-lede {
+  max-width: 60ch;
+}
 
 /* The bar above already says "The Workshop"; the masthead says it louder.
    Let the small one step back rather than compete. */
-html[data-masthead="on"] .topbar-title { color: var(--text-subtle); font-weight: 500; }
+html[data-masthead="on"] .topbar-title {
+  color: var(--text-subtle);
+  font-weight: 500;
+}
 
 html[data-masthead="on"] .workshop-project-footer a {
   font-size: var(--text-sm);
@@ -403,7 +428,9 @@ html[data-masthead="on"] .workshop-back {
    internal distinction the reader has no reason to hold. Hidden here so the
    page ends cleanly; the real screen needs a decision on where that route
    lives. */
-html[data-masthead="on"] .workshop-project-footer { display: none; }
+html[data-masthead="on"] .workshop-project-footer {
+  display: none;
+}
 
 /* ============================================================
    10. THE PROJECT WORKSPACE AS A CHAT WINDOW
@@ -474,7 +501,10 @@ html[data-masthead="on"] .workshop-project-detail > .workshop-project-pane:first
   min-width: 0;
 }
 
-html[data-masthead="on"] .workshop-project-detail > .workshop-project-pane + .workshop-project-pane {
+html[data-masthead="on"]
+  .workshop-project-detail
+  > .workshop-project-pane
+  + .workshop-project-pane {
   flex: 0 0 clamp(320px, 26vw, 460px);
 }
 
@@ -577,8 +607,7 @@ html[data-masthead="on"] .workshop-project-pane > form {
   flex: 0 0 auto;
   gap: 0;
   --gutter: clamp(1rem, 2.5vw, 2rem);
-  padding: clamp(0.75rem, 1.6vw, 1.15rem) var(--gutter)
-           clamp(1rem, 2vw, 1.4rem);
+  padding: clamp(0.75rem, 1.6vw, 1.15rem) var(--gutter) clamp(1rem, 2vw, 1.4rem);
   border-top: 1px solid var(--border);
   background: var(--surface);
   display: block;
@@ -647,7 +676,6 @@ html[data-masthead="on"] .workshop-project-pane + .workshop-project-pane .jds-em
    place to type, and the project takes its name from what you
    write. No separate form to fill in first.
    ============================================================ */
-
 
 html[data-masthead="on"] .workshop-project-messages .jds-empty {
   margin: auto;
@@ -1097,7 +1125,8 @@ html[data-masthead="on"] .workshop-project-detail > .workshop-project-pane.works
   border-left: 0;
 }
 
-html[data-masthead="on"] .workshop-project-detail:has(.workshop-artifact--wide)
+html[data-masthead="on"]
+  .workshop-project-detail:has(.workshop-artifact--wide)
   > .workshop-project-pane:first-child {
   display: none;
 }
@@ -1117,13 +1146,19 @@ html[data-masthead="on"] .workshop-project-detail:has(.workshop-artifact--wide)
    not a fixed number.
    ============================================================ */
 
-html[data-masthead="on"] .workshop-project-detail > .workshop-project-pane.workshop-artifact--design,
+html[data-masthead="on"]
+  .workshop-project-detail
+  > .workshop-project-pane.workshop-artifact--design,
 html[data-masthead="on"] .workshop-project-detail > .workshop-project-pane.workshop-artifact--show {
   flex: 1 1 auto;
 }
 
-html[data-masthead="on"] .workshop-project-detail:has(.workshop-artifact--design) > .workshop-project-pane:first-child,
-html[data-masthead="on"] .workshop-project-detail:has(.workshop-artifact--show) > .workshop-project-pane:first-child {
+html[data-masthead="on"]
+  .workshop-project-detail:has(.workshop-artifact--design)
+  > .workshop-project-pane:first-child,
+html[data-masthead="on"]
+  .workshop-project-detail:has(.workshop-artifact--show)
+  > .workshop-project-pane:first-child {
   flex: 0 0 clamp(300px, 26vw, 400px);
   min-width: 0;
 }
@@ -1166,7 +1201,9 @@ html[data-masthead="on"] .workshop-design__frame {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;
-  box-shadow: 0 1px 0 var(--border-subtle), 0 10px 24px -18px rgba(31, 27, 20, 0.5);
+  box-shadow:
+    0 1px 0 var(--border-subtle),
+    0 10px 24px -18px rgba(31, 27, 20, 0.5);
   padding: clamp(0.9rem, 1.6vw, 1.4rem);
   overflow: hidden;
 }
@@ -1197,7 +1234,9 @@ html[data-masthead="on"] .workshop-design__screen figcaption span {
    language the Files list uses. */
 html[data-masthead="on"] .workshop-design__screen.is-new .workshop-design__frame {
   border-color: var(--gold);
-  box-shadow: inset 3px 0 0 var(--gold), 0 10px 24px -18px rgba(31, 27, 20, 0.5);
+  box-shadow:
+    inset 3px 0 0 var(--gold),
+    0 10px 24px -18px rgba(31, 27, 20, 0.5);
 }
 
 html[data-masthead="on"] .workshop-design__screen.is-new figcaption::after {
@@ -1436,7 +1475,9 @@ html[data-masthead="on"] .topbar-rename__input {
 
 /* Hide the meta before the top bar gets tight. */
 @media (max-width: 900px) {
-  html[data-masthead="on"] .topbar-crumb__meta { display: none; }
+  html[data-masthead="on"] .topbar-crumb__meta {
+    display: none;
+  }
 }
 
 /* ============================================================
@@ -1496,7 +1537,9 @@ html[data-masthead="on"] .workshop-open__eg button {
   border-radius: 999px;
   padding: 0.45rem 0.9rem;
   cursor: pointer;
-  transition: border-color 0.12s ease, color 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 
 html[data-masthead="on"] .workshop-open__eg button:hover {
@@ -1508,11 +1551,16 @@ html[data-masthead="on"] .workshop-open__eg button:hover {
    any project before Moss has made anything - the text keeps a
    reading measure instead of running the full window. The moment
    the panel appears the column is narrow enough to need it all. */
-html[data-masthead="on"] .workshop-project-detail:not(:has(.workshop-artifact)) .workshop-project-pane > form {
+html[data-masthead="on"]
+  .workshop-project-detail:not(:has(.workshop-artifact))
+  .workshop-project-pane
+  > form {
   --gutter: max(clamp(1rem, 2.5vw, 2rem), calc((100% - 56rem) / 2));
 }
 
-html[data-masthead="on"] .workshop-project-detail:not(:has(.workshop-artifact)) .workshop-project-messages {
+html[data-masthead="on"]
+  .workshop-project-detail:not(:has(.workshop-artifact))
+  .workshop-project-messages {
   padding-left: max(clamp(1rem, 2.5vw, 2rem), calc((100% - 56rem) / 2));
   padding-right: max(clamp(1rem, 2.5vw, 2rem), calc((100% - 56rem) / 2));
 }

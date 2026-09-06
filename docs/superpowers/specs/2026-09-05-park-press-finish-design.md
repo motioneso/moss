@@ -76,13 +76,13 @@ becomes Archivo followed by `var(--font-sans)`, never a hand-typed list.
 
 ### Page colour: bone
 
-| Token | Today | New |
-| --- | --- | --- |
-| `--paper` | `#ece4d1` (oat) | `#f2eee4` (bone) |
-| `--surface` | `#f6f0e1` | `#fffdf7` |
-| `--surface-2` | `#e3dac4` | `#f7f3e9` |
-| `--border` | alias of `--line`, ink at 11% | `#d9d1bf` |
-| `--border-subtle` | alias of `--line-subtle`, ink at 6% | `#e6dfd0` |
+| Token             | Today                               | New              |
+| ----------------- | ----------------------------------- | ---------------- |
+| `--paper`         | `#ece4d1` (oat)                     | `#f2eee4` (bone) |
+| `--surface`       | `#f6f0e1`                           | `#fffdf7`        |
+| `--surface-2`     | `#e3dac4`                           | `#f7f3e9`        |
+| `--border`        | alias of `--line`, ink at 11%       | `#d9d1bf`        |
+| `--border-subtle` | alias of `--line-subtle`, ink at 6% | `#e6dfd0`        |
 
 The old flatness came from page and card being nearly the same oat. Bone plus warm-white surfaces
 gives a card something to sit on.
@@ -134,14 +134,14 @@ custom themes a user makes in Settings. Each of those re-points `--forest` and i
 the masthead may name a colour, only these tokens, which `tokens.css` defines beside the rail's
 (`--rail-bg`, `--rail-fg`), the one committed colour field the app already has:
 
-| Token | What it colours | Light, default | Light, Sage / Canyon / Teal / Dusk | Dark, with any theme |
-| --- | --- | --- | --- | --- |
-| `--masthead-bg` | the field | `var(--forest)` = `#294b39` | `var(--forest)` as the theme sets it: `#4a5d3a` / `#8a4b2b` / `#2f6d6a` / `#4b4a63` | `var(--forest-soft)`: `#22392c` default, `#293624` / `#432b20` / `#203937` / `#302f43` |
-| `--masthead-fg` | heading and lede | `var(--rail-fg)` = `#ede5d2`, the off-white already on the green rail | same | same |
-| `--masthead-fg-muted` | quieter text: meta, dates | `rgba(237, 229, 210, 0.85)` | Sage and Dusk `0.85`; Canyon `0.9`; Teal has no wash that passes and falls back to `var(--masthead-fg)` | `rgba(237, 229, 210, 0.85)` |
-| `--masthead-accent` | the eyebrow, and "just added" marks | `var(--gold-soft)` = `#f1e2c2` | same | `var(--gold-ink)` = `#ecca8b` |
-| `--masthead-rule` | the rule along the bottom | `var(--gold)` = `#c2872b` | same | `var(--gold)` = `#d9a04b` |
-| `--masthead-action-bg`, `--masthead-action-fg` | the one button on the field ("New project") | `var(--gold)`, `#241a06` | same | same: gold is light enough for dark ink in both modes |
+| Token                                          | What it colours                             | Light, default                                                        | Light, Sage / Canyon / Teal / Dusk                                                                      | Dark, with any theme                                                                   |
+| ---------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `--masthead-bg`                                | the field                                   | `var(--forest)` = `#294b39`                                           | `var(--forest)` as the theme sets it: `#4a5d3a` / `#8a4b2b` / `#2f6d6a` / `#4b4a63`                     | `var(--forest-soft)`: `#22392c` default, `#293624` / `#432b20` / `#203937` / `#302f43` |
+| `--masthead-fg`                                | heading and lede                            | `var(--rail-fg)` = `#ede5d2`, the off-white already on the green rail | same                                                                                                    | same                                                                                   |
+| `--masthead-fg-muted`                          | quieter text: meta, dates                   | `rgba(237, 229, 210, 0.85)`                                           | Sage and Dusk `0.85`; Canyon `0.9`; Teal has no wash that passes and falls back to `var(--masthead-fg)` | `rgba(237, 229, 210, 0.85)`                                                            |
+| `--masthead-accent`                            | the eyebrow, and "just added" marks         | `var(--gold-soft)` = `#f1e2c2`                                        | same                                                                                                    | `var(--gold-ink)` = `#ecca8b`                                                          |
+| `--masthead-rule`                              | the rule along the bottom                   | `var(--gold)` = `#c2872b`                                             | same                                                                                                    | `var(--gold)` = `#d9a04b`                                                              |
+| `--masthead-action-bg`, `--masthead-action-fg` | the one button on the field ("New project") | `var(--gold)`, `#241a06`                                              | same                                                                                                    | same: gold is light enough for dark ink in both modes                                  |
 
 Why these and not the mockup's literals: in dark mode `--forest` is a light tint for text duty
 (`#65b889` in the default dark theme), and light text on it reads 1.9:1, so the dark field is the
@@ -156,14 +156,14 @@ special case.
 contrast arithmetic (the `contrastRatio` in the appearance pane), transparency composited onto the
 field, small text needing 4.5:1:
 
-| Theme | Heading and lede on the field | Quieter text | Eyebrow | Rule (decorative) |
-| --- | --- | --- | --- | --- |
-| Light, default | 7.8 | 6.1 | 7.6 | 3.1 |
-| Light, Sage | 5.7 | 4.7 | 5.6 | 2.3 |
-| Light, Canyon | 5.4 | 4.7 | 5.3 | 2.2 |
-| Light, Teal | 4.8 | 4.8 | 4.7 | 1.9 |
-| Light, Dusk | 6.8 | 5.5 | 6.7 | 2.8 |
-| Dark, any theme | 9.8 to 10.4 | 7.6 to 8.0 | 7.9 to 8.3 | 5.3 to 5.7 |
+| Theme           | Heading and lede on the field | Quieter text | Eyebrow    | Rule (decorative) |
+| --------------- | ----------------------------- | ------------ | ---------- | ----------------- |
+| Light, default  | 7.8                           | 6.1          | 7.6        | 3.1               |
+| Light, Sage     | 5.7                           | 4.7          | 5.6        | 2.3               |
+| Light, Canyon   | 5.4                           | 4.7          | 5.3        | 2.2               |
+| Light, Teal     | 4.8                           | 4.8          | 4.7        | 1.9               |
+| Light, Dusk     | 6.8                           | 5.5          | 6.7        | 2.8               |
+| Dark, any theme | 9.8 to 10.4                   | 7.6 to 8.0   | 7.9 to 8.3 | 5.3 to 5.7        |
 
 The check a builder runs: a unit test in `tests/unit/` reads `apps/web/src/styles/tokens.css`,
 resolves the masthead tokens for every theme block in it (the default, the four accent themes, dark,
@@ -246,17 +246,17 @@ and fills as projects are made; nothing is carried over from anywhere. Newest ac
 grouping. Each row has the name, the opening request as the excerpt, and
 at the right the state and the date of the last activity:
 
-| Where the project is | The row says |
-| --- | --- |
-| Conversation only, nothing made yet | Talking it through |
-| Moss writing the plan | Moss is planning |
-| Plan or design waiting for your approval, or Moss asked you something | Waiting on you (gold dot) |
-| Plan approved, Moss drawing the screens | Drawing the screens |
-| Building | Building |
-| Built, checks passed, not installed | Built, not installed (gold dot) |
-| Build failed | Build failed (red dot) |
-| You pressed Stop | Stopped |
-| Installed | Installed (green dot) |
+| Where the project is                                                  | The row says                    |
+| --------------------------------------------------------------------- | ------------------------------- |
+| Conversation only, nothing made yet                                   | Talking it through              |
+| Moss writing the plan                                                 | Moss is planning                |
+| Plan or design waiting for your approval, or Moss asked you something | Waiting on you (gold dot)       |
+| Plan approved, Moss drawing the screens                               | Drawing the screens             |
+| Building                                                              | Building                        |
+| Built, checks passed, not installed                                   | Built, not installed (gold dot) |
+| Build failed                                                          | Build failed (red dot)          |
+| You pressed Stop                                                      | Stopped                         |
+| Installed                                                             | Installed (green dot)           |
 
 The words are the panel's chip words, so the row and the workspace never disagree. Gold marks
 anything waiting on you; those rows are the ones to look for.
@@ -347,12 +347,12 @@ The panel is one column with a tab strip. **Tabs swap what is in the column; no 
 A tab exists only once it has content: no Files until Moss has written a file, no Preview until it
 runs.
 
-| Tab | What it holds |
-| --- | --- |
-| **Plan** | What Moss proposes, as short headed parts. The mockup shows numbered steps; today's plan record has five parts (what it does, what it reaches, what it keeps, when it runs, rough cost) and they render as five headed parts in the same style until planning produces steps. Whatever changed since you last looked is marked "just added". Foot: Approve and build / Ask for changes. |
-| **Design** | A picture of each screen the module will have, drawn before any code. Takes most of the width; the chat narrows to a column. A redrawn screen is marked "just redrawn". Foot: Approve the design and build / Ask for changes. See below. |
-| **Files** | What Moss wrote, name plus what it is for, changes since Moss's last reply marked in gold. Click one to read it in the same column; a back arrow returns to the list. The file itself is read-only in a monospace block — the one place the retired mono face is still right, as `tokens.css` allows for genuine code. |
-| **Preview** | The module itself, running. Takes most of the width, exactly as Design does — it is the same thing one step later, a screen you are looking at rather than a list you are reading. Foot: Install in Moss / Ask for changes. |
+| Tab         | What it holds                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Plan**    | What Moss proposes, as short headed parts. The mockup shows numbered steps; today's plan record has five parts (what it does, what it reaches, what it keeps, when it runs, rough cost) and they render as five headed parts in the same style until planning produces steps. Whatever changed since you last looked is marked "just added". Foot: Approve and build / Ask for changes. |
+| **Design**  | A picture of each screen the module will have, drawn before any code. Takes most of the width; the chat narrows to a column. A redrawn screen is marked "just redrawn". Foot: Approve the design and build / Ask for changes. See below.                                                                                                                                                |
+| **Files**   | What Moss wrote, name plus what it is for, changes since Moss's last reply marked in gold. Click one to read it in the same column; a back arrow returns to the list. The file itself is read-only in a monospace block — the one place the retired mono face is still right, as `tokens.css` allows for genuine code.                                                                  |
+| **Preview** | The module itself, running. Takes most of the width, exactly as Design does — it is the same thing one step later, a screen you are looking at rather than a list you are reading. Foot: Install in Moss / Ask for changes.                                                                                                                                                             |
 
 The panel bar also carries a state chip ("Waiting on you", "Built, not installed") and the foot
 carries the action that matters at that moment (Approve and build, then Install in Moss).
@@ -368,18 +368,18 @@ waiting for a change, ready, failed, cancelled); the design step adds one, waiti
 approval. The panel is a projection of that status. Nothing else on the screen changes with it —
 Moss says what is happening in the chat, in words, and the panel shows the thing itself.
 
-| Moment | Panel | Chip | Foot |
-| --- | --- | --- | --- |
-| Before Moss has made anything, including while it is writing the plan | Not rendered. The chat has the whole width; the activity line says Moss is thinking. | | |
-| Plan written, waiting for you | Plan | Waiting on you | Approve and build / Ask for changes |
-| Plan approved, Moss drawing the screens | Plan (read-only, marked approved) | Drawing the screens | Stop |
-| Design drawn, waiting for you | Plan, Design | Waiting on you | Approve the design and build / Ask for changes |
-| Building | Plan, Design, and Files from the first file written; the file list grows as Moss writes | Building, plus the current step's name | Stop |
-| Moss stopped to ask you something | As before | Waiting on you | Ask for changes (the question itself is a Moss turn; you answer in the composer) |
-| Built, checks passed, not installed | Plan, Design, Files, Preview | Built, not installed | Install in Moss / Ask for changes |
-| Build failed | Plan, Design, Files (what was written stays readable); Preview only if a previous version still runs, showing that version | Build failed, or "Last change failed" when a previous version still runs | Try again / Ask for changes |
-| You pressed Stop | Same as failed | Stopped | Try again / Ask for changes |
-| Installed | Plan, Design, Files, Preview (the copy under review — never two live versions) | Installed | Open it (the module in the rail) / Ask for changes |
+| Moment                                                                | Panel                                                                                                                      | Chip                                                                     | Foot                                                                             |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Before Moss has made anything, including while it is writing the plan | Not rendered. The chat has the whole width; the activity line says Moss is thinking.                                       |                                                                          |                                                                                  |
+| Plan written, waiting for you                                         | Plan                                                                                                                       | Waiting on you                                                           | Approve and build / Ask for changes                                              |
+| Plan approved, Moss drawing the screens                               | Plan (read-only, marked approved)                                                                                          | Drawing the screens                                                      | Stop                                                                             |
+| Design drawn, waiting for you                                         | Plan, Design                                                                                                               | Waiting on you                                                           | Approve the design and build / Ask for changes                                   |
+| Building                                                              | Plan, Design, and Files from the first file written; the file list grows as Moss writes                                    | Building, plus the current step's name                                   | Stop                                                                             |
+| Moss stopped to ask you something                                     | As before                                                                                                                  | Waiting on you                                                           | Ask for changes (the question itself is a Moss turn; you answer in the composer) |
+| Built, checks passed, not installed                                   | Plan, Design, Files, Preview                                                                                               | Built, not installed                                                     | Install in Moss / Ask for changes                                                |
+| Build failed                                                          | Plan, Design, Files (what was written stays readable); Preview only if a previous version still runs, showing that version | Build failed, or "Last change failed" when a previous version still runs | Try again / Ask for changes                                                      |
+| You pressed Stop                                                      | Same as failed                                                                                                             | Stopped                                                                  | Try again / Ask for changes                                                      |
+| Installed                                                             | Plan, Design, Files, Preview (the copy under review — never two live versions)                                             | Installed                                                                | Open it (the module in the rail) / Ask for changes                               |
 
 Approving, asking for changes, stopping and installing all wait for the server's answer with the
 button in its pending state; on failure the button returns and the error is a Moss-side line in the
@@ -401,12 +401,12 @@ is of a feature we build.
 
 So the artifact panel gains a **Design** tab, and the run order is:
 
-| Step | Tab | What you do |
-| --- | --- | --- |
-| 1 | Plan | Approve the steps, or ask for changes |
-| 2 | **Design** | Look at the screens Moss proposes. Approve, or say what to change. Nothing is coded until this is approved. |
-| 3 | Files | Read what it wrote |
-| 4 | Preview | Use the real thing |
+| Step | Tab        | What you do                                                                                                 |
+| ---- | ---------- | ----------------------------------------------------------------------------------------------------------- |
+| 1    | Plan       | Approve the steps, or ask for changes                                                                       |
+| 2    | **Design** | Look at the screens Moss proposes. Approve, or say what to change. Nothing is coded until this is approved. |
+| 3    | Files      | Read what it wrote                                                                                          |
+| 4    | Preview    | Use the real thing                                                                                          |
 
 **A tab you look at takes the room; a tab you read does not.** Plan and Files are a side column
 beside a wide chat — about a quarter of the window, never narrower than 320px nor wider than
