@@ -28,7 +28,10 @@ const PROJECT_REPLY_TIMEOUT_MS = 45_000;
 
 export interface ProjectReplyDependencies {
   readonly dataContext: DataContextRunner;
-  readonly aiRepository: Pick<AiRepository, "selectModelForCapability" | "selectProviderWithCredential">;
+  readonly aiRepository: Pick<
+    AiRepository,
+    "selectModelForCapability" | "selectProviderWithCredential"
+  >;
   readonly cipher: Pick<AiSecretCipher, "decryptJson">;
   readonly createCliStructuredAdapter?: (kind: ProviderKind) => StructuredProviderAdapter;
 }
@@ -49,7 +52,10 @@ function buildPrompt(project: WorkshopProject, userEntry: WorkshopFeedEntry): st
   return lines.join("\n");
 }
 
-function readStructuredReplyText(result: { readonly rawObject?: unknown; readonly rawText?: string }): string {
+function readStructuredReplyText(result: {
+  readonly rawObject?: unknown;
+  readonly rawText?: string;
+}): string {
   const value =
     result.rawObject ??
     (() => {
@@ -59,7 +65,11 @@ function readStructuredReplyText(result: { readonly rawObject?: unknown; readonl
         return null;
       }
     })();
-  if (value && typeof value === "object" && typeof (value as { text?: unknown }).text === "string") {
+  if (
+    value &&
+    typeof value === "object" &&
+    typeof (value as { text?: unknown }).text === "string"
+  ) {
     return (value as { text: string }).text;
   }
   throw new Error("Model transport returned no text");
@@ -88,12 +98,19 @@ async function getReplyText(
     };
     const result = await deps
       .createCliStructuredAdapter(modelInput.provider_kind)
-      .generateStructured({ model: modelInput, messages, schema, maxOutputTokens: PROJECT_REPLY_MAX_OUTPUT_TOKENS });
+      .generateStructured({
+        model: modelInput,
+        messages,
+        schema,
+        maxOutputTokens: PROJECT_REPLY_MAX_OUTPUT_TOKENS
+      });
     return readStructuredReplyText(result);
   }
 
   if (!provider.encrypted_credential) throw new Error("Provider has no stored credential");
-  const credential = parseAiApiKeyCredential(deps.cipher.decryptJson(provider.encrypted_credential));
+  const credential = parseAiApiKeyCredential(
+    deps.cipher.decryptJson(provider.encrypted_credential)
+  );
   if (!credential) throw new Error("Provider credential could not be read");
   const adapter = new HttpApiAdapter(modelInput.provider_kind, credential.apiKey, {
     baseUrl: provider.base_url ?? undefined
@@ -111,7 +128,11 @@ async function getReplyText(
  * cancelling the underlying call; a late result or error from it is only logged, never
  * allowed to affect the save that already returned.
  */
-function withTimeout<T>(promise: Promise<T>, ms: number, onLateSettle: (error: unknown) => void): Promise<T | null> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  onLateSettle: (error: unknown) => void
+): Promise<T | null> {
   return new Promise((resolve) => {
     let settled = false;
     const timer = setTimeout(() => {
@@ -154,9 +175,16 @@ export async function attemptProjectReply(
 ): Promise<ProjectReplyResult> {
   try {
     const picked = await deps.dataContext.withDataContext(access, async (scopedDb) => {
-      const model = await deps.aiRepository.selectModelForCapability(scopedDb, "chat", "interactive");
+      const model = await deps.aiRepository.selectModelForCapability(
+        scopedDb,
+        "chat",
+        "interactive"
+      );
       if (!model) return null;
-      const provider = await deps.aiRepository.selectProviderWithCredential(scopedDb, model.provider_config_id);
+      const provider = await deps.aiRepository.selectProviderWithCredential(
+        scopedDb,
+        model.provider_config_id
+      );
       if (!provider) return null;
       return { model, provider };
     });
@@ -173,12 +201,19 @@ export async function attemptProjectReply(
     if (replyText === null || !replyText.trim()) return { delivered: false };
 
     const written = await deps.dataContext.withDataContext(access, (scopedDb) =>
-      new WorkshopProjectFeed().appendAssistantReply(scopedDb, project.id, replyText, userEntry.messageId)
+      new WorkshopProjectFeed().appendAssistantReply(
+        scopedDb,
+        project.id,
+        replyText,
+        userEntry.messageId
+      )
     );
     if (!written) return { delivered: false };
     return { delivered: true, assistantEntry: written.entry };
   } catch (error) {
-    console.warn(`[workshop] project reply for project ${project.id} failed: ${(error as Error).message}`);
+    console.warn(
+      `[workshop] project reply for project ${project.id} failed: ${(error as Error).message}`
+    );
     return { delivered: false };
   }
 }

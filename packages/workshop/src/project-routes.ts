@@ -1,4 +1,9 @@
-import type { AiRepository, AiSecretCipher, ProviderKind, StructuredProviderAdapter } from "@moss/ai";
+import type {
+  AiRepository,
+  AiSecretCipher,
+  ProviderKind,
+  StructuredProviderAdapter
+} from "@moss/ai";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
@@ -32,7 +37,10 @@ import {
 export interface WorkshopProjectRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
-  readonly aiRepository: Pick<AiRepository, "selectModelForCapability" | "selectProviderWithCredential">;
+  readonly aiRepository: Pick<
+    AiRepository,
+    "selectModelForCapability" | "selectProviderWithCredential"
+  >;
   readonly cipher: Pick<AiSecretCipher, "decryptJson">;
   readonly createCliStructuredAdapter?: (kind: ProviderKind) => StructuredProviderAdapter;
 }
