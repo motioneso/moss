@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 
-import type { AccessContext, DataContextRunner, JsonSecretCipher } from "@moss/db";
+import {
+  resolveMossEnv,
+  type AccessContext,
+  type DataContextDb,
+  type DataContextRunner,
+  type JsonSecretCipher,
+  type Keyring
+} from "@moss/db";
 import type {
   ModuleAssistantToolManifest,
   MossModuleManifest,
@@ -10,6 +17,7 @@ import type {
 } from "@moss/module-sdk";
 
 import { callMemory, requestBudget, type CallMemory, type RequestBudget } from "./call-memory.js";
+import { createIntegrationsCipher, createIntegrationsCipherFromKeyring } from "./credentials.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { capChars, INTEGRATION_RESPONSE_CHAR_CAP } from "./limits.js";
 import { callMcpTool } from "./mcp-client.js";
@@ -38,7 +46,13 @@ export interface ToolManifestLogger {
 
 export interface IntegrationsActiveModulesResolverDeps {
   readonly dataContext: DataContextRunner;
-  readonly cipher: JsonSecretCipher;
+  /** Injected cipher wins (tests, legacy wiring). Otherwise resolved per request. */
+  readonly cipher?: JsonSecretCipher;
+  /**
+   * Master key store (#2312): loads the family keyring per request when no cipher
+   * is injected and no env key is set. Missing everywhere degrades the tools.
+   */
+  readonly resolveKeyring?: (scopedDb: DataContextDb) => Promise<Keyring | null>;
   readonly logger: ToolManifestLogger;
   /** Test seam — defaults to a real IntegrationsRepository. */
   readonly repository?: IntegrationsRepository;
@@ -86,12 +100,20 @@ export function createIntegrationsActiveModulesResolver(
     if (cached) return [...modules, ...cached];
 
     const accessContext: AccessContext = { actorUserId, requestId: `int_${randomUUID()}` };
-    const connections = await deps.dataContext.withDataContext(accessContext, (scopedDb) =>
-      repository.listConnections(scopedDb)
-    );
+    const listed = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => ({
+      connections: await repository.listConnections(scopedDb),
+      cipher: await resolveCipher(scopedDb)
+    }));
+    const { connections, cipher } = listed;
 
     const synthetic: MossModuleManifest[] = [];
+    let pausedCount = 0;
     for (const conn of connections.filter((c) => c.enabled && c.discoveredTools.length > 0)) {
+      if (!cipher && conn.hasCredential) {
+        // No key anywhere: credentialed connections stay unlisted until setup.
+        pausedCount += 1;
+        continue;
+      }
       const slug = connectionSlug(conn.name);
       const state = {
         enabledGroups: conn.enabledGroups,
@@ -107,14 +129,36 @@ export function createIntegrationsActiveModulesResolver(
           );
           continue;
         }
-        tools.push(buildToolManifest(conn, slug, tool as DiscoveredTool, deps, repository));
+        tools.push(buildToolManifest(conn, slug, tool as DiscoveredTool, deps, repository, cipher));
       }
       if (tools.length > 0) synthetic.push(buildSyntheticModule(conn, slug, tools));
+    }
+    if (pausedCount > 0) {
+      deps.logger.warn(
+        { pausedConnections: pausedCount },
+        "integration tools paused: no encryption key"
+      );
     }
 
     cache.set(actorUserId, synthetic);
     return [...modules, ...synthetic];
   };
+
+  /**
+   * Cipher for this listing: injected cipher wins (tests, legacy wiring), else the
+   * env key, else the family key from the master store. Null means paused.
+   */
+  async function resolveCipher(scopedDb: DataContextDb): Promise<JsonSecretCipher | null> {
+    if (deps.cipher) return deps.cipher;
+    if (resolveMossEnv(process.env, "JARVIS_INTEGRATIONS_SECRET_KEY") !== undefined) {
+      return createIntegrationsCipher();
+    }
+    if (deps.resolveKeyring) {
+      const keyring = await deps.resolveKeyring(scopedDb);
+      if (keyring) return createIntegrationsCipherFromKeyring(keyring);
+    }
+    return null;
+  }
 }
 
 function buildToolManifest(
@@ -122,7 +166,8 @@ function buildToolManifest(
   slug: string,
   tool: DiscoveredTool,
   deps: IntegrationsActiveModulesResolverDeps,
-  repository: IntegrationsRepository
+  repository: IntegrationsRepository,
+  cipher: JsonSecretCipher | null
 ): ModuleAssistantToolManifest {
   const memory = deps.callMemory ?? callMemory;
   const budget = deps.requestBudget ?? requestBudget;
@@ -155,9 +200,18 @@ function buildToolManifest(
       return { data: envelope as unknown as Record<string, unknown> };
     }
 
+    if (!cipher) {
+      const envelope: IntegrationOutcomeEnvelope = {
+        status: "error",
+        action,
+        summary: INTEGRATION_SUMMARY.setupPaused,
+        detail: undefined
+      };
+      return { data: envelope as unknown as Record<string, unknown> };
+    }
     const credentialEnvelope = await repository.loadCredentialEnvelope(scopedDb as never, conn.id);
     const secret = credentialEnvelope
-      ? (deps.cipher.decryptJson(deps.cipher.parseEnvelope(credentialEnvelope)).secret as string)
+      ? (cipher.decryptJson(cipher.parseEnvelope(credentialEnvelope)).secret as string)
       : null;
     const outcome = tool.invoke
       ? await invokeOpenApiTool(

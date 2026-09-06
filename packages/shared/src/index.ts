@@ -44,6 +44,7 @@ export * from "./news-api.js";
 export * from "./news-credentials-api.js";
 export * from "./weather-api.js";
 export * from "./web-search-api.js";
+export * from "./family-key-api.js";
 export * from "./runtime-config-api.js";
 export * from "./yolo-api.js";
 export * from "./notes-api.js";

@@ -128,6 +128,8 @@ docker compose -p moss -f docker-compose.prod.yml --env-file env.production.loca
 
 Store backups securely off the Docker host and test restoring them into a separate installation. Docker Compose does not schedule backups automatically. **Do not use `down -v` to perform maintenance**: it deletes the stack's volumes.
 
+A restore needs the database backup **and** `env.production.local` together. The database holds the locked copies of the encryption keys (managed under Admin Settings, Encryption keys); the env file holds the master secret that unlocks them. Either one alone cannot recover stored credentials.
+
 ## Troubleshooting
 
 ```sh

@@ -114,7 +114,7 @@ docker compose -p moss -f docker-compose.prod.yml --env-file env.production.loca
   up -d --no-build
 ```
 
-Open **[http://localhost:1533](http://localhost:1533)**, create your first account with the email above, and follow the setup wizard to connect your AI provider. Then choose your modules and connect any accounts you want Moss to use.
+Open **[http://localhost:1533](http://localhost:1533)**, create your first account with the email above, and follow the setup wizard to connect your AI provider. Then choose your modules and connect any accounts you want Moss to use. If a feature reports it needs attention, an admin opens Settings, Admin / Setup, Encryption keys, and presses Generate — keys are created there, never by editing the env file.
 
 The stack includes PostgreSQL with pgvector, the Moss app, and a supporting sports renderer. Database migrations and module reconciliation run automatically during app startup. Allow a few minutes for the first boot.
 

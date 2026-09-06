@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AccessContext, DataContextRunner } from "@moss/db";
 import {
+  createIntegrationsCipher,
   createResolverCache,
   registerIntegrationsRoutes,
   type ConnectionRow,
@@ -87,6 +88,7 @@ function buildServer(actorUserId: string, cache: ResolverCache, seed: Connection
     }),
     dataContext: fakeDataContext(),
     repository: fakeRepository(seed),
+    cipher: createIntegrationsCipher(),
     resolverCache: cache
   });
   return server;
@@ -132,7 +134,7 @@ describe("integrations routes drop the resolver cache on every edit", () => {
   let cache: ResolverCache;
 
   beforeEach(() => {
-    cache = { get: vi.fn(), set: vi.fn(), drop: vi.fn() };
+    cache = { get: vi.fn(), set: vi.fn(), drop: vi.fn(), clear: vi.fn() };
   });
 
   it("drops on create", async () => {
