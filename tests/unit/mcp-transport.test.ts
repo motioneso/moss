@@ -99,7 +99,7 @@ describe("streamToolCallWithProgress", () => {
     const beats = messages.filter((msg) => msg.method === "notifications/progress");
     expect(beats.length).toBeGreaterThanOrEqual(3);
     for (const beat of beats) {
-      expect(beat.params.progressToken).toBe("tok-1");
+      expect(beat.params?.progressToken).toBe("tok-1");
     }
     expect(messages.at(-1)).toEqual({
       jsonrpc: "2.0",
