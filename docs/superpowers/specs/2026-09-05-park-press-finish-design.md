@@ -1,7 +1,8 @@
 # Design: finishing Park Press, and the Workshop project workspace
 
 Status: approved by Ben 2026-09-05 ("Ok, write this up, looks great!"); build-readiness review by
-Fable 5.1, 2026-09-05, folded in below
+Fable 5.1, 2026-09-05, folded in below; Ben's rulings of 2026-09-05 on the four open items (renaming,
+the "Only you" badge, earlier builds, the green field app-wide) folded in
 Direction: PARK PRESS, approved 2026-07-03 — `2026-07-03-park-press-design-language-design.md`, EPIC #726
 Mockup: `docs/superpowers/specs/assets/2026-09-05-park-press-finish/`
 Builds on: `2026-09-04-workshop-projects-and-supervised-builds.md` (PR 2307's spec) — its build
@@ -41,9 +42,9 @@ the word-of-the-day project — because no real build exists yet. The three draw
 Design tab are hand-written HTML standing in for the pictures Moss will actually produce (see "The
 Design tab" below); they show what the tab looks like, not how it is fed.
 
-The frozen markup still carries PR 2307's page heading, back link and mobile switch inside a
-project; `park-press.css` hides the heading and back link (section 17) because Ben ruled them out.
-Production removes that markup rather than hiding it.
+The frozen workspace screens originally carried PR 2307's in-page heading, back link and "Only
+you" badge; on 2026-09-05 those were removed from the screens rather than hidden, which is also
+what production does. `detail-rename` shows the top bar while a project is being renamed.
 
 ## Part 1 — finishing Park Press
 
@@ -114,9 +115,10 @@ and what Moss made.
 the dateline and clock, ink on paper). The green field is a variant of that primitive, not a second
 one: add the reversed treatment there and have Workshop's home page render `Masthead` instead of
 its own `workshop-project-heading` markup. A module's CSS is layout-only by contract, so the field
-cannot live in Workshop's stylesheet. Today keeps its own ink-on-paper masthead for now; whether it
-takes the green field is an open question below, and other section home pages adopt the variant as
-each is next touched, one product change per page.
+cannot live in Workshop's stylesheet. **For this work the green field appears on one page, the
+Workshop home.** Ben, 2026-09-05: carrying the finished language to Today and every other area of
+the app is its own piece of work, later, not scoped here (see "Follow-on work" at the end). Today
+keeps its ink-on-paper masthead and no other page changes.
 
 **In dark mode** the accent is a light green (`--forest` becomes `#65b889`), and the reversed light
 text would fail on it. Until dark mode gets its own pass, the field in dark mode is `--forest-soft`
@@ -128,9 +130,9 @@ tokens PR from breaking dark mode; Ben has not seen it.
 - A page's name lives in the **top bar**, and that name is the link back to the section. There is no
   separate back link.
 - Inside a thing that belongs to a section, the top bar carries the trail: the section name as a
-  link, then the name of what you are in, then any small meta ("Started Sep 5"). The "Only you"
-  badge moves to the top bar's right, beside the assistant button, and both meta and badge drop out
-  below 900px. A long name truncates with an ellipsis rather than wrapping the bar.
+  link, then the name of what you are in, then any small meta ("Started Sep 5"). The meta drops out
+  below 900px. A long name truncates with an ellipsis rather than wrapping the bar. There is no
+  "Only you" badge (see "Words").
 - The masthead says what the page is about in the page's own words ("Your projects"), not the
   section name again.
 - Nothing is said twice. Ben flagged the word "Workshop" appearing three times on one screen as
@@ -145,6 +147,21 @@ shell renders the section label as the link. The same trail must feed the page c
 in chat (`apps/web/src/chat/page-context.ts` uses the same lookup), so Moss knows which project you
 are in and not only which section.
 
+**Renaming a project.** Ben, 2026-09-05: the name in the top bar is edited in place, not by asking
+Moss. The name is a button that looks like text; hovering it draws a hairline gold underline, the
+pointer becomes the text cursor, and the tooltip says "Click to rename". Clicking it, or pressing
+Enter on it, swaps the name for a text field in the same spot, pre-filled and fully selected, with
+Save and Cancel beside it; the meta steps out while editing and the section link stays where it
+was. Enter or Save saves. Escape or Cancel puts the old name back. Clicking elsewhere saves if the
+text changed and cancels if it did not, so a name you typed and walked away from is not lost. An
+empty or blank name cannot be saved: Save stays disabled and the field keeps focus. While the
+server is saving, the new name shows in the resting style with the field gone; once confirmed, the
+row index and Moss's page context carry the new name. If the server refuses, the old name returns
+and a small red line under the trail says "Could not rename. Try again." until the next click.
+Moss may suggest a name in the chat; only you set it. This needs a rename call the project API does
+not have (PR 2307 can create a project but not change its title). Mocked in `detail-rename`. On a
+phone the field takes the bar's width and Save and Cancel sit under it.
+
 ### Lists
 
 A card grid leaves empty tracks whenever the item count does not fill a row, which is the
@@ -156,11 +173,41 @@ rule down the left edge plus a forest-green title — never a filled block, whic
 The rules and the hover are visual identity, so the row index is a host primitive in `packages/ui`
 (working name `jds-index`), not Workshop layout CSS. Workshop's list is its first user.
 
+**One list.** Every project is on it, whatever state it is in — talking, planning, building, built,
+failed, installed — and so are the builds from before projects existed. Ben, 2026-09-05: "it should
+just be part of the list." There is no "earlier builds and installed modules" page, link, or menu.
+Newest activity first, no grouping. Each row has the name, the opening request as the excerpt, and
+at the right the state and the date of the last activity:
+
+| Where the project is | The row says |
+| --- | --- |
+| Conversation only, nothing made yet | Talking it through |
+| Moss writing the plan | Moss is planning |
+| Plan or design waiting for your approval, or Moss asked you something | Waiting on you (gold dot) |
+| Plan approved, Moss drawing the screens | Drawing the screens |
+| Building | Building |
+| Built, checks passed, not installed | Built, not installed (gold dot) |
+| Build failed | Build failed (red dot) |
+| You pressed Stop | Stopped |
+| Installed | Installed (green dot) |
+
+The words are the panel's chip words, so the row and the workspace never disagree. Gold marks
+anything waiting on you; those rows are the ones to look for.
+
+A build from before projects existed becomes a row like any other: the plan's "what it does" as
+the name, the honest excerpt "Built before projects existed, so there is no conversation to show",
+and its real state. Opening it is the workspace with what the record has (the plan, the files, the
+preview if it still runs) and an empty conversation with one Moss line saying so; nothing is
+invented. Its old actions (build it, stop, look at the draft, discard, ship) become the panel's
+foot. The old page at `/workshop/legacy` and its map entry retire when those rows exist.
+
 ### Words
 
 No branding that leans on privacy. "Keep your projects and their conversations here" and "this
-project is private to you" are out. The "Only you" badge already says it. Ben: "I like the feature,
-but I don't want the branding to lean into it."
+project is private to you" are out. Ben: "I like the feature, but I don't want the branding to lean
+into it." The "Only you" badge is out too (Ben, 2026-09-05): every project is private until sharing
+exists, so it said nothing the screen did not already say. It can return the day a project can be
+shared, as a fact about that project.
 
 Nothing appears on screen unless it does something useful. An empty "No plan yet" panel is not
 rendered at all — a render condition, not a style rule.
@@ -242,7 +289,7 @@ runs.
 
 | Tab | What it holds |
 | --- | --- |
-| **Plan** | Numbered steps, each a title and a sentence. Newest step marked "just added". Foot: Approve and build / Ask for changes. |
+| **Plan** | What Moss proposes, as short headed parts. The mockup shows numbered steps; today's plan record has five parts (what it does, what it reaches, what it keeps, when it runs, rough cost) and they render as five headed parts in the same style until planning produces steps. Whatever changed since you last looked is marked "just added". Foot: Approve and build / Ask for changes. |
 | **Design** | A picture of each screen the module will have, drawn before any code. Takes most of the width; the chat narrows to a column. A redrawn screen is marked "just redrawn". Foot: Approve the design and build / Ask for changes. See below. |
 | **Files** | What Moss wrote, name plus what it is for, changes since Moss's last reply marked in gold. Click one to read it in the same column; a back arrow returns to the list. The file itself is read-only in a monospace block — the one place the retired mono face is still right, as `tokens.css` allows for genuine code. |
 | **Preview** | The module itself, running. Takes most of the width, exactly as Design does — it is the same thing one step later, a screen you are looking at rather than a list you are reading. Foot: Install in Moss / Ask for changes. |
@@ -360,7 +407,7 @@ with a two-way switch under the top bar: "Conversation" and the name of the open
 "The design", "Files", "Preview"). The switch is not rendered when there is no panel — an empty
 project on a phone is just the chat. Switching keeps unsent text and your place in the transcript.
 The looking-tabs-take-the-room rule and the expand button do not apply here; everything is full
-width. The top bar drops the meta and badge (already below 900px) and truncates the project name.
+width. The top bar drops the meta (already below 900px) and truncates the project name.
 
 Between 768px and about 1024px the two panes sit side by side at their minimum widths; the mockup
 was reviewed at desktop widths only and the live proof must include one pass at 800px.
@@ -371,15 +418,18 @@ PR 2307 is open and not merged (as of 2026-09-05). Its spec carries the data lay
 statuses, the API, the app-map declarations and the mockup format, and all of that stands. What
 this spec replaces is its three screens, and it replaces them after 2307 merges, not on it:
 
-- **Kept:** the routes (`/workshop`, `/workshop/new`, `/workshop/<id>`, `/workshop/legacy`), the
-  project client, the message feed and its "earlier messages" paging, the error-and-retry states,
-  the mobile switch, export and deletion, the manifest.
-- **Replaced:** the card grid (row index), the create page's form (empty chat window), the
-  "Project work" pane with "No plan yet" and "Already decided" (artifact panel, rendered only with
-  content), the in-page heading and back link (top bar trail), and turns rendered as `Card`
-  (chat drawer message parts).
-- **Changed in the contract:** create no longer requires a title; a rename call exists; the build
-  status gains "waiting for design approval".
+- **Kept:** the routes `/workshop`, `/workshop/new` and `/workshop/<id>`, the project client, the
+  message feed and its "earlier messages" paging, the error-and-retry states, the mobile switch,
+  export and deletion, the manifest. `/workshop/legacy` and its page stay only until the builds it
+  lists are rows in the one list, then retire.
+- **Replaced:** the card grid (row index with a state on every row), the create page's form (empty
+  chat window), the "Project work" pane with "No plan yet" and "Already decided" (artifact panel,
+  rendered only with content), the in-page heading, back link and "Only you" badge (top bar trail,
+  no badge), turns rendered as `Card` (chat drawer message parts), and the "Earlier builds and
+  installed modules" footer link and page (rows in the one list).
+- **Changed in the contract:** create no longer requires a title; a rename call is added; the build
+  status gains "waiting for design approval"; builds from before projects existed are linked to a
+  project each so they can be rows.
 
 Every one of these is a product change, so the app map declarations move in the same pull request
 as the screen they describe: the Workshop manifest's `navigation` description and the
@@ -402,9 +452,10 @@ App-wide, in `apps/web/src/styles/tokens.css` and the shared styles:
 
 Workshop, in `packages/workshop/src/web/`:
 
-- The project list becomes a row index rendered with the shared primitive; the "Earlier builds and
-  installed modules" link moves out of the page foot (account menu or an overflow beside "New
-  project" — still to decide; the route and its map entry stay either way).
+- The project list becomes a row index rendered with the shared primitive, one row per project
+  with its state, newest activity first; the "Earlier builds and installed modules" link and page
+  go once the builds they list are rows too.
+- The project name in the top bar renames in place, backed by a new rename call.
 - The workspace renders as a chat window using the shared turn components, with the composer
   pinned and the empty-window invitation.
 - New project routes into the empty workspace; the create form is removed and the name is derived
@@ -430,14 +481,21 @@ Workshop work. That is true of the tokens and false of the masthead, so step 1 i
    assistant bubble given the `--surface-2` flip; `pnpm check:design-tokens` passes.
 2. **After PR 2307 merges: masthead, top bar trail, list and workspace.** The `Masthead` variant
    and the row-index primitive in `packages/ui`; the top bar trail in the shell and the module web
-   SDK; the transcript and activity-line components moved to `@moss/ui`; Workshop's home page on the masthead and the
-   row index; the workspace as a chat window; no-form new project. One pull request if it fits one
-   session's worth of work, otherwise the host primitives first and Workshop's adoption second, but
-   the masthead does not ship without a page that shows it. Live proof: start a project by typing,
-   see it named and listed, send a message, reload and find it; the top bar reads section / project.
-3. **The artifact panel, Plan tab.** Needs the build side to produce a plan first (PR 2307's
-   planning slice). Live proof: a real plan appears beside a real conversation, "Approve and build"
-   changes the server status, and the panel is absent on a project with no plan.
+   SDK; the transcript and activity-line components moved to `@moss/ui`; Workshop's home page on
+   the masthead and the row index with a state on every row; the workspace as a chat window;
+   no-form new project; rename in place. One pull request, slice by slice, with the host primitives
+   before the Workshop screens that show them; the masthead does not ship without a page that
+   shows it. The "Earlier builds" footer link stays through this step, because the builds it lists
+   cannot be rows until step 3 links them to projects; it is the one thing on the list Ben ruled
+   out that still shows, and it goes in step 3. Live proof: start a project by typing, see it named
+   and listed with its state, rename it from the top bar, send a message, reload and find it; the
+   top bar reads section / project.
+3. **The artifact panel, Plan tab, and the one list made whole.** Needs the build side to produce
+   a plan and to link a build to its project (PR 2307's planning and durable-project slices). The
+   builds from before projects existed get a project each and become rows; `/workshop/legacy` and
+   its map entry retire; the footer link goes. Live proof: a real plan appears beside a real
+   conversation, "Approve and build" changes the server status, the panel is absent on a project
+   with no plan, and an earlier build shows on the list with its real state and opens.
 4. **Design tab, and the design step in a build.** Moss draws the screens and waits for approval
    before writing code. Needs PR 2307's mockup slice (the manifest, the confined capture, the image
    serving) plus the new status. This is build behaviour as much as UI, so it needs its own spec.
@@ -448,21 +506,18 @@ This must not ride in on PR 2307.
 
 ## Open
 
-- Where "Earlier builds and installed modules" goes. The route survives regardless and its app-map
-  entry must name wherever the link lands.
 - Dark mode against the bone/warm-white set. The masthead's dark-mode field above is a stopgap
   until then.
-- Renaming. There is no masthead inside a project now, so the earlier question is moot; the choice
-  is between renaming by telling Moss in the chat ("call it Daily Word") and clicking the name in
-  the top bar. Reviewer's suggestion: chat only, since the top bar name is a link back to the
-  section and a name that is also a link and also an edit field is three things in one.
-- Whether Today's masthead takes the green field too, or stays ink on paper as the one section
-  home that already had a masthead.
+- Where "Export this project" and "Delete this project" live. PR 2307 promises both (its removal
+  and export slice) and the legacy page's "Discard this draft" folds into delete, but the workspace
+  as designed has no place for them: the top bar name is the rename, the panel foot is for the
+  build, and the chat is the chat. Suggestion for Ben: a small "More" button at the right of the
+  top bar, where the badge was, holding those two and nothing else. Not mocked.
 
-## Worth reconsidering
+## Follow-on work, not scoped here
 
-The "Only you" badge in a project's top bar. Every project is private to its owner today and
-sharing is a later slice of PR 2307's plan, so until then the badge is true of every project and
-says nothing the screen does not already say — which is the standard Ben applied to the "No plan
-yet" panel. It would earn its place the day a project can be shared, when "Only you" becomes a
-fact about this project rather than about all of them. Ben's call; the mockup keeps it.
+- Carrying the finished language — the green field, the row index, the type at display size — to
+  Today, Settings and every other area of the app. Ben, 2026-09-05: a later piece of work of its
+  own, one product change per page, not part of these pull requests.
+- The dark-mode pass above.
+- Sharing a project, and with it the day a badge on a project says something true.

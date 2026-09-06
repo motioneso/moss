@@ -246,7 +246,10 @@ html[data-masthead="on"] .topbar-title {
 /* ============================================================
    6. METADATA ON THE GREEN FIELD
    ------------------------------------------------------------
-   The project heading carries a privacy badge and a start date. Both
+   Superseded 2026-09-05: the "Only you" badge is gone (Ben: it says
+   nothing until sharing exists) and the in-page project heading with
+   it. Kept for the record; nothing in the screens matches it now.
+   The project heading carried a privacy badge and a start date. Both
    inherit dark ink, which is unreadable once the heading became a
    committed colour field. Lift them onto the reversed palette.
    ============================================================ */
@@ -1361,15 +1364,59 @@ html[data-masthead="on"] .topbar-crumb .topbar-title--link:hover {
   color: var(--forest);
 }
 
-html[data-masthead="on"] .topbar-only {
-  margin-right: var(--space-2);
-  font-size: var(--text-xs);
+/* Superseded: the "Only you" badge sat at the right of the top bar.
+   Ben, 2026-09-05: every project is private until sharing exists, so
+   it said nothing the screen did not already say. */
+
+/* The name is a button that looks like text. Ben, 2026-09-05: click
+   to rename, in place. Hover draws a hairline gold underline so the
+   name reads as something you can touch without shouting about it. */
+html[data-masthead="on"] button.topbar-crumb__now {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: text;
+  text-align: left;
+  box-shadow: 0 1px 0 transparent;
+  transition: box-shadow 0.12s ease;
 }
 
-/* Hide the meta and the badge before the top bar gets tight. */
+html[data-masthead="on"] button.topbar-crumb__now:hover {
+  box-shadow: 0 1px 0 var(--gold);
+}
+
+html[data-masthead="on"] button.topbar-crumb__now:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+
+/* Renaming: the field takes the name's place and the meta steps out.
+   Save and Cancel sit beside it; Enter saves, Escape cancels. */
+html[data-masthead="on"] .topbar-rename {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+html[data-masthead="on"] .topbar-rename__input {
+  flex: 1 1 24ch;
+  min-width: 0;
+  max-width: 40ch;
+  height: 2rem;
+  padding: 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Hide the meta before the top bar gets tight. */
 @media (max-width: 900px) {
-  html[data-masthead="on"] .topbar-crumb__meta,
-  html[data-masthead="on"] .topbar-only { display: none; }
+  html[data-masthead="on"] .topbar-crumb__meta { display: none; }
 }
 
 /* ============================================================
