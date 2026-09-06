@@ -40,6 +40,10 @@ feature that is not present in the image you are running.
 
 - **App no longer sticks on the loading screen on slow days.** The app used to get stuck on its loading screen when one startup check was slow, and now it waits for the answer instead of asking again until nothing responds. [PR #2344](https://github.com/motioneso/moss/pull/2344)
 
+#### Added
+
+- **Workshop projects.** You can now start a Workshop project, give it a name and a first request, and come back [PR #2307](https://github.com/motioneso/moss/pull/2307)
+
 ### 2026-09-05
 
 #### Fixed
