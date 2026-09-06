@@ -78,9 +78,9 @@ export const workshopModuleManifest = {
     {
       id: "workshop.projects",
       description:
-        "Admins can save private projects and messages. Other admins cannot access them. " +
-        "Creation starts no planning or build; the Workshop assistant answers each saved message with " +
-        "a plain reply, and a message stays marked as awaiting delivery only if that reply fails.",
+        "Admins can save private projects and messages; other admins cannot access them. " +
+        "Creating a project starts no planning or build. The Workshop assistant replies to each " +
+        "message, marked awaiting delivery only if that reply fails.",
       remediations: [
         {
           id: "workshop.projects.retry",
