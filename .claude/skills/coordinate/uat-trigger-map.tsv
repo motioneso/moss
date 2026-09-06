@@ -113,3 +113,8 @@ blocking	apps/web/src/wellness/**	tests/uat/specs/1970-medication-builder.uat.sp
 blocking	apps/web/src/wellness/**	tests/uat/specs/1971-medication-edit.uat.spec.ts
 blocking	apps/web/src/settings/settings-instance-modules-pane.tsx	tests/uat/specs/1106-external-module-trust-credentials.uat.spec.ts
 blocking	apps/web/src/settings/module-credentials-section.tsx	tests/uat/specs/1106-external-module-trust-credentials.uat.spec.ts
+# #2307 Workshop projects: direct entry on the module screens, and starting a
+# project from the chat drawer through the assistant tool with the saved card.
+blocking	packages/workshop/**	tests/uat/specs/workshop-project-entry.uat.spec.ts
+blocking	packages/workshop/**	tests/uat/specs/workshop-chat-handover.uat.spec.ts
+blocking	apps/web/src/chat/**	tests/uat/specs/workshop-chat-handover.uat.spec.ts
