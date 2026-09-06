@@ -215,6 +215,8 @@ export type SeedHook = (ctx: {
   readonly workflowApprovalFixture?: boolean;
   /** #2175: three seeded audit-log rows (suppressed / refused / success+duration). */
   readonly activityOutcomeFixture?: boolean;
+  /** #2267: opt-in trusted owner-draft fixture for the Workshop storage proof. */
+  readonly withWorkshopStorageFixture?: boolean;
   /** #1121 Task 4: an id from UAT_CHAT_SCRIPTS. Consumed by Task 5's seed/cli.ts wiring
    *  (blocked on #1557) — until then this reaches the seed service but nothing reads it. */
   readonly chatScript?: string;
@@ -242,6 +244,7 @@ export const composeSeedHook: SeedHook = async ({
   sportsPublicSourceFixtures,
   workflowApprovalFixture,
   activityOutcomeFixture,
+  withWorkshopStorageFixture,
   chatScript
 }) => {
   await runCommand(
@@ -269,6 +272,8 @@ export const composeSeedHook: SeedHook = async ({
       "-e",
       `JARVIS_UAT_ACTIVITY_OUTCOME_FIXTURE=${activityOutcomeFixture === true ? "1" : "0"}`,
       "-e",
+      `JARVIS_UAT_WORKSHOP_STORAGE_FIXTURE=${withWorkshopStorageFixture === true ? "1" : "0"}`,
+      "-e",
       // #1121 Task 4: same "always pass, empty means off" shape. Nothing reads this yet —
       // Task 5 (blocked on #1557) adds the cli.ts consumer.
       `JARVIS_UAT_SEED_CHAT_SCRIPT=${chatScript ?? ""}`,
@@ -293,7 +298,16 @@ export function buildUatComposeArgs(
   projectName: string,
   extra: readonly string[]
 ): readonly string[] {
-  return ["compose", "-p", projectName, "-f", UAT_COMPOSE_FILE, ...extra];
+  return [
+    "compose",
+    "-p",
+    projectName,
+    "-f",
+    UAT_COMPOSE_FILE,
+    "-f",
+    "tests/uat/compose.override.yml",
+    ...extra
+  ];
 }
 
 /**
@@ -588,6 +602,8 @@ export interface UatProvisionOptions {
   readonly withWorkflowApprovalFixture?: boolean;
   /** #2175: opt-in seeded audit-log rows used only by the Activity outcomes live-path spec. */
   readonly withActivityOutcomeFixture?: boolean;
+  /** #2267: opt-in trusted owner-draft fixture used only by the Workshop storage proof. */
+  readonly withWorkshopStorageFixture?: boolean;
   /** #1121 Task 4: an id from UAT_CHAT_SCRIPTS (tests/uat/seed/types.ts). Threads to
    *  composeSeedHook's chatScript ctx field, and (when set) writes JARVIS_UAT_SCRIPTED_PROVIDER_BIN
    *  (#1659 defect 4) so the container's profile.d script puts the scripted-provider fixture's
@@ -614,6 +630,7 @@ export function buildSeedHookInput(
   sportsPublicSourceFixtures?: boolean;
   workflowApprovalFixture?: boolean;
   activityOutcomeFixture?: boolean;
+  withWorkshopStorageFixture?: boolean;
   chatScript?: string;
 } {
   return {
@@ -625,6 +642,7 @@ export function buildSeedHookInput(
     sportsPublicSourceFixtures: opts?.withSportsPublicSourceFixtures,
     workflowApprovalFixture: opts?.withWorkflowApprovalFixture,
     activityOutcomeFixture: opts?.withActivityOutcomeFixture,
+    withWorkshopStorageFixture: opts?.withWorkshopStorageFixture,
     chatScript: opts?.chatScript
   };
 }
