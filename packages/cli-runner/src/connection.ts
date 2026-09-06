@@ -16,6 +16,9 @@ import {
   decodeFrame,
   encodeFrame,
   MAX_FRAME_BYTES,
+  type RpcAcpReadParams,
+  type RpcAcpSendParams,
+  type RpcAcpSpawnParams,
   type RpcBeginLoginParams,
   type RpcCancelLoginParams,
   type RpcCancelSubmitParams,
@@ -506,6 +509,44 @@ async function invoke(
     case "killTerminal": {
       // No params validation (task-4 spec) — kill is idempotent for an absent/unknown id.
       terminalHost.kill(req.params as RpcKillTerminalParams);
+      return { ok: true };
+    }
+    // #2369 slice 1 — ACP tunnel. Session-scoped by key (requireSessionKey ⇒
+    // bad_request without one, never a close). Lines cross opaquely; validation here
+    // guards shape only, never protocol content.
+    case "acpSpawn": {
+      const key = requireSessionKey(req);
+      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpSpawnParams>;
+      if (typeof params.projectId !== "string") {
+        throw new BadRequestError("acpSpawn.projectId must be a string");
+      }
+      return host.acpSpawn(key, params.projectId);
+    }
+    case "acpSend": {
+      const key = requireSessionKey(req);
+      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpSendParams>;
+      if (typeof params.line !== "string") {
+        throw new BadRequestError("acpSend.line must be a string");
+      }
+      host.acpSend(key, params.line);
+      return { accepted: true };
+    }
+    case "acpRead": {
+      const key = requireSessionKey(req);
+      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpReadParams>;
+      if (
+        typeof params.afterSeq !== "number" ||
+        !Number.isInteger(params.afterSeq) ||
+        params.afterSeq < 0 ||
+        params.afterSeq > MAX_SAFE
+      ) {
+        throw new BadRequestError("acpRead.afterSeq out of range");
+      }
+      return host.acpRead(key, params.afterSeq);
+    }
+    case "acpKill": {
+      const key = requireSessionKey(req);
+      host.acpKill(key);
       return { ok: true };
     }
     default:
