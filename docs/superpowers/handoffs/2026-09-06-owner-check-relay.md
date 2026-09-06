@@ -56,5 +56,5 @@ Coordinator approved the plan on 2026-09-06. Nothing left to study. Go straight 
 - Never run a gate command through a pipe, and never run the full gate or anything that touches
   the database without the verify-gate skill.
 - The development instance for any live testing is at address 192.168.50.36, port 5173, with the
-  api on port 3000, login ben@ben.com, password jarvistest123!. Port 1533 is production and must
-  never be a test target.
+  api on port 3000, login ben@ben.com, password from the usual dev credential store. Port 1533 is
+  production and must never be a test target.
