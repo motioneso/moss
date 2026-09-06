@@ -10,8 +10,8 @@ export interface WorkshopFeedInput {
 export interface WorkshopFeedEntry extends WorkshopFeedInput {
   readonly projectId: string;
   readonly sequence: string;
-  readonly kind: "user_message";
-  readonly delivery: "pending";
+  readonly kind: "user_message" | "assistant_message";
+  readonly delivery: "pending" | "delivered";
   readonly createdAt: string;
 }
 
@@ -286,9 +286,9 @@ export const workshopFeedEntrySchema = {
     projectId: workshopUuidSchema,
     messageId: workshopUuidSchema,
     sequence: { type: "string" },
-    kind: { type: "string", const: "user_message" },
+    kind: { type: "string", enum: ["user_message", "assistant_message"] },
     text: { type: "string" },
-    delivery: { type: "string", const: "pending" },
+    delivery: { type: "string", enum: ["pending", "delivered"] },
     createdAt: workshopTimestampSchema
   }
 } as const;

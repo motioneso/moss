@@ -198,9 +198,17 @@ export interface WorkshopProjectFeedTable {
   owner_user_id: ColumnType<string, string | undefined, never>;
   message_id: string;
   sequence: string;
-  kind: ColumnType<"user_message", "user_message" | undefined, never>;
+  kind: ColumnType<
+    "user_message" | "assistant_message",
+    "user_message" | "assistant_message" | undefined,
+    never
+  >;
   text: string;
-  delivery: ColumnType<"pending", "pending" | undefined, never>;
+  delivery: ColumnType<
+    "pending" | "delivered",
+    "pending" | "delivered" | undefined,
+    "pending" | "delivered"
+  >;
   created_at: TimestampColumn;
 }
 
