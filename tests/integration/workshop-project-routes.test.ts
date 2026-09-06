@@ -187,6 +187,73 @@ describe("Workshop project HTTP entry", () => {
     });
   });
 
+  it("answers a saved message with a Moss reply and marks it delivered", async () => {
+    const replyText = "Moss reply for the saved message";
+    const replyApp = Fastify();
+    registerWorkshopProjectRoutes(replyApp, {
+      dataContext: context,
+      resolveAccessContext: async (request) => ({
+        actorUserId: String(request.headers["x-test-actor"])
+      }),
+      // @ts-expect-error mock
+      aiRepository: {
+        selectModelForCapability: async () => ({
+          id: "test-model",
+          provider_config_id: "test-config",
+          provider_kind: "openai-compatible",
+          provider_model_id: "test-model-id"
+        }),
+        selectProviderWithCredential: async () => ({ auth_method: "cli" })
+      },
+      cipher: createAiSecretCipher(),
+      createCliStructuredAdapter: () => ({
+        generateStructured: async () => ({
+          rawObject: { text: replyText },
+          usage: { inputTokens: 0, outputTokens: 0 }
+        })
+      })
+    });
+    await replyApp.ready();
+    try {
+      const project = (
+        await replyApp.inject({
+          method: "POST",
+          url: base,
+          payload: input(),
+          headers: { "x-test-actor": ids.adminUser }
+        })
+      ).json<CreateWorkshopProjectResponse>().project;
+      const messageId = randomUUID();
+      const saved = await replyApp.inject({
+        method: "POST",
+        url: `${base}/${project.id}/messages`,
+        payload: { messageId, text: "Reply to this please" },
+        headers: { "x-test-actor": ids.adminUser }
+      });
+      expect(saved.statusCode).toBe(201);
+      const listed = (
+        await replyApp.inject({
+          method: "GET",
+          url: `${base}/${project.id}/messages`,
+          headers: { "x-test-actor": ids.adminUser }
+        })
+      ).json<{ entries: { messageId: string; kind: string; delivery: string; text: string }[] }>();
+      expect(listed.entries).toHaveLength(2);
+      expect(listed.entries[0]).toMatchObject({
+        messageId,
+        kind: "user_message",
+        delivery: "delivered"
+      });
+      expect(listed.entries[1]).toMatchObject({
+        kind: "assistant_message",
+        delivery: "delivered",
+        text: replyText
+      });
+    } finally {
+      await replyApp.close();
+    }
+  });
+
   it("paginates project timestamps and rejects malformed inputs with curated errors", async () => {
     const { project } = await create();
     const first = (
