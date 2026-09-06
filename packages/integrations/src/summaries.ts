@@ -6,5 +6,7 @@ export const INTEGRATION_SUMMARY = {
   blockedRead: "Unchanged result from earlier in this request.",
   blockedPerformed: "This was already done once in this request and was not done again.",
   truncated: "Result truncated at 8,000 characters; ask for a narrower query to see more.",
-  requestRefused: "Call limit reached for this request; answer with what you have."
+  requestRefused: "Call limit reached for this request; answer with what you have.",
+  setupPaused:
+    "Integration credentials are paused until an encryption key is set up. Ask an admin to open Settings, Encryption keys, and press Generate."
 } as const;

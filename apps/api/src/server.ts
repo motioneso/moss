@@ -24,10 +24,7 @@ import {
   GoogleApiClient,
   createConnectorSecretCipher
 } from "@moss/connectors";
-import {
-  createIntegrationsActiveModulesResolver,
-  createIntegrationsCipher
-} from "@moss/integrations";
+import { createIntegrationsActiveModulesResolver } from "@moss/integrations";
 import {
   DataContextRunner,
   createDatabase,
@@ -62,7 +59,7 @@ import {
 import { createModuleLogger, CORE_VERSION } from "@moss/module-sdk";
 // #917: /api/modules reads enablement through the public settings API; this is legitimate
 // composition-root wiring, not a module cross-import.
-import { SettingsRepository } from "@moss/settings";
+import { INTEGRATIONS_FAMILY, SettingsRepository, loadFamilyKeyring } from "@moss/settings";
 import {
   type ExternalModuleWorkerRuntime,
   createExternalModuleDiscoveryHolder,
@@ -443,13 +440,16 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         })
     );
 
-    // Task 7 wired the integrations REST routes (and their cipher) in module-registry,
-    // not here — this is a second cipher instance off the same key chain, used only to
-    // decrypt connection credentials at tool-call time for the synthetic chat tools below.
-    const integrationsCipher = createIntegrationsCipher(process.env);
+    // The integrations family key loads per request from env or the master key
+    // store (#2312) — never eagerly here, so a missing key degrades the tools
+    // instead of failing startup.
     const resolveActiveModulesWithIntegrations = createIntegrationsActiveModulesResolver(
       resolveActiveModules,
-      { dataContext, cipher: integrationsCipher, logger: server.log }
+      {
+        dataContext,
+        resolveKeyring: (scopedDb) => loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY),
+        logger: server.log
+      }
     );
 
     // Connector collaborators for the calendar focus-time write tool. A single shared

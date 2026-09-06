@@ -39,6 +39,27 @@ export const integrationsModuleManifest = {
         "A connection's tool list is grouped, with each tool getting a per-tool switch to allow " +
         "repeated identical calls (off by default). Notes explain grandfathered connections and " +
         "point to Refresh tools when read/repeat hints are missing."
+    },
+    {
+      id: "integrations.credentials_paused",
+      description:
+        "Integration credentials pause when no encryption key is set up. Credentialed tools " +
+        "stay unlisted until an admin generates a key.",
+      remediations: [
+        {
+          id: "integrations.credentials_paused.generate_key",
+          description: "Ask an admin to open Settings, Encryption keys, and press Generate.",
+          path: "/settings?section=enckeys"
+        }
+      ],
+      errors: [
+        {
+          code: "integrations.credentials_paused.no_key",
+          class: "prerequisite",
+          remediationRef: "integrations.credentials_paused.generate_key",
+          description: "No integrations encryption key is set up."
+        }
+      ]
     }
   ]
 } satisfies MossModuleManifest;

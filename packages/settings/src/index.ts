@@ -26,6 +26,8 @@ export * from "./source-inspector.js";
 export * from "./host-install-routes.js";
 export * from "./host-restart-routes.js";
 export * from "./module-credential-crypto.js";
+export * from "./master-key-store.js";
+export * from "./family-key-routes.js";
 export * from "./repository-module-credentials.js";
 export * from "./repository-module-kv.js";
 export * from "./module-builds-repository.js";

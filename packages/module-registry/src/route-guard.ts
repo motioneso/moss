@@ -71,6 +71,11 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   routeKey("GET", "/api/admin/settings/web-search"),
   routeKey("PUT", "/api/admin/settings/web-search"),
   routeKey("DELETE", "/api/admin/settings/web-search"),
+  // Family encryption keys: dedicated encrypted admin routes (#2312), admin-gated
+  // like the rest of the settings surface — not module-enablement-gated.
+  routeKey("GET", "/api/admin/settings/encryption-keys"),
+  routeKey("PUT", "/api/admin/settings/encryption-keys"),
+  routeKey("POST", "/api/admin/settings/encryption-keys/rotate"),
   routeKey("GET", "/api/admin/registration"),
   routeKey("PUT", "/api/admin/registration"),
   routeKey("GET", "/api/admin/chat-multiplexer"),

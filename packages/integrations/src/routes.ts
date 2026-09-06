@@ -1,6 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import type { AccessContext, DataContextDb, DataContextRunner, JsonSecretCipher } from "@moss/db";
+import {
+  resolveMossEnv,
+  type AccessContext,
+  type DataContextDb,
+  type DataContextRunner,
+  type JsonSecretCipher,
+  type Keyring
+} from "@moss/db";
 import { HttpError, handleRouteError as handleModuleRouteError } from "@moss/module-sdk";
 import type {
   CreateIntegrationRequest,
@@ -11,7 +18,7 @@ import type {
   ListIntegrationsResponse
 } from "@moss/shared";
 
-import { createIntegrationsCipher } from "./credentials.js";
+import { createIntegrationsCipher, createIntegrationsCipherFromKeyring } from "./credentials.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { discoverTools, resolveOpenApiBase, toDetail } from "./discovery.js";
 import { IntegrationUserError } from "./errors.js";
@@ -30,6 +37,12 @@ export interface IntegrationsRouteDependencies {
   readonly dataContext: DataContextRunner;
   readonly repository?: IntegrationsRepository;
   readonly cipher?: JsonSecretCipher;
+  /**
+   * Master key store (#2312): loads the family keyring per request when no cipher
+   * is injected and no env key is set. Injected by the composition root; omitted in
+   * tests, which pass a cipher directly.
+   */
+  readonly resolveKeyring?: (scopedDb: DataContextDb) => Promise<Keyring | null>;
   /** Test seam — defaults to the module-level `resolverCache` singleton (#2175 Task 8). */
   readonly resolverCache?: ResolverCache;
 }
@@ -43,8 +56,29 @@ export function registerIntegrationsRoutes(
   dependencies: IntegrationsRouteDependencies
 ): void {
   const repository = dependencies.repository ?? new IntegrationsRepository();
-  const cipher = dependencies.cipher ?? createIntegrationsCipher();
   const cache = dependencies.resolverCache ?? resolverCache;
+
+  /**
+   * Cipher for this request: injected cipher wins (tests), else the env key with
+   * its existing semantics, else the family key from the master store. Missing
+   * everywhere means the feature is paused for setup — a 503 naming the fix,
+   * never a boot-style throw and never key material.
+   */
+  async function cipherForRequest(scopedDb: DataContextDb): Promise<JsonSecretCipher> {
+    if (dependencies.cipher) return dependencies.cipher;
+    if (resolveMossEnv(process.env, "JARVIS_INTEGRATIONS_SECRET_KEY") !== undefined) {
+      return createIntegrationsCipher();
+    }
+    if (dependencies.resolveKeyring) {
+      const keyring = await dependencies.resolveKeyring(scopedDb);
+      if (keyring) return createIntegrationsCipherFromKeyring(keyring);
+    }
+    throw new HttpError(
+      503,
+      "Integration credentials are paused until an encryption key is set up. " +
+        "Ask an admin to open Settings, Encryption keys, and press Generate."
+    );
+  }
 
   server.get("/api/integrations", async (request, reply) => {
     try {
@@ -90,12 +124,12 @@ export function registerIntegrationsRoutes(
         return reply.code(422).send({ error: sanitizedMessage(error) });
       }
 
-      const credentialEnvelope =
-        body.credential !== undefined ? cipher.encryptJson({ secret: body.credential }) : null;
-
       const detail = await dependencies.dataContext.withDataContext(
         accessContext,
         async (scopedDb) => {
+          const cipher = await cipherForRequest(scopedDb);
+          const credentialEnvelope =
+            body.credential !== undefined ? cipher.encryptJson({ secret: body.credential }) : null;
           const created = await repository.createConnection(scopedDb, {
             name: body.name,
             kind: body.kind,
@@ -135,9 +169,13 @@ export function registerIntegrationsRoutes(
     try {
       const accessContext = await dependencies.resolveAccessContext(request);
       const value = requireObject(request.body);
-      const patch = buildUpdatePatch(value, cipher);
-      const updated = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-        repository.updateConnection(scopedDb, request.params.id, patch)
+      const updated = await dependencies.dataContext.withDataContext(
+        accessContext,
+        async (scopedDb) => {
+          const cipher = await cipherForRequest(scopedDb);
+          const patch = buildUpdatePatch(value, cipher);
+          return repository.updateConnection(scopedDb, request.params.id, patch);
+        }
       );
       if (!updated) return reply.code(404).send({ error: "Integration not found" });
       cache.drop(accessContext.actorUserId);
@@ -168,6 +206,7 @@ export function registerIntegrationsRoutes(
           }
 
           const envelope = await repository.loadCredentialEnvelope(scopedDb, row.id);
+          const cipher = await cipherForRequest(scopedDb);
           const secret = envelope
             ? (cipher.decryptJson(cipher.parseEnvelope(envelope)).secret as string)
             : null;
