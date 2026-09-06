@@ -39,6 +39,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Assistant chat home folder mismatch.** Fixed a problem that could make the assistant take a long time to answer, or fail [PR #2358](https://github.com/motioneso/moss/pull/2358)
 - **Fresh accounts get working chat tools automatically.** A brand-new account running from source now gets a chat-tools folder it can actually write to, instead of silently failing because the old default pointed at a folder only the Docker image could create. [PR #2354](https://github.com/motioneso/moss/pull/2354)
 - **A private module you are still building can now actually run.** A private module the owner is still building can now run and save its own data while it is still a draft, and nobody else can see or use it. [PR #2353](https://github.com/motioneso/moss/pull/2353)
 - **App no longer sticks on the loading screen on slow days.** The app used to get stuck on its loading screen when one startup check was slow, and now it waits for the answer instead of asking again until nothing responds. [PR #2344](https://github.com/motioneso/moss/pull/2344)
