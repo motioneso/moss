@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
-import { Badge, Button, ButtonLink, Card, EmptyState } from "@moss/ui";
+import { Badge, Button, ButtonLink, Card, EmptyState, Masthead, RowIndex, RowIndexItem } from "@moss/ui";
 import { ApiError, randomUuid } from "@moss/module-web-sdk";
 import type { LocaleSettingsDto, WorkshopProjectCursor } from "@moss/shared";
 import { formatDate, useUserLocale } from "./locale.js";
@@ -52,25 +52,25 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
   const projects = query.data?.pages.flatMap((page) => page.projects) ?? [];
   return (
     <>
-      <header className="workshop-project-heading">
-        <div className="workshop-project-heading__text">
-          <p className="jds-eyebrow">Workshop</p>
-          <h1>Your Workshop</h1>
-          <p className="workshop-lede">
-            Start with an idea. Keep your projects and their conversations here.
-          </p>
-        </div>
-        <ButtonLink
-          href="/workshop/new"
-          size="lg"
-          aria-disabled={!canMutate}
-          onClick={(event) => {
-            if (!canMutate) event.preventDefault();
-          }}
-        >
-          New project
-        </ButtonLink>
-      </header>
+      <Masthead
+        tone="field"
+        eyebrow="Workshop"
+        title="Your projects"
+        lede="Start with an idea, and pick it back up whenever you're ready."
+        aside={
+          <ButtonLink
+            href="/workshop/new"
+            variant="field"
+            size="lg"
+            aria-disabled={!canMutate}
+            onClick={(event) => {
+              if (!canMutate) event.preventDefault();
+            }}
+          >
+            New project
+          </ButtonLink>
+        }
+      />
       {query.isPending ? <p role="status">Loading your projects…</p> : null}
       {query.isError ? (
         <ProjectError
@@ -97,24 +97,23 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
         </EmptyState>
       ) : null}
       {projects.length > 0 ? (
-        <div className="workshop-project-list">
+        <RowIndex>
           {projects.map((project) => (
-            <Card key={project.id} interactive>
-              <h2 className="workshop-project-card__title">
-                <Link to={`/workshop/${project.id}`}>{project.title}</Link>
-              </h2>
-              <p className="workshop-project-excerpt">{project.initialRequest}</p>
-              <div className="workshop-project-card__foot">
-                <Badge tone="steel" pill dot>
-                  Only you
-                </Badge>
-                <span className="jds-caption">
-                  Started {formatStartedOn(project.createdAt, locale)}
-                </span>
-              </div>
-            </Card>
+            <RowIndexItem
+              key={project.id}
+              title={<Link to={`/workshop/${project.id}`}>{project.title}</Link>}
+              excerpt={project.initialRequest}
+              meta={
+                <>
+                  <Badge tone="neutral">Talking it through</Badge>
+                  <span className="jds-caption">
+                    {formatStartedOn(project.createdAt, locale)}
+                  </span>
+                </>
+              }
+            />
           ))}
-        </div>
+        </RowIndex>
       ) : null}
       {query.hasNextPage ? (
         <div className="workshop-project-more">
@@ -127,9 +126,6 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
           </Button>
         </div>
       ) : null}
-      <p className="workshop-project-footer">
-        <Link to="/workshop/legacy">Earlier builds and installed modules</Link>
-      </p>
     </>
   );
 }
