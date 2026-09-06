@@ -2657,7 +2657,10 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     registerRoutes: (server, deps) =>
       registerWorkshopProjectRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
-        dataContext: deps.dataContext
+        dataContext: deps.dataContext,
+        aiRepository: new AiRepository(),
+        cipher: createAiSecretCipher(),
+        createCliStructuredAdapter: deps.createCliStructuredAdapter
       })
   }
 ];

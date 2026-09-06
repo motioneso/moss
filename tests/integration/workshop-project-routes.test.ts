@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import type { Kysely } from "kysely";
 import { getBuiltInModuleRegistrations } from "@moss/module-registry";
+import { AiRepository, createAiSecretCipher } from "@moss/ai";
 import { createWorkshopProject, registerWorkshopProjectRoutes } from "@moss/workshop";
 import type { CreateWorkshopProjectResponse, ListWorkshopProjectsResponse } from "@moss/shared";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
@@ -41,7 +42,9 @@ beforeAll(async () => {
     dataContext: context,
     resolveAccessContext: async (request) => ({
       actorUserId: String(request.headers["x-test-actor"])
-    })
+    }),
+    aiRepository: new AiRepository(),
+    cipher: createAiSecretCipher()
   });
   await app.ready();
 });
