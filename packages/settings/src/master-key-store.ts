@@ -10,7 +10,11 @@ import {
 } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 
-import { INTEGRATIONS_FAMILY_KEY_SETTING } from "./instance-settings-keys.js";
+import {
+  INTEGRATIONS_FAMILY_KEY_SETTING,
+  MODULE_CREDENTIAL_FAMILY_KEY_SETTING,
+  NEWS_CREDENTIAL_FAMILY_KEY_SETTING
+} from "./instance-settings-keys.js";
 
 /**
  * Master key store (#2312 slice 1): per-family key-encryption keys kept as
@@ -50,7 +54,29 @@ export const INTEGRATIONS_FAMILY: FamilyKeyDescriptor = {
   devDefault: "jarv1s-development-integrations-secret"
 };
 
-const FAMILIES: readonly FamilyKeyDescriptor[] = [INTEGRATIONS_FAMILY];
+export const MODULE_CREDENTIAL_FAMILY: FamilyKeyDescriptor = {
+  name: "module_credential",
+  settingKey: MODULE_CREDENTIAL_FAMILY_KEY_SETTING,
+  keyEnvVar: "JARVIS_MODULE_CREDENTIAL_SECRET_KEY",
+  keyIdEnvVar: "JARVIS_MODULE_CREDENTIAL_SECRET_KEY_ID",
+  keysEnvVar: "JARVIS_MODULE_CREDENTIAL_SECRET_KEYS",
+  devDefault: "jarv1s-development-module-credential-secret"
+};
+
+export const NEWS_CREDENTIAL_FAMILY: FamilyKeyDescriptor = {
+  name: "news_credential",
+  settingKey: NEWS_CREDENTIAL_FAMILY_KEY_SETTING,
+  keyEnvVar: "JARVIS_NEWS_CREDENTIAL_SECRET_KEY",
+  keyIdEnvVar: "JARVIS_NEWS_CREDENTIAL_SECRET_KEY_ID",
+  keysEnvVar: "JARVIS_NEWS_CREDENTIAL_SECRET_KEYS",
+  devDefault: "jarv1s-development-news-credential-secret"
+};
+
+const FAMILIES: readonly FamilyKeyDescriptor[] = [
+  INTEGRATIONS_FAMILY,
+  MODULE_CREDENTIAL_FAMILY,
+  NEWS_CREDENTIAL_FAMILY
+];
 
 /** Look up a family by the name the admin routes receive. */
 export function familyByName(name: string): FamilyKeyDescriptor | null {

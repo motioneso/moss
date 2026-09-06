@@ -47,7 +47,13 @@ describe("family key admin routes (#2312 slice 1)", () => {
     const { app, keyChanges } = createHarness(true);
     const before = await app.inject({ method: "GET", url: "/api/admin/settings/encryption-keys" });
     expect(before.statusCode).toBe(200);
-    expect(before.json()).toEqual({ keys: [{ family: "integrations", source: "missing" }] });
+    expect(before.json()).toEqual({
+      keys: [
+        { family: "integrations", source: "missing" },
+        { family: "module_credential", source: "missing" },
+        { family: "news_credential", source: "missing" }
+      ]
+    });
 
     const put = await app.inject({
       method: "PUT",
@@ -55,9 +61,32 @@ describe("family key admin routes (#2312 slice 1)", () => {
       payload: { family: "integrations" }
     });
     expect(put.statusCode).toBe(200);
-    expect(put.json()).toEqual({ keys: [{ family: "integrations", source: "store" }] });
+    expect(put.json()).toEqual({
+      keys: [
+        { family: "integrations", source: "store" },
+        { family: "module_credential", source: "missing" },
+        { family: "news_credential", source: "missing" }
+      ]
+    });
     expect(keyChanges).toHaveLength(1);
     expect(JSON.stringify(put.json())).not.toContain("ciphertext");
+  });
+
+  it("generates each new family with no route changes", async () => {
+    const { app } = createHarness(true);
+    for (const family of ["module_credential", "news_credential"]) {
+      const put = await app.inject({
+        method: "PUT",
+        url: "/api/admin/settings/encryption-keys",
+        payload: { family }
+      });
+      expect(put.statusCode).toBe(200);
+      expect(
+        (put.json() as { keys: { family: string; source: string }[] }).keys.find(
+          (k) => k.family === family
+        )?.source
+      ).toBe("store");
+    }
   });
 
   it("rejects unknown families and rotate-with-nothing as 404", async () => {
@@ -89,7 +118,13 @@ describe("family key admin routes (#2312 slice 1)", () => {
       payload: { family: "integrations" }
     });
     expect(rotate.statusCode).toBe(200);
-    expect(rotate.json()).toEqual({ keys: [{ family: "integrations", source: "store" }] });
+    expect(rotate.json()).toEqual({
+      keys: [
+        { family: "integrations", source: "store" },
+        { family: "module_credential", source: "missing" },
+        { family: "news_credential", source: "missing" }
+      ]
+    });
 
     const nonAdmin = createHarness(false);
     for (const request of [

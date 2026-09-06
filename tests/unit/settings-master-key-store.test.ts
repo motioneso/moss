@@ -4,11 +4,14 @@ import { describe, expect, it } from "vitest";
 import { dataContextBrand, JsonSecretCipher, type DataContextDb } from "@moss/db";
 
 import {
+  familyByName,
   generateFamilyKey,
   getFamilyKeyStatus,
   INTEGRATIONS_FAMILY,
   invalidateFamilyKeyCache,
   loadFamilyKeyring,
+  MODULE_CREDENTIAL_FAMILY,
+  NEWS_CREDENTIAL_FAMILY,
   rotateFamilyKey,
   SECRET_INSTANCE_SETTING_KEYS
 } from "@moss/settings";
@@ -46,7 +49,60 @@ function createMockRepository(store: Map<string, unknown>) {
 
 const MASTER_ENV = { JARVIS_AI_SECRET_KEY: "m".repeat(40) };
 
-describe("family key store (#2312 slice 1)", () => {
+describe("family key store (#2312 slice 1, #2322 slice 2)", () => {
+  it("resolves all three families by name with their store keys and env names", () => {
+    expect(familyByName("integrations")).toBe(INTEGRATIONS_FAMILY);
+    expect(familyByName("module_credential")).toBe(MODULE_CREDENTIAL_FAMILY);
+    expect(familyByName("news_credential")).toBe(NEWS_CREDENTIAL_FAMILY);
+    expect(MODULE_CREDENTIAL_FAMILY?.settingKey).toBe("keys.module_credential");
+    expect(MODULE_CREDENTIAL_FAMILY?.keyEnvVar).toBe("JARVIS_MODULE_CREDENTIAL_SECRET_KEY");
+    expect(NEWS_CREDENTIAL_FAMILY?.settingKey).toBe("keys.news_credential");
+    expect(NEWS_CREDENTIAL_FAMILY?.keyEnvVar).toBe("JARVIS_NEWS_CREDENTIAL_SECRET_KEY");
+    expect(familyByName("nope")).toBeNull();
+  });
+
+  it("both new families read env through the newer prefix with legacy fallback", async () => {
+    invalidateFamilyKeyCache();
+    const { scopedDb } = createMockDb();
+    const base = { NODE_ENV: "production", ...MASTER_ENV };
+    for (const [family, mossName, jarvisName] of [
+      [MODULE_CREDENTIAL_FAMILY, "MOSS_MODULE_CREDENTIAL_SECRET_KEY", "JARVIS_MODULE_CREDENTIAL_SECRET_KEY"],
+      [NEWS_CREDENTIAL_FAMILY, "MOSS_NEWS_CREDENTIAL_SECRET_KEY", "JARVIS_NEWS_CREDENTIAL_SECRET_KEY"]
+    ] as const) {
+      invalidateFamilyKeyCache();
+      const fromMoss = await loadFamilyKeyring(scopedDb, family, {
+        ...base,
+        [mossName]: "n".repeat(40)
+      });
+      expect(fromMoss).not.toBeNull();
+      const statusMoss = await getFamilyKeyStatus(scopedDb, {
+        ...base,
+        [mossName]: "n".repeat(40)
+      });
+      expect(statusMoss.find((s) => s.family === family.name)?.source).toBe("env");
+      invalidateFamilyKeyCache();
+      const fromLegacy = await loadFamilyKeyring(scopedDb, family, {
+        ...base,
+        [jarvisName]: "o".repeat(40)
+      });
+      expect(fromLegacy).not.toBeNull();
+    }
+  });
+
+  it("status lists all three families as missing on an empty store", async () => {
+    invalidateFamilyKeyCache();
+    const { scopedDb } = createMockDb();
+    const missing = await getFamilyKeyStatus(scopedDb, {
+      NODE_ENV: "production",
+      ...MASTER_ENV
+    });
+    expect(missing).toEqual([
+      { family: "integrations", source: "missing" },
+      { family: "module_credential", source: "missing" },
+      { family: "news_credential", source: "missing" }
+    ]);
+  });
+
   it("missing row and no env key resolves to null, never throws, even in production", async () => {
     invalidateFamilyKeyCache();
     const { scopedDb } = createMockDb();
@@ -94,7 +150,11 @@ describe("family key store (#2312 slice 1)", () => {
       NODE_ENV: "production",
       ...MASTER_ENV
     });
-    expect(missing).toEqual([{ family: "integrations", source: "missing" }]);
+    expect(missing).toEqual([
+      { family: "integrations", source: "missing" },
+      { family: "module_credential", source: "missing" },
+      { family: "news_credential", source: "missing" }
+    ]);
 
     const repository = createMockRepository(store);
     await generateFamilyKey(scopedDb, repository, {
@@ -108,14 +168,22 @@ describe("family key store (#2312 slice 1)", () => {
       NODE_ENV: "production",
       ...MASTER_ENV
     });
-    expect(stored).toEqual([{ family: "integrations", source: "store" }]);
+    expect(stored).toEqual([
+      { family: "integrations", source: "store" },
+      { family: "module_credential", source: "missing" },
+      { family: "news_credential", source: "missing" }
+    ]);
 
     const fromEnv = await getFamilyKeyStatus(scopedDb, {
       NODE_ENV: "production",
       ...MASTER_ENV,
       JARVIS_INTEGRATIONS_SECRET_KEY: "e".repeat(40)
     });
-    expect(fromEnv).toEqual([{ family: "integrations", source: "env" }]);
+    expect(fromEnv).toEqual([
+      { family: "integrations", source: "env" },
+      { family: "module_credential", source: "missing" },
+      { family: "news_credential", source: "missing" }
+    ]);
   });
 
   it("data locked under the env key stays readable after moving into the store", async () => {
@@ -233,7 +301,11 @@ describe("family key store (#2312 slice 1)", () => {
     });
     invalidateFamilyKeyCache();
     const status = await getFamilyKeyStatus(scopedDb, envB);
-    expect(status).toEqual([{ family: "integrations", source: "broken" }]);
+    expect(status).toEqual([
+      { family: "integrations", source: "broken" },
+      { family: "module_credential", source: "missing" },
+      { family: "news_credential", source: "missing" }
+    ]);
     await expect(loadFamilyKeyring(scopedDb, INTEGRATIONS_FAMILY, envB)).resolves.toBeNull();
 
     await rotateFamilyKey(scopedDb, repository, {
@@ -250,7 +322,9 @@ describe("family key store (#2312 slice 1)", () => {
     });
     invalidateFamilyKeyCache();
     expect(await getFamilyKeyStatus(scopedDb, envB)).toEqual([
-      { family: "integrations", source: "store" }
+      { family: "integrations", source: "store" },
+      { family: "module_credential", source: "missing" },
+      { family: "news_credential", source: "missing" }
     ]);
   });
 
