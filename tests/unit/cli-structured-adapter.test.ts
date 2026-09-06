@@ -39,7 +39,13 @@ describe("CliStructuredAdapter (#982/#869/#981)", () => {
     expect(submit.mock.calls[0]?.[0]).toContain("Respond with ONLY a JSON object");
   });
 
-  it("keeps a valid reply that becomes readable during bounded CLI teardown", async () => {
+  it("throws away a reply that only becomes readable after its own timeout fired (#2276)", async () => {
+    // Before #2276 this same setup was named "keeps a valid reply that becomes readable
+    // during bounded CLI teardown" and asserted the opposite: that a reply landing after
+    // the timeout's own kill-and-reread step was handed back as a success. Issue #2276 says
+    // a late answer must not be handed back once the run has already timed out, so this is
+    // the timeout case the fix targets, not the genuine-crash case the rescue read still
+    // exists for.
     let tornDown = false;
     const factory: ChatEngineFactory = () => ({
       provider: "anthropic",
@@ -69,7 +75,7 @@ describe("CliStructuredAdapter (#982/#869/#981)", () => {
         schema: { type: "object", required: ["ok"] },
         maxOutputTokens: 100
       })
-    ).resolves.toMatchObject({ rawText: '{"ok":true}' });
+    ).rejects.toThrow("CLI structured generation timed out");
   });
 
   it("selects a waiting foreground call before FIFO background calls", async () => {
@@ -378,7 +384,9 @@ describe("CliStructuredAdapter — nativeSearch and sources (#2228)", () => {
     expect(result).not.toHaveProperty("sources");
   });
 
-  it("keeps sources on a reply that only becomes readable during teardown", async () => {
+  it("throws away sources too, on a reply that only becomes readable after its own timeout fired (#2276)", async () => {
+    // Same #2276 change as the timeout test above, with sources attached to the discarded
+    // late reply: a timed-out run must not hand back a success, sources included.
     let tornDown = false;
     const factory: ChatEngineFactory = () => ({
       provider: "anthropic",
@@ -408,18 +416,14 @@ describe("CliStructuredAdapter — nativeSearch and sources (#2228)", () => {
     });
     const adapter = new CliStructuredAdapter("anthropic", factory, 20, 0);
 
-    const result = await adapter.generateStructured({
-      model: { provider_kind: "anthropic", provider_model_id: "claude-opus-4-8" },
-      messages: [{ role: "user", content: "Extract a value" }],
-      schema: { type: "object", required: ["ok"] },
-      maxOutputTokens: 100,
-      nativeSearch: true
-    });
-
-    expect(result).toEqual({
-      rawText: '{"ok":true}',
-      usage: { inputTokens: 0, outputTokens: 0 },
-      sources: [{ title: "Late", url: "https://example.com/late" }]
-    });
+    await expect(
+      adapter.generateStructured({
+        model: { provider_kind: "anthropic", provider_model_id: "claude-opus-4-8" },
+        messages: [{ role: "user", content: "Extract a value" }],
+        schema: { type: "object", required: ["ok"] },
+        maxOutputTokens: 100,
+        nativeSearch: true
+      })
+    ).rejects.toThrow("CLI structured generation timed out");
   });
 });
