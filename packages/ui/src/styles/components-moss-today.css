@@ -666,7 +666,7 @@
 }
 .jds-index__row {
   display: grid;
-  grid-template-columns: minmax(20ch, 24ch) 1fr auto;
+  grid-template-columns: auto 1fr auto;
   align-items: baseline;
   column-gap: clamp(1rem, 3vw, 2.75rem);
   row-gap: var(--space-1);
