@@ -56,8 +56,7 @@ const defaultGatewayLogger: GatewayLogger = {
  * The agent retries a bare timeout exactly once, so both outcomes return the
  * same sentence telling it not to retry and to tell the user instead.
  */
-export const APPROVAL_REFUSED_REASON =
-  "This action was not approved. Do not retry; tell the user.";
+export const APPROVAL_REFUSED_REASON = "This action was not approved. Do not retry; tell the user.";
 
 /**
  * Private runHandler return shape: the public envelope plus the audit-log fields, computed once
@@ -787,8 +786,7 @@ export class AssistantToolGateway {
           actionRequestId: action.id,
           toolName: found.dto.name,
           outcome: "denied",
-          reason:
-            outcome === "cancelled" ? "Action cancelled." : APPROVAL_REFUSED_REASON
+          reason: outcome === "cancelled" ? "Action cancelled." : APPROVAL_REFUSED_REASON
         });
         const approvalMode =
           outcome === "timeout" ? "timeout" : outcome === "rejected" ? "rejected" : "cancelled";

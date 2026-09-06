@@ -712,7 +712,11 @@ describe("AssistantToolGateway", () => {
     await gateway.resolveActionRequest(ids.userA, card.actionRequestId, "rejected");
     const res = await call;
 
-    expect(res).toEqual({ ok: false, denied: true, reason: "This action was not approved. Do not retry; tell the user." });
+    expect(res).toEqual({
+      ok: false,
+      denied: true,
+      reason: "This action was not approved. Do not retry; tell the user."
+    });
     expect(exampleToolCalls).toHaveLength(0);
   });
 

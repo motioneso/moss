@@ -220,6 +220,8 @@ describe("ChatGatewayNotifier", () => {
       string,
       TranscriptRecord
     ];
-    expect(record.text).toBe("Not changed — This action was not approved. Do not retry; tell the user.");
+    expect(record.text).toBe(
+      "Not changed — This action was not approved. Do not retry; tell the user."
+    );
   });
 });

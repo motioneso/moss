@@ -342,7 +342,10 @@ describe("native Claude tool permission bridge", () => {
 
     await expect(
       gateway.requestNativeToolPermission(token, { toolName: "Grep", toolInput: {} })
-    ).resolves.toEqual({ decision: "deny", reason: "This action was not approved. Do not retry; tell the user." });
+    ).resolves.toEqual({
+      decision: "deny",
+      reason: "This action was not approved. Do not retry; tell the user."
+    });
   });
 
   it.each([

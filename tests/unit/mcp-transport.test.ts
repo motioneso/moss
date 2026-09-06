@@ -20,10 +20,17 @@ describe("gatewayResponseToMcp", () => {
   });
 
   it("maps denied response to isError=true with reason", () => {
-    const res: GatewayToolResponse = { ok: false, denied: true, reason: "Denied by user." };
+    const res: GatewayToolResponse = {
+      ok: false,
+      denied: true,
+      reason: "This action was not approved. Do not retry; tell the user."
+    };
     const mcp = gatewayResponseToMcp(res);
     expect(mcp.isError).toBe(true);
-    expect(mcp.content[0]).toEqual({ type: "text", text: "Denied by user." });
+    expect(mcp.content[0]).toEqual({
+      type: "text",
+      text: "This action was not approved. Do not retry; tell the user."
+    });
   });
 
   it("maps error response to isError=true with error message", () => {
@@ -118,11 +125,11 @@ describe("streamToolCallWithProgress", () => {
 
   it("closes with an error frame when the call throws", async () => {
     const raw = new FakeRaw();
-    await streamToolCallWithProgress(
-      raw as never,
-      Promise.resolve(null),
-      { id: 2, progressToken: "tok-2", heartbeatMs: 10 }
-    );
+    await streamToolCallWithProgress(raw as never, Promise.resolve(null), {
+      id: 2,
+      progressToken: "tok-2",
+      heartbeatMs: 10
+    });
     expect(frameMessages(raw)).toEqual([
       { jsonrpc: "2.0", id: 2, error: { code: -32603, message: "Internal error" } }
     ]);
@@ -175,7 +182,10 @@ describe("registerNativePermissionRoute", () => {
         requestNativeToolPermission: async (rawToken: string, request: unknown) => {
           expect(rawToken).toBe(token);
           expect(request).toEqual({ toolName: "Bash", toolInput: { command: "echo hi" } });
-          return { decision: "deny", reason: "Denied by user." };
+          return {
+            decision: "deny",
+            reason: "This action was not approved. Do not retry; tell the user."
+          };
         }
       } as never
     });
@@ -188,7 +198,10 @@ describe("registerNativePermissionRoute", () => {
         body: { tool_name: "Bash", tool_input: { command: "echo hi" } }
       });
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ decision: "deny", reason: "Denied by user." });
+      expect(res.json()).toEqual({
+        decision: "deny",
+        reason: "This action was not approved. Do not retry; tell the user."
+      });
     } finally {
       await app.close();
     }
