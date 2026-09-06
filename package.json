@@ -61,6 +61,7 @@
     "test:unit": "tsx scripts/test-unit.ts",
     "test:uat-seed": "vitest run tests/uat/seed",
     "test:integration": "tsx scripts/test-integration.ts",
+    "test:module-worker-queue-ai": "tsx scripts/test-integration.ts tests/integration/module-worker-queue-ai.test.ts",
     "test:sports-sources": "tsx scripts/test-integration.ts tests/integration/sports-sources-repository.test.ts",
     "test:sports-retry-card": "tsx scripts/test-integration.ts tests/integration/sports-retry-source-card.test.ts",
     "test:news-personalization-repository": "tsx scripts/test-integration.ts tests/integration/news-personalization-repository.test.ts",
