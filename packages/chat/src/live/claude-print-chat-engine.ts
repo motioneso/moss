@@ -1,10 +1,11 @@
 import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import {
   DEFAULT_MODEL_SENTINEL,
+  buildSanitizedCliEnv,
   parseTranscript,
   redactExact,
   redactSecrets,
@@ -13,6 +14,7 @@ import {
   type TmuxIo
 } from "@moss/ai";
 
+import { CliTranscriptLocationMismatchError } from "./errors.js";
 import type { ChatRecordKind, CliChatEngine, EngineLaunchOpts, TranscriptRecord } from "./types.js";
 import { writeClaudeOneShotPermissionHook } from "./claude-permission-hook.js";
 import { vaultReadOnlyToolPatterns } from "./vault-allowlist.js";
@@ -68,11 +70,24 @@ function scrubPromptFragments(stderrTail: string, sanitizedPrompt: string): stri
     .join("\n");
 }
 
+/**
+ * #2348 — how long, after a submit, `readNew()` gives the model program to create its
+ * transcript project folder before treating a still-missing folder as a genuine
+ * location disagreement rather than an ordinary "still starting" miss. Small compared
+ * to the 120-second overall turn budget (about an eighth of it) so the failure stays
+ * fast, and generous compared to how quickly Claude Code creates that folder in
+ * practice — the folder appears before any model output, not at the end of a slow
+ * turn. Overridable per-engine (tests use a much smaller value) without changing the
+ * production default.
+ */
+const DEFAULT_TRANSCRIPT_DIR_GRACE_MS = 15_000;
+
 export interface ClaudePrintChatEngineOpts {
   readonly mux?: Multiplexer;
   readonly homeBase?: string;
   readonly sessionId?: string;
   readonly credentialFile?: string;
+  readonly transcriptDirGraceMs?: number;
 }
 
 export class ClaudePrintChatEngine implements CliChatEngine {
@@ -92,6 +107,9 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   private hasSubmitted = false;
   /** #1353 — one warning per unreadable-transcript streak, not one per 25ms poll. */
   private warnedUnreadable = false;
+  /** #2348 — when the current turn's child process was started; null before the first submit. */
+  private submitStartedAt: number | null = null;
+  private readonly transcriptDirGraceMs: number;
   /**
    * #2164 r23 security correction (item 3) — a prior turn's `submit()` never kills its child on
    * this path (only teardown/Stop do), so an abandoned still-writing child could keep mutating a
@@ -112,6 +130,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     this.homeBase = opts.homeBase;
     this.credentialFile = opts.credentialFile;
     this.sessionId = opts.sessionId ?? randomUUID();
+    this.transcriptDirGraceMs = opts.transcriptDirGraceMs ?? DEFAULT_TRANSCRIPT_DIR_GRACE_MS;
   }
 
   async launch(opts: EngineLaunchOpts): Promise<{ offset: number }> {
@@ -141,7 +160,10 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     this.currentProcess = spawn("bash", ["-lc", launchLine], {
       cwd: this.launchOpts.neutralDir,
       detached: true,
-      stdio: ["ignore", "ignore", "pipe"]
+      stdio: ["ignore", "ignore", "pipe"],
+      ...(this.homeBase === undefined
+        ? {}
+        : { env: { ...buildSanitizedCliEnv(process.env), HOME: this.homeBase } })
     });
     this.currentProcess.on("error", () => undefined);
     // #2164 r21 — bounded (oldest-dropped) stderr capture for last-submit diagnostics. Security
@@ -166,6 +188,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     });
     this.currentProcess.unref();
     this.hasSubmitted = true;
+    this.submitStartedAt = Date.now();
   }
 
   /**
@@ -200,7 +223,10 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     const child = spawn("bash", ["-lc", command], {
       cwd: opts.neutralDir,
       detached: true,
-      stdio: ["pipe", "pipe", "pipe"]
+      stdio: ["pipe", "pipe", "pipe"],
+      ...(this.homeBase === undefined
+        ? {}
+        : { env: { ...buildSanitizedCliEnv(process.env), HOME: this.homeBase } })
     });
     this.structuredProcess = child;
     this.structuredExited = false;
@@ -216,6 +242,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     child.once("error", () => {
       this.structuredExited = true;
     });
+    this.submitStartedAt = Date.now();
     return { offset: 0 };
   }
 
@@ -279,6 +306,25 @@ export class ClaudePrintChatEngine implements CliChatEngine {
             "if this persists the turn will time out empty"
         );
       }
+      // #2348 — a genuine location disagreement (the app and the model program will
+      // NEVER agree on a folder, e.g. a home-folder mismatch) looks identical to an
+      // ordinary "still starting" miss for the first moments of a turn. Distinguish
+      // them directly: the model program creates its project FOLDER very early,
+      // before it produces any output, not at the end of a slow turn — so if the
+      // folder itself still does not exist well past a normal startup, this is not
+      // "still thinking," it is a disagreement, and it is reported immediately
+      // instead of silently polling for the rest of the 120-second budget.
+      if (
+        this.hasSubmitted &&
+        this.submitStartedAt !== null &&
+        Date.now() - this.submitStartedAt > this.transcriptDirGraceMs &&
+        !existsSync(dirname(this.transcriptPathValue))
+      ) {
+        throw new CliTranscriptLocationMismatchError(
+          `the app expects the model program's answer file under ` +
+            `${dirname(this.transcriptPathValue)}, but that folder was never created`
+        );
+      }
       return { records: [], offset: afterOffset, complete: false };
     }
 
@@ -322,6 +368,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     this.currentProcess = null;
     this.structuredOutput = "";
     this.structuredExited = true;
+    this.submitStartedAt = null;
     if (child === null || child.exitCode !== null || child.signalCode !== null) return;
 
     const exited = new Promise<void>((resolve) => {

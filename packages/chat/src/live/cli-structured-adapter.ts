@@ -16,7 +16,7 @@ import type {
 } from "@moss/ai";
 import { dedupeStructuredSources } from "@moss/ai";
 
-import { CliChatUnavailableError } from "./errors.js";
+import { CliChatUnavailableError, CliTranscriptLocationMismatchError } from "./errors.js";
 import { selectEngineFactory, type ChatEngineFactory } from "./runtime.js";
 import type { CliChatEngine, TranscriptRecord } from "./types.js";
 
@@ -145,10 +145,16 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       engine = activeEngine;
       const stopped = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
+          // #2348: do NOT kill the engine here. `kill()` nulls the engine's process
+          // handle on its first call and returns instantly on every call after that,
+          // so an unawaited kill fired from this timer "wins" the race against the
+          // `catch` block below (which awaits its own `kill()` call before reading) —
+          // that second, awaited call becomes a no-op, and the transcript gets read
+          // before the process has actually stopped. Only reject here; the `catch`
+          // block does the one real, awaited kill-then-read.
           timedOut = true;
           cancelled = true;
           emit({ kind: "timeout" });
-          void activeEngine.kill().catch(() => undefined);
           reject(new CliChatUnavailableError("CLI structured generation timed out"));
         }, this.timeoutMs);
         abort = () => {
@@ -172,6 +178,15 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
         return withSources({ rawText, usage: { inputTokens: 0, outputTokens: 0 } }, sources);
       } catch (error) {
         await activeEngine.kill().catch(() => undefined);
+        // #2348 — a genuine location disagreement means there is nothing to recover: the
+        // model program never wrote to where the app is looking, so a late-read attempt
+        // can only ever come back empty. Skip straight to reporting it, with its own
+        // specific message intact, instead of losing it inside the generic "no reply"
+        // path below.
+        if (error instanceof CliTranscriptLocationMismatchError) {
+          exit = "error";
+          throw error;
+        }
         const final = cancelled ? null : await activeEngine.readNew(0).catch(() => null);
         const reply = final?.records
           .slice()

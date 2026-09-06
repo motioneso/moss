@@ -11,6 +11,19 @@ export class CliChatUnavailableError extends Error {
   }
 }
 
+/**
+ * #2348 — thrown when the app and the model program genuinely disagree about where the
+ * answer file lives: the program has had a fair chance to create its project folder and
+ * never did. Distinct from an ordinary "still writing" miss, which never throws. The
+ * message names only the expected folder path — no prompt or reply content.
+ */
+export class CliTranscriptLocationMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CliTranscriptLocationMismatchError";
+  }
+}
+
 /** Enter may have reached provider, but exact transcript ACK was not observed. Never auto-retry. */
 export class CliChatDeliveryUnknownError extends Error {
   constructor(message: string) {

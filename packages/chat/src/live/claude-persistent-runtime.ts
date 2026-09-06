@@ -12,7 +12,12 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { DEFAULT_MODEL_SENTINEL, type ProviderKind, type TmuxIo } from "@moss/ai";
+import {
+  DEFAULT_MODEL_SENTINEL,
+  buildSanitizedCliEnv,
+  type ProviderKind,
+  type TmuxIo
+} from "@moss/ai";
 
 import { PersistentStreamDecoder } from "./persistent-stream-decoder.js";
 import { writeClaudePermissionHook } from "./claude-permission-hook.js";
@@ -42,6 +47,9 @@ export const NEUTRAL_CRASH_FAILURE =
 export interface ClaudePersistentRuntimeOpts {
   readonly io: Pick<TmuxIo, "run" | "writeFile">;
   readonly credentialFile?: string;
+  /** #2348 — passed into the default spawn's env as HOME, so the child agrees with the app
+   *  about where its home folder (and therefore its transcript folder) lives. */
+  readonly homeBase?: string;
   /** Injected for tests; production callers rely on the default (piped-stdio, process-group spawn). */
   readonly spawnChild?: (command: string, cwd: string) => ChildProcessWithoutNullStreams;
 }
@@ -54,6 +62,7 @@ export class ClaudePersistentRuntime implements ProviderChatRuntime {
 
   private readonly io: Pick<TmuxIo, "run" | "writeFile">;
   private readonly credentialFile?: string;
+  private readonly homeBase?: string;
   private readonly spawnChild: (command: string, cwd: string) => ChildProcessWithoutNullStreams;
 
   private child: ChildProcessWithoutNullStreams | null = null;
@@ -73,13 +82,17 @@ export class ClaudePersistentRuntime implements ProviderChatRuntime {
   constructor(opts: ClaudePersistentRuntimeOpts) {
     this.io = opts.io;
     this.credentialFile = opts.credentialFile;
+    this.homeBase = opts.homeBase;
     this.spawnChild =
       opts.spawnChild ??
       ((command, cwd) =>
         spawn("bash", ["-lc", command], {
           cwd,
           detached: true,
-          stdio: ["pipe", "pipe", "pipe"]
+          stdio: ["pipe", "pipe", "pipe"],
+          ...(this.homeBase === undefined
+            ? {}
+            : { env: { ...buildSanitizedCliEnv(process.env), HOME: this.homeBase } })
         }) as ChildProcessWithoutNullStreams);
   }
 
