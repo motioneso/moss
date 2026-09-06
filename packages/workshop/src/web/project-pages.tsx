@@ -369,11 +369,21 @@ function WorkshopProjectContent({
             </Card>
             {messages.data?.pages
               .flatMap((page) => page.entries)
-              .map((entry) => (
-                <Card key={entry.messageId} title="You" meta="Saved · awaiting delivery">
-                  <p className="workshop-project-text">{entry.text}</p>
-                </Card>
-              ))}
+              .map((entry) =>
+                entry.kind === "assistant_message" ? (
+                  <Card key={entry.messageId} title="Moss">
+                    <p className="workshop-project-text">{entry.text}</p>
+                  </Card>
+                ) : (
+                  <Card
+                    key={entry.messageId}
+                    title="You"
+                    meta={entry.delivery === "pending" ? "Saved · awaiting delivery" : undefined}
+                  >
+                    <p className="workshop-project-text">{entry.text}</p>
+                  </Card>
+                )
+              )}
           </div>
           {messages.isPending ? <p role="status">Loading messages…</p> : null}
           {messages.isError ? (
