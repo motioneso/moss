@@ -213,13 +213,13 @@ describe("ChatGatewayNotifier", () => {
       actionRequestId: "ar_1",
       toolName: "example.write",
       outcome: "denied",
-      reason: "Denied by user."
+      reason: "This action was not approved. Do not retry; tell the user."
     });
 
     const [, record] = (manager.injectRecord as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
       TranscriptRecord
     ];
-    expect(record.text).toBe("Not changed — Denied by user.");
+    expect(record.text).toBe("Not changed — This action was not approved. Do not retry; tell the user.");
   });
 });

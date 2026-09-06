@@ -60,7 +60,7 @@ describe("first-party Moss MCP transport", () => {
 
     await expect(
       gateway.requestNativeToolPermission(token, { toolName, toolInput: {} })
-    ).resolves.toEqual({ decision: "deny", reason: "Timed out awaiting confirmation." });
+    ).resolves.toEqual({ decision: "deny", reason: "This action was not approved. Do not retry; tell the user." });
     expect(createPendingAssistantAction).toHaveBeenCalledOnce();
     expect(resolveLocalTimezone).toHaveBeenCalledOnce();
   });

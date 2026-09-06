@@ -590,7 +590,7 @@ describe("AssistantToolGateway", () => {
     expect(res).toEqual({
       ok: false,
       denied: true,
-      reason: "Timed out awaiting confirmation — still pending in your drawer."
+      reason: "This action was not approved. Do not retry; tell the user."
     });
     expect(exampleToolCalls).toHaveLength(0);
 
@@ -712,7 +712,7 @@ describe("AssistantToolGateway", () => {
     await gateway.resolveActionRequest(ids.userA, card.actionRequestId, "rejected");
     const res = await call;
 
-    expect(res).toEqual({ ok: false, denied: true, reason: "Denied by user." });
+    expect(res).toEqual({ ok: false, denied: true, reason: "This action was not approved. Do not retry; tell the user." });
     expect(exampleToolCalls).toHaveLength(0);
   });
 
