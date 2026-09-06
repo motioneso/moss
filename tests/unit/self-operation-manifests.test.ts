@@ -278,18 +278,20 @@ describe("Calendar self-operation manifest classification", () => {
 });
 
 describe("Web Research self-operation manifest classification", () => {
-  it("classifies web.read as confirm_always with no promotable family", () => {
+  it("classifies web.read as risk read, so it runs without confirmation and cannot be promoted", () => {
     const tools: readonly ModuleAssistantToolManifest[] = webModuleManifest.assistantTools ?? [];
     const webRead = tools.find((candidate) => candidate.name === "web.read");
     expect(webRead, "expected tool web.read to exist").toBeDefined();
-    expect(webRead?.risk).toBe("write");
-    // No actionFamilyId, no executionPolicy: policy.ts:40 must confirm every call. web-research
-    // has no approved spec (spec 2's remaining-modules list stops at calendar/email/ai), and
-    // web.read is the v0.1.0 audit's prompt-injection-to-exfiltration finding — an unattended
-    // auto-approve here would resurrect that HIGH. Opus security review on PR #1268; #1263.
+    // policy.ts:36 runs every "read" tool without confirming. web.read used to confirm every call
+    // (Opus security review, PR #1268; #1263) because it fetches arbitrary URLs and page text is
+    // untrusted — the v0.1.0 audit's prompt-injection-to-exfiltration finding. Ben ruled,
+    // 2026-09-05 (#2326), that asking every time made the turn never finish and accepted that
+    // remaining risk, so it moved to risk "read" instead, same as web.search. It still carries no
+    // actionFamilyId or executionPolicy, so it has no path to a trusted, auto-run family either.
+    expect(webRead?.risk).toBe("read");
     expect(webRead?.actionFamilyId).toBeUndefined();
     expect(webRead?.executionPolicy).toBeUndefined();
-    expect(webRead?.selfOperationGrant).toBe("confirm_always");
+    expect(webRead?.selfOperationGrant).toBeUndefined();
 
     const manifestAssistantActionFamilies = (
       webModuleManifest as { assistantActionFamilies?: readonly unknown[] }
@@ -298,18 +300,16 @@ describe("Web Research self-operation manifest classification", () => {
   });
 });
 
-// Five tools, not four: the odd one out is web.read (risk "write", not "destructive"). It is
-// deliberately listed here rather than made auto-run-eligible: pre-PR #1268 it carried no
-// actionFamilyId, so policy.ts:40 confirmed every call, and that card was the last human control
-// on the v0.1.0 audit's web.read prompt-injection-to-exfiltration finding. Do not "tidy" this to
-// risk: "destructive" to match the other four, and do not give it a family — either would either
-// misclassify the risk or reopen the auto-approve door. See Opus security review on PR #1268 (#1263).
+// Four tools. web.read used to be the odd one out here (risk "write", not "destructive") until
+// Ben's ruling, 2026-09-05 (#2326), moved it to risk "read" — it now runs without confirmation, so
+// it is no longer part of this planned confirm-always roster at all. See the Web Research
+// classification test above for why, and Opus security review on PR #1268 (#1263) for the
+// original reasoning that put it here.
 const PLANNED_CONFIRM_ALWAYS_TOOL_NAMES = [
   "memory.forget",
   "people.merge",
   "people.splitIdentity",
   "email.sendReply",
-  "web.read",
   "sports.confirmSource",
   "sports.confirmSourceAssignments",
   "sports.confirmSourceRecipe",
@@ -341,7 +341,7 @@ describe("Sports/News denylist check (#1265)", () => {
 });
 
 describe("Complete built-in self-operation inventory (#1263)", () => {
-  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 57", () => {
+  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 56", () => {
     // People declares its grants in packages/people/src/tools.ts, not a manifest.ts — this
     // walks the real getBuiltInModuleManifests() registry (which resolves that indirection),
     // so it does not undercount the way a manifest.ts-only grep would (34 instead of 38).
@@ -395,8 +395,11 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // service, not by this tier.
     // #2236: +1 (scratchpad.append), granted_at_install. It only adds a line to the caller's own
     // scratchpad and can never replace or delete existing text, so it stays in the lowest tier.
+    // #2326: -1 confirm_always. Ben ruled that web.read should stop asking for approval on every
+    // call; it moved to risk "read", so it is no longer in any of these three buckets at all (the
+    // loop above skips read tools before it ever reaches the switch).
     expect(grantedAtInstall.length).toBe(42);
-    expect(confirmAlways.length).toBe(10);
+    expect(confirmAlways.length).toBe(9);
     expect(userPromotable.length).toBe(5);
 
     // Task 12a moved calendar.deleteEvent out of granted_at_install (33 -> ...). PR #1268's
@@ -415,8 +418,10 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // tools total. #1698's calendar lifecycle rebuild added calendar.rescheduleEvent as a new
     // user_promotable tool (same tier as the existing create/delete calendar tools) — 39 + 5 + 5
     // = 49 total. #1888 added workshop.buildModule (granted_at_install), and #1909 adds five
-    // confirmed Sports source writes plus news.refreshNews — 41 + 10 + 5 = 56 total.
-    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(57);
+    // confirmed Sports source writes plus news.refreshNews — 41 + 10 + 5 = 56, then #2236 added
+    // scratchpad.append (granted_at_install) — 42 + 10 + 5 = 57. #2326 then moved web.read out of
+    // confirm_always to risk "read" — 42 + 9 + 5 = 56 total.
+    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(56);
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
     expect(userPromotable.sort()).toEqual(

@@ -42,7 +42,8 @@ install with one Anthropic key should be able to search the web on day one.
   were out; Ben's ruling on 2026-09-05 was that a CLI model must search "just as if I asked you to
   search here".)
 - New search engines beyond Brave (Google News RSS, GDELT and the like are a separate spec).
-- Changing how `web.read` works.
+- Changing how `web.read` decides which pages are safe to fetch. (Its approval behavior did
+  change, in the same pull request as this spec update — see section 9.)
 
 ## 4. Resolved Decisions
 
@@ -220,3 +221,24 @@ install with one Anthropic key should be able to search the web on day one.
 - No new required env var or hand-edited file: the switch and the key are app settings.
 - Module isolation: News reaches search only through the availability dependency it already
   declares; web-research reaches models only through the router.
+
+## 9. Accepted risk: `web.read` runs without approval (2026-09-05, #2326)
+
+Ben's ruling: asking the person to approve every single page fetch made a chat turn never
+finish (see PR #2280), and he judged that annoying enough to stop. `web.read` now runs
+automatically, with no approval prompt, the same as `web.search`.
+
+The risk this accepts: the text on a fetched page is not trustworthy. A page could contain a
+hidden instruction telling the assistant to fetch a second address and put private information
+into the request to that address, carrying it out of the system. Removing the per-call approval
+removes the one check that would have caught that at the moment it happened.
+
+What still stops it: the private-address block in `url-safety.ts` refuses loopback and private
+network addresses, so the local half of that attack — reaching another service on the same
+machine or network — is still blocked. What is not blocked is a fetch to a second public
+address; Ben has accepted that risk so the feature is usable.
+
+Guardrails kept in place on purpose: `web.read` must never be given a permission family that
+lets it be promoted to a fully trusted, auto-run tool with elevated privileges — it has no
+`actionFamilyId` and no `executionPolicy`, and that must stay true. The private/loopback address
+block must never be removed or weakened.
