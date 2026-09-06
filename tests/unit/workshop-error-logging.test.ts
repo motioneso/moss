@@ -3,6 +3,7 @@ import { Writable } from "node:stream";
 import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
 
+import type { AiRepository, AiSecretCipher } from "@moss/ai";
 import type { DataContextRunner } from "@moss/db";
 import { registerWorkshopProjectRoutes } from "@moss/workshop";
 
@@ -29,7 +30,19 @@ describe("workshop unexpected-error handling", () => {
     const failure = new Error("db is down: relation app.workshop_projects is missing");
     registerWorkshopProjectRoutes(app, {
       dataContext: throwingDataContext(failure),
-      resolveAccessContext: async () => ({ actorUserId: "user-a" })
+      resolveAccessContext: async () => ({ actorUserId: "user-a" }),
+      aiRepository: {
+        selectModelForCapability: async () => undefined,
+        selectProviderWithCredential: async () => undefined
+      } as unknown as Pick<
+        AiRepository,
+        "selectModelForCapability" | "selectProviderWithCredential"
+      >,
+      cipher: {
+        decryptJson: async () => {
+          throw new Error("unused in this test");
+        }
+      } as unknown as Pick<AiSecretCipher, "decryptJson">
     });
     await app.ready();
     try {

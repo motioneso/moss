@@ -195,7 +195,6 @@ describe("Workshop project HTTP entry", () => {
       resolveAccessContext: async (request) => ({
         actorUserId: String(request.headers["x-test-actor"])
       }),
-      // @ts-expect-error mock
       aiRepository: {
         selectModelForCapability: async () => ({
           id: "test-model",
@@ -204,7 +203,10 @@ describe("Workshop project HTTP entry", () => {
           provider_model_id: "test-model-id"
         }),
         selectProviderWithCredential: async () => ({ auth_method: "cli" })
-      },
+      } as unknown as Pick<
+        AiRepository,
+        "selectModelForCapability" | "selectProviderWithCredential"
+      >,
       cipher: createAiSecretCipher(),
       createCliStructuredAdapter: () => ({
         generateStructured: async () => ({
