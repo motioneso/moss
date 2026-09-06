@@ -394,7 +394,7 @@ export async function putSourceBehavior(
 }
 
 /** Bounded so a hung persona read can never trap the app shell (mirrors ONBOARDING_STATUS_TIMEOUT_MS). */
-const PERSONA_SETTINGS_TIMEOUT_MS = 4000;
+const PERSONA_SETTINGS_TIMEOUT_MS = 30_000;
 
 export async function getPersonaSettings(): Promise<GetPersonaSettingsResponse> {
   const controller = new AbortController();
@@ -598,7 +598,7 @@ export async function revokeModuleCredential(
 }
 
 /** Bounded so a hung status read can never trap the founder before the app shell (Codex R2 #2). */
-const ONBOARDING_STATUS_TIMEOUT_MS = 4000;
+const ONBOARDING_STATUS_TIMEOUT_MS = 30_000;
 
 export async function getOnboardingStatus(): Promise<OnboardingStatusResponse> {
   // Race the request against a bounded timeout. On timeout this rejects → React Query
