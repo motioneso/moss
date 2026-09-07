@@ -550,32 +550,6 @@ button.module-link {
   white-space: nowrap;
 }
 
-.topbar-crumb__error {
-  flex-shrink: 0;
-  font-size: 0.8125rem;
-  color: var(--danger-fg);
-  white-space: nowrap;
-}
-
-/* Choosing "Rename" from the More menu swaps the plain title for this row: an input sized to
-   read like the title it replaces, plus small Save/Cancel buttons. */
-.topbar-rename {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.topbar-rename__input {
-  min-width: 0;
-  flex: 1 1 auto;
-  font-size: 1.25rem;
-  line-height: 1.15;
-  font-weight: 700;
-  letter-spacing: var(--tracking-tight);
-  padding: 0.125rem 0.5rem;
-}
-
 @media (max-width: 900px) {
   .topbar-crumb__meta {
     display: none;
