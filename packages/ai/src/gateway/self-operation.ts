@@ -208,7 +208,11 @@ const PLANNED_CONFIRM_ALWAYS_TOOLS: readonly string[] = [
   "sports.confirmSourceAssignments",
   "sports.confirmSourceRecipe",
   "sports.retrySource",
-  "sports.removeSource"
+  "sports.removeSource",
+  // Fable's ruling on 2418: a Workshop build command always raises its card
+  // while unconfined (until issue 2414), so it is not promotable and declares
+  // confirm_always with no auto execution policy.
+  "workshop.runCommand"
 ];
 
 const GENERIC_INPUT_KEY_NAMES = new Set(["key", "preferenceKey", "settingKey"]);

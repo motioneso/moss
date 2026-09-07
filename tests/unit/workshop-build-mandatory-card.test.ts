@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AssistantToolGateway, ConfirmationRegistry, SessionTokenRegistry } from "@moss/ai";
 import { resolvePolicy } from "../../packages/ai/src/gateway/policy.js";
+import { assertBuiltInSelfOperationManifests } from "../../packages/ai/src/gateway/self-operation.js";
 import { workshopModuleManifest } from "../../packages/workshop/src/manifest.js";
 import type { MossModuleManifest } from "@moss/module-sdk";
 
@@ -19,6 +20,15 @@ describe("workshop build card is mandatory", () => {
     (entry) => entry.name === "workshop.runCommand"
   );
   if (!family || !tool) throw new Error("workshop build family or tool missing from manifest");
+
+  it("passes the boot manifest assertion that crashed the server once", () => {
+    // Removing the run-automatically tier while declaring user_promotable
+    // crashed boot (the grant promises promotability the family no longer
+    // offers). confirm_always is the honest grant; this runs the same
+    // assertion boot runs over the real manifest.
+    expect(tool.selfOperationGrant).toBe("confirm_always");
+    expect(() => assertBuiltInSelfOperationManifests([workshopModuleManifest])).not.toThrow();
+  });
 
   it("resolvePolicy confirms even at the highest tier a person can choose", async () => {
     // The family offers no trusted_auto, so there is nothing to promote to.

@@ -238,12 +238,13 @@ export const workshopModuleManifest = {
       permissionId: "workshop.view",
       actionFamilyId: "workshop_builds",
       risk: "write",
-      executionPolicy: "auto",
-      // user_promotable, never granted_at_install: this runs arbitrary shell, so
-      // installing the module must not silently grant unattended runs. The
-      // family cannot be promoted to run automatically at all (see above):
-      // every run waits for the person on the card.
-      selfOperationGrant: "user_promotable",
+      executionPolicy: "confirm",
+      // confirm_always, never granted_at_install or user_promotable: this runs
+      // arbitrary shell, and Fable's ruling on 2418 keeps the card mandatory
+      // until real confinement lands (issue 2414), so the tool must not be
+      // promotable to run automatically at all. Every run waits for the
+      // person on the card, attended and unattended alike.
+      selfOperationGrant: "confirm_always",
       requiresServices: [WORKSHOP_RUN_COMMAND_SERVICE_KEY],
       inputSchema: workshopRunCommandInputSchema,
       outputSchema: workshopRunCommandResultSchema,
