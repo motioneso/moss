@@ -192,7 +192,9 @@ export class AcpHost {
     const settingsPath = join(settingsDir, "settings.json");
     await writeFile(
       settingsPath,
-      JSON.stringify({ permissions: { deny: ["Bash", "Write", "Edit", "NotebookEdit"] } })
+      JSON.stringify({
+        permissions: { deny: ["Bash", "KillShell", "Write", "Edit", "MultiEdit", "NotebookEdit"] }
+      })
     );
     if (uid !== undefined && gid !== undefined) {
       await this.chownOwned(key, settingsDir, uid, gid);

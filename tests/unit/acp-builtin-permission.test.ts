@@ -31,8 +31,7 @@ function buildGateway(store: FakeStore, confirmTimeoutMs = 1000) {
       resolveAssistantAction: async () => ({ ...store.actionRow })
     } as never,
     runner: {
-      withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
-        work({})
+      withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) => work({})
     } as never,
     tokens,
     confirmations,
@@ -102,6 +101,34 @@ class ScriptedAgent implements AcpTunnel {
 
   async execKill(): Promise<void> {}
 
+  /**
+   * The adapter announces each tool use before asking about it. The
+   * announcement carries the real name under metadata, alongside the raw
+   * input, kind and locations the client also records.
+   */
+  agentAnnouncesToolCall(): void {
+    this.emit({
+      jsonrpc: "2.0",
+      method: "session/update",
+      params: {
+        sessionId: "agent-sess-1",
+        update: {
+          sessionUpdate: "tool_call",
+          toolCallId: "call-9",
+          title: "`pnpm build`",
+          kind: "execute",
+          rawInput: { command: "pnpm build" },
+          status: "pending",
+          _meta: { claudeCode: { toolName: "Bash" } }
+        }
+      }
+    });
+  }
+
+  /**
+   * The adapter's permission question, in its exact shape: only the tool call
+   * id, the raw input and the display title.
+   */
   agentAsksPermission(id: number): void {
     this.emit({
       jsonrpc: "2.0",
@@ -112,8 +139,7 @@ class ScriptedAgent implements AcpTunnel {
         toolCall: {
           toolCallId: "call-9",
           title: "`pnpm build`",
-          rawInput: { command: "pnpm build" },
-          _meta: { toolName: "Bash" }
+          rawInput: { command: "pnpm build" }
         },
         options: [
           { kind: "allow_always", name: "Always Allow", optionId: "allow_always" },
@@ -159,9 +185,9 @@ describe("agent built-in permission through the shared approval card", () => {
     });
 
     // The person answers through the same function the Approve button calls.
-    await expect(
-      gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")
-    ).resolves.toBe("resolved");
+    await expect(gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")).resolves.toBe(
+      "resolved"
+    );
 
     await expect(pending).resolves.toEqual({ decision: "allow", reason: "Approved by user." });
     await vi.waitFor(() => expect(store.emitted).toHaveLength(2));
@@ -200,29 +226,26 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(pending).resolves.toMatchObject({ decision: "allow" });
   });
 
-  it("asks a person for a subagent even when its title mimics a read", async () => {
+  it("refuses a subagent titled like a read, with no card and no row", async () => {
     const store = freshStore();
     const { gateway, tokens } = buildGateway(store);
     const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
 
-    const pending = gateway.requestAcpBuiltInPermission(token, {
-      cwd: CWD,
-      sessionId: "agent-sess-1",
-      toolCallId: "call-7",
-      title: "Read the repository and summarize the layout",
-      toolInput: {
-        description: "Read the repository and summarize the layout",
-        prompt: "Read every file and report back."
-      },
-      toolName: "Task"
-    });
-    await vi.waitFor(() => expect(store.created).toHaveLength(1));
-    expect(store.created[0]).toMatchObject({
-      toolName: "Task",
-      risk: "destructive"
-    });
-    gatewayResolveSoon(gateway, "u1");
-    await expect(pending).resolves.toMatchObject({ decision: "allow" });
+    await expect(
+      gateway.requestAcpBuiltInPermission(token, {
+        cwd: CWD,
+        sessionId: "agent-sess-1",
+        toolCallId: "call-7",
+        title: "Read the repository and summarize the layout",
+        toolInput: {
+          description: "Read the repository and summarize the layout",
+          prompt: "Read every file and report back."
+        },
+        toolName: "Task"
+      })
+    ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    expect(store.created).toHaveLength(0);
+    expect(store.emitted).toHaveLength(0);
   });
 
   it("refuses a read-mimicking title with no real name and no row", async () => {
@@ -364,25 +387,26 @@ describe("agent built-in permission through the shared approval card", () => {
       agent,
       {},
       {
-        decide: async (permissionRequest, session) =>
-          decideAcpPermission(permissionRequest, session.cwd, async (builtIn) => {
+        decide: async (builtIn, session) =>
+          decideAcpPermission(builtIn, session.cwd, async (announced) => {
             const verdict = await gateway.requestAcpBuiltInPermission(token, {
               cwd: session.cwd,
-              sessionId: builtIn.sessionId,
-              toolCallId: builtIn.toolCallId,
-              title: builtIn.title,
+              sessionId: announced.sessionId,
+              toolCallId: announced.toolCallId,
+              title: announced.title,
               toolInput:
-                builtIn.rawInput && typeof builtIn.rawInput === "object"
-                  ? (builtIn.rawInput as Record<string, unknown>)
+                announced.rawInput && typeof announced.rawInput === "object"
+                  ? (announced.rawInput as Record<string, unknown>)
                   : {},
-              toolName: builtIn.toolName,
-              kind: null
+              toolName: announced.toolName,
+              kind: announced.kind
             });
             return verdict.decision === "allow" ? "allow" : "deny";
           })
       }
     );
     const handle = await client.openSession("workshop:u1:proj", "proj");
+    agent.agentAnnouncesToolCall();
     agent.agentAsksPermission(11);
 
     // The card is up; the person confirms through the Approve path.
@@ -411,8 +435,6 @@ function gatewayResolveSoon(
   status: "confirmed" | "rejected" = "confirmed"
 ): void {
   setTimeout(() => {
-    void gateway
-      .resolveActionRequest(actorUserId, "acp-action-1", status)
-      .catch(() => undefined);
+    void gateway.resolveActionRequest(actorUserId, "acp-action-1", status).catch(() => undefined);
   }, 50);
 }

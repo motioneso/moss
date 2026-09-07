@@ -4,11 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-patchedDependencies:
-  '@zed-industries/claude-code-acp@0.16.2':
-    hash: 1eb4b63c1790ebd441494224d9d210341dbab63778d5cbe952c8f9066dedc683
-    path: patches/@zed-industries__claude-code-acp@0.16.2.patch
-
 importers:
 
   .:
@@ -524,7 +519,7 @@ importers:
         version: link:../db
       '@zed-industries/claude-code-acp':
         specifier: 0.16.2
-        version: 0.16.2(patch_hash=1eb4b63c1790ebd441494224d9d210341dbab63778d5cbe952c8f9066dedc683)(zod@4.4.3)
+        version: 0.16.2(zod@4.4.3)
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
@@ -6674,7 +6669,7 @@ snapshots:
 
   '@xterm/xterm@6.0.0': {}
 
-  '@zed-industries/claude-code-acp@0.16.2(patch_hash=1eb4b63c1790ebd441494224d9d210341dbab63778d5cbe952c8f9066dedc683)(zod@4.4.3)':
+  '@zed-industries/claude-code-acp@0.16.2(zod@4.4.3)':
     dependencies:
       '@agentclientprotocol/sdk': 0.14.1(zod@4.4.3)
       '@anthropic-ai/claude-agent-sdk': 0.2.44(zod@4.4.3)

@@ -133,10 +133,5 @@
     "typescript-eslint": "^8.60.1",
     "vitest": "^4.1.8",
     "ws": "^8.21.1"
-  },
-  "pnpm": {
-    "patchedDependencies": {
-      "@zed-industries/claude-code-acp@0.16.2": "patches/@zed-industries__claude-code-acp@0.16.2.patch"
-    }
   }
 }

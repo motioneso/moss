@@ -15,11 +15,7 @@
 
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
-import type {
-  PermissionOption,
-  RequestPermissionRequest,
-  RequestPermissionResponse
-} from "@agentclientprotocol/sdk";
+import type { PermissionOption, ToolCallLocation } from "@agentclientprotocol/sdk";
 
 export type AcpPermissionVerdict = "allow" | "ask" | "deny";
 
@@ -29,46 +25,22 @@ export interface AcpBuiltInRequest {
   /** Display text only. Passed through for the card; never decides. */
   readonly title: string;
   readonly rawInput: unknown;
-  /** Real tool name from adapter platform code, or null when absent. */
+  /**
+   * Real tool name, learned from the agent's own announcement and matched by
+   * tool call id — never from the title. Null when no announcement arrived.
+   */
   readonly toolName: string | null;
+  /** Announced kind, carried for the record only; never decides. */
+  readonly kind: string | null;
+  /** Announced file locations, used only to scope named writes. */
+  readonly locations: readonly ToolCallLocation[] | null;
 }
 
-/** Prefix the adapter puts on its own file and shell tool names. */
-const ACP_TOOL_PREFIX = "mcp__acp__";
+import { acpToolNamesIn, lookupAcpToolFamily } from "./tool-table.js";
 
-function withPrefixed(names: readonly string[]): Set<string> {
-  return new Set([...names, ...names.map((name) => `${ACP_TOOL_PREFIX}${name}`)]);
-}
-
-/** Named tools that only observe: reads, listings, searches, plans. */
-export const ACP_READ_TOOL_NAMES: ReadonlySet<string> = withPrefixed([
-  "Read",
-  "NotebookRead",
-  "LS",
-  "Glob",
-  "Grep",
-  "WebFetch",
-  "WebSearch",
-  "TodoWrite",
-  "BashOutput"
-]);
-/** Named tools that change files: allowed only inside the session folder. */
-export const ACP_WRITE_TOOL_NAMES: ReadonlySet<string> = withPrefixed([
-  "Edit",
-  "Write",
-  "NotebookEdit"
-]);
-/** Named tools that always need a person, even inside the session folder. */
-export const ACP_ASK_TOOL_NAMES: ReadonlySet<string> = withPrefixed([
-  "Bash",
-  "KillShell",
-  "ExitPlanMode",
-  "Task"
-]);
 /** Named tools whose card shows the destructive seriousness. */
-export const ACP_DESTRUCTIVE_TOOL_NAMES: ReadonlySet<string> = withPrefixed([
-  "Bash",
-  "KillShell",
+export const ACP_DESTRUCTIVE_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ...acpToolNamesIn("shell"),
   "Task"
 ]);
 /** Raw-input fields that name a file the tool touches. */
@@ -81,9 +53,18 @@ export function toolNameFromMeta(meta: unknown): string | null {
   return typeof name === "string" && name.trim() !== "" ? name : null;
 }
 
-/** Every file path the request names, from the known tool input fields. */
+/**
+ * Every file path the request names: the announced locations plus the known
+ * tool input fields. Both come from adapter platform code around the same
+ * tool call; neither decides identity, only scope.
+ */
 export function extractAcpPaths(request: AcpBuiltInRequest): string[] {
   const paths: string[] = [];
+  for (const location of request.locations ?? []) {
+    if (typeof location?.path === "string" && location.path.trim() !== "") {
+      paths.push(location.path);
+    }
+  }
   const input = request.rawInput;
   if (input && typeof input === "object" && !Array.isArray(input)) {
     for (const key of ACP_PATH_INPUT_KEYS) {
@@ -117,9 +98,10 @@ export function classifyAcpPermission(
   // so refused. This is the design default, and it is what stops a subagent
   // titled like a harmless read from walking in with no card.
   if (toolName === null) return "deny";
-  if (ACP_READ_TOOL_NAMES.has(toolName)) return "allow";
-  if (ACP_WRITE_TOOL_NAMES.has(toolName)) return classifyEdit(extractAcpPaths(request), cwd);
-  if (ACP_ASK_TOOL_NAMES.has(toolName)) return "ask";
+  const family = lookupAcpToolFamily(toolName);
+  if (family === "read" || family === "web" || family === "harmless") return "allow";
+  if (family === "write") return classifyEdit(extractAcpPaths(request), cwd);
+  if (family === "shell") return "ask";
   return "deny";
 }
 
@@ -130,31 +112,19 @@ export function selectAllowOptionId(options: readonly PermissionOption[]): strin
   return options.find((option) => option.kind.startsWith("allow"))?.optionId ?? null;
 }
 
-function cancelled(): RequestPermissionResponse {
-  return { outcome: { outcome: "cancelled" } };
-}
-
 /**
- * Answer one permission request. `ask` runs only when the policy needs a
- * person — the gateway wires it to the shared approval card; any other caller
- * decides how to reach someone.
+ * Answer one announced tool ask with allow or deny. `ask` runs only when the
+ * policy needs a person — the gateway wires it to the shared approval card;
+ * any other caller decides how to reach someone. The client translates the
+ * verdict into the protocol answer.
  */
 export async function decideAcpPermission(
-  request: RequestPermissionRequest,
+  builtIn: AcpBuiltInRequest,
   cwd: string,
   ask: (builtIn: AcpBuiltInRequest) => Promise<"allow" | "deny">
-): Promise<RequestPermissionResponse> {
-  const builtIn: AcpBuiltInRequest = {
-    sessionId: request.sessionId,
-    toolCallId: request.toolCall.toolCallId,
-    title: request.toolCall.title ?? "",
-    rawInput: request.toolCall.rawInput,
-    toolName: toolNameFromMeta(request.toolCall._meta)
-  };
+): Promise<"allow" | "deny"> {
   const verdict = classifyAcpPermission(builtIn, cwd);
-  if (verdict === "deny") return cancelled();
-  if (verdict === "ask" && (await ask(builtIn)) !== "allow") return cancelled();
-  const optionId = selectAllowOptionId(request.options);
-  if (optionId === null) return cancelled();
-  return { outcome: { outcome: "selected", optionId } };
+  if (verdict === "deny") return "deny";
+  if (verdict === "ask") return ask(builtIn);
+  return "allow";
 }

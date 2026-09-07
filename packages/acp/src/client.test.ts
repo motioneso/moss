@@ -89,16 +89,38 @@ class ScriptedAgent implements AcpTunnel {
 
   async execKill(): Promise<void> {}
 
-  /** Agent-initiated request, e.g. a built-in asking for approval. */
-  agentAsksPermission(id: number): void {
+  /**
+   * The adapter's tool-use announcement, in its exact shape: the tool call id
+   * plus the real name under metadata, alongside title, kind and locations.
+   */
+  agentAnnouncesToolCall(toolCall: Record<string, unknown>): void {
+    this.emit({
+      jsonrpc: "2.0",
+      method: "session/update",
+      params: {
+        sessionId: "agent-sess-1",
+        update: { sessionUpdate: "tool_call", status: "pending", ...toolCall }
+      }
+    });
+  }
+
+  /**
+   * The adapter's permission question, in its exact shape: only the tool call
+   * id, the raw input and the display title — never a name, kind or locations.
+   */
+  agentAsksPermission(id: number, toolCall: Record<string, unknown>): void {
     this.emit({
       jsonrpc: "2.0",
       id,
       method: "session/request_permission",
       params: {
         sessionId: "agent-sess-1",
-        toolCall: { toolCallId: "call-9", title: "Write", kind: "edit" },
-        options: [{ optionId: "allow", name: "Allow", kind: "allow_once" }]
+        toolCall: { toolCallId: "call-9", ...toolCall },
+        options: [
+          { optionId: "allow_always", name: "Always Allow", kind: "allow_always" },
+          { optionId: "allow", name: "Allow", kind: "allow_once" },
+          { optionId: "reject", name: "Reject", kind: "reject_once" }
+        ]
       }
     });
   }
@@ -209,50 +231,117 @@ describe("MossAcpClient", () => {
     await client.close(handle);
   });
 
-  it("answers through the wired decider, failing closed when it throws", async () => {
+  it("decides by the announced name when the announcement lands first", async () => {
     const agent = new ScriptedAgent();
+    const seen: Array<string | null> = [];
     const client = new MossAcpClient(
       agent,
       {},
       {
-        decide: async (request, session) => {
-          if (session.cwd !== "/runner/session/acp/proj") throw new Error("wrong folder");
-          const allow = request.options.find((option) => option.kind === "allow_once");
-          if (!allow) throw new Error("no allow option");
-          return { outcome: { outcome: "selected", optionId: allow.optionId } };
+        decide: async (builtIn) => {
+          seen.push(builtIn.toolName);
+          return "allow";
         }
       }
     );
     const handle = await client.openSession("workshop:user:proj", "proj");
-    agent.agentAsksPermission(8);
-    await vi.waitFor(() => {
-      const answers = agent.sent
-        .map((line) => JSON.parse(line))
-        .filter((msg) => msg.id === 8 && msg.result !== undefined);
-      expect(answers.length).toBe(1);
+    agent.agentAnnouncesToolCall({
+      toolCallId: "call-9",
+      title: "Read src/a.ts",
+      kind: "read",
+      rawInput: { file_path: "src/a.ts" },
+      _meta: { claudeCode: { toolName: "Read" } }
     });
-    const answer = agent.sent
-      .map((line) => JSON.parse(line))
-      .find((msg) => msg.id === 8 && msg.result !== undefined);
+    agent.agentAsksPermission(8, { title: "Read src/a.ts", rawInput: { file_path: "src/a.ts" } });
+    const answer = await waitForAnswer(agent, 8);
+    // The question's title is ignored; the announced name decides.
+    expect(seen).toEqual(["Read"]);
     expect(answer.result.outcome).toEqual({ outcome: "selected", optionId: "allow" });
     await client.close(handle);
   });
 
-  it("denies permission requests it has no policy for", async () => {
+  it("decides by the announced name when the question lands first", async () => {
+    const agent = new ScriptedAgent();
+    const seen: Array<string | null> = [];
+    const client = new MossAcpClient(
+      agent,
+      {},
+      {
+        decide: async (builtIn) => {
+          seen.push(builtIn.toolName);
+          return "allow";
+        }
+      }
+    );
+    const handle = await client.openSession("workshop:user:proj", "proj");
+    agent.agentAsksPermission(8, { title: "`pnpm build`", rawInput: { command: "pnpm build" } });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    agent.agentAnnouncesToolCall({
+      toolCallId: "call-9",
+      title: "`pnpm build`",
+      kind: "execute",
+      rawInput: { command: "pnpm build" },
+      _meta: { claudeCode: { toolName: "Bash" } }
+    });
+    const answer = await waitForAnswer(agent, 8);
+    expect(seen).toEqual(["Bash"]);
+    expect(answer.result.outcome).toEqual({ outcome: "selected", optionId: "allow" });
+    await client.close(handle);
+  });
+
+  it("refuses when no announcement arrives within the bound", async () => {
+    const agent = new ScriptedAgent();
+    const client = new MossAcpClient(agent, {}, { decide: async () => "allow" as const });
+    const handle = await client.openSession("workshop:user:proj", "proj");
+    agent.agentAsksPermission(8, { title: "Read everything", rawInput: { prompt: "go" } });
+    // The two second announcement wait runs before the refusal.
+    const answer = await waitForAnswer(agent, 8, 10_000);
+    expect(answer.result.outcome).toEqual({ outcome: "cancelled" });
+    await client.close(handle);
+  });
+
+  it("refuses when the announcement carries no name", async () => {
+    const agent = new ScriptedAgent();
+    const client = new MossAcpClient(agent, {}, { decide: async () => "allow" as const });
+    const handle = await client.openSession("workshop:user:proj", "proj");
+    agent.agentAnnouncesToolCall({ toolCallId: "call-9", title: "mystery" });
+    agent.agentAsksPermission(8, { title: "mystery", rawInput: {} });
+    const answer = await waitForAnswer(agent, 8);
+    expect(answer.result.outcome).toEqual({ outcome: "cancelled" });
+    await client.close(handle);
+  });
+
+  it("denies permission answers when no decider is wired", async () => {
     const agent = new ScriptedAgent();
     const client = new MossAcpClient(agent);
     const handle = await client.openSession("workshop:user:proj", "proj");
-    agent.agentAsksPermission(7);
-    await vi.waitFor(() => {
-      const answers = agent.sent
-        .map((line) => JSON.parse(line))
-        .filter((msg) => msg.id === 7 && msg.result !== undefined);
-      expect(answers.length).toBe(1);
+    agent.agentAnnouncesToolCall({
+      toolCallId: "call-9",
+      title: "Read src/a.ts",
+      _meta: { claudeCode: { toolName: "Read" } }
     });
-    const answer = agent.sent
-      .map((line) => JSON.parse(line))
-      .find((msg) => msg.id === 7 && msg.result !== undefined);
+    agent.agentAsksPermission(7, { title: "Read src/a.ts", rawInput: {} });
+    const answer = await waitForAnswer(agent, 7);
     expect(answer.result.outcome).toEqual({ outcome: "cancelled" });
     await client.close(handle);
   });
 });
+
+async function waitForAnswer(
+  agent: ScriptedAgent,
+  id: number,
+  timeout = 5000
+): Promise<{ result: { outcome: unknown } }> {
+  await vi.waitFor(
+    () => {
+      const answers = agent.sent
+        .map((line) => JSON.parse(line))
+        .filter((msg) => msg.id === id && msg.result !== undefined);
+      expect(answers.length).toBe(1);
+    },
+    { timeout }
+  );
+  return agent.sent
+    .map((line) => JSON.parse(line))
+    .find((msg) => msg.id === id && msg.result !== undefined);
+}

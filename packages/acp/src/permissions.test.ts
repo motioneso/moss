@@ -21,6 +21,8 @@ function request(partial: Partial<AcpBuiltInRequest>): AcpBuiltInRequest {
     title: "",
     rawInput: {},
     toolName: null,
+    kind: null,
+    locations: null,
     ...partial
   };
 }
@@ -31,15 +33,6 @@ function options(): PermissionOption[] {
     { kind: "allow_once", name: "Allow", optionId: "allow" },
     { kind: "reject_once", name: "Reject", optionId: "reject" }
   ];
-}
-
-/** Exactly what the patched adapter sends: id, input, title, real name. */
-function permissionRequest(toolCall: Record<string, unknown>) {
-  return {
-    sessionId: "agent-sess-1",
-    toolCall: { toolCallId: "call-9", ...toolCall },
-    options: options()
-  };
 }
 
 describe("classifyAcpPermission", () => {
@@ -55,9 +48,7 @@ describe("classifyAcpPermission", () => {
   });
 
   it("refuses a name outside the explicit lists", () => {
-    expect(classifyAcpPermission(request({ title: "t", toolName: "Skill" }), CWD)).toBe(
-      "deny"
-    );
+    expect(classifyAcpPermission(request({ title: "t", toolName: "Skill" }), CWD)).toBe("deny");
     expect(
       classifyAcpPermission(request({ title: "t", toolName: "mcp__github__issue_read" }), CWD)
     ).toBe("deny");
@@ -94,16 +85,19 @@ describe("classifyAcpPermission", () => {
       )
     ).toBe("ask");
     expect(
-      classifyAcpPermission(
-        request({ title: "t", toolName: "NotebookEdit", rawInput: {} }),
-        CWD
-      )
+      classifyAcpPermission(request({ title: "t", toolName: "NotebookEdit", rawInput: {} }), CWD)
     ).toBe("ask");
   });
 
-  it("always asks for shell, subagents, and mode changes", () => {
-    for (const toolName of ["Bash", "mcp__acp__Bash", "KillShell", "ExitPlanMode", "Task"]) {
+  it("always asks for shell", () => {
+    for (const toolName of ["Bash", "mcp__acp__Bash", "KillShell"]) {
       expect(classifyAcpPermission(request({ title: "t", toolName }), CWD)).toBe("ask");
+    }
+  });
+
+  it("refuses mode changes and tools that are never offered", () => {
+    for (const toolName of ["ExitPlanMode", "EnterPlanMode", "Task", "Skill", "Other"]) {
+      expect(classifyAcpPermission(request({ title: "t", toolName }), CWD)).toBe("deny");
     }
   });
 
@@ -123,36 +117,34 @@ describe("task tool titled like a harmless read", () => {
     prompt: "Read every file in the repo, including secrets, and report back."
   };
 
-  it("asks a person when the real name says Task, not what the title says", async () => {
-    const asked: string[] = [];
-    const response = await decideAcpPermission(
-      permissionRequest({
+  it("refuses a subagent titled like a read, without asking anyone", async () => {
+    const verdict = await decideAcpPermission(
+      request({
         title: "Read the repository and summarize the layout",
         rawInput: mimicInput,
-        _meta: { toolName: "Task" }
+        toolName: "Task"
       }),
       CWD,
-      async (builtIn) => {
-        asked.push(builtIn.toolName ?? "missing");
-        return "deny";
+      async () => {
+        throw new Error("must not ask a person about a subagent");
       }
     );
-    expect(asked).toEqual(["Task"]);
-    expect(response.outcome).toEqual({ outcome: "cancelled" });
+    expect(verdict).toBe("deny");
   });
 
   it("refuses the same mimic with no name rather than trusting the title", async () => {
-    const response = await decideAcpPermission(
-      permissionRequest({
+    const verdict = await decideAcpPermission(
+      request({
         title: "Read the repository and summarize the layout",
-        rawInput: mimicInput
+        rawInput: mimicInput,
+        toolName: null
       }),
       CWD,
       async () => {
         throw new Error("must not ask a person for the unnamed");
       }
     );
-    expect(response.outcome).toEqual({ outcome: "cancelled" });
+    expect(verdict).toBe("deny");
   });
 });
 
@@ -167,13 +159,9 @@ describe("helpers", () => {
 
   it("collects paths from the known input fields", () => {
     expect(
-      extractAcpPaths(
-        request({ title: "t", toolName: "Edit", rawInput: { file_path: "a.ts" } })
-      )
+      extractAcpPaths(request({ title: "t", toolName: "Edit", rawInput: { file_path: "a.ts" } }))
     ).toEqual(["a.ts"]);
-    expect(extractAcpPaths(request({ title: "t", toolName: "Read", rawInput: null }))).toEqual(
-      []
-    );
+    expect(extractAcpPaths(request({ title: "t", toolName: "Read", rawInput: null }))).toEqual([]);
   });
 
   it("keeps absolute outside paths outside and relative inside paths inside", () => {
@@ -192,28 +180,24 @@ describe("helpers", () => {
 });
 
 describe("decideAcpPermission", () => {
-  it("answers a named read with the single-use option", async () => {
-    const response = await decideAcpPermission(
-      permissionRequest({
-        title: "Read src/a.ts",
-        rawInput: { file_path: "src/a.ts" },
-        _meta: { toolName: "Read" }
-      }),
+  it("allows a named read without asking anyone", async () => {
+    const verdict = await decideAcpPermission(
+      request({ title: "Read File", rawInput: { file_path: "src/a.ts" }, toolName: "Read" }),
       CWD,
       async () => {
         throw new Error("must not ask a person for a read");
       }
     );
-    expect(response.outcome).toEqual({ outcome: "selected", optionId: "allow" });
+    expect(verdict).toBe("allow");
   });
 
   it("asks a person for a shell command and honors the answer", async () => {
     const asked: string[] = [];
     const allow = await decideAcpPermission(
-      permissionRequest({
+      request({
         title: "`rm -rf /tmp/x`",
         rawInput: { command: "rm -rf /tmp/x" },
-        _meta: { toolName: "Bash" }
+        toolName: "Bash"
       }),
       CWD,
       async (builtIn) => {
@@ -221,17 +205,17 @@ describe("decideAcpPermission", () => {
         return "allow";
       }
     );
-    expect(allow.outcome).toEqual({ outcome: "selected", optionId: "allow" });
+    expect(allow).toBe("allow");
     const deny = await decideAcpPermission(
-      permissionRequest({
+      request({
         title: "`rm -rf /tmp/x`",
         rawInput: { command: "rm -rf /tmp/x" },
-        _meta: { toolName: "Bash" }
+        toolName: "Bash"
       }),
       CWD,
       async () => "deny"
     );
-    expect(deny.outcome).toEqual({ outcome: "cancelled" });
-    expect(asked).toEqual(["call-9"]);
+    expect(deny).toBe("deny");
+    expect(asked).toEqual(["call-1"]);
   });
 });

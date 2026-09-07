@@ -11,10 +11,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import {
-  ACP_DESTRUCTIVE_TOOL_NAMES,
-  classifyAcpPermission
-} from "@moss/acp";
+import { ACP_DESTRUCTIVE_TOOL_NAMES, classifyAcpPermission } from "@moss/acp";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
@@ -86,7 +83,9 @@ export async function requestAcpBuiltInPermission(
       toolCallId: request.toolCallId,
       title: request.title,
       rawInput: input,
-      toolName
+      toolName,
+      kind: request.kind ?? null,
+      locations: null
     },
     request.cwd
   );
