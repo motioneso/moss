@@ -4,8 +4,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Thread } from "../../apps/web/src/chat/message-row.js";
-import type { TranscriptRecord } from "../../apps/web/src/chat/use-chat-stream.js";
+import { Thread } from "@moss/ui";
+import type { TranscriptRecord } from "@moss/shared";
+import { RecordRow } from "../../apps/web/src/chat/message-row.js";
 
 const REPLY_RECORD: TranscriptRecord = {
   kind: "reply",
@@ -23,7 +24,7 @@ function mount() {
   act(() => {
     root?.render(
       <QueryClientProvider client={new QueryClient()}>
-        <Thread records={[REPLY_RECORD]} />
+        <Thread records={[REPLY_RECORD]} renderRecord={(record) => <RecordRow record={record} />} />
       </QueryClientProvider>
     );
   });

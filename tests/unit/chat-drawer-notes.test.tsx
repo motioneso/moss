@@ -4,15 +4,22 @@ import { renderToString } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { Thread } from "../../apps/web/src/chat/message-row.js";
-import type { TranscriptRecord } from "../../apps/web/src/chat/use-chat-stream.js";
+import { Thread } from "@moss/ui";
+import type { TranscriptRecord } from "@moss/shared";
+import { RecordRow } from "../../apps/web/src/chat/message-row.js";
 
-function render(records: readonly TranscriptRecord[], working?: boolean): string {
+function render(records: readonly TranscriptRecord[], working?: boolean, fullRow = false): string {
   return renderToString(
     createElement(
       QueryClientProvider,
       { client: new QueryClient() },
-      createElement(Thread, { records, working })
+      createElement(Thread, {
+        records,
+        working,
+        // The feedback menu is the shell's own row furniture; the shared default rows cover
+        // everything else this file asserts.
+        renderRecord: fullRow ? (record) => createElement(RecordRow, { record }) : undefined
+      })
     )
   );
 }
@@ -74,7 +81,7 @@ describe("chat drawer: status lines in the thread (note 2)", () => {
 
 describe("chat drawer: feedback menu on the assistant message (note 3)", () => {
   it("renders the menu pinned to the assistant message corner", () => {
-    const html = render([{ kind: "reply", text: "Here you go.", messageId: "m1" }], false);
+    const html = render([{ kind: "reply", text: "Here you go.", messageId: "m1" }], false, true);
     expect(html).toContain("feedback-menu feedback-menu--corner");
     // The item list ("More like this" / "Not useful") is a Menu primitive popover that only
     // renders once opened by a click, so a static server render only shows its trigger button.

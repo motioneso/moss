@@ -58,6 +58,12 @@ Deliberate decisions, each with a real failure behind it. Violating one is a blo
 - **Design the front end before building a module.** A new module needs a front-end design
   discussion with Ben and agreed mockups of every screen, in the spec, before implementation.
   Full rule in `docs/DEVELOPMENT_STANDARDS.md` → Design System Guardrails.
+- **Never claim a security property you have not followed through.** Before writing that a secret
+  is confined, scoped, expired or revoked — in a comment, plan, spec, PR body or status — read the
+  code that receives it, including vendor libraries, and see where it actually ends up. A test
+  asserting such a property must be observed failing with the protection removed. When a claim turns
+  out wrong, fix every copy, the plan before the comment. Full rule in
+  `docs/DEVELOPMENT_STANDARDS.md` → Claims About Security Properties.
 - **Live-path gate.** CI-green plus code review does not make a user-facing feature done. It needs
   live end-to-end proof recorded on the PR — installed and exercised through the real UI on a live
   dev instance. Without that the honest status is _code-complete, unverified_: don't merge, don't

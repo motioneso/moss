@@ -10,10 +10,19 @@ export { Button } from "./button.js";
 export type { ButtonProps, ButtonSize, ButtonVariant } from "./button.js";
 export { ButtonLink, buttonLinkClassName } from "./button-link.js";
 export type { ButtonLinkProps, ButtonLinkSize, ButtonLinkVariant } from "./button-link.js";
+export { BrandMark } from "./brand-mark.js";
 export { Card } from "./card.js";
 export type { CardPadding, CardProps } from "./card.js";
 export { CategoryDot } from "./category-dot.js";
 export type { CategoryDotProps } from "./category-dot.js";
+export {
+  ActivityPeek,
+  ChatFreshnessFooter,
+  Thread,
+  activityVerb,
+  groupRecords
+} from "./chat-thread.js";
+export type { ThreadRenderRecord } from "./chat-thread.js";
 export { Chip } from "./chip.js";
 export { Combobox } from "./combobox.js";
 export type { ComboboxOption, ComboboxProps } from "./combobox.js";

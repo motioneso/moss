@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
-import { ChatFreshnessFooter } from "../../apps/web/src/chat/message-row.js";
+import { ChatFreshnessFooter } from "@moss/ui";
 import type { SourceFreshnessV1 } from "@moss/shared";
 
 const CAPTURED = "2026-06-28T10:00:00.000Z";

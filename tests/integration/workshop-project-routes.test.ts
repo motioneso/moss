@@ -91,6 +91,24 @@ describe("Workshop project HTTP entry", () => {
     expect(await bootstrap.selectFrom("app.module_builds").select("id").execute()).toEqual(before);
   });
 
+  it("creates without a title and derives the name from the request", async () => {
+    const { requestKey, initialRequest } = input();
+    const response = await send({
+      method: "POST",
+      url: base,
+      payload: { requestKey, initialRequest: `${initialRequest} to review every morning.` }
+    });
+    expect(response.statusCode).toBe(201);
+    const result = response.json<CreateWorkshopProjectResponse>();
+    expect(result.project.title).toBe("Keep my requirements to review every morning.");
+    expect(result.project.initialRequest).toBe(`${initialRequest} to review every morning.`);
+  });
+
+  it("creates with an explicit title untouched (the chat handoff)", async () => {
+    const result = await create();
+    expect(result.project.title).toBe("Saved project");
+  });
+
   it("denies non-admins on every endpoint and in the shared create operation", async () => {
     const { project } = await create();
     for (const options of [

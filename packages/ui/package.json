@@ -11,8 +11,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@moss/shared": "workspace:*",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
+    "react-markdown": "^9",
+    "remark-gfm": "^4",
     "typescript": "^6.0.3"
   },
   "devDependencies": {

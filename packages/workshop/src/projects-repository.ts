@@ -85,6 +85,42 @@ export class WorkshopProjectsRepository {
     return { project: project(existing), created: false };
   }
 
+  async rename(
+    scopedDb: DataContextDb,
+    id: string,
+    title: string
+  ): Promise<WorkshopProject | null> {
+    assertDataContextDb(scopedDb);
+    assertUuid(id, "Project id");
+    const clean = boundedText(title, "title", 160).trim();
+    const row = await scopedDb.db
+      .updateTable("app.workshop_projects")
+      .set({ title: clean, updated_at: new Date() })
+      .where("id", "=", id)
+      .returning(columns)
+      .executeTakeFirst();
+    return row ? project(row) : null;
+  }
+
+  /**
+   * Remove the project and its feed rows together. Runs inside the ambient data-context
+   * transaction, so either everything goes or nothing does; the feed delete runs first and the
+   * project row last (its foreign key would cascade the feed anyway).
+   */
+  async remove(scopedDb: DataContextDb, id: string): Promise<boolean> {
+    assertDataContextDb(scopedDb);
+    assertUuid(id, "Project id");
+    await scopedDb.db
+      .deleteFrom("app.workshop_project_feed")
+      .where("project_id", "=", id)
+      .execute();
+    const deleted = await scopedDb.db
+      .deleteFrom("app.workshop_projects")
+      .where("id", "=", id)
+      .executeTakeFirst();
+    return deleted.numDeletedRows > 0n;
+  }
+
   async get(scopedDb: DataContextDb, id: string): Promise<WorkshopProject | null> {
     assertDataContextDb(scopedDb);
     assertUuid(id, "Project id");

@@ -174,6 +174,9 @@ importers:
       '@moss/module-sdk':
         specifier: workspace:*
         version: link:../../packages/module-sdk
+      '@moss/module-web-sdk':
+        specifier: workspace:*
+        version: link:../../packages/module-web-sdk
       '@moss/news':
         specifier: workspace:*
         version: link:../../packages/news
@@ -1305,12 +1308,21 @@ importers:
 
   packages/ui:
     dependencies:
+      '@moss/shared':
+        specifier: workspace:*
+        version: link:../shared
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
       react:
         specifier: ^19.0.0
         version: 19.2.7
+      react-markdown:
+        specifier: ^9
+        version: 9.1.0(@types/react@19.2.17)(react@19.2.7)
+      remark-gfm:
+        specifier: ^4
+        version: 4.0.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

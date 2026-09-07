@@ -25,9 +25,12 @@ test("Workshop creates a private project, retries saved requests and retains mes
   }
   await page.getByRole("link", { name: "The Workshop", exact: true }).click();
   await page.getByRole("link", { name: "New project", exact: true }).click();
-  await page.getByLabel("Project name", { exact: true }).fill("Workshop live project");
-  await page.getByLabel("Your idea", { exact: true }).fill("Keep a private list of book ideas.");
-  await page.getByLabel("Already decided").fill("Only save details I choose.");
+  await expect(page.getByText("What would you like to make?", { exact: true })).toBeVisible();
+  // An example writes into the box without sending anything.
+  await page.getByRole("button", { name: "Track the books I read", exact: true }).click();
+  const idea = page.getByLabel("Your idea", { exact: true });
+  await expect(idea).toHaveValue("Track the books I read");
+  await idea.fill("Keep a private list of book ideas.");
 
   // Simulate a lost acknowledgement AFTER the real server commits, then retry in the UI.
   const createKeys: string[] = [];
@@ -42,32 +45,27 @@ test("Workshop creates a private project, retries saved requests and retains mes
     expect(response.status()).toBe(200);
     return route.fulfill({ response });
   });
-  await page.getByRole("button", { name: "Create project", exact: true }).click();
+  await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Your text is still here");
   await expect(page.getByLabel("Your idea", { exact: true })).toHaveValue(
     "Keep a private list of book ideas."
   );
-  await page.getByRole("button", { name: "Create project", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Workshop live project", exact: true })
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  // No name travels up front: the service derives it from the request's first line.
+  await expect(page.getByText("Keep a private list of book ideas.", { exact: true })).toBeVisible();
   expect(createKeys).toHaveLength(2);
   expect(createKeys[1]).toBe(createKeys[0]);
   const projectURL = page.url();
   const projectId = new URL(projectURL).pathname.split("/").at(-1)!;
   expect(projectId).toMatch(/^[0-9a-f-]{36}$/);
-  await expect(page.getByText("No plan yet", { exact: true })).toBeVisible();
+  await expect(page.getByText("Keep a private list of book ideas.", { exact: true })).toHaveCount(
+    2
+  );
 
   const message = page.getByLabel("Add to your project", { exact: true });
   await message.fill("Start with the books I already own.");
   for (const width of [320, 375, 414, 768]) {
     await page.setViewportSize({ width, height: 900 });
-    const work = page.getByRole("button", { name: "Project work", exact: true });
-    if (await work.isVisible()) {
-      await work.click();
-      await expect(page.getByText("No plan yet", { exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Conversation", exact: true }).click();
-    }
     await expect(message).toHaveValue("Start with the books I already own.");
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
@@ -88,7 +86,7 @@ test("Workshop creates a private project, retries saved requests and retains mes
   await page.getByRole("button", { name: "Save message", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Your text is still here");
   await expect(message).toHaveValue("Start with the books I already own.");
-  await page.getByRole("button", { name: "Save message", exact: true }).click();
+  await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect(message).toHaveValue("");
   expect(messageIds).toHaveLength(2);
   expect(messageIds[1]).toBe(messageIds[0]);
@@ -100,7 +98,7 @@ test("Workshop creates a private project, retries saved requests and retains mes
   const projects = await page.request.get("/api/workshop/projects");
   expect(projects.status()).toBe(200);
   expect((await projects.json()).projects).toHaveLength(1);
-  await page.getByRole("link", { name: "← Your projects", exact: true }).click();
-  await page.getByRole("link", { name: "Workshop live project", exact: true }).click();
+  await page.getByRole("link", { name: "The Workshop", exact: true }).click();
+  await page.getByRole("link", { name: "Keep a private list of book ideas.", exact: true }).click();
   await expect(page).toHaveURL(projectURL);
 });

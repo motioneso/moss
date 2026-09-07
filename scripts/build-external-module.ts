@@ -52,6 +52,7 @@ export async function buildExternalModule(moduleDir: string): Promise<void> {
   if (!existsSync(webEntry)) return;
   const reactRuntimeShim = join(repoRoot, "packages/module-web-sdk/src/runtime.ts");
   const reactDomRuntimeShim = join(repoRoot, "packages/module-web-sdk/src/react-dom-runtime.ts");
+  const reactJsxRuntimeShim = join(repoRoot, "packages/module-web-sdk/src/jsx-runtime.ts");
   const moduleWebSdk = join(repoRoot, "packages/module-web-sdk/src/index.ts");
   await build({
     entryPoints: [webEntry],
@@ -77,6 +78,11 @@ export async function buildExternalModule(moduleDir: string): Promise<void> {
     inject: [reactRuntimeShim],
     alias: {
       react: reactRuntimeShim,
+      // A compiled dependency (react-markdown, pulled in via @moss/ui's shared thread) imports
+      // "react/jsx-runtime" directly — the classic-transform tsconfigRaw above cannot rewrite an
+      // already-compiled file, and without this exact entry the bare-"react" prefix alias maps it
+      // to the nonsense path "runtime.ts/jsx-runtime" and the build fails.
+      "react/jsx-runtime": reactJsxRuntimeShim,
       "react-dom": reactDomRuntimeShim,
       "@moss/module-web-sdk": moduleWebSdk,
       // Same alias as the worker build above — a web surface needs the user's day too, and the

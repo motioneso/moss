@@ -2,12 +2,15 @@ import type {
   ChatMessageDto,
   ChatSurface,
   SourceFreshnessV1,
-  WorkflowApprovalDto,
-  WorkflowApprovalStatusDto
+  WorkflowApprovalDto
 } from "@moss/shared";
 import { useCallback, useEffect, useState } from "react";
 
-import type { AnswerSourceSupportCard, ChatAttachmentDto } from "@moss/shared";
+// The transcript shape lives in `@moss/shared` now (defined once for the shell and every module
+// thread); re-exported here so existing importers keep working while they migrate over.
+import type { ActionRequestPreview, ChatRecordKind, TranscriptRecord } from "@moss/shared";
+
+export type { ActionRequestPreview, ChatRecordKind, TranscriptRecord };
 
 import {
   chatStreamUrl,
@@ -16,49 +19,6 @@ import {
   listPendingActionRequests
 } from "../api/client.js";
 import { listWorkflowApprovals } from "../api/workflows-client.js";
-
-export type ChatRecordKind =
-  | "user"
-  | "thinking"
-  | "tool"
-  | "status"
-  | "reply"
-  | "error"
-  | "action_request"
-  | "workflow_approval"
-  | "action_result";
-
-/**
- * Rich, server-derived Approve/Deny card preview (email reply recipient/subject/body). Rides the
- * live SSE stream ONLY — the backend never persists it. Mirrors `@moss/module-sdk`
- * ActionRequestPreview; declared locally so the web bundle stays free of node-side deps.
- */
-export interface ActionRequestPreview {
-  readonly to: string;
-  readonly subject: string;
-  readonly body: string;
-}
-
-export interface TranscriptRecord {
-  readonly kind: ChatRecordKind;
-  readonly text: string;
-  readonly messageId?: string;
-  readonly actionRequestId?: string;
-  readonly workflowApprovalId?: string;
-  readonly toolName?: string;
-  readonly summary?: string;
-  readonly status?: WorkflowApprovalStatusDto;
-  readonly outcome?: "executed" | "denied" | "error" | "allowed";
-  readonly result?: Record<string, unknown>;
-  /** #1310: dot-path tokens into the frontend `queryKeys` object, resolved by app-shell's generic invalidation effect. */
-  readonly affectsQueryKeys?: readonly string[];
-  readonly answerProvenance?: readonly AnswerSourceSupportCard[];
-  readonly answerProvenanceCitedIds?: readonly string[];
-  readonly sourceFreshness?: SourceFreshnessV1 | null;
-  readonly preview?: ActionRequestPreview;
-  /** #1133: chips shown on a sent user message (optimistic, post-response, and history rows). */
-  readonly attachments?: readonly ChatAttachmentDto[];
-}
 
 function parsePreview(value: unknown): ActionRequestPreview | undefined {
   if (!value || typeof value !== "object") return undefined;
