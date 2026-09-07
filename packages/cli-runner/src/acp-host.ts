@@ -384,7 +384,9 @@ export class AcpHost {
           detached: true,
           ...(opts.uid !== undefined ? { uid: opts.uid } : {}),
           ...(opts.gid !== undefined ? { gid: opts.gid } : {})
-        }) as ChildProcessWithoutNullStreams);
+          // stdin is ignored (builds never read it), so the stdio shape needs
+          // the explicit step before it matches the session-child type.
+        }) as unknown as ChildProcessWithoutNullStreams);
     const child = spawnExec({ command, cwd: sessionDir, env, uid, gid });
 
     this.sweepExecs();
