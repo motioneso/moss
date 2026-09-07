@@ -660,6 +660,34 @@ describe("agent built-in permission through the shared approval card", () => {
     expect(answer.result.outcome).toEqual({ outcome: "selected", optionId: "allow" });
     await client.close(handle);
   });
+
+  it("refuses a made-up tool name with no card, no row, and an audit line", async () => {
+    const store = freshStore();
+    const { gateway, tokens } = buildGateway(store);
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+
+    // The tool the agent ships tomorrow: in no table, announced with a
+    // plausible title. The backstop that makes the launch-time removal list
+    // safe is refusing it here, before any person is bothered.
+    await expect(
+      gateway.requestAcpBuiltInPermission(token, {
+        cwd: CWD,
+        home: "/home/agent",
+        sessionId: "agent-sess-1",
+        toolCallId: "call-tomorrow",
+        title: "Read the project files",
+        toolInput: { path: "src/index.ts" },
+        toolName: "QuantumRead"
+      })
+    ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+
+    // No card: nobody was asked, so no pending row and no card event. The
+    // refusal itself is still on the record.
+    expect(store.created).toHaveLength(0);
+    expect(store.emitted).toHaveLength(0);
+    expect(store.audit).toHaveLength(1);
+    expect(store.audit[0]).toMatchObject({ toolName: "QuantumRead", outcome: "failed" });
+  });
 });
 
 function gatewayResolveSoon(

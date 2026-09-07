@@ -357,6 +357,53 @@ describe("AcpHost", () => {
     }
   });
 
+  it("catches a secret split across two output chunks", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const child = new FakeExecChild();
+      const host = new AcpHost({
+        neutralBase: dir,
+        spawnExec: () => child as never
+      });
+      const { execId } = await host.execStart("workshop:user:proj", "proj", "cmd", 60_000);
+      // Neither chunk alone matches the token shape; together they spell it.
+      child.emitStdout("reading settings token=js");
+      child.emitStderr("t_spl1t-across-chunks-9 done\n");
+      child.exit(0);
+      const result = host.execPoll("workshop:user:proj", execId);
+      expect(result.done).toBe(true);
+      expect(result.output).not.toContain("js");
+      expect(result.output).not.toContain("t_spl1t-across-chunks-9");
+      expect(result.output).toContain("[redacted]");
+      expect(result.output).toContain("done");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("redacts the known session token value even with no marker around it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    const previous = process.env.JARVIS_MCP_TOKEN;
+    process.env.JARVIS_MCP_TOKEN = "kst_live_known_value_ABC123";
+    try {
+      const child = new FakeExecChild();
+      const host = new AcpHost({
+        neutralBase: dir,
+        spawnExec: () => child as never
+      });
+      const { execId } = await host.execStart("workshop:user:proj", "proj", "cmd", 60_000);
+      child.emitStdout("launch line shows kst_live_known_value_ABC123 plain\n");
+      child.exit(0);
+      const result = host.execPoll("workshop:user:proj", execId);
+      expect(result.output).not.toContain("kst_live_known_value_ABC123");
+      expect(result.output).toContain("[redacted]");
+    } finally {
+      if (previous === undefined) delete process.env.JARVIS_MCP_TOKEN;
+      else process.env.JARVIS_MCP_TOKEN = previous;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects a project id that could escape the session folder", async () => {
     const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
     try {

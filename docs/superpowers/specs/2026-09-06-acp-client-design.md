@@ -61,14 +61,14 @@ subscription. Those stay Moss's problems.
    fix, and the same per-account home folder is where the agent's settings file lives.
 3. **Shell and file writes off in chat.** File reads, file search, web search and web fetch may
    stay on (the spike's third condition: five read-only built-ins offered, zero used on calendar
-   prompts). The agent's tool list is a fixed base list, not a deny filter. In the Workshop,
-   shell and writes are the point, starting in the project folder (not restricted to it). The
-   base list lives in one table, `packages/acp/src/tool-table.ts` (one row per real tool name,
-   with a family and an on/off per surface); the use-time policy in section 6 and the launch-time
-   off-list both derive from it so they cannot drift apart. Today the client still sends the
-   adapter the blanket "disable built-in tools" flag, so no built-in is offered on either surface
-   yet; phase 5 replaces that flag with the table's off-list for the surface, passed to the
-   adapter as `_meta.claudeCode.options.disallowedTools`.
+   prompts). In the Workshop, shell and writes are the point, starting in the project folder
+   (not restricted to it). One table, `packages/acp/src/tool-table.ts` (one row per real tool
+   name, with a family and an on/off per surface), drives both the use-time policy in section 6
+   and the launch-time off-list so they cannot drift apart. The launch-time control is honestly
+   a removal list: the adapter (0.16.2, `acp-agent.js`) overwrites any allow list sent in
+   `_meta.claudeCode.options` with its full tool preset and only merges `disallowedTools`, so
+   the client sends the table's off-list for the surface as `disallowedTools` and relies on the
+   use-time refusal for anything the list does not name. Phase 5 wired exactly that.
 4. **The approval card is wired to the protocol** (section 6). This is the one real defect the
    spike found, and it ships in the first slice.
 5. **An agent capability list** (section 7) decides which agents may be offered on which
@@ -303,5 +303,42 @@ directly, and it can reach the internet freely.
 What does stand in the way: the owner has to approve every command on a card
 showing the whole command, the working folder is fixed, the environment is
 scrubbed, there is a deadline and a cap on runs, and every run is recorded.
+
+The card for a build command cannot be switched off by any tier setting or by
+unattended mode, and that holds until issue 2414 lands. The build family
+offers no run-automatically tier, and unattended mode only skips the card for
+a family a person could have promoted to it.
+
+The card gates the build command only. The agent's own tools act without any
+card, under the use-time rules in section 6: reads and writes inside the
+project folder are ordinary use, except secret-shaped names (`.env`, keys,
+certificates, `.npmrc`, `.netrc`), which ask with the path on the card; web
+search is silent and web fetch is silent except toward loopback, private
+ranges, link-local and bare hostnames, which ask; shell through the agent's
+own shell tool always asks; the agent's home folder (token store, the coding
+CLI's own config, other providers' logins) plus `/proc`, `/sys`, `/dev` and
+`/run` refuse with no card; and a tool name outside the table, including any
+tool the agent ships tomorrow, refuses with no card. An approved build
+command is plain shell and is NOT fenced to the folder the way the agent's
+own file tools are — that asymmetry is why the card is mandatory.
+
+Build output is scrubbed before it is kept, and the scrub catches: the
+session token shapes (`Bearer` values, bare `jst_` tokens, the launch-line
+`JARVIS_MCP_TOKEN`), database and service URLs with embedded passwords,
+`password=` style assignments, named secret/key/token assignments, vendor
+token prefixes (AI keys, `ghp_`, `xoxb-`, `AKIA`), private key blocks, and
+the literal session token this runner launched with — including a secret
+split across two output chunks. It does not catch: an arbitrary pasted
+sign-in code with no marker and no assignment around it, a secret spanning
+many chunks further apart than the 256-character holdback, or anything the
+patterns have never seen. The absolute claim is withdrawn: secrets are
+reduced, not banished. A mid-run poll also lags the live edge by up to 256
+characters; only the finished result is complete.
+
+The launch-time tool control is a removal list, not a base allow list: the
+adapter overwrites any allow list we send with its full tool preset and only
+merges our removal list in. A tool the agent ships tomorrow is therefore
+visible to the model at launch; what stops it is the use-time refusal above,
+which is tested with a made-up name.
 
 This is accepted for a single owner install and is not a sandbox.

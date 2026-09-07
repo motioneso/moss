@@ -199,7 +199,11 @@ export const workshopModuleManifest = {
         "Run one shell command with the project folder as its working folder and report the " +
         "output. The command itself is not restricted to that folder.",
       defaultTier: "ask_each_time",
-      allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
+      // No trusted_auto: a build command always raises its card, in attended
+      // and unattended runs alike. Fable's ruling on 2418 makes this mandatory
+      // until real confinement lands (issue 2414), which is what could bring
+      // this tier back.
+      allowedTiers: ["ask_each_time", "always_confirm"]
     }
   ],
   assistantTools: [
@@ -236,8 +240,9 @@ export const workshopModuleManifest = {
       risk: "write",
       executionPolicy: "auto",
       // user_promotable, never granted_at_install: this runs arbitrary shell, so
-      // installing the module must not silently grant unattended runs. The user
-      // promotes the family to trusted_auto for unattended builds.
+      // installing the module must not silently grant unattended runs. The
+      // family cannot be promoted to run automatically at all (see above):
+      // every run waits for the person on the card.
       selfOperationGrant: "user_promotable",
       requiresServices: [WORKSHOP_RUN_COMMAND_SERVICE_KEY],
       inputSchema: workshopRunCommandInputSchema,

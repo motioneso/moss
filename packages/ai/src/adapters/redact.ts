@@ -15,7 +15,20 @@ const PATTERNS: readonly RegExp[] = [
   // `Authorization: Bearer <value>` / `Bearer <value>` header form.
   /Bearer\s+\S+/gi,
   // Bare session-token tokens (`jst_…`) anywhere they appear.
-  /jst_[A-Za-z0-9_-]+/g
+  /jst_[A-Za-z0-9_-]+/g,
+  // Private key blocks (PEM): the whole block, which base64 padding (`=`)
+  // would otherwise slice into pieces for the assignment patterns below.
+  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
+  // Database / service URLs with embedded credentials (`scheme://user:pass@host`).
+  // Requires the `user:password@` shape so plain URLs pass through untouched.
+  /\b[a-z][a-z0-9+.-]*:\/\/[^\s/@]+:[^\s/@]+@[^\s]*/gi,
+  // `password=…` / `password: …` assignments.
+  /\b(passw(or)?d|passwd|pwd)\s*[:=]\s*\S+/gi,
+  // Named secret/key/token assignments (`OPENAI_API_KEY=…`, `api_secret: …`).
+  // The name is kept so the log stays useful; only the value is scrubbed.
+  /\b([a-z0-9_.-]*(secret|token|api[_-]?key|access[_-]?key)[a-z0-9_.-]*\s*[:=]\s*)\S+/gi,
+  // Vendor token prefixes that carry no assignment context.
+  /\b(sk[-_](ant|proj|live|test)[-_a-zA-Z0-9]+|sk_test[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]+|xox[bpas]-[A-Za-z0-9-]+|AKIA[0-9A-Z]{16})\b/g
 ];
 
 /** Replace any token-bearing substring with a fixed marker. Safe on undefined/empty input. */

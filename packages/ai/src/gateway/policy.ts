@@ -57,3 +57,20 @@ export async function resolvePolicy(
 
   return "confirm";
 }
+
+/**
+ * Whether unattended mode may run this tool with no card: only when a person
+ * could have promoted the tool's family to run automatically. Reads off the
+ * family's allowed tiers, never the stored tier, and fails closed — a missing
+ * family, a non-auto tool, or an unreadable manifest means the card.
+ */
+export async function familyAllowsAutoRun(
+  tool: ModuleAssistantToolManifest,
+  moduleId: string,
+  lookup: ActionPolicyLookup
+): Promise<boolean> {
+  const familyId = tool.actionFamilyId;
+  if (!familyId || tool.executionPolicy !== "auto") return false;
+  const manifest = await lookup.getFamilyManifest(moduleId, familyId);
+  return manifest?.allowedTiers.includes("trusted_auto") ?? false;
+}

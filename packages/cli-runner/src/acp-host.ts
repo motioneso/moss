@@ -24,7 +24,7 @@ import { prepareOwnedPath, writeOwnedFile } from "./owned-fs.js";
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { allocateUidSlot } from "./uid-allocator.js";
 import { providerTokenPath } from "./provider-token-store.js";
-import { redactSecrets } from "@moss/ai";
+import { redactExact, redactSecrets } from "@moss/ai";
 import { sanitizeSessionKey } from "@moss/chat/live";
 
 export interface AcpHostDeps {
@@ -117,7 +117,11 @@ export interface AcpExecStartResult {
 }
 
 export interface AcpExecPollResult {
-  /** Full output so far (stdout plus stderr, arrival order), capped at 256 KiB. */
+  /**
+   * Output so far (stdout plus stderr, arrival order), capped at 256 KiB. A
+   * mid-run poll lags the live edge by up to 256 held-back chars; once `done`
+   * the finish flush has run and it is complete.
+   */
   readonly output: string;
   readonly done: boolean;
   readonly exitCode: number | null;
@@ -126,6 +130,13 @@ export interface AcpExecPollResult {
   /** True when the deadline killed the command; output is whatever ran so far. */
   readonly timedOut: boolean;
 }
+
+/**
+ * Raw tail held back between output chunks so a secret split across two
+ * chunks is scanned whole. Bounded and process-local; always scrubbed before
+ * it is retained, and flushed when the command ends.
+ */
+const ACP_EXEC_TAIL_KEEP_CHARS = 256;
 
 interface AcpExec {
   readonly id: number;
@@ -138,6 +149,7 @@ interface AcpExec {
   exitCode: number | null;
   lastActivity: number;
   deadline: ReturnType<typeof setTimeout> | null;
+  pendingTail: string;
 }
 
 interface AcpSession {
@@ -631,10 +643,12 @@ export class AcpHost {
       done: false,
       exitCode: null,
       lastActivity: Date.now(),
-      deadline: null
+      deadline: null,
+      pendingTail: ""
     };
     const finish = (code: number | null): void => {
       if (record.done) return;
+      this.flushExecTail(record);
       record.done = true;
       record.exitCode = code;
       record.lastActivity = Date.now();
@@ -753,17 +767,56 @@ export class AcpHost {
   }
 
   /**
+   * Scrub one head of build output: shape matching first, then the literal
+   * session token this runner launched with. The literal scrub is the backstop
+   * for a token the command echoes with no marker around it (its own launch
+   * line, `/proc`, an error trace) — shapes alone cannot see those.
+   */
+  private scrubExecHead(text: string): string {
+    return redactExact(redactSecrets(text), process.env.JARVIS_MCP_TOKEN);
+  }
+
+  /**
    * Append build output up to the cap; past it the head is kept and the flag
-   * is set. Output is scrubbed before it is retained, so a command that reads
-   * the app's settings never lands a secret in the poll reply, the agent's
-   * context, or the audit record downstream.
+   * is set. The last few characters of each chunk are held back raw and
+   * prepended to the next chunk, so a secret straddling the boundary is
+   * scanned whole instead of leaking its tail. Everything retained is
+   * scrubbed first, so a command that reads the app's settings never lands a
+   * secret in the poll reply, the agent's context, or the audit record
+   * downstream. A mid-run poll can lag the live edge by up to the held-back
+   * tail; the remainder is flushed when the command ends.
    */
   private appendExecOutput(record: AcpExec, chunk: Buffer): void {
     if (record.outputBytes >= ACP_EXEC_OUTPUT_CAP_BYTES) {
       record.truncated = true;
       return;
     }
-    const text = redactSecrets(chunk.toString("utf8"));
+    const combined = record.pendingTail + chunk.toString("utf8");
+    if (combined.length <= ACP_EXEC_TAIL_KEEP_CHARS) {
+      record.pendingTail = combined;
+      record.lastActivity = Date.now();
+      return;
+    }
+    const cutAt = combined.length - ACP_EXEC_TAIL_KEEP_CHARS;
+    record.pendingTail = combined.slice(cutAt);
+    this.retainExecText(record, this.scrubExecHead(combined.slice(0, cutAt)));
+    record.lastActivity = Date.now();
+  }
+
+  /** Retain the held-back tail, scrubbed, when the command ends. */
+  private flushExecTail(record: AcpExec): void {
+    if (record.pendingTail.length === 0) return;
+    const tail = record.pendingTail;
+    record.pendingTail = "";
+    this.retainExecText(record, this.scrubExecHead(tail));
+  }
+
+  /** Keep scrubbed text up to the cap; past it the head wins and the flag says so. */
+  private retainExecText(record: AcpExec, text: string): void {
+    if (record.outputBytes >= ACP_EXEC_OUTPUT_CAP_BYTES) {
+      record.truncated = true;
+      return;
+    }
     const room = ACP_EXEC_OUTPUT_CAP_BYTES - record.outputBytes;
     const size = Buffer.byteLength(text, "utf8");
     if (size <= room) {
@@ -775,7 +828,6 @@ export class AcpHost {
       record.outputBytes = ACP_EXEC_OUTPUT_CAP_BYTES;
       record.truncated = true;
     }
-    record.lastActivity = Date.now();
   }
 
   private requireExec(sessionKey: string, execId: number): AcpExec {

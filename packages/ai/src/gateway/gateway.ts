@@ -35,7 +35,7 @@ import {
   renderAndCap,
   sanitizeAssistantToolResult
 } from "./output-validation.js";
-import { resolvePolicy } from "./policy.js";
+import { familyAllowsAutoRun, resolvePolicy } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
 import {
   APPROVAL_REFUSED_REASON,
@@ -238,6 +238,10 @@ export class AssistantToolGateway {
     const prefs = this.deps.agencyPrefs?.(ctx) ?? denyPrefs;
     const lookup = this.deps.actionPolicy?.(ctx) ?? defaultPolicyLookup;
     if (found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true) {
+      // No card-skip for a family nobody could promote to automatic (#2418).
+      if (!(await familyAllowsAutoRun(found.tool, found.dto.moduleId, lookup))) {
+        return this.confirmAndRun(found, input, ctx, await this.firstRunNotice(found, prefs));
+      }
       if (!this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
         this.deps.notifier.emit(ctx.chatSessionId, {
           kind: "action_result",
@@ -259,25 +263,7 @@ export class AssistantToolGateway {
           reason: "Rate limit exceeded for unattended runs of this tool. Try again shortly."
         };
       }
-      const { response: result, audit } = await this.runHandler(found, input, ctx);
-      this.deps.notifier.emit(ctx.chatSessionId, {
-        kind: "action_result",
-        actionRequestId: ctx.requestId,
-        toolName: found.dto.name,
-        outcome: audit.errorClass === null ? "executed" : "error",
-        ...(result.ok
-          ? { result: liveStreamResult(found.tool, result) }
-          : { reason: gatewayFailureReason(result) }),
-        ...(result.ok && found.tool.affectsQueryKeys
-          ? { affectsQueryKeys: found.tool.affectsQueryKeys }
-          : {})
-      });
-      void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
-        approvalMode: "yolo",
-        ...audit,
-        chatSessionId: ctx.chatSessionId
-      });
-      return result;
+      return this.runAutoApproved(found, input, ctx, "yolo");
     }
     const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
     if ((await resolvePolicy(found.tool, found.dto.moduleId, confirmOverride, lookup)) === "run") {
@@ -299,29 +285,41 @@ export class AssistantToolGateway {
           "Automatic execution hit its rate limit — please confirm this action."
         );
       }
-      const { response: result, audit } = await this.runHandler(found, input, ctx);
-      if (found.tool.risk !== "read") {
-        this.deps.notifier.emit(ctx.chatSessionId, {
-          kind: "action_result",
-          actionRequestId: ctx.requestId,
-          toolName: found.dto.name,
-          outcome: audit.errorClass === null ? "executed" : "error",
-          ...(result.ok
-            ? { result: liveStreamResult(found.tool, result) }
-            : { reason: gatewayFailureReason(result) }),
-          ...(result.ok && found.tool.affectsQueryKeys
-            ? { affectsQueryKeys: found.tool.affectsQueryKeys }
-            : {})
-        });
-        void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
-          approvalMode: "auto",
-          ...audit,
-          chatSessionId: ctx.chatSessionId
-        });
-      }
-      return result;
+      return this.runAutoApproved(found, input, ctx, "auto");
     }
     return this.confirmAndRun(found, input, ctx, await this.firstRunNotice(found, prefs));
+  }
+
+  /**
+   * Run an approved tool and report it (event plus audit line). Shared by the
+   * unattended and policy-auto paths; reads stay silent.
+   */
+  private async runAutoApproved(
+    found: ExecutableTool,
+    input: Record<string, unknown>,
+    ctx: ToolContext,
+    approvalMode: "yolo" | "auto"
+  ): Promise<GatewayToolResponse> {
+    const { response: result, audit } = await this.runHandler(found, input, ctx);
+    if (approvalMode === "auto" && found.tool.risk === "read") return result;
+    this.deps.notifier.emit(ctx.chatSessionId, {
+      kind: "action_result",
+      actionRequestId: ctx.requestId,
+      toolName: found.dto.name,
+      outcome: audit.errorClass === null ? "executed" : "error",
+      ...(result.ok
+        ? { result: liveStreamResult(found.tool, result) }
+        : { reason: gatewayFailureReason(result) }),
+      ...(result.ok && found.tool.affectsQueryKeys
+        ? { affectsQueryKeys: found.tool.affectsQueryKeys }
+        : {})
+    });
+    void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
+      approvalMode,
+      ...audit,
+      chatSessionId: ctx.chatSessionId
+    });
+    return result;
   }
 
   async requestNativeToolPermission(

@@ -626,6 +626,10 @@ describe("gateway audit outcome truth (#1252)", () => {
           description: "Write",
           permissionId: "acme.write",
           risk: "write",
+          // Unattended auto-run needs a promotable family (#2418); without
+          // one the tool raises its card instead of running.
+          actionFamilyId: "acme_family",
+          executionPolicy: "auto",
           ...toolOverrides
         }
       ]
@@ -670,7 +674,17 @@ describe("gateway audit outcome truth (#1252)", () => {
       confirmations,
       notifier: { emit: () => {} },
       confirmTimeoutMs: 50,
-      yoloMode: async () => true
+      yoloMode: async () => true,
+      actionPolicy: () => ({
+        getFamilyTier: async () => "trusted_auto",
+        getFamilyManifest: async () => ({
+          id: "acme_family",
+          label: "Acme family",
+          description: "Acme family",
+          defaultTier: "ask_each_time",
+          allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
+        })
+      })
     });
     const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
     const response = await gateway.callTool(token, "acme.write", {});
@@ -746,7 +760,17 @@ describe("gateway audit outcome truth (#1252)", () => {
         }
       },
       confirmTimeoutMs: 50,
-      yoloMode: async () => true
+      yoloMode: async () => true,
+      actionPolicy: () => ({
+        getFamilyTier: async () => "trusted_auto",
+        getFamilyManifest: async () => ({
+          id: "acme_family",
+          label: "Acme family",
+          description: "Acme family",
+          defaultTier: "ask_each_time",
+          allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
+        })
+      })
     });
     const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
     await gateway.callTool(token, "acme.write", {});

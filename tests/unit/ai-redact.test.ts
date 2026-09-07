@@ -59,3 +59,55 @@ describe("redactExact (#342 Phase 3 login-contract §L.6.3)", () => {
     expect(redactExact("the cat sat", "cat")).toBe("the cat sat"); // < 4 chars ⇒ not treated as a secret
   });
 });
+
+describe("redactSecrets widened shapes (issue 2381 review round 1)", () => {
+  it("redacts a database URL with the password in it", () => {
+    const out = redactSecrets("postgres://admin:s3cr3t-pw-db9@db.internal:5432/app");
+    expect(out).not.toContain("s3cr3t-pw-db9");
+    expect(out).toContain("[redacted]");
+  });
+
+  it("redacts a plain password assignment", () => {
+    const out = redactSecrets("password=hunter2-hunter2");
+    expect(out).not.toContain("hunter2-hunter2");
+    expect(out).toContain("[redacted]");
+  });
+
+  it("redacts generic secret and key assignments but keeps the name", () => {
+    for (const line of [
+      "OPENAI_API_KEY=sk-proj-AbC123xYz456",
+      "ANTHROPIC_API_KEY=sk-ant-api03-abcDEF123",
+      "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI K7MDENG bPxRfiCY",
+      "STRIPE_SECRET_KEY=sk_live_abc123",
+      "api_secret=Zx9q2-SECRET-99"
+    ]) {
+      const out = redactSecrets(line);
+      expect(out).not.toContain(line.split("=")[1]);
+      expect(out).toContain("[redacted]");
+    }
+  });
+
+  it("redacts vendor token prefixes", () => {
+    for (const token of ["ghp_abcDEF1234567890abcd", "xoxb-12345-abcde", "AKIAIOSFODNN7EXAMPLE"]) {
+      const out = redactSecrets(`saw ${token} here`);
+      expect(out).not.toContain(token);
+      expect(out).toContain("[redacted]");
+    }
+  });
+
+  it("redacts a private key block", () => {
+    const key = "-----BEGIN RSA PRIVATE KEY-----\nMIIBogusKey\n-----END RSA PRIVATE KEY-----";
+    const out = redactSecrets(`config:\n${key}\ndone`);
+    expect(out).not.toContain("MIIBogusKey");
+    expect(out).toContain("[redacted]");
+    expect(out).toContain("done");
+  });
+
+  it("still misses an arbitrary pasted sign-in code, which is the documented limit", () => {
+    const code = "4/1AbC-xyz-7890-qrs";
+    // Shape matching cannot see this: no marker, no assignment. The literal
+    // scrub is the backstop for values we already hold.
+    expect(redactSecrets(`provider rejected ${code}`)).toContain(code);
+    expect(redactExact(`provider rejected ${code}`, code)).not.toContain(code);
+  });
+});
