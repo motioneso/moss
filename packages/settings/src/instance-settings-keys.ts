@@ -11,6 +11,12 @@ export interface InstanceSettingKeyEntry {
   readonly secret?: boolean;
 }
 
+/** Instance setting holding the Workshop answering agent id (#2369 slice 1 phase 5). */
+export const WORKSHOP_AGENT_SETTING = "workshop.agent";
+
+/** Instance setting holding the chat answering agent id (#2369 slice 1 phase 5). */
+export const CHAT_AGENT_SETTING = "chat.agent";
+
 export const INSTANCE_SETTINGS_REGISTRY: readonly InstanceSettingKeyEntry[] = [
   { key: "registration.enabled" },
   { key: "registration.requires_approval" },
@@ -34,7 +40,11 @@ export const INSTANCE_SETTINGS_REGISTRY: readonly InstanceSettingKeyEntry[] = [
   { key: "keys.module_credential", secret: true },
   { key: "keys.news_credential", secret: true },
   // Built-in web search instance switch: boolean, default true ("Use your model's built-in web search").
-  { key: "web.native_search_enabled" }
+  { key: "web.native_search_enabled" },
+  // Outside-agent choice per surface (#2369 slice 1 phase 5): plain strings, admin
+  // default only, no per-person override in this slice. Absent reads as "default".
+  { key: WORKSHOP_AGENT_SETTING },
+  { key: CHAT_AGENT_SETTING }
 ] as const;
 
 export const KNOWN_INSTANCE_SETTING_KEYS: ReadonlySet<string> = new Set(

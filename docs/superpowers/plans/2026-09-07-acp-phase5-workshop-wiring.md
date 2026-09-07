@@ -45,7 +45,7 @@ real confinement is 2414) lands here as four conditions plus five prohibitions.
 - UAT shape: tests/uat/specs/workshop-project-entry.uat.spec.ts:1 (Playwright,
   isolated provisioner guard). Trigger map at
   .claude/skills/coordinate/uat-trigger-map.tsv:118 already covers
-  packages/workshop/**.
+  packages/workshop/\*\*.
 
 ## Decisions
 
@@ -171,7 +171,7 @@ Owner: coordinator. The 30 s attended slice proof is the exit.
 
 - [ ] Task issue 2381 open and named; spec approved; ruling 2396 read
 - [ ] Every assumed capability cited file:line above, or settled (tunnel
-  backing verified first in task 6 before building on it)
+      backing verified first in task 6 before building on it)
 - [ ] No function bodies above; signatures, test cases, commands only
 - [ ] Determinism boundary stated; guidance under 150 words
 - [ ] E2E named (task 10); every command unpiped with exit 0

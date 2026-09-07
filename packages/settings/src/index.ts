@@ -12,6 +12,7 @@ export * from "./notification-preferences-routes.js";
 export * from "./web-search-key.js";
 export * from "./web-search-key-routes.js";
 export * from "./web-search-engine-resolver.js";
+export * from "./agent-settings.js";
 export * from "./instance-settings-keys.js";
 export * from "./runtime-config-keys.js";
 export * from "./runtime-config-resolver.js";
