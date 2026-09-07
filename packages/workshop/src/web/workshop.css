@@ -68,6 +68,13 @@
   gap: var(--space-4);
 }
 
+/* A short thread opens just above the composer instead of hanging from the top of the
+   window. An auto top margin collapses to zero once the thread overflows, so long
+   threads keep their normal top-anchored scroll. */
+.workshop-chat__history > :first-child {
+  margin-top: auto;
+}
+
 .workshop-chat__caption {
   margin: 0;
   font-size: var(--text-sm);

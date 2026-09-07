@@ -1,4 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { UIEvent } from "react";
+import { ArrowUp } from "lucide-react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
 import { Button, ButtonLink, Card, EmptyState, Masthead, RowIndex, RowIndexItem } from "@moss/ui";
@@ -142,8 +144,8 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
 }
 
 /**
- * The pinned composer both windows share: the label for screen readers, the box with Send
- * inside it, and an error note underneath if the last send failed.
+ * The pinned composer both windows share: the label for screen readers, the box with the
+ * arrow send button inside it, and an error note underneath if the last send failed.
  */
 export function WorkshopComposer(props: {
   readonly label: string;
@@ -182,8 +184,14 @@ export function WorkshopComposer(props: {
             }
           }}
         />
-        <button type="submit" className="chatd-send" disabled={props.sendDisabled}>
-          {props.sending ? "Sending…" : "Send"}
+        <button
+          type="submit"
+          className="chatd-send"
+          aria-label={props.sending ? "Sending" : "Send"}
+          title={props.sending ? "Sending" : "Send"}
+          disabled={props.sendDisabled}
+        >
+          <ArrowUp size={17} aria-hidden="true" />
         </button>
       </div>
       {props.error ? (
@@ -297,6 +305,20 @@ function WorkshopProjectContent({
   const [text, setText] = useState("");
   const [messageId, setMessageId] = useState(() => randomUuid());
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // A normal chat follows new turns down while the reader is already at the bottom and
+  // never yanks them away from earlier messages. Same contract as the chat drawer.
+  const historyRef = useRef<HTMLDivElement | null>(null);
+  const [stickToBottom, setStickToBottom] = useState(true);
+  const loadingEarlierRef = useRef(false);
+  const AUTOSCROLL_THRESHOLD_PX = 48;
+  const handleHistoryScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    const el = event.currentTarget;
+    setStickToBottom(el.scrollHeight - el.scrollTop - el.clientHeight <= AUTOSCROLL_THRESHOLD_PX);
+  }, []);
+  const scrollHistoryToLatest = useCallback(() => {
+    const el = historyRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+  }, []);
   const onRename = useCallback(
     async (title: string) => {
       const result = await renameProject(projectId, title);
@@ -338,6 +360,16 @@ function WorkshopProjectContent({
       void client.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
     }
   });
+  const entryCount = messages.data?.pages.reduce((n, page) => n + page.entries.length, 0) ?? 0;
+  // A fresh turn lands at the bottom while the reader is already there. Loading earlier
+  // messages grows the same count from the top, so that growth never pulls the reader down.
+  useEffect(() => {
+    if (loadingEarlierRef.current) {
+      loadingEarlierRef.current = false;
+      return;
+    }
+    if (stickToBottom) scrollHistoryToLatest();
+  }, [entryCount, mutation.isPending, stickToBottom, scrollHistoryToLatest]);
   // The top bar carries the project's name while this page is mounted; before the project
   // loads there is no name to show, so the trail stays clear and the plain section title stands.
   usePageTrail(
@@ -415,13 +447,16 @@ function WorkshopProjectContent({
           <Button
             variant="quiet"
             disabled={messages.isFetching || !canMutate}
-            onClick={() => void messages.fetchNextPage()}
+            onClick={() => {
+              loadingEarlierRef.current = true;
+              void messages.fetchNextPage();
+            }}
           >
             {messages.isFetching ? "Loading…" : "Earlier messages"}
           </Button>
         </div>
       ) : null}
-      <div className="workshop-chat__history">
+      <div className="workshop-chat__history" ref={historyRef} onScroll={handleHistoryScroll}>
         {messages.isPending ? <p role="status">Loading messages…</p> : null}
         {messages.isError ? (
           <ProjectError
