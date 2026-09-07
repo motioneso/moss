@@ -57,8 +57,6 @@ export interface AcpHostDeps {
 export interface AcpSpawnResult {
   readonly cwd: string;
   readonly generation: number;
-  /** The HOME handed to the agent process, or null when it names none. */
-  readonly home: string | null;
 }
 
 export interface AcpReadResult {
@@ -192,33 +190,9 @@ export class AcpHost {
     const settingsDir = join(sessionDir, ".claude");
     await mkdir(settingsDir, { recursive: true });
     const settingsPath = join(settingsDir, "settings.json");
-    // Belt and braces with the policy: the shell and writer names stay off, and
-    // reads of the login-token corners plus the system pseudofolders are denied
-    // even if a future adapter ever launched those tools. Whether the vendor
-    // matcher honors these rules needs a live check in phase 5.
     await writeFile(
       settingsPath,
-      JSON.stringify({
-        permissions: {
-          deny: [
-            "Bash",
-            "KillShell",
-            "Write",
-            "Edit",
-            "MultiEdit",
-            "NotebookEdit",
-            "Read(~/.jarvis/**)",
-            "Read(~/.claude/**)",
-            "Read(~/.claude.json)",
-            "Read(~/.codex/**)",
-            "Read(~/.gemini/**)",
-            "Read(//proc/**)",
-            "Read(//sys/**)",
-            "Read(//dev/**)",
-            "Read(//run/**)"
-          ]
-        }
-      })
+      JSON.stringify({ permissions: { deny: ["Bash", "Write", "Edit", "NotebookEdit"] } })
     );
     if (uid !== undefined && gid !== undefined) {
       await this.chownOwned(key, settingsDir, uid, gid);
@@ -299,11 +273,7 @@ export class AcpHost {
       session.lastActivity = Date.now();
     });
     this.sessions.set(key, session);
-    // The agent's home travels with the spawn result so the permission policy
-    // can refuse its sensitive corners without ever reading them. Null when
-    // the child environment names no home.
-    const home = typeof env.HOME === "string" && env.HOME !== "" ? env.HOME : null;
-    return { cwd: sessionDir, generation: session.generation, home };
+    return { cwd: sessionDir, generation: session.generation };
   }
 
   send(sessionKey: string, line: string): void {

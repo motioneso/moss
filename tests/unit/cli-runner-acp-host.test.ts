@@ -91,25 +91,6 @@ describe("AcpHost", () => {
       };
       // Shell and writes are denied outright; a bare tool name matches every use.
       expect(settings.permissions?.deny).toEqual(expect.arrayContaining(["Bash", "Write", "Edit"]));
-      // The deny list matches the tool table's shell and write rows exactly
-      // (bare names only), plus the zone rules below — nothing else may ride
-      // along, so launch and policy cannot drift apart.
-      const { acpToolNamesIn } = await import("../../packages/acp/src/tool-table.js");
-      const tableRows = [...acpToolNamesIn("shell", "write")].filter(
-        (name) => !name.startsWith("mcp__acp__")
-      );
-      const zoneRules = [
-        "Read(~/.jarvis/**)",
-        "Read(~/.claude/**)",
-        "Read(~/.claude.json)",
-        "Read(~/.codex/**)",
-        "Read(~/.gemini/**)",
-        "Read(//proc/**)",
-        "Read(//sys/**)",
-        "Read(//dev/**)",
-        "Read(//run/**)"
-      ];
-      expect(new Set(settings.permissions?.deny)).toEqual(new Set([...tableRows, ...zoneRules]));
       // The old dead path is gone: nothing writes outside the adapter's layout.
       expect(existsSync(join(spawned.cwd, ".Muse"))).toBe(false);
     } finally {

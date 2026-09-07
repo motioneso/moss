@@ -20,31 +20,18 @@ import {
   ClientSideConnection,
   type Client,
   type McpServer,
-  type RequestPermissionRequest,
   type RequestPermissionResponse,
   type SessionNotification,
-  type StopReason,
-  type ToolCallLocation
+  type StopReason
 } from "@agentclientprotocol/sdk";
 
 import { checkAgentCapabilities, type AcpSurface } from "./capabilities.js";
-import { selectAllowOptionId, toolNameFromMeta, type AcpBuiltInRequest } from "./permissions.js";
 import { createTunnelStream } from "./stream.js";
 import type { AcpTunnel } from "./tunnel.js";
-
-/** Announcements remembered per session; oldest dropped past the cap. */
-const MAX_ANNOUNCEMENTS_PER_SESSION = 256;
-/**
- * How long a permission question waits for its announcement. The race is
- * milliseconds in practice; past this the tool is unknown and refuses.
- */
-const ANNOUNCEMENT_WAIT_MS = 2000;
 
 export interface AcpSessionHandle {
   readonly sessionId: string;
   readonly cwd: string;
-  /** The HOME handed to the agent process, or null when it names none. */
-  readonly home: string | null;
 }
 
 /**
@@ -73,26 +60,6 @@ export interface AcpClientEvents {
   onSessionUpdate?: (notification: SessionNotification) => void;
 }
 
-/**
- * One announced tool use, matched to its permission question by tool call id.
- * The name comes from the agent's own announcement metadata, written by
- * adapter platform code — never from the display title.
- */
-export interface AcpToolAnnouncement {
-  readonly toolName: string | null;
-  readonly kind: string | null;
-  readonly locations: readonly ToolCallLocation[] | null;
-  readonly rawInput: unknown;
-}
-
-/**
- * Answers one announced tool ask with allow or deny. The client translates the
- * verdict into the protocol answer; without a decider the client refuses.
- */
-export interface AcpPermissionDecider {
-  decide(request: AcpBuiltInRequest, session: AcpSessionHandle): Promise<"allow" | "deny">;
-}
-
 export interface AcpPromptOptions {
   /**
    * Caller-side deadline for one prompt turn. A hung agent cancels instead of
@@ -104,11 +71,10 @@ export interface AcpPromptOptions {
 const DEFAULT_PROMPT_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
- * Deny-closed fallback: anything the policy does not explicitly allow is
- * denied, and anything unrecognised is refused without asking. Denial is the
- * protocol's cancelled outcome, which aborts the tool use without retrying it.
- * With a permission decider wired (phase 4), the policy answers first and only
- * this fallback denies.
+ * Phase 1 permission posture: anything the policy does not explicitly allow is
+ * denied, and slice 1 allows nothing yet — the shared approval card arrives with
+ * the next phase. Denial is the protocol's cancelled outcome, which aborts the
+ * tool use without retrying it.
  */
 function denyPermission(): RequestPermissionResponse {
   return { outcome: { outcome: "cancelled" } };
@@ -133,15 +99,10 @@ export class MossAcpClient {
   private readonly texts = new Map<string, string[]>();
   private readonly toolCalls = new Map<string, number>();
   private readonly closers = new Map<string, () => void>();
-  private readonly sessionCwds = new Map<string, string>();
-  private readonly sessionHomes = new Map<string, string | null>();
-  private readonly announcements = new Map<string, Map<string, AcpToolAnnouncement>>();
-  private readonly announcementWaiters = new Map<string, () => void>();
 
   constructor(
     private readonly tunnel: AcpTunnel,
-    private readonly events: AcpClientEvents = {},
-    private readonly permissionDecider: AcpPermissionDecider | null = null
+    private readonly events: AcpClientEvents = {}
   ) {}
 
   async openSession(
@@ -150,7 +111,7 @@ export class MossAcpClient {
     surface: AcpSurface = "workshop",
     toolServer?: AcpToolServer
   ): Promise<AcpSessionHandle> {
-    const { cwd, home } = await this.tunnel.spawn(sessionKey, projectId);
+    const { cwd } = await this.tunnel.spawn(sessionKey, projectId);
     const stream = createTunnelStream(this.tunnel, sessionKey);
     const connection = new ClientSideConnection(() => this.createClientHandler(), stream);
     const init = await connection.initialize({
@@ -170,10 +131,8 @@ export class MossAcpClient {
     this.connections.set(session.sessionId, connection);
     this.texts.set(session.sessionId, []);
     this.toolCalls.set(session.sessionId, 0);
-    this.sessionCwds.set(session.sessionId, cwd);
-    this.sessionHomes.set(session.sessionId, home);
     if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
-    return { sessionId: session.sessionId, cwd, home };
+    return { sessionId: session.sessionId, cwd };
   }
 
   async prompt(
@@ -217,16 +176,6 @@ export class MossAcpClient {
     this.connections.delete(handle.sessionId);
     this.texts.delete(handle.sessionId);
     this.toolCalls.delete(handle.sessionId);
-    this.sessionCwds.delete(handle.sessionId);
-    this.sessionHomes.delete(handle.sessionId);
-    this.announcements.delete(handle.sessionId);
-    // Wake any questions still waiting: they re-check, find nothing, refuse.
-    for (const [key, wake] of [...this.announcementWaiters]) {
-      if (key.startsWith(`${handle.sessionId}\n`)) {
-        this.announcementWaiters.delete(key);
-        wake();
-      }
-    }
     // The phase-one end path: the tool server Bearer [REDACTED] working the moment the
     // outside session closes, so run the caller's revoke hook here.
     const onClose = this.closers.get(handle.sessionId);
@@ -240,112 +189,9 @@ export class MossAcpClient {
     return connection;
   }
 
-  /** Remember one announced tool use, waking its question if already waiting. */
-  private recordAnnouncement(sessionId: string, toolCallId: string, update: unknown): void {
-    let table = this.announcements.get(sessionId);
-    if (!table) {
-      table = new Map();
-      this.announcements.set(sessionId, table);
-    }
-    if (table.size >= MAX_ANNOUNCEMENTS_PER_SESSION) {
-      const oldest = table.keys().next();
-      if (!oldest.done) table.delete(oldest.value);
-    }
-    const fields = update && typeof update === "object" ? (update as Record<string, unknown>) : {};
-    const meta = fields._meta;
-    const claudeCode =
-      meta && typeof meta === "object" && !Array.isArray(meta)
-        ? (meta as Record<string, unknown>).claudeCode
-        : null;
-    const rawKind = fields.kind;
-    const rawLocations = fields.locations;
-    table.set(toolCallId, {
-      toolName: toolNameFromMeta(claudeCode),
-      kind: typeof rawKind === "string" ? rawKind : null,
-      locations: Array.isArray(rawLocations) ? (rawLocations as ToolCallLocation[]) : null,
-      rawInput: fields.rawInput
-    });
-    const waiter = this.announcementWaiters.get(`${sessionId}\n${toolCallId}`);
-    if (waiter) {
-      this.announcementWaiters.delete(`${sessionId}\n${toolCallId}`);
-      waiter();
-    }
-  }
-
-  /**
-   * Wait for an announcement that may land just after its question. Event
-   * driven: the arrival wakes us, otherwise a short bound expires and the
-   * tool stays unknown.
-   */
-  private waitForAnnouncement(sessionId: string, toolCallId: string): Promise<void> {
-    const key = `${sessionId}\n${toolCallId}`;
-    return new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        this.announcementWaiters.delete(key);
-        resolve();
-      }, ANNOUNCEMENT_WAIT_MS);
-      this.announcementWaiters.set(key, () => {
-        clearTimeout(timer);
-        resolve();
-      });
-    });
-  }
-
-  /**
-   * Fail closed: no decider, no known folder, no announcement, no name, or a
-   * throwing decider all refuse without asking anyone. An unnamed tool is
-   * unknown by definition, and the only text available for it is the model's.
-   */
-  private async answerPermission(
-    params: RequestPermissionRequest
-  ): Promise<RequestPermissionResponse> {
-    const cwd = this.sessionCwds.get(params.sessionId);
-    if (!this.permissionDecider || !cwd || !this.sessionHomes.has(params.sessionId)) {
-      return denyPermission();
-    }
-    const home = this.sessionHomes.get(params.sessionId) ?? null;
-    const toolCallId = params.toolCall.toolCallId;
-    let announced = this.announcements.get(params.sessionId)?.get(toolCallId);
-    if (!announced) {
-      await this.waitForAnnouncement(params.sessionId, toolCallId);
-      announced = this.announcements.get(params.sessionId)?.get(toolCallId);
-    }
-    if (!announced || announced.toolName === null) {
-      console.warn(
-        `[acp] refusing permission ask with no announced tool name ` +
-          `(session ${params.sessionId}, call ${toolCallId})`
-      );
-      return denyPermission();
-    }
-    const builtIn: AcpBuiltInRequest = {
-      sessionId: params.sessionId,
-      toolCallId,
-      title: params.toolCall.title ?? "",
-      rawInput: params.toolCall.rawInput,
-      toolName: announced.toolName,
-      kind: announced.kind,
-      locations: announced.locations
-    };
-    try {
-      const verdict = await this.permissionDecider.decide(builtIn, {
-        sessionId: params.sessionId,
-        cwd,
-        home
-      });
-      if (verdict !== "allow") return denyPermission();
-      // Least privilege: single-use grant, never standing. No allow option
-      // means the question itself offers nothing to take: refuse.
-      const optionId = selectAllowOptionId(params.options);
-      if (optionId === null) return denyPermission();
-      return { outcome: { outcome: "selected", optionId } };
-    } catch {
-      return denyPermission();
-    }
-  }
-
   private createClientHandler(): Client {
     return {
-      requestPermission: async (params) => this.answerPermission(params),
+      requestPermission: async () => denyPermission(),
       sessionUpdate: async (params) => {
         this.events.onSessionUpdate?.(params);
         const update = params.update;
@@ -362,10 +208,6 @@ export class MossAcpClient {
         }
         if (update.sessionUpdate === "tool_call") {
           this.toolCalls.set(params.sessionId, (this.toolCalls.get(params.sessionId) ?? 0) + 1);
-          const toolCall = update as { toolCallId?: unknown };
-          if (typeof toolCall.toolCallId === "string") {
-            this.recordAnnouncement(params.sessionId, toolCall.toolCallId, update);
-          }
         }
       }
     };

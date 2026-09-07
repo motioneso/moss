@@ -15,11 +15,8 @@ export interface AcpExecPoll {
 }
 
 export interface AcpTunnel {
-  /**
-   * Start the adapter for a session key; resolves the runner-side working
-   * folder plus the HOME handed to the agent process (null when none).
-   */
-  spawn(sessionKey: string, projectId: string): Promise<{ cwd: string; home: string | null }>;
+  /** Start the adapter for a session key; resolves the runner-side working folder. */
+  spawn(sessionKey: string, projectId: string): Promise<{ cwd: string }>;
   /** Deliver one client-to-agent JSON-RPC line (no trailing newline). */
   send(sessionKey: string, line: string): Promise<void>;
   /** Drain adapter stdout lines after a sequence cursor. */
