@@ -689,6 +689,11 @@
   color: var(--forest-ink);
   text-decoration: none;
 }
+.jds-index__row:hover .jds-index__excerpt,
+.jds-index__row:hover .jds-index__meta,
+.jds-index__row:hover .jds-index__meta .jds-caption {
+  color: var(--ink);
+}
 .jds-index__title a {
   text-decoration: none;
 }

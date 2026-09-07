@@ -10,6 +10,13 @@
   padding: var(--space-7) var(--space-8) var(--space-11);
 }
 
+/* Ben, 2026-09-06: the masthead read a touch short on this screen; a bit more breathing
+   room top and bottom, scoped to Workshop so other tone="field" mastheads are unaffected. */
+.workshop-page .jds-masthead--field {
+  padding-top: calc(clamp(1.25rem, 2.6vw, 2rem) + var(--space-6));
+  padding-bottom: calc(clamp(1.5rem, 2.6vw, 2rem) + var(--space-6));
+}
+
 /* The invitation centers itself inside the empty window; the host's empty-state classes
    carry the visuals. */
 .workshop-open {

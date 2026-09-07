@@ -47,6 +47,7 @@ let container: HTMLDivElement;
 let client: QueryClient;
 let createFailures: number;
 let messageFailures: number;
+let renameFailures: number;
 let listStatus: number;
 let detailStatus: number;
 let admin: boolean;
@@ -68,6 +69,21 @@ function Location() {
 function TrailName() {
   const trail = usePageTrailValue();
   return <output aria-label="Page trail">{trail?.name ?? ""}</output>;
+}
+// Stands in for the shell's real More menu: the page publishes actions and an onAction handler,
+// and this renders one button per action so a test can choose one the way a person would.
+function TrailActions() {
+  const trail = usePageTrailValue();
+  if (!trail) return null;
+  return (
+    <>
+      {trail.actions.map((action) => (
+        <button key={action.id} type="button" onClick={() => trail.onAction?.(action.id)}>
+          {action.label}
+        </button>
+      ))}
+    </>
+  );
 }
 async function flush() {
   await act(async () => {
@@ -91,6 +107,7 @@ async function render(path: string) {
           <PageTrailProvider>
             <Location />
             <TrailName />
+            <TrailActions />
             <Routes>
               <Route path="/workshop/*" element={<WorkshopProjectRoutes />} />
             </Routes>
@@ -134,6 +151,7 @@ beforeEach(() => {
   onlineManager.setOnline(true);
   createFailures = 0;
   messageFailures = 0;
+  renameFailures = 0;
   listStatus = 200;
   detailStatus = 200;
   admin = true;
@@ -185,6 +203,12 @@ beforeEach(() => {
           entries = [entry];
           return response({ entry, created: true }, 201);
         }
+      }
+      if (init?.method === "PATCH" && path === `${base}/${project.id}`) {
+        const body = JSON.parse(String(init.body)) as Record<string, string>;
+        writes.push({ path, body });
+        if (renameFailures-- > 0) return response({ error: "Temporary failure" }, 503);
+        return response({ project: { ...project, title: body.title! } });
       }
       reads.push(path);
       if (path === "/api/me")
@@ -295,9 +319,51 @@ describe("Workshop project browser interactions", () => {
     expect(writes).toHaveLength(2);
     expect(writes[1]!.body).toEqual(writes[0]!.body);
     expect(field("project-message").value).toBe("");
-    expect(container.textContent).toContain(
-      "Saved to this project. No planning or build has started."
+    // Ben's ruling on 2404: no status line narrating that saving started no planning or build.
+    expect(container.textContent).not.toContain("No planning or build has started");
+  });
+
+  it("sends the project message on Enter, but not on Shift+Enter", async () => {
+    await render(`/workshop/${project.id}`);
+    await eventually(() => expect(container.querySelector("#project-message")).not.toBeNull());
+    type("project-message", "A line, then a break");
+    await eventually(() => expect(button("Send").disabled).toBe(false));
+    act(() => {
+      field("project-message").dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true, cancelable: true })
+      );
+    });
+    expect(writes).toHaveLength(0);
+    act(() => {
+      field("project-message").dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
+      );
+    });
+    await eventually(() => expect(writes).toHaveLength(1));
+    expect(writes[0]!.body.text).toBe("A line, then a break");
+    expect(field("project-message").value).toBe("");
+  });
+
+  it("renames from the More menu with a dialog, not an editable title", async () => {
+    await render(`/workshop/${project.id}`);
+    await eventually(() =>
+      expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe(project.title)
     );
+    expect(container.querySelector('[title="Click to rename"]')).toBeNull();
+    click("Rename");
+    type("project-rename", "Reading list");
+    click("Save");
+    await eventually(() =>
+      expect(
+        writes.some(
+          (write) => write.path === `${base}/${project.id}` && write.body.title === "Reading list"
+        )
+      ).toBe(true)
+    );
+    await eventually(() =>
+      expect(container.querySelector('[aria-label="Rename this project"]')).toBeNull()
+    );
+    expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe("Reading list");
   });
 
   it("retains the composer and blocks saves until reconnect refresh succeeds", async () => {

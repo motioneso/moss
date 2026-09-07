@@ -143,7 +143,7 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
 
 /**
  * The pinned composer both windows share: the label for screen readers, the box with Send
- * inside it, and the error and saved notes underneath.
+ * inside it, and an error note underneath if the last send failed.
  */
 export function WorkshopComposer(props: {
   readonly label: string;
@@ -153,7 +153,6 @@ export function WorkshopComposer(props: {
   readonly sendDisabled: boolean;
   readonly onSubmit: () => void;
   readonly error: string | null;
-  readonly status: string | null;
 }) {
   return (
     <form
@@ -175,6 +174,13 @@ export function WorkshopComposer(props: {
           value={props.text}
           disabled={props.sending}
           onChange={(event) => props.onTextChange(event.target.value)}
+          onKeyDown={(event) => {
+            // Enter sends, matching every other chat surface; Shift+Enter still makes a new line.
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              props.onSubmit();
+            }
+          }}
         />
         <button type="submit" className="chatd-send" disabled={props.sendDisabled}>
           {props.sending ? "Sending…" : "Send"}
@@ -185,7 +191,6 @@ export function WorkshopComposer(props: {
           {props.error}
         </p>
       ) : null}
-      {props.status ? <p role="status">{props.status}</p> : null}
     </form>
   );
 }
@@ -261,7 +266,6 @@ export function WorkshopProjectNew({ canMutate }: { canMutate: boolean }) {
             ? "The project could not be confirmed as saved. Your text is still here; retry to check the same request."
             : null
         }
-        status={null}
       />
     </section>
   );
@@ -271,7 +275,58 @@ const PROJECT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 
 // A fixed identity on purpose: the trail hook republishes on every new array, so a literal
 // here would re-render the top bar on each keystroke in the composer.
-const DELETE_ACTIONS = [{ id: "delete", label: "Delete project" }] as const;
+const TRAIL_ACTIONS = [
+  { id: "rename", label: "Rename" },
+  { id: "delete", label: "Delete project" }
+] as const;
+
+/** The rename dialog opened from the More menu, styled like the delete confirmation beside it. */
+function RenameProjectDialog(props: {
+  readonly initialTitle: string;
+  readonly pending: boolean;
+  readonly failed: boolean;
+  readonly onCancel: () => void;
+  readonly onSubmit: (title: string) => void;
+}) {
+  const [draft, setDraft] = useState(props.initialTitle);
+  const trimmed = draft.trim();
+  return (
+    <Card>
+      <form
+        aria-label="Rename this project"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (trimmed) props.onSubmit(trimmed);
+        }}
+      >
+        <label className="jds-sr-only" htmlFor="project-rename">
+          Project name
+        </label>
+        <input
+          id="project-rename"
+          className="jds-input"
+          type="text"
+          maxLength={160}
+          value={draft}
+          disabled={props.pending}
+          onChange={(event) => setDraft(event.target.value)}
+          ref={(element) => element?.focus()}
+        />
+        {props.failed ? (
+          <p className="workshop-status" role="alert">
+            Could not rename. Try again.
+          </p>
+        ) : null}
+        <Button variant="secondary" disabled={props.pending} onClick={props.onCancel}>
+          Cancel
+        </Button>{" "}
+        <Button variant="primary" type="submit" disabled={props.pending || !trimmed}>
+          {props.pending ? "Saving…" : "Save"}
+        </Button>
+      </form>
+    </Card>
+  );
+}
 
 export function WorkshopProjectDetail({ canMutate }: { canMutate: boolean }) {
   const { projectId = "" } = useParams();
@@ -292,13 +347,14 @@ function WorkshopProjectContent({
   const locale = useUserLocale();
   const [text, setText] = useState("");
   const [messageId, setMessageId] = useState(() => randomUuid());
-  const [saved, setSaved] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingRename, setConfirmingRename] = useState(false);
   const renameMutation = useMutation({
     mutationFn: (title: string) => renameProject(projectId, title),
     onSuccess: (result) => {
       client.setQueryData(projectKeys.detail(projectId), { project: result.project });
       void client.invalidateQueries({ queryKey: projectKeys.list });
+      setConfirmingRename(false);
     }
   });
   const deleteMutation = useMutation({
@@ -309,12 +365,9 @@ function WorkshopProjectContent({
       navigate("/workshop", { replace: true });
     }
   });
-  const onRename = useCallback(
-    (title: string) => renameMutation.mutateAsync(title).then(() => undefined),
-    [renameMutation]
-  );
   const onTrailAction = useCallback((id: string) => {
     if (id === "delete") setConfirmingDelete(true);
+    if (id === "rename") setConfirmingRename(true);
   }, []);
   const project = useQuery({
     queryKey: projectKeys.detail(projectId),
@@ -335,7 +388,6 @@ function WorkshopProjectContent({
     onSuccess: () => {
       setText("");
       setMessageId(randomUuid());
-      setSaved(true);
       void client.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
     }
   });
@@ -346,8 +398,7 @@ function WorkshopProjectContent({
       ? {
           name: project.data.project.title,
           meta: `Started ${formatStartedOn(project.data.project.createdAt, locale)}`,
-          actions: canMutate ? DELETE_ACTIONS : undefined,
-          onRename: canMutate ? onRename : undefined,
+          actions: canMutate ? TRAIL_ACTIONS : undefined,
           onAction: canMutate ? onTrailAction : undefined
         }
       : { name: "" }
@@ -377,6 +428,24 @@ function WorkshopProjectContent({
     !messages.isFetching;
   return (
     <section className="workshop-chat" aria-label="Project conversation">
+      {confirmingRename ? (
+        <RenameProjectDialog
+          initialTitle={record.title}
+          pending={renameMutation.isPending}
+          failed={renameMutation.isError}
+          onCancel={() => {
+            setConfirmingRename(false);
+            renameMutation.reset();
+          }}
+          onSubmit={(title) => {
+            if (title === record.title) {
+              setConfirmingRename(false);
+              return;
+            }
+            renameMutation.mutate(title);
+          }}
+        />
+      ) : null}
       {confirmingDelete ? (
         <Card>
           <div role="alertdialog" aria-label="Delete this project">
@@ -448,7 +517,6 @@ function WorkshopProjectContent({
             setMessageId(randomUuid());
             mutation.reset();
           }
-          setSaved(false);
           setText(next);
         }}
         sending={mutation.isPending}
@@ -461,7 +529,6 @@ function WorkshopProjectContent({
             ? "The message could not be confirmed as saved. Your text is still here; retry to check the same message."
             : null
         }
-        status={saved ? "Saved to this project. No planning or build has started." : null}
       />
     </section>
   );
