@@ -17,6 +17,11 @@ import type { ActionAuditInputSummary, AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AiRepository, InsertAuditLogInput } from "../repository.js";
+import {
+  requestAcpBuiltInPermission as resolveAcpBuiltInPermission,
+  type AcpBuiltInPermissionRequest,
+  type AcpBuiltInPermissionResponse
+} from "./acp-permission.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import {
@@ -33,6 +38,7 @@ import {
 import { resolvePolicy } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
 import {
+  APPROVAL_REFUSED_REASON,
   gatewayFailureReason,
   nativeToolRisk,
   nativeToolSummary,
@@ -50,16 +56,6 @@ export interface GatewayLogger {
 const defaultGatewayLogger: GatewayLogger = {
   error: (event, fields) => console.error(JSON.stringify({ event, ...fields }))
 };
-
-/**
- * Refusal wording for a held approval that expires or is denied (spec 6.2).
- * The agent retries a bare timeout exactly once, so both outcomes return the
- * same sentence: nothing was done, do not try again, report back. It reads in
- * chat after "Not changed — ", so it speaks to the person first and the agent
- * second.
- */
-export const APPROVAL_REFUSED_REASON =
-  "This action was not approved, so it was not done. Do not try it again; let the user know.";
 
 /**
  * Private runHandler return shape: the public envelope plus the audit-log fields, computed once
@@ -459,6 +455,14 @@ export class AssistantToolGateway {
     } finally {
       this.deps.confirmations.markDone(action.id);
     }
+  }
+
+  /** Outside-agent built-in ask; orchestration lives in ./acp-permission.js. */
+  async requestAcpBuiltInPermission(
+    token: string,
+    request: AcpBuiltInPermissionRequest
+  ): Promise<AcpBuiltInPermissionResponse> {
+    return resolveAcpBuiltInPermission(this.deps, token, request);
   }
 
   /**
