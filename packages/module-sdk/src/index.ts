@@ -92,12 +92,24 @@ export interface JsonSchema {
 
 export type ToolInput = Record<string, unknown>;
 
+/** Partial output a long-running tool streams while it works. Carried over MCP
+ * progress notifications by the transport; absent everywhere else. */
+export interface ToolProgressUpdate {
+  readonly message: string;
+}
+
 export interface ToolContext {
   readonly actorUserId: string;
   readonly requestId: string;
   readonly chatSessionId: string;
   /** IANA timezone string from the user's locale settings (e.g. "America/Chicago"). Absent when the gateway has no locale available (falls back to UTC at call site). */
   readonly localTimezone?: string;
+  /**
+   * Streams partial output while the tool runs. Set only by the MCP transport
+   * (backed by SSE progress notifications); everywhere else it is absent and
+   * the tool must treat it as a no-op via `ctx.reportProgress?.(...)`.
+   */
+  readonly reportProgress?: (update: ToolProgressUpdate) => void;
 }
 
 /**

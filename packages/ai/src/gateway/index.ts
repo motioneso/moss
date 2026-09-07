@@ -31,6 +31,7 @@ export type {
 export {
   AssistantToolGateway,
   type AssistantToolGatewayDependencies,
+  type GatewayCallToolOptions,
   type NativeToolPermissionRequest,
   type NativeToolPermissionResponse
 } from "./gateway.js";
