@@ -440,6 +440,9 @@ importers:
 
   packages/chat:
     dependencies:
+      '@moss/acp':
+        specifier: workspace:*
+        version: link:../acp
       '@moss/ai':
         specifier: workspace:*
         version: link:../ai
