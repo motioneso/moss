@@ -259,10 +259,8 @@ function EditableTrailName(props: {
         aria-label="Project name"
         value={draft}
         maxLength={160}
-        ref={(element) => {
-          element?.focus();
-          element?.select();
-        }}
+        autoFocus
+        onFocus={(event) => event.currentTarget.select()}
         onChange={(event) => setDraft(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Escape") setDraft(null);
