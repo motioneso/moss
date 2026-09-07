@@ -73,9 +73,14 @@ describe("gateway tool progress", () => {
     });
     const gw = new AssistantToolGateway(deps);
 
-    const result = await gw.callTool("tok", "example.streamingRead", {}, {
-      onProgress: (message) => messages.push(message)
-    });
+    const result = await gw.callTool(
+      "tok",
+      "example.streamingRead",
+      {},
+      {
+        onProgress: (message) => messages.push(message)
+      }
+    );
 
     expect(result.ok).toBe(true);
     expect(messages).toEqual(["first chunk", "second chunk"]);

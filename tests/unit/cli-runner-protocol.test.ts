@@ -318,7 +318,13 @@ describe("serveConnection (§3.4/§3.7)", () => {
     const start = vi.spyOn(host, "acpExecStart").mockResolvedValue({ execId: 9 });
     const poll = vi
       .spyOn(host, "acpExecPoll")
-      .mockReturnValue({ output: "hi", done: true, exitCode: 0, truncated: false, timedOut: false });
+      .mockReturnValue({
+        output: "hi",
+        done: true,
+        exitCode: 0,
+        truncated: false,
+        timedOut: false
+      });
     const kill = vi.spyOn(host, "acpExecKill").mockReturnValue(undefined);
     const channel = new FakeChannel();
     serveConnection(channel, deps(host));

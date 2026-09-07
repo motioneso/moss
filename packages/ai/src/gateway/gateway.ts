@@ -221,7 +221,9 @@ export class AssistantToolGateway {
       localTimezone,
       // The only context that carries a reporter: the MCP transport passes its
       // SSE sink here. Every other caller omits it, so their tools send nowhere.
-      ...(onProgress ? { reportProgress: (update: { message: string }) => onProgress(update.message) } : {})
+      ...(onProgress
+        ? { reportProgress: (update: { message: string }) => onProgress(update.message) }
+        : {})
     };
 
     const found = (await this.executableTools(actorUserId)).find(

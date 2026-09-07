@@ -374,10 +374,7 @@ export class RpcConnection {
   // #2369 slice 1 phase 3 — runner-side builds for workshop.runCommand.
   // Session-scoped like the tunnel verbs; acpExecPoll is a quick poll, so the
   // default deadline applies.
-  acpExecStart(
-    sessionKey: string,
-    params: RpcAcpExecStartParams
-  ): Promise<RpcAcpExecStartResult> {
+  acpExecStart(sessionKey: string, params: RpcAcpExecStartParams): Promise<RpcAcpExecStartResult> {
     return this.call<RpcAcpExecStartResult>("acpExecStart", sessionKey, params);
   }
 

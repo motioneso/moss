@@ -108,10 +108,15 @@ describe("workshop.runCommand execute", () => {
       { ...doneState("half\n"), done: false, exitCode: null },
       doneState("half\nwhole\n")
     ]);
-    await workshopRunCommandExecute({}, { command: "pnpm build" }, {
-      ...ctx,
-      reportProgress: (update) => messages.push(update.message)
-    }, { workshopRunCommand: service });
+    await workshopRunCommandExecute(
+      {},
+      { command: "pnpm build" },
+      {
+        ...ctx,
+        reportProgress: (update) => messages.push(update.message)
+      },
+      { workshopRunCommand: service }
+    );
     expect(messages).toEqual(["half\n", "whole\n"]);
   });
 
@@ -142,22 +147,39 @@ describe("workshop.runCommand execute", () => {
     const { service, calls } = scriptedService([]);
     (service as { poll?: unknown }).poll = async () => {
       calls.polls += 1;
-      return { output: "stuck log", done: false, exitCode: null, truncated: false, timedOut: false };
+      return {
+        output: "stuck log",
+        done: false,
+        exitCode: null,
+        truncated: false,
+        timedOut: false
+      };
     };
-    const result = await workshopRunCommandExecute({}, { command: "sleep 999", timeoutMs: 1000 }, ctx, {
-      workshopRunCommand: service
+    const result = await workshopRunCommandExecute(
+      {},
+      { command: "sleep 999", timeoutMs: 1000 },
+      ctx,
+      {
+        workshopRunCommand: service
+      }
+    );
+    expect(result.data).toMatchObject({
+      output: expect.stringContaining("stuck log"),
+      timedOut: true
     });
-    expect(result.data).toMatchObject({ output: expect.stringContaining("stuck log"), timedOut: true });
     expect(calls.kills).toBe(1);
   }, 15000);
 
-  it.each(["", "   ", "x\0", "x".repeat(32769)])("rejects an invalid command %j", async (command) => {
-    const { service, calls } = scriptedService([doneState("")]);
-    await expect(
-      workshopRunCommandExecute({}, { command }, ctx, { workshopRunCommand: service })
-    ).rejects.toThrow(/command/i);
-    expect(calls.starts).toHaveLength(0);
-  });
+  it.each(["", "   ", "x\0", "x".repeat(32769)])(
+    "rejects an invalid command %j",
+    async (command) => {
+      const { service, calls } = scriptedService([doneState("")]);
+      await expect(
+        workshopRunCommandExecute({}, { command }, ctx, { workshopRunCommand: service })
+      ).rejects.toThrow(/command/i);
+      expect(calls.starts).toHaveLength(0);
+    }
+  );
 
   it.each([0, 999, 601_000, "soon", 1.5])("rejects an invalid deadline %j", async (timeoutMs) => {
     const { service, calls } = scriptedService([doneState("")]);
@@ -174,18 +196,23 @@ describe("workshop.runCommand execute", () => {
     async (chatSessionId) => {
       const { service, calls } = scriptedService([doneState("")]);
       await expect(
-        workshopRunCommandExecute({}, { command: "pnpm build" }, { ...ctx, chatSessionId }, {
-          workshopRunCommand: service
-        })
+        workshopRunCommandExecute(
+          {},
+          { command: "pnpm build" },
+          { ...ctx, chatSessionId },
+          {
+            workshopRunCommand: service
+          }
+        )
       ).rejects.toThrow(/Workshop project session/);
       expect(calls.starts).toHaveLength(0);
     }
   );
 
   it("fails closed when the host wired no runner service", async () => {
-    await expect(
-      workshopRunCommandExecute({}, { command: "pnpm build" }, ctx, {})
-    ).rejects.toThrow(/not available/i);
+    await expect(workshopRunCommandExecute({}, { command: "pnpm build" }, ctx, {})).rejects.toThrow(
+      /not available/i
+    );
   });
 });
 

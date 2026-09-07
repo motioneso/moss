@@ -22,10 +22,7 @@ function makeHost(dir: string) {
   return new AcpHost({ neutralBase: dir });
 }
 
-async function pollUntil(
-  poll: () => { done: boolean },
-  timeoutMs = 10_000
-): Promise<void> {
+async function pollUntil(poll: () => { done: boolean }, timeoutMs = 10_000): Promise<void> {
   const started = Date.now();
   for (;;) {
     if (poll().done) return;

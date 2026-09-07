@@ -37,7 +37,12 @@ export interface AcpTunnel {
    * resolves the folder runner-side from the session key plus projectId; the
    * caller never passes a path.
    */
-  execStart(sessionKey: string, projectId: string, command: string, timeoutMs?: number): Promise<{
+  execStart(
+    sessionKey: string,
+    projectId: string,
+    command: string,
+    timeoutMs?: number
+  ): Promise<{
     execId: number;
   }>;
   /** Read output so far for one build. */

@@ -14,10 +14,7 @@ import {
 } from "@moss/shared";
 
 import { workshopBuildModuleExecute } from "./assistant-tools.js";
-import {
-  WORKSHOP_RUN_COMMAND_SERVICE_KEY,
-  workshopRunCommandExecute
-} from "./run-command.js";
+import { WORKSHOP_RUN_COMMAND_SERVICE_KEY, workshopRunCommandExecute } from "./run-command.js";
 import { collectWorkshopProjectFeed } from "./project-feed.js";
 import { collectWorkshopProjects } from "./projects-repository.js";
 
