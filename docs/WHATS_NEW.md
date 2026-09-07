@@ -35,13 +35,13 @@ feature that is not present in the image you are running.
 
 - **Clearer message when an action is not approved.** When Moss does not approve an action, it now says so in plain words and asks the agent to tell you instead of trying again. [PR #2382](https://github.com/motioneso/moss/pull/2382)
 - **A cleaner Workshop home page.** The Workshop home page now shows your projects in a simple list with a clear title bar, instead of a grid of cards, and drops an old, unused page. [PR #2364](https://github.com/motioneso/moss/pull/2364)
-- **Email summaries that take too long are now dropped instead of arriving late.** If summarising an email takes longer than the allowed time, you now get no [PR #2355](https://github.com/motioneso/moss/pull/2355)
+- **Email summaries that take too long are now dropped instead of arriving late.** If summarising an email takes longer than the allowed time, you now get no summary for that email instead of getting a correct summary a bit later than usual. [PR #2355](https://github.com/motioneso/moss/pull/2355)
 - **A new display typeface and a lighter page colour across the app.** Headings use a new typeface and pages sit on a lighter background across the app. [PR #2333](https://github.com/motioneso/moss/pull/2333)
 - **The assistant no longer asks permission every time it reads a web page.** When the assistant reads a web page for you, it now just does it, the same way it already does for a web search, instead of stopping to ask you to approve every single page it looks at. [PR #2331](https://github.com/motioneso/moss/pull/2331)
 
 #### Fixed
 
-- **Assistant chat home folder mismatch.** Fixed a problem that could make the assistant take a long time to answer, or fail [PR #2358](https://github.com/motioneso/moss/pull/2358)
+- **Assistant chat home folder mismatch.** Fixed a problem that could make the assistant take a long time to answer, or fail with a confusing error, because of where its answer was being saved. [PR #2358](https://github.com/motioneso/moss/pull/2358)
 - **Fresh accounts get working chat tools automatically.** A brand-new account running from source now gets a chat-tools folder it can actually write to, instead of silently failing because the old default pointed at a folder only the Docker image could create. [PR #2354](https://github.com/motioneso/moss/pull/2354)
 - **A private module you are still building can now actually run.** A private module the owner is still building can now run and save its own data while it is still a draft, and nobody else can see or use it. [PR #2353](https://github.com/motioneso/moss/pull/2353)
 - **App no longer sticks on the loading screen on slow days.** The app used to get stuck on its loading screen when one startup check was slow, and now it waits for the answer instead of asking again until nothing responds. [PR #2344](https://github.com/motioneso/moss/pull/2344)
