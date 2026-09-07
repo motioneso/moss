@@ -5,7 +5,7 @@
  * real tool identifiers from adapter platform code — never display titles.
  */
 
-import type { AcpSurface } from "./capabilities.js";
+import type { AcpProfile } from "./capabilities.js";
 
 export type AcpToolFamily =
   | "read"
@@ -65,8 +65,11 @@ export function lookupAcpToolFamily(name: string): AcpToolFamily | "unknown" {
   return "unknown";
 }
 
-/** Tool names switched off at launch for a surface; phase 5 passes these on. */
-export function launchOffList(surface: AcpSurface): string[] {
+/** Tool names switched off at launch for a profile; phase 5 passes these on. */
+export function launchOffList(surface: AcpProfile): string[] {
+  // `unattended` has no column yet (slice 2); fail closed with everything off
+  // until then. The profile gate rejects it before this is consulted.
+  if (surface === "unattended") return ACP_TOOL_TABLE.map((row) => row.name);
   return ACP_TOOL_TABLE.filter((row) => !row[surface]).map((row) => row.name);
 }
 
