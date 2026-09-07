@@ -135,18 +135,15 @@ same commit range.
   `setModel` sends the option when advertised, falls back per row, records a mismatch; version mismatch fails closed. The restored tool table has `chat` and `workshop` columns only; `unattended` has no row yet and gets one in slice 2 (Reviewer finding 5), so the profile gate rejects it before the table is consulted.
 - **Gate:** the four checks; `pnpm --filter @moss/acp test`.
 
-### Task 3. Runner: restore the ACP host and its seven cases as they were
+### Task 3. Runner: restore the ACP host and its seven cases as they were, launching the pinned registry entries
 
 - **Builds:** `packages/cli-runner/src/acp-host.ts`, `exec-records.ts`, `owned-fs.ts` and the seven
   dispatch cases restored from `bb59e0700` beside the existing cases, unchanged; the RPC contract
-  types and the API-side client restored to match. Per-user home, scrubbed env and the 0700 working
-  folder on spawn; the bearer token crosses only inside the `session/new` payload.
-- **Files:** `packages/cli-runner/src/{acp-host,exec-records,owned-fs,connection,engine-host}.ts`,
-  `packages/cli-runner/package.json`, `packages/chat/src/live/{rpc-contract,chat-engine-rpc-client}.ts`,
+  types and the API-side client restored to match. Per-user home, scrubbed env and the 0700 working folder on spawn; the bearer token crosses only inside the `session/new` payload. **One deliberate change to the restored host, and the only one (Reviewer finding 3 on task 2, 2026-09-07):** the restored host spawns the node binary on an adapter entry file that an injected resolver finds, and the default resolver points at the old Zed adapter pinned in the runner's `package.json`. This task makes the provider row the thing launched: the runner's `package.json` drops `@zed-industries/claude-code-acp` and pins the three registry entry packages at the versions in the spec's section 9 table (Claude `@agentclientprotocol/claude-agent-acp@0.75.1`, Codex `@agentclientprotocol/codex-acp@1.10.0`, OpenCode at the version Scout ran); `acpSpawn` carries the provider kind; the host resolves the entry file from that row's package name and spawns it through `process.execPath` as before. No default provider anywhere: a spawn without a provider kind is refused. The same Zed pin comes out of the protocol package's dev dependencies, left behind by task 2. Task 2's rows keep the launch text as documentation of what this task resolves.
+- **Files:** `packages/cli-runner/src/{acp-host,exec-records,owned-fs,connection,engine-host}.ts`, `packages/cli-runner/package.json`, `packages/acp/package.json`, `pnpm-lock.yaml`, `packages/chat/src/live/{rpc-contract,chat-engine-rpc-client}.ts`,
   `packages/acp/src/tunnel.ts`.
 - **Tests:** `tests/unit/cli-runner-acp-host.test.ts`, `cli-runner-acp-exec.test.ts`,
-  `cli-runner-protocol.test.ts`, `cli-runner-startup-orphan-sweep.test.ts` restored unchanged and
-  green; every existing runner test still passes unchanged.
+  `cli-runner-protocol.test.ts`, `cli-runner-startup-orphan-sweep.test.ts` restored and green, the host tests changed only where they inject the entry resolver, which now takes a provider kind; one new test that each of the three rows resolves to its own pinned package's entry file and that a spawn without a provider kind is refused; every existing runner test still passes unchanged.
 - **Gate:** the four checks; `pnpm vitest run tests/unit/cli-runner-*`.
 
 ### Task 4. Dev handshake (first kill gate)
