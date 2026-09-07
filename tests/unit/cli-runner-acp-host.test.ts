@@ -4,7 +4,19 @@
  * pure/fast/deterministic — no real processes, no timers left dangling.
  */
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -91,6 +103,25 @@ describe("AcpHost", () => {
       };
       // Shell and writes are denied outright; a bare tool name matches every use.
       expect(settings.permissions?.deny).toEqual(expect.arrayContaining(["Bash", "Write", "Edit"]));
+      // The deny list matches the tool table's shell and write rows exactly
+      // (bare names only), plus the zone rules below — nothing else may ride
+      // along, so launch and policy cannot drift apart.
+      const { acpToolNamesIn } = await import("../../packages/acp/src/tool-table.js");
+      const tableRows = [...acpToolNamesIn("shell", "write")].filter(
+        (name) => !name.startsWith("mcp__acp__")
+      );
+      const zoneRules = [
+        "Read(~/.jarvis/**)",
+        "Read(~/.claude/**)",
+        "Read(~/.claude.json)",
+        "Read(~/.codex/**)",
+        "Read(~/.gemini/**)",
+        "Read(//proc/**)",
+        "Read(//sys/**)",
+        "Read(//dev/**)",
+        "Read(//run/**)"
+      ];
+      expect(new Set(settings.permissions?.deny)).toEqual(new Set([...tableRows, ...zoneRules]));
       // The old dead path is gone: nothing writes outside the adapter's layout.
       expect(existsSync(join(spawned.cwd, ".Muse"))).toBe(false);
     } finally {
@@ -176,6 +207,100 @@ describe("AcpHost", () => {
       // Unconditional explicit kill still ends it: the record is gone.
       host.kill("workshop:user:proj");
       expect(() => host.read("workshop:user:proj", 0)).toThrow(/not running/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces a planted link with a real folder on the start path", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const victim = mkdtempSync(join(tmpdir(), "acp-victim-"));
+      try {
+        const canary = join(victim, "canary.txt");
+        writeFileSync(canary, "untouched");
+        chmodSync(victim, 0o755);
+        // A previous command swaps its own project folder for a link elsewhere.
+        const sessionDir = join(dir, "workshop:user:proj", "acp", "proj");
+        mkdirSync(join(sessionDir, ".."), { recursive: true });
+        symlinkSync(victim, sessionDir);
+
+        const child = new FakeChild();
+        const { host } = makeHost(dir, child);
+        const spawned = await host.spawn("workshop:user:proj", "proj");
+
+        // The link is gone, a real folder stands in its place, and the spawn landed there.
+        expect(lstatSync(sessionDir).isSymbolicLink()).toBe(false);
+        expect(lstatSync(sessionDir).isDirectory()).toBe(true);
+        expect(spawned.cwd).toBe(sessionDir);
+        // The victim was never followed: file intact, permissions unchanged.
+        expect(readFileSync(canary, "utf8")).toBe("untouched");
+        expect(statSync(victim).mode & 0o777).toBe(0o755);
+      } finally {
+        rmSync(victim, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces a planted link at the settings file and never writes through it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const victim = mkdtempSync(join(tmpdir(), "acp-victim-"));
+      try {
+        const victimFile = join(victim, "settings.json");
+        writeFileSync(victimFile, "victim-content");
+        const child = new FakeChild();
+        const { host } = makeHost(dir, child);
+        const spawned = await host.spawn("workshop:user:proj", "proj");
+        const settingsPath = join(spawned.cwd, ".claude", "settings.json");
+        // A previous command swaps the settings file for a link elsewhere.
+        rmSync(settingsPath);
+        symlinkSync(victimFile, settingsPath);
+
+        await host.spawn("workshop:user:proj", "proj");
+
+        // A real file stands in place with the narrowing settings in it.
+        expect(lstatSync(settingsPath).isSymbolicLink()).toBe(false);
+        const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as {
+          permissions?: { deny?: string[] };
+        };
+        expect(settings.permissions?.deny).toEqual(
+          expect.arrayContaining(["Bash", "Write", "Edit"])
+        );
+        // The victim was never written through: content intact.
+        expect(readFileSync(victimFile, "utf8")).toBe("victim-content");
+      } finally {
+        rmSync(victim, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces a planted link at a parent folder on the start path", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const victim = mkdtempSync(join(tmpdir(), "acp-victim-"));
+      try {
+        // A previous command swaps a parent of the project folder for a link.
+        mkdirSync(join(dir, "workshop:user:proj"), { recursive: true });
+        symlinkSync(victim, join(dir, "workshop:user:proj", "acp"));
+
+        const child = new FakeChild();
+        const { host } = makeHost(dir, child);
+        const spawned = await host.spawn("workshop:user:proj", "proj");
+
+        // Every level is real, the spawn landed in the real folder, and
+        // nothing was ever created inside the victim.
+        const sessionDir = join(dir, "workshop:user:proj", "acp", "proj");
+        expect(lstatSync(join(dir, "workshop:user:proj", "acp")).isSymbolicLink()).toBe(false);
+        expect(spawned.cwd).toBe(sessionDir);
+        expect(readdirSync(victim)).toHaveLength(0);
+      } finally {
+        rmSync(victim, { recursive: true, force: true });
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

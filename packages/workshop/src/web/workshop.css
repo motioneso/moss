@@ -10,6 +10,13 @@
   padding: var(--space-7) var(--space-8) var(--space-11);
 }
 
+/* Ben, 2026-09-06: the masthead read a touch short on this screen; a bit more breathing
+   room top and bottom, scoped to Workshop so other tone="field" mastheads are unaffected. */
+.workshop-page .jds-masthead--field {
+  padding-top: calc(clamp(1.25rem, 2.6vw, 2rem) + var(--space-6));
+  padding-bottom: calc(clamp(1.5rem, 2.6vw, 2rem) + var(--space-6));
+}
+
 /* The invitation centers itself inside the empty window; the host's empty-state classes
    carry the visuals. */
 .workshop-open {
@@ -59,6 +66,19 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+/* A short thread opens just above the composer instead of hanging from the top of the
+   window. An auto top margin collapses to zero once the thread overflows, so long
+   threads keep their normal top-anchored scroll. */
+.workshop-chat__history > :first-child {
+  margin-top: auto;
+}
+
+/* A reply stops before the far edge, like your own bubbles already do at 80%: without
+   a cap the assistant column fills the whole row and long lines run wall to wall. */
+.workshop-chat__history .chatd-msg:not(.chatd-msg--me) .chatd-bubble {
+  max-width: 80%;
 }
 
 .workshop-chat__caption {

@@ -52,6 +52,7 @@ import {
 import type { ProviderKind } from "@moss/ai";
 
 import { AcpHost } from "./acp-host.js";
+import { ACP_DEADLINE_DIR } from "./exec-records.js";
 import { Mutex } from "./mutex.js";
 import { LoginBadRequestError, type LoginService } from "./login-service.js";
 import {
@@ -155,6 +156,33 @@ export class CliChatEngineHost {
 
   acpKill(sessionKey: string, opts: { generation?: number } = {}): void {
     this.acp.kill(sessionKey, opts.generation);
+  }
+
+  /** #2369 phase 3 — runner-side builds; contract lives in AcpHost. */
+  async acpExecStart(
+    sessionKey: string,
+    projectId: string,
+    command: string,
+    timeoutMs?: number
+  ): Promise<{ execId: number }> {
+    return this.acp.execStart(sessionKey, projectId, command, timeoutMs);
+  }
+
+  acpExecPoll(
+    sessionKey: string,
+    execId: number
+  ): {
+    output: string;
+    done: boolean;
+    exitCode: number | null;
+    truncated: boolean;
+    timedOut: boolean;
+  } {
+    return this.acp.execPoll(sessionKey, execId);
+  }
+
+  acpExecKill(sessionKey: string, execId: number): void {
+    this.acp.execKill(sessionKey, execId);
   }
 
   /** Registers a listener for session-reaped events; returns an unregister function. */
@@ -870,6 +898,8 @@ export class CliChatEngineHost {
     // restart can leave one while the in-memory login flow is gone). DISTINCT from (a), which
     // only enumerates `jarv1s-live-*` chat sessions.
     await this.deps.loginService?.startupSweep().catch(() => undefined);
+    // (f) #2396 orphaned-build sweep: after the clean-out, never beside it.
+    await this.acp.reapOrphanedExecs().catch(() => undefined);
   }
 
   /** `rm -rf <neutralBase>/* ` then recreate the base dir (`0700`). */
@@ -884,7 +914,7 @@ export class CliChatEngineHost {
       for (const name of listed.stdout
         .split("\n")
         .map((s) => s.trim())
-        .filter(Boolean)) {
+        .filter((name) => name.length > 0 && name !== ACP_DEADLINE_DIR)) {
         await this.deps.io
           .run("rm", ["-rf", `${this.deps.neutralBase}/${name}`])
           .catch(() => undefined);

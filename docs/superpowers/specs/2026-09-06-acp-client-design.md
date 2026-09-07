@@ -22,8 +22,9 @@ audit trail. The agent owns the model loop.
 
 Two surfaces, in this order:
 
-1. **Workshop** — the agent works on a project. Unanimous yes; the sandbox is a folder Moss
-   controls.
+1. **Workshop** — the agent works on a project. Unanimous yes; the working folder is a
+   folder Moss controls. It is not a sandbox: a shell command started there is not restricted
+   to it.
 2. **Chat** — the agent replaces today's hand-made CLI bridge (`packages/chat/src/live/`), which
    launches the Claude CLI and parses its output. Yes, with the five conditions in section 3.
 
@@ -61,7 +62,13 @@ subscription. Those stay Moss's problems.
 3. **Shell and file writes off in chat.** File reads, file search, web search and web fetch may
    stay on (the spike's third condition: five read-only built-ins offered, zero used on calendar
    prompts). The agent's tool list is a fixed base list, not a deny filter. In the Workshop,
-   shell and writes are the point, inside the project folder.
+   shell and writes are the point, starting in the project folder (not restricted to it). The
+   base list lives in one table, `packages/acp/src/tool-table.ts` (one row per real tool name,
+   with a family and an on/off per surface); the use-time policy in section 6 and the launch-time
+   off-list both derive from it so they cannot drift apart. Today the client still sends the
+   adapter the blanket "disable built-in tools" flag, so no built-in is offered on either surface
+   yet; phase 5 replaces that flag with the table's off-list for the surface, passed to the
+   adapter as `_meta.claudeCode.options.disallowedTools`.
 4. **The approval card is wired to the protocol** (section 6). This is the one real defect the
    spike found, and it ships in the first slice.
 5. **An agent capability list** (section 7) decides which agents may be offered on which
@@ -96,6 +103,20 @@ scrubbed environment, own home, empty scratch working folder (chat) or the proje
 (Workshop). The vendor login comes from the runner's token store via the environment. Nothing
 secret ever goes on the command line (the room saw the hub leak its own tokens through `ps`).
 
+Known limits, stated rather than papered over (phase 4 review, 2026-09-07):
+
+- The login credential is inside the agent's own process: the coding CLI needs it to reach its
+  provider, so it sits in that process's environment and in a file under its home. The policy's
+  forbidden zone, the runner's native read-deny rules and the per-user account each raise the
+  bar; none removes the fact. The real fix is a Moss-side relay that adds the credential on the
+  way out so the child never holds it — a runner change with its own spec and issue.
+- Folder containment is lexical. A link inside the project pointing at a secret passes the check,
+  because the decision runs on the API side and cannot resolve paths on the runner host. The
+  per-user account plus the 0600 token file is the containment that does not care about paths,
+  and it exists only when the per-user identity option is on; with it off, file permissions
+  narrow nothing. Follow-up: either the runner resolves announced paths before they cross the
+  pipe, or per-user identity becomes the Workshop default.
+
 **Tool server.** The existing MCP transport, unchanged. Moss mints the per-session bearer token
 (`jst_<uuid>`, one per session, per agent) and passes it inside the `session/new` `mcpServers`
 entry as an HTTP header. It travels over the stdio pipe only. Every tool call is attributable to
@@ -105,17 +126,20 @@ only `actorUserId` and `requestId` by ruling.
 
 **Capabilities advertised to the agent.**
 
-| capability                                | chat | Workshop                  | why                                                                                                                                             |
-| ----------------------------------------- | ---- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fs/read_text_file`, `fs/write_text_file` | no   | no                        | v2 removes client file access; serve files as Moss tools scoped to the project folder instead, so the v2 migration does not touch file handling |
-| `terminal/*`                              | no   | no (see fork A)           | same reason; commands run through a Moss tool that executes inside the sandbox                                                                  |
-| agent built-in shell / file-write         | off  | on, inside project folder | condition 3                                                                                                                                     |
-| agent built-in read / search / web        | on   | on                        | spike third condition                                                                                                                           |
+| capability                                | chat | Workshop                           | why                                                                                                                                                                   |
+| ----------------------------------------- | ---- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fs/read_text_file`, `fs/write_text_file` | no   | no                                 | v2 removes client file access; serve files as Moss tools scoped to the project folder instead, so the v2 migration does not touch file handling                       |
+| `terminal/*`                              | no   | no (see fork A)                    | same reason; commands run through a Moss tool that starts with the session project folder as its working folder (the command itself is not restricted to that folder) |
+| agent built-in shell / file-write         | off  | on, starting in the project folder | condition 3                                                                                                                                                           |
+| agent built-in read / search / web        | on   | on                                 | spike third condition                                                                                                                                                 |
 
-**Fork A — how the Workshop runs commands. Decided (review, 2026-09-06): (1).** A Moss tool runs
-the command inside the project sandbox and streams output, v2-proof and audited like every other
-tool. (2), advertising ACP `terminal/*`, is taken only if the slice 1 live proof shows the tool
-cannot stream a build log well enough; record the reason in the plan if so.
+**Fork A — how the Workshop runs commands. Decided (review, 2026-09-06): (1).** A Moss tool
+starts the command with the project folder as its working folder and streams output, v2-proof
+and audited like every other tool. Say plainly what is true: the working folder is fixed, the
+command itself is not restricted, and the only thing standing between a caller and an arbitrary
+command is the approval card. (2), advertising ACP `terminal/*`, is taken only if the slice 1
+live proof shows the tool cannot stream a build log well enough; record the reason in the plan
+if so.
 
 **Conversation history.** Postgres stays the record, under row-level access. A fresh agent
 session gets history replayed by Moss, the way a stateless model call does today. The agent's own
@@ -155,8 +179,39 @@ request finished in 16 s with exactly one event written. Not a broken tool; mism
    the enforcement point; the protocol message is a second way to display the same card, never a
    second policy.
 4. Ben's posture holds: installing a module grants normal use, only write/destructive tools ask
-   at use time. The agent's own permission prompts (for its built-ins) are auto-answered from the
-   same policy; anything the policy does not cover is denied.
+   at use time. The agent's own permission prompts (for its built-ins) are answered by Moss from
+   one policy keyed on the tool's real name, taken from the agent's own tool-call announcement
+   and matched to the question by tool call id — never from the display title, which the model
+   writes and must not decide. Title-matching was considered and rejected: it lets the model
+   choose its own policy. The rule, by family from the table in section 3:
+   - No name (no announcement within a short bound), or a name outside the table: refused, no
+     card. The only text available for an unnamed tool is the model's, so nobody is asked.
+   - Reads fall into three zones. Inside the session folder: allowed silently, except
+     secret-shaped names (`.env`, keys, certificates, `.npmrc`, `.netrc`), which ask with the
+     path on the card. A small fixed forbidden zone — the agent's home (token store, the coding
+     CLI's own config, other providers' logins) plus `/proc`, `/sys`, `/dev`, `/run` — is refused
+     with no card, because no person can sensibly approve it. Anywhere else asks once, path on
+     the card.
+   - Web fetch is silent except toward loopback, private ranges, link-local and bare hostnames,
+     which ask with the address on the card. Web search is silent.
+   - Writes inside the folder are ordinary use; the forbidden zone refuses; elsewhere asks.
+     Shell always asks, marked destructive.
+   - Moss's own tools are waved through at the agent-side prompt: the tool server's gateway
+     already decides the real call with its own card, allowlist and audit.
+   - Mode changes and tools never offered (subagents, skills, slash commands) refuse; if one
+     arrives, the launch list is wrong and the refusal makes that visible.
+     Example: a subagent titled "Read the repo" is refused outright while a named Read of a project
+     file is allowed quietly and a named shell run raises the card. The record: the pending row
+     and every audit line carry the agent session id, tool call id, real tool name, session folder,
+     the paths a read or write named (capped) and the decision word; never a command or contents.
+     Every ask outcome and every refusal writes an audit line; silent allows write nothing. The
+     card reads "The agent wants to use <real name>" followed by the paths, the address or the
+     command; the model's own description appears only when there is nothing else, and labelled
+     as its description. Reads and fetches that reach a person show as "outbound" seriousness.
+     Points 2 and 3 above are untouched by this change. Open flags from the phase 4 QA review,
+     not this slice: the blocked user identity behind the token, borrowing the chat session
+     identity, several agents sharing one conversation, and the token plus folder on MCP tool
+     holds; the launch-time limits are recorded in section 4.
 
 ## 7. Agent capability list
 

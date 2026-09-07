@@ -1,3 +1,23 @@
+/**
+ * #2380: what the record carries about an outside agent's own tool ask —
+ * plain identifiers and the paths a read or write named, never a command or
+ * file contents. Present only on lines written for the agent's built-ins.
+ */
+const actionAuditAgentSummarySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sessionId", "toolCallId", "toolName", "cwd", "paths", "decision", "reason"],
+  properties: {
+    sessionId: { type: "string" },
+    toolCallId: { type: "string" },
+    toolName: { type: "string" },
+    cwd: { type: "string" },
+    paths: { type: "array", items: { type: "string" } },
+    decision: { type: "string", enum: ["asked", "refused"] },
+    reason: { type: ["string", "null"] }
+  }
+} as const;
+
 const actionAuditInputSummarySchema = {
   type: ["object", "null"],
   additionalProperties: false,
@@ -5,7 +25,8 @@ const actionAuditInputSummarySchema = {
   properties: {
     inputKeys: { type: "array", items: { type: "string" } },
     inputKeyCount: { type: "integer", minimum: 0 },
-    truncated: { type: "boolean" }
+    truncated: { type: "boolean" },
+    agent: actionAuditAgentSummarySchema
   }
 } as const;
 
@@ -118,10 +139,24 @@ export type ActionAuditLogEntryDto = {
   readonly occurredAt: string;
 };
 
+export type ActionAuditAgentSummary = {
+  readonly sessionId: string;
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly cwd: string;
+  /** Paths a read or write named, capped; empty for every other family. */
+  readonly paths: readonly string[];
+  readonly decision: "asked" | "refused";
+  /** The refusal reason word, null when a person was asked. */
+  readonly reason: string | null;
+};
+
 export type ActionAuditInputSummary = {
   readonly inputKeys: readonly string[];
   readonly inputKeyCount: number;
   readonly truncated: boolean;
+  /** #2380: set only for the outside agent's own tool asks. */
+  readonly agent?: ActionAuditAgentSummary;
 };
 
 export type ListActionAuditLogResponse = {

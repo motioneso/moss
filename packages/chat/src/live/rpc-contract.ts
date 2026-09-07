@@ -180,7 +180,13 @@ export type RpcMethod =
   | "acpSpawn"
   | "acpSend"
   | "acpRead"
-  | "acpKill";
+  | "acpKill"
+  // #2369 slice 1 phase 3 — workshop.runCommand builds. The caller names a
+  // project, never a folder; the runner locks the working directory to the
+  // session project folder, caps output at 256 KiB, and kills past the deadline.
+  | "acpExecStart"
+  | "acpExecPoll"
+  | "acpExecKill";
 
 export type RpcErrorCode =
   | "unavailable" // engine could not launch / multiplexer down / NOT_LAUNCHED → CliChatUnavailableError (retryable HTTP 503)
@@ -538,6 +544,8 @@ export interface RpcAcpSpawnResult {
    * a dropped connection can never kill another connection's live session.
    */
   readonly generation: number;
+  /** The HOME handed to the agent process, or null when it names none. */
+  readonly home: string | null;
 }
 /** params for method "acpSend": one client-to-agent JSON-RPC line (no trailing newline). */
 export interface RpcAcpSendParams {
@@ -577,5 +585,39 @@ export interface RpcAcpKillParams {
 }
 /** result for method "acpKill". */
 export interface RpcAcpKillResult {
+  readonly ok: true;
+}
+// #2369 slice 1 phase 3 — runner-side builds for workshop.runCommand (interface-pair
+// pattern, mirrors RpcAcpSpawn*). The working directory is derived runner-side from
+// the session key plus projectId; there is deliberately no folder parameter.
+/** params for method "acpExecStart": run one shell command in the session project folder. */
+export interface RpcAcpExecStartParams {
+  readonly projectId: string;
+  readonly command: string;
+  /** Deadline in ms; defaults to 5 min runner-side, never more than 10 min. */
+  readonly timeoutMs?: number;
+}
+/** result for method "acpExecStart": the build id to poll. */
+export interface RpcAcpExecStartResult {
+  readonly execId: number;
+}
+/** params for method "acpExecPoll": read output so far for one build. */
+export interface RpcAcpExecPollParams {
+  readonly execId: number;
+}
+/** result for method "acpExecPoll": output so far plus completion. */
+export interface RpcAcpExecPollResult {
+  readonly output: string;
+  readonly done: boolean;
+  readonly exitCode: number | null;
+  readonly truncated: boolean;
+  readonly timedOut: boolean;
+}
+/** params for method "acpExecKill": stop one build. Idempotent. */
+export interface RpcAcpExecKillParams {
+  readonly execId: number;
+}
+/** result for method "acpExecKill". */
+export interface RpcAcpExecKillResult {
   readonly ok: true;
 }

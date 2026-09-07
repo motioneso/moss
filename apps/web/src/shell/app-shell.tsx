@@ -38,7 +38,8 @@ import {
   PageTrailProvider,
   TopbarMoreActions,
   TopbarTrail,
-  usePageTrailDisplay
+  usePageTrailDisplay,
+  useRequestPageTrailEdit
 } from "./page-trail";
 import { WORKSHOP_MODULE_ID } from "@moss/shared";
 import {
@@ -484,14 +485,29 @@ export function AppShell(props: AppShellProps) {
   );
 }
 
+const RENAME_TRAIL_ACTION = { id: "__trail_rename", label: "Rename" } as const;
+
 /**
  * The page's "More" button at the bar's right, ahead of the assistant button. It exists only
- * while a page holds the trail with actions — any other page shows no More button at all.
+ * while a page holds the trail with actions or a rename handler — any other page shows no More
+ * button at all. "Rename" is the shell's own item, prepended whenever the page allows renaming:
+ * choosing it puts the title itself into edit mode rather than opening anything.
  */
 function TrailMoreButton() {
   const trail = usePageTrailDisplay();
-  if (!trail || trail.actions.length === 0) return null;
-  return <TopbarMoreActions actions={trail.actions} onAction={trail.onAction} />;
+  const requestEdit = useRequestPageTrailEdit();
+  if (!trail) return null;
+  const actions = trail.onRename ? [RENAME_TRAIL_ACTION, ...trail.actions] : trail.actions;
+  if (actions.length === 0) return null;
+  return (
+    <TopbarMoreActions
+      actions={actions}
+      onAction={(id) => {
+        if (id === RENAME_TRAIL_ACTION.id) requestEdit();
+        else trail.onAction?.(id);
+      }}
+    />
+  );
 }
 
 /**

@@ -39,6 +39,10 @@ export default defineConfig({
         )
       },
       {
+        find: "@moss/acp",
+        replacement: fileURLToPath(new URL("./packages/acp/src/index.ts", import.meta.url))
+      },
+      {
         find: "@moss/ai",
         replacement: fileURLToPath(new URL("./packages/ai/src/index.ts", import.meta.url))
       },
