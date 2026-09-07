@@ -175,7 +175,10 @@ export const workshopModuleManifest = {
       actionFamilyId: "workshop_builds",
       risk: "write",
       executionPolicy: "auto",
-      selfOperationGrant: "granted_at_install",
+      // user_promotable, never granted_at_install: this runs arbitrary shell, so
+      // installing the module must not silently grant unattended runs. The user
+      // promotes the family to trusted_auto for unattended builds.
+      selfOperationGrant: "user_promotable",
       requiresServices: [WORKSHOP_RUN_COMMAND_SERVICE_KEY],
       inputSchema: workshopRunCommandInputSchema,
       outputSchema: workshopRunCommandResultSchema,

@@ -61,7 +61,7 @@ describe("workshop.runCommand manifest declaration", () => {
     expect(tool.risk).toBe("write");
     expect(tool.actionFamilyId).toBe("workshop_builds");
     expect(tool.executionPolicy).toBe("auto");
-    expect(tool.selfOperationGrant).toBe("granted_at_install");
+    expect(tool.selfOperationGrant).toBe("user_promotable");
     expect(tool.requiresServices).toEqual([WORKSHOP_RUN_COMMAND_SERVICE_KEY]);
     // Ordinary text output: the rendered log is what the model and browser see.
     expect(tool.streamsStructuredResult).not.toBe(true);
