@@ -17,7 +17,11 @@ import {
 } from "@moss/shared";
 
 import { workshopBuildModuleExecute } from "./assistant-tools.js";
-import { WORKSHOP_RUN_COMMAND_SERVICE_KEY, workshopRunCommandExecute } from "./run-command.js";
+import {
+  WORKSHOP_RUN_COMMAND_SANDBOX_NOTE,
+  WORKSHOP_RUN_COMMAND_SERVICE_KEY,
+  workshopRunCommandExecute
+} from "./run-command.js";
 import { collectWorkshopProjectFeed } from "./project-feed.js";
 import { collectWorkshopProjects } from "./projects-repository.js";
 
@@ -220,7 +224,7 @@ export const workshopModuleManifest = {
       // over-long commands are refused up front, never silently cut.
       summarize: (input) => {
         const command = typeof input.command === "string" ? input.command : "";
-        return `Run this project command: ${command}`;
+        return `Run this project command: ${command}. ${WORKSHOP_RUN_COMMAND_SANDBOX_NOTE}`;
       }
     }
   ],

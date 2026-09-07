@@ -18,6 +18,15 @@ import { workshopRunCommandMaxLength } from "@moss/shared";
 
 export const WORKSHOP_RUN_COMMAND_SERVICE_KEY = "workshopRunCommand";
 
+/**
+ * Plain user-facing sandbox sentence (#2396 ruling, accepted for a
+ * single-owner install). Shared by the approval card (manifest `summarize`)
+ * and the app-map feature entry, so the two can never drift apart.
+ */
+export const WORKSHOP_RUN_COMMAND_SANDBOX_NOTE =
+  "Build commands run on your Moss server as the Moss account and are not " +
+  "sandboxed, so approve only commands you understand.";
+
 /** Default deadline: five minutes. */
 export const WORKSHOP_RUN_COMMAND_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 /** Upper bound for one deadline: ten minutes, matching the runner. */
