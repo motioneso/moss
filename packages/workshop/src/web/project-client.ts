@@ -28,6 +28,13 @@ export const createProject = (input: CreateWorkshopProjectInput) =>
   requestJson<WorkshopProjectCreationResult>(base, { method: "POST", body: input });
 export const getProject = (id: string) =>
   requestJson<{ project: WorkshopProject }>(`${base}/${encodeURIComponent(id)}`);
+export const renameProject = (id: string, title: string) =>
+  requestJson<{ project: WorkshopProject }>(`${base}/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: { title }
+  });
+export const deleteProject = (id: string) =>
+  requestJson<{ deleted: boolean }>(`${base}/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const listMessages = (id: string, after: string) =>
   requestJson<{ entries: WorkshopFeedEntry[]; nextCursor: string }>(
     `${base}/${encodeURIComponent(id)}/messages?${new URLSearchParams({ after, limit: "50" })}`

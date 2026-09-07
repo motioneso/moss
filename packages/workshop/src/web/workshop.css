@@ -10,49 +10,10 @@
   padding: var(--space-7) var(--space-8) var(--space-11);
 }
 
-.workshop-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-/* ---- Page heading: title block on the left, primary action pinned right, ruled off ---- */
-
-.workshop-project-heading {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-6);
-  flex-wrap: wrap;
-  padding-bottom: var(--space-5);
-  margin-bottom: var(--space-7);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.workshop-project-heading__text {
-  min-width: 0;
-  flex: 1 1 34ch;
-}
-
-.workshop-project-heading h1 {
-  margin: var(--space-1) 0 0;
-  /* A saved request can be a long sentence; wrap it rather than letting it clip. */
-  overflow-wrap: anywhere;
-  text-wrap: balance;
-}
-
-.workshop-project-heading__meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.workshop-back {
-  display: inline-block;
-  margin-bottom: var(--space-4);
-  font-size: var(--text-sm);
+/* The invitation centers itself inside the empty window; the host's empty-state classes
+   carry the visuals. */
+.workshop-open {
+  margin-block: auto;
 }
 
 /* Supporting status lines on the project list share the excerpt treatment. */
@@ -74,45 +35,46 @@
   margin-bottom: var(--space-7);
 }
 
-.workshop-project-messages,
-.workshop-project-form form,
-.workshop-project-pane {
+/* The project window: a 56rem reading measure fixed to the viewport, the composer pinned at
+   the foot, only the transcript scrolling. */
+.workshop-chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 56rem;
+  margin-inline: auto;
+  height: calc(100dvh - var(--topbar-h) - var(--space-7) - var(--space-11));
+  min-height: 20rem;
+}
+
+.workshop-chat__earlier {
+  display: flex;
+  justify-content: center;
+}
+
+.workshop-chat__history {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
 }
 
-.workshop-project-messages {
-  margin-bottom: var(--space-2);
-}
-
-.workshop-project-form {
-  max-width: 720px;
-}
-
-/* The conversation carries the writing and gets the wider column; the work pane is a status
-   sidebar until planning ships. Both stay above 320px at the page's minimum desktop width. */
-.workshop-project-detail {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: var(--space-8);
-  align-items: start;
-}
-
-.workshop-project-pane > h2 {
+.workshop-chat__caption {
   margin: 0;
-  font-size: var(--text-md);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+  font-size: var(--text-sm);
   color: var(--text-subtle);
 }
 
-.workshop-project-text {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  margin: var(--space-1) 0 0;
+.workshop-chat__composer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
+/* The pane switch has nothing to switch between until panels land; its rules stay for slice 8. */
 .workshop-mobile-tabs {
   display: none;
 }
@@ -121,21 +83,11 @@
   .workshop-page {
     padding: var(--space-6);
   }
-
-  .workshop-project-detail {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-6);
-  }
 }
 
 @media (max-width: 767px) {
   .workshop-page {
     padding: var(--space-4);
-  }
-
-  .workshop-project-heading {
-    align-items: flex-start;
-    margin-bottom: var(--space-5);
   }
 
   .workshop-mobile-tabs {

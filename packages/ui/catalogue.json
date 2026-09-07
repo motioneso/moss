@@ -67,6 +67,15 @@
       ]
     },
     {
+      "name": "brand-mark",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/brand-mark.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["BrandMark"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "button-link",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/button-link.tsx", "type": "registry:ui" }],
@@ -145,6 +154,15 @@
       "files": [{ "path": "packages/ui/src/category-dot.tsx", "type": "registry:ui" }],
       "dependencies": [],
       "exports": ["CategoryDot"],
+      "options": [],
+      "flags": []
+    },
+    {
+      "name": "chat-thread",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/chat-thread.tsx", "type": "registry:ui" }],
+      "dependencies": ["@moss/shared", "lucide-react", "react-markdown", "remark-gfm"],
+      "exports": ["ActivityPeek", "ChatFreshnessFooter", "Thread", "activityVerb", "groupRecords"],
       "options": [],
       "flags": []
     },

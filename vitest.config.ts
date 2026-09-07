@@ -297,6 +297,12 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./packages/shared/src/index.ts", import.meta.url))
       },
       {
+        // Subpath export; must precede the bare "@moss/sports" alias below, same pairing
+        // requirement as the `@moss/news/web` entry above.
+        find: "@moss/sports/web",
+        replacement: fileURLToPath(new URL("./packages/sports/src/web/index.tsx", import.meta.url))
+      },
+      {
         find: "@moss/sports",
         replacement: fileURLToPath(new URL("./packages/sports/src/index.ts", import.meta.url))
       },
@@ -309,6 +315,10 @@ export default defineConfig({
       {
         find: "@moss/tasks",
         replacement: fileURLToPath(new URL("./packages/tasks/src/index.ts", import.meta.url))
+      },
+      {
+        find: "@moss/ui",
+        replacement: fileURLToPath(new URL("./packages/ui/src/index.ts", import.meta.url))
       },
       {
         find: "@moss/usefulness-feedback",
@@ -350,6 +360,14 @@ export default defineConfig({
       {
         find: "@moss/weather",
         replacement: fileURLToPath(new URL("./packages/weather/src/index.ts", import.meta.url))
+      },
+      {
+        // Subpath export; must precede the bare "@moss/workshop" alias below, same pairing
+        // requirement as the `@moss/news/web` entry above.
+        find: "@moss/workshop/web",
+        replacement: fileURLToPath(
+          new URL("./packages/workshop/src/web/index.tsx", import.meta.url)
+        )
       },
       {
         find: "@moss/workshop",

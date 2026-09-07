@@ -9,8 +9,11 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   createWorkshopProjectInputSchema,
   createWorkshopProjectResponseSchema,
+  deleteWorkshopProjectResponseSchema,
   listWorkshopProjectsQuerySchema,
   listWorkshopProjectsResponseSchema,
+  renameWorkshopProjectInputSchema,
+  renameWorkshopProjectResponseSchema,
   workshopProjectParamsSchema,
   getWorkshopProjectResponseSchema,
   listWorkshopMessagesQuerySchema,
@@ -19,6 +22,7 @@ import {
   createWorkshopMessageResponseSchema,
   workshopErrorResponseSchema,
   type CreateWorkshopProjectInput,
+  type RenameWorkshopProjectInput,
   type WorkshopFeedInput
 } from "@moss/shared";
 import {
@@ -30,6 +34,8 @@ import { WorkshopMessageConflictError, WorkshopProjectFeed } from "./project-fee
 import { attemptProjectReply } from "./project-reply.js";
 import {
   createWorkshopProject,
+  deleteWorkshopProject,
+  renameWorkshopProject,
   requireWorkshopAdmin,
   WorkshopAdminRequiredError
 } from "./project-service.js";
@@ -154,6 +160,41 @@ export function registerWorkshopProjectRoutes(
         );
         return project
           ? { project }
+          : reply.code(404).send({ error: "Workshop project not found." });
+      }
+    );
+    app.patch<{ Params: { projectId: string }; Body: RenameWorkshopProjectInput }>(
+      "/api/workshop/projects/:projectId",
+      {
+        schema: {
+          params: workshopProjectParamsSchema,
+          body: renameWorkshopProjectInputSchema,
+          response: { ...errors, 200: renameWorkshopProjectResponseSchema }
+        }
+      },
+      async (request, reply) => {
+        const renamed = await withAdmin(request, (db) =>
+          renameWorkshopProject(db, request.params.projectId, request.body.title)
+        );
+        return renamed
+          ? { project: renamed }
+          : reply.code(404).send({ error: "Workshop project not found." });
+      }
+    );
+    app.delete<{ Params: { projectId: string } }>(
+      "/api/workshop/projects/:projectId",
+      {
+        schema: {
+          params: workshopProjectParamsSchema,
+          response: { ...errors, 200: deleteWorkshopProjectResponseSchema }
+        }
+      },
+      async (request, reply) => {
+        const deleted = await withAdmin(request, (db) =>
+          deleteWorkshopProject(db, request.params.projectId)
+        );
+        return deleted
+          ? { deleted: true }
           : reply.code(404).send({ error: "Workshop project not found." });
       }
     );

@@ -5,7 +5,9 @@ import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MeResponse, WorkshopFeedEntry, WorkshopProject } from "@moss/shared";
+import { deriveProjectTitle } from "@moss/shared";
 import { WorkshopProjectRoutes } from "../../packages/workshop/src/web/project-routes.js";
+import { PageTrailProvider, usePageTrailValue } from "../../apps/web/src/shell/page-trail.js";
 
 const project: WorkshopProject = {
   id: "a0000000-0000-4000-8000-000000000001",
@@ -15,6 +17,10 @@ const project: WorkshopProject = {
   createdAt: "2026-09-05T12:00:00.000Z",
   updatedAt: "2026-09-05T12:00:00.000Z"
 };
+// Slice 5: the new-project window names nothing — the service derives the name, so a create
+// lands on a fresh id the detail window then loads.
+const createdId = "b0000000-0000-4000-8000-000000000002";
+let createdBody: Record<string, string> | null;
 const otherProject = {
   ...project,
   id: "a0000000-0000-4000-8000-000000000003",
@@ -57,6 +63,12 @@ function Location() {
     </>
   );
 }
+// Slice 3: the detail page carries no in-page heading — its title lives in the shell's top-bar
+// trail, so this probe stands in for the top bar and asserts what the page published there.
+function TrailName() {
+  const trail = usePageTrailValue();
+  return <output aria-label="Page trail">{trail?.name ?? ""}</output>;
+}
 async function flush() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -76,10 +88,13 @@ async function render(path: string) {
     root.render(
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={[path]}>
-          <Location />
-          <Routes>
-            <Route path="/workshop/*" element={<WorkshopProjectRoutes />} />
-          </Routes>
+          <PageTrailProvider>
+            <Location />
+            <TrailName />
+            <Routes>
+              <Route path="/workshop/*" element={<WorkshopProjectRoutes />} />
+            </Routes>
+          </PageTrailProvider>
         </MemoryRouter>
       </QueryClientProvider>
     );
@@ -125,6 +140,7 @@ beforeEach(() => {
   entries = [];
   writes = [];
   reads = [];
+  createdBody = null;
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
   });
@@ -140,11 +156,17 @@ beforeEach(() => {
         writes.push({ path, body });
         if (path === base) {
           if (createFailures-- > 0) return response({ error: "Temporary failure" }, 503);
+          createdBody = body;
           return response(
             {
-              project: { ...project, title: body.title, initialRequest: body.initialRequest },
+              project: {
+                ...project,
+                id: createdId,
+                title: body.title ?? deriveProjectTitle(body.initialRequest!),
+                initialRequest: body.initialRequest
+              },
               created: true,
-              destination: `/workshop/${project.id}`
+              destination: `/workshop/${createdId}`
             },
             201
           );
@@ -176,6 +198,17 @@ beforeEach(() => {
         return response(detailStatus === 200 ? { project } : { error: "Not found" }, detailStatus);
       if (path.startsWith(`${base}/${project.id}/messages?`))
         return response({ entries, nextCursor: entries.at(-1)?.sequence ?? "0" });
+      if (path === `${base}/${createdId}` && createdBody)
+        return response({
+          project: {
+            ...project,
+            id: createdId,
+            title: deriveProjectTitle(createdBody.initialRequest!),
+            initialRequest: createdBody.initialRequest
+          }
+        });
+      if (path.startsWith(`${base}/${createdId}/messages?`))
+        return response({ entries: [], nextCursor: "0" });
       throw new Error(`Unexpected request: ${path}`);
     })
   );
@@ -189,64 +222,75 @@ afterEach(async () => {
 });
 
 describe("Workshop project browser interactions", () => {
-  it("retains create text and request key after failure, then opens the saved destination on retry", async () => {
+  it("shows the invitation with examples that fill the box without sending", async () => {
+    await render("/workshop/new");
+    await eventually(() => expect(container.textContent).toContain("What would you like to make?"));
+    expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe("New project");
+    click("Track the books I read");
+    expect(field("project-message").value).toBe("Track the books I read");
+    expect(writes).toHaveLength(0);
+    expect(container.querySelector("output")?.textContent).toBe("/workshop/new");
+  });
+
+  it("creates with no title on send, replaces the URL, and retries the same key after failure", async () => {
     createFailures = 1;
     await render("/workshop/new");
-    type("project-title", project.title);
-    type("project-idea", project.initialRequest);
-    type("project-context", project.context);
-    click("Create project");
+    await eventually(() => expect(container.querySelector("#project-message")).not.toBeNull());
+    type("project-message", "Keep a private list of book ideas.");
+    click("Send");
     await eventually(() =>
       expect(container.querySelector('[role="alert"]')?.textContent).toContain(
         "could not be confirmed as saved"
       )
     );
-    expect(field("project-title").value).toBe(project.title);
-    expect(field("project-idea").value).toBe(project.initialRequest);
-    expect(field("project-context").value).toBe(project.context);
-    click("Create project");
+    expect(field("project-message").value).toBe("Keep a private list of book ideas.");
+    click("Send");
     await eventually(() =>
-      expect(container.querySelector("output")?.textContent).toBe(`/workshop/${project.id}`)
+      expect(container.querySelector("output")?.textContent).toBe(`/workshop/${createdId}`)
     );
     expect(writes).toHaveLength(2);
     expect(writes[1]!.body).toEqual(writes[0]!.body);
     expect(writes[0]!.body.requestKey).toMatch(/^[0-9a-f-]{36}$/i);
-    await eventually(() => expect(container.textContent).toContain(project.title));
-    expect(container.textContent).toContain("No plan yet");
+    // No name travels up front; the service derives it from the request's first line.
+    expect("title" in writes[0]!.body).toBe(false);
+    const derived = deriveProjectTitle("Keep a private list of book ideas.");
+    await eventually(() =>
+      expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe(derived)
+    );
+    // The request opens the window as its first turn.
+    expect(container.querySelector(".chatd-thread")?.textContent).toContain(
+      "Keep a private list of book ideas."
+    );
   });
 
   it("uses a new request key when a failed create's payload is edited", async () => {
     createFailures = 2;
     await render("/workshop/new");
-    type("project-title", project.title);
-    type("project-idea", project.initialRequest);
-    click("Create project");
+    await eventually(() => expect(container.querySelector("#project-message")).not.toBeNull());
+    type("project-message", "Keep a private list of book ideas.");
+    click("Send");
     await eventually(() => expect(container.querySelector('[role="alert"]')).not.toBeNull());
-    type("project-idea", "Changed requirements");
-    click("Create project");
+    type("project-message", "Changed requirements");
+    click("Send");
     await eventually(() => expect(writes).toHaveLength(2));
     expect(writes[1]!.body.requestKey).not.toBe(writes[0]!.body.requestKey);
     expect(writes[1]!.body.initialRequest).toBe("Changed requirements");
   });
 
-  it("keeps unsent text across mobile panes and failed sends, retries the same message, and shows pending saved state", async () => {
+  it("keeps unsent text across failed sends, retries the same message, and shows pending saved state", async () => {
     messageFailures = 1;
     await render(`/workshop/${project.id}`);
     await eventually(() => expect(container.querySelector("#project-message")).not.toBeNull());
     type("project-message", "Keep this additional requirement");
-    click("Project work");
-    expect(button("Project work").getAttribute("aria-pressed")).toBe("true");
-    expect(field("project-message").value).toBe("Keep this additional requirement");
-    click("Conversation");
-    expect(button("Conversation").getAttribute("aria-pressed")).toBe("true");
-    expect(field("project-message").value).toBe("Keep this additional requirement");
-    await eventually(() => expect(button("Save message").disabled).toBe(false));
-    click("Save message");
+    // The window is the chat alone: the opening request is the first turn, with no pane switch.
+    expect(container.querySelector(".chatd-thread")?.textContent).toContain(project.initialRequest);
+    await eventually(() => expect(button("Send").disabled).toBe(false));
+    click("Send");
     await eventually(() =>
       expect(container.querySelector('[role="alert"]')?.textContent).toContain("same message")
     );
     expect(field("project-message").value).toBe("Keep this additional requirement");
-    click("Save message");
+    click("Send");
     await eventually(() => expect(container.textContent).toContain("Saved · awaiting delivery"));
     expect(writes).toHaveLength(2);
     expect(writes[1]!.body).toEqual(writes[0]!.body);
@@ -260,9 +304,9 @@ describe("Workshop project browser interactions", () => {
     await render(`/workshop/${project.id}`);
     await eventually(() => expect(container.querySelector("#project-message")).not.toBeNull());
     type("project-message", "Unsent while offline");
-    await eventually(() => expect(button("Save message").disabled).toBe(false));
+    await eventually(() => expect(button("Send").disabled).toBe(false));
     act(() => onlineManager.setOnline(false));
-    expect(button("Save message").disabled).toBe(true);
+    expect(button("Send").disabled).toBe(true);
     expect(field("project-message").value).toBe("Unsent while offline");
 
     let resolveRefresh!: (value: Response) => void;
@@ -281,25 +325,25 @@ describe("Workshop project browser interactions", () => {
       )
     );
     expect(container.textContent).toContain("Refreshing your saved work");
-    expect(button("Save message").disabled).toBe(true);
+    expect(button("Send").disabled).toBe(true);
     expect(field("project-message").value).toBe("Unsent while offline");
-    click("Save message");
+    click("Send");
     expect(writes).toEqual([]);
 
     await act(async () => resolveRefresh(response({ error: "Refresh failed" }, 503)));
     await eventually(() =>
       expect(container.textContent).toContain("Your saved work could not be refreshed")
     );
-    expect(button("Save message").disabled).toBe(true);
+    expect(button("Send").disabled).toBe(true);
     expect(field("project-message").value).toBe("Unsent while offline");
 
     refresh = new Promise<Response>((resolve) => {
       resolveRefresh = resolve;
     });
     click("Reconnect");
-    expect(button("Save message").disabled).toBe(true);
+    expect(button("Send").disabled).toBe(true);
     await act(async () => resolveRefresh(response({ project })));
-    await eventually(() => expect(button("Save message").disabled).toBe(false));
+    await eventually(() => expect(button("Send").disabled).toBe(false));
     expect(field("project-message").value).toBe("Unsent while offline");
     expect(writes).toEqual([]);
   });
@@ -324,7 +368,9 @@ describe("Workshop project browser interactions", () => {
       container.querySelector<HTMLAnchorElement>(`a[href="/workshop/${otherProject.id}"]`)!.click()
     );
     await eventually(() =>
-      expect(container.querySelector("h1")?.textContent).toBe(otherProject.title)
+      expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe(
+        otherProject.title
+      )
     );
     expect(field("project-message").value).toBe("");
   });

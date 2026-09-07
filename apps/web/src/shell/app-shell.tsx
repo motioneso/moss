@@ -28,12 +28,18 @@ import {
 } from "../chat/assistant-surface";
 import { useChatStream } from "../chat/use-chat-stream";
 import { usePageContextSync } from "../chat/use-page-context-sync";
-import { BrandMark } from "./brand-mark";
+import { BrandMark } from "@moss/ui";
 import { ChatControlsProvider } from "./chat-controls-context";
 import { HeaderWeather } from "../today/header-weather";
 import { applyThemeTokens } from "../theme/theme-runtime";
 import { CommandPalette } from "./command-palette";
 import { NAV_ICON_MAP } from "./nav-icons";
+import {
+  PageTrailProvider,
+  TopbarMoreActions,
+  TopbarTrail,
+  usePageTrailDisplay
+} from "./page-trail";
 import { WORKSHOP_MODULE_ID } from "@moss/shared";
 import {
   loadShellColorMode,
@@ -346,134 +352,187 @@ export function AppShell(props: AppShellProps) {
 
   return (
     <div className="app-frame">
-      <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
-        <div className="brand-lockup">
-          <span className="brand-mark">
-            <BrandMark />
-          </span>
-          <span className="brand-wordmark">Moss</span>
-        </div>
+      <PageTrailProvider>
+        <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
+          <div className="brand-lockup">
+            <span className="brand-mark">
+              <BrandMark />
+            </span>
+            <span className="brand-wordmark">Moss</span>
+          </div>
 
-        {/* #1734: the accessible name is what a screen reader announces on entering this
+          {/* #1734: the accessible name is what a screen reader announces on entering this
             landmark, so "Modules" leaked our packaging word to exactly the users least able to
             ignore it. "Main" names what the list is for. */}
-        <nav className="module-nav" aria-label="Main">
-          {navSections.map((section) => (
-            <div className="nav-group" key={section.key}>
-              {section.label ? <p className="nav-group__label">{section.label}</p> : null}
-              {section.items.map((entry) => (
-                <NavItem
-                  key={entry.id}
-                  entry={entry}
-                  unreadByModule={unreadByModule}
-                  onClick={closeMobileNav}
-                />
-              ))}
-            </div>
-          ))}
-          {/* #1734: "Loading modules" named our packaging; the user is just waiting for the list. */}
-          {props.modulesLoading ? <span className="nav-loading">Loading</span> : null}
-        </nav>
+          <nav className="module-nav" aria-label="Main">
+            {navSections.map((section) => (
+              <div className="nav-group" key={section.key}>
+                {section.label ? <p className="nav-group__label">{section.label}</p> : null}
+                {section.items.map((entry) => (
+                  <NavItem
+                    key={entry.id}
+                    entry={entry}
+                    unreadByModule={unreadByModule}
+                    onClick={closeMobileNav}
+                  />
+                ))}
+              </div>
+            ))}
+            {/* #1734: "Loading modules" named our packaging; the user is just waiting for the list. */}
+            {props.modulesLoading ? <span className="nav-loading">Loading</span> : null}
+          </nav>
 
-        <div className="rail-foot">
-          <RailUserMenu
-            me={props.me}
-            unreadCount={unreadCount}
-            signOutPending={signOutMutation.isPending}
-            onSignOut={() => signOutMutation.mutate()}
-            onNavigate={(to) => {
-              closeMobileNav();
-              navigate(to);
-            }}
-          />
-        </div>
-      </aside>
+          <div className="rail-foot">
+            <RailUserMenu
+              me={props.me}
+              unreadCount={unreadCount}
+              signOutPending={signOutMutation.isPending}
+              onSignOut={() => signOutMutation.mutate()}
+              onNavigate={(to) => {
+                closeMobileNav();
+                navigate(to);
+              }}
+            />
+          </div>
+        </aside>
 
-      {mobileNavOpen ? (
-        <button
-          aria-label="Close navigation"
-          className="sidebar-scrim"
-          type="button"
-          onClick={closeMobileNav}
-        />
-      ) : null}
-
-      <div className="workspace-area">
-        <header className="topbar">
+        {mobileNavOpen ? (
           <button
-            aria-label="Open navigation"
-            className="icon-button mobile-only"
-            title="Open navigation"
+            aria-label="Close navigation"
+            className="sidebar-scrim"
             type="button"
-            onClick={() => setMobileNavOpen(true)}
-          >
-            <Menu size={20} aria-hidden="true" />
-          </button>
+            onClick={closeMobileNav}
+          />
+        ) : null}
 
-          <div className="topbar-titles">
-            <div className="topbar-title-row">
-              <span className="topbar-title">{title}</span>
-              {showSettingsButton ? (
-                <ModuleSettingsButton moduleId={activeModuleId} moduleName={title} />
-              ) : null}
-            </div>
-            {subtitle ? <span className="topbar-subtitle">{subtitle}</span> : null}
-          </div>
-
-          {onTodayPage ? (
-            <div className="topbar-context">
-              <HeaderWeather weather={weatherQuery.data?.data ?? null} />
-            </div>
-          ) : null}
-
-          <div className="topbar-actions">
+        <div className="workspace-area">
+          <header className="topbar">
             <button
-              aria-label={assistantName ? `Chat with ${assistantName}` : "Open chat"}
-              aria-pressed={chatOpen}
-              className={`icon-button ${chatOpen ? "active" : ""}`}
-              title={assistantName ? `Ask ${assistantName}` : "Open chat"}
+              aria-label="Open navigation"
+              className="icon-button mobile-only"
+              title="Open navigation"
               type="button"
-              onClick={() => setChatOpen((open) => !open)}
+              onClick={() => setMobileNavOpen(true)}
             >
-              <MessageSquare size={19} aria-hidden="true" />
+              <Menu size={20} aria-hidden="true" />
             </button>
-          </div>
-        </header>
 
-        <div className={`workspace-body ${dockChat && chatOpen ? "workspace-body--docked" : ""}`}>
-          <main className="content-surface">
-            <AssistantSurfaceHostProvider value={assistantSurfaceHost}>
-              <ChatControlsProvider
-                value={{
-                  openChat,
-                  openChatWith,
-                  openAssistantWithDraft,
-                  pendingNotesDelete: pendingNotesDelete
-                    ? {
-                        actionRequestId: pendingNotesDelete.actionRequestId!,
-                        summary: pendingNotesDelete.summary ?? pendingNotesDelete.text
-                      }
-                    : null,
-                  openActionRequest
-                }}
+            <TopbarTitles
+              title={title}
+              subtitle={subtitle}
+              showSettingsButton={showSettingsButton}
+              moduleId={activeModuleId}
+            />
+
+            {onTodayPage ? (
+              <div className="topbar-context">
+                <HeaderWeather weather={weatherQuery.data?.data ?? null} />
+              </div>
+            ) : null}
+
+            <div className="topbar-actions">
+              <TrailMoreButton />
+              <button
+                aria-label={assistantName ? `Chat with ${assistantName}` : "Open chat"}
+                aria-pressed={chatOpen}
+                className={`icon-button ${chatOpen ? "active" : ""}`}
+                title={assistantName ? `Ask ${assistantName}` : "Open chat"}
+                type="button"
+                onClick={() => setChatOpen((open) => !open)}
               >
-                {props.children}
-              </ChatControlsProvider>
-            </AssistantSurfaceHostProvider>
-          </main>
+                <MessageSquare size={19} aria-hidden="true" />
+              </button>
+            </div>
+          </header>
 
-          {dockChat ? chatDrawer : null}
+          <div className={`workspace-body ${dockChat && chatOpen ? "workspace-body--docked" : ""}`}>
+            <main className="content-surface">
+              <AssistantSurfaceHostProvider value={assistantSurfaceHost}>
+                <ChatControlsProvider
+                  value={{
+                    openChat,
+                    openChatWith,
+                    openAssistantWithDraft,
+                    pendingNotesDelete: pendingNotesDelete
+                      ? {
+                          actionRequestId: pendingNotesDelete.actionRequestId!,
+                          summary: pendingNotesDelete.summary ?? pendingNotesDelete.text
+                        }
+                      : null,
+                    openActionRequest
+                  }}
+                >
+                  {props.children}
+                </ChatControlsProvider>
+              </AssistantSurfaceHostProvider>
+            </main>
+
+            {dockChat ? chatDrawer : null}
+          </div>
         </div>
+
+        <CommandPalette
+          modules={props.modules}
+          disabledModuleIds={props.disabledModuleIds ?? []}
+          themes={themesQuery.data}
+          navigate={navigate}
+        />
+
+        {dockChat ? null : chatDrawer}
+      </PageTrailProvider>
+    </div>
+  );
+}
+
+/**
+ * The page's "More" button at the bar's right, ahead of the assistant button. It exists only
+ * while a page holds the trail with actions — any other page shows no More button at all.
+ */
+function TrailMoreButton() {
+  const trail = usePageTrailDisplay();
+  if (!trail || trail.actions.length === 0) return null;
+  return <TopbarMoreActions actions={trail.actions} onAction={trail.onAction} />;
+}
+
+/**
+ * The top bar's title area. While a page holds the trail (a Workshop project), the bar shows
+ * the section as the way back, then the page name and its meta note — in place of the plain
+ * title, never beside it. Otherwise the ordinary title and subtitle render unchanged.
+ */
+function TopbarTitles(props: {
+  readonly title: string;
+  readonly subtitle: string;
+  readonly showSettingsButton: boolean;
+  readonly moduleId: string | null;
+}) {
+  const trail = usePageTrailDisplay();
+  if (!trail) {
+    return (
+      <div className="topbar-titles">
+        <div className="topbar-title-row">
+          <span className="topbar-title">{props.title}</span>
+          {props.showSettingsButton && props.moduleId ? (
+            <ModuleSettingsButton moduleId={props.moduleId} moduleName={props.title} />
+          ) : null}
+        </div>
+        {props.subtitle ? <span className="topbar-subtitle">{props.subtitle}</span> : null}
       </div>
-
-      <CommandPalette
-        modules={props.modules}
-        disabledModuleIds={props.disabledModuleIds ?? []}
-        themes={themesQuery.data}
-        navigate={navigate}
+    );
+  }
+  return (
+    <div className="topbar-titles">
+      <TopbarTrail
+        sectionLabel={trail.sectionLabel}
+        sectionPath={trail.sectionPath}
+        name={trail.name}
+        meta={trail.meta}
+        onRename={trail.onRename}
+        trailing={
+          props.showSettingsButton && props.moduleId ? (
+            <ModuleSettingsButton moduleId={props.moduleId} moduleName={trail.name} />
+          ) : null
+        }
       />
-
-      {dockChat ? null : chatDrawer}
     </div>
   );
 }

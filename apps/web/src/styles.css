@@ -510,6 +510,52 @@ button.module-link {
   color: var(--text-subtle);
 }
 
+/* Page trail: section (the way back) / current name / meta note, in place of the plain title. */
+.topbar-crumb {
+  align-items: baseline;
+}
+
+.topbar-title--link {
+  flex-shrink: 0;
+  color: var(--text-subtle);
+  text-decoration: none;
+}
+
+.topbar-title--link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.topbar-crumb__sep {
+  flex-shrink: 0;
+  color: var(--text-subtle);
+}
+
+.topbar-crumb__now {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.25rem;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+}
+
+.topbar-crumb__meta {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .topbar-crumb__meta {
+    display: none;
+  }
+}
+
 .topbar-settings-button {
   display: inline-flex;
   align-items: center;

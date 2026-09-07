@@ -88,6 +88,7 @@ describe("web route metadata", () => {
       "/wellness",
       "/news",
       "/sports",
+      "/workshop",
       "/settings"
     ]);
   });

@@ -406,7 +406,9 @@ describe("MVP foundation schema catalog", () => {
         // #2267 — lets an owner invoke their own module draft's worker jobs.
         { version: "0226", name: "0226_module_kv_worker_owner_draft.sql" },
         // #2349 — the Workshop assistant replies to a saved project message.
-        { version: "0227", name: "0227_workshop_project_feed_reply.sql" }
+        { version: "0227", name: "0227_workshop_project_feed_reply.sql" },
+        // #2362 — Workshop projects rename in place and delete with their feed.
+        { version: "0228", name: "0228_workshop_project_rename_delete.sql" }
       ]);
     } finally {
       await client.end();

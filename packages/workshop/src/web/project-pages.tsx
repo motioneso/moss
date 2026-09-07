@@ -1,25 +1,30 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
+import { Button, ButtonLink, Card, EmptyState, Masthead, RowIndex, RowIndexItem } from "@moss/ui";
 import {
-  Badge,
-  Button,
-  ButtonLink,
-  Card,
-  EmptyState,
-  Masthead,
-  RowIndex,
-  RowIndexItem
-} from "@moss/ui";
-import { ApiError, randomUuid } from "@moss/module-web-sdk";
-import type { LocaleSettingsDto, WorkshopProjectCursor } from "@moss/shared";
+  ActivityPeek,
+  ApiError,
+  BrandMark,
+  Thread,
+  randomUuid,
+  usePageTrail
+} from "@moss/module-web-sdk";
+import type {
+  LocaleSettingsDto,
+  TranscriptRecord,
+  WorkshopFeedEntry,
+  WorkshopProjectCursor
+} from "@moss/shared";
 import { formatDate, useUserLocale } from "./locale.js";
 import {
   createProject,
+  deleteProject,
   getProject,
   listMessages,
   listProjects,
   projectKeys,
+  renameProject,
   saveMessage
 } from "./project-client.js";
 
@@ -136,118 +141,137 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
   );
 }
 
-export function WorkshopProjectCreate({ canMutate }: { canMutate: boolean }) {
+/**
+ * The pinned composer both windows share: the label for screen readers, the box with Send
+ * inside it, and the error and saved notes underneath.
+ */
+export function WorkshopComposer(props: {
+  readonly label: string;
+  readonly text: string;
+  readonly onTextChange: (text: string) => void;
+  readonly sending: boolean;
+  readonly sendDisabled: boolean;
+  readonly onSubmit: () => void;
+  readonly error: string | null;
+  readonly status: string | null;
+}) {
+  return (
+    <form
+      className="workshop-chat__composer"
+      onSubmit={(event) => {
+        event.preventDefault();
+        props.onSubmit();
+      }}
+    >
+      <div className="chatd-input">
+        <label className="jds-sr-only" htmlFor="project-message">
+          {props.label}
+        </label>
+        <textarea
+          id="project-message"
+          rows={3}
+          maxLength={16384}
+          required
+          value={props.text}
+          disabled={props.sending}
+          onChange={(event) => props.onTextChange(event.target.value)}
+        />
+        <button type="submit" className="chatd-send" disabled={props.sendDisabled}>
+          {props.sending ? "Sending…" : "Send"}
+        </button>
+      </div>
+      {props.error ? (
+        <p role="alert" className="form-error">
+          {props.error}
+        </p>
+      ) : null}
+      {props.status ? <p role="status">{props.status}</p> : null}
+    </form>
+  );
+}
+
+/** Fixed example requests on the new-project window: they write into the box, never send. */
+export const NEW_PROJECT_EXAMPLES = [
+  "A word of the day on Today",
+  "Track the books I read",
+  "A reminder to water the plants"
+] as const;
+
+export function WorkshopProjectNew({ canMutate }: { canMutate: boolean }) {
+  usePageTrail({ name: "New project" });
   const navigate = useNavigate();
   const client = useQueryClient();
   const [requestKey, setRequestKey] = useState(() => randomUuid());
-  const [title, setTitle] = useState("");
-  const [initialRequest, setInitialRequest] = useState("");
-  const [context, setContext] = useState("");
+  const [text, setText] = useState("");
   const mutation = useMutation({
-    mutationFn: createProject,
+    mutationFn: (input: { requestKey: string; initialRequest: string }) => createProject(input),
     onSuccess: (result) => {
       void client.invalidateQueries({ queryKey: projectKeys.list });
-      navigate(`/workshop/${result.project.id}`);
+      // The project exists now: replace the URL without a reload and let the detail window
+      // mount, which shows the request as the first turn.
+      navigate(result.destination, { replace: true });
     }
   });
-  const changed = () => {
-    if (mutation.isError) {
-      setRequestKey(randomUuid());
-      mutation.reset();
-    }
-  };
+  const ready = canMutate;
   return (
-    <section className="workshop-project-form">
-      <Link className="workshop-back" to="/workshop">
-        ← Your projects
-      </Link>
-      <h1>What would you like to make?</h1>
-      <p>Start with what you want it to do. This project is private to you.</p>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (canMutate && !mutation.isPending)
-            mutation.mutate({ requestKey, title, initialRequest, context });
+    <section className="workshop-chat" aria-label="New project">
+      <div className="workshop-chat__history">
+        <div className="workshop-open chatd-empty">
+          <span className="chatd-empty__mark">
+            <BrandMark size={22} />
+          </span>
+          <div className="chatd-empty__title">What would you like to make?</div>
+          <div className="chatd-empty__sub">
+            Say it in your own words. Moss will ask a few questions, show you the screens, then
+            build it.
+          </div>
+          <div className="chatd-sugg">
+            {NEW_PROJECT_EXAMPLES.map((example) => (
+              <button
+                key={example}
+                type="button"
+                className="chatd-sugg__btn"
+                disabled={mutation.isPending}
+                onClick={() => setText(example)}
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <WorkshopComposer
+        label="Your idea"
+        text={text}
+        onTextChange={(next) => {
+          if (mutation.isError) {
+            setRequestKey(randomUuid());
+            mutation.reset();
+          }
+          setText(next);
         }}
-      >
-        <div className="jds-field">
-          <label className="jds-label" htmlFor="project-title">
-            Project name
-          </label>
-          <input
-            className="jds-input"
-            id="project-title"
-            required
-            maxLength={160}
-            value={title}
-            disabled={mutation.isPending}
-            onChange={(event) => {
-              changed();
-              setTitle(event.target.value);
-            }}
-          />
-        </div>
-        <div className="jds-field">
-          <label className="jds-label" htmlFor="project-idea">
-            Your idea
-          </label>
-          <textarea
-            className="jds-textarea"
-            id="project-idea"
-            required
-            maxLength={16384}
-            rows={5}
-            value={initialRequest}
-            disabled={mutation.isPending}
-            onChange={(event) => {
-              changed();
-              setInitialRequest(event.target.value);
-            }}
-          />
-        </div>
-        <div className="jds-field">
-          <label className="jds-label" htmlFor="project-context">
-            Already decided <span>(optional)</span>
-          </label>
-          <textarea
-            className="jds-textarea"
-            id="project-context"
-            maxLength={16384}
-            rows={3}
-            value={context}
-            disabled={mutation.isPending}
-            onChange={(event) => {
-              changed();
-              setContext(event.target.value);
-            }}
-          />
-          <p className="jds-hint">Include only the details you want saved in this project.</p>
-        </div>
-        {mutation.isError ? (
-          <p className="form-error" role="alert">
-            {mutation.error instanceof ApiError && mutation.error.status === 400
-              ? "Check your entries. Use a shorter name or message, then try again."
-              : "The project could not be confirmed as saved. Your text is still here; retry to check the same request."}
-          </p>
-        ) : null}
-        <div className="workshop-actions">
-          <Button
-            type="submit"
-            disabled={!canMutate || mutation.isPending || !title.trim() || !initialRequest.trim()}
-          >
-            {mutation.isPending ? "Creating…" : "Create project"}
-          </Button>
-          <ButtonLink href="/workshop" variant="quiet">
-            Cancel
-          </ButtonLink>
-        </div>
-        <p className="jds-hint">Creating a project saves your idea. It does not start a build.</p>
-      </form>
+        sending={mutation.isPending}
+        sendDisabled={!ready || mutation.isPending || !text.trim()}
+        onSubmit={() => {
+          if (ready && !mutation.isPending && text.trim())
+            mutation.mutate({ requestKey, initialRequest: text });
+        }}
+        error={
+          mutation.isError
+            ? "The project could not be confirmed as saved. Your text is still here; retry to check the same request."
+            : null
+        }
+        status={null}
+      />
     </section>
   );
 }
 
 const PROJECT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// A fixed identity on purpose: the trail hook republishes on every new array, so a literal
+// here would re-render the top bar on each keystroke in the composer.
+const DELETE_ACTIONS = [{ id: "delete", label: "Delete project" }] as const;
 
 export function WorkshopProjectDetail({ canMutate }: { canMutate: boolean }) {
   const { projectId = "" } = useParams();
@@ -264,11 +288,34 @@ function WorkshopProjectContent({
   canMutate: boolean;
 }) {
   const client = useQueryClient();
+  const navigate = useNavigate();
   const locale = useUserLocale();
-  const [pane, setPane] = useState<"conversation" | "work">("conversation");
   const [text, setText] = useState("");
   const [messageId, setMessageId] = useState(() => randomUuid());
   const [saved, setSaved] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const renameMutation = useMutation({
+    mutationFn: (title: string) => renameProject(projectId, title),
+    onSuccess: (result) => {
+      client.setQueryData(projectKeys.detail(projectId), { project: result.project });
+      void client.invalidateQueries({ queryKey: projectKeys.list });
+    }
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteProject(projectId),
+    onSuccess: () => {
+      setConfirmingDelete(false);
+      void client.invalidateQueries({ queryKey: projectKeys.list });
+      navigate("/workshop", { replace: true });
+    }
+  });
+  const onRename = useCallback(
+    (title: string) => renameMutation.mutateAsync(title).then(() => undefined),
+    [renameMutation]
+  );
+  const onTrailAction = useCallback((id: string) => {
+    if (id === "delete") setConfirmingDelete(true);
+  }, []);
   const project = useQuery({
     queryKey: projectKeys.detail(projectId),
     queryFn: () => getProject(projectId),
@@ -292,26 +339,36 @@ function WorkshopProjectContent({
       void client.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
     }
   });
+  // The top bar carries the project's name while this page is mounted; before the project
+  // loads there is no name to show, so the trail stays clear and the plain section title stands.
+  usePageTrail(
+    project.data
+      ? {
+          name: project.data.project.title,
+          meta: `Started ${formatStartedOn(project.data.project.createdAt, locale)}`,
+          actions: canMutate ? DELETE_ACTIONS : undefined,
+          onRename: canMutate ? onRename : undefined,
+          onAction: canMutate ? onTrailAction : undefined
+        }
+      : { name: "" }
+  );
   if (!project.data) {
     if (project.isError)
       return (
-        <>
-          <Link className="workshop-back" to="/workshop">
-            ← Your projects
-          </Link>
-          <ProjectError
-            title={
-              project.error instanceof ApiError && project.error.status === 404
-                ? "This project is not available to you."
-                : "This project could not be loaded."
-            }
-            retry={() => void project.refetch()}
-          />
-        </>
+        <ProjectError
+          title={
+            project.error instanceof ApiError && project.error.status === 404
+              ? "This project is not available to you."
+              : "This project could not be loaded."
+          }
+          retry={() => void project.refetch()}
+        />
       );
     return <p role="status">Loading your project…</p>;
   }
   const record = project.data.project;
+  const entries = messages.data?.pages.flatMap((page) => page.entries) ?? [];
+  const awaitingDelivery = entries.some((entry) => entry.delivery === "pending");
   const ready =
     canMutate &&
     !project.isError &&
@@ -319,156 +376,113 @@ function WorkshopProjectContent({
     !messages.isError &&
     !messages.isFetching;
   return (
-    <>
-      <Link className="workshop-back" to="/workshop">
-        ← Your projects
-      </Link>
-      <header className="workshop-project-heading">
-        <div className="workshop-project-heading__text">
-          <p className="jds-eyebrow">Project</p>
-          <h1>{record.title}</h1>
-        </div>
-        <div className="workshop-project-heading__meta">
-          <Badge tone="steel" pill dot>
-            Only you
-          </Badge>
-          <span className="jds-caption">Started {formatStartedOn(record.createdAt, locale)}</span>
-        </div>
-      </header>
+    <section className="workshop-chat" aria-label="Project conversation">
+      {confirmingDelete ? (
+        <Card>
+          <div role="alertdialog" aria-label="Delete this project">
+            <p className="workshop-status">
+              Delete “{record.title}”? Its messages go with it. This cannot be undone.
+            </p>
+            {deleteMutation.isError ? (
+              <p className="workshop-status" role="alert">
+                The project could not be deleted. Try again.
+              </p>
+            ) : null}
+            <Button
+              variant="secondary"
+              disabled={deleteMutation.isPending}
+              onClick={() => setConfirmingDelete(false)}
+            >
+              Keep it
+            </Button>{" "}
+            <Button
+              variant="primary"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete project"}
+            </Button>
+          </div>
+        </Card>
+      ) : null}
       {project.isError ? (
         <ProjectError
           title="The project could not be refreshed. Reload it before making changes."
           retry={() => void project.refetch()}
         />
       ) : null}
-      <div className="workshop-mobile-tabs" aria-label="Project view">
-        <Button
-          variant="secondary"
-          active={pane === "conversation"}
-          aria-pressed={pane === "conversation"}
-          onClick={() => setPane("conversation")}
-        >
-          Conversation
-        </Button>
-        <Button
-          variant="secondary"
-          active={pane === "work"}
-          aria-pressed={pane === "work"}
-          onClick={() => setPane("work")}
-        >
-          Project work
-        </Button>
-      </div>
-      <div className="workshop-project-detail">
-        <section
-          className={
-            pane === "conversation"
-              ? "workshop-project-pane"
-              : "workshop-project-pane workshop-project-pane--inactive"
-          }
-          aria-label="Project conversation"
-        >
-          <h2>Conversation</h2>
-          <div className="workshop-project-messages">
-            <Card title="Your idea">
-              <p className="workshop-project-text">{record.initialRequest}</p>
-            </Card>
-            {messages.data?.pages
-              .flatMap((page) => page.entries)
-              .map((entry) =>
-                entry.kind === "assistant_message" ? (
-                  <Card key={entry.messageId} title="Moss">
-                    <p className="workshop-project-text">{entry.text}</p>
-                  </Card>
-                ) : (
-                  <Card
-                    key={entry.messageId}
-                    title="You"
-                    meta={entry.delivery === "pending" ? "Saved · awaiting delivery" : undefined}
-                  >
-                    <p className="workshop-project-text">{entry.text}</p>
-                  </Card>
-                )
-              )}
-          </div>
-          {messages.isPending ? <p role="status">Loading messages…</p> : null}
-          {messages.isError ? (
-            <ProjectError
-              title="Messages could not be refreshed. Your unsent text is still here."
-              retry={() => void messages.refetch()}
-            />
-          ) : null}
-          {messages.hasNextPage ? (
-            <Button
-              variant="secondary"
-              disabled={messages.isFetching || !canMutate}
-              onClick={() => void messages.fetchNextPage()}
-            >
-              More messages
-            </Button>
-          ) : null}
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (ready && !mutation.isPending) mutation.mutate({ messageId, text });
-            }}
+      {messages.hasNextPage ? (
+        <div className="workshop-chat__earlier">
+          <Button
+            variant="quiet"
+            disabled={messages.isFetching || !canMutate}
+            onClick={() => void messages.fetchNextPage()}
           >
-            <div className="jds-field">
-              <label className="jds-label" htmlFor="project-message">
-                Add to your project
-              </label>
-              <textarea
-                className="jds-textarea"
-                id="project-message"
-                rows={3}
-                maxLength={16384}
-                required
-                value={text}
-                disabled={mutation.isPending}
-                onChange={(event) => {
-                  if (mutation.isError) {
-                    setMessageId(randomUuid());
-                    mutation.reset();
-                  }
-                  setSaved(false);
-                  setText(event.target.value);
-                }}
-              />
-            </div>
-            {mutation.isError ? (
-              <p role="alert" className="form-error">
-                The message could not be confirmed as saved. Your text is still here; retry to check
-                the same message.
-              </p>
-            ) : null}
-            <Button type="submit" disabled={!ready || mutation.isPending || !text.trim()}>
-              {mutation.isPending ? "Saving…" : "Save message"}
-            </Button>
-            {saved ? (
-              <p role="status">Saved to this project. No planning or build has started.</p>
-            ) : null}
-          </form>
-        </section>
-        <section
-          className={
-            pane === "work"
-              ? "workshop-project-pane"
-              : "workshop-project-pane workshop-project-pane--inactive"
-          }
-          aria-label="Project work"
-        >
-          <h2>Project work</h2>
-          <EmptyState
-            title="No plan yet"
-            description="Your idea and messages are saved. Planning is not available yet."
+            {messages.isFetching ? "Loading…" : "Earlier messages"}
+          </Button>
+        </div>
+      ) : null}
+      <div className="workshop-chat__history">
+        {messages.isPending ? <p role="status">Loading messages…</p> : null}
+        {messages.isError ? (
+          <ProjectError
+            title="Messages could not be refreshed. Your unsent text is still here."
+            retry={() => void messages.refetch()}
           />
-          {record.context ? (
-            <Card title="Already decided">
-              <p className="workshop-project-text">{record.context}</p>
-            </Card>
-          ) : null}
-        </section>
+        ) : null}
+        {!messages.isPending && !messages.isError ? (
+          <Thread records={workshopTranscript(record, entries)} working={mutation.isPending} />
+        ) : null}
+        {mutation.isPending ? <ActivityPeek records={[]} inProgress /> : null}
+        {awaitingDelivery ? (
+          <p className="workshop-chat__caption" role="status">
+            Saved · awaiting delivery
+          </p>
+        ) : null}
       </div>
-    </>
+      <WorkshopComposer
+        label="Add to your project"
+        text={text}
+        onTextChange={(next) => {
+          if (mutation.isError) {
+            setMessageId(randomUuid());
+            mutation.reset();
+          }
+          setSaved(false);
+          setText(next);
+        }}
+        sending={mutation.isPending}
+        sendDisabled={!ready || mutation.isPending || !text.trim()}
+        onSubmit={() => {
+          if (ready && !mutation.isPending) mutation.mutate({ messageId, text });
+        }}
+        error={
+          mutation.isError
+            ? "The message could not be confirmed as saved. Your text is still here; retry to check the same message."
+            : null
+        }
+        status={saved ? "Saved to this project. No planning or build has started." : null}
+      />
+    </section>
   );
+}
+
+/**
+ * The opening request plus the saved feed entries as transcript records, oldest first: your
+ * opening request is the first turn, your messages read as your turns, Moss's messages as
+ * replies once they exist.
+ */
+export function workshopTranscript(
+  project: { readonly initialRequest: string },
+  entries: readonly WorkshopFeedEntry[]
+): TranscriptRecord[] {
+  return [
+    { kind: "user", text: project.initialRequest },
+    ...entries.map(
+      (entry): TranscriptRecord =>
+        entry.kind === "assistant_message"
+          ? { kind: "reply", text: entry.text, messageId: entry.messageId }
+          : { kind: "user", text: entry.text, messageId: entry.messageId }
+    )
+  ];
 }

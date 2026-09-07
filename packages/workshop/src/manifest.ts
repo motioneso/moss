@@ -4,11 +4,14 @@ import {
   workshopBuildModuleResultSchema,
   createWorkshopProjectInputSchema,
   createWorkshopProjectResponseSchema,
+  deleteWorkshopProjectResponseSchema,
   listWorkshopProjectsResponseSchema,
   getWorkshopProjectResponseSchema,
   createWorkshopMessageInputSchema,
   createWorkshopMessageResponseSchema,
-  listWorkshopMessagesResponseSchema
+  listWorkshopMessagesResponseSchema,
+  renameWorkshopProjectInputSchema,
+  renameWorkshopProjectResponseSchema
 } from "@moss/shared";
 
 import { workshopBuildModuleExecute } from "./assistant-tools.js";
@@ -32,7 +35,11 @@ export const workshopModuleManifest = {
     required: true
   },
   database: {
-    migrations: ["0223_workshop_projects.sql", "0224_workshop_project_feed.sql"],
+    migrations: [
+      "0223_workshop_projects.sql",
+      "0224_workshop_project_feed.sql",
+      "0228_workshop_project_rename_delete.sql"
+    ],
     ownedTables: ["app.workshop_projects", "app.workshop_project_feed"]
   },
   dataLifecycle: {
@@ -57,7 +64,9 @@ export const workshopModuleManifest = {
     {
       id: "workshop",
       label: "The Workshop",
-      description: "Create projects, save requirements and messages, and revisit your work.",
+      description:
+        "Create projects, save requirements and messages, and revisit your work. Inside a " +
+        "project the top bar shows The Workshop as the way back, followed by the project name.",
       path: "/workshop",
       icon: "wrench",
       order: 900,
@@ -84,7 +93,17 @@ export const workshopModuleManifest = {
         {
           id: "workshop.projects.retry",
           description:
-            "Reconnect and reload the project, then retry the saved request. Unsent text stays in the form.",
+            "Reconnect and reload the project, then retry the saved request. Unsent text stays in the window.",
+          path: "/workshop"
+        },
+        {
+          id: "workshop.projects.rename_retry",
+          description: "Click the project name in the top bar and enter the name again.",
+          path: "/workshop"
+        },
+        {
+          id: "workshop.projects.delete_retry",
+          description: "Open the More menu and choose Delete project again.",
           path: "/workshop"
         }
       ],
@@ -99,6 +118,17 @@ export const workshopModuleManifest = {
           class: "transient",
           description:
             "Saving could not be confirmed. Retrying the same request does not duplicate it."
+        },
+        {
+          code: "workshop.projects.rename_failed",
+          class: "transient",
+          description:
+            "The new name could not be saved. The old name is back. Try entering it again."
+        },
+        {
+          code: "workshop.projects.delete_failed",
+          class: "transient",
+          description: "The project could not be deleted. It is still there. Try deleting it again."
         }
       ]
     },
@@ -106,11 +136,11 @@ export const workshopModuleManifest = {
       id: "workshop.chat_handoff",
       description:
         "Moss saves only the requested idea as a private project and links to it. " +
-        "Creation never plans or builds, including with YOLO. Incognito and unverified chats must use the create form.",
+        "Creation never plans or builds, including with YOLO. Incognito and unverified chats must use the new-project window.",
       remediations: [
         {
           id: "workshop.chat_handoff.choose_content",
-          description: "Open the new-project form and choose the details you want to save.",
+          description: "Start a new project and say what you want in your own words.",
           path: "/workshop/new"
         }
       ],
@@ -174,6 +204,19 @@ export const workshopModuleManifest = {
       path: "/api/workshop/projects/:projectId",
       permissionId: "workshop.view",
       responseSchema: getWorkshopProjectResponseSchema
+    },
+    {
+      method: "PATCH",
+      path: "/api/workshop/projects/:projectId",
+      permissionId: "workshop.view",
+      requestSchema: renameWorkshopProjectInputSchema,
+      responseSchema: renameWorkshopProjectResponseSchema
+    },
+    {
+      method: "DELETE",
+      path: "/api/workshop/projects/:projectId",
+      permissionId: "workshop.view",
+      responseSchema: deleteWorkshopProjectResponseSchema
     },
     {
       method: "GET",
