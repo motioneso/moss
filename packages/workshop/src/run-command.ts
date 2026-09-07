@@ -132,38 +132,42 @@ export const workshopRunCommandExecute: ToolExecute = async (
   // The runner kills the command at the deadline; this backstop only fires
   // when the runner goes silent, so the tool still answers with what it saw.
   const stopWaitingAt = Date.now() + (timeoutMs as number) + RUN_COMMAND_GRACE_MS;
-  let output = "";
-  let done = false;
-  let exitCode: number | null = null;
-  let truncated = false;
-  let timedOut = false;
+  let state: WorkshopRunCommandState = {
+    output: "",
+    done: false,
+    exitCode: null,
+    truncated: false,
+    timedOut: false
+  };
   for (;;) {
-    const state = await service.poll({ sessionKey, execId });
-    if (state.output.length > output.length) {
-      ctx.reportProgress?.({ message: state.output.slice(output.length) });
+    const fresh = await service.poll({ sessionKey, execId });
+    if (fresh.output.length > state.output.length) {
+      ctx.reportProgress?.({ message: fresh.output.slice(state.output.length) });
     }
-    output = state.output;
-    done = state.done;
-    exitCode = state.exitCode;
-    truncated = state.truncated;
-    timedOut = state.timedOut;
-    if (done) break;
+    state = fresh;
+    if (state.done) break;
     if (Date.now() >= stopWaitingAt) {
-      timedOut = true;
+      try {
+        await service.kill({ sessionKey, execId });
+      } catch {
+        /* best effort: the runner is already silent, still answer with what ran */
+      }
+      state = { ...state, timedOut: true };
       break;
     }
     await sleep(RUN_COMMAND_POLL_MS);
   }
-  if (!done) {
-    try {
-      await service.kill({ sessionKey, execId });
-    } catch {
-      /* best effort: the runner is already silent, still answer with what ran */
-    }
-  }
 
-  let text = output;
-  if (truncated) text += "\n[The output was cut at 256 KiB; this is the start of it.]";
-  if (timedOut) text += "\n[The command was stopped after the timeout; this is what ran so far.]";
-  return { data: { output: text, exitCode, truncated, timedOut } };
+  let text = state.output;
+  if (state.truncated) text += "\n[The output was cut at 256 KiB; this is the start of it.]";
+  if (state.timedOut)
+    text += "\n[The command was stopped after the timeout; this is what ran so far.]";
+  return {
+    data: {
+      output: text,
+      exitCode: state.exitCode,
+      truncated: state.truncated,
+      timedOut: state.timedOut
+    }
+  };
 };
