@@ -1,233 +1,433 @@
-# Spec: Moss as an Agent Client Protocol (ACP) client
+# Spec: ACP as the single model interface in Moss
 
-**Status:** Approved (Fitz, Muse review; Ben rulings folded in). Decided in the "Moss Work" room on 2026-09-06 after a
-for/against debate (Fable for, Foble against, Fitz facilitating, Muse researching) and a measured
-spike. Build issue: to be opened once this spec is approved.
+**Status:** Revised 2026-09-07 on Ben's rulings in the "ACP Work" room; awaiting Ben's approval.
+Supersedes the 2026-09-06 approval (Fitz, Muse review) and the "outside agent" shape that PR 2420
+removed. No plan and no code until this revision is approved.
 
-**Evidence:** `spikes/acp-tool-call/RESULTS.md` (four runs on the dev instance, 2026-09-06).
-The spike code stays in `spikes/`; nothing in it ships.
+**Evidence:** `spikes/acp-tool-call/RESULTS.md` (four runs on the dev instance, 2026-09-06); the
+Codex and Gemini adapter login checks Scout ran on the box on 2026-09-07 (section 9); the ACP
+documentation set (protocol v1 stable, v2 draft, registry, RFDs) read in full on 2026-09-07.
 
-**Build timing:** no code until PRs 2364 (Workshop home page), 2365 (Moss answers in a Workshop
-project) and 2358 (prod chat fix) have merged. Both Workshop PRs touch the surface this spec plugs
-into. Section 8 is written against 2365 and is marked accordingly.
+**What comes back from the reverted work:** the protocol package `packages/acp` (client,
+capability check, permission classifier, tool table, stream, tunnel) was sound and returns in the
+first build PR. The parts that do not return are the separate "outside agent", the per-surface
+agent picker, and the agent catalogue in settings.
 
 ---
 
 ## 1. Decision
 
-Moss becomes an **ACP client**: it launches an outside coding agent (Claude Code today, others
-later) as a subprocess, talks to it over the protocol's JSON-RPC-on-stdio, and hands it Moss's own
-tool server at session start. Moss owns the conversation, the permissions, the tool list, and the
-audit trail. The agent owns the model loop.
+The Agent Client Protocol (ACP) is the **single interface for every model conversation in Moss**.
+Chat, the Workshop, briefings, monitoring, module builds and every other feature that runs a model
+does so through one ACP client adapter that launches the provider's ACP agent as a subprocess,
+talks to it over JSON-RPC on stdio, and hands it Moss's own tool server at session start. Moss
+owns the conversation, the permissions, the tool list and the audit trail. The agent owns the model
+loop.
 
-Two surfaces, in this order:
+There is no "outside agent". A **provider** is what the admin adds today (Claude, Codex, Gemini,
+...); each provider ships its own ACP agent in the protocol's public registry, and that agent is
+what Moss launches. The user never chooses an agent, only a provider and (where the admin allows)
+a model.
 
-1. **Workshop** — the agent works on a project. Unanimous yes; the sandbox is a folder Moss
-   controls.
-2. **Chat** — the agent replaces today's hand-made CLI bridge (`packages/chat/src/live/`), which
-   launches the Claude CLI and parses its output. Yes, with the five conditions in section 3.
+Consumers, in build order:
 
-Moss does **not** become an ACP agent (something other editors could host). That is a different
-product and is out of scope.
+1. **Workshop.** A conversation whose working folder is the project folder. Shell and file writes
+   are allowed. Not a sandbox: a command started there is not restricted to that folder.
+2. **Chat.** A conversation in an empty scratch folder. Shell and file writes are off. The
+   hand-made CLI bridge in `packages/chat/src/live/` is deleted when chat moves (section 13).
+3. **Unattended calls.** Briefings, connector monitoring, module builds and anything else that
+   runs a model with nobody watching (section 8).
+
+Same adapter, same settings model, different launch profile per consumer.
+
+Moss does **not** become an ACP agent (something other editors could host). Out of scope.
 
 ## 2. Why
 
-- Today's chat already runs a CLI subprocess and scrapes it. The bridge produced a string of real
-  bugs (fenced JSON that failed to parse, a flag that silently dropped all 101 Moss tools, a
-  session id mistaken for a conversation id). ACP replaces the scraping with a typed contract:
-  typed content blocks, tool calls as events with ids and status, a permission request message,
-  and cancel.
-- The spike showed both paths pick the right Moss tool among ~100, every run, with no stray
-  calls to the agent's own tools. Wall-clock is the same within noise (read: 10–18 s both arms).
-- The household runs on the vendors' subscription logins through the CLIs (see
-  `packages/ai/src/repository.ts`, `auth_method = 'cli'`), not per-user API keys. So the honest
-  comparison was bridge versus ACP, not subprocess versus direct API call. Direct calls stay
-  available through the router for API-key providers and are unaffected by this spec.
-- The same session shape gives Moss a path to hosting several agents at once (section 10).
+- Today's chat runs a CLI subprocess and scrapes its output. That bridge produced a string of real
+  bugs: fenced JSON that failed to parse, a flag that silently dropped all 101 Moss tools, a session
+  id mistaken for a conversation id. ACP replaces scraping with a typed contract: content blocks,
+  tool calls as events with ids and status, a permission request message, cancel.
+- The spike showed the ACP path picks the right Moss tool among ~100 every run with no stray calls
+  to the agent's own tools, at the same wall-clock as the bridge (10 to 18 s both arms).
+- The household runs on the vendors' subscription logins through the CLIs
+  (`packages/ai/src/repository.ts`, `auth_method = 'cli'`), not per-user API keys. So the honest
+  comparison is bridge versus ACP. Direct API calls for API-key providers stay available through
+  the router and are unaffected by this spec.
+- One interface for every caller means one place to fix a bug, one permission model and one audit
+  trail, instead of the four engines and three one-shot flags the bridge grew.
 
-What ACP does **not** give us, stated so nobody assumes it: agents talking to each other, a
-per-user vendor login, control over the agent's own system prompt, or a fix for the shared
-subscription. Those stay Moss's problems.
+What ACP does **not** give us: agents talking to each other, a per-user vendor login, control over
+the agent's own system prompt, or a fix for the shared subscription. Those stay Moss's problems.
 
-## 3. The five conditions (requirements, not follow-ups)
+## 3. Conditions (requirements, not follow-ups)
 
-1. **Workshop first, chat second.** Chat lands only after the Workshop adapter has passed the
-   live-path gate.
-2. **Chat launches through the per-user runner**, never from the box's login. The cli-runner
-   engine host already allocates a Unix account per user (`packages/cli-runner/src/uid-allocator.ts`)
+1. **Workshop first, chat second, unattended callers third.** Each consumer lands only after the
+   previous one has passed the live-path gate.
+2. **Every session launches through the per-user runner**, never from the box's login. The
+   cli-runner engine host allocates a Unix account per user (`packages/cli-runner/src/uid-allocator.ts`)
    with a scrubbed environment and its own home folder. The spike ran as the box's own login and
-   inherited that login's hooks, global instructions and plugins into the Moss session. The runner is the
-   fix, and the same per-account home folder is where the agent's settings file lives.
+   inherited that login's hooks, global instructions and plugins into the Moss session; the runner
+   is the fix. Unattended callers run as the account of the user the work belongs to.
 3. **Shell and file writes off in chat.** File reads, file search, web search and web fetch may
-   stay on (the spike's third condition: five read-only built-ins offered, zero used on calendar
-   prompts). The agent's tool list is a fixed base list, not a deny filter. In the Workshop,
-   shell and writes are the point, inside the project folder.
-4. **The approval card is wired to the protocol** (section 6). This is the one real defect the
-   spike found, and it ships in the first slice.
-5. **An agent capability list** (section 7) decides which agents may be offered on which
-   surface. "Any ACP agent works with Moss" is false and the settings screen must not imply it.
+   stay on (the spike's third condition: five read-only built-ins offered, zero used). The agent's
+   tool list is a fixed base list per profile, not a deny filter, kept in one table
+   (`packages/acp/src/tool-table.ts`: one row per real tool name with a family and an on/off per
+   profile). The use-time policy in section 7 and the launch-time off-list derive from the same
+   table so they cannot drift apart. In the Workshop, shell and writes are the point.
+4. **The approval card is wired to the protocol** (section 7). The one real defect the spike found;
+   it ships in the first slice.
+5. **Each provider has its own adapter row** (section 9). Providers share the protocol but differ
+   in login, model selection and which built-ins can be switched off. A provider is offered for a
+   consumer only when its row passes that consumer's requirements, checked at adapter start, not
+   assumed. "Any provider works everywhere" is false and the settings screen must not imply it.
+6. **Admins decide which model does what** (section 5). Every consumer asks the existing model
+   router by service key; the router answers with a model on a connected provider, defaulting to the
+   instance default provider. Nothing in Moss names a provider or model in code.
 
-Plus, stated plainly in the settings screen and in this spec: **one subscription login per agent
-is shared by the whole household**, stored on disk in the runner's token store, outside the
-encrypted credential store; the encrypted row for a CLI provider holds no secret at all. ACP
-neither fixes nor worsens this. It is today's arrangement, carried forward knowingly.
+Stated plainly in the settings screen and here: **one subscription login per provider is shared by
+the whole household**, stored on disk in the runner's per-user home or token store, outside the
+encrypted credential store; the encrypted row for a CLI provider holds no secret. ACP neither fixes
+nor worsens this.
 
 ## 4. Architecture
 
 ```mermaid
 flowchart LR
-  UI[Chat drawer / Workshop panel] --> Moss[Moss API]
-  Moss --> Adapter[ACP client adapter]
-  Adapter -- launch via cli-runner, per-user account --> Agent[Agent subprocess<br/>Claude Code via ACP adapter]
+  UI[Chat drawer / Workshop panel / unattended job] --> Moss[Moss API or worker]
+  Moss --> Router[Model router: service bindings, default provider]
+  Router --> Adapter[ACP client adapter]
+  Adapter -- launch via cli-runner, per-user account --> Agent[Provider's ACP agent<br/>claude-acp, codex-acp, gemini --acp]
   Agent -- session/prompt, session/update, request_permission --> Adapter
   Agent -- MCP over HTTP, per-session bearer token --> Tools[Moss tool server<br/>packages/chat/src/mcp-transport.ts]
   Tools --> Gateway[AI gateway: allowlist, policy, approve/deny]
   Gateway --> Modules[Module tools: calendar, food, ...]
 ```
 
-**Adapter.** One new package (name decided in the plan) built on the official TypeScript ACP
-library, pinned to protocol v1, negotiating version at `initialize` so v2 can slot in per
-connection later. It exposes one internal interface to the rest of Moss: open session, send
-prompt, stream events, answer permission, cancel, close. Both surfaces use the same adapter with
-different launch settings.
+**Adapter.** `packages/acp` (`@moss/acp`), built on the official TypeScript ACP library
+(`@agentclientprotocol/sdk`), pinned to protocol v1 and negotiating the version at `initialize` so
+v2 can slot in per connection (section 11). One internal interface to the rest of Moss: open
+session, send prompt, stream events, answer permission, set a session option, cancel, close. Every
+consumer uses this interface with a **launch profile**:
 
-**Launch.** Through the cli-runner engine host, same as the bridge today: per-user account,
-scrubbed environment, own home, empty scratch working folder (chat) or the project folder
-(Workshop). The vendor login comes from the runner's token store via the environment. Nothing
-secret ever goes on the command line (the room saw the hub leak its own tokens through `ps`).
+| profile      | working folder              | shell / writes | built-in reads, search, web | streaming to a person | history replay |
+| ------------ | --------------------------- | -------------- | --------------------------- | --------------------- | -------------- |
+| `workshop`   | the project folder          | on             | on                          | yes                   | yes            |
+| `chat`       | empty scratch folder        | off            | on                          | yes                   | yes            |
+| `unattended` | caller's choice (section 8) | per caller     | per caller                  | no                    | no             |
+
+**Provider resolution.** The adapter never picks a provider. It receives a resolved model
+(provider id, model id, provider kind) from the router (section 5) and maps the provider kind to a
+registry adapter row (section 9): which command to launch, how the login reaches it, how the model
+is set, which built-ins can be switched off.
+
+**Launch.** Through the cli-runner engine host: per-user account, scrubbed environment, own home,
+the profile's working folder. The launch command comes from the registry entry for the provider,
+pinned by version in Moss (section 9), never resolved live at run time. The vendor login reaches
+the agent the way each provider's row says. Nothing secret ever goes on the command line.
+
+Known limits, stated rather than papered over (phase 4 review, 2026-09-07):
+
+- The login credential is inside the agent's own process, because the provider's CLI needs it to
+  reach its vendor. The runner's read-deny rules, the per-user account and the forbidden zone in
+  section 7 each raise the bar; none removes the fact. The real fix is a Moss-side relay that adds
+  the credential on the way out so the child never holds it. A runner change with its own spec.
+- Folder containment is lexical. A link inside the project pointing at a secret passes the check,
+  because the decision runs on the API side and cannot resolve paths on the runner host. The
+  per-user account is the containment that does not care about paths, and it exists only when the
+  per-user identity option is on. Follow-up: the runner resolves announced paths before they cross
+  the pipe, or per-user identity becomes the Workshop default.
 
 **Tool server.** The existing MCP transport, unchanged. Moss mints the per-session bearer token
-(`jst_<uuid>`, one per session, per agent) and passes it inside the `session/new` `mcpServers`
-entry as an HTTP header. It travels over the stdio pipe only. Every tool call is attributable to
-the token that carried it, which is how the audit trail knows which agent (and which council
-seat, later) made a call. **The agent identity does not go into `AccessContext`**; that carries
-only `actorUserId` and `requestId` by ruling.
+(`jst_<uuid>`, one per session) and passes it inside the `session/new` `mcpServers` entry as an
+HTTP header. It travels over the stdio pipe only. Every tool call is attributable to the token that
+carried it. **The agent identity does not go into `AccessContext`**; that carries only
+`actorUserId` and `requestId` by ruling.
 
 **Capabilities advertised to the agent.**
 
-| capability                                | chat | Workshop                  | why                                                                                                                                             |
-| ----------------------------------------- | ---- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fs/read_text_file`, `fs/write_text_file` | no   | no                        | v2 removes client file access; serve files as Moss tools scoped to the project folder instead, so the v2 migration does not touch file handling |
-| `terminal/*`                              | no   | no (see fork A)           | same reason; commands run through a Moss tool that executes inside the sandbox                                                                  |
-| agent built-in shell / file-write         | off  | on, inside project folder | condition 3                                                                                                                                     |
-| agent built-in read / search / web        | on   | on                        | spike third condition                                                                                                                           |
+| capability                                | chat | Workshop        | unattended | why                                                                                                                           |
+| ----------------------------------------- | ---- | --------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `fs/read_text_file`, `fs/write_text_file` | no   | no              | no         | v2 removes client file access; files are served as Moss tools scoped to the project folder so the v2 move does not touch them |
+| `terminal/*`                              | no   | no (see fork A) | no         | same reason; commands run through a Moss tool that starts in the session folder                                               |
+| agent built-in shell / file-write         | off  | on              | per caller | condition 3                                                                                                                   |
+| agent built-in read / search / web        | on   | on              | per caller | spike third condition                                                                                                         |
+| `auth.terminal`                           | yes  | yes             | no         | lets an admin complete a provider's interactive login through the runner (section 9); never offered to an unattended session  |
 
-**Fork A — how the Workshop runs commands. Decided (review, 2026-09-06): (1).** A Moss tool runs
-the command inside the project sandbox and streams output, v2-proof and audited like every other
-tool. (2), advertising ACP `terminal/*`, is taken only if the slice 1 live proof shows the tool
-cannot stream a build log well enough; record the reason in the plan if so.
+**Fork A, how the Workshop runs commands. Decided (review, 2026-09-06): (1).** A Moss tool starts
+the command with the project folder as its working folder and streams output, v2-proof and audited
+like every other tool. The working folder is fixed, the command itself is not restricted, and the
+only thing between a caller and an arbitrary command is the approval card. (2), advertising ACP
+`terminal/*`, is taken only if the slice 1 live proof shows the tool cannot stream a build log well
+enough; record the reason in the plan if so.
 
-**Conversation history.** Postgres stays the record, under row-level access. A fresh agent
-session gets history replayed by Moss, the way a stateless model call does today. The agent's own
-session is a cache; `session/load` is optional in the protocol and is used only when the agent
-supports it and the process is still alive.
+**Conversation history.** Postgres stays the record, under row-level access. A fresh agent session
+gets history replayed by Moss, the way a stateless model call does today. The agent's own session
+is a cache; `session/load` (v1) or `session/resume` (v1 stabilized, v2) is used only when the
+provider advertises it and the process is still alive.
 
-## 5. Sessions and lifecycle
+## 5. Who decides which model does what
 
-- One agent process per (user, surface, conversation). Chat processes are reaped after the same
-  idle timeout chat already uses for its sessions (the plan reads the existing value rather than
-  inventing one). The Workshop keeps its process for the life of the project tab, and a browser
-  reload is not closing the tab: reconnect to the live process if it is still up (`session/load`
-  where supported), otherwise replay from Postgres.
-- `session/cancel` is wired to the chat drawer's stop button and the Workshop's cancel.
-- Stop reasons and errors surface to the UI as typed events, never as parsed text.
-- Session ids are the agent's; conversation ids are Moss's. They are stored in separate columns
-  and never substituted for one another (the 1888 lesson).
+Moss already has the mechanism: **service bindings** (`ai.service_bindings`, resolved in
+`packages/ai/src/repository.ts`). A caller names a service key; the router answers with a model
+on a connected provider. The order today, kept unchanged:
 
-## 6. Permissions and the approval card
+1. an admin's per-user pin (`/api/admin/users/:userId/ai-pin`),
+2. a module-specific binding (`module.<id>`),
+3. the binding for the service key (`{kind: "model", modelId}` or `{kind: "mode", tier}`),
+4. the **instance default provider**, picked by tier.
+
+The user's own chat model override stays as today, gated by the admin's
+`ai.chat_model_override.enabled` and each model's `allowUserOverride`.
+
+This spec adds **service keys, not a new picker**:
+
+| service key                             | who calls it                                       | default when unbound      |
+| --------------------------------------- | -------------------------------------------------- | ------------------------- |
+| `chat`                                  | the chat drawer (exists today)                     | instance default provider |
+| `workshop`                              | every Workshop conversation and every module build | instance default provider |
+| `tool-use`, `json`, `summarization`, .. | unattended callers, by capability (exist today)    | instance default provider |
+| `module.<id>`                           | a module's own AI requests (exists today)          | the capability's binding  |
+
+The **Workshop model setting Ben asked for** ("which model does the building, chosen only from
+providers he has already connected") is the `workshop` row in the existing bindings screen. The
+list it offers is the connected providers' models and nothing else. There is no second settings
+system, and no code path may name a provider.
+
+**How the chosen model reaches the agent.** The resolved model's provider selects the adapter row
+(section 9). The model id is passed to the agent through the protocol's own selector where the
+adapter exposes one: the `configOptions` entry with `category: "model"` returned by `session/new`,
+set with `session/set_config_option`. Where the adapter has no such option, the row names its own
+mechanism (Codex: the `CODEX_CONFIG` launch setting). Where the adapter offers neither, the only
+choice for that provider is the login's own default model, and the bindings screen says so beside
+that provider instead of offering models it cannot honour. The sentinel `default` keeps its meaning:
+the provider account's own model.
+
+**A model change mid-conversation** starts a new agent session on the new provider with history
+replayed from Postgres. Switching models inside one session is allowed only when the new model is on
+the same provider and the adapter exposes the model option.
+
+## 6. Sessions and lifecycle
+
+- One agent process per (user, consumer, conversation). Chat processes are reaped after the idle
+  timeout chat already uses (the plan reads the existing value). The Workshop keeps its process for
+  the life of the project tab; a browser reload reconnects to the live process if it is still up
+  (`session/load` or `session/resume` where advertised), otherwise replays from Postgres. Unattended
+  sessions close as soon as the prompt returns.
+- `session/cancel` is wired to the chat drawer's stop button, the Workshop's cancel and the job
+  runner's timeout. On cancel, every pending permission request is answered `cancelled`, as the
+  protocol requires.
+- Stop reasons (`end_turn`, `max_tokens`, `max_turn_requests`, `refusal`, `cancelled`) and errors
+  surface as typed events, never as parsed text. A `refusal` is shown to the person as a refusal; an
+  unattended caller treats it as a failed call, not an empty answer.
+- Session ids are the agent's; conversation ids are Moss's. Separate columns, never substituted (the
+  1888 lesson).
+- One prompt at a time per session, as the protocol requires. A second send while a turn is running
+  is queued by Moss, not sent.
+
+## 7. Permissions and the approval card
 
 **The defect.** Creating a calendar event is `risk: "write"` in the calendar manifest, so the
 gateway (`packages/ai/src/gateway/gateway.ts`, `confirmAndRun`) raises an approval request and
-waits up to 150 s (`packages/chat/src/live/claude-permission-hook.ts`). The MCP client library
-gives up after 60 s of silence (`DEFAULT_REQUEST_TIMEOUT_MSEC`). In an unattended run the agent
-saw a timeout, retried once, and reported failure at 130–205 s. With an approver present the same
-request finished in 16 s with exactly one event written. Not a broken tool; mismatched clocks.
+waits up to 150 s. The MCP client library gives up after 60 s of silence. In an unattended run the
+agent saw a timeout, retried once, and reported failure at 130 to 205 s. With an approver present
+the same request finished in 16 s with exactly one event written. Not a broken tool; mismatched
+clocks.
 
 **Design.**
 
-1. While a call is held for approval, the tool server sends MCP progress notifications every
-   20 s so the client's clock resets. The hold can then run the full 150 s.
+1. While a call is held for approval, the tool server sends MCP progress notifications every 20 s
+   so the client's clock resets. The hold can then run the full 150 s.
 2. If the hold expires or is denied, the tool reply says so in words the agent will not retry on:
-   "This action was not approved. Do not retry; tell the user." The spike showed the agent
-   retries a bare timeout exactly once, so the wording matters.
+   "This action was not approved. Do not retry; tell the user."
 3. The gateway's approval request is also surfaced through ACP's `session/request_permission`
-   handler, so the person sees one card in the UI whichever path raised it. The gateway remains
-   the enforcement point; the protocol message is a second way to display the same card, never a
-   second policy.
-4. Ben's posture holds: installing a module grants normal use, only write/destructive tools ask
-   at use time. The agent's own permission prompts (for its built-ins) are auto-answered from the
-   same policy; anything the policy does not cover is denied.
+   handler, so the person sees one card whichever path raised it. The gateway remains the
+   enforcement point; the protocol message is a second way to show the same card, never a second
+   policy.
+4. Ben's posture holds: installing a module grants normal use; only write and destructive tools ask
+   at use time. The agent's own permission prompts (for its built-ins) are answered by Moss from one
+   policy keyed on the tool's real name, taken from the agent's own tool-call announcement and
+   matched by tool call id, never from the display title, which the model writes. The rule, by
+   family from the table in section 3:
+   - No name, or a name outside the table: refused, no card.
+   - Reads fall into three zones. Inside the session folder: allowed silently, except secret-shaped
+     names (`.env`, keys, certificates, `.npmrc`, `.netrc`), which ask with the path on the card. A
+     fixed forbidden zone, the agent's home (token store, the CLI's own config, other providers'
+     logins) plus `/proc`, `/sys`, `/dev`, `/run`, is refused with no card. Anywhere else asks once.
+   - Web fetch is silent except toward loopback, private ranges, link-local and bare hostnames,
+     which ask with the address on the card. Web search is silent.
+   - Writes inside the folder are ordinary use; the forbidden zone refuses; elsewhere asks. Shell
+     always asks, marked destructive.
+   - Moss's own tools are waved through at the agent-side prompt: the tool server's gateway already
+     decides the real call with its own card, allowlist and audit.
+   - Mode changes and tools never offered (subagents, skills, slash commands) refuse; a refusal
+     makes a wrong launch list visible.
+     The record: the pending row and every audit line carry the agent session id, tool call id, real
+     tool name, session folder, the paths named (capped) and the decision word; never a command or
+     contents. Every ask outcome and every refusal writes an audit line; silent allows write nothing.
+     The card reads "The agent wants to use <real name>" followed by the paths, address or command.
+5. **Unattended sessions never raise a card.** A permission request in an unattended session is
+   answered from the same policy; anything the policy would have asked a person about is refused
+   with the "not approved" wording, and the refusal is in the job's audit line. No job waits on a
+   human.
 
-## 7. Agent capability list
+## 8. Non-interactive calls
 
-An agent may be offered on a surface only if it meets that surface's row. Checked at adapter
-start, not assumed.
+Anything that runs a model with nobody watching. Inventory so far (Scout, 2026-09-07; grep of the
+one-shot callers in the tree):
 
-| requirement                                                                     | chat | Workshop | Claude Code (via ACP adapter)             | Gemini CLI                                    |
-| ------------------------------------------------------------------------------- | ---- | -------- | ----------------------------------------- | --------------------------------------------- |
-| ACP v1 `initialize`, `session/new`, `session/prompt`, streaming updates, cancel | yes  | yes      | yes                                       | yes                                           |
-| accepts `mcpServers` over HTTP with headers at session start                    | yes  | yes      | yes                                       | yes                                           |
-| built-in shell and file-write tools can be switched off by the client           | yes  | no       | yes (base tool list, confirmed in source) | no (ignores the setting)                      |
-| runs headless with a stored login                                               | yes  | yes      | yes                                       | blocked on this box (needs interactive login) |
+| caller                                                                                                    | needs tools                     | needs JSON answer | today                                                                            |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------- | -------------------------------------------------------------------------------- |
+| module build job (`packages/ai/src/module-build/`)                                                        | yes, shell + writes in a folder | no                | launches the full CLI, polls a marker for up to 30 min                           |
+| connector monitoring, sync, mail sync, dependency extraction, source context (`packages/connectors/src/`) | no                              | yes               | one-shot `claude -p` / `gemini -p` / `codex exec` through `CliStructuredAdapter` |
+| module plan writing (`packages/ai/src/module-build/write-plan.ts`)                                        | no                              | yes               | same one-shot path                                                               |
+| installed modules asking for AI (`external-module-ai-bridge.ts` in api and worker)                        | no                              | yes               | same one-shot path                                                               |
+| briefings                                                                                                 | pending Scout                   | pending Scout     | pending Scout                                                                    |
 
-Result today: Claude Code on both surfaces; Gemini CLI Workshop-only, and only once it has a
-login. Codex and others are added by filling in a row, not by editing code paths.
+Scout's inventory is still landing; rows are added to this table as they are confirmed, and the
+plan is not written until the table is complete.
 
-## 8. Settings, app map, and the Workshop hook (pending PR 2365)
+**Decision, recommended and pending the full inventory: every unattended call is a short ACP
+session.** `session/new` with the `unattended` profile, one `session/prompt`, read the stop reason,
+`session/close`. The one-shot CLI flags are not kept.
 
-- **Settings → AI providers** gains an "agent" choice per surface (chat, Workshop) listing only
-  agents that pass section 7 for that surface, with the shared-login sentence shown beside CLI
-  providers. The admin sets the household default per surface and users override where they can
-  override the provider today. That is the existing choose-a-provider behaviour carried over; only
-  the way the chosen agent is launched and spoken to changes (Ben, 2026-09-06). Model choice stays with the router's picker; the sentinel `default` continues to mean
-  "the agent's own account model".
-- App-map entries for the new setting, the two surfaces' new behaviour, and the "not approved,
-  ask the user" error are updated in the build PR (core screens in
-  `packages/shared/src/app-map-core.ts`; module surfaces in the owning manifests).
-- **Workshop hook:** PR 2365 makes Moss answer each saved message in a project. The ACP adapter
+- **JSON answers** are asked for in the prompt and parsed from the final agent message, with the
+  fence-tolerant parser the bridge already learned to need. The provider's own structured-output
+  flag is not used, because ACP has no such field and each CLI spells it differently.
+- **Tools:** the tool server is handed in only when the caller's profile asks for it. Pure JSON
+  callers get no tool server, so the model cannot wander.
+- **Module build** is a Workshop-shaped unattended session: project folder, shell and writes on,
+  Moss's tools in, no card (section 7 point 5), the job waits for the prompt's stop reason instead
+  of polling a marker file. Its model comes from the `workshop` service key.
+- **Timeouts** stay per caller as today (the build's 30 min, the connectors' existing budgets) and
+  end with `session/cancel` then `session/close`.
+- **Why not keep the one-shot flags:** they are the bridge. Keeping them keeps three parsers, three
+  login paths and the fenced-JSON class of bug alive, and the bridge deletion (section 13) could not
+  be complete. A short ACP session costs one process launch per call, which is what the one-shot
+  flags cost today.
+
+The alternative, keeping `claude -p` and friends for JSON callers, is recorded so it is not
+re-argued: it is taken only if slice 3's live proof shows a short session is materially slower or
+less reliable than the one-shot flag for a JSON caller, measured on dev, and then only for that
+class of caller, with the number in the plan.
+
+## 9. Providers and their adapters
+
+ACP is the one interface, but **each provider ships its own agent with its own behaviour**. Moss
+pins one registry entry per provider kind and records, per row, how login, model choice and
+built-in tool control work. The public registry
+(`https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json`, version 1.0.0, curated to
+agents that support authentication) is the source of the launch commands; Moss pins versions and
+bumps them on purpose, never at run time.
+
+| requirement                                                           | chat | Workshop | Claude (`claude-acp`, `@agentclientprotocol/claude-agent-acp@0.75.1`) | Codex (`codex-acp`, `@agentclientprotocol/codex-acp@1.10.0`)                    | Gemini (`gemini`, `@google/gemini-cli@0.58.0 --acp`)                                   |
+| --------------------------------------------------------------------- | ---- | -------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| ACP v1 `initialize`, `session/new`, `session/prompt`, updates, cancel | yes  | yes      | yes                                                                   | yes                                                                             | yes                                                                                    |
+| accepts `mcpServers` over HTTP with headers at session start          | yes  | yes      | yes (spike)                                                           | yes (`mcpCapabilities.http`)                                                    | to verify on the box                                                                   |
+| built-in shell and file-write switchable off by the client            | yes  | no       | yes (`_meta` disallowed-tools list, confirmed in source)              | yes (`INITIAL_AGENT_MODE=read-only`)                                            | no known switch; Workshop-only until one is found                                      |
+| model selectable by the client                                        | no   | no       | not exposed today; login default model only                           | yes (`CODEX_CONFIG` JSON at launch; `configOptions` model where advertised)     | to verify (`configOptions` model)                                                      |
+| login reuse: runs headless with the CLI's stored login                | yes  | yes      | yes (runner token store, `CLAUDE_CODE_OAUTH_TOKEN` in env)            | yes (reuses the Codex CLI's own on-disk login automatically; Scout, 2026-09-07) | **no**: demands its own Google sign-in with an authorization code; no login on the box |
+
+Result today: **Claude and Codex on both consumers; Gemini on neither** until its login row goes
+green. A new provider is added by filling in a row, checked live on dev, not by editing code paths.
+
+**Login, per provider.** Adding a provider and logging its CLI in stays exactly today's flow in
+Settings, Assistant & AI. What changes is what happens after: ACP takes over, and the adapter
+checks login at `initialize` rather than assuming it.
+
+- The v1 protocol has no stable "am I logged in" query (`auth/status` is an accepted draft only).
+  So the adapter treats an `auth_required` error on `session/new` as "not logged in" and shows the
+  provider's status in the bindings screen as "Not logged in", the wording the screen already uses.
+- A provider whose agent advertises an `agent`-type auth method is logged in by Moss calling
+  `authenticate`. One that advertises only a `terminal`-type method (the CLI's own interactive
+  sign-in) is logged in by the runner running that command for the admin, interactively, through the
+  existing sign-in helper; this is the `auth.terminal` client capability in section 4, offered to
+  attended sessions only. Gemini needs this path; it is built in slice 3 and Gemini is offered only
+  after it passes on dev.
+- `logout` is called where advertised when the admin removes a provider; otherwise the runner
+  removes the per-user home's credential files as it does today.
+
+**Model listing.** The "Refresh models" button on a provider card keeps today's per-CLI list
+adapter. ACP's `configOptions` is an additional source where the agent advertises a model option,
+and the two are reconciled in the plan, not here.
+
+## 10. Settings and app map
+
+- **Settings, Assistant & AI.** No new screen and no agent picker. The provider cards stay as they
+  are. The bindings list gains the `workshop` row (section 5), each provider card shows the
+  shared-login sentence, and a provider whose adapter cannot honour a model choice says so beside
+  its model list. The "Not logged in" state is driven by the adapter's `initialize` check.
+- **App map.** The `aiproviders` entry in `packages/shared/src/app-map-core.ts` is updated in the
+  build PR for the `workshop` binding, the login-check wording and the "not approved, ask the user"
+  error; Workshop and chat behaviour changes go in their owning manifests' `features`.
+- **Workshop hook.** The Workshop already answers each saved message in a project. The ACP adapter
   replaces the answering engine behind that path; the message model, project folder and artifact
-  panel stay as 2365 lands them. This section is completed after 2365 merges.
+  panel stay as they are.
 - No new required environment variable. Everything is set in the app.
 
-## 9. Protocol version strategy
+## 11. Protocol version strategy
 
-Pin v1. Negotiate at `initialize`. Known v2 changes (draft, breaking): prompt lifecycle becomes
-accept-then-state-updates, client file and terminal access removed in favour of MCP tool servers,
-modes folded into config options, `session/load` merged into `session/resume`, updates become
-id-keyed upserts. Because this design already serves files and commands as Moss tools and keeps
-Postgres as the record, the v2 migration is confined to the adapter's event handling. Tracked as
-a known chore, not a surprise.
+Pin v1. Negotiate at `initialize` (the client sends the newest it supports; the agent answers with
+the same or its own latest). Known v2 changes, all draft and breaking: prompt returns immediately
+and the stop reason arrives on a state update; `tool_call` becomes an id-keyed upsert; client file
+and terminal access removed in favour of MCP servers; `session/load` folded into `session/resume`;
+modes folded into config options; `auth/login` and `auth/logout`. Because this design already serves
+files and commands as Moss tools, passes the model through config options, and keeps Postgres as
+the record, the v2 migration is confined to the adapter's event handling and auth calls. The
+adapter keeps two thin protocol surfaces behind one shared core, chosen per connection, so a
+provider that moves to v2 first does not force the others.
 
-## 10. Later: several agents in one conversation
+## 12. Later: several sessions in one conversation
 
-Out of scope for this build, recorded so the design does not close the door. Each extra agent is
-another session with its own token; the token can carry a narrower tool list, so a "finance seat"
-sees finance tools only, using the gateway's existing allowlist. Moss is the hub deciding which
-seats to wake; the protocol has no agent-to-agent message. Cost scales per seat, so waking seats
-selectively is the difference between a feature and a bill.
+Out of scope for this build, recorded so the design does not close the door. Each extra session is
+another token; the token can carry a narrower tool list, so a "finance seat" sees finance tools
+only, using the gateway's existing allowlist. Moss is the hub deciding which seats to wake; the
+protocol has no agent-to-agent message. Cost scales per seat.
 
-## 11. Slices and gates
+## 13. Slices and gates
 
-1. **Adapter + Workshop.** Adapter package, launch through the runner, tool server handed in,
-   Fork A resolved, approval wiring (section 6), settings + app map. Live-path proof: a real
-   project, a real build command, a real approval card answered by a person on dev.
-2. **Chat.** Same adapter, chat launch profile (scratch folder, writes and shell off). The old
-   CLI bridge (`packages/chat/src/live/`) is deleted in this slice, no fallback setting (Ben,
-   2026-09-06, overriding the reviewers' keep-one-release vote). Live-path proof: "add
-   lunch with Sam" approved in the drawer and one event in the calendar.
-3. **Gemini and others.** Only when a row in section 7 turns green on this box.
+1. **Adapter + Workshop.** `packages/acp` returns, launch through the runner, tool server handed
+   in, Fork A as decided, approval wiring (section 7), the `workshop` service key and its bindings
+   row, app map. Claude and Codex rows verified live. Live-path proof: a real project, a real build
+   command, a real approval card answered by a person on dev, once on each of the two providers.
+2. **Chat.** Same adapter, `chat` profile (scratch folder, writes and shell off). **The CLI bridge
+   (`packages/chat/src/live/`, its engine selection and the four engines) is deleted in this
+   slice. No fallback setting** (Ben, 2026-09-06, reaffirmed 2026-09-07). Live-path proof: "add
+   lunch with Sam" approved in the drawer and one event in the calendar, on the instance default
+   provider and on a second bound provider.
+3. **Unattended callers and the remaining login path.** Every row of the section 8 table moves to
+   a short ACP session and the one-shot engines and `CliStructuredAdapter` are deleted. The
+   terminal-type login path lands; Gemini is offered only once its row passes on dev. Live-path
+   proof: one connector monitoring run and one module build finishing unattended with the audit
+   lines in section 7 point 5, plus a Gemini session on dev if the login passes.
 
-Kill gate after slice 1: if the approval wiring cannot make an attended write finish in under 30 s
-end to end on dev, stop and reassess before touching chat.
+**Kill gate after slice 1:** if the approval wiring cannot make an attended write finish in under
+30 s end to end on dev, on the instance default provider, stop and reassess before touching chat.
 
-## 12. Non-goals
+**Kill gate after slice 2:** if a chat turn through ACP is not within the bridge's wall-clock on
+the same prompt set as the spike, measured on dev, stop before moving the unattended callers.
+
+## 14. Non-goals
 
 Moss as an ACP agent; agent-to-agent messaging inside the protocol; building on v2 now; a new
-credential model; per-user vendor subscriptions; a module marketplace; real OAuth callbacks.
+credential model or provider system; per-user vendor subscriptions; the draft custom-endpoint RFD
+(`providers/*`); a module marketplace; real OAuth callbacks.
 
-## 13. Review record
+## 15. Open questions for Ben, each with a recommendation
 
-Reviewed by Fitz and Muse on 2026-09-06, approved. The three open questions were resolved as
-recorded in sections 4 (Fork A: Moss tool), 5 (reaping and reload) and 11 (bridge). Ben ruled
-on 2026-09-06: delete the bridge in slice 2, and the agent choice follows today's provider
-choice (admin default per surface, user override where it exists). No open questions remain.
+1. **Gemini.** Its agent will not run on a stored login and the box has none. Recommendation: keep
+   Gemini off the offered list until slice 3 builds the interactive login path through the runner
+   and it passes on dev; do not block slices 1 and 2 on it.
+2. **Claude's model choice.** The Claude adapter exposes no model selector today, so a `workshop`
+   binding to a specific Claude model cannot be honoured; only "the login's default model" can.
+   Recommendation: the bindings screen says so beside Claude and offers only `default` for it until
+   the adapter exposes the option; no Moss-side workaround.
+3. **Unattended calls.** Recommendation: short ACP sessions for every caller and delete the
+   one-shot flags (section 8), decided finally when Scout's inventory is complete.
+
+## 16. Review record
+
+2026-09-06: reviewed by Fitz and Muse, approved with Ben's rulings (Fork A, reaping and reload,
+delete the bridge). 2026-09-07: Ben ruled the outside-agent shape out (PR 2420 reverted it) and
+ruled ACP the single interface with admin-chosen models per service; this revision folds those
+rulings in and awaits his approval.
