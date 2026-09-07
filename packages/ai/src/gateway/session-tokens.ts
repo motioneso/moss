@@ -130,7 +130,9 @@ export class SessionTokenRegistry {
   touchBySessionId(chatSessionId: string): void {
     const expiresAt = this.clock.now() + this.ttlMs;
     for (const entry of this.tokens.values()) {
-      if (entry.identity.chatSessionId === chatSessionId) {
+      // Fixed-expiry tokens keep their end time: session activity must not
+      // keep an outside token alive, or it never goes stale on its own.
+      if (entry.identity.chatSessionId === chatSessionId && !entry.fixedExpiry) {
         entry.expiresAt = expiresAt;
       }
     }

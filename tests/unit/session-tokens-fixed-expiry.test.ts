@@ -56,4 +56,27 @@ describe("SessionTokenRegistry fixed expiry", () => {
     registry.revoke(token);
     expect(() => registry.verify(token)).toThrow(InvalidSessionTokenError);
   });
+
+  it("still revokes a fixed token with the whole session", () => {
+    const { registry } = fixedRegistry(1_000);
+    const token = registry.mint(identity(), { fixedExpiry: true });
+    registry.revokeBySessionId("u1:workshop");
+    expect(() => registry.verify(token)).toThrow(InvalidSessionTokenError);
+  });
+
+  it("leaves a fixed end time alone on session activity", () => {
+    const { registry, advance } = fixedRegistry(60_000);
+    const fixed = registry.mint(identity(), { ttlMs: 1_000, fixedExpiry: true });
+    const sliding = registry.mint(identity());
+
+    // The owning chat session stays active right up to the fixed end time.
+    advance(900);
+    registry.touchBySessionId("u1:workshop");
+    advance(200);
+    registry.touchBySessionId("u1:workshop");
+
+    // Activity refreshed the normal token but must not have moved the fixed one.
+    expect(registry.verify(sliding).actorUserId).toBe("u1");
+    expect(() => registry.verify(fixed)).toThrow(InvalidSessionTokenError);
+  });
 });

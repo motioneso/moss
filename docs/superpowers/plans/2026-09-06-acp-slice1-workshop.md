@@ -42,7 +42,11 @@ project pages; this plan never touches them.
 - `acpSpawn` runs the adapter as the user's UID with scrubbed env, HOME set to the per-user
   home, cwd set to a runner-side `<home>/workshop/<projectId>/` directory created 0700 on
   spawn. The session Bearer travels only inside the `session/new` payload over the RPC
-  socket (same rule as `RpcLaunchParams.mcpToken`), never argv or env. `cli-runner`
+  socket, and from there the adapter passes it into the agent launch, so it
+  reaches the agent process command line readable by box logins — a known
+  exposure of the outside-agent design, not a socket-only secret (unlike
+  `RpcLaunchParams.mcpToken`). It stays cheap: per-session, fixed end time,
+  narrowed to Workshop tools, revoked on close. `cli-runner`
   gains an npm dependency on `@zed-industries/claude-code-acp 0.16.2`, spawned through
   `process.execPath`.
 - Client capabilities advertised: no `fs`, no `terminal` (files and commands are Moss tools,
