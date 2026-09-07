@@ -71,7 +71,10 @@ function TrailName() {
   return <output aria-label="Page trail">{trail?.name ?? ""}</output>;
 }
 // Stands in for the shell's real More menu: the page publishes actions and an onAction handler,
-// and this renders one button per action so a test can choose one the way a person would.
+// and this renders one button per action so a test can choose one the way a person would. The
+// shell itself prepends its own "Rename" item whenever onRename is set (not tested here, that
+// lives in the shell's app-shell test) and turns the title editable in place; this probe drives
+// that same onRename handler directly to check what the page does with a submitted name.
 function TrailActions() {
   const trail = usePageTrailValue();
   if (!trail) return null;
@@ -82,6 +85,16 @@ function TrailActions() {
           {action.label}
         </button>
       ))}
+      {trail.onRename ? (
+        <button
+          type="button"
+          onClick={() => {
+            void trail.onRename!("Reading list");
+          }}
+        >
+          Rename
+        </button>
+      ) : null}
     </>
   );
 }
@@ -349,24 +362,18 @@ describe("Workshop project browser interactions", () => {
     expect(field("project-message").value).toBe("");
   });
 
-  it("renames from the More menu with a dialog, not an editable title", async () => {
+  it("saves a rename through the trail's onRename and shows the new name", async () => {
     await render(`/workshop/${project.id}`);
     await eventually(() =>
       expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe(project.title)
     );
-    expect(container.querySelector('[title="Click to rename"]')).toBeNull();
     click("Rename");
-    type("project-rename", "Reading list");
-    click("Save");
     await eventually(() =>
       expect(
         writes.some(
           (write) => write.path === `${base}/${project.id}` && write.body.title === "Reading list"
         )
       ).toBe(true)
-    );
-    await eventually(() =>
-      expect(container.querySelector('[aria-label="Rename this project"]')).toBeNull()
     );
     expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe("Reading list");
   });

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { Ellipsis } from "lucide-react";
@@ -24,6 +24,12 @@ interface PageTrailActions {
 // retriggered the setter's effect off its own write, an infinite set-state loop.
 const PageTrailStateContext = createContext<PageTrail | null>(null);
 const PageTrailActionsContext = createContext<PageTrailActions | null>(null);
+// The More menu's "Rename" item and the top bar's editable title are separate components under
+// the shell, so choosing "Rename" reaches the title through this counter rather than props: each
+// bump means "start editing now", read by an effect rather than a plain render-time value so a
+// second click while already editing still refocuses the field.
+const PageTrailEditRequestContext = createContext<number>(0);
+const PageTrailRequestEditContext = createContext<() => void>(() => {});
 
 /** Latest trail name outside React, so page context can name the project Moss is looking at. */
 let currentTrailName: string | null = null;
@@ -34,6 +40,7 @@ export function getPageTrailName(): string | null {
 
 export function PageTrailProvider({ children }: { readonly children: ReactNode }) {
   const [trail, setTrailState] = useState<PageTrail | null>(null);
+  const [editRequest, setEditRequest] = useState(0);
   const actions = useMemo<PageTrailActions>(
     () => ({
       setTrail: (next: PageTrail) => setTrailState(next),
@@ -41,10 +48,15 @@ export function PageTrailProvider({ children }: { readonly children: ReactNode }
     }),
     []
   );
+  const requestEdit = useMemo(() => () => setEditRequest((token) => token + 1), []);
   return (
     <PageTrailStateContext.Provider value={trail}>
       <PageTrailActionsContext.Provider value={actions}>
-        {children}
+        <PageTrailEditRequestContext.Provider value={editRequest}>
+          <PageTrailRequestEditContext.Provider value={requestEdit}>
+            {children}
+          </PageTrailRequestEditContext.Provider>
+        </PageTrailEditRequestContext.Provider>
       </PageTrailActionsContext.Provider>
     </PageTrailStateContext.Provider>
   );
@@ -85,6 +97,17 @@ const EMPTY_TRAIL_ACTIONS: readonly PageTrailAction[] = [];
 
 export function usePageTrailValue(): PageTrail | null {
   return useContext(PageTrailStateContext);
+}
+
+/** Bumps every time the More menu's "Rename" item is chosen; the top bar title watches this to
+    start editing itself. */
+export function usePageTrailEditToken(): number {
+  return useContext(PageTrailEditRequestContext);
+}
+
+/** Called by the More menu's "Rename" item to put the top bar title into edit mode. */
+export function useRequestPageTrailEdit(): () => void {
+  return useContext(PageTrailRequestEditContext);
 }
 
 export interface PageTrailSection {
@@ -170,27 +193,29 @@ function EditableTrailName(props: {
     setFailed(false);
   }, [props.name]);
 
-  if (!props.onRename) {
-    return <span className="topbar-crumb__now">{props.name}</span>;
+  const editToken = usePageTrailEditToken();
+  // Skip the token's own mount value: only a later bump (the More menu's "Rename" chosen) should
+  // open the editor, never the initial render.
+  const seenEditToken = useRef(editToken);
+  useEffect(() => {
+    if (editToken === seenEditToken.current) return;
+    seenEditToken.current = editToken;
+    if (props.onRename) {
+      setDraft(props.name);
+      setFailed(false);
+    }
+  }, [editToken, props.name, props.onRename]);
+
+  if (!props.onRename || pendingName !== null) {
+    return <span className="topbar-crumb__now">{pendingName ?? props.name}</span>;
   }
   const onRename = props.onRename;
-  if (pendingName !== null) {
-    return <span className="topbar-crumb__now">{pendingName}</span>;
-  }
+  // At rest this reads as the plain title — no button, no hover state. Choosing "Rename" from
+  // the More menu is the only way in; that's when it turns into a field.
   if (draft === null) {
     return (
       <>
-        <button
-          type="button"
-          className="topbar-crumb__now topbar-crumb__now--editable"
-          title="Click to rename"
-          onClick={() => {
-            setDraft(props.name);
-            setFailed(false);
-          }}
-        >
-          {props.name}
-        </button>
+        <span className="topbar-crumb__now">{props.name}</span>
         {failed ? (
           <span className="topbar-crumb__error" role="alert">
             Could not rename. Try again.
@@ -221,9 +246,9 @@ function EditableTrailName(props: {
         event.preventDefault();
         submit();
       }}
-      onBlur={(event) => {
-        // Tabbing between the field and its own buttons is not leaving: the buttons act.
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+      onBlur={() => {
+        // Clicking anywhere else saves a real change; clicking away from an empty or
+        // unchanged field just closes the editor.
         if (trimmed && trimmed !== props.name) submit();
         else setDraft(null);
       }}
@@ -243,16 +268,6 @@ function EditableTrailName(props: {
           if (event.key === "Escape") setDraft(null);
         }}
       />
-      <button type="submit" className="jds-btn jds-btn--primary jds-btn--sm" disabled={!trimmed}>
-        Save
-      </button>
-      <button
-        type="button"
-        className="jds-btn jds-btn--quiet jds-btn--sm"
-        onClick={() => setDraft(null)}
-      >
-        Cancel
-      </button>
     </form>
   );
 }
