@@ -68,6 +68,39 @@ follow-up work.
 Pure refactors and internal implementation changes that do not alter what Moss can do or explain
 need no map change.
 
+## Claims About Security Properties Must Be Followed Through
+
+A sentence asserting that a secret is confined, scoped, expired, or revoked is a claim about the
+whole path that secret travels, not about the line of code in front of you. Do not write one —
+in a code comment, a plan, a spec, a PR description, or a status message — until you have followed
+the value to its last consumer yourself, including through third-party libraries, and seen where it
+actually ends up.
+
+Concretely, before writing that a credential "stays inside" anything, read the code that receives
+it: the adapter you hand it to, and the library that adapter hands it to. Vendor code counts. If
+following the path is impractical, say what you verified and what you did not — "not verified past
+the adapter" is an acceptable sentence; a confident claim you did not check is not.
+
+A test that asserts a security property must be observed **failing** with the protection removed,
+and that observation recorded in the PR. A test that passes either way proves nothing, and reads
+in review exactly like one that works.
+
+When a claim turns out to be wrong, correct **every copy of it**. The code comment is the least
+important one: plans and specs are what the next slice reads and builds on, so a false sentence
+left in a plan propagates into work that has not been written yet. Grep the phrase, don't fix the
+one you were shown.
+
+Where the safe version of a property is deferred to a later slice, the deferral is a tracked issue
+named as a hard merge blocker on that slice — never a hopeful comment, and never wording that
+implies the work is already done.
+
+This rule exists because it already happened, on the outside-agent work: a slice stated in both a
+code comment and its plan that a session token never leaves the runner socket. The code was fine;
+the sentence was false. The library being used puts the whole tool-server entry, authorization
+header included, on the command line of the process it starts, where any login on the box can read
+it. Review caught it, the code comment was corrected, and the identical sentence sat in the plan
+document for another round.
+
 ## Live-Path Gate (CI-green is not done)
 
 Do not request, capture, attach, or review screenshots for this gate. Use executable assertions and
