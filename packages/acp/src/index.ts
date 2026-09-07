@@ -5,11 +5,15 @@ export type {
   AcpPromptOptions,
   AcpPromptResult,
   AcpSessionHandle,
+  AcpSetModelResult,
   AcpToolAnnouncement,
   AcpToolServer
 } from "./client.js";
-export { AcpCapabilityError, checkAgentCapabilities } from "./capabilities.js";
-export type { AcpSurface } from "./capabilities.js";
+export { acceptedOptionValues, findModelOption } from "./client.js";
+export { AcpCapabilityError, checkAcpProfile, checkAgentCapabilities } from "./capabilities.js";
+export type { AcpProfile, AcpSurface } from "./capabilities.js";
+export { getAcpProviderRow, listAcpProviderRows } from "./providers.js";
+export type { AcpProviderKind, AcpProviderRow } from "./providers.js";
 export {
   acpRequestFamily,
   classifyAcpPermission,

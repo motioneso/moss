@@ -1,0 +1,93 @@
+/**
+ * One adapter row per provider kind (spec section 9, slice 1 task 2).
+ *
+ * Providers share the protocol but differ in login, model selection and which
+ * built-ins can be switched off. A provider is offered for a profile only when
+ * its row says so; "any provider works everywhere" is false. Launch commands
+ * come from the public registry; Moss pins versions and bumps them on purpose,
+ * never at run time. The launch text here is the record of what task 3
+ * resolves and spawns; nothing in this package launches anything yet.
+ */
+
+export type AcpProviderKind = "anthropic" | "openai" | "google" | "opencode";
+
+export interface AcpProviderRow {
+  readonly kind: AcpProviderKind;
+  /** Registry agent id, e.g. `claude-acp`. */
+  readonly agent: string;
+  /** Pinned registry entry the launch command uses. */
+  readonly registry: string;
+  /** How the agent is launched (registry entry, run without a shell). */
+  readonly launch: string;
+  /** How login works for this provider. */
+  readonly login: string;
+  /** How the model choice reaches the agent. */
+  readonly model: string;
+  /** How the agent's own shell and file writes are switched off. */
+  readonly offList: string;
+  /** Offered for the chat profile in slice 1. */
+  readonly chatReady: boolean;
+  /** Why not, when `chatReady` is false. */
+  readonly chatBlockReason?: string;
+}
+
+const ROWS: readonly AcpProviderRow[] = [
+  {
+    kind: "anthropic",
+    agent: "claude-acp",
+    registry: "@agentclientprotocol/claude-agent-acp@0.75.1",
+    launch: "npx @agentclientprotocol/claude-agent-acp@0.75.1",
+    login: "runner token store, CLAUDE_CODE_OAUTH_TOKEN in env",
+    model: "configOptions model, set with session/set_config_option",
+    offList: "_meta disallowed-tools list, confirmed in source",
+    chatReady: true
+  },
+  {
+    kind: "openai",
+    agent: "codex-acp",
+    registry: "@agentclientprotocol/codex-acp@1.10.0",
+    launch: "npx @agentclientprotocol/codex-acp@1.10.0",
+    login: "reuses the Codex CLI's own on-disk login automatically",
+    model: "CODEX_CONFIG JSON at launch; configOptions model where advertised",
+    offList: "INITIAL_AGENT_MODE=read-only",
+    chatReady: true
+  },
+  {
+    kind: "google",
+    agent: "antigravity-acp",
+    registry: "antigravity-acp (binary from the registry)",
+    launch: "antigravity-acp binary from the registry",
+    login:
+      "no: session/new answers Authentication required even with the Google CLI logged in; it wants its own login over the protocol",
+    model: "to verify (configOptions model)",
+    offList: "no known switch; Workshop-only until one is found",
+    chatReady: false,
+    chatBlockReason:
+      "the Google provider needs its own login over the protocol before it is offered anywhere (slice 2)"
+  },
+  {
+    kind: "opencode",
+    agent: "opencode",
+    registry: "opencode@1.18.29",
+    launch: "opencode acp (binary 1.18.29, the version Scout ran 2026-09-07)",
+    login:
+      "reads its own config file; account login reuse untested, no account logged in on the box",
+    model: "session/set_config_option (switched to Muse Spark 1.3 free live, 2026-09-07)",
+    offList: "to verify on dev in task 5; chat only once proven",
+    chatReady: false,
+    chatBlockReason:
+      "its shell-and-writes switch-off is unproven: Scout proved the model switch, a real turn and token counts, not the switch-off (verified on dev in task 5)"
+  }
+];
+
+/** Row lookup by provider kind; throws on an unknown kind. */
+export function getAcpProviderRow(kind: AcpProviderKind): AcpProviderRow {
+  const row = ROWS.find((candidate) => candidate.kind === kind);
+  if (!row) throw new Error(`Unknown ACP provider kind: ${kind}`);
+  return row;
+}
+
+/** All four rows, for the row-lookup test and future settings use. */
+export function listAcpProviderRows(): readonly AcpProviderRow[] {
+  return ROWS;
+}
