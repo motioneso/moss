@@ -1,17 +1,11 @@
 # Spec: ACP as the single model interface in Moss
 
-**Status:** Revised 2026-09-07 on Ben's rulings in the "ACP Work" room; awaiting Ben's approval.
-Supersedes the 2026-09-06 approval (Fitz, Muse review) and the "outside agent" shape that PR 2420
-removed. No plan and no code until this revision is approved.
+**Status:** Awaiting Ben's approval (2026-09-07, "ACP Work" room). No plan and no code until it is
+approved.
 
 **Evidence:** `spikes/acp-tool-call/RESULTS.md` (four runs on the dev instance, 2026-09-06); the
 Codex, Antigravity (agy) and Claude adapter checks Scout ran on the box on 2026-09-07 (section 9); the ACP
 documentation set (protocol v1 stable, v2 draft, registry, RFDs) read in full on 2026-09-07.
-
-**What comes back from the reverted work:** the protocol package `packages/acp` (client,
-capability check, permission classifier, tool table, stream, tunnel) was sound and returns in the
-first build PR. The parts that do not return are the separate "outside agent", the per-surface
-agent picker, and the agent catalogue in settings.
 
 ---
 
@@ -24,7 +18,7 @@ talks to it over JSON-RPC on stdio, and hands it Moss's own tool server at sessi
 owns the conversation, the permissions, the tool list and the audit trail. The agent owns the model
 loop.
 
-There is no "outside agent". A **provider** is what the admin adds today (Claude, Codex, Google's agy,
+A **provider** is what the admin adds today (Claude, Codex, Google's agy,
 ...); each provider ships its own ACP agent in the protocol's public registry, and that agent is
 what Moss launches. The user never chooses an agent, only a provider and (where the admin allows)
 a model.
@@ -126,7 +120,7 @@ the profile's working folder. The launch command comes from the registry entry f
 pinned by version in Moss (section 9), never resolved live at run time. The vendor login reaches
 the agent the way each provider's row says. Nothing secret ever goes on the command line.
 
-Known limits, stated rather than papered over (phase 4 review, 2026-09-07):
+Known limits, stated rather than papered over:
 
 - The login credential is inside the agent's own process, because the provider's CLI needs it to
   reach its vendor. The runner's read-deny rules, the per-user account and the forbidden zone in
@@ -397,7 +391,8 @@ protocol has no agent-to-agent message. Cost scales per seat.
 
 ## 13. Slices and gates
 
-1. **Adapter + Workshop.** `packages/acp` returns, launch through the runner, tool server handed
+1. **Adapter + Workshop.** The protocol package `packages/acp` (client, capability check,
+   permission classifier, tool table, stream, tunnel), launch through the runner, tool server handed
    in, Fork A as decided, approval wiring (section 7), the `workshop` service key and its bindings
    row, app map. Claude and Codex rows verified live. Live-path proof: a real project, a real build
    command, a real approval card answered by a person on dev, once on each of the two providers.
@@ -437,7 +432,7 @@ None open. Resolved on 2026-09-07:
 
 ## 16. Review record
 
-2026-09-06: reviewed by Fitz and Muse, approved with Ben's rulings (Fork A, reaping and reload,
-delete the bridge). 2026-09-07: Ben ruled the outside-agent shape out (PR 2420 reverted it) and
-ruled ACP the single interface with admin-chosen models per service; this revision folds those
-rulings in and awaits his approval.
+Rulings folded in: Fork A, reaping and reload, delete the bridge with no fallback (Ben,
+2026-09-06); ACP as the single interface, admin-chosen model per service defaulting to the instance
+default provider, unattended calls as short ACP sessions, agy off the list until its login path
+passes (Ben, 2026-09-07). Awaiting Ben's approval.
