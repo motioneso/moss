@@ -9,8 +9,7 @@ passes its live proof.
 Revision 2 (2026-09-07): chat replaces the Workshop as slice 1 (Ben); Reviewer's findings on
 revision 1 folded in (runner restored as it was, chat profile only, spec 7 point 3 deferred with a
 reason, model list reconciliation decided, reload and queueing named, evidence rules, two missed
-restores, release note); the behind-the-scenes task added (spec section 14); OpenCode as the second
-live-proof provider pending Scout.
+restores, release note); the behind-the-scenes task added (spec section 14); OpenCode as the second live-proof provider (Scout's check passed 2026-09-07).
 
 ## Premises verified on `main` at e32222640 (2026-09-07)
 
@@ -39,12 +38,11 @@ live-proof provider pending Scout.
   `apps/web/src/chat/message-row.tsx`. Chat's app-map surface is the `features` block of
   `packages/chat/src/manifest.ts`; core screens and errors are `packages/shared/src/app-map-core.ts`.
 - Registry pins (spec section 9): Claude `@agentclientprotocol/claude-agent-acp@0.75.1`, Codex
-  `@agentclientprotocol/codex-acp@1.10.0`, OpenCode registry entry `opencode` (pinned in task 2
-  once Scout's check passes), SDK `@agentclientprotocol/sdk` newest v1 line at build time.
+  `@agentclientprotocol/codex-acp@1.10.0`, OpenCode registry entry `opencode` (pinned in task 2 at the version Scout ran on 2026-09-07), SDK `@agentclientprotocol/sdk` newest v1 line at build time.
 - Token usage: each turn's reply carries a usage block (input, output, cached read, cached write,
   total) built by the Claude adapter from its own tally and shaped like the Codex adapter's
   (Scout read both, 2026-09-07). Codex's live numbers are unproven until its account usage returns
-  on 2026-09-11; OpenCode's are Scout's pending check. There is no turn-duration field.
+  on 2026-09-11. OpenCode's real turn (Scout, 2026-09-07) returned input, output and total plus a thought-token count, and no cache split. There is no turn-duration field. OpenCode takes 15 to 20 seconds to answer its first two calls; Claude and Codex answer at once.
 
 ## Decisions
 
@@ -55,9 +53,7 @@ live-proof provider pending Scout.
 - **Provider rows are code, versions are pinned.** `packages/acp/src/providers.ts` holds one row per
   provider kind (`anthropic`, `openai`, `google`, `opencode`): launch command, login mechanism,
   model mechanism, built-in off-list mechanism, capability requirements per profile. `google` is
-  present and marked unavailable with the reason (slice 2). `opencode` is present only if Scout's
-  check passes before task 2 starts; otherwise it is added in a later task of this slice with its
-  own dev check.
+  present and marked unavailable with the reason (slice 2). `opencode` is present: Scout's scratch check passed on 2026-09-07 (model switch, real turn, real usage numbers); its shell and file switch and its tool server handoff are checked on dev in tasks 2 and 5.
 - **Runner: add, don't rewrite.** The ACP host and its seven RPC cases come back from
   `bb59e0700` exactly as they were, beside the existing cases; no existing case is touched, no
   mode flag is introduced. Chat uses four of the seven (spawn, send, read, kill); the three exec
@@ -134,7 +130,7 @@ same commit range.
   closed in plain English on any other answer.
 - **Files:** `packages/acp/src/{providers,capabilities,client,index}.ts`, `packages/acp/package.json`,
   `pnpm-lock.yaml`.
-- **Tests:** row lookup by kind; profile gate passes Claude, Codex (and OpenCode if present) for
+- **Tests:** row lookup by kind; profile gate passes Claude, Codex and OpenCode for
   `chat`, rejects `google` with its reason and `workshop`/`unattended` with "not built yet";
   `setModel` sends the option when advertised, falls back per row, records a mismatch; version
   mismatch fails closed.
@@ -216,8 +212,7 @@ Starts only after Ben has seen the mockup (posted in the room 2026-09-07).
   (capped), approved / not approved / refused lines, written as the protocol updates arrive so the
   open fold is the live view; the reply record stores elapsed ms and the usage block; the stats
   strip (`chatd-stats`, one new primitive in `components-chat.css`) under the reply: elapsed, then
-  input, output, cached-read tokens with flat icons and word tooltips, each number shown only when
-  the agent sent it.
+  input, output, cached-read tokens with flat icons and word tooltips, each number shown only when the agent sent it (OpenCode sends no cache split, so it shows two); a thought-token count, when sent, is stored with the block and not shown.
 - **Files:** `packages/shared/src/chat-api.ts`, `packages/chat/src/live/acp-chat-engine.ts`,
   `packages/ui/src/chat-thread.tsx`, `packages/ui/src/styles/components-chat.css`,
   `apps/web/src/chat/message-row.tsx`, `packages/chat/src/manifest.ts`.
@@ -240,14 +235,13 @@ Starts only after Ben has seen the mockup (posted in the room 2026-09-07).
   and the engine choice in `engine-selection.ts`. `cli-structured-adapter.ts` stays until slice 2
   because the unattended callers still use it (named here so nobody deletes it early). No fallback
   setting. Settings: each provider card's "Not logged in" state driven by the adapter's initialize
-  check; a provider whose row cannot honour a model choice says so beside its list; OpenCode card if
-  its row landed.
+  check; a provider whose row cannot honour a model choice says so beside its list; OpenCode card.
 - **Files:** `packages/chat/src/live/**` (deletions), `packages/chat/src/routes.ts`,
   `apps/web/src/settings/settings-ai-admin-pane.tsx`, `packages/shared/src/app-map-core.ts`,
   the tests of the deleted engines.
 - **Tests:** deleted engines' tests removed; a test that engine selection has one path; settings
   web test for the login state and the model-choice note.
-- **App map:** `aiproviders` entry: login-check wording, model-choice note, OpenCode if present.
+- **App map:** `aiproviders` entry: login-check wording, model-choice note, OpenCode.
 - **Gate:** the four checks; `pnpm vitest run packages/chat apps/web`; full gate via `verify-gate`.
 
 ### Task 10. Live proof and slice exit (Prover, not Builder)
@@ -255,13 +249,11 @@ Starts only after Ben has seen the mockup (posted in the room 2026-09-07).
 - **Proof:** on dev, "add lunch with Sam on Thursday at noon" in the drawer, the approval card
   answered by a person, one event in the calendar, the fold open showing the tool call and the
   approval, the stats strip present; once on the instance default provider (Claude) and once on
-  the second bound provider (OpenCode if its row passed, else Codex after 2026-09-11, recorded as
-  pending on the PR until then). The first real turn on each provider records its usage block on
-  the PR (real numbers or zeros).
+  OpenCode on Muse Spark 1.3 free. Codex's turn is recorded on the PR as pending until its usage returns on 2026-09-11, then run and recorded. The first real turn on each provider records its usage block on the PR (real numbers or zeros). OpenCode's first two calls take 15 to 20 seconds; that is expected, not a hang.
 - **Evidence:** `tests/uat/specs/2424-acp-chat-lunch.uat.spec.ts` (added by Builder in task 7,
   run by Prover) exit code and assertions, the audit lines, the bounded engine log. No screenshots.
 - **Kill gate (slice exit):** the attended write finishes in under 30 s end to end on dev on the
-  instance default provider. If it does not, the slice stops here and PM reassesses before slice 2.
+  instance default provider (Claude). OpenCode's time is recorded beside it and is not held to the 30 s bar in this slice. If Claude does not make it, the slice stops here and PM reassesses before slice 2.
 
 ## Order and hand-offs
 
