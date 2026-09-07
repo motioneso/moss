@@ -6,20 +6,13 @@
  * the cli-runner host; this client owns the protocol over the line tunnel.
  *
  * Slice 1 advertises no file or terminal capabilities (files and commands are
- * Moss tools, so a later protocol version never touches file handling). The
- * caller hands over Moss's own tool server at session open: its address plus a
- * per-session bearer, carried inside the session request over the runner socket.
- * From there the adapter passes the entry, bearer and all, into the agent
- * launch, so the bearer reaches the agent process command line, where any box
- * login can read it. That exposure is inherent to the outside-agent design. It
- * stays cheap because the token is per-session, narrowed to Workshop tools,
- * given a fixed end time, and revoked when the session closes.
+ * Moss tools, so a later protocol version never touches file handling) and hands
+ * over no tool server yet — that arrives in the next phase.
  */
 
 import {
   ClientSideConnection,
   type Client,
-  type McpServer,
   type RequestPermissionResponse,
   type SessionNotification,
   type StopReason
@@ -32,22 +25,6 @@ import type { AcpTunnel } from "./tunnel.js";
 export interface AcpSessionHandle {
   readonly sessionId: string;
   readonly cwd: string;
-}
-
-/**
- * Moss's own tool server, handed to the agent when a session opens. The URL is
- * the address the agent reaches the tool server at, and the Bearer is the
- * per-session token minted for that session. Both travel inside the
- * `session/new` payload over the runner socket, and from there into the agent
- * process command line. Plan for the Bearer [REDACTED] exposed to box logins, never
- * for it staying inside the socket: mint it per session with a fixed end time,
- * narrowed to Workshop tools, and revoke it on close.
- */
-export interface AcpToolServer {
-  readonly url: string;
-  readonly bearer: string;
-  /** Runs on the phase-one session end path, so the caller can revoke the Bearer. */
-  readonly onClose?: () => void;
 }
 
 export interface AcpPromptResult {
@@ -80,25 +57,10 @@ function denyPermission(): RequestPermissionResponse {
   return { outcome: { outcome: "cancelled" } };
 }
 
-/**
- * The session opening carries one tool server entry: Moss's own, over HTTP,
- * with the session Bearer as an Authorization header. The capability gate
- * already proved the agent takes HTTP tool servers before we get here.
- */
-function toMcpServerEntry(toolServer: AcpToolServer): McpServer {
-  return {
-    type: "http",
-    name: "moss",
-    url: toolServer.url,
-    headers: [{ name: "Authorization", value: `Bearer ${toolServer.bearer}` }]
-  };
-}
-
 export class MossAcpClient {
   private readonly connections = new Map<string, ClientSideConnection>();
   private readonly texts = new Map<string, string[]>();
   private readonly toolCalls = new Map<string, number>();
-  private readonly closers = new Map<string, () => void>();
 
   constructor(
     private readonly tunnel: AcpTunnel,
@@ -108,8 +70,7 @@ export class MossAcpClient {
   async openSession(
     sessionKey: string,
     projectId: string,
-    surface: AcpSurface = "workshop",
-    toolServer?: AcpToolServer
+    surface: AcpSurface = "workshop"
   ): Promise<AcpSessionHandle> {
     const { cwd } = await this.tunnel.spawn(sessionKey, projectId);
     const stream = createTunnelStream(this.tunnel, sessionKey);
@@ -122,7 +83,7 @@ export class MossAcpClient {
     checkAgentCapabilities(surface, init);
     const session = await connection.newSession({
       cwd,
-      mcpServers: toolServer ? [toMcpServerEntry(toolServer)] : [],
+      mcpServers: [],
       // The agent's own file and shell tools stay off on purpose: files and
       // commands are Moss tools, and the vendor default prompt is not a policy
       // we accept. The runner-side settings file denies them a second time.
@@ -131,7 +92,6 @@ export class MossAcpClient {
     this.connections.set(session.sessionId, connection);
     this.texts.set(session.sessionId, []);
     this.toolCalls.set(session.sessionId, 0);
-    if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
     return { sessionId: session.sessionId, cwd };
   }
 
@@ -176,11 +136,6 @@ export class MossAcpClient {
     this.connections.delete(handle.sessionId);
     this.texts.delete(handle.sessionId);
     this.toolCalls.delete(handle.sessionId);
-    // The phase-one end path: the tool server Bearer [REDACTED] working the moment the
-    // outside session closes, so run the caller's revoke hook here.
-    const onClose = this.closers.get(handle.sessionId);
-    this.closers.delete(handle.sessionId);
-    onClose?.();
   }
 
   private requireConnection(sessionId: string): ClientSideConnection {

@@ -208,20 +208,18 @@ describe("ChatGatewayNotifier", () => {
     const manager = makeManager();
     const notifier = new ChatGatewayNotifier(manager);
 
-    // A neutral sentence: this test covers the rendering, not the gateway's
-    // wording, so the emitted record must not speak for the gateway.
     notifier.emit("u1", {
       kind: "action_result",
       actionRequestId: "ar_1",
       toolName: "example.write",
       outcome: "denied",
-      reason: "Example refused."
+      reason: "Denied by user."
     });
 
     const [, record] = (manager.injectRecord as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
       TranscriptRecord
     ];
-    expect(record.text).toBe("Not changed — Example refused.");
+    expect(record.text).toBe("Not changed — Denied by user.");
   });
 });

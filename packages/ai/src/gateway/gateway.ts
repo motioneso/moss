@@ -52,16 +52,6 @@ const defaultGatewayLogger: GatewayLogger = {
 };
 
 /**
- * Refusal wording for a held approval that expires or is denied (spec 6.2).
- * The agent retries a bare timeout exactly once, so both outcomes return the
- * same sentence: nothing was done, do not try again, report back. It reads in
- * chat after "Not changed — ", so it speaks to the person first and the agent
- * second.
- */
-export const APPROVAL_REFUSED_REASON =
-  "This action was not approved, so it was not done. Do not try it again; let the user know.";
-
-/**
  * Private runHandler return shape: the public envelope plus the audit-log fields, computed once
  * so every call site records them identically. `audit.errorClass` is `null` only for a genuine
  * success (a module self-reporting failure inside an `ok:true` result is not one); the live-stream
@@ -428,11 +418,11 @@ export class AssistantToolGateway {
           actionRequestId: action.id,
           toolName,
           outcome: "denied",
-          reason: APPROVAL_REFUSED_REASON
+          reason: outcome === "timeout" ? "Timed out awaiting confirmation." : "Denied by user."
         });
         return {
           decision: "deny",
-          reason: APPROVAL_REFUSED_REASON
+          reason: outcome === "timeout" ? "Timed out awaiting confirmation." : "Denied by user."
         };
       }
 
@@ -789,7 +779,12 @@ export class AssistantToolGateway {
           actionRequestId: action.id,
           toolName: found.dto.name,
           outcome: "denied",
-          reason: outcome === "cancelled" ? "Action cancelled." : APPROVAL_REFUSED_REASON
+          reason:
+            outcome === "timeout"
+              ? "Timed out awaiting confirmation."
+              : outcome === "cancelled"
+                ? "Action cancelled."
+                : "Denied by user."
         });
         const approvalMode =
           outcome === "timeout" ? "timeout" : outcome === "rejected" ? "rejected" : "cancelled";
@@ -799,7 +794,10 @@ export class AssistantToolGateway {
           durationMs: null,
           chatSessionId: ctx.chatSessionId
         });
-        const reason = APPROVAL_REFUSED_REASON;
+        const reason =
+          outcome === "timeout"
+            ? "Timed out awaiting confirmation — still pending in your drawer."
+            : "Denied by user.";
         return { ok: false, denied: true, reason };
       }
 
