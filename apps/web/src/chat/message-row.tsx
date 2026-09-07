@@ -1,12 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  BookmarkPlus,
-  MoreHorizontal,
-  Paperclip,
-  ThumbsDown,
-  ThumbsUp,
-  Undo2
-} from "lucide-react";
+import { BookmarkPlus, MoreHorizontal, Paperclip, ThumbsDown, ThumbsUp, Undo2 } from "lucide-react";
 import { useState } from "react";
 
 import type {

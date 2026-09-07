@@ -1,15 +1,7 @@
 import { useCallback, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
-import {
-  Button,
-  ButtonLink,
-  Card,
-  EmptyState,
-  Masthead,
-  RowIndex,
-  RowIndexItem
-} from "@moss/ui";
+import { Button, ButtonLink, Card, EmptyState, Masthead, RowIndex, RowIndexItem } from "@moss/ui";
 import {
   ActivityPeek,
   ApiError,
@@ -184,11 +176,7 @@ export function WorkshopComposer(props: {
           disabled={props.sending}
           onChange={(event) => props.onTextChange(event.target.value)}
         />
-        <button
-          type="submit"
-          className="chatd-send"
-          disabled={props.sendDisabled}
-        >
+        <button type="submit" className="chatd-send" disabled={props.sendDisabled}>
           {props.sending ? "Sending…" : "Send"}
         </button>
       </div>

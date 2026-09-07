@@ -24,10 +24,7 @@ function mount() {
   act(() => {
     root?.render(
       <QueryClientProvider client={new QueryClient()}>
-        <Thread
-          records={[REPLY_RECORD]}
-          renderRecord={(record) => <RecordRow record={record} />}
-        />
+        <Thread records={[REPLY_RECORD]} renderRecord={(record) => <RecordRow record={record} />} />
       </QueryClientProvider>
     );
   });

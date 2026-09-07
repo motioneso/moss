@@ -20,9 +20,7 @@ function Probe() {
   return createElement(
     "div",
     null,
-    trail
-      ? `${trail.sectionLabel}|${trail.sectionPath}|${trail.name}|${trail.meta ?? ""}`
-      : "none"
+    trail ? `${trail.sectionLabel}|${trail.sectionPath}|${trail.name}|${trail.meta ?? ""}` : "none"
   );
 }
 

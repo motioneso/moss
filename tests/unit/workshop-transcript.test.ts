@@ -5,7 +5,9 @@ import { workshopTranscript } from "../../packages/workshop/src/web/project-page
 
 const opening = "Save the ideas I want to revisit";
 
-function entry(overrides: Partial<WorkshopFeedEntry> & { readonly messageId: string }): WorkshopFeedEntry {
+function entry(
+  overrides: Partial<WorkshopFeedEntry> & { readonly messageId: string }
+): WorkshopFeedEntry {
   return {
     projectId: "a0000000-0000-4000-8000-000000000001",
     sequence: "1",

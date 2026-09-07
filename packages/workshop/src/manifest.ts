@@ -122,7 +122,8 @@ export const workshopModuleManifest = {
         {
           code: "workshop.projects.rename_failed",
           class: "transient",
-          description: "The new name could not be saved. The old name is back. Try entering it again."
+          description:
+            "The new name could not be saved. The old name is back. Try entering it again."
         },
         {
           code: "workshop.projects.delete_failed",

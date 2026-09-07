@@ -99,8 +99,6 @@ test("Workshop creates a private project, retries saved requests and retains mes
   expect(projects.status()).toBe(200);
   expect((await projects.json()).projects).toHaveLength(1);
   await page.getByRole("link", { name: "The Workshop", exact: true }).click();
-  await page
-    .getByRole("link", { name: "Keep a private list of book ideas.", exact: true })
-    .click();
+  await page.getByRole("link", { name: "Keep a private list of book ideas.", exact: true }).click();
   await expect(page).toHaveURL(projectURL);
 });

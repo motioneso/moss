@@ -8,11 +8,7 @@ import { Thread } from "@moss/ui";
 import type { TranscriptRecord } from "@moss/shared";
 import { RecordRow } from "../../apps/web/src/chat/message-row.js";
 
-function render(
-  records: readonly TranscriptRecord[],
-  working?: boolean,
-  fullRow = false
-): string {
+function render(records: readonly TranscriptRecord[], working?: boolean, fullRow = false): string {
   return renderToString(
     createElement(
       QueryClientProvider,

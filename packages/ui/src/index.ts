@@ -15,7 +15,13 @@ export { Card } from "./card.js";
 export type { CardPadding, CardProps } from "./card.js";
 export { CategoryDot } from "./category-dot.js";
 export type { CategoryDotProps } from "./category-dot.js";
-export { ActivityPeek, ChatFreshnessFooter, Thread, activityVerb, groupRecords } from "./chat-thread.js";
+export {
+  ActivityPeek,
+  ChatFreshnessFooter,
+  Thread,
+  activityVerb,
+  groupRecords
+} from "./chat-thread.js";
 export type { ThreadRenderRecord } from "./chat-thread.js";
 export { Chip } from "./chip.js";
 export { Combobox } from "./combobox.js";

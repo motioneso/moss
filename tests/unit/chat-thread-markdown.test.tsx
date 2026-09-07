@@ -32,7 +32,10 @@ describe("shared thread Moss replies (issue 2375)", () => {
     const html = renderToString(
       createElement(Thread, {
         records: [
-          { kind: "reply", text: "See [this](javascript:alert(1)) and [that](https://example.com)." }
+          {
+            kind: "reply",
+            text: "See [this](javascript:alert(1)) and [that](https://example.com)."
+          }
         ]
       })
     );

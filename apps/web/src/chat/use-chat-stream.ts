@@ -1,13 +1,14 @@
-import type { ChatMessageDto, ChatSurface, SourceFreshnessV1, WorkflowApprovalDto } from "@moss/shared";
+import type {
+  ChatMessageDto,
+  ChatSurface,
+  SourceFreshnessV1,
+  WorkflowApprovalDto
+} from "@moss/shared";
 import { useCallback, useEffect, useState } from "react";
 
 // The transcript shape lives in `@moss/shared` now (defined once for the shell and every module
 // thread); re-exported here so existing importers keep working while they migrate over.
-import type {
-  ActionRequestPreview,
-  ChatRecordKind,
-  TranscriptRecord
-} from "@moss/shared";
+import type { ActionRequestPreview, ChatRecordKind, TranscriptRecord } from "@moss/shared";
 
 export type { ActionRequestPreview, ChatRecordKind, TranscriptRecord };
 

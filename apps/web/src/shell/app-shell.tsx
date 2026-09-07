@@ -34,7 +34,12 @@ import { HeaderWeather } from "../today/header-weather";
 import { applyThemeTokens } from "../theme/theme-runtime";
 import { CommandPalette } from "./command-palette";
 import { NAV_ICON_MAP } from "./nav-icons";
-import { PageTrailProvider, TopbarMoreActions, TopbarTrail, usePageTrailDisplay } from "./page-trail";
+import {
+  PageTrailProvider,
+  TopbarMoreActions,
+  TopbarTrail,
+  usePageTrailDisplay
+} from "./page-trail";
 import { WORKSHOP_MODULE_ID } from "@moss/shared";
 import {
   loadShellColorMode,
@@ -348,132 +353,132 @@ export function AppShell(props: AppShellProps) {
   return (
     <div className="app-frame">
       <PageTrailProvider>
-      <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
-        <div className="brand-lockup">
-          <span className="brand-mark">
-            <BrandMark />
-          </span>
-          <span className="brand-wordmark">Moss</span>
-        </div>
+        <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
+          <div className="brand-lockup">
+            <span className="brand-mark">
+              <BrandMark />
+            </span>
+            <span className="brand-wordmark">Moss</span>
+          </div>
 
-        {/* #1734: the accessible name is what a screen reader announces on entering this
+          {/* #1734: the accessible name is what a screen reader announces on entering this
             landmark, so "Modules" leaked our packaging word to exactly the users least able to
             ignore it. "Main" names what the list is for. */}
-        <nav className="module-nav" aria-label="Main">
-          {navSections.map((section) => (
-            <div className="nav-group" key={section.key}>
-              {section.label ? <p className="nav-group__label">{section.label}</p> : null}
-              {section.items.map((entry) => (
-                <NavItem
-                  key={entry.id}
-                  entry={entry}
-                  unreadByModule={unreadByModule}
-                  onClick={closeMobileNav}
-                />
-              ))}
-            </div>
-          ))}
-          {/* #1734: "Loading modules" named our packaging; the user is just waiting for the list. */}
-          {props.modulesLoading ? <span className="nav-loading">Loading</span> : null}
-        </nav>
+          <nav className="module-nav" aria-label="Main">
+            {navSections.map((section) => (
+              <div className="nav-group" key={section.key}>
+                {section.label ? <p className="nav-group__label">{section.label}</p> : null}
+                {section.items.map((entry) => (
+                  <NavItem
+                    key={entry.id}
+                    entry={entry}
+                    unreadByModule={unreadByModule}
+                    onClick={closeMobileNav}
+                  />
+                ))}
+              </div>
+            ))}
+            {/* #1734: "Loading modules" named our packaging; the user is just waiting for the list. */}
+            {props.modulesLoading ? <span className="nav-loading">Loading</span> : null}
+          </nav>
 
-        <div className="rail-foot">
-          <RailUserMenu
-            me={props.me}
-            unreadCount={unreadCount}
-            signOutPending={signOutMutation.isPending}
-            onSignOut={() => signOutMutation.mutate()}
-            onNavigate={(to) => {
-              closeMobileNav();
-              navigate(to);
-            }}
-          />
-        </div>
-      </aside>
-
-      {mobileNavOpen ? (
-        <button
-          aria-label="Close navigation"
-          className="sidebar-scrim"
-          type="button"
-          onClick={closeMobileNav}
-        />
-      ) : null}
-
-      <div className="workspace-area">
-        <header className="topbar">
-          <button
-            aria-label="Open navigation"
-            className="icon-button mobile-only"
-            title="Open navigation"
-            type="button"
-            onClick={() => setMobileNavOpen(true)}
-          >
-            <Menu size={20} aria-hidden="true" />
-          </button>
-
-          <TopbarTitles
-            title={title}
-            subtitle={subtitle}
-            showSettingsButton={showSettingsButton}
-            moduleId={activeModuleId}
-          />
-
-          {onTodayPage ? (
-            <div className="topbar-context">
-              <HeaderWeather weather={weatherQuery.data?.data ?? null} />
-            </div>
-          ) : null}
-
-          <div className="topbar-actions">
-            <TrailMoreButton />
-            <button
-              aria-label={assistantName ? `Chat with ${assistantName}` : "Open chat"}
-              aria-pressed={chatOpen}
-              className={`icon-button ${chatOpen ? "active" : ""}`}
-              title={assistantName ? `Ask ${assistantName}` : "Open chat"}
-              type="button"
-              onClick={() => setChatOpen((open) => !open)}
-            >
-              <MessageSquare size={19} aria-hidden="true" />
-            </button>
+          <div className="rail-foot">
+            <RailUserMenu
+              me={props.me}
+              unreadCount={unreadCount}
+              signOutPending={signOutMutation.isPending}
+              onSignOut={() => signOutMutation.mutate()}
+              onNavigate={(to) => {
+                closeMobileNav();
+                navigate(to);
+              }}
+            />
           </div>
-        </header>
+        </aside>
 
-        <div className={`workspace-body ${dockChat && chatOpen ? "workspace-body--docked" : ""}`}>
-          <main className="content-surface">
-            <AssistantSurfaceHostProvider value={assistantSurfaceHost}>
-              <ChatControlsProvider
-                value={{
-                  openChat,
-                  openChatWith,
-                  openAssistantWithDraft,
-                  pendingNotesDelete: pendingNotesDelete
-                    ? {
-                        actionRequestId: pendingNotesDelete.actionRequestId!,
-                        summary: pendingNotesDelete.summary ?? pendingNotesDelete.text
-                      }
-                    : null,
-                  openActionRequest
-                }}
+        {mobileNavOpen ? (
+          <button
+            aria-label="Close navigation"
+            className="sidebar-scrim"
+            type="button"
+            onClick={closeMobileNav}
+          />
+        ) : null}
+
+        <div className="workspace-area">
+          <header className="topbar">
+            <button
+              aria-label="Open navigation"
+              className="icon-button mobile-only"
+              title="Open navigation"
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+            >
+              <Menu size={20} aria-hidden="true" />
+            </button>
+
+            <TopbarTitles
+              title={title}
+              subtitle={subtitle}
+              showSettingsButton={showSettingsButton}
+              moduleId={activeModuleId}
+            />
+
+            {onTodayPage ? (
+              <div className="topbar-context">
+                <HeaderWeather weather={weatherQuery.data?.data ?? null} />
+              </div>
+            ) : null}
+
+            <div className="topbar-actions">
+              <TrailMoreButton />
+              <button
+                aria-label={assistantName ? `Chat with ${assistantName}` : "Open chat"}
+                aria-pressed={chatOpen}
+                className={`icon-button ${chatOpen ? "active" : ""}`}
+                title={assistantName ? `Ask ${assistantName}` : "Open chat"}
+                type="button"
+                onClick={() => setChatOpen((open) => !open)}
               >
-                {props.children}
-              </ChatControlsProvider>
-            </AssistantSurfaceHostProvider>
-          </main>
+                <MessageSquare size={19} aria-hidden="true" />
+              </button>
+            </div>
+          </header>
 
-          {dockChat ? chatDrawer : null}
+          <div className={`workspace-body ${dockChat && chatOpen ? "workspace-body--docked" : ""}`}>
+            <main className="content-surface">
+              <AssistantSurfaceHostProvider value={assistantSurfaceHost}>
+                <ChatControlsProvider
+                  value={{
+                    openChat,
+                    openChatWith,
+                    openAssistantWithDraft,
+                    pendingNotesDelete: pendingNotesDelete
+                      ? {
+                          actionRequestId: pendingNotesDelete.actionRequestId!,
+                          summary: pendingNotesDelete.summary ?? pendingNotesDelete.text
+                        }
+                      : null,
+                    openActionRequest
+                  }}
+                >
+                  {props.children}
+                </ChatControlsProvider>
+              </AssistantSurfaceHostProvider>
+            </main>
+
+            {dockChat ? chatDrawer : null}
+          </div>
         </div>
-      </div>
 
-      <CommandPalette
-        modules={props.modules}
-        disabledModuleIds={props.disabledModuleIds ?? []}
-        themes={themesQuery.data}
-        navigate={navigate}
-      />
+        <CommandPalette
+          modules={props.modules}
+          disabledModuleIds={props.disabledModuleIds ?? []}
+          themes={themesQuery.data}
+          navigate={navigate}
+        />
 
-      {dockChat ? null : chatDrawer}
+        {dockChat ? null : chatDrawer}
       </PageTrailProvider>
     </div>
   );

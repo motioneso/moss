@@ -34,8 +34,7 @@ export async function createWorkshopProject(
   // The new-project window names nothing up front: the name is the request's own first line,
   // derived the same way the chat handoff names it. A present title (the handoff tool) wins and
   // still validates as before — only an absent one derives, so a blank title stays a 400.
-  const title =
-    input.title === undefined ? deriveProjectTitle(input.initialRequest) : input.title;
+  const title = input.title === undefined ? deriveProjectTitle(input.initialRequest) : input.title;
   const result = await new WorkshopProjectsRepository().create(scopedDb, { ...input, title });
   return { ...result, destination: `/workshop/${result.project.id}` };
 }
@@ -56,10 +55,7 @@ export async function renameWorkshopProject(
  * to clean up — when the build link lands, its removal work extends this path with the
  * "Stop the build first" refusal instead of orphaning it.
  */
-export async function deleteWorkshopProject(
-  scopedDb: DataContextDb,
-  id: string
-): Promise<boolean> {
+export async function deleteWorkshopProject(scopedDb: DataContextDb, id: string): Promise<boolean> {
   await requireWorkshopAdmin(scopedDb);
   return new WorkshopProjectsRepository().remove(scopedDb, id);
 }

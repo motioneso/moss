@@ -7,10 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MeResponse, WorkshopFeedEntry, WorkshopProject } from "@moss/shared";
 import { deriveProjectTitle } from "@moss/shared";
 import { WorkshopProjectRoutes } from "../../packages/workshop/src/web/project-routes.js";
-import {
-  PageTrailProvider,
-  usePageTrailValue
-} from "../../apps/web/src/shell/page-trail.js";
+import { PageTrailProvider, usePageTrailValue } from "../../apps/web/src/shell/page-trail.js";
 
 const project: WorkshopProject = {
   id: "a0000000-0000-4000-8000-000000000001",
@@ -227,9 +224,7 @@ afterEach(async () => {
 describe("Workshop project browser interactions", () => {
   it("shows the invitation with examples that fill the box without sending", async () => {
     await render("/workshop/new");
-    await eventually(() =>
-      expect(container.textContent).toContain("What would you like to make?")
-    );
+    await eventually(() => expect(container.textContent).toContain("What would you like to make?"));
     expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe("New project");
     click("Track the books I read");
     expect(field("project-message").value).toBe("Track the books I read");
