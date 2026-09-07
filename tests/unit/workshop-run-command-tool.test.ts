@@ -113,7 +113,7 @@ describe("workshop.runCommand execute", () => {
       { command: "pnpm build" },
       {
         ...ctx,
-        reportProgress: (update) => messages.push(update.message)
+        reportProgress: (message) => messages.push(message)
       },
       { workshopRunCommand: service }
     );

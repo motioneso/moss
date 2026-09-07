@@ -77,15 +77,6 @@ interface RunHandlerOutcome {
 }
 
 /**
- * Per-call options for {@link AssistantToolGateway.callTool}. `onProgress`
- * backs `ToolContext.reportProgress` for this call only; when absent the
- * context carries no reporter and the tool's `?.` send is a no-op.
- */
-export interface GatewayCallToolOptions {
-  readonly onProgress?: (message: string) => void;
-}
-
-/**
  * Closed set of conventional error shapes a module handler may return inside an `ok:true`
  * ToolResult. Checked on the raw pre-sanitize payload (#1252) — top-level only, no recursion.
  */
@@ -209,21 +200,17 @@ export class AssistantToolGateway {
     token: string,
     toolName: string,
     rawInput: unknown,
-    options: GatewayCallToolOptions = {}
+    options: { onProgress?: (message: string) => void } = {}
   ): Promise<GatewayToolResponse> {
     const { actorUserId, chatSessionId, allowedToolNames } = this.deps.tokens.verify(token);
     const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
-    const onProgress = options.onProgress;
     const ctx: ToolContext = {
       actorUserId,
       requestId: `mcp_${randomUUID()}`,
       chatSessionId,
       localTimezone,
-      // The only context that carries a reporter: the MCP transport passes its
-      // SSE sink here. Every other caller omits it, so their tools send nowhere.
-      ...(onProgress
-        ? { reportProgress: (update: { message: string }) => onProgress(update.message) }
-        : {})
+      // Only the MCP transport passes a sink; every other caller sends nowhere.
+      ...(options.onProgress ? { reportProgress: options.onProgress } : {})
     };
 
     const found = (await this.executableTools(actorUserId)).find(

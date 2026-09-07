@@ -142,7 +142,7 @@ export const workshopRunCommandExecute: ToolExecute = async (
   for (;;) {
     const fresh = await service.poll({ sessionKey, execId });
     if (fresh.output.length > state.output.length) {
-      ctx.reportProgress?.({ message: fresh.output.slice(state.output.length) });
+      ctx.reportProgress?.(fresh.output.slice(state.output.length));
     }
     state = fresh;
     if (state.done) break;

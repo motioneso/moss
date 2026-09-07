@@ -46,8 +46,8 @@ function progressTool(seen: ToolContext[]) {
         inputSchema: { type: "object", properties: {} },
         execute: async (_scopedDb: unknown, _input: unknown, ctx: ToolContext) => {
           seen.push(ctx);
-          ctx.reportProgress?.({ message: "first chunk" });
-          ctx.reportProgress?.({ message: "second chunk" });
+          ctx.reportProgress?.("first chunk");
+          ctx.reportProgress?.("second chunk");
           return { data: { done: true } };
         }
       } as ModuleAssistantToolManifest

@@ -157,11 +157,7 @@ export class CliChatEngineHost {
     this.acp.kill(sessionKey, opts.generation);
   }
 
-  /**
-   * #2369 slice 1 phase 3 — runner-side builds. Thin delegates like the tunnel
-   * verbs above; the tool contract (cap, deadline, project-folder lock) lives
-   * in AcpHost, and policy plus progress live API-side in the workshop tool.
-   */
+  /** #2369 phase 3 — runner-side builds; contract lives in AcpHost. */
   async acpExecStart(
     sessionKey: string,
     projectId: string,
