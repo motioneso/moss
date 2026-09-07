@@ -46,7 +46,8 @@ project pages; this plan never touches them.
   reaches the agent process command line readable by box logins — a known
   exposure of the outside-agent design, not a socket-only secret (unlike
   `RpcLaunchParams.mcpToken`). It stays cheap: per-session, fixed end time,
-  narrowed to Workshop tools, revoked on close. `cli-runner`
+  revoked on close, and narrowed to Workshop tools once issue 2383 lands.
+  `cli-runner`
   gains an npm dependency on `@zed-industries/claude-code-acp 0.16.2`, spawned through
   `process.execPath`.
 - Client capabilities advertised: no `fs`, no `terminal` (files and commands are Moss tools,
