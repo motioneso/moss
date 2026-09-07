@@ -420,14 +420,12 @@ way in.
 1. **Adapter + chat.** The protocol package `packages/acp` (client, capability check, permission
    classifier, tool table, stream, tunnel), launch through the runner, tool server handed in,
    approval wiring (section 7), the `chat` profile (scratch folder, writes and shell off), the
-   behind-the-scenes view (section 14), app map. Claude, Codex and OpenCode rows verified live. **The CLI
-   bridge (`packages/chat/src/live/`, its engine selection and the four engines) is deleted in
-   this slice. No fallback setting** (Ben, 2026-09-06, reaffirmed 2026-09-07). Live-path proof:
+   behind-the-scenes view (section 14), app map. Claude, Codex and OpenCode rows verified live. **Chat's half of the CLI bridge is deleted in this slice: the engine selection and the engines only chat used. No fallback setting** (Ben, 2026-09-06, reaffirmed 2026-09-07). The shared runtime pieces that module chat and module builds still stand on (the persistent runtime, the engine type, the launch config) stay until slice 2 moves those callers and deletes the rest; the bridge is gone by the end of slice 2 (PM, 2026-09-07, on Reviewer's finding). Chat's model in this slice is what today's chat route resolves: the admin's chat binding, or the person's own override where the admin allows it; the resolved model's provider kind picks the row, and no code path names a provider. Live-path proof:
    "add lunch with Sam" approved in the drawer and one event in the calendar, on the instance
    default provider (Claude) and on OpenCode, with the fold and the stats strip on the reply.
    Codex's live turn is recorded on the PR once its usage returns.
 2. **Unattended callers and the remaining login path.** Every row of the section 8 table moves to
-   a short ACP session and the one-shot engines and `CliStructuredAdapter` are deleted. The
+   a short ACP session and the one-shot engines, the persistent runtime, the engine type and `CliStructuredAdapter` are deleted; module chat and module builds move onto the adapter first. The
    terminal-type login path lands; agy is offered only once its row passes on dev. Live-path
    proof: one connector monitoring run and one module build finishing unattended with the audit
    lines in section 7 point 5, plus an agy session on dev if the login passes.
@@ -437,9 +435,7 @@ way in.
    state, each with a mockup Ben sees first. Live-path proof: a real project, a real build
    command, a real approval card answered by a person on dev, once on each of the two providers.
 
-**Kill gate after slice 1:** if the approval wiring cannot make an attended write finish in under
-30 s end to end on dev, on the instance default provider, stop and reassess before touching the
-unattended callers. A second gate in the same slice: a chat turn through ACP must be within the
+**Kill gate after slice 1:** if the approval wiring cannot make an attended write finish in under 30 s on dev, on the instance default provider, stop and reassess before touching the unattended callers. The clock runs from the person's approval click to the event in the calendar and the reply in the drawer (PM, 2026-09-07); the time from send to the approval card is recorded beside it. Session start is not on that clock, and it is not paid on the first prompt either: the session is warmed when the conversation is opened in the drawer, so OpenCode's 15 to 20 second start happens before anyone types. A second gate in the same slice: a chat turn through ACP must be within the
 bridge's wall-clock on the same prompt set as the spike, measured on dev, before the bridge is
 deleted.
 
@@ -475,8 +471,7 @@ and a tooltip naming it in words.
 
 - Elapsed time is Moss's clock from the prompt being sent to the turn's stop reason. It is always
   present.
-- Token counts come from the usage block the agent returns with each turn's reply: input tokens,
-  output tokens, cached-read tokens, cached-write tokens and a total. Scout read the Claude
+- Token counts come from the usage block the agent returns with each turn's reply: input tokens, output tokens, cached-read tokens, cached-write tokens, thought tokens and a total, every field optional. Scout read the Claude
   adapter's source on 2026-09-07: it builds that block from its own running tally at the end of
   every turn, and a comment there says it is shaped the same as the Codex adapter's numbers so a
   caller reads one shape from either. The strip never shows a number the agent did not send: a
