@@ -232,6 +232,28 @@ describe("agent built-in permission through the shared approval card", () => {
     expect(store.emitted).toHaveLength(0);
   });
 
+  it("still allows when the person answers slowly, with no shorter clock firing", async () => {
+    const store = freshStore();
+    const { gateway, tokens } = buildGateway(store, 30_000);
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+
+    const pending = gateway.requestAcpBuiltInPermission(token, {
+      cwd: CWD,
+      sessionId: "agent-sess-1",
+      toolCallId: "call-6",
+      title: "`pnpm build`",
+      toolInput: { command: "pnpm build" }
+    });
+    await vi.waitFor(() => expect(store.emitted).toHaveLength(1));
+    // The person takes two seconds; nothing on our side or the agent's side
+    // cuts the wait short, so the late confirm still lands.
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await expect(gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")).resolves.toBe(
+      "resolved"
+    );
+    await expect(pending).resolves.toEqual({ decision: "allow", reason: "Approved by user." });
+  });
+
   it("rejects a token it never minted", async () => {
     const store = freshStore();
     const { gateway } = buildGateway(store);
