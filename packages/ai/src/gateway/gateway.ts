@@ -196,14 +196,21 @@ export class AssistantToolGateway {
     return (await this.executableTools(actorUserId)).map((entry) => entry.dto);
   }
 
-  async callTool(token: string, toolName: string, rawInput: unknown): Promise<GatewayToolResponse> {
+  async callTool(
+    token: string,
+    toolName: string,
+    rawInput: unknown,
+    options: { onProgress?: (message: string) => void } = {}
+  ): Promise<GatewayToolResponse> {
     const { actorUserId, chatSessionId, allowedToolNames } = this.deps.tokens.verify(token);
     const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
     const ctx: ToolContext = {
       actorUserId,
       requestId: `mcp_${randomUUID()}`,
       chatSessionId,
-      localTimezone
+      localTimezone,
+      // Only the MCP transport passes a sink; every other caller sends nowhere.
+      ...(options.onProgress ? { reportProgress: options.onProgress } : {})
     };
 
     const found = (await this.executableTools(actorUserId)).find(

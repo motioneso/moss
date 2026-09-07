@@ -2,6 +2,8 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   workshopBuildModuleInputSchema,
   workshopBuildModuleResultSchema,
+  workshopRunCommandInputSchema,
+  workshopRunCommandResultSchema,
   createWorkshopProjectInputSchema,
   createWorkshopProjectResponseSchema,
   deleteWorkshopProjectResponseSchema,
@@ -15,6 +17,7 @@ import {
 } from "@moss/shared";
 
 import { workshopBuildModuleExecute } from "./assistant-tools.js";
+import { WORKSHOP_RUN_COMMAND_SERVICE_KEY, workshopRunCommandExecute } from "./run-command.js";
 import { collectWorkshopProjectFeed } from "./project-feed.js";
 import { collectWorkshopProjects } from "./projects-repository.js";
 
@@ -161,6 +164,15 @@ export const workshopModuleManifest = {
       description: "Save a private Workshop project from a request you gave Moss.",
       defaultTier: "ask_each_time",
       allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
+    },
+    {
+      id: "workshop_builds",
+      label: "Running project build commands",
+      description:
+        "Run one shell command with the project folder as its working folder and report the " +
+        "output. The command itself is not restricted to that folder.",
+      defaultTier: "ask_each_time",
+      allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
     }
   ],
   assistantTools: [
@@ -183,6 +195,33 @@ export const workshopModuleManifest = {
       streamsStructuredResult: true,
       execute: workshopBuildModuleExecute,
       summarize: () => "Save a private Workshop project. Planning has not started."
+    },
+    {
+      name: "workshop.runCommand",
+      description:
+        "Run one shell command with the project folder as its working folder and return its " +
+        "output. The folder is fixed to this session's project; there is no path to choose. " +
+        "The command itself is not restricted to that folder. Use for build, test, and check " +
+        "commands. Output past 256 KiB is cut with a note, and past the deadline the command " +
+        "stops and whatever ran so far returns.",
+      permissionId: "workshop.view",
+      actionFamilyId: "workshop_builds",
+      risk: "write",
+      executionPolicy: "auto",
+      // user_promotable, never granted_at_install: this runs arbitrary shell, so
+      // installing the module must not silently grant unattended runs. The user
+      // promotes the family to trusted_auto for unattended builds.
+      selfOperationGrant: "user_promotable",
+      requiresServices: [WORKSHOP_RUN_COMMAND_SERVICE_KEY],
+      inputSchema: workshopRunCommandInputSchema,
+      outputSchema: workshopRunCommandResultSchema,
+      execute: workshopRunCommandExecute,
+      // The card is the only human control here, so it shows the whole command:
+      // over-long commands are refused up front, never silently cut.
+      summarize: (input) => {
+        const command = typeof input.command === "string" ? input.command : "";
+        return `Run this project command: ${command}`;
+      }
     }
   ],
   routes: [

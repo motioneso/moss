@@ -9,8 +9,9 @@
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { O_DIRECTORY, O_NOFOLLOW, O_RDONLY } from "node:constants";
 import { createRequire } from "node:module";
-import { chmod, chown, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, chown, lstat, mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
@@ -34,6 +35,18 @@ export interface AcpHostDeps {
    */
   readonly spawnChild?: (opts: {
     entry: string;
+    cwd: string;
+    env: NodeJS.ProcessEnv;
+    uid?: number;
+    gid?: number;
+  }) => ChildProcessWithoutNullStreams;
+  /**
+   * Spawns one build command; injected so tests never start a process. The
+   * production default runs `sh -c` in the session project folder under the
+   * session identity, with a scrubbed environment and no vendor login.
+   */
+  readonly spawnExec?: (opts: {
+    command: string;
     cwd: string;
     env: NodeJS.ProcessEnv;
     uid?: number;
@@ -69,6 +82,47 @@ const MAX_REPLY_BYTES = 1024 * 1024;
 const IDLE_REAP_MS = 30 * 60 * 1000;
 /** Single-line cap: a pathological stdout line must not blow the RPC frame cap. */
 const MAX_LINE_BYTES = 256 * 1024;
+/**
+ * Retained-output backstop for one build command: the head is kept, the tail
+ * is dropped, and the poll reply says it was cut. Matches the tool contract.
+ */
+export const ACP_EXEC_OUTPUT_CAP_BYTES = 256 * 1024;
+/** Default build deadline (5 min); the poller returns partial output past it. */
+export const ACP_EXEC_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+/** Upper bound for one build deadline (10 min); the runner never holds longer. */
+export const ACP_EXEC_MAX_TIMEOUT_MS = 10 * 60 * 1000;
+/** Finished build records are kept this long for a final poll, then swept. */
+const EXEC_RETAIN_MS = 10 * 60 * 1000;
+/** Backstop per session so one runaway agent cannot pile up build records. */
+const MAX_EXECS_PER_SESSION = 32;
+
+export interface AcpExecStartResult {
+  readonly execId: number;
+}
+
+export interface AcpExecPollResult {
+  /** Full output so far (stdout plus stderr, arrival order), capped at 256 KiB. */
+  readonly output: string;
+  readonly done: boolean;
+  readonly exitCode: number | null;
+  /** True once output past the cap was dropped; the head is what you get. */
+  readonly truncated: boolean;
+  /** True when the deadline killed the command; output is whatever ran so far. */
+  readonly timedOut: boolean;
+}
+
+interface AcpExec {
+  readonly id: number;
+  readonly child: ChildProcessWithoutNullStreams;
+  output: string;
+  outputBytes: number;
+  truncated: boolean;
+  timedOut: boolean;
+  done: boolean;
+  exitCode: number | null;
+  lastActivity: number;
+  deadline: ReturnType<typeof setTimeout> | null;
+}
 
 interface AcpSession {
   readonly child: ChildProcessWithoutNullStreams;
@@ -99,6 +153,8 @@ function defaultResolveAdapterEntry(): string {
 export class AcpHost {
   private readonly sessions = new Map<string, AcpSession>();
   private generationCounter = 0;
+  private readonly execs = new Map<string, Map<number, AcpExec>>();
+  private execCounter = 0;
 
   constructor(private readonly deps: AcpHostDeps) {}
 
@@ -272,6 +328,157 @@ export class AcpHost {
   }
 
   /**
+   * Run one build command starting in the session project folder and return
+   * its id. The caller names a project, never a folder: the working directory
+   * is always `<neutralBase>/<sessionKey>/acp/<projectId>/`, the same folder
+   * an adapter spawn for that session uses. The command itself is not
+   * restricted to that folder. Output past 256 KiB is dropped (the poll reply
+   * keeps the head and says it was cut); past the deadline the command is
+   * killed and the poll reply carries whatever ran so far.
+   */
+  async execStart(
+    sessionKey: string,
+    projectId: string,
+    command: string,
+    timeoutMs: number = ACP_EXEC_DEFAULT_TIMEOUT_MS
+  ): Promise<AcpExecStartResult> {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(projectId)) {
+      throw new Error("acpExecStart.projectId must match [A-Za-z0-9_-]{1,64}");
+    }
+    const key = sanitizeSessionKey(sessionKey);
+    if (typeof command !== "string" || command.length === 0 || command.includes("\0")) {
+      throw new Error("acpExecStart.command must be a non-empty string");
+    }
+    if (Buffer.byteLength(command, "utf8") > MAX_LINE_BYTES) {
+      throw new Error("acpExecStart.command must be within 256 KiB");
+    }
+    if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > ACP_EXEC_MAX_TIMEOUT_MS) {
+      throw new Error("acpExecStart.timeoutMs must be a positive integer within 10 minutes");
+    }
+
+    const sessionDir = join(this.deps.neutralBase, key, "acp", projectId);
+    // The build's own home, in its own scratch area rather than the shared
+    // home base, so the login token file is not under the build's home.
+    const homeDir = join(this.deps.neutralBase, key, "acp-home", projectId);
+
+    let uid: number | undefined;
+    let gid: number | undefined;
+    if (this.deps.perUserUid && this.deps.homeBase) {
+      const slot = allocateUidSlot(this.deps.homeBase, key);
+      uid = slot.uid;
+      gid = slot.gid;
+    }
+    await this.prepareOwnedDir(key, sessionDir, uid, gid);
+    await this.prepareOwnedDir(key, homeDir, uid, gid);
+
+    // Scrubbed environment with the build's own home. What is actually true:
+    // the build's home no longer points at the shared home, so the login
+    // token is not in the child's home and nothing hands it over — but the
+    // command is not confined, and one that goes looking under the shared
+    // account can still reach the shared home. The runner's folder-naming
+    // variables are dropped below so the environment does not point there
+    // either. What stays (PATH, HOME, TERM, locale basics) is what a build
+    // needs to run and carries no secret.
+    const env: NodeJS.ProcessEnv = {
+      ...buildSanitizedCliEnv(process.env),
+      HOME: homeDir
+    };
+    for (const key of [
+      "JARVIS_CLI_HOME",
+      "MOSS_CLI_HOME",
+      "JARVIS_CLI_HOME_BASE",
+      "MOSS_CLI_HOME_BASE",
+      "JARVIS_CLI_NEUTRAL_BASE",
+      "MOSS_CLI_NEUTRAL_BASE"
+    ]) {
+      delete env[key];
+    }
+    const spawnExec =
+      this.deps.spawnExec ??
+      ((opts) =>
+        spawn("sh", ["-c", opts.command], {
+          cwd: opts.cwd,
+          env: opts.env,
+          stdio: ["ignore", "pipe", "pipe"],
+          detached: true,
+          ...(opts.uid !== undefined ? { uid: opts.uid } : {}),
+          ...(opts.gid !== undefined ? { gid: opts.gid } : {})
+          // stdin is ignored (builds never read it), so the stdio shape needs
+          // the explicit step before it matches the session-child type.
+        }) as unknown as ChildProcessWithoutNullStreams);
+    const child = spawnExec({ command, cwd: sessionDir, env, uid, gid });
+
+    this.sweepExecs();
+    const bySession = this.execs.get(key) ?? new Map<number, AcpExec>();
+    if (bySession.size >= MAX_EXECS_PER_SESSION) {
+      const oldestDone = [...bySession.values()].find((record) => record.done);
+      if (!oldestDone) throw new Error("acpExecStart: too many running commands for this session");
+      this.dropExec(key, bySession, oldestDone.id);
+    }
+    const id = (this.execCounter += 1);
+    const record: AcpExec = {
+      id,
+      child,
+      output: "",
+      outputBytes: 0,
+      truncated: false,
+      timedOut: false,
+      done: false,
+      exitCode: null,
+      lastActivity: Date.now(),
+      deadline: null
+    };
+    const finish = (code: number | null): void => {
+      if (record.done) return;
+      record.done = true;
+      record.exitCode = code;
+      record.lastActivity = Date.now();
+      if (record.deadline) {
+        clearTimeout(record.deadline);
+        record.deadline = null;
+      }
+    };
+    child.stdout.on("data", (chunk: Buffer) => this.appendExecOutput(record, chunk));
+    child.stderr.on("data", (chunk: Buffer) => this.appendExecOutput(record, chunk));
+    child.on("exit", (code) => finish(code));
+    child.on("error", () => finish(null));
+    const timer = setTimeout(() => {
+      record.deadline = null;
+      record.timedOut = true;
+      record.lastActivity = Date.now();
+      this.killExecProcess(record);
+    }, timeoutMs);
+    // The deadline must never hold the runner process open on its own.
+    (timer as unknown as { unref?: () => void }).unref?.();
+    record.deadline = timer;
+    bySession.set(id, record);
+    this.execs.set(key, bySession);
+    return { execId: id };
+  }
+
+  execPoll(sessionKey: string, execId: number): AcpExecPollResult {
+    this.sweepExecs();
+    const record = this.requireExec(sessionKey, execId);
+    record.lastActivity = Date.now();
+    return {
+      output: record.output,
+      done: record.done,
+      exitCode: record.exitCode,
+      truncated: record.truncated,
+      timedOut: record.timedOut
+    };
+  }
+
+  execKill(sessionKey: string, execId: number): void {
+    this.sweepExecs();
+    const key = sanitizeSessionKey(sessionKey);
+    const record = this.execs.get(key)?.get(execId);
+    // Idempotent like the adapter kill: an absent or finished command is a no-op.
+    if (!record || record.done) return;
+    this.killExecProcess(record);
+  }
+
+  /**
    * Keep the retained buffer small. Lines the reader has already passed go
    * first; lines it is still owed are kept unless the buffer is far past its
    * backstop, and then the sticky flag records the loss.
@@ -285,6 +492,51 @@ export class AcpHost {
       if (oldestSeq > session.deliveredSeq) session.truncated = true;
       const dropped = session.buffered.shift() as string;
       session.bufferedBytes -= Buffer.byteLength(dropped, "utf8");
+    }
+  }
+
+  /**
+   * Make path a real folder owned by the session without ever following a
+   * link. A command that ran here earlier can swap the folder for a link to
+   * somewhere else; a plain make-folder plus lock-bits would then set owner
+   * only bits (and ownership) on the wrong place. So a planted link is
+   * removed, the real folder is created, it is verified to be a folder, and
+   * the bits are set through a handle opened with O_NOFOLLOW, which refuses
+   * to resolve to anything but this folder.
+   */
+  private async prepareOwnedDir(
+    key: string,
+    path: string,
+    uid: number | undefined,
+    gid: number | undefined
+  ): Promise<void> {
+    const first = await lstat(path).catch(() => null);
+    if (first && first.isSymbolicLink()) await unlink(path);
+    await mkdir(path, { recursive: true });
+    const verified = await lstat(path).catch(() => null);
+    if (!verified || !verified.isDirectory() || verified.isSymbolicLink()) {
+      throw new Error("acpExecStart: project folder is not a folder");
+    }
+    const handle = await open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    try {
+      try {
+        await handle.chmod(0o700);
+      } catch (error) {
+        console.warn(
+          `[acp-host] ${key} could not lock the project folder owner-only: ${(error as Error).message}`
+        );
+      }
+      if (uid !== undefined && gid !== undefined) {
+        try {
+          await handle.chown(uid, gid);
+        } catch (error) {
+          console.warn(
+            `[acp-host] ${key} could not hand the project folder to its owner: ${(error as Error).message}`
+          );
+        }
+      }
+    } finally {
+      await handle.close().catch(() => undefined);
     }
   }
 
@@ -329,6 +581,75 @@ export class AcpHost {
     if (!session) throw new Error("ACP session is not running");
     if (session.exited) throw new Error("ACP session has exited");
     return session;
+  }
+
+  /** Append build output up to the cap; past it the head is kept and the flag is set. */
+  private appendExecOutput(record: AcpExec, chunk: Buffer): void {
+    if (record.outputBytes >= ACP_EXEC_OUTPUT_CAP_BYTES) {
+      record.truncated = true;
+      return;
+    }
+    const text = chunk.toString("utf8");
+    const room = ACP_EXEC_OUTPUT_CAP_BYTES - record.outputBytes;
+    const size = Buffer.byteLength(text, "utf8");
+    if (size <= room) {
+      record.output += text;
+      record.outputBytes += size;
+    } else {
+      // Head only; a split multibyte tail decodes to U+FFFD, and the flag says so.
+      record.output += Buffer.from(text, "utf8").subarray(0, room).toString("utf8");
+      record.outputBytes = ACP_EXEC_OUTPUT_CAP_BYTES;
+      record.truncated = true;
+    }
+    record.lastActivity = Date.now();
+  }
+
+  private requireExec(sessionKey: string, execId: number): AcpExec {
+    if (!Number.isInteger(execId) || execId <= 0) {
+      throw new Error("acpExec.execId must be a positive integer");
+    }
+    const key = sanitizeSessionKey(sessionKey);
+    const record = this.execs.get(key)?.get(execId);
+    if (!record) throw new Error("Build command is not running");
+    return record;
+  }
+
+  private dropExec(key: string, bySession: Map<number, AcpExec>, execId: number): void {
+    const record = bySession.get(execId);
+    bySession.delete(execId);
+    if (record?.deadline) clearTimeout(record.deadline);
+    if (bySession.size === 0) this.execs.delete(key);
+  }
+
+  /** Best-effort process-group kill for one build; the exit handler settles the record. */
+  private killExecProcess(record: AcpExec): void {
+    if (record.done) return;
+    const pid = record.child.pid;
+    if (pid !== undefined) {
+      try {
+        process.kill(-pid, "SIGTERM");
+        return;
+      } catch {
+        /* fall through to the direct kill */
+      }
+    }
+    try {
+      record.child.kill("SIGTERM");
+    } catch {
+      /* already gone */
+    }
+  }
+
+  /** Drop finished build records past their retain window so polling clients can go away. */
+  private sweepExecs(): void {
+    const now = Date.now();
+    for (const [key, bySession] of this.execs) {
+      for (const [id, record] of bySession) {
+        if (record.done && now - record.lastActivity > EXEC_RETAIN_MS) {
+          this.dropExec(key, bySession, id);
+        }
+      }
+    }
   }
 
   private killRecord(key: string): void {

@@ -157,6 +157,33 @@ export class CliChatEngineHost {
     this.acp.kill(sessionKey, opts.generation);
   }
 
+  /** #2369 phase 3 — runner-side builds; contract lives in AcpHost. */
+  async acpExecStart(
+    sessionKey: string,
+    projectId: string,
+    command: string,
+    timeoutMs?: number
+  ): Promise<{ execId: number }> {
+    return this.acp.execStart(sessionKey, projectId, command, timeoutMs);
+  }
+
+  acpExecPoll(
+    sessionKey: string,
+    execId: number
+  ): {
+    output: string;
+    done: boolean;
+    exitCode: number | null;
+    truncated: boolean;
+    timedOut: boolean;
+  } {
+    return this.acp.execPoll(sessionKey, execId);
+  }
+
+  acpExecKill(sessionKey: string, execId: number): void {
+    this.acp.execKill(sessionKey, execId);
+  }
+
   /** Registers a listener for session-reaped events; returns an unregister function. */
   addSessionReapedListener(listener: SessionReapedListener): () => void {
     this.reapListeners.add(listener);

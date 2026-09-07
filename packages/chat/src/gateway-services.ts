@@ -27,6 +27,7 @@ import { sendJob } from "@moss/jobs";
 import { NOTES_SYNC_QUEUE, type NotesSyncJobPayload, type NotesSyncToolService } from "@moss/notes";
 import { TasksCompatibilityHelper } from "@moss/tasks";
 import type { MossModuleManifest } from "@moss/module-sdk";
+import type { WorkshopRunCommandService } from "@moss/workshop";
 import {
   SettingsRepository,
   setNotificationPreferenceEnabled,
@@ -61,6 +62,12 @@ export function buildChatToolServices(deps: {
   boss?: PgBoss;
   featureGrantService?: FeatureGrantService;
   listModuleManifests?: () => readonly MossModuleManifest[];
+  /**
+   * Runner access for workshop.runCommand. Wired with the Workshop reply path
+   * (phase 5), which owns the tunnel the builds run through; until then the
+   * tool stays hidden by the gateway's fail-closed service filter.
+   */
+  workshopRunCommandService?: WorkshopRunCommandService;
 }): Record<string, unknown> {
   const services: Record<string, unknown> = {};
   if (deps.googleConnectionService && deps.googleApiClient && deps.connectorsRepository) {
@@ -94,6 +101,9 @@ export function buildChatToolServices(deps: {
   }
   if (deps.featureGrantService) {
     services.featureGrants = deps.featureGrantService;
+  }
+  if (deps.workshopRunCommandService) {
+    services.workshopRunCommand = deps.workshopRunCommandService;
   }
   if (deps.listModuleManifests) {
     const listModuleManifests = deps.listModuleManifests;
@@ -146,6 +156,8 @@ export function buildChatGatewayDependencies(args: {
     /** #1133 — read-only vault-backed attachment reads for chat.readAttachment. */
     attachmentsService?: ChatAttachmentsService;
     listModuleManifests?: () => readonly MossModuleManifest[];
+    /** Runner access for workshop.runCommand; see buildChatToolServices. */
+    workshopRunCommandService?: WorkshopRunCommandService;
   };
 }): AssistantToolGatewayDependencies {
   return {
