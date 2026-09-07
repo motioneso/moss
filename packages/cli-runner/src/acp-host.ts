@@ -752,13 +752,18 @@ export class AcpHost {
     return session;
   }
 
-  /** Append build output up to the cap; past it the head is kept and the flag is set. */
+  /**
+   * Append build output up to the cap; past it the head is kept and the flag
+   * is set. Output is scrubbed before it is retained, so a command that reads
+   * the app's settings never lands a secret in the poll reply, the agent's
+   * context, or the audit record downstream.
+   */
   private appendExecOutput(record: AcpExec, chunk: Buffer): void {
     if (record.outputBytes >= ACP_EXEC_OUTPUT_CAP_BYTES) {
       record.truncated = true;
       return;
     }
-    const text = chunk.toString("utf8");
+    const text = redactSecrets(chunk.toString("utf8"));
     const room = ACP_EXEC_OUTPUT_CAP_BYTES - record.outputBytes;
     const size = Buffer.byteLength(text, "utf8");
     if (size <= room) {

@@ -23,6 +23,28 @@ import { describe, expect, it } from "vitest";
 
 import { AcpHost } from "../../packages/cli-runner/src/acp-host.js";
 
+class FakeExecChild extends EventEmitter {
+  readonly stdout = new EventEmitter();
+  readonly stderr = new EventEmitter();
+  readonly pid = undefined;
+
+  kill(): boolean {
+    return true;
+  }
+
+  emitStdout(text: string): void {
+    this.stdout.emit("data", Buffer.from(text));
+  }
+
+  emitStderr(text: string): void {
+    this.stderr.emit("data", Buffer.from(text));
+  }
+
+  exit(code: number): void {
+    this.emit("exit", code);
+  }
+}
+
 class FakeChild extends EventEmitter {
   readonly written: string[] = [];
   readonly stdout = new EventEmitter();
@@ -301,6 +323,35 @@ describe("AcpHost", () => {
       } finally {
         rmSync(victim, { recursive: true, force: true });
       }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("scrubs secrets out of build output before the poll reply", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const child = new FakeExecChild();
+      const host = new AcpHost({
+        neutralBase: dir,
+        spawnExec: () => child as never
+      });
+      const { execId } = await host.execStart("workshop:user:proj", "proj", "printenv", 60_000);
+      child.emitStdout("first line\ntoken=jst_secret-token-1\n");
+      child.emitStderr("Authorization: Bearer abc123\n");
+      child.emitStdout("JARVIS_MCP_TOKEN=jst_other-token\nlast line\n");
+      child.exit(0);
+      const result = host.execPoll("workshop:user:proj", execId);
+      expect(result.done).toBe(true);
+      expect(result.exitCode).toBe(0);
+      // The secret shapes never reach the poll reply, the agent, or the audit
+      // record downstream: without the scrub this test fails on the raw text.
+      expect(result.output).not.toContain("jst_secret-token-1");
+      expect(result.output).not.toContain("Bearer abc123");
+      expect(result.output).not.toContain("JARVIS_MCP_TOKEN=jst_other-token");
+      expect(result.output).toContain("[redacted]");
+      expect(result.output).toContain("first line");
+      expect(result.output).toContain("last line");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
