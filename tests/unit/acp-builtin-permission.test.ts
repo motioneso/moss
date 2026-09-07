@@ -24,12 +24,13 @@ function buildGateway(store: FakeStore, confirmTimeoutMs = 1000) {
   const gateway = new AssistantToolGateway({
     resolveActiveModules: async () => [],
     repository: {
+      // Rows are numbered in creation order so two asks can be told apart.
       createPendingAssistantAction: async (_db: unknown, input: unknown) => {
         store.created.push(input);
-        return { ...store.actionRow };
+        return { ...store.actionRow, id: `acp-action-${store.created.length}` };
       },
-      getAssistantAction: async () => ({ ...store.actionRow }),
-      resolveAssistantAction: async () => ({ ...store.actionRow }),
+      getAssistantAction: async (_db: unknown, id: string) => ({ ...store.actionRow, id }),
+      resolveAssistantAction: async (_db: unknown, id: string) => ({ ...store.actionRow, id }),
       insertActionAuditLog: async (_db: unknown, input: unknown) => {
         store.audit.push(input);
       }
@@ -225,16 +226,103 @@ describe("agent built-in permission through the shared approval card", () => {
     });
     await vi.waitFor(() => expect(store.created).toHaveLength(1));
     expect(store.created[0]).toMatchObject({
-      inputSummary: expect.objectContaining({
-        agentSessionId: "agent-sess-1",
-        sessionFolder: CWD
-      })
+      inputSummary: {
+        agent: {
+          sessionId: "agent-sess-1",
+          toolCallId: "call-9",
+          toolName: "Bash",
+          cwd: CWD,
+          paths: [],
+          decision: "asked",
+          reason: null
+        }
+      }
     });
     const summary = (store.created[0] as { inputSummary: Record<string, unknown> }).inputSummary;
     expect(summary).not.toHaveProperty("command");
     expect(JSON.stringify(summary)).not.toContain("pnpm build");
+    // The card itself shows the command (live stream only) behind the real name.
+    await vi.waitFor(() => expect(store.emitted).toHaveLength(1));
+    expect(store.emitted[0]).toMatchObject({
+      kind: "action_request",
+      summary: "The agent wants to use Bash: pnpm build"
+    });
     gatewayResolveSoon(gateway, "u1");
     await expect(pending).resolves.toMatchObject({ decision: "allow" });
+    // The audit line carries the same identifiers, still without the command.
+    await vi.waitFor(() => expect(store.audit).toHaveLength(1));
+    expect(store.audit[0]).toMatchObject({
+      inputSummary: { agent: { sessionId: "agent-sess-1", toolCallId: "call-9", cwd: CWD } }
+    });
+    expect(JSON.stringify(store.audit[0])).not.toContain("pnpm build");
+  });
+
+  it("asks about a read outside the folder as outbound, with the path on the card and the row", async () => {
+    const store = freshStore();
+    const { gateway, tokens } = buildGateway(store);
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+
+    const pending = gateway.requestAcpBuiltInPermission(token, {
+      cwd: CWD,
+      home: "/home/agent",
+      sessionId: "agent-sess-1",
+      toolCallId: "call-9",
+      title: "Read File",
+      toolInput: { file_path: "/etc/hosts" },
+      toolName: "Read",
+      kind: "read",
+      locations: [{ path: "/etc/hosts" }]
+    });
+    await vi.waitFor(() => expect(store.emitted).toHaveLength(1));
+    expect(store.created[0]).toMatchObject({
+      toolName: "Read",
+      risk: "outbound",
+      inputSummary: { agent: { toolName: "Read", paths: ["/etc/hosts"], decision: "asked" } }
+    });
+    expect(store.emitted[0]).toMatchObject({
+      kind: "action_request",
+      summary: "The agent wants to use Read: /etc/hosts"
+    });
+    gatewayResolveSoon(gateway, "u1", "rejected");
+    await expect(pending).resolves.toMatchObject({ decision: "deny" });
+  });
+
+  it("keeps two agents in one conversation apart: two rows, each naming its own session", async () => {
+    const store = freshStore();
+    const { gateway, tokens } = buildGateway(store);
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const ask = (sessionId: string, cwd: string) =>
+      gateway.requestAcpBuiltInPermission(token, {
+        cwd,
+        home: "/home/agent",
+        sessionId,
+        toolCallId: `${sessionId}-call`,
+        title: "`pnpm build`",
+        toolInput: { command: "pnpm build" },
+        toolName: "Bash"
+      });
+    const first = ask("agent-sess-1", CWD);
+    await vi.waitFor(() => expect(store.created).toHaveLength(1));
+    const second = ask("agent-sess-2", "/runner/session/acp/other");
+    await vi.waitFor(() => expect(store.created).toHaveLength(2));
+    expect(
+      store.created.map((row) => (row as { inputSummary: { agent: unknown } }).inputSummary.agent)
+    ).toMatchObject([
+      { sessionId: "agent-sess-1", toolCallId: "agent-sess-1-call", cwd: CWD },
+      {
+        sessionId: "agent-sess-2",
+        toolCallId: "agent-sess-2-call",
+        cwd: "/runner/session/acp/other"
+      }
+    ]);
+    await expect(gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")).resolves.toBe(
+      "resolved"
+    );
+    await expect(gateway.resolveActionRequest("u1", "acp-action-2", "rejected")).resolves.toBe(
+      "resolved"
+    );
+    await expect(first).resolves.toMatchObject({ decision: "allow" });
+    await expect(second).resolves.toMatchObject({ decision: "deny" });
   });
 
   it("refuses a subagent titled like a read, with no card and no row", async () => {

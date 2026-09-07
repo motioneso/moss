@@ -5,6 +5,8 @@
  * real tool identifiers from adapter platform code — never display titles.
  */
 
+import type { AcpSurface } from "./capabilities.js";
+
 export type AcpToolFamily =
   | "read"
   | "web"
@@ -21,8 +23,6 @@ export interface AcpToolRow {
   readonly chat: boolean;
   readonly workshop: boolean;
 }
-
-import type { AcpSurface } from "./capabilities.js";
 
 /** Prefix the adapter puts on its own bridged file and shell tool names. */
 const ACP_TOOL_PREFIX = "mcp__acp__";

@@ -47,11 +47,16 @@
   - WEB: public fetches allow, loopback/private/bare names ask; Moss tools
     allow at once. MODE and NOT OFFERED refuse.
   - Forbidden zone is the agent home subtree plus `/proc`, `/sys`, `/dev`,
-    `/run`; the session folder is checked first and always wins. Lexical only;
-    links unresolved — the runner's owned dirs plus the launch deny list
-    contain escape the other way. The runner block list switches built-in
-    writing off entirely today, so the in-folder write allow cannot fire until
-    phase 5 turns the feature on — the rule is written for that shape.
+    `/run`; the session folder is checked first and always wins. A request
+    naming several files is judged by its most sensitive one. The runner
+    block list switches built-in writing off entirely today, so the in-folder
+    write allow cannot fire until phase 5 turns the feature on — the rule is
+    written for that shape.
+  - Known limits (spec section 4): containment is lexical, so a link inside
+    the folder pointing at a secret passes; the login credential is inside the
+    agent's own process regardless of any path rule; the per-user account is
+    the containment that does not care about paths, and only exists with the
+    per-user identity option on.
 - Home reaches the decider beside the folder: `spawn` returns the HOME handed
   to the agent (`acp-host.ts`, RPC contract, tunnel, client handle).
 - `packages/ai/src/gateway/acp-permission.ts`:
@@ -59,13 +64,18 @@
   attribution) and decides via `@moss/acp`. Allow returns without a row; deny
   returns without a row; ask creates the same pending row and emits the same
   `action_request` event as the native path, awaits the same registry, emits
-  `action_result`, and `markDone`s. The row's `inputSummary` carries the agent
-  session and folder as plain identifiers (values stay out); the card is marked
-  destructive for shell, subagent, delete, move, and execute. An audit line is
-  written for every ask outcome and every refusal (reason word as error class);
-  silent allows write none. The class keeps a thin delegate so `gateway.ts`
-  stays under the size gate. No second policy, no second wording, enforcement
-  point unchanged.
+  `action_result`, and `markDone`s. The row's `inputSummary` and every audit
+  line carry an `agent` block (`ActionAuditAgentSummary` in `@moss/shared`):
+  session id, tool call id, real tool name, folder, the paths a read or write
+  named (5 at most, 200 chars each), and the decision word with the refusal
+  reason; never a command. The card is marked destructive for shell, delete,
+  move and execute; write for writes; outbound for reads and fetches that reach
+  a person. Card text is the real name plus the paths, address or command
+  (`acpCardText`); the model's title appears only labelled as its own
+  description. An audit line is written for every ask outcome and every
+  refusal (reason word as error class); silent allows write none. The class
+  keeps a thin delegate so `gateway.ts` stays under the size gate. No second
+  policy, no second wording, enforcement point unchanged.
 - Exports: `permissions.ts` from `packages/acp/src/index.ts`; gateway method plus
   its input/output types from `packages/ai/src/gateway/index.ts`. Workspace dep
   `@moss/ai -> @moss/acp` declared in `packages/ai/package.json`.
@@ -101,6 +111,23 @@
   client decider → gateway ask → `resolveActionRequest` as owner → agent receives
   `selected/allow`. This is the attended-approval path with the human step played
   through the exact function the UI calls; in-browser proof lands with phase 5 UAT.
+
+## Handoff to phase 5 (turning built-ins on)
+
+- Replace the client's blanket `disableBuiltInTools` flag with
+  `launchOffList(surface)` from the tool table, passed to the adapter as
+  `_meta.claudeCode.options.disallowedTools` (the adapter merges that list).
+- Live checks the unit tests cannot give: the first tool call of a session
+  must show a real name in the API log, otherwise the adapter changed under
+  us and everything refuses; ask the agent to read the token file and expect
+  the runner's native deny rule to refuse it by name (the vendor's matcher is
+  what protects the built-in Read, so a unit test here proves nothing); count
+  the agent-side prompts raised by Moss tool calls under the runner's clean
+  home — if they occur and the Moss row were ever dropped from the table,
+  every Moss call would die looking like a tool-server failure.
+- Wire `MossAcpClient` with a decider that calls
+  `gateway.requestAcpBuiltInPermission` once; the gateway already runs the
+  policy, so the decider must not classify a second time.
 
 ## Determinism boundary
 

@@ -157,6 +157,57 @@ describe("classifyAcpPermission", () => {
     }
   });
 
+  it("asks for a read outside the folder that is not forbidden, and allows a bare search", () => {
+    // /etc/hosts is the person's own file system: a card with the path, not a refusal.
+    expect(
+      classifyAcpPermission(
+        request({ title: "t", toolName: "Read", rawInput: { file_path: "/etc/hosts" } }),
+        FOLDERS
+      )
+    ).toEqual({ verdict: "ask" });
+    // Glob and Grep with no path search the session folder by default.
+    for (const toolName of ["Glob", "Grep", "LS"]) {
+      expect(
+        classifyAcpPermission(
+          request({ title: "t", toolName, rawInput: { pattern: "*" } }),
+          FOLDERS
+        )
+      ).toEqual({ verdict: "allow" });
+    }
+  });
+
+  it("judges a request naming several files by its most sensitive one", () => {
+    expect(
+      classifyAcpPermission(
+        request({
+          title: "t",
+          toolName: "Read",
+          rawInput: { file_path: ".env" },
+          locations: [{ path: "/home/agent/.jarvis/cli-tokens/claude" }]
+        }),
+        FOLDERS
+      )
+    ).toEqual({ verdict: "deny", reason: "forbidden_zone" });
+    expect(
+      classifyAcpPermission(
+        request({
+          title: "t",
+          toolName: "Read",
+          rawInput: { file_path: ".env" },
+          locations: [{ path: "/etc/hosts" }]
+        }),
+        FOLDERS
+      )
+    ).toEqual({ verdict: "ask" });
+  });
+
+  // Known gap, not a passing test that proves nothing: a link inside the
+  // session folder pointing at a secret passes the lexical check. The decision
+  // runs on the API side and cannot resolve paths on the runner host. The
+  // runner's per-user account plus the 0600 token file is the containment that
+  // does not care about paths, and only exists with per-user identity on.
+  // Spec section 4, known limits.
+
   it("treats folder traversal as outside the session folder", () => {
     expect(
       classifyAcpPermission(
@@ -176,6 +227,7 @@ describe("classifyAcpPermission", () => {
       "http://169.254.169.254/",
       "http://[::1]/",
       "http://[fd00::1]/",
+      "http://[fe80::1]/",
       "http://printer/"
     ]) {
       expect(
@@ -188,16 +240,21 @@ describe("classifyAcpPermission", () => {
   });
 
   it("allows public web addresses and refuses a fetch with none", () => {
+    // Names that merely start like an IPv6 private prefix are public hosts.
+    for (const url of ["https://example.com/docs", "https://fcc.gov/", "https://fdroid.org/x"]) {
+      expect(
+        classifyAcpPermission(
+          request({ title: "t", toolName: "WebFetch", rawInput: { url } }),
+          FOLDERS
+        )
+      ).toEqual({ verdict: "allow" });
+    }
     expect(
       classifyAcpPermission(
-        request({
-          title: "t",
-          toolName: "WebFetch",
-          rawInput: { url: "https://example.com/docs" }
-        }),
+        request({ title: "t", toolName: "WebFetch", rawInput: { url: "not a url" } }),
         FOLDERS
       )
-    ).toEqual({ verdict: "allow" });
+    ).toEqual({ verdict: "ask" });
     expect(
       classifyAcpPermission(request({ title: "t", toolName: "WebFetch", rawInput: {} }), FOLDERS)
     ).toEqual({ verdict: "deny", reason: "malformed" });

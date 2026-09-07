@@ -47,12 +47,6 @@ export interface AcpSessionHandle {
   readonly home: string | null;
 }
 
-/** The two folders every filesystem decision needs. */
-export interface AcpSessionFolders {
-  readonly cwd: string;
-  readonly home: string | null;
-}
-
 /**
  * Moss's own tool server, handed to the agent when a session opens. The URL is
  * the address the agent reaches the tool server at, and the Bearer is the
