@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Clearer message when an action is not approved.** When Moss does not approve an action, it now says so in plain words and asks the agent to tell you instead of trying again. [PR #2382](https://github.com/motioneso/moss/pull/2382)
 - **A cleaner Workshop home page.** The Workshop home page now shows your projects in a simple list with a clear title bar, instead of a grid of cards, and drops an old, unused page. [PR #2364](https://github.com/motioneso/moss/pull/2364)
 - **Email summaries that take too long are now dropped instead of arriving late.** If summarising an email takes longer than the allowed time, you now get no [PR #2355](https://github.com/motioneso/moss/pull/2355)
 - **A new display typeface and a lighter page colour across the app.** Headings use a new typeface and pages sit on a lighter background across the app. [PR #2333](https://github.com/motioneso/moss/pull/2333)
