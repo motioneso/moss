@@ -23,11 +23,6 @@ function manifestWithTool(
         description: "Write",
         permissionId: "acme.write",
         risk: "write",
-        // Unattended auto-run needs a family a person could promote (#2418):
-        // without one the tool now raises its card instead of running, so the
-        // duration tests declare the family they mean to exercise.
-        actionFamilyId: "acme_family",
-        executionPolicy: "auto",
         ...toolOverrides
       }
     ]
@@ -59,17 +54,7 @@ async function runYoloAndCaptureAudit(
     confirmations,
     notifier: { emit: () => {} },
     confirmTimeoutMs: 50,
-    yoloMode: async () => true,
-    actionPolicy: () => ({
-      getFamilyTier: async () => "trusted_auto",
-      getFamilyManifest: async () => ({
-        id: "acme_family",
-        label: "Acme family",
-        description: "Acme family",
-        defaultTier: "ask_each_time",
-        allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
-      })
-    })
+    yoloMode: async () => true
   });
   const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
   await gateway.callTool(token, "acme.write", {});

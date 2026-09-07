@@ -779,6 +779,8 @@ describe("AssistantToolGateway self-operation", () => {
     // Sports source writes share a non-promotable family; all remain explicit confirmation-only
     // declarations. web.read was on this list until Ben's ruling, 2026-09-05 (#2326), moved it to
     // risk "read" instead (it never confirms now, so it is no longer a confirm_always tool).
+    // Fable's ruling on 2418 moves workshop.runCommand here: the build card is mandatory
+    // while unconfined, so the tool is not promotable at all.
     expect(confirmAlwaysTools.sort()).toEqual(
       [
         "email.sendReply",
@@ -789,7 +791,8 @@ describe("AssistantToolGateway self-operation", () => {
         "sports.confirmSourceAssignments",
         "sports.confirmSourceRecipe",
         "sports.removeSource",
-        "sports.retrySource"
+        "sports.retrySource",
+        "workshop.runCommand"
       ].sort()
     );
   });
