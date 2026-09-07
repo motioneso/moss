@@ -16,16 +16,6 @@ export {
   type WorkshopModuleBuildPlan,
   type WorkshopModuleBuildStartResult
 } from "./assistant-tools.js";
-export {
-  workshopRunCommandExecute,
-  WORKSHOP_RUN_COMMAND_SERVICE_KEY,
-  WORKSHOP_RUN_COMMAND_DEFAULT_TIMEOUT_MS,
-  WORKSHOP_RUN_COMMAND_MAX_TIMEOUT_MS,
-  WORKSHOP_RUN_COMMAND_MIN_TIMEOUT_MS,
-  type WorkshopRunCommandService,
-  type WorkshopRunCommandStart,
-  type WorkshopRunCommandState
-} from "./run-command.js";
 
 export {
   WorkshopProjectFeed,

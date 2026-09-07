@@ -17,11 +17,6 @@ import type { ActionAuditInputSummary, AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AiRepository, InsertAuditLogInput } from "../repository.js";
-import {
-  requestAcpBuiltInPermission as resolveAcpBuiltInPermission,
-  type AcpBuiltInPermissionRequest,
-  type AcpBuiltInPermissionResponse
-} from "./acp-permission.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import {
@@ -38,7 +33,6 @@ import {
 import { resolvePolicy } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
 import {
-  APPROVAL_REFUSED_REASON,
   gatewayFailureReason,
   nativeToolRisk,
   nativeToolSummary,
@@ -192,21 +186,14 @@ export class AssistantToolGateway {
     return (await this.executableTools(actorUserId)).map((entry) => entry.dto);
   }
 
-  async callTool(
-    token: string,
-    toolName: string,
-    rawInput: unknown,
-    options: { onProgress?: (message: string) => void } = {}
-  ): Promise<GatewayToolResponse> {
+  async callTool(token: string, toolName: string, rawInput: unknown): Promise<GatewayToolResponse> {
     const { actorUserId, chatSessionId, allowedToolNames } = this.deps.tokens.verify(token);
     const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
     const ctx: ToolContext = {
       actorUserId,
       requestId: `mcp_${randomUUID()}`,
       chatSessionId,
-      localTimezone,
-      // Only the MCP transport passes a sink; every other caller sends nowhere.
-      ...(options.onProgress ? { reportProgress: options.onProgress } : {})
+      localTimezone
     };
 
     const found = (await this.executableTools(actorUserId)).find(
@@ -431,11 +418,11 @@ export class AssistantToolGateway {
           actionRequestId: action.id,
           toolName,
           outcome: "denied",
-          reason: APPROVAL_REFUSED_REASON
+          reason: outcome === "timeout" ? "Timed out awaiting confirmation." : "Denied by user."
         });
         return {
           decision: "deny",
-          reason: APPROVAL_REFUSED_REASON
+          reason: outcome === "timeout" ? "Timed out awaiting confirmation." : "Denied by user."
         };
       }
 
@@ -455,14 +442,6 @@ export class AssistantToolGateway {
     } finally {
       this.deps.confirmations.markDone(action.id);
     }
-  }
-
-  /** Outside-agent built-in ask; orchestration lives in ./acp-permission.js. */
-  async requestAcpBuiltInPermission(
-    token: string,
-    request: AcpBuiltInPermissionRequest
-  ): Promise<AcpBuiltInPermissionResponse> {
-    return resolveAcpBuiltInPermission(this.deps, token, request);
   }
 
   /**
@@ -800,7 +779,12 @@ export class AssistantToolGateway {
           actionRequestId: action.id,
           toolName: found.dto.name,
           outcome: "denied",
-          reason: outcome === "cancelled" ? "Action cancelled." : APPROVAL_REFUSED_REASON
+          reason:
+            outcome === "timeout"
+              ? "Timed out awaiting confirmation."
+              : outcome === "cancelled"
+                ? "Action cancelled."
+                : "Denied by user."
         });
         const approvalMode =
           outcome === "timeout" ? "timeout" : outcome === "rejected" ? "rejected" : "cancelled";
@@ -810,7 +794,10 @@ export class AssistantToolGateway {
           durationMs: null,
           chatSessionId: ctx.chatSessionId
         });
-        const reason = APPROVAL_REFUSED_REASON;
+        const reason =
+          outcome === "timeout"
+            ? "Timed out awaiting confirmation — still pending in your drawer."
+            : "Denied by user.";
         return { ok: false, denied: true, reason };
       }
 

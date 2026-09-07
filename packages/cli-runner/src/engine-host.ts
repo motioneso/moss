@@ -51,8 +51,6 @@ import {
 } from "@moss/chat/live";
 import type { ProviderKind } from "@moss/ai";
 
-import { AcpHost } from "./acp-host.js";
-import { ACP_DEADLINE_DIR } from "./exec-records.js";
 import { Mutex } from "./mutex.js";
 import { LoginBadRequestError, type LoginService } from "./login-service.js";
 import {
@@ -112,77 +110,6 @@ export class CliChatEngineHost {
   constructor(private readonly deps: EngineHostDeps) {
     this.launchTimeoutMs = deps.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT_MS;
     this.verifiedSubmitTimeoutMs = deps.verifiedSubmitTimeoutMs ?? VERIFIED_SUBMIT_DEADLINE_MS;
-    // #2369 slice 1 — the ACP adapter host rides the same identity config (uid slot
-    // when enabled, shared home base, per-session dirs). It is deliberately OUTSIDE
-    // the chat admission gate below: Workshop agent sessions are a separate surface
-    // and must never contend with the single-active-user chat lock.
-    this.acp = new AcpHost({
-      neutralBase: deps.neutralBase,
-      homeBase: deps.homeBase,
-      perUserUid: deps.perUserUid
-    });
-  }
-
-  private readonly acp: AcpHost;
-
-  /**
-   * #2369 slice 1 — ACP tunnel verbs. Thin delegates: admission, policy, and the
-   * protocol all live elsewhere (API-side client, gateway); the host only pipes lines.
-   */
-  async acpSpawn(
-    sessionKey: string,
-    projectId: string
-  ): Promise<{ cwd: string; generation: number }> {
-    return this.acp.spawn(sessionKey, projectId);
-  }
-
-  acpSend(sessionKey: string, line: string): void {
-    this.acp.send(sessionKey, line);
-  }
-
-  acpRead(
-    sessionKey: string,
-    afterSeq: number
-  ): {
-    lines: readonly string[];
-    firstSeq: number;
-    nextSeq: number;
-    exited: boolean;
-    exitCode: number | null;
-    truncated: boolean;
-  } {
-    return this.acp.read(sessionKey, afterSeq);
-  }
-
-  acpKill(sessionKey: string, opts: { generation?: number } = {}): void {
-    this.acp.kill(sessionKey, opts.generation);
-  }
-
-  /** #2369 phase 3 — runner-side builds; contract lives in AcpHost. */
-  async acpExecStart(
-    sessionKey: string,
-    projectId: string,
-    command: string,
-    timeoutMs?: number
-  ): Promise<{ execId: number }> {
-    return this.acp.execStart(sessionKey, projectId, command, timeoutMs);
-  }
-
-  acpExecPoll(
-    sessionKey: string,
-    execId: number
-  ): {
-    output: string;
-    done: boolean;
-    exitCode: number | null;
-    truncated: boolean;
-    timedOut: boolean;
-  } {
-    return this.acp.execPoll(sessionKey, execId);
-  }
-
-  acpExecKill(sessionKey: string, execId: number): void {
-    this.acp.execKill(sessionKey, execId);
   }
 
   /** Registers a listener for session-reaped events; returns an unregister function. */
@@ -898,8 +825,6 @@ export class CliChatEngineHost {
     // restart can leave one while the in-memory login flow is gone). DISTINCT from (a), which
     // only enumerates `jarv1s-live-*` chat sessions.
     await this.deps.loginService?.startupSweep().catch(() => undefined);
-    // (f) #2396 orphaned-build sweep: after the clean-out, never beside it.
-    await this.acp.reapOrphanedExecs().catch(() => undefined);
   }
 
   /** `rm -rf <neutralBase>/* ` then recreate the base dir (`0700`). */
@@ -914,7 +839,7 @@ export class CliChatEngineHost {
       for (const name of listed.stdout
         .split("\n")
         .map((s) => s.trim())
-        .filter((name) => name.length > 0 && name !== ACP_DEADLINE_DIR)) {
+        .filter(Boolean)) {
         await this.deps.io
           .run("rm", ["-rf", `${this.deps.neutralBase}/${name}`])
           .catch(() => undefined);

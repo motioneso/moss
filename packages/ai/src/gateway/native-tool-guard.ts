@@ -3,16 +3,6 @@ import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path
 
 import type { GatewayToolResponse } from "./types.js";
 
-/**
- * Refusal wording for a held approval that expires or is denied (spec 6.2).
- * The agent retries a bare timeout exactly once, so both outcomes return the
- * same sentence: nothing was done, do not try again, report back. It reads in
- * chat after "Not changed — ", so it speaks to the person first and the agent
- * second.
- */
-export const APPROVAL_REFUSED_REASON =
-  "This action was not approved, so it was not done. Do not try it again; let the user know.";
-
 // Bash and Task stay permanently gated: YOLO removes confirmation only for these mutation-only
 // tools, and unknown/future native capabilities fail closed to the normal confirmation path.
 const NATIVE_YOLO_AUTO_ALLOW = new Set(["Edit", "Write", "NotebookEdit"]);

@@ -271,8 +271,7 @@ describe("native Claude tool permission bridge", () => {
       })
     ).resolves.toEqual({
       decision: "deny",
-      reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
+      reason: "Timed out awaiting confirmation."
     });
     expect(emitted.at(-1)).toMatchObject({
       kind: "action_result",
@@ -343,11 +342,7 @@ describe("native Claude tool permission bridge", () => {
 
     await expect(
       gateway.requestNativeToolPermission(token, { toolName: "Grep", toolInput: {} })
-    ).resolves.toEqual({
-      decision: "deny",
-      reason:
-        "This action was not approved, so it was not done. Do not try it again; let the user know."
-    });
+    ).resolves.toEqual({ decision: "deny", reason: "Timed out awaiting confirmation." });
   });
 
   it.each([

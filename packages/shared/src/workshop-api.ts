@@ -104,53 +104,6 @@ export const workshopBuildModuleInputSchema = {
   }
 } as const;
 
-/**
- * Longest command workshop.runCommand accepts. The approval card shows the
- * command in full and a person cannot approve what they cannot see, so a
- * command longer than this is refused instead of cut.
- */
-export const workshopRunCommandMaxLength = 2000;
-
-/**
- * workshop.runCommand (#2369 slice 1 phase 3): one shell command starting
- * with the session project folder as its working folder. The folder is fixed
- * runner-side from the session, so the input names a command and a deadline,
- * never a path. The command itself is not restricted to that folder.
- */
-export const workshopRunCommandInputSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["command"],
-  properties: {
-    command: {
-      type: "string",
-      minLength: 1,
-      maxLength: workshopRunCommandMaxLength,
-      description:
-        "Shell command to run with the project folder as its working folder, for example " +
-        "a build or test command. At most 2000 characters so the approval card shows it in full."
-    },
-    timeoutMs: {
-      type: "integer",
-      description:
-        "Deadline in milliseconds. Defaults to 300000 (5 minutes); past it the command is " +
-        "stopped and whatever ran so far returns."
-    }
-  }
-} as const;
-
-export const workshopRunCommandResultSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["output", "exitCode", "truncated", "timedOut"],
-  properties: {
-    output: { type: "string" },
-    exitCode: { type: ["integer", "null"] },
-    truncated: { type: "boolean" },
-    timedOut: { type: "boolean" }
-  }
-} as const;
-
 export const approveModuleBuildResponseSchema = {
   type: "object",
   additionalProperties: false,

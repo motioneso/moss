@@ -98,8 +98,6 @@ export interface ToolContext {
   readonly chatSessionId: string;
   /** IANA timezone string from the user's locale settings (e.g. "America/Chicago"). Absent when the gateway has no locale available (falls back to UTC at call site). */
   readonly localTimezone?: string;
-  /** Partial output while the tool runs. Set only by the MCP transport; absent elsewhere. */
-  readonly reportProgress?: (message: string) => void;
 }
 
 /**

@@ -39,7 +39,6 @@ const packagesRoot = join(process.cwd(), "packages");
 
 /** Platform: cross-cutting infrastructure, no independent end-user product domain. */
 const PLATFORM_PACKAGES = new Set([
-  "@moss/acp", // agent-protocol client transport consumed by surfaces — infra, no product domain
   "@moss/ai", // provider-agnostic AI capability router (CLAUDE.md invariant), not a feature
   "@moss/auth",
   "@moss/datasets", // dataset connector SDK runtime host (host pinning, cache, TTL) — infra, not a product domain
