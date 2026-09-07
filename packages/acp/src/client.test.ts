@@ -160,11 +160,18 @@ describe("MossAcpClient", () => {
       .find((msg) => msg.method === "initialize");
     expect(init.params.protocolVersion).toBe(1);
     expect(init.params.clientCapabilities ?? {}).toEqual({});
-    // The agent's own tools are switched off: files and commands are Moss tools.
+    // The agent's own tools are switched off per surface from the one tool
+    // table: files and commands are Moss tools. Workshop keeps reads, web,
+    // harmless and writes; shell, mode changes and unoffered tools stay off.
     const opened = agent.sent
       .map((line) => JSON.parse(line))
       .find((msg) => msg.method === "session/new");
-    expect(opened.params._meta).toEqual({ disableBuiltInTools: true });
+    const disallowed = opened.params._meta.claudeCode.options.disallowedTools;
+    expect(disallowed).toContain("Bash");
+    expect(disallowed).toContain("KillShell");
+    expect(disallowed).toContain("Task");
+    expect(disallowed).not.toContain("Read");
+    expect(disallowed).not.toContain("Write");
     // No tool server handed over unless the caller provides one.
     expect(opened.params.mcpServers).toEqual([]);
     await client.close(handle);

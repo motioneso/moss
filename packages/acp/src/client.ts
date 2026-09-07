@@ -29,6 +29,7 @@ import {
 
 import { checkAgentCapabilities, type AcpSurface } from "./capabilities.js";
 import { selectAllowOptionId, toolNameFromMeta, type AcpBuiltInRequest } from "./permissions.js";
+import { launchOffList } from "./tool-table.js";
 import { createTunnelStream } from "./stream.js";
 import type { AcpTunnel } from "./tunnel.js";
 
@@ -162,10 +163,11 @@ export class MossAcpClient {
     const session = await connection.newSession({
       cwd,
       mcpServers: toolServer ? [toMcpServerEntry(toolServer)] : [],
-      // The agent's own file and shell tools stay off on purpose: files and
-      // commands are Moss tools, and the vendor default prompt is not a policy
-      // we accept. The runner-side settings file denies them a second time.
-      _meta: { disableBuiltInTools: true }
+      // The agent's own tools stay off per surface from the one tool table, so
+      // the launch list and the use-time policy cannot drift apart. Files and
+      // commands are Moss tools, and the runner-side settings file denies the
+      // same names a second time.
+      _meta: { claudeCode: { options: { disallowedTools: launchOffList(surface) } } }
     });
     this.connections.set(session.sessionId, connection);
     this.texts.set(session.sessionId, []);
