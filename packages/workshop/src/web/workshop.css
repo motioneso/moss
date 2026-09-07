@@ -75,6 +75,12 @@
   margin-top: auto;
 }
 
+/* A reply stops before the far edge, like your own bubbles already do at 80%: without
+   a cap the assistant column fills the whole row and long lines run wall to wall. */
+.workshop-chat__history .chatd-msg:not(.chatd-msg--me) .chatd-bubble {
+  max-width: 80%;
+}
+
 .workshop-chat__caption {
   margin: 0;
   font-size: var(--text-sm);
