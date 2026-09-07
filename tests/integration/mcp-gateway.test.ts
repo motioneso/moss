@@ -477,7 +477,16 @@ describe("AssistantToolGateway", () => {
       confirmations,
       notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
       confirmTimeoutMs: 30_000,
-      yoloMode: async () => true
+      yoloMode: async () => true,
+      // example.destroy's dummy family allows the automatic tier, so
+      // unattended mode still runs it (#2418 only cards non-promotable families).
+      actionPolicy: () => ({
+        getFamilyTier: async () => null,
+        getFamilyManifest: async (moduleId: string, familyId: string) =>
+          moduleId === exampleToolModule.id
+            ? (exampleToolModule.assistantActionFamilies?.find((f) => f.id === familyId) ?? null)
+            : null
+      })
     });
     const token = tokens.mint({
       actorUserId: ids.userA,

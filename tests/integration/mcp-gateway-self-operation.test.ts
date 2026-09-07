@@ -693,7 +693,10 @@ describe("AssistantToolGateway self-operation", () => {
         confirmations,
         notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
         confirmTimeoutMs: 30_000,
-        yoloMode: async () => true
+        yoloMode: async () => true,
+        // Real family manifests: dummy allows the automatic tier, so the
+        // rate-limiter test still exercises the yolo auto-run path (#2418).
+        actionPolicy: (ctx) => dbBackedActionPolicy(ctx)
       });
       const tokenA = tokens.mint({
         actorUserId: ids.userA,
