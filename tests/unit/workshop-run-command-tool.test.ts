@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { AssistantToolGateway } from "@moss/ai";
+import type { ToolSummarize } from "@moss/module-sdk";
 import {
   WORKSHOP_RUN_COMMAND_SERVICE_KEY,
   workshopModuleManifest,
@@ -82,7 +83,8 @@ describe("workshop.runCommand manifest declaration", () => {
 
   it("puts the actual command on the approval card", () => {
     const tool = findTool();
-    const summary = tool.summarize?.(
+    const summarize = tool.summarize as ToolSummarize | undefined;
+    const summary = summarize?.(
       { command: "pnpm build" },
       {
         actorUserId: "user-a",
