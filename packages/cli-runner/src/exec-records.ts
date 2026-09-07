@@ -37,7 +37,9 @@ export interface ExecDeadlineRecord {
    * The build's actual start time read from the system at spawn, in system
    * ticks. Compared against the live process before any kill, so a recycled
    * process number can never aim the kill at something else. Null when the
-   * system would not say: such a record is never acted on.
+   * system would not say: such a record is never acted on. This value is
+   * counted from the machine's boot, so it is only unique within one boot —
+   * never assume it is unique across restarts.
    */
   readonly startTime: string | null;
 }
