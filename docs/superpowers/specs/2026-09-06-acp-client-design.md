@@ -275,8 +275,10 @@ clocks.
 
 ## 8. Non-interactive calls
 
-Anything that runs a model with nobody watching. Inventory so far (Scout, 2026-09-07; grep of the
-one-shot callers in the tree):
+Anything that runs a model with nobody watching. Inventory complete (Scout traced every caller
+end to end, 2026-09-07). There are two shapes: a **working session** (tools on, a folder, waits for
+the model to finish) and a **one-question call** (text in, one bounded structured answer out, no
+tools). Every row below is one or the other:
 
 | caller                                                                                                    | needs tools                     | needs JSON answer | today                                                                            |
 | --------------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------- | -------------------------------------------------------------------------------- |
@@ -284,10 +286,9 @@ one-shot callers in the tree):
 | connector monitoring, sync, mail sync, dependency extraction, source context (`packages/connectors/src/`) | no                              | yes               | one-shot `claude -p` / `gemini -p` / `codex exec` through `CliStructuredAdapter` |
 | module plan writing (`packages/ai/src/module-build/write-plan.ts`)                                        | no                              | yes               | same one-shot path                                                               |
 | installed modules asking for AI (`external-module-ai-bridge.ts` in api and worker)                        | no                              | yes               | same one-shot path                                                               |
-| briefings                                                                                                 | pending Scout                   | pending Scout     | pending Scout                                                                    |
 
-Scout's inventory is still landing; rows are added to this table as they are confirmed, and the
-plan is not written until the table is complete.
+Briefings do not call a model unattended today; if one does later, it is a one-question call and
+takes that row's shape.
 
 **Ruled (Ben, 2026-09-07): every unattended call is a short ACP session.** One way of talking
 to models, so a change is made in one place. `session/new` with the `unattended` profile, one `session/prompt`, read the stop reason,
