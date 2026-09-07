@@ -310,7 +310,10 @@ function sanitizeSessionKey(sessionKey: string): string {
     sessionKey.includes("\0") ||
     sessionKey === "." ||
     sessionKey === ".." ||
-    sessionKey.includes("..")
+    sessionKey.includes("..") ||
+    // Same reservation as the public sanitizer: no session may take the
+    // build deadline folder's name.
+    sessionKey === "acp-deadlines"
   ) {
     throw new Error("invalid sessionKey");
   }

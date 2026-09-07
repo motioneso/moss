@@ -835,4 +835,8 @@ describe("cli-runner mux-name helpers", () => {
     expect(() => sanitizeSessionKey("")).toThrow();
     expect(sanitizeSessionKey("ok-uuid-123")).toBe("ok-uuid-123");
   });
+
+  it("sanitizeSessionKey reserves the build deadline folder name", () => {
+    expect(() => sanitizeSessionKey("acp-deadlines")).toThrow();
+  });
 });
