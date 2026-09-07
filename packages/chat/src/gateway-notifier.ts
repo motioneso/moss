@@ -1,6 +1,10 @@
 import type { GatewaySessionRecord, SessionNotifier } from "@moss/ai";
 import type { ChatSessionManager } from "./live/chat-session-manager.js";
-import { parseSurfaceSessionKey } from "./live/chat-surface.js";
+import {
+  WORKSHOP_STREAM_SURFACE,
+  isWorkshopSessionKey,
+  parseSurfaceSessionKey
+} from "./live/chat-surface.js";
 import type { TranscriptRecord } from "./live/types.js";
 
 /**
@@ -14,13 +18,10 @@ export class ChatGatewayNotifier implements SessionNotifier {
   emit(chatSessionId: string, record: GatewaySessionRecord): void {
     const transcriptRecord = toTranscriptRecord(record);
     if (!transcriptRecord) return;
-    // #2369 slice 1 phase 5 — the Workshop outside-agent path emits its cards
-    // on the Workshop session key, which has no live subscriber. Route them to
-    // the owning actor's chat surface instead, where the one answerable
-    // approval card lives. Anything unparseable keeps today's fallback.
-    const workshopOwner = parseWorkshopSessionOwner(chatSessionId);
-    if (workshopOwner !== null) {
-      this.manager.injectRecord(workshopOwner, transcriptRecord);
+    if (isWorkshopSessionKey(chatSessionId)) {
+      // Workshop cards ride the project stream bucket, never parsed: the
+      // project conversation subscribes under this same raw key and surface.
+      this.manager.injectRecord(chatSessionId, transcriptRecord, WORKSHOP_STREAM_SURFACE);
       return;
     }
     try {
@@ -30,16 +31,6 @@ export class ChatGatewayNotifier implements SessionNotifier {
       this.manager.injectRecord(chatSessionId, transcriptRecord);
     }
   }
-}
-
-/**
- * Owner user id for a `workshop:<userId>:<projectId>` session key, or null
- * for anything else. Same split the run-command tool parses.
- */
-export function parseWorkshopSessionOwner(sessionKey: string): string | null {
-  const parts = sessionKey.split(":");
-  if (parts.length !== 3 || parts[0] !== "workshop" || !parts[1]) return null;
-  return parts[1];
 }
 
 function toTranscriptRecord(record: GatewaySessionRecord): TranscriptRecord | null {

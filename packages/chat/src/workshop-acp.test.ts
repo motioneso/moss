@@ -2,9 +2,11 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import {
   RpcAcpTunnel,
+  chatSessionAllowlist,
   createWorkshopAcpOpener,
   createWorkshopRunCommandService
 } from "./workshop-acp.js";
+import { WORKSHOP_AGENT_TOOL_NAMES } from "@moss/workshop";
 
 describe("RpcAcpTunnel", () => {
   it("maps each tunnel method to its runner verb with the session key", async () => {
@@ -113,13 +115,36 @@ describe("createWorkshopRunCommandService", () => {
   });
 });
 
+describe("workshop agent tool set", () => {
+  it("is exactly the build command, a subset of the manifest tools", async () => {
+    const { workshopModuleManifest } = await import("@moss/workshop");
+    const manifestNames = new Set(
+      (workshopModuleManifest.assistantTools ?? []).map((tool) => tool.name)
+    );
+    expect([...WORKSHOP_AGENT_TOOL_NAMES]).toEqual(["workshop.runCommand"]);
+    for (const name of WORKSHOP_AGENT_TOOL_NAMES) {
+      expect(manifestNames.has(name)).toBe(true);
+    }
+  });
+
+  it("stays out of chat session allowlists, handover tool included", () => {
+    const allowed = chatSessionAllowlist([
+      "workshop.runCommand",
+      "workshop.buildModule",
+      "chat.summarize"
+    ]);
+    expect(allowed.has("workshop.runCommand")).toBe(false);
+    expect(allowed.has("workshop.buildModule")).toBe(true);
+    expect(allowed.has("chat.summarize")).toBe(true);
+  });
+});
+
 describe("createWorkshopAcpOpener", () => {
   it("says plainly when the runner connection is not up", async () => {
     const opener = createWorkshopAcpOpener({
       getConnection: () => undefined,
       tokens: {} as never,
       mcpServerUrl: "http://moss.local/api/mcp",
-      listToolsForActor: async () => [],
       permissionGateway: {} as never
     });
     await expect(
@@ -139,13 +164,17 @@ describe("createWorkshopAcpOpener", () => {
         }) as never,
       tokens: { mint, revokeBySessionId } as never,
       mcpServerUrl: "http://moss.local/api/mcp",
-      listToolsForActor: async () => [],
       permissionGateway: {} as never
     });
     await expect(
       opener.open({ sessionKey: "workshop:u:p", projectId: "p", actorUserId: "u" })
     ).rejects.toThrow(/runner down/);
     expect(mint).toHaveBeenCalledTimes(1);
+    const minted = mint.mock.calls.at(0)?.at(0) as
+      | { chatSessionId?: string; allowedToolNames?: Set<string> }
+      | undefined;
+    expect(minted?.chatSessionId).toBe("workshop:u:p");
+    expect(minted?.allowedToolNames).toEqual(new Set(["workshop.runCommand"]));
     expect(revokeBySessionId).toHaveBeenCalledWith("workshop:u:p");
   });
 });

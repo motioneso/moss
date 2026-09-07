@@ -113,7 +113,10 @@ export function registerMcpTransportRoute(
       if (method === "tools/list") {
         let tools;
         try {
-          tools = (await deps.gateway.listToolsForActor(identity.actorUserId)).map(dtoToMcpTool);
+          tools = filterToolsForSession(
+            (await deps.gateway.listToolsForActor(identity.actorUserId)).map(dtoToMcpTool),
+            identity.allowedToolNames
+          );
         } catch (err) {
           // FAIL CLOSED + scrub: a resolver/DB failure must not expose the tool surface
           // nor leak err.message. Generic internal error; detail logged server-side.
@@ -396,6 +399,19 @@ function dtoToMcpTool(dto: AiAssistantToolDto) {
     description: dto.description,
     inputSchema: dto.inputSchema ?? { type: "object" as const, properties: {} }
   };
+}
+
+/**
+ * What a session is actually handed: the token's captured allowlist, or the
+ * whole list for the old unrestricted tokens (null). Without this the agent
+ * sees every tool the person can run even when its token permits a few.
+ */
+export function filterToolsForSession<TTool extends { readonly name: string }>(
+  tools: readonly TTool[],
+  allowedToolNames: Set<string> | null
+): TTool[] {
+  if (allowedToolNames === null) return [...tools];
+  return tools.filter((tool) => allowedToolNames.has(tool.name));
 }
 
 // #1133 — MCP tool-result content is no longer text-only: image attachments surface as

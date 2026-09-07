@@ -2,19 +2,34 @@ import { useMutation } from "@tanstack/react-query";
 import { CheckCircle, LoaderCircle, XCircle } from "lucide-react";
 import { useEffect, useRef } from "react";
 
-import { ApiError, resolveActionRequest } from "../api/client";
-import type { ActionRequestPreview } from "./use-chat-stream";
+import type { ActionRequestPreview } from "@moss/shared";
+
+import { ApiError, requestJson } from "./index.js";
 
 interface ActionRequestCardProps {
   readonly actionRequestId: string;
   readonly toolName: string;
   readonly summary: string;
-  /** Rich server-derived preview (email reply recipient/subject/body); live-stream only. */
   readonly preview?: ActionRequestPreview;
   readonly focusRequested?: boolean;
   readonly onFocusComplete?: () => void;
 }
 
+async function resolveActionRequest(
+  actionRequestId: string,
+  status: "confirmed" | "rejected" | "cancelled"
+): Promise<void> {
+  // #1250 — server returns 409 for expired requests; let card handle it
+  await requestJson<unknown>(
+    `/api/chat/action-requests/${encodeURIComponent(actionRequestId)}/resolve`,
+    { method: "POST", body: { status } }
+  );
+}
+
+/**
+ * The one answerable approval card, shared by the chat drawer and the Workshop
+ * project conversation. One component, two homes — never a parallel version.
+ */
 export function ActionRequestCard(props: ActionRequestCardProps) {
   const admittedRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);

@@ -29,7 +29,7 @@ import {
 } from "@moss/ai";
 import { PreferencesRepository } from "@moss/structured-state";
 import type { NotesRecallPort } from "@moss/notes";
-import type { WorkshopAcpOpener } from "@moss/workshop";
+import { WorkshopProjectsRepository, type WorkshopAcpOpener } from "@moss/workshop";
 import { getConnectorSyncAt } from "@moss/connectors";
 import type {
   ConnectorsRepository,
@@ -51,7 +51,11 @@ import { ChatGatewayNotifier } from "./gateway-notifier.js";
 import type { AcpRpcConnection } from "./live/acp-rpc-client.js";
 import { NATIVE_CONFIRM_TIMEOUT_MS } from "./live/claude-permission-hook.js";
 import { readRouteSurface } from "./live/chat-surface.js";
-import { createWorkshopAcpOpener, createWorkshopRunCommandService } from "./workshop-acp.js";
+import {
+  chatSessionAllowlist,
+  createWorkshopAcpOpener,
+  createWorkshopRunCommandService
+} from "./workshop-acp.js";
 import { registerChatLiveRoutes, type EveningInterviewSeed } from "./live-routes.js";
 import { CliChatUnavailableError } from "./live/errors.js";
 import { createCurrentViewReadService, type CurrentViewReadService } from "./live/current-view.js";
@@ -329,7 +333,9 @@ export function registerChatRoutes(
             // Capture the actor's current executable tool set as the per-session allowlist.
             // Bare tool names (e.g. "example.read") — same format as tools/list and tools/call params.name.
             // The mcp__jarvis__<name> prefix is a client-side CLI convention that never reaches the server.
-            const allowedToolNames = new Set(
+            // Minus the Workshop agent set: the build command lives only in Workshop
+            // session tokens, never in chat ones.
+            const allowedToolNames = chatSessionAllowlist(
               (await wiring.gateway.listToolsForActor(actorUserId)).map((tool) => tool.name)
             );
             return {
@@ -396,7 +402,6 @@ export function registerChatRoutes(
         getConnection: getWorkshopRpcConnection,
         tokens: wiring.tokens,
         mcpServerUrl: wiring.mcpServerUrl,
-        listToolsForActor: (actorUserId) => wiring.gateway.listToolsForActor(actorUserId),
         permissionGateway: {
           repository: wiring.aiRepository,
           runner: dependencies.dataContext,
@@ -482,6 +487,14 @@ export function registerChatRoutes(
       resolveEveningInterviewSeed: dependencies.resolveEveningInterviewSeed
     },
     pageContextStore,
+    // #2369 slice 1 phase 5 — owner check behind the project-scoped stream:
+    // only a caller who can open the project may listen to its cards.
+    resolveWorkshopProjectAccess: async (access, projectId) => {
+      const project = await dependencies.dataContext.withDataContext(access, (scopedDb) =>
+        new WorkshopProjectsRepository().get(scopedDb, projectId)
+      );
+      return project !== null;
+    },
     // #1133 — lets /turn resolve uploaded attachment ids to vault metadata.
     attachmentsService
   });

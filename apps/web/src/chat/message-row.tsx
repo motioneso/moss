@@ -16,7 +16,7 @@ import {
   undoUsefulnessFeedback
 } from "../api/usefulness-feedback-client";
 
-import { ActionRequestCard } from "./action-request-card";
+import { ActionRequestCard } from "@moss/module-web-sdk";
 import { formatAttachmentSize } from "./attachments";
 import { MarkdownMessage } from "./markdown-message";
 import { ModuleBuildPlanRecord, parseModuleBuildPlanResult } from "./module-build-plan-record";

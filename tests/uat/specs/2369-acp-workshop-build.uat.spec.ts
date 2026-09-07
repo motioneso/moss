@@ -57,12 +57,10 @@ test("Workshop build through the outside agent with an answered approval card", 
     .fill("Please run the command `echo acp-proof-ok` as a build and tell me what it showed.");
   await page.getByRole("button", { name: "Send", exact: true }).click();
 
-  // The approval card lands in the chat drawer, carrying the whole command
-  // and the sandbox sentence. Answer it there like a person would.
-  await page.getByRole("button", { name: "Chat with Moss" }).click();
-  const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
-  await expect(drawer).toBeVisible({ timeout: 30_000 });
-  const card = drawer.getByRole("region", { name: "Action request" });
+  // The approval card lands in the project conversation itself, carrying the
+  // whole command and the sandbox sentence. Answer it there like a person would.
+  const conversation = page.getByRole("region", { name: "Project conversation" });
+  const card = conversation.getByRole("region", { name: "Action request" });
   await expect(card).toBeVisible({ timeout: 120_000 });
   await expect(card).toContainText("echo acp-proof-ok");
   await expect(card).toContainText("not sandboxed");

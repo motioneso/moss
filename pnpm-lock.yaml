@@ -898,9 +898,18 @@ importers:
 
   packages/module-web-sdk:
     dependencies:
+      '@moss/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@moss/ui':
         specifier: workspace:*
         version: link:../ui
+      '@tanstack/react-query':
+        specifier: ^5.0.0
+        version: 5.101.0(react@19.2.7)
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.7)
       react:
         specifier: ^19.0.0
         version: 19.2.7

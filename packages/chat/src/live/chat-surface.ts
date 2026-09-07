@@ -5,6 +5,20 @@ const SESSION_KEY_DELIMITER = ":";
 export { DEFAULT_CHAT_SURFACE, normalizeChatSurface };
 export type { ChatSurface };
 
+/**
+ * Fan-out bucket for Workshop project streams (#2369 slice 1 phase 5). The
+ * gateway notifier injects Workshop cards under the raw `workshop:<userId>:
+ * <projectId>` key on this surface, and the project conversation subscribes
+ * to that same bucket — never parsed as actor+surface, because a project id
+ * starting with a-f would parse as a surface and silently misroute the card.
+ */
+export const WORKSHOP_STREAM_SURFACE: ChatSurface = "workshop" as ChatSurface;
+
+/** True for `workshop:<userId>:<projectId>` session keys. */
+export function isWorkshopSessionKey(sessionKey: string): boolean {
+  return sessionKey.startsWith("workshop:");
+}
+
 export function readRouteSurface(query: unknown): ChatSurface {
   const raw =
     query && typeof query === "object" ? (query as { surface?: unknown }).surface : undefined;

@@ -53,6 +53,7 @@ import {
   ChatThreadNotFoundError,
   ChatTurnInFlightError
 } from "./live/chat-session-manager.js";
+import { WORKSHOP_STREAM_SURFACE } from "./live/chat-surface.js";
 import { CliChatUnavailableError } from "./live/errors.js";
 import type { PageContextStore } from "./live/page-context-store.js";
 import { renderModuleControlContext, sanitizeExternalData } from "./live/prompt-safety.js";
@@ -87,6 +88,15 @@ export interface ChatLiveRoutesDependencies {
   };
   /** #1109 — TTL-backed store the pull-based chat.getCurrentView tool reads from. */
   readonly pageContextStore: PageContextStore;
+  /**
+   * #2369 slice 1 phase 5 — owner check for the project-scoped stream below.
+   * Optional so existing structural runtime stubs in tests keep compiling;
+   * when absent, project streams are rejected.
+   */
+  readonly resolveWorkshopProjectAccess?: (
+    access: AccessContext,
+    projectId: string
+  ) => Promise<boolean>;
   /**
    * #1133 — resolves uploaded attachment ids to vault-backed metadata for /turn.
    * Optional so existing structural runtime stubs in tests keep compiling; when
@@ -495,15 +505,35 @@ export function registerChatLiveRoutes(
 
     // Subscriptions are keyed by the caller's actor + surface — a stream only ever
     // receives that actor's transcript records, never another user's.
+    //
+    // #2369 slice 1 phase 5 — a project conversation passes ?workshopProject=<id>
+    // instead and subscribes under that project's Workshop session key, the same
+    // raw key the gateway notifier falls back to because it cannot parse it. The
+    // owner check below keeps one owner's cards out of another owner's window.
+    let subscribeActorId = access.actorUserId;
+    let subscribeSurface = surfaceResult.surface;
+    const workshopProjectId = (request.query as Record<string, unknown>).workshopProject;
+    if (workshopProjectId !== undefined) {
+      if (typeof workshopProjectId !== "string" || workshopProjectId.length === 0) {
+        return reply.code(400).send({ error: "workshopProject must be a project id" });
+      }
+      const ownsProject = await dependencies.resolveWorkshopProjectAccess?.(
+        access,
+        workshopProjectId
+      );
+      if (!ownsProject) return reply.code(404).send({ error: "Project not found" });
+      subscribeActorId = `workshop:${access.actorUserId}:${workshopProjectId}`;
+      subscribeSurface = WORKSHOP_STREAM_SURFACE;
+    }
     let unsubscribe: () => void;
     try {
       unsubscribe = runtime.manager.subscribe(
-        access.actorUserId,
+        subscribeActorId,
         (record) => {
           if (reply.raw.destroyed || reply.raw.writableEnded) return;
           reply.raw.write(`data: ${JSON.stringify(record)}\n\n`);
         },
-        surfaceResult.surface
+        subscribeSurface
       );
     } catch (error) {
       return handleLiveRouteError(error, reply);

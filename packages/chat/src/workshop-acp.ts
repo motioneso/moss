@@ -11,7 +11,12 @@
 import { MossAcpClient, type AcpPermissionDecider, type AcpTunnel } from "@moss/acp";
 import { requestAcpBuiltInPermission, type AcpPermissionGatewayDeps } from "@moss/ai";
 import { HttpError } from "@moss/module-sdk";
-import type { WorkshopAcpOpener, WorkshopAcpTurn, WorkshopRunCommandService } from "@moss/workshop";
+import {
+  WORKSHOP_AGENT_TOOL_NAMES,
+  type WorkshopAcpOpener,
+  type WorkshopAcpTurn,
+  type WorkshopRunCommandService
+} from "@moss/workshop";
 
 import type { AcpRpcConnection } from "./live/acp-rpc-client.js";
 
@@ -99,10 +104,19 @@ export interface WorkshopAcpOpenerDeps {
   readonly getConnection: () => AcpRpcConnection | undefined;
   readonly tokens: AcpPermissionGatewayDeps["tokens"];
   readonly mcpServerUrl: string;
-  readonly listToolsForActor: (
-    actorUserId: string
-  ) => Promise<readonly { readonly name: string }[]>;
   readonly permissionGateway: AcpPermissionGatewayDeps;
+}
+
+/**
+ * What a chat session hands over: the actor's tools minus the Workshop agent
+ * set. The build command is only callable inside a Workshop turn (the tool
+ * itself refuses any other session), so chat sessions must not list it — and
+ * the handover tool the chat genuinely needs is untouched.
+ */
+export function chatSessionAllowlist(allToolNames: Iterable<string>): Set<string> {
+  const allowed = new Set(allToolNames);
+  for (const name of WORKSHOP_AGENT_TOOL_NAMES) allowed.delete(name);
+  return allowed;
 }
 
 /** One prompt turn against the outside agent; close revokes the Bearer [REDACTED] stops the adapter. */
@@ -114,11 +128,11 @@ export function createWorkshopAcpOpener(deps: WorkshopAcpOpenerDeps): WorkshopAc
         throw new Error("The outside agent needs the runner connection, which is not up.");
       }
       const tunnel = new RpcAcpTunnel(connection);
-      const allowedToolNames = new Set(
-        (await deps.listToolsForActor(input.actorUserId)).map((tool) => tool.name)
-      );
-      // Fixed end time: a leaked outside token goes stale on its own. Revoked
-      // on close; the TTL is only the backstop.
+      // Exactly the Workshop agent set, never the actor's full list: this
+      // token sits on the agent's command line where any login on the box can
+      // read it. Fixed end time: a leaked outside token goes stale on its own.
+      // Revoked on close; the TTL is only the backstop.
+      const allowedToolNames = new Set(WORKSHOP_AGENT_TOOL_NAMES);
       const bearer = deps.tokens.mint(
         {
           actorUserId: input.actorUserId,

@@ -5,6 +5,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { Link, useNavigate, useParams } from "react-router";
 import { Button, ButtonLink, Card, EmptyState, Masthead, RowIndex, RowIndexItem } from "@moss/ui";
 import {
+  ActionRequestCard,
   ActivityPeek,
   ApiError,
   BrandMark,
@@ -310,6 +311,41 @@ function WorkshopProjectContent({
   // Turns already sent but not yet back from the feed: they render in the thread
   // immediately so sending never looks stuck, and leave as their rows arrive.
   const [pending, setPending] = useState<readonly { messageId: string; text: string }[]>([]);
+  // Approval cards the outside agent raises mid-turn, arriving on this
+  // project's live stream. Live-only: a reload drops them, and nothing runs
+  // until the owner answers, so the safe direction survives a refresh.
+  const [approvals, setApprovals] = useState<
+    readonly { actionRequestId: string; toolName: string; summary: string }[]
+  >([]);
+  useEffect(() => {
+    const source = new EventSource(
+      `/api/chat/stream?workshopProject=${encodeURIComponent(projectId)}`
+    );
+    source.onmessage = (event: MessageEvent<string>) => {
+      let record: TranscriptRecord;
+      try {
+        record = JSON.parse(event.data) as TranscriptRecord;
+      } catch {
+        return;
+      }
+      if (record.kind !== "action_request" || !record.actionRequestId) return;
+      const card = {
+        actionRequestId: record.actionRequestId,
+        toolName: record.toolName ?? "",
+        summary: record.summary ?? record.text
+      };
+      setApprovals((current) =>
+        current.some((item) => item.actionRequestId === card.actionRequestId)
+          ? current
+          : [...current, card]
+      );
+    };
+    // No error handler on purpose: EventSource retries on its own, and closing
+    // here would drop later cards after one blip.
+    return () => {
+      source.close();
+    };
+  }, [projectId]);
   const forgetPending = useCallback((sentId: string) => {
     setPending((current) => current.filter((item) => item.messageId !== sentId));
   }, []);
@@ -404,8 +440,8 @@ function WorkshopProjectContent({
     const lastId = entries.at(-1)?.messageId ?? null;
     const grown = lastId !== lastEntryIdRef.current;
     if (grown) lastEntryIdRef.current = lastId;
-    if (stickToBottom && (grown || thinking)) scrollHistoryToLatest();
-  }, [pending, entries, thinking, stickToBottom, scrollHistoryToLatest]);
+    if (stickToBottom && (grown || thinking || approvals.length > 0)) scrollHistoryToLatest();
+  }, [pending, entries, thinking, approvals.length, stickToBottom, scrollHistoryToLatest]);
   // The top bar carries the project's name while this page is mounted; before the project
   // loads there is no name to show, so the trail stays clear and the plain section title stands.
   usePageTrail(
@@ -509,6 +545,14 @@ function WorkshopProjectContent({
         {!messages.isPending && !messages.isError ? (
           <Thread records={visibleTranscript} working={thinking} />
         ) : null}
+        {approvals.map((approval) => (
+          <ActionRequestCard
+            key={approval.actionRequestId}
+            actionRequestId={approval.actionRequestId}
+            toolName={approval.toolName}
+            summary={approval.summary}
+          />
+        ))}
         {thinking ? <ActivityPeek records={[]} inProgress /> : null}
       </div>
       <WorkshopComposer

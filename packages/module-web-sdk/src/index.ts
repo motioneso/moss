@@ -23,6 +23,7 @@ import type { ReactNode } from "react";
 export * from "@moss/ui";
 export * from "./page-trail.js";
 export * from "./runtime.js";
+export * from "./action-request-card.js";
 export interface ModuleWebContribution {
   /** Must match the module's backend manifest `id` — asserted at scan/test time. */
   readonly moduleId: string;

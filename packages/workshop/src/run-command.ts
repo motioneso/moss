@@ -19,6 +19,17 @@ import { workshopRunCommandMaxLength } from "@moss/shared";
 export const WORKSHOP_RUN_COMMAND_SERVICE_KEY = "workshopRunCommand";
 
 /**
+ * Tools the outside agent may call inside a Workshop turn (#2383: this token
+ * sits on the agent's command line where any login on the box can read it, so
+ * the list must be exactly what the turn needs). Deliberate and minimal:
+ * workshop.runCommand runs the build, the turn's only tool job. History
+ * arrives in the prompt and the reply persists through the feed, so the agent
+ * needs nothing else. workshop.buildModule saves projects from chat and must
+ * never be callable from inside a project turn.
+ */
+export const WORKSHOP_AGENT_TOOL_NAMES: readonly string[] = ["workshop.runCommand"];
+
+/**
  * Plain user-facing sandbox sentence (#2396 ruling, accepted for a
  * single-owner install). Shared by the approval card (manifest `summarize`)
  * and the app-map feature entry, so the two can never drift apart.

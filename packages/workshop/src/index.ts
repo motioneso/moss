@@ -18,6 +18,7 @@ export {
 } from "./assistant-tools.js";
 export {
   workshopRunCommandExecute,
+  WORKSHOP_AGENT_TOOL_NAMES,
   WORKSHOP_RUN_COMMAND_SANDBOX_NOTE,
   WORKSHOP_RUN_COMMAND_SERVICE_KEY,
   WORKSHOP_RUN_COMMAND_DEFAULT_TIMEOUT_MS,

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 
-import { ActionRequestCard } from "../../apps/web/src/chat/action-request-card.js";
+import { ActionRequestCard } from "@moss/module-web-sdk";
 import { parseRecord } from "../../apps/web/src/chat/use-chat-stream.js";
 
 // `ActionRequestCard` reads `useMutation` (#1518), which requires a `QueryClient` in context even
