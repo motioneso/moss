@@ -29,7 +29,10 @@ export type {
   GatewayToolResponse
 } from "./types.js";
 export {
+  APPROVAL_REFUSED_REASON,
   AssistantToolGateway,
+  type AcpBuiltInPermissionRequest,
+  type AcpBuiltInPermissionResponse,
   type AssistantToolGatewayDependencies,
   type NativeToolPermissionRequest,
   type NativeToolPermissionResponse

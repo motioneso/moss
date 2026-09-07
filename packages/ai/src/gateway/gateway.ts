@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { types as nodeUtilTypes } from "node:util";
 
+import { classifyAcpPermission, inferAcpToolName } from "@moss/acp";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 import type {
@@ -168,8 +169,29 @@ export interface NativeToolPermissionResponse {
   readonly reason: string;
 }
 
+/**
+ * One built-in tool ask from the outside agent (ACP `session/request_permission`).
+ * The adapter sends no tool name, only the display title and the raw tool input,
+ * so both travel here for the policy to classify. `kind`/`paths` carry the
+ * protocol fields when the agent supplied them. Identity always comes from the
+ * verified session token, never from these fields.
+ */
+export interface AcpBuiltInPermissionRequest {
+  readonly cwd: string;
+  readonly sessionId: string;
+  readonly toolCallId: string;
+  readonly title: string;
+  readonly toolInput: Record<string, unknown>;
+  readonly kind?: string | null;
+  readonly paths?: readonly string[] | null;
+}
+
+export type AcpBuiltInPermissionResponse = NativeToolPermissionResponse;
+
 const NATIVE_TOOL_MODULE_ID = "claude-native";
 const NATIVE_TOOL_MODULE_NAME = "Claude Native Tools";
+const ACP_TOOL_MODULE_ID = "acp-builtin";
+const ACP_TOOL_MODULE_NAME = "Agent Built-in Tools";
 // #1158: read-only native META-tools that must never require a user confirmation.
 // Claude Code loads its MCP tool schemas lazily via the native ToolSearch tool; gating it
 // behind the confirm flow deadlocks the permission hook (150s confirm wait == 150s hook
@@ -449,6 +471,97 @@ export class AssistantToolGateway {
       // on the strength of their own click. The YOLO branch above already got this right and
       // says why (#1085 F4: observe the grant, never fire-and-forget a fictional success); this
       // sibling branch, forty lines down and doing the identical thing, was missed.
+      this.deps.notifier.emit(chatSessionId, {
+        kind: "action_result",
+        actionRequestId: action.id,
+        toolName,
+        outcome: "allowed"
+      });
+      return { decision: "allow", reason: "Approved by user." };
+    } finally {
+      this.deps.confirmations.markDone(action.id);
+    }
+  }
+
+  /**
+   * Decide one outside-agent built-in tool ask (#2380, spec 6.3/6.4).
+   *
+   * Same approval system as every other ask, not a second one: the automatic
+   * policy allows read-only tools and in-folder writes outright and refuses the
+   * unrecognised without a row, while anything needing a person creates the
+   * same pending row and emits the same `action_request` event the approval
+   * card already listens for. The row owner is the token's actor, so the audit
+   * records who approved by the token that carried the request. The session
+   * tool allowlist is not consulted: built-in names are outside that list.
+   */
+  async requestAcpBuiltInPermission(
+    token: string,
+    request: AcpBuiltInPermissionRequest
+  ): Promise<AcpBuiltInPermissionResponse> {
+    const { actorUserId, chatSessionId } = this.deps.tokens.verify(token);
+    const toolName = inferAcpToolName(request.title) ?? "Unknown";
+    const input = request.toolInput;
+    const requestId = `acp_${randomUUID()}`;
+    const access: AccessContext = { actorUserId, requestId };
+
+    const verdict = classifyAcpPermission(
+      {
+        sessionId: request.sessionId,
+        toolCallId: request.toolCallId,
+        title: request.title,
+        rawInput: input,
+        kind: (request.kind ?? null) as Parameters<typeof classifyAcpPermission>[0]["kind"],
+        locations: (request.paths ?? []).map((path) => ({ path }))
+      },
+      request.cwd
+    );
+    if (verdict === "allow") {
+      return { decision: "allow", reason: "Allowed by policy." };
+    }
+    if (verdict === "deny") {
+      return { decision: "deny", reason: APPROVAL_REFUSED_REASON };
+    }
+
+    const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
+      this.deps.repository.createPendingAssistantAction(scopedDb, {
+        toolModuleId: ACP_TOOL_MODULE_ID,
+        toolModuleName: ACP_TOOL_MODULE_NAME,
+        toolName,
+        permissionId: `${ACP_TOOL_MODULE_ID}.${toolName}`,
+        risk: request.kind === "execute" || toolName === "Bash" ? "destructive" : "write",
+        inputSummary: summarizeAssistantToolInput(input),
+        requestId
+      })
+    );
+
+    const pendingResolution = this.deps.confirmations.awaitResolution(
+      action.id,
+      this.deps.confirmTimeoutMs
+    );
+
+    this.deps.notifier.emit(chatSessionId, {
+      kind: "action_request",
+      actionRequestId: action.id,
+      toolName,
+      summary: `The agent wants to use ${toolName} (${request.title.slice(0, 200)}).`
+    });
+
+    try {
+      const outcome = await pendingResolution;
+      if (outcome !== "confirmed") {
+        this.deps.notifier.emit(chatSessionId, {
+          kind: "action_result",
+          actionRequestId: action.id,
+          toolName,
+          outcome: "denied",
+          reason: APPROVAL_REFUSED_REASON
+        });
+        return {
+          decision: "deny",
+          reason: APPROVAL_REFUSED_REASON
+        };
+      }
+
       this.deps.notifier.emit(chatSessionId, {
         kind: "action_result",
         actionRequestId: action.id,
