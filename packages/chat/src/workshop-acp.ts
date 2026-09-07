@@ -148,11 +148,19 @@ export function createWorkshopAcpOpener(deps: WorkshopAcpOpenerDeps): WorkshopAc
         }
       };
       const client = new MossAcpClient(tunnel, {}, decider);
-      const handle = await client.openSession(input.sessionKey, input.projectId, "workshop", {
-        url: deps.mcpServerUrl,
-        bearer,
-        onClose: () => deps.tokens.revokeBySessionId(input.sessionKey)
-      });
+      let handle;
+      try {
+        handle = await client.openSession(input.sessionKey, input.projectId, "workshop", {
+          url: deps.mcpServerUrl,
+          bearer,
+          onClose: () => deps.tokens.revokeBySessionId(input.sessionKey)
+        });
+      } catch (error) {
+        // The Bearer [REDACTED] minted above or the turn never starts: revoke it
+        // now rather than letting it sit valid until its fixed end time.
+        deps.tokens.revokeBySessionId(input.sessionKey);
+        throw error;
+      }
       return {
         async prompt(text: string): Promise<string> {
           const result = await client.prompt(handle, text, {

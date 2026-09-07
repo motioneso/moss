@@ -290,7 +290,8 @@ choice (admin default per surface, user override where it exists). No open quest
 ## 14. What a build command can reach
 
 Ruling on issue 2396 item 1 (Fable, 2026-09-07): no sandbox for now, written
-down plainly instead. Real confinement is issue 2414.
+down plainly instead. Real confinement is
+[#2414](https://github.com/motioneso/moss/issues/2414).
 
 A build command runs on the Moss server as the Moss account, in the same
 container as the app. From there it can read every user's files and project

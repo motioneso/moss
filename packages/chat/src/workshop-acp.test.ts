@@ -126,4 +126,26 @@ describe("createWorkshopAcpOpener", () => {
       opener.open({ sessionKey: "k", projectId: "p", actorUserId: "u" })
     ).rejects.toThrow(/runner connection/);
   });
+
+  it("revokes the minted Bearer [REDACTED] the session open fails", async () => {
+    const mint = vi.fn(() => "jst_test");
+    const revokeBySessionId = vi.fn();
+    const opener = createWorkshopAcpOpener({
+      getConnection: () =>
+        ({
+          acpSpawn: async () => {
+            throw new Error("runner down");
+          }
+        }) as never,
+      tokens: { mint, revokeBySessionId } as never,
+      mcpServerUrl: "http://moss.local/api/mcp",
+      listToolsForActor: async () => [],
+      permissionGateway: {} as never
+    });
+    await expect(
+      opener.open({ sessionKey: "workshop:u:p", projectId: "p", actorUserId: "u" })
+    ).rejects.toThrow(/runner down/);
+    expect(mint).toHaveBeenCalledTimes(1);
+    expect(revokeBySessionId).toHaveBeenCalledWith("workshop:u:p");
+  });
 });
