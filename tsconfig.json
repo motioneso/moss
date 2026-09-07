@@ -13,6 +13,7 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
+      "@moss/acp": ["packages/acp/src/index.ts"],
       "@moss/auth": ["packages/auth/src/index.ts"],
       "@moss/ai": ["packages/ai/src/index.ts"],
       "@moss/briefings": ["packages/briefings/src/index.ts"],
