@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@moss/acp": "workspace:*",
     "@moss/ai": "workspace:*",
     "@moss/calendar": "workspace:*",
     "@moss/connectors": "workspace:*",

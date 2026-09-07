@@ -18,6 +18,7 @@ export {
 } from "./assistant-tools.js";
 export {
   workshopRunCommandExecute,
+  WORKSHOP_RUN_COMMAND_SANDBOX_NOTE,
   WORKSHOP_RUN_COMMAND_SERVICE_KEY,
   WORKSHOP_RUN_COMMAND_DEFAULT_TIMEOUT_MS,
   WORKSHOP_RUN_COMMAND_MAX_TIMEOUT_MS,
@@ -26,6 +27,14 @@ export {
   type WorkshopRunCommandStart,
   type WorkshopRunCommandState
 } from "./run-command.js";
+export {
+  attemptAcpProjectReply,
+  buildAcpPrompt,
+  workshopSessionKey,
+  type AcpReplyDependencies,
+  type WorkshopAcpOpener,
+  type WorkshopAcpTurn
+} from "./acp-reply.js";
 
 export {
   WorkshopProjectFeed,

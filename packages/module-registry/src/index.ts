@@ -314,7 +314,8 @@ import { registerWeatherRoutes, weatherModuleManifest } from "@moss/weather";
 import {
   workshopModuleManifest,
   workshopModuleSqlMigrationDirectory,
-  registerWorkshopProjectRoutes
+  registerWorkshopProjectRoutes,
+  type WorkshopAcpOpener
 } from "@moss/workshop";
 import {
   configureSportsBriefingService,
@@ -592,6 +593,19 @@ export interface BuiltInRouteDependencies {
   readonly getResolveActionRequestFn?: () =>
     | AssistantToolGateway["resolveActionRequest"]
     | undefined;
+  /**
+   * #2369 slice 1 phase 5 — set by `registerBuiltInApiRoutes` and consumed
+   * inside `registerChatRoutes`: same late-bound "adopt" seam as
+   * {@link adoptChatGateway}, publishing the Workshop outside-agent opener.
+   */
+  readonly adoptWorkshopAcpSession?: ChatRoutesDependencies["adoptWorkshopAcpSession"];
+  /**
+   * #2369 slice 1 phase 5 — per-server getter over the value
+   * {@link adoptWorkshopAcpSession} publishes. Built fresh inside
+   * `registerBuiltInApiRoutes` for each call; read at Workshop registration
+   * time (chat registers before workshop on the same synchronous pass).
+   */
+  readonly getWorkshopAcpOpener?: () => WorkshopAcpOpener | undefined;
   /**
    * #1554 task #6 — set by `registerBuiltInApiRoutes` and consumed inside `registerChatRoutes`:
    * same late-bound "adopt" seam as {@link adoptChatRpcConnection}/
@@ -1976,6 +1990,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // #1256 — same late-bound "adopt" seam, publishing the chat module's live
         // AssistantToolGateway so the ai module's resolve route can reach it.
         adoptChatGateway: deps.adoptChatGateway,
+        // #2369 slice 1 phase 5 — same seam, publishing the Workshop
+        // outside-agent opener for the Workshop project routes below.
+        adoptWorkshopAcpSession: deps.adoptWorkshopAcpSession,
         // #1554 task #6: same late-bound "adopt" seam, publishing the wiring closure's
         // SessionTokenRegistry.revokeBySessionId so onReady's resolveChatEngineFactory call
         // below can thread it into the persistent-runtime pool's onPersistentReap.
@@ -2660,7 +2677,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         aiRepository: new AiRepository(),
         cipher: createAiSecretCipher(),
-        createCliStructuredAdapter: deps.createCliStructuredAdapter
+        createCliStructuredAdapter: deps.createCliStructuredAdapter,
+        // #2369 slice 1 phase 5 — adopted from the chat module earlier on this
+        // same synchronous pass. Absent means unwired; the reply path stays on
+        // today's engine and says so.
+        openWorkshopAcpSession: deps.getWorkshopAcpOpener?.()
       })
   }
 ];
@@ -3063,6 +3084,10 @@ export function registerBuiltInApiRoutes(
   // synchronously during the BUILT_IN_MODULES registerRoutes pass below, strictly before the
   // onReady hook further down that calls resolveChatEngineFactory (the only reader).
   let revokeMcpTokenBySessionId: ((chatSessionId: string) => void) | undefined;
+  // #2369 slice 1 phase 5: the chat module's Workshop outside-agent opener,
+  // adopted during the same synchronous registerRoutes pass (chat registers
+  // before workshop). Per-server binding, never module-level.
+  let workshopAcpOpener: WorkshopAcpOpener | undefined;
 
   // Onboarding probes: built synchronously (no boot-time probing) and forwarded to the settings
   // module. Each function probes lazily, per request, bounded by a short timeout. On the RPC path they
@@ -3269,6 +3294,14 @@ export function registerBuiltInApiRoutes(
     adoptMcpTokenRevoke: (fn: (chatSessionId: string) => void) => {
       revokeMcpTokenBySessionId = fn;
     },
+    // #2369 slice 1 phase 5: mirrors adoptChatGateway above — publishes the
+    // chat module's Workshop outside-agent opener into this per-server
+    // binding, which the Workshop registration below reads back out through
+    // getWorkshopAcpOpener.
+    adoptWorkshopAcpSession: (opener: WorkshopAcpOpener) => {
+      workshopAcpOpener = opener;
+    },
+    getWorkshopAcpOpener: () => workshopAcpOpener,
     resolveEveningInterviewSeed: async (actorUserId: string, briefingRunId?: string) => {
       const repository = new BriefingsRepository();
       const run = await dependencies.dataContext.withDataContext(

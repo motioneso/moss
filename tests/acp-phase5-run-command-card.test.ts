@@ -8,7 +8,7 @@ function runCommandSummarize(input: unknown): string {
     (candidate) => candidate.name === "workshop.runCommand"
   );
   if (!tool || typeof tool.summarize !== "function") throw new Error("runCommand tool missing");
-  return tool.summarize(input as never, {} as never);
+  return tool.summarize(input as never);
 }
 
 describe("runCommand approval card", () => {

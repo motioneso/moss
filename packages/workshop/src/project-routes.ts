@@ -31,6 +31,7 @@ import {
   WorkshopProjectsRepository
 } from "./projects-repository.js";
 import { WorkshopMessageConflictError, WorkshopProjectFeed } from "./project-feed.js";
+import type { WorkshopAcpOpener } from "./acp-reply.js";
 import { attemptProjectReply } from "./project-reply.js";
 import {
   createWorkshopProject,
@@ -49,6 +50,8 @@ export interface WorkshopProjectRouteDependencies {
   >;
   readonly cipher: Pick<AiSecretCipher, "decryptJson">;
   readonly createCliStructuredAdapter?: (kind: ProviderKind) => StructuredProviderAdapter;
+  /** Outside-agent turn opener, threaded from the chat wiring; absent unwired. */
+  readonly openWorkshopAcpSession?: WorkshopAcpOpener;
 }
 
 const errors = Object.fromEntries(
@@ -245,7 +248,8 @@ export function registerWorkshopProjectRoutes(
               dataContext: deps.dataContext,
               aiRepository: deps.aiRepository,
               cipher: deps.cipher,
-              createCliStructuredAdapter: deps.createCliStructuredAdapter
+              createCliStructuredAdapter: deps.createCliStructuredAdapter,
+              openWorkshopAcpSession: deps.openWorkshopAcpSession
             },
             access,
             project,

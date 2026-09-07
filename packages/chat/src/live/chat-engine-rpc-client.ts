@@ -48,6 +48,12 @@ import { performClientHello } from "./rpc-handshake.js";
 import {
   decodeFrame,
   encodeFrame,
+  type RpcAcpExecKillParams,
+  type RpcAcpExecKillResult,
+  type RpcAcpExecPollParams,
+  type RpcAcpExecPollResult,
+  type RpcAcpExecStartParams,
+  type RpcAcpExecStartResult,
   type RpcAcpKillParams,
   type RpcAcpKillResult,
   type RpcAcpReadParams,
@@ -368,6 +374,17 @@ export class RpcConnection {
   // #2369 phase 3 — the runner speaks acpExecStart/acpExecPoll/acpExecKill
   // (server side is live); the matching client verbs land with the API-side
   // tunnel backing in phase 5, which is their first caller.
+  acpExecStart(sessionKey: string, params: RpcAcpExecStartParams): Promise<RpcAcpExecStartResult> {
+    return this.call<RpcAcpExecStartResult>("acpExecStart", sessionKey, params);
+  }
+
+  acpExecPoll(sessionKey: string, params: RpcAcpExecPollParams): Promise<RpcAcpExecPollResult> {
+    return this.call<RpcAcpExecPollResult>("acpExecPoll", sessionKey, params);
+  }
+
+  acpExecKill(sessionKey: string, params: RpcAcpExecKillParams): Promise<RpcAcpExecKillResult> {
+    return this.call<RpcAcpExecKillResult>("acpExecKill", sessionKey, params);
+  }
 
   /**
    * #456 — re-arm the response deadline for any in-flight turn verb.

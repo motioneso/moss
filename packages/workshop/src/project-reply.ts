@@ -9,7 +9,9 @@ import {
   type StructuredProviderAdapter
 } from "@moss/ai";
 import type { AccessContext, DataContextRunner } from "@moss/db";
-import type { WorkshopFeedEntry, WorkshopProject } from "@moss/shared";
+import { ACP_AGENT_CLAUDE_CODE, type WorkshopFeedEntry, type WorkshopProject } from "@moss/shared";
+import { readWorkshopAgentSetting } from "@moss/settings";
+import { attemptAcpProjectReply, type WorkshopAcpOpener } from "./acp-reply.js";
 import { WorkshopProjectFeed } from "./project-feed.js";
 
 /**
@@ -17,7 +19,7 @@ import { WorkshopProjectFeed } from "./project-feed.js";
  * docs/reviews/2026-09-04-workshop-assessment.md), trimmed to what applies to a plain
  * conversational reply — this slice has no tools, no builds, no planning.
  */
-const PROJECT_REPLY_PERSONA_TEXT =
+export const PROJECT_REPLY_PERSONA_TEXT =
   "You are the assistant for this Workshop project. You help the user design, build, test, and " +
   "refine its Moss module. Keep the conversation focused on that module and retain its agreed " +
   "requirements and current plan. Ask focused questions when an answer changes the result; " +
@@ -34,6 +36,8 @@ export interface ProjectReplyDependencies {
   >;
   readonly cipher: Pick<AiSecretCipher, "decryptJson">;
   readonly createCliStructuredAdapter?: (kind: ProviderKind) => StructuredProviderAdapter;
+  /** Outside-agent turn opener; absent means the outside agent is not wired. */
+  readonly openWorkshopAcpSession?: WorkshopAcpOpener;
 }
 
 export interface ProjectReplyResult {
@@ -174,6 +178,23 @@ export async function attemptProjectReply(
   userEntry: WorkshopFeedEntry
 ): Promise<ProjectReplyResult> {
   try {
+    const agentChoice = await deps.dataContext.withDataContext(access, (scopedDb) =>
+      readWorkshopAgentSetting(scopedDb)
+    );
+    if (agentChoice === ACP_AGENT_CLAUDE_CODE) {
+      if (!deps.openWorkshopAcpSession) {
+        console.warn(
+          `[workshop] project reply for project ${project.id} selected the outside agent, which is not wired.`
+        );
+        return { delivered: false };
+      }
+      return attemptAcpProjectReply(
+        { dataContext: deps.dataContext, opener: deps.openWorkshopAcpSession },
+        access,
+        project,
+        userEntry
+      );
+    }
     const picked = await deps.dataContext.withDataContext(access, async (scopedDb) => {
       const model = await deps.aiRepository.selectModelForCapability(
         scopedDb,

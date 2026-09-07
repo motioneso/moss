@@ -29,6 +29,7 @@ import {
 } from "@moss/ai";
 import { PreferencesRepository } from "@moss/structured-state";
 import type { NotesRecallPort } from "@moss/notes";
+import type { WorkshopAcpOpener } from "@moss/workshop";
 import { getConnectorSyncAt } from "@moss/connectors";
 import type {
   ConnectorsRepository,
@@ -47,7 +48,9 @@ import {
   type MossModuleManifest
 } from "@moss/module-sdk";
 import { ChatGatewayNotifier } from "./gateway-notifier.js";
+import { NATIVE_CONFIRM_TIMEOUT_MS } from "./live/claude-permission-hook.js";
 import { readRouteSurface } from "./live/chat-surface.js";
+import { createWorkshopAcpOpener, createWorkshopRunCommandService } from "./workshop-acp.js";
 import { registerChatLiveRoutes, type EveningInterviewSeed } from "./live-routes.js";
 import { CliChatUnavailableError } from "./live/errors.js";
 import { createCurrentViewReadService, type CurrentViewReadService } from "./live/current-view.js";
@@ -175,6 +178,15 @@ export interface ChatRoutesDependencies {
    * is wired (`wiring === null`, i.e. no `resolveActiveModules`/`mcpServerUrl` supplied).
    */
   readonly adoptMcpTokenRevoke?: (revoke: (chatSessionId: string) => void) => void;
+  /**
+   * #2369 slice 1 phase 5 — same late-bound "adopt" seam as
+   * {@link adoptChatRpcConnection}, publishing the Workshop outside-agent
+   * session opener built from this module's gateway wiring plus the runtime's
+   * runner connection. The composition root threads it into the Workshop
+   * project routes. Absent until adopted; the reply path treats that as
+   * unwired and stays on today's engine.
+   */
+  readonly adoptWorkshopAcpSession?: (opener: WorkshopAcpOpener) => void;
   readonly resolveEveningInterviewSeed?: (
     actorUserId: string,
     briefingRunId?: string
@@ -239,6 +251,11 @@ export function registerChatRoutes(
 
   const resolveActiveModules = dependencies.resolveActiveModules;
   const mcpServerUrl = dependencies.mcpServerUrl;
+  // #2369 slice 1 phase 5 — the Workshop outside-agent path and workshop.runCommand
+  // share the chat runtime's ONE runner connection. It only exists after the
+  // runtime is built below, so both read it through this late-bound holder.
+  const workshopRpcBox: { connection?: RpcConnection } = {};
+  const getWorkshopRpcConnection = (): RpcConnection | undefined => workshopRpcBox.connection;
   const wiring =
     resolveActiveModules && mcpServerUrl
       ? (() => {
@@ -264,7 +281,10 @@ export function registerChatRoutes(
                 currentViewService,
                 // #1133 — lets the engine pull attachment bytes via chat.readAttachment.
                 attachmentsService,
-                listModuleManifests: dependencies.listModuleManifests
+                listModuleManifests: dependencies.listModuleManifests,
+                // #2369 slice 1 phase 5 — runner access for workshop.runCommand,
+                // over the shared connection above.
+                workshopRunCommandService: createWorkshopRunCommandService(getWorkshopRpcConnection)
               },
               appMapService: dependencies.appMapService,
               platformDiagnostics: dependencies.platformDiagnostics,
@@ -274,7 +294,7 @@ export function registerChatRoutes(
             })
           );
 
-          return { tokens, gateway, mcpServerUrl, aiRepository };
+          return { tokens, gateway, mcpServerUrl, aiRepository, confirmations };
         })()
       : null;
 
@@ -364,6 +384,29 @@ export function registerChatRoutes(
 
   // Wire real notifier now that manager is available.
   realNotifier = new ChatGatewayNotifier(runtime.manager);
+
+  // #2369 slice 1 phase 5 — the Workshop outside-agent opener shares the
+  // runtime's runner connection (late-bound above) and the gateway wiring.
+  // Adopted to the composition root for the Workshop project routes.
+  workshopRpcBox.connection = runtime.connection;
+  if (wiring) {
+    dependencies.adoptWorkshopAcpSession?.(
+      createWorkshopAcpOpener({
+        getConnection: getWorkshopRpcConnection,
+        tokens: wiring.tokens,
+        mcpServerUrl: wiring.mcpServerUrl,
+        listToolsForActor: (actorUserId) => wiring.gateway.listToolsForActor(actorUserId),
+        permissionGateway: {
+          repository: wiring.aiRepository,
+          runner: dependencies.dataContext,
+          tokens: wiring.tokens,
+          confirmations: wiring.confirmations,
+          notifier: notifierProxy,
+          confirmTimeoutMs: NATIVE_CONFIRM_TIMEOUT_MS
+        }
+      })
+    );
+  }
 
   // #342 (§5.5): tear down runtime-owned background resources on server close — stop the idle reaper
   // and close the RPC connection. Idempotent (the composition root also closes the adopted connection;
