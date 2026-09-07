@@ -48,6 +48,12 @@ import { performClientHello } from "./rpc-handshake.js";
 import {
   decodeFrame,
   encodeFrame,
+  type RpcAcpExecKillParams,
+  type RpcAcpExecKillResult,
+  type RpcAcpExecPollParams,
+  type RpcAcpExecPollResult,
+  type RpcAcpExecStartParams,
+  type RpcAcpExecStartResult,
   type RpcAcpKillParams,
   type RpcAcpKillResult,
   type RpcAcpReadParams,
@@ -363,6 +369,24 @@ export class RpcConnection {
 
   acpKill(sessionKey: string, params: RpcAcpKillParams = {}): Promise<RpcAcpKillResult> {
     return this.call<RpcAcpKillResult>("acpKill", sessionKey, params);
+  }
+
+  // #2369 slice 1 phase 3 — runner-side builds for workshop.runCommand.
+  // Session-scoped like the tunnel verbs; acpExecPoll is a quick poll, so the
+  // default deadline applies.
+  acpExecStart(
+    sessionKey: string,
+    params: RpcAcpExecStartParams
+  ): Promise<RpcAcpExecStartResult> {
+    return this.call<RpcAcpExecStartResult>("acpExecStart", sessionKey, params);
+  }
+
+  acpExecPoll(sessionKey: string, params: RpcAcpExecPollParams): Promise<RpcAcpExecPollResult> {
+    return this.call<RpcAcpExecPollResult>("acpExecPoll", sessionKey, params);
+  }
+
+  acpExecKill(sessionKey: string, params: RpcAcpExecKillParams): Promise<RpcAcpExecKillResult> {
+    return this.call<RpcAcpExecKillResult>("acpExecKill", sessionKey, params);
   }
 
   /**
