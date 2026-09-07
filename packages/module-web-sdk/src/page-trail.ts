@@ -10,11 +10,28 @@
  * The registered function is stable for the life of the app — the host sets it once at module
  * scope, never during render — so calling it unconditionally here keeps hook order stable.
  */
+export interface PageTrailAction {
+  readonly id: string;
+  readonly label: string;
+}
+
 export interface PageTrailInput {
   /** The name shown in the top bar while the calling page is mounted. */
   readonly name: string;
   /** Small trailing note, hidden on narrow screens. */
   readonly meta?: string | null;
+  /**
+   * When given, the shell shows its "More" button at the bar's right with exactly these items.
+   * Chosen ids arrive through `onAction`.
+   */
+  readonly actions?: readonly PageTrailAction[];
+  /**
+   * When given, the name is a rename button for the calling page; the submitted name arrives
+   * here. Reject (throw) to refuse — the shell puts the old name back with a red line.
+   */
+  readonly onRename?: (name: string) => Promise<void>;
+  /** Chosen "More" action ids arrive here. */
+  readonly onAction?: (id: string) => void;
 }
 
 export type PageTrailHook = (input: PageTrailInput) => void;

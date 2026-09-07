@@ -16,6 +16,7 @@
     "@moss/goals": "workspace:*",
     "@moss/module-css-confine": "workspace:*",
     "@moss/module-sdk": "workspace:*",
+    "@moss/module-web-sdk": "workspace:*",
     "@moss/news": "workspace:*",
     "@moss/settings-ui": "workspace:*",
     "@moss/shared": "workspace:*",

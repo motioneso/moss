@@ -335,6 +335,24 @@ export const getWorkshopProjectResponseSchema = {
   required: ["project"],
   properties: { project: workshopProjectSchema }
 } as const;
+export interface RenameWorkshopProjectInput {
+  readonly title: string;
+}
+export const renameWorkshopProjectInputSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["title"],
+  properties: {
+    title: { type: "string", minLength: 1, maxLength: 160 }
+  }
+} as const;
+export const renameWorkshopProjectResponseSchema = getWorkshopProjectResponseSchema;
+export const deleteWorkshopProjectResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["deleted"],
+  properties: { deleted: { type: "boolean" } }
+} as const;
 export const listWorkshopProjectsResponseSchema = {
   type: "object",
   additionalProperties: false,

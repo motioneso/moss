@@ -9,7 +9,7 @@ import {
   useState,
   useSyncExternalStore
 } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router";
+import { NavLink, useLocation, useNavigate } from "react-router";
 
 import { listNotifications, listThemes, sendChatTurn, signOut } from "../api/client";
 import { useAssistantName } from "../api/use-assistant-name";
@@ -34,7 +34,7 @@ import { HeaderWeather } from "../today/header-weather";
 import { applyThemeTokens } from "../theme/theme-runtime";
 import { CommandPalette } from "./command-palette";
 import { NAV_ICON_MAP } from "./nav-icons";
-import { PageTrailProvider, usePageTrailDisplay } from "./page-trail";
+import { PageTrailProvider, TopbarMoreActions, TopbarTrail, usePageTrailDisplay } from "./page-trail";
 import { WORKSHOP_MODULE_ID } from "@moss/shared";
 import {
   loadShellColorMode,
@@ -426,6 +426,7 @@ export function AppShell(props: AppShellProps) {
           ) : null}
 
           <div className="topbar-actions">
+            <TrailMoreButton />
             <button
               aria-label={assistantName ? `Chat with ${assistantName}` : "Open chat"}
               aria-pressed={chatOpen}
@@ -479,6 +480,16 @@ export function AppShell(props: AppShellProps) {
 }
 
 /**
+ * The page's "More" button at the bar's right, ahead of the assistant button. It exists only
+ * while a page holds the trail with actions — any other page shows no More button at all.
+ */
+function TrailMoreButton() {
+  const trail = usePageTrailDisplay();
+  if (!trail || trail.actions.length === 0) return null;
+  return <TopbarMoreActions actions={trail.actions} onAction={trail.onAction} />;
+}
+
+/**
  * The top bar's title area. While a page holds the trail (a Workshop project), the bar shows
  * the section as the way back, then the page name and its meta note — in place of the plain
  * title, never beside it. Otherwise the ordinary title and subtitle render unchanged.
@@ -505,19 +516,18 @@ function TopbarTitles(props: {
   }
   return (
     <div className="topbar-titles">
-      <div className="topbar-title-row topbar-crumb">
-        <Link className="topbar-title topbar-title--link" to={trail.sectionPath}>
-          {trail.sectionLabel}
-        </Link>
-        <span className="topbar-crumb__sep" aria-hidden="true">
-          /
-        </span>
-        <span className="topbar-crumb__now">{trail.name}</span>
-        {trail.meta ? <span className="topbar-crumb__meta">{trail.meta}</span> : null}
-        {props.showSettingsButton && props.moduleId ? (
-          <ModuleSettingsButton moduleId={props.moduleId} moduleName={trail.name} />
-        ) : null}
-      </div>
+      <TopbarTrail
+        sectionLabel={trail.sectionLabel}
+        sectionPath={trail.sectionPath}
+        name={trail.name}
+        meta={trail.meta}
+        onRename={trail.onRename}
+        trailing={
+          props.showSettingsButton && props.moduleId ? (
+            <ModuleSettingsButton moduleId={props.moduleId} moduleName={trail.name} />
+          ) : null
+        }
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router";
 import {
@@ -27,10 +27,12 @@ import type {
 import { formatDate, useUserLocale } from "./locale.js";
 import {
   createProject,
+  deleteProject,
   getProject,
   listMessages,
   listProjects,
   projectKeys,
+  renameProject,
   saveMessage
 } from "./project-client.js";
 
@@ -279,6 +281,10 @@ export function WorkshopProjectNew({ canMutate }: { canMutate: boolean }) {
 
 const PROJECT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// A fixed identity on purpose: the trail hook republishes on every new array, so a literal
+// here would re-render the top bar on each keystroke in the composer.
+const DELETE_ACTIONS = [{ id: "delete", label: "Delete project" }] as const;
+
 export function WorkshopProjectDetail({ canMutate }: { canMutate: boolean }) {
   const { projectId = "" } = useParams();
   if (!PROJECT_ID_RE.test(projectId))
@@ -294,10 +300,34 @@ function WorkshopProjectContent({
   canMutate: boolean;
 }) {
   const client = useQueryClient();
+  const navigate = useNavigate();
   const locale = useUserLocale();
   const [text, setText] = useState("");
   const [messageId, setMessageId] = useState(() => randomUuid());
   const [saved, setSaved] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const renameMutation = useMutation({
+    mutationFn: (title: string) => renameProject(projectId, title),
+    onSuccess: (result) => {
+      client.setQueryData(projectKeys.detail(projectId), { project: result.project });
+      void client.invalidateQueries({ queryKey: projectKeys.list });
+    }
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteProject(projectId),
+    onSuccess: () => {
+      setConfirmingDelete(false);
+      void client.invalidateQueries({ queryKey: projectKeys.list });
+      navigate("/workshop", { replace: true });
+    }
+  });
+  const onRename = useCallback(
+    (title: string) => renameMutation.mutateAsync(title).then(() => undefined),
+    [renameMutation]
+  );
+  const onTrailAction = useCallback((id: string) => {
+    if (id === "delete") setConfirmingDelete(true);
+  }, []);
   const project = useQuery({
     queryKey: projectKeys.detail(projectId),
     queryFn: () => getProject(projectId),
@@ -327,7 +357,10 @@ function WorkshopProjectContent({
     project.data
       ? {
           name: project.data.project.title,
-          meta: `Started ${formatStartedOn(project.data.project.createdAt, locale)}`
+          meta: `Started ${formatStartedOn(project.data.project.createdAt, locale)}`,
+          actions: canMutate ? DELETE_ACTIONS : undefined,
+          onRename: canMutate ? onRename : undefined,
+          onAction: canMutate ? onTrailAction : undefined
         }
       : { name: "" }
   );
@@ -356,6 +389,34 @@ function WorkshopProjectContent({
     !messages.isFetching;
   return (
     <section className="workshop-chat" aria-label="Project conversation">
+      {confirmingDelete ? (
+        <Card>
+          <div role="alertdialog" aria-label="Delete this project">
+            <p className="workshop-status">
+              Delete “{record.title}”? Its messages go with it. This cannot be undone.
+            </p>
+            {deleteMutation.isError ? (
+              <p className="workshop-status" role="alert">
+                The project could not be deleted. Try again.
+              </p>
+            ) : null}
+            <Button
+              variant="secondary"
+              disabled={deleteMutation.isPending}
+              onClick={() => setConfirmingDelete(false)}
+            >
+              Keep it
+            </Button>{" "}
+            <Button
+              variant="primary"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete project"}
+            </Button>
+          </div>
+        </Card>
+      ) : null}
       {project.isError ? (
         <ProjectError
           title="The project could not be refreshed. Reload it before making changes."
