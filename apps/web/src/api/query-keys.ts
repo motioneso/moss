@@ -69,6 +69,7 @@ export const queryKeys = {
     terminalStatus: (providerId: string) => ["ai", "terminal-status", providerId] as const,
     assistantTools: ["ai", "assistant-tools"] as const,
     webSearchKey: ["ai", "web-search-key"] as const,
+    agentSettings: ["ai", "agent-settings"] as const,
     familyKeys: ["ai", "encryption-keys"] as const,
     // #1313: the `runtimeConfig` query key + its only caller, `runtime-config-client.ts`, were
     // dead — the settings-UI control that used them was already removed (PR #1205 → batch PR

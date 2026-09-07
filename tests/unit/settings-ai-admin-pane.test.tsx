@@ -65,7 +65,13 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   putAdminYoloUser: vi.fn(),
   deleteWebSearchKey: vi.fn(),
   getWebSearchKey: vi.fn(async () => ({ hasKey: false })),
-  putWebSearchKey: vi.fn()
+  putWebSearchKey: vi.fn(),
+  listInstanceSettings: vi.fn(async () => ({
+    settings: [{ key: "workshop.agent", value: { value: "claude-code-acp" } }]
+  })),
+  putInstanceSetting: vi.fn(async (key: string, value: unknown) => ({
+    setting: { key, value }
+  }))
 }));
 
 vi.mock("../../apps/web/src/api/client-admin.js", () => ({
@@ -189,6 +195,38 @@ describe("AiProvidersPane provider picker (#1325)", () => {
     expect(sent.providerKind).toBe("anthropic");
     expect(sent.authMethod).toBe("cli");
     expect("credentialPayload" in sent).toBe(false);
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe("AiProvidersPane agent choices (#2381)", () => {
+  it("offers only passing agents per surface and shows the shared-login note", async () => {
+    const renderer = await renderPane();
+
+    const workshopSelect = renderer.root.findByProps({ "aria-label": "Agent for Workshop builds" });
+    const workshopOptions = workshopSelect
+      .findAllByType("option")
+      .map((option) => option.props.value);
+    expect(workshopOptions).toContain("default");
+    expect(workshopOptions).toContain("claude-code-acp");
+    expect(workshopSelect.props.value).toBe("claude-code-acp");
+
+    const chatSelect = renderer.root.findByProps({ "aria-label": "Agent for Chat" });
+    const chatOptions = chatSelect.findAllByType("option").map((option) => option.props.value);
+    expect(chatOptions).toEqual(["default"]);
+
+    const notes = renderer.root.findAll(
+      (instance) =>
+        typeof instance.type === "string" &&
+        instance.type === "span" &&
+        instance.children.some(
+          (child) => typeof child === "string" && child.includes("shared Claude login")
+        )
+    );
+    expect(notes.length).toBeGreaterThan(0);
 
     await act(async () => {
       renderer.unmount();

@@ -26,6 +26,8 @@ import type {
   GetChatModelOverrideSettingsResponse,
   GetFamilyKeysResponse,
   GetWebSearchKeyResponse,
+  ListInstanceSettingsResponse,
+  UpsertInstanceSettingResponse,
   PutFamilyKeyRequest,
   PutFamilyKeyResponse,
   RotateFamilyKeyRequest,
@@ -1349,6 +1351,20 @@ export async function listActionAuditLog(params?: {
 
 export async function getWebSearchKey(): Promise<GetWebSearchKeyResponse> {
   return requestJson<GetWebSearchKeyResponse>("/api/admin/settings/web-search");
+}
+
+export async function listInstanceSettings(): Promise<ListInstanceSettingsResponse> {
+  return requestJson<ListInstanceSettingsResponse>("/api/admin/settings");
+}
+
+export async function putInstanceSetting(
+  key: string,
+  value: Record<string, unknown>
+): Promise<UpsertInstanceSettingResponse> {
+  return requestJson<UpsertInstanceSettingResponse>(
+    `/api/admin/settings/${encodeURIComponent(key)}`,
+    { method: "PATCH", body: { value } }
+  );
 }
 
 export async function putWebSearchKey(

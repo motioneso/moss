@@ -43,6 +43,7 @@ import {
   supportsAutomatedProviderLogin,
   type AutomatedLoginProvider
 } from "./settings-provider-login-dialog";
+import { AgentChoiceGroup } from "./settings-agent-choice-group";
 import { ChatLockGroup } from "./settings-ai-chat-lock-group";
 import { YoloAdminGroup } from "./settings-yolo-admin-group";
 import { WebSearchKeyGroup } from "./settings-web-search-key-group";
@@ -821,6 +822,7 @@ export function AiProvidersPane() {
           ))}
         </Group>
       ) : null}
+      <AgentChoiceGroup />
       {/* #874: Voice (STT) is its own dedicated admin section, independent of the chat providers. */}
       <VoiceConfigGroup />
       <ChatLockGroup />
