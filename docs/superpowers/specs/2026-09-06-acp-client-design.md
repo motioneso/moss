@@ -1,7 +1,6 @@
 # Spec: ACP as the single model interface in Moss
 
-**Status:** Awaiting Ben's approval (2026-09-07, "ACP Work" room). No plan and no code until it is
-approved.
+**Status:** Approved by Ben, 2026-09-07 ("ACP Work" room). Next: the slice 1 plan.
 
 **Evidence:** `spikes/acp-tool-call/RESULTS.md` (four runs on the dev instance, 2026-09-06); the
 Codex, Antigravity (agy) and Claude adapter checks Scout ran on the box on 2026-09-07 (section 9); the ACP
@@ -118,7 +117,11 @@ is set, which built-ins can be switched off.
 **Launch.** Through the cli-runner engine host: per-user account, scrubbed environment, own home,
 the profile's working folder. The launch command comes from the registry entry for the provider,
 pinned by version in Moss (section 9), never resolved live at run time. The vendor login reaches
-the agent the way each provider's row says. Nothing secret ever goes on the command line.
+the agent the way each provider's row says. Nothing secret ever goes on the command line. The
+runner's interface narrows to one job: start this provider's agent as this user in this folder and
+hand back the pipe, plus sign-in and model refresh. It no longer knows about chat, engines or output
+parsing (Ben asked what the runner still brings, 2026-09-07: per-user accounts, the logins kept out
+of the API process, and the CLIs kept off the API container).
 
 Known limits, stated rather than papered over:
 
@@ -435,4 +438,4 @@ None open. Resolved on 2026-09-07:
 Rulings folded in: Fork A, reaping and reload, delete the bridge with no fallback (Ben,
 2026-09-06); ACP as the single interface, admin-chosen model per service defaulting to the instance
 default provider, unattended calls as short ACP sessions, agy off the list until its login path
-passes (Ben, 2026-09-07). Awaiting Ben's approval.
+passes (Ben, 2026-09-07). Approved by Ben on 2026-09-07.
