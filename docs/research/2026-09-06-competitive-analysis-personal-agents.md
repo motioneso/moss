@@ -39,18 +39,18 @@ capabilities below close the agent gap without giving up the product.
 
 ## What each side is
 
-| | Hermes Agent | OpenClaw | Moss |
-|---|---|---|---|
-| Shape | One Python process, one person | One long-running gateway, one trust domain | Web app plus database, many accounts |
-| Talk to it from | Terminal, desktop app, web dashboard, about 25 chat platforms, voice, editors | Web panel, about 25 chat platforms, macOS/iOS/Android/Watch apps, voice, phone calls | The web app only (installable on a phone as a web app, no push) |
-| Acts through | Shell, files, browser, code, web search, MCP, Home Assistant, Spotify, skills | Shell, files, browser, code, web search, MCP, phone camera/screen/location, skills | Its own module tools (about 100), plus connected MCP and OpenAPI services; no shell, no browser |
-| Remembers in | Two small text files it edits, full-text search of past chats, plug-in memory services | Markdown files in a folder (persona, user, curated facts, daily notes) with vector search and overnight promotion | A structured memory graph distilled from chat, viewable in Settings; optional daily archive of chats to Notes |
-| Runs on its own | Cron jobs made in chat, heartbeat, loops, goals, webhooks, weekly skill pruning | Cron jobs made in chat, 30-minute heartbeat, watched commands, webhooks, overnight memory pass | Fixed module schedules: briefings, monitoring scans, syncs, medication reminders |
-| Extends itself | Writes skills from experience, learns from a folder or web page, skills hub, plugins | Drafts skills for your review, ClawHub registry, plugins | Workshop builds a whole module with screens and tools from a chat request; prompt-only skills; module install |
-| Models | About 50 providers, local models managed in the desktop app, own subscription | About 60 providers, local runners, Claude and Codex subscription logins | Claude, Codex, Gemini subscription logins for chat; any API or Ollama/OpenAI-compatible endpoint for background work |
-| Personal-life features | None built in; skills drive Google, Apple, Obsidian, Notion; a briefing tutorial | None built in; community skills for CalDAV, Todoist, Obsidian, Oura, Home Assistant | Built in: Today, Tasks, Notes, Calendar, Email, Briefings, Monitoring, Commitments, Goals, People, News, Sports, Weather, Wellness, Food, Finance, Job Search |
-| People | One person per profile; family means separate services | One operator or a trusting team; one agent per person for isolation | Real accounts, an admin, access policy, per-user data |
-| Traction | 242k stars, releases several times a month | 389k stars, foundation-backed, weekly releases | Alpha |
+|                        | Hermes Agent                                                                           | OpenClaw                                                                                                          | Moss                                                                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shape                  | One Python process, one person                                                         | One long-running gateway, one trust domain                                                                        | Web app plus database, many accounts                                                                                                                          |
+| Talk to it from        | Terminal, desktop app, web dashboard, about 25 chat platforms, voice, editors          | Web panel, about 25 chat platforms, macOS/iOS/Android/Watch apps, voice, phone calls                              | The web app only (installable on a phone as a web app, no push)                                                                                               |
+| Acts through           | Shell, files, browser, code, web search, MCP, Home Assistant, Spotify, skills          | Shell, files, browser, code, web search, MCP, phone camera/screen/location, skills                                | Its own module tools (about 100), plus connected MCP and OpenAPI services; no shell, no browser                                                               |
+| Remembers in           | Two small text files it edits, full-text search of past chats, plug-in memory services | Markdown files in a folder (persona, user, curated facts, daily notes) with vector search and overnight promotion | A structured memory graph distilled from chat, viewable in Settings; optional daily archive of chats to Notes                                                 |
+| Runs on its own        | Cron jobs made in chat, heartbeat, loops, goals, webhooks, weekly skill pruning        | Cron jobs made in chat, 30-minute heartbeat, watched commands, webhooks, overnight memory pass                    | Fixed module schedules: briefings, monitoring scans, syncs, medication reminders                                                                              |
+| Extends itself         | Writes skills from experience, learns from a folder or web page, skills hub, plugins   | Drafts skills for your review, ClawHub registry, plugins                                                          | Workshop builds a whole module with screens and tools from a chat request; prompt-only skills; module install                                                 |
+| Models                 | About 50 providers, local models managed in the desktop app, own subscription          | About 60 providers, local runners, Claude and Codex subscription logins                                           | Claude, Codex, Gemini subscription logins for chat; any API or Ollama/OpenAI-compatible endpoint for background work                                          |
+| Personal-life features | None built in; skills drive Google, Apple, Obsidian, Notion; a briefing tutorial       | None built in; community skills for CalDAV, Todoist, Obsidian, Oura, Home Assistant                               | Built in: Today, Tasks, Notes, Calendar, Email, Briefings, Monitoring, Commitments, Goals, People, News, Sports, Weather, Wellness, Food, Finance, Job Search |
+| People                 | One person per profile; family means separate services                                 | One operator or a trusting team; one agent per person for isolation                                               | Real accounts, an admin, access policy, per-user data                                                                                                         |
+| Traction               | 242k stars, releases several times a month                                             | 389k stars, foundation-backed, weekly releases                                                                    | Alpha                                                                                                                                                         |
 
 ## Why people choose Hermes or OpenClaw over Moss
 
@@ -226,13 +226,13 @@ automation, readable memory, self-written skills, and a bounded place to act.
 
 ## Filed as issues (2026-09-07)
 
-| Capability | Issue |
-|---|---|
-| 1. Message Moss from your phone through Telegram | #2387 |
-| 2. Schedules and watchers the user creates in chat | #2388 |
-| 3. Memory you can read and edit as notes | #2390 |
-| 4. Skills the assistant writes, and skills you can import | #2391 |
+| Capability                                                              | Issue |
+| ----------------------------------------------------------------------- | ----- |
+| 1. Message Moss from your phone through Telegram                        | #2387 |
+| 2. Schedules and watchers the user creates in chat                      | #2388 |
+| 3. Memory you can read and edit as notes                                | #2390 |
+| 4. Skills the assistant writes, and skills you can import               | #2391 |
 | 5. A place for the assistant to actually do things (needs Ben's ruling) | #2385 |
-| 6. Voice: push-to-talk | #2386 |
-| 7. Smart home through Home Assistant's MCP server | #2389 |
-| 8. Import from an OpenClaw or Hermes workspace | #2392 |
+| 6. Voice: push-to-talk                                                  | #2386 |
+| 7. Smart home through Home Assistant's MCP server                       | #2389 |
+| 8. Import from an OpenClaw or Hermes workspace                          | #2392 |

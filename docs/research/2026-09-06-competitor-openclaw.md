@@ -34,20 +34,20 @@ command, and external plugin maintained outside the repo
 (https://docs.openclaw.ai/channels). All of these are documented and supported by the project;
 only the external tier is not first-party code.
 
-| Surface | Tier | Notes |
-|---|---|---|
-| Telegram | Bundled | Recommended first channel, needs only a bot token |
-| WebChat and web control panel | Bundled | Served by the Gateway at port 18789 (https://docs.openclaw.ai/web/control-ui) |
-| WhatsApp | Official plugin | QR pairing as a linked device, loaded on demand |
-| Discord, Slack, Signal, iMessage, Google Chat, Microsoft Teams, Matrix, Mattermost, IRC, LINE, Nostr, QQ, Feishu, Zalo, Twitch, Nextcloud Talk, Synology Chat, Tlon, SMS via Twilio, Voice Call via Plivo, Telnyx or Twilio | Official plugins | iMessage runs through a native macOS bridge; Signal through signal-cli |
-| WeChat, WeCom, Yuanbao, Zalo ClawBot | External plugins | Maintained outside the repo |
-| macOS menu bar app | First-party | Quick Chat popup, voice input, notifications, widget panel, Mac-side commands; distributed as a DMG from GitHub releases (https://docs.openclaw.ai/platforms/macos) |
-| iOS app | First-party | Chat, camera, screen snapshot, location, talk mode, voice wake, opt-in health summaries; "distributed through Apple channels when enabled for a release" (https://docs.openclaw.ai/platforms/ios) |
-| Android app | First-party | On Google Play and as a signed APK; chat, voice, camera, calendar, contacts, SMS, notification forwarding; Wear OS companion (https://docs.openclaw.ai/platforms/android) |
-| Apple Watch | First-party | Standalone voice over the talk feature (https://docs.openclaw.ai/nodes/talk) |
-| Windows Hub | First-party | Desktop app; Linux companion apps are "planned" (https://docs.openclaw.ai/platforms) |
-| Voice | First-party | Continuous talk mode on macOS, iOS, Android, browser; wake words; realtime voice via OpenAI or Google Live (https://docs.openclaw.ai/nodes/talk, https://docs.openclaw.ai/nodes/voicewake) |
-| Email | Trigger only | Gmail push and a bundled IMAP trigger wake an agent on inbound mail; sending is via skills (https://docs.openclaw.ai/cli/webhooks, https://docs.openclaw.ai/start/why-openclaw) |
+| Surface                                                                                                                                                                                                                     | Tier             | Notes                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Telegram                                                                                                                                                                                                                    | Bundled          | Recommended first channel, needs only a bot token                                                                                                                                                 |
+| WebChat and web control panel                                                                                                                                                                                               | Bundled          | Served by the Gateway at port 18789 (https://docs.openclaw.ai/web/control-ui)                                                                                                                     |
+| WhatsApp                                                                                                                                                                                                                    | Official plugin  | QR pairing as a linked device, loaded on demand                                                                                                                                                   |
+| Discord, Slack, Signal, iMessage, Google Chat, Microsoft Teams, Matrix, Mattermost, IRC, LINE, Nostr, QQ, Feishu, Zalo, Twitch, Nextcloud Talk, Synology Chat, Tlon, SMS via Twilio, Voice Call via Plivo, Telnyx or Twilio | Official plugins | iMessage runs through a native macOS bridge; Signal through signal-cli                                                                                                                            |
+| WeChat, WeCom, Yuanbao, Zalo ClawBot                                                                                                                                                                                        | External plugins | Maintained outside the repo                                                                                                                                                                       |
+| macOS menu bar app                                                                                                                                                                                                          | First-party      | Quick Chat popup, voice input, notifications, widget panel, Mac-side commands; distributed as a DMG from GitHub releases (https://docs.openclaw.ai/platforms/macos)                               |
+| iOS app                                                                                                                                                                                                                     | First-party      | Chat, camera, screen snapshot, location, talk mode, voice wake, opt-in health summaries; "distributed through Apple channels when enabled for a release" (https://docs.openclaw.ai/platforms/ios) |
+| Android app                                                                                                                                                                                                                 | First-party      | On Google Play and as a signed APK; chat, voice, camera, calendar, contacts, SMS, notification forwarding; Wear OS companion (https://docs.openclaw.ai/platforms/android)                         |
+| Apple Watch                                                                                                                                                                                                                 | First-party      | Standalone voice over the talk feature (https://docs.openclaw.ai/nodes/talk)                                                                                                                      |
+| Windows Hub                                                                                                                                                                                                                 | First-party      | Desktop app; Linux companion apps are "planned" (https://docs.openclaw.ai/platforms)                                                                                                              |
+| Voice                                                                                                                                                                                                                       | First-party      | Continuous talk mode on macOS, iOS, Android, browser; wake words; realtime voice via OpenAI or Google Live (https://docs.openclaw.ai/nodes/talk, https://docs.openclaw.ai/nodes/voicewake)        |
+| Email                                                                                                                                                                                                                       | Trigger only     | Gmail push and a bundled IMAP trigger wake an agent on inbound mail; sending is via skills (https://docs.openclaw.ai/cli/webhooks, https://docs.openclaw.ai/start/why-openclaw)                   |
 
 Every channel supports text; "media and reactions vary by channel". Group chats reply only
 when mentioned by default (https://docs.openclaw.ai/channels).
@@ -233,18 +233,18 @@ From the FAQ (https://docs.openclaw.ai/help/faq) and the why page
 
 ## 12. Popularity signals
 
-| Signal | Value | Source |
-|---|---|---|
-| GitHub stars | 389,058 | https://api.github.com/repos/openclaw/openclaw (2026-09-06) |
-| Forks | 81,754 | same |
-| Open issues | 6,230 | same |
-| Repository created | 2025-11-24 | same |
-| Latest release | v2026.9.2 on 2026-09-05 | https://api.github.com/repos/openclaw/openclaw/releases |
-| Releases per month 2026 | Feb 16, Mar 22, Apr 47, May 66, Jun 27, Jul 9, Aug 10, Sep 3 so far | same, pages 1 and 2 |
-| Release volume | 2026.9.2 covers "1,247 in-range PRs" in two days | same |
-| Contributors on 2.0 | "933 contributors, including 569 first-time contributors" | https://openclaw.ai/blog/openclaw-2-accidentally |
-| Foundation claims | "4.5 million new claws weekly", "fastest growing repository in GitHub history" | https://openclaw.ai/blog/introducing-openclaw-foundation |
-| ClawHub skills | not published (API paginates without a total) | https://clawhub.ai/api/v1/skills |
+| Signal                  | Value                                                                          | Source                                                      |
+| ----------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| GitHub stars            | 389,058                                                                        | https://api.github.com/repos/openclaw/openclaw (2026-09-06) |
+| Forks                   | 81,754                                                                         | same                                                        |
+| Open issues             | 6,230                                                                          | same                                                        |
+| Repository created      | 2025-11-24                                                                     | same                                                        |
+| Latest release          | v2026.9.2 on 2026-09-05                                                        | https://api.github.com/repos/openclaw/openclaw/releases     |
+| Releases per month 2026 | Feb 16, Mar 22, Apr 47, May 66, Jun 27, Jul 9, Aug 10, Sep 3 so far            | same, pages 1 and 2                                         |
+| Release volume          | 2026.9.2 covers "1,247 in-range PRs" in two days                               | same                                                        |
+| Contributors on 2.0     | "933 contributors, including 569 first-time contributors"                      | https://openclaw.ai/blog/openclaw-2-accidentally            |
+| Foundation claims       | "4.5 million new claws weekly", "fastest growing repository in GitHub history" | https://openclaw.ai/blog/introducing-openclaw-foundation    |
+| ClawHub skills          | not published (API paginates without a total)                                  | https://clawhub.ai/api/v1/skills                            |
 
 Releases are automated and date-tagged. The pace slowed from May to a nearly seven-week gap
 before 2.0 on 30 August 2026, and an "extended-stable" channel was added in July on the road

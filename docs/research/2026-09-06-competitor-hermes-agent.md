@@ -236,15 +236,15 @@ Mostly a general agent plus tools and skills, with a few first-class integration
 
 From the GitHub API on 2026-09-06 (https://api.github.com/repos/NousResearch/hermes-agent):
 
-| Signal | Value |
-|---|---|
-| Stars | 242,567 |
-| Forks | 49,889 |
-| Open issues and pull requests | 40,395 |
-| Repository created | 2025-07-22 |
-| Last push | 2026-09-07 |
-| Latest release | v2026.8.31 on 2026-08-31 |
-| Releases in August 2026 | 8 |
-| Current version in pyproject.toml | 0.21.0 |
+| Signal                            | Value                    |
+| --------------------------------- | ------------------------ |
+| Stars                             | 242,567                  |
+| Forks                             | 49,889                   |
+| Open issues and pull requests     | 40,395                   |
+| Repository created                | 2025-07-22               |
+| Last push                         | 2026-09-07               |
+| Latest release                    | v2026.8.31 on 2026-08-31 |
+| Releases in August 2026           | 8                        |
+| Current version in pyproject.toml | 0.21.0                   |
 
 Releases are tagged by date and land several times a month; the docs site has 433 pages.
