@@ -118,7 +118,11 @@ function classifyEdit(paths: string[], cwd: string): AcpPermissionVerdict {
   return paths.every((path) => isInsideSessionFolder(cwd, path)) ? "allow" : "ask";
 }
 
-function classifyByName(toolName: string | null, request: AcpBuiltInRequest, cwd: string): AcpPermissionVerdict {
+function classifyByName(
+  toolName: string | null,
+  request: AcpBuiltInRequest,
+  cwd: string
+): AcpPermissionVerdict {
   if (toolName === null) return "deny";
   if (READ_ONLY_TOOL_NAMES.has(toolName)) return "allow";
   if (WRITE_TOOL_NAMES.has(toolName)) return classifyEdit(extractAcpPaths(request), cwd);

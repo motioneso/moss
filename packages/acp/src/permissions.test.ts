@@ -14,9 +14,7 @@ import {
 
 const CWD = "/runner/session/acp/proj";
 
-function request(
-  partial: Partial<AcpBuiltInRequest> & { title: string }
-): AcpBuiltInRequest {
+function request(partial: Partial<AcpBuiltInRequest> & { title: string }): AcpBuiltInRequest {
   return {
     sessionId: "agent-sess-1",
     toolCallId: "call-1",
@@ -79,9 +77,7 @@ describe("classifyAcpPermission with a kind", () => {
   });
 
   it("refuses an unrecognised kind", () => {
-    expect(classifyAcpPermission(request({ title: "anything", kind: "other" }), CWD)).toBe(
-      "deny"
-    );
+    expect(classifyAcpPermission(request({ title: "anything", kind: "other" }), CWD)).toBe("deny");
   });
 });
 

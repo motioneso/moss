@@ -304,6 +304,9 @@ importers:
 
   packages/ai:
     dependencies:
+      '@moss/acp':
+        specifier: workspace:*
+        version: link:../acp
       '@moss/db':
         specifier: workspace:*
         version: link:../db
