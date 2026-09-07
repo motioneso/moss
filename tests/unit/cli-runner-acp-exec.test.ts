@@ -11,6 +11,7 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   statSync,
   symlinkSync,
   writeFileSync
@@ -41,6 +42,19 @@ async function pollUntil(poll: () => { done: boolean }, timeoutMs = 10_000): Pro
     if (poll().done) return;
     if (Date.now() - started > timeoutMs) throw new Error("timed out waiting for the build");
     await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+/** A process's actual start time in system ticks, or null when it is gone. */
+function procStartTime(pid: number): string | null {
+  try {
+    const content = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const closing = content.lastIndexOf(")");
+    if (closing < 0) return null;
+    const startTime = content.slice(closing + 2).split(" ")[19];
+    return startTime !== undefined && /^\d+$/.test(startTime) ? startTime : null;
+  } catch {
+    return null;
   }
 }
 
@@ -255,13 +269,17 @@ describe("AcpHost builds", () => {
     try {
       const { EventEmitter } = await import("node:events");
       const children: InstanceType<typeof EventEmitter>[] = [];
+      const stopped: unknown[] = [];
       const host = new AcpHost({
         neutralBase: dir,
         spawnExec: () => {
           const child = Object.assign(new EventEmitter(), {
             stdout: new EventEmitter(),
             stderr: new EventEmitter(),
-            kill: () => true
+            kill: () => {
+              stopped.push(child);
+              return true;
+            }
           }) as never;
           children.push(child as InstanceType<typeof EventEmitter>);
           return child;
@@ -276,9 +294,12 @@ describe("AcpHost builds", () => {
         }
       }
       // Everything held is still running, so there is nothing safe to evict.
+      // The refusal stops the build it had just started: the cap bounds
+      // running builds, not just records.
       await expect(host.execStart("workshop:user:other", PROJECT, "echo hi")).rejects.toThrow(
         /across sessions/
       );
+      expect(stopped).toHaveLength(1);
       // Finishing one build makes room: the next start evicts it and runs.
       const finished = children.at(0);
       if (!finished) throw new Error("expected a build to finish");
@@ -295,7 +316,8 @@ describe("AcpHost builds", () => {
     try {
       const host = makeHost(dir);
       const { execId } = await host.execStart(KEY, PROJECT, "sleep 30", 60_000);
-      const recordPath = join(dir, KEY, "acp-exec", `${execId}.json`);
+      // Deadline records live in the one folder the startup clean-out spares.
+      const recordPath = join(dir, "acp-deadlines", KEY, `${execId}.json`);
       const record = JSON.parse(readFileSync(recordPath, "utf8")) as {
         pid: number;
         deadlineAt: number;
@@ -325,8 +347,8 @@ describe("AcpHost builds", () => {
       pid = child.pid ?? -1;
       expect(pid).toBeGreaterThan(0);
       // A deadline record from a dead runner, plus junk the sweep must ignore.
-      mkdirSync(join(dir, KEY, "acp-exec"), { recursive: true });
-      const recordPath = join(dir, KEY, "acp-exec", "7.json");
+      mkdirSync(join(dir, "acp-deadlines", KEY), { recursive: true });
+      const recordPath = join(dir, "acp-deadlines", KEY, "7.json");
       writeFileSync(
         recordPath,
         JSON.stringify({
@@ -334,11 +356,12 @@ describe("AcpHost builds", () => {
           deadlineAt: Date.now() + 300,
           sessionKey: KEY,
           projectId: PROJECT,
-          startedAt: Date.now()
+          startedAt: Date.now(),
+          startTime: procStartTime(pid)
         })
       );
-      writeFileSync(join(dir, KEY, "acp-exec", "junk.txt"), "not a record");
-      writeFileSync(join(dir, KEY, "acp-exec", "bad.json"), "{nope");
+      writeFileSync(join(dir, "acp-deadlines", KEY, "junk.txt"), "not a record");
+      writeFileSync(join(dir, "acp-deadlines", KEY, "bad.json"), "{nope");
 
       const restarted = makeHost(dir);
       await restarted.reapOrphanedExecs();
@@ -372,8 +395,239 @@ describe("AcpHost builds", () => {
       await pollUntil(host.execPoll.bind(host, KEY, execId));
       expect(host.execPoll(KEY, execId).done).toBe(true);
       // This runner saw the end, so nothing is left for a restart to pick up.
-      expect(existsSync(join(dir, KEY, "acp-exec", `${execId}.json`))).toBe(false);
+      expect(existsSync(join(dir, "acp-deadlines", KEY, `${execId}.json`))).toBe(false);
     } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("stops no process it cannot prove is the recorded build", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    let pid = -1;
+    try {
+      const { spawn } = await import("node:child_process");
+      const child = spawn("sleep", ["30"], { detached: true, stdio: "ignore" });
+      child.unref();
+      pid = child.pid ?? -1;
+      const real = procStartTime(pid);
+      expect(real).not.toBeNull();
+      // Three leftover records naming this live process: one with another
+      // build's start time, one with no start time at all, and one in the
+      // per-session spot the first version used (which this runner must not
+      // act on). All are overdue.
+      const recordDir = join(dir, "acp-deadlines", KEY);
+      mkdirSync(recordDir, { recursive: true });
+      const wrongPath = join(recordDir, "11.json");
+      writeFileSync(
+        wrongPath,
+        JSON.stringify({
+          pid,
+          deadlineAt: Date.now() - 1000,
+          sessionKey: KEY,
+          projectId: PROJECT,
+          startedAt: Date.now(),
+          startTime: String(Number(real) + 1)
+        })
+      );
+      const nullPath = join(recordDir, "12.json");
+      writeFileSync(
+        nullPath,
+        JSON.stringify({
+          pid,
+          deadlineAt: Date.now() - 1000,
+          sessionKey: KEY,
+          projectId: PROJECT,
+          startedAt: Date.now(),
+          startTime: null
+        })
+      );
+      const legacyDir = join(dir, KEY, "acp-exec");
+      mkdirSync(legacyDir, { recursive: true });
+      writeFileSync(
+        join(legacyDir, "13.json"),
+        JSON.stringify({ pid, deadlineAt: Date.now() - 1000 })
+      );
+
+      const host = makeHost(dir);
+      await host.reapOrphanedExecs();
+
+      // Something else's process stands, and the stray records are gone.
+      expect(process.kill(pid, 0)).toBe(true);
+      expect(existsSync(wrongPath)).toBe(false);
+      expect(existsSync(nullPath)).toBe(false);
+    } finally {
+      if (pid > 0) {
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          /* already gone */
+        }
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          /* already gone */
+        }
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("arms no backup timer for a build this runner is already running", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    try {
+      const host = makeHost(dir);
+      const { execId } = await host.execStart(KEY, PROJECT, "sleep 30", 2000);
+      const recordPath = join(dir, "acp-deadlines", KEY, `${execId}.json`);
+      expect(existsSync(recordPath)).toBe(true);
+      // Another start's backstop sweep sees the live build and must leave it
+      // to its own deadline instead of arming a second kill timer.
+      await host.reapOrphanedExecs();
+      host.execKill(KEY, execId);
+      await pollUntil(host.execPoll.bind(host, KEY, execId));
+      // A canary where the record was: a stray backup timer would delete it
+      // when the original deadline arrives.
+      writeFileSync(recordPath, "canary");
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      expect(readFileSync(recordPath, "utf8")).toBe("canary");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("a restarted runner stands down once the owner saw the finish", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    try {
+      const host = makeHost(dir);
+      const { execId } = await host.execStart(KEY, PROJECT, "sleep 30", 60_000);
+      const recordPath = join(dir, "acp-deadlines", KEY, `${execId}.json`);
+      const record = JSON.parse(readFileSync(recordPath, "utf8")) as {
+        pid: number;
+        deadlineAt: number;
+      };
+      // The restart lands just before the deadline, so it arms a backup timer.
+      writeFileSync(recordPath, JSON.stringify({ ...record, deadlineAt: Date.now() + 600 }));
+      const restarted = makeHost(dir);
+      await restarted.reapOrphanedExecs();
+      // The owner stops the build and sees the finish; the record is gone.
+      host.execKill(KEY, execId);
+      await pollUntil(host.execPoll.bind(host, KEY, execId));
+      expect(existsSync(recordPath)).toBe(false);
+      // A canary where the record was: the backup timer must stand down
+      // instead of killing and unlinking blindly.
+      writeFileSync(recordPath, "canary");
+      await pollUntilPidGone(record.pid);
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      expect(readFileSync(recordPath, "utf8")).toBe("canary");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes the deadline record without following a planted link", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    try {
+      const victimNew = join(dir, "victim-new.txt");
+      writeFileSync(victimNew, "new-victim-content");
+      const victimOld = join(dir, "victim-old.txt");
+      writeFileSync(victimOld, "old-victim-content");
+      // The next build id is predictable, so a previous command can plant a
+      // link at the record's name, at the current spot or the old one.
+      const recordDir = join(dir, "acp-deadlines", KEY);
+      mkdirSync(recordDir, { recursive: true });
+      symlinkSync(victimNew, join(recordDir, "1.json"));
+      const legacyDir = join(dir, KEY, "acp-exec");
+      mkdirSync(legacyDir, { recursive: true });
+      symlinkSync(victimOld, join(legacyDir, "1.json"));
+
+      const host = makeHost(dir);
+      const { execId } = await host.execStart(KEY, PROJECT, "sleep 30");
+
+      // A real record stands in place; neither victim was written through.
+      const recordPath = join(recordDir, `${execId}.json`);
+      expect(lstatSync(recordPath).isSymbolicLink()).toBe(false);
+      const record = JSON.parse(readFileSync(recordPath, "utf8")) as { pid: number };
+      expect(record.pid).toBeGreaterThan(0);
+      expect(readFileSync(victimNew, "utf8")).toBe("new-victim-content");
+      expect(readFileSync(victimOld, "utf8")).toBe("old-victim-content");
+      host.execKill(KEY, execId);
+      await pollUntil(host.execPoll.bind(host, KEY, execId));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces a planted link at a parent folder on the build path", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    try {
+      const victim = mkdtempSync(join(tmpdir(), "acp-victim-"));
+      try {
+        // A previous command swaps the whole session folder for a link elsewhere.
+        mkdirSync(join(dir, KEY), { recursive: true });
+        symlinkSync(victim, join(dir, KEY, "acp"));
+
+        const host = makeHost(dir);
+        const { execId } = await host.execStart(KEY, PROJECT, "pwd");
+        await pollUntil(host.execPoll.bind(host, KEY, execId));
+        const final = host.execPoll(KEY, execId);
+
+        // Every level is real, the build ran in the real folder, and nothing
+        // was ever created inside the victim.
+        const sessionDir = join(dir, KEY, "acp", PROJECT);
+        expect(lstatSync(join(dir, KEY, "acp")).isSymbolicLink()).toBe(false);
+        expect(final.output.trim()).toBe(sessionDir);
+        expect(final.exitCode).toBe(0);
+        expect(readdirSync(victim)).toHaveLength(0);
+      } finally {
+        rmSync(victim, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("stops the refused build when one session hits its cap", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    const pids: number[] = [];
+    try {
+      const { spawn } = await import("node:child_process");
+      const host = new AcpHost({
+        neutralBase: dir,
+        spawnExec: (opts) => {
+          const child = spawn("sh", ["-c", opts.command], {
+            cwd: opts.cwd,
+            env: opts.env,
+            stdio: ["ignore", "pipe", "pipe"],
+            detached: true
+          });
+          if (child.pid !== undefined) pids.push(child.pid);
+          return child as never;
+        }
+      });
+      for (let i = 0; i < MAX_EXECS_PER_SESSION; i++) {
+        await host.execStart(KEY, PROJECT, "sleep 30");
+      }
+      await expect(host.execStart(KEY, PROJECT, "sleep 30")).rejects.toThrow(/this session/);
+      // The refusal stopped the build it had just started: the newest process
+      // is gone while the tracked builds still stand.
+      const refused = pids.at(-1);
+      if (refused === undefined) throw new Error("expected a refused build");
+      await pollUntilPidGone(refused);
+      for (const pid of pids.slice(0, MAX_EXECS_PER_SESSION)) {
+        expect(process.kill(pid, 0)).toBe(true);
+      }
+    } finally {
+      for (const pid of pids) {
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          /* already gone */
+        }
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          /* already gone */
+        }
+      }
       rmSync(dir, { recursive: true, force: true });
     }
   });

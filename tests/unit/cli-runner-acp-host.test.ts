@@ -11,6 +11,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -270,6 +271,33 @@ describe("AcpHost", () => {
         );
         // The victim was never written through: content intact.
         expect(readFileSync(victimFile, "utf8")).toBe("victim-content");
+      } finally {
+        rmSync(victim, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces a planted link at a parent folder on the start path", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const victim = mkdtempSync(join(tmpdir(), "acp-victim-"));
+      try {
+        // A previous command swaps a parent of the project folder for a link.
+        mkdirSync(join(dir, "workshop:user:proj"), { recursive: true });
+        symlinkSync(victim, join(dir, "workshop:user:proj", "acp"));
+
+        const child = new FakeChild();
+        const { host } = makeHost(dir, child);
+        const spawned = await host.spawn("workshop:user:proj", "proj");
+
+        // Every level is real, the spawn landed in the real folder, and
+        // nothing was ever created inside the victim.
+        const sessionDir = join(dir, "workshop:user:proj", "acp", "proj");
+        expect(lstatSync(join(dir, "workshop:user:proj", "acp")).isSymbolicLink()).toBe(false);
+        expect(spawned.cwd).toBe(sessionDir);
+        expect(readdirSync(victim)).toHaveLength(0);
       } finally {
         rmSync(victim, { recursive: true, force: true });
       }
