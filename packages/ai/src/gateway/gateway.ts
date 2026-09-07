@@ -54,9 +54,12 @@ const defaultGatewayLogger: GatewayLogger = {
 /**
  * Refusal wording for a held approval that expires or is denied (spec 6.2).
  * The agent retries a bare timeout exactly once, so both outcomes return the
- * same sentence telling it not to retry and to tell the user instead.
+ * same sentence: nothing was done, do not try again, report back. It reads in
+ * chat after "Not changed — ", so it speaks to the person first and the agent
+ * second.
  */
-export const APPROVAL_REFUSED_REASON = "This action was not approved. Do not retry; tell the user.";
+export const APPROVAL_REFUSED_REASON =
+  "This action was not approved, so it was not done. Do not try it again; let the user know.";
 
 /**
  * Private runHandler return shape: the public envelope plus the audit-log fields, computed once
