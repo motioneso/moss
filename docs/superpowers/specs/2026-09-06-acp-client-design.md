@@ -358,7 +358,7 @@ and the two are reconciled in the plan, not here.
 
 ## 10. Settings and app map
 
-- **Settings, Assistant & AI.** No new screen and no agent picker. The provider cards stay as they
+- **Settings, Assistant & AI.** No new screen. The provider cards stay as they
   are. The bindings list gains the `workshop` row (section 5), each provider card shows the
   shared-login sentence, and a provider whose adapter cannot honour a model choice says so beside
   its model list. The "Not logged in" state is driven by the adapter's `initialize` check.
