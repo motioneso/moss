@@ -118,3 +118,14 @@ blocking	apps/web/src/settings/module-credentials-section.tsx	tests/uat/specs/11
 blocking	packages/workshop/**	tests/uat/specs/workshop-project-entry.uat.spec.ts
 blocking	packages/workshop/**	tests/uat/specs/workshop-chat-handover.uat.spec.ts
 blocking	apps/web/src/chat/**	tests/uat/specs/workshop-chat-handover.uat.spec.ts
+# #2369 slice 1 phase 5: Workshop reply through the outside agent, the
+# per-surface agent setting, and the scrubbed build output path.
+blocking	packages/workshop/src/project-reply.ts	tests/uat/specs/2369-acp-workshop-build.uat.spec.ts
+blocking	packages/workshop/src/acp-reply.ts	tests/uat/specs/2369-acp-workshop-build.uat.spec.ts
+blocking	packages/workshop/src/run-command.ts	tests/uat/specs/2369-acp-workshop-build.uat.spec.ts
+blocking	packages/acp/src/client.ts	tests/uat/specs/2369-acp-workshop-build.uat.spec.ts
+blocking	packages/cli-runner/src/acp-host.ts	tests/uat/specs/2369-acp-workshop-build.uat.spec.ts
+blocking	packages/chat/src/workshop-acp.ts	tests/uat/specs/2369-acp-workshop-build.uat.spec.ts
+blocking	packages/chat/src/gateway-notifier.ts	tests/uat/specs/2369-acp-workshop-build.uat.spec.ts
+blocking	apps/web/src/settings/settings-agent-choice-group.tsx	tests/uat/specs/2369-acp-workshop-build.uat.spec.ts
+blocking	apps/web/src/settings/settings-ai-admin-pane.tsx	tests/uat/specs/2369-acp-workshop-build.uat.spec.ts

@@ -286,3 +286,21 @@ Reviewed by Fitz and Muse on 2026-09-06, approved. The three open questions were
 recorded in sections 4 (Fork A: Moss tool), 5 (reaping and reload) and 11 (bridge). Ben ruled
 on 2026-09-06: delete the bridge in slice 2, and the agent choice follows today's provider
 choice (admin default per surface, user override where it exists). No open questions remain.
+
+## 14. What a build command can reach
+
+Ruling on issue 2396 item 1 (Fable, 2026-09-07): no sandbox for now, written
+down plainly instead. Real confinement is issue 2414.
+
+A build command runs on the Moss server as the Moss account, in the same
+container as the app. From there it can read every user's files and project
+folders, the runner socket, and the app's own settings through the process
+filesystem, which hold the sign-in secret, the AI key, the connector key and
+the database password; with that password it can talk to the database
+directly, and it can reach the internet freely.
+
+What does stand in the way: the owner has to approve every command on a card
+showing the whole command, the working folder is fixed, the environment is
+scrubbed, there is a deadline and a cap on runs, and every run is recorded.
+
+This is accepted for a single owner install and is not a sandbox.
