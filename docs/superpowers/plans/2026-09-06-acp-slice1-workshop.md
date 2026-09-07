@@ -69,12 +69,14 @@ project pages; this plan never touches them.
   or no SSE accept means today's held response (never worse).
 - Denial wording (spec 6.2): timeout and deny both return
   "This action was not approved. Do not retry; tell the user."
-- Fork A tool: `workshop.runCommand`, input `{command, timeoutMs?}`, cwd locked runner-side
-  to the session project directory, output cap 256 KB with truncation note, default timeout
-  300 s returning partial output on timeout. Partial output streams as MCP progress through
-  a new optional `ToolContext.reportProgress`; the transport wires an SSE sink, no-op
-  otherwise. Session tokens for Workshop carry an allowlist including it
-  (`SessionTokenRegistry` already supports `allowedToolNames`).
+- Fork A tool: `workshop.runCommand`, input `{command, timeoutMs?}`, working folder fixed
+  runner-side to the session project directory (the folder is fixed; the command itself is
+  not restricted, and the approval card is the only human control over what runs), output
+  cap 256 KB with truncation note, default timeout 300 s returning partial output on
+  timeout. Partial output streams as MCP progress through a new optional
+  `ToolContext.reportProgress`; the transport wires an SSE sink, no-op otherwise. Session
+  tokens for Workshop carry an allowlist including it (`SessionTokenRegistry` already
+  supports `allowedToolNames`).
 - Workshop wiring: `attemptProjectReply` (`packages/workshop/src/project-reply.ts:170`) gains
   an ACP path used when the `workshop.agent` setting selects the ACP agent; otherwise
   today's behavior byte for byte. Session key `workshop:<userId>:<projectId>`. History is

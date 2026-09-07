@@ -79,6 +79,16 @@ describe("workshop.runCommand manifest declaration", () => {
     const properties = Object.keys(findTool().inputSchema?.properties ?? {});
     expect(properties.sort()).toEqual(["command", "timeoutMs"]);
   });
+
+  it("puts the actual command on the approval card", () => {
+    const tool = findTool();
+    const summary = tool.summarize?.({ command: "pnpm build" }, {
+      actorUserId: "user-a",
+      requestId: "req-1",
+      chatSessionId: "workshop:user-a:proj"
+    });
+    expect(summary).toContain("pnpm build");
+  });
 });
 
 describe("workshop.runCommand execute", () => {

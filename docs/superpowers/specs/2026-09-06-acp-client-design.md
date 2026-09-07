@@ -22,8 +22,9 @@ audit trail. The agent owns the model loop.
 
 Two surfaces, in this order:
 
-1. **Workshop** — the agent works on a project. Unanimous yes; the sandbox is a folder Moss
-   controls.
+1. **Workshop** — the agent works on a project. Unanimous yes; the working folder is a
+   folder Moss controls. It is not a sandbox: a shell command started there is not restricted
+   to it.
 2. **Chat** — the agent replaces today's hand-made CLI bridge (`packages/chat/src/live/`), which
    launches the Claude CLI and parses its output. Yes, with the five conditions in section 3.
 
@@ -108,14 +109,17 @@ only `actorUserId` and `requestId` by ruling.
 | capability                                | chat | Workshop                  | why                                                                                                                                             |
 | ----------------------------------------- | ---- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `fs/read_text_file`, `fs/write_text_file` | no   | no                        | v2 removes client file access; serve files as Moss tools scoped to the project folder instead, so the v2 migration does not touch file handling |
-| `terminal/*`                              | no   | no (see fork A)           | same reason; commands run through a Moss tool that executes inside the sandbox                                                                  |
+| `terminal/*`                              | no   | no (see fork A)           | same reason; commands run through a Moss tool that starts with the session project folder as its working folder (the command itself is not restricted to that folder) |
 | agent built-in shell / file-write         | off  | on, inside project folder | condition 3                                                                                                                                     |
 | agent built-in read / search / web        | on   | on                        | spike third condition                                                                                                                           |
 
-**Fork A — how the Workshop runs commands. Decided (review, 2026-09-06): (1).** A Moss tool runs
-the command inside the project sandbox and streams output, v2-proof and audited like every other
-tool. (2), advertising ACP `terminal/*`, is taken only if the slice 1 live proof shows the tool
-cannot stream a build log well enough; record the reason in the plan if so.
+**Fork A — how the Workshop runs commands. Decided (review, 2026-09-06): (1).** A Moss tool
+starts the command with the project folder as its working folder and streams output, v2-proof
+and audited like every other tool. Say plainly what is true: the working folder is fixed, the
+command itself is not restricted, and the only thing standing between a caller and an arbitrary
+command is the approval card. (2), advertising ACP `terminal/*`, is taken only if the slice 1
+live proof shows the tool cannot stream a build log well enough; record the reason in the plan
+if so.
 
 **Conversation history.** Postgres stays the record, under row-level access. A fresh agent
 session gets history replayed by Moss, the way a stateless model call does today. The agent's own

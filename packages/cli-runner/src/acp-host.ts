@@ -9,8 +9,9 @@
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { O_DIRECTORY, O_NOFOLLOW, O_RDONLY } from "node:constants";
 import { createRequire } from "node:module";
-import { chmod, chown, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, chown, lstat, mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
@@ -327,12 +328,13 @@ export class AcpHost {
   }
 
   /**
-   * Run one build command in the session project folder and return its id.
-   * The caller names a project, never a folder: the working directory is
-   * always `<neutralBase>/<sessionKey>/acp/<projectId>/`, the same folder an
-   * adapter spawn for that session uses. Output past 256 KiB is dropped (the
-   * poll reply keeps the head and says it was cut); past the deadline the
-   * command is killed and the poll reply carries whatever ran so far.
+   * Run one build command starting in the session project folder and return
+   * its id. The caller names a project, never a folder: the working directory
+   * is always `<neutralBase>/<sessionKey>/acp/<projectId>/`, the same folder
+   * an adapter spawn for that session uses. The command itself is not
+   * restricted to that folder. Output past 256 KiB is dropped (the poll reply
+   * keeps the head and says it was cut); past the deadline the command is
+   * killed and the poll reply carries whatever ran so far.
    */
   async execStart(
     sessionKey: string,
@@ -355,7 +357,10 @@ export class AcpHost {
     }
 
     const sessionDir = join(this.deps.neutralBase, key, "acp", projectId);
-    await mkdir(sessionDir, { recursive: true });
+    // The build's own home, inside its own scratch area — never the shared
+    // home base, so the login token file and anything else under the shared
+    // home are simply not there for the command to read.
+    const homeDir = join(this.deps.neutralBase, key, "acp-home", projectId);
 
     let uid: number | undefined;
     let gid: number | undefined;
@@ -363,16 +368,15 @@ export class AcpHost {
       const slot = allocateUidSlot(this.deps.homeBase, key);
       uid = slot.uid;
       gid = slot.gid;
-      await this.chownOwned(key, sessionDir, uid, gid);
     }
-    await this.chmodOwned(key, sessionDir);
+    await this.prepareOwnedDir(key, sessionDir, uid, gid);
+    await this.prepareOwnedDir(key, homeDir, uid, gid);
 
-    // Scrubbed environment like the adapter spawn, but deliberately WITHOUT
-    // the vendor login: a build command gets no subscription token, and one
-    // less secret that could end up echoed into a build log.
+    // Scrubbed environment with the build's own home. The vendor login reaches
+    // the child in neither the environment nor the home folder.
     const env: NodeJS.ProcessEnv = {
       ...buildSanitizedCliEnv(process.env),
-      ...(this.deps.homeBase ? { HOME: this.deps.homeBase } : {})
+      HOME: homeDir
     };
     const spawnExec =
       this.deps.spawnExec ??
@@ -473,6 +477,51 @@ export class AcpHost {
       if (oldestSeq > session.deliveredSeq) session.truncated = true;
       const dropped = session.buffered.shift() as string;
       session.bufferedBytes -= Buffer.byteLength(dropped, "utf8");
+    }
+  }
+
+  /**
+   * Make path a real folder owned by the session without ever following a
+   * link. A command that ran here earlier can swap the folder for a link to
+   * somewhere else; a plain make-folder plus lock-bits would then set owner
+   * only bits (and ownership) on the wrong place. So a planted link is
+   * removed, the real folder is created, it is verified to be a folder, and
+   * the bits are set through a handle opened with O_NOFOLLOW, which refuses
+   * to resolve to anything but this folder.
+   */
+  private async prepareOwnedDir(
+    key: string,
+    path: string,
+    uid: number | undefined,
+    gid: number | undefined
+  ): Promise<void> {
+    const first = await lstat(path).catch(() => null);
+    if (first && first.isSymbolicLink()) await unlink(path);
+    await mkdir(path, { recursive: true });
+    const verified = await lstat(path).catch(() => null);
+    if (!verified || !verified.isDirectory() || verified.isSymbolicLink()) {
+      throw new Error("acpExecStart: project folder is not a folder");
+    }
+    const handle = await open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    try {
+      try {
+        await handle.chmod(0o700);
+      } catch (error) {
+        console.warn(
+          `[acp-host] ${key} could not lock the project folder owner-only: ${(error as Error).message}`
+        );
+      }
+      if (uid !== undefined && gid !== undefined) {
+        try {
+          await handle.chown(uid, gid);
+        } catch (error) {
+          console.warn(
+            `[acp-host] ${key} could not hand the project folder to its owner: ${(error as Error).message}`
+          );
+        }
+      }
+    } finally {
+      await handle.close().catch(() => undefined);
     }
   }
 

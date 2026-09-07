@@ -5,6 +5,15 @@
  * these prove the runner path, not a stub of it.
  */
 import { mkdtempSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -14,6 +23,7 @@ import {
   ACP_EXEC_OUTPUT_CAP_BYTES,
   AcpHost
 } from "../../packages/cli-runner/src/acp-host.js";
+import { providerTokenPath } from "../../packages/cli-runner/src/provider-token-store.js";
 
 const KEY = "workshop:user:proj";
 const PROJECT = "proj";
@@ -140,6 +150,77 @@ describe("AcpHost builds", () => {
       expect(Buffer.byteLength(final.output, "utf8")).toBeLessThanOrEqual(
         ACP_EXEC_OUTPUT_CAP_BYTES
       );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("gives the build its own home, away from the login token and server secrets", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    const homeBase = mkdtempSync(join(tmpdir(), "acp-homebase-"));
+    // Even if these leaked into the runner process env, the child must not see them.
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = "server-side-oauth-token";
+    process.env.JARVIS_TEST_SECRET_MARKER = "server-side-marker";
+    try {
+      const tokenPath = providerTokenPath(homeBase, "anthropic");
+      mkdirSync(join(tokenPath, ".."), { recursive: true });
+      writeFileSync(tokenPath, "test-login-token");
+      const host = new AcpHost({ neutralBase: dir, homeBase });
+      const { execId } = await host.execStart(
+        KEY,
+        PROJECT,
+        "echo HOME=$HOME; echo OAUTH=$CLAUDE_CODE_OAUTH_TOKEN; " +
+          "echo MARKER=$JARVIS_TEST_SECRET_MARKER; " +
+          "cat $HOME/.jarvis/cli-tokens/anthropic 2>/dev/null || echo TOKEN_UNREADABLE"
+      );
+      await pollUntil(host.execPoll.bind(host, KEY, execId));
+      const final = host.execPoll(KEY, execId);
+      expect(final.done).toBe(true);
+      const expectedHome = join(dir, KEY, "acp-home", PROJECT);
+      expect(final.output).toContain(`HOME=${expectedHome}`);
+      expect(final.output).not.toContain(homeBase);
+      expect(final.output).not.toContain("server-side-oauth-token");
+      expect(final.output).not.toContain("server-side-marker");
+      expect(final.output).not.toContain("test-login-token");
+      expect(final.output).toContain("TOKEN_UNREADABLE");
+      // The shared token file itself is untouched; it is just not under the build's home.
+      expect(lstatSync(expectedHome).isDirectory()).toBe(true);
+    } finally {
+      delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+      delete process.env.JARVIS_TEST_SECRET_MARKER;
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(homeBase, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces a planted link with a real folder and never locks the target", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    try {
+      const victim = mkdtempSync(join(tmpdir(), "acp-victim-"));
+      try {
+        const canary = join(victim, "canary.txt");
+        writeFileSync(canary, "untouched");
+        chmodSync(victim, 0o755);
+        // A previous command swaps its own project folder for a link elsewhere.
+        const sessionDir = join(dir, KEY, "acp", PROJECT);
+        mkdirSync(join(sessionDir, ".."), { recursive: true });
+        symlinkSync(victim, sessionDir);
+
+        const host = makeHost(dir);
+        const { execId } = await host.execStart(KEY, PROJECT, "pwd");
+        await pollUntil(host.execPoll.bind(host, KEY, execId));
+        const final = host.execPoll(KEY, execId);
+
+        // The link is gone, a real folder stands in its place, and the build ran there.
+        expect(lstatSync(sessionDir).isSymbolicLink()).toBe(false);
+        expect(lstatSync(sessionDir).isDirectory()).toBe(true);
+        expect(final.output.trim()).toBe(sessionDir);
+        // The victim was never followed: file intact, permissions unchanged.
+        expect(readFileSync(canary, "utf8")).toBe("untouched");
+        expect(statSync(victim).mode & 0o777).toBe(0o755);
+      } finally {
+        rmSync(victim, { recursive: true, force: true });
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -2,15 +2,17 @@ import { HttpError } from "@moss/module-sdk";
 import type { ToolExecute, ToolResult, ToolServices } from "@moss/module-sdk";
 
 /**
- * workshop.runCommand (#2369 slice 1 phase 3): one shell command in the
- * session project folder.
+ * workshop.runCommand (#2369 slice 1 phase 3): one shell command starting in
+ * the session project folder.
  *
- * The folder is fixed on the runner side to that session's project folder —
- * the tool derives the project from its own session key and the runner
- * resolves the folder from the session key plus project, so the caller can
- * never choose a path. Output past 256 KiB keeps the head and says it was
- * cut; past the deadline the command is stopped and whatever ran so far
- * returns. Partial output streams through `ctx.reportProgress` while it runs.
+ * The working folder is fixed on the runner side to that session's project
+ * folder — the tool derives the project from its own session key and the
+ * runner resolves the folder from the session key plus project, so the caller
+ * can never choose a path. The command itself is not restricted to that
+ * folder; the approval card is the only human control over what runs. Output
+ * past 256 KiB keeps the head and says it was cut; past the deadline the
+ * command is stopped and whatever ran so far returns. Partial output streams
+ * through `ctx.reportProgress` while it runs.
  */
 
 export const WORKSHOP_RUN_COMMAND_SERVICE_KEY = "workshopRunCommand";

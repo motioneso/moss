@@ -138,7 +138,9 @@ export const workshopModuleManifest = {
     {
       id: "workshop_builds",
       label: "Running project build commands",
-      description: "Run build and check commands inside the project folder and report the output.",
+      description:
+        "Run one shell command with the project folder as its working folder and report the " +
+        "output. The command itself is not restricted to that folder.",
       defaultTier: "ask_each_time",
       allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
     }
@@ -167,10 +169,11 @@ export const workshopModuleManifest = {
     {
       name: "workshop.runCommand",
       description:
-        "Run one shell command inside the project folder and return its output. " +
-        "The folder is fixed to this session's project; there is no path to choose. " +
-        "Use for build, test, and check commands. Output past 256 KiB is cut with a note, " +
-        "and past the deadline the command stops and whatever ran so far returns.",
+        "Run one shell command with the project folder as its working folder and return its " +
+        "output. The folder is fixed to this session's project; there is no path to choose. " +
+        "The command itself is not restricted to that folder. Use for build, test, and check " +
+        "commands. Output past 256 KiB is cut with a note, and past the deadline the command " +
+        "stops and whatever ran so far returns.",
       permissionId: "workshop.view",
       actionFamilyId: "workshop_builds",
       risk: "write",
@@ -183,7 +186,12 @@ export const workshopModuleManifest = {
       inputSchema: workshopRunCommandInputSchema,
       outputSchema: workshopRunCommandResultSchema,
       execute: workshopRunCommandExecute,
-      summarize: () => "Run a project build command and report its output."
+      // The card is the only human control here, so it must say what will run.
+      summarize: (input) => {
+        const command = typeof input.command === "string" ? input.command : "";
+        const shown = command.length > 300 ? `${command.slice(0, 300)}...` : command;
+        return `Run this project command: ${shown}`;
+      }
     }
   ],
   routes: [

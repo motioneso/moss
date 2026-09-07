@@ -238,6 +238,9 @@ export interface ToolProgressSink {
   attach(raw: ServerResponse): void;
 }
 
+/** Early messages wait here only between the tool starting and the stream opening. */
+const MAX_PENDING_PROGRESS = 128;
+
 export function createProgressSink(progressToken: string | number): ToolProgressSink {
   let raw: ServerResponse | null = null;
   let seq = 0;
@@ -260,7 +263,7 @@ export function createProgressSink(progressToken: string | number): ToolProgress
         } catch {
           raw = null;
         }
-      } else {
+      } else if (pending.length < MAX_PENDING_PROGRESS) {
         pending.push(message);
       }
     },
