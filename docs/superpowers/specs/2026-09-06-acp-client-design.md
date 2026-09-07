@@ -294,9 +294,18 @@ takes that row's shape.
 to models, so a change is made in one place. `session/new` with the `unattended` profile, one `session/prompt`, read the stop reason,
 `session/close`. The one-shot CLI flags are not kept.
 
-- **JSON answers** are asked for in the prompt and parsed from the final agent message, with the
-  fence-tolerant parser the bridge already learned to need. The provider's own structured-output
-  flag is not used, because ACP has no such field and each CLI spells it differently.
+- **Structured answers, requested and checked over the protocol.** The caller hands the adapter
+  its schema (the same schema it validates against today). The adapter puts the schema and the
+  instruction "answer with one JSON object and nothing else" into the prompt, and no tool server is
+  attached. The answer is the text of the agent's message chunks for that turn, joined in order,
+  not the CLI's own structured-output flag, which ACP has no field for and each CLI spells
+  differently. Checking is three steps in one place, in the adapter: strip a surrounding code fence
+  if the model added one (the old bridge's fenced-JSON bug, now handled once for every provider),
+  parse, validate against the caller's schema. A failure of any step sends one follow-up prompt in
+  the same session quoting the validation error and asking for the object again; a second failure
+  ends the call as failed with the stop reason and the validation error in the audit line, never as
+  an empty answer. A `refusal` or `max_tokens` stop reason fails the call the same way without a
+  retry.
 - **Tools:** the tool server is handed in only when the caller's profile asks for it. Pure JSON
   callers get no tool server, so the model cannot wander.
 - **Module build** is a Workshop-shaped unattended session: project folder, shell and writes on,
