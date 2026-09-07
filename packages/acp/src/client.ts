@@ -211,7 +211,7 @@ export class MossAcpClient {
     toolServer?: AcpToolServer
   ): Promise<AcpSessionHandle> {
     checkAcpProfile(surface, providerKind);
-    const { cwd, home } = await this.tunnel.spawn(sessionKey, projectId);
+    const { cwd, home } = await this.tunnel.spawn(sessionKey, projectId, providerKind);
     const stream = createTunnelStream(this.tunnel, sessionKey);
     const connection = new ClientSideConnection(() => this.createClientHandler(), stream);
     const init = await connection.initialize({

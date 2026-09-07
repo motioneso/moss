@@ -13,6 +13,6 @@
     "@agentclientprotocol/sdk": "1.4.0"
   },
   "devDependencies": {
-    "@zed-industries/claude-code-acp": "0.16.2"
+    "@agentclientprotocol/claude-agent-acp": "0.75.1"
   }
 }
