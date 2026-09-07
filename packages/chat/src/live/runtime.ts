@@ -37,10 +37,11 @@ import { ChatPriorityModelAdapter } from "./priority-model-adapter.js";
 import { resolveChatHome } from "./chat-home.js";
 import {
   ChatEngineRpcClient,
-  RpcConnection,
   type RpcClientLogger,
+  type RpcConnection,
   type RpcReconcileDriver
 } from "./chat-engine-rpc-client.js";
+import { AcpRpcConnection } from "./acp-rpc-client.js";
 import type { PersistentRuntimeLaunchConfig } from "./rpc-contract.js";
 import { createChatEngine } from "./engine-selection.js";
 import { CliChatUnavailableError } from "./errors.js";
@@ -234,7 +235,7 @@ export function createRealEngineFactory(
  */
 export interface RpcEngineFactory {
   readonly factory: ChatEngineFactory;
-  readonly connection: RpcConnection;
+  readonly connection: AcpRpcConnection;
 }
 
 /**
@@ -259,7 +260,7 @@ function createRpcEngineFactory(opts: {
   readonly logger?: RpcClientLogger;
   readonly readPersistentRuntimeConfig?: () => Promise<PersistentRuntimeLaunchConfig>;
 }): RpcEngineFactory {
-  const connection = new RpcConnection({
+  const connection = new AcpRpcConnection({
     socketPath: opts.socketPath,
     rpcSecret: opts.rpcSecret,
     onReconcile: opts.onReconcile,
@@ -310,7 +311,7 @@ export function selectEngineFactory(
      *  called per launch and shipped in `RpcLaunchParams` (the cli-runner has no DB access). */
     readonly readPersistentRuntimeConfig?: () => Promise<PersistentRuntimeLaunchConfig>;
   } = {}
-): { factory: ChatEngineFactory; connection?: RpcConnection } {
+): { factory: ChatEngineFactory; connection?: AcpRpcConnection } {
   const env = opts.env ?? process.env;
   const socketPath = env.JARVIS_CLI_RUNNER_SOCKET;
   if (socketPath) {
@@ -465,9 +466,10 @@ export interface ChatSessionRuntime {
    * #342 — the shared RPC connection when the cli-runner socket path was selected (else undefined, on
    * the in-process/host path). The composition root may `ensureConnected()` it on boot so the §5.3
    * reconciliation runs before the first user turn, and MUST `close()` it on shutdown (done by
-   * {@link shutdown}).
+   * {@link shutdown}). Always the ACP-capable subclass on the socket path, so the
+   * Workshop outside-agent tunnel can rely on the tunnel verbs.
    */
-  readonly connection?: RpcConnection;
+  readonly connection?: AcpRpcConnection;
   /**
    * #342 — tear down runtime-owned background resources: stop the idle reaper and close the RPC
    * connection. Idempotent. The composition root calls this on server shutdown. A no-op when neither
@@ -537,7 +539,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
   // engineFactory always wins (tests/embedders) and takes the in-process/no-reconcile path. When
   // `engineSelection` is supplied and no explicit factory is given, select via the boot-time fork:
   // RPC client (socket set, fail-fast on a missing secret — §6.6) else in-process.
-  let connection: RpcConnection | undefined;
+  let connection: AcpRpcConnection | undefined;
   let engineFactory: ChatEngineFactory;
   if (deps.engineFactory) {
     engineFactory = deps.engineFactory;

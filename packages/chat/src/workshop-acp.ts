@@ -13,11 +13,11 @@ import { requestAcpBuiltInPermission, type AcpPermissionGatewayDeps } from "@mos
 import { HttpError } from "@moss/module-sdk";
 import type { WorkshopAcpOpener, WorkshopAcpTurn, WorkshopRunCommandService } from "@moss/workshop";
 
-import type { RpcConnection } from "./live/chat-engine-rpc-client.js";
+import type { AcpRpcConnection } from "./live/acp-rpc-client.js";
 
 /** `AcpTunnel` over one runner RPC connection. */
 export class RpcAcpTunnel implements AcpTunnel {
-  constructor(private readonly connection: RpcConnection) {}
+  constructor(private readonly connection: AcpRpcConnection) {}
 
   async spawn(
     sessionKey: string,
@@ -96,7 +96,7 @@ export class RpcAcpTunnel implements AcpTunnel {
 
 export interface WorkshopAcpOpenerDeps {
   /** The chat runtime's runner connection; absent on the in-process path. */
-  readonly getConnection: () => RpcConnection | undefined;
+  readonly getConnection: () => AcpRpcConnection | undefined;
   readonly tokens: AcpPermissionGatewayDeps["tokens"];
   readonly mcpServerUrl: string;
   readonly listToolsForActor: (
@@ -176,9 +176,9 @@ export function createWorkshopAcpOpener(deps: WorkshopAcpOpenerDeps): WorkshopAc
 
 /** `workshop.runCommand` over the runner exec verbs. */
 export function createWorkshopRunCommandService(
-  getConnection: () => RpcConnection | undefined
+  getConnection: () => AcpRpcConnection | undefined
 ): WorkshopRunCommandService {
-  const requireConnection = (): RpcConnection => {
+  const requireConnection = (): AcpRpcConnection => {
     const connection = getConnection();
     if (!connection) {
       throw new HttpError(

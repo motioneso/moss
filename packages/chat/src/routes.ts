@@ -48,6 +48,7 @@ import {
   type MossModuleManifest
 } from "@moss/module-sdk";
 import { ChatGatewayNotifier } from "./gateway-notifier.js";
+import type { AcpRpcConnection } from "./live/acp-rpc-client.js";
 import { NATIVE_CONFIRM_TIMEOUT_MS } from "./live/claude-permission-hook.js";
 import { readRouteSurface } from "./live/chat-surface.js";
 import { createWorkshopAcpOpener, createWorkshopRunCommandService } from "./workshop-acp.js";
@@ -254,8 +255,8 @@ export function registerChatRoutes(
   // #2369 slice 1 phase 5 — the Workshop outside-agent path and workshop.runCommand
   // share the chat runtime's ONE runner connection. It only exists after the
   // runtime is built below, so both read it through this late-bound holder.
-  const workshopRpcBox: { connection?: RpcConnection } = {};
-  const getWorkshopRpcConnection = (): RpcConnection | undefined => workshopRpcBox.connection;
+  const workshopRpcBox: { connection?: AcpRpcConnection } = {};
+  const getWorkshopRpcConnection = (): AcpRpcConnection | undefined => workshopRpcBox.connection;
   const wiring =
     resolveActiveModules && mcpServerUrl
       ? (() => {

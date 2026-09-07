@@ -48,20 +48,6 @@ import { performClientHello } from "./rpc-handshake.js";
 import {
   decodeFrame,
   encodeFrame,
-  type RpcAcpExecKillParams,
-  type RpcAcpExecKillResult,
-  type RpcAcpExecPollParams,
-  type RpcAcpExecPollResult,
-  type RpcAcpExecStartParams,
-  type RpcAcpExecStartResult,
-  type RpcAcpKillParams,
-  type RpcAcpKillResult,
-  type RpcAcpReadParams,
-  type RpcAcpReadResult,
-  type RpcAcpSendParams,
-  type RpcAcpSendResult,
-  type RpcAcpSpawnParams,
-  type RpcAcpSpawnResult,
   type RpcCancelSubmitParams,
   type RpcCancelSubmitResult,
   type RpcErr,
@@ -353,38 +339,9 @@ export class RpcConnection {
     return this.call<RpcInterruptResult>("interrupt", sessionKey, {});
   }
 
-  // #2369 slice 1 — ACP tunnel verbs. Session-scoped like the turn verbs; acpRead is a
-  // quick poll (the API-side client in @moss/acp paces it), so the default deadline applies.
-  acpSpawn(sessionKey: string, params: RpcAcpSpawnParams): Promise<RpcAcpSpawnResult> {
-    return this.call<RpcAcpSpawnResult>("acpSpawn", sessionKey, params);
-  }
-
-  acpSend(sessionKey: string, params: RpcAcpSendParams): Promise<RpcAcpSendResult> {
-    return this.call<RpcAcpSendResult>("acpSend", sessionKey, params);
-  }
-
-  acpRead(sessionKey: string, params: RpcAcpReadParams): Promise<RpcAcpReadResult> {
-    return this.call<RpcAcpReadResult>("acpRead", sessionKey, params);
-  }
-
-  acpKill(sessionKey: string, params: RpcAcpKillParams = {}): Promise<RpcAcpKillResult> {
-    return this.call<RpcAcpKillResult>("acpKill", sessionKey, params);
-  }
-
-  // #2369 phase 3 — the runner speaks acpExecStart/acpExecPoll/acpExecKill
-  // (server side is live); the matching client verbs land with the API-side
-  // tunnel backing in phase 5, which is their first caller.
-  acpExecStart(sessionKey: string, params: RpcAcpExecStartParams): Promise<RpcAcpExecStartResult> {
-    return this.call<RpcAcpExecStartResult>("acpExecStart", sessionKey, params);
-  }
-
-  acpExecPoll(sessionKey: string, params: RpcAcpExecPollParams): Promise<RpcAcpExecPollResult> {
-    return this.call<RpcAcpExecPollResult>("acpExecPoll", sessionKey, params);
-  }
-
-  acpExecKill(sessionKey: string, params: RpcAcpExecKillParams): Promise<RpcAcpExecKillResult> {
-    return this.call<RpcAcpExecKillResult>("acpExecKill", sessionKey, params);
-  }
+  // #2369 slice 1 — ACP tunnel verbs live on AcpRpcConnection
+  // (./acp-rpc-client.js), beside this class, so this file stays under the
+  // source-size gate.
 
   /**
    * #456 — re-arm the response deadline for any in-flight turn verb.
@@ -495,7 +452,7 @@ export class RpcConnection {
 
   // ─── core request/response ───────────────────────────────────────────────────
 
-  private async call<T>(
+  protected async call<T>(
     method: RpcMethod,
     sessionKey: string | undefined,
     params: unknown,
