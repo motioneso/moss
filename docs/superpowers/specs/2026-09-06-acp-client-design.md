@@ -1,6 +1,8 @@
 # Spec: ACP as the single model interface in Moss
 
-**Status:** Approved by Ben, 2026-09-07 ("ACP Work" room). Next: the slice 1 plan.
+**Status:** Approved by Ben, 2026-09-07 ("ACP Work" room). Amended 2026-09-07 on Ben's ruling:
+chat is slice 1 and the Workshop is parked (section 13); the behind-the-scenes view is added
+(section 14). Next: the slice 1 plan.
 
 **Evidence:** `spikes/acp-tool-call/RESULTS.md` (four runs on the dev instance, 2026-09-06); the
 Codex, Antigravity (agy) and Claude adapter checks Scout ran on the box on 2026-09-07 (section 9); the ACP
@@ -55,8 +57,10 @@ the agent's own system prompt, or a fix for the shared subscription. Those stay 
 
 ## 3. Conditions (requirements, not follow-ups)
 
-1. **Workshop first, chat second, unattended callers third.** Each consumer lands only after the
-   previous one has passed the live-path gate.
+1. **Chat first, unattended callers second, the Workshop last.** Each consumer lands only after
+   the previous one has passed the live-path gate. The Workshop was first until 2026-09-07; Ben
+   parked it because it has never worked for us and its problems are largely chat's problems, so
+   chat goes in first and the Workshop is revisited once the protocol path is all the way in.
 2. **Every session launches through the per-user runner**, never from the box's login. The
    cli-runner engine host allocates a Unix account per user (`packages/cli-runner/src/uid-allocator.ts`)
    with a scrubbed environment and its own home folder. The spike ran as the box's own login and
@@ -70,6 +74,8 @@ the agent's own system prompt, or a fix for the shared subscription. Those stay 
    table so they cannot drift apart. In the Workshop, shell and writes are the point.
 4. **The approval card is wired to the protocol** (section 7). The one real defect the spike found;
    it ships in the first slice.
+   Every reply also shows its behind-the-scenes view (section 14): what the model thought and did,
+   and what the turn cost.
 5. **Each provider has its own adapter row** (section 9). Providers share the protocol but differ
    in login, model selection and which built-ins can be switched off. A provider is offered for a
    consumer only when its row passes that consumer's requirements, checked at adapter start, not
@@ -155,7 +161,7 @@ carried it. **The agent identity does not go into `AccessContext`**; that carrie
 the command with the project folder as its working folder and streams output, v2-proof and audited
 like every other tool. The working folder is fixed, the command itself is not restricted, and the
 only thing between a caller and an arbitrary command is the approval card. (2), advertising ACP
-`terminal/*`, is taken only if the slice 1 live proof shows the tool cannot stream a build log well
+`terminal/*`, is taken only if the Workshop slice's live proof shows the tool cannot stream a build log well
 enough; record the reason in the plan if so.
 
 **Conversation history.** Postgres stays the record, under row-level access. A fresh agent session
@@ -351,7 +357,7 @@ checks login at `initialize` rather than assuming it.
   sign-in) is logged in by the runner running that command for the admin, interactively, through the
   existing sign-in helper; this is the `auth.terminal` client capability in section 4, offered to
   attended sessions only. agy needs one of these paths (which one its agent advertises is checked in
-  slice 3); agy is offered only after the path passes on dev.
+  slice 2); agy is offered only after the path passes on dev.
 - `logout` is called where advertised when the admin removes a provider; otherwise the runner
   removes the per-user home's credential files as it does today.
 
@@ -368,9 +374,9 @@ and the two are reconciled in the plan, not here.
 - **App map.** The `aiproviders` entry in `packages/shared/src/app-map-core.ts` is updated in the
   build PR for the `workshop` binding, the login-check wording and the "not approved, ask the user"
   error; Workshop and chat behaviour changes go in their owning manifests' `features`.
-- **Workshop hook.** The Workshop already answers each saved message in a project. The ACP adapter
-  replaces the answering engine behind that path; the message model, project folder and artifact
-  panel stay as they are.
+- **Workshop hook (slice 3).** The Workshop already answers each saved message in a project. The
+  ACP adapter replaces the answering engine behind that path; the message model, project folder
+  and artifact panel stay as they are, plus the panel work named in section 13.
 - No new required environment variable. Everything is set in the app.
 
 ## 11. Protocol version strategy
@@ -394,46 +400,98 @@ protocol has no agent-to-agent message. Cost scales per seat.
 
 ## 13. Slices and gates
 
-1. **Adapter + Workshop.** The protocol package `packages/acp` (client, capability check,
-   permission classifier, tool table, stream, tunnel), launch through the runner, tool server handed
-   in, Fork A as decided, approval wiring (section 7), the `workshop` service key and its bindings
-   row, app map. Claude and Codex rows verified live. Live-path proof: a real project, a real build
-   command, a real approval card answered by a person on dev, once on each of the two providers.
-2. **Chat.** Same adapter, `chat` profile (scratch folder, writes and shell off). **The CLI bridge
-   (`packages/chat/src/live/`, its engine selection and the four engines) is deleted in this
-   slice. No fallback setting** (Ben, 2026-09-06, reaffirmed 2026-09-07). Live-path proof: "add
-   lunch with Sam" approved in the drawer and one event in the calendar, on the instance default
-   provider and on a second bound provider.
-3. **Unattended callers and the remaining login path.** Every row of the section 8 table moves to
+Order changed on 2026-09-07 (Ben): chat first, because the Workshop has never worked for us and
+has no screen of its own to answer an approval card on, while the chat drawer already has the
+card, the stop button and real users. The Workshop is parked until the protocol path is all the
+way in.
+
+1. **Adapter + chat.** The protocol package `packages/acp` (client, capability check, permission
+   classifier, tool table, stream, tunnel), launch through the runner, tool server handed in,
+   approval wiring (section 7), the `chat` profile (scratch folder, writes and shell off), the
+   behind-the-scenes view (section 14), app map. Claude and Codex rows verified live. **The CLI
+   bridge (`packages/chat/src/live/`, its engine selection and the four engines) is deleted in
+   this slice. No fallback setting** (Ben, 2026-09-06, reaffirmed 2026-09-07). Live-path proof:
+   "add lunch with Sam" approved in the drawer and one event in the calendar, on the instance
+   default provider and on a second bound provider, with the fold and the stats strip on the
+   reply.
+2. **Unattended callers and the remaining login path.** Every row of the section 8 table moves to
    a short ACP session and the one-shot engines and `CliStructuredAdapter` are deleted. The
    terminal-type login path lands; agy is offered only once its row passes on dev. Live-path
    proof: one connector monitoring run and one module build finishing unattended with the audit
    lines in section 7 point 5, plus an agy session on dev if the login passes.
+3. **The Workshop.** Same adapter, `workshop` profile (project folder, shell and writes on), Fork A
+   as decided, the `workshop` service key and its bindings row, and the panel work the Workshop
+   needs to answer a card in place: approval card, live progress, cancel and the sign-in-expired
+   state, each with a mockup Ben sees first. Live-path proof: a real project, a real build
+   command, a real approval card answered by a person on dev, once on each of the two providers.
 
 **Kill gate after slice 1:** if the approval wiring cannot make an attended write finish in under
-30 s end to end on dev, on the instance default provider, stop and reassess before touching chat.
+30 s end to end on dev, on the instance default provider, stop and reassess before touching the
+unattended callers. A second gate in the same slice: a chat turn through ACP must be within the
+bridge's wall-clock on the same prompt set as the spike, measured on dev, before the bridge is
+deleted.
 
-**Kill gate after slice 2:** if a chat turn through ACP is not within the bridge's wall-clock on
-the same prompt set as the spike, measured on dev, stop before moving the unattended callers.
+**Kill gate after slice 2:** if any unattended caller cannot finish its section 8 shape on dev,
+stop before the Workshop.
 
-## 14. Non-goals
+## 14. Behind the scenes: the fold and the stats strip
+
+Ben's requirement (2026-09-07, with a screenshot): every reply carries a collapsed section the
+user can open to see what happened along the way, and one quiet line of numbers under the reply.
+Text and simple flat icons, nothing louder than a caption. Mockup:
+`docs/superpowers/specs/assets/2026-09-06-acp-client/behind-the-scenes.html` (three states: fold
+closed as the reply lands, fold open, and a provider that sends no token counts).
+
+**The fold.** The chat drawer already shows a per-turn "Thinking" line above the reply that opens
+into the turn's steps. It stays exactly where it is and gains its content from the protocol:
+
+- Each `agent_thought_chunk` update becomes a "Thought" line, joined per thought.
+- Each `tool_call` update becomes a "Tool" line with the real tool name from the announcement and
+  the arguments summarised by the tool table (paths, address, window), never the model's display
+  title. Its `tool_call_update` with the result becomes a "Result" line, capped in length.
+- An approval answered by a person becomes an "Approved" or "Not approved" line with the tool name,
+  who answered and how long the hold took; a policy refusal (section 7) becomes a "Refused" line.
+- Lines appear as the updates arrive, so an open fold is the live progress view during the turn.
+  The label reads "Thinking..." while the turn runs and "Thinking, N steps" after, as today.
+- A turn with no thoughts and no tool calls shows no fold, as today.
+- The fold renders from the transcript records Moss stores, never from raw protocol frames, so
+  history shows the same fold as the live turn (the determinism rule in section 4).
+
+**The stats strip.** One line under the reply, in the reply column, caption size, tabular numbers:
+elapsed time, then tokens sent, tokens written, tokens served from cache, each with its flat icon
+and a tooltip naming it in words.
+
+- Elapsed time is Moss's clock from the prompt being sent to the turn's stop reason. It is always
+  present.
+- Token counts come only from the protocol's usage update (`session/update` with a usage payload)
+  when the provider's agent sends one. The strip never shows a number the agent did not send: a
+  provider that reports nothing shows time alone; one that reports totals but no cache split shows
+  the two it sent. Which of Claude and Codex send which numbers is Scout's finding on 2026-09-07
+  and is recorded in the plan, not guessed here.
+- Numbers are stored on the reply's transcript record so history shows them and so the audit can
+  add them up later. No cost in currency: Moss does not know the user's price.
+- Nothing in the strip is clickable; the fold above the reply is the thing to open.
+
+**App map.** The chat manifest's `features` describe the fold and the strip in the build PR.
+
+## 15. Non-goals
 
 Moss as an ACP agent; agent-to-agent messaging inside the protocol; building on v2 now; a new
 credential model or provider system; per-user vendor subscriptions; the draft custom-endpoint RFD
 (`providers/*`); a module marketplace; real OAuth callbacks.
 
-## 15. Open questions for Ben
+## 16. Open questions for Ben
 
 None open. Resolved on 2026-09-07:
 
 - **Google agy** stays off the offered list, watched for an adapter update; the protocol sign-in
-  path through the runner is built in slice 3 and agy is offered once it passes on dev (Ben,
-  2026-09-07). Slices 1 and 2 do not wait on it.
+  path through the runner is built in slice 2 and agy is offered once it passes on dev (Ben,
+  2026-09-07). Slice 1 does not wait on it.
 - **Unattended calls** run as short ACP sessions; the one-shot print and exec paths are deleted
   with the bridge, no fallback (Ben, 2026-09-07). Section 8's caller table fills in as Scout
   confirms rows; the ruling does not change with the rows.
 
-## 16. Review record
+## 17. Review record
 
 Rulings folded in: Fork A, reaping and reload, delete the bridge with no fallback (Ben,
 2026-09-06); ACP as the single interface, admin-chosen model per service defaulting to the instance
