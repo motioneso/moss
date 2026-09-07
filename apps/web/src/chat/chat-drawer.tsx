@@ -34,7 +34,9 @@ import { formatDate, useUserLocale } from "../locale/locale-format";
 import { ChatModelPill } from "./chat-model-pill";
 import { Composer } from "./composer";
 import { ConnectProviderEmpty } from "./connect-provider-empty";
-import { Thread } from "./message-row";
+import { Thread } from "@moss/ui";
+
+import { RecordRow } from "./message-row";
 import { buildChatSeeds } from "./seeds";
 import { isNoActiveChatModelError } from "../onboarding/chat-availability";
 import {
@@ -619,9 +621,14 @@ export function ChatDrawer(props: {
           {showHistory ? null : effectiveRecords.length > 0 ? (
             <Thread
               records={effectiveRecords}
-              focusActionRequestId={props.focusActionRequestId}
-              onActionRequestFocused={props.onActionRequestFocused}
               working={isWaiting}
+              renderRecord={(record) => (
+                <RecordRow
+                  record={record}
+                  focusActionRequestId={props.focusActionRequestId}
+                  onActionRequestFocused={props.onActionRequestFocused}
+                />
+              )}
             />
           ) : chatRouteQuery.isSuccess && !chatAvailable && !lockedModelUnavailable ? (
             <ConnectProviderEmpty isFounder={props.isFounder} />

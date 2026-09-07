@@ -44,45 +44,56 @@
   margin-bottom: var(--space-7);
 }
 
-.workshop-project-messages,
-.workshop-project-form form,
-.workshop-project-pane {
+.workshop-project-form form {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-}
-
-.workshop-project-messages {
-  margin-bottom: var(--space-2);
 }
 
 .workshop-project-form {
   max-width: 720px;
 }
 
-/* The conversation carries the writing and gets the wider column; the work pane is a status
-   sidebar until planning ships. Both stay above 320px at the page's minimum desktop width. */
-.workshop-project-detail {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: var(--space-8);
-  align-items: start;
+/* The project window: a 56rem reading measure fixed to the viewport, the composer pinned at
+   the foot, only the transcript scrolling. */
+.workshop-chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 56rem;
+  margin-inline: auto;
+  height: calc(100dvh - var(--topbar-h) - var(--space-7) - var(--space-11));
+  min-height: 20rem;
 }
 
-.workshop-project-pane > h2 {
+.workshop-chat__earlier {
+  display: flex;
+  justify-content: center;
+}
+
+.workshop-chat__history {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.workshop-chat__caption {
   margin: 0;
-  font-size: var(--text-md);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+  font-size: var(--text-sm);
   color: var(--text-subtle);
 }
 
-.workshop-project-text {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  margin: var(--space-1) 0 0;
+.workshop-chat__composer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
+/* The pane switch has nothing to switch between until panels land; its rules stay for slice 8. */
 .workshop-mobile-tabs {
   display: none;
 }
@@ -90,11 +101,6 @@
 @media (max-width: 1024px) {
   .workshop-page {
     padding: var(--space-6);
-  }
-
-  .workshop-project-detail {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-6);
   }
 }
 

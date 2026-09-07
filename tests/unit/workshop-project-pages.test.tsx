@@ -225,7 +225,8 @@ describe("Workshop project browser interactions", () => {
     expect(writes[1]!.body).toEqual(writes[0]!.body);
     expect(writes[0]!.body.requestKey).toMatch(/^[0-9a-f-]{36}$/i);
     await eventually(() => expect(container.textContent).toContain(project.title));
-    expect(container.textContent).toContain("No plan yet");
+    // The saved request opens the window as its first turn, with no panel beside it.
+    expect(container.querySelector(".chatd-thread")?.textContent).toContain(project.initialRequest);
   });
 
   it("uses a new request key when a failed create's payload is edited", async () => {
@@ -242,24 +243,20 @@ describe("Workshop project browser interactions", () => {
     expect(writes[1]!.body.initialRequest).toBe("Changed requirements");
   });
 
-  it("keeps unsent text across mobile panes and failed sends, retries the same message, and shows pending saved state", async () => {
+  it("keeps unsent text across failed sends, retries the same message, and shows pending saved state", async () => {
     messageFailures = 1;
     await render(`/workshop/${project.id}`);
     await eventually(() => expect(container.querySelector("#project-message")).not.toBeNull());
     type("project-message", "Keep this additional requirement");
-    click("Project work");
-    expect(button("Project work").getAttribute("aria-pressed")).toBe("true");
-    expect(field("project-message").value).toBe("Keep this additional requirement");
-    click("Conversation");
-    expect(button("Conversation").getAttribute("aria-pressed")).toBe("true");
-    expect(field("project-message").value).toBe("Keep this additional requirement");
-    await eventually(() => expect(button("Save message").disabled).toBe(false));
-    click("Save message");
+    // The window is the chat alone: the opening request is the first turn, with no pane switch.
+    expect(container.querySelector(".chatd-thread")?.textContent).toContain(project.initialRequest);
+    await eventually(() => expect(button("Send").disabled).toBe(false));
+    click("Send");
     await eventually(() =>
       expect(container.querySelector('[role="alert"]')?.textContent).toContain("same message")
     );
     expect(field("project-message").value).toBe("Keep this additional requirement");
-    click("Save message");
+    click("Send");
     await eventually(() => expect(container.textContent).toContain("Saved · awaiting delivery"));
     expect(writes).toHaveLength(2);
     expect(writes[1]!.body).toEqual(writes[0]!.body);
@@ -273,9 +270,9 @@ describe("Workshop project browser interactions", () => {
     await render(`/workshop/${project.id}`);
     await eventually(() => expect(container.querySelector("#project-message")).not.toBeNull());
     type("project-message", "Unsent while offline");
-    await eventually(() => expect(button("Save message").disabled).toBe(false));
+    await eventually(() => expect(button("Send").disabled).toBe(false));
     act(() => onlineManager.setOnline(false));
-    expect(button("Save message").disabled).toBe(true);
+    expect(button("Send").disabled).toBe(true);
     expect(field("project-message").value).toBe("Unsent while offline");
 
     let resolveRefresh!: (value: Response) => void;
@@ -294,25 +291,25 @@ describe("Workshop project browser interactions", () => {
       )
     );
     expect(container.textContent).toContain("Refreshing your saved work");
-    expect(button("Save message").disabled).toBe(true);
+    expect(button("Send").disabled).toBe(true);
     expect(field("project-message").value).toBe("Unsent while offline");
-    click("Save message");
+    click("Send");
     expect(writes).toEqual([]);
 
     await act(async () => resolveRefresh(response({ error: "Refresh failed" }, 503)));
     await eventually(() =>
       expect(container.textContent).toContain("Your saved work could not be refreshed")
     );
-    expect(button("Save message").disabled).toBe(true);
+    expect(button("Send").disabled).toBe(true);
     expect(field("project-message").value).toBe("Unsent while offline");
 
     refresh = new Promise<Response>((resolve) => {
       resolveRefresh = resolve;
     });
     click("Reconnect");
-    expect(button("Save message").disabled).toBe(true);
+    expect(button("Send").disabled).toBe(true);
     await act(async () => resolveRefresh(response({ project })));
-    await eventually(() => expect(button("Save message").disabled).toBe(false));
+    await eventually(() => expect(button("Send").disabled).toBe(false));
     expect(field("project-message").value).toBe("Unsent while offline");
     expect(writes).toEqual([]);
   });

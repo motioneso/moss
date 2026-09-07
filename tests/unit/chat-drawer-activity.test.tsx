@@ -4,8 +4,9 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { ChatMessageDto } from "@moss/shared";
+import { Thread, activityVerb } from "@moss/ui";
 import { recordsFromMessages } from "../../apps/web/src/chat/chat-drawer.js";
-import { Thread, activityVerb } from "../../apps/web/src/chat/message-row.js";
+import { RecordRow } from "../../apps/web/src/chat/message-row.js";
 
 const allowedRecord = {
   kind: "action_result" as const,
@@ -28,7 +29,9 @@ describe("chat drawer activity outcomes", () => {
               summary: "Approve the seeded workflow action",
               status: "pending"
             }
-          ]
+          ],
+          // The approval card is the shell's own row, not part of the shared thread.
+          renderRecord: (record) => createElement(RecordRow, { record })
         })
       )
     );

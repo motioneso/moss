@@ -1,5 +1,6 @@
 import type { AiCapabilityRouteReason, AiConfiguredModelDto, AiModelCapability } from "./ai-api.js";
 import type { SourceFreshnessV1 } from "./freshness-types.js";
+import type { WorkflowApprovalStatusDto } from "./workflows-api.js";
 import { errorResponseSchema } from "./schema-fragments.js";
 
 export type { MossError, MossErrorClass } from "@moss/module-sdk/errors";
@@ -103,6 +104,54 @@ export interface GetChatPrivacyStateResponse {
 
 export interface ListChatThreadMessagesResponse {
   readonly messages: readonly ChatMessageDto[];
+}
+
+/**
+ * One row of a rendered chat transcript — the shape the shared `Thread` component reads.
+ * Defined here (moved from the web app's chat stream hook) so the shell and every module
+ * thread render the same records from one definition.
+ */
+export type ChatRecordKind =
+  | "user"
+  | "thinking"
+  | "tool"
+  | "status"
+  | "reply"
+  | "error"
+  | "action_request"
+  | "workflow_approval"
+  | "action_result";
+
+/**
+ * Rich, server-derived Approve/Deny card preview (email reply recipient/subject/body). Rides the
+ * live SSE stream ONLY — the backend never persists it. Mirrors `@moss/module-sdk`
+ * ActionRequestPreview; declared locally so the web bundle stays free of node-side deps.
+ */
+export interface ActionRequestPreview {
+  readonly to: string;
+  readonly subject: string;
+  readonly body: string;
+}
+
+export interface TranscriptRecord {
+  readonly kind: ChatRecordKind;
+  readonly text: string;
+  readonly messageId?: string;
+  readonly actionRequestId?: string;
+  readonly workflowApprovalId?: string;
+  readonly toolName?: string;
+  readonly summary?: string;
+  readonly status?: WorkflowApprovalStatusDto;
+  readonly outcome?: "executed" | "denied" | "error" | "allowed";
+  readonly result?: Record<string, unknown>;
+  /** Dot-path tokens into the frontend `queryKeys` object, resolved by app-shell's generic invalidation effect. */
+  readonly affectsQueryKeys?: readonly string[];
+  readonly answerProvenance?: readonly AnswerSourceSupportCard[];
+  readonly answerProvenanceCitedIds?: readonly string[];
+  readonly sourceFreshness?: SourceFreshnessV1 | null;
+  readonly preview?: ActionRequestPreview;
+  /** Chips shown on a sent user message (optimistic, post-response, and history rows). */
+  readonly attachments?: readonly ChatAttachmentDto[];
 }
 
 export type MemoryCorrectionReasonDto = "rejected" | "corrected";

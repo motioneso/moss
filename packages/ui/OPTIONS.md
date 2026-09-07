@@ -53,6 +53,10 @@ _No enum or boolean props._
 
 _No enum or boolean props._
 
+## chat-thread
+
+_No enum or boolean props._
+
 ## chip
 
 - **toggle** (optional boolean flag)

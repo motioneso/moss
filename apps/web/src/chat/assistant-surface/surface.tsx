@@ -20,7 +20,9 @@ import {
   removePendingAttachment,
   type PendingAttachment
 } from "../attachments";
-import { Thread } from "../message-row";
+import { Thread } from "@moss/ui";
+
+import { RecordRow } from "../message-row";
 import type { ChatRecordKind } from "../use-chat-stream";
 import type { AssistantSurfaceViewProps } from "./contracts";
 import { useAssistantSurfaceHost } from "./host-context";
@@ -152,7 +154,7 @@ export function AssistantSurface(props: AssistantSurfaceViewProps) {
             <div className={`jds-bubble jds-bubble--${row.role}`}>{row.content}</div>
           </div>
         ))}
-        <Thread records={visibleRecords} />
+        <Thread records={visibleRecords} renderRecord={(record) => <RecordRow record={record} />} />
         {props.typing ? <TypingRow /> : null}
         {props.activeControl ? (
           <div className="assistant-surface__row assistant-surface__row--control">

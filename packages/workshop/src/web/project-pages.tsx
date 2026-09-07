@@ -10,8 +10,13 @@ import {
   RowIndex,
   RowIndexItem
 } from "@moss/ui";
-import { ApiError, randomUuid, usePageTrail } from "@moss/module-web-sdk";
-import type { LocaleSettingsDto, WorkshopProjectCursor } from "@moss/shared";
+import { ActivityPeek, ApiError, Thread, randomUuid, usePageTrail } from "@moss/module-web-sdk";
+import type {
+  LocaleSettingsDto,
+  TranscriptRecord,
+  WorkshopFeedEntry,
+  WorkshopProjectCursor
+} from "@moss/shared";
 import { formatDate, useUserLocale } from "./locale.js";
 import {
   createProject,
@@ -264,7 +269,6 @@ function WorkshopProjectContent({
 }) {
   const client = useQueryClient();
   const locale = useUserLocale();
-  const [pane, setPane] = useState<"conversation" | "work">("conversation");
   const [text, setText] = useState("");
   const [messageId, setMessageId] = useState(() => randomUuid());
   const [saved, setSaved] = useState(false);
@@ -316,6 +320,8 @@ function WorkshopProjectContent({
     return <p role="status">Loading your project…</p>;
   }
   const record = project.data.project;
+  const entries = messages.data?.pages.flatMap((page) => page.entries) ?? [];
+  const awaitingDelivery = entries.some((entry) => entry.delivery === "pending");
   const ready =
     canMutate &&
     !project.isError &&
@@ -323,141 +329,107 @@ function WorkshopProjectContent({
     !messages.isError &&
     !messages.isFetching;
   return (
-    <>
+    <section className="workshop-chat" aria-label="Project conversation">
       {project.isError ? (
         <ProjectError
           title="The project could not be refreshed. Reload it before making changes."
           retry={() => void project.refetch()}
         />
       ) : null}
-      <div className="workshop-mobile-tabs" aria-label="Project view">
-        <Button
-          variant="secondary"
-          active={pane === "conversation"}
-          aria-pressed={pane === "conversation"}
-          onClick={() => setPane("conversation")}
-        >
-          Conversation
-        </Button>
-        <Button
-          variant="secondary"
-          active={pane === "work"}
-          aria-pressed={pane === "work"}
-          onClick={() => setPane("work")}
-        >
-          Project work
-        </Button>
-      </div>
-      <div className="workshop-project-detail">
-        <section
-          className={
-            pane === "conversation"
-              ? "workshop-project-pane"
-              : "workshop-project-pane workshop-project-pane--inactive"
-          }
-          aria-label="Project conversation"
-        >
-          <h2>Conversation</h2>
-          <div className="workshop-project-messages">
-            <Card title="Your idea">
-              <p className="workshop-project-text">{record.initialRequest}</p>
-            </Card>
-            {messages.data?.pages
-              .flatMap((page) => page.entries)
-              .map((entry) =>
-                entry.kind === "assistant_message" ? (
-                  <Card key={entry.messageId} title="Moss">
-                    <p className="workshop-project-text">{entry.text}</p>
-                  </Card>
-                ) : (
-                  <Card
-                    key={entry.messageId}
-                    title="You"
-                    meta={entry.delivery === "pending" ? "Saved · awaiting delivery" : undefined}
-                  >
-                    <p className="workshop-project-text">{entry.text}</p>
-                  </Card>
-                )
-              )}
-          </div>
-          {messages.isPending ? <p role="status">Loading messages…</p> : null}
-          {messages.isError ? (
-            <ProjectError
-              title="Messages could not be refreshed. Your unsent text is still here."
-              retry={() => void messages.refetch()}
-            />
-          ) : null}
-          {messages.hasNextPage ? (
-            <Button
-              variant="secondary"
-              disabled={messages.isFetching || !canMutate}
-              onClick={() => void messages.fetchNextPage()}
-            >
-              More messages
-            </Button>
-          ) : null}
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (ready && !mutation.isPending) mutation.mutate({ messageId, text });
-            }}
+      {messages.hasNextPage ? (
+        <div className="workshop-chat__earlier">
+          <Button
+            variant="quiet"
+            disabled={messages.isFetching || !canMutate}
+            onClick={() => void messages.fetchNextPage()}
           >
-            <div className="jds-field">
-              <label className="jds-label" htmlFor="project-message">
-                Add to your project
-              </label>
-              <textarea
-                className="jds-textarea"
-                id="project-message"
-                rows={3}
-                maxLength={16384}
-                required
-                value={text}
-                disabled={mutation.isPending}
-                onChange={(event) => {
-                  if (mutation.isError) {
-                    setMessageId(randomUuid());
-                    mutation.reset();
-                  }
-                  setSaved(false);
-                  setText(event.target.value);
-                }}
-              />
-            </div>
-            {mutation.isError ? (
-              <p role="alert" className="form-error">
-                The message could not be confirmed as saved. Your text is still here; retry to check
-                the same message.
-              </p>
-            ) : null}
-            <Button type="submit" disabled={!ready || mutation.isPending || !text.trim()}>
-              {mutation.isPending ? "Saving…" : "Save message"}
-            </Button>
-            {saved ? (
-              <p role="status">Saved to this project. No planning or build has started.</p>
-            ) : null}
-          </form>
-        </section>
-        <section
-          className={
-            pane === "work"
-              ? "workshop-project-pane"
-              : "workshop-project-pane workshop-project-pane--inactive"
-          }
-          aria-label="Project work"
-        >
-          <h2>Project work</h2>
-          <EmptyState
-            title="No plan yet"
-            description="Your idea and messages are saved. Planning is not available yet."
+            {messages.isFetching ? "Loading…" : "Earlier messages"}
+          </Button>
+        </div>
+      ) : null}
+      <div className="workshop-chat__history">
+        {messages.isPending ? <p role="status">Loading messages…</p> : null}
+        {messages.isError ? (
+          <ProjectError
+            title="Messages could not be refreshed. Your unsent text is still here."
+            retry={() => void messages.refetch()}
           />
-          {record.context ? (
-            <Card title="Already decided">
-              <p className="workshop-project-text">{record.context}</p>
-            </Card>
-          ) : null}
-        </section>
+        ) : null}
+        {!messages.isPending && !messages.isError ? (
+          <Thread records={workshopTranscript(record, entries)} working={mutation.isPending} />
+        ) : null}
+        {mutation.isPending ? <ActivityPeek records={[]} inProgress /> : null}
+        {awaitingDelivery ? (
+          <p className="workshop-chat__caption" role="status">
+            Saved · awaiting delivery
+          </p>
+        ) : null}
       </div>
-    </>
+      <form
+        className="workshop-chat__composer"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (ready && !mutation.isPending) mutation.mutate({ messageId, text });
+        }}
+      >
+        <div className="chatd-input">
+          <label className="jds-sr-only" htmlFor="project-message">
+            Add to your project
+          </label>
+          <textarea
+            id="project-message"
+            rows={3}
+            maxLength={16384}
+            required
+            value={text}
+            disabled={mutation.isPending}
+            onChange={(event) => {
+              if (mutation.isError) {
+                setMessageId(randomUuid());
+                mutation.reset();
+              }
+              setSaved(false);
+              setText(event.target.value);
+            }}
+          />
+          <button
+            type="submit"
+            className="chatd-send"
+            disabled={!ready || mutation.isPending || !text.trim()}
+          >
+            {mutation.isPending ? "Sending…" : "Send"}
+          </button>
+        </div>
+        {mutation.isError ? (
+          <p role="alert" className="form-error">
+            The message could not be confirmed as saved. Your text is still here; retry to check
+            the same message.
+          </p>
+        ) : null}
+        {saved ? (
+          <p role="status">Saved to this project. No planning or build has started.</p>
+        ) : null}
+      </form>
+    </section>
   );
+}
+
+/**
+ * The opening request plus the saved feed entries as transcript records, oldest first: your
+ * opening request is the first turn, your messages read as your turns, Moss's messages as
+ * replies once they exist.
+ */
+export function workshopTranscript(
+  project: { readonly initialRequest: string },
+  entries: readonly WorkshopFeedEntry[]
+): TranscriptRecord[] {
+  return [
+    { kind: "user", text: project.initialRequest },
+    ...entries.map(
+      (entry): TranscriptRecord =>
+        entry.kind === "assistant_message"
+          ? { kind: "reply", text: entry.text, messageId: entry.messageId }
+          : { kind: "user", text: entry.text, messageId: entry.messageId }
+    )
+  ];
 }

@@ -149,6 +149,15 @@
       "flags": []
     },
     {
+      "name": "chat-thread",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/chat-thread.tsx", "type": "registry:ui" }],
+      "dependencies": ["@moss/shared", "lucide-react", "react-markdown", "remark-gfm"],
+      "exports": ["ActivityPeek", "ChatFreshnessFooter", "Thread", "activityVerb", "groupRecords"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "chip",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/chip.tsx", "type": "registry:ui" }],

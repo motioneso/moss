@@ -317,6 +317,10 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./packages/tasks/src/index.ts", import.meta.url))
       },
       {
+        find: "@moss/ui",
+        replacement: fileURLToPath(new URL("./packages/ui/src/index.ts", import.meta.url))
+      },
+      {
         find: "@moss/usefulness-feedback",
         replacement: fileURLToPath(
           new URL("./packages/usefulness-feedback/src/index.ts", import.meta.url)
