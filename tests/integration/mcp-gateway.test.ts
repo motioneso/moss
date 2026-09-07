@@ -17,7 +17,8 @@ import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-mod
 
 describe("AssistantToolGateway", () => {
   // The refusal wording both timeouts and denials return (spec 6.2).
-  const refusedReason = "This action was not approved, so it was not done. Do not try it again; let the user know.";
+  const refusedReason =
+    "This action was not approved, so it was not done. Do not try it again; let the user know.";
   let appDb: Kysely<MossDatabase>;
   let bootstrapDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;

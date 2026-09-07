@@ -643,7 +643,8 @@ describe("native permission YOLO", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       decision: "deny",
-      reason: "This action was not approved, so it was not done. Do not try it again; let the user know."
+      reason:
+        "This action was not approved, so it was not done. Do not try it again; let the user know."
     });
   }
 

@@ -9,14 +9,21 @@ import {
  * server bearer): the end time must not move no matter how often the token is
  * used, so a leaked token goes stale on its own.
  */
-function fixedRegistry(ttlMs: number): { registry: SessionTokenRegistry; advance: (ms: number) => void } {
+function fixedRegistry(ttlMs: number): {
+  registry: SessionTokenRegistry;
+  advance: (ms: number) => void;
+} {
   let now = 0;
   const registry = new SessionTokenRegistry({ clock: { now: () => now } });
   return { registry, advance: (ms: number) => void (now += ms) };
 }
 
 function identity() {
-  return { actorUserId: "u1", chatSessionId: "u1:workshop", allowedToolNames: new Set(["workshop.run"]) };
+  return {
+    actorUserId: "u1",
+    chatSessionId: "u1:workshop",
+    allowedToolNames: new Set(["workshop.run"])
+  };
 }
 
 describe("SessionTokenRegistry fixed expiry", () => {

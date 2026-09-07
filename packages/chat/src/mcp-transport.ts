@@ -272,19 +272,16 @@ export async function streamToolCallWithProgress(
       })}\n\n`
     );
   }, options.heartbeatMs);
-  const limit = setTimeout(
-    () => {
-      if (closed || answered) return;
-      answered = true;
-      cleanup();
-      raw.write(
-        `data: ${JSON.stringify(jsonRpcError(options.id, -32603, "Tool call timed out."))}\n\n`
-      );
-      raw.end();
-      finishGate();
-    },
-    options.maxDurationMs ?? MCP_STREAM_MAX_DURATION_MS
-  );
+  const limit = setTimeout(() => {
+    if (closed || answered) return;
+    answered = true;
+    cleanup();
+    raw.write(
+      `data: ${JSON.stringify(jsonRpcError(options.id, -32603, "Tool call timed out."))}\n\n`
+    );
+    raw.end();
+    finishGate();
+  }, options.maxDurationMs ?? MCP_STREAM_MAX_DURATION_MS);
   const response = await Promise.race([call, finished]);
   cleanup();
   if (closed || answered) return;

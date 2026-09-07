@@ -62,7 +62,8 @@ describe("first-party Moss MCP transport", () => {
       gateway.requestNativeToolPermission(token, { toolName, toolInput: {} })
     ).resolves.toEqual({
       decision: "deny",
-      reason: "This action was not approved, so it was not done. Do not try it again; let the user know."
+      reason:
+        "This action was not approved, so it was not done. Do not try it again; let the user know."
     });
     expect(createPendingAssistantAction).toHaveBeenCalledOnce();
     expect(resolveLocalTimezone).toHaveBeenCalledOnce();
