@@ -8,7 +8,12 @@
  * Slice 1 advertises no file or terminal capabilities (files and commands are
  * Moss tools, so a later protocol version never touches file handling). The
  * caller hands over Moss's own tool server at session open: its address plus a
- * per-session Bearer, carried inside the session request over the runner socket.
+ * per-session bearer, carried inside the session request over the runner socket.
+ * From there the adapter passes the entry, bearer and all, into the agent
+ * launch, so the bearer reaches the agent process command line, where any box
+ * login can read it. That exposure is inherent to the outside-agent design. It
+ * stays cheap because the token is per-session, narrowed to Workshop tools,
+ * given a fixed end time, and revoked when the session closes.
  */
 
 import {
@@ -33,11 +38,16 @@ export interface AcpSessionHandle {
  * Moss's own tool server, handed to the agent when a session opens. The URL is
  * the address the agent reaches the tool server at, and the Bearer is the
  * per-session token minted for that session. Both travel inside the
- * `session/new` payload over the runner socket, never on a command line.
+ * `session/new` payload over the runner socket, and from there into the agent
+ * process command line. Plan for the Bearer [REDACTED] exposed to box logins, never
+ * for it staying inside the socket: mint it per session with a fixed end time,
+ * narrowed to Workshop tools, and revoke it on close.
  */
 export interface AcpToolServer {
   readonly url: string;
   readonly bearer: string;
+  /** Runs on the phase-one session end path, so the caller can revoke the Bearer. */
+  readonly onClose?: () => void;
 }
 
 export interface AcpPromptResult {
@@ -88,6 +98,7 @@ export class MossAcpClient {
   private readonly connections = new Map<string, ClientSideConnection>();
   private readonly texts = new Map<string, string[]>();
   private readonly toolCalls = new Map<string, number>();
+  private readonly closers = new Map<string, () => void>();
 
   constructor(
     private readonly tunnel: AcpTunnel,
@@ -120,6 +131,7 @@ export class MossAcpClient {
     this.connections.set(session.sessionId, connection);
     this.texts.set(session.sessionId, []);
     this.toolCalls.set(session.sessionId, 0);
+    if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
     return { sessionId: session.sessionId, cwd };
   }
 
@@ -164,6 +176,11 @@ export class MossAcpClient {
     this.connections.delete(handle.sessionId);
     this.texts.delete(handle.sessionId);
     this.toolCalls.delete(handle.sessionId);
+    // The phase-one end path: the tool server Bearer [REDACTED] working the moment the
+    // outside session closes, so run the caller's revoke hook here.
+    const onClose = this.closers.get(handle.sessionId);
+    this.closers.delete(handle.sessionId);
+    onClose?.();
   }
 
   private requireConnection(sessionId: string): ClientSideConnection {

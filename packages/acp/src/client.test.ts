@@ -144,6 +144,9 @@ describe("MossAcpClient", () => {
     const opened = agent.sent
       .map((line) => JSON.parse(line))
       .find((msg) => msg.method === "session/new");
+    // The Bearer [REDACTED] inside this entry, in the open, for the adapter to hand to the
+    // agent launch: anyone who removes the header breaks tool access, and anyone
+    // reading it must treat it as exposed on the agent command line.
     expect(opened.params.mcpServers).toEqual([
       {
         type: "http",
@@ -153,6 +156,24 @@ describe("MossAcpClient", () => {
       }
     ]);
     await client.close(handle);
+  });
+
+  it("revokes the tool server Bearer [REDACTED] the session closes", async () => {
+    const agent = new ScriptedAgent();
+    const client = new MossAcpClient(agent);
+    let revoked = 0;
+    const handle = await client.openSession("workshop:user:proj", "proj", "workshop", {
+      url: "http://moss.local/api/mcp",
+      bearer: "jst_test-token",
+      onClose: () => {
+        revoked += 1;
+      }
+    });
+    await client.close(handle);
+    expect(revoked).toBe(1);
+    // Closing again revokes nothing further.
+    await client.close(handle);
+    expect(revoked).toBe(1);
   });
 
   it("gives up on a hung agent instead of hanging the caller", async () => {
