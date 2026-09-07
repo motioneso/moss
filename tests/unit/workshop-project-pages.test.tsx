@@ -330,7 +330,12 @@ describe("Workshop project browser interactions", () => {
     await eventually(() => expect(button("Send").disabled).toBe(false));
     act(() => {
       field("project-message").dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true, cancelable: true })
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true
+        })
       );
     });
     expect(writes).toHaveLength(0);
