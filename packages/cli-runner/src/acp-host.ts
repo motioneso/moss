@@ -10,9 +10,9 @@
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createRequire } from "node:module";
-import { readFile, readdir, unlink } from "node:fs/promises";
+import { readFile, readdir, rmdir, unlink } from "node:fs/promises";
 import { readFileSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   ACP_DEADLINE_DIR,
   execRecordPath,
@@ -245,6 +245,11 @@ export class AcpHost {
           this.orphanTimers.set(recordPath, timer);
         }
       }
+      // Folders emptied by an earlier sweep — or by an owner that saw the
+      // finish — would otherwise pile up under the spared folder forever.
+      // Removing only an empty folder is race-safe: a concurrent new record
+      // makes this fail and the folder simply stays.
+      await rmdir(execDir).catch(() => undefined);
     }
   }
 
@@ -265,6 +270,10 @@ export class AcpHost {
       console.warn(`[acp-host] orphan build record does not match a running build; dropping it`);
     }
     await unlink(recordPath).catch(() => undefined);
+    // The sweep took the last record in this session folder: take the folder
+    // too, so empty folders never pile up under the spared folder. Only an
+    // empty folder goes — anything else fails and simply stays.
+    await rmdir(dirname(recordPath)).catch(() => undefined);
   }
 
   /** Forget a backup timer armed for a build that has since finished. */

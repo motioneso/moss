@@ -472,6 +472,40 @@ describe("AcpHost builds", () => {
     }
   });
 
+  it("sweep removes the session folder with its last record, and empty leftovers", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    try {
+      // One overdue record with no start time: dropped without touching any
+      // process, leaving its session folder empty.
+      const recordDir = join(dir, "acp-deadlines", KEY);
+      mkdirSync(recordDir, { recursive: true });
+      writeFileSync(
+        join(recordDir, "9.json"),
+        JSON.stringify({
+          pid: 123456789,
+          deadlineAt: Date.now() - 1000,
+          sessionKey: KEY,
+          projectId: PROJECT,
+          startedAt: Date.now(),
+          startTime: null
+        })
+      );
+      // A folder an earlier owner emptied by seeing the finish itself.
+      const leftoverDir = join(dir, "acp-deadlines", "workshop:user:gone");
+      mkdirSync(leftoverDir, { recursive: true });
+
+      const host = makeHost(dir);
+      await host.reapOrphanedExecs();
+
+      expect(existsSync(join(recordDir, "9.json"))).toBe(false);
+      expect(existsSync(recordDir)).toBe(false);
+      expect(existsSync(leftoverDir)).toBe(false);
+      expect(existsSync(join(dir, "acp-deadlines"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("arms no backup timer for a build this runner is already running", async () => {
     const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
     try {
