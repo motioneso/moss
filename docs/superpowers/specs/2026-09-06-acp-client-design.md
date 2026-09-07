@@ -289,8 +289,8 @@ one-shot callers in the tree):
 Scout's inventory is still landing; rows are added to this table as they are confirmed, and the
 plan is not written until the table is complete.
 
-**Decision, recommended and pending the full inventory: every unattended call is a short ACP
-session.** `session/new` with the `unattended` profile, one `session/prompt`, read the stop reason,
+**Ruled (Ben, 2026-09-07): every unattended call is a short ACP session.** One way of talking
+to models, so a change is made in one place. `session/new` with the `unattended` profile, one `session/prompt`, read the stop reason,
 `session/close`. The one-shot CLI flags are not kept.
 
 - **JSON answers** are asked for in the prompt and parsed from the final agent message, with the
@@ -308,10 +308,9 @@ session.** `session/new` with the `unattended` profile, one `session/prompt`, re
   be complete. A short ACP session costs one process launch per call, which is what the one-shot
   flags cost today.
 
-The alternative, keeping `claude -p` and friends for JSON callers, is recorded so it is not
-re-argued: it is taken only if slice 3's live proof shows a short session is materially slower or
-less reliable than the one-shot flag for a JSON caller, measured on dev, and then only for that
-class of caller, with the number in the plan.
+The alternative, keeping `claude -p` and friends for JSON callers, was put to Ben and rejected on
+2026-09-07 ("having ONE way of interacting with models is the best"). It is not taken back in a
+plan; a slow JSON caller is tuned inside the session, not moved off the protocol.
 
 ## 9. Providers and their adapters
 
@@ -415,14 +414,16 @@ Moss as an ACP agent; agent-to-agent messaging inside the protocol; building on 
 credential model or provider system; per-user vendor subscriptions; the draft custom-endpoint RFD
 (`providers/*`); a module marketplace; real OAuth callbacks.
 
-## 15. Open questions for Ben, each with a recommendation
+## 15. Open questions for Ben
 
-1. **Google agy.** Its ACP agent refuses to open a session on agy's existing login and wants its
-   own sign-in over the protocol. Recommendation: keep agy off the offered list until slice 3 builds
-   the protocol login path through the runner and it passes on dev; do not block slices 1 and 2 on
-   it.
-2. **Unattended calls.** Recommendation: short ACP sessions for every caller and delete the
-   one-shot flags (section 8), decided finally when Scout's inventory is complete.
+None open. Resolved on 2026-09-07:
+
+- **Google agy** stays off the offered list, watched for an adapter update; the protocol sign-in
+  path through the runner is built in slice 3 and agy is offered once it passes on dev (Ben,
+  2026-09-07). Slices 1 and 2 do not wait on it.
+- **Unattended calls** run as short ACP sessions; the one-shot print and exec paths are deleted
+  with the bridge, no fallback (Ben, 2026-09-07). Section 8's caller table fills in as Scout
+  confirms rows; the ruling does not change with the rows.
 
 ## 16. Review record
 
