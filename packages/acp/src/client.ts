@@ -20,6 +20,7 @@ import {
   ClientSideConnection,
   type Client,
   type McpServer,
+  type RequestPermissionRequest,
   type RequestPermissionResponse,
   type SessionNotification,
   type StopReason
@@ -60,6 +61,18 @@ export interface AcpClientEvents {
   onSessionUpdate?: (notification: SessionNotification) => void;
 }
 
+/**
+ * Answers one built-in permission request for a session. Phase 4 wires this to
+ * the gateway's shared approval card via `decideAcpPermission`; without a
+ * decider the client stays deny-closed.
+ */
+export interface AcpPermissionDecider {
+  decide(
+    request: RequestPermissionRequest,
+    session: AcpSessionHandle
+  ): Promise<RequestPermissionResponse>;
+}
+
 export interface AcpPromptOptions {
   /**
    * Caller-side deadline for one prompt turn. A hung agent cancels instead of
@@ -71,10 +84,11 @@ export interface AcpPromptOptions {
 const DEFAULT_PROMPT_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
- * Phase 1 permission posture: anything the policy does not explicitly allow is
- * denied, and slice 1 allows nothing yet — the shared approval card arrives with
- * the next phase. Denial is the protocol's cancelled outcome, which aborts the
- * tool use without retrying it.
+ * Deny-closed fallback: anything the policy does not explicitly allow is
+ * denied, and anything unrecognised is refused without asking. Denial is the
+ * protocol's cancelled outcome, which aborts the tool use without retrying it.
+ * With a permission decider wired (phase 4), the policy answers first and only
+ * this fallback denies.
  */
 function denyPermission(): RequestPermissionResponse {
   return { outcome: { outcome: "cancelled" } };
@@ -99,10 +113,12 @@ export class MossAcpClient {
   private readonly texts = new Map<string, string[]>();
   private readonly toolCalls = new Map<string, number>();
   private readonly closers = new Map<string, () => void>();
+  private readonly sessionCwds = new Map<string, string>();
 
   constructor(
     private readonly tunnel: AcpTunnel,
-    private readonly events: AcpClientEvents = {}
+    private readonly events: AcpClientEvents = {},
+    private readonly permissionDecider: AcpPermissionDecider | null = null
   ) {}
 
   async openSession(
@@ -131,6 +147,7 @@ export class MossAcpClient {
     this.connections.set(session.sessionId, connection);
     this.texts.set(session.sessionId, []);
     this.toolCalls.set(session.sessionId, 0);
+    this.sessionCwds.set(session.sessionId, cwd);
     if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
     return { sessionId: session.sessionId, cwd };
   }
@@ -176,6 +193,7 @@ export class MossAcpClient {
     this.connections.delete(handle.sessionId);
     this.texts.delete(handle.sessionId);
     this.toolCalls.delete(handle.sessionId);
+    this.sessionCwds.delete(handle.sessionId);
     // The phase-one end path: the tool server Bearer [REDACTED] working the moment the
     // outside session closes, so run the caller's revoke hook here.
     const onClose = this.closers.get(handle.sessionId);
@@ -189,9 +207,25 @@ export class MossAcpClient {
     return connection;
   }
 
+  /**
+   * Fail closed: no decider, no known folder, or a throwing decider all refuse
+   * without asking anyone.
+   */
+  private async answerPermission(
+    params: RequestPermissionRequest
+  ): Promise<RequestPermissionResponse> {
+    const cwd = this.sessionCwds.get(params.sessionId);
+    if (!this.permissionDecider || !cwd) return denyPermission();
+    try {
+      return await this.permissionDecider.decide(params, { sessionId: params.sessionId, cwd });
+    } catch {
+      return denyPermission();
+    }
+  }
+
   private createClientHandler(): Client {
     return {
-      requestPermission: async () => denyPermission(),
+      requestPermission: async (params) => this.answerPermission(params),
       sessionUpdate: async (params) => {
         this.events.onSessionUpdate?.(params);
         const update = params.update;

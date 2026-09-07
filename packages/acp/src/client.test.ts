@@ -209,6 +209,35 @@ describe("MossAcpClient", () => {
     await client.close(handle);
   });
 
+  it("answers through the wired decider, failing closed when it throws", async () => {
+    const agent = new ScriptedAgent();
+    const client = new MossAcpClient(
+      agent,
+      {},
+      {
+        decide: async (request, session) => {
+          if (session.cwd !== "/runner/session/acp/proj") throw new Error("wrong folder");
+          const allow = request.options.find((option) => option.kind === "allow_once");
+          if (!allow) throw new Error("no allow option");
+          return { outcome: { outcome: "selected", optionId: allow.optionId } };
+        }
+      }
+    );
+    const handle = await client.openSession("workshop:user:proj", "proj");
+    agent.agentAsksPermission(8);
+    await vi.waitFor(() => {
+      const answers = agent.sent
+        .map((line) => JSON.parse(line))
+        .filter((msg) => msg.id === 8 && msg.result !== undefined);
+      expect(answers.length).toBe(1);
+    });
+    const answer = agent.sent
+      .map((line) => JSON.parse(line))
+      .find((msg) => msg.id === 8 && msg.result !== undefined);
+    expect(answer.result.outcome).toEqual({ outcome: "selected", optionId: "allow" });
+    await client.close(handle);
+  });
+
   it("denies permission requests it has no policy for", async () => {
     const agent = new ScriptedAgent();
     const client = new MossAcpClient(agent);
