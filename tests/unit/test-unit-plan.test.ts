@@ -12,7 +12,8 @@ describe("resolveVitestArgs", () => {
       "--fileParallelism",
       "--maxWorkers=2",
       "tests/unit",
-      "packages/scratchpad/src/__tests__"
+      "packages/scratchpad/src/__tests__",
+      "packages/acp/src"
     ]);
   });
 
