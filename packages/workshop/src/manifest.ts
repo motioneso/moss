@@ -159,6 +159,29 @@ export const workshopModuleManifest = {
           description: "This chat cannot authorize saving a project. No chat content was copied."
         }
       ]
+    },
+    {
+      id: "workshop.acp_builds",
+      description:
+        "When the admin picks the outside agent, it answers project messages and runs build " +
+        "commands. " +
+        WORKSHOP_RUN_COMMAND_SANDBOX_NOTE,
+      remediations: [
+        {
+          id: "workshop.acp_builds.retry_command",
+          description:
+            "Send the build request again and answer the approval card. Unsent text stays in the window.",
+          path: "/workshop"
+        }
+      ],
+      errors: [
+        {
+          code: "workshop.acp_builds.not_approved",
+          class: "permission",
+          description:
+            "The build command was not approved, so nothing ran. Send the request again and approve it on the card."
+        }
+      ]
     }
   ],
   assistantActionFamilies: [
