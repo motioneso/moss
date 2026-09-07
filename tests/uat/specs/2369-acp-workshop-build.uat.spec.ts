@@ -61,17 +61,35 @@ test("Workshop build through the outside agent with an answered approval card", 
   // whole command and the sandbox sentence. Answer it there like a person would.
   const conversation = page.getByRole("region", { name: "Project conversation" });
   const card = conversation.getByRole("region", { name: "Action request" });
-  await expect(card).toBeVisible({ timeout: 120_000 });
+  try {
+    await card.waitFor({ timeout: 120_000 });
+  } catch {
+    throw new Error(
+      "Approval card never appeared: the outside agent did not start (household Claude " +
+        "login missing on the runner?) or the turn died before its first tool call. Failing " +
+        "here loudly, as this spec promises, instead of timing out on a later step."
+    );
+  }
   await expect(card).toContainText("echo acp-proof-ok");
   await expect(card).toContainText("not sandboxed");
+  // Moss reply bubbles carry the avatar; the person's own bubbles do not. The
+  // person's message also contains the command words, so a bare text search
+  // passes whether or not the build ever ran — count the agent's bubbles.
+  const replies = conversation.locator(".chatd-msg:not(.chatd-msg--me)");
+  const repliesBefore = await replies.count();
   await card.getByRole("button", { name: "Approve" }).click();
   await expect(card.getByText("Approved")).toBeVisible({ timeout: 30_000 });
 
-  // The reply lands in the project feed once the turn finishes.
+  // The reply lands in the project feed once the turn finishes: one more Moss
+  // bubble, and it answers with what the command showed rather than echoing
+  // the person's own words back.
   await page.reload();
-  await expect(page.getByText("acp-proof-ok", { exact: false })).toBeVisible({
-    timeout: 120_000
-  });
+  await expect
+    .poll(async () => replies.count(), { timeout: 120_000 })
+    .toBeGreaterThan(repliesBefore);
+  const lastReply = replies.last();
+  await expect(lastReply).toContainText("acp-proof-ok");
+  await expect(lastReply).not.toContainText("Please run the command");
   const seconds = Math.round((Date.now() - startedAt) / 1000);
   console.log(`workshop outside-agent build proof took ${seconds}s`);
 });

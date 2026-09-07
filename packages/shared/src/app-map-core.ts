@@ -198,7 +198,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "default, with a status line reading 'On, using Brave', 'On, using each person's chat " +
       "model', or 'Off. Add a Brave key or turn on built-in search.' A Brave Search API key " +
       "field below it is described as giving consistent results for every model, including " +
-      "local ones.",
+      "local ones. A separate Agents group chooses which agent answers each surface: a " +
+      "Workshop builds row (the agent that answers Workshop project messages and runs build " +
+      "commands) and a Chat row, each a dropdown offering 'Moss default' plus every outside " +
+      "agent that passes that surface's capability check. Saving shows an 'Agent choice saved' " +
+      "toast. When the chosen agent needs its own sign-in, a note under the group says so. " +
+      "While no outside agent passes the chat check, a note reads 'Chat stays on Moss default " +
+      "until an outside agent passes its gate.'",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },
