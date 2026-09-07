@@ -66,7 +66,7 @@ const response = (body: unknown, status = 200) => new Response(JSON.stringify(bo
 const elementProto = HTMLElement.prototype as HTMLElement & {
   scrollTo?: (options?: ScrollToOptions) => void;
 };
-let realScrollTo: ((options?: ScrollToOptions) => void) | undefined;
+let realScrollTo: (options?: ScrollToOptions) => void;
 let scrollTops: number[];
 
 function Location() {
@@ -170,10 +170,7 @@ function typeName(value: string) {
   const element = container.querySelector<HTMLInputElement>('input[aria-label="Project name"]');
   if (!element) throw new Error("Missing project name field");
   act(() => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
-      element,
-      value
-    );
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(element, value);
     element.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
@@ -205,7 +202,7 @@ beforeEach(() => {
   reads = [];
   createdBody = null;
   scrollTops = [];
-  realScrollTo = elementProto.scrollTo;
+  realScrollTo = elementProto.scrollTo?.bind(elementProto) ?? (() => {});
   elementProto.scrollTo = function (options?: ScrollToOptions) {
     scrollTops.push(options?.top ?? 0);
   };

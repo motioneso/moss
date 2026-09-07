@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance, type InjectOptions } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import type { Kysely } from "kysely";
 import { getBuiltInModuleRegistrations } from "@moss/module-registry";
@@ -251,14 +251,27 @@ describe("Workshop project HTTP entry", () => {
         headers: { "x-test-actor": ids.adminUser }
       });
       expect(saved.statusCode).toBe(201);
-      const listed = (
-        await replyApp.inject({
-          method: "GET",
-          url: `${base}/${project.id}/messages`,
-          headers: { "x-test-actor": ids.adminUser }
-        })
-      ).json<{ entries: { messageId: string; kind: string; delivery: string; text: string }[] }>();
-      expect(listed.entries).toHaveLength(2);
+      // The save returns with only the user's row; the reply works in the background and
+      // lands moments later, so poll for it rather than expecting it on the save.
+      const listMessages = () =>
+        replyApp
+          .inject({
+            method: "GET",
+            url: `${base}/${project.id}/messages`,
+            headers: { "x-test-actor": ids.adminUser }
+          })
+          .then((response) =>
+            response.json<{
+              entries: { messageId: string; kind: string; delivery: string; text: string }[];
+            }>()
+          );
+      await vi.waitFor(
+        async () => {
+          expect((await listMessages()).entries).toHaveLength(2);
+        },
+        { timeout: 10000 }
+      );
+      const listed = await listMessages();
       expect(listed.entries[0]).toMatchObject({
         messageId,
         kind: "user_message",
