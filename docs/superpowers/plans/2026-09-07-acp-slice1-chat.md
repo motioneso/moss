@@ -9,7 +9,7 @@ passes its live proof.
 Revision 2 (2026-09-07): chat replaces the Workshop as slice 1 (Ben); Reviewer's findings on
 revision 1 folded in (runner restored as it was, chat profile only, spec 7 point 3 deferred with a
 reason, model list reconciliation decided, reload and queueing named, evidence rules, two missed
-restores, release note); the behind-the-scenes task added (spec section 14); OpenCode as the second live-proof provider (Scout's check passed 2026-09-07).
+restores, release note); the behind-the-scenes task added (spec section 14); OpenCode as the second live-proof provider (Scout's check passed 2026-09-07). Revision 3 (same day): Reviewer's second-pass findings: task 9 narrowed to chat's own engines (PM's ruling), the spike's timing numbers copied in, chat's model choice stated, the chat UAT spec in task 7, the tool table's missing column named; PM's ruling on the gate clock and session warm-up.
 
 ## Premises verified on `main` at e32222640 (2026-09-07)
 
@@ -25,7 +25,8 @@ restores, release note); the behind-the-scenes task added (spec section 14); Ope
   session manager (`packages/chat/src/live/chat-session-manager.ts`: idle watchdog 180 s at line
   107, idle reaper at line 880, the "Chat session was lost, reconnecting" record at line 282,
   resume at line 674) through `packages/chat/src/live/runtime.ts` and `routes.ts`
-  (`selectEngineFactory`). The bridge engines live beside it in `packages/chat/src/live/`.
+  (`selectEngineFactory`). The bridge engines live beside it in `packages/chat/src/live/`. Two callers outside chat stand on the bridge's shared pieces: the module chat multiplexer (`packages/module-registry/src/chat-multiplexer.ts`) imports the engine type, the persistent-runtime launch config and the reap reason, and the module build step (`packages/ai/src/module-build/run-build-step.ts`) takes a live agent launcher from the same runtime. Both are slice 2 callers, so those pieces outlive this slice.
+- Spike timing (`spikes/acp-tool-call/RESULTS.md`, untracked, copied here so the gate has its numbers): the read prompt ("what is on my calendar") took 11.0 to 12.6 s on the bridge and 10.1 to 28.8 s over ACP across two runs of three; the write prompt ran 130 to 169 s on both arms because the approval hold ran to its timeout in the spike harness, so it is not a fair turn time; the one auto-approved ACP write took 16.4 s. The task 9 gate compares the read prompt only.
 - Runner RPC dispatch is the `switch` in `packages/cli-runner/src/connection.ts` (line 307 on
   main: `launch`, `submit`, `readNew`, `kill`, `probeProvider`, `listProviderModels` at 434, the
   login and terminal cases). Model lists come from `packages/cli-runner/src/model-list-adapters.ts`.
@@ -61,8 +62,7 @@ restores, release note); the behind-the-scenes task added (spec section 14); Ope
   and they are not reachable from any chat path. The old chat paths in the runner stay live until
   task 9 deletes the bridge API-side; the runner's own dead cases come out in slice 2 with a runner
   audit as its own task there (PM's ruling on Ben's question, 2026-09-07).
-- **Model choice.** Chat keeps today's resolution (per-user pin, else the instance default
-  provider's default model). The resolved provider kind picks the row; the model id is sent with
+- **Model choice.** Chat keeps today's resolution, unchanged: the admin's chat binding through the existing capability route (chat is the only bindable service), or the person's own override where the admin has enabled it (`packages/ai/src/chat-model-override.ts`); so yes, the admin's chat binding is honoured in slice 1. The resolved model record's provider kind picks the row; no code path names a provider (the bridge's engine chooser, which does, is what task 9 deletes); the model id is sent with
   `session/set_config_option` on the `category: "model"` option after `session/new` where the
   agent advertises it, else the row's launch mechanism, else the session stays on the login's
   default and the reply record says so.
@@ -132,8 +132,7 @@ same commit range.
   `pnpm-lock.yaml`.
 - **Tests:** row lookup by kind; profile gate passes Claude, Codex and OpenCode for
   `chat`, rejects `google` with its reason and `workshop`/`unattended` with "not built yet";
-  `setModel` sends the option when advertised, falls back per row, records a mismatch; version
-  mismatch fails closed.
+  `setModel` sends the option when advertised, falls back per row, records a mismatch; version mismatch fails closed. The restored tool table has `chat` and `workshop` columns only; `unattended` has no row yet and gets one in slice 2 (Reviewer finding 5), so the profile gate rejects it before the table is consulted.
 - **Gate:** the four checks; `pnpm --filter @moss/acp test`.
 
 ### Task 3. Runner: restore the ACP host and its seven cases as they were
@@ -195,11 +194,10 @@ same commit range.
   send during a turn is queued and the composer says so; stop reasons surface as typed events; an
   `auth_required` answer becomes the provider's "Not logged in" status and the drawer reply "The
   <provider> sign-in has expired; an admin can log it in again under Settings, Assistant & AI";
-  reply persisted through the existing transcript path.
-- **Files:** `packages/chat/src/live/{engine-selection,runtime,chat-session-manager}.ts`, a new
-  `packages/chat/src/live/acp-chat-engine.ts`, `packages/chat/src/manifest.ts`.
+  reply persisted through the existing transcript path; the session is started when the conversation is opened in the drawer, not on the first send, so no first prompt pays the session start (PM, 2026-09-07).
+- **Files:** `packages/chat/src/live/{engine-selection,runtime,chat-session-manager}.ts`, a new `packages/chat/src/live/acp-chat-engine.ts`, `packages/chat/src/manifest.ts`, `tests/uat/specs/2424-acp-chat-lunch.uat.spec.ts` (the live-proof script task 10 runs; modelled on `tests/uat/specs/chat-drawer-private.uat.spec.ts`).
 - **Tests:** engine unit tests (login failure text, replay shape, stop reason mapping, queue on
-  busy, cancel answers pending asks); session manager tests for the queue.
+  busy, cancel answers pending asks, warm start on open); session manager tests for the queue.
 - **App map:** chat manifest `features`: answers through the agent protocol, the sign-in expired
   message, queued sends.
 - **Gate:** the four checks; `pnpm vitest run packages/chat`; full gate via `verify-gate`.
@@ -224,22 +222,16 @@ Starts only after Ben has seen the mockup (posted in the room 2026-09-07).
   and `packages/ui/src`, output on the PR.
 - **Gate:** the four checks; `pnpm vitest run packages/chat packages/ui apps/web`.
 
-### Task 9. Delete the bridge, settings wording, second gate
+### Task 9. Delete chat's half of the bridge, settings wording, second gate
 
-- **Measure first:** the spike's prompt set run through the ACP engine on dev, wall-clock per turn
-  recorded on the PR next to the bridge's numbers from `spikes/acp-tool-call/RESULTS.md`. If ACP is
-  not within the bridge's wall-clock, stop and report to PM before deleting anything.
-- **Builds:** the bridge engines and their selection removed: `claude-print-chat-engine`,
-  `gemini-print-chat-engine`, `codex-exec-session`, `claude-persistent-runtime`,
-  `codex-persistent-runtime`, `persistent-runtime-*`, `cli-chat-engine*`, `claude-permission-hook`
-  and the engine choice in `engine-selection.ts`. `cli-structured-adapter.ts` stays until slice 2
-  because the unattended callers still use it (named here so nobody deletes it early). No fallback
+- **Measure first:** the spike's read prompt run three times through the ACP engine on dev, wall-clock per turn recorded on the PR next to the bridge's 11.0 to 12.6 s from the Premises. The gate passes when the ACP median is within the bridge's slowest run plus 20 percent (15.1 s). If not, stop and report to PM before deleting anything.
+- **Builds (narrowed, PM 2026-09-07 on Reviewer's finding 1):** only what chat alone used goes: the engine choice in `engine-selection.ts` and its provider-naming rules, `claude-print-chat-engine`, `gemini-print-chat-engine`, `codex-exec-session`, the tmux REPL chat engine implementation (`cli-chat-engine-impl` and its launch commands) and `claude-permission-hook`. What stays, named so nobody deletes it early: the persistent runtimes (`claude-persistent-runtime`, `codex-persistent-runtime`, `persistent-runtime-*`), the engine type and launch config in `cli-chat-engine.ts`, and `cli-structured-adapter.ts`, because module chat, module builds and the unattended callers still stand on them; slice 2 moves those callers and deletes the rest, so the bridge is gone with no fallback by the end of slice 2. Builder confirms before deleting each file that nothing outside `packages/chat/src/live/` imports it. No fallback
   setting. Settings: each provider card's "Not logged in" state driven by the adapter's initialize
   check; a provider whose row cannot honour a model choice says so beside its list; OpenCode card.
 - **Files:** `packages/chat/src/live/**` (deletions), `packages/chat/src/routes.ts`,
   `apps/web/src/settings/settings-ai-admin-pane.tsx`, `packages/shared/src/app-map-core.ts`,
   the tests of the deleted engines.
-- **Tests:** deleted engines' tests removed; a test that engine selection has one path; settings
+- **Tests:** deleted engines' tests removed; a test that chat's engine selection has one path; module chat and module build tests still green untouched; settings
   web test for the login state and the model-choice note.
 - **App map:** `aiproviders` entry: login-check wording, model-choice note, OpenCode.
 - **Gate:** the four checks; `pnpm vitest run packages/chat apps/web`; full gate via `verify-gate`.
@@ -252,8 +244,7 @@ Starts only after Ben has seen the mockup (posted in the room 2026-09-07).
   OpenCode on Muse Spark 1.3 free. Codex's turn is recorded on the PR as pending until its usage returns on 2026-09-11, then run and recorded. The first real turn on each provider records its usage block on the PR (real numbers or zeros). OpenCode's first two calls take 15 to 20 seconds; that is expected, not a hang.
 - **Evidence:** `tests/uat/specs/2424-acp-chat-lunch.uat.spec.ts` (added by Builder in task 7,
   run by Prover) exit code and assertions, the audit lines, the bounded engine log. No screenshots.
-- **Kill gate (slice exit):** the attended write finishes in under 30 s end to end on dev on the
-  instance default provider (Claude). OpenCode's time is recorded beside it and is not held to the 30 s bar in this slice. If Claude does not make it, the slice stops here and PM reassesses before slice 2.
+- **Kill gate (slice exit):** the attended write finishes in under 30 s on dev on the instance default provider (Claude), the clock running from the person's approval click to the event in the calendar and the reply in the drawer (PM, 2026-09-07); the time from send to the approval card is recorded beside it. Session start is not on the clock and is paid at drawer open (task 7), which is where OpenCode's 15 to 20 s go. OpenCode's time is recorded beside it and is not held to the 30 s bar in this slice. If Claude does not make it, the slice stops here and PM reassesses before slice 2.
 
 ## Order and hand-offs
 
@@ -263,7 +254,6 @@ Reviewer reviews each task's commit range before the next task starts.
 
 ## Out of scope for this slice
 
-The Workshop, its profile, its service key and its panel (slice 3); unattended callers, the
-structured adapter's deletion, the terminal-type login path, agy (slice 2); the runner audit
+The Workshop, its profile, its service key and its panel (slice 3); unattended callers, moving module chat and module builds off the bridge and the deletion of the persistent runtimes, the engine type and the structured adapter, the terminal-type login path, agy (slice 2); the runner audit
 (slice 2); the gateway hold through the protocol card (slice 3); user-level model override; ACP
 `terminal/*`.
