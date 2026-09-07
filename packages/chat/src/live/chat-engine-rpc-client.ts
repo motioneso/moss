@@ -48,14 +48,6 @@ import { performClientHello } from "./rpc-handshake.js";
 import {
   decodeFrame,
   encodeFrame,
-  type RpcAcpKillParams,
-  type RpcAcpKillResult,
-  type RpcAcpReadParams,
-  type RpcAcpReadResult,
-  type RpcAcpSendParams,
-  type RpcAcpSendResult,
-  type RpcAcpSpawnParams,
-  type RpcAcpSpawnResult,
   type RpcCancelSubmitParams,
   type RpcCancelSubmitResult,
   type RpcErr,
@@ -345,24 +337,6 @@ export class RpcConnection {
 
   interrupt(sessionKey: string): Promise<RpcInterruptResult> {
     return this.call<RpcInterruptResult>("interrupt", sessionKey, {});
-  }
-
-  // #2369 slice 1 — ACP tunnel verbs. Session-scoped like the turn verbs; acpRead is a
-  // quick poll (the API-side client in @moss/acp paces it), so the default deadline applies.
-  acpSpawn(sessionKey: string, params: RpcAcpSpawnParams): Promise<RpcAcpSpawnResult> {
-    return this.call<RpcAcpSpawnResult>("acpSpawn", sessionKey, params);
-  }
-
-  acpSend(sessionKey: string, params: RpcAcpSendParams): Promise<RpcAcpSendResult> {
-    return this.call<RpcAcpSendResult>("acpSend", sessionKey, params);
-  }
-
-  acpRead(sessionKey: string, params: RpcAcpReadParams): Promise<RpcAcpReadResult> {
-    return this.call<RpcAcpReadResult>("acpRead", sessionKey, params);
-  }
-
-  acpKill(sessionKey: string, params: RpcAcpKillParams = {}): Promise<RpcAcpKillResult> {
-    return this.call<RpcAcpKillResult>("acpKill", sessionKey, params);
   }
 
   /**

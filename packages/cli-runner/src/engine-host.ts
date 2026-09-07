@@ -51,7 +51,6 @@ import {
 } from "@moss/chat/live";
 import type { ProviderKind } from "@moss/ai";
 
-import { AcpHost } from "./acp-host.js";
 import { Mutex } from "./mutex.js";
 import { LoginBadRequestError, type LoginService } from "./login-service.js";
 import {
@@ -111,50 +110,6 @@ export class CliChatEngineHost {
   constructor(private readonly deps: EngineHostDeps) {
     this.launchTimeoutMs = deps.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT_MS;
     this.verifiedSubmitTimeoutMs = deps.verifiedSubmitTimeoutMs ?? VERIFIED_SUBMIT_DEADLINE_MS;
-    // #2369 slice 1 — the ACP adapter host rides the same identity config (uid slot
-    // when enabled, shared home base, per-session dirs). It is deliberately OUTSIDE
-    // the chat admission gate below: Workshop agent sessions are a separate surface
-    // and must never contend with the single-active-user chat lock.
-    this.acp = new AcpHost({
-      neutralBase: deps.neutralBase,
-      homeBase: deps.homeBase,
-      perUserUid: deps.perUserUid
-    });
-  }
-
-  private readonly acp: AcpHost;
-
-  /**
-   * #2369 slice 1 — ACP tunnel verbs. Thin delegates: admission, policy, and the
-   * protocol all live elsewhere (API-side client, gateway); the host only pipes lines.
-   */
-  async acpSpawn(
-    sessionKey: string,
-    projectId: string
-  ): Promise<{ cwd: string; generation: number }> {
-    return this.acp.spawn(sessionKey, projectId);
-  }
-
-  acpSend(sessionKey: string, line: string): void {
-    this.acp.send(sessionKey, line);
-  }
-
-  acpRead(
-    sessionKey: string,
-    afterSeq: number
-  ): {
-    lines: readonly string[];
-    firstSeq: number;
-    nextSeq: number;
-    exited: boolean;
-    exitCode: number | null;
-    truncated: boolean;
-  } {
-    return this.acp.read(sessionKey, afterSeq);
-  }
-
-  acpKill(sessionKey: string, opts: { generation?: number } = {}): void {
-    this.acp.kill(sessionKey, opts.generation);
   }
 
   /** Registers a listener for session-reaped events; returns an unregister function. */
