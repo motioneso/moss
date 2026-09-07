@@ -185,7 +185,7 @@ describe("workshop.runCommand execute", () => {
     expect(calls.kills).toBe(1);
   }, 15000);
 
-  it.each(["", "   ", "x\0", "x".repeat(32769)])(
+  it.each(["", "   ", "x\0", "x".repeat(2001)])(
     "rejects an invalid command %j",
     async (command) => {
       const { service, calls } = scriptedService([doneState("")]);
@@ -195,6 +195,16 @@ describe("workshop.runCommand execute", () => {
       expect(calls.starts).toHaveLength(0);
     }
   );
+
+  it("refuses a command the approval card cannot show in full", async () => {
+    const { service, calls } = scriptedService([doneState("")]);
+    await expect(
+      workshopRunCommandExecute({}, { command: "x".repeat(2001) }, ctx, {
+        workshopRunCommand: service
+      })
+    ).rejects.toThrow(/approval card.*in full/i);
+    expect(calls.starts).toHaveLength(0);
+  });
 
   it.each([0, 999, 601_000, "soon", 1.5])("rejects an invalid deadline %j", async (timeoutMs) => {
     const { service, calls } = scriptedService([doneState("")]);

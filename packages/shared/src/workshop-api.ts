@@ -78,9 +78,17 @@ export const workshopBuildModuleInputSchema = {
 } as const;
 
 /**
- * workshop.runCommand (#2369 slice 1 phase 3): one shell command in the
- * session project folder. The folder is fixed runner-side from the session,
- * so the input names a command and a deadline, never a path.
+ * Longest command workshop.runCommand accepts. The approval card shows the
+ * command in full and a person cannot approve what they cannot see, so a
+ * command longer than this is refused instead of cut.
+ */
+export const workshopRunCommandMaxLength = 2000;
+
+/**
+ * workshop.runCommand (#2369 slice 1 phase 3): one shell command starting
+ * with the session project folder as its working folder. The folder is fixed
+ * runner-side from the session, so the input names a command and a deadline,
+ * never a path. The command itself is not restricted to that folder.
  */
 export const workshopRunCommandInputSchema = {
   type: "object",
@@ -90,9 +98,10 @@ export const workshopRunCommandInputSchema = {
     command: {
       type: "string",
       minLength: 1,
-      maxLength: 32768,
+      maxLength: workshopRunCommandMaxLength,
       description:
-        "Shell command to run in the project folder, for example a build or test command."
+        "Shell command to run with the project folder as its working folder, for example " +
+        "a build or test command. At most 2000 characters so the approval card shows it in full."
     },
     timeoutMs: {
       type: "integer",

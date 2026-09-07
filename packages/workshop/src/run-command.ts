@@ -1,5 +1,6 @@
 import { HttpError } from "@moss/module-sdk";
 import type { ToolExecute, ToolResult, ToolServices } from "@moss/module-sdk";
+import { workshopRunCommandMaxLength } from "@moss/shared";
 
 /**
  * workshop.runCommand (#2369 slice 1 phase 3): one shell command starting in
@@ -107,9 +108,13 @@ export const workshopRunCommandExecute: ToolExecute = async (
     typeof raw.command !== "string" ||
     raw.command.trim().length === 0 ||
     raw.command.includes("\0") ||
-    raw.command.length > 32768
+    raw.command.length > workshopRunCommandMaxLength
   ) {
-    throw new HttpError(400, "command must be a non-empty string of at most 32768 characters.");
+    throw new HttpError(
+      400,
+      "command must be a non-empty string of at most 2000 characters so the approval card " +
+        "can show it in full."
+    );
   }
   const timeoutMs =
     raw.timeoutMs === undefined ? WORKSHOP_RUN_COMMAND_DEFAULT_TIMEOUT_MS : raw.timeoutMs;

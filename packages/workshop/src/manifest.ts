@@ -186,11 +186,11 @@ export const workshopModuleManifest = {
       inputSchema: workshopRunCommandInputSchema,
       outputSchema: workshopRunCommandResultSchema,
       execute: workshopRunCommandExecute,
-      // The card is the only human control here, so it must say what will run.
+      // The card is the only human control here, so it shows the whole command:
+      // over-long commands are refused up front, never silently cut.
       summarize: (input) => {
         const command = typeof input.command === "string" ? input.command : "";
-        const shown = command.length > 300 ? `${command.slice(0, 300)}...` : command;
-        return `Run this project command: ${shown}`;
+        return `Run this project command: ${command}`;
       }
     }
   ],

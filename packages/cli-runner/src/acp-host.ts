@@ -357,9 +357,8 @@ export class AcpHost {
     }
 
     const sessionDir = join(this.deps.neutralBase, key, "acp", projectId);
-    // The build's own home, inside its own scratch area — never the shared
-    // home base, so the login token file and anything else under the shared
-    // home are simply not there for the command to read.
+    // The build's own home, in its own scratch area rather than the shared
+    // home base, so the login token file is not under the build's home.
     const homeDir = join(this.deps.neutralBase, key, "acp-home", projectId);
 
     let uid: number | undefined;
@@ -372,12 +371,28 @@ export class AcpHost {
     await this.prepareOwnedDir(key, sessionDir, uid, gid);
     await this.prepareOwnedDir(key, homeDir, uid, gid);
 
-    // Scrubbed environment with the build's own home. The vendor login reaches
-    // the child in neither the environment nor the home folder.
+    // Scrubbed environment with the build's own home. What is actually true:
+    // the build's home no longer points at the shared home, so the login
+    // token is not in the child's home and nothing hands it over — but the
+    // command is not confined, and one that goes looking under the shared
+    // account can still reach the shared home. The runner's folder-naming
+    // variables are dropped below so the environment does not point there
+    // either. What stays (PATH, HOME, TERM, locale basics) is what a build
+    // needs to run and carries no secret.
     const env: NodeJS.ProcessEnv = {
       ...buildSanitizedCliEnv(process.env),
       HOME: homeDir
     };
+    for (const key of [
+      "JARVIS_CLI_HOME",
+      "MOSS_CLI_HOME",
+      "JARVIS_CLI_HOME_BASE",
+      "MOSS_CLI_HOME_BASE",
+      "JARVIS_CLI_NEUTRAL_BASE",
+      "MOSS_CLI_NEUTRAL_BASE"
+    ]) {
+      delete env[key];
+    }
     const spawnExec =
       this.deps.spawnExec ??
       ((opts) =>

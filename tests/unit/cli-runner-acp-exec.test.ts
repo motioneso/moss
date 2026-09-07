@@ -161,6 +161,8 @@ describe("AcpHost builds", () => {
     // Even if these leaked into the runner process env, the child must not see them.
     process.env.CLAUDE_CODE_OAUTH_TOKEN = "server-side-oauth-token";
     process.env.JARVIS_TEST_SECRET_MARKER = "server-side-marker";
+    process.env.JARVIS_CLI_HOME = homeBase;
+    process.env.JARVIS_CLI_HOME_BASE = homeBase;
     try {
       const tokenPath = providerTokenPath(homeBase, "anthropic");
       mkdirSync(join(tokenPath, ".."), { recursive: true });
@@ -171,6 +173,7 @@ describe("AcpHost builds", () => {
         PROJECT,
         "echo HOME=$HOME; echo OAUTH=$CLAUDE_CODE_OAUTH_TOKEN; " +
           "echo MARKER=$JARVIS_TEST_SECRET_MARKER; " +
+          "env | grep -E 'JARVIS_CLI_HOME|MOSS_CLI_HOME' || echo NO_HOME_VARS; " +
           "cat $HOME/.jarvis/cli-tokens/anthropic 2>/dev/null || echo TOKEN_UNREADABLE"
       );
       await pollUntil(host.execPoll.bind(host, KEY, execId));
@@ -182,12 +185,15 @@ describe("AcpHost builds", () => {
       expect(final.output).not.toContain("server-side-oauth-token");
       expect(final.output).not.toContain("server-side-marker");
       expect(final.output).not.toContain("test-login-token");
+      expect(final.output).toContain("NO_HOME_VARS");
       expect(final.output).toContain("TOKEN_UNREADABLE");
       // The shared token file itself is untouched; it is just not under the build's home.
       expect(lstatSync(expectedHome).isDirectory()).toBe(true);
     } finally {
       delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
       delete process.env.JARVIS_TEST_SECRET_MARKER;
+      delete process.env.JARVIS_CLI_HOME;
+      delete process.env.JARVIS_CLI_HOME_BASE;
       rmSync(dir, { recursive: true, force: true });
       rmSync(homeBase, { recursive: true, force: true });
     }

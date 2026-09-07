@@ -62,7 +62,7 @@ subscription. Those stay Moss's problems.
 3. **Shell and file writes off in chat.** File reads, file search, web search and web fetch may
    stay on (the spike's third condition: five read-only built-ins offered, zero used on calendar
    prompts). The agent's tool list is a fixed base list, not a deny filter. In the Workshop,
-   shell and writes are the point, inside the project folder.
+   shell and writes are the point, starting in the project folder (not restricted to it).
 4. **The approval card is wired to the protocol** (section 6). This is the one real defect the
    spike found, and it ships in the first slice.
 5. **An agent capability list** (section 7) decides which agents may be offered on which
@@ -106,12 +106,12 @@ only `actorUserId` and `requestId` by ruling.
 
 **Capabilities advertised to the agent.**
 
-| capability                                | chat | Workshop                  | why                                                                                                                                                                   |
-| ----------------------------------------- | ---- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fs/read_text_file`, `fs/write_text_file` | no   | no                        | v2 removes client file access; serve files as Moss tools scoped to the project folder instead, so the v2 migration does not touch file handling                       |
-| `terminal/*`                              | no   | no (see fork A)           | same reason; commands run through a Moss tool that starts with the session project folder as its working folder (the command itself is not restricted to that folder) |
-| agent built-in shell / file-write         | off  | on, inside project folder | condition 3                                                                                                                                                           |
-| agent built-in read / search / web        | on   | on                        | spike third condition                                                                                                                                                 |
+| capability                                | chat | Workshop                           | why                                                                                                                                                                   |
+| ----------------------------------------- | ---- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fs/read_text_file`, `fs/write_text_file` | no   | no                                 | v2 removes client file access; serve files as Moss tools scoped to the project folder instead, so the v2 migration does not touch file handling                       |
+| `terminal/*`                              | no   | no (see fork A)                    | same reason; commands run through a Moss tool that starts with the session project folder as its working folder (the command itself is not restricted to that folder) |
+| agent built-in shell / file-write         | off  | on, starting in the project folder | condition 3                                                                                                                                                           |
+| agent built-in read / search / web        | on   | on                                 | spike third condition                                                                                                                                                 |
 
 **Fork A — how the Workshop runs commands. Decided (review, 2026-09-06): (1).** A Moss tool
 starts the command with the project folder as its working folder and streams output, v2-proof
