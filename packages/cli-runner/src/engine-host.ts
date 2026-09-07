@@ -52,7 +52,6 @@ import {
 import type { ProviderKind } from "@moss/ai";
 
 import { AcpHost } from "./acp-host.js";
-import { ACP_DEADLINE_DIR } from "./exec-records.js";
 import { Mutex } from "./mutex.js";
 import { LoginBadRequestError, type LoginService } from "./login-service.js";
 import {
@@ -898,8 +897,6 @@ export class CliChatEngineHost {
     // restart can leave one while the in-memory login flow is gone). DISTINCT from (a), which
     // only enumerates `jarv1s-live-*` chat sessions.
     await this.deps.loginService?.startupSweep().catch(() => undefined);
-    // (f) #2396 orphaned-build sweep: after the clean-out, never beside it.
-    await this.acp.reapOrphanedExecs().catch(() => undefined);
   }
 
   /** `rm -rf <neutralBase>/* ` then recreate the base dir (`0700`). */
@@ -914,7 +911,7 @@ export class CliChatEngineHost {
       for (const name of listed.stdout
         .split("\n")
         .map((s) => s.trim())
-        .filter((name) => name.length > 0 && name !== ACP_DEADLINE_DIR)) {
+        .filter(Boolean)) {
         await this.deps.io
           .run("rm", ["-rf", `${this.deps.neutralBase}/${name}`])
           .catch(() => undefined);
