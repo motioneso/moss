@@ -250,7 +250,10 @@ export class AcpHost {
       // Only an empty folder goes: anything else fails and simply stays.
       // This can still land inside a record write in progress, whose folder
       // sits empty until its file follows. That write rebuilds the folder
-      // and tries once more, so the record still lands.
+      // and tries once more, so the record lands unless the sweep wins the
+      // race twice in a row. Past that point the build still starts, and the
+      // caller logs that it could not save the deadline and carries on with
+      // the one it holds in memory.
       await rmdir(execDir).catch(() => undefined);
     }
   }
