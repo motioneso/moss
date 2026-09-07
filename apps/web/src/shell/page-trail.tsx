@@ -26,8 +26,9 @@ const PageTrailStateContext = createContext<PageTrail | null>(null);
 const PageTrailActionsContext = createContext<PageTrailActions | null>(null);
 // The More menu's "Rename" item and the top bar's editable title are separate components under
 // the shell, so choosing "Rename" reaches the title through this counter rather than props: each
-// bump means "start editing now", read by an effect rather than a plain render-time value so a
-// second click while already editing still refocuses the field.
+// bump means "start editing now", read by an effect rather than a plain render-time value. The
+// field itself focuses only when it first appears (autoFocus on mount); a bump while already
+// editing re-seeds the draft with the saved name instead.
 const PageTrailEditRequestContext = createContext<number>(0);
 const PageTrailRequestEditContext = createContext<() => void>(() => {});
 

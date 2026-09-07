@@ -237,7 +237,10 @@ export function registerWorkshopProjectRoutes(
         });
         if (!result) return reply.code(404).send({ error: "Workshop project not found." });
         if (result.created && project) {
-          await attemptProjectReply(
+          // The reply works in the background: the save returns at once, the page polls
+          // while its message is still pending, and the wait in the old await was pure
+          // latency. attemptProjectReply never throws; a late failure only logs.
+          void attemptProjectReply(
             {
               dataContext: deps.dataContext,
               aiRepository: deps.aiRepository,

@@ -7,7 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MeResponse, WorkshopFeedEntry, WorkshopProject } from "@moss/shared";
 import { deriveProjectTitle } from "@moss/shared";
 import { WorkshopProjectRoutes } from "../../packages/workshop/src/web/project-routes.js";
-import { PageTrailProvider, usePageTrailValue } from "../../apps/web/src/shell/page-trail.js";
+import {
+  PageTrailProvider,
+  resolveTrailSection,
+  TopbarMoreActions,
+  TopbarTrail,
+  usePageTrailValue,
+  useRequestPageTrailEdit
+} from "../../apps/web/src/shell/page-trail.js";
 
 const project: WorkshopProject = {
   id: "a0000000-0000-4000-8000-000000000001",
@@ -47,7 +54,6 @@ let container: HTMLDivElement;
 let client: QueryClient;
 let createFailures: number;
 let messageFailures: number;
-let renameFailures: number;
 let listStatus: number;
 let detailStatus: number;
 let admin: boolean;
@@ -55,6 +61,13 @@ let entries: WorkshopFeedEntry[];
 let writes: { path: string; body: Record<string, string> }[];
 let reads: string[];
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+// jsdom ships no Element.scrollTo: stub it on the prototype and record where the thread
+// asks to go, so the follow-down behaviour is asserted, not just rendered.
+const elementProto = HTMLElement.prototype as HTMLElement & {
+  scrollTo?: (options?: ScrollToOptions) => void;
+};
+let realScrollTo: ((options?: ScrollToOptions) => void) | undefined;
+let scrollTops: number[];
 
 function Location() {
   return (
@@ -70,31 +83,36 @@ function TrailName() {
   const trail = usePageTrailValue();
   return <output aria-label="Page trail">{trail?.name ?? ""}</output>;
 }
-// Stands in for the shell's real More menu: the page publishes actions and an onAction handler,
-// and this renders one button per action so a test can choose one the way a person would. The
-// shell itself prepends its own "Rename" item whenever onRename is set (not tested here, that
-// lives in the shell's app-shell test) and turns the title editable in place; this probe drives
-// that same onRename handler directly to check what the page does with a submitted name.
-function TrailActions() {
+// The shell's real top-bar title and More menu, wired the way app-shell wires them: the page
+// publishes the trail, the shell prepends its own Rename item whenever the page allows
+// renaming, and choosing it turns the title itself into the field. The item id must match
+// the shell's RENAME_TRAIL_ACTION; if it drifts, choosing Rename opens no editor and the
+// rename test below fails on the missing field.
+function RealTrail() {
   const trail = usePageTrailValue();
+  const location = useLocation();
+  const requestEdit = useRequestPageTrailEdit();
   if (!trail) return null;
+  const section = resolveTrailSection(location.pathname);
+  const actions = trail.onRename
+    ? [{ id: "__trail_rename", label: "Rename" }, ...trail.actions]
+    : trail.actions;
   return (
     <>
-      {trail.actions.map((action) => (
-        <button key={action.id} type="button" onClick={() => trail.onAction?.(action.id)}>
-          {action.label}
-        </button>
-      ))}
-      {trail.onRename ? (
-        <button
-          type="button"
-          onClick={() => {
-            void trail.onRename!("Reading list");
-          }}
-        >
-          Rename
-        </button>
-      ) : null}
+      <TopbarTrail
+        sectionLabel={section.label}
+        sectionPath={section.path}
+        name={trail.name}
+        meta={trail.meta}
+        onRename={trail.onRename}
+      />
+      <TopbarMoreActions
+        actions={actions}
+        onAction={(id) => {
+          if (id === "__trail_rename") requestEdit();
+          else trail.onAction?.(id);
+        }}
+      />
     </>
   );
 }
@@ -120,7 +138,7 @@ async function render(path: string) {
           <PageTrailProvider>
             <Location />
             <TrailName />
-            <TrailActions />
+            <RealTrail />
             <Routes>
               <Route path="/workshop/*" element={<WorkshopProjectRoutes />} />
             </Routes>
@@ -148,10 +166,25 @@ function type(id: string, value: string) {
     element.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+function typeName(value: string) {
+  const element = container.querySelector<HTMLInputElement>('input[aria-label="Project name"]');
+  if (!element) throw new Error("Missing project name field");
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+      element,
+      value
+    );
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
 function button(label: string) {
-  const element = [...container.querySelectorAll("button")].find(
-    (item) => item.textContent === label
-  );
+  // Most buttons carry their words as text; icon-only buttons (the arrow send button)
+  // carry no words, so match their accessible name instead. Never match an accessible
+  // name on a button that already has words — the words are what a person sees.
+  const element = [...container.querySelectorAll("button")].find((item) => {
+    if (item.textContent === label) return true;
+    return (item.textContent ?? "").trim() === "" && item.getAttribute("aria-label") === label;
+  });
   if (!element) throw new Error(`Missing button ${label}`);
   return element;
 }
@@ -164,7 +197,6 @@ beforeEach(() => {
   onlineManager.setOnline(true);
   createFailures = 0;
   messageFailures = 0;
-  renameFailures = 0;
   listStatus = 200;
   detailStatus = 200;
   admin = true;
@@ -172,6 +204,11 @@ beforeEach(() => {
   writes = [];
   reads = [];
   createdBody = null;
+  scrollTops = [];
+  realScrollTo = elementProto.scrollTo;
+  elementProto.scrollTo = function (options?: ScrollToOptions) {
+    scrollTops.push(options?.top ?? 0);
+  };
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
   });
@@ -220,7 +257,6 @@ beforeEach(() => {
       if (init?.method === "PATCH" && path === `${base}/${project.id}`) {
         const body = JSON.parse(String(init.body)) as Record<string, string>;
         writes.push({ path, body });
-        if (renameFailures-- > 0) return response({ error: "Temporary failure" }, 503);
         return response({ project: { ...project, title: body.title! } });
       }
       reads.push(path);
@@ -254,6 +290,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   client.clear();
   container.remove();
+  elementProto.scrollTo = realScrollTo;
   onlineManager.setOnline(true);
   vi.unstubAllGlobals();
 });
@@ -328,7 +365,12 @@ describe("Workshop project browser interactions", () => {
     );
     expect(field("project-message").value).toBe("Keep this additional requirement");
     click("Send");
-    await eventually(() => expect(container.textContent).toContain("Saved · awaiting delivery"));
+    // The retry saves: the turn renders in the thread at once, no status line narrates it.
+    await eventually(() =>
+      expect(container.querySelector(".chatd-thread")?.textContent).toContain(
+        "Keep this additional requirement"
+      )
+    );
     expect(writes).toHaveLength(2);
     expect(writes[1]!.body).toEqual(writes[0]!.body);
     expect(field("project-message").value).toBe("");
@@ -352,6 +394,7 @@ describe("Workshop project browser interactions", () => {
       );
     });
     expect(writes).toHaveLength(0);
+    const scrollsBefore = scrollTops.length;
     act(() => {
       field("project-message").dispatchEvent(
         new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
@@ -360,22 +403,47 @@ describe("Workshop project browser interactions", () => {
     await eventually(() => expect(writes).toHaveLength(1));
     expect(writes[0]!.body.text).toBe("A line, then a break");
     expect(field("project-message").value).toBe("");
+    // The fresh turn follows the thread down while the reader is at the bottom.
+    await eventually(() => expect(scrollTops.length).toBeGreaterThan(scrollsBefore));
   });
 
-  it("saves a rename through the trail's onRename and shows the new name", async () => {
+  it("renames through the More menu, typing the name one letter at a time", async () => {
     await render(`/workshop/${project.id}`);
     await eventually(() =>
       expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe(project.title)
     );
+    click("More");
     click("Rename");
+    await eventually(() =>
+      expect(container.querySelector('input[aria-label="Project name"]')).not.toBeNull()
+    );
+    // One letter at a time with renders flushed between keystrokes: the old field
+    // re-selected its whole content on every render, so only the last letter survived.
+    const selectSpy = vi.spyOn(HTMLInputElement.prototype, "select");
+    const target = "Reading list";
+    let current = "";
+    for (const letter of target) {
+      current += letter;
+      typeName(current);
+      await flush();
+    }
+    const reselects = selectSpy.mock.calls.length;
+    selectSpy.mockRestore();
+    // Focusing the fresh field selects once; no keystroke may reselect.
+    expect(reselects).toBe(0);
+    await act(async () => {
+      container
+        .querySelector<HTMLFormElement>('form[aria-label="Rename this project"]')!
+        .requestSubmit();
+    });
     await eventually(() =>
       expect(
         writes.some(
-          (write) => write.path === `${base}/${project.id}` && write.body.title === "Reading list"
+          (write) => write.path === `${base}/${project.id}` && write.body.title === target
         )
       ).toBe(true)
     );
-    expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe("Reading list");
+    expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe(target);
   });
 
   it("retains the composer and blocks saves until reconnect refresh succeeds", async () => {

@@ -40,6 +40,21 @@
   }
 }
 
+/* The in-progress Thinking line breathes while the model works. */
+@keyframes chatd-thinking {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.chatd-peek--quiet[data-in-progress] .chatd-peek__label {
+  animation: chatd-thinking 1.6s ease-in-out infinite;
+}
+
 .chatd__head {
   flex: none;
   display: flex;
@@ -502,6 +517,9 @@
   }
   .chatd-peek__chev {
     transition: none;
+  }
+  .chatd-peek--quiet[data-in-progress] .chatd-peek__label {
+    animation: none;
   }
 }
 

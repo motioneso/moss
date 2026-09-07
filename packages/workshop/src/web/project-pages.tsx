@@ -177,8 +177,10 @@ export function WorkshopComposer(props: {
           disabled={props.sending}
           onChange={(event) => props.onTextChange(event.target.value)}
           onKeyDown={(event) => {
-            // Enter sends, matching every other chat surface; Shift+Enter still makes a new line.
-            if (event.key === "Enter" && !event.shiftKey) {
+            // Enter sends, like the drawer's composer; Shift+Enter still makes a new line. An
+            // Enter halfway through composing (input methods building one character from
+            // several key presses) never sends.
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
               props.onSubmit();
             }
@@ -305,11 +307,16 @@ function WorkshopProjectContent({
   const [text, setText] = useState("");
   const [messageId, setMessageId] = useState(() => randomUuid());
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Turns already sent but not yet back from the feed: they render in the thread
+  // immediately so sending never looks stuck, and leave as their rows arrive.
+  const [pending, setPending] = useState<readonly { messageId: string; text: string }[]>([]);
+  const forgetPending = useCallback((sentId: string) => {
+    setPending((current) => current.filter((item) => item.messageId !== sentId));
+  }, []);
   // A normal chat follows new turns down while the reader is already at the bottom and
   // never yanks them away from earlier messages. Same contract as the chat drawer.
   const historyRef = useRef<HTMLDivElement | null>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
-  const loadingEarlierRef = useRef(false);
   const AUTOSCROLL_THRESHOLD_PX = 48;
   const handleHistoryScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     const el = event.currentTarget;
@@ -344,32 +351,61 @@ function WorkshopProjectContent({
     retry: false,
     refetchOnReconnect: "always"
   });
+  const mutation = useMutation({
+    mutationFn: (input: { messageId: string; text: string }) => saveMessage(projectId, input),
+    onSuccess: () => {
+      setMessageId(randomUuid());
+      void client.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+      void client.invalidateQueries({ queryKey: projectKeys.messages(projectId) });
+    },
+    onError: (_error, input) => {
+      // A failed save was never stored, so its optimistic turn leaves and the text goes
+      // back in the box when there is nothing newer to lose.
+      forgetPending(input.messageId);
+      setText((current) => (current ? current : input.text));
+    }
+  });
   const messages = useInfiniteQuery({
     queryKey: projectKeys.messages(projectId),
     queryFn: ({ pageParam }) => listMessages(projectId, pageParam),
     initialPageParam: "0",
     getNextPageParam: (last) => (last.entries.length === 50 ? last.nextCursor : undefined),
     retry: false,
-    refetchOnReconnect: "always"
-  });
-  const mutation = useMutation({
-    mutationFn: (input: { messageId: string; text: string }) => saveMessage(projectId, input),
-    onSuccess: () => {
-      setText("");
-      setMessageId(randomUuid());
-      void client.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+    refetchOnReconnect: "always",
+    // While a turn is still on its way the reply can land at any moment: saving, sent
+    // but not yet shown, or saved and still awaiting its reply. Otherwise leave the feed alone.
+    refetchInterval: (query) => {
+      // The feed data can be briefly absent-shaped mid-fetch; only read pages when they
+      // are really there so a background poll can never crash the page.
+      const pages = query.state.data?.pages;
+      const waiting =
+        Array.isArray(pages) &&
+        pages.flatMap((page) => page.entries).some((entry) => entry.delivery === "pending");
+      return mutation.isPending || pending.length > 0 || waiting ? 2000 : false;
     }
   });
-  const entryCount = messages.data?.pages.reduce((n, page) => n + page.entries.length, 0) ?? 0;
-  // A fresh turn lands at the bottom while the reader is already there. Loading earlier
-  // messages grows the same count from the top, so that growth never pulls the reader down.
+
+  const entries = messages.data?.pages.flatMap((page) => page.entries) ?? [];
+  const awaitingDelivery = entries.some((entry) => entry.delivery === "pending");
+  // The model is working while a turn is saving, sent but not yet shown, or saved and
+  // still awaiting its reply.
+  const thinking = mutation.isPending || pending.length > 0 || awaitingDelivery;
+  const lastEntryIdRef = useRef<string | null>(null);
+  // An optimistic turn leaves the thread the moment its row arrives. A fresh turn at the
+  // foot of the thread follows it down while the reader is already there; older pages only
+  // ever grow the head, so loading them never moves the reader — including when a load
+  // returns nothing new. Thinking joining the thread counts as movement too, so the wait
+  // stays in view.
   useEffect(() => {
-    if (loadingEarlierRef.current) {
-      loadingEarlierRef.current = false;
-      return;
+    const arrived = new Set(entries.map((entry) => entry.messageId));
+    if (pending.length > 0 && pending.some((item) => arrived.has(item.messageId))) {
+      setPending((current) => current.filter((item) => !arrived.has(item.messageId)));
     }
-    if (stickToBottom) scrollHistoryToLatest();
-  }, [entryCount, mutation.isPending, stickToBottom, scrollHistoryToLatest]);
+    const lastId = entries.at(-1)?.messageId ?? null;
+    const grown = lastId !== lastEntryIdRef.current;
+    if (grown) lastEntryIdRef.current = lastId;
+    if (stickToBottom && (grown || thinking)) scrollHistoryToLatest();
+  }, [pending, entries, thinking, stickToBottom, scrollHistoryToLatest]);
   // The top bar carries the project's name while this page is mounted; before the project
   // loads there is no name to show, so the trail stays clear and the plain section title stands.
   usePageTrail(
@@ -398,8 +434,17 @@ function WorkshopProjectContent({
     return <p role="status">Loading your project…</p>;
   }
   const record = project.data.project;
-  const entries = messages.data?.pages.flatMap((page) => page.entries) ?? [];
-  const awaitingDelivery = entries.some((entry) => entry.delivery === "pending");
+  const arrivedIds = new Set(entries.map((entry) => entry.messageId));
+  const transcript = workshopTranscript(record, entries);
+  const visibleTranscript =
+    pending.length > 0
+      ? [
+          ...transcript,
+          ...pending
+            .filter((item) => !arrivedIds.has(item.messageId))
+            .map((item) => ({ kind: "user" as const, text: item.text }))
+        ]
+      : transcript;
   const ready =
     canMutate &&
     !project.isError &&
@@ -447,10 +492,7 @@ function WorkshopProjectContent({
           <Button
             variant="quiet"
             disabled={messages.isFetching || !canMutate}
-            onClick={() => {
-              loadingEarlierRef.current = true;
-              void messages.fetchNextPage();
-            }}
+            onClick={() => void messages.fetchNextPage()}
           >
             {messages.isFetching ? "Loading…" : "Earlier messages"}
           </Button>
@@ -465,14 +507,9 @@ function WorkshopProjectContent({
           />
         ) : null}
         {!messages.isPending && !messages.isError ? (
-          <Thread records={workshopTranscript(record, entries)} working={mutation.isPending} />
+          <Thread records={visibleTranscript} working={thinking} />
         ) : null}
-        {mutation.isPending ? <ActivityPeek records={[]} inProgress /> : null}
-        {awaitingDelivery ? (
-          <p className="workshop-chat__caption" role="status">
-            Saved · awaiting delivery
-          </p>
-        ) : null}
+        {thinking ? <ActivityPeek records={[]} inProgress /> : null}
       </div>
       <WorkshopComposer
         label="Add to your project"
@@ -487,7 +524,13 @@ function WorkshopProjectContent({
         sending={mutation.isPending}
         sendDisabled={!ready || mutation.isPending || !text.trim()}
         onSubmit={() => {
-          if (ready && !mutation.isPending) mutation.mutate({ messageId, text });
+          // The turn joins the thread now, not when the save returns: the box clears
+          // and the message renders immediately, with Thinking covering the wait.
+          if (!ready || mutation.isPending || !text.trim()) return;
+          const input = { messageId, text };
+          setPending((current) => [...current, input]);
+          setText("");
+          mutation.mutate(input);
         }}
         error={
           mutation.isError
