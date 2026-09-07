@@ -106,12 +106,12 @@ only `actorUserId` and `requestId` by ruling.
 
 **Capabilities advertised to the agent.**
 
-| capability                                | chat | Workshop                  | why                                                                                                                                             |
-| ----------------------------------------- | ---- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fs/read_text_file`, `fs/write_text_file` | no   | no                        | v2 removes client file access; serve files as Moss tools scoped to the project folder instead, so the v2 migration does not touch file handling |
+| capability                                | chat | Workshop                  | why                                                                                                                                                                   |
+| ----------------------------------------- | ---- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fs/read_text_file`, `fs/write_text_file` | no   | no                        | v2 removes client file access; serve files as Moss tools scoped to the project folder instead, so the v2 migration does not touch file handling                       |
 | `terminal/*`                              | no   | no (see fork A)           | same reason; commands run through a Moss tool that starts with the session project folder as its working folder (the command itself is not restricted to that folder) |
-| agent built-in shell / file-write         | off  | on, inside project folder | condition 3                                                                                                                                     |
-| agent built-in read / search / web        | on   | on                        | spike third condition                                                                                                                           |
+| agent built-in shell / file-write         | off  | on, inside project folder | condition 3                                                                                                                                                           |
+| agent built-in read / search / web        | on   | on                        | spike third condition                                                                                                                                                 |
 
 **Fork A — how the Workshop runs commands. Decided (review, 2026-09-06): (1).** A Moss tool
 starts the command with the project folder as its working folder and streams output, v2-proof
