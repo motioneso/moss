@@ -9,9 +9,10 @@
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { O_DIRECTORY, O_NOFOLLOW, O_RDONLY } from "node:constants";
+import { O_CREAT, O_DIRECTORY, O_NOFOLLOW, O_RDONLY, O_TRUNC, O_WRONLY } from "node:constants";
 import { createRequire } from "node:module";
-import { chmod, chown, lstat, mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, unlink } from "node:fs/promises";
+import { unlinkSync } from "node:fs";
 import { join } from "node:path";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
@@ -96,7 +97,26 @@ export const ACP_EXEC_MAX_TIMEOUT_MS = 10 * 60 * 1000;
 /** Finished build records are kept this long for a final poll, then swept. */
 const EXEC_RETAIN_MS = 10 * 60 * 1000;
 /** Backstop per session so one runaway agent cannot pile up build records. */
-const MAX_EXECS_PER_SESSION = 32;
+export const MAX_EXECS_PER_SESSION = 32;
+/**
+ * Backstop across all sessions so runs cannot pile up without bound. Eight
+ * fully-loaded sessions fit; the 32-per-session cap still applies inside it.
+ * Each record holds at most 256 KiB of output, so the worst case is 64 MiB
+ * retained plus one process per running record.
+ */
+export const MAX_EXECS_TOTAL = 8 * MAX_EXECS_PER_SESSION;
+/**
+ * Smallest unit of a build record kept on disk: what a restarted runner needs
+ * to stop a build that outlived the process that started it.
+ */
+interface ExecDeadlineRecord {
+  readonly pid: number;
+  /** Epoch milliseconds when the build must be stopped. */
+  readonly deadlineAt: number;
+  readonly sessionKey: string;
+  readonly projectId: string;
+  readonly startedAt: number;
+}
 
 export interface AcpExecStartResult {
   readonly execId: number;
@@ -157,8 +177,59 @@ export class AcpHost {
   private generationCounter = 0;
   private readonly execs = new Map<string, Map<number, AcpExec>>();
   private execCounter = 0;
+  /**
+   * Kill timers armed for builds owned by a dead runner, keyed by record
+   * file. Stops a restarted runner from arming the same deadline twice.
+   */
+  private readonly orphanTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  constructor(private readonly deps: AcpHostDeps) {}
+  constructor(private readonly deps: AcpHostDeps) {
+    // A restart throws away every in-memory deadline while the builds keep
+    // running detached, so the first thing a new runner does is pick up the
+    // deadlines left on disk. Fire-and-forget: a scan failure must never stop
+    // the runner from starting; execStart runs the same pass awaited.
+    void this.reapOrphanedExecs().catch((error: unknown) => {
+      console.warn(`[acp-host] orphan build sweep failed: ${(error as Error).message}`);
+    });
+  }
+
+  /**
+   * Stop builds that outlived the runner process that started them. Reads
+   * every deadline record left on disk: builds past their deadline are
+   * stopped at once, builds still within it get a kill timer in this process
+   * so a second restart keeps them covered too. Unreadable records are left
+   * alone. Safe to call any number of times.
+   */
+  async reapOrphanedExecs(): Promise<void> {
+    const base = this.deps.neutralBase;
+    const sessionDirs = await readdir(base, { withFileTypes: true }).catch(() => []);
+    for (const entry of sessionDirs) {
+      if (!entry.isDirectory()) continue;
+      const execDir = join(base, entry.name, "acp-exec");
+      const files = await readdir(execDir).catch(() => [] as string[]);
+      for (const file of files) {
+        if (!file.endsWith(".json")) continue;
+        const recordPath = join(execDir, file);
+        if (this.orphanTimers.has(recordPath)) continue;
+        const record = await this.readExecRecord(recordPath);
+        if (!record) continue;
+        const waitMs = record.deadlineAt - Date.now();
+        if (waitMs <= 0) {
+          this.killPidGroup(record.pid);
+          await unlink(recordPath).catch(() => undefined);
+        } else {
+          const timer = setTimeout(() => {
+            this.orphanTimers.delete(recordPath);
+            this.killPidGroup(record.pid);
+            void unlink(recordPath).catch(() => undefined);
+          }, waitMs);
+          // A leftover deadline must never hold the runner process open.
+          (timer as unknown as { unref?: () => void }).unref?.();
+          this.orphanTimers.set(recordPath, timer);
+        }
+      }
+    }
+  }
 
   async spawn(sessionKey: string, projectId: string): Promise<AcpSpawnResult> {
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(projectId)) {
@@ -168,7 +239,6 @@ export class AcpHost {
     this.killRecord(key);
 
     const sessionDir = join(this.deps.neutralBase, key, "acp", projectId);
-    await mkdir(sessionDir, { recursive: true });
 
     let uid: number | undefined;
     let gid: number | undefined;
@@ -176,27 +246,30 @@ export class AcpHost {
       const slot = allocateUidSlot(this.deps.homeBase, key);
       uid = slot.uid;
       gid = slot.gid;
-      await this.chownOwned(key, sessionDir, uid, gid);
     }
-    // Owner-only whatever the identity option says: with it off every session
-    // shares one account, so this narrows nothing between people — the real
-    // containment there is the disabled built-ins plus the per-session folder
-    // (asserted in cli-runner-acp-host.test.ts), not these bits. Still the only
-    // safe default: group and world get nothing.
-    await this.chmodOwned(key, sessionDir);
+    // Same link-safe folder setup the build path uses: a command that ran
+    // here earlier can swap this folder for a link elsewhere, so a planted
+    // link is removed and the real folder is verified before use. Owner-only
+    // whatever the identity option says: with it off every session shares one
+    // account, so this narrows nothing between people — the real containment
+    // there is the disabled built-ins plus the per-session folder (asserted
+    // in cli-runner-acp-host.test.ts), not these bits. Still the only safe
+    // default: group and world get nothing.
+    await this.prepareOwnedDir(key, sessionDir, uid, gid);
 
     // Project settings at the path the adapter actually reads
     // (<cwd>/.claude/settings.json). A bare tool name denies every use of it,
     // so even an adapter that ignored the disabled-built-ins flag could neither
     // shell out nor write. Written before spawn so the first session is scoped.
     const settingsDir = join(sessionDir, ".claude");
-    await mkdir(settingsDir, { recursive: true });
+    await this.prepareOwnedDir(key, settingsDir, uid, gid);
     const settingsPath = join(settingsDir, "settings.json");
     // Belt and braces with the policy: the shell and writer names stay off, and
     // reads of the login-token corners plus the system pseudofolders are denied
     // even if a future adapter ever launched those tools. Whether the vendor
     // matcher honors these rules needs a live check in phase 5.
-    await writeFile(
+    await this.writeOwnedFile(
+      key,
       settingsPath,
       JSON.stringify({
         permissions: {
@@ -218,14 +291,10 @@ export class AcpHost {
             "Read(//run/**)"
           ]
         }
-      })
+      }),
+      uid,
+      gid
     );
-    if (uid !== undefined && gid !== undefined) {
-      await this.chownOwned(key, settingsDir, uid, gid);
-      await this.chownOwned(key, settingsPath, uid, gid);
-    }
-    await this.chmodOwned(key, settingsDir);
-    await this.chmodOwned(key, settingsPath);
 
     const env: NodeJS.ProcessEnv = {
       ...buildSanitizedCliEnv(process.env),
@@ -364,7 +433,9 @@ export class AcpHost {
    * an adapter spawn for that session uses. The command itself is not
    * restricted to that folder. Output past 256 KiB is dropped (the poll reply
    * keeps the head and says it was cut); past the deadline the command is
-   * killed and the poll reply carries whatever ran so far.
+   * killed and the poll reply carries whatever ran so far. The deadline is
+   * also written to disk next to the session, so a restarted runner still
+   * stops a build that outlived the process that started it.
    */
   async execStart(
     sessionKey: string,
@@ -372,6 +443,9 @@ export class AcpHost {
     command: string,
     timeoutMs: number = ACP_EXEC_DEFAULT_TIMEOUT_MS
   ): Promise<AcpExecStartResult> {
+    // Pick up deadlines left by a dead runner before admitting anything new.
+    // A scan failure must never refuse a build; the constructor already tried.
+    await this.reapOrphanedExecs().catch(() => undefined);
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(projectId)) {
       throw new Error("acpExecStart.projectId must match [A-Za-z0-9_-]{1,64}");
     }
@@ -439,13 +513,19 @@ export class AcpHost {
     const child = spawnExec({ command, cwd: sessionDir, env, uid, gid });
 
     this.sweepExecs();
-    const bySession = this.execs.get(key) ?? new Map<number, AcpExec>();
-    if (bySession.size >= MAX_EXECS_PER_SESSION) {
+    let bySession = this.execs.get(key);
+    if (bySession && bySession.size >= MAX_EXECS_PER_SESSION) {
       const oldestDone = [...bySession.values()].find((record) => record.done);
       if (!oldestDone) throw new Error("acpExecStart: too many running commands for this session");
       this.dropExec(key, bySession, oldestDone.id);
+    } else if (this.totalExecCount() >= MAX_EXECS_TOTAL) {
+      if (!this.evictOldestDoneExec()) {
+        throw new Error("acpExecStart: too many running commands across sessions");
+      }
     }
+    bySession = this.execs.get(key) ?? new Map<number, AcpExec>();
     const id = (this.execCounter += 1);
+    const recordPath = this.execRecordPath(key, id);
     const record: AcpExec = {
       id,
       child,
@@ -467,6 +547,12 @@ export class AcpHost {
         clearTimeout(record.deadline);
         record.deadline = null;
       }
+      // The deadline no longer needs to survive anything: this runner saw the end.
+      try {
+        unlinkSync(recordPath);
+      } catch {
+        /* never written, or the reaper already took it */
+      }
     };
     child.stdout.on("data", (chunk: Buffer) => this.appendExecOutput(record, chunk));
     child.stderr.on("data", (chunk: Buffer) => this.appendExecOutput(record, chunk));
@@ -483,6 +569,18 @@ export class AcpHost {
     record.deadline = timer;
     bySession.set(id, record);
     this.execs.set(key, bySession);
+    // The deadline on disk is what lets a restarted runner stop this build.
+    // A write failure is said out loud but never refuses the build: the
+    // in-memory deadline still guards this runner's lifetime.
+    await this.writeExecRecord(key, id, {
+      pid: child.pid,
+      deadlineAt: Date.now() + timeoutMs,
+      sessionKey: key,
+      projectId,
+      startedAt: Date.now()
+    }).catch((error: unknown) => {
+      console.warn(`[acp-host] ${key} could not persist build ${id}: ${(error as Error).message}`);
+    });
     return { execId: id };
   }
 
@@ -545,7 +643,7 @@ export class AcpHost {
     await mkdir(path, { recursive: true });
     const verified = await lstat(path).catch(() => null);
     if (!verified || !verified.isDirectory() || verified.isSymbolicLink()) {
-      throw new Error("acpExecStart: project folder is not a folder");
+      throw new Error("AcpHost: session folder is not a folder");
     }
     const handle = await open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
     try {
@@ -571,26 +669,46 @@ export class AcpHost {
   }
 
   /**
-   * Owner-only bits, always. A failure is said out loud: silent best-effort is
-   * how isolation ends up missing with nobody knowing.
+   * Write content to path without ever following a link. A command that ran
+   * here earlier can plant a link where the settings file goes; a plain write
+   * would then overwrite the wrong place. So a planted link is removed first
+   * and the file is opened with O_NOFOLLOW, which refuses to resolve to
+   * anything but this file — a link re-planted in between fails closed
+   * instead of writing through. Owner-only bits and handover go through the
+   * open handle, so they can only land on this file. A failure to lock or
+   * hand over is said out loud: silent best-effort is how isolation ends up
+   * missing with nobody knowing.
    */
-  private async chmodOwned(key: string, path: string): Promise<void> {
+  private async writeOwnedFile(
+    key: string,
+    path: string,
+    content: string,
+    uid: number | undefined,
+    gid: number | undefined
+  ): Promise<void> {
+    const first = await lstat(path).catch(() => null);
+    if (first && first.isSymbolicLink()) await unlink(path);
+    const handle = await open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o600);
     try {
-      await chmod(path, 0o700);
-    } catch (error) {
-      console.warn(
-        `[acp-host] ${key} could not lock ${path} owner-only: ${(error as Error).message}`
-      );
-    }
-  }
-
-  private async chownOwned(key: string, path: string, uid: number, gid: number): Promise<void> {
-    try {
-      await chown(path, uid, gid);
-    } catch (error) {
-      console.warn(
-        `[acp-host] ${key} could not hand ${path} to its owner: ${(error as Error).message}`
-      );
+      await handle.writeFile(content, "utf8");
+      try {
+        await handle.chmod(0o700);
+      } catch (error) {
+        console.warn(
+          `[acp-host] ${key} could not lock ${path} owner-only: ${(error as Error).message}`
+        );
+      }
+      if (uid !== undefined && gid !== undefined) {
+        try {
+          await handle.chown(uid, gid);
+        } catch (error) {
+          console.warn(
+            `[acp-host] ${key} could not hand ${path} to its owner: ${(error as Error).message}`
+          );
+        }
+      }
+    } finally {
+      await handle.close().catch(() => undefined);
     }
   }
 
@@ -648,7 +766,115 @@ export class AcpHost {
     const record = bySession.get(execId);
     bySession.delete(execId);
     if (record?.deadline) clearTimeout(record.deadline);
+    try {
+      unlinkSync(this.execRecordPath(key, execId));
+    } catch {
+      /* never written, finished already, or the reaper took it */
+    }
     if (bySession.size === 0) this.execs.delete(key);
+  }
+
+  /** Where one build's restart-proof deadline lives. */
+  private execRecordPath(key: string, execId: number): string {
+    return join(this.deps.neutralBase, key, "acp-exec", `${execId}.json`);
+  }
+
+  /**
+   * Persist one build's deadline. Skipped when the child has no process id
+   * (injected test doubles): there is nothing a restarted runner could stop.
+   */
+  private async writeExecRecord(
+    key: string,
+    execId: number,
+    record: Omit<ExecDeadlineRecord, "pid"> & { pid: number | undefined }
+  ): Promise<void> {
+    if (record.pid === undefined) return;
+    const path = this.execRecordPath(key, execId);
+    const { pid, ...rest } = record;
+    await mkdir(join(this.deps.neutralBase, key, "acp-exec"), { recursive: true });
+    const handle = await open(path, O_WRONLY | O_CREAT | O_TRUNC, 0o600);
+    try {
+      await handle.writeFile(JSON.stringify({ pid, ...rest }), "utf8");
+    } finally {
+      await handle.close().catch(() => undefined);
+    }
+  }
+
+  /** Read one deadline record; null when it is missing or not what we wrote. */
+  private async readExecRecord(path: string): Promise<ExecDeadlineRecord | null> {
+    try {
+      const raw = JSON.parse(await readFile(path, "utf8")) as Partial<ExecDeadlineRecord>;
+      if (
+        typeof raw.pid !== "number" ||
+        !Number.isInteger(raw.pid) ||
+        raw.pid <= 0 ||
+        typeof raw.deadlineAt !== "number" ||
+        !Number.isFinite(raw.deadlineAt)
+      ) {
+        return null;
+      }
+      return {
+        pid: raw.pid,
+        deadlineAt: raw.deadlineAt,
+        sessionKey: typeof raw.sessionKey === "string" ? raw.sessionKey : "",
+        projectId: typeof raw.projectId === "string" ? raw.projectId : "",
+        startedAt: typeof raw.startedAt === "number" ? raw.startedAt : 0
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Best-effort stop of one process group by id, for builds owned by a dead
+   * runner where no child handle exists. A missing process is the common
+   * case (it exited on its own) and is not an error.
+   */
+  private killPidGroup(pid: number): void {
+    try {
+      process.kill(-pid, "SIGTERM");
+      return;
+    } catch {
+      /* fall through to the direct kill */
+    }
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      /* already gone */
+    }
+  }
+
+  /** Every build record held right now, finished or running, in every session. */
+  private totalExecCount(): number {
+    let total = 0;
+    for (const bySession of this.execs.values()) total += bySession.size;
+    return total;
+  }
+
+  /**
+   * Drop the longest-idle finished build across all sessions to make room for
+   * a new one. Running builds are never dropped: when everything held is
+   * still running there is nothing safe to make room with. Returns true when
+   * a record was dropped.
+   */
+  private evictOldestDoneExec(): boolean {
+    let oldestKey: string | null = null;
+    let oldestSession: Map<number, AcpExec> | null = null;
+    let oldestId = -1;
+    let oldestActivity = Number.POSITIVE_INFINITY;
+    for (const [key, bySession] of this.execs) {
+      for (const [id, record] of bySession) {
+        if (record.done && record.lastActivity < oldestActivity) {
+          oldestKey = key;
+          oldestSession = bySession;
+          oldestId = id;
+          oldestActivity = record.lastActivity;
+        }
+      }
+    }
+    if (oldestKey === null || oldestSession === null) return false;
+    this.dropExec(oldestKey, oldestSession, oldestId);
+    return true;
   }
 
   /** Best-effort process-group kill for one build; the exit handler settles the record. */

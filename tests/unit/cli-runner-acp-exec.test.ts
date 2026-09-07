@@ -7,6 +7,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import {
   chmodSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -21,6 +22,8 @@ import { describe, expect, it } from "vitest";
 import {
   ACP_EXEC_DEFAULT_TIMEOUT_MS,
   ACP_EXEC_OUTPUT_CAP_BYTES,
+  MAX_EXECS_PER_SESSION,
+  MAX_EXECS_TOTAL,
   AcpHost
 } from "../../packages/cli-runner/src/acp-host.js";
 import { providerTokenPath } from "../../packages/cli-runner/src/provider-token-store.js";
@@ -37,6 +40,21 @@ async function pollUntil(poll: () => { done: boolean }, timeoutMs = 10_000): Pro
   for (;;) {
     if (poll().done) return;
     if (Date.now() - started > timeoutMs) throw new Error("timed out waiting for the build");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+async function pollUntilPidGone(pid: number, timeoutMs = 10_000): Promise<void> {
+  const started = Date.now();
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      // No such process: it is gone. Anything else (like no permission to
+      // signal it) means it is still there.
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
+    }
+    if (Date.now() - started > timeoutMs) throw new Error("timed out waiting for the build to die");
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
 }
@@ -227,6 +245,134 @@ describe("AcpHost builds", () => {
       } finally {
         rmSync(victim, { recursive: true, force: true });
       }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("caps build records across sessions, evicting finished ones first", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    try {
+      const { EventEmitter } = await import("node:events");
+      const children: InstanceType<typeof EventEmitter>[] = [];
+      const host = new AcpHost({
+        neutralBase: dir,
+        spawnExec: () => {
+          const child = Object.assign(new EventEmitter(), {
+            stdout: new EventEmitter(),
+            stderr: new EventEmitter(),
+            kill: () => true
+          }) as never;
+          children.push(child as InstanceType<typeof EventEmitter>);
+          return child;
+        }
+      });
+      // Fill the cross-session cap with running builds, spreading them so no
+      // single session hits its own cap first.
+      const sessions = MAX_EXECS_TOTAL / MAX_EXECS_PER_SESSION;
+      for (let s = 0; s < sessions; s++) {
+        for (let i = 0; i < MAX_EXECS_PER_SESSION; i++) {
+          await host.execStart(`workshop:user:cap${s}`, PROJECT, "sleep 30");
+        }
+      }
+      // Everything held is still running, so there is nothing safe to evict.
+      await expect(host.execStart("workshop:user:other", PROJECT, "echo hi")).rejects.toThrow(
+        /across sessions/
+      );
+      // Finishing one build makes room: the next start evicts it and runs.
+      const finished = children.at(0);
+      if (!finished) throw new Error("expected a build to finish");
+      finished.emit("exit", 0);
+      const { execId } = await host.execStart("workshop:user:other", PROJECT, "echo hi");
+      expect(execId).toBeGreaterThan(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves a deadline on disk so a restarted runner still stops the build", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    try {
+      const host = makeHost(dir);
+      const { execId } = await host.execStart(KEY, PROJECT, "sleep 30", 60_000);
+      const recordPath = join(dir, KEY, "acp-exec", `${execId}.json`);
+      const record = JSON.parse(readFileSync(recordPath, "utf8")) as {
+        pid: number;
+        deadlineAt: number;
+      };
+      expect(record.pid).toBeGreaterThan(0);
+      expect(record.deadlineAt).toBeGreaterThan(Date.now());
+      // The restart lands after the deadline has passed.
+      writeFileSync(recordPath, JSON.stringify({ ...record, deadlineAt: Date.now() - 1000 }));
+
+      // A new runner process picks up the leftover deadline and stops the build.
+      const restarted = makeHost(dir);
+      await restarted.reapOrphanedExecs();
+      await pollUntilPidGone(record.pid);
+      expect(existsSync(recordPath)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("arms the leftover deadline when the build is still within it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    let pid = -1;
+    try {
+      const { spawn } = await import("node:child_process");
+      const child = spawn("sleep", ["30"], { detached: true, stdio: "ignore" });
+      child.unref();
+      pid = child.pid ?? -1;
+      expect(pid).toBeGreaterThan(0);
+      // A deadline record from a dead runner, plus junk the sweep must ignore.
+      mkdirSync(join(dir, KEY, "acp-exec"), { recursive: true });
+      const recordPath = join(dir, KEY, "acp-exec", "7.json");
+      writeFileSync(
+        recordPath,
+        JSON.stringify({
+          pid,
+          deadlineAt: Date.now() + 300,
+          sessionKey: KEY,
+          projectId: PROJECT,
+          startedAt: Date.now()
+        })
+      );
+      writeFileSync(join(dir, KEY, "acp-exec", "junk.txt"), "not a record");
+      writeFileSync(join(dir, KEY, "acp-exec", "bad.json"), "{nope");
+
+      const restarted = makeHost(dir);
+      await restarted.reapOrphanedExecs();
+      // Still within the deadline: the build stands and the record stays armed.
+      expect(process.kill(pid, 0)).toBe(true);
+      expect(existsSync(recordPath)).toBe(true);
+      await pollUntilPidGone(pid);
+      expect(existsSync(recordPath)).toBe(false);
+    } finally {
+      if (pid > 0) {
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          /* already gone */
+        }
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          /* already gone */
+        }
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("drops the deadline record once the build finishes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    try {
+      const host = makeHost(dir);
+      const { execId } = await host.execStart(KEY, PROJECT, "echo done");
+      await pollUntil(host.execPoll.bind(host, KEY, execId));
+      expect(host.execPoll(KEY, execId).done).toBe(true);
+      // This runner saw the end, so nothing is left for a restart to pick up.
+      expect(existsSync(join(dir, KEY, "acp-exec", `${execId}.json`))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
