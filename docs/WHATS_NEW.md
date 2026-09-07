@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-07
+
+#### Changed
+
+- **Workshop project list cleanup.** The Workshop project list page is tidier: renaming a project now lives in its menu, pressing Enter sends a chat message, and the page header and row highlighting got small visual polish. [PR #2405](https://github.com/motioneso/moss/pull/2405)
+
 ### 2026-09-06
 
 #### Changed
