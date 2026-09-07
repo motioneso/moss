@@ -101,7 +101,7 @@ export const workshopModuleManifest = {
         },
         {
           id: "workshop.projects.rename_retry",
-          description: "Click the project name in the top bar and enter the name again.",
+          description: "Open the More menu and choose Rename, then enter the name again.",
           path: "/workshop"
         },
         {

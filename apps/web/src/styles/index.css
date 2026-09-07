@@ -12,6 +12,7 @@
 @import "./components-keyline.css";
 @import "./command-palette.css";
 @import "../styles.css";
+@import "./kit-shell-rename.css";
 @import "./onboarding.css";
 @import "./onboarding-design.css";
 @import "./onboarding-connectors.css";
