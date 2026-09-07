@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { types as nodeUtilTypes } from "node:util";
 
-import { classifyAcpPermission, inferAcpToolName } from "@moss/acp";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 import type {
@@ -18,6 +17,11 @@ import type { ActionAuditInputSummary, AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AiRepository, InsertAuditLogInput } from "../repository.js";
+import {
+  requestAcpBuiltInPermission as resolveAcpBuiltInPermission,
+  type AcpBuiltInPermissionRequest,
+  type AcpBuiltInPermissionResponse
+} from "./acp-permission.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import {
@@ -34,6 +38,7 @@ import {
 import { resolvePolicy } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
 import {
+  APPROVAL_REFUSED_REASON,
   gatewayFailureReason,
   nativeToolRisk,
   nativeToolSummary,
@@ -51,16 +56,6 @@ export interface GatewayLogger {
 const defaultGatewayLogger: GatewayLogger = {
   error: (event, fields) => console.error(JSON.stringify({ event, ...fields }))
 };
-
-/**
- * Refusal wording for a held approval that expires or is denied (spec 6.2).
- * The agent retries a bare timeout exactly once, so both outcomes return the
- * same sentence: nothing was done, do not try again, report back. It reads in
- * chat after "Not changed — ", so it speaks to the person first and the agent
- * second.
- */
-export const APPROVAL_REFUSED_REASON =
-  "This action was not approved, so it was not done. Do not try it again; let the user know.";
 
 /**
  * Private runHandler return shape: the public envelope plus the audit-log fields, computed once
@@ -169,29 +164,8 @@ export interface NativeToolPermissionResponse {
   readonly reason: string;
 }
 
-/**
- * One built-in tool ask from the outside agent (ACP `session/request_permission`).
- * The adapter sends no tool name, only the display title and the raw tool input,
- * so both travel here for the policy to classify. `kind`/`paths` carry the
- * protocol fields when the agent supplied them. Identity always comes from the
- * verified session token, never from these fields.
- */
-export interface AcpBuiltInPermissionRequest {
-  readonly cwd: string;
-  readonly sessionId: string;
-  readonly toolCallId: string;
-  readonly title: string;
-  readonly toolInput: Record<string, unknown>;
-  readonly kind?: string | null;
-  readonly paths?: readonly string[] | null;
-}
-
-export type AcpBuiltInPermissionResponse = NativeToolPermissionResponse;
-
 const NATIVE_TOOL_MODULE_ID = "claude-native";
 const NATIVE_TOOL_MODULE_NAME = "Claude Native Tools";
-const ACP_TOOL_MODULE_ID = "acp-builtin";
-const ACP_TOOL_MODULE_NAME = "Agent Built-in Tools";
 // #1158: read-only native META-tools that must never require a user confirmation.
 // Claude Code loads its MCP tool schemas lazily via the native ToolSearch tool; gating it
 // behind the confirm flow deadlocks the permission hook (150s confirm wait == 150s hook
@@ -483,95 +457,12 @@ export class AssistantToolGateway {
     }
   }
 
-  /**
-   * Decide one outside-agent built-in tool ask (#2380, spec 6.3/6.4).
-   *
-   * Same approval system as every other ask, not a second one: the automatic
-   * policy allows read-only tools and in-folder writes outright and refuses the
-   * unrecognised without a row, while anything needing a person creates the
-   * same pending row and emits the same `action_request` event the approval
-   * card already listens for. The row owner is the token's actor, so the audit
-   * records who approved by the token that carried the request. The session
-   * tool allowlist is not consulted: built-in names are outside that list.
-   */
+  /** Outside-agent built-in ask; orchestration lives in ./acp-permission.js. */
   async requestAcpBuiltInPermission(
     token: string,
     request: AcpBuiltInPermissionRequest
   ): Promise<AcpBuiltInPermissionResponse> {
-    const { actorUserId, chatSessionId } = this.deps.tokens.verify(token);
-    const toolName = inferAcpToolName(request.title) ?? "Unknown";
-    const input = request.toolInput;
-    const requestId = `acp_${randomUUID()}`;
-    const access: AccessContext = { actorUserId, requestId };
-
-    const verdict = classifyAcpPermission(
-      {
-        sessionId: request.sessionId,
-        toolCallId: request.toolCallId,
-        title: request.title,
-        rawInput: input,
-        kind: (request.kind ?? null) as Parameters<typeof classifyAcpPermission>[0]["kind"],
-        locations: (request.paths ?? []).map((path) => ({ path }))
-      },
-      request.cwd
-    );
-    if (verdict === "allow") {
-      return { decision: "allow", reason: "Allowed by policy." };
-    }
-    if (verdict === "deny") {
-      return { decision: "deny", reason: APPROVAL_REFUSED_REASON };
-    }
-
-    const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-      this.deps.repository.createPendingAssistantAction(scopedDb, {
-        toolModuleId: ACP_TOOL_MODULE_ID,
-        toolModuleName: ACP_TOOL_MODULE_NAME,
-        toolName,
-        permissionId: `${ACP_TOOL_MODULE_ID}.${toolName}`,
-        risk: request.kind === "execute" || toolName === "Bash" ? "destructive" : "write",
-        inputSummary: summarizeAssistantToolInput(input),
-        requestId
-      })
-    );
-
-    const pendingResolution = this.deps.confirmations.awaitResolution(
-      action.id,
-      this.deps.confirmTimeoutMs
-    );
-
-    this.deps.notifier.emit(chatSessionId, {
-      kind: "action_request",
-      actionRequestId: action.id,
-      toolName,
-      summary: `The agent wants to use ${toolName} (${request.title.slice(0, 200)}).`
-    });
-
-    try {
-      const outcome = await pendingResolution;
-      if (outcome !== "confirmed") {
-        this.deps.notifier.emit(chatSessionId, {
-          kind: "action_result",
-          actionRequestId: action.id,
-          toolName,
-          outcome: "denied",
-          reason: APPROVAL_REFUSED_REASON
-        });
-        return {
-          decision: "deny",
-          reason: APPROVAL_REFUSED_REASON
-        };
-      }
-
-      this.deps.notifier.emit(chatSessionId, {
-        kind: "action_result",
-        actionRequestId: action.id,
-        toolName,
-        outcome: "allowed"
-      });
-      return { decision: "allow", reason: "Approved by user." };
-    } finally {
-      this.deps.confirmations.markDone(action.id);
-    }
+    return resolveAcpBuiltInPermission(this.deps, token, request);
   }
 
   /**
