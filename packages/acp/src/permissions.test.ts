@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 // Entry first: the adapter's modules only load in a working order this way.
-import "@zed-industries/claude-code-acp";
-import { toolInfoFromToolUse } from "@zed-industries/claude-code-acp/dist/tools.js";
+import "@agentclientprotocol/claude-agent-acp";
+import { toolInfoFromToolUse } from "@agentclientprotocol/claude-agent-acp/dist/tools.js";
 import type { PermissionOption } from "@agentclientprotocol/sdk";
 
 import {

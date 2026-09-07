@@ -12,9 +12,13 @@
     "start": "tsx src/main-entry.ts"
   },
   "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "0.75.1",
+    "@agentclientprotocol/codex-acp": "1.10.0",
+    "@moss/acp": "workspace:*",
     "@moss/ai": "workspace:*",
     "@moss/chat": "workspace:*",
     "@moss/db": "workspace:*",
-    "node-pty": "^1.1.0"
+    "node-pty": "^1.1.0",
+    "opencode-ai": "1.18.29"
   }
 }

@@ -9,6 +9,7 @@
  */
 
 import { redactSecrets } from "@moss/ai";
+import type { AcpProviderKind } from "@moss/acp";
 
 import {
   CliChatUnavailableError,
@@ -16,6 +17,13 @@ import {
   decodeFrame,
   encodeFrame,
   MAX_FRAME_BYTES,
+  type RpcAcpExecKillParams,
+  type RpcAcpExecPollParams,
+  type RpcAcpExecStartParams,
+  type RpcAcpKillParams,
+  type RpcAcpReadParams,
+  type RpcAcpSendParams,
+  type RpcAcpSpawnParams,
   type RpcBeginLoginParams,
   type RpcCancelLoginParams,
   type RpcCancelSubmitParams,
@@ -99,6 +107,13 @@ export function serveConnection(channel: ByteChannel, deps: ConnectionDeps): voi
   const recordTerminal = (id: string): void => {
     ownedTerminalId = id;
   };
+  // Slice 1 task 3 — every agent session this connection spawned, keyed by
+  // session with its spawn generation. Unlike the single-instance terminal above
+  // many sessions may share one connection; recorded by `acpSpawn` in `invoke`.
+  const ownedAcpKeys = new Map<string, number>();
+  const recordAcpSpawn = (sessionKey: string, generation: number): void => {
+    ownedAcpKeys.set(sessionKey, generation);
+  };
   // #1526 — the terminalId whose data push last saw `write() === false`, or null if none is
   // currently backpressured. Cleared by the matching "drain" event, which resumes only this id.
   let backpressureTerminalId: string | null = null;
@@ -167,6 +182,18 @@ export function serveConnection(channel: ByteChannel, deps: ConnectionDeps): voi
     // id is a safe no-op (TerminalHost.clear checks `session.id === id`), so this is correct even
     // if a later connection's `openTerminal` already evicted this connection's terminal.
     if (ownedTerminalId) deps.terminalHost.kill({ terminalId: ownedTerminalId });
+    // Slice 1 task 3 — a dropped socket must never leave agent children running
+    // with the provider login in their environment. Each kill carries the spawn
+    // generation this connection saw, so a session another connection respawned
+    // since (newer generation) survives a stale close.
+    for (const [sessionKey, generation] of ownedAcpKeys) {
+      try {
+        deps.host.acpKill(sessionKey, { generation });
+      } catch {
+        // ignore — already gone
+      }
+    }
+    ownedAcpKeys.clear();
     // #1554 Decision 2 — deregister this connection's reap listener so a closed/dropped
     // connection doesn't keep accumulating dead listeners on the process-wide host.
     unregisterReap();
@@ -234,7 +261,16 @@ export function serveConnection(channel: ByteChannel, deps: ConnectionDeps): voi
       }
 
       // Authenticated: every subsequent frame must be a request (§3.4).
-      void dispatchFrame(parsed, frameBytes, deps, channel, close, pushSink, recordTerminal);
+      void dispatchFrame(
+        parsed,
+        frameBytes,
+        deps,
+        channel,
+        close,
+        pushSink,
+        recordTerminal,
+        recordAcpSpawn
+      );
     }
   });
 }
@@ -249,7 +285,9 @@ async function dispatchFrame(
   // #1059 [N2] — threaded from serveConnection's connection-scoped `ownedTerminalId`; invoke's
   // `openTerminal` case calls this with the fresh terminalId so close() can scope its kill to
   // just this connection instead of the whole shared TerminalHost.
-  recordTerminal: (id: string) => void
+  recordTerminal: (id: string) => void,
+  // Slice 1 task 3 — same threading for this connection's agent spawns.
+  recordAcpSpawn: (sessionKey: string, generation: number) => void
 ): Promise<void> {
   if (!isRequest(parsed)) {
     // Unknown `t` discriminant / not a request post-handshake ⇒ malformed frame (§3.7).
@@ -267,7 +305,14 @@ async function dispatchFrame(
   });
 
   try {
-    const result = await invoke(req, deps.host, deps.terminalHost, pushSink, recordTerminal);
+    const result = await invoke(
+      req,
+      deps.host,
+      deps.terminalHost,
+      pushSink,
+      recordTerminal,
+      recordAcpSpawn
+    );
     const ok: RpcOk = { t: "ok", id: req.id, bootId: deps.bootId, result };
     // §3.2/§4.4: an OK result (e.g. a pathological multi-MiB readNew) that would exceed
     // MAX_FRAME_BYTES must NOT throw into the close path — encodeFrame throws and the
@@ -301,7 +346,9 @@ async function invoke(
   terminalHost: TerminalHost,
   pushSink: TerminalSink,
   // #1059 [N2] — see dispatchFrame's param doc above.
-  recordTerminal: (id: string) => void
+  recordTerminal: (id: string) => void,
+  // Slice 1 task 3 — records this connection's agent spawns for close-time kill.
+  recordAcpSpawn: (sessionKey: string, generation: number) => void
 ): Promise<unknown> {
   switch (req.method) {
     case "launch": {
@@ -506,6 +553,102 @@ async function invoke(
     case "killTerminal": {
       // No params validation (task-4 spec) — kill is idempotent for an absent/unknown id.
       terminalHost.kill(req.params as RpcKillTerminalParams);
+      return { ok: true };
+    }
+    // Slice 1 task 3 — ACP tunnel. Session-scoped by key (requireSessionKey ⇒
+    // bad_request without one, never a close). Lines cross opaquely; validation here
+    // guards shape only, never protocol content. The spawn carries the provider
+    // kind and is refused without one; the host refuses an unknown kind.
+    case "acpSpawn": {
+      const key = requireSessionKey(req);
+      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpSpawnParams>;
+      if (typeof params.projectId !== "string") {
+        throw new BadRequestError("acpSpawn.projectId must be a string");
+      }
+      if (typeof params.providerKind !== "string" || params.providerKind.length === 0) {
+        throw new BadRequestError("acpSpawn.providerKind is required: no default provider");
+      }
+      const spawned = await host.acpSpawn(
+        key,
+        params.projectId,
+        params.providerKind as AcpProviderKind
+      );
+      recordAcpSpawn(key, spawned.generation);
+      return spawned;
+    }
+    case "acpSend": {
+      const key = requireSessionKey(req);
+      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpSendParams>;
+      if (typeof params.line !== "string") {
+        throw new BadRequestError("acpSend.line must be a string");
+      }
+      host.acpSend(key, params.line);
+      return { accepted: true };
+    }
+    case "acpRead": {
+      const key = requireSessionKey(req);
+      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpReadParams>;
+      if (
+        typeof params.afterSeq !== "number" ||
+        !Number.isInteger(params.afterSeq) ||
+        params.afterSeq < 0 ||
+        params.afterSeq > MAX_SAFE
+      ) {
+        throw new BadRequestError("acpRead.afterSeq out of range");
+      }
+      return host.acpRead(key, params.afterSeq);
+    }
+    case "acpKill": {
+      const key = requireSessionKey(req);
+      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpKillParams>;
+      if (
+        params.generation !== undefined &&
+        (!Number.isInteger(params.generation) || params.generation <= 0)
+      ) {
+        throw new BadRequestError("acpKill.generation must be a positive integer");
+      }
+      host.acpKill(key, params.generation === undefined ? {} : { generation: params.generation });
+      return { ok: true };
+    }
+    // Slice 1 task 3 — runner-side builds. Shape is validated here;
+    // the working directory is derived runner-side, never taken from the caller.
+    case "acpExecStart": {
+      const key = requireSessionKey(req);
+      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpExecStartParams>;
+      if (typeof params.projectId !== "string") {
+        throw new BadRequestError("acpExecStart.projectId must be a string");
+      }
+      if (typeof params.command !== "string") {
+        throw new BadRequestError("acpExecStart.command must be a string");
+      }
+      if (
+        params.timeoutMs !== undefined &&
+        (!Number.isInteger(params.timeoutMs) || params.timeoutMs <= 0)
+      ) {
+        throw new BadRequestError("acpExecStart.timeoutMs must be a positive integer");
+      }
+      return host.acpExecStart(
+        key,
+        params.projectId,
+        params.command,
+        params.timeoutMs === undefined ? undefined : params.timeoutMs
+      );
+    }
+    case "acpExecPoll": {
+      const key = requireSessionKey(req);
+      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpExecPollParams>;
+      if (!Number.isInteger(params.execId) || (params.execId as number) <= 0) {
+        throw new BadRequestError("acpExecPoll.execId must be a positive integer");
+      }
+      return host.acpExecPoll(key, params.execId as number);
+    }
+    case "acpExecKill": {
+      const key = requireSessionKey(req);
+      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpExecKillParams>;
+      if (!Number.isInteger(params.execId) || (params.execId as number) <= 0) {
+        throw new BadRequestError("acpExecKill.execId must be a positive integer");
+      }
+      host.acpExecKill(key, params.execId as number);
       return { ok: true };
     }
     default:
