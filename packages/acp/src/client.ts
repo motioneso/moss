@@ -43,6 +43,14 @@ const ANNOUNCEMENT_WAIT_MS = 2000;
 export interface AcpSessionHandle {
   readonly sessionId: string;
   readonly cwd: string;
+  /** The HOME handed to the agent process, or null when it names none. */
+  readonly home: string | null;
+}
+
+/** The two folders every filesystem decision needs. */
+export interface AcpSessionFolders {
+  readonly cwd: string;
+  readonly home: string | null;
 }
 
 /**
@@ -132,6 +140,7 @@ export class MossAcpClient {
   private readonly toolCalls = new Map<string, number>();
   private readonly closers = new Map<string, () => void>();
   private readonly sessionCwds = new Map<string, string>();
+  private readonly sessionHomes = new Map<string, string | null>();
   private readonly announcements = new Map<string, Map<string, AcpToolAnnouncement>>();
   private readonly announcementWaiters = new Map<string, () => void>();
 
@@ -147,7 +156,7 @@ export class MossAcpClient {
     surface: AcpSurface = "workshop",
     toolServer?: AcpToolServer
   ): Promise<AcpSessionHandle> {
-    const { cwd } = await this.tunnel.spawn(sessionKey, projectId);
+    const { cwd, home } = await this.tunnel.spawn(sessionKey, projectId);
     const stream = createTunnelStream(this.tunnel, sessionKey);
     const connection = new ClientSideConnection(() => this.createClientHandler(), stream);
     const init = await connection.initialize({
@@ -168,8 +177,9 @@ export class MossAcpClient {
     this.texts.set(session.sessionId, []);
     this.toolCalls.set(session.sessionId, 0);
     this.sessionCwds.set(session.sessionId, cwd);
+    this.sessionHomes.set(session.sessionId, home);
     if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
-    return { sessionId: session.sessionId, cwd };
+    return { sessionId: session.sessionId, cwd, home };
   }
 
   async prompt(
@@ -214,6 +224,7 @@ export class MossAcpClient {
     this.texts.delete(handle.sessionId);
     this.toolCalls.delete(handle.sessionId);
     this.sessionCwds.delete(handle.sessionId);
+    this.sessionHomes.delete(handle.sessionId);
     this.announcements.delete(handle.sessionId);
     // Wake any questions still waiting: they re-check, find nothing, refuse.
     for (const [key, wake] of [...this.announcementWaiters]) {
@@ -295,7 +306,10 @@ export class MossAcpClient {
     params: RequestPermissionRequest
   ): Promise<RequestPermissionResponse> {
     const cwd = this.sessionCwds.get(params.sessionId);
-    if (!this.permissionDecider || !cwd) return denyPermission();
+    if (!this.permissionDecider || !cwd || !this.sessionHomes.has(params.sessionId)) {
+      return denyPermission();
+    }
+    const home = this.sessionHomes.get(params.sessionId) ?? null;
     const toolCallId = params.toolCall.toolCallId;
     let announced = this.announcements.get(params.sessionId)?.get(toolCallId);
     if (!announced) {
@@ -321,7 +335,8 @@ export class MossAcpClient {
     try {
       const verdict = await this.permissionDecider.decide(builtIn, {
         sessionId: params.sessionId,
-        cwd
+        cwd,
+        home
       });
       if (verdict !== "allow") return denyPermission();
       // Least privilege: single-use grant, never standing. No allow option

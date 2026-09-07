@@ -14,6 +14,7 @@ const CWD = "/runner/session/acp/proj";
 interface FakeStore {
   created: unknown[];
   emitted: unknown[];
+  audit: unknown[];
   actionRow: { id: string; status: string };
 }
 
@@ -28,7 +29,10 @@ function buildGateway(store: FakeStore, confirmTimeoutMs = 1000) {
         return { ...store.actionRow };
       },
       getAssistantAction: async () => ({ ...store.actionRow }),
-      resolveAssistantAction: async () => ({ ...store.actionRow })
+      resolveAssistantAction: async () => ({ ...store.actionRow }),
+      insertActionAuditLog: async (_db: unknown, input: unknown) => {
+        store.audit.push(input);
+      }
     } as never,
     runner: {
       withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) => work({})
@@ -44,7 +48,12 @@ function buildGateway(store: FakeStore, confirmTimeoutMs = 1000) {
 }
 
 function freshStore(): FakeStore {
-  return { created: [], emitted: [], actionRow: { id: "acp-action-1", status: "pending" } };
+  return {
+    created: [],
+    emitted: [],
+    audit: [],
+    actionRow: { id: "acp-action-1", status: "pending" }
+  };
 }
 
 /**
@@ -57,8 +66,8 @@ class ScriptedAgent implements AcpTunnel {
   private readonly outbox: string[] = [];
   private seq = 0;
 
-  async spawn(): Promise<{ cwd: string; generation: number }> {
-    return { cwd: CWD, generation: 1 };
+  async spawn(): Promise<{ cwd: string; home: string | null; generation: number }> {
+    return { cwd: CWD, home: "/home/agent", generation: 1 };
   }
 
   async send(_sessionKey: string, line: string): Promise<void> {
@@ -164,6 +173,7 @@ describe("agent built-in permission through the shared approval card", () => {
 
     const pending = gateway.requestAcpBuiltInPermission(token, {
       cwd: CWD,
+      home: "/home/agent",
       sessionId: "agent-sess-1",
       toolCallId: "call-9",
       title: "`pnpm build`",
@@ -206,6 +216,7 @@ describe("agent built-in permission through the shared approval card", () => {
 
     const pending = gateway.requestAcpBuiltInPermission(token, {
       cwd: CWD,
+      home: "/home/agent",
       sessionId: "agent-sess-1",
       toolCallId: "call-9",
       title: "`pnpm build`",
@@ -234,6 +245,7 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(
       gateway.requestAcpBuiltInPermission(token, {
         cwd: CWD,
+        home: "/home/agent",
         sessionId: "agent-sess-1",
         toolCallId: "call-7",
         title: "Read the repository and summarize the layout",
@@ -250,12 +262,14 @@ describe("agent built-in permission through the shared approval card", () => {
 
   it("refuses a read-mimicking title with no real name and no row", async () => {
     const store = freshStore();
-    const { gateway, tokens } = buildGateway(store);
+    const { gateway, tokens, confirmations } = buildGateway(store);
     const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    const awaitResolution = vi.spyOn(confirmations, "awaitResolution");
 
     await expect(
       gateway.requestAcpBuiltInPermission(token, {
         cwd: CWD,
+        home: "/home/agent",
         sessionId: "agent-sess-1",
         toolCallId: "call-8",
         title: "Read the repository and summarize the layout",
@@ -267,6 +281,7 @@ describe("agent built-in permission through the shared approval card", () => {
       })
     ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
     expect(store.created).toHaveLength(0);
+    expect(awaitResolution).not.toHaveBeenCalled();
     expect(store.emitted).toHaveLength(0);
   });
 
@@ -278,6 +293,7 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(
       gateway.requestAcpBuiltInPermission(token, {
         cwd: CWD,
+        home: "/home/agent",
         sessionId: "agent-sess-1",
         toolCallId: "call-9",
         title: "`pnpm build`",
@@ -300,6 +316,7 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(
       gateway.requestAcpBuiltInPermission(token, {
         cwd: CWD,
+        home: "/home/agent",
         sessionId: "agent-sess-1",
         toolCallId: "call-2",
         title: "Read src/index.ts",
@@ -310,6 +327,7 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(
       gateway.requestAcpBuiltInPermission(token, {
         cwd: CWD,
+        home: "/home/agent",
         sessionId: "agent-sess-1",
         toolCallId: "call-3",
         title: "Write src/out.txt",
@@ -329,6 +347,7 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(
       gateway.requestAcpBuiltInPermission(token, {
         cwd: CWD,
+        home: "/home/agent",
         sessionId: "agent-sess-1",
         toolCallId: "call-4",
         title: "Invent everything",
@@ -347,6 +366,7 @@ describe("agent built-in permission through the shared approval card", () => {
 
     const pending = gateway.requestAcpBuiltInPermission(token, {
       cwd: CWD,
+      home: "/home/agent",
       sessionId: "agent-sess-1",
       toolCallId: "call-6",
       title: "`pnpm build`",
@@ -363,12 +383,132 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(pending).resolves.toEqual({ decision: "allow", reason: "Approved by user." });
   });
 
+  it("writes one audit line per ask and per refusal, none for silent allows", async () => {
+    const ask = async (status: "confirmed" | "rejected", timeoutMs = 1000) => {
+      const store = freshStore();
+      const { gateway, tokens } = buildGateway(store, timeoutMs);
+      const token = tokens.mint({
+        actorUserId: "u1",
+        chatSessionId: "s1",
+        allowedToolNames: null
+      });
+      const pending = gateway.requestAcpBuiltInPermission(token, {
+        cwd: CWD,
+        home: "/home/agent",
+        sessionId: "agent-sess-1",
+        toolCallId: "call-9",
+        title: "`pnpm build`",
+        toolInput: { command: "pnpm build" },
+        toolName: "Bash"
+      });
+      await vi.waitFor(() => expect(store.created).toHaveLength(1));
+      await expect(gateway.resolveActionRequest("u1", "acp-action-1", status)).resolves.toBe(
+        "resolved"
+      );
+      await pending;
+      return store.audit;
+    };
+
+    const confirmed = await ask("confirmed");
+    expect(confirmed).toHaveLength(1);
+    expect(confirmed[0]).toMatchObject({
+      toolModuleId: "acp-builtin",
+      toolName: "Bash",
+      approvalMode: "confirmed",
+      outcome: "success",
+      errorClass: null
+    });
+    const rejected = await ask("rejected");
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatchObject({
+      approvalMode: "rejected",
+      outcome: "failed",
+      errorClass: "rejected"
+    });
+
+    const store = freshStore();
+    const { gateway, tokens } = buildGateway(store, 20);
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+    await gateway.requestAcpBuiltInPermission(token, {
+      cwd: CWD,
+      home: "/home/agent",
+      sessionId: "agent-sess-1",
+      toolCallId: "call-9",
+      title: "`pnpm build`",
+      toolInput: { command: "pnpm build" },
+      toolName: "Bash"
+    });
+    expect(store.audit).toHaveLength(1);
+    expect(store.audit[0]).toMatchObject({ approvalMode: "timeout", outcome: "failed" });
+
+    const silent = freshStore();
+    const silentGateway = buildGateway(silent);
+    const silentToken = silentGateway.tokens.mint({
+      actorUserId: "u1",
+      chatSessionId: "s1",
+      allowedToolNames: null
+    });
+    await silentGateway.gateway.requestAcpBuiltInPermission(silentToken, {
+      cwd: CWD,
+      home: "/home/agent",
+      sessionId: "agent-sess-1",
+      toolCallId: "call-2",
+      title: "Read src/a.ts",
+      toolInput: { file_path: "src/a.ts" },
+      toolName: "Read"
+    });
+    expect(silent.audit).toHaveLength(0);
+  });
+
+  it("writes the reason word for each refusal class", async () => {
+    const cases: Array<{
+      input: Record<string, unknown>;
+      toolName: string | null;
+      reason: string;
+    }> = [
+      { input: {}, toolName: null, reason: "unknown_tool" },
+      { input: {}, toolName: "DefinitelyNotATool", reason: "unknown_tool" },
+      { input: {}, toolName: "Task", reason: "not_offered" },
+      {
+        input: { file_path: "/home/agent/.claude.json" },
+        toolName: "Read",
+        reason: "forbidden_zone"
+      },
+      { input: {}, toolName: "Read", reason: "malformed" }
+    ];
+    for (const refusal of cases) {
+      const store = freshStore();
+      const { gateway, tokens } = buildGateway(store);
+      const token = tokens.mint({
+        actorUserId: "u1",
+        chatSessionId: "s1",
+        allowedToolNames: null
+      });
+      await gateway.requestAcpBuiltInPermission(token, {
+        cwd: CWD,
+        home: "/home/agent",
+        sessionId: "agent-sess-1",
+        toolCallId: "call-9",
+        title: "t",
+        toolInput: refusal.input,
+        toolName: refusal.toolName
+      });
+      expect(store.audit).toHaveLength(1);
+      expect(store.audit[0]).toMatchObject({
+        approvalMode: "auto",
+        outcome: "failed",
+        errorClass: refusal.reason
+      });
+    }
+  });
+
   it("rejects a token it never minted", async () => {
     const store = freshStore();
     const { gateway } = buildGateway(store);
     await expect(
       gateway.requestAcpBuiltInPermission("jst_bogus", {
         cwd: CWD,
+        home: "/home/agent",
         sessionId: "agent-sess-1",
         toolCallId: "call-5",
         title: "`pnpm build`",
@@ -388,21 +528,26 @@ describe("agent built-in permission through the shared approval card", () => {
       {},
       {
         decide: async (builtIn, session) =>
-          decideAcpPermission(builtIn, session.cwd, async (announced) => {
-            const verdict = await gateway.requestAcpBuiltInPermission(token, {
-              cwd: session.cwd,
-              sessionId: announced.sessionId,
-              toolCallId: announced.toolCallId,
-              title: announced.title,
-              toolInput:
-                announced.rawInput && typeof announced.rawInput === "object"
-                  ? (announced.rawInput as Record<string, unknown>)
-                  : {},
-              toolName: announced.toolName,
-              kind: announced.kind
-            });
-            return verdict.decision === "allow" ? "allow" : "deny";
-          })
+          decideAcpPermission(
+            builtIn,
+            { cwd: session.cwd, home: session.home },
+            async (announced) => {
+              const verdict = await gateway.requestAcpBuiltInPermission(token, {
+                cwd: session.cwd,
+                home: session.home,
+                sessionId: announced.sessionId,
+                toolCallId: announced.toolCallId,
+                title: announced.title,
+                toolInput:
+                  announced.rawInput && typeof announced.rawInput === "object"
+                    ? (announced.rawInput as Record<string, unknown>)
+                    : {},
+                toolName: announced.toolName,
+                kind: announced.kind
+              });
+              return verdict.decision === "allow" ? "allow" : "deny";
+            }
+          ).then((result) => result.decision)
       }
     );
     const handle = await client.openSession("workshop:u1:proj", "proj");

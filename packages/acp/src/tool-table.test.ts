@@ -4,6 +4,7 @@ import { classifyAcpPermission } from "./permissions.js";
 import { acpToolNamesIn, launchOffList, lookupAcpToolFamily } from "./tool-table.js";
 
 const CWD = "/runner/session/acp/proj";
+const FOLDERS = { cwd: CWD, home: "/home/agent" };
 
 /**
  * The launch list and the use-time policy agree because both derive from the
@@ -14,20 +15,22 @@ describe("tool table agreement", () => {
   it("classifies every row into its own family", () => {
     const inFolder = { file_path: "src/a.ts", notebook_path: "n.ipynb", path: "src" };
     for (const name of acpToolNamesIn("read", "web", "harmless")) {
+      const rawInput =
+        name === "WebFetch" ? { url: "https://example.com/docs" } : { file_path: "src/a.ts" };
       expect(
         classifyAcpPermission(
           {
             sessionId: "s",
             toolCallId: "c",
             title: "t",
-            rawInput: {},
+            rawInput,
             toolName: name,
             kind: null,
             locations: null
           },
-          CWD
+          FOLDERS
         )
-      ).toBe("allow");
+      ).toEqual({ verdict: "allow" });
     }
     for (const name of acpToolNamesIn("write")) {
       expect(
@@ -41,9 +44,9 @@ describe("tool table agreement", () => {
             kind: null,
             locations: null
           },
-          CWD
+          FOLDERS
         )
-      ).toBe("allow");
+      ).toEqual({ verdict: "allow" });
     }
     for (const name of acpToolNamesIn("shell")) {
       expect(
@@ -57,9 +60,9 @@ describe("tool table agreement", () => {
             kind: null,
             locations: null
           },
-          CWD
+          FOLDERS
         )
-      ).toBe("ask");
+      ).toEqual({ verdict: "ask" });
     }
     for (const name of acpToolNamesIn("mode", "not-offered")) {
       expect(
@@ -73,9 +76,9 @@ describe("tool table agreement", () => {
             kind: null,
             locations: null
           },
-          CWD
+          FOLDERS
         )
-      ).toBe("deny");
+      ).toEqual({ verdict: "deny", reason: "not_offered" });
     }
   });
 

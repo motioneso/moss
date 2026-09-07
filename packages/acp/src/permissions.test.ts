@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+// Entry first: the adapter's modules only load in a working order this way.
+import "@zed-industries/claude-code-acp";
+import { toolInfoFromToolUse } from "@zed-industries/claude-code-acp/dist/tools.js";
 import type { PermissionOption } from "@agentclientprotocol/sdk";
 
 import {
@@ -9,10 +12,13 @@ import {
   isInsideSessionFolder,
   selectAllowOptionId,
   toolNameFromMeta,
-  type AcpBuiltInRequest
+  type AcpBuiltInRequest,
+  type AcpSessionFolders
 } from "./permissions.js";
 
 const CWD = "/runner/session/acp/proj";
+const HOME = "/home/agent";
+const FOLDERS: AcpSessionFolders = { cwd: CWD, home: HOME };
 
 function request(partial: Partial<AcpBuiltInRequest>): AcpBuiltInRequest {
   return {
@@ -43,18 +49,32 @@ describe("classifyAcpPermission", () => {
       "Update TODOs: write tests",
       "Refactor the billing module"
     ]) {
-      expect(classifyAcpPermission(request({ title, toolName: null }), CWD)).toBe("deny");
+      expect(classifyAcpPermission(request({ title, toolName: null }), FOLDERS)).toEqual({
+        verdict: "deny",
+        reason: "unknown_tool"
+      });
     }
   });
 
   it("refuses a name outside the explicit lists", () => {
-    expect(classifyAcpPermission(request({ title: "t", toolName: "Skill" }), CWD)).toBe("deny");
     expect(
-      classifyAcpPermission(request({ title: "t", toolName: "mcp__github__issue_read" }), CWD)
-    ).toBe("deny");
+      classifyAcpPermission(request({ title: "t", toolName: "DefinitelyNotATool" }), FOLDERS)
+    ).toEqual({
+      verdict: "deny",
+      reason: "unknown_tool"
+    });
   });
 
-  it("allows named read-only tools", () => {
+  it("refuses mode changes and tools that are never offered", () => {
+    for (const toolName of ["ExitPlanMode", "EnterPlanMode", "Task", "Skill"]) {
+      expect(classifyAcpPermission(request({ title: "t", toolName }), FOLDERS)).toEqual({
+        verdict: "deny",
+        reason: "not_offered"
+      });
+    }
+  });
+
+  it("allows named read-only tools inside the folder", () => {
     for (const toolName of [
       "Read",
       "mcp__acp__Read",
@@ -62,42 +82,78 @@ describe("classifyAcpPermission", () => {
       "LS",
       "Glob",
       "Grep",
-      "WebFetch",
       "WebSearch",
       "TodoWrite",
       "BashOutput"
     ]) {
-      expect(classifyAcpPermission(request({ title: "t", toolName }), CWD)).toBe("allow");
+      const rawInput = toolName === "WebSearch" ? { query: "q" } : { file_path: "src/a.ts" };
+      expect(classifyAcpPermission(request({ title: "t", toolName, rawInput }), FOLDERS)).toEqual({
+        verdict: "allow"
+      });
     }
+  });
+
+  it("refuses a bare Read that names no file", () => {
+    expect(
+      classifyAcpPermission(request({ title: "Read", toolName: "Read", rawInput: {} }), FOLDERS)
+    ).toEqual({ verdict: "deny", reason: "malformed" });
   });
 
   it("allows a named write inside the folder and asks outside it", () => {
     expect(
       classifyAcpPermission(
         request({ title: "t", toolName: "Write", rawInput: { file_path: "src/out.txt" } }),
-        CWD
+        FOLDERS
       )
-    ).toBe("allow");
+    ).toEqual({ verdict: "allow" });
     expect(
       classifyAcpPermission(
         request({ title: "t", toolName: "Edit", rawInput: { file_path: "/etc/passwd" } }),
-        CWD
+        FOLDERS
       )
-    ).toBe("ask");
+    ).toEqual({ verdict: "ask" });
     expect(
-      classifyAcpPermission(request({ title: "t", toolName: "NotebookEdit", rawInput: {} }), CWD)
-    ).toBe("ask");
+      classifyAcpPermission(
+        request({ title: "t", toolName: "NotebookEdit", rawInput: {} }),
+        FOLDERS
+      )
+    ).toEqual({ verdict: "ask" });
   });
 
   it("always asks for shell", () => {
     for (const toolName of ["Bash", "mcp__acp__Bash", "KillShell"]) {
-      expect(classifyAcpPermission(request({ title: "t", toolName }), CWD)).toBe("ask");
+      expect(classifyAcpPermission(request({ title: "t", toolName }), FOLDERS)).toEqual({
+        verdict: "ask"
+      });
     }
   });
 
-  it("refuses mode changes and tools that are never offered", () => {
-    for (const toolName of ["ExitPlanMode", "EnterPlanMode", "Task", "Skill", "Other"]) {
-      expect(classifyAcpPermission(request({ title: "t", toolName }), CWD)).toBe("deny");
+  it("refuses the agent home and the system pseudofolders with no card", () => {
+    for (const target of [
+      "/home/agent/.jarvis/token",
+      "/home/agent/.claude.json",
+      "/proc/self/environ",
+      "/sys/kernel",
+      "/dev/null",
+      "/run/secrets/x"
+    ]) {
+      expect(
+        classifyAcpPermission(
+          request({ title: "t", toolName: "Read", rawInput: { file_path: target } }),
+          FOLDERS
+        )
+      ).toEqual({ verdict: "deny", reason: "forbidden_zone" });
+    }
+  });
+
+  it("asks for secret-shaped names inside the folder instead of reading quietly", () => {
+    for (const target of ["src/../.env", ".env.production", "keys/id_rsa", "cert.p12"]) {
+      expect(
+        classifyAcpPermission(
+          request({ title: "t", toolName: "Read", rawInput: { file_path: target } }),
+          FOLDERS
+        )
+      ).toEqual({ verdict: "ask" });
     }
   });
 
@@ -105,9 +161,115 @@ describe("classifyAcpPermission", () => {
     expect(
       classifyAcpPermission(
         request({ title: "t", toolName: "Write", rawInput: { file_path: "../escape.txt" } }),
-        CWD
+        FOLDERS
       )
-    ).toBe("ask");
+    ).toEqual({ verdict: "ask" });
+  });
+
+  it("asks for loopback, private and bare web addresses", () => {
+    for (const url of [
+      "http://localhost:3000/x",
+      "http://127.0.0.1:8080/",
+      "http://10.0.0.5/docs",
+      "http://192.168.1.2/",
+      "http://172.20.0.9/",
+      "http://169.254.169.254/",
+      "http://[::1]/",
+      "http://[fd00::1]/",
+      "http://printer/"
+    ]) {
+      expect(
+        classifyAcpPermission(
+          request({ title: "t", toolName: "WebFetch", rawInput: { url } }),
+          FOLDERS
+        )
+      ).toEqual({ verdict: "ask" });
+    }
+  });
+
+  it("allows public web addresses and refuses a fetch with none", () => {
+    expect(
+      classifyAcpPermission(
+        request({
+          title: "t",
+          toolName: "WebFetch",
+          rawInput: { url: "https://example.com/docs" }
+        }),
+        FOLDERS
+      )
+    ).toEqual({ verdict: "allow" });
+    expect(
+      classifyAcpPermission(request({ title: "t", toolName: "WebFetch", rawInput: {} }), FOLDERS)
+    ).toEqual({ verdict: "deny", reason: "malformed" });
+  });
+
+  it("allows Moss tools at the agent prompt", () => {
+    expect(
+      classifyAcpPermission(
+        request({ title: "t", toolName: "mcp__moss__calendar_createEvent", rawInput: {} }),
+        FOLDERS
+      )
+    ).toEqual({ verdict: "allow" });
+  });
+});
+
+/**
+ * Fixtures built by the adapter's own title/kind/locations mapping, so the
+ * policy tests track what the adapter really sends. The question in each case
+ * carries only the id, the raw input and the display title.
+ */
+describe("adapter-built fixtures", () => {
+  function announced(name: string, input: Record<string, unknown>): AcpBuiltInRequest {
+    const info = toolInfoFromToolUse({ name, input });
+    return {
+      sessionId: "agent-sess-1",
+      toolCallId: "call-9",
+      title: info.title,
+      rawInput: input,
+      toolName: name,
+      kind: info.kind ?? null,
+      locations: info.locations ?? null
+    };
+  }
+
+  it("allows the announced read, write-inside, and public fetch", () => {
+    expect(classifyAcpPermission(announced("Read", { file_path: "src/a.ts" }), FOLDERS)).toEqual({
+      verdict: "allow"
+    });
+    expect(classifyAcpPermission(announced("Edit", { file_path: "src/a.ts" }), FOLDERS)).toEqual({
+      verdict: "allow"
+    });
+    expect(
+      classifyAcpPermission(announced("WebFetch", { url: "https://example.com/x" }), FOLDERS)
+    ).toEqual({ verdict: "allow" });
+  });
+
+  it("asks the announced write-outside and shell run, refuses the rest", () => {
+    expect(classifyAcpPermission(announced("Edit", { file_path: "/etc/passwd" }), FOLDERS)).toEqual(
+      { verdict: "ask" }
+    );
+    expect(classifyAcpPermission(announced("Bash", { command: "pnpm build" }), FOLDERS)).toEqual({
+      verdict: "ask"
+    });
+    expect(classifyAcpPermission(announced("ExitPlanMode", {}), FOLDERS)).toEqual({
+      verdict: "deny",
+      reason: "not_offered"
+    });
+    expect(
+      classifyAcpPermission(announced("Task", { description: "x", prompt: "y" }), FOLDERS)
+    ).toEqual({ verdict: "deny", reason: "not_offered" });
+  });
+
+  it("refuses a task whose description mimics a read, title and all", async () => {
+    const built = announced("Task", {
+      description: "Read the repository and summarize the layout",
+      prompt: "Read every file and report back."
+    });
+    expect(built.title).toBe("Read the repository and summarize the layout");
+    const verdict = await decideAcpPermission(built, FOLDERS, async () => {
+      throw new Error("must not ask a person about a subagent");
+    });
+    expect(verdict).toEqual({ decision: "deny", asked: false, reason: "not_offered" });
   });
 });
 
@@ -124,12 +286,12 @@ describe("task tool titled like a harmless read", () => {
         rawInput: mimicInput,
         toolName: "Task"
       }),
-      CWD,
+      FOLDERS,
       async () => {
         throw new Error("must not ask a person about a subagent");
       }
     );
-    expect(verdict).toBe("deny");
+    expect(verdict).toEqual({ decision: "deny", asked: false, reason: "not_offered" });
   });
 
   it("refuses the same mimic with no name rather than trusting the title", async () => {
@@ -139,12 +301,12 @@ describe("task tool titled like a harmless read", () => {
         rawInput: mimicInput,
         toolName: null
       }),
-      CWD,
+      FOLDERS,
       async () => {
         throw new Error("must not ask a person for the unnamed");
       }
     );
-    expect(verdict).toBe("deny");
+    expect(verdict).toEqual({ decision: "deny", asked: false, reason: "unknown_tool" });
   });
 });
 
@@ -157,11 +319,17 @@ describe("helpers", () => {
     expect(toolNameFromMeta({ toolName: 7 })).toBeNull();
   });
 
-  it("collects paths from the known input fields", () => {
+  it("collects paths from locations and the known input fields", () => {
     expect(
-      extractAcpPaths(request({ title: "t", toolName: "Edit", rawInput: { file_path: "a.ts" } }))
-    ).toEqual(["a.ts"]);
-    expect(extractAcpPaths(request({ title: "t", toolName: "Read", rawInput: null }))).toEqual([]);
+      extractAcpPaths(
+        request({
+          title: "t",
+          toolName: "Edit",
+          rawInput: { file_path: "a.ts" },
+          locations: [{ path: "b.ts" }]
+        })
+      )
+    ).toEqual(["b.ts", "a.ts"]);
   });
 
   it("keeps absolute outside paths outside and relative inside paths inside", () => {
@@ -183,12 +351,12 @@ describe("decideAcpPermission", () => {
   it("allows a named read without asking anyone", async () => {
     const verdict = await decideAcpPermission(
       request({ title: "Read File", rawInput: { file_path: "src/a.ts" }, toolName: "Read" }),
-      CWD,
+      FOLDERS,
       async () => {
         throw new Error("must not ask a person for a read");
       }
     );
-    expect(verdict).toBe("allow");
+    expect(verdict).toEqual({ decision: "allow", asked: false, reason: null });
   });
 
   it("asks a person for a shell command and honors the answer", async () => {
@@ -199,23 +367,23 @@ describe("decideAcpPermission", () => {
         rawInput: { command: "rm -rf /tmp/x" },
         toolName: "Bash"
       }),
-      CWD,
+      FOLDERS,
       async (builtIn) => {
         asked.push(builtIn.toolCallId);
         return "allow";
       }
     );
-    expect(allow).toBe("allow");
+    expect(allow).toEqual({ decision: "allow", asked: true, reason: null });
     const deny = await decideAcpPermission(
       request({
         title: "`rm -rf /tmp/x`",
         rawInput: { command: "rm -rf /tmp/x" },
         toolName: "Bash"
       }),
-      CWD,
+      FOLDERS,
       async () => "deny"
     );
-    expect(deny).toBe("deny");
+    expect(deny).toEqual({ decision: "deny", asked: true, reason: "denied_by_person" });
     expect(asked).toEqual(["call-1"]);
   });
 });

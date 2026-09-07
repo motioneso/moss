@@ -544,6 +544,8 @@ export interface RpcAcpSpawnResult {
    * a dropped connection can never kill another connection's live session.
    */
   readonly generation: number;
+  /** The HOME handed to the agent process, or null when it names none. */
+  readonly home: string | null;
 }
 /** params for method "acpSend": one client-to-agent JSON-RPC line (no trailing newline). */
 export interface RpcAcpSendParams {

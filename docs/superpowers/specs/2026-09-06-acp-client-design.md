@@ -160,7 +160,15 @@ request finished in 16 s with exactly one event written. Not a broken tool; mism
    second policy.
 4. Ben's posture holds: installing a module grants normal use, only write/destructive tools ask
    at use time. The agent's own permission prompts (for its built-ins) are auto-answered from the
-   same policy; anything the policy does not cover is denied.
+   same policy; anything the policy does not cover is denied. Identity for those prompts comes
+   only from the real tool name the agent announces alongside each tool call, never from the
+   display title, which the model writes and must not decide. Example: a subagent titled "Read
+   the repo" is refused outright (with a written reason) while a named Read of a project file is
+   allowed quietly and a named shell run raises the card. Title-matching was considered and
+   rejected: it lets the model choose its own policy. Open flags, not this slice: the blocked
+   user identity behind the token (F1), borrowing the chat session identity (F2), where several
+   agents share one conversation (F3), and the token plus folder on MCP tool holds (F4). Points
+   2 and 3 above are untouched by this change.
 
 ## 7. Agent capability list
 

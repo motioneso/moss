@@ -19,52 +19,53 @@
 - Current ACP posture denies everything with no policy:
   `packages/acp/src/client.ts:79` (`denyPermission`) wired at `:194`.
 - Protocol shape: `RequestPermissionRequest` carries `sessionId`, `toolCall`
-  (`toolCallId`, optional `kind`, `locations`, `rawInput`, `title`, declared
-  `_meta`), and `options` (SDK `types.gen.d.ts`, `RequestPermissionRequest`).
-  The stock adapter sends only `toolCallId`, `rawInput`, `title` plus
-  allow/reject options (adapter `dist/acp-agent.js`, `canUseTool`) — no tool
-  name, and the title is model-written, so nothing in the stock payload can
-  identify the tool. Our pnpm patch (`patches/@zed-industries__claude-code-acp@0.16.2.patch`)
-  adds `_meta: { toolName }` from the adapter's own `canUseTool` argument;
-  `_meta` is a declared protocol field, so it survives the SDK receive-side
-  validation that strips undeclared fields. Absent name refuses, by design.
+  (`toolCallId`, `rawInput`, `title`), and `options` (SDK `types.gen.d.ts`).
+  The question names nothing — the name arrives earlier, in the agent's
+  `tool_call` progress announcement for the same tool call id, which carries
+  the raw input, kind, file locations, and the real name under
+  `_meta.claudeCode.toolName` (adapter `dist/acp-agent.js`, announcement
+  builder plus `canUseTool`). `_meta` is declared, so it survives receive-side
+  validation; a bare custom field would be stripped. The title is model-written
+  and never decides. Question without announcement refuses, by design.
 - `@moss/acp` has no workspace dependencies (`packages/acp/package.json`); adding
   `@moss/ai -> @moss/acp` introduces no cycle.
 
 ## Decisions
 
-- New `packages/acp/src/permissions.ts` (pure, no DB, no fs):
-  - `classifyAcpPermission(request: AcpBuiltInRequest, cwd: string): "allow" | "ask" | "deny"`.
-    Identity is the real name from `toolCall._meta` only — never the title.
-    Named read-only tools allow; named writes allow only when every referenced
-    path sits inside `cwd`, else ask; shell, subagent (`Task`), and mode changes
-    always ask; absent or unlisted name denies without asking.
-  - Explicit lists: `ACP_READ_TOOL_NAMES`, `ACP_WRITE_TOOL_NAMES`,
-    `ACP_ASK_TOOL_NAMES`, `ACP_DESTRUCTIVE_TOOL_NAMES` (card seriousness),
-    `ACP_PATH_INPUT_KEYS` (`file_path`, `notebook_path`, `path`). Lexical cwd
-    containment only; links are not resolved. The runner block list switches
-    built-in writing off entirely today, so the in-folder write allow cannot
-    fire until phase 5 turns the feature on — the rule is written for that
-    shape, not today's.
-  - `selectAllowOptionId(options): string | null` picks the least-privilege allow
-    choice (first `allow_once`, else first `allow*` kind); null means deny.
-- `packages/acp/src/client.ts`: new optional `AcpPermissionDecider`
-  (`decide(request): Promise<RequestPermissionResponse>`) on the client events;
-  per-session cwd remembered at open. No decider keeps today's deny-closed
-  behavior. Allow answers select the decider's option; deny answers `cancelled`.
-- `packages/ai/src/gateway/acp-permission.ts`: new
-  `requestAcpBuiltInPermission(deps, token, input)` where input carries `cwd`,
-  `sessionId`, `toolCallId`, `title`, `rawInput`, the real `toolName`, plus
-  optional `kind`. Verifies the token (owner attribution), classifies via
-  `@moss/acp`, then: allow returns without a row; deny returns without a row
-  (including null name); ask creates the same pending row and emits the same
+- Identity: the client remembers each session's announcements (id → name, kind,
+  locations, raw input; 256 per session, cleared on close) and matches each
+  question by tool call id, waiting a bounded 2 s for a late announcement.
+  Unannounced or unnamed asks are UNKNOWN and refuse with a log line.
+- One table `packages/acp/src/tool-table.ts` (family, chat/workshop surfaces per
+  row; Moss prefix; launch off-lists). Policy, launch list, and runner deny
+  list all derive from it; tests lock the agreement.
+- Rule by family (`packages/acp/src/permissions.ts`, pure, no DB, no fs):
+  - READ: inside folder allows except secret-shaped names, which ask; home
+    corners and system folders refuse; anywhere else asks; bare Reads refuse.
+  - WRITE: session-folder writes allow as ordinary use; home corners and system
+    folders refuse; anywhere else asks; with no path, ask.
+  - WEB: public fetches allow, loopback/private/bare names ask; Moss tools
+    allow at once. MODE and NOT OFFERED refuse.
+  - Forbidden zone is the agent home subtree plus `/proc`, `/sys`, `/dev`,
+    `/run`; the session folder is checked first and always wins. Lexical only;
+    links unresolved — the runner's owned dirs plus the launch deny list
+    contain escape the other way. The runner block list switches built-in
+    writing off entirely today, so the in-folder write allow cannot fire until
+    phase 5 turns the feature on — the rule is written for that shape.
+- Home reaches the decider beside the folder: `spawn` returns the HOME handed
+  to the agent (`acp-host.ts`, RPC contract, tunnel, client handle).
+- `packages/ai/src/gateway/acp-permission.ts`:
+  `requestAcpBuiltInPermission(deps, token, input)` verifies the token (owner
+  attribution) and decides via `@moss/acp`. Allow returns without a row; deny
+  returns without a row; ask creates the same pending row and emits the same
   `action_request` event as the native path, awaits the same registry, emits
-  `action_result` (`allowed`, or `denied` with `APPROVAL_REFUSED_REASON` on
-  deny/timeout), and `markDone`s. The row's `inputSummary` carries the agent
+  `action_result`, and `markDone`s. The row's `inputSummary` carries the agent
   session and folder as plain identifiers (values stay out); the card is marked
-  destructive for shell, subagent, delete, move, and execute. The class keeps a
-  thin delegate so `gateway.ts` stays under the size gate. No second policy,
-  no second wording, enforcement point unchanged.
+  destructive for shell, subagent, delete, move, and execute. An audit line is
+  written for every ask outcome and every refusal (reason word as error class);
+  silent allows write none. The class keeps a thin delegate so `gateway.ts`
+  stays under the size gate. No second policy, no second wording, enforcement
+  point unchanged.
 - Exports: `permissions.ts` from `packages/acp/src/index.ts`; gateway method plus
   its input/output types from `packages/ai/src/gateway/index.ts`. Workspace dep
   `@moss/ai -> @moss/acp` declared in `packages/ai/package.json`.
@@ -73,24 +74,29 @@
 
 ## Test cases (behavior plus what breaks them)
 
-- `packages/acp/src/permissions.test.ts`: every verdict test feeds the exact
-  adapter payload (id, input, title, `_meta` name) — never kind or locations.
-  Covers: absent name refuses whatever the title claims; unlisted name refuses;
-  named reads allow; named writes inside allow and outside ask; shell, subagent,
-  and mode changes ask; traversal asks; a `Task` titled like a read asks with
-  the real name and refuses without it; picker prefers `allow_once`, null when
-  none allows. Each fails if the name lists, extraction, or containment regress.
-- `packages/acp/src/client.test.ts` additions: wired decider answering allow
-  produces a `selected` outcome on the permission id; absent decider keeps the
-  `cancelled` default (existing test). Fails if the hook is bypassed.
+- `packages/acp/src/permissions.test.ts` plus `tool-table.test.ts`: verdict tests
+  feed announced names (kind/locations carried, never decisive) and adapter-built
+  fixtures from the adapter's own mapping. Covers: absent/unlisted name refuses;
+  mode/not-offered refuse; reads inside allow, secrets ask, home corners and
+  system folders refuse with reason words, bare Reads refuse; writes inside
+  allow, outside ask, forbidden refuse; public fetches allow, private ask;
+  Moss tools allow; traversal asks; subagent titled like a read refuses without
+  asking. Each fails if the table, extraction, or zones regress.
+- `packages/acp/src/client.test.ts` additions: announcement-then-question and
+  question-then-announcement both decide by the announced name; no announcement
+  refuses after the bound; nameless announcement refuses. Fails if the hook,
+  the wait, or the folder handover breaks.
 - `tests/unit/acp-builtin-permission.test.ts`: ask path creates a pending row owned
   by the token's actor and emits `action_request` matching the native shape, with
   agent session and folder saved as identifiers and no command content;
   confirming through `gateway.resolveActionRequest` (the function the Approve route
   calls) returns allow; timeout returns deny with `APPROVAL_REFUSED_REASON`;
   allow/deny paths create no row; read-mimicking title with no name refuses with
-  no row; `Task` asks marked destructive; bad token throws. Fails if a second
-  event shape, wording, or attribution path appears.
+  no row and untouched confirmations; audit lines land for every ask and every
+  refusal with the reason words, none for silent allows; bad token throws.
+  Fails if a second event shape, wording, or attribution path appears.
+- `tests/unit/cli-runner-acp-host.test.ts`: settings deny equals the table's
+  shell/write rows plus the zone rules, exactly.
 - Phase E2E (in the same unit file, no DB): scripted agent permission request →
   client decider → gateway ask → `resolveActionRequest` as owner → agent receives
   `selected/allow`. This is the attended-approval path with the human step played

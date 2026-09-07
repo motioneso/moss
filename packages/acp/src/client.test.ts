@@ -15,8 +15,8 @@ class ScriptedAgent implements AcpTunnel {
   private seq = 0;
   hangPrompt = false;
 
-  async spawn(): Promise<{ cwd: string; generation: number }> {
-    return { cwd: "/runner/session/acp/proj", generation: 1 };
+  async spawn(): Promise<{ cwd: string; home: string | null; generation: number }> {
+    return { cwd: "/runner/session/acp/proj", home: "/home/agent", generation: 1 };
   }
 
   async send(_sessionKey: string, line: string): Promise<void> {
@@ -234,12 +234,14 @@ describe("MossAcpClient", () => {
   it("decides by the announced name when the announcement lands first", async () => {
     const agent = new ScriptedAgent();
     const seen: Array<string | null> = [];
+    const folders: unknown[] = [];
     const client = new MossAcpClient(
       agent,
       {},
       {
-        decide: async (builtIn) => {
+        decide: async (builtIn, session) => {
           seen.push(builtIn.toolName);
+          folders.push({ cwd: session.cwd, home: session.home });
           return "allow";
         }
       }
@@ -254,8 +256,10 @@ describe("MossAcpClient", () => {
     });
     agent.agentAsksPermission(8, { title: "Read src/a.ts", rawInput: { file_path: "src/a.ts" } });
     const answer = await waitForAnswer(agent, 8);
-    // The question's title is ignored; the announced name decides.
+    // The question's title is ignored; the announced name decides, and the
+    // spawn's folders travel with the decision.
     expect(seen).toEqual(["Read"]);
+    expect(folders).toEqual([{ cwd: "/runner/session/acp/proj", home: "/home/agent" }]);
     expect(answer.result.outcome).toEqual({ outcome: "selected", optionId: "allow" });
     await client.close(handle);
   });
