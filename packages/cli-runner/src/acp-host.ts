@@ -247,8 +247,10 @@ export class AcpHost {
       }
       // Folders emptied by an earlier sweep — or by an owner that saw the
       // finish — would otherwise pile up under the spared folder forever.
-      // Removing only an empty folder is race-safe: a concurrent new record
-      // makes this fail and the folder simply stays.
+      // Only an empty folder goes: anything else fails and simply stays.
+      // This can still land inside a record write in progress, whose folder
+      // sits empty until its file follows. That write rebuilds the folder
+      // and tries once more, so the record still lands.
       await rmdir(execDir).catch(() => undefined);
     }
   }

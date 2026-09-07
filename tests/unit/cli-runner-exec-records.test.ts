@@ -10,10 +10,12 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  ACP_DEADLINE_DIR,
   execRecordPath,
   readExecRecord,
   writeExecRecord
 } from "../../packages/cli-runner/src/exec-records.js";
+import { sanitizeSessionKey } from "../../packages/chat/src/live/cli-session-lifecycle.js";
 
 const KEY = "workshop:user:proj";
 
@@ -62,5 +64,9 @@ describe("exec deadline records", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("the reserved session key still matches the folder the runner uses", () => {
+    expect(() => sanitizeSessionKey(ACP_DEADLINE_DIR)).toThrow();
   });
 });

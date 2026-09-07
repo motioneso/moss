@@ -63,15 +63,32 @@ export async function writeExecRecord(
   record: Omit<ExecDeadlineRecord, "pid"> & { pid: number | undefined }
 ): Promise<void> {
   if (record.pid === undefined) return;
-  const dir = await prepareOwnedPath(baseDir, key, undefined, undefined, ACP_DEADLINE_DIR, key);
   const { pid, ...rest } = record;
-  await writeOwnedFile(
-    key,
-    join(dir, `${execId}.json`),
-    JSON.stringify({ pid, ...rest }),
-    undefined,
-    undefined
-  );
+  const content = JSON.stringify({ pid, ...rest });
+  const fileName = `${execId}.json`;
+  const writeOnce = async (dir: string): Promise<void> => {
+    await writeOwnedFile(key, join(dir, fileName), content, undefined, undefined);
+  };
+  const dir = await prepareOwnedPath(baseDir, key, undefined, undefined, ACP_DEADLINE_DIR, key);
+  try {
+    await writeOnce(dir);
+  } catch (error) {
+    // The sweep removes empty session folders, and this folder sits empty
+    // between being built above and the file landing here. A sweep in that
+    // window deletes the folder and this write fails with no such folder.
+    // Rebuild once and try again; anything else, or a second failure, is
+    // thrown to the caller as before.
+    if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
+    const rebuilt = await prepareOwnedPath(
+      baseDir,
+      key,
+      undefined,
+      undefined,
+      ACP_DEADLINE_DIR,
+      key
+    );
+    await writeOnce(rebuilt);
+  }
 }
 
 /** Read one deadline record; null when it is missing or not what we wrote. */
