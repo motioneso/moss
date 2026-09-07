@@ -314,7 +314,10 @@ const PLANNED_CONFIRM_ALWAYS_TOOL_NAMES = [
   "sports.confirmSourceAssignments",
   "sports.confirmSourceRecipe",
   "sports.retrySource",
-  "sports.removeSource"
+  "sports.removeSource",
+  // Fable's ruling on 2418: workshop.runCommand is not promotable while
+  // unconfined, so it declares confirm_always instead of user_promotable.
+  "workshop.runCommand"
 ];
 
 describe("Sports/News denylist check (#1265)", () => {
@@ -399,8 +402,8 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // call; it moved to risk "read", so it is no longer in any of these three buckets at all (the
     // loop above skips read tools before it ever reaches the switch).
     expect(grantedAtInstall.length).toBe(42);
-    expect(confirmAlways.length).toBe(9);
-    expect(userPromotable.length).toBe(6);
+    expect(confirmAlways.length).toBe(10);
+    expect(userPromotable.length).toBe(5);
 
     // Task 12a moved calendar.deleteEvent out of granted_at_install (33 -> ...). PR #1268's
     // security reviews moved two more: Fable moved calendar.createEvent to user_promotable
@@ -423,7 +426,9 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // confirm_always to risk "read" — 42 + 9 + 5 = 56 total. #2379 adds workshop.runCommand as
     // user_promotable — it runs arbitrary shell in the project folder, so install must never
     // auto-grant it; the user promotes the workshop_builds family for unattended builds.
-    // 42 + 9 + 6 = 57 total.
+    // 42 + 9 + 6 = 57 total. Fable's ruling on 2418 moves workshop.runCommand to
+    // confirm_always (the card is mandatory while unconfined, so the tool is not promotable
+    // at all) — 42 + 10 + 5 = 57 total.
     expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(57);
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
@@ -433,8 +438,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
         "calendar.createEvent",
         "calendar.rescheduleEvent",
         "tasks.deleteList",
-        "tasks.deleteTag",
-        "workshop.runCommand"
+        "tasks.deleteTag"
       ].sort()
     );
   });

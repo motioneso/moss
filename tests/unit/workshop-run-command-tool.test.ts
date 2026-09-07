@@ -61,19 +61,21 @@ describe("workshop.runCommand manifest declaration", () => {
     // non-read tools, so a read tool's build log would never reach the browser at all.
     expect(tool.risk).toBe("write");
     expect(tool.actionFamilyId).toBe("workshop_builds");
-    expect(tool.executionPolicy).toBe("auto");
-    expect(tool.selfOperationGrant).toBe("user_promotable");
+    // Fable's ruling on 2418: the card is mandatory while unconfined, so the
+    // tool is not promotable — confirm policy, confirm_always grant.
+    expect(tool.executionPolicy).toBe("confirm");
+    expect(tool.selfOperationGrant).toBe("confirm_always");
     expect(tool.requiresServices).toEqual([WORKSHOP_RUN_COMMAND_SERVICE_KEY]);
     // Ordinary text output: the rendered log is what the model and browser see.
     expect(tool.streamsStructuredResult).not.toBe(true);
   });
 
-  it("declares a family that starts at ask each time but can run unattended", () => {
+  it("declares a family that starts at ask each time and can never run unattended", () => {
     const family = workshopModuleManifest.assistantActionFamilies?.find(
       (entry) => entry.id === "workshop_builds"
     );
     expect(family?.defaultTier).toBe("ask_each_time");
-    expect(family?.allowedTiers).toEqual(["ask_each_time", "trusted_auto", "always_confirm"]);
+    expect(family?.allowedTiers).toEqual(["ask_each_time", "always_confirm"]);
   });
 
   it("takes a command and an optional deadline, never a folder", () => {

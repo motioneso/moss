@@ -318,6 +318,9 @@ function WorkshopProjectContent({
     readonly { actionRequestId: string; toolName: string; summary: string }[]
   >([]);
   useEffect(() => {
+    // No live stream where EventSource does not exist (prerender, tests):
+    // cards simply never arrive there, and the page still works.
+    if (typeof EventSource === "undefined") return;
     const source = new EventSource(
       `/api/chat/stream?workshopProject=${encodeURIComponent(projectId)}`
     );
