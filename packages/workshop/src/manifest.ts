@@ -2,6 +2,8 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   workshopBuildModuleInputSchema,
   workshopBuildModuleResultSchema,
+  workshopRunCommandInputSchema,
+  workshopRunCommandResultSchema,
   createWorkshopProjectInputSchema,
   createWorkshopProjectResponseSchema,
   listWorkshopProjectsResponseSchema,
@@ -12,6 +14,10 @@ import {
 } from "@moss/shared";
 
 import { workshopBuildModuleExecute } from "./assistant-tools.js";
+import {
+  WORKSHOP_RUN_COMMAND_SERVICE_KEY,
+  workshopRunCommandExecute
+} from "./run-command.js";
 import { collectWorkshopProjectFeed } from "./project-feed.js";
 import { collectWorkshopProjects } from "./projects-repository.js";
 
@@ -131,6 +137,13 @@ export const workshopModuleManifest = {
       description: "Save a private Workshop project from a request you gave Moss.",
       defaultTier: "ask_each_time",
       allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
+    },
+    {
+      id: "workshop_builds",
+      label: "Running project build commands",
+      description: "Run build and check commands inside the project folder and report the output.",
+      defaultTier: "ask_each_time",
+      allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
     }
   ],
   assistantTools: [
@@ -153,6 +166,24 @@ export const workshopModuleManifest = {
       streamsStructuredResult: true,
       execute: workshopBuildModuleExecute,
       summarize: () => "Save a private Workshop project. Planning has not started."
+    },
+    {
+      name: "workshop.runCommand",
+      description:
+        "Run one shell command inside the project folder and return its output. " +
+        "The folder is fixed to this session's project; there is no path to choose. " +
+        "Use for build, test, and check commands. Output past 256 KiB is cut with a note, " +
+        "and past the deadline the command stops and whatever ran so far returns.",
+      permissionId: "workshop.view",
+      actionFamilyId: "workshop_builds",
+      risk: "write",
+      executionPolicy: "auto",
+      selfOperationGrant: "granted_at_install",
+      requiresServices: [WORKSHOP_RUN_COMMAND_SERVICE_KEY],
+      inputSchema: workshopRunCommandInputSchema,
+      outputSchema: workshopRunCommandResultSchema,
+      execute: workshopRunCommandExecute,
+      summarize: () => "Run a project build command and report its output."
     }
   ],
   routes: [

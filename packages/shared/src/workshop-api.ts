@@ -77,6 +77,44 @@ export const workshopBuildModuleInputSchema = {
   }
 } as const;
 
+/**
+ * workshop.runCommand (#2369 slice 1 phase 3): one shell command in the
+ * session project folder. The folder is fixed runner-side from the session,
+ * so the input names a command and a deadline, never a path.
+ */
+export const workshopRunCommandInputSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["command"],
+  properties: {
+    command: {
+      type: "string",
+      minLength: 1,
+      maxLength: 32768,
+      description:
+        "Shell command to run in the project folder, for example a build or test command."
+    },
+    timeoutMs: {
+      type: "integer",
+      description:
+        "Deadline in milliseconds. Defaults to 300000 (5 minutes); past it the command is " +
+        "stopped and whatever ran so far returns."
+    }
+  }
+} as const;
+
+export const workshopRunCommandResultSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["output", "exitCode", "truncated", "timedOut"],
+  properties: {
+    output: { type: "string" },
+    exitCode: { type: ["integer", "null"] },
+    truncated: { type: "boolean" },
+    timedOut: { type: "boolean" }
+  }
+} as const;
+
 export const approveModuleBuildResponseSchema = {
   type: "object",
   additionalProperties: false,
