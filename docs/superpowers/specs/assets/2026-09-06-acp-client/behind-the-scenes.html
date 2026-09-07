@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Behind the scenes · Chat drawer · Moss mockup</title>
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/tokens.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles/components-core.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles/components-chat.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/kit-chat.css" />
+    <style>
+      /* Mockup frame only. Nothing below is proposed product CSS except the .chatd-stats block,
+         which is the one new primitive this design adds (to components-chat.css at build). */
+      body {
+        margin: 0;
+        padding: 28px;
+        background: var(--surface-2);
+        font-family: var(--font-sans);
+        color: var(--text);
+      }
+      .frame {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      .panel {
+        width: 404px;
+        background: var(--surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-card);
+        padding: 18px 16px 6px;
+      }
+      .panel > h2 {
+        font-family: var(--font-display);
+        font-size: var(--text-sm);
+        font-weight: 600;
+        color: var(--text-subtle);
+        margin: 0 0 14px;
+      }
+      .panel > p.note {
+        font-size: var(--text-xs);
+        color: var(--text-faint);
+        margin: 0 0 14px;
+        line-height: 1.5;
+      }
+      .chatd-msg--me .chatd-bubble {
+        background: var(--surface-2);
+        border-radius: var(--radius-lg);
+      }
+      /* The one proposed addition: the stats strip under a reply. Same column, same caption
+         style as the Thinking line above the reply. Tabular numbers, no mono. */
+      .chatd-stats {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: -8px 0 16px 36px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        color: var(--text-faint);
+        font-variant-numeric: tabular-nums;
+      }
+      .chatd-stats__item {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .chatd-stats svg {
+        width: 12px;
+        height: 12px;
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .chatd-stats__sep {
+        color: var(--surface-3);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <section class="panel" aria-label="As a reply lands">
+        <h2>1. As the reply lands (fold closed)</h2>
+        <p class="note">
+          The Thinking line the drawer already shows stays where it is. New: the stats strip under
+          the reply. Time first, then tokens in, out and cached.
+        </p>
+
+        <div class="chatd-msg chatd-msg--me">
+          <div class="chatd-bubble">Add lunch with Sam on Thursday at noon</div>
+        </div>
+
+        <details class="chatd-peek chatd-peek--quiet">
+          <summary class="chatd-peek__summary chatd-peek__summary--quiet">
+            <span class="chatd-peek__label">Thinking</span>
+            <span class="chatd-peek__count">5 steps</span>
+            <svg
+              class="chatd-peek__chev"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </summary>
+        </details>
+
+        <div class="chatd-msg">
+          <span class="chatd-msg__av">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
+              <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+              <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="var(--gold)" />
+              <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" />
+            </svg>
+          </span>
+          <div class="chatd-bubble">
+            Done. Lunch with Sam is on Thursday at 12:00 for an hour, in your calendar.
+          </div>
+        </div>
+
+        <div class="chatd-stats" aria-label="Reply stats">
+          <span class="chatd-stats__item" title="Time to answer"
+            ><svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" /></svg
+            >24.0 s</span
+          >
+          <span class="chatd-stats__sep">·</span>
+          <span class="chatd-stats__item" title="Tokens sent to the model"
+            ><svg viewBox="0 0 24 24">
+              <path d="M12 5v14" />
+              <path d="m19 12-7 7-7-7" /></svg
+            >2</span
+          >
+          <span class="chatd-stats__item" title="Tokens the model wrote"
+            ><svg viewBox="0 0 24 24">
+              <path d="m5 12 7-7 7 7" />
+              <path d="M12 19V5" /></svg
+            >1.2k</span
+          >
+          <span class="chatd-stats__item" title="Tokens served from cache"
+            ><svg viewBox="0 0 24 24">
+              <ellipse cx="12" cy="5" rx="9" ry="3" />
+              <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+              <path d="M3 12A9 3 0 0 0 21 12" /></svg
+            >4.5k</span
+          >
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Fold open">
+        <h2>2. The user opens the fold</h2>
+        <p class="note">
+          Same fold, now fed from the protocol: thoughts, each tool call, the approval, each result,
+          in the order they happened. Tool calls show the real tool name. Nothing here is the
+          model's display title.
+        </p>
+
+        <div class="chatd-msg chatd-msg--me">
+          <div class="chatd-bubble">Add lunch with Sam on Thursday at noon</div>
+        </div>
+
+        <details class="chatd-peek chatd-peek--quiet" open>
+          <summary class="chatd-peek__summary chatd-peek__summary--quiet">
+            <span class="chatd-peek__label">Thinking</span>
+            <span class="chatd-peek__count">5 steps</span>
+            <svg
+              class="chatd-peek__chev"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </summary>
+          <div class="chatd-peek__body">
+            <div class="chatd-peek__line">
+              <span class="chatd-peek__kind">Thought</span>Sam is in contacts. Thursday is the 10th.
+              Check for a free hour at noon before creating anything.
+            </div>
+            <div class="chatd-peek__line">
+              <span class="chatd-peek__kind">Tool</span>calendar.listEvents, Thursday 11:00 to 14:00
+            </div>
+            <div class="chatd-peek__line">
+              <span class="chatd-peek__kind">Result</span>No events in that window.
+            </div>
+            <div class="chatd-peek__line">
+              <span class="chatd-peek__kind">Approved</span>calendar.createEvent, approved by you at
+              14:46 after 9 s
+            </div>
+            <div class="chatd-peek__line">
+              <span class="chatd-peek__kind">Result</span>Event created: Lunch with Sam, Thursday
+              12:00, one hour.
+            </div>
+          </div>
+        </details>
+
+        <div class="chatd-msg">
+          <span class="chatd-msg__av">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
+              <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+              <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="var(--gold)" />
+              <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" />
+            </svg>
+          </span>
+          <div class="chatd-bubble">
+            Done. Lunch with Sam is on Thursday at 12:00 for an hour, in your calendar.
+          </div>
+        </div>
+
+        <div class="chatd-stats" aria-label="Reply stats">
+          <span class="chatd-stats__item" title="Time to answer"
+            ><svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" /></svg
+            >24.0 s</span
+          >
+          <span class="chatd-stats__sep">·</span>
+          <span class="chatd-stats__item" title="Tokens sent to the model"
+            ><svg viewBox="0 0 24 24">
+              <path d="M12 5v14" />
+              <path d="m19 12-7 7-7-7" /></svg
+            >2</span
+          >
+          <span class="chatd-stats__item" title="Tokens the model wrote"
+            ><svg viewBox="0 0 24 24">
+              <path d="m5 12 7-7 7 7" />
+              <path d="M12 19V5" /></svg
+            >1.2k</span
+          >
+          <span class="chatd-stats__item" title="Tokens served from cache"
+            ><svg viewBox="0 0 24 24">
+              <ellipse cx="12" cy="5" rx="9" ry="3" />
+              <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+              <path d="M3 12A9 3 0 0 0 21 12" /></svg
+            >4.5k</span
+          >
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Provider sends no token counts">
+        <h2>3. A provider that reports no token counts</h2>
+        <p class="note">
+          The strip never shows a number the agent did not send. Time is Moss's own clock, so it is
+          always there. A turn with no tool calls has no fold at all, as today.
+        </p>
+
+        <div class="chatd-msg chatd-msg--me">
+          <div class="chatd-bubble">What day is the 10th?</div>
+        </div>
+
+        <div class="chatd-msg">
+          <span class="chatd-msg__av">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
+              <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+              <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="var(--gold)" />
+              <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" />
+            </svg>
+          </span>
+          <div class="chatd-bubble">Thursday.</div>
+        </div>
+
+        <div class="chatd-stats" aria-label="Reply stats">
+          <span class="chatd-stats__item" title="Time to answer"
+            ><svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" /></svg
+            >3.1 s</span
+          >
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
