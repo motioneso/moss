@@ -48,6 +48,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Project workspace with top bar trail.** Workshop projects now open as a chat window with the project name in the top bar, starting a project needs no form, Moss replies show formatting instead of raw marks, and you can rename a project from the top bar or delete it from the More button. [PR #2376](https://github.com/motioneso/moss/pull/2376)
 - **Moss replies in Workshop projects.** When you save a message in a Workshop project, Moss now writes back a reply in the same conversation instead of leaving it waiting forever. [PR #2365](https://github.com/motioneso/moss/pull/2365)
 - **Workshop projects.** You can now start a Workshop project, give it a name and a first request, and come back to it later with everything you have written saved. [PR #2307](https://github.com/motioneso/moss/pull/2307)
 
