@@ -65,7 +65,11 @@ export function sanitizeSessionKey(sessionKey: string): string {
     sessionKey.includes("\0") ||
     sessionKey === "." ||
     sessionKey === ".." ||
-    sessionKey.includes("..")
+    sessionKey.includes("..") ||
+    // The build deadline folder lives directly under the runner base, so a
+    // session with this name would land where the startup clean-out never
+    // wipes. Mirrors ACP_DEADLINE_DIR in packages/cli-runner/src/exec-records.ts.
+    sessionKey === "acp-deadlines"
   ) {
     throw new Error("invalid sessionKey");
   }
