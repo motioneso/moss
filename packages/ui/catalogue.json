@@ -67,6 +67,15 @@
       ]
     },
     {
+      "name": "brand-mark",
+      "type": "registry:ui",
+      "files": [{ "path": "packages/ui/src/brand-mark.tsx", "type": "registry:ui" }],
+      "dependencies": [],
+      "exports": ["BrandMark"],
+      "options": [],
+      "flags": []
+    },
+    {
       "name": "button-link",
       "type": "registry:ui",
       "files": [{ "path": "packages/ui/src/button-link.tsx", "type": "registry:ui" }],

@@ -28,6 +28,10 @@ _No enum or boolean props._
 - **pill** (optional boolean flag)
 - **dot** (optional boolean flag)
 
+## brand-mark
+
+_No enum or boolean props._
+
 ## button-link
 
 - **variant** (optional, default `primary`): `primary`, `secondary`, `quiet`, `accentSoft`, `danger`, `field`

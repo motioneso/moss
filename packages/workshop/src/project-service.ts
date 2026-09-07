@@ -1,6 +1,7 @@
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import { SettingsRepository } from "@moss/settings";
 import type { CreateWorkshopProjectInput, CreateWorkshopProjectResponse } from "@moss/shared";
+import { deriveProjectTitle } from "@moss/shared";
 import { sql } from "kysely";
 import { WorkshopProjectsRepository } from "./projects-repository.js";
 
@@ -26,6 +27,11 @@ export async function createWorkshopProject(
   input: CreateWorkshopProjectInput
 ): Promise<CreateWorkshopProjectResponse> {
   await requireWorkshopAdmin(scopedDb);
-  const result = await new WorkshopProjectsRepository().create(scopedDb, input);
+  // The new-project window names nothing up front: the name is the request's own first line,
+  // derived the same way the chat handoff names it. A present title (the handoff tool) wins and
+  // still validates as before — only an absent one derives, so a blank title stays a 400.
+  const title =
+    input.title === undefined ? deriveProjectTitle(input.initialRequest) : input.title;
+  const result = await new WorkshopProjectsRepository().create(scopedDb, { ...input, title });
   return { ...result, destination: `/workshop/${result.project.id}` };
 }

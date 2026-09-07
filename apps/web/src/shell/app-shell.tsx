@@ -28,7 +28,7 @@ import {
 } from "../chat/assistant-surface";
 import { useChatStream } from "../chat/use-chat-stream";
 import { usePageContextSync } from "../chat/use-page-context-sync";
-import { BrandMark } from "./brand-mark";
+import { BrandMark } from "@moss/ui";
 import { ChatControlsProvider } from "./chat-controls-context";
 import { HeaderWeather } from "../today/header-weather";
 import { applyThemeTokens } from "../theme/theme-runtime";

@@ -1,11 +1,11 @@
 import { Paperclip, X } from "lucide-react";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import type { ChatSurface } from "@moss/shared";
-import { Button } from "@moss/ui";
+import { BrandMark, Button } from "@moss/ui";
 
 import { sendChatTurn } from "../../api/client";
 import { useAssistantName } from "../../api/use-assistant-name";
-import { BrandMark } from "../../shell/brand-mark";
+
 import "../../styles/kit-chat-attach.css";
 import {
   ATTACHMENT_ACCEPT,

@@ -7,9 +7,9 @@ import { requestJson } from "@moss/module-web-sdk";
 import type { MeResponse } from "@moss/shared";
 import {
   ProjectError,
-  WorkshopProjectCreate,
   WorkshopProjectDetail,
-  WorkshopProjectList
+  WorkshopProjectList,
+  WorkshopProjectNew
 } from "./project-pages.js";
 
 export function WorkshopProjectRoutes() {
@@ -97,7 +97,7 @@ export function WorkshopProjectRoutes() {
       ) : null}
       <Routes>
         <Route index element={<WorkshopProjectList canMutate={canMutate} />} />
-        <Route path="new" element={<WorkshopProjectCreate canMutate={canMutate} />} />
+        <Route path="new" element={<WorkshopProjectNew canMutate={canMutate} />} />
         <Route path=":projectId" element={<WorkshopProjectDetail canMutate={canMutate} />} />
         <Route path="*" element={<EmptyState title="This Workshop page was not found" />} />
       </Routes>

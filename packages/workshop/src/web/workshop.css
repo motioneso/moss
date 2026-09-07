@@ -10,19 +10,10 @@
   padding: var(--space-7) var(--space-8) var(--space-11);
 }
 
-.workshop-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-/* The create form keeps its own back link until slice 5 replaces the form; the detail page's
-   back link is gone with its heading. */
-.workshop-back {
-  display: inline-block;
-  margin-bottom: var(--space-4);
-  font-size: var(--text-sm);
+/* The invitation centers itself inside the empty window; the host's empty-state classes
+   carry the visuals. */
+.workshop-open {
+  margin-block: auto;
 }
 
 /* Supporting status lines on the project list share the excerpt treatment. */
@@ -42,16 +33,6 @@
   display: flex;
   justify-content: center;
   margin-bottom: var(--space-7);
-}
-
-.workshop-project-form form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.workshop-project-form {
-  max-width: 720px;
 }
 
 /* The project window: a 56rem reading measure fixed to the viewport, the composer pinned at

@@ -15,14 +15,14 @@ import type {
   UsefulnessFeedbackDto,
   UsefulnessFeedbackKind
 } from "@moss/shared";
-import { ChatFreshnessFooter, Menu, activityVerb } from "@moss/ui";
+import { BrandMark, ChatFreshnessFooter, Menu, activityVerb } from "@moss/ui";
 
 import { queryKeys } from "../api/query-keys";
 import {
   createUsefulnessFeedback,
   undoUsefulnessFeedback
 } from "../api/usefulness-feedback-client";
-import { BrandMark } from "../shell/brand-mark";
+
 import { ActionRequestCard } from "./action-request-card";
 import { formatAttachmentSize } from "./attachments";
 import { MarkdownMessage } from "./markdown-message";

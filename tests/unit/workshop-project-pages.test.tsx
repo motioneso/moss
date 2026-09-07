@@ -5,6 +5,7 @@ import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MeResponse, WorkshopFeedEntry, WorkshopProject } from "@moss/shared";
+import { deriveProjectTitle } from "@moss/shared";
 import { WorkshopProjectRoutes } from "../../packages/workshop/src/web/project-routes.js";
 import {
   PageTrailProvider,
@@ -19,6 +20,10 @@ const project: WorkshopProject = {
   createdAt: "2026-09-05T12:00:00.000Z",
   updatedAt: "2026-09-05T12:00:00.000Z"
 };
+// Slice 5: the new-project window names nothing — the service derives the name, so a create
+// lands on a fresh id the detail window then loads.
+const createdId = "b0000000-0000-4000-8000-000000000002";
+let createdBody: Record<string, string> | null;
 const otherProject = {
   ...project,
   id: "a0000000-0000-4000-8000-000000000003",
@@ -138,6 +143,7 @@ beforeEach(() => {
   entries = [];
   writes = [];
   reads = [];
+  createdBody = null;
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
   });
@@ -153,11 +159,17 @@ beforeEach(() => {
         writes.push({ path, body });
         if (path === base) {
           if (createFailures-- > 0) return response({ error: "Temporary failure" }, 503);
+          createdBody = body;
           return response(
             {
-              project: { ...project, title: body.title, initialRequest: body.initialRequest },
+              project: {
+                ...project,
+                id: createdId,
+                title: body.title ?? deriveProjectTitle(body.initialRequest!),
+                initialRequest: body.initialRequest
+              },
               created: true,
-              destination: `/workshop/${project.id}`
+              destination: `/workshop/${createdId}`
             },
             201
           );
@@ -189,6 +201,17 @@ beforeEach(() => {
         return response(detailStatus === 200 ? { project } : { error: "Not found" }, detailStatus);
       if (path.startsWith(`${base}/${project.id}/messages?`))
         return response({ entries, nextCursor: entries.at(-1)?.sequence ?? "0" });
+      if (path === `${base}/${createdId}` && createdBody)
+        return response({
+          project: {
+            ...project,
+            id: createdId,
+            title: deriveProjectTitle(createdBody.initialRequest!),
+            initialRequest: createdBody.initialRequest
+          }
+        });
+      if (path.startsWith(`${base}/${createdId}/messages?`))
+        return response({ entries: [], nextCursor: "0" });
       throw new Error(`Unexpected request: ${path}`);
     })
   );
@@ -202,42 +225,58 @@ afterEach(async () => {
 });
 
 describe("Workshop project browser interactions", () => {
-  it("retains create text and request key after failure, then opens the saved destination on retry", async () => {
+  it("shows the invitation with examples that fill the box without sending", async () => {
+    await render("/workshop/new");
+    await eventually(() =>
+      expect(container.textContent).toContain("What would you like to make?")
+    );
+    expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe("New project");
+    click("Track the books I read");
+    expect(field("project-message").value).toBe("Track the books I read");
+    expect(writes).toHaveLength(0);
+    expect(container.querySelector("output")?.textContent).toBe("/workshop/new");
+  });
+
+  it("creates with no title on send, replaces the URL, and retries the same key after failure", async () => {
     createFailures = 1;
     await render("/workshop/new");
-    type("project-title", project.title);
-    type("project-idea", project.initialRequest);
-    type("project-context", project.context);
-    click("Create project");
+    await eventually(() => expect(container.querySelector("#project-message")).not.toBeNull());
+    type("project-message", "Keep a private list of book ideas.");
+    click("Send");
     await eventually(() =>
       expect(container.querySelector('[role="alert"]')?.textContent).toContain(
         "could not be confirmed as saved"
       )
     );
-    expect(field("project-title").value).toBe(project.title);
-    expect(field("project-idea").value).toBe(project.initialRequest);
-    expect(field("project-context").value).toBe(project.context);
-    click("Create project");
+    expect(field("project-message").value).toBe("Keep a private list of book ideas.");
+    click("Send");
     await eventually(() =>
-      expect(container.querySelector("output")?.textContent).toBe(`/workshop/${project.id}`)
+      expect(container.querySelector("output")?.textContent).toBe(`/workshop/${createdId}`)
     );
     expect(writes).toHaveLength(2);
     expect(writes[1]!.body).toEqual(writes[0]!.body);
     expect(writes[0]!.body.requestKey).toMatch(/^[0-9a-f-]{36}$/i);
-    await eventually(() => expect(container.textContent).toContain(project.title));
-    // The saved request opens the window as its first turn, with no panel beside it.
-    expect(container.querySelector(".chatd-thread")?.textContent).toContain(project.initialRequest);
+    // No name travels up front; the service derives it from the request's first line.
+    expect("title" in writes[0]!.body).toBe(false);
+    const derived = deriveProjectTitle("Keep a private list of book ideas.");
+    await eventually(() =>
+      expect(container.querySelector('[aria-label="Page trail"]')?.textContent).toBe(derived)
+    );
+    // The request opens the window as its first turn.
+    expect(container.querySelector(".chatd-thread")?.textContent).toContain(
+      "Keep a private list of book ideas."
+    );
   });
 
   it("uses a new request key when a failed create's payload is edited", async () => {
     createFailures = 2;
     await render("/workshop/new");
-    type("project-title", project.title);
-    type("project-idea", project.initialRequest);
-    click("Create project");
+    await eventually(() => expect(container.querySelector("#project-message")).not.toBeNull());
+    type("project-message", "Keep a private list of book ideas.");
+    click("Send");
     await eventually(() => expect(container.querySelector('[role="alert"]')).not.toBeNull());
-    type("project-idea", "Changed requirements");
-    click("Create project");
+    type("project-message", "Changed requirements");
+    click("Send");
     await eventually(() => expect(writes).toHaveLength(2));
     expect(writes[1]!.body.requestKey).not.toBe(writes[0]!.body.requestKey);
     expect(writes[1]!.body.initialRequest).toBe("Changed requirements");

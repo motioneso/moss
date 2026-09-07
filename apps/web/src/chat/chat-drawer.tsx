@@ -2,9 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Clock, MessageSquareText, ShieldOff, SquarePen, X } from "lucide-react";
 import { type UIEvent, useCallback, useEffect, useRef, useState } from "react";
 
-import { EmptyState as JdsEmptyState } from "@moss/ui";
-
-import { BrandMark } from "../shell/brand-mark";
+import { BrandMark, EmptyState as JdsEmptyState } from "@moss/ui";
 
 import {
   cancelChatTurn,

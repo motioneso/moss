@@ -26,7 +26,8 @@ export interface WorkshopProject {
 
 export interface CreateWorkshopProjectInput {
   readonly requestKey: string;
-  readonly title: string;
+  /** Absent from the new-project window, which names nothing up front; the service derives it. */
+  readonly title?: string;
   readonly initialRequest: string;
   readonly context?: string;
 }
@@ -34,6 +35,32 @@ export interface CreateWorkshopProjectInput {
 export interface WorkshopProjectCursor {
   readonly createdAt: string;
   readonly id: string;
+}
+
+const DERIVED_TITLE_MAX_CHARACTERS = 60;
+
+/**
+ * A readable name for the project list, taken from the request the person typed.
+ *
+ * The first cut was a hard 40-character slice, which on a real request produced
+ * "Garden watering reminders — reminds me w" (2026-09-05 live check). Prefer the first sentence,
+ * then fall back to a word boundary, and only ever cut mid-word if a single word is longer than
+ * the whole budget. The full request is always kept verbatim in initialRequest, so nothing said
+ * here is lost. (Moved here from the chat handoff so the create service derives the same name.)
+ */
+export function deriveProjectTitle(description: string): string {
+  const collapsed = description.replace(/\s+/g, " ").trim();
+  const firstSentence = collapsed.split(/(?<=[.!?])\s/)[0]?.trim() ?? collapsed;
+  const candidate = firstSentence.length > 0 ? firstSentence : collapsed;
+  const characters = Array.from(candidate);
+  if (characters.length <= DERIVED_TITLE_MAX_CHARACTERS) return candidate;
+
+  const clipped = characters.slice(0, DERIVED_TITLE_MAX_CHARACTERS).join("");
+  const lastSpace = clipped.lastIndexOf(" ");
+  // A word boundary is only useful if it leaves a real title behind, not one or two letters.
+  const trimmed =
+    lastSpace > DERIVED_TITLE_MAX_CHARACTERS / 3 ? clipped.slice(0, lastSpace) : clipped;
+  return `${trimmed.replace(/[\s\u2013\u2014-]+$/, "")}…`;
 }
 
 export const moduleBuildPlanSchema = {
@@ -230,7 +257,7 @@ export const workshopProjectParamsSchema = {
 export const createWorkshopProjectInputSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["requestKey", "title", "initialRequest"],
+  required: ["requestKey", "initialRequest"],
   properties: {
     requestKey: workshopUuidSchema,
     title: { type: "string", minLength: 1, maxLength: 160 },

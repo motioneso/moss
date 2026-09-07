@@ -10,7 +10,14 @@ import {
   RowIndex,
   RowIndexItem
 } from "@moss/ui";
-import { ActivityPeek, ApiError, Thread, randomUuid, usePageTrail } from "@moss/module-web-sdk";
+import {
+  ActivityPeek,
+  ApiError,
+  BrandMark,
+  Thread,
+  randomUuid,
+  usePageTrail
+} from "@moss/module-web-sdk";
 import type {
   LocaleSettingsDto,
   TranscriptRecord,
@@ -140,113 +147,132 @@ export function WorkshopProjectList({ canMutate }: { canMutate: boolean }) {
   );
 }
 
-export function WorkshopProjectCreate({ canMutate }: { canMutate: boolean }) {
+/**
+ * The pinned composer both windows share: the label for screen readers, the box with Send
+ * inside it, and the error and saved notes underneath.
+ */
+export function WorkshopComposer(props: {
+  readonly label: string;
+  readonly text: string;
+  readonly onTextChange: (text: string) => void;
+  readonly sending: boolean;
+  readonly sendDisabled: boolean;
+  readonly onSubmit: () => void;
+  readonly error: string | null;
+  readonly status: string | null;
+}) {
+  return (
+    <form
+      className="workshop-chat__composer"
+      onSubmit={(event) => {
+        event.preventDefault();
+        props.onSubmit();
+      }}
+    >
+      <div className="chatd-input">
+        <label className="jds-sr-only" htmlFor="project-message">
+          {props.label}
+        </label>
+        <textarea
+          id="project-message"
+          rows={3}
+          maxLength={16384}
+          required
+          value={props.text}
+          disabled={props.sending}
+          onChange={(event) => props.onTextChange(event.target.value)}
+        />
+        <button
+          type="submit"
+          className="chatd-send"
+          disabled={props.sendDisabled}
+        >
+          {props.sending ? "Sending…" : "Send"}
+        </button>
+      </div>
+      {props.error ? (
+        <p role="alert" className="form-error">
+          {props.error}
+        </p>
+      ) : null}
+      {props.status ? <p role="status">{props.status}</p> : null}
+    </form>
+  );
+}
+
+/** Fixed example requests on the new-project window: they write into the box, never send. */
+export const NEW_PROJECT_EXAMPLES = [
+  "A word of the day on Today",
+  "Track the books I read",
+  "A reminder to water the plants"
+] as const;
+
+export function WorkshopProjectNew({ canMutate }: { canMutate: boolean }) {
+  usePageTrail({ name: "New project" });
   const navigate = useNavigate();
   const client = useQueryClient();
   const [requestKey, setRequestKey] = useState(() => randomUuid());
-  const [title, setTitle] = useState("");
-  const [initialRequest, setInitialRequest] = useState("");
-  const [context, setContext] = useState("");
+  const [text, setText] = useState("");
   const mutation = useMutation({
-    mutationFn: createProject,
+    mutationFn: (input: { requestKey: string; initialRequest: string }) => createProject(input),
     onSuccess: (result) => {
       void client.invalidateQueries({ queryKey: projectKeys.list });
-      navigate(`/workshop/${result.project.id}`);
+      // The project exists now: replace the URL without a reload and let the detail window
+      // mount, which shows the request as the first turn.
+      navigate(result.destination, { replace: true });
     }
   });
-  const changed = () => {
-    if (mutation.isError) {
-      setRequestKey(randomUuid());
-      mutation.reset();
-    }
-  };
+  const ready = canMutate;
   return (
-    <section className="workshop-project-form">
-      <Link className="workshop-back" to="/workshop">
-        ← Your projects
-      </Link>
-      <h1>What would you like to make?</h1>
-      <p>Start with what you want it to do. This project is private to you.</p>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (canMutate && !mutation.isPending)
-            mutation.mutate({ requestKey, title, initialRequest, context });
+    <section className="workshop-chat" aria-label="New project">
+      <div className="workshop-chat__history">
+        <div className="workshop-open chatd-empty">
+          <span className="chatd-empty__mark">
+            <BrandMark size={22} />
+          </span>
+          <div className="chatd-empty__title">What would you like to make?</div>
+          <div className="chatd-empty__sub">
+            Say it in your own words. Moss will ask a few questions, show you the screens, then
+            build it.
+          </div>
+          <div className="chatd-sugg">
+            {NEW_PROJECT_EXAMPLES.map((example) => (
+              <button
+                key={example}
+                type="button"
+                className="chatd-sugg__btn"
+                disabled={mutation.isPending}
+                onClick={() => setText(example)}
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <WorkshopComposer
+        label="Your idea"
+        text={text}
+        onTextChange={(next) => {
+          if (mutation.isError) {
+            setRequestKey(randomUuid());
+            mutation.reset();
+          }
+          setText(next);
         }}
-      >
-        <div className="jds-field">
-          <label className="jds-label" htmlFor="project-title">
-            Project name
-          </label>
-          <input
-            className="jds-input"
-            id="project-title"
-            required
-            maxLength={160}
-            value={title}
-            disabled={mutation.isPending}
-            onChange={(event) => {
-              changed();
-              setTitle(event.target.value);
-            }}
-          />
-        </div>
-        <div className="jds-field">
-          <label className="jds-label" htmlFor="project-idea">
-            Your idea
-          </label>
-          <textarea
-            className="jds-textarea"
-            id="project-idea"
-            required
-            maxLength={16384}
-            rows={5}
-            value={initialRequest}
-            disabled={mutation.isPending}
-            onChange={(event) => {
-              changed();
-              setInitialRequest(event.target.value);
-            }}
-          />
-        </div>
-        <div className="jds-field">
-          <label className="jds-label" htmlFor="project-context">
-            Already decided <span>(optional)</span>
-          </label>
-          <textarea
-            className="jds-textarea"
-            id="project-context"
-            maxLength={16384}
-            rows={3}
-            value={context}
-            disabled={mutation.isPending}
-            onChange={(event) => {
-              changed();
-              setContext(event.target.value);
-            }}
-          />
-          <p className="jds-hint">Include only the details you want saved in this project.</p>
-        </div>
-        {mutation.isError ? (
-          <p className="form-error" role="alert">
-            {mutation.error instanceof ApiError && mutation.error.status === 400
-              ? "Check your entries. Use a shorter name or message, then try again."
-              : "The project could not be confirmed as saved. Your text is still here; retry to check the same request."}
-          </p>
-        ) : null}
-        <div className="workshop-actions">
-          <Button
-            type="submit"
-            disabled={!canMutate || mutation.isPending || !title.trim() || !initialRequest.trim()}
-          >
-            {mutation.isPending ? "Creating…" : "Create project"}
-          </Button>
-          <ButtonLink href="/workshop" variant="quiet">
-            Cancel
-          </ButtonLink>
-        </div>
-        <p className="jds-hint">Creating a project saves your idea. It does not start a build.</p>
-      </form>
+        sending={mutation.isPending}
+        sendDisabled={!ready || mutation.isPending || !text.trim()}
+        onSubmit={() => {
+          if (ready && !mutation.isPending && text.trim())
+            mutation.mutate({ requestKey, initialRequest: text });
+        }}
+        error={
+          mutation.isError
+            ? "The project could not be confirmed as saved. Your text is still here; retry to check the same request."
+            : null
+        }
+        status={null}
+      />
     </section>
   );
 }
@@ -365,51 +391,29 @@ function WorkshopProjectContent({
           </p>
         ) : null}
       </div>
-      <form
-        className="workshop-chat__composer"
-        onSubmit={(event) => {
-          event.preventDefault();
+      <WorkshopComposer
+        label="Add to your project"
+        text={text}
+        onTextChange={(next) => {
+          if (mutation.isError) {
+            setMessageId(randomUuid());
+            mutation.reset();
+          }
+          setSaved(false);
+          setText(next);
+        }}
+        sending={mutation.isPending}
+        sendDisabled={!ready || mutation.isPending || !text.trim()}
+        onSubmit={() => {
           if (ready && !mutation.isPending) mutation.mutate({ messageId, text });
         }}
-      >
-        <div className="chatd-input">
-          <label className="jds-sr-only" htmlFor="project-message">
-            Add to your project
-          </label>
-          <textarea
-            id="project-message"
-            rows={3}
-            maxLength={16384}
-            required
-            value={text}
-            disabled={mutation.isPending}
-            onChange={(event) => {
-              if (mutation.isError) {
-                setMessageId(randomUuid());
-                mutation.reset();
-              }
-              setSaved(false);
-              setText(event.target.value);
-            }}
-          />
-          <button
-            type="submit"
-            className="chatd-send"
-            disabled={!ready || mutation.isPending || !text.trim()}
-          >
-            {mutation.isPending ? "Sending…" : "Send"}
-          </button>
-        </div>
-        {mutation.isError ? (
-          <p role="alert" className="form-error">
-            The message could not be confirmed as saved. Your text is still here; retry to check
-            the same message.
-          </p>
-        ) : null}
-        {saved ? (
-          <p role="status">Saved to this project. No planning or build has started.</p>
-        ) : null}
-      </form>
+        error={
+          mutation.isError
+            ? "The message could not be confirmed as saved. Your text is still here; retry to check the same message."
+            : null
+        }
+        status={saved ? "Saved to this project. No planning or build has started." : null}
+      />
     </section>
   );
 }

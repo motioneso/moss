@@ -86,7 +86,7 @@ export const workshopModuleManifest = {
         {
           id: "workshop.projects.retry",
           description:
-            "Reconnect and reload the project, then retry the saved request. Unsent text stays in the form.",
+            "Reconnect and reload the project, then retry the saved request. Unsent text stays in the window.",
           path: "/workshop"
         }
       ],
@@ -108,11 +108,11 @@ export const workshopModuleManifest = {
       id: "workshop.chat_handoff",
       description:
         "Moss saves only the requested idea as a private project and links to it. " +
-        "Creation never plans or builds, including with YOLO. Incognito and unverified chats must use the create form.",
+        "Creation never plans or builds, including with YOLO. Incognito and unverified chats must use the new-project window.",
       remediations: [
         {
           id: "workshop.chat_handoff.choose_content",
-          description: "Open the new-project form and choose the details you want to save.",
+          description: "Start a new project and say what you want in your own words.",
           path: "/workshop/new"
         }
       ],

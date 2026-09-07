@@ -4,6 +4,8 @@ import { ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { BrandMark } from "./brand-mark.js";
+
 import type {
   ChatRecordKind,
   SourceFreshnessEntry,
@@ -204,6 +206,9 @@ function defaultRenderRecord(record: TranscriptRecord): ReactNode {
   if (record.kind === "reply") {
     return (
       <div className="chatd-msg">
+        <span className="chatd-msg__av">
+          <BrandMark size={14} />
+        </span>
         <div className="chatd-bubble">
           <ThreadMarkdown text={record.text} />
         </div>
