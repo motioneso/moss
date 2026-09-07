@@ -2,10 +2,15 @@
  * Permission policy for the agent's own built-in tools (#2380, spec 6.4).
  *
  * Pure function of the permission request plus the session working folder: no
- * database, no filesystem. Read-only built-ins allow; writes inside the session
- * folder allow as ordinary use; destructive tools, or anything outside that
- * folder, ask a person through the shared approval card; anything unrecognised
- * is refused. The card itself lives in the gateway — this module only decides.
+ * database, no filesystem. Identity comes only from the real tool name the
+ * adapter carries in `toolCall._meta`, written by adapter platform code around
+ * its own `canUseTool` call — never from the display title, which is
+ * model-written and untrusted. A request with no name, or a name outside the
+ * explicit lists, is refused without asking anyone. Named read-only tools
+ * allow; named writes inside the session folder allow as ordinary use, outside
+ * it ask a person through the shared approval card; shell, subagent, and mode
+ * changes always ask. The card itself lives in the gateway — this module only
+ * decides. Nothing here ever sees file contents.
  */
 
 import { isAbsolute, relative, resolve, sep } from "node:path";
@@ -13,9 +18,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import type {
   PermissionOption,
   RequestPermissionRequest,
-  RequestPermissionResponse,
-  ToolCallLocation,
-  ToolKind
+  RequestPermissionResponse
 } from "@agentclientprotocol/sdk";
 
 export type AcpPermissionVerdict = "allow" | "ask" | "deny";
@@ -23,48 +26,24 @@ export type AcpPermissionVerdict = "allow" | "ask" | "deny";
 export interface AcpBuiltInRequest {
   readonly sessionId: string;
   readonly toolCallId: string;
+  /** Display text only. Passed through for the card; never decides. */
   readonly title: string;
   readonly rawInput: unknown;
-  readonly kind?: ToolKind | null;
-  readonly locations?: readonly ToolCallLocation[] | null;
+  /** Real tool name from adapter platform code, or null when absent. */
+  readonly toolName: string | null;
 }
 
-/** Kinds that only observe: search results, file reads, fetched pages, plans. */
-export const ACP_READ_ONLY_KINDS: readonly ToolKind[] = ["read", "search", "fetch", "think"];
-/** Kinds that change files: allowed only inside the session folder. */
-export const ACP_WRITE_KINDS: readonly ToolKind[] = ["edit"];
-/** Kinds that always need a person, even inside the session folder. */
-export const ACP_ASK_KINDS: readonly ToolKind[] = ["delete", "move", "execute", "switch_mode"];
-/** Raw-input fields that name a file the tool touches. */
-export const ACP_PATH_INPUT_KEYS: readonly string[] = ["file_path", "notebook_path", "path"];
-/** Raw-input field that names a shell command to run. */
-const COMMAND_INPUT_KEY = "command";
+/** Prefix the adapter puts on its own file and shell tool names. */
+const ACP_TOOL_PREFIX = "mcp__acp__";
 
-/**
- * Recover the built-in tool name from the adapter's title. The adapter sends no
- * tool name in permission requests, only the display title it derives from the
- * tool and its input — this table mirrors that derivation. Null means unknown,
- * which refuses rather than guesses.
- */
-export function inferAcpToolName(title: string): string | null {
-  if (title.startsWith("Read ") || title === "Read File") return "Read";
-  if (title.startsWith("List the")) return "LS";
-  if (title.startsWith("Find")) return "Glob";
-  if (title.startsWith("grep")) return "Grep";
-  if (title.startsWith("Fetch ")) return "WebFetch";
-  if (title.startsWith('"')) return "WebSearch";
-  if (title.startsWith("Update TODOs")) return "TodoWrite";
-  if (title === "Tail Logs") return "BashOutput";
-  if (title === "Kill Process") return "KillShell";
-  if (title.startsWith("Write ")) return "Write";
-  if (title.startsWith("Edit ")) return "Edit";
-  if (title === "Ready to code?") return "ExitPlanMode";
-  if (title.startsWith("`") && title.endsWith("`") && title.length > 1) return "Bash";
-  return null;
+function withPrefixed(names: readonly string[]): Set<string> {
+  return new Set([...names, ...names.map((name) => `${ACP_TOOL_PREFIX}${name}`)]);
 }
 
-const READ_ONLY_TOOL_NAMES = new Set([
+/** Named tools that only observe: reads, listings, searches, plans. */
+export const ACP_READ_TOOL_NAMES: ReadonlySet<string> = withPrefixed([
   "Read",
+  "NotebookRead",
   "LS",
   "Glob",
   "Grep",
@@ -73,35 +52,46 @@ const READ_ONLY_TOOL_NAMES = new Set([
   "TodoWrite",
   "BashOutput"
 ]);
-const WRITE_TOOL_NAMES = new Set(["Write", "Edit"]);
-const ASK_TOOL_NAMES = new Set(["Bash", "KillShell", "ExitPlanMode"]);
+/** Named tools that change files: allowed only inside the session folder. */
+export const ACP_WRITE_TOOL_NAMES: ReadonlySet<string> = withPrefixed([
+  "Edit",
+  "Write",
+  "NotebookEdit"
+]);
+/** Named tools that always need a person, even inside the session folder. */
+export const ACP_ASK_TOOL_NAMES: ReadonlySet<string> = withPrefixed([
+  "Bash",
+  "KillShell",
+  "ExitPlanMode",
+  "Task"
+]);
+/** Named tools whose card shows the destructive seriousness. */
+export const ACP_DESTRUCTIVE_TOOL_NAMES: ReadonlySet<string> = withPrefixed([
+  "Bash",
+  "KillShell",
+  "Task"
+]);
+/** Raw-input fields that name a file the tool touches. */
+export const ACP_PATH_INPUT_KEYS: readonly string[] = ["file_path", "notebook_path", "path"];
 
-function rawInputRecord(rawInput: unknown): Record<string, unknown> | null {
-  if (!rawInput || typeof rawInput !== "object" || Array.isArray(rawInput)) return null;
-  return rawInput as Record<string, unknown>;
+/** Real tool name from adapter platform code, or null when absent or forged. */
+export function toolNameFromMeta(meta: unknown): string | null {
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null;
+  const name = (meta as Record<string, unknown>).toolName;
+  return typeof name === "string" && name.trim() !== "" ? name : null;
 }
 
-/** Every file path the request names, from locations plus known input fields. */
+/** Every file path the request names, from the known tool input fields. */
 export function extractAcpPaths(request: AcpBuiltInRequest): string[] {
   const paths: string[] = [];
-  for (const location of request.locations ?? []) {
-    if (typeof location?.path === "string" && location.path.trim() !== "") {
-      paths.push(location.path);
-    }
-  }
-  const input = rawInputRecord(request.rawInput);
-  if (input) {
+  const input = request.rawInput;
+  if (input && typeof input === "object" && !Array.isArray(input)) {
     for (const key of ACP_PATH_INPUT_KEYS) {
-      const value = input[key];
+      const value = (input as Record<string, unknown>)[key];
       if (typeof value === "string" && value.trim() !== "") paths.push(value);
     }
   }
   return paths;
-}
-
-function hasCommandInput(rawInput: unknown): boolean {
-  const value = rawInputRecord(rawInput)?.[COMMAND_INPUT_KEY];
-  return typeof value === "string" && value.trim() !== "";
 }
 
 /** Lexical containment only: no filesystem access, so links are not resolved. */
@@ -118,35 +108,19 @@ function classifyEdit(paths: string[], cwd: string): AcpPermissionVerdict {
   return paths.every((path) => isInsideSessionFolder(cwd, path)) ? "allow" : "ask";
 }
 
-function classifyByName(
-  toolName: string | null,
-  request: AcpBuiltInRequest,
-  cwd: string
-): AcpPermissionVerdict {
-  if (toolName === null) return "deny";
-  if (READ_ONLY_TOOL_NAMES.has(toolName)) return "allow";
-  if (WRITE_TOOL_NAMES.has(toolName)) return classifyEdit(extractAcpPaths(request), cwd);
-  if (ASK_TOOL_NAMES.has(toolName)) return "ask";
-  return "deny";
-}
-
 export function classifyAcpPermission(
   request: AcpBuiltInRequest,
   cwd: string
 ): AcpPermissionVerdict {
-  const kind = request.kind ?? null;
-  if (kind !== null) {
-    if ((ACP_READ_ONLY_KINDS as readonly string[]).includes(kind)) return "allow";
-    if ((ACP_WRITE_KINDS as readonly string[]).includes(kind)) {
-      return classifyEdit(extractAcpPaths(request), cwd);
-    }
-    if ((ACP_ASK_KINDS as readonly string[]).includes(kind)) return "ask";
-    return "deny";
-  }
-  // The adapter omits kind on permission requests: a shell command always asks,
-  // otherwise the title recovers the tool name through the explicit table.
-  if (hasCommandInput(request.rawInput)) return "ask";
-  return classifyByName(inferAcpToolName(request.title), request, cwd);
+  const toolName = request.toolName;
+  // No name means the request carries only model-written text: unrecognised,
+  // so refused. This is the design default, and it is what stops a subagent
+  // titled like a harmless read from walking in with no card.
+  if (toolName === null) return "deny";
+  if (ACP_READ_TOOL_NAMES.has(toolName)) return "allow";
+  if (ACP_WRITE_TOOL_NAMES.has(toolName)) return classifyEdit(extractAcpPaths(request), cwd);
+  if (ACP_ASK_TOOL_NAMES.has(toolName)) return "ask";
+  return "deny";
 }
 
 /** Least-privilege allow choice: single-use first, never a standing grant. */
@@ -162,8 +136,8 @@ function cancelled(): RequestPermissionResponse {
 
 /**
  * Answer one permission request. `ask` runs only when the policy needs a
- * person — the gateway wires it to the shared approval card in phase 4; any
- * other caller decides how to reach someone.
+ * person — the gateway wires it to the shared approval card; any other caller
+ * decides how to reach someone.
  */
 export async function decideAcpPermission(
   request: RequestPermissionRequest,
@@ -175,8 +149,7 @@ export async function decideAcpPermission(
     toolCallId: request.toolCall.toolCallId,
     title: request.toolCall.title ?? "",
     rawInput: request.toolCall.rawInput,
-    kind: request.toolCall.kind ?? undefined,
-    locations: request.toolCall.locations ?? undefined
+    toolName: toolNameFromMeta(request.toolCall._meta)
   };
   const verdict = classifyAcpPermission(builtIn, cwd);
   if (verdict === "deny") return cancelled();

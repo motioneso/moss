@@ -13,13 +13,14 @@ export {
   classifyAcpPermission,
   decideAcpPermission,
   extractAcpPaths,
-  inferAcpToolName,
   isInsideSessionFolder,
   selectAllowOptionId,
-  ACP_ASK_KINDS,
+  toolNameFromMeta,
+  ACP_ASK_TOOL_NAMES,
+  ACP_DESTRUCTIVE_TOOL_NAMES,
   ACP_PATH_INPUT_KEYS,
-  ACP_READ_ONLY_KINDS,
-  ACP_WRITE_KINDS
+  ACP_READ_TOOL_NAMES,
+  ACP_WRITE_TOOL_NAMES
 } from "./permissions.js";
 export type { AcpBuiltInRequest, AcpPermissionVerdict } from "./permissions.js";
 export { createTunnelStream } from "./stream.js";

@@ -1,0 +1,26 @@
+diff --git a/dist/acp-agent.js b/dist/acp-agent.js
+index b3a85a712c6be20d6663687719a3b34e39a60e1d..e9edbb224a5242c05215499e3352e51aefb6095a 100644
+--- a/dist/acp-agent.js
++++ b/dist/acp-agent.js
+@@ -597,6 +597,10 @@ export class ClaudeAcpAgent {
+                         toolCallId: toolUseID,
+                         rawInput: toolInput,
+                         title: toolInfoFromToolUse({ name: toolName, input: toolInput }).title,
++                        // Moss addition: carry the real tool name for policy.
++                        // The display title is model-written and must never
++                        // decide; _meta survives protocol validation.
++                        _meta: { toolName },
+                     },
+                 });
+                 if (signal.aborted || response.outcome?.outcome === "cancelled") {
+@@ -653,6 +657,10 @@ export class ClaudeAcpAgent {
+                     toolCallId: toolUseID,
+                     rawInput: toolInput,
+                     title: toolInfoFromToolUse({ name: toolName, input: toolInput }).title,
++                    // Moss addition: carry the real tool name for policy.
++                    // The display title is model-written and must never
++                    // decide; _meta survives protocol validation.
++                    _meta: { toolName },
+                 },
+             });
+             if (signal.aborted || response.outcome?.outcome === "cancelled") {

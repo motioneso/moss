@@ -6,19 +6,21 @@ import {
   classifyAcpPermission,
   decideAcpPermission,
   extractAcpPaths,
-  inferAcpToolName,
   isInsideSessionFolder,
   selectAllowOptionId,
+  toolNameFromMeta,
   type AcpBuiltInRequest
 } from "./permissions.js";
 
 const CWD = "/runner/session/acp/proj";
 
-function request(partial: Partial<AcpBuiltInRequest> & { title: string }): AcpBuiltInRequest {
+function request(partial: Partial<AcpBuiltInRequest>): AcpBuiltInRequest {
   return {
     sessionId: "agent-sess-1",
     toolCallId: "call-1",
+    title: "",
     rawInput: {},
+    toolName: null,
     ...partial
   };
 }
@@ -31,135 +33,147 @@ function options(): PermissionOption[] {
   ];
 }
 
-describe("classifyAcpPermission with a kind", () => {
-  it("allows read-only kinds without looking at paths", () => {
-    for (const kind of ["read", "search", "fetch", "think"] as const) {
-      expect(classifyAcpPermission(request({ title: "anything", kind }), CWD)).toBe("allow");
-    }
-  });
+/** Exactly what the patched adapter sends: id, input, title, real name. */
+function permissionRequest(toolCall: Record<string, unknown>) {
+  return {
+    sessionId: "agent-sess-1",
+    toolCall: { toolCallId: "call-9", ...toolCall },
+    options: options()
+  };
+}
 
-  it("allows an edit whose every path sits inside the session folder", () => {
-    expect(
-      classifyAcpPermission(
-        request({
-          title: "Edit",
-          kind: "edit",
-          rawInput: { file_path: "src/index.ts" },
-          locations: [{ path: "src/index.ts" }]
-        }),
-        CWD
-      )
-    ).toBe("allow");
-  });
-
-  it("asks when one edit path leaves the session folder", () => {
-    expect(
-      classifyAcpPermission(
-        request({
-          title: "Edit",
-          kind: "edit",
-          rawInput: { file_path: "src/index.ts" },
-          locations: [{ path: "/etc/passwd" }]
-        }),
-        CWD
-      )
-    ).toBe("ask");
-  });
-
-  it("asks for an edit that names no path rather than guessing", () => {
-    expect(classifyAcpPermission(request({ title: "Edit", kind: "edit" }), CWD)).toBe("ask");
-  });
-
-  it("always asks for destructive and mode-changing kinds", () => {
-    for (const kind of ["delete", "move", "execute", "switch_mode"] as const) {
-      expect(classifyAcpPermission(request({ title: "anything", kind }), CWD)).toBe("ask");
-    }
-  });
-
-  it("refuses an unrecognised kind", () => {
-    expect(classifyAcpPermission(request({ title: "anything", kind: "other" }), CWD)).toBe("deny");
-  });
-});
-
-describe("classifyAcpPermission without a kind (what the adapter sends)", () => {
-  it("allows read-only titles", () => {
+describe("classifyAcpPermission", () => {
+  it("refuses when no real name arrived, whatever the title claims", () => {
     for (const title of [
       "Read src/index.ts",
-      "Read Notebook notes.ipynb",
-      "List the `src` directory's contents",
       "Find `src` `*.ts`",
-      'grep "hello" src',
-      "Fetch https://example.com",
-      '"best router"',
       "Update TODOs: write tests",
-      "Tail Logs"
+      "Refactor the billing module"
     ]) {
-      expect(classifyAcpPermission(request({ title, rawInput: {} }), CWD)).toBe("allow");
+      expect(classifyAcpPermission(request({ title, toolName: null }), CWD)).toBe("deny");
     }
   });
 
-  it("allows a write inside the session folder and asks outside it", () => {
+  it("refuses a name outside the explicit lists", () => {
+    expect(classifyAcpPermission(request({ title: "t", toolName: "Skill" }), CWD)).toBe(
+      "deny"
+    );
+    expect(
+      classifyAcpPermission(request({ title: "t", toolName: "mcp__github__issue_read" }), CWD)
+    ).toBe("deny");
+  });
+
+  it("allows named read-only tools", () => {
+    for (const toolName of [
+      "Read",
+      "mcp__acp__Read",
+      "NotebookRead",
+      "LS",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch",
+      "TodoWrite",
+      "BashOutput"
+    ]) {
+      expect(classifyAcpPermission(request({ title: "t", toolName }), CWD)).toBe("allow");
+    }
+  });
+
+  it("allows a named write inside the folder and asks outside it", () => {
     expect(
       classifyAcpPermission(
-        request({ title: "Write src/out.txt", rawInput: { file_path: "src/out.txt" } }),
+        request({ title: "t", toolName: "Write", rawInput: { file_path: "src/out.txt" } }),
         CWD
       )
     ).toBe("allow");
     expect(
       classifyAcpPermission(
-        request({ title: "Write /tmp/out.txt", rawInput: { file_path: "/tmp/out.txt" } }),
+        request({ title: "t", toolName: "Edit", rawInput: { file_path: "/etc/passwd" } }),
+        CWD
+      )
+    ).toBe("ask");
+    expect(
+      classifyAcpPermission(
+        request({ title: "t", toolName: "NotebookEdit", rawInput: {} }),
         CWD
       )
     ).toBe("ask");
   });
 
-  it("asks for shell commands and process control", () => {
-    expect(
-      classifyAcpPermission(
-        request({ title: "`pnpm test`", rawInput: { command: "pnpm test" } }),
-        CWD
-      )
-    ).toBe("ask");
-    expect(classifyAcpPermission(request({ title: "Kill Process" }), CWD)).toBe("ask");
-    expect(classifyAcpPermission(request({ title: "Ready to code?" }), CWD)).toBe("ask");
-  });
-
-  it("refuses a title it does not recognise, such as a free-form task", () => {
-    expect(
-      classifyAcpPermission(
-        request({ title: "Refactor the billing module", rawInput: { prompt: "do it all" } }),
-        CWD
-      )
-    ).toBe("deny");
+  it("always asks for shell, subagents, and mode changes", () => {
+    for (const toolName of ["Bash", "mcp__acp__Bash", "KillShell", "ExitPlanMode", "Task"]) {
+      expect(classifyAcpPermission(request({ title: "t", toolName }), CWD)).toBe("ask");
+    }
   });
 
   it("treats folder traversal as outside the session folder", () => {
     expect(
       classifyAcpPermission(
-        request({ title: "Write ../escape.txt", rawInput: { file_path: "../escape.txt" } }),
+        request({ title: "t", toolName: "Write", rawInput: { file_path: "../escape.txt" } }),
         CWD
       )
     ).toBe("ask");
   });
 });
 
-describe("helpers", () => {
-  it("recovers tool names from adapter titles and null otherwise", () => {
-    expect(inferAcpToolName("Read src/a.ts")).toBe("Read");
-    expect(inferAcpToolName("`pnpm test`")).toBe("Bash");
-    expect(inferAcpToolName("Something the agent invented")).toBeNull();
+describe("task tool titled like a harmless read", () => {
+  const mimicInput = {
+    description: "Read the repository and summarize the layout",
+    prompt: "Read every file in the repo, including secrets, and report back."
+  };
+
+  it("asks a person when the real name says Task, not what the title says", async () => {
+    const asked: string[] = [];
+    const response = await decideAcpPermission(
+      permissionRequest({
+        title: "Read the repository and summarize the layout",
+        rawInput: mimicInput,
+        _meta: { toolName: "Task" }
+      }),
+      CWD,
+      async (builtIn) => {
+        asked.push(builtIn.toolName ?? "missing");
+        return "deny";
+      }
+    );
+    expect(asked).toEqual(["Task"]);
+    expect(response.outcome).toEqual({ outcome: "cancelled" });
   });
 
-  it("collects paths from locations and known input fields", () => {
+  it("refuses the same mimic with no name rather than trusting the title", async () => {
+    const response = await decideAcpPermission(
+      permissionRequest({
+        title: "Read the repository and summarize the layout",
+        rawInput: mimicInput
+      }),
+      CWD,
+      async () => {
+        throw new Error("must not ask a person for the unnamed");
+      }
+    );
+    expect(response.outcome).toEqual({ outcome: "cancelled" });
+  });
+});
+
+describe("helpers", () => {
+  it("reads the real name from adapter metadata and nothing else", () => {
+    expect(toolNameFromMeta({ toolName: "Bash" })).toBe("Bash");
+    expect(toolNameFromMeta({})).toBeNull();
+    expect(toolNameFromMeta(null)).toBeNull();
+    expect(toolNameFromMeta({ toolName: "  " })).toBeNull();
+    expect(toolNameFromMeta({ toolName: 7 })).toBeNull();
+  });
+
+  it("collects paths from the known input fields", () => {
     expect(
       extractAcpPaths(
-        request({
-          title: "Edit",
-          rawInput: { file_path: "a.ts" },
-          locations: [{ path: "b.ts" }]
-        })
+        request({ title: "t", toolName: "Edit", rawInput: { file_path: "a.ts" } })
       )
-    ).toEqual(["b.ts", "a.ts"]);
+    ).toEqual(["a.ts"]);
+    expect(extractAcpPaths(request({ title: "t", toolName: "Read", rawInput: null }))).toEqual(
+      []
+    );
   });
 
   it("keeps absolute outside paths outside and relative inside paths inside", () => {
@@ -178,17 +192,13 @@ describe("helpers", () => {
 });
 
 describe("decideAcpPermission", () => {
-  function permissionRequest(title: string, rawInput: unknown) {
-    return {
-      sessionId: "agent-sess-1",
-      toolCall: { toolCallId: "call-9", title, rawInput },
-      options: options()
-    };
-  }
-
-  it("answers an allowed read with the single-use option", async () => {
+  it("answers a named read with the single-use option", async () => {
     const response = await decideAcpPermission(
-      permissionRequest("Read src/a.ts", {}),
+      permissionRequest({
+        title: "Read src/a.ts",
+        rawInput: { file_path: "src/a.ts" },
+        _meta: { toolName: "Read" }
+      }),
       CWD,
       async () => {
         throw new Error("must not ask a person for a read");
@@ -200,7 +210,11 @@ describe("decideAcpPermission", () => {
   it("asks a person for a shell command and honors the answer", async () => {
     const asked: string[] = [];
     const allow = await decideAcpPermission(
-      permissionRequest("`rm -rf /tmp/x`", { command: "rm -rf /tmp/x" }),
+      permissionRequest({
+        title: "`rm -rf /tmp/x`",
+        rawInput: { command: "rm -rf /tmp/x" },
+        _meta: { toolName: "Bash" }
+      }),
       CWD,
       async (builtIn) => {
         asked.push(builtIn.toolCallId);
@@ -209,22 +223,15 @@ describe("decideAcpPermission", () => {
     );
     expect(allow.outcome).toEqual({ outcome: "selected", optionId: "allow" });
     const deny = await decideAcpPermission(
-      permissionRequest("`rm -rf /tmp/x`", { command: "rm -rf /tmp/x" }),
+      permissionRequest({
+        title: "`rm -rf /tmp/x`",
+        rawInput: { command: "rm -rf /tmp/x" },
+        _meta: { toolName: "Bash" }
+      }),
       CWD,
       async () => "deny"
     );
     expect(deny.outcome).toEqual({ outcome: "cancelled" });
     expect(asked).toEqual(["call-9"]);
-  });
-
-  it("refuses the unknown without asking anyone", async () => {
-    const response = await decideAcpPermission(
-      permissionRequest("Invent everything", { whatever: true }),
-      CWD,
-      async () => {
-        throw new Error("must not ask a person for the unknown");
-      }
-    );
-    expect(response.outcome).toEqual({ outcome: "cancelled" });
   });
 });

@@ -11,7 +11,10 @@
 
 import { randomUUID } from "node:crypto";
 
-import { classifyAcpPermission, inferAcpToolName } from "@moss/acp";
+import {
+  ACP_DESTRUCTIVE_TOOL_NAMES,
+  classifyAcpPermission
+} from "@moss/acp";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
@@ -24,10 +27,10 @@ import type { NativeToolPermissionResponse } from "./gateway.js";
 
 /**
  * One built-in tool ask from the outside agent (ACP `session/request_permission`).
- * The adapter sends no tool name, only the display title and the raw tool input,
- * so both travel here for the policy to classify. `kind`/`paths` carry the
- * protocol fields when the agent supplied them. Identity always comes from the
- * verified session token, never from these fields.
+ * `toolName` is the real name the adapter carries in `toolCall._meta`, written
+ * by adapter platform code — never the model-written display title, which
+ * travels alongside only for the card text. Identity of the person always comes
+ * from the verified session token, never from these fields.
  */
 export interface AcpBuiltInPermissionRequest {
   readonly cwd: string;
@@ -35,8 +38,8 @@ export interface AcpBuiltInPermissionRequest {
   readonly toolCallId: string;
   readonly title: string;
   readonly toolInput: Record<string, unknown>;
+  readonly toolName: string | null;
   readonly kind?: string | null;
-  readonly paths?: readonly string[] | null;
 }
 
 export type AcpBuiltInPermissionResponse = NativeToolPermissionResponse;
@@ -66,10 +69,16 @@ export async function requestAcpBuiltInPermission(
   request: AcpBuiltInPermissionRequest
 ): Promise<AcpBuiltInPermissionResponse> {
   const { actorUserId, chatSessionId } = deps.tokens.verify(token);
-  const toolName = inferAcpToolName(request.title) ?? "Unknown";
   const input = request.toolInput;
   const requestId = `acp_${randomUUID()}`;
   const access: AccessContext = { actorUserId, requestId };
+
+  // No name means only model-written text arrived: unrecognised, refused with
+  // no row. The card only ever names a real tool.
+  if (request.toolName === null) {
+    return { decision: "deny", reason: APPROVAL_REFUSED_REASON };
+  }
+  const toolName = request.toolName;
 
   const verdict = classifyAcpPermission(
     {
@@ -77,8 +86,7 @@ export async function requestAcpBuiltInPermission(
       toolCallId: request.toolCallId,
       title: request.title,
       rawInput: input,
-      kind: (request.kind ?? null) as Parameters<typeof classifyAcpPermission>[0]["kind"],
-      locations: (request.paths ?? []).map((path) => ({ path }))
+      toolName
     },
     request.cwd
   );
@@ -89,14 +97,26 @@ export async function requestAcpBuiltInPermission(
     return { decision: "deny", reason: APPROVAL_REFUSED_REASON };
   }
 
+  const destructive =
+    ACP_DESTRUCTIVE_TOOL_NAMES.has(toolName) ||
+    request.kind === "execute" ||
+    request.kind === "delete" ||
+    request.kind === "move";
   const action = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
     deps.repository.createPendingAssistantAction(scopedDb, {
       toolModuleId: ACP_TOOL_MODULE_ID,
       toolModuleName: ACP_TOOL_MODULE_NAME,
       toolName,
       permissionId: `${ACP_TOOL_MODULE_ID}.${toolName}`,
-      risk: request.kind === "execute" || toolName === "Bash" ? "destructive" : "write",
-      inputSummary: summarizeAssistantToolInput(input),
+      risk: destructive ? "destructive" : "write",
+      // The saved record names the agent session and folder as plain
+      // identifiers, so a later reader can tell which agent was approved
+      // for what. Values stay out: input keys only, never content.
+      inputSummary: {
+        ...summarizeAssistantToolInput(input),
+        agentSessionId: request.sessionId,
+        sessionFolder: request.cwd
+      },
       requestId
     })
   );
@@ -107,7 +127,9 @@ export async function requestAcpBuiltInPermission(
     kind: "action_request",
     actionRequestId: action.id,
     toolName,
-    summary: `The agent wants to use ${toolName} (${request.title.slice(0, 200)}).`
+    summary:
+      `Agent ${request.sessionId} in ${request.cwd} wants to use ` +
+      `${toolName} (${request.title.slice(0, 200)}).`
   });
 
   try {

@@ -31,7 +31,8 @@ function buildGateway(store: FakeStore, confirmTimeoutMs = 1000) {
       resolveAssistantAction: async () => ({ ...store.actionRow })
     } as never,
     runner: {
-      withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) => work({})
+      withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
+        work({})
     } as never,
     tokens,
     confirmations,
@@ -47,7 +48,11 @@ function freshStore(): FakeStore {
   return { created: [], emitted: [], actionRow: { id: "acp-action-1", status: "pending" } };
 }
 
-/** Scripted stand-in for the adapter: answers the handshake and permission asks. */
+/**
+ * Scripted stand-in for the patched adapter: answers the handshake and sends
+ * permission asks shaped exactly like the real one — tool call id, raw input,
+ * display title, and the real tool name in metadata.
+ */
 class ScriptedAgent implements AcpTunnel {
   readonly sent: string[] = [];
   private readonly outbox: string[] = [];
@@ -107,7 +112,8 @@ class ScriptedAgent implements AcpTunnel {
         toolCall: {
           toolCallId: "call-9",
           title: "`pnpm build`",
-          rawInput: { command: "pnpm build" }
+          rawInput: { command: "pnpm build" },
+          _meta: { toolName: "Bash" }
         },
         options: [
           { kind: "allow_always", name: "Always Allow", optionId: "allow_always" },
@@ -135,7 +141,8 @@ describe("agent built-in permission through the shared approval card", () => {
       sessionId: "agent-sess-1",
       toolCallId: "call-9",
       title: "`pnpm build`",
-      toolInput: { command: "pnpm build" }
+      toolInput: { command: "pnpm build" },
+      toolName: "Bash"
     });
     await vi.waitFor(() => expect(store.emitted).toHaveLength(1));
     expect(store.created[0]).toMatchObject({
@@ -152,9 +159,9 @@ describe("agent built-in permission through the shared approval card", () => {
     });
 
     // The person answers through the same function the Approve button calls.
-    await expect(gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")).resolves.toBe(
-      "resolved"
-    );
+    await expect(
+      gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")
+    ).resolves.toBe("resolved");
 
     await expect(pending).resolves.toEqual({ decision: "allow", reason: "Approved by user." });
     await vi.waitFor(() => expect(store.emitted).toHaveLength(2));
@@ -164,6 +171,80 @@ describe("agent built-in permission through the shared approval card", () => {
       toolName: "Bash",
       outcome: "allowed"
     });
+  });
+
+  it("saves the agent session and folder on the row for later readers", async () => {
+    const store = freshStore();
+    const { gateway, tokens } = buildGateway(store);
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+
+    const pending = gateway.requestAcpBuiltInPermission(token, {
+      cwd: CWD,
+      sessionId: "agent-sess-1",
+      toolCallId: "call-9",
+      title: "`pnpm build`",
+      toolInput: { command: "pnpm build" },
+      toolName: "Bash"
+    });
+    await vi.waitFor(() => expect(store.created).toHaveLength(1));
+    expect(store.created[0]).toMatchObject({
+      inputSummary: expect.objectContaining({
+        agentSessionId: "agent-sess-1",
+        sessionFolder: CWD
+      })
+    });
+    const summary = (store.created[0] as { inputSummary: Record<string, unknown> }).inputSummary;
+    expect(summary).not.toHaveProperty("command");
+    expect(JSON.stringify(summary)).not.toContain("pnpm build");
+    gatewayResolveSoon(gateway, "u1");
+    await expect(pending).resolves.toMatchObject({ decision: "allow" });
+  });
+
+  it("asks a person for a subagent even when its title mimics a read", async () => {
+    const store = freshStore();
+    const { gateway, tokens } = buildGateway(store);
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+
+    const pending = gateway.requestAcpBuiltInPermission(token, {
+      cwd: CWD,
+      sessionId: "agent-sess-1",
+      toolCallId: "call-7",
+      title: "Read the repository and summarize the layout",
+      toolInput: {
+        description: "Read the repository and summarize the layout",
+        prompt: "Read every file and report back."
+      },
+      toolName: "Task"
+    });
+    await vi.waitFor(() => expect(store.created).toHaveLength(1));
+    expect(store.created[0]).toMatchObject({
+      toolName: "Task",
+      risk: "destructive"
+    });
+    gatewayResolveSoon(gateway, "u1");
+    await expect(pending).resolves.toMatchObject({ decision: "allow" });
+  });
+
+  it("refuses a read-mimicking title with no real name and no row", async () => {
+    const store = freshStore();
+    const { gateway, tokens } = buildGateway(store);
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+
+    await expect(
+      gateway.requestAcpBuiltInPermission(token, {
+        cwd: CWD,
+        sessionId: "agent-sess-1",
+        toolCallId: "call-8",
+        title: "Read the repository and summarize the layout",
+        toolInput: {
+          description: "Read the repository and summarize the layout",
+          prompt: "Read every file and report back."
+        },
+        toolName: null
+      })
+    ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    expect(store.created).toHaveLength(0);
+    expect(store.emitted).toHaveLength(0);
   });
 
   it("denies with the shared refusal wording when the hold expires", async () => {
@@ -177,7 +258,8 @@ describe("agent built-in permission through the shared approval card", () => {
         sessionId: "agent-sess-1",
         toolCallId: "call-9",
         title: "`pnpm build`",
-        toolInput: { command: "pnpm build" }
+        toolInput: { command: "pnpm build" },
+        toolName: "Bash"
       })
     ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
     expect(store.emitted.at(-1)).toMatchObject({
@@ -198,7 +280,8 @@ describe("agent built-in permission through the shared approval card", () => {
         sessionId: "agent-sess-1",
         toolCallId: "call-2",
         title: "Read src/index.ts",
-        toolInput: { file_path: "src/index.ts" }
+        toolInput: { file_path: "src/index.ts" },
+        toolName: "Read"
       })
     ).resolves.toMatchObject({ decision: "allow" });
     await expect(
@@ -207,7 +290,8 @@ describe("agent built-in permission through the shared approval card", () => {
         sessionId: "agent-sess-1",
         toolCallId: "call-3",
         title: "Write src/out.txt",
-        toolInput: { file_path: "src/out.txt" }
+        toolInput: { file_path: "src/out.txt" },
+        toolName: "Write"
       })
     ).resolves.toMatchObject({ decision: "allow" });
     expect(store.created).toHaveLength(0);
@@ -225,7 +309,8 @@ describe("agent built-in permission through the shared approval card", () => {
         sessionId: "agent-sess-1",
         toolCallId: "call-4",
         title: "Invent everything",
-        toolInput: { whatever: true }
+        toolInput: { whatever: true },
+        toolName: "Skill"
       })
     ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
     expect(store.created).toHaveLength(0);
@@ -242,7 +327,8 @@ describe("agent built-in permission through the shared approval card", () => {
       sessionId: "agent-sess-1",
       toolCallId: "call-6",
       title: "`pnpm build`",
-      toolInput: { command: "pnpm build" }
+      toolInput: { command: "pnpm build" },
+      toolName: "Bash"
     });
     await vi.waitFor(() => expect(store.emitted).toHaveLength(1));
     // The person takes two seconds; nothing on our side or the agent's side
@@ -263,7 +349,8 @@ describe("agent built-in permission through the shared approval card", () => {
         sessionId: "agent-sess-1",
         toolCallId: "call-5",
         title: "`pnpm build`",
-        toolInput: { command: "pnpm build" }
+        toolInput: { command: "pnpm build" },
+        toolName: "Bash"
       })
     ).rejects.toThrow(InvalidSessionTokenError);
   });
@@ -288,8 +375,8 @@ describe("agent built-in permission through the shared approval card", () => {
                 builtIn.rawInput && typeof builtIn.rawInput === "object"
                   ? (builtIn.rawInput as Record<string, unknown>)
                   : {},
-              kind: builtIn.kind ?? null,
-              paths: null
+              toolName: builtIn.toolName,
+              kind: null
             });
             return verdict.decision === "allow" ? "allow" : "deny";
           })
@@ -317,3 +404,15 @@ describe("agent built-in permission through the shared approval card", () => {
     await client.close(handle);
   });
 });
+
+function gatewayResolveSoon(
+  gateway: AssistantToolGateway,
+  actorUserId: string,
+  status: "confirmed" | "rejected" = "confirmed"
+): void {
+  setTimeout(() => {
+    void gateway
+      .resolveActionRequest(actorUserId, "acp-action-1", status)
+      .catch(() => undefined);
+  }, 50);
+}
