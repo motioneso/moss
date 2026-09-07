@@ -73,22 +73,6 @@ class ScriptedAgent implements AcpTunnel {
 
   async kill(): Promise<void> {}
 
-  async execStart(): Promise<{ execId: number }> {
-    return { execId: 1 };
-  }
-
-  async execPoll(): Promise<{
-    output: string;
-    done: boolean;
-    exitCode: number | null;
-    truncated: boolean;
-    timedOut: boolean;
-  }> {
-    return { output: "", done: true, exitCode: 0, truncated: false, timedOut: false };
-  }
-
-  async execKill(): Promise<void> {}
-
   /** Agent-initiated request, e.g. a built-in asking for approval. */
   agentAsksPermission(id: number): void {
     this.emit({

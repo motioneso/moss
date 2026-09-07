@@ -143,12 +143,8 @@ export function registerMcpTransportRoute(
           // notifications, so keep them coming every 20 s while the gateway
           // hold runs, then close the stream with the real result. Any other
           // caller gets today's single held response below, never worse.
-          // Long tools also stream their own partial output through the same
-          // channel via ToolContext.reportProgress (workshop.runCommand); the
-          // heartbeat above only keeps the client clock alive.
-          const sink = createProgressSink(progressToken);
           const call = deps.gateway
-            .callTool(token, params.name, params.arguments ?? {}, { onProgress: sink.onProgress })
+            .callTool(token, params.name, params.arguments ?? {})
             .catch((err) => {
               request.log.error({ err }, "mcp tools/call failed");
               return null;
@@ -156,8 +152,6 @@ export function registerMcpTransportRoute(
           reply.hijack();
           const raw = reply.raw;
           raw.writeHead(200, MCP_SSE_HEADERS);
-          // Flush any tool progress that landed before the stream opened, in order.
-          sink.attach(raw);
           await streamToolCallWithProgress(raw, call, {
             id,
             progressToken,
@@ -225,61 +219,6 @@ export const MCP_SSE_HEADERS: Record<string, string> = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer"
 };
-
-/**
- * The transport end of `ToolContext.reportProgress`: the gateway hands the
- * tool `sink.onProgress`, and each message goes out as an MCP
- * `notifications/progress` frame echoing the caller's progress token. The
- * stream opens after the tool starts, so messages that land early wait in a
- * bounded in-order queue until `attach` flushes them onto the wire.
- */
-export interface ToolProgressSink {
-  readonly onProgress: (message: string) => void;
-  attach(raw: ServerResponse): void;
-}
-
-/** Early messages wait here only between the tool starting and the stream opening. */
-const MAX_PENDING_PROGRESS = 128;
-
-export function createProgressSink(progressToken: string | number): ToolProgressSink {
-  let raw: ServerResponse | null = null;
-  let seq = 0;
-  const pending: string[] = [];
-  const send = (target: ServerResponse, message: string): void => {
-    seq += 1;
-    target.write(
-      `data: ${JSON.stringify({
-        jsonrpc: "2.0",
-        method: "notifications/progress",
-        params: { progressToken, progress: seq, message }
-      })}\n\n`
-    );
-  };
-  return {
-    onProgress: (message: string) => {
-      if (raw) {
-        try {
-          send(raw, message);
-        } catch {
-          raw = null;
-        }
-      } else if (pending.length < MAX_PENDING_PROGRESS) {
-        pending.push(message);
-      }
-    },
-    attach: (target: ServerResponse) => {
-      raw = target;
-      for (const message of pending.splice(0)) {
-        try {
-          send(target, message);
-        } catch {
-          raw = null;
-          break;
-        }
-      }
-    }
-  };
-}
 
 /**
  * Sends a progress beat every heartbeat while the tool call is still running,

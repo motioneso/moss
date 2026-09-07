@@ -6,14 +6,6 @@
  * production wiring can back it with the chat-engine RPC client.
  */
 
-export interface AcpExecPoll {
-  readonly output: string;
-  readonly done: boolean;
-  readonly exitCode: number | null;
-  readonly truncated: boolean;
-  readonly timedOut: boolean;
-}
-
 export interface AcpTunnel {
   /** Start the adapter for a session key; resolves the runner-side working folder. */
   spawn(sessionKey: string, projectId: string): Promise<{ cwd: string }>;
@@ -32,21 +24,4 @@ export interface AcpTunnel {
   }>;
   /** Stop the adapter for a session key. Idempotent. */
   kill(sessionKey: string): Promise<void>;
-  /**
-   * Run one shell command in the session project folder (phase 3). The tunnel
-   * resolves the folder runner-side from the session key plus projectId; the
-   * caller never passes a path.
-   */
-  execStart(
-    sessionKey: string,
-    projectId: string,
-    command: string,
-    timeoutMs?: number
-  ): Promise<{
-    execId: number;
-  }>;
-  /** Read output so far for one build. */
-  execPoll(sessionKey: string, execId: number): Promise<AcpExecPoll>;
-  /** Stop one build. Idempotent. */
-  execKill(sessionKey: string, execId: number): Promise<void>;
 }

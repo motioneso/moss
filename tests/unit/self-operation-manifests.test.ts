@@ -341,7 +341,7 @@ describe("Sports/News denylist check (#1265)", () => {
 });
 
 describe("Complete built-in self-operation inventory (#1263)", () => {
-  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 57", () => {
+  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 56", () => {
     // People declares its grants in packages/people/src/tools.ts, not a manifest.ts — this
     // walks the real getBuiltInModuleManifests() registry (which resolves that indirection),
     // so it does not undercount the way a manifest.ts-only grep would (34 instead of 38).
@@ -400,7 +400,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // loop above skips read tools before it ever reaches the switch).
     expect(grantedAtInstall.length).toBe(42);
     expect(confirmAlways.length).toBe(9);
-    expect(userPromotable.length).toBe(6);
+    expect(userPromotable.length).toBe(5);
 
     // Task 12a moved calendar.deleteEvent out of granted_at_install (33 -> ...). PR #1268's
     // security reviews moved two more: Fable moved calendar.createEvent to user_promotable
@@ -420,11 +420,8 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // = 49 total. #1888 added workshop.buildModule (granted_at_install), and #1909 adds five
     // confirmed Sports source writes plus news.refreshNews — 41 + 10 + 5 = 56, then #2236 added
     // scratchpad.append (granted_at_install) — 42 + 10 + 5 = 57. #2326 then moved web.read out of
-    // confirm_always to risk "read" — 42 + 9 + 5 = 56 total. #2379 adds workshop.runCommand as
-    // user_promotable — it runs arbitrary shell in the project folder, so install must never
-    // auto-grant it; the user promotes the workshop_builds family for unattended builds.
-    // 42 + 9 + 6 = 57 total.
-    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(57);
+    // confirm_always to risk "read" — 42 + 9 + 5 = 56 total.
+    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(56);
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
     expect(userPromotable.sort()).toEqual(
@@ -433,8 +430,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
         "calendar.createEvent",
         "calendar.rescheduleEvent",
         "tasks.deleteList",
-        "tasks.deleteTag",
-        "workshop.runCommand"
+        "tasks.deleteTag"
       ].sort()
     );
   });

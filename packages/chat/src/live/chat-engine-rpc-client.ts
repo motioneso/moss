@@ -365,10 +365,6 @@ export class RpcConnection {
     return this.call<RpcAcpKillResult>("acpKill", sessionKey, params);
   }
 
-  // #2369 phase 3 — the runner speaks acpExecStart/acpExecPoll/acpExecKill
-  // (server side is live); the matching client verbs land with the API-side
-  // tunnel backing in phase 5, which is their first caller.
-
   /**
    * #456 — re-arm the response deadline for any in-flight turn verb.
    * of the given sessionKey. Called by the manager when it observes new transcript records from a
