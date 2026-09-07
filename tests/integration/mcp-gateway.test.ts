@@ -16,6 +16,8 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-module.js";
 
 describe("AssistantToolGateway", () => {
+  // The refusal wording both timeouts and denials return (spec 6.2).
+  const refusedReason = "This action was not approved. Do not retry; tell the user.";
   let appDb: Kysely<MossDatabase>;
   let bootstrapDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;
@@ -587,11 +589,7 @@ describe("AssistantToolGateway", () => {
 
     const res = await fastTimeoutGateway.callTool(token, "example.write", { value: "late" });
     // The call gave up: timed-out denial, handler never ran.
-    expect(res).toEqual({
-      ok: false,
-      denied: true,
-      reason: "This action was not approved. Do not retry; tell the user."
-    });
+    expect(res).toEqual({ ok: false, denied: true, reason: refusedReason });
     expect(exampleToolCalls).toHaveLength(0);
 
     const card = firstActionRequest();
@@ -712,11 +710,7 @@ describe("AssistantToolGateway", () => {
     await gateway.resolveActionRequest(ids.userA, card.actionRequestId, "rejected");
     const res = await call;
 
-    expect(res).toEqual({
-      ok: false,
-      denied: true,
-      reason: "This action was not approved. Do not retry; tell the user."
-    });
+    expect(res).toEqual({ ok: false, denied: true, reason: refusedReason });
     expect(exampleToolCalls).toHaveLength(0);
   });
 
