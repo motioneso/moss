@@ -151,11 +151,7 @@ export function registerMcpTransportRoute(
             });
           reply.hijack();
           const raw = reply.raw;
-          raw.writeHead(200, {
-            "content-type": "text/event-stream",
-            "cache-control": "no-cache",
-            connection: "keep-alive"
-          });
+          raw.writeHead(200, MCP_SSE_HEADERS);
           await streamToolCallWithProgress(raw, call, {
             id,
             progressToken,
@@ -198,7 +194,31 @@ export interface ProgressStreamOptions {
   readonly id: string | number | null;
   readonly progressToken: string | number;
   readonly heartbeatMs: number;
+  /** Total cap for one streamed call; defaults to MCP_STREAM_MAX_DURATION_MS. */
+  readonly maxDurationMs?: number;
 }
+
+/**
+ * Total cap for one streamed call: the 150 s approval hold plus room for a
+ * long tool run afterwards. A stuck handler must close the connection instead
+ * of holding it open forever.
+ */
+export const MCP_STREAM_MAX_DURATION_MS = 600_000;
+
+/**
+ * Headers for the hijacked SSE response. `reply.hijack()` bypasses the
+ * onSend hooks where @fastify/helmet sets the security headers, so they are
+ * repeated here (values mirror apps/api/src/server.ts).
+ */
+export const MCP_SSE_HEADERS: Record<string, string> = {
+  "content-type": "text/event-stream",
+  "cache-control": "no-cache",
+  connection: "keep-alive",
+  "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+  "x-frame-options": "DENY",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer"
+};
 
 /**
  * Sends a progress beat every heartbeat while the tool call is still running,
@@ -213,13 +233,32 @@ export async function streamToolCallWithProgress(
 ): Promise<void> {
   let beats = 0;
   let closed = false;
+  let answered = false;
+  const cleanup = (): void => {
+    clearInterval(timer);
+    clearTimeout(limit);
+    raw.off("close", onClose);
+  };
   const onClose = (): void => {
     closed = true;
-    clearInterval(timer);
+    cleanup();
+    finishGate();
   };
+  // The function must settle when the stream ends even if the call never
+  // does: the cap and a dropped connection each resolve their own gate, and
+  // the result path below only runs for the call winning the race.
+  let finishGate!: () => void;
+  const finished = new Promise<void>((resolve) => {
+    finishGate = resolve;
+  });
   raw.on("close", onClose);
+  // Flush the head immediately. `writeHead` only buffers it — Node puts nothing
+  // on the wire until the first body write, so the first twenty seconds would
+  // otherwise go out silently and defeat the beat. A comment frame is inert by
+  // the SSE spec (same workaround as /api/chat/stream in live-routes.ts).
+  raw.write(": connected\n\n");
   const timer = setInterval(() => {
-    if (closed) return;
+    if (closed || answered) return;
     beats += 1;
     raw.write(
       `data: ${JSON.stringify({
@@ -233,21 +272,29 @@ export async function streamToolCallWithProgress(
       })}\n\n`
     );
   }, options.heartbeatMs);
-  let frame: unknown;
-  try {
-    const response = await call;
-    frame =
-      response === null
-        ? jsonRpcError(options.id, -32603, "Internal error")
-        : { jsonrpc: "2.0", id: options.id, result: gatewayResponseToMcp(response) };
-  } finally {
-    clearInterval(timer);
-  }
-  if (!closed) {
-    raw.write(`data: ${JSON.stringify(frame)}\n\n`);
-    raw.end();
-  }
-  raw.off("close", onClose);
+  const limit = setTimeout(
+    () => {
+      if (closed || answered) return;
+      answered = true;
+      cleanup();
+      raw.write(
+        `data: ${JSON.stringify(jsonRpcError(options.id, -32603, "Tool call timed out."))}\n\n`
+      );
+      raw.end();
+      finishGate();
+    },
+    options.maxDurationMs ?? MCP_STREAM_MAX_DURATION_MS
+  );
+  const response = await Promise.race([call, finished]);
+  cleanup();
+  if (closed || answered) return;
+  answered = true;
+  const frame =
+    response === null || response === undefined
+      ? jsonRpcError(options.id, -32603, "Internal error")
+      : { jsonrpc: "2.0", id: options.id, result: gatewayResponseToMcp(response) };
+  raw.write(`data: ${JSON.stringify(frame)}\n\n`);
+  raw.end();
 }
 
 export function registerNativePermissionRoute(

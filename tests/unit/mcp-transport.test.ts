@@ -4,6 +4,7 @@ import Fastify from "fastify";
 import {
   acceptsEventStream,
   gatewayResponseToMcp,
+  MCP_SSE_HEADERS,
   registerNativePermissionRoute,
   streamToolCallWithProgress
 } from "../../packages/chat/src/mcp-transport.js";
@@ -20,17 +21,12 @@ describe("gatewayResponseToMcp", () => {
   });
 
   it("maps denied response to isError=true with reason", () => {
-    const res: GatewayToolResponse = {
-      ok: false,
-      denied: true,
-      reason: "This action was not approved. Do not retry; tell the user."
-    };
+    // A neutral sentence: this test covers the mapping, not the gateway's
+    // wording, so it must not depend on what the gateway says.
+    const res: GatewayToolResponse = { ok: false, denied: true, reason: "Example refused." };
     const mcp = gatewayResponseToMcp(res);
     expect(mcp.isError).toBe(true);
-    expect(mcp.content[0]).toEqual({
-      type: "text",
-      text: "This action was not approved. Do not retry; tell the user."
-    });
+    expect(mcp.content[0]).toEqual({ type: "text", text: "Example refused." });
   });
 
   it("maps error response to isError=true with error message", () => {
@@ -72,10 +68,41 @@ interface StreamFrame {
 }
 
 function frameMessages(raw: FakeRaw): StreamFrame[] {
-  return raw.frames.map((frame) => JSON.parse(frame.replace(/^data: /, "")) as StreamFrame);
+  return raw.frames
+    .filter((frame) => frame.startsWith("data:"))
+    .map((frame) => JSON.parse(frame.replace(/^data: /, "")) as StreamFrame);
 }
 
+describe("stream headers", () => {
+  it("keeps the security headers hijacking would otherwise drop", () => {
+    // Mirrors the @fastify/helmet setup in apps/api/src/server.ts.
+    expect(MCP_SSE_HEADERS["content-type"]).toBe("text/event-stream");
+    expect(MCP_SSE_HEADERS["content-security-policy"]).toContain("default-src 'none'");
+    expect(MCP_SSE_HEADERS["x-frame-options"]).toBe("DENY");
+    expect(MCP_SSE_HEADERS["x-content-type-options"]).toBe("nosniff");
+    expect(MCP_SSE_HEADERS["referrer-policy"]).toBe("no-referrer");
+  });
+});
+
 describe("streamToolCallWithProgress", () => {
+  it("flushes a prelude frame at once, before the first beat", async () => {
+    const raw = new FakeRaw();
+    const call = new Promise<GatewayToolResponse>(() => {});
+    const done = streamToolCallWithProgress(raw as never, call, {
+      id: 7,
+      progressToken: "tok-1",
+      heartbeatMs: 60_000,
+      maxDurationMs: 60_000
+    });
+
+    await vi.waitFor(() => expect(raw.frames.length).toBeGreaterThanOrEqual(1));
+    // The head goes out with the prelude; the first beat would take a minute.
+    expect(raw.frames[0]).toBe(": connected\n\n");
+    expect(frameMessages(raw)).toHaveLength(0);
+    raw.end();
+    await done;
+  });
+
   it("beats while the call is held, then closes with the result", async () => {
     const raw = new FakeRaw();
     let resolveCall!: (response: GatewayToolResponse) => void;
@@ -92,7 +119,8 @@ describe("streamToolCallWithProgress", () => {
       const beats = frameMessages(raw).filter((msg) => msg.method === "notifications/progress");
       expect(beats.length).toBeGreaterThanOrEqual(3);
     });
-    resolveCall({ ok: false, denied: true, reason: "This action was not approved." });
+    // A neutral sentence: this test covers framing, not the gateway's wording.
+    resolveCall({ ok: false, denied: true, reason: "Example refused." });
     await done;
 
     const messages = frameMessages(raw);
@@ -105,9 +133,27 @@ describe("streamToolCallWithProgress", () => {
       jsonrpc: "2.0",
       id: 7,
       result: {
-        content: [{ type: "text", text: "This action was not approved." }],
+        content: [{ type: "text", text: "Example refused." }],
         isError: true
       }
+    });
+    expect(raw.ended).toBe(true);
+  });
+
+  it("closes a stuck call with a timeout frame instead of holding forever", async () => {
+    const raw = new FakeRaw();
+    const call = new Promise<GatewayToolResponse>(() => {});
+    await streamToolCallWithProgress(raw as never, call, {
+      id: 9,
+      progressToken: "tok-9",
+      heartbeatMs: 10,
+      maxDurationMs: 40
+    });
+
+    expect(frameMessages(raw).at(-1)).toEqual({
+      jsonrpc: "2.0",
+      id: 9,
+      error: { code: -32603, message: "Tool call timed out." }
     });
     expect(raw.ended).toBe(true);
   });
@@ -179,13 +225,12 @@ describe("registerNativePermissionRoute", () => {
     registerNativePermissionRoute(app, {
       tokens,
       gateway: {
+        // A neutral sentence: this test covers route passthrough, not the
+        // gateway's wording, so the stand-in must not speak for the gateway.
         requestNativeToolPermission: async (rawToken: string, request: unknown) => {
           expect(rawToken).toBe(token);
           expect(request).toEqual({ toolName: "Bash", toolInput: { command: "echo hi" } });
-          return {
-            decision: "deny",
-            reason: "This action was not approved. Do not retry; tell the user."
-          };
+          return { decision: "deny", reason: "Example refused." };
         }
       } as never
     });
@@ -198,10 +243,7 @@ describe("registerNativePermissionRoute", () => {
         body: { tool_name: "Bash", tool_input: { command: "echo hi" } }
       });
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({
-        decision: "deny",
-        reason: "This action was not approved. Do not retry; tell the user."
-      });
+      expect(res.json()).toEqual({ decision: "deny", reason: "Example refused." });
     } finally {
       await app.close();
     }
