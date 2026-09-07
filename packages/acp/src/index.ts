@@ -3,7 +3,8 @@ export type {
   AcpClientEvents,
   AcpPromptOptions,
   AcpPromptResult,
-  AcpSessionHandle
+  AcpSessionHandle,
+  AcpToolServer
 } from "./client.js";
 export { AcpCapabilityError, checkAgentCapabilities } from "./capabilities.js";
 export type { AcpSurface } from "./capabilities.js";
