@@ -334,22 +334,28 @@ built-in tool control work. The public registry
 agents that support authentication) is the source of the launch commands; Moss pins versions and
 bumps them on purpose, never at run time.
 
-| requirement                                                           | chat | Workshop | Claude (`claude-acp`, `@agentclientprotocol/claude-agent-acp@0.75.1`)                                        | Codex (`codex-acp`, `@agentclientprotocol/codex-acp@1.10.0`)                    | Google agy (`antigravity-acp`, binary from the registry)                                                                                                 | OpenCode (registry entry `opencode`, pinned once its row passes) |
-| --------------------------------------------------------------------- | ---- | -------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| ACP v1 `initialize`, `session/new`, `session/prompt`, updates, cancel | yes  | yes      | yes                                                                                                          | yes                                                                             | yes                                                                                                                                                      | to verify (Scout, in progress)                                   |
-| accepts `mcpServers` over HTTP with headers at session start          | yes  | yes      | yes (spike)                                                                                                  | yes (`mcpCapabilities.http`)                                                    | to verify on the box                                                                                                                                     | to verify                                                        |
-| built-in shell and file-write switchable off by the client            | yes  | no       | yes (`_meta` disallowed-tools list, confirmed in source)                                                     | yes (`INITIAL_AGENT_MODE=read-only`)                                            | no known switch; Workshop-only until one is found                                                                                                        | to verify                                                        |
-| model selectable by the client                                        | no   | no       | yes (`configOptions` model, set with `session/set_config_option`; Scout read the adapter source, 2026-09-07) | yes (`CODEX_CONFIG` JSON at launch; `configOptions` model where advertised)     | to verify (`configOptions` model)                                                                                                                        | to verify (Muse Spark 1.3 on the free tier is the test model)    |
-| login reuse: runs headless with the CLI's stored login                | yes  | yes      | yes (runner token store, `CLAUDE_CODE_OAUTH_TOKEN` in env)                                                   | yes (reuses the Codex CLI's own on-disk login automatically; Scout, 2026-09-07) | **no**: `session/new` answers "Authentication required" even with agy logged in on the box; it wants its own login over the protocol (Scout, 2026-09-07) | to verify: must reuse the OpenCode CLI's own stored login        |
+| requirement                                                           | chat | Workshop | Claude (`claude-acp`, `@agentclientprotocol/claude-agent-acp@0.75.1`)                                        | Codex (`codex-acp`, `@agentclientprotocol/codex-acp@1.10.0`)                    | Google agy (`antigravity-acp`, binary from the registry)                                                                                                 | OpenCode (registry entry `opencode`, pinned at the version Scout ran)                                                                                       |
+| --------------------------------------------------------------------- | ---- | -------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ACP v1 `initialize`, `session/new`, `session/prompt`, updates, cancel | yes  | yes      | yes                                                                                                          | yes                                                                             | yes                                                                                                                                                      | yes (real turn completed; Scout, 2026-09-07)                                                                                                                |
+| accepts `mcpServers` over HTTP with headers at session start          | yes  | yes      | yes (spike)                                                                                                  | yes (`mcpCapabilities.http`)                                                    | to verify on the box                                                                                                                                     | to verify on dev (task 5)                                                                                                                                   |
+| built-in shell and file-write switchable off by the client            | yes  | no       | yes (`_meta` disallowed-tools list, confirmed in source)                                                     | yes (`INITIAL_AGENT_MODE=read-only`)                                            | no known switch; Workshop-only until one is found                                                                                                        | to verify on dev (task 2); chat only until found                                                                                                            |
+| model selectable by the client                                        | no   | no       | yes (`configOptions` model, set with `session/set_config_option`; Scout read the adapter source, 2026-09-07) | yes (`CODEX_CONFIG` JSON at launch; `configOptions` model where advertised)     | to verify (`configOptions` model)                                                                                                                        | yes (`session/set_config_option`, switched to Muse Spark 1.3 free; Scout, 2026-09-07)                                                                       |
+| login reuse: runs headless with the CLI's stored login                | yes  | yes      | yes (runner token store, `CLAUDE_CODE_OAUTH_TOKEN` in env)                                                   | yes (reuses the Codex CLI's own on-disk login automatically; Scout, 2026-09-07) | **no**: `session/new` answers "Authentication required" even with agy logged in on the box; it wants its own login over the protocol (Scout, 2026-09-07) | reads its own config file (picked up the box's configured model unasked); account login reuse untested, no account logged in on the box (Scout, 2026-09-07) |
 
 Result today: **Claude and Codex on both consumers; agy on neither** until its login row goes
 green. (The plain Gemini CLI is not a Moss provider; Google's CLI on this box is agy.) A new provider is added by filling in a row, checked live on dev, not by editing code paths.
 
-**OpenCode** (Ben, 2026-09-07) is added as a fourth provider kind, pending Scout's check of the
-registry adapter in a scratch folder: login reuse, model setting, a completed turn on Muse Spark
-1.3 free, and the usage block. It is a CLI Moss was not designed around, so it is also the
-provider-agnostic test. If the row passes, the slice 1 live proof runs on Claude and OpenCode;
-Codex's live check waits for its account usage to return (2026-09-11).
+**OpenCode** (Ben, 2026-09-07) is the fourth provider kind. Scout's check of the registry adapter
+in a scratch folder passed the same day: the session took the model switch to Muse Spark 1.3 free
+through the same option call Claude uses, a real turn completed ("reply with exactly: hello" came
+back as "hello"), and the usage block carried real numbers (input, output, total, plus a
+thought-token count the other two do not send; no cache split). Login reuse is the one open cell:
+the box has no OpenCode account logged in, so only config-file reuse was seen. It is a CLI Moss
+was not designed around, so it is also the provider-agnostic test, and the slice 1 live proof runs
+on Claude and OpenCode; Codex's live check waits for its account usage to return (2026-09-11).
+One rough edge: OpenCode takes 15 to 20 seconds to answer its first two calls (Claude and Codex
+answer at once). The kill gates are timed on the instance default provider; OpenCode's time is
+recorded beside it, not held to the same bar in this slice.
 
 **Login, per provider.** Adding a provider and logging its CLI in stays exactly today's flow in
 Settings, Assistant & AI. What changes is what happens after: ACP takes over, and the adapter
@@ -414,12 +420,12 @@ way in.
 1. **Adapter + chat.** The protocol package `packages/acp` (client, capability check, permission
    classifier, tool table, stream, tunnel), launch through the runner, tool server handed in,
    approval wiring (section 7), the `chat` profile (scratch folder, writes and shell off), the
-   behind-the-scenes view (section 14), app map. Claude and Codex rows verified live. **The CLI
+   behind-the-scenes view (section 14), app map. Claude, Codex and OpenCode rows verified live. **The CLI
    bridge (`packages/chat/src/live/`, its engine selection and the four engines) is deleted in
    this slice. No fallback setting** (Ben, 2026-09-06, reaffirmed 2026-09-07). Live-path proof:
    "add lunch with Sam" approved in the drawer and one event in the calendar, on the instance
-   default provider and on a second bound provider (OpenCode if its row passes, else Codex once
-   its usage returns), with the fold and the stats strip on the reply.
+   default provider (Claude) and on OpenCode, with the fold and the stats strip on the reply.
+   Codex's live turn is recorded on the PR once its usage returns.
 2. **Unattended callers and the remaining login path.** Every row of the section 8 table moves to
    a short ACP session and the one-shot engines and `CliStructuredAdapter` are deleted. The
    terminal-type login path lands; agy is offered only once its row passes on dev. Live-path
@@ -476,9 +482,11 @@ and a tooltip naming it in words.
   caller reads one shape from either. The strip never shows a number the agent did not send: a
   provider that reports nothing shows time alone; one that reports totals but no cache split shows
   the two it sent. The strip shows cached-read as the cache figure; cached-write is stored, not
-  shown. Unproven until a live turn: whether Codex fills in real numbers rather than zeros (its
-  account is out of usage until 2026-09-11) and what OpenCode sends. Both are checked on the first
-  real turn on dev and recorded on the lane PR.
+  shown. OpenCode sends input, output and total plus a thought-token count and no cache split
+  (Scout's real turn, 2026-09-07), so its strip shows two numbers; the thought count is stored
+  with the block, not shown. Unproven until a live turn: whether Codex fills in real numbers
+  rather than zeros (its account is out of usage until 2026-09-11); checked on its first real turn
+  on dev and recorded on the lane PR.
 - The protocol has no turn-duration field; its only elapsed-time number is per tool call inside a
   turn (Scout, 2026-09-07), so Moss's clock is the honest source for the seconds.
 - Numbers are stored on the reply's transcript record so history shows them and so the audit can
