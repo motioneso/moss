@@ -5,7 +5,7 @@ Supersedes the 2026-09-06 approval (Fitz, Muse review) and the "outside agent" s
 removed. No plan and no code until this revision is approved.
 
 **Evidence:** `spikes/acp-tool-call/RESULTS.md` (four runs on the dev instance, 2026-09-06); the
-Codex and Gemini adapter login checks Scout ran on the box on 2026-09-07 (section 9); the ACP
+Codex, Antigravity (agy) and Claude adapter checks Scout ran on the box on 2026-09-07 (section 9); the ACP
 documentation set (protocol v1 stable, v2 draft, registry, RFDs) read in full on 2026-09-07.
 
 **What comes back from the reverted work:** the protocol package `packages/acp` (client,
@@ -24,7 +24,7 @@ talks to it over JSON-RPC on stdio, and hands it Moss's own tool server at sessi
 owns the conversation, the permissions, the tool list and the audit trail. The agent owns the model
 loop.
 
-There is no "outside agent". A **provider** is what the admin adds today (Claude, Codex, Gemini,
+There is no "outside agent". A **provider** is what the admin adds today (Claude, Codex, Google's agy,
 ...); each provider ships its own ACP agent in the protocol's public registry, and that agent is
 what Moss launches. The user never chooses an agent, only a provider and (where the admin allows)
 a model.
@@ -97,7 +97,7 @@ flowchart LR
   UI[Chat drawer / Workshop panel / unattended job] --> Moss[Moss API or worker]
   Moss --> Router[Model router: service bindings, default provider]
   Router --> Adapter[ACP client adapter]
-  Adapter -- launch via cli-runner, per-user account --> Agent[Provider's ACP agent<br/>claude-acp, codex-acp, gemini --acp]
+  Adapter -- launch via cli-runner, per-user account --> Agent[Provider's ACP agent<br/>claude-acp, codex-acp, antigravity-acp]
   Agent -- session/prompt, session/update, request_permission --> Adapter
   Agent -- MCP over HTTP, per-session bearer token --> Tools[Moss tool server<br/>packages/chat/src/mcp-transport.ts]
   Tools --> Gateway[AI gateway: allowlist, policy, approve/deny]
@@ -197,8 +197,10 @@ system, and no code path may name a provider.
 **How the chosen model reaches the agent.** The resolved model's provider selects the adapter row
 (section 9). The model id is passed to the agent through the protocol's own selector where the
 adapter exposes one: the `configOptions` entry with `category: "model"` returned by `session/new`,
-set with `session/set_config_option`. Where the adapter has no such option, the row names its own
-mechanism (Codex: the `CODEX_CONFIG` launch setting). Where the adapter offers neither, the only
+set with `session/set_config_option`. Claude's adapter exposes this option (Scout read it in the
+adapter source, 2026-09-07), so a `workshop` binding to a specific Claude model is honoured. Where
+the adapter has no such option, the row names its own mechanism (Codex: the `CODEX_CONFIG` launch
+setting). Where the adapter offers neither, the only
 choice for that provider is the login's own default model, and the bindings screen says so beside
 that provider instead of offering models it cannot honour. The sentinel `default` keeps its meaning:
 the provider account's own model.
@@ -320,16 +322,16 @@ built-in tool control work. The public registry
 agents that support authentication) is the source of the launch commands; Moss pins versions and
 bumps them on purpose, never at run time.
 
-| requirement                                                           | chat | Workshop | Claude (`claude-acp`, `@agentclientprotocol/claude-agent-acp@0.75.1`) | Codex (`codex-acp`, `@agentclientprotocol/codex-acp@1.10.0`)                    | Gemini (`gemini`, `@google/gemini-cli@0.58.0 --acp`)                                   |
-| --------------------------------------------------------------------- | ---- | -------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| ACP v1 `initialize`, `session/new`, `session/prompt`, updates, cancel | yes  | yes      | yes                                                                   | yes                                                                             | yes                                                                                    |
-| accepts `mcpServers` over HTTP with headers at session start          | yes  | yes      | yes (spike)                                                           | yes (`mcpCapabilities.http`)                                                    | to verify on the box                                                                   |
-| built-in shell and file-write switchable off by the client            | yes  | no       | yes (`_meta` disallowed-tools list, confirmed in source)              | yes (`INITIAL_AGENT_MODE=read-only`)                                            | no known switch; Workshop-only until one is found                                      |
-| model selectable by the client                                        | no   | no       | not exposed today; login default model only                           | yes (`CODEX_CONFIG` JSON at launch; `configOptions` model where advertised)     | to verify (`configOptions` model)                                                      |
-| login reuse: runs headless with the CLI's stored login                | yes  | yes      | yes (runner token store, `CLAUDE_CODE_OAUTH_TOKEN` in env)            | yes (reuses the Codex CLI's own on-disk login automatically; Scout, 2026-09-07) | **no**: demands its own Google sign-in with an authorization code; no login on the box |
+| requirement                                                           | chat | Workshop | Claude (`claude-acp`, `@agentclientprotocol/claude-agent-acp@0.75.1`)                                        | Codex (`codex-acp`, `@agentclientprotocol/codex-acp@1.10.0`)                    | Google agy (`antigravity-acp`, binary from the registry)                                                                                                 |
+| --------------------------------------------------------------------- | ---- | -------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ACP v1 `initialize`, `session/new`, `session/prompt`, updates, cancel | yes  | yes      | yes                                                                                                          | yes                                                                             | yes                                                                                                                                                      |
+| accepts `mcpServers` over HTTP with headers at session start          | yes  | yes      | yes (spike)                                                                                                  | yes (`mcpCapabilities.http`)                                                    | to verify on the box                                                                                                                                     |
+| built-in shell and file-write switchable off by the client            | yes  | no       | yes (`_meta` disallowed-tools list, confirmed in source)                                                     | yes (`INITIAL_AGENT_MODE=read-only`)                                            | no known switch; Workshop-only until one is found                                                                                                        |
+| model selectable by the client                                        | no   | no       | yes (`configOptions` model, set with `session/set_config_option`; Scout read the adapter source, 2026-09-07) | yes (`CODEX_CONFIG` JSON at launch; `configOptions` model where advertised)     | to verify (`configOptions` model)                                                                                                                        |
+| login reuse: runs headless with the CLI's stored login                | yes  | yes      | yes (runner token store, `CLAUDE_CODE_OAUTH_TOKEN` in env)                                                   | yes (reuses the Codex CLI's own on-disk login automatically; Scout, 2026-09-07) | **no**: `session/new` answers "Authentication required" even with agy logged in on the box; it wants its own login over the protocol (Scout, 2026-09-07) |
 
-Result today: **Claude and Codex on both consumers; Gemini on neither** until its login row goes
-green. A new provider is added by filling in a row, checked live on dev, not by editing code paths.
+Result today: **Claude and Codex on both consumers; agy on neither** until its login row goes
+green. (The plain Gemini CLI is not a Moss provider; Google's CLI on this box is agy.) A new provider is added by filling in a row, checked live on dev, not by editing code paths.
 
 **Login, per provider.** Adding a provider and logging its CLI in stays exactly today's flow in
 Settings, Assistant & AI. What changes is what happens after: ACP takes over, and the adapter
@@ -342,8 +344,8 @@ checks login at `initialize` rather than assuming it.
   `authenticate`. One that advertises only a `terminal`-type method (the CLI's own interactive
   sign-in) is logged in by the runner running that command for the admin, interactively, through the
   existing sign-in helper; this is the `auth.terminal` client capability in section 4, offered to
-  attended sessions only. Gemini needs this path; it is built in slice 3 and Gemini is offered only
-  after it passes on dev.
+  attended sessions only. agy needs one of these paths (which one its agent advertises is checked in
+  slice 3); agy is offered only after the path passes on dev.
 - `logout` is called where advertised when the admin removes a provider; otherwise the runner
   removes the per-user home's credential files as it does today.
 
@@ -397,9 +399,9 @@ protocol has no agent-to-agent message. Cost scales per seat.
    provider and on a second bound provider.
 3. **Unattended callers and the remaining login path.** Every row of the section 8 table moves to
    a short ACP session and the one-shot engines and `CliStructuredAdapter` are deleted. The
-   terminal-type login path lands; Gemini is offered only once its row passes on dev. Live-path
+   terminal-type login path lands; agy is offered only once its row passes on dev. Live-path
    proof: one connector monitoring run and one module build finishing unattended with the audit
-   lines in section 7 point 5, plus a Gemini session on dev if the login passes.
+   lines in section 7 point 5, plus an agy session on dev if the login passes.
 
 **Kill gate after slice 1:** if the approval wiring cannot make an attended write finish in under
 30 s end to end on dev, on the instance default provider, stop and reassess before touching chat.
@@ -415,14 +417,11 @@ credential model or provider system; per-user vendor subscriptions; the draft cu
 
 ## 15. Open questions for Ben, each with a recommendation
 
-1. **Gemini.** Its agent will not run on a stored login and the box has none. Recommendation: keep
-   Gemini off the offered list until slice 3 builds the interactive login path through the runner
-   and it passes on dev; do not block slices 1 and 2 on it.
-2. **Claude's model choice.** The Claude adapter exposes no model selector today, so a `workshop`
-   binding to a specific Claude model cannot be honoured; only "the login's default model" can.
-   Recommendation: the bindings screen says so beside Claude and offers only `default` for it until
-   the adapter exposes the option; no Moss-side workaround.
-3. **Unattended calls.** Recommendation: short ACP sessions for every caller and delete the
+1. **Google agy.** Its ACP agent refuses to open a session on agy's existing login and wants its
+   own sign-in over the protocol. Recommendation: keep agy off the offered list until slice 3 builds
+   the protocol login path through the runner and it passes on dev; do not block slices 1 and 2 on
+   it.
+2. **Unattended calls.** Recommendation: short ACP sessions for every caller and delete the
    one-shot flags (section 8), decided finally when Scout's inventory is complete.
 
 ## 16. Review record
