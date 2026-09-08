@@ -54,7 +54,7 @@ restores, release note); the behind-the-scenes task added (spec section 14); Ope
 - **Provider rows are code, versions are pinned.** `packages/acp/src/providers.ts` holds one row per
   provider kind (`anthropic`, `openai`, `google`, `opencode`): launch command, login mechanism,
   model mechanism, built-in off-list mechanism, capability requirements per profile. `google` is
-  present and marked unavailable with the reason (slice 2). `opencode` is present: Scout's scratch check passed on 2026-09-07 (model switch, real turn, real usage numbers); its shell and file switch and its tool server handoff are checked on dev in tasks 2 and 5.
+  present and marked unavailable with the reason (slice 2). `opencode` is present: Scout's scratch check passed on 2026-09-07 (model switch, real turn, real usage numbers); its tool server handoff is checked on dev in task 5. Its shell and file switch is OpenCode's own settings file in the per-user home, written by the row before spawn with shell and file edits set to deny: with it, a fresh session offers no shell tool and no ask fires (Scout, scratch home on dev, 2026-09-07). Task 6 adds the write to the row's launch step, deriving the two entries from the tool table; task 10 proves it in the runner's real per-user home, and the row is ready only then. Until then it is not ready: gated-and-denied at use (Builder, task 5) is the second line, not the requirement.
 - **Runner: add, don't rewrite.** The ACP host and its seven RPC cases come back from
   `bb59e0700` exactly as they were, beside the existing cases; no existing case is touched, no
   mode flag is introduced. Chat uses four of the seven (spawn, send, read, kill); the three exec
@@ -171,11 +171,10 @@ same commit range.
 
 - **Builds:** `packages/ai/src/gateway/acp-permission.ts` restored (policy keyed on real tool name, matched by tool call id, zones from spec section 7, audit lines); the gateway's `requestAcpBuiltInPermission` method and the index re-exports restored here, not in task 5 (the refusal wording constant already landed in task 5); agent asks that need a
   person create a gateway pending action and emit the existing `action_request` event, and the ACP
-  request is answered from that resolution; every pending ask answered `cancelled` on
-  `session/cancel`. The spec 7 point 3 deferral is written into the spec's review record.
+  request is answered from that resolution; every pending ask answered `cancelled` on `session/cancel`; the OpenCode row's launch step writes its settings file into the per-user home before spawn with shell and file edits set to deny, both entries derived from the tool table's `chat` column (Decisions, provider rows). The spec 7 point 3 deferral is written into the spec's review record.
 - **Files:** `packages/ai/src/gateway/{acp-permission,gateway,index}.ts`,
   `packages/acp/src/permissions.ts`, `docs/superpowers/specs/2026-09-06-acp-client-design.md`.
-- **Tests:** `tests/unit/acp-builtin-permission.test.ts` restored and extended for the cancel case.
+- **Tests:** `tests/unit/acp-builtin-permission.test.ts` restored and extended for the cancel case; a row test that the OpenCode launch step writes the deny file from the table and never for the Workshop profile.
 - **App map:** `app-map-core.ts` gains the "not approved, ask the user" error and remediation.
 - **Gate:** the four checks; `pnpm vitest run tests/unit/acp-* tests/unit/gateway-*`.
 
@@ -234,7 +233,7 @@ Starts only after Ben has seen the mockup (posted in the room 2026-09-07).
 - **Proof:** on dev, "add lunch with Sam on Thursday at noon" in the drawer, the approval card
   answered by a person, one event in the calendar, the fold open showing the tool call and the
   approval, the stats strip present; once on the instance default provider (Claude) and once on
-  OpenCode on Muse Spark 1.3 free. Codex's turn is recorded on the PR as pending until its usage returns on 2026-09-11, then run and recorded. The first real turn on each provider records its usage block on the PR (real numbers or zeros). OpenCode's first two calls take 15 to 20 seconds; that is expected, not a hang.
+  OpenCode on Muse Spark 1.3 free. Codex's turn is recorded on the PR as pending until its usage returns on 2026-09-11, then run and recorded. The first real turn on each provider records its usage block on the PR (real numbers or zeros). On OpenCode the proof also shows, in the runner's real per-user home, that the deny file is present at session start and a shell request in chat gets no shell tool and no approval card; the OpenCode row flips to ready only on that evidence (Scout's scratch-home result, 2026-09-07, is not it). OpenCode's first two calls take 15 to 20 seconds; that is expected, not a hang.
 - **Evidence:** `tests/uat/specs/2424-acp-chat-lunch.uat.spec.ts` (added by Builder in task 7,
   run by Prover) exit code and assertions, the audit lines, the bounded engine log. No screenshots.
 - **Kill gate (slice exit):** the attended write finishes in under 30 s on dev on the instance default provider (Claude), the clock running from the person's approval click to the event in the calendar and the reply in the drawer (PM, 2026-09-07); the time from send to the approval card is recorded beside it. Session start is not on the clock and is paid at drawer open (task 7), which is where OpenCode's 15 to 20 s go. OpenCode's time is recorded beside it and is not held to the 30 s bar in this slice. If Claude does not make it, the slice stops here and PM reassesses before slice 2.
