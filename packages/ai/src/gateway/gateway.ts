@@ -33,6 +33,7 @@ import {
 import { resolvePolicy } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
 import {
+  APPROVAL_REFUSED_REASON,
   gatewayFailureReason,
   nativeToolRisk,
   nativeToolSummary,
@@ -186,14 +187,21 @@ export class AssistantToolGateway {
     return (await this.executableTools(actorUserId)).map((entry) => entry.dto);
   }
 
-  async callTool(token: string, toolName: string, rawInput: unknown): Promise<GatewayToolResponse> {
+  async callTool(
+    token: string,
+    toolName: string,
+    rawInput: unknown,
+    options: { onProgress?: (message: string) => void } = {}
+  ): Promise<GatewayToolResponse> {
     const { actorUserId, chatSessionId, allowedToolNames } = this.deps.tokens.verify(token);
     const localTimezone = (await this.deps.resolveLocalTimezone?.(actorUserId)) ?? undefined;
     const ctx: ToolContext = {
       actorUserId,
       requestId: `mcp_${randomUUID()}`,
       chatSessionId,
-      localTimezone
+      localTimezone,
+      // Only the MCP transport passes a sink; every other caller sends nowhere.
+      ...(options.onProgress ? { reportProgress: options.onProgress } : {})
     };
 
     const found = (await this.executableTools(actorUserId)).find(
@@ -418,11 +426,11 @@ export class AssistantToolGateway {
           actionRequestId: action.id,
           toolName,
           outcome: "denied",
-          reason: outcome === "timeout" ? "Timed out awaiting confirmation." : "Denied by user."
+          reason: APPROVAL_REFUSED_REASON
         });
         return {
           decision: "deny",
-          reason: outcome === "timeout" ? "Timed out awaiting confirmation." : "Denied by user."
+          reason: APPROVAL_REFUSED_REASON
         };
       }
 
@@ -779,12 +787,7 @@ export class AssistantToolGateway {
           actionRequestId: action.id,
           toolName: found.dto.name,
           outcome: "denied",
-          reason:
-            outcome === "timeout"
-              ? "Timed out awaiting confirmation."
-              : outcome === "cancelled"
-                ? "Action cancelled."
-                : "Denied by user."
+          reason: outcome === "cancelled" ? "Action cancelled." : APPROVAL_REFUSED_REASON
         });
         const approvalMode =
           outcome === "timeout" ? "timeout" : outcome === "rejected" ? "rejected" : "cancelled";
@@ -794,10 +797,7 @@ export class AssistantToolGateway {
           durationMs: null,
           chatSessionId: ctx.chatSessionId
         });
-        const reason =
-          outcome === "timeout"
-            ? "Timed out awaiting confirmation — still pending in your drawer."
-            : "Denied by user.";
+        const reason = APPROVAL_REFUSED_REASON;
         return { ok: false, denied: true, reason };
       }
 

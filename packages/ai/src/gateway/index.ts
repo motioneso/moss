@@ -34,6 +34,7 @@ export {
   type NativeToolPermissionRequest,
   type NativeToolPermissionResponse
 } from "./gateway.js";
+export { APPROVAL_REFUSED_REASON } from "./native-tool-guard.js";
 export { createUnwiredActionResolver } from "./unwired-action-resolver.js";
 export {
   AutoRunRateLimiter,
