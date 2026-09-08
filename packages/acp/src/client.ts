@@ -182,6 +182,7 @@ export function acceptedOptionValues(option: SessionConfigOption): Set<string> |
 
 export class MossAcpClient {
   private readonly connections = new Map<string, ClientSideConnection>();
+  private readonly sessionKeys = new Map<string, string>();
   private readonly texts = new Map<string, string[]>();
   private readonly toolCalls = new Map<string, number>();
   private readonly closers = new Map<string, () => void>();
@@ -241,6 +242,7 @@ export class MossAcpClient {
       _meta: { claudeCode: { options: { disallowedTools: launchOffList(surface) } } }
     });
     this.connections.set(session.sessionId, connection);
+    this.sessionKeys.set(session.sessionId, sessionKey);
     this.texts.set(session.sessionId, []);
     this.toolCalls.set(session.sessionId, 0);
     this.sessionCwds.set(session.sessionId, cwd);
@@ -258,6 +260,8 @@ export class MossAcpClient {
   ): Promise<AcpPromptResult> {
     const connection = this.requireConnection(handle.sessionId);
     const timeoutMs = options.timeoutMs ?? DEFAULT_PROMPT_TIMEOUT_MS;
+    this.texts.set(handle.sessionId, []);
+    this.toolCalls.set(handle.sessionId, 0);
     let timer: ReturnType<typeof setTimeout> | null = null;
     try {
       const response = await Promise.race([
@@ -330,7 +334,16 @@ export class MossAcpClient {
   }
 
   async close(handle: AcpSessionHandle): Promise<void> {
+    const sessionKey = this.sessionKeys.get(handle.sessionId);
+    if (sessionKey) {
+      try {
+        await this.tunnel.kill(sessionKey);
+      } catch {
+        // Closing still revokes the tool server when runner teardown is already complete.
+      }
+    }
     this.connections.delete(handle.sessionId);
+    this.sessionKeys.delete(handle.sessionId);
     this.texts.delete(handle.sessionId);
     this.toolCalls.delete(handle.sessionId);
     this.sessionCwds.delete(handle.sessionId);
