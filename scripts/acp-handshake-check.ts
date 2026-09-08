@@ -24,7 +24,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
 import { RpcConnection } from "@moss/chat/live";
 import { resolveMossEnv } from "@moss/db";
@@ -85,6 +85,16 @@ function readRunnerConnectionEnv(): { socketPath: string; rpcSecret: string } {
     );
   }
   return { socketPath, rpcSecret };
+}
+
+/**
+ * The launcher's own account, read from the socket file it owns — the real
+ * running process's kernel-recorded owner, not a name this script infers or
+ * is told (task 5b, Astra-Reviewer round-four finding, 2026-09-08).
+ */
+async function launcherUidFromSocket(socketPath: string): Promise<number> {
+  const info = await stat(socketPath);
+  return info.uid;
 }
 
 /**
@@ -165,7 +175,8 @@ async function reportActualIdentity(
   home: string | null,
   pid: number | null,
   expectedUid: number,
-  expectedGid: number
+  expectedGid: number,
+  launcherUid: number
 ): Promise<void> {
   if (pid === null) {
     throw new Error(
@@ -177,14 +188,27 @@ async function reportActualIdentity(
   const account = accountNameForUid(identity.uid);
   console.log(
     `[handshake] ${label}: pid=${pid} home=${home ?? "(none)"} account=${account} ` +
-      `(uid=${identity.uid}, gid=${identity.gid}, expected uid=${expectedUid} gid=${expectedGid}) ` +
-      `CapPrm=${identity.permittedCaps} CapEff=${identity.effectiveCaps} ` +
+      `(uid=${identity.uid}, gid=${identity.gid}, expected uid=${expectedUid} gid=${expectedGid}, ` +
+      `launcher uid=${launcherUid}) CapPrm=${identity.permittedCaps} CapEff=${identity.effectiveCaps} ` +
       `CapInh=${identity.inheritableCaps} CapAmb=${identity.ambientCaps}`
   );
   if (identity.uid !== expectedUid || identity.gid !== expectedGid) {
     throw new Error(
       `${label}: the spawned agent runs as uid=${identity.uid} gid=${identity.gid}, ` +
         `not the slot account it was spawned as (uid=${expectedUid} gid=${expectedGid})`
+    );
+  }
+  // Equality with the expected uid/gid is not enough on its own: fixtures where
+  // BOTH expected and actual are 0 (root) or both equal the launcher's own
+  // account passed cleanly with zero capabilities (task 5b, Astra-Reviewer
+  // round-four finding, 2026-09-08). The slot must be neither.
+  if (identity.uid === 0) {
+    throw new Error(`${label}: the spawned agent runs as root (uid=0), not a per-person slot`);
+  }
+  if (identity.uid === launcherUid) {
+    throw new Error(
+      `${label}: the spawned agent runs as the launcher's own account (uid=${launcherUid}), ` +
+        `not a per-person slot`
     );
   }
   if (
@@ -206,7 +230,8 @@ async function claudeLeg(
   tunnel: AcpTunnel,
   providerKind: AcpProviderKind,
   userId: string,
-  timeoutMs: number
+  timeoutMs: number,
+  socketPath: string
 ): Promise<void> {
   const started = Date.now();
   const client = new MossAcpClient(tunnel);
@@ -216,7 +241,15 @@ async function claudeLeg(
   );
   const handle = await client.openSession(sessionKey, "handshake", providerKind, userId, "chat");
   console.log(`[handshake] session open id=${handle.sessionId} cwd=${handle.cwd}`);
-  await reportActualIdentity("claude leg", handle.home, handle.pid, handle.uid, handle.gid);
+  const launcherUid = await launcherUidFromSocket(socketPath);
+  await reportActualIdentity(
+    "claude leg",
+    handle.home,
+    handle.pid,
+    handle.uid,
+    handle.gid,
+    launcherUid
+  );
   const result = await client.prompt(handle, PROMPT_TEXT, { timeoutMs });
   console.log(
     `[handshake] prompt done stopReason=${result.stopReason} toolCallsSeen=${result.toolCallsSeen} text=${JSON.stringify(result.text.slice(0, 200))}`
@@ -237,7 +270,8 @@ async function directLeg(
   tunnel: AcpTunnel,
   providerKind: AcpProviderKind,
   userId: string,
-  timeoutMs: number
+  timeoutMs: number,
+  socketPath: string
 ): Promise<void> {
   const started = Date.now();
   const sessionKey = `acp-handshake-${process.pid}`;
@@ -249,7 +283,8 @@ async function directLeg(
     userId,
     "chat"
   );
-  await reportActualIdentity("direct leg", home, pid, uid, gid);
+  const launcherUid = await launcherUidFromSocket(socketPath);
+  await reportActualIdentity("direct leg", home, pid, uid, gid, launcherUid);
   const stream = createTunnelStream(tunnel, sessionKey);
   let text = "";
   let toolCallsSeen = 0;
@@ -332,9 +367,9 @@ async function main(): Promise<void> {
     const tunnel = rpcTunnel(conn);
     if (providerKind === "opencode") {
       console.log("[handshake] opencode is not API-ready until task 5; proving runner spawn only");
-      await directLeg(tunnel, providerKind, userId, timeoutMs - 5000);
+      await directLeg(tunnel, providerKind, userId, timeoutMs - 5000, socketPath);
     } else {
-      await claudeLeg(tunnel, providerKind, userId, timeoutMs - 5000);
+      await claudeLeg(tunnel, providerKind, userId, timeoutMs - 5000, socketPath);
     }
     console.log(`[handshake] PASS kind=${providerKind}`);
     clearTimeout(wall);

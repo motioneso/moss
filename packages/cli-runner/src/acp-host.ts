@@ -196,6 +196,14 @@ interface AcpSession {
    * Cleared again if the stop fails, so a later call can retry.
    */
   stopping: boolean;
+  /**
+   * The in-flight stop's own promise, so a concurrent caller awaits and
+   * relays the SAME outcome instead of returning success immediately while
+   * the first stop is still running (task 5b, Astra-Reviewer round-four
+   * finding: a concurrent close returned success while the process was
+   * still alive, 2026-09-08). Cleared alongside `stopping`.
+   */
+  stopPromise: Promise<void> | undefined;
 }
 
 /** What runs for one adapter spawn: node plus the row's pinned entry, or the provider binary. */
@@ -453,7 +461,8 @@ export class AcpHost {
       exited: false,
       exitCode: null,
       lastActivity: Date.now(),
-      stopping: false
+      stopping: false,
+      stopPromise: undefined
     };
     let pending = "";
     child.stdout.on("data", (chunk: Buffer) => {
@@ -617,6 +626,12 @@ export class AcpHost {
    * its own process group. A refused or unconfirmed stop is thrown, not
    * swallowed, and the session record is kept so the caller can retry
    * (task 5b, Astra-Reviewer finding 3, 2026-09-08).
+   *
+   * A caller that arrives while a stop is already in flight awaits and
+   * relays that SAME stop's outcome, rather than returning success right
+   * away while the process is still alive — the earlier version did the
+   * latter, so a concurrent close reported the session gone before it
+   * actually was (task 5b, Astra-Reviewer round-four finding, 2026-09-08).
    */
   private async killRecord(key: string): Promise<void> {
     const session = this.sessions.get(key);
@@ -625,18 +640,26 @@ export class AcpHost {
       this.sessions.delete(key);
       return;
     }
-    if (session.stopping) return;
+    if (session.stopping) {
+      await session.stopPromise;
+      return;
+    }
     const pid = session.child.pid;
     if (pid === undefined) {
       this.sessions.delete(key);
       return;
     }
     session.stopping = true;
-    try {
+    const stopPromise = (async () => {
       await this.signalProcessGroup(session, pid);
       await this.awaitExit(session);
+    })();
+    session.stopPromise = stopPromise;
+    try {
+      await stopPromise;
     } catch (error) {
       session.stopping = false;
+      session.stopPromise = undefined;
       throw error;
     }
     this.sessions.delete(key);

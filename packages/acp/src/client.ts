@@ -346,15 +346,20 @@ export class MossAcpClient {
     return { applied: true, mismatch: false, mechanism: row.model, note: null };
   }
 
+  /**
+   * A refused or unconfirmed stop is rethrown, not swallowed: a blanket
+   * catch here previously let a rejecting tunnel make close() report
+   * success and stop polling, so the caller believed the session was gone
+   * while the process kept running (task 5b, Astra-Reviewer round-four
+   * finding, 2026-09-08). Session tracking is only torn down once the stop
+   * actually succeeds, so a caller that retries after a failure still finds
+   * the session to retry against.
+   */
   async close(handle: AcpSessionHandle): Promise<void> {
     const sessionKey = this.sessionKeys.get(handle.sessionId);
     const stream = this.streams.get(handle.sessionId);
     if (sessionKey) {
-      try {
-        await this.tunnel.kill(sessionKey);
-      } catch {
-        // Closing still revokes the tool server when runner teardown is already complete.
-      }
+      await this.tunnel.kill(sessionKey);
       await stream?.stop();
     }
     this.connections.delete(handle.sessionId);
