@@ -37,6 +37,7 @@ const DEFAULT_TOKEN_TTL_MS = 60 * 60 * 1000;
 interface TokenEntry {
   readonly identity: SessionIdentity;
   expiresAt: number;
+  readonly fixedExpiry: boolean;
   /** #2159 — has this token's client completed its first MCP tools/list round trip? */
   toolsListObserved: boolean;
   /**
@@ -59,6 +60,18 @@ export interface SessionTokenRegistryOptions {
   readonly ttlMs?: number;
 }
 
+export interface MintTokenOptions {
+  /** Override the TTL for this token only (ms); defaults to the registry TTL. */
+  readonly ttlMs?: number;
+  /**
+   * Fixed end time: using the token never pushes the expiry out again. For
+   * tokens handed to outside processes (the ACP tool server Bearer), where a
+   * leaked token must go stale on its own. Defaults to false, keeping the
+   * sliding refresh live chat sessions rely on.
+   */
+  readonly fixedExpiry?: boolean;
+}
+
 /**
  * In-memory registry of per-session tokens. Identity NEVER comes from the agent's
  * input — only from a token the API minted at engine launch and revokes at reap.
@@ -75,13 +88,14 @@ export class SessionTokenRegistry {
     this.ttlMs = options.ttlMs ?? DEFAULT_TOKEN_TTL_MS;
   }
 
-  mint(identity: SessionIdentity): string {
+  mint(identity: SessionIdentity, options: MintTokenOptions = {}): string {
     // Opportunistically purge anything already expired (one token per user → cheap).
     this.sweepExpired();
     const token = `jst_${randomUUID()}`;
     this.tokens.set(token, {
       identity,
-      expiresAt: this.clock.now() + this.ttlMs,
+      expiresAt: this.clock.now() + (options.ttlMs ?? this.ttlMs),
+      fixedExpiry: options.fixedExpiry ?? false,
       toolsListObserved: false,
       observationCount: 0,
       toolsListWaiters: []
@@ -99,8 +113,11 @@ export class SessionTokenRegistry {
       throw new InvalidSessionTokenError();
     }
     // Sliding refresh: an in-use token (e.g. a long turn making many tool calls)
-    // never expires mid-flight.
-    entry.expiresAt = this.clock.now() + this.ttlMs;
+    // never expires mid-flight. Fixed-expiry tokens skip it: their end time
+    // does not move, so a leaked outside token goes stale on its own.
+    if (!entry.fixedExpiry) {
+      entry.expiresAt = this.clock.now() + this.ttlMs;
+    }
     return entry.identity;
   }
 
@@ -113,7 +130,9 @@ export class SessionTokenRegistry {
   touchBySessionId(chatSessionId: string): void {
     const expiresAt = this.clock.now() + this.ttlMs;
     for (const entry of this.tokens.values()) {
-      if (entry.identity.chatSessionId === chatSessionId) {
+      // Fixed-expiry tokens keep their end time: session activity must not
+      // keep an outside token alive, or it never goes stale on its own.
+      if (entry.identity.chatSessionId === chatSessionId && !entry.fixedExpiry) {
         entry.expiresAt = expiresAt;
       }
     }

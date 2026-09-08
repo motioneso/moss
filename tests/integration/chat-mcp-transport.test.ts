@@ -641,7 +641,11 @@ describe("native permission YOLO", () => {
     confirmations.resolve(request.actionRequestId, "rejected");
     const response = await pending;
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ decision: "deny", reason: "Denied by user." });
+    expect(response.json()).toEqual({
+      decision: "deny",
+      reason:
+        "This action was not approved, so it was not done. Do not try it again; let the user know."
+    });
   }
 
   it("auto-grants allowlisted Write only when effective persisted YOLO state is active", async () => {
