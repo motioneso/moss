@@ -17,6 +17,11 @@ import type { ActionAuditInputSummary, AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AiRepository, InsertAuditLogInput } from "../repository.js";
+import {
+  requestAcpBuiltInPermission as resolveAcpBuiltInPermission,
+  type AcpBuiltInPermissionRequest,
+  type AcpBuiltInPermissionResponse
+} from "./acp-permission.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import {
@@ -450,6 +455,14 @@ export class AssistantToolGateway {
     } finally {
       this.deps.confirmations.markDone(action.id);
     }
+  }
+
+  /** Outside-agent built-in ask; orchestration lives in ./acp-permission.js. */
+  async requestAcpBuiltInPermission(
+    token: string,
+    request: AcpBuiltInPermissionRequest
+  ): Promise<AcpBuiltInPermissionResponse> {
+    return resolveAcpBuiltInPermission(this.deps, token, request);
   }
 
   /**

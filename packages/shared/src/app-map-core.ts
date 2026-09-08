@@ -8,6 +8,20 @@ export interface CoreAppSurfaceDeclaration {
   readonly scope: "user" | "admin";
 }
 
+export interface CoreAppErrorDeclaration {
+  readonly code: string;
+  readonly class: "prerequisite" | "transient" | "validation" | "permission" | "bug";
+  readonly remediationRef?: string;
+  readonly description: string;
+}
+
+export interface CoreAppRemediationDeclaration {
+  readonly id: string;
+  readonly description: string;
+  readonly path?: string;
+  readonly scope?: "user" | "admin" | "system";
+}
+
 export interface AppMapItem {
   readonly moduleId: string;
   readonly id?: string;
@@ -237,5 +251,23 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "Generate and rotate the encryption keys that lock stored credentials. A banner here and on the settings home names any key that still needs attention; a stored key that no longer opens shows as stopped with a Replace key remediation, while an unusable value in the settings file shows as stopped with guidance to fix or remove it there and no button. Keys are never shown.",
     path: "/settings?section=enckeys",
     scope: "admin"
+  }
+];
+
+export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
+  {
+    code: "core.ai.action_not_approved",
+    class: "permission",
+    remediationRef: "core.ai.ask_user",
+    description: "An agent action was not approved, so it was not done."
+  }
+];
+
+export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "core.ai.ask_user",
+    description: "Ask the user to approve the action before trying it again.",
+    path: "/",
+    scope: "user"
   }
 ];

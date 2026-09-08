@@ -518,4 +518,7 @@ None open. Resolved on 2026-09-07:
 Rulings folded in: Fork A, reaping and reload, delete the bridge with no fallback (Ben,
 2026-09-06); ACP as the single interface, admin-chosen model per service defaulting to the instance
 default provider, unattended calls as short ACP sessions, agy off the list until its login path
-passes (Ben, 2026-09-07). Approved by Ben on 2026-09-07.
+passes (Ben, 2026-09-07). The approval card remains the gateway's enforcement point; chat does not
+duplicate that hold through ACP's `session/request_permission` because the drawer already renders
+the card, while the Workshop is the surface that needs the protocol path (Ben, 2026-09-08).
+Approved by Ben on 2026-09-07.
