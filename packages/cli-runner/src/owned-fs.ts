@@ -46,6 +46,13 @@ export async function prepareOwnedPath(
  * handed to its owner. AcpHost uses this so its tests can prove the routing
  * logic without needing real chown privileges, while still proving the real
  * failure-and-cleanup behavior separately against a genuinely unreachable id.
+ *
+ * `sharedPrefixCount` marks how many of the leading segments are shared
+ * parents rather than one person's own folder (task 5b, Astra-Reviewer
+ * finding 3, 2026-09-08): those levels stay owned by the caller (this
+ * process), mode 0711 pass-through, so the launcher can keep creating
+ * siblings under them for other people. Ownership only hands over starting
+ * at the first segment past that prefix.
  */
 export async function prepareOwnedPathWithOwnership(
   baseDir: string,
@@ -53,7 +60,8 @@ export async function prepareOwnedPathWithOwnership(
   uid: number | undefined,
   gid: number | undefined,
   segments: readonly string[],
-  applyOwnership: OwnershipApplier = defaultApplyOwnership
+  applyOwnership: OwnershipApplier = defaultApplyOwnership,
+  sharedPrefixCount = 0
 ): Promise<string> {
   for (const segment of segments) {
     if (
@@ -69,9 +77,9 @@ export async function prepareOwnedPathWithOwnership(
     }
   }
   let current = baseDir;
-  for (const segment of segments) {
+  for (const [index, segment] of segments.entries()) {
     current = join(current, segment);
-    await prepareOwnedDir(key, current, uid, gid, applyOwnership);
+    await prepareOwnedDir(key, current, uid, gid, applyOwnership, index >= sharedPrefixCount);
   }
   return current;
 }
@@ -93,6 +101,10 @@ export async function writeOwnedFile(
 ): Promise<void> {
   const first = await lstat(path).catch(() => null);
   if (first && first.isSymbolicLink()) await unlink(path);
+  // A file already there before this call was not this call's to remove on
+  // failure — only a fresh write this call made is (task 5b, Astra-Reviewer
+  // finding 1, 2026-09-08).
+  const preexisting = first !== null && !first.isSymbolicLink();
   const handle = await open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o600);
   try {
     await handle.writeFile(content, "utf8");
@@ -108,7 +120,9 @@ export async function writeOwnedFile(
         await applyOwnership(handle, uid, gid);
       } catch (error) {
         await handle.close().catch(() => undefined);
-        await unlink(path).catch(() => undefined);
+        if (!preexisting) {
+          await unlink(path).catch(() => undefined);
+        }
         throw new Error(
           `AcpHost: ${key} could not hand ${path} to its owner, launch refused: ${(error as Error).message}`,
           { cause: error }
@@ -130,19 +144,43 @@ async function prepareOwnedDir(
   path: string,
   uid: number | undefined,
   gid: number | undefined,
-  applyOwnership: OwnershipApplier = defaultApplyOwnership
+  applyOwnership: OwnershipApplier = defaultApplyOwnership,
+  ownedHere = true
 ): Promise<void> {
   const first = await lstat(path).catch(() => null);
   if (first && first.isSymbolicLink()) await unlink(path);
-  await mkdir(path).catch((error: unknown) => {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-  });
+  // Only clean up on failure what this call actually made: a folder that
+  // already existed (this launch merely reused it) must survive a failed
+  // handover untouched (task 5b, Astra-Reviewer finding 1, 2026-09-08 — the
+  // old cleanup deleted a whole pre-existing home).
+  let createdHere = false;
+  await mkdir(path).then(
+    () => {
+      createdHere = true;
+    },
+    (error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  );
   const verified = await lstat(path).catch(() => null);
   if (!verified || !verified.isDirectory() || verified.isSymbolicLink()) {
     throw new Error("AcpHost: session folder is not a folder");
   }
   const handle = await open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
   try {
+    // A shared parent stays owned by the launcher itself, pass-through only:
+    // no chown, so the launcher can keep creating other people's sibling
+    // folders underneath it (task 5b, Astra-Reviewer finding 3, 2026-09-08).
+    if (!ownedHere) {
+      try {
+        await handle.chmod(0o711);
+      } catch (error) {
+        console.warn(
+          `[acp-host] ${key} could not lock the shared folder pass-through: ${(error as Error).message}`
+        );
+      }
+      return;
+    }
     try {
       await handle.chmod(0o700);
     } catch (error) {
@@ -155,7 +193,9 @@ async function prepareOwnedDir(
         await applyOwnership(handle, uid, gid);
       } catch (error) {
         await handle.close().catch(() => undefined);
-        await rm(path, { force: true, recursive: true }).catch(() => undefined);
+        if (createdHere) {
+          await rm(path, { force: true, recursive: true }).catch(() => undefined);
+        }
         throw new Error(
           `AcpHost: ${key} could not hand the project folder to its owner, launch refused: ${(error as Error).message}`,
           { cause: error }
