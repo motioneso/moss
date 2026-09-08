@@ -38,6 +38,10 @@ const PROJECT = "proj";
 // throw-and-clean-up behavior is proved in cli-runner-owned-fs.test.ts.
 const acceptOwnership = async (): Promise<void> => undefined;
 
+const acceptAgentHomePrepare = async (request: { dirs: readonly string[] }): Promise<void> => {
+  for (const dir of request.dirs) mkdirSync(dir, { recursive: true });
+};
+
 function makeHost(dir: string) {
   return new AcpHost({ neutralBase: dir });
 }
@@ -117,7 +121,8 @@ describe("AcpHost builds", () => {
         perUserUid: true,
         resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
         spawnChild: () => child,
-        applyOwnership: acceptOwnership
+        applyOwnership: acceptOwnership,
+        runAgentHomePrepare: acceptAgentHomePrepare
       });
       const spawned = await host.spawn(KEY, PROJECT, "anthropic", "user-1", "chat");
       // Real shell runs need no account switch in tests (non-root cannot
