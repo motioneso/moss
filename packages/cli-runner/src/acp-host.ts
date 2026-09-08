@@ -21,12 +21,18 @@ import {
   readExecRecord,
   writeExecRecord
 } from "./exec-records.js";
-import { prepareOwnedPath, writeOwnedFile } from "./owned-fs.js";
+import { prepareOwnedPath, writeOpencodeChatDenyFile } from "./owned-fs.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { allocateUidSlot } from "./uid-allocator.js";
 import { providerTokenPath } from "./provider-token-store.js";
-import { getAcpProviderRow, type AcpProviderKind } from "@moss/acp";
+import {
+  getAcpProviderRow,
+  launchOffList,
+  lookupAcpToolFamily,
+  type AcpProfile,
+  type AcpProviderKind
+} from "@moss/acp";
 import { redactSecrets } from "@moss/ai";
 import { sanitizeSessionKey } from "@moss/chat/live";
 
@@ -320,32 +326,51 @@ export class AcpHost {
   }
 
   /**
-   * Start one provider's agent as the session user in the session folder and
-   * hand back the pipe. The provider kind is required: a spawn without one is
-   * refused, and an unknown kind is refused by the row lookup. There is no
-   * default provider anywhere on this path.
+   * Start one provider's agent as the session user and hand back the pipe.
+   * Kind, user and profile are all required and undefaulted; the launch
+   * follows the selected row (per-person slot and home, per-row login and
+   * off-list).
    */
   async spawn(
     sessionKey: string,
     projectId: string,
-    providerKind: AcpProviderKind
+    providerKind: AcpProviderKind,
+    userId: string,
+    profile: AcpProfile
   ): Promise<AcpSpawnResult> {
-    if (!providerKind) {
-      throw new Error("acpSpawn.providerKind is required: no default provider");
-    }
+    if (!providerKind) throw new Error("acpSpawn.providerKind is required: no default provider");
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(projectId)) {
       throw new Error("acpSpawn.projectId must match [A-Za-z0-9_-]{1,64}");
     }
+    if (typeof userId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(userId)) {
+      throw new Error("acpSpawn.userId must match [A-Za-z0-9_-]{1,64}");
+    }
+    if (profile !== "chat" && profile !== "workshop")
+      throw new Error("acpSpawn.profile must be chat or workshop");
     const key = sanitizeSessionKey(sessionKey);
     this.killRecord(key);
 
-    let uid: number | undefined;
-    let gid: number | undefined;
-    if (this.deps.perUserUid && this.deps.homeBase) {
-      const slot = allocateUidSlot(this.deps.homeBase, key);
-      uid = slot.uid;
-      gid = slot.gid;
+    // Per-user identity is mandatory on this path: without it every agent
+    // would share one account and one home, and the deny file would land in
+    // a shared folder. Refuse rather than fall back.
+    if (!this.deps.perUserUid || !this.deps.homeBase) {
+      throw new Error("acpSpawn requires per-user identity: refusing the shared home");
     }
+
+    // One slot per person, never per conversation.
+    const slot = allocateUidSlot(this.deps.homeBase, userId);
+    const uid = slot.uid;
+    const gid = slot.gid;
+    // The slot's own home, never the shared base: two people must not read
+    // each other's logins.
+    const agentHome = await prepareOwnedPath(
+      this.deps.homeBase,
+      userId,
+      uid,
+      gid,
+      "agents",
+      userId
+    );
     // Same link-safe folder setup the build path uses, at every level: a
     // command that ran here earlier can plant a link at this folder or any of
     // its parents, so each level is cleared of links and verified before the
@@ -365,62 +390,29 @@ export class AcpHost {
       projectId
     );
 
-    // Project settings at the path the adapter actually reads
-    // (<cwd>/.claude/settings.json). A bare tool name denies every use of it,
-    // so even an adapter that ignored the disabled-built-ins flag could neither
-    // shell out nor write. Written before spawn so the first session is scoped.
-    const settingsDir = await prepareOwnedPath(
-      this.deps.neutralBase,
-      key,
-      uid,
-      gid,
-      key,
-      "acp",
-      projectId,
-      ".claude"
-    );
-    const settingsPath = join(settingsDir, "settings.json");
-    // Belt and braces with the policy: the shell and writer names stay off, and
-    // reads of the login-token corners plus the system pseudofolders are denied
-    // even if a future adapter ever launched those tools. Whether the vendor
-    // matcher honors these rules needs a live check in phase 5.
-    await writeOwnedFile(
-      key,
-      settingsPath,
-      JSON.stringify({
-        permissions: {
-          deny: [
-            "Bash",
-            "KillShell",
-            "Write",
-            "Edit",
-            "MultiEdit",
-            "NotebookEdit",
-            "Read(~/.jarvis/**)",
-            "Read(~/.claude/**)",
-            "Read(~/.claude.json)",
-            "Read(~/.codex/**)",
-            "Read(~/.gemini/**)",
-            "Read(//proc/**)",
-            "Read(//sys/**)",
-            "Read(//dev/**)",
-            "Read(//run/**)"
-          ]
-        }
-      }),
-      uid,
-      gid
-    );
-
     const env: NodeJS.ProcessEnv = {
       ...buildSanitizedCliEnv(process.env),
-      ...(this.deps.homeBase ? { HOME: this.deps.homeBase } : {})
+      HOME: agentHome
     };
-    // Same login the chat engine uses: the stored subscription token, via the
-    // environment only — never argv (which leaks through `ps`).
-    if (this.deps.homeBase) {
+    // The login travels only the way the selected row needs it, via the
+    // environment only. Claude reads the stored token; Codex reuses the
+    // on-disk login in the agent home; OpenCode gets neither.
+    if (providerKind === "anthropic") {
       const token = await this.readLoginToken(this.deps.homeBase);
       if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
+    }
+    // The row's launch-time off-list from the table through the row's own
+    // mechanism. Codex runs read-only exactly when the profile switches
+    // shell off; OpenCode's deny file lands in the agent home for chat,
+    // never Workshop.
+    if (
+      providerKind === "openai" &&
+      launchOffList(profile).some((name) => lookupAcpToolFamily(name) === "shell")
+    ) {
+      env.INITIAL_AGENT_MODE = "read-only";
+    }
+    if (providerKind === "opencode" && profile === "chat") {
+      await writeOpencodeChatDenyFile(agentHome, userId, uid, gid);
     }
 
     const target =
@@ -494,9 +486,8 @@ export class AcpHost {
     this.sessions.set(key, session);
     // The agent's home travels with the spawn result so the permission policy
     // can refuse its sensitive corners without ever reading them. Null when
-    // the child environment names no home.
-    const home = typeof env.HOME === "string" && env.HOME !== "" ? env.HOME : null;
-    return { cwd: sessionDir, generation: session.generation, home };
+    // the agent runs without a home.
+    return { cwd: sessionDir, generation: session.generation, home: agentHome };
   }
 
   send(sessionKey: string, line: string): void {

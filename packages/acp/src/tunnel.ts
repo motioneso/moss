@@ -6,6 +6,7 @@
  * production wiring can back it with the chat-engine RPC client.
  */
 
+import type { AcpProfile } from "./capabilities.js";
 import type { AcpProviderKind } from "./providers.js";
 
 export interface AcpExecPoll {
@@ -19,13 +20,16 @@ export interface AcpExecPoll {
 export interface AcpTunnel {
   /**
    * Start one provider's agent for a session key; resolves the runner-side working
-   * folder plus the HOME handed to the agent process (null when none). The kind
-   * is required: the runner refuses a spawn without one, with no default.
+   * folder plus the HOME handed to the agent process (null when none). The kind,
+   * the user and the profile are required: the runner refuses a spawn without
+   * them, with no default.
    */
   spawn(
     sessionKey: string,
     projectId: string,
-    providerKind: AcpProviderKind
+    providerKind: AcpProviderKind,
+    userId: string,
+    profile: AcpProfile
   ): Promise<{ cwd: string; home: string | null }>;
   /** Deliver one client-to-agent JSON-RPC line (no trailing newline). */
   send(sessionKey: string, line: string): Promise<void>;

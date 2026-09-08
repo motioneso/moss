@@ -13,7 +13,7 @@
  */
 
 import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 
 import {
@@ -58,8 +58,10 @@ function parseArgs(): { providerKind: AcpProviderKind; timeoutMs: number; homeBa
 
 function loopbackTunnel(host: AcpHost): AcpTunnel {
   return {
-    spawn: (sessionKey, projectId, providerKind) =>
-      host.spawn(sessionKey, projectId, providerKind).then(({ cwd, home }) => ({ cwd, home })),
+    spawn: (sessionKey, projectId, providerKind, userId, profile) =>
+      host
+        .spawn(sessionKey, projectId, providerKind, userId, profile)
+        .then(({ cwd, home }) => ({ cwd, home })),
     send: (sessionKey, line) => {
       host.send(sessionKey, line);
       return Promise.resolve();
@@ -88,8 +90,13 @@ async function claudeLeg(
   const started = Date.now();
   const client = new MossAcpClient(tunnel);
   const sessionKey = `acp-handshake-${process.pid}`;
-  console.log(`[handshake] openSession kind=${providerKind} profile=chat (no tool server)`);
-  const handle = await client.openSession(sessionKey, "handshake", providerKind, "chat");
+  // Dev-check identity: the OS user stands in for the Moss actor id the chat
+  // engine will pass in task 7; the point here is a stable per-person slot.
+  const userId = userInfo().username;
+  console.log(
+    `[handshake] openSession kind=${providerKind} profile=chat user=${userId} (no tool server)`
+  );
+  const handle = await client.openSession(sessionKey, "handshake", providerKind, userId, "chat");
   console.log(`[handshake] session open id=${handle.sessionId} cwd=${handle.cwd}`);
   const result = await client.prompt(handle, PROMPT_TEXT, { timeoutMs });
   console.log(
@@ -115,7 +122,13 @@ async function directLeg(
   const started = Date.now();
   const sessionKey = `acp-handshake-${process.pid}`;
   console.log(`[handshake] direct leg kind=${providerKind}: runner spawn plus protocol only`);
-  const { cwd } = await tunnel.spawn(sessionKey, "handshake", providerKind);
+  const { cwd } = await tunnel.spawn(
+    sessionKey,
+    "handshake",
+    providerKind,
+    userInfo().username,
+    "chat"
+  );
   const stream = createTunnelStream(tunnel, sessionKey);
   let text = "";
   let toolCallsSeen = 0;
@@ -192,7 +205,10 @@ async function main(): Promise<void> {
   }, timeoutMs);
   try {
     const neutralBase = mkdtempSync(join(tmpdir(), "acp-handshake-"));
-    const host = new AcpHost({ neutralBase, homeBase });
+    // Dev-check approximation: per-user identity on, like production. Real
+    // spawns need privilege for the account switch; without it the spawn
+    // fails loudly instead of silently sharing one account.
+    const host = new AcpHost({ neutralBase, homeBase, perUserUid: true });
     const tunnel = loopbackTunnel(host);
     if (providerKind === "opencode") {
       console.log("[handshake] opencode is not API-ready until task 5; proving runner spawn only");

@@ -568,10 +568,18 @@ async function invoke(
       if (typeof params.providerKind !== "string" || params.providerKind.length === 0) {
         throw new BadRequestError("acpSpawn.providerKind is required: no default provider");
       }
+      if (typeof params.userId !== "string" || params.userId.length === 0) {
+        throw new BadRequestError("acpSpawn.userId is required: slots belong to people");
+      }
+      if (params.profile !== "chat" && params.profile !== "workshop") {
+        throw new BadRequestError("acpSpawn.profile must be chat or workshop");
+      }
       const spawned = await host.acpSpawn(
         key,
         params.projectId,
-        params.providerKind as AcpProviderKind
+        params.providerKind as AcpProviderKind,
+        params.userId,
+        params.profile
       );
       recordAcpSpawn(key, spawned.generation);
       return spawned;

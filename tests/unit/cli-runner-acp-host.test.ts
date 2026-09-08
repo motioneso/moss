@@ -48,8 +48,12 @@ class FakeChild extends EventEmitter {
 
 function makeHost(dir: string, child: FakeChild) {
   let lastSpawn: { cwd: string; env: NodeJS.ProcessEnv } | null = null;
+  const homeBase = join(dir, "homes");
+  mkdirSync(homeBase, { recursive: true });
   const host = new AcpHost({
     neutralBase: dir,
+    homeBase,
+    perUserUid: true,
     resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
     spawnChild: (opts) => {
       lastSpawn = { cwd: opts.cwd, env: opts.env };
@@ -65,7 +69,7 @@ describe("AcpHost", () => {
     try {
       const child = new FakeChild();
       const { host, lastSpawn } = makeHost(dir, child);
-      const spawned = await host.spawn("workshop:user:proj", "proj", "anthropic");
+      const spawned = await host.spawn("workshop:user:proj", "proj", "anthropic", "user-1", "chat");
       expect(spawned.cwd).toBe(join(dir, "workshop:user:proj", "acp", "proj"));
       expect(lastSpawn()?.cwd).toBe(spawned.cwd);
       // The vendor login travels by environment, never the command line.
@@ -82,7 +86,7 @@ describe("AcpHost", () => {
       expect(second.lines).toHaveLength(0);
       expect(second.exited).toBe(false);
       // A second project lands in its own sibling folder, never inside the first.
-      const other = await host.spawn("workshop:user:proj", "other", "anthropic");
+      const other = await host.spawn("workshop:user:proj", "other", "anthropic", "user-1", "chat");
       expect(other.cwd).not.toBe(spawned.cwd);
       expect(spawned.cwd.startsWith(other.cwd)).toBe(false);
       expect(other.cwd.startsWith(spawned.cwd)).toBe(false);
@@ -91,37 +95,15 @@ describe("AcpHost", () => {
     }
   });
 
-  it("writes narrowing project settings at the path the adapter reads", async () => {
+  it("writes no Claude deny list: the table is the single source now", async () => {
     const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
     try {
       const child = new FakeChild();
       const { host } = makeHost(dir, child);
-      const spawned = await host.spawn("workshop:user:proj", "proj", "anthropic");
-      const settingsPath = join(spawned.cwd, ".claude", "settings.json");
-      const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as {
-        permissions?: { deny?: string[] };
-      };
-      // Shell and writes are denied outright; a bare tool name matches every use.
-      expect(settings.permissions?.deny).toEqual(expect.arrayContaining(["Bash", "Write", "Edit"]));
-      // The deny list matches the tool table's shell and write rows exactly
-      // (bare names only), plus the zone rules below — nothing else may ride
-      // along, so launch and policy cannot drift apart.
-      const { acpToolNamesIn } = await import("../../packages/acp/src/tool-table.js");
-      const tableRows = [...acpToolNamesIn("shell", "write")].filter(
-        (name) => !name.startsWith("mcp__acp__")
-      );
-      const zoneRules = [
-        "Read(~/.jarvis/**)",
-        "Read(~/.claude/**)",
-        "Read(~/.claude.json)",
-        "Read(~/.codex/**)",
-        "Read(~/.gemini/**)",
-        "Read(//proc/**)",
-        "Read(//sys/**)",
-        "Read(//dev/**)",
-        "Read(//run/**)"
-      ];
-      expect(new Set(settings.permissions?.deny)).toEqual(new Set([...tableRows, ...zoneRules]));
+      const spawned = await host.spawn("workshop:user:proj", "proj", "anthropic", "user-1", "chat");
+      // Task 5b deleted the host-written deny file; per-row mechanisms from
+      // the table (client flag, launch env, home settings file) replaced it.
+      expect(existsSync(join(spawned.cwd, ".claude", "settings.json"))).toBe(false);
       // The old dead path is gone: nothing writes outside the adapter's layout.
       expect(existsSync(join(spawned.cwd, ".Muse"))).toBe(false);
     } finally {
@@ -134,10 +116,9 @@ describe("AcpHost", () => {
     try {
       const child = new FakeChild();
       const { host } = makeHost(dir, child);
-      const spawned = await host.spawn("workshop:user:proj", "proj", "anthropic");
+      const spawned = await host.spawn("workshop:user:proj", "proj", "anthropic", "user-1", "chat");
       const mode = (path: string): string => (statSync(path).mode & 0o777).toString(8);
       expect(mode(spawned.cwd)).toBe("700");
-      expect(mode(join(spawned.cwd, ".claude"))).toBe("700");
 
       // With per-user identity on but no root, the handover fails — and the
       // failure is said out loud instead of silently skipping isolation.
@@ -155,7 +136,7 @@ describe("AcpHost", () => {
           resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
           spawnChild: () => child as never
         });
-        await loud.spawn("workshop:user:proj2", "proj", "anthropic");
+        await loud.spawn("workshop:user:proj2", "proj", "anthropic", "user-1", "chat");
       } finally {
         console.warn = originalWarn;
       }
@@ -170,7 +151,7 @@ describe("AcpHost", () => {
     try {
       const child = new FakeChild();
       const { host } = makeHost(dir, child);
-      await host.spawn("workshop:user:proj", "proj", "anthropic");
+      await host.spawn("workshop:user:proj", "proj", "anthropic", "user-1", "chat");
       // Five 300 KiB lines: over the 1 MiB reply cap.
       for (let i = 0; i < 5; i++) child.emitStdout(`x${i}${"y".repeat(300 * 1024)}`);
       const result = host.read("workshop:user:proj", 0);
@@ -192,14 +173,18 @@ describe("AcpHost", () => {
       const first = new FakeChild();
       const second = new FakeChild();
       let child = first;
+      const homeBase = join(dir, "homes");
+      mkdirSync(homeBase, { recursive: true });
       const host = new AcpHost({
         neutralBase: dir,
+        homeBase,
+        perUserUid: true,
         resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
         spawnChild: () => child as never
       });
-      const one = await host.spawn("workshop:user:proj", "proj", "anthropic");
+      const one = await host.spawn("workshop:user:proj", "proj", "anthropic", "user-1", "chat");
       child = second;
-      const two = await host.spawn("workshop:user:proj", "proj", "anthropic");
+      const two = await host.spawn("workshop:user:proj", "proj", "anthropic", "user-1", "chat");
       expect(two.generation).toBeGreaterThan(one.generation);
       // Stale generation from a dropped connection: no-op, live session stands.
       host.kill("workshop:user:proj", one.generation);
@@ -227,7 +212,13 @@ describe("AcpHost", () => {
 
         const child = new FakeChild();
         const { host } = makeHost(dir, child);
-        const spawned = await host.spawn("workshop:user:proj", "proj", "anthropic");
+        const spawned = await host.spawn(
+          "workshop:user:proj",
+          "proj",
+          "anthropic",
+          "user-1",
+          "chat"
+        );
 
         // The link is gone, a real folder stands in its place, and the spawn landed there.
         expect(lstatSync(sessionDir).isSymbolicLink()).toBe(false);
@@ -236,41 +227,6 @@ describe("AcpHost", () => {
         // The victim was never followed: file intact, permissions unchanged.
         expect(readFileSync(canary, "utf8")).toBe("untouched");
         expect(statSync(victim).mode & 0o777).toBe(0o755);
-      } finally {
-        rmSync(victim, { recursive: true, force: true });
-      }
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("replaces a planted link at the settings file and never writes through it", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
-    try {
-      const victim = mkdtempSync(join(tmpdir(), "acp-victim-"));
-      try {
-        const victimFile = join(victim, "settings.json");
-        writeFileSync(victimFile, "victim-content");
-        const child = new FakeChild();
-        const { host } = makeHost(dir, child);
-        const spawned = await host.spawn("workshop:user:proj", "proj", "anthropic");
-        const settingsPath = join(spawned.cwd, ".claude", "settings.json");
-        // A previous command swaps the settings file for a link elsewhere.
-        rmSync(settingsPath);
-        symlinkSync(victimFile, settingsPath);
-
-        await host.spawn("workshop:user:proj", "proj", "anthropic");
-
-        // A real file stands in place with the narrowing settings in it.
-        expect(lstatSync(settingsPath).isSymbolicLink()).toBe(false);
-        const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as {
-          permissions?: { deny?: string[] };
-        };
-        expect(settings.permissions?.deny).toEqual(
-          expect.arrayContaining(["Bash", "Write", "Edit"])
-        );
-        // The victim was never written through: content intact.
-        expect(readFileSync(victimFile, "utf8")).toBe("victim-content");
       } finally {
         rmSync(victim, { recursive: true, force: true });
       }
@@ -290,7 +246,13 @@ describe("AcpHost", () => {
 
         const child = new FakeChild();
         const { host } = makeHost(dir, child);
-        const spawned = await host.spawn("workshop:user:proj", "proj", "anthropic");
+        const spawned = await host.spawn(
+          "workshop:user:proj",
+          "proj",
+          "anthropic",
+          "user-1",
+          "chat"
+        );
 
         // Every level is real, the spawn landed in the real folder, and
         // nothing was ever created inside the victim.
@@ -311,7 +273,9 @@ describe("AcpHost", () => {
     try {
       const child = new FakeChild();
       const { host } = makeHost(dir, child);
-      await expect(host.spawn("workshop:user:proj", "../evil", "anthropic")).rejects.toThrow();
+      await expect(
+        host.spawn("workshop:user:proj", "../evil", "anthropic", "user-1", "chat")
+      ).rejects.toThrow();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -322,7 +286,7 @@ describe("AcpHost", () => {
     try {
       const child = new FakeChild();
       const { host } = makeHost(dir, child);
-      await host.spawn("workshop:user:proj", "proj", "anthropic");
+      await host.spawn("workshop:user:proj", "proj", "anthropic", "user-1", "chat");
       expect(() => host.send("workshop:user:proj", "a\nb")).toThrow();
       child.exit(1);
       const result = host.read("workshop:user:proj", 0);
@@ -353,11 +317,133 @@ describe("AcpHost", () => {
     try {
       const child = new FakeChild();
       const { host } = makeHost(dir, child);
-      await expect(host.spawn("workshop:user:proj", "proj", undefined as never)).rejects.toThrow(
-        /providerKind/
-      );
+      await expect(
+        host.spawn("workshop:user:proj", "proj", undefined as never, "user-1", "chat")
+      ).rejects.toThrow(/providerKind/);
+      await expect(
+        host.spawn("workshop:user:proj", "proj", "anthropic", undefined as never, "chat")
+      ).rejects.toThrow(/userId/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("task 5b launch follows the row", () => {
+  function makeUserHost(neutralBase: string, homeBase: string, child: FakeChild) {
+    const seen: Array<{ command: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv }> =
+      [];
+    const host = new AcpHost({
+      neutralBase,
+      homeBase,
+      perUserUid: true,
+      resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
+      spawnChild: (opts) => {
+        seen.push({ command: opts.command, args: opts.args, cwd: opts.cwd, env: opts.env });
+        return child as never;
+      }
+    });
+    return { host, seen };
+  }
+
+  it("allocates one slot per person across conversations", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
+    const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+    try {
+      const child = new FakeChild();
+      const { host, seen } = makeUserHost(dir, home, child);
+      await host.spawn("chat:user-1:aaa", "proj", "anthropic", "user-1", "chat");
+      await host.spawn("chat:user-1:bbb", "proj", "anthropic", "user-1", "chat");
+      const slots = JSON.parse(readFileSync(join(home, "uid-slots.json"), "utf8")) as Record<
+        string,
+        number
+      >;
+      // One entry for the person, not one per conversation.
+      expect(Object.keys(slots)).toEqual(["user-1"]);
+      expect(seen).toHaveLength(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("runs the agent in the slot's own home, never the shared base", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
+    const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+    try {
+      const child = new FakeChild();
+      const { host, seen } = makeUserHost(dir, home, child);
+      const spawned = await host.spawn("chat:user-1:aaa", "proj", "anthropic", "user-1", "chat");
+      expect(spawned.home).toBe(join(home, "agents", "user-1"));
+      expect(seen[0]?.env.HOME).toBe(join(home, "agents", "user-1"));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("passes the Claude token to Claude alone, read-only to Codex, neither elsewhere", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
+    const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+    try {
+      mkdirSync(join(home, ".jarvis", "cli-tokens"), { recursive: true });
+      writeFileSync(join(home, ".jarvis", "cli-tokens", "anthropic"), "tok_test-token");
+      const child = new FakeChild();
+      const { host, seen } = makeUserHost(dir, home, child);
+      await host.spawn("chat:user-1:a", "proj", "anthropic", "user-1", "chat");
+      await host.spawn("chat:user-1:b", "proj", "openai", "user-1", "chat");
+      await host.spawn("chat:user-1:c", "proj", "opencode", "user-1", "chat");
+      expect(seen[0]?.env.CLAUDE_CODE_OAUTH_TOKEN).toBe("tok_test-token");
+      expect(seen[1]?.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+      expect(seen[1]?.env.INITIAL_AGENT_MODE).toBe("read-only");
+      expect(seen[2]?.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+      expect(seen[2]?.env.INITIAL_AGENT_MODE).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("writes the OpenCode deny file from the table for chat, never for Workshop", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
+    const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+    try {
+      // A login-owned config the write must preserve, not clobber.
+      const existingDir = join(home, "agents", "user-1", ".config", "opencode");
+      mkdirSync(existingDir, { recursive: true });
+      writeFileSync(
+        join(existingDir, "opencode.json"),
+        JSON.stringify({ model: "keep-me", permission: { read: "allow" } })
+      );
+      const child = new FakeChild();
+      const { host } = makeUserHost(dir, home, child);
+      await host.spawn("chat:user-1:a", "proj", "opencode", "user-1", "chat");
+      const written = JSON.parse(
+        readFileSync(join(home, "agents", "user-1", ".config", "opencode", "opencode.json"), "utf8")
+      ) as { model?: string; permission?: Record<string, string> };
+      const { opencodeDenyPermissionKeys } = await import("../../packages/acp/src/providers.js");
+      const expected = opencodeDenyPermissionKeys();
+      expect(expected).toEqual(expect.arrayContaining(["bash", "edit", "write"]));
+      for (const key of expected) expect(written.permission?.[key]).toBe("deny");
+      expect(written.model).toBe("keep-me");
+      expect(written.permission?.read).toBe("allow");
+
+      await host.spawn("workshop:user-1:b", "proj", "opencode", "user-1", "workshop");
+      // Workshop sessions run no deny file at all: no file where none existed.
+      const freshHome = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+      try {
+        const freshChild = new FakeChild();
+        const fresh = makeUserHost(dir, freshHome, freshChild);
+        await fresh.host.spawn("workshop:user-1:b", "proj", "opencode", "user-1", "workshop");
+        expect(
+          existsSync(join(freshHome, "agents", "user-1", ".config", "opencode", "opencode.json"))
+        ).toBe(false);
+      } finally {
+        rmSync(freshHome, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
     }
   });
 });

@@ -299,14 +299,14 @@ describe("serveConnection (§3.4/§3.7)", () => {
         id: 31,
         method: "acpSpawn",
         sessionKey: "workshop:u:p",
-        params: { projectId: "p", providerKind: "anthropic" }
+        params: { projectId: "p", providerKind: "anthropic", userId: "user-1", profile: "chat" }
       })
     );
     await new Promise((r) => setTimeout(r, 5));
     const ok = channel.decodeAll().find((f) => (f as RpcOk).id === 31) as RpcOk;
     expect(ok.t).toBe("ok");
     expect((ok.result as { generation: number }).generation).toBe(7);
-    expect(host.acpSpawn).toHaveBeenCalledWith("workshop:u:p", "p", "anthropic");
+    expect(host.acpSpawn).toHaveBeenCalledWith("workshop:u:p", "p", "anthropic", "user-1", "chat");
 
     channel.triggerClose();
     expect(kill).toHaveBeenCalledWith("workshop:u:p", { generation: 7 });
@@ -333,6 +333,28 @@ describe("serveConnection (§3.4/§3.7)", () => {
     const err = channel.decodeAll().find((f) => (f as RpcErr).id === 32) as RpcErr;
     expect(err.t).toBe("err");
     expect(err.error.code).toBe("bad_request");
+    expect(spawn).not.toHaveBeenCalled();
+    expect(channel.closed).toBe(false);
+  });
+
+  // A spawn without a user id or profile is refused the same way.
+  it("refuses acpSpawn without userId or profile (stays open)", async () => {
+    const host = fakeHost();
+    const spawn = vi.spyOn(host, "acpSpawn");
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
+
+    for (const [id, params] of [
+      [33, { projectId: "p", providerKind: "anthropic", profile: "chat" }],
+      [34, { projectId: "p", providerKind: "anthropic", userId: "user-1" }]
+    ] as const) {
+      channel.feed(encodeFrame({ t: "req", id, method: "acpSpawn", sessionKey: "s", params }));
+      await new Promise((r) => setTimeout(r, 5));
+      const err = channel.decodeAll().find((f) => (f as RpcErr).id === id) as RpcErr;
+      expect(err.t).toBe("err");
+      expect(err.error.code).toBe("bad_request");
+    }
     expect(spawn).not.toHaveBeenCalled();
     expect(channel.closed).toBe(false);
   });

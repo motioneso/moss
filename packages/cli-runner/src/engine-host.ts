@@ -50,7 +50,7 @@ import {
   startIdleReapTimer as startPoolIdleReapTimer
 } from "@moss/chat/live";
 import type { ProviderKind } from "@moss/ai";
-import type { AcpProviderKind } from "@moss/acp";
+import type { AcpProfile, AcpProviderKind } from "@moss/acp";
 
 import { AcpHost, type AcpExecPollResult, type AcpReadResult } from "./acp-host.js";
 import { ACP_DEADLINE_DIR } from "./exec-records.js";
@@ -134,9 +134,11 @@ export class CliChatEngineHost {
   async acpSpawn(
     sessionKey: string,
     projectId: string,
-    providerKind: AcpProviderKind
+    providerKind: AcpProviderKind,
+    userId: string,
+    profile: AcpProfile
   ): Promise<{ cwd: string; generation: number }> {
-    return this.acp.spawn(sessionKey, projectId, providerKind);
+    return this.acp.spawn(sessionKey, projectId, providerKind, userId, profile);
   }
 
   acpSend(sessionKey: string, line: string): void {

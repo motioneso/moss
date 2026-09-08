@@ -9,6 +9,8 @@
  * resolves and spawns; nothing in this package launches anything yet.
  */
 
+import { launchOffList } from "./tool-table.js";
+
 export type AcpProviderKind = "anthropic" | "openai" | "google" | "opencode";
 
 export interface AcpProviderRow {
@@ -73,7 +75,8 @@ const ROWS: readonly AcpProviderRow[] = [
     login:
       "reads its own config file; account login reuse untested, no account logged in on the box",
     model: "session/set_config_option (switched to Muse Spark 1.3 free live, 2026-09-07)",
-    offList: "to verify on dev in task 5; chat only once proven",
+    offList:
+      "settings file in the agent home with shell and file edits denied, written at spawn for chat",
     chatReady: false,
     chatBlockReason:
       "its shell-and-writes switch-off is unproven: Scout proved the model switch, a real turn and token counts, not the switch-off (verified on dev in task 5)"
@@ -85,6 +88,24 @@ export function getAcpProviderRow(kind: AcpProviderKind): AcpProviderRow {
   const row = ROWS.find((candidate) => candidate.kind === kind);
   if (!row) throw new Error(`Unknown ACP provider kind: ${kind}`);
   return row;
+}
+
+/**
+ * OpenCode permission keys the chat profile denies, derived from the tool
+ * table so launch and policy cannot drift: every shell or write row switched
+ * off for chat contributes its tool name, and only names OpenCode actually
+ * has are kept (it has no KillShell, MultiEdit or NotebookEdit).
+ */
+const OPENCODE_KNOWN_PERMISSION_KEYS = new Set(["bash", "edit", "write"]);
+
+export function opencodeDenyPermissionKeys(): string[] {
+  const keys = new Set<string>();
+  for (const name of launchOffList("chat")) {
+    const base = name.startsWith("mcp__acp__") ? name.slice("mcp__acp__".length) : name;
+    const key = base.toLowerCase();
+    if (OPENCODE_KNOWN_PERMISSION_KEYS.has(key)) keys.add(key);
+  }
+  return [...keys].sort();
 }
 
 /** All four rows, for the row-lookup test and future settings use. */

@@ -25,6 +25,7 @@ import {
 
 import { checkAcpProfile, checkAgentCapabilities, type AcpProfile } from "./capabilities.js";
 import { getAcpProviderRow, type AcpProviderKind } from "./providers.js";
+import { launchOffList } from "./tool-table.js";
 import { selectAllowOptionId, toolNameFromMeta, type AcpBuiltInRequest } from "./permissions.js";
 import { createTunnelStream } from "./stream.js";
 import type { AcpTunnel } from "./tunnel.js";
@@ -202,16 +203,26 @@ export class MossAcpClient {
    * adapter row for the model fallback, and the profile gate refuses anything
    * but a ready provider on the chat profile before anything is spawned. There
    * is no default kind; a caller that does not know the provider cannot open.
+   * The user id travels with it: the runner's account slot belongs to the
+   * person, never the session. The profile travels too, so the runner applies
+   * that surface's launch rules.
    */
   async openSession(
     sessionKey: string,
     projectId: string,
     providerKind: AcpProviderKind,
+    userId: string,
     surface: AcpProfile = "workshop",
     toolServer?: AcpToolServer
   ): Promise<AcpSessionHandle> {
     checkAcpProfile(surface, providerKind);
-    const { cwd, home } = await this.tunnel.spawn(sessionKey, projectId, providerKind);
+    const { cwd, home } = await this.tunnel.spawn(
+      sessionKey,
+      projectId,
+      providerKind,
+      userId,
+      surface
+    );
     const stream = createTunnelStream(this.tunnel, sessionKey);
     const connection = new ClientSideConnection(() => this.createClientHandler(), stream);
     const init = await connection.initialize({
@@ -223,10 +234,11 @@ export class MossAcpClient {
     const session = await connection.newSession({
       cwd,
       mcpServers: toolServer ? [toMcpServerEntry(toolServer)] : [],
-      // The agent's own file and shell tools stay off on purpose: files and
-      // commands are Moss tools, and the vendor default prompt is not a policy
-      // we accept. The runner-side settings file denies them a second time.
-      _meta: { disableBuiltInTools: true }
+      // The row's launch-time off-list, from the tool table through the row's
+      // own mechanism: the agent's disallowed-tools list. The legacy blanket
+      // flag is gone on purpose — it switched everything off including the
+      // tools the profile allows, and other adapters never honored it.
+      _meta: { claudeCode: { options: { disallowedTools: launchOffList(surface) } } }
     });
     this.connections.set(session.sessionId, connection);
     this.texts.set(session.sessionId, []);

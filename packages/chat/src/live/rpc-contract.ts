@@ -540,6 +540,10 @@ export interface RpcAcpSpawnParams {
    * and the host refuses an unknown kind. There is no default provider.
    */
   readonly providerKind: string;
+  /** Whose account slot the agent runs in. Required: slots belong to people, never sessions. */
+  readonly userId: string;
+  /** Which surface the session serves. The host applies that profile's launch rules. */
+  readonly profile: string;
 }
 /** result for method "acpSpawn": the runner-side working folder the client hands to session/new. */
 export interface RpcAcpSpawnResult {

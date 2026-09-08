@@ -11,8 +11,10 @@
  */
 
 import { O_CREAT, O_DIRECTORY, O_NOFOLLOW, O_RDONLY, O_TRUNC, O_WRONLY } from "node:constants";
-import { lstat, mkdir, open, unlink } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
+
+import { opencodeDenyPermissionKeys } from "@moss/acp";
 
 /**
  * Build every level of a folder path under the runner base without ever
@@ -127,4 +129,33 @@ async function prepareOwnedDir(
   } finally {
     await handle.close().catch(() => undefined);
   }
+}
+
+/**
+ * OpenCode chat deny file in the agent home: shell and file edits denied from
+ * the tool table's chat column. Merges into an existing config, keeping the rest.
+ */
+export async function writeOpencodeChatDenyFile(
+  agentHome: string,
+  userId: string,
+  uid: number | undefined,
+  gid: number | undefined
+): Promise<void> {
+  const dir = await prepareOwnedPath(agentHome, userId, uid, gid, ".config", "opencode");
+  const path = join(dir, "opencode.json");
+  let config: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      config = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Absent or broken config: start fresh, nothing to keep.
+  }
+  const prior = config.permission;
+  const permission: Record<string, unknown> =
+    prior && typeof prior === "object" && !Array.isArray(prior) ? { ...prior } : {};
+  for (const key of opencodeDenyPermissionKeys()) permission[key] = "deny";
+  config.permission = permission;
+  await writeOwnedFile(userId, path, JSON.stringify(config, null, 2), uid, gid);
 }
