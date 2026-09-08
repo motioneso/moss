@@ -45,6 +45,9 @@ export interface AcpSessionHandle {
   readonly home: string | null;
   /** The spawned agent's own process id, or null when it could not be read. */
   readonly pid: number | null;
+  /** The slot account the agent should be running as — the identity evidence to check against. */
+  readonly uid: number;
+  readonly gid: number;
 }
 
 /**
@@ -192,6 +195,8 @@ export class MossAcpClient {
   private readonly sessionCwds = new Map<string, string>();
   private readonly sessionHomes = new Map<string, string | null>();
   private readonly sessionPids = new Map<string, number | null>();
+  private readonly sessionUids = new Map<string, number>();
+  private readonly sessionGids = new Map<string, number>();
   private readonly sessionKinds = new Map<string, AcpProviderKind>();
   private readonly sessionOptions = new Map<string, readonly SessionConfigOption[]>();
   private readonly announcements = new Map<string, Map<string, AcpToolAnnouncement>>();
@@ -221,7 +226,7 @@ export class MossAcpClient {
     toolServer?: AcpToolServer
   ): Promise<AcpSessionHandle> {
     checkAcpProfile(surface, providerKind);
-    const { cwd, home, pid } = await this.tunnel.spawn(
+    const { cwd, home, pid, uid, gid } = await this.tunnel.spawn(
       sessionKey,
       projectId,
       providerKind,
@@ -253,10 +258,12 @@ export class MossAcpClient {
     this.sessionCwds.set(session.sessionId, cwd);
     this.sessionHomes.set(session.sessionId, home);
     this.sessionPids.set(session.sessionId, pid);
+    this.sessionUids.set(session.sessionId, uid);
+    this.sessionGids.set(session.sessionId, gid);
     this.sessionKinds.set(session.sessionId, providerKind);
     this.sessionOptions.set(session.sessionId, session.configOptions ?? []);
     if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
-    return { sessionId: session.sessionId, cwd, home, pid };
+    return { sessionId: session.sessionId, cwd, home, pid, uid, gid };
   }
 
   async prompt(
@@ -358,6 +365,8 @@ export class MossAcpClient {
     this.sessionCwds.delete(handle.sessionId);
     this.sessionHomes.delete(handle.sessionId);
     this.sessionPids.delete(handle.sessionId);
+    this.sessionUids.delete(handle.sessionId);
+    this.sessionGids.delete(handle.sessionId);
     this.sessionKinds.delete(handle.sessionId);
     this.sessionOptions.delete(handle.sessionId);
     this.announcements.delete(handle.sessionId);
@@ -446,6 +455,9 @@ export class MossAcpClient {
     }
     const home = this.sessionHomes.get(params.sessionId) ?? null;
     const pid = this.sessionPids.get(params.sessionId) ?? null;
+    const uid = this.sessionUids.get(params.sessionId);
+    const gid = this.sessionGids.get(params.sessionId);
+    if (uid === undefined || gid === undefined) return denyPermission();
     const toolCallId = params.toolCall.toolCallId;
     let announced = this.announcements.get(params.sessionId)?.get(toolCallId);
     if (!announced) {
@@ -473,7 +485,9 @@ export class MossAcpClient {
         sessionId: params.sessionId,
         cwd,
         home,
-        pid
+        pid,
+        uid,
+        gid
       });
       if (verdict !== "allow") return denyPermission();
       // Least privilege: single-use grant, never standing. No allow option

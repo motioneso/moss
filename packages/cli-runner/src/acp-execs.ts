@@ -17,7 +17,11 @@ import {
   readExecRecord,
   writeExecRecord
 } from "./exec-records.js";
-import { prepareOwnedPathWithOwnership, type OwnershipApplier } from "./owned-fs.js";
+import {
+  handOverOwnedPath,
+  prepareOwnedPathWithOwnership,
+  type OwnershipApplier
+} from "./owned-fs.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { allocateUidSlot } from "./uid-allocator.js";
@@ -215,24 +219,24 @@ export class AcpExecManager {
       uid = slot.uid;
       gid = slot.gid;
     }
-    const sessionDir = await prepareOwnedPathWithOwnership(
-      this.deps.neutralBase,
+    const sessionPath = await prepareOwnedPathWithOwnership(this.deps.neutralBase, key, [
       key,
-      uid,
-      gid,
-      [key, "acp", projectId],
-      this.deps.applyOwnership
-    );
+      "acp",
+      projectId
+    ]);
     // The build's own home, in its own scratch area rather than the shared
     // home base, so the login token file is not under the build's home.
-    const homeDir = await prepareOwnedPathWithOwnership(
-      this.deps.neutralBase,
+    const homePath = await prepareOwnedPathWithOwnership(this.deps.neutralBase, key, [
       key,
-      uid,
-      gid,
-      [key, "acp-home", projectId],
-      this.deps.applyOwnership
-    );
+      "acp-home",
+      projectId
+    ]);
+    if (uid !== undefined && gid !== undefined) {
+      await handOverOwnedPath(key, sessionPath.levels, uid, gid, this.deps.applyOwnership);
+      await handOverOwnedPath(key, homePath.levels, uid, gid, this.deps.applyOwnership);
+    }
+    const sessionDir = sessionPath.path;
+    const homeDir = homePath.path;
 
     // Scrubbed environment with the build's own home. What is actually true:
     // the build's home no longer points at the shared home, so the login

@@ -12,7 +12,7 @@
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createRequire } from "node:module";
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   AcpExecManager,
@@ -25,8 +25,11 @@ import {
   type AcpExecPollResult
 } from "./acp-execs.js";
 import {
+  handOverOpencodeChatDenyFile,
+  handOverOwnedPath,
   prepareOwnedPathWithOwnership,
   writeOpencodeChatDenyFile,
+  type OwnedPathLevel,
   type OwnershipApplier
 } from "./owned-fs.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
@@ -108,6 +111,13 @@ export interface AcpSpawnResult {
    * owner stat that only shows what was asked for.
    */
   readonly pid: number | null;
+  /**
+   * The slot account the agent is spawned to run as — the expected identity
+   * to check /proc/<pid>/status against, not a stand-in for it (task 5b,
+   * Astra-Reviewer finding 5, 2026-09-08).
+   */
+  readonly uid: number;
+  readonly gid: number;
 }
 
 export interface AcpReadResult {
@@ -133,11 +143,37 @@ const MAX_REPLY_BYTES = 1024 * 1024;
 const IDLE_REAP_MS = 30 * 60 * 1000;
 /** Single-line cap: a pathological stdout line must not blow the RPC frame cap. */
 const MAX_LINE_BYTES = 256 * 1024;
+/** How long a stop waits for the signalled process to actually exit before reporting it as refused. */
+const KILL_CONFIRM_TIMEOUT_MS = 5000;
+
+/**
+ * Remove every level this launch created, shallowest owned-here level first:
+ * removing a level recursively also removes whatever this same launch built
+ * underneath it, so there is nothing left to double-remove going deeper. A
+ * level that already existed before this launch (createdHere false) is
+ * never touched (task 5b, Astra-Reviewer finding 1 and 2, 2026-09-08).
+ */
+async function removeCreatedLevels(levels: readonly OwnedPathLevel[]): Promise<void> {
+  for (const level of levels) {
+    if (!level.ownedHere || !level.createdHere) continue;
+    await rm(level.path, { force: true, recursive: true }).catch(() => undefined);
+    break;
+  }
+}
 
 interface AcpSession {
   readonly child: ChildProcessWithoutNullStreams;
   readonly cwd: string;
   readonly generation: number;
+  /**
+   * The slot's own identity, present whenever per-user separation launched
+   * this session. The launcher's three privileges (chown/setuid/setgid) do
+   * not include signalling another account's process, so a stop is sent
+   * through setpriv running as this identity instead (task 5b, Astra-Reviewer
+   * finding 3, 2026-09-08). Null only for a session launched without
+   * per-user identity.
+   */
+  readonly identity: { readonly uid: number; readonly gid: number } | null;
   buffered: string[];
   bufferedBytes: number;
   nextSeq: number;
@@ -154,6 +190,12 @@ interface AcpSession {
   exited: boolean;
   exitCode: number | null;
   lastActivity: number;
+  /**
+   * Set once a stop signal is in flight for this session, so an idle sweep or
+   * a second kill call while it is confirming does not send the signal twice.
+   * Cleared again if the stop fails, so a later call can retry.
+   */
+  stopping: boolean;
 }
 
 /** What runs for one adapter spawn: node plus the row's pinned entry, or the provider binary. */
@@ -245,7 +287,7 @@ export class AcpHost {
       }
     }
     const key = sanitizeSessionKey(sessionKey);
-    this.killRecord(key);
+    await this.killRecord(key);
 
     // Per-user identity is mandatory on this path: without it every agent
     // would share one account and one home, and the deny file would land in
@@ -259,19 +301,21 @@ export class AcpHost {
     const uid = slot.uid;
     const gid = slot.gid;
     // The slot's own home, never the shared base: two people must not read
-    // each other's logins.
-    const agentHome = await prepareOwnedPathWithOwnership(
+    // each other's logins. Created here, launcher-owned throughout: every
+    // file the launch needs inside it (the OpenCode deny file) is written
+    // before ownership ever hands over, since the launcher cannot enter a
+    // folder once it is someone else's (task 5b, Astra-Reviewer finding 2,
+    // 2026-09-08).
+    const agentHomeResult = await prepareOwnedPathWithOwnership(
       this.deps.homeBase,
       userId,
-      uid,
-      gid,
       ["agents", userId],
-      this.deps.applyOwnership,
       // "agents" is a shared parent the launcher itself keeps owning
-      // (pass-through, 0711); only "userId" below it hands over owner-only
+      // (pass-through, 0711); only "userId" below it ever hands over
       // (task 5b, Astra-Reviewer finding 3, 2026-09-08).
       1
     );
+    const agentHome = agentHomeResult.path;
     // Same link-safe folder setup the build path uses, at every level: a
     // command that ran here earlier can plant a link at this folder or any of
     // its parents, so each level is cleared of links and verified before the
@@ -281,14 +325,12 @@ export class AcpHost {
     // plus the per-session folder (asserted in cli-runner-acp-host.test.ts),
     // not these bits. Still the only safe default: group and world get
     // nothing.
-    const sessionDir = await prepareOwnedPathWithOwnership(
-      this.deps.neutralBase,
+    const sessionDirResult = await prepareOwnedPathWithOwnership(this.deps.neutralBase, key, [
       key,
-      uid,
-      gid,
-      [key, "acp", projectId],
-      this.deps.applyOwnership
-    );
+      "acp",
+      projectId
+    ]);
+    const sessionDir = sessionDirResult.path;
 
     const env: NodeJS.ProcessEnv = {
       ...buildSanitizedCliEnv(process.env),
@@ -311,8 +353,37 @@ export class AcpHost {
     ) {
       env.INITIAL_AGENT_MODE = "read-only";
     }
+    let opencodeDenyFile: Awaited<ReturnType<typeof writeOpencodeChatDenyFile>> | null = null;
     if (providerKind === "opencode" && profile === "chat") {
-      await writeOpencodeChatDenyFile(agentHome, userId, uid, gid, this.deps.applyOwnership);
+      opencodeDenyFile = await writeOpencodeChatDenyFile(agentHome, userId);
+    }
+
+    // Every file this launch needed inside the two trees is written by now.
+    // Hand ownership over, deepest level first: the deny file and its
+    // folders (nested inside agentHome) ahead of agentHome's own leaf level,
+    // then the session folder (task 5b, Astra-Reviewer finding 2, 2026-09-08).
+    // A failure partway through leaves the OTHER tree (already created,
+    // never yet handed over) on disk unless this launch cleans it up too:
+    // handOverOwnedPath only removes the one level it was working on, so the
+    // ruling's "the cleanup removes only what this launch created" is
+    // enforced here across both trees, not level-by-level (task 5b,
+    // Astra-Reviewer finding 2, 2026-09-08).
+    try {
+      if (opencodeDenyFile) {
+        await handOverOpencodeChatDenyFile(
+          userId,
+          opencodeDenyFile,
+          uid,
+          gid,
+          this.deps.applyOwnership
+        );
+      }
+      await handOverOwnedPath(userId, agentHomeResult.levels, uid, gid, this.deps.applyOwnership);
+      await handOverOwnedPath(key, sessionDirResult.levels, uid, gid, this.deps.applyOwnership);
+    } catch (error) {
+      await removeCreatedLevels(agentHomeResult.levels);
+      await removeCreatedLevels(sessionDirResult.levels);
+      throw error;
     }
 
     const target =
@@ -328,15 +399,33 @@ export class AcpHost {
         // process ends with none (Astra-Reviewer finding 2, 2026-09-08). The
         // outer spawn then runs as the launcher's own identity, not the
         // target uid/gid — setpriv performs that switch itself.
+        //
+        // The working directory is entered after the identity switch, never
+        // by this outer spawn's own cwd option: by now the session folder has
+        // already been handed over to the target account, and the launcher
+        // can no longer enter a folder it does not own (task 5b,
+        // Astra-Reviewer finding 2, 2026-09-08). setpriv itself has no cd
+        // step, so the privileged path wraps the real command in a shell that
+        // cd's after setpriv has already switched identity and is about to
+        // exec it; the folder name travels as its own argument, never
+        // interpolated into the script text.
         const launch =
           opts.uid !== undefined && opts.gid !== undefined
-            ? buildSetprivDropCommand(opts.command, opts.args, { uid: opts.uid, gid: opts.gid })
+            ? buildSetprivDropCommand(
+                "sh",
+                ["-c", 'cd "$1" && shift && exec "$@"', "sh", opts.cwd, opts.command, ...opts.args],
+                { uid: opts.uid, gid: opts.gid }
+              )
             : { command: opts.command, args: [...opts.args] };
         // detached: the adapter owns a process group, so kill takes down the
         // whole tree (the agent SDK's own CLI grandchild included) — a plain
         // child.kill would orphan it. Same shape as the persistent chat runtime.
         return spawn(launch.command, launch.args, {
-          cwd: opts.cwd,
+          // No cwd here for the privileged path — see above. The
+          // non-privileged fallback (uid/gid undefined, tests only) keeps
+          // entering the folder directly, since there is no identity switch
+          // to wait for.
+          cwd: opts.uid !== undefined && opts.gid !== undefined ? undefined : opts.cwd,
           env: opts.env,
           stdio: ["pipe", "pipe", "pipe"],
           detached: true
@@ -354,6 +443,7 @@ export class AcpHost {
     const session: AcpSession = {
       child,
       cwd: sessionDir,
+      identity: { uid, gid },
       generation: (this.generationCounter += 1),
       buffered: [],
       bufferedBytes: 0,
@@ -362,7 +452,8 @@ export class AcpHost {
       truncated: false,
       exited: false,
       exitCode: null,
-      lastActivity: Date.now()
+      lastActivity: Date.now(),
+      stopping: false
     };
     let pending = "";
     child.stdout.on("data", (chunk: Buffer) => {
@@ -402,7 +493,9 @@ export class AcpHost {
       cwd: sessionDir,
       generation: session.generation,
       home: agentHome,
-      pid: child.pid ?? null
+      pid: child.pid ?? null,
+      uid,
+      gid
     };
   }
 
@@ -496,7 +589,7 @@ export class AcpHost {
     }
   }
 
-  kill(sessionKey: string, expectedGeneration?: number): void {
+  async kill(sessionKey: string, expectedGeneration?: number): Promise<void> {
     this.sweepIdle();
     const key = sanitizeSessionKey(sessionKey);
     const session = this.sessions.get(key);
@@ -504,7 +597,7 @@ export class AcpHost {
     // A guarded kill from a dropped connection must not take down a session
     // another connection respawned after it: generations differ, so no-op.
     if (expectedGeneration !== undefined && session.generation !== expectedGeneration) return;
-    this.killRecord(key);
+    await this.killRecord(key);
   }
 
   private requireLive(sessionKey: string): AcpSession {
@@ -515,32 +608,91 @@ export class AcpHost {
     return session;
   }
 
-  private killRecord(key: string): void {
+  /**
+   * Stop one session's process group and wait for it to actually exit before
+   * dropping the record for it. The launcher's three privileges (chown,
+   * setuid, setgid) do not cover signalling another account's process, so
+   * a session launched under a slot identity is stopped through setpriv
+   * running AS that same slot, which needs no further privilege to signal
+   * its own process group. A refused or unconfirmed stop is thrown, not
+   * swallowed, and the session record is kept so the caller can retry
+   * (task 5b, Astra-Reviewer finding 3, 2026-09-08).
+   */
+  private async killRecord(key: string): Promise<void> {
     const session = this.sessions.get(key);
-    this.sessions.delete(key);
-    if (!session || session.exited) return;
-    // Kill the group first (adapter plus any CLI grandchild), then fall back to
-    // the direct child. Every step is best-effort: the process may already be gone.
+    if (!session) return;
+    if (session.exited) {
+      this.sessions.delete(key);
+      return;
+    }
+    if (session.stopping) return;
     const pid = session.child.pid;
-    if (pid !== undefined) {
+    if (pid === undefined) {
+      this.sessions.delete(key);
+      return;
+    }
+    session.stopping = true;
+    try {
+      await this.signalProcessGroup(session, pid);
+      await this.awaitExit(session);
+    } catch (error) {
+      session.stopping = false;
+      throw error;
+    }
+    this.sessions.delete(key);
+  }
+
+  /** Send SIGTERM to the session's process group as the owning identity. */
+  private async signalProcessGroup(session: AcpSession, pid: number): Promise<void> {
+    if (!session.identity) {
+      // No per-user identity: the launcher started this child directly under
+      // its own account, so it may signal it directly, same as before.
       try {
         process.kill(-pid, "SIGTERM");
-        return;
       } catch {
-        /* fall through to the direct kill */
+        session.child.kill("SIGTERM");
       }
+      return;
     }
-    try {
-      session.child.kill("SIGTERM");
-    } catch {
-      /* already gone */
-    }
+    const { command, args } = buildSetprivDropCommand(
+      "kill",
+      ["-TERM", "--", `-${pid}`],
+      session.identity
+    );
+    await new Promise<void>((resolve, reject) => {
+      const stopper = spawn(command, args, { stdio: "ignore" });
+      stopper.once("error", (error) => reject(error));
+      stopper.once("exit", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`stop command for pid ${pid} exited with code ${String(code)}`));
+      });
+    });
+  }
+
+  /** Wait for the session's own exit handler to fire, or time out and report it. */
+  private async awaitExit(session: AcpSession, timeoutMs = KILL_CONFIRM_TIMEOUT_MS): Promise<void> {
+    if (session.exited) return;
+    await new Promise<void>((resolve, reject) => {
+      const onExit = (): void => {
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        session.child.removeListener("exit", onExit);
+        reject(new Error("stop signal sent, but the process did not exit in time"));
+      }, timeoutMs);
+      session.child.once("exit", onExit);
+    });
   }
 
   private sweepIdle(): void {
     const now = Date.now();
     for (const [key, session] of this.sessions) {
-      if (now - session.lastActivity > IDLE_REAP_MS) this.killRecord(key);
+      if (now - session.lastActivity > IDLE_REAP_MS && !session.stopping) {
+        this.killRecord(key).catch((error: unknown) => {
+          console.error(`[acp-host] ${key} idle stop failed: ${(error as Error).message}`);
+        });
+      }
     }
   }
 

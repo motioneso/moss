@@ -28,41 +28,50 @@ export type OwnershipApplier = (handle: FileHandle, uid: number, gid: number) =>
 const defaultApplyOwnership: OwnershipApplier = (handle, uid, gid) => handle.chown(uid, gid);
 
 /**
+ * One folder level made by prepareOwnedPathWithOwnership: enough to hand it
+ * over later, deepest first, without redoing the lstat/mkdir/verify work and
+ * without losing track of which levels this call actually created (task 5b,
+ * Astra-Reviewer finding 2, 2026-09-08 — the old single-pass code chowned
+ * each level as soon as it made it, so a file written into a level after
+ * that point landed in a folder the launcher itself could no longer enter).
+ */
+export interface OwnedPathLevel {
+  readonly path: string;
+  readonly createdHere: boolean;
+  readonly ownedHere: boolean;
+}
+
+/**
  * Build every level of a folder path under the runner base without ever
- * following a link. Returns the full path.
+ * following a link and without handing any of it over yet. Returns the full
+ * path. Pair with handOverOwnedPath once every file this launch needs inside
+ * the tree has been written.
  */
 export async function prepareOwnedPath(
   baseDir: string,
   key: string,
-  uid: number | undefined,
-  gid: number | undefined,
   ...segments: string[]
 ): Promise<string> {
-  return prepareOwnedPathWithOwnership(baseDir, key, uid, gid, segments);
+  return (await prepareOwnedPathWithOwnership(baseDir, key, segments)).path;
 }
 
 /**
- * Same as prepareOwnedPath, but lets the caller swap in how a folder is
- * handed to its owner. AcpHost uses this so its tests can prove the routing
- * logic without needing real chown privileges, while still proving the real
- * failure-and-cleanup behavior separately against a genuinely unreachable id.
+ * Same as prepareOwnedPath, but returns the per-level record handOverOwnedPath
+ * needs, and lets the caller mark a leading run of segments as shared parents
+ * that are never handed over.
  *
  * `sharedPrefixCount` marks how many of the leading segments are shared
  * parents rather than one person's own folder (task 5b, Astra-Reviewer
  * finding 3, 2026-09-08): those levels stay owned by the caller (this
  * process), mode 0711 pass-through, so the launcher can keep creating
- * siblings under them for other people. Ownership only hands over starting
- * at the first segment past that prefix.
+ * siblings under them for other people.
  */
 export async function prepareOwnedPathWithOwnership(
   baseDir: string,
   key: string,
-  uid: number | undefined,
-  gid: number | undefined,
   segments: readonly string[],
-  applyOwnership: OwnershipApplier = defaultApplyOwnership,
   sharedPrefixCount = 0
-): Promise<string> {
+): Promise<{ path: string; levels: OwnedPathLevel[] }> {
   for (const segment of segments) {
     if (
       segment.length === 0 ||
@@ -77,33 +86,61 @@ export async function prepareOwnedPathWithOwnership(
     }
   }
   let current = baseDir;
+  const levels: OwnedPathLevel[] = [];
   for (const [index, segment] of segments.entries()) {
     current = join(current, segment);
-    await prepareOwnedDir(key, current, uid, gid, applyOwnership, index >= sharedPrefixCount);
+    const ownedHere = index >= sharedPrefixCount;
+    const createdHere = await prepareOwnedDir(key, current, ownedHere);
+    levels.push({ path: current, createdHere, ownedHere });
   }
-  return current;
+  return { path: current, levels };
 }
 
 /**
- * Write content to path without ever following a link. A planted link is
- * removed first, and the file is opened with O_NOFOLLOW. Owner-only bits and
- * handover go through the open handle, so they can only land on this file. A
- * failure to lock or hand over is said out loud: silent best-effort is how
- * isolation ends up missing with nobody knowing.
+ * Hand every owned-here level over to its owner, deepest first, stopping and
+ * cleaning up at the first failure (task 5b, Astra-Reviewer finding 2,
+ * 2026-09-08). Call only once every file this launch writes into the tree
+ * has been written by writeOwnedFile — that write needs the launcher's own
+ * access, which a level already handed over would refuse it.
  */
-export async function writeOwnedFile(
+export async function handOverOwnedPath(
   key: string,
-  path: string,
-  content: string,
-  uid: number | undefined,
-  gid: number | undefined,
+  levels: readonly OwnedPathLevel[],
+  uid: number,
+  gid: number,
   applyOwnership: OwnershipApplier = defaultApplyOwnership
 ): Promise<void> {
+  for (let index = levels.length - 1; index >= 0; index -= 1) {
+    const level = levels[index] as OwnedPathLevel;
+    if (!level.ownedHere) continue;
+    const handle = await open(level.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    try {
+      await applyOwnership(handle, uid, gid);
+    } catch (error) {
+      if (level.createdHere) {
+        await rm(level.path, { force: true, recursive: true }).catch(() => undefined);
+      }
+      throw new Error(
+        `AcpHost: ${key} could not hand the project folder to its owner, launch refused: ${(error as Error).message}`,
+        { cause: error }
+      );
+    } finally {
+      await handle.close().catch(() => undefined);
+    }
+  }
+}
+
+/**
+ * Write content to path without ever following a link, without handing it
+ * over yet. A planted link is removed first, and the file is opened with
+ * O_NOFOLLOW. Returns whether this call created the file fresh (false if it
+ * already existed) — pass that to handOverOwnedFile so a failed handover
+ * only removes what this call made (task 5b, Astra-Reviewer finding 1,
+ * 2026-09-08).
+ */
+export async function writeOwnedFile(key: string, path: string, content: string): Promise<boolean> {
   const first = await lstat(path).catch(() => null);
   if (first && first.isSymbolicLink()) await unlink(path);
-  // A file already there before this call was not this call's to remove on
-  // failure — only a fresh write this call made is (task 5b, Astra-Reviewer
-  // finding 1, 2026-09-08).
   const preexisting = first !== null && !first.isSymbolicLink();
   const handle = await open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o600);
   try {
@@ -115,44 +152,53 @@ export async function writeOwnedFile(
         `[acp-host] ${key} could not lock ${path} owner-only: ${(error as Error).message}`
       );
     }
-    if (uid !== undefined && gid !== undefined) {
-      try {
-        await applyOwnership(handle, uid, gid);
-      } catch (error) {
-        await handle.close().catch(() => undefined);
-        if (!preexisting) {
-          await unlink(path).catch(() => undefined);
-        }
-        throw new Error(
-          `AcpHost: ${key} could not hand ${path} to its owner, launch refused: ${(error as Error).message}`,
-          { cause: error }
-        );
-      }
-    }
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+  return !preexisting;
+}
+
+/**
+ * Hand a file writeOwnedFile made over to its owner. Call only after every
+ * write this launch needs is done — a level or file already handed over
+ * refuses the launcher's own further writes (task 5b, Astra-Reviewer
+ * finding 2, 2026-09-08).
+ */
+export async function handOverOwnedFile(
+  key: string,
+  path: string,
+  createdHere: boolean,
+  uid: number,
+  gid: number,
+  applyOwnership: OwnershipApplier = defaultApplyOwnership
+): Promise<void> {
+  const handle = await open(path, O_WRONLY | O_NOFOLLOW);
+  try {
+    await applyOwnership(handle, uid, gid);
+  } catch (error) {
+    if (createdHere) await unlink(path).catch(() => undefined);
+    throw new Error(
+      `AcpHost: ${key} could not hand ${path} to its owner, launch refused: ${(error as Error).message}`,
+      { cause: error }
+    );
   } finally {
     await handle.close().catch(() => undefined);
   }
 }
 
 /**
- * Make one folder level real and owned without ever following a link. The
- * parent level must already be secured (see prepareOwnedPath): this creates
- * only this level, so a link above it cannot redirect the creation.
+ * Make one folder level real without ever following a link, without handing
+ * it over yet. The parent level must already be secured (see
+ * prepareOwnedPath): this creates only this level, so a link above it cannot
+ * redirect the creation. Returns whether this call created it fresh.
  */
-async function prepareOwnedDir(
-  key: string,
-  path: string,
-  uid: number | undefined,
-  gid: number | undefined,
-  applyOwnership: OwnershipApplier = defaultApplyOwnership,
-  ownedHere = true
-): Promise<void> {
+async function prepareOwnedDir(key: string, path: string, ownedHere: boolean): Promise<boolean> {
   const first = await lstat(path).catch(() => null);
   if (first && first.isSymbolicLink()) await unlink(path);
-  // Only clean up on failure what this call actually made: a folder that
-  // already existed (this launch merely reused it) must survive a failed
-  // handover untouched (task 5b, Astra-Reviewer finding 1, 2026-09-08 — the
-  // old cleanup deleted a whole pre-existing home).
+  // Only clean up on a later failed handover what this call actually made: a
+  // folder that already existed (this launch merely reused it) must survive
+  // untouched (task 5b, Astra-Reviewer finding 1, 2026-09-08 — the old
+  // cleanup deleted a whole pre-existing home).
   let createdHere = false;
   await mkdir(path).then(
     () => {
@@ -169,63 +215,33 @@ async function prepareOwnedDir(
   const handle = await open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
   try {
     // A shared parent stays owned by the launcher itself, pass-through only:
-    // no chown, so the launcher can keep creating other people's sibling
-    // folders underneath it (task 5b, Astra-Reviewer finding 3, 2026-09-08).
-    if (!ownedHere) {
-      try {
-        await handle.chmod(0o711);
-      } catch (error) {
-        console.warn(
-          `[acp-host] ${key} could not lock the shared folder pass-through: ${(error as Error).message}`
-        );
-      }
-      return;
-    }
+    // no chown, ever (task 5b, Astra-Reviewer finding 3, 2026-09-08).
     try {
-      await handle.chmod(0o700);
+      await handle.chmod(ownedHere ? 0o700 : 0o711);
     } catch (error) {
-      console.warn(
-        `[acp-host] ${key} could not lock the project folder owner-only: ${(error as Error).message}`
-      );
-    }
-    if (uid !== undefined && gid !== undefined) {
-      try {
-        await applyOwnership(handle, uid, gid);
-      } catch (error) {
-        await handle.close().catch(() => undefined);
-        if (createdHere) {
-          await rm(path, { force: true, recursive: true }).catch(() => undefined);
-        }
-        throw new Error(
-          `AcpHost: ${key} could not hand the project folder to its owner, launch refused: ${(error as Error).message}`,
-          { cause: error }
-        );
-      }
+      console.warn(`[acp-host] ${key} could not lock ${path}: ${(error as Error).message}`);
     }
   } finally {
     await handle.close().catch(() => undefined);
   }
+  return createdHere;
 }
 
 /**
  * OpenCode chat deny file in the agent home: shell and file edits denied from
- * the tool table's chat column. Merges into an existing config, keeping the rest.
+ * the tool table's chat column. Merges into an existing config, keeping the
+ * rest. Creates the folders and writes the file launcher-owned; the caller
+ * hands everything over afterward, deepest first, alongside the rest of the
+ * agent home (task 5b, Astra-Reviewer finding 2, 2026-09-08).
  */
 export async function writeOpencodeChatDenyFile(
   agentHome: string,
-  userId: string,
-  uid: number | undefined,
-  gid: number | undefined,
-  applyOwnership: OwnershipApplier = defaultApplyOwnership
-): Promise<void> {
-  const dir = await prepareOwnedPathWithOwnership(
-    agentHome,
-    userId,
-    uid,
-    gid,
-    [".config", "opencode"],
-    applyOwnership
-  );
+  userId: string
+): Promise<{ levels: OwnedPathLevel[]; filePath: string; fileCreatedHere: boolean }> {
+  const { path: dir, levels } = await prepareOwnedPathWithOwnership(agentHome, userId, [
+    ".config",
+    "opencode"
+  ]);
   const path = join(dir, "opencode.json");
   let config: Record<string, unknown> = {};
   try {
@@ -241,5 +257,28 @@ export async function writeOpencodeChatDenyFile(
     prior && typeof prior === "object" && !Array.isArray(prior) ? { ...prior } : {};
   for (const key of opencodeDenyPermissionKeys()) permission[key] = "deny";
   config.permission = permission;
-  await writeOwnedFile(userId, path, JSON.stringify(config, null, 2), uid, gid, applyOwnership);
+  const fileCreatedHere = await writeOwnedFile(userId, path, JSON.stringify(config, null, 2));
+  return { levels, filePath: path, fileCreatedHere };
+}
+
+/**
+ * Hand everything writeOpencodeChatDenyFile made over to its owner, deepest
+ * first: the file, then the opencode folder, then .config.
+ */
+export async function handOverOpencodeChatDenyFile(
+  userId: string,
+  result: { levels: OwnedPathLevel[]; filePath: string; fileCreatedHere: boolean },
+  uid: number,
+  gid: number,
+  applyOwnership: OwnershipApplier = defaultApplyOwnership
+): Promise<void> {
+  await handOverOwnedFile(
+    userId,
+    result.filePath,
+    result.fileCreatedHere,
+    uid,
+    gid,
+    applyOwnership
+  );
+  await handOverOwnedPath(userId, result.levels, uid, gid, applyOwnership);
 }

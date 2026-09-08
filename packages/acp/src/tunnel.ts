@@ -30,7 +30,14 @@ export interface AcpTunnel {
     providerKind: AcpProviderKind,
     userId: string,
     profile: AcpProfile
-  ): Promise<{ cwd: string; home: string | null; pid: number | null }>;
+  ): Promise<{
+    cwd: string;
+    home: string | null;
+    pid: number | null;
+    /** The slot account the agent should be running as — the identity evidence to check against, not stat() the home. */
+    uid: number;
+    gid: number;
+  }>;
   /** Deliver one client-to-agent JSON-RPC line (no trailing newline). */
   send(sessionKey: string, line: string): Promise<void>;
   /** Drain adapter stdout lines after a sequence cursor. */

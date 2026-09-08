@@ -98,7 +98,7 @@ function rpcTunnel(conn: RpcConnection): AcpTunnel {
     spawn: (sessionKey, projectId, providerKind, userId, profile) =>
       conn
         .acpSpawn(sessionKey, { projectId, providerKind, userId, profile })
-        .then(({ cwd, home, pid }) => ({ cwd, home, pid })),
+        .then(({ cwd, home, pid, uid, gid }) => ({ cwd, home, pid, uid, gid })),
     send: (sessionKey, line) => conn.acpSend(sessionKey, { line }).then(() => undefined),
     read: (sessionKey, afterSeq) => conn.acpRead(sessionKey, { afterSeq }),
     kill: (sessionKey) => conn.acpKill(sessionKey).then(() => undefined),
@@ -126,6 +126,7 @@ function accountNameForUid(uid: number): string {
 interface ProcIdentity {
   readonly uid: number;
   readonly gid: number;
+  readonly permittedCaps: string;
   readonly inheritableCaps: string;
   readonly ambientCaps: string;
   readonly effectiveCaps: string;
@@ -140,6 +141,7 @@ function parseProcStatus(text: string): ProcIdentity {
   return {
     uid: Number(line("Uid").split(/\s+/)[0]),
     gid: Number(line("Gid").split(/\s+/)[0]),
+    permittedCaps: line("CapPrm"),
     inheritableCaps: line("CapInh"),
     ambientCaps: line("CapAmb"),
     effectiveCaps: line("CapEff")
@@ -151,13 +153,19 @@ function parseProcStatus(text: string): ProcIdentity {
  * reading its own child pid's `/proc/<pid>/status` — never a folder-owner
  * `stat()`, which only shows what was asked for and says nothing about
  * whether the ambient-capability leak (task 5b, Astra-Reviewer finding 2,
- * 2026-09-08) was actually closed. Fails the check if either capability set
- * is non-zero: a real leak, not just a mismatched account.
+ * 2026-09-08) was actually closed. Fails the check if the account is not
+ * exactly the slot the runner spawned it as, or if any of the four
+ * privilege sets (permitted, effective, inheritable, ambient) is non-zero —
+ * checking only two of the four sets, or only that the account is not root,
+ * passed a still-privileged process in Astra-Reviewer's finding 5,
+ * 2026-09-08.
  */
 async function reportActualIdentity(
   label: string,
   home: string | null,
-  pid: number | null
+  pid: number | null,
+  expectedUid: number,
+  expectedGid: number
 ): Promise<void> {
   if (pid === null) {
     throw new Error(
@@ -169,16 +177,26 @@ async function reportActualIdentity(
   const account = accountNameForUid(identity.uid);
   console.log(
     `[handshake] ${label}: pid=${pid} home=${home ?? "(none)"} account=${account} ` +
-      `(uid=${identity.uid}, gid=${identity.gid}) CapInh=${identity.inheritableCaps} ` +
-      `CapAmb=${identity.ambientCaps} CapEff=${identity.effectiveCaps}`
+      `(uid=${identity.uid}, gid=${identity.gid}, expected uid=${expectedUid} gid=${expectedGid}) ` +
+      `CapPrm=${identity.permittedCaps} CapEff=${identity.effectiveCaps} ` +
+      `CapInh=${identity.inheritableCaps} CapAmb=${identity.ambientCaps}`
   );
+  if (identity.uid !== expectedUid || identity.gid !== expectedGid) {
+    throw new Error(
+      `${label}: the spawned agent runs as uid=${identity.uid} gid=${identity.gid}, ` +
+        `not the slot account it was spawned as (uid=${expectedUid} gid=${expectedGid})`
+    );
+  }
   if (
+    identity.permittedCaps !== "0000000000000000" ||
+    identity.effectiveCaps !== "0000000000000000" ||
     identity.ambientCaps !== "0000000000000000" ||
     identity.inheritableCaps !== "0000000000000000"
   ) {
     throw new Error(
-      `${label}: the spawned agent still carries inheritable/ambient capabilities ` +
-        `(CapInh=${identity.inheritableCaps} CapAmb=${identity.ambientCaps}) — the privilege drop failed`
+      `${label}: the spawned agent still carries privileges ` +
+        `(CapPrm=${identity.permittedCaps} CapEff=${identity.effectiveCaps} ` +
+        `CapInh=${identity.inheritableCaps} CapAmb=${identity.ambientCaps}) — the privilege drop failed`
     );
   }
 }
@@ -198,7 +216,7 @@ async function claudeLeg(
   );
   const handle = await client.openSession(sessionKey, "handshake", providerKind, userId, "chat");
   console.log(`[handshake] session open id=${handle.sessionId} cwd=${handle.cwd}`);
-  await reportActualIdentity("claude leg", handle.home, handle.pid);
+  await reportActualIdentity("claude leg", handle.home, handle.pid, handle.uid, handle.gid);
   const result = await client.prompt(handle, PROMPT_TEXT, { timeoutMs });
   console.log(
     `[handshake] prompt done stopReason=${result.stopReason} toolCallsSeen=${result.toolCallsSeen} text=${JSON.stringify(result.text.slice(0, 200))}`
@@ -224,14 +242,14 @@ async function directLeg(
   const started = Date.now();
   const sessionKey = `acp-handshake-${process.pid}`;
   console.log(`[handshake] direct leg kind=${providerKind}: runner spawn plus protocol only`);
-  const { cwd, home, pid } = await tunnel.spawn(
+  const { cwd, home, pid, uid, gid } = await tunnel.spawn(
     sessionKey,
     "handshake",
     providerKind,
     userId,
     "chat"
   );
-  await reportActualIdentity("direct leg", home, pid);
+  await reportActualIdentity("direct leg", home, pid, uid, gid);
   const stream = createTunnelStream(tunnel, sessionKey);
   let text = "";
   let toolCallsSeen = 0;

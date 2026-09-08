@@ -286,9 +286,13 @@ describe("serveConnection (§3.4/§3.7)", () => {
     const host = fakeHost();
     vi.spyOn(host, "acpSpawn").mockResolvedValue({
       cwd: "/tmp/neutral-base/workshop:u:p/acp/p",
-      generation: 7
+      generation: 7,
+      home: null,
+      pid: null,
+      uid: 2001,
+      gid: 2001
     });
-    const kill = vi.spyOn(host, "acpKill").mockReturnValue(undefined);
+    const kill = vi.spyOn(host, "acpKill").mockResolvedValue(undefined);
     const channel = new FakeChannel();
     serveConnection(channel, deps(host));
     authenticate(channel);

@@ -21,8 +21,20 @@ class ScriptedAgent implements AcpTunnel {
   pollingStopped = false;
   hangPrompt = false;
 
-  async spawn(): Promise<{ cwd: string; home: string | null; pid: number | null }> {
-    return { cwd: "/runner/session/acp/proj", home: "/home/agent", pid: 12345 };
+  async spawn(): Promise<{
+    cwd: string;
+    home: string | null;
+    pid: number | null;
+    uid: number;
+    gid: number;
+  }> {
+    return {
+      cwd: "/runner/session/acp/proj",
+      home: "/home/agent",
+      pid: 12345,
+      uid: 2001,
+      gid: 2001
+    };
   }
 
   async send(_sessionKey: string, line: string): Promise<void> {

@@ -33,7 +33,7 @@ describe("setpriv command lines", () => {
     expect(built.args).toEqual([
       "--reuid=2001",
       "--regid=2001",
-      "--init-groups",
+      "--clear-groups",
       "--inh-caps=-all",
       "--ambient-caps=-all",
       "--",

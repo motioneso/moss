@@ -558,6 +558,13 @@ export interface RpcAcpSpawnResult {
   readonly home: string | null;
   /** The spawned agent's own process id, or null when it could not be read. */
   readonly pid: number | null;
+  /**
+   * The slot account the agent is spawned to run as — the expected identity
+   * to check /proc/<pid>/status against, not a stand-in for it (task 5b,
+   * Astra-Reviewer finding 5, 2026-09-08).
+   */
+  readonly uid: number;
+  readonly gid: number;
 }
 /** params for method "acpSend": one client-to-agent JSON-RPC line (no trailing newline). */
 export interface RpcAcpSendParams {

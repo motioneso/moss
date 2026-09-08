@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  handOverOwnedFile,
+  handOverOwnedPath,
   prepareOwnedPath,
   prepareOwnedPathWithOwnership,
   writeOwnedFile
@@ -17,11 +19,12 @@ const UNREACHABLE_UID = 65534;
 const UNREACHABLE_GID = 65534;
 
 describe("owned-fs stops rather than warns on a failed ownership handover", () => {
-  it("prepareOwnedPath throws and removes the folder it could not hand over", async () => {
+  it("handOverOwnedPath throws and removes the folder it could not hand over", async () => {
     const base = mkdtempSync(join(tmpdir(), "owned-fs-dir-"));
     try {
+      const { levels } = await prepareOwnedPathWithOwnership(base, "test", ["agent-home"]);
       await expect(
-        prepareOwnedPath(base, "test", UNREACHABLE_UID, UNREACHABLE_GID, "agent-home")
+        handOverOwnedPath("test", levels, UNREACHABLE_UID, UNREACHABLE_GID)
       ).rejects.toThrow(/could not hand the project folder to its owner, launch refused/);
       expect(existsSync(join(base, "agent-home"))).toBe(false);
     } finally {
@@ -29,12 +32,13 @@ describe("owned-fs stops rather than warns on a failed ownership handover", () =
     }
   });
 
-  it("writeOwnedFile throws and removes the file it could not hand over", async () => {
+  it("handOverOwnedFile throws and removes the file it could not hand over", async () => {
     const base = mkdtempSync(join(tmpdir(), "owned-fs-file-"));
     const target = join(base, "deny.json");
     try {
+      const createdHere = await writeOwnedFile("test", target, "{}");
       await expect(
-        writeOwnedFile("test", target, "{}", UNREACHABLE_UID, UNREACHABLE_GID)
+        handOverOwnedFile("test", target, createdHere, UNREACHABLE_UID, UNREACHABLE_GID)
       ).rejects.toThrow(/could not hand .* to its owner, launch refused/);
       expect(existsSync(target)).toBe(false);
     } finally {
@@ -47,8 +51,9 @@ describe("owned-fs stops rather than warns on a failed ownership handover", () =
     const target = join(base, "agent-home");
     mkdirSync(target);
     try {
+      const { levels } = await prepareOwnedPathWithOwnership(base, "test", ["agent-home"]);
       await expect(
-        prepareOwnedPath(base, "test", UNREACHABLE_UID, UNREACHABLE_GID, "agent-home")
+        handOverOwnedPath("test", levels, UNREACHABLE_UID, UNREACHABLE_GID)
       ).rejects.toThrow(/could not hand the project folder to its owner, launch refused/);
       expect(existsSync(target)).toBe(true);
     } finally {
@@ -60,10 +65,12 @@ describe("owned-fs stops rather than warns on a failed ownership handover", () =
     const base = mkdtempSync(join(tmpdir(), "owned-fs-reuse-file-"));
     const target = join(base, "deny.json");
     mkdirSync(base, { recursive: true });
-    await writeOwnedFile("test", target, '{"already":"here"}', undefined, undefined);
+    await writeOwnedFile("test", target, '{"already":"here"}');
     try {
+      const createdHere = await writeOwnedFile("test", target, "{}");
+      expect(createdHere).toBe(false);
       await expect(
-        writeOwnedFile("test", target, "{}", UNREACHABLE_UID, UNREACHABLE_GID)
+        handOverOwnedFile("test", target, createdHere, UNREACHABLE_UID, UNREACHABLE_GID)
       ).rejects.toThrow(/could not hand .* to its owner, launch refused/);
       expect(existsSync(target)).toBe(true);
     } finally {
@@ -76,15 +83,7 @@ describe("owned-fs splits shared parents from a per-person leaf (task 5b finding
   it("leaves a shared prefix segment launcher-owned, pass-through mode, unchowned", async () => {
     const base = mkdtempSync(join(tmpdir(), "owned-fs-shared-"));
     try {
-      const path = await prepareOwnedPathWithOwnership(
-        base,
-        "test",
-        undefined,
-        undefined,
-        ["agents", "user-1"],
-        undefined,
-        1
-      );
+      const { path } = await prepareOwnedPathWithOwnership(base, "test", ["agents", "user-1"], 1);
       expect(path).toBe(join(base, "agents", "user-1"));
       const sharedMode = statSync(join(base, "agents")).mode & 0o777;
       const leafMode = statSync(path).mode & 0o777;
@@ -102,19 +101,28 @@ describe("owned-fs splits shared parents from a per-person leaf (task 5b finding
       // must be created successfully even though the uid/gid given could
       // never actually be chowned to, proving the shared segment never goes
       // through applyOwnership at all.
+      const { levels } = await prepareOwnedPathWithOwnership(base, "test", ["agents", "user-1"], 1);
       await expect(
-        prepareOwnedPathWithOwnership(
-          base,
-          "test",
-          UNREACHABLE_UID,
-          UNREACHABLE_GID,
-          ["agents", "user-1"],
-          undefined,
-          1
-        )
+        handOverOwnedPath("test", levels, UNREACHABLE_UID, UNREACHABLE_GID)
       ).rejects.toThrow(/could not hand the project folder to its owner, launch refused/);
       expect(existsSync(join(base, "agents"))).toBe(true);
       expect((statSync(join(base, "agents")).mode & 0o777) >>> 0).toBe(0o711);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("owned-fs create/handover ordering (task 5b finding 2)", () => {
+  it("prepareOwnedPath creates without chowning; the caller writes files before handing over", async () => {
+    const base = mkdtempSync(join(tmpdir(), "owned-fs-order-"));
+    try {
+      const dir = await prepareOwnedPath(base, "test", "agent-home");
+      // The launcher itself can still write into the tree: nothing was handed over yet.
+      const filePath = join(dir, "opencode.json");
+      const createdHere = await writeOwnedFile("test", filePath, "{}");
+      expect(createdHere).toBe(true);
+      expect(existsSync(filePath)).toBe(true);
     } finally {
       rmSync(base, { recursive: true, force: true });
     }

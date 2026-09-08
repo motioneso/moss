@@ -48,6 +48,12 @@ export function buildSetprivRaiseCommand(
  * these now carries ambient capabilities of its own, which would otherwise
  * pass to each of them across the program start and let any launched agent
  * switch to any account.
+ *
+ * Uses `--clear-groups`, never `--init-groups`: a person's slot is a bare
+ * allocated uid/gid number with no entry in the system account list, so a
+ * groups lookup by account name fails and refuses the whole launch (Astra
+ * finding, task 5b round 3, 2026-09-08). Clearing supplementary groups needs
+ * no such lookup.
  */
 export function buildSetprivDropCommand(
   command: string,
@@ -59,7 +65,7 @@ export function buildSetprivDropCommand(
     args: [
       `--reuid=${identity.uid}`,
       `--regid=${identity.gid}`,
-      "--init-groups",
+      "--clear-groups",
       "--inh-caps=-all",
       "--ambient-caps=-all",
       "--",

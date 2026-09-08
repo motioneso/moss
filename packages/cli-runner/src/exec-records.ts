@@ -67,9 +67,9 @@ export async function writeExecRecord(
   const content = JSON.stringify({ pid, ...rest });
   const fileName = `${execId}.json`;
   const writeOnce = async (dir: string): Promise<void> => {
-    await writeOwnedFile(key, join(dir, fileName), content, undefined, undefined);
+    await writeOwnedFile(key, join(dir, fileName), content);
   };
-  const dir = await prepareOwnedPath(baseDir, key, undefined, undefined, ACP_DEADLINE_DIR, key);
+  const dir = await prepareOwnedPath(baseDir, key, ACP_DEADLINE_DIR, key);
   try {
     await writeOnce(dir);
   } catch (error) {
@@ -79,14 +79,7 @@ export async function writeExecRecord(
     // Rebuild once and try again; anything else, or a second failure, is
     // thrown to the caller as before.
     if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
-    const rebuilt = await prepareOwnedPath(
-      baseDir,
-      key,
-      undefined,
-      undefined,
-      ACP_DEADLINE_DIR,
-      key
-    );
+    const rebuilt = await prepareOwnedPath(baseDir, key, ACP_DEADLINE_DIR, key);
     await writeOnce(rebuilt);
   }
 }

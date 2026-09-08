@@ -426,12 +426,7 @@ describe("task 5b launch follows the row", () => {
       );
       const { writeOpencodeChatDenyFile } =
         await import("../../packages/cli-runner/src/owned-fs.js");
-      await writeOpencodeChatDenyFile(
-        join(home, "agents", "user-1"),
-        "user-1",
-        undefined,
-        undefined
-      );
+      await writeOpencodeChatDenyFile(join(home, "agents", "user-1"), "user-1");
       const written = JSON.parse(
         readFileSync(join(home, "agents", "user-1", ".config", "opencode", "opencode.json"), "utf8")
       ) as { model?: string; permission?: Record<string, string> };

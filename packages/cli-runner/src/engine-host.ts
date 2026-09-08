@@ -137,7 +137,14 @@ export class CliChatEngineHost {
     providerKind: AcpProviderKind,
     userId: string,
     profile: AcpProfile
-  ): Promise<{ cwd: string; generation: number }> {
+  ): Promise<{
+    cwd: string;
+    generation: number;
+    home: string | null;
+    pid: number | null;
+    uid: number;
+    gid: number;
+  }> {
     return this.acp.spawn(sessionKey, projectId, providerKind, userId, profile);
   }
 
@@ -149,8 +156,8 @@ export class CliChatEngineHost {
     return this.acp.read(sessionKey, afterSeq);
   }
 
-  acpKill(sessionKey: string, opts: { generation?: number } = {}): void {
-    this.acp.kill(sessionKey, opts.generation);
+  acpKill(sessionKey: string, opts: { generation?: number } = {}): Promise<void> {
+    return this.acp.kill(sessionKey, opts.generation);
   }
 
   /** Runner-side builds; contract lives in AcpHost. */

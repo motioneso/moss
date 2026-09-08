@@ -184,11 +184,12 @@ export function serveConnection(channel: ByteChannel, deps: ConnectionDeps): voi
     // generation this connection saw, so a session another connection respawned
     // since (newer generation) survives a stale close.
     for (const [sessionKey, generation] of ownedAcpKeys) {
-      try {
-        deps.host.acpKill(sessionKey, { generation });
-      } catch {
-        // ignore — already gone
-      }
+      // The stop now goes out through setpriv and waits for the process to
+      // actually exit, so it cannot throw synchronously here; a refusal is
+      // reported, never swallowed (task 5b, Astra-Reviewer finding 3, 2026-09-08).
+      deps.host.acpKill(sessionKey, { generation }).catch((error: unknown) => {
+        console.error(`[connection] stop failed for ${sessionKey}: ${(error as Error).message}`);
+      });
     }
     ownedAcpKeys.clear();
     // #1554 Decision 2 — deregister this connection's reap listener so a closed/dropped
@@ -612,7 +613,10 @@ async function invoke(
       ) {
         throw new BadRequestError("acpKill.generation must be a positive integer");
       }
-      host.acpKill(key, params.generation === undefined ? {} : { generation: params.generation });
+      await host.acpKill(
+        key,
+        params.generation === undefined ? {} : { generation: params.generation }
+      );
       return { ok: true };
     }
     // The three command-running methods (exec start, poll, kill) stay
