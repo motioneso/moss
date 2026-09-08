@@ -1,10 +1,16 @@
 /**
- * Slice 1 task 4 — first kill gate: one check script that asks the runner to
- * spawn a provider's agent for the signed-in user, runs `initialize`,
+ * Slice 1 task 4 — first kill gate: one check script that connects to the REAL,
+ * already-running cli-runner over its socket (the same way the app does), asks
+ * it to spawn a provider's agent for the signed-in user, runs `initialize`,
  * `session/new`, one `session/prompt` with no tools, and exits non-zero on any
- * failure or after 60 s.
+ * failure or after 60 s. Task 5b (#2427): this script builds no launcher of its
+ * own — it is a client of the one already listening on `JARVIS_CLI_RUNNER_SOCKET`,
+ * proving the real per-user account handover rather than an in-process stand-in.
  *
- * Usage: pnpm tsx scripts/acp-handshake-check.ts --provider=anthropic [--timeout-ms=60000]
+ * Usage:
+ *   JARVIS_CLI_RUNNER_SOCKET=/run/jarv1s/cli-runner.sock \
+ *   JARVIS_CLI_RUNNER_RPC_SECRET=... \
+ *   pnpm tsx scripts/acp-handshake-check.ts --provider=anthropic [--timeout-ms=60000]
  *
  * Claude goes through the full product path (readiness gate included). OpenCode
  * is not API-ready until task 5 proves its switch-off, so its leg drives the
@@ -12,9 +18,12 @@
  * install-step fix (the pinned binary spawns and answers), not readiness.
  */
 
-import { mkdtempSync } from "node:fs";
-import { tmpdir, userInfo } from "node:os";
-import { join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { stat } from "node:fs/promises";
+import { userInfo } from "node:os";
+
+import { RpcConnection } from "@moss/chat/live";
+import { resolveMossEnv } from "@moss/db";
 
 import {
   ClientSideConnection,
@@ -26,8 +35,6 @@ import {
 } from "@moss/acp";
 import type { AcpProviderKind } from "@moss/acp";
 
-import { AcpHost } from "../packages/cli-runner/src/acp-host.js";
-
 const PROMPT_TEXT = "reply with exactly: hello";
 
 function usageError(message: string): never {
@@ -38,7 +45,7 @@ function usageError(message: string): never {
   process.exit(2);
 }
 
-function parseArgs(): { providerKind: AcpProviderKind; timeoutMs: number; homeBase: string } {
+function parseArgs(): { providerKind: AcpProviderKind; timeoutMs: number } {
   const providerArg = process.argv.find((arg) => arg.startsWith("--provider="));
   if (!providerArg) usageError("missing --provider=");
   const providerKind = providerArg.slice("--provider=".length) as AcpProviderKind;
@@ -48,37 +55,72 @@ function parseArgs(): { providerKind: AcpProviderKind; timeoutMs: number; homeBa
   const timeoutArg = process.argv.find((arg) => arg.startsWith("--timeout-ms="));
   const timeoutMs = timeoutArg ? Number(timeoutArg.slice("--timeout-ms=".length)) : 60000;
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) usageError("bad --timeout-ms=");
-  // The runner's per-user home base holds the login store the host reads; it is
-  // not $HOME. Defaults to $HOME only for a box without a runner layout.
-  const homeArg = process.argv.find((arg) => arg.startsWith("--home-base="));
-  const homeBase = homeArg ? homeArg.slice("--home-base=".length) : (process.env.HOME ?? "");
-  if (!homeBase) usageError("bad --home-base=");
-  return { providerKind, timeoutMs, homeBase };
+  return { providerKind, timeoutMs };
 }
 
-function loopbackTunnel(host: AcpHost): AcpTunnel {
+/** Same two env vars the app reads to reach the cli-runner (carve-out names, see resolveMossEnv). */
+function readRunnerConnectionEnv(): { socketPath: string; rpcSecret: string } {
+  const socketPath = resolveMossEnv(process.env, "JARVIS_CLI_RUNNER_SOCKET");
+  const rpcSecret = resolveMossEnv(process.env, "JARVIS_CLI_RUNNER_RPC_SECRET");
+  if (!socketPath) {
+    usageError(
+      "JARVIS_CLI_RUNNER_SOCKET is not set — this check talks to a running cli-runner, it does not start one"
+    );
+  }
+  if (!rpcSecret) {
+    usageError(
+      "JARVIS_CLI_RUNNER_RPC_SECRET is not set — the running cli-runner will refuse an unauthenticated connection"
+    );
+  }
+  return { socketPath, rpcSecret };
+}
+
+/**
+ * Backs `AcpTunnel` with the real socket connection to the already-running
+ * cli-runner, exactly the wiring `packages/acp/src/tunnel.ts` anticipates for
+ * production use. No launcher is constructed here; every call crosses the
+ * socket to the process that owns the account switch.
+ */
+function rpcTunnel(conn: RpcConnection): AcpTunnel {
   return {
     spawn: (sessionKey, projectId, providerKind, userId, profile) =>
-      host
-        .spawn(sessionKey, projectId, providerKind, userId, profile)
+      conn
+        .acpSpawn(sessionKey, { projectId, providerKind, userId, profile })
         .then(({ cwd, home }) => ({ cwd, home })),
-    send: (sessionKey, line) => {
-      host.send(sessionKey, line);
-      return Promise.resolve();
-    },
-    read: (sessionKey, afterSeq) => Promise.resolve(host.read(sessionKey, afterSeq)),
-    kill: (sessionKey) => {
-      host.kill(sessionKey);
-      return Promise.resolve();
-    },
-    execStart: (sessionKey, projectId, command, timeoutMs) =>
-      host.execStart(sessionKey, projectId, command, timeoutMs).then(({ execId }) => ({ execId })),
-    execPoll: (sessionKey, execId) => Promise.resolve(host.execPoll(sessionKey, execId)),
-    execKill: (sessionKey, execId) => {
-      host.execKill(sessionKey, execId);
-      return Promise.resolve();
-    }
+    send: (sessionKey, line) => conn.acpSend(sessionKey, { line }).then(() => undefined),
+    read: (sessionKey, afterSeq) => conn.acpRead(sessionKey, { afterSeq }),
+    kill: (sessionKey) => conn.acpKill(sessionKey).then(() => undefined),
+    // Neither leg below runs a build; this check never needs the exec verbs, so
+    // they are left unimplemented rather than adding client-side RPC methods
+    // nothing here calls.
+    execStart: () =>
+      Promise.reject(new Error("acp-handshake-check: execStart is not used by this check")),
+    execPoll: () =>
+      Promise.reject(new Error("acp-handshake-check: execPoll is not used by this check")),
+    execKill: () =>
+      Promise.reject(new Error("acp-handshake-check: execKill is not used by this check"))
   };
+}
+
+/** Resolves an OS uid to an account name via `id -un`, or a labeled uid if the box has no entry for it. */
+function accountNameForUid(uid: number): string {
+  try {
+    return execFileSync("id", ["-un", String(uid)], { encoding: "utf8" }).trim();
+  } catch {
+    return `uid ${uid} (no account entry on this box)`;
+  }
+}
+
+/** Proves the account the agent actually ran as by reading who owns the folder it was handed, rather than trusting what was asked for. */
+async function reportActualOwner(label: string, home: string | null): Promise<void> {
+  if (!home) {
+    console.log(`[handshake] ${label}: no home folder was handed to the agent`);
+    return;
+  }
+  const info = await stat(home);
+  console.log(
+    `[handshake] ${label}: home=${home} account=${accountNameForUid(info.uid)} (uid=${info.uid}, gid=${info.gid})`
+  );
 }
 
 /** Full product path: readiness gate, runner spawn, protocol, one prompt. */
@@ -98,6 +140,7 @@ async function claudeLeg(
   );
   const handle = await client.openSession(sessionKey, "handshake", providerKind, userId, "chat");
   console.log(`[handshake] session open id=${handle.sessionId} cwd=${handle.cwd}`);
+  await reportActualOwner("claude leg", handle.home);
   const result = await client.prompt(handle, PROMPT_TEXT, { timeoutMs });
   console.log(
     `[handshake] prompt done stopReason=${result.stopReason} toolCallsSeen=${result.toolCallsSeen} text=${JSON.stringify(result.text.slice(0, 200))}`
@@ -122,13 +165,14 @@ async function directLeg(
   const started = Date.now();
   const sessionKey = `acp-handshake-${process.pid}`;
   console.log(`[handshake] direct leg kind=${providerKind}: runner spawn plus protocol only`);
-  const { cwd } = await tunnel.spawn(
+  const { cwd, home } = await tunnel.spawn(
     sessionKey,
     "handshake",
     providerKind,
     userInfo().username,
     "chat"
   );
+  await reportActualOwner("direct leg", home);
   const stream = createTunnelStream(tunnel, sessionKey);
   let text = "";
   let toolCallsSeen = 0;
@@ -198,18 +242,17 @@ async function directLeg(
 }
 
 async function main(): Promise<void> {
-  const { providerKind, timeoutMs, homeBase } = parseArgs();
+  const { providerKind, timeoutMs } = parseArgs();
+  const { socketPath, rpcSecret } = readRunnerConnectionEnv();
   const wall = setTimeout(() => {
     console.error(`[handshake] FAIL: wall deadline ${timeoutMs} ms exceeded`);
     process.exit(1);
   }, timeoutMs);
+  console.log(`[handshake] connecting to the running cli-runner at ${socketPath}`);
+  const conn = new RpcConnection({ socketPath, rpcSecret });
   try {
-    const neutralBase = mkdtempSync(join(tmpdir(), "acp-handshake-"));
-    // Dev-check approximation: per-user identity on, like production. Real
-    // spawns need privilege for the account switch; without it the spawn
-    // fails loudly instead of silently sharing one account.
-    const host = new AcpHost({ neutralBase, homeBase, perUserUid: true });
-    const tunnel = loopbackTunnel(host);
+    await conn.ensureConnected();
+    const tunnel = rpcTunnel(conn);
     if (providerKind === "opencode") {
       console.log("[handshake] opencode is not API-ready until task 5; proving runner spawn only");
       await directLeg(tunnel, providerKind, timeoutMs - 5000);
@@ -218,12 +261,14 @@ async function main(): Promise<void> {
     }
     console.log(`[handshake] PASS kind=${providerKind}`);
     clearTimeout(wall);
+    conn.close();
     process.exit(0);
   } catch (error) {
     console.error(
       `[handshake] FAIL kind=${providerKind}: ${error instanceof Error ? error.message : String(error)}`
     );
     clearTimeout(wall);
+    conn.close();
     process.exit(1);
   }
 }

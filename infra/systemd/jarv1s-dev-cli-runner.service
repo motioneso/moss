@@ -1,0 +1,28 @@
+# NOTE: `User=REPLACE_WITH_INSTALL_USER` and the `~/Jarv1s` paths are PLACEHOLDERS
+# the installing operator MUST edit to match their system (user, repo path, and
+# EnvironmentFile path) at install time.
+#
+# #2427 (task 5b): the dev cli-runner hands each conversation's process to its own
+# account and folders, which takes the chown, setuid and setgid privileges. A plain
+# `systemd --user` unit cannot carry ambient capabilities — that needs a system unit
+# (root-managed) that still runs the process as the ordinary dev account below.
+# Install this in place of any `systemd --user` cli-runner unit already running.
+[Unit]
+Description=Jarv1s dev cli-runner (per-user launcher)
+After=network.target
+
+[Service]
+Type=simple
+User=REPLACE_WITH_INSTALL_USER
+AmbientCapabilities=CAP_CHOWN CAP_SETUID CAP_SETGID
+CapabilityBoundingSet=CAP_CHOWN CAP_SETUID CAP_SETGID
+NoNewPrivileges=true
+WorkingDirectory=~/Jarv1s
+EnvironmentFile=~/.config/moss/dev/cli-runner.env
+ExecStart=~/Jarv1s/node_modules/.bin/tsx packages/cli-runner/src/main-entry.ts
+Restart=always
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
