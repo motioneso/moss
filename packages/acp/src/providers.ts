@@ -49,10 +49,12 @@ const ROWS: readonly AcpProviderRow[] = [
     agent: "codex-acp",
     registry: "@agentclientprotocol/codex-acp@1.10.0",
     launch: "npx @agentclientprotocol/codex-acp@1.10.0",
-    login: "reuses the Codex CLI's own on-disk login automatically",
+    login:
+      "no stored login reaches the agent's home yet; a Codex sign-in of its own comes in a later slice",
     model: "CODEX_CONFIG JSON at launch; configOptions model where advertised",
     offList: "INITIAL_AGENT_MODE=read-only",
-    chatReady: true
+    chatReady: false,
+    chatBlockReason: "Not logged in — no stored login reaches the agent's home"
   },
   {
     kind: "google",

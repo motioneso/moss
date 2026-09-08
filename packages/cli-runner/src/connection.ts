@@ -17,9 +17,6 @@ import {
   decodeFrame,
   encodeFrame,
   MAX_FRAME_BYTES,
-  type RpcAcpExecKillParams,
-  type RpcAcpExecPollParams,
-  type RpcAcpExecStartParams,
   type RpcAcpKillParams,
   type RpcAcpReadParams,
   type RpcAcpSendParams,
@@ -618,47 +615,9 @@ async function invoke(
       host.acpKill(key, params.generation === undefined ? {} : { generation: params.generation });
       return { ok: true };
     }
-    // Slice 1 task 3 — runner-side builds. Shape is validated here;
-    // the working directory is derived runner-side, never taken from the caller.
-    case "acpExecStart": {
-      const key = requireSessionKey(req);
-      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpExecStartParams>;
-      if (typeof params.projectId !== "string") {
-        throw new BadRequestError("acpExecStart.projectId must be a string");
-      }
-      if (typeof params.command !== "string") {
-        throw new BadRequestError("acpExecStart.command must be a string");
-      }
-      if (
-        params.timeoutMs !== undefined &&
-        (!Number.isInteger(params.timeoutMs) || params.timeoutMs <= 0)
-      ) {
-        throw new BadRequestError("acpExecStart.timeoutMs must be a positive integer");
-      }
-      return host.acpExecStart(
-        key,
-        params.projectId,
-        params.command,
-        params.timeoutMs === undefined ? undefined : params.timeoutMs
-      );
-    }
-    case "acpExecPoll": {
-      const key = requireSessionKey(req);
-      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpExecPollParams>;
-      if (!Number.isInteger(params.execId) || (params.execId as number) <= 0) {
-        throw new BadRequestError("acpExecPoll.execId must be a positive integer");
-      }
-      return host.acpExecPoll(key, params.execId as number);
-    }
-    case "acpExecKill": {
-      const key = requireSessionKey(req);
-      const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpExecKillParams>;
-      if (!Number.isInteger(params.execId) || (params.execId as number) <= 0) {
-        throw new BadRequestError("acpExecKill.execId must be a positive integer");
-      }
-      host.acpExecKill(key, params.execId as number);
-      return { ok: true };
-    }
+    // The three command-running methods (exec start, poll, kill) stay
+    // unregistered until Workshop's own slice keys them by person: parked
+    // code must not be reachable over the wire.
     default:
       throw new BadRequestError("unknown method");
   }

@@ -347,6 +347,16 @@ export class AcpHost {
     }
     if (profile !== "chat" && profile !== "workshop")
       throw new Error("acpSpawn.profile must be chat or workshop");
+    // A row marked not ready refuses here, whoever asks: the launcher is the
+    // only piece that knows the home has no login, and later unattended
+    // callers come through it directly. Before any side effect, so a refused
+    // spawn allocates no slot, kills no prior session and writes no file.
+    if (profile === "chat") {
+      const row = getAcpProviderRow(providerKind);
+      if (!row.chatReady) {
+        throw new Error(`Not logged in (${row.chatBlockReason ?? "provider not ready"})`);
+      }
+    }
     const key = sanitizeSessionKey(sessionKey);
     this.killRecord(key);
 

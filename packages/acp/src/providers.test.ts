@@ -35,14 +35,19 @@ describe("provider rows", () => {
 });
 
 describe("profile gate", () => {
-  it("passes Claude and Codex for chat", () => {
+  it("passes Claude for chat", () => {
     expect(() => checkAcpProfile("chat", "anthropic")).not.toThrow();
-    expect(() => checkAcpProfile("chat", "openai")).not.toThrow();
   });
 
   it("holds OpenCode until its switch-off is proven on dev", () => {
     expect(() => checkAcpProfile("chat", "opencode")).toThrow(AcpCapabilityError);
     expect(() => checkAcpProfile("chat", "opencode")).toThrow(/switch-off/);
+  });
+
+  it("holds Codex until a stored login reaches the agent home", () => {
+    expect(() => checkAcpProfile("chat", "openai")).toThrow(AcpCapabilityError);
+    expect(() => checkAcpProfile("chat", "openai")).toThrow(/Not logged in/);
+    expect(getAcpProviderRow("openai").model).toContain("CODEX_CONFIG");
   });
 
   it("rejects Google for chat with its reason", () => {
@@ -53,6 +58,15 @@ describe("profile gate", () => {
   it("rejects workshop and unattended with not built yet", () => {
     expect(() => checkAcpProfile("workshop", "anthropic")).toThrow(/not built yet/);
     expect(() => checkAcpProfile("unattended", "anthropic")).toThrow(/not built yet/);
+  });
+
+  it("refuses to open a Codex chat session: no stored login", async () => {
+    const agent = new ModelAgent(["m-1"]);
+    const client = new MossAcpClient(agent);
+    await expect(
+      client.openSession("chat:user:conv", "conv", "openai", "user-1", "chat")
+    ).rejects.toThrow(/Not logged in/);
+    expect(agent.sent).toHaveLength(0);
   });
 
   it("refuses to open a Workshop session before anything is spawned", async () => {
@@ -214,11 +228,17 @@ describe("setModel", () => {
   it("falls back per row when no model option is advertised", async () => {
     const agent = new ModelAgent(null);
     const client = new MossAcpClient(agent);
-    const handle = await client.openSession("chat:user:conv", "conv", "openai", "user-1", "chat");
+    const handle = await client.openSession(
+      "chat:user:conv",
+      "conv",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
     const result = await client.setModel(handle, "m-1");
     expect(result.applied).toBe(false);
     expect(result.mismatch).toBe(false);
-    expect(result.mechanism).toContain("CODEX_CONFIG");
+    expect(result.mechanism).toContain("configOptions model");
     expect(result.note).toContain("login's default");
     await client.close(handle);
   });

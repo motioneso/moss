@@ -390,9 +390,11 @@ describe("task 5b launch follows the row", () => {
       writeFileSync(join(home, ".jarvis", "cli-tokens", "anthropic"), "tok_test-token");
       const child = new FakeChild();
       const { host, seen } = makeUserHost(dir, home, child);
+      // Ready rows run under either profile; not-ready rows refuse chat, so
+      // the per-row environment is observed through Workshop here.
       await host.spawn("chat:user-1:a", "proj", "anthropic", "user-1", "chat");
-      await host.spawn("chat:user-1:b", "proj", "openai", "user-1", "chat");
-      await host.spawn("chat:user-1:c", "proj", "opencode", "user-1", "chat");
+      await host.spawn("chat:user-1:b", "proj", "openai", "user-1", "workshop");
+      await host.spawn("chat:user-1:c", "proj", "opencode", "user-1", "workshop");
       expect(seen[0]?.env.CLAUDE_CODE_OAUTH_TOKEN).toBe("tok_test-token");
       expect(seen[1]?.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
       expect(seen[1]?.env.INITIAL_AGENT_MODE).toBe("read-only");
@@ -404,8 +406,10 @@ describe("task 5b launch follows the row", () => {
     }
   });
 
-  it("writes the OpenCode deny file from the table for chat, never for Workshop", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
+  it("writes the OpenCode deny file from the table, preserving the rest", async () => {
+    // The writer runs at spawn for chat; with the row not ready the spawn
+    // itself refuses, so this test drives the writer directly. Task 10 proves
+    // the wired path in the real per-user home.
     const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
     try {
       // A login-owned config the write must preserve, not clobber.
@@ -415,9 +419,14 @@ describe("task 5b launch follows the row", () => {
         join(existingDir, "opencode.json"),
         JSON.stringify({ model: "keep-me", permission: { read: "allow" } })
       );
-      const child = new FakeChild();
-      const { host } = makeUserHost(dir, home, child);
-      await host.spawn("chat:user-1:a", "proj", "opencode", "user-1", "chat");
+      const { writeOpencodeChatDenyFile } =
+        await import("../../packages/cli-runner/src/owned-fs.js");
+      await writeOpencodeChatDenyFile(
+        join(home, "agents", "user-1"),
+        "user-1",
+        undefined,
+        undefined
+      );
       const written = JSON.parse(
         readFileSync(join(home, "agents", "user-1", ".config", "opencode", "opencode.json"), "utf8")
       ) as { model?: string; permission?: Record<string, string> };
@@ -427,20 +436,79 @@ describe("task 5b launch follows the row", () => {
       for (const key of expected) expect(written.permission?.[key]).toBe("deny");
       expect(written.model).toBe("keep-me");
       expect(written.permission?.read).toBe("allow");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
 
+  it("writes no deny file for Workshop sessions", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
+    const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+    try {
+      const child = new FakeChild();
+      const { host } = makeUserHost(dir, home, child);
       await host.spawn("workshop:user-1:b", "proj", "opencode", "user-1", "workshop");
-      // Workshop sessions run no deny file at all: no file where none existed.
-      const freshHome = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
-      try {
-        const freshChild = new FakeChild();
-        const fresh = makeUserHost(dir, freshHome, freshChild);
-        await fresh.host.spawn("workshop:user-1:b", "proj", "opencode", "user-1", "workshop");
-        expect(
-          existsSync(join(freshHome, "agents", "user-1", ".config", "opencode", "opencode.json"))
-        ).toBe(false);
-      } finally {
-        rmSync(freshHome, { recursive: true, force: true });
-      }
+      expect(
+        existsSync(join(home, "agents", "user-1", ".config", "opencode", "opencode.json"))
+      ).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("identity off refuses before any slot or file work", () => {
+  it("refuses the launch and writes no file anywhere", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
+    const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+    try {
+      const child = new FakeChild();
+      const host = new AcpHost({
+        neutralBase: dir,
+        homeBase: home,
+        resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
+        spawnChild: () => child as never
+      });
+      await expect(
+        host.spawn("chat:user-1:a", "proj", "anthropic", "user-1", "chat")
+      ).rejects.toThrow(/per-user identity/);
+      // No slot was allocated and no deny file was written, here or anywhere.
+      expect(existsSync(join(home, "uid-slots.json"))).toBe(false);
+      expect(existsSync(join(home, "agents"))).toBe(false);
+      expect(existsSync(join(dir, "chat:user-1:a"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("not-ready rows refuse at the launcher", () => {
+  it("refuses a not-ready row with Not logged in and no side effects", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
+    const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+    try {
+      const child = new FakeChild();
+      let spawned = 0;
+      const host = new AcpHost({
+        neutralBase: dir,
+        homeBase: home,
+        perUserUid: true,
+        resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
+        spawnChild: () => {
+          spawned += 1;
+          return child as never;
+        }
+      });
+      await expect(host.spawn("chat:user-1:a", "proj", "openai", "user-1", "chat")).rejects.toThrow(
+        /Not logged in/
+      );
+      await expect(
+        host.spawn("chat:user-1:a", "proj", "opencode", "user-1", "chat")
+      ).rejects.toThrow(/Not logged in/);
+      expect(spawned).toBe(0);
+      expect(existsSync(join(home, "uid-slots.json"))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
       rmSync(home, { recursive: true, force: true });
