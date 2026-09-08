@@ -17,10 +17,9 @@
  * Identity evidence comes from reading /proc/<pid>/status for the spawned
  * agent's own child pid, not from stat()-ing the home folder it was handed.
  *
- * Claude goes through the full product path (readiness gate included). OpenCode
- * is not API-ready until task 5 proves its switch-off, so its leg drives the
- * same runner spawn plus the protocol directly and says so: it proves the
- * install-step fix (the pinned binary spawns and answers), not readiness.
+ * Claude and OpenCode go through the full product path, including the
+ * readiness gate. The live proof separately verifies OpenCode's deny settings
+ * in its per-user home and remains a merge gate rather than a readiness flag.
  */
 
 import { execFileSync } from "node:child_process";
@@ -29,14 +28,7 @@ import { readFile, stat } from "node:fs/promises";
 import { RpcConnection } from "@moss/chat/live";
 import { resolveMossEnv } from "@moss/db";
 
-import {
-  ClientSideConnection,
-  MossAcpClient,
-  acceptedOptionValues,
-  createTunnelStream,
-  findModelOption,
-  type AcpTunnel
-} from "@moss/acp";
+import { MossAcpClient, type AcpTunnel } from "@moss/acp";
 import type { AcpProviderKind } from "@moss/acp";
 
 const PROMPT_TEXT = "reply with exactly: hello";
@@ -226,7 +218,7 @@ async function reportActualIdentity(
 }
 
 /** Full product path: readiness gate, runner spawn, protocol, one prompt. */
-async function claudeLeg(
+async function standardLeg(
   tunnel: AcpTunnel,
   providerKind: AcpProviderKind,
   userId: string,
@@ -243,7 +235,7 @@ async function claudeLeg(
   console.log(`[handshake] session open id=${handle.sessionId} cwd=${handle.cwd}`);
   const launcherUid = await launcherUidFromSocket(socketPath);
   await reportActualIdentity(
-    "claude leg",
+    `${providerKind} leg`,
     handle.home,
     handle.pid,
     handle.uid,
@@ -261,98 +253,6 @@ async function claudeLeg(
   console.log(`[handshake] closed after ${Date.now() - started} ms`);
 }
 
-/**
- * Runner-plus-protocol leg for a provider behind the readiness gate: same
- * spawn, `initialize`, `session/new`, one prompt, text collected from session
- * updates. Used for OpenCode until task 5 proves its switch-off.
- */
-async function directLeg(
-  tunnel: AcpTunnel,
-  providerKind: AcpProviderKind,
-  userId: string,
-  timeoutMs: number,
-  socketPath: string
-): Promise<void> {
-  const started = Date.now();
-  const sessionKey = `acp-handshake-${process.pid}`;
-  console.log(`[handshake] direct leg kind=${providerKind}: runner spawn plus protocol only`);
-  const { cwd, home, pid, uid, gid } = await tunnel.spawn(
-    sessionKey,
-    "handshake",
-    providerKind,
-    userId,
-    "chat"
-  );
-  const launcherUid = await launcherUidFromSocket(socketPath);
-  await reportActualIdentity("direct leg", home, pid, uid, gid, launcherUid);
-  const stream = createTunnelStream(tunnel, sessionKey);
-  let text = "";
-  let toolCallsSeen = 0;
-  const connection = new ClientSideConnection(
-    () => ({
-      requestPermission: async () => ({ outcome: { outcome: "cancelled" } }),
-      sessionUpdate: async (params) => {
-        const update = params.update as { sessionUpdate?: string; content?: unknown };
-        if (update.sessionUpdate === "agent_message_chunk") {
-          const content = update.content as { type?: unknown; text?: string } | undefined;
-          if (content?.type === "text") text += content.text ?? "";
-        }
-        if (update.sessionUpdate === "tool_call") toolCallsSeen += 1;
-      }
-    }),
-    stream
-  );
-  const init = await connection.initialize({
-    protocolVersion: 1,
-    clientCapabilities: {},
-    clientInfo: { name: "moss-handshake", version: "0.1.0" }
-  });
-  console.log(`[handshake] initialize ok protocolVersion=${init.protocolVersion}`);
-  const session = await connection.newSession({ cwd, mcpServers: [] });
-  console.log(`[handshake] session/new ok id=${session.sessionId}`);
-  // Mirror what the chat engine will do in task 7: resolve the model through
-  // the advertised option before prompting, since an ACP session starts with
-  // no usable default. Prefer the free tier, else the first offered value.
-  const modelOption = findModelOption(session.configOptions ?? []);
-  if (modelOption) {
-    const accepted = acceptedOptionValues(modelOption);
-    const offered = accepted ? [...accepted].slice(0, 10) : null;
-    console.log(`[handshake] model option id=${modelOption.id} offered=${JSON.stringify(offered)}`);
-    const pick =
-      (accepted ? [...accepted].find((value) => /spark/i.test(value)) : undefined) ??
-      (accepted ? [...accepted][0] : "default");
-    if (pick && pick !== "default") {
-      await connection.setSessionConfigOption({
-        sessionId: session.sessionId,
-        configId: modelOption.id,
-        value: pick
-      });
-      console.log(`[handshake] model set to ${pick}`);
-    } else {
-      console.log("[handshake] model option takes free-form values; keeping session default");
-    }
-  } else {
-    console.log("[handshake] no model option advertised; keeping session default");
-  }
-  const response = await Promise.race([
-    connection.prompt({
-      sessionId: session.sessionId,
-      prompt: [{ type: "text", text: PROMPT_TEXT }]
-    }),
-    new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`prompt timed out after ${timeoutMs} ms`)), timeoutMs);
-    })
-  ]);
-  console.log(
-    `[handshake] prompt done stopReason=${response.stopReason} toolCallsSeen=${toolCallsSeen} text=${JSON.stringify(text.slice(0, 200))}`
-  );
-  if (text.trim() !== "hello") {
-    throw new Error(`prompt reply was not exactly "hello"`);
-  }
-  await tunnel.kill(sessionKey);
-  console.log(`[handshake] killed after ${Date.now() - started} ms`);
-}
-
 async function main(): Promise<void> {
   const { providerKind, userId, timeoutMs } = parseArgs();
   const { socketPath, rpcSecret } = readRunnerConnectionEnv();
@@ -365,12 +265,7 @@ async function main(): Promise<void> {
   try {
     await conn.ensureConnected();
     const tunnel = rpcTunnel(conn);
-    if (providerKind === "opencode") {
-      console.log("[handshake] opencode is not API-ready until task 5; proving runner spawn only");
-      await directLeg(tunnel, providerKind, userId, timeoutMs - 5000, socketPath);
-    } else {
-      await claudeLeg(tunnel, providerKind, userId, timeoutMs - 5000, socketPath);
-    }
+    await standardLeg(tunnel, providerKind, userId, timeoutMs - 5000, socketPath);
     console.log(`[handshake] PASS kind=${providerKind}`);
     clearTimeout(wall);
     conn.close();

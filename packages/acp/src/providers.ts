@@ -79,9 +79,7 @@ const ROWS: readonly AcpProviderRow[] = [
     model: "session/set_config_option (switched to Muse Spark 1.3 free live, 2026-09-07)",
     offList:
       "settings file in the agent home with shell and file edits denied, written at spawn for chat",
-    chatReady: false,
-    chatBlockReason:
-      "its shell-and-writes switch-off is unproven: Scout proved the model switch, a real turn and token counts, not the switch-off (verified on dev in task 5)"
+    chatReady: true
   }
 ];
 

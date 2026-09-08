@@ -487,11 +487,9 @@ describe("task 5b launch follows the row", () => {
   });
 
   it("writes the OpenCode deny file from the table, preserving the rest", async () => {
-    // The writer runs at spawn for chat; with the row not ready the spawn
-    // itself refuses, so this test runs the real preparation script
-    // directly, the same way the runner spawns it (task 5b, Architect
-    // ruling, 2026-09-08). Task 10 proves the wired path in the real
-    // per-user home.
+    // The writer runs at spawn for chat. This test runs the real preparation
+    // script directly to isolate its merge behavior; task 10 proves the
+    // wired path in the real per-user home.
     const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
     try {
       // A login-owned config the write must preserve, not clobber.
@@ -637,9 +635,6 @@ describe("not-ready rows refuse at the launcher", () => {
       await expect(host.spawn("chat:user-1:a", "proj", "openai", "user-1", "chat")).rejects.toThrow(
         /Not logged in/
       );
-      await expect(
-        host.spawn("chat:user-1:a", "proj", "opencode", "user-1", "chat")
-      ).rejects.toThrow(/Not logged in/);
       expect(spawned).toBe(0);
       expect(existsSync(join(home, "uid-slots.json"))).toBe(false);
     } finally {

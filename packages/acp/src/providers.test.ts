@@ -39,9 +39,8 @@ describe("profile gate", () => {
     expect(() => checkAcpProfile("chat", "anthropic")).not.toThrow();
   });
 
-  it("holds OpenCode until its switch-off is proven on dev", () => {
-    expect(() => checkAcpProfile("chat", "opencode")).toThrow(AcpCapabilityError);
-    expect(() => checkAcpProfile("chat", "opencode")).toThrow(/switch-off/);
+  it("offers OpenCode for chat", () => {
+    expect(() => checkAcpProfile("chat", "opencode")).not.toThrow();
   });
 
   it("holds Codex until a stored login reaches the agent home", () => {

@@ -222,9 +222,11 @@ services:
     # the chown root no longer owns that folder, so the chmod needs FOWNER or
     # it throws EPERM and crash-loops the container. Nothing else the
     # container does needs any other root power, so we narrow to exactly
-    # these four instead of leaving the process fully privileged.
+    # these five instead of leaving the process fully privileged. KILL is
+    # required by start-jarv1s.ts when the root boot script stops its
+    # ordinary-account children.
     cap_drop: [ALL]
-    cap_add: [CHOWN, SETUID, SETGID, FOWNER]
+    cap_add: [CHOWN, SETUID, SETGID, FOWNER, KILL]
     security_opt: [no-new-privileges:true]
     depends_on:
       postgres:
