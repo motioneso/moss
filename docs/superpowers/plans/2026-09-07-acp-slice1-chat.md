@@ -82,7 +82,7 @@ restores, release note); the behind-the-scenes task added (spec section 14); Ope
   pass. One prompt at a time: a second send while a turn runs is queued by the session manager and
   sent after the stop reason arrives; the composer shows it as queued.
 - **Approval card:** the gateway hold stays the enforcement point; heartbeat every 20 s on held
-  calls; denial wording "This action was not approved. Do not retry; tell the user."; the agent's
+  calls; denial wording "This action was not approved, so it was not done. Do not try it again; let the user know."; the agent's
   built-in asks are answered from the restored policy keyed on real tool name and tool call id;
   `session/cancel` (the drawer's stop button) answers every pending ask `cancelled`.
 - **Login check at start.** `initialize` then `session/new`; an `auth_required` error becomes the
@@ -159,7 +159,7 @@ same commit range.
 
 - **Builds:** `mcp-transport.ts` session handoff restored (`mcpServers` entry with the `jst_` bearer
   header at `session/new`); progress notifications every 20 s on a held call; fixed-expiry session tokens; the denial wording in the gateway. **Restore by reversing the removal commit's hunks (`e32222640`) onto main, never by copying whole files from `bb59e0700`:** the old files carry the gateway's built-in ask (task 6) and Workshop run-command wiring that main has since dropped (slice 3), and a whole-file copy does not typecheck (Builder, 2026-09-07). Pulled forward from task 6 because this wording needs it: the refusal sentence constant in `native-tool-guard.ts` and its export from the gateway index. Left in task 6: the gateway's `requestAcpBuiltInPermission` method, its imports and the index re-exports from `acp-permission.ts`. Dropped from this task: `gateway-services.ts`, whose only removed lines were the Workshop run-command service, parked with the Workshop.
-- **Files:** `packages/chat/src/mcp-transport.ts`, `packages/ai/src/gateway/{gateway,session-tokens,index,native-tool-guard}.ts` (the removal commit's hunks only, minus the built-in ask).
+- **Files:** `packages/chat/src/mcp-transport.ts`, `packages/ai/src/gateway/{gateway,session-tokens,index,native-tool-guard}.ts` (the removal commit's hunks only, minus the built-in ask), `packages/module-sdk/src/index.ts` (the optional progress field on the shared tool context, two lines the removal took out; the gateway hunk sets it, so the restore does not typecheck without it; Reviewer, 2026-09-07).
 - **Tests:** `tests/unit/gateway-tool-progress.test.ts`, `session-tokens-fixed-expiry.test.ts`,
   `mcp-transport.test.ts` restored; wording restored in `tests/unit/mcp-gateway-recovery.test.ts`
   and updated in `tests/integration/chat-mcp-transport.test.ts`, `tests/integration/mcp-gateway.test.ts`,
