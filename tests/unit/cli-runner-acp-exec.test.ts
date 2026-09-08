@@ -32,6 +32,12 @@ import { providerTokenPath } from "../../packages/cli-runner/src/provider-token-
 const KEY = "workshop:user:proj";
 const PROJECT = "proj";
 
+// This suite proves exec behavior, not real chown privilege — a plain test
+// process has no CAP_CHOWN, so the one test that turns on per-user identity
+// needs a no-op stand-in for handing a folder to its owner. The real
+// throw-and-clean-up behavior is proved in cli-runner-owned-fs.test.ts.
+const acceptOwnership = async (): Promise<void> => undefined;
+
 function makeHost(dir: string) {
   return new AcpHost({ neutralBase: dir });
 }
@@ -110,7 +116,8 @@ describe("AcpHost builds", () => {
         homeBase,
         perUserUid: true,
         resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
-        spawnChild: () => child
+        spawnChild: () => child,
+        applyOwnership: acceptOwnership
       });
       const spawned = await host.spawn(KEY, PROJECT, "anthropic", "user-1", "chat");
       // Real shell runs need no account switch in tests (non-root cannot
