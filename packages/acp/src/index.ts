@@ -4,6 +4,7 @@ export type {
   AcpPermissionDecider,
   AcpPromptOptions,
   AcpPromptResult,
+  AcpSessionCleanupHandle,
   AcpSessionHandle,
   AcpSetModelResult,
   AcpToolAnnouncement,

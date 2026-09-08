@@ -279,8 +279,9 @@ describe("MossAcpClient", () => {
     expect(failure.message).toMatch(/cleanup failed \(STOP REFUSED\)/);
     expect(agent.killCalls).toEqual(["chat:user:proj"]);
     expect(revoked).toBe(0);
+    expect(typeof failure.cleanup.close).toBe("function");
 
-    await failure.retryCleanup();
+    await failure.cleanup.close();
     expect(agent.killCalls).toEqual(["chat:user:proj", "chat:user:proj"]);
     expect(agent.pollingStopped).toBe(true);
     expect(revoked).toBe(1);

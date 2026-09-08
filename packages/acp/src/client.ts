@@ -50,26 +50,33 @@ export interface AcpSessionHandle {
   readonly gid: number;
 }
 
+/** Cleanup retained for a failed open whose runner stop can be retried. */
+export interface AcpSessionCleanupHandle {
+  close(): Promise<void>;
+}
+
 /** A failed open whose runner cleanup can be retried after a refused stop. */
 export class AcpSessionOpenError extends Error {
   readonly startupError: unknown;
   readonly cleanupError: unknown;
+  readonly cleanup: AcpSessionCleanupHandle;
   readonly retryCleanup: () => Promise<void>;
 
-  constructor(startupError: unknown, cleanupError: unknown, retryCleanup: () => Promise<void>) {
+  constructor(startupError: unknown, cleanupError: unknown, cleanup: AcpSessionCleanupHandle) {
     const startupMessage =
       startupError instanceof Error ? startupError.message : String(startupError);
     const cleanupMessage =
       cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
     super(
       `ACP session failed to open (${startupMessage}); cleanup failed (${cleanupMessage}); ` +
-        "call retryCleanup() to finish stopping the agent",
+        "call cleanup.close() to finish stopping the agent",
       { cause: startupError }
     );
     this.name = "AcpSessionOpenError";
     this.startupError = startupError;
     this.cleanupError = cleanupError;
-    this.retryCleanup = retryCleanup;
+    this.cleanup = cleanup;
+    this.retryCleanup = () => cleanup.close();
   }
 }
 
@@ -290,22 +297,24 @@ export class MossAcpClient {
       let killed = false;
       let stopped = false;
       let revoked = false;
-      const cleanup = async (): Promise<void> => {
-        if (!killed) {
-          await this.tunnel.kill(sessionKey);
-          killed = true;
-        }
-        if (!stopped) {
-          await stream.stop();
-          stopped = true;
-        }
-        if (!revoked) {
-          revoked = true;
-          toolServer?.onClose?.();
+      const cleanup: AcpSessionCleanupHandle = {
+        close: async (): Promise<void> => {
+          if (!killed) {
+            await this.tunnel.kill(sessionKey);
+            killed = true;
+          }
+          if (!stopped) {
+            await stream.stop();
+            stopped = true;
+          }
+          if (!revoked) {
+            revoked = true;
+            toolServer?.onClose?.();
+          }
         }
       };
       try {
-        await cleanup();
+        await cleanup.close();
       } catch (cleanupError) {
         throw new AcpSessionOpenError(error, cleanupError, cleanup);
       }
