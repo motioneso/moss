@@ -496,6 +496,47 @@ describe("MossAcpClient", () => {
     await client.close(handle);
   });
 
+  it("settles a gateway-backed permission ask before cancelling the ACP session", async () => {
+    const agent = new ScriptedAgent();
+    let resolveDecision: ((decision: "allow" | "deny") => void) | undefined;
+    const decider = {
+      decide: vi.fn(
+        () =>
+          new Promise<"allow" | "deny">((resolve) => {
+            resolveDecision = resolve;
+          })
+      ),
+      cancelSession: vi.fn(() => {
+        resolveDecision?.("deny");
+      })
+    };
+    const client = new MossAcpClient(agent, {}, decider);
+    const handle = await client.openSession(
+      "chat:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
+
+    agent.agentAnnouncesToolCall({
+      toolCallId: "call-9",
+      title: "`pnpm build`",
+      kind: "execute",
+      rawInput: { command: "pnpm build" },
+      _meta: { claudeCode: { toolName: "Bash" } }
+    });
+    agent.agentAsksPermission(8, { title: "`pnpm build`", rawInput: { command: "pnpm build" } });
+    await vi.waitFor(() => expect(decider.decide).toHaveBeenCalledOnce());
+
+    await client.cancel(handle);
+
+    expect(decider.cancelSession).toHaveBeenCalledWith("agent-sess-1");
+    const answer = await waitForAnswer(agent, 8);
+    expect(answer.result.outcome).toEqual({ outcome: "cancelled" });
+    await client.close(handle);
+  });
+
   it("decides by the announced name when the question lands first", async () => {
     const agent = new ScriptedAgent();
     const seen: Array<string | null> = [];

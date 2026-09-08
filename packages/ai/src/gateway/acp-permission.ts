@@ -245,7 +245,11 @@ export async function requestAcpBuiltInPermission(
       })
     );
 
-    const pendingResolution = deps.confirmations.awaitResolution(action.id, deps.confirmTimeoutMs);
+    const pendingResolution = deps.confirmations.awaitResolution(
+      action.id,
+      deps.confirmTimeoutMs,
+      request.sessionId
+    );
 
     deps.notifier.emit(chatSessionId, {
       kind: "action_request",

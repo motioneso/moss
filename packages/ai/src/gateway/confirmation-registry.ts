@@ -2,6 +2,7 @@ export type ResolutionStatus = "confirmed" | "rejected" | "cancelled";
 export type AwaitOutcome = ResolutionStatus | "timeout";
 
 interface Waiter {
+  readonly sessionId?: string;
   readonly settle: (outcome: AwaitOutcome) => void;
 }
 
@@ -13,7 +14,11 @@ export class ConfirmationRegistry {
   private readonly waiters = new Map<string, Waiter>();
   private readonly completions = new Map<string, () => void>();
 
-  awaitResolution(actionRequestId: string, timeoutMs: number): Promise<AwaitOutcome> {
+  awaitResolution(
+    actionRequestId: string,
+    timeoutMs: number,
+    sessionId?: string
+  ): Promise<AwaitOutcome> {
     return new Promise<AwaitOutcome>((resolve) => {
       const timer = setTimeout(() => {
         this.waiters.delete(actionRequestId);
@@ -21,6 +26,7 @@ export class ConfirmationRegistry {
       }, timeoutMs);
 
       this.waiters.set(actionRequestId, {
+        sessionId,
         settle: (outcome) => {
           clearTimeout(timer);
           this.waiters.delete(actionRequestId);
@@ -28,6 +34,17 @@ export class ConfirmationRegistry {
         }
       });
     });
+  }
+
+  /** Cancel every live ACP ask belonging to a stopped agent session. */
+  cancelSession(sessionId: string): number {
+    let cancelled = 0;
+    for (const waiter of this.waiters.values()) {
+      if (waiter.sessionId !== sessionId) continue;
+      waiter.settle("cancelled");
+      cancelled += 1;
+    }
+    return cancelled;
   }
 
   /**

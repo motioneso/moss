@@ -390,6 +390,30 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(pending).resolves.toEqual({ decision: "allow", reason: "Approved by user." });
   });
 
+  it("cancels every ask when its ACP session stops and ignores a later approval", async () => {
+    const store = freshStore();
+    const { gateway, tokens, confirmations } = buildGateway(store, 30_000);
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+
+    const pending = gateway.requestAcpBuiltInPermission(token, {
+      cwd: CWD,
+      home: "/home/agent",
+      sessionId: "agent-sess-1",
+      toolCallId: "call-9",
+      title: "`pnpm build`",
+      toolInput: { command: "pnpm build" },
+      toolName: "Bash"
+    });
+    await vi.waitFor(() => expect(store.created).toHaveLength(1));
+    await vi.waitFor(() => expect(confirmations.isAwaiting("acp-action-1")).toBe(true));
+
+    expect(confirmations.cancelSession("agent-sess-1")).toBe(1);
+    await expect(pending).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    await expect(gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")).resolves.toBe(
+      "expired"
+    );
+  });
+
   it("writes one audit line per ask and per refusal, none for silent allows", async () => {
     const ask = async (status: "confirmed" | "rejected", timeoutMs = 1000) => {
       const store = freshStore();

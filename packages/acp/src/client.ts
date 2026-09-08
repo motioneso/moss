@@ -138,6 +138,8 @@ export interface AcpToolAnnouncement {
  */
 export interface AcpPermissionDecider {
   decide(request: AcpBuiltInRequest, session: AcpSessionHandle): Promise<"allow" | "deny">;
+  /** Settle all pending permission asks when this agent session is stopped. */
+  cancelSession?: (sessionId: string) => void | Promise<void>;
 }
 
 export interface AcpPromptOptions {
@@ -340,7 +342,7 @@ export class MossAcpClient {
         }),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
-            void connection.cancel({ sessionId: handle.sessionId }).catch(() => undefined);
+            void this.cancel(handle).catch(() => undefined);
             reject(new Error(`ACP prompt timed out after ${timeoutMs} ms`));
           }, timeoutMs);
         })
@@ -358,7 +360,12 @@ export class MossAcpClient {
 
   async cancel(handle: AcpSessionHandle): Promise<void> {
     const connection = this.requireConnection(handle.sessionId);
-    await connection.cancel({ sessionId: handle.sessionId });
+    const permissionCancellation = this.cancelPendingPermissions(handle.sessionId);
+    try {
+      await connection.cancel({ sessionId: handle.sessionId });
+    } finally {
+      await permissionCancellation;
+    }
   }
 
   /**
@@ -414,6 +421,7 @@ export class MossAcpClient {
   async close(handle: AcpSessionHandle): Promise<void> {
     const sessionKey = this.sessionKeys.get(handle.sessionId);
     const stream = this.streams.get(handle.sessionId);
+    await this.cancelPendingPermissions(handle.sessionId);
     if (sessionKey) {
       await this.tunnel.kill(sessionKey);
       await stream?.stop();
@@ -449,6 +457,10 @@ export class MossAcpClient {
     const connection = this.connections.get(sessionId);
     if (!connection) throw new Error("ACP session is not open");
     return connection;
+  }
+
+  private async cancelPendingPermissions(sessionId: string): Promise<void> {
+    await this.permissionDecider?.cancelSession?.(sessionId);
   }
 
   /** Remember one announced tool use, waking its question if already waiting. */
