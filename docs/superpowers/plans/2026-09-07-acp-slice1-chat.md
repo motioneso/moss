@@ -64,8 +64,7 @@ restores, release note); the behind-the-scenes task added (spec section 14); Ope
   audit as its own task there (PM's ruling on Ben's question, 2026-09-07).
 - **Model choice.** Chat keeps today's resolution, unchanged: the admin's chat binding through the existing capability route (chat is the only bindable service), or the person's own override where the admin has enabled it (`packages/ai/src/chat-model-override.ts`); so yes, the admin's chat binding is honoured in slice 1. The resolved model record's provider kind picks the row; no code path names a provider (the bridge's engine chooser, which does, is what task 9 deletes); the model id is sent with
   `session/set_config_option` on the `category: "model"` option after `session/new` where the
-  agent advertises it, else the row's launch mechanism, else the session stays on the login's
-  default and the reply record says so.
+  agent advertises it, else the row's launch mechanism, else the session stays on the login's default and the reply record says so. Where the option is advertised it is always set before the first prompt, never left unset: the resolved id when listed, else the agent's reported current value, else the first advertised option, and the reply record names what was set. A fresh OpenCode session in the runner's home has no config file and answers nothing without one (Builder, task 4, 2026-09-07); Claude's adapter has a built-in default, which is why only OpenCode showed it.
 - **Model list reconciliation, decided (Reviewer finding 5).** The "Refresh models" list in
   settings keeps today's per-CLI adapter as its only source. The protocol's `configOptions` is
   used to set the model and, at session start, to confirm the chosen id is one the agent accepts;
@@ -187,14 +186,14 @@ same commit range.
 
 - **Builds:** an ACP chat engine behind the session manager for the `chat` profile, chosen by
   `engine-selection.ts` for every conversation (no setting); session key and folder as decided;
-  history replayed from Postgres into the prompt; the stop button sends `session/cancel`; a second
+  history replayed from Postgres into the prompt; the model option is set before the first prompt on every session that advertises it (Decisions, model choice), so no provider is ever prompted unset; the stop button sends `session/cancel`; a second
   send during a turn is queued and the composer says so; stop reasons surface as typed events; an
   `auth_required` answer becomes the provider's "Not logged in" status and the drawer reply "The
   <provider> sign-in has expired; an admin can log it in again under Settings, Assistant & AI";
   reply persisted through the existing transcript path; the session is started when the conversation is opened in the drawer, not on the first send, so no first prompt pays the session start (PM, 2026-09-07).
 - **Files:** `packages/chat/src/live/{engine-selection,runtime,chat-session-manager}.ts`, a new `packages/chat/src/live/acp-chat-engine.ts`, `packages/chat/src/manifest.ts`, `tests/uat/specs/2424-acp-chat-lunch.uat.spec.ts` (the live-proof script task 10 runs; modelled on `tests/uat/specs/chat-drawer-private.uat.spec.ts`).
 - **Tests:** engine unit tests (login failure text, replay shape, stop reason mapping, queue on
-  busy, cancel answers pending asks, warm start on open); session manager tests for the queue.
+  busy, cancel answers pending asks, warm start on open, model always set before the first prompt including the `default` binding); session manager tests for the queue.
 - **App map:** chat manifest `features`: answers through the agent protocol, the sign-in expired
   message, queued sends.
 - **Gate:** the four checks; `pnpm vitest run packages/chat`; full gate via `verify-gate`.

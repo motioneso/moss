@@ -205,8 +205,7 @@ adapter source, 2026-09-07), so a `workshop` binding to a specific Claude model 
 the adapter has no such option, the row names its own mechanism (Codex: the `CODEX_CONFIG` launch
 setting). Where the adapter offers neither, the only
 choice for that provider is the login's own default model, and the bindings screen says so beside
-that provider instead of offering models it cannot honour. The sentinel `default` keeps its meaning:
-the provider account's own model.
+that provider instead of offering models it cannot honour. The sentinel `default` keeps its meaning: the provider account's own model. **A session that advertises the model option is never prompted without one set.** A fresh OpenCode session in the runner's per-user home has no config file and answers nothing until a model is set (Builder, dev handshake, 2026-09-07), so the client sets the option before the first prompt in every case: the resolved model id when it is among the advertised options; otherwise (binding `default`, or an id the agent does not list) the value the agent reports as current, else the first advertised option; the reply record names the model actually set. A provider without the option keeps the two fallbacks above.
 
 **A model change mid-conversation** starts a new agent session on the new provider with history
 replayed from Postgres. Switching models inside one session is allowed only when the new model is on
