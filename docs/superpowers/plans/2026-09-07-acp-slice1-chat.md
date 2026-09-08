@@ -157,8 +157,8 @@ same commit range.
   tools, and exits non-zero on any failure or after 60 s.
 - **Files:** `scripts/acp-handshake-check.ts`.
 - **Evidence (Builder, on the PR):** the script's exit code and its bounded log (last 40 lines).
-- **Kill gate:** if the handshake cannot complete through the runner on dev, stop the slice and
-  report to PM before any further task.
+- **Kill gate:** if the handshake cannot complete through the runner on dev, stop the slice and report to PM before any further task.
+- **Rerun after task 5b (Astra-Reviewer finding 4, 2026-09-08).** The first run built its own host inside the script with per-user identity off and a loopback tunnel, so it proved the adapters answer and not the path the gate exists to prove. Its result is withdrawn: **not passed**. The rerun connects to the running runner service over its socket, with per-user identity on, for Claude and OpenCode, and records on the PR the account and home folder each agent ran as. Task 6 does not start before it passes.
 
 ### Task 5. Tool server handoff, heartbeat, denial wording
 
@@ -172,14 +172,30 @@ same commit range.
 - **Gate:** the four checks; `pnpm vitest run tests/unit/gateway-* tests/unit/mcp-*`; full gate via
   `verify-gate`.
 
+### Task 5b. The launch follows the provider row (blocks task 6)
+
+Astra-Reviewer's whole-slice read at 561265882 (2026-09-08) found that the restored host launches every provider the way the old Claude path did. Task 3 restored it faithfully; the spec asks for more, and this task is the difference.
+
+- **Builds:** in the runner's ACP host, the account slot is allocated by the user's id, the same key the existing per-user runtimes use, never by conversation key (finding 2: one slot per conversation drains the permanent slot pool and gives two conversations of one person two accounts); `HOME` is that slot's own home folder, never the shared base folder; the login reaches the agent by the selected row's mechanism only (finding 1: Claude's stored token in the environment for Claude alone; Codex reuses the on-disk login in that home and gets no Claude token; OpenCode gets neither); the launch-time off-list is applied for every row from `launchOffList(profile)` through the row's own mechanism (finding 3: Claude's disallowed-tools list, Codex's `INITIAL_AGENT_MODE=read-only` in the environment, OpenCode's settings file written into the home with shell and file edits set to deny, moved here from task 6); the Claude-only deny list the host writes today is deleted, so the table is the single source. A row's "ready" claim is the launch code, not the row text: `providers.ts` says nothing a launch does not do.
+- **Files:** `packages/cli-runner/src/acp-host.ts`, `packages/acp/src/providers.ts`, `packages/acp/src/tool-table.ts` if the row mechanism needs a shape change, their tests.
+- **Tests:** host unit tests: slot keyed by user id, `HOME` is the slot home, Codex and OpenCode environments carry no Claude token, each row's off-list reaches its mechanism from the table, no deny file for the Workshop profile.
+- **Gate:** the four checks; `pnpm vitest run packages/cli-runner packages/acp`; then task 4 rerun.
+
+### Task 5c. Client lifecycle: one turn's reply, and close kills the session (before task 7)
+
+- **Builds:** in the protocol client, reply text and tool counts are collected per turn, reset at each `session/prompt`, so a second turn returns only its own answer (finding 5: offline, two prompts returned `answer-1` then `answer-1answer-2`); `close` kills the runner session and stops its polling stream before revoking the bearer (finding 6: zero kill calls after close, and the polling kept the runner's activity timestamp fresh so idle cleanup never fired).
+- **Files:** `packages/acp/src/client.ts`, `packages/acp/src/client.test.ts`.
+- **Tests:** two-turn reply isolation for text and counts; close issues exactly one kill and the poll loop ends.
+- **Gate:** the four checks; `pnpm vitest run packages/acp`.
+
 ### Task 6. Approval wiring and the built-in permission policy
 
 - **Builds:** `packages/ai/src/gateway/acp-permission.ts` restored (policy keyed on real tool name, matched by tool call id, zones from spec section 7, audit lines); the gateway's `requestAcpBuiltInPermission` method and the index re-exports restored here, not in task 5 (the refusal wording constant already landed in task 5); agent asks that need a
   person create a gateway pending action and emit the existing `action_request` event, and the ACP
-  request is answered from that resolution; every pending ask answered `cancelled` on `session/cancel`; the OpenCode row's launch step writes its settings file into the per-user home before spawn with shell and file edits set to deny, both entries derived from the tool table's `chat` column (Decisions, provider rows). The spec 7 point 3 deferral is written into the spec's review record.
+  request is answered from that resolution; every pending ask answered `cancelled` on `session/cancel`; the OpenCode settings-file write lives in task 5b with the other rows' off-lists (moved 2026-09-08). The spec 7 point 3 deferral is written into the spec's review record.
 - **Files:** `packages/ai/src/gateway/{acp-permission,gateway,index}.ts`,
   `packages/acp/src/permissions.ts`, `packages/ai/package.json` (the `@moss/acp` workspace dependency, restored here with its first importer), `docs/superpowers/specs/2026-09-06-acp-client-design.md`.
-- **Tests:** `tests/unit/acp-builtin-permission.test.ts` restored and extended for the cancel case; a row test that the OpenCode launch step writes the deny file from the table and never for the Workshop profile.
+- **Tests:** `tests/unit/acp-builtin-permission.test.ts` restored and extended for the cancel case.
 - **App map:** `app-map-core.ts` gains the "not approved, ask the user" error and remediation.
 - **Gate:** the four checks; `pnpm vitest run tests/unit/acp-* tests/unit/gateway-*`.
 
@@ -245,8 +261,7 @@ Starts only after Ben has seen the mockup (posted in the room 2026-09-07).
 
 ## Order and hand-offs
 
-1 → 2 → 3 → 4 (first kill gate) → 5 → 6 → 7 → 8 → 9 (second gate) → 10. Task 5 may run in
-parallel with 3 and 4 if two builders are available; both land on the same lane branch and PR.
+1 → 2 → 3 → 4 → 5 → 5b → 4 rerun (first kill gate, on the running service) → 5c → 6 → 7 → 8 → 9 (second gate) → 10. Task 5 may run in parallel with 3 and 4 if two builders are available; both land on the same lane branch and PR.
 Reviewer reviews each task's commit range before the next task starts.
 
 ## Out of scope for this slice
