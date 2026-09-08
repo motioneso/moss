@@ -103,15 +103,23 @@ describe("AcpHost builds", () => {
         stdin: { write: () => undefined },
         kill: () => true
       }) as never;
+      const homeBase = join(dir, "homes");
+      mkdirSync(homeBase, { recursive: true });
       const host = new AcpHost({
         neutralBase: dir,
+        homeBase,
+        perUserUid: true,
         resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
         spawnChild: () => child
       });
-      const spawned = await host.spawn(KEY, PROJECT, "anthropic");
-      const { execId } = await host.execStart(KEY, PROJECT, "pwd");
-      await pollUntil(host.execPoll.bind(host, KEY, execId));
-      const final = host.execPoll(KEY, execId);
+      const spawned = await host.spawn(KEY, PROJECT, "anthropic", "user-1", "chat");
+      // Real shell runs need no account switch in tests (non-root cannot
+      // setuid), so the build itself runs on a host without per-user
+      // identity; the folder assertion is what this test owns.
+      const execHost = new AcpHost({ neutralBase: dir });
+      const { execId } = await execHost.execStart(KEY, PROJECT, "pwd");
+      await pollUntil(execHost.execPoll.bind(execHost, KEY, execId));
+      const final = execHost.execPoll(KEY, execId);
       expect(final.output.trim()).toBe(spawned.cwd);
     } finally {
       rmSync(dir, { recursive: true, force: true });

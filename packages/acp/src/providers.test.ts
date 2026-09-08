@@ -59,7 +59,7 @@ describe("profile gate", () => {
     const agent = new ModelAgent(["m-1"]);
     const client = new MossAcpClient(agent);
     await expect(
-      client.openSession("workshop:user:proj", "proj", "anthropic", "workshop")
+      client.openSession("workshop:user:proj", "proj", "anthropic", "user-1", "workshop")
     ).rejects.toThrow(/not built yet/);
     expect(agent.sent).toHaveLength(0);
   });
@@ -170,7 +170,13 @@ describe("setModel", () => {
   it("sends the option when the agent advertises a model choice", async () => {
     const agent = new ModelAgent(["m-1", "m-2"]);
     const client = new MossAcpClient(agent);
-    const handle = await client.openSession("chat:user:conv", "conv", "anthropic", "chat");
+    const handle = await client.openSession(
+      "chat:user:conv",
+      "conv",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
     const result = await client.setModel(handle, "m-2");
     expect(result.applied).toBe(true);
     expect(result.mismatch).toBe(false);
@@ -188,7 +194,13 @@ describe("setModel", () => {
   it("records a mismatch instead of sending an id the agent does not accept", async () => {
     const agent = new ModelAgent(["m-1", "m-2"]);
     const client = new MossAcpClient(agent);
-    const handle = await client.openSession("chat:user:conv", "conv", "anthropic", "chat");
+    const handle = await client.openSession(
+      "chat:user:conv",
+      "conv",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
     const result = await client.setModel(handle, "m-nope");
     expect(result.applied).toBe(false);
     expect(result.mismatch).toBe(true);
@@ -202,7 +214,7 @@ describe("setModel", () => {
   it("falls back per row when no model option is advertised", async () => {
     const agent = new ModelAgent(null);
     const client = new MossAcpClient(agent);
-    const handle = await client.openSession("chat:user:conv", "conv", "openai", "chat");
+    const handle = await client.openSession("chat:user:conv", "conv", "openai", "user-1", "chat");
     const result = await client.setModel(handle, "m-1");
     expect(result.applied).toBe(false);
     expect(result.mismatch).toBe(false);
