@@ -96,8 +96,8 @@ class ModelAgent implements AcpTunnel {
 
   constructor(private readonly modelValues: string[] | null = ["m-1", "m-2"]) {}
 
-  async spawn(): Promise<{ cwd: string; home: string | null; generation: number }> {
-    return { cwd: "/runner/session/acp/chat", home: "/home/agent", generation: 1 };
+  async spawn(): Promise<{ cwd: string; home: string | null; pid: number | null }> {
+    return { cwd: "/runner/session/acp/chat", home: "/home/agent", pid: 12345 };
   }
 
   async send(_sessionKey: string, line: string): Promise<void> {

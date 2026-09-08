@@ -30,7 +30,7 @@ export interface AcpTunnel {
     providerKind: AcpProviderKind,
     userId: string,
     profile: AcpProfile
-  ): Promise<{ cwd: string; home: string | null }>;
+  ): Promise<{ cwd: string; home: string | null; pid: number | null }>;
   /** Deliver one client-to-agent JSON-RPC line (no trailing newline). */
   send(sessionKey: string, line: string): Promise<void>;
   /** Drain adapter stdout lines after a sequence cursor. */

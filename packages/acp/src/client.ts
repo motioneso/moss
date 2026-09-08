@@ -43,6 +43,8 @@ export interface AcpSessionHandle {
   readonly cwd: string;
   /** The HOME handed to the agent process, or null when it names none. */
   readonly home: string | null;
+  /** The spawned agent's own process id, or null when it could not be read. */
+  readonly pid: number | null;
 }
 
 /**
@@ -189,6 +191,7 @@ export class MossAcpClient {
   private readonly closers = new Map<string, () => void>();
   private readonly sessionCwds = new Map<string, string>();
   private readonly sessionHomes = new Map<string, string | null>();
+  private readonly sessionPids = new Map<string, number | null>();
   private readonly sessionKinds = new Map<string, AcpProviderKind>();
   private readonly sessionOptions = new Map<string, readonly SessionConfigOption[]>();
   private readonly announcements = new Map<string, Map<string, AcpToolAnnouncement>>();
@@ -218,7 +221,7 @@ export class MossAcpClient {
     toolServer?: AcpToolServer
   ): Promise<AcpSessionHandle> {
     checkAcpProfile(surface, providerKind);
-    const { cwd, home } = await this.tunnel.spawn(
+    const { cwd, home, pid } = await this.tunnel.spawn(
       sessionKey,
       projectId,
       providerKind,
@@ -249,10 +252,11 @@ export class MossAcpClient {
     this.toolCalls.set(session.sessionId, 0);
     this.sessionCwds.set(session.sessionId, cwd);
     this.sessionHomes.set(session.sessionId, home);
+    this.sessionPids.set(session.sessionId, pid);
     this.sessionKinds.set(session.sessionId, providerKind);
     this.sessionOptions.set(session.sessionId, session.configOptions ?? []);
     if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
-    return { sessionId: session.sessionId, cwd, home };
+    return { sessionId: session.sessionId, cwd, home, pid };
   }
 
   async prompt(
@@ -353,6 +357,7 @@ export class MossAcpClient {
     this.toolCalls.delete(handle.sessionId);
     this.sessionCwds.delete(handle.sessionId);
     this.sessionHomes.delete(handle.sessionId);
+    this.sessionPids.delete(handle.sessionId);
     this.sessionKinds.delete(handle.sessionId);
     this.sessionOptions.delete(handle.sessionId);
     this.announcements.delete(handle.sessionId);
@@ -440,6 +445,7 @@ export class MossAcpClient {
       return denyPermission();
     }
     const home = this.sessionHomes.get(params.sessionId) ?? null;
+    const pid = this.sessionPids.get(params.sessionId) ?? null;
     const toolCallId = params.toolCall.toolCallId;
     let announced = this.announcements.get(params.sessionId)?.get(toolCallId);
     if (!announced) {
@@ -466,7 +472,8 @@ export class MossAcpClient {
       const verdict = await this.permissionDecider.decide(builtIn, {
         sessionId: params.sessionId,
         cwd,
-        home
+        home,
+        pid
       });
       if (verdict !== "allow") return denyPermission();
       // Least privilege: single-use grant, never standing. No allow option

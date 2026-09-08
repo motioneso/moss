@@ -10,7 +10,12 @@
  * Usage:
  *   JARVIS_CLI_RUNNER_SOCKET=/run/jarv1s/cli-runner.sock \
  *   JARVIS_CLI_RUNNER_RPC_SECRET=... \
- *   pnpm tsx scripts/acp-handshake-check.ts --provider=anthropic [--timeout-ms=60000]
+ *   pnpm tsx scripts/acp-handshake-check.ts --provider=anthropic --user-id=<real Moss user id> [--timeout-ms=60000]
+ *
+ * --user-id= is required and must be a real Moss user id — never inferred from
+ * the OS/operator's account (task 5b, Astra-Reviewer finding 5b, 2026-09-08).
+ * Identity evidence comes from reading /proc/<pid>/status for the spawned
+ * agent's own child pid, not from stat()-ing the home folder it was handed.
  *
  * Claude goes through the full product path (readiness gate included). OpenCode
  * is not API-ready until task 5 proves its switch-off, so its leg drives the
@@ -19,8 +24,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { stat } from "node:fs/promises";
-import { userInfo } from "node:os";
+import { readFile } from "node:fs/promises";
 
 import { RpcConnection } from "@moss/chat/live";
 import { resolveMossEnv } from "@moss/db";
@@ -40,22 +44,30 @@ const PROMPT_TEXT = "reply with exactly: hello";
 function usageError(message: string): never {
   console.error(`[handshake] usage error: ${message}`);
   console.error(
-    "[handshake] usage: pnpm tsx scripts/acp-handshake-check.ts --provider=anthropic|openai|opencode [--timeout-ms=60000]"
+    "[handshake] usage: pnpm tsx scripts/acp-handshake-check.ts --provider=anthropic|openai|opencode --user-id=<real Moss user id> [--timeout-ms=60000]"
   );
   process.exit(2);
 }
 
-function parseArgs(): { providerKind: AcpProviderKind; timeoutMs: number } {
+function parseArgs(): { providerKind: AcpProviderKind; userId: string; timeoutMs: number } {
   const providerArg = process.argv.find((arg) => arg.startsWith("--provider="));
   if (!providerArg) usageError("missing --provider=");
   const providerKind = providerArg.slice("--provider=".length) as AcpProviderKind;
   if (providerKind !== "anthropic" && providerKind !== "openai" && providerKind !== "opencode") {
     usageError(`unsupported provider: ${providerKind}`);
   }
+  // Never inferred from the OS/operator's username (task 5b, Astra-Reviewer
+  // finding 5b, 2026-09-08): the OS account running this script is not a Moss
+  // person, and slots belong to people, so the check must be told which real
+  // user id to spawn as.
+  const userIdArg = process.argv.find((arg) => arg.startsWith("--user-id="));
+  if (!userIdArg) usageError("missing --user-id= (a real Moss user id, not the OS account)");
+  const userId = userIdArg.slice("--user-id=".length);
+  if (userId.length === 0) usageError("--user-id= must not be empty");
   const timeoutArg = process.argv.find((arg) => arg.startsWith("--timeout-ms="));
   const timeoutMs = timeoutArg ? Number(timeoutArg.slice("--timeout-ms=".length)) : 60000;
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) usageError("bad --timeout-ms=");
-  return { providerKind, timeoutMs };
+  return { providerKind, userId, timeoutMs };
 }
 
 /** Same two env vars the app reads to reach the cli-runner (carve-out names, see resolveMossEnv). */
@@ -86,7 +98,7 @@ function rpcTunnel(conn: RpcConnection): AcpTunnel {
     spawn: (sessionKey, projectId, providerKind, userId, profile) =>
       conn
         .acpSpawn(sessionKey, { projectId, providerKind, userId, profile })
-        .then(({ cwd, home }) => ({ cwd, home })),
+        .then(({ cwd, home, pid }) => ({ cwd, home, pid })),
     send: (sessionKey, line) => conn.acpSend(sessionKey, { line }).then(() => undefined),
     read: (sessionKey, afterSeq) => conn.acpRead(sessionKey, { afterSeq }),
     kill: (sessionKey) => conn.acpKill(sessionKey).then(() => undefined),
@@ -111,36 +123,82 @@ function accountNameForUid(uid: number): string {
   }
 }
 
-/** Proves the account the agent actually ran as by reading who owns the folder it was handed, rather than trusting what was asked for. */
-async function reportActualOwner(label: string, home: string | null): Promise<void> {
-  if (!home) {
-    console.log(`[handshake] ${label}: no home folder was handed to the agent`);
-    return;
+interface ProcIdentity {
+  readonly uid: number;
+  readonly gid: number;
+  readonly inheritableCaps: string;
+  readonly ambientCaps: string;
+  readonly effectiveCaps: string;
+}
+
+function parseProcStatus(text: string): ProcIdentity {
+  const line = (name: string): string => {
+    const match = new RegExp(`^${name}:\\s*(.+)$`, "m").exec(text);
+    if (!match) throw new Error(`/proc/<pid>/status has no ${name} line`);
+    return match[1]!.trim();
+  };
+  return {
+    uid: Number(line("Uid").split(/\s+/)[0]),
+    gid: Number(line("Gid").split(/\s+/)[0]),
+    inheritableCaps: line("CapInh"),
+    ambientCaps: line("CapAmb"),
+    effectiveCaps: line("CapEff")
+  };
+}
+
+/**
+ * Proves the identity and privilege state the agent actually runs with by
+ * reading its own child pid's `/proc/<pid>/status` — never a folder-owner
+ * `stat()`, which only shows what was asked for and says nothing about
+ * whether the ambient-capability leak (task 5b, Astra-Reviewer finding 2,
+ * 2026-09-08) was actually closed. Fails the check if either capability set
+ * is non-zero: a real leak, not just a mismatched account.
+ */
+async function reportActualIdentity(
+  label: string,
+  home: string | null,
+  pid: number | null
+): Promise<void> {
+  if (pid === null) {
+    throw new Error(
+      `${label}: the runner returned no pid for the spawned agent, cannot prove its identity`
+    );
   }
-  const info = await stat(home);
+  const raw = await readFile(`/proc/${pid}/status`, "utf8");
+  const identity = parseProcStatus(raw);
+  const account = accountNameForUid(identity.uid);
   console.log(
-    `[handshake] ${label}: home=${home} account=${accountNameForUid(info.uid)} (uid=${info.uid}, gid=${info.gid})`
+    `[handshake] ${label}: pid=${pid} home=${home ?? "(none)"} account=${account} ` +
+      `(uid=${identity.uid}, gid=${identity.gid}) CapInh=${identity.inheritableCaps} ` +
+      `CapAmb=${identity.ambientCaps} CapEff=${identity.effectiveCaps}`
   );
+  if (
+    identity.ambientCaps !== "0000000000000000" ||
+    identity.inheritableCaps !== "0000000000000000"
+  ) {
+    throw new Error(
+      `${label}: the spawned agent still carries inheritable/ambient capabilities ` +
+        `(CapInh=${identity.inheritableCaps} CapAmb=${identity.ambientCaps}) — the privilege drop failed`
+    );
+  }
 }
 
 /** Full product path: readiness gate, runner spawn, protocol, one prompt. */
 async function claudeLeg(
   tunnel: AcpTunnel,
   providerKind: AcpProviderKind,
+  userId: string,
   timeoutMs: number
 ): Promise<void> {
   const started = Date.now();
   const client = new MossAcpClient(tunnel);
   const sessionKey = `acp-handshake-${process.pid}`;
-  // Dev-check identity: the OS user stands in for the Moss actor id the chat
-  // engine will pass in task 7; the point here is a stable per-person slot.
-  const userId = userInfo().username;
   console.log(
     `[handshake] openSession kind=${providerKind} profile=chat user=${userId} (no tool server)`
   );
   const handle = await client.openSession(sessionKey, "handshake", providerKind, userId, "chat");
   console.log(`[handshake] session open id=${handle.sessionId} cwd=${handle.cwd}`);
-  await reportActualOwner("claude leg", handle.home);
+  await reportActualIdentity("claude leg", handle.home, handle.pid);
   const result = await client.prompt(handle, PROMPT_TEXT, { timeoutMs });
   console.log(
     `[handshake] prompt done stopReason=${result.stopReason} toolCallsSeen=${result.toolCallsSeen} text=${JSON.stringify(result.text.slice(0, 200))}`
@@ -160,19 +218,20 @@ async function claudeLeg(
 async function directLeg(
   tunnel: AcpTunnel,
   providerKind: AcpProviderKind,
+  userId: string,
   timeoutMs: number
 ): Promise<void> {
   const started = Date.now();
   const sessionKey = `acp-handshake-${process.pid}`;
   console.log(`[handshake] direct leg kind=${providerKind}: runner spawn plus protocol only`);
-  const { cwd, home } = await tunnel.spawn(
+  const { cwd, home, pid } = await tunnel.spawn(
     sessionKey,
     "handshake",
     providerKind,
-    userInfo().username,
+    userId,
     "chat"
   );
-  await reportActualOwner("direct leg", home);
+  await reportActualIdentity("direct leg", home, pid);
   const stream = createTunnelStream(tunnel, sessionKey);
   let text = "";
   let toolCallsSeen = 0;
@@ -242,7 +301,7 @@ async function directLeg(
 }
 
 async function main(): Promise<void> {
-  const { providerKind, timeoutMs } = parseArgs();
+  const { providerKind, userId, timeoutMs } = parseArgs();
   const { socketPath, rpcSecret } = readRunnerConnectionEnv();
   const wall = setTimeout(() => {
     console.error(`[handshake] FAIL: wall deadline ${timeoutMs} ms exceeded`);
@@ -255,9 +314,9 @@ async function main(): Promise<void> {
     const tunnel = rpcTunnel(conn);
     if (providerKind === "opencode") {
       console.log("[handshake] opencode is not API-ready until task 5; proving runner spawn only");
-      await directLeg(tunnel, providerKind, timeoutMs - 5000);
+      await directLeg(tunnel, providerKind, userId, timeoutMs - 5000);
     } else {
-      await claudeLeg(tunnel, providerKind, timeoutMs - 5000);
+      await claudeLeg(tunnel, providerKind, userId, timeoutMs - 5000);
     }
     console.log(`[handshake] PASS kind=${providerKind}`);
     clearTimeout(wall);

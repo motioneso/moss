@@ -556,6 +556,8 @@ export interface RpcAcpSpawnResult {
   readonly generation: number;
   /** The HOME handed to the agent process, or null when it names none. */
   readonly home: string | null;
+  /** The spawned agent's own process id, or null when it could not be read. */
+  readonly pid: number | null;
 }
 /** params for method "acpSend": one client-to-agent JSON-RPC line (no trailing newline). */
 export interface RpcAcpSendParams {
