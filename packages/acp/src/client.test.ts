@@ -330,7 +330,8 @@ describe("MossAcpClient", () => {
 
   it("isolates reply text and tool counts between prompt turns", async () => {
     const agent = new ScriptedAgent();
-    const client = new MossAcpClient(agent);
+    const beginTurn = vi.fn();
+    const client = new MossAcpClient(agent, {}, { decide: async () => "deny", beginTurn });
     const handle = await client.openSession(
       "workshop:user:proj",
       "proj",
@@ -347,6 +348,8 @@ describe("MossAcpClient", () => {
       text: "reply-2",
       toolCallsSeen: 2
     });
+    expect(beginTurn).toHaveBeenNthCalledWith(1, "agent-sess-1");
+    expect(beginTurn).toHaveBeenNthCalledWith(2, "agent-sess-1");
     await client.close(handle);
   });
 

@@ -138,6 +138,8 @@ export interface AcpToolAnnouncement {
  */
 export interface AcpPermissionDecider {
   decide(request: AcpBuiltInRequest, session: AcpSessionHandle): Promise<"allow" | "deny">;
+  /** Clear cancellation from a stopped session before its next prompt turn. */
+  beginTurn?: (sessionId: string) => void | Promise<void>;
   /** Settle all pending permission asks when this agent session is stopped. */
   cancelSession?: (sessionId: string) => void | Promise<void>;
 }
@@ -330,6 +332,7 @@ export class MossAcpClient {
     options: AcpPromptOptions = {}
   ): Promise<AcpPromptResult> {
     const connection = this.requireConnection(handle.sessionId);
+    await this.permissionDecider?.beginTurn?.(handle.sessionId);
     const timeoutMs = options.timeoutMs ?? DEFAULT_PROMPT_TIMEOUT_MS;
     this.texts.set(handle.sessionId, []);
     this.toolCalls.set(handle.sessionId, 0);

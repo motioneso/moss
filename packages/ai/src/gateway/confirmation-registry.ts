@@ -13,6 +13,7 @@ interface Waiter {
 export class ConfirmationRegistry {
   private readonly waiters = new Map<string, Waiter>();
   private readonly completions = new Map<string, () => void>();
+  private readonly cancelledSessions = new Set<string>();
 
   awaitResolution(
     actionRequestId: string,
@@ -20,6 +21,11 @@ export class ConfirmationRegistry {
     sessionId?: string
   ): Promise<AwaitOutcome> {
     return new Promise<AwaitOutcome>((resolve) => {
+      if (sessionId && this.cancelledSessions.has(sessionId)) {
+        resolve("cancelled");
+        return;
+      }
+
       const timer = setTimeout(() => {
         this.waiters.delete(actionRequestId);
         resolve("timeout");
@@ -38,6 +44,7 @@ export class ConfirmationRegistry {
 
   /** Cancel every live ACP ask belonging to a stopped agent session. */
   cancelSession(sessionId: string): number {
+    this.cancelledSessions.add(sessionId);
     let cancelled = 0;
     for (const waiter of this.waiters.values()) {
       if (waiter.sessionId !== sessionId) continue;
@@ -45,6 +52,11 @@ export class ConfirmationRegistry {
       cancelled += 1;
     }
     return cancelled;
+  }
+
+  /** Allow permission asks from the next turn on a previously stopped session. */
+  beginTurn(sessionId: string): void {
+    this.cancelledSessions.delete(sessionId);
   }
 
   /**
