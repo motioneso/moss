@@ -243,7 +243,7 @@ clocks.
 1. While a call is held for approval, the tool server sends MCP progress notifications every 20 s
    so the client's clock resets. The hold can then run the full 150 s.
 2. If the hold expires or is denied, the tool reply says so in words the agent will not retry on:
-   "This action was not approved. Do not retry; tell the user."
+   "This action was not approved, so it was not done. Do not try it again; let the user know." (the sentence the restored code carries; the spec's earlier shorter form was a paraphrase, aligned 2026-09-07 on Reviewer's task 5 finding)
 3. The gateway's approval request is also surfaced through ACP's `session/request_permission`
    handler, so the person sees one card whichever path raised it. The gateway remains the
    enforcement point; the protocol message is a second way to show the same card, never a second
