@@ -56,7 +56,7 @@ restores, release note); the behind-the-scenes task added (spec section 14); Ope
 - **Provider rows are code, versions are pinned.** `packages/acp/src/providers.ts` holds one row per
   provider kind (`anthropic`, `openai`, `google`, `opencode`): launch command, login mechanism,
   model mechanism, built-in off-list mechanism, capability requirements per profile. `google` is
-  present and marked unavailable with the reason (slice 2). `opencode` is present: Scout's scratch check passed on 2026-09-07 (model switch, real turn, real usage numbers); its shell and file switch and its tool server handoff are checked on dev in tasks 2 and 5.
+  present and marked unavailable with the reason (slice 2). `opencode` is present: Scout's scratch check passed on 2026-09-07 (model switch, real turn, real usage numbers); its tool server handoff is checked on dev in task 5. Its shell and file switch is OpenCode's own settings file in the per-user home, written by the row before spawn with shell and file edits set to deny: with it, a fresh session offers no shell tool and no ask fires (Scout, scratch home on dev, 2026-09-07). Task 6 adds the write to the row's launch step, deriving the two entries from the tool table; task 10 proves it in the runner's real per-user home, and the row is ready only then. Until then it is not ready: gated-and-denied at use (Builder, task 5) is the second line, not the requirement.
 - **Runner: add, don't rewrite.** The ACP host and its seven RPC cases come back from
   `bb59e0700` exactly as they were, beside the existing cases; no existing case is touched, no
   mode flag is introduced. Chat uses four of the seven (spawn, send, read, kill); the three exec
@@ -66,8 +66,7 @@ restores, release note); the behind-the-scenes task added (spec section 14); Ope
   audit as its own task there (PM's ruling on Ben's question, 2026-09-07).
 - **Model choice.** Chat keeps today's resolution, unchanged: the admin's chat binding through the existing capability route (chat is the only bindable service), or the person's own override where the admin has enabled it (`packages/ai/src/chat-model-override.ts`); so yes, the admin's chat binding is honoured in slice 1. The resolved model record's provider kind picks the row; no code path names a provider (the bridge's engine chooser, which does, is what task 9 deletes); the model id is sent with
   `session/set_config_option` on the `category: "model"` option after `session/new` where the
-  agent advertises it, else the row's launch mechanism, else the session stays on the login's
-  default and the reply record says so.
+  agent advertises it, else the row's launch mechanism, else the session stays on the login's default and the reply record says so. Where the option is advertised it is always set before the first prompt, never left unset: the resolved id when listed, else the agent's reported current value, else the first advertised option, and the reply record names what was set. A fresh OpenCode session in the runner's home has no config file and answers nothing without one (Builder, task 4, 2026-09-07); Claude's adapter has a built-in default, which is why only OpenCode showed it.
 - **Model list reconciliation, decided (Reviewer finding 5).** The "Refresh models" list in
   settings keeps today's per-CLI adapter as its only source. The protocol's `configOptions` is
   used to set the model and, at session start, to confirm the chosen id is one the agent accepts;
@@ -85,7 +84,7 @@ restores, release note); the behind-the-scenes task added (spec section 14); Ope
   pass. One prompt at a time: a second send while a turn runs is queued by the session manager and
   sent after the stop reason arrives; the composer shows it as queued.
 - **Approval card:** the gateway hold stays the enforcement point; heartbeat every 20 s on held
-  calls; denial wording "This action was not approved. Do not retry; tell the user."; the agent's
+  calls; denial wording "This action was not approved, so it was not done. Do not try it again; let the user know."; the agent's
   built-in asks are answered from the restored policy keyed on real tool name and tool call id;
   `session/cancel` (the drawer's stop button) answers every pending ask `cancelled`.
 - **Login check at start.** `initialize` then `session/new`; an `auth_required` error becomes the
@@ -140,18 +139,15 @@ same commit range.
   `setModel` sends the option when advertised, falls back per row, records a mismatch; version mismatch fails closed. The restored tool table has `chat` and `workshop` columns only; `unattended` has no row yet and gets one in slice 2 (Reviewer finding 5), so the profile gate rejects it before the table is consulted.
 - **Gate:** the four checks; `pnpm --filter @moss/acp test`.
 
-### Task 3. Runner: restore the ACP host and its seven cases as they were
+### Task 3. Runner: restore the ACP host and its seven cases as they were, launching the pinned registry entries
 
 - **Builds:** `packages/cli-runner/src/acp-host.ts`, `exec-records.ts`, `owned-fs.ts` and the seven
   dispatch cases restored from `bb59e0700` beside the existing cases, unchanged; the RPC contract
-  types and the API-side client restored to match. Per-user home, scrubbed env and the 0700 working
-  folder on spawn; the bearer token crosses only inside the `session/new` payload.
-- **Files:** `packages/cli-runner/src/{acp-host,exec-records,owned-fs,connection,engine-host}.ts`,
-  `packages/cli-runner/package.json`, `packages/chat/src/live/{rpc-contract,chat-engine-rpc-client}.ts`,
+  types and the API-side client restored to match. Per-user home, scrubbed env and the 0700 working folder on spawn; the bearer token crosses only inside the `session/new` payload. **One deliberate change to the restored host, and the only one (Reviewer finding 3 on task 2, 2026-09-07):** the restored host spawns the node binary on an adapter entry file that an injected resolver finds, and the default resolver points at the old Zed adapter pinned in the runner's `package.json`. This task makes the provider row the thing launched: the runner's `package.json` drops `@zed-industries/claude-code-acp` and pins the three registry entry packages at the versions in the spec's section 9 table (Claude `@agentclientprotocol/claude-agent-acp@0.75.1`, Codex `@agentclientprotocol/codex-acp@1.10.0`, OpenCode at the version Scout ran); `acpSpawn` carries the provider kind; the host resolves the entry file from that row's package name and spawns it through `process.execPath` as before. OpenCode's package ships a launcher whose platform binary arrives only when the package's install step runs, so a checkout installed without scripts has the launcher and no binary; the dev handshake in task 4 and the live proof in task 10 confirm the runner box has it before trusting any OpenCode result. No default provider anywhere: a spawn without a provider kind is refused. The same Zed pin comes out of the protocol package's dev dependencies, left behind by task 2. Task 2's rows keep the launch text as documentation of what this task resolves.
+- **Files:** `packages/cli-runner/src/{acp-host,exec-records,owned-fs,connection,engine-host}.ts`, `packages/cli-runner/package.json`, `packages/acp/package.json`, `pnpm-lock.yaml`, `packages/acp/src/client.ts` (passes the provider kind to the runner spawn), `packages/acp/src/permissions.test.ts` (fixtures follow the adapter package rename), `packages/chat/src/live/{rpc-contract,chat-engine-rpc-client}.ts`,
   `packages/acp/src/tunnel.ts`.
 - **Tests:** `tests/unit/cli-runner-acp-host.test.ts`, `cli-runner-acp-exec.test.ts`,
-  `cli-runner-protocol.test.ts`, `cli-runner-startup-orphan-sweep.test.ts` restored unchanged and
-  green; every existing runner test still passes unchanged.
+  `cli-runner-protocol.test.ts`, `cli-runner-startup-orphan-sweep.test.ts` restored and green, the host tests changed only where they inject the entry resolver, which now takes a provider kind; one new test that each of the three rows resolves to its own pinned package's entry file and that a spawn without a provider kind is refused; every existing runner test still passes unchanged.
 - **Gate:** the four checks; `pnpm vitest run tests/unit/cli-runner-*`.
 
 ### Task 4. Dev handshake (first kill gate)
@@ -167,10 +163,8 @@ same commit range.
 ### Task 5. Tool server handoff, heartbeat, denial wording
 
 - **Builds:** `mcp-transport.ts` session handoff restored (`mcpServers` entry with the `jst_` bearer
-  header at `session/new`); progress notifications every 20 s on a held call; fixed-expiry session
-  tokens; the denial wording in the gateway.
-- **Files:** `packages/chat/src/mcp-transport.ts`, `packages/chat/src/gateway-services.ts`,
-  `packages/ai/src/gateway/{gateway,session-tokens,index}.ts`.
+  header at `session/new`); progress notifications every 20 s on a held call; fixed-expiry session tokens; the denial wording in the gateway. **Restore by reversing the removal commit's hunks (`e32222640`) onto main, never by copying whole files from `bb59e0700`:** the old files carry the gateway's built-in ask (task 6) and Workshop run-command wiring that main has since dropped (slice 3), and a whole-file copy does not typecheck (Builder, 2026-09-07). Pulled forward from task 6 because this wording needs it: the refusal sentence constant in `native-tool-guard.ts` and its export from the gateway index. Left in task 6: the gateway's `requestAcpBuiltInPermission` method, its imports and the index re-exports from `acp-permission.ts`. Dropped from this task: `gateway-services.ts`, whose only removed lines were the Workshop run-command service, parked with the Workshop.
+- **Files:** `packages/chat/src/mcp-transport.ts`, `packages/ai/src/gateway/{gateway,session-tokens,index,native-tool-guard}.ts` (the removal commit's hunks only, minus the built-in ask), `packages/module-sdk/src/index.ts` (the optional progress field on the shared tool context, two lines the removal took out; the gateway hunk sets it, so the restore does not typecheck without it; Reviewer, 2026-09-07).
 - **Tests:** `tests/unit/gateway-tool-progress.test.ts`, `session-tokens-fixed-expiry.test.ts`,
   `mcp-transport.test.ts` restored; wording restored in `tests/unit/mcp-gateway-recovery.test.ts`
   and updated in `tests/integration/chat-mcp-transport.test.ts`, `tests/integration/mcp-gateway.test.ts`,
@@ -180,15 +174,14 @@ same commit range.
 
 ### Task 6. Approval wiring and the built-in permission policy
 
-- **Builds:** `packages/ai/src/gateway/acp-permission.ts` restored (policy keyed on real tool
-  name, matched by tool call id, zones from spec section 7, audit lines); agent asks that need a
+- **Builds:** `packages/ai/src/gateway/acp-permission.ts` restored (policy keyed on real tool name, matched by tool call id, zones from spec section 7, audit lines); the gateway's `requestAcpBuiltInPermission` method and the index re-exports restored here, not in task 5 (the refusal wording constant already landed in task 5); agent asks that need a
   person create a gateway pending action and emit the existing `action_request` event, and the ACP
   request is answered from that resolution; every pending ask answered `cancelled` on
-  `session/cancel`. The spec 7 point 3 deferral is written into the spec's review record.
-- **Files:** `packages/ai/src/gateway/{acp-permission,gateway,native-tool-guard,index}.ts`,
+  `session/cancel`; the OpenCode row's launch step writes its settings file into the per-user home before spawn with shell and file edits set to deny, both entries derived from the tool table's `chat` column (Decisions, provider rows). The spec 7 point 3 deferral is written into the spec's review record.
+- **Files:** `packages/ai/src/gateway/{acp-permission,gateway,index}.ts`,
   `packages/acp/src/permissions.ts`, `packages/ai/package.json` (the `@moss/acp` workspace
   dependency, restored here with its first importer), `docs/superpowers/specs/2026-09-06-acp-client-design.md`.
-- **Tests:** `tests/unit/acp-builtin-permission.test.ts` restored and extended for the cancel case.
+- **Tests:** `tests/unit/acp-builtin-permission.test.ts` restored and extended for the cancel case; a row test that the OpenCode launch step writes the deny file from the table and never for the Workshop profile.
 - **App map:** `app-map-core.ts` gains the "not approved, ask the user" error and remediation.
 - **Gate:** the four checks; `pnpm vitest run tests/unit/acp-* tests/unit/gateway-*`.
 
@@ -196,14 +189,14 @@ same commit range.
 
 - **Builds:** an ACP chat engine behind the session manager for the `chat` profile, chosen by
   `engine-selection.ts` for every conversation (no setting); session key and folder as decided;
-  history replayed from Postgres into the prompt; the stop button sends `session/cancel`; a second
+  history replayed from Postgres into the prompt; the model option is set before the first prompt on every session that advertises it (Decisions, model choice), so no provider is ever prompted unset; the stop button sends `session/cancel`; a second
   send during a turn is queued and the composer says so; stop reasons surface as typed events; an
   `auth_required` answer becomes the provider's "Not logged in" status and the drawer reply "The
   <provider> sign-in has expired; an admin can log it in again under Settings, Assistant & AI";
   reply persisted through the existing transcript path; the session is started when the conversation is opened in the drawer, not on the first send, so no first prompt pays the session start (PM, 2026-09-07).
 - **Files:** `packages/chat/src/live/{engine-selection,runtime,chat-session-manager}.ts`, a new `packages/chat/src/live/acp-chat-engine.ts`, `packages/chat/src/manifest.ts`, `tests/uat/specs/2424-acp-chat-lunch.uat.spec.ts` (the live-proof script task 10 runs; modelled on `tests/uat/specs/chat-drawer-private.uat.spec.ts`).
 - **Tests:** engine unit tests (login failure text, replay shape, stop reason mapping, queue on
-  busy, cancel answers pending asks, warm start on open); session manager tests for the queue.
+  busy, cancel answers pending asks, warm start on open, model always set before the first prompt including the `default` binding); session manager tests for the queue.
 - **App map:** chat manifest `features`: answers through the agent protocol, the sign-in expired
   message, queued sends.
 - **Gate:** the four checks; `pnpm vitest run packages/chat`; full gate via `verify-gate`.
@@ -247,7 +240,7 @@ Starts only after Ben has seen the mockup (posted in the room 2026-09-07).
 - **Proof:** on dev, "add lunch with Sam on Thursday at noon" in the drawer, the approval card
   answered by a person, one event in the calendar, the fold open showing the tool call and the
   approval, the stats strip present; once on the instance default provider (Claude) and once on
-  OpenCode on Muse Spark 1.3 free. Codex's turn is recorded on the PR as pending until its usage returns on 2026-09-11, then run and recorded. The first real turn on each provider records its usage block on the PR (real numbers or zeros). OpenCode's first two calls take 15 to 20 seconds; that is expected, not a hang.
+  OpenCode on Muse Spark 1.3 free. Codex's turn is recorded on the PR as pending until its usage returns on 2026-09-11, then run and recorded. The first real turn on each provider records its usage block on the PR (real numbers or zeros). On OpenCode the proof also shows, in the runner's real per-user home, that the deny file is present at session start and a shell request in chat gets no shell tool and no approval card; the OpenCode row flips to ready only on that evidence (Scout's scratch-home result, 2026-09-07, is not it). OpenCode's first two calls take 15 to 20 seconds; that is expected, not a hang.
 - **Evidence:** `tests/uat/specs/2424-acp-chat-lunch.uat.spec.ts` (added by Builder in task 7,
   run by Prover) exit code and assertions, the audit lines, the bounded engine log. No screenshots.
 - **Kill gate (slice exit):** the attended write finishes in under 30 s on dev on the instance default provider (Claude), the clock running from the person's approval click to the event in the calendar and the reply in the drawer (PM, 2026-09-07); the time from send to the approval card is recorded beside it. Session start is not on the clock and is paid at drawer open (task 7), which is where OpenCode's 15 to 20 s go. OpenCode's time is recorded beside it and is not held to the 30 s bar in this slice. If Claude does not make it, the slice stops here and PM reassesses before slice 2.
