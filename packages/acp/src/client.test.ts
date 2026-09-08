@@ -13,6 +13,11 @@ class ScriptedAgent implements AcpTunnel {
   readonly sent: string[] = [];
   private readonly outbox: string[] = [];
   private seq = 0;
+  private promptCount = 0;
+  private killed = false;
+  readCount = 0;
+  killCalls: string[] = [];
+  pollingStopped = false;
   hangPrompt = false;
 
   async spawn(): Promise<{ cwd: string; home: string | null; generation: number }> {
@@ -28,6 +33,7 @@ class ScriptedAgent implements AcpTunnel {
       this.emit({ jsonrpc: "2.0", id: msg.id, result: { sessionId: "agent-sess-1" } });
     } else if (msg.method === "session/prompt") {
       if (this.hangPrompt) return;
+      const promptNumber = ++this.promptCount;
       this.emit({
         jsonrpc: "2.0",
         method: "session/update",
@@ -35,7 +41,10 @@ class ScriptedAgent implements AcpTunnel {
           sessionId: "agent-sess-1",
           update: {
             sessionUpdate: "agent_message_chunk",
-            content: { type: "text", text: "hello from the agent" }
+            content: {
+              type: "text",
+              text: promptNumber === 1 ? "hello from the agent" : `reply-${promptNumber}`
+            }
           }
         }
       });
@@ -46,13 +55,29 @@ class ScriptedAgent implements AcpTunnel {
           sessionId: "agent-sess-1",
           update: {
             sessionUpdate: "tool_call",
-            toolCallId: "call-1",
+            toolCallId: `call-${promptNumber}-1`,
             title: "Read",
             status: "pending",
             kind: "read"
           }
         }
       });
+      if (promptNumber > 1) {
+        this.emit({
+          jsonrpc: "2.0",
+          method: "session/update",
+          params: {
+            sessionId: "agent-sess-1",
+            update: {
+              sessionUpdate: "tool_call",
+              toolCallId: `call-${promptNumber}-2`,
+              title: "Read again",
+              status: "pending",
+              kind: "read"
+            }
+          }
+        });
+      }
       this.emit({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "end_turn" } });
     }
   }
@@ -67,11 +92,25 @@ class ScriptedAgent implements AcpTunnel {
     exited: boolean;
     truncated: boolean;
   }> {
+    this.readCount += 1;
+    if (this.killed) {
+      this.pollingStopped = true;
+      return {
+        lines: [],
+        firstSeq: afterSeq + 1,
+        nextSeq: this.seq,
+        exited: true,
+        truncated: false
+      };
+    }
     const lines = this.outbox.slice(afterSeq);
     return { lines, firstSeq: afterSeq + 1, nextSeq: this.seq, exited: false, truncated: false };
   }
 
-  async kill(): Promise<void> {}
+  async kill(sessionKey: string): Promise<void> {
+    this.killCalls.push(sessionKey);
+    this.killed = true;
+  }
 
   async execStart(): Promise<{ execId: number }> {
     return { execId: 1 };
@@ -178,6 +217,52 @@ describe("MossAcpClient", () => {
     // No tool server handed over unless the caller provides one.
     expect(opened.params.mcpServers).toEqual([]);
     await client.close(handle);
+  });
+
+  it("isolates reply text and tool counts between prompt turns", async () => {
+    const agent = new ScriptedAgent();
+    const client = new MossAcpClient(agent);
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
+
+    await expect(client.prompt(handle, "first")).resolves.toMatchObject({
+      text: "hello from the agent",
+      toolCallsSeen: 1
+    });
+    await expect(client.prompt(handle, "second")).resolves.toMatchObject({
+      text: "reply-2",
+      toolCallsSeen: 2
+    });
+    await client.close(handle);
+  });
+
+  it("kills the runner session and ends polling before revoking on close", async () => {
+    const agent = new ScriptedAgent();
+    const client = new MossAcpClient(agent);
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat",
+      {
+        url: "http://moss.local/api/mcp",
+        bearer: "jst_test-token",
+        onClose: () => undefined
+      }
+    );
+
+    await client.close(handle);
+    await vi.waitFor(() => expect(agent.pollingStopped).toBe(true));
+    expect(agent.killCalls).toEqual(["workshop:user:proj"]);
+    const readsAfterStop = agent.readCount;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(agent.readCount).toBe(readsAfterStop);
   });
 
   it("hands Moss's tool server over inside the session opening", async () => {
