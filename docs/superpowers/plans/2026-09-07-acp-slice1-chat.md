@@ -20,7 +20,9 @@ restores, release note); the behind-the-scenes task added (spec section 14); Ope
   history at commit `bb59e0700` (the parent of the removal commit). Every restore names that commit.
   The removal also dropped `"@moss/acp": "workspace:*"` from `packages/ai/package.json` and
   changed the denial wording asserted in `tests/unit/mcp-gateway-recovery.test.ts` to "Timed out
-  awaiting confirmation."; both come back (Reviewer finding 8).
+  awaiting confirmation."; the wording comes back in task 5 and the dependency in task 6 with its
+  first importer (Reviewer finding 8; Reviewer task-1 finding: the check fails on an unused
+  declaration, so the dependency must not land earlier).
 - Chat's engine is chosen in `packages/chat/src/live/engine-selection.ts` and handed to the
   session manager (`packages/chat/src/live/chat-session-manager.ts`: idle watchdog 180 s at line
   107, idle reaper at line 880, the "Chat session was lost, reconnecting" record at line 282,
@@ -113,8 +115,11 @@ same commit range.
 - **Builds:** `packages/acp/` exactly as at `bb59e0700` (`git checkout bb59e0700 -- packages/acp`)
   plus the wiring that made it a workspace member at that commit. No behaviour change, no rename.
 - **Files:** `packages/acp/**`, `tsconfig.json`, `vitest.config.ts`, `scripts/test-unit.ts`,
-  `pnpm-lock.yaml`, `tests/unit/test-unit-plan.test.ts`, `packages/ai/package.json` (the
-  `@moss/acp` workspace dependency).
+  `pnpm-lock.yaml`, `tests/unit/test-unit-plan.test.ts`,
+  `tests/unit/module-dependency-allowlist.test.ts` (the `@moss/acp` platform classification). (The `@moss/acp` workspace dependency in
+  `packages/ai/package.json` is not restored here: nothing imports it until task 6, and the
+  package-dependency check fails on an unused declaration. It comes back in task 6 with the file
+  that imports it.)
 - **Tests:** the restored `capabilities`, `client`, `permissions`, `tool-table` unit tests pass
   unchanged.
 - **Gate:** the four checks; `pnpm --filter @moss/acp test`.
@@ -173,7 +178,7 @@ same commit range.
   person create a gateway pending action and emit the existing `action_request` event, and the ACP
   request is answered from that resolution; every pending ask answered `cancelled` on `session/cancel`; the OpenCode row's launch step writes its settings file into the per-user home before spawn with shell and file edits set to deny, both entries derived from the tool table's `chat` column (Decisions, provider rows). The spec 7 point 3 deferral is written into the spec's review record.
 - **Files:** `packages/ai/src/gateway/{acp-permission,gateway,index}.ts`,
-  `packages/acp/src/permissions.ts`, `docs/superpowers/specs/2026-09-06-acp-client-design.md`.
+  `packages/acp/src/permissions.ts`, `packages/ai/package.json` (the `@moss/acp` workspace dependency, restored here with its first importer), `docs/superpowers/specs/2026-09-06-acp-client-design.md`.
 - **Tests:** `tests/unit/acp-builtin-permission.test.ts` restored and extended for the cancel case; a row test that the OpenCode launch step writes the deny file from the table and never for the Workshop profile.
 - **App map:** `app-map-core.ts` gains the "not approved, ask the user" error and remediation.
 - **Gate:** the four checks; `pnpm vitest run tests/unit/acp-* tests/unit/gateway-*`.
