@@ -50,9 +50,15 @@ async function readExistingConfig(path) {
   if (!handle) return {};
   try {
     const parsed = JSON.parse(await handle.readFile("utf8"));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(`existing settings file is not a JSON object: ${path}`);
+    }
+    return parsed;
+  } catch (error) {
+    throw new Error(
+      `could not read existing settings file ${path}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    );
   } finally {
     await handle.close();
   }

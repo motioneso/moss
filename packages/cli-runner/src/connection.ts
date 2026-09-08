@@ -108,8 +108,10 @@ export function serveConnection(channel: ByteChannel, deps: ConnectionDeps): voi
   // session with its spawn generation. Unlike the single-instance terminal above
   // many sessions may share one connection; recorded by `acpSpawn` in `invoke`.
   const ownedAcpKeys = new Map<string, number>();
-  const recordAcpSpawn = (sessionKey: string, generation: number): void => {
+  const recordAcpSpawn = (sessionKey: string, generation: number): boolean => {
+    if (closed) return false;
     ownedAcpKeys.set(sessionKey, generation);
+    return true;
   };
   // #1526 — the terminalId whose data push last saw `write() === false`, or null if none is
   // currently backpressured. Cleared by the matching "drain" event, which resumes only this id.
@@ -285,7 +287,7 @@ async function dispatchFrame(
   // just this connection instead of the whole shared TerminalHost.
   recordTerminal: (id: string) => void,
   // Slice 1 task 3 — same threading for this connection's agent spawns.
-  recordAcpSpawn: (sessionKey: string, generation: number) => void
+  recordAcpSpawn: (sessionKey: string, generation: number) => boolean
 ): Promise<void> {
   if (!isRequest(parsed)) {
     // Unknown `t` discriminant / not a request post-handshake ⇒ malformed frame (§3.7).
@@ -346,7 +348,7 @@ async function invoke(
   // #1059 [N2] — see dispatchFrame's param doc above.
   recordTerminal: (id: string) => void,
   // Slice 1 task 3 — records this connection's agent spawns for close-time kill.
-  recordAcpSpawn: (sessionKey: string, generation: number) => void
+  recordAcpSpawn: (sessionKey: string, generation: number) => boolean
 ): Promise<unknown> {
   switch (req.method) {
     case "launch": {
@@ -579,7 +581,10 @@ async function invoke(
         params.userId,
         params.profile
       );
-      recordAcpSpawn(key, spawned.generation);
+      if (!recordAcpSpawn(key, spawned.generation)) {
+        await host.acpKill(key, { generation: spawned.generation });
+        throw new Error("connection closed during acpSpawn");
+      }
       return spawned;
     }
     case "acpSend": {

@@ -20,6 +20,7 @@ class ScriptedAgent implements AcpTunnel {
   killCalls: string[] = [];
   pollingStopped = false;
   hangPrompt = false;
+  failInitialize = false;
 
   async spawn(): Promise<{
     cwd: string;
@@ -41,7 +42,11 @@ class ScriptedAgent implements AcpTunnel {
     this.sent.push(line);
     const msg = JSON.parse(line) as { id?: number; method?: string };
     if (msg.method === "initialize") {
-      this.emit({ jsonrpc: "2.0", id: msg.id, result: fullCapabilities() });
+      this.emit(
+        this.failInitialize
+          ? { jsonrpc: "2.0", id: msg.id, error: { code: -32000, message: "init failed" } }
+          : { jsonrpc: "2.0", id: msg.id, result: fullCapabilities() }
+      );
     } else if (msg.method === "session/new") {
       this.emit({ jsonrpc: "2.0", id: msg.id, result: { sessionId: "agent-sess-1" } });
     } else if (msg.method === "session/prompt") {
@@ -222,6 +227,27 @@ function fullCapabilities() {
 }
 
 describe("MossAcpClient", () => {
+  it("cleans up the spawned agent and tool server when initialization fails", async () => {
+    const agent = new ScriptedAgent();
+    agent.failInitialize = true;
+    let revoked = 0;
+    const client = new MossAcpClient(agent);
+
+    await expect(
+      client.openSession("chat:user:proj", "proj", "anthropic", "user-1", "chat", {
+        url: "http://moss.local/api/mcp",
+        bearer: "test-token",
+        onClose: () => {
+          revoked += 1;
+        }
+      })
+    ).rejects.toThrow();
+
+    expect(agent.killCalls).toEqual(["chat:user:proj"]);
+    expect(agent.pollingStopped).toBe(true);
+    expect(revoked).toBe(1);
+  });
+
   it("opens a session, collects streamed text, and reports the stop reason", async () => {
     const agent = new ScriptedAgent();
     const client = new MossAcpClient(agent);

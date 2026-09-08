@@ -24,7 +24,11 @@ import {
   type AcpExecStartResult,
   type AcpExecPollResult
 } from "./acp-execs.js";
-import { ensureOwnedTopLevel, prepareOwnedPath, type OwnershipApplier } from "./owned-fs.js";
+import {
+  ensureOwnedTopLevel,
+  prepareOwnedPathWithOwnership,
+  type OwnershipApplier
+} from "./owned-fs.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
@@ -255,7 +259,10 @@ async function defaultRunAgentHomePrepare(
     identity
   );
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "ignore", "pipe"] });
+    const child = spawn(command, args, {
+      stdio: ["ignore", "ignore", "pipe"],
+      env: buildSanitizedCliEnv(process.env)
+    });
     let stderr = "";
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
@@ -339,7 +346,8 @@ export class AcpHost {
     // Per-user identity is mandatory on this path: without it every agent
     // would share one account and one home, and the deny file would land in
     // a shared folder. Refuse rather than fall back.
-    if (!this.deps.perUserUid || !this.deps.homeBase) {
+    const homeBase = this.deps.homeBase;
+    if (!this.deps.perUserUid || !homeBase) {
       throw new Error("acpSpawn requires per-user identity: refusing the shared home");
     }
 
@@ -357,78 +365,69 @@ export class AcpHost {
     // ruling on Astra-Reviewer round-four finding, 2026-09-08 — the old code
     // tried to recreate/re-enter the whole tree on every launch and refused
     // a second launch for the same person once their home was owner-only).
-    const agentsParent = await prepareOwnedPath(this.deps.homeBase, userId, "agents");
-    const agentHomeTop = await ensureOwnedTopLevel(
-      userId,
-      agentsParent,
-      userId,
-      uid,
-      gid,
-      this.deps.applyOwnership
-    );
-    const agentHome = agentHomeTop.path;
-    const sessionTop = await ensureOwnedTopLevel(
-      key,
-      this.deps.neutralBase,
-      key,
-      uid,
-      gid,
-      this.deps.applyOwnership
-    );
-    const sessionDir = join(sessionTop.path, "acp", projectId);
+    const setup = await (async () => {
+      let agentHomeTop: Awaited<ReturnType<typeof ensureOwnedTopLevel>> | undefined;
+      let sessionTop: Awaited<ReturnType<typeof ensureOwnedTopLevel>> | undefined;
+      try {
+        const agentsParent = (await prepareOwnedPathWithOwnership(homeBase, userId, ["agents"], 1))
+          .path;
+        agentHomeTop = await ensureOwnedTopLevel(
+          userId,
+          agentsParent,
+          userId,
+          uid,
+          gid,
+          this.deps.applyOwnership
+        );
+        const agentHome = agentHomeTop.path;
+        sessionTop = await ensureOwnedTopLevel(
+          key,
+          this.deps.neutralBase,
+          key,
+          uid,
+          gid,
+          this.deps.applyOwnership
+        );
+        const sessionDir = join(sessionTop.path, "acp", projectId);
 
-    const env: NodeJS.ProcessEnv = {
-      ...buildSanitizedCliEnv(process.env),
-      HOME: agentHome
-    };
-    // The login travels only the way the selected row needs it, via the
-    // environment only. Claude reads the stored token; Codex reuses the
-    // on-disk login in the agent home; OpenCode gets neither. The token file
-    // itself lives directly under homeBase, launcher-owned, never inside a
-    // person's own tree — nothing the launcher needs after a person's first
-    // launch may live inside a folder it can no longer enter.
-    if (providerKind === "anthropic") {
-      const token = await this.readLoginToken(this.deps.homeBase);
-      if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
-    }
-    // The row's launch-time off-list from the table through the row's own
-    // mechanism. Codex runs read-only exactly when the profile switches
-    // shell off; OpenCode's deny file lands in the agent home for chat,
-    // never Workshop.
-    if (
-      providerKind === "openai" &&
-      launchOffList(profile).some((name) => lookupAcpToolFamily(name) === "shell")
-    ) {
-      env.INITIAL_AGENT_MODE = "read-only";
-    }
+        const env: NodeJS.ProcessEnv = {
+          ...buildSanitizedCliEnv(process.env),
+          HOME: agentHome
+        };
+        if (providerKind === "anthropic") {
+          const token = await this.readLoginToken(homeBase);
+          if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
+        }
+        if (
+          providerKind === "openai" &&
+          launchOffList(profile).some((name) => lookupAcpToolFamily(name) === "shell")
+        ) {
+          env.INITIAL_AGENT_MODE = "read-only";
+        }
 
-    // Everything below a person's top level is created and written by a
-    // small preparation step that runs AS the person, through the same
-    // setpriv switch the agent itself uses: because it runs already
-    // switched to the slot's uid/gid, plain mkdir/writeFile land already
-    // owned by them, so there is nothing here for the launcher to chown or
-    // hand over (task 5b, Architect ruling, 2026-09-08).
-    const denyFile =
-      providerKind === "opencode" && profile === "chat"
-        ? {
-            path: join(agentHome, ".config", "opencode", "opencode.json"),
-            permissionKeys: [...opencodeDenyPermissionKeys()]
-          }
-        : null;
-    const prepareDirs = [sessionDir];
-    if (denyFile) prepareDirs.push(join(agentHome, ".config", "opencode"));
-    const runAgentHomePrepare = this.deps.runAgentHomePrepare ?? defaultRunAgentHomePrepare;
-    try {
-      await runAgentHomePrepare({ dirs: prepareDirs, denyFile }, { uid, gid });
-    } catch (error) {
-      if (agentHomeTop.createdHere) {
-        await rm(agentHomeTop.path, { force: true, recursive: true }).catch(() => undefined);
+        const denyFile =
+          providerKind === "opencode" && profile === "chat"
+            ? {
+                path: join(agentHome, ".config", "opencode", "opencode.json"),
+                permissionKeys: [...opencodeDenyPermissionKeys()]
+              }
+            : null;
+        const prepareDirs = [sessionDir];
+        if (denyFile) prepareDirs.push(join(agentHome, ".config", "opencode"));
+        const runAgentHomePrepare = this.deps.runAgentHomePrepare ?? defaultRunAgentHomePrepare;
+        await runAgentHomePrepare({ dirs: prepareDirs, denyFile }, { uid, gid });
+        return { agentHome, sessionDir, env };
+      } catch (error) {
+        if (agentHomeTop?.createdHere) {
+          await rm(agentHomeTop.path, { force: true, recursive: true }).catch(() => undefined);
+        }
+        if (sessionTop?.createdHere) {
+          await rm(sessionTop.path, { force: true, recursive: true }).catch(() => undefined);
+        }
+        throw error;
       }
-      if (sessionTop.createdHere) {
-        await rm(sessionTop.path, { force: true, recursive: true }).catch(() => undefined);
-      }
-      throw error;
-    }
+    })();
+    const { agentHome, sessionDir, env } = setup;
 
     const target =
       this.deps.resolveAdapterTarget?.(providerKind) ?? defaultResolveAdapterTarget(providerKind);
@@ -728,7 +727,7 @@ export class AcpHost {
     await new Promise<void>((resolve, reject) => {
       const stopper = spawn(command, args, {
         stdio: "ignore",
-        env: { ...process.env, ACP_STOP_PID: String(pid) }
+        env: { ...buildSanitizedCliEnv(process.env), ACP_STOP_PID: String(pid) }
       });
       stopper.once("error", (error) => reject(error));
       stopper.once("exit", (code) => {

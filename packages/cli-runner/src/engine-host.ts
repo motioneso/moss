@@ -895,7 +895,7 @@ export class CliChatEngineHost {
     await this.acp.reapOrphanedExecs().catch(() => undefined);
   }
 
-  /** `rm -rf <neutralBase>/* ` then recreate the base dir (`0700`). */
+  /** `rm -rf <neutralBase>/* ` then recreate the shared traversable base (`0711`). */
   private async clearNeutralBase(): Promise<void> {
     // Remove children individually (not the base itself) so the mount point/volume root
     // is preserved; recreate the base so the first launch's mkdir -p is a no-op.
@@ -914,7 +914,7 @@ export class CliChatEngineHost {
       }
     }
     await this.deps.io.run("mkdir", ["-p", this.deps.neutralBase]).catch(() => undefined);
-    await this.deps.io.run("chmod", ["700", this.deps.neutralBase]).catch(() => undefined);
+    await this.deps.io.run("chmod", ["711", this.deps.neutralBase]).catch(() => undefined);
   }
 
   // ─── helpers ──────────────────────────────────────────────────────────────────

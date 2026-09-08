@@ -523,6 +523,27 @@ describe("task 5b launch follows the row", () => {
     }
   });
 
+  it("fails loudly and preserves malformed existing settings", async () => {
+    const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+    try {
+      const configDir = join(home, "config");
+      const configPath = join(configDir, "opencode.json");
+      mkdirSync(configDir, { recursive: true });
+      writeFileSync(configPath, "{ not-json");
+      const scriptPath = join(process.cwd(), "packages/cli-runner/src/agent-home-prepare.mjs");
+      const request = JSON.stringify({
+        dirs: [configDir],
+        denyFile: { path: configPath, permissionKeys: ["bash"] }
+      });
+      const { spawnSync } = await import("node:child_process");
+      const result = spawnSync(process.execPath, [scriptPath, request], { encoding: "utf8" });
+      expect(result.status).not.toBe(0);
+      expect(readFileSync(configPath, "utf8")).toBe("{ not-json");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it("writes no deny file for Workshop sessions", async () => {
     const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
     const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
@@ -533,6 +554,36 @@ describe("task 5b launch follows the row", () => {
       expect(
         existsSync(join(home, "agents", "user-1", ".config", "opencode", "opencode.json"))
       ).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("fails without leaving a fresh agent home when session setup fails", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
+    const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+    try {
+      const child = new FakeChild();
+      let handovers = 0;
+      const host = new AcpHost({
+        neutralBase: dir,
+        homeBase: home,
+        perUserUid: true,
+        allocateUidSlot: selfSlot,
+        applyOwnership: async () => {
+          handovers += 1;
+          if (handovers === 2) throw new Error("session handover failed");
+        },
+        resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
+        spawnChild: () => child as never
+      });
+
+      await expect(
+        host.spawn("chat:user-1:setup-fails", "proj", "anthropic", "user-1", "chat")
+      ).rejects.toThrow("session handover failed");
+      expect(existsSync(join(home, "agents", "user-1"))).toBe(false);
+      expect(existsSync(join(dir, "chat:user-1:setup-fails"))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
       rmSync(home, { recursive: true, force: true });

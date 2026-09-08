@@ -316,6 +316,45 @@ describe("serveConnection (§3.4/§3.7)", () => {
     expect(kill).toHaveBeenCalledWith("workshop:u:p", { generation: 7 });
   });
 
+  it("kills a spawn that finishes after its connection disconnects", async () => {
+    const host = fakeHost();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(host, "acpSpawn").mockImplementation(async () => {
+      await gate;
+      return {
+        cwd: "/tmp/neutral-base/workshop:u:p/acp/p",
+        generation: 8,
+        home: null,
+        pid: null,
+        uid: 2001,
+        gid: 2001
+      };
+    });
+    const kill = vi.spyOn(host, "acpKill").mockResolvedValue(undefined);
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
+
+    channel.feed(
+      encodeFrame({
+        t: "req",
+        id: 35,
+        method: "acpSpawn",
+        sessionKey: "workshop:u:p",
+        params: { projectId: "p", providerKind: "anthropic", userId: "user-1", profile: "chat" }
+      })
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    channel.triggerClose();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    expect(kill).toHaveBeenCalledWith("workshop:u:p", { generation: 8 });
+  });
+
   // Slice 1 task 3 — a spawn without a provider kind is refused, with no default.
   it("refuses acpSpawn without a provider kind (stays open)", async () => {
     const host = fakeHost();

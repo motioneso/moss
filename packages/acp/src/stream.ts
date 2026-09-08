@@ -96,11 +96,15 @@ export function createTunnelStream(
               delivered = true;
             }
             if (result.exited) {
-              // Drain first: lines already enqueued above still reach the
-              // toolkit; with nothing left the stream ends and the pump stops.
-              controller.close();
-              stopped = true;
-              return;
+              // The runner may cap one read while the process has already
+              // exited. Keep polling until the cursor reaches the retained
+              // buffer's end, then close.
+              if (seq >= result.nextSeq) {
+                controller.close();
+                stopped = true;
+                return;
+              }
+              continue;
             }
             if (!delivered) {
               await new Promise((resolve) => setTimeout(resolve, pollMs));

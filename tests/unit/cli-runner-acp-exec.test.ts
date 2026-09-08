@@ -133,6 +133,7 @@ describe("AcpHost builds", () => {
       await pollUntil(execHost.execPoll.bind(execHost, KEY, execId));
       const final = execHost.execPoll(KEY, execId);
       expect(final.output.trim()).toBe(spawned.cwd);
+      expect(statSync(join(homeBase, "agents")).mode & 0o777).toBe(0o711);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

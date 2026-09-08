@@ -235,35 +235,40 @@ export class MossAcpClient {
     );
     const stream = createTunnelStream(this.tunnel, sessionKey);
     const connection = new ClientSideConnection(() => this.createClientHandler(), stream);
-    const init = await connection.initialize({
-      protocolVersion: 1,
-      clientCapabilities: {},
-      clientInfo: { name: "moss", version: "0.1.0" }
-    });
-    checkAgentCapabilities(surface, init);
-    const session = await connection.newSession({
-      cwd,
-      mcpServers: toolServer ? [toMcpServerEntry(toolServer)] : [],
-      // The row's launch-time off-list, from the tool table through the row's
-      // own mechanism: the agent's disallowed-tools list. The legacy blanket
-      // flag is gone on purpose — it switched everything off including the
-      // tools the profile allows, and other adapters never honored it.
-      _meta: { claudeCode: { options: { disallowedTools: launchOffList(surface) } } }
-    });
-    this.connections.set(session.sessionId, connection);
-    this.sessionKeys.set(session.sessionId, sessionKey);
-    this.streams.set(session.sessionId, stream);
-    this.texts.set(session.sessionId, []);
-    this.toolCalls.set(session.sessionId, 0);
-    this.sessionCwds.set(session.sessionId, cwd);
-    this.sessionHomes.set(session.sessionId, home);
-    this.sessionPids.set(session.sessionId, pid);
-    this.sessionUids.set(session.sessionId, uid);
-    this.sessionGids.set(session.sessionId, gid);
-    this.sessionKinds.set(session.sessionId, providerKind);
-    this.sessionOptions.set(session.sessionId, session.configOptions ?? []);
-    if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
-    return { sessionId: session.sessionId, cwd, home, pid, uid, gid };
+    try {
+      const init = await connection.initialize({
+        protocolVersion: 1,
+        clientCapabilities: {},
+        clientInfo: { name: "moss", version: "0.1.0" }
+      });
+      checkAgentCapabilities(surface, init);
+      const session = await connection.newSession({
+        cwd,
+        mcpServers: toolServer ? [toMcpServerEntry(toolServer)] : [],
+        // The row's launch-time off-list, from the tool table through the row's
+        // own mechanism: the agent's disallowed-tools list.
+        _meta: { claudeCode: { options: { disallowedTools: launchOffList(surface) } } }
+      });
+      this.connections.set(session.sessionId, connection);
+      this.sessionKeys.set(session.sessionId, sessionKey);
+      this.streams.set(session.sessionId, stream);
+      this.texts.set(session.sessionId, []);
+      this.toolCalls.set(session.sessionId, 0);
+      this.sessionCwds.set(session.sessionId, cwd);
+      this.sessionHomes.set(session.sessionId, home);
+      this.sessionPids.set(session.sessionId, pid);
+      this.sessionUids.set(session.sessionId, uid);
+      this.sessionGids.set(session.sessionId, gid);
+      this.sessionKinds.set(session.sessionId, providerKind);
+      this.sessionOptions.set(session.sessionId, session.configOptions ?? []);
+      if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
+      return { sessionId: session.sessionId, cwd, home, pid, uid, gid };
+    } catch (error) {
+      await this.tunnel.kill(sessionKey).catch(() => undefined);
+      await stream.stop().catch(() => undefined);
+      toolServer?.onClose?.();
+      throw error;
+    }
   }
 
   async prompt(
