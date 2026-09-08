@@ -158,10 +158,8 @@ same commit range.
 ### Task 5. Tool server handoff, heartbeat, denial wording
 
 - **Builds:** `mcp-transport.ts` session handoff restored (`mcpServers` entry with the `jst_` bearer
-  header at `session/new`); progress notifications every 20 s on a held call; fixed-expiry session
-  tokens; the denial wording in the gateway.
-- **Files:** `packages/chat/src/mcp-transport.ts`, `packages/chat/src/gateway-services.ts`,
-  `packages/ai/src/gateway/{gateway,session-tokens,index}.ts`.
+  header at `session/new`); progress notifications every 20 s on a held call; fixed-expiry session tokens; the denial wording in the gateway. **Restore by reversing the removal commit's hunks (`e32222640`) onto main, never by copying whole files from `bb59e0700`:** the old files carry the gateway's built-in ask (task 6) and Workshop run-command wiring that main has since dropped (slice 3), and a whole-file copy does not typecheck (Builder, 2026-09-07). Pulled forward from task 6 because this wording needs it: the refusal sentence constant in `native-tool-guard.ts` and its export from the gateway index. Left in task 6: the gateway's `requestAcpBuiltInPermission` method, its imports and the index re-exports from `acp-permission.ts`. Dropped from this task: `gateway-services.ts`, whose only removed lines were the Workshop run-command service, parked with the Workshop.
+- **Files:** `packages/chat/src/mcp-transport.ts`, `packages/ai/src/gateway/{gateway,session-tokens,index,native-tool-guard}.ts` (the removal commit's hunks only, minus the built-in ask).
 - **Tests:** `tests/unit/gateway-tool-progress.test.ts`, `session-tokens-fixed-expiry.test.ts`,
   `mcp-transport.test.ts` restored; wording restored in `tests/unit/mcp-gateway-recovery.test.ts`
   and updated in `tests/integration/chat-mcp-transport.test.ts`, `tests/integration/mcp-gateway.test.ts`,
@@ -171,12 +169,11 @@ same commit range.
 
 ### Task 6. Approval wiring and the built-in permission policy
 
-- **Builds:** `packages/ai/src/gateway/acp-permission.ts` restored (policy keyed on real tool
-  name, matched by tool call id, zones from spec section 7, audit lines); agent asks that need a
+- **Builds:** `packages/ai/src/gateway/acp-permission.ts` restored (policy keyed on real tool name, matched by tool call id, zones from spec section 7, audit lines); the gateway's `requestAcpBuiltInPermission` method and the index re-exports restored here, not in task 5 (the refusal wording constant already landed in task 5); agent asks that need a
   person create a gateway pending action and emit the existing `action_request` event, and the ACP
   request is answered from that resolution; every pending ask answered `cancelled` on
   `session/cancel`. The spec 7 point 3 deferral is written into the spec's review record.
-- **Files:** `packages/ai/src/gateway/{acp-permission,gateway,native-tool-guard,index}.ts`,
+- **Files:** `packages/ai/src/gateway/{acp-permission,gateway,index}.ts`,
   `packages/acp/src/permissions.ts`, `docs/superpowers/specs/2026-09-06-acp-client-design.md`.
 - **Tests:** `tests/unit/acp-builtin-permission.test.ts` restored and extended for the cancel case.
 - **App map:** `app-map-core.ts` gains the "not approved, ask the user" error and remediation.
