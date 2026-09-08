@@ -15,6 +15,7 @@ class ScriptedAgent implements AcpTunnel {
   private seq = 0;
   private promptCount = 0;
   private killed = false;
+  private pendingRead: (() => void) | null = null;
   readCount = 0;
   killCalls: string[] = [];
   pollingStopped = false;
@@ -104,12 +105,38 @@ class ScriptedAgent implements AcpTunnel {
       };
     }
     const lines = this.outbox.slice(afterSeq);
+    if (lines.length === 0) {
+      return new Promise((resolve) => {
+        this.pendingRead = () => {
+          this.pendingRead = null;
+          if (this.killed) this.pollingStopped = true;
+          resolve(
+            this.killed
+              ? {
+                  lines: [],
+                  firstSeq: afterSeq + 1,
+                  nextSeq: this.seq,
+                  exited: true,
+                  truncated: false
+                }
+              : {
+                  lines: this.outbox.slice(afterSeq),
+                  firstSeq: afterSeq + 1,
+                  nextSeq: this.seq,
+                  exited: false,
+                  truncated: false
+                }
+          );
+        };
+      });
+    }
     return { lines, firstSeq: afterSeq + 1, nextSeq: this.seq, exited: false, truncated: false };
   }
 
   async kill(sessionKey: string): Promise<void> {
     this.killCalls.push(sessionKey);
     this.killed = true;
+    this.pendingRead?.();
   }
 
   async execStart(): Promise<{ execId: number }> {
@@ -167,6 +194,7 @@ class ScriptedAgent implements AcpTunnel {
   private emit(message: unknown): void {
     this.outbox.push(JSON.stringify(message));
     this.seq += 1;
+    this.pendingRead?.();
   }
 }
 
@@ -243,6 +271,7 @@ describe("MossAcpClient", () => {
 
   it("kills the runner session and ends polling before revoking on close", async () => {
     const agent = new ScriptedAgent();
+    const order: string[] = [];
     const client = new MossAcpClient(agent);
     const handle = await client.openSession(
       "workshop:user:proj",
@@ -253,13 +282,14 @@ describe("MossAcpClient", () => {
       {
         url: "http://moss.local/api/mcp",
         bearer: "jst_test-token",
-        onClose: () => undefined
+        onClose: () => order.push(agent.pollingStopped ? "revoke" : "polling-active")
       }
     );
 
     await client.close(handle);
-    await vi.waitFor(() => expect(agent.pollingStopped).toBe(true));
     expect(agent.killCalls).toEqual(["workshop:user:proj"]);
+    expect(order).toEqual(["revoke"]);
+    expect(agent.pollingStopped).toBe(true);
     const readsAfterStop = agent.readCount;
     await new Promise((resolve) => setTimeout(resolve, 250));
     expect(agent.readCount).toBe(readsAfterStop);
