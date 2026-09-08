@@ -45,3 +45,5 @@ export type {
 export type { ToolCallLocation as AcpToolCallLocation } from "@agentclientprotocol/sdk";
 export { createTunnelStream } from "./stream.js";
 export type { AcpExecPoll, AcpTunnel } from "./tunnel.js";
+/** Re-exported so tunnel backers can build protocol handlers without an SDK dependency. */
+export { ClientSideConnection } from "@agentclientprotocol/sdk";
