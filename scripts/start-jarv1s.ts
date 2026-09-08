@@ -2,7 +2,14 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { chmodSync, chownSync, mkdirSync } from "node:fs";
 
+import { buildSetprivRaiseCommand } from "@moss/cli-runner";
 import { resolveMossEnv } from "@moss/db";
+
+// The three privileges the launcher itself needs to hand a folder to its
+// owner: change file ownership, switch account, switch group (task 5b, ruling
+// 2026-09-08). Only the cli-runner child is started with these raised —
+// api and worker keep the plain account switch they use today.
+const LAUNCHER_CAPABILITIES = ["chown", "setuid", "setgid"];
 
 export type ChildRole = "api" | "worker" | "cli-runner";
 
@@ -160,6 +167,7 @@ export function prepareRuntimeDirs(uid: number, gid: number): void {
   for (const dir of [
     "/data/cli-tools",
     "/data/cli-auth",
+    "/data/cli-auth/chat",
     "/data/vaults",
     "/data/modules",
     "/app/.cache/huggingface",
@@ -168,6 +176,13 @@ export function prepareRuntimeDirs(uid: number, gid: number): void {
     mkdirSync(dir, { recursive: true });
     chownSync(dir, uid, gid);
   }
+  // The home base and the chat base are shared parents: the launcher keeps
+  // owning them and only passes through (0711), so it can keep creating each
+  // person's own sibling folder underneath (task 5b, Astra-Reviewer finding
+  // 3, 2026-09-08). The per-person folders below them are handed over
+  // owner-only by owned-fs.ts.
+  chmodSync("/data/cli-auth", 0o711);
+  chmodSync("/data/cli-auth/chat", 0o711);
   chmodSync("/run/jarv1s", 0o700);
 }
 
@@ -189,6 +204,20 @@ async function runOneShot(
 
 function spawnResident(spec: ProcessSpec, uid: number, gid: number): ChildProcess {
   const [cmd, ...args] = spec.command;
+  if (spec.role === "cli-runner") {
+    // Node's uid/gid spawn options clear every capability on the way to a
+    // non-root account, which is why the launcher's ownership handovers used
+    // to fail once it stopped running as root. setpriv instead raises the
+    // three needed capabilities as inheritable and ambient, which survive
+    // the program start (task 5b, ruling 2026-09-08). This process must
+    // already be root for the raise to work, which it is: start-jarv1s.ts
+    // runs before any account switch.
+    const raised = buildSetprivRaiseCommand(cmd!, args, { uid, gid }, LAUNCHER_CAPABILITIES);
+    return spawn(raised.command, raised.args, {
+      env: spec.env,
+      stdio: "inherit"
+    });
+  }
   return spawn(cmd!, args, {
     env: spec.env,
     gid,
