@@ -136,7 +136,8 @@ class ScriptedAgent implements AcpTunnel {
   async kill(sessionKey: string): Promise<void> {
     this.killCalls.push(sessionKey);
     this.killed = true;
-    this.pendingRead?.();
+    const wake = this.pendingRead;
+    setTimeout(() => wake?.(), 20);
   }
 
   async execStart(): Promise<{ execId: number }> {
