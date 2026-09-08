@@ -27,7 +27,7 @@ import { checkAcpProfile, checkAgentCapabilities, type AcpProfile } from "./capa
 import { getAcpProviderRow, type AcpProviderKind } from "./providers.js";
 import { launchOffList } from "./tool-table.js";
 import { selectAllowOptionId, toolNameFromMeta, type AcpBuiltInRequest } from "./permissions.js";
-import { createTunnelStream } from "./stream.js";
+import { createTunnelStream, type TunnelStream } from "./stream.js";
 import type { AcpTunnel } from "./tunnel.js";
 
 /** Announcements remembered per session; oldest dropped past the cap. */
@@ -183,6 +183,7 @@ export function acceptedOptionValues(option: SessionConfigOption): Set<string> |
 export class MossAcpClient {
   private readonly connections = new Map<string, ClientSideConnection>();
   private readonly sessionKeys = new Map<string, string>();
+  private readonly streams = new Map<string, TunnelStream>();
   private readonly texts = new Map<string, string[]>();
   private readonly toolCalls = new Map<string, number>();
   private readonly closers = new Map<string, () => void>();
@@ -243,6 +244,7 @@ export class MossAcpClient {
     });
     this.connections.set(session.sessionId, connection);
     this.sessionKeys.set(session.sessionId, sessionKey);
+    this.streams.set(session.sessionId, stream);
     this.texts.set(session.sessionId, []);
     this.toolCalls.set(session.sessionId, 0);
     this.sessionCwds.set(session.sessionId, cwd);
@@ -335,15 +337,18 @@ export class MossAcpClient {
 
   async close(handle: AcpSessionHandle): Promise<void> {
     const sessionKey = this.sessionKeys.get(handle.sessionId);
+    const stream = this.streams.get(handle.sessionId);
     if (sessionKey) {
       try {
         await this.tunnel.kill(sessionKey);
       } catch {
         // Closing still revokes the tool server when runner teardown is already complete.
       }
+      await stream?.stop();
     }
     this.connections.delete(handle.sessionId);
     this.sessionKeys.delete(handle.sessionId);
+    this.streams.delete(handle.sessionId);
     this.texts.delete(handle.sessionId);
     this.toolCalls.delete(handle.sessionId);
     this.sessionCwds.delete(handle.sessionId);
