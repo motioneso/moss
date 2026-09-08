@@ -23,6 +23,14 @@ import { describe, expect, it } from "vitest";
 
 import { AcpHost, defaultResolveAdapterTarget } from "../../packages/cli-runner/src/acp-host.js";
 
+// These tests exercise spawn routing (folders, env, deny files), not the real
+// chown privilege boundary — no unprivileged process can chown to the
+// synthetic uid/gid task 5b's slot allocator hands out. A stub stands in for
+// a successful handover here; the real failure-and-cleanup behavior is
+// proved separately, against a genuinely unreachable id, in
+// cli-runner-owned-fs.test.ts.
+const acceptOwnership = async (): Promise<void> => undefined;
+
 class FakeChild extends EventEmitter {
   readonly written: string[] = [];
   readonly stdout = new EventEmitter();
@@ -54,6 +62,7 @@ function makeHost(dir: string, child: FakeChild) {
     neutralBase: dir,
     homeBase,
     perUserUid: true,
+    applyOwnership: acceptOwnership,
     resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
     spawnChild: (opts) => {
       lastSpawn = { cwd: opts.cwd, env: opts.env };
@@ -111,7 +120,7 @@ describe("AcpHost", () => {
     }
   });
 
-  it("locks session folders owner-only and says so when it cannot", async () => {
+  it("locks session folders owner-only and refuses the launch when it cannot hand one over", async () => {
     const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
     try {
       const child = new FakeChild();
@@ -120,27 +129,21 @@ describe("AcpHost", () => {
       const mode = (path: string): string => (statSync(path).mode & 0o777).toString(8);
       expect(mode(spawned.cwd)).toBe("700");
 
-      // With per-user identity on but no root, the handover fails — and the
-      // failure is said out loud instead of silently skipping isolation.
-      const warnings: string[] = [];
-      const originalWarn = console.warn;
-      console.warn = (message?: unknown) => {
-        warnings.push(String(message));
-      };
-      try {
-        mkdirSync(join(dir, "homes"), { recursive: true });
-        const loud = new AcpHost({
-          neutralBase: dir,
-          homeBase: join(dir, "homes"),
-          perUserUid: true,
-          resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
-          spawnChild: () => child as never
-        });
-        await loud.spawn("workshop:user:proj2", "proj", "anthropic", "user-1", "chat");
-      } finally {
-        console.warn = originalWarn;
-      }
-      expect(warnings.some((w) => w.includes("could not hand"))).toBe(true);
+      // With per-user identity on but no real chown privilege, the handover
+      // fails — task 5b makes that stop the launch there, folder removed,
+      // rather than warning and carrying on.
+      mkdirSync(join(dir, "homes"), { recursive: true });
+      const strict = new AcpHost({
+        neutralBase: dir,
+        homeBase: join(dir, "homes"),
+        perUserUid: true,
+        resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
+        spawnChild: () => child as never
+      });
+      await expect(
+        strict.spawn("workshop:user:proj2", "proj", "anthropic", "user-1", "chat")
+      ).rejects.toThrow(/could not hand.*to its owner, launch refused/);
+      expect(existsSync(join(dir, "workshop:user:proj2"))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -179,6 +182,7 @@ describe("AcpHost", () => {
         neutralBase: dir,
         homeBase,
         perUserUid: true,
+        applyOwnership: acceptOwnership,
         resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
         spawnChild: () => child as never
       });
@@ -337,6 +341,7 @@ describe("task 5b launch follows the row", () => {
       neutralBase,
       homeBase,
       perUserUid: true,
+      applyOwnership: acceptOwnership,
       resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
       spawnChild: (opts) => {
         seen.push({ command: opts.command, args: opts.args, cwd: opts.cwd, env: opts.env });

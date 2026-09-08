@@ -21,7 +21,11 @@ import {
   readExecRecord,
   writeExecRecord
 } from "./exec-records.js";
-import { prepareOwnedPath, writeOpencodeChatDenyFile } from "./owned-fs.js";
+import {
+  prepareOwnedPathWithOwnership,
+  writeOpencodeChatDenyFile,
+  type OwnershipApplier
+} from "./owned-fs.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { allocateUidSlot } from "./uid-allocator.js";
@@ -41,6 +45,10 @@ export interface AcpHostDeps {
   readonly homeBase?: string;
   /** Mirrors the engine host flag: setuid spawn only with a root container. */
   readonly perUserUid?: boolean;
+  /** Hands a folder/file to its owner; injected so tests can prove routing without real
+   * chown privileges. Prod default really calls chown; the failure-and-cleanup behavior
+   * itself is proved separately in cli-runner-owned-fs.test.ts against an unreachable id. */
+  readonly applyOwnership?: OwnershipApplier;
   /** Resolves the adapter spawn target; injected so tests never touch node_modules. */
   readonly resolveAdapterTarget?: (kind: AcpProviderKind) => AcpAdapterTarget;
   /** Reads a file; injected so tests can stub the login token. */
@@ -373,13 +381,13 @@ export class AcpHost {
     const gid = slot.gid;
     // The slot's own home, never the shared base: two people must not read
     // each other's logins.
-    const agentHome = await prepareOwnedPath(
+    const agentHome = await prepareOwnedPathWithOwnership(
       this.deps.homeBase,
       userId,
       uid,
       gid,
-      "agents",
-      userId
+      ["agents", userId],
+      this.deps.applyOwnership
     );
     // Same link-safe folder setup the build path uses, at every level: a
     // command that ran here earlier can plant a link at this folder or any of
@@ -390,14 +398,13 @@ export class AcpHost {
     // plus the per-session folder (asserted in cli-runner-acp-host.test.ts),
     // not these bits. Still the only safe default: group and world get
     // nothing.
-    const sessionDir = await prepareOwnedPath(
+    const sessionDir = await prepareOwnedPathWithOwnership(
       this.deps.neutralBase,
       key,
       uid,
       gid,
-      key,
-      "acp",
-      projectId
+      [key, "acp", projectId],
+      this.deps.applyOwnership
     );
 
     const env: NodeJS.ProcessEnv = {
@@ -422,7 +429,7 @@ export class AcpHost {
       env.INITIAL_AGENT_MODE = "read-only";
     }
     if (providerKind === "opencode" && profile === "chat") {
-      await writeOpencodeChatDenyFile(agentHome, userId, uid, gid);
+      await writeOpencodeChatDenyFile(agentHome, userId, uid, gid, this.deps.applyOwnership);
     }
 
     const target =
@@ -592,25 +599,23 @@ export class AcpHost {
       uid = slot.uid;
       gid = slot.gid;
     }
-    const sessionDir = await prepareOwnedPath(
+    const sessionDir = await prepareOwnedPathWithOwnership(
       this.deps.neutralBase,
       key,
       uid,
       gid,
-      key,
-      "acp",
-      projectId
+      [key, "acp", projectId],
+      this.deps.applyOwnership
     );
     // The build's own home, in its own scratch area rather than the shared
     // home base, so the login token file is not under the build's home.
-    const homeDir = await prepareOwnedPath(
+    const homeDir = await prepareOwnedPathWithOwnership(
       this.deps.neutralBase,
       key,
       uid,
       gid,
-      key,
-      "acp-home",
-      projectId
+      [key, "acp-home", projectId],
+      this.deps.applyOwnership
     );
 
     // Scrubbed environment with the build's own home. What is actually true:

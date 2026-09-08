@@ -11,10 +11,21 @@
  */
 
 import { O_CREAT, O_DIRECTORY, O_NOFOLLOW, O_RDONLY, O_TRUNC, O_WRONLY } from "node:constants";
-import { lstat, mkdir, open, readFile, unlink } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, rm, unlink } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import { join } from "node:path";
 
 import { opencodeDenyPermissionKeys } from "@moss/acp";
+
+/**
+ * Hands an open handle to its owner. Injected so tests can prove the launch
+ * refusal on a real, deliberately unreachable id (no privilege needed) while
+ * still exercising the routing tests below it without needing real root.
+ * Production always uses the default, which really calls chown.
+ */
+export type OwnershipApplier = (handle: FileHandle, uid: number, gid: number) => Promise<void>;
+
+const defaultApplyOwnership: OwnershipApplier = (handle, uid, gid) => handle.chown(uid, gid);
 
 /**
  * Build every level of a folder path under the runner base without ever
@@ -26,6 +37,23 @@ export async function prepareOwnedPath(
   uid: number | undefined,
   gid: number | undefined,
   ...segments: string[]
+): Promise<string> {
+  return prepareOwnedPathWithOwnership(baseDir, key, uid, gid, segments);
+}
+
+/**
+ * Same as prepareOwnedPath, but lets the caller swap in how a folder is
+ * handed to its owner. AcpHost uses this so its tests can prove the routing
+ * logic without needing real chown privileges, while still proving the real
+ * failure-and-cleanup behavior separately against a genuinely unreachable id.
+ */
+export async function prepareOwnedPathWithOwnership(
+  baseDir: string,
+  key: string,
+  uid: number | undefined,
+  gid: number | undefined,
+  segments: readonly string[],
+  applyOwnership: OwnershipApplier = defaultApplyOwnership
 ): Promise<string> {
   for (const segment of segments) {
     if (
@@ -43,7 +71,7 @@ export async function prepareOwnedPath(
   let current = baseDir;
   for (const segment of segments) {
     current = join(current, segment);
-    await prepareOwnedDir(key, current, uid, gid);
+    await prepareOwnedDir(key, current, uid, gid, applyOwnership);
   }
   return current;
 }
@@ -60,7 +88,8 @@ export async function writeOwnedFile(
   path: string,
   content: string,
   uid: number | undefined,
-  gid: number | undefined
+  gid: number | undefined,
+  applyOwnership: OwnershipApplier = defaultApplyOwnership
 ): Promise<void> {
   const first = await lstat(path).catch(() => null);
   if (first && first.isSymbolicLink()) await unlink(path);
@@ -76,10 +105,13 @@ export async function writeOwnedFile(
     }
     if (uid !== undefined && gid !== undefined) {
       try {
-        await handle.chown(uid, gid);
+        await applyOwnership(handle, uid, gid);
       } catch (error) {
-        console.warn(
-          `[acp-host] ${key} could not hand ${path} to its owner: ${(error as Error).message}`
+        await handle.close().catch(() => undefined);
+        await unlink(path).catch(() => undefined);
+        throw new Error(
+          `AcpHost: ${key} could not hand ${path} to its owner, launch refused: ${(error as Error).message}`,
+          { cause: error }
         );
       }
     }
@@ -97,7 +129,8 @@ async function prepareOwnedDir(
   key: string,
   path: string,
   uid: number | undefined,
-  gid: number | undefined
+  gid: number | undefined,
+  applyOwnership: OwnershipApplier = defaultApplyOwnership
 ): Promise<void> {
   const first = await lstat(path).catch(() => null);
   if (first && first.isSymbolicLink()) await unlink(path);
@@ -119,10 +152,13 @@ async function prepareOwnedDir(
     }
     if (uid !== undefined && gid !== undefined) {
       try {
-        await handle.chown(uid, gid);
+        await applyOwnership(handle, uid, gid);
       } catch (error) {
-        console.warn(
-          `[acp-host] ${key} could not hand the project folder to its owner: ${(error as Error).message}`
+        await handle.close().catch(() => undefined);
+        await rm(path, { force: true, recursive: true }).catch(() => undefined);
+        throw new Error(
+          `AcpHost: ${key} could not hand the project folder to its owner, launch refused: ${(error as Error).message}`,
+          { cause: error }
         );
       }
     }
@@ -139,9 +175,17 @@ export async function writeOpencodeChatDenyFile(
   agentHome: string,
   userId: string,
   uid: number | undefined,
-  gid: number | undefined
+  gid: number | undefined,
+  applyOwnership: OwnershipApplier = defaultApplyOwnership
 ): Promise<void> {
-  const dir = await prepareOwnedPath(agentHome, userId, uid, gid, ".config", "opencode");
+  const dir = await prepareOwnedPathWithOwnership(
+    agentHome,
+    userId,
+    uid,
+    gid,
+    [".config", "opencode"],
+    applyOwnership
+  );
   const path = join(dir, "opencode.json");
   let config: Record<string, unknown> = {};
   try {
@@ -157,5 +201,5 @@ export async function writeOpencodeChatDenyFile(
     prior && typeof prior === "object" && !Array.isArray(prior) ? { ...prior } : {};
   for (const key of opencodeDenyPermissionKeys()) permission[key] = "deny";
   config.permission = permission;
-  await writeOwnedFile(userId, path, JSON.stringify(config, null, 2), uid, gid);
+  await writeOwnedFile(userId, path, JSON.stringify(config, null, 2), uid, gid, applyOwnership);
 }
