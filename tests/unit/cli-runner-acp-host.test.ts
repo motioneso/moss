@@ -22,14 +22,82 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { AcpHost, defaultResolveAdapterTarget } from "../../packages/cli-runner/src/acp-host.js";
+import { allocateUidSlot as realAllocateUidSlot } from "../../packages/cli-runner/src/uid-allocator.js";
 
 // These tests exercise spawn routing (folders, env, deny files), not the real
-// chown privilege boundary — no unprivileged process can chown to the
-// synthetic uid/gid task 5b's slot allocator hands out. A stub stands in for
-// a successful handover here; the real failure-and-cleanup behavior is
-// proved separately, against a genuinely unreachable id, in
-// cli-runner-owned-fs.test.ts.
-const acceptOwnership = async (): Promise<void> => undefined;
+// chown privilege boundary. Rather than stub the handover out, they give the
+// host the test process's own real uid/gid as the "slot" identity: chowning
+// a file to your own current uid/gid always succeeds unprivileged, so the
+// real default handover genuinely runs and a reused top level is genuinely,
+// not just pretend, owned by the identity the host checks against. The
+// refusal-on-real-failure behavior is proved separately, against a
+// genuinely unreachable id, in cli-runner-owned-fs.test.ts and in the
+// "locks session folders..." test below (which deliberately keeps the real
+// slot allocator for its second host).
+const selfSlot = (): { uid: number; gid: number } => ({
+  uid: process.getuid?.() ?? 0,
+  gid: process.getgid?.() ?? 0
+});
+
+// Same real per-person slot bookkeeping as production (so a test can prove
+// "one entry per person" against the real slot file), but handed back as the
+// test process's own uid/gid so an unprivileged chown can genuinely succeed.
+const selfSlotWithRealFile = (homeBase: string, userId: string): { uid: number; gid: number } => {
+  realAllocateUidSlot(homeBase, userId);
+  return selfSlot();
+};
+
+// Stands in for the real setpriv+node preparation step (task 5b, Architect
+// ruling, 2026-09-08): these tests run unprivileged, so this fake does the
+// same folder/deny-file work plainly, without ever switching identity. It
+// still walks each folder level and refuses to write through a planted
+// symlink, matching packages/cli-runner/src/agent-home-prepare.mjs, so the
+// symlink tests below keep proving what they always proved. The real step's
+// own behavior (running as the slot through setpriv) is proved separately,
+// not by these routing tests.
+function ensureRealDirSync(path: string): void {
+  const stat = lstatSync(path, { throwIfNoEntry: false }) ?? null;
+  if (stat?.isSymbolicLink()) rmSync(path, { force: true });
+  if (!stat || stat.isSymbolicLink()) {
+    mkdirSync(path, { mode: 0o700 });
+    return;
+  }
+  if (!stat.isDirectory()) throw new Error(`refusing to prepare ${path}: not a real folder`);
+}
+
+function ensureDirTreeSync(path: string): void {
+  const parts = path.split("/").filter((part) => part.length > 0);
+  let current = path.startsWith("/") ? "/" : "";
+  for (const part of parts) {
+    current = current === "" ? part : current === "/" ? `/${part}` : `${current}/${part}`;
+    ensureRealDirSync(current);
+  }
+}
+
+async function fakeAgentHomePrepare(request: {
+  dirs: readonly string[];
+  denyFile: { path: string; permissionKeys: readonly string[] } | null;
+}): Promise<void> {
+  for (const dir of request.dirs) ensureDirTreeSync(dir);
+  if (request.denyFile) {
+    const { path, permissionKeys } = request.denyFile;
+    const first = lstatSync(path, { throwIfNoEntry: false }) ?? null;
+    if (first?.isSymbolicLink()) rmSync(path, { force: true });
+    let config: Record<string, unknown> = {};
+    if (existsSync(path)) {
+      const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        config = parsed as Record<string, unknown>;
+      }
+    }
+    const prior = config.permission;
+    const permission: Record<string, unknown> =
+      prior && typeof prior === "object" && !Array.isArray(prior) ? { ...prior } : {};
+    for (const key of permissionKeys) permission[key] = "deny";
+    config.permission = permission;
+    writeFileSync(path, JSON.stringify(config, null, 2), { mode: 0o600 });
+  }
+}
 
 class FakeChild extends EventEmitter {
   readonly written: string[] = [];
@@ -62,12 +130,13 @@ function makeHost(dir: string, child: FakeChild) {
     neutralBase: dir,
     homeBase,
     perUserUid: true,
-    applyOwnership: acceptOwnership,
+    allocateUidSlot: selfSlot,
     resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
     spawnChild: (opts) => {
       lastSpawn = { cwd: opts.cwd, env: opts.env };
       return child as never;
-    }
+    },
+    runAgentHomePrepare: fakeAgentHomePrepare
   });
   return { host, lastSpawn: () => lastSpawn };
 }
@@ -140,8 +209,12 @@ describe("AcpHost", () => {
         resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
         spawnChild: () => child as never
       });
+      // A fresh person ("user-2"): the first host's own real uid/gid never
+      // touched this one, so this is a genuinely new top level, and the real
+      // (unmocked) slot allocator hands out a synthetic uid/gid this test
+      // process can never really chown to.
       await expect(
-        strict.spawn("workshop:user:proj2", "proj", "anthropic", "user-1", "chat")
+        strict.spawn("workshop:user:proj2", "proj", "anthropic", "user-2", "chat")
       ).rejects.toThrow(/could not hand.*to its owner, launch refused/);
       expect(existsSync(join(dir, "workshop:user:proj2"))).toBe(false);
     } finally {
@@ -182,9 +255,10 @@ describe("AcpHost", () => {
         neutralBase: dir,
         homeBase,
         perUserUid: true,
-        applyOwnership: acceptOwnership,
+        allocateUidSlot: selfSlot,
         resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
-        spawnChild: () => child as never
+        spawnChild: () => child as never,
+        runAgentHomePrepare: fakeAgentHomePrepare
       });
       const one = await host.spawn("workshop:user:proj", "proj", "anthropic", "user-1", "chat");
       child = second;
@@ -341,12 +415,13 @@ describe("task 5b launch follows the row", () => {
       neutralBase,
       homeBase,
       perUserUid: true,
-      applyOwnership: acceptOwnership,
+      allocateUidSlot: selfSlotWithRealFile,
       resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
       spawnChild: (opts) => {
         seen.push({ command: opts.command, args: opts.args, cwd: opts.cwd, env: opts.env });
         return child as never;
-      }
+      },
+      runAgentHomePrepare: fakeAgentHomePrepare
     });
     return { host, seen };
   }
@@ -413,8 +488,10 @@ describe("task 5b launch follows the row", () => {
 
   it("writes the OpenCode deny file from the table, preserving the rest", async () => {
     // The writer runs at spawn for chat; with the row not ready the spawn
-    // itself refuses, so this test drives the writer directly. Task 10 proves
-    // the wired path in the real per-user home.
+    // itself refuses, so this test runs the real preparation script
+    // directly, the same way the runner spawns it (task 5b, Architect
+    // ruling, 2026-09-08). Task 10 proves the wired path in the real
+    // per-user home.
     const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
     try {
       // A login-owned config the write must preserve, not clobber.
@@ -424,14 +501,19 @@ describe("task 5b launch follows the row", () => {
         join(existingDir, "opencode.json"),
         JSON.stringify({ model: "keep-me", permission: { read: "allow" } })
       );
-      const { writeOpencodeChatDenyFile } =
-        await import("../../packages/cli-runner/src/owned-fs.js");
-      await writeOpencodeChatDenyFile(join(home, "agents", "user-1"), "user-1");
+      const { opencodeDenyPermissionKeys } = await import("../../packages/acp/src/providers.js");
+      const expected = opencodeDenyPermissionKeys();
+      const scriptPath = join(process.cwd(), "packages/cli-runner/src/agent-home-prepare.mjs");
+      const request = JSON.stringify({
+        dirs: [existingDir],
+        denyFile: { path: join(existingDir, "opencode.json"), permissionKeys: expected }
+      });
+      const { spawnSync } = await import("node:child_process");
+      const result = spawnSync(process.execPath, [scriptPath, request], { encoding: "utf8" });
+      expect(result.status).toBe(0);
       const written = JSON.parse(
         readFileSync(join(home, "agents", "user-1", ".config", "opencode", "opencode.json"), "utf8")
       ) as { model?: string; permission?: Record<string, string> };
-      const { opencodeDenyPermissionKeys } = await import("../../packages/acp/src/providers.js");
-      const expected = opencodeDenyPermissionKeys();
       expect(expected).toEqual(expect.arrayContaining(["bash", "edit", "write"]));
       for (const key of expected) expect(written.permission?.[key]).toBe("deny");
       expect(written.model).toBe("keep-me");

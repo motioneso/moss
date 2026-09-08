@@ -24,23 +24,17 @@ import {
   type AcpExecStartResult,
   type AcpExecPollResult
 } from "./acp-execs.js";
-import {
-  handOverOpencodeChatDenyFile,
-  handOverOwnedPath,
-  prepareOwnedPathWithOwnership,
-  writeOpencodeChatDenyFile,
-  type OwnedPathLevel,
-  type OwnershipApplier
-} from "./owned-fs.js";
+import { ensureOwnedTopLevel, prepareOwnedPath, type OwnershipApplier } from "./owned-fs.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
-import { allocateUidSlot } from "./uid-allocator.js";
+import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
 import { providerTokenPath } from "./provider-token-store.js";
 import {
   getAcpProviderRow,
   launchOffList,
   lookupAcpToolFamily,
+  opencodeDenyPermissionKeys,
   type AcpProfile,
   type AcpProviderKind
 } from "@moss/acp";
@@ -96,6 +90,30 @@ export interface AcpHostDeps {
     uid?: number;
     gid?: number;
   }) => ChildProcessWithoutNullStreams;
+  /**
+   * Runs the below-top-level home/session preparation step as the person's
+   * own slot; injected so tests never truly shell out to setpriv and node.
+   * The production default runs `agent-home-prepare.mjs` through setpriv,
+   * exactly the way the agent's own process starts (task 5b, Architect
+   * ruling, 2026-09-08).
+   */
+  readonly runAgentHomePrepare?: (
+    request: AgentHomePrepareRequest,
+    identity: { uid: number; gid: number }
+  ) => Promise<void>;
+  /**
+   * Overrides the real per-person uid/gid slot allocator. Injected only so
+   * tests can prove folder reuse against a genuinely reachable identity (their
+   * own real uid/gid, which unprivileged chown always accepts) without
+   * needing real root. Production always uses the default.
+   */
+  readonly allocateUidSlot?: (homeBase: string, userId: string) => { uid: number; gid: number };
+}
+
+/** Argument passed as one JSON string to agent-home-prepare.mjs. */
+export interface AgentHomePrepareRequest {
+  readonly dirs: readonly string[];
+  readonly denyFile: { readonly path: string; readonly permissionKeys: readonly string[] } | null;
 }
 
 export interface AcpSpawnResult {
@@ -145,21 +163,6 @@ const IDLE_REAP_MS = 30 * 60 * 1000;
 const MAX_LINE_BYTES = 256 * 1024;
 /** How long a stop waits for the signalled process to actually exit before reporting it as refused. */
 const KILL_CONFIRM_TIMEOUT_MS = 5000;
-
-/**
- * Remove every level this launch created, shallowest owned-here level first:
- * removing a level recursively also removes whatever this same launch built
- * underneath it, so there is nothing left to double-remove going deeper. A
- * level that already existed before this launch (createdHere false) is
- * never touched (task 5b, Astra-Reviewer finding 1 and 2, 2026-09-08).
- */
-async function removeCreatedLevels(levels: readonly OwnedPathLevel[]): Promise<void> {
-  for (const level of levels) {
-    if (!level.ownedHere || !level.createdHere) continue;
-    await rm(level.path, { force: true, recursive: true }).catch(() => undefined);
-    break;
-  }
-}
 
 interface AcpSession {
   readonly child: ChildProcessWithoutNullStreams;
@@ -235,6 +238,42 @@ export function defaultResolveAdapterTarget(kind: AcpProviderKind): AcpAdapterTa
 }
 
 /**
+ * Run the below-top-level preparation step as the person's own slot: setpriv
+ * switches identity, then the runner's own Node binary runs the script,
+ * given the request as one JSON argv element (never through a shell, so
+ * nothing in it is ever interpolated). A non-zero exit fails the launch with
+ * the step's own stderr (task 5b, Architect ruling, 2026-09-08).
+ */
+async function defaultRunAgentHomePrepare(
+  request: AgentHomePrepareRequest,
+  identity: { uid: number; gid: number }
+): Promise<void> {
+  const script = createRequire(import.meta.url).resolve("./agent-home-prepare.mjs");
+  const { command, args } = buildSetprivDropCommand(
+    process.execPath,
+    [script, JSON.stringify(request)],
+    identity
+  );
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.once("error", (error) => reject(error));
+    child.once("exit", (code) => {
+      if (code === 0) resolve();
+      else
+        reject(
+          new Error(
+            `AcpHost: could not prepare the agent's home: ${stderr.trim() || `exit code ${String(code)}`}`
+          )
+        );
+    });
+  });
+}
+
+/**
  * A process's actual start time in system ticks, read from the system process
  * table. Compared against the start time saved when the build was started:
  * only the same build is ever stopped. Null when the process is gone or the
@@ -305,40 +344,38 @@ export class AcpHost {
     }
 
     // One slot per person, never per conversation.
-    const slot = allocateUidSlot(this.deps.homeBase, userId);
+    const allocate = this.deps.allocateUidSlot ?? defaultAllocateUidSlot;
+    const slot = allocate(this.deps.homeBase, userId);
     const uid = slot.uid;
     const gid = slot.gid;
-    // The slot's own home, never the shared base: two people must not read
-    // each other's logins. Created here, launcher-owned throughout: every
-    // file the launch needs inside it (the OpenCode deny file) is written
-    // before ownership ever hands over, since the launcher cannot enter a
-    // folder once it is someone else's (task 5b, Astra-Reviewer finding 2,
-    // 2026-09-08).
-    const agentHomeResult = await prepareOwnedPathWithOwnership(
-      this.deps.homeBase,
+
+    // The launcher's own folder work stops at each person's top level: the
+    // slot's home folder, and the conversation's session-key folder. A
+    // returning person's top level already exists and is already theirs, so
+    // the launcher only checks the kernel's record of it — it must never try
+    // to open a folder that belongs to someone else (task 5b, Architect
+    // ruling on Astra-Reviewer round-four finding, 2026-09-08 — the old code
+    // tried to recreate/re-enter the whole tree on every launch and refused
+    // a second launch for the same person once their home was owner-only).
+    const agentsParent = await prepareOwnedPath(this.deps.homeBase, userId, "agents");
+    const agentHomeTop = await ensureOwnedTopLevel(
       userId,
-      ["agents", userId],
-      // "agents" is a shared parent the launcher itself keeps owning
-      // (pass-through, 0711); only "userId" below it ever hands over
-      // (task 5b, Astra-Reviewer finding 3, 2026-09-08).
-      1
+      agentsParent,
+      userId,
+      uid,
+      gid,
+      this.deps.applyOwnership
     );
-    const agentHome = agentHomeResult.path;
-    // Same link-safe folder setup the build path uses, at every level: a
-    // command that ran here earlier can plant a link at this folder or any of
-    // its parents, so each level is cleared of links and verified before the
-    // next builds on it. Owner-only whatever the identity option says: with
-    // it off every session shares one account, so this narrows nothing
-    // between people — the real containment there is the disabled built-ins
-    // plus the per-session folder (asserted in cli-runner-acp-host.test.ts),
-    // not these bits. Still the only safe default: group and world get
-    // nothing.
-    const sessionDirResult = await prepareOwnedPathWithOwnership(this.deps.neutralBase, key, [
+    const agentHome = agentHomeTop.path;
+    const sessionTop = await ensureOwnedTopLevel(
       key,
-      "acp",
-      projectId
-    ]);
-    const sessionDir = sessionDirResult.path;
+      this.deps.neutralBase,
+      key,
+      uid,
+      gid,
+      this.deps.applyOwnership
+    );
+    const sessionDir = join(sessionTop.path, "acp", projectId);
 
     const env: NodeJS.ProcessEnv = {
       ...buildSanitizedCliEnv(process.env),
@@ -346,7 +383,10 @@ export class AcpHost {
     };
     // The login travels only the way the selected row needs it, via the
     // environment only. Claude reads the stored token; Codex reuses the
-    // on-disk login in the agent home; OpenCode gets neither.
+    // on-disk login in the agent home; OpenCode gets neither. The token file
+    // itself lives directly under homeBase, launcher-owned, never inside a
+    // person's own tree — nothing the launcher needs after a person's first
+    // launch may live inside a folder it can no longer enter.
     if (providerKind === "anthropic") {
       const token = await this.readLoginToken(this.deps.homeBase);
       if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
@@ -361,36 +401,32 @@ export class AcpHost {
     ) {
       env.INITIAL_AGENT_MODE = "read-only";
     }
-    let opencodeDenyFile: Awaited<ReturnType<typeof writeOpencodeChatDenyFile>> | null = null;
-    if (providerKind === "opencode" && profile === "chat") {
-      opencodeDenyFile = await writeOpencodeChatDenyFile(agentHome, userId);
-    }
 
-    // Every file this launch needed inside the two trees is written by now.
-    // Hand ownership over, deepest level first: the deny file and its
-    // folders (nested inside agentHome) ahead of agentHome's own leaf level,
-    // then the session folder (task 5b, Astra-Reviewer finding 2, 2026-09-08).
-    // A failure partway through leaves the OTHER tree (already created,
-    // never yet handed over) on disk unless this launch cleans it up too:
-    // handOverOwnedPath only removes the one level it was working on, so the
-    // ruling's "the cleanup removes only what this launch created" is
-    // enforced here across both trees, not level-by-level (task 5b,
-    // Astra-Reviewer finding 2, 2026-09-08).
+    // Everything below a person's top level is created and written by a
+    // small preparation step that runs AS the person, through the same
+    // setpriv switch the agent itself uses: because it runs already
+    // switched to the slot's uid/gid, plain mkdir/writeFile land already
+    // owned by them, so there is nothing here for the launcher to chown or
+    // hand over (task 5b, Architect ruling, 2026-09-08).
+    const denyFile =
+      providerKind === "opencode" && profile === "chat"
+        ? {
+            path: join(agentHome, ".config", "opencode", "opencode.json"),
+            permissionKeys: [...opencodeDenyPermissionKeys()]
+          }
+        : null;
+    const prepareDirs = [sessionDir];
+    if (denyFile) prepareDirs.push(join(agentHome, ".config", "opencode"));
+    const runAgentHomePrepare = this.deps.runAgentHomePrepare ?? defaultRunAgentHomePrepare;
     try {
-      if (opencodeDenyFile) {
-        await handOverOpencodeChatDenyFile(
-          userId,
-          opencodeDenyFile,
-          uid,
-          gid,
-          this.deps.applyOwnership
-        );
-      }
-      await handOverOwnedPath(userId, agentHomeResult.levels, uid, gid, this.deps.applyOwnership);
-      await handOverOwnedPath(key, sessionDirResult.levels, uid, gid, this.deps.applyOwnership);
+      await runAgentHomePrepare({ dirs: prepareDirs, denyFile }, { uid, gid });
     } catch (error) {
-      await removeCreatedLevels(agentHomeResult.levels);
-      await removeCreatedLevels(sessionDirResult.levels);
+      if (agentHomeTop.createdHere) {
+        await rm(agentHomeTop.path, { force: true, recursive: true }).catch(() => undefined);
+      }
+      if (sessionTop.createdHere) {
+        await rm(sessionTop.path, { force: true, recursive: true }).catch(() => undefined);
+      }
       throw error;
     }
 
@@ -677,13 +713,23 @@ export class AcpHost {
       }
       return;
     }
+    // The runtime image has no separate `kill` program (only util-linux for
+    // setpriv), so the stop signal is sent by the runner's own Node binary
+    // instead, run through setpriv as the slot straight at the process
+    // group — no shell in between (task 5b, Architect ruling on
+    // Astra-Reviewer round-four finding, 2026-09-08). The pid travels by
+    // environment variable, not by argv, so there is no ambiguity about how
+    // Node indexes process.argv under -e.
     const { command, args } = buildSetprivDropCommand(
-      "kill",
-      ["-TERM", "--", `-${pid}`],
+      process.execPath,
+      ["-e", "process.kill(-Number(process.env.ACP_STOP_PID), 'SIGTERM')"],
       session.identity
     );
     await new Promise<void>((resolve, reject) => {
-      const stopper = spawn(command, args, { stdio: "ignore" });
+      const stopper = spawn(command, args, {
+        stdio: "ignore",
+        env: { ...process.env, ACP_STOP_PID: String(pid) }
+      });
       stopper.once("error", (error) => reject(error));
       stopper.once("exit", (code) => {
         if (code === 0) resolve();

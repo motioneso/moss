@@ -11,11 +11,9 @@
  */
 
 import { O_CREAT, O_DIRECTORY, O_NOFOLLOW, O_RDONLY, O_TRUNC, O_WRONLY } from "node:constants";
-import { lstat, mkdir, open, readFile, rm, unlink } from "node:fs/promises";
+import { lstat, mkdir, open, rm, unlink } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { join } from "node:path";
-
-import { opencodeDenyPermissionKeys } from "@moss/acp";
 
 /**
  * Hands an open handle to its owner. Injected so tests can prove the launch
@@ -228,57 +226,50 @@ async function prepareOwnedDir(key: string, path: string, ownedHere: boolean): P
 }
 
 /**
- * OpenCode chat deny file in the agent home: shell and file edits denied from
- * the tool table's chat column. Merges into an existing config, keeping the
- * rest. Creates the folders and writes the file launcher-owned; the caller
- * hands everything over afterward, deepest first, alongside the rest of the
- * agent home (task 5b, Astra-Reviewer finding 2, 2026-09-08).
+ * Ensure one person's top-level folder exists and is owned by exactly their
+ * slot, without ever opening it: once a top level is someone else's the
+ * launcher cannot enter it, and must not try (task 5b, Astra-Reviewer
+ * round-four finding, 2026-09-08 — a second launch for the same person was
+ * refused reopening their own now owner-only home). Created only when
+ * absent, then handed over at once while still empty; when one already
+ * exists its ownership is checked from the kernel's record alone (a real
+ * folder, not a link, owned by exactly this slot) and the launch refuses if
+ * anyone else owns it. Everything below this level is the caller's job, done
+ * by a preparation step running as the person, never by the launcher.
  */
-export async function writeOpencodeChatDenyFile(
-  agentHome: string,
-  userId: string
-): Promise<{ levels: OwnedPathLevel[]; filePath: string; fileCreatedHere: boolean }> {
-  const { path: dir, levels } = await prepareOwnedPathWithOwnership(agentHome, userId, [
-    ".config",
-    "opencode"
-  ]);
-  const path = join(dir, "opencode.json");
-  let config: Record<string, unknown> = {};
-  try {
-    const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      config = parsed as Record<string, unknown>;
-    }
-  } catch {
-    // Absent or broken config: start fresh, nothing to keep.
-  }
-  const prior = config.permission;
-  const permission: Record<string, unknown> =
-    prior && typeof prior === "object" && !Array.isArray(prior) ? { ...prior } : {};
-  for (const key of opencodeDenyPermissionKeys()) permission[key] = "deny";
-  config.permission = permission;
-  const fileCreatedHere = await writeOwnedFile(userId, path, JSON.stringify(config, null, 2));
-  return { levels, filePath: path, fileCreatedHere };
-}
-
-/**
- * Hand everything writeOpencodeChatDenyFile made over to its owner, deepest
- * first: the file, then the opencode folder, then .config.
- */
-export async function handOverOpencodeChatDenyFile(
-  userId: string,
-  result: { levels: OwnedPathLevel[]; filePath: string; fileCreatedHere: boolean },
+export async function ensureOwnedTopLevel(
+  key: string,
+  parentDir: string,
+  segment: string,
   uid: number,
   gid: number,
   applyOwnership: OwnershipApplier = defaultApplyOwnership
-): Promise<void> {
-  await handOverOwnedFile(
-    userId,
-    result.filePath,
-    result.fileCreatedHere,
-    uid,
-    gid,
-    applyOwnership
-  );
-  await handOverOwnedPath(userId, result.levels, uid, gid, applyOwnership);
+): Promise<{ path: string; createdHere: boolean }> {
+  if (
+    segment.length === 0 ||
+    segment === "." ||
+    segment === ".." ||
+    segment.includes("/") ||
+    segment.includes("\\") ||
+    segment.includes("\0")
+  ) {
+    throw new Error("AcpHost: refusing an unsafe folder name");
+  }
+  const path = join(parentDir, segment);
+  const existing = await lstat(path).catch(() => null);
+  if (existing) {
+    if (!existing.isDirectory()) {
+      throw new Error(`AcpHost: ${key} top level ${path} is not a real folder, launch refused`);
+    }
+    if (existing.uid !== uid || existing.gid !== gid) {
+      throw new Error(
+        `AcpHost: ${key} top level ${path} is owned by uid=${existing.uid} gid=${existing.gid}, ` +
+          `not this slot (uid=${uid} gid=${gid}), launch refused`
+      );
+    }
+    return { path, createdHere: false };
+  }
+  const createdHere = await prepareOwnedDir(key, path, true);
+  await handOverOwnedPath(key, [{ path, createdHere, ownedHere: true }], uid, gid, applyOwnership);
+  return { path, createdHere };
 }
