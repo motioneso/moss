@@ -50,6 +50,29 @@ export interface AcpSessionHandle {
   readonly gid: number;
 }
 
+/** A failed open whose runner cleanup can be retried after a refused stop. */
+export class AcpSessionOpenError extends Error {
+  readonly startupError: unknown;
+  readonly cleanupError: unknown;
+  readonly retryCleanup: () => Promise<void>;
+
+  constructor(startupError: unknown, cleanupError: unknown, retryCleanup: () => Promise<void>) {
+    const startupMessage =
+      startupError instanceof Error ? startupError.message : String(startupError);
+    const cleanupMessage =
+      cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+    super(
+      `ACP session failed to open (${startupMessage}); cleanup failed (${cleanupMessage}); ` +
+        "call retryCleanup() to finish stopping the agent",
+      { cause: startupError }
+    );
+    this.name = "AcpSessionOpenError";
+    this.startupError = startupError;
+    this.cleanupError = cleanupError;
+    this.retryCleanup = retryCleanup;
+  }
+}
+
 /**
  * Moss's own tool server, handed to the agent when a session opens. The URL is
  * the address the agent reaches the tool server at, and the Bearer is the
@@ -264,9 +287,28 @@ export class MossAcpClient {
       if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
       return { sessionId: session.sessionId, cwd, home, pid, uid, gid };
     } catch (error) {
-      await this.tunnel.kill(sessionKey).catch(() => undefined);
-      await stream.stop().catch(() => undefined);
-      toolServer?.onClose?.();
+      let killed = false;
+      let stopped = false;
+      let revoked = false;
+      const cleanup = async (): Promise<void> => {
+        if (!killed) {
+          await this.tunnel.kill(sessionKey);
+          killed = true;
+        }
+        if (!stopped) {
+          await stream.stop();
+          stopped = true;
+        }
+        if (!revoked) {
+          revoked = true;
+          toolServer?.onClose?.();
+        }
+      };
+      try {
+        await cleanup();
+      } catch (cleanupError) {
+        throw new AcpSessionOpenError(error, cleanupError, cleanup);
+      }
       throw error;
     }
   }

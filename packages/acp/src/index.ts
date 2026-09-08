@@ -1,4 +1,4 @@
-export { MossAcpClient } from "./client.js";
+export { AcpSessionOpenError, MossAcpClient } from "./client.js";
 export type {
   AcpClientEvents,
   AcpPermissionDecider,

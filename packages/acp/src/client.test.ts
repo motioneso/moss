@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { MossAcpClient } from "./client.js";
+import { AcpSessionOpenError, MossAcpClient } from "./client.js";
 import type { AcpTunnel } from "./tunnel.js";
 
 /**
@@ -21,6 +21,7 @@ class ScriptedAgent implements AcpTunnel {
   pollingStopped = false;
   hangPrompt = false;
   failInitialize = false;
+  killFailure: Error | null = null;
 
   async spawn(): Promise<{
     cwd: string;
@@ -152,6 +153,11 @@ class ScriptedAgent implements AcpTunnel {
 
   async kill(sessionKey: string): Promise<void> {
     this.killCalls.push(sessionKey);
+    if (this.killFailure) {
+      const error = this.killFailure;
+      this.killFailure = null;
+      throw error;
+    }
     this.killed = true;
     const wake = this.pendingRead;
     setTimeout(() => wake?.(), 20);
@@ -246,6 +252,41 @@ describe("MossAcpClient", () => {
     expect(agent.killCalls).toEqual(["chat:user:proj"]);
     expect(agent.pollingStopped).toBe(true);
     expect(revoked).toBe(1);
+  });
+
+  it("reports refused startup cleanup and leaves a retry path", async () => {
+    const agent = new ScriptedAgent();
+    agent.failInitialize = true;
+    agent.killFailure = new Error("STOP REFUSED");
+    let revoked = 0;
+    const client = new MossAcpClient(agent);
+
+    let failure: unknown;
+    try {
+      await client.openSession("chat:user:proj", "proj", "anthropic", "user-1", "chat", {
+        url: "http://moss.local/api/mcp",
+        bearer: "test-token",
+        onClose: () => {
+          revoked += 1;
+        }
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(AcpSessionOpenError);
+    if (!(failure instanceof AcpSessionOpenError)) throw failure;
+    expect(failure.message).toMatch(/cleanup failed \(STOP REFUSED\)/);
+    expect(agent.killCalls).toEqual(["chat:user:proj"]);
+    expect(revoked).toBe(0);
+
+    await failure.retryCleanup();
+    expect(agent.killCalls).toEqual(["chat:user:proj", "chat:user:proj"]);
+    expect(agent.pollingStopped).toBe(true);
+    expect(revoked).toBe(1);
+
+    await failure.retryCleanup();
+    expect(agent.killCalls).toHaveLength(2);
   });
 
   it("opens a session, collects streamed text, and reports the stop reason", async () => {
