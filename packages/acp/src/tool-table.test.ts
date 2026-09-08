@@ -21,6 +21,7 @@ describe("tool table agreement", () => {
         classifyAcpPermission(
           {
             sessionId: "s",
+            turnId: "t",
             toolCallId: "c",
             title: "t",
             rawInput,
@@ -37,6 +38,7 @@ describe("tool table agreement", () => {
         classifyAcpPermission(
           {
             sessionId: "s",
+            turnId: "t",
             toolCallId: "c",
             title: "t",
             rawInput: inFolder,
@@ -53,6 +55,7 @@ describe("tool table agreement", () => {
         classifyAcpPermission(
           {
             sessionId: "s",
+            turnId: "t",
             toolCallId: "c",
             title: "t",
             rawInput: {},
@@ -69,6 +72,7 @@ describe("tool table agreement", () => {
         classifyAcpPermission(
           {
             sessionId: "s",
+            turnId: "t",
             toolCallId: "c",
             title: "t",
             rawInput: {},

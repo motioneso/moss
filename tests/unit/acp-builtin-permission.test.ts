@@ -12,6 +12,8 @@ const CWD = "/runner/session/acp/proj";
 
 interface FakeStore {
   created: unknown[];
+  createStarted: boolean;
+  createGate?: Promise<void>;
   emitted: unknown[];
   audit: unknown[];
   actionRow: { id: string; status: string };
@@ -25,6 +27,8 @@ function buildGateway(store: FakeStore, confirmTimeoutMs = 1000) {
     repository: {
       // Rows are numbered in creation order so two asks can be told apart.
       createPendingAssistantAction: async (_db: unknown, input: unknown) => {
+        store.createStarted = true;
+        await store.createGate;
         store.created.push(input);
         return { ...store.actionRow, id: `acp-action-${store.created.length}` };
       },
@@ -50,6 +54,7 @@ function buildGateway(store: FakeStore, confirmTimeoutMs = 1000) {
 function freshStore(): FakeStore {
   return {
     created: [],
+    createStarted: false,
     emitted: [],
     audit: [],
     actionRow: { id: "acp-action-1", status: "pending" }
@@ -66,6 +71,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-9",
       title: "`pnpm build`",
       toolInput: { command: "pnpm build" },
@@ -109,6 +115,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-9",
       title: "`pnpm build`",
       toolInput: { command: "pnpm build" },
@@ -156,6 +163,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-9",
       title: "Read File",
       toolInput: { file_path: "/etc/hosts" },
@@ -186,6 +194,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd,
         home: "/home/agent",
         sessionId,
+        turnId: `${sessionId}-turn`,
         toolCallId: `${sessionId}-call`,
         title: "`pnpm build`",
         toolInput: { command: "pnpm build" },
@@ -225,6 +234,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-7",
         title: "Read the repository and summarize the layout",
         toolInput: {
@@ -249,6 +259,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-8",
         title: "Read the repository and summarize the layout",
         toolInput: {
@@ -273,6 +284,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-9",
         title: "`pnpm build`",
         toolInput: { command: "pnpm build" },
@@ -295,6 +307,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-cancel",
       title: "`pnpm build`",
       toolInput: { command: "pnpm build" },
@@ -325,6 +338,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-2",
         title: "Read src/index.ts",
         toolInput: { file_path: "src/index.ts" },
@@ -336,6 +350,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-3",
         title: "Write src/out.txt",
         toolInput: { file_path: "src/out.txt" },
@@ -356,6 +371,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-4",
         title: "Invent everything",
         toolInput: { whatever: true },
@@ -375,6 +391,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-6",
       title: "`pnpm build`",
       toolInput: { command: "pnpm build" },
@@ -390,21 +407,31 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(pending).resolves.toEqual({ decision: "allow", reason: "Approved by user." });
   });
 
-  it("cancels asks that arrive after a session stop and clears on the next turn", async () => {
+  it("keeps a stopped turn cancelled after the next turn starts", async () => {
     const store = freshStore();
     const { gateway, tokens, confirmations } = buildGateway(store, 30_000);
     const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
 
-    expect(confirmations.cancelSession("agent-sess-1")).toBe(0);
+    let releaseCreate!: () => void;
+    store.createGate = new Promise<void>((resolve) => {
+      releaseCreate = resolve;
+    });
+    confirmations.beginTurn("agent-sess-1", "turn-old");
     const pending = gateway.requestAcpBuiltInPermission(token, {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-old",
       toolCallId: "call-9",
       title: "`pnpm build`",
       toolInput: { command: "pnpm build" },
       toolName: "Bash"
     });
+    await vi.waitFor(() => expect(store.createStarted).toBe(true));
+    expect(confirmations.cancelSession("agent-sess-1")).toBe(0);
+    confirmations.beginTurn("agent-sess-1", "turn-new");
+    store.createGate = undefined;
+    releaseCreate();
     await vi.waitFor(() => expect(store.created).toHaveLength(1));
     expect(confirmations.isAwaiting("acp-action-1")).toBe(false);
     await expect(pending).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
@@ -412,11 +439,11 @@ describe("agent built-in permission through the shared approval card", () => {
       "expired"
     );
 
-    confirmations.beginTurn("agent-sess-1");
     const next = gateway.requestAcpBuiltInPermission(token, {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-new",
       toolCallId: "call-next",
       title: "`pnpm build`",
       toolInput: { command: "pnpm build" },
@@ -443,6 +470,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-9",
         title: "`pnpm build`",
         toolInput: { command: "pnpm build" },
@@ -480,6 +508,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-9",
       title: "`pnpm build`",
       toolInput: { command: "pnpm build" },
@@ -499,6 +528,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-2",
       title: "Read src/a.ts",
       toolInput: { file_path: "src/a.ts" },
@@ -535,6 +565,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-9",
         title: "t",
         toolInput: refusal.input,
@@ -557,6 +588,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-5",
         title: "`pnpm build`",
         toolInput: { command: "pnpm build" },

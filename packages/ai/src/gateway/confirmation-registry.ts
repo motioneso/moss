@@ -3,6 +3,7 @@ export type AwaitOutcome = ResolutionStatus | "timeout";
 
 interface Waiter {
   readonly sessionId?: string;
+  readonly turnId?: string;
   readonly settle: (outcome: AwaitOutcome) => void;
 }
 
@@ -13,15 +14,17 @@ interface Waiter {
 export class ConfirmationRegistry {
   private readonly waiters = new Map<string, Waiter>();
   private readonly completions = new Map<string, () => void>();
-  private readonly cancelledSessions = new Set<string>();
+  private readonly activeTurns = new Map<string, string>();
+  private readonly cancelledTurns = new Set<string>();
 
   awaitResolution(
     actionRequestId: string,
     timeoutMs: number,
-    sessionId?: string
+    sessionId?: string,
+    turnId?: string
   ): Promise<AwaitOutcome> {
     return new Promise<AwaitOutcome>((resolve) => {
-      if (sessionId && this.cancelledSessions.has(sessionId)) {
+      if (turnId && this.cancelledTurns.has(turnId)) {
         resolve("cancelled");
         return;
       }
@@ -33,6 +36,7 @@ export class ConfirmationRegistry {
 
       this.waiters.set(actionRequestId, {
         sessionId,
+        turnId,
         settle: (outcome) => {
           clearTimeout(timer);
           this.waiters.delete(actionRequestId);
@@ -42,21 +46,23 @@ export class ConfirmationRegistry {
     });
   }
 
-  /** Cancel every live ACP ask belonging to a stopped agent session. */
+  /** Cancel every live ACP ask belonging to the active turn of a stopped session. */
   cancelSession(sessionId: string): number {
-    this.cancelledSessions.add(sessionId);
+    const turnId = this.activeTurns.get(sessionId);
+    if (!turnId) return 0;
+    this.cancelledTurns.add(turnId);
     let cancelled = 0;
     for (const waiter of this.waiters.values()) {
-      if (waiter.sessionId !== sessionId) continue;
+      if (waiter.turnId !== turnId) continue;
       waiter.settle("cancelled");
       cancelled += 1;
     }
     return cancelled;
   }
 
-  /** Allow permission asks from the next turn on a previously stopped session. */
-  beginTurn(sessionId: string): void {
-    this.cancelledSessions.delete(sessionId);
+  /** Set the identity used to cancel asks from this turn. */
+  beginTurn(sessionId: string, turnId: string): void {
+    this.activeTurns.set(sessionId, turnId);
   }
 
   /**

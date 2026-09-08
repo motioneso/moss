@@ -44,6 +44,8 @@ export interface AcpBuiltInPermissionRequest {
   /** The HOME handed to the agent process, or null when it names none. */
   readonly home: string | null;
   readonly sessionId: string;
+  /** Identity of the prompt turn that created this ask. */
+  readonly turnId: string;
   readonly toolCallId: string;
   readonly title: string;
   readonly toolInput: Record<string, unknown>;
@@ -217,6 +219,7 @@ export async function requestAcpBuiltInPermission(
   const folders = { cwd: request.cwd, home: request.home };
   const builtIn: AcpBuiltInRequest = {
     sessionId: request.sessionId,
+    turnId: request.turnId,
     toolCallId: request.toolCallId,
     title: request.title,
     rawInput: input,
@@ -248,7 +251,8 @@ export async function requestAcpBuiltInPermission(
     const pendingResolution = deps.confirmations.awaitResolution(
       action.id,
       deps.confirmTimeoutMs,
-      request.sessionId
+      request.sessionId,
+      request.turnId
     );
 
     deps.notifier.emit(chatSessionId, {

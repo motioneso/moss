@@ -22,6 +22,7 @@ import {
   type StopReason,
   type ToolCallLocation
 } from "@agentclientprotocol/sdk";
+import { randomUUID } from "node:crypto";
 
 import { checkAcpProfile, checkAgentCapabilities, type AcpProfile } from "./capabilities.js";
 import { getAcpProviderRow, type AcpProviderKind } from "./providers.js";
@@ -138,8 +139,8 @@ export interface AcpToolAnnouncement {
  */
 export interface AcpPermissionDecider {
   decide(request: AcpBuiltInRequest, session: AcpSessionHandle): Promise<"allow" | "deny">;
-  /** Clear cancellation from a stopped session before its next prompt turn. */
-  beginTurn?: (sessionId: string) => void | Promise<void>;
+  /** Start a prompt turn with an identity that permission asks carry. */
+  beginTurn?: (sessionId: string, turnId: string) => void | Promise<void>;
   /** Settle all pending permission asks when this agent session is stopped. */
   cancelSession?: (sessionId: string) => void | Promise<void>;
 }
@@ -233,6 +234,7 @@ export class MossAcpClient {
   private readonly sessionGids = new Map<string, number>();
   private readonly sessionKinds = new Map<string, AcpProviderKind>();
   private readonly sessionOptions = new Map<string, readonly SessionConfigOption[]>();
+  private readonly turnIds = new Map<string, string>();
   private readonly announcements = new Map<string, Map<string, AcpToolAnnouncement>>();
   private readonly announcementWaiters = new Map<string, () => void>();
 
@@ -332,7 +334,9 @@ export class MossAcpClient {
     options: AcpPromptOptions = {}
   ): Promise<AcpPromptResult> {
     const connection = this.requireConnection(handle.sessionId);
-    await this.permissionDecider?.beginTurn?.(handle.sessionId);
+    const turnId = randomUUID();
+    this.turnIds.set(handle.sessionId, turnId);
+    await this.permissionDecider?.beginTurn?.(handle.sessionId, turnId);
     const timeoutMs = options.timeoutMs ?? DEFAULT_PROMPT_TIMEOUT_MS;
     this.texts.set(handle.sessionId, []);
     this.toolCalls.set(handle.sessionId, 0);
@@ -534,6 +538,8 @@ export class MossAcpClient {
     const uid = this.sessionUids.get(params.sessionId);
     const gid = this.sessionGids.get(params.sessionId);
     if (uid === undefined || gid === undefined) return denyPermission();
+    const turnId = this.turnIds.get(params.sessionId) ?? randomUUID();
+    this.turnIds.set(params.sessionId, turnId);
     const toolCallId = params.toolCall.toolCallId;
     let announced = this.announcements.get(params.sessionId)?.get(toolCallId);
     if (!announced) {
@@ -549,6 +555,7 @@ export class MossAcpClient {
     }
     const builtIn: AcpBuiltInRequest = {
       sessionId: params.sessionId,
+      turnId,
       toolCallId,
       title: params.toolCall.title ?? "",
       rawInput: params.toolCall.rawInput,

@@ -348,8 +348,9 @@ describe("MossAcpClient", () => {
       text: "reply-2",
       toolCallsSeen: 2
     });
-    expect(beginTurn).toHaveBeenNthCalledWith(1, "agent-sess-1");
-    expect(beginTurn).toHaveBeenNthCalledWith(2, "agent-sess-1");
+    expect(beginTurn).toHaveBeenNthCalledWith(1, "agent-sess-1", expect.any(String));
+    expect(beginTurn).toHaveBeenNthCalledWith(2, "agent-sess-1", expect.any(String));
+    expect(beginTurn.mock.calls[0]?.[1]).not.toBe(beginTurn.mock.calls[1]?.[1]);
     await client.close(handle);
   });
 

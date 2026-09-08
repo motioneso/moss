@@ -47,6 +47,8 @@ export interface AcpSessionFolders {
 
 export interface AcpBuiltInRequest {
   readonly sessionId: string;
+  /** Identity of the prompt turn that created this ask. */
+  readonly turnId: string;
   readonly toolCallId: string;
   /** Display text only. Passed through for the card; never decides. */
   readonly title: string;

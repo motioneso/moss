@@ -23,6 +23,7 @@ const FOLDERS: AcpSessionFolders = { cwd: CWD, home: HOME };
 function request(partial: Partial<AcpBuiltInRequest>): AcpBuiltInRequest {
   return {
     sessionId: "agent-sess-1",
+    turnId: "turn-1",
     toolCallId: "call-1",
     title: "",
     rawInput: {},
@@ -280,6 +281,7 @@ describe("adapter-built fixtures", () => {
     const info = toolInfoFromToolUse({ name, input });
     return {
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-9",
       title: info.title,
       rawInput: input,
