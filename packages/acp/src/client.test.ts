@@ -334,6 +334,16 @@ describe("MossAcpClient", () => {
       systemPrompt: "You are Jarvis."
     });
     expect(agent.receivedSystemPrompt).toBe("You are Jarvis.");
+    // This proves the field name and shape Moss sends, but only against this
+    // stand-in agent, not the real installed adapter package. That adapter
+    // keeps its own copy of the Claude Agent SDK in an isolated pnpm install
+    // unreachable from this package's module graph, so no vi.mock here can
+    // intercept its calls without either a live credentialed subprocess test
+    // or a fragile path into its private install. Confirmed instead by
+    // reading the adapter's own source: it reads params._meta.systemPrompt
+    // as a plain string, matching this test exactly. The live chat proof's
+    // persona check (an instruction only the real persona text produces) is
+    // the substitute for an automated adapter-level test.
     // No tool server handed over unless the caller provides one.
     expect(opened.params.mcpServers).toEqual([]);
     await client.close(handle);
