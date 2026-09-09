@@ -262,14 +262,14 @@ task 7 around that commit; nothing in the purge is re-planned.
 
 - **Task 7b. Land the purge.** One session: push the local commit, wait for the pull request's
   checks on that head, report each check by name. No code changes unless a check is red, and a red
-  check is reported, not fixed in the same session. *Done when* the purge commit is on GitHub and
+  check is reported, not fixed in the same session. _Done when_ the purge commit is on GitHub and
   every check on that head is green, or the red ones are named in the report.
 - **Task 7c. Purge review fixes.** Runs only if Astra's review of the purge commit range finds
-  something. One session per finding batch, one commit, checks named for the new head. *Done when*
+  something. One session per finding batch, one commit, checks named for the new head. _Done when_
   Astra confirms the findings closed and the head is green.
 - **Task 7d. Handoff for the live proof.** Not a build session. The builder's handoff to Prover
   gives the four items Prover's script asks for (dev address, account, engine, the session-open
-  log line quoted word for word) and nothing else. *Done when* Prover has the four items and the
+  log line quoted word for word) and nothing else. _Done when_ Prover has the four items and the
   dev instance runs the branch head.
 - **Prover's task 7 early live proof** stays where it is above, unchanged, and gates task 8.
 
@@ -287,7 +287,7 @@ design and the records are as decided above and in the spec; only the cut change
   when sent, is stored and not shown. Files: `packages/shared/src/chat-api.ts`,
   `packages/chat/src/live/acp-chat-engine.ts`. Tests: record mapping unit tests (each update kind
   to its line; usage absent stores time alone). Gate: the four checks; `pnpm vitest run
-  packages/chat`. Nothing on screen changes. *Done when* a turn on the branch persists the new
+packages/chat`. Nothing on screen changes. _Done when_ a turn on the branch persists the new
   records and the checks are green for the head.
 - **Task 8b. The fold.** Builds: the thread renders the records from 8a under the reply as a fold
   that is the live view while the turn runs, lines in arrival order. Files:
@@ -295,7 +295,7 @@ design and the records are as decided above and in the spec; only the cut change
   `packages/chat/src/manifest.ts` (app map: the fold). Tests: a web test that the fold lists the
   lines in order. Gate: the four checks; `pnpm vitest run packages/ui apps/web`; the invented-class
   audit from the `design-system` skill on `apps/web/src/chat` and `packages/ui/src`, output on the
-  PR. *Done when* the fold shows a real turn's lines on the branch, the audit is clean and the
+  PR. _Done when_ the fold shows a real turn's lines on the branch, the audit is clean and the
   checks are green for the head.
 - **Task 8c. The stats strip.** Builds: `chatd-stats`, one new primitive in
   `packages/ui/src/styles/components-chat.css`, under the reply: elapsed, then input, output and
@@ -303,8 +303,8 @@ design and the records are as decided above and in the spec; only the cut change
   it (OpenCode sends no cache split, so it shows two). Files: the stylesheet,
   `apps/web/src/chat/message-row.tsx`, `packages/chat/src/manifest.ts` (app map: the strip).
   Tests: a web test that the strip renders the numbers given and hides the ones absent. Gate: the
-  four checks; `pnpm vitest run apps/web`; the invented-class audit again, output on the PR. *Done
-  when* the strip shows a real turn's numbers on the branch, the audit is clean and the checks are
+  four checks; `pnpm vitest run apps/web`; the invented-class audit again, output on the PR. _Done
+  when_ the strip shows a real turn's numbers on the branch, the audit is clean and the checks are
   green for the head.
 
 Each of 8a, 8b and 8c is reviewed and confirmed before the next starts, per the working rules.
