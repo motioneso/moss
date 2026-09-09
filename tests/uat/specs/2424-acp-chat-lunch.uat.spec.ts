@@ -37,6 +37,17 @@ async function shot(page: Page, name: string): Promise<void> {
   await test.info().attach(name, { path, contentType: "image/png" });
 }
 
+// A raw list, not just the first entry: another conversation active at the same time
+// could otherwise supply both the assumed-first thread and the first fresh log line.
+async function currentThreadIds(page: Page): Promise<ReadonlySet<string>> {
+  const response = await page.request.get(`${baseUrl()}/api/chat/threads?surface=drawer`);
+  expect(response.ok()).toBeTruthy();
+  const body = (await response.json()) as { threads?: readonly { id?: unknown }[] };
+  return new Set(
+    (body.threads ?? []).map((thread) => thread.id).filter((id) => typeof id === "string")
+  );
+}
+
 test("ACP chat answers, queues the next send, and refuses shell tools (#2424)", async ({
   page
 }) => {
@@ -47,6 +58,7 @@ test("ACP chat answers, queues the next send, and refuses shell tools (#2424)", 
     throw new Error("JARVIS_UAT_ACP_SESSION_OPEN_LINE and JARVIS_UAT_ACP_LOG_PATH are required");
   }
   const logBeforeOpen = await readFile(ACP_LOG_PATH, "utf8");
+  const threadIdsBeforeOpen = await currentThreadIds(page);
 
   await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
   const composer = page.getByRole("textbox", { name: /^Message/ });
@@ -65,26 +77,31 @@ test("ACP chat answers, queues the next send, and refuses shell tools (#2424)", 
   const log = await readFile(ACP_LOG_PATH, "utf8");
   expect(log.startsWith(logBeforeOpen)).toBeTruthy();
   const freshLog = log.slice(logBeforeOpen.length);
-  const sessionOpenLine = freshLog
+
+  // The conversation this run actually exercised: the one thread id that appeared
+  // after opening chat but was not there before. Not threads[0] — another active
+  // conversation could hold that slot instead of the one this test opened.
+  const threadIdsAfterOpen = await currentThreadIds(page);
+  const newThreadIds = [...threadIdsAfterOpen].filter((id) => !threadIdsBeforeOpen.has(id));
+  expect(newThreadIds).toHaveLength(1);
+  const currentConversationId = newThreadIds[0] as string;
+
+  const sessionOpenLines = freshLog
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .find((line) => line.startsWith("[acp-chat] session opened conversation="));
-  expect(sessionOpenLine).toBeDefined();
-  const threadsResponse = await page.request.get(`${baseUrl()}/api/chat/threads?surface=drawer`);
-  expect(threadsResponse.ok()).toBeTruthy();
-  const threadsBody = (await threadsResponse.json()) as {
-    threads?: readonly { id?: unknown }[];
-  };
-  const currentConversationId = threadsBody.threads?.[0]?.id;
-  expect(typeof currentConversationId).toBe("string");
+    .filter((line) =>
+      line.startsWith(`[acp-chat] session opened conversation=${currentConversationId} `)
+    );
+  expect(sessionOpenLines).toHaveLength(1);
+  const sessionOpenLine = sessionOpenLines[0];
   const expectedSessionOpenLine = ACP_SESSION_OPEN_LINE.replace(
     "<conversation-id>",
-    String(currentConversationId)
+    currentConversationId
   );
   expect(sessionOpenLine).toBe(expectedSessionOpenLine);
   expect(sessionOpenLine).toMatch(
     new RegExp(
-      `^\\[acp-chat\\] session opened conversation=${String(currentConversationId)} provider=anthropic$`
+      `^\\[acp-chat\\] session opened conversation=${currentConversationId} provider=anthropic$`
     )
   );
 
