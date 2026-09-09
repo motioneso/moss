@@ -703,17 +703,11 @@ export class CliChatEngineHost {
     return { status: result.status, message: result.message };
   }
 
-  /**
-   * ACP sessions run in the API process, which learns first when the vendor refuses a saved
-   * sign-in. `probeProvider` above always answers from THIS process's own refusal cache, so
-   * without this call the settings screen kept reporting "ready" with a credential the API
-   * process already knew was refused.
-   */
+  /** Relays a sign-in rejection learned in the API process into this cache. */
   async recordLoginRejected(provider: RpcProviderKind): Promise<void> {
-    const credentialEnv = this.deps.homeBase
-      ? await readProviderCredentialEnv(this.deps.homeBase, provider)
-      : undefined;
-    recordProviderLoginRejected(provider as ProviderKind, credentialEnv);
+    const { homeBase } = this.deps;
+    const credentialEnv = homeBase && (await readProviderCredentialEnv(homeBase, provider));
+    recordProviderLoginRejected(provider as ProviderKind, credentialEnv || undefined);
   }
 
   // ─── listProviderModels (#2208) — non-session; credential never crosses the socket ───

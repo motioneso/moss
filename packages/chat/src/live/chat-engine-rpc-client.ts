@@ -411,12 +411,7 @@ export class RpcConnection {
     return this.call<RpcProbeProviderResult>("probeProvider", undefined, params);
   }
 
-  /**
-   * Non-session, no sessionKey, mirrors `probeProvider`. ACP sessions run in this (API) process
-   * and learn first when a saved sign-in is refused; the runner process holds the readiness cache
-   * the settings screen actually reads, so that refusal has to be relayed across the socket or the
-   * settings screen keeps showing the sign-in as good.
-   */
+  /** Non-session, mirrors `probeProvider`. Relays a rejection learned here to the runner's own cache. */
   recordLoginRejected(params: RpcRecordLoginRejectedParams): Promise<RpcRecordLoginRejectedResult> {
     return this.call<RpcRecordLoginRejectedResult>("recordLoginRejected", undefined, params);
   }
