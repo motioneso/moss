@@ -19,19 +19,6 @@ export const GEMINI_OUTPUT_FILENAME = ".jarvis-gemini-output.jsonl";
 export const GEMINI_STDERR_FILENAME = ".jarvis-gemini-stderr.log";
 export const GEMINI_IDENTITY_FILENAME = ".jarvis-gemini-session-id";
 export const CODEX_IDENTITY_FILENAME = ".jarvis-codex-session-id";
-export const ACP_IDENTITY_FILENAME = ".jarvis-acp-session-id";
-
-const ACP_SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-
-/** Persist the protocol session id before the first prompt so a private crash leaves a sweep marker. */
-export async function persistAcpSessionIdentity(
-  io: Pick<TmuxIo, "writeFile" | "run">,
-  neutralDir: string,
-  sessionId: string
-): Promise<void> {
-  if (!ACP_SESSION_ID_PATTERN.test(sessionId)) throw new Error("invalid ACP session identity");
-  await persistIdentity(io, neutralDir, ACP_IDENTITY_FILENAME, sessionId, "ACP session");
-}
 
 export function geminiHomeRoot(homeBase: string = homedir()): string {
   return join(homeBase, ".gemini");
@@ -259,7 +246,6 @@ export async function purgePrivateTranscripts(
   const neutralDir = deriveNeutralDir(neutralBase, sessionKey);
   await removeChecked(io, ["-rf", transcriptGlobDir("anthropic", neutralDir, homeBase)]);
   await removeChecked(io, ["-f", join(neutralDir, "codex-exec-transcript.jsonl")]);
-  await removeChecked(io, ["-f", join(neutralDir, ACP_IDENTITY_FILENAME)]);
 
   const codexUuid = await readCodexSessionIdentity(io, neutralDir);
   if (codexUuid !== null) {
@@ -277,19 +263,6 @@ export async function purgePrivateTranscripts(
     }
     await removeChecked(io, ["-f", join(neutralDir, GEMINI_IDENTITY_FILENAME)]);
   }
-}
-
-/** Purge the Anthropic transcript using the ACP runner's actual cwd and HOME. */
-export async function purgeAcpPrivateTranscripts(
-  io: Pick<TmuxIo, "run">,
-  sessionCwd: string,
-  sessionHome: string | null
-): Promise<void> {
-  await removeChecked(io, [
-    "-rf",
-    transcriptGlobDir("anthropic", sessionCwd, sessionHome ?? undefined)
-  ]);
-  await removeChecked(io, ["-f", join(sessionCwd, ACP_IDENTITY_FILENAME)]);
 }
 
 export async function purgePrivateTranscriptMarkers(
@@ -317,59 +290,8 @@ export async function purgePrivateTranscriptMarkers(
     } catch {
       purged = false;
     }
-    try {
-      if (!(await purgeAcpMarkersForSessionKey(io, neutralBase, sessionKey, homeBase))) {
-        purged = false;
-      }
-    } catch {
-      purged = false;
-    }
   }
   return purged;
-}
-
-/**
- * An ACP session's real working folder sits one level below its session key, at
- * `<sessionKey>/acp/<projectId>`, so the plain sweep above never reaches its marker there.
- * This finds every such marker under one session key and purges it with the session's own
- * folder, so a crash mid-turn still gets cleaned up on the next boot.
- */
-async function purgeAcpMarkersForSessionKey(
-  io: Pick<TmuxIo, "run">,
-  neutralBase: string,
-  sessionKey: string,
-  homeBase?: string
-): Promise<boolean> {
-  const acpDir = join(neutralBase, sessionKey, "acp");
-  const listed = await io.run("ls", ["-A", acpDir]).catch(() => ({ code: 1, stdout: "" }));
-  if (listed.code !== 0) return true;
-  const agentHome = agentHomeForSessionKey(sessionKey, homeBase);
-  let purged = true;
-  for (const projectId of listed.stdout
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean)) {
-    const sessionCwd = join(acpDir, projectId);
-    const markerCheck = await io
-      .run("ls", [join(sessionCwd, ACP_IDENTITY_FILENAME)])
-      .catch(() => ({ code: 1, stdout: "" }));
-    if (markerCheck.code !== 0) continue;
-    try {
-      await purgeAcpPrivateTranscripts(io, sessionCwd, agentHome);
-    } catch {
-      purged = false;
-    }
-  }
-  return purged;
-}
-
-/** ACP session keys are `chat:<userId>:<conversationId>`; the runner's real home for that
- *  session is per user, `<homeBase>/<userId>/agents/<userId>`, not the generic homeBase. */
-function agentHomeForSessionKey(sessionKey: string, homeBase?: string): string | null {
-  if (!homeBase) return null;
-  const [kind, userId] = sessionKey.split(":");
-  if (kind !== "chat" || !userId) return null;
-  return join(homeBase, userId, "agents", userId);
 }
 
 function codexSessionsRoot(homeBase: string = homedir()): string {

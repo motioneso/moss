@@ -5,10 +5,7 @@ import { dirname, join } from "node:path";
 import { createRealTmuxIo } from "@moss/ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { transcriptGlobDir } from "@moss/ai";
-
 import {
-  ACP_IDENTITY_FILENAME,
   CODEX_IDENTITY_FILENAME,
   GEMINI_IDENTITY_FILENAME,
   GEMINI_OUTPUT_FILENAME,
@@ -18,9 +15,7 @@ import {
   parseGeminiProjectShortId,
   persistCodexSessionIdentity,
   persistGeminiSessionIdentity,
-  purgeAcpPrivateTranscripts,
   purgeGeminiConversation,
-  purgePrivateTranscriptMarkers,
   purgePrivateTranscripts,
   readCodexSessionIdentity,
   readGeminiSessionIdentity
@@ -198,68 +193,6 @@ describe("purgePrivateTranscripts", () => {
     await expect(readFile(join(neutralDir, GEMINI_IDENTITY_FILENAME), "utf8")).resolves.toContain(
       uuid
     );
-  });
-});
-
-describe("purgeAcpPrivateTranscripts", () => {
-  it("uses the runner session cwd and HOME rather than the API session-key folder", async () => {
-    const io = makeIo();
-
-    await purgeAcpPrivateTranscripts(io, "/runner/session/acp/thread-1", "/home/agent");
-
-    expect(io.run).toHaveBeenNthCalledWith(1, "rm", [
-      "-rf",
-      "/home/agent/.claude/projects/-runner-session-acp-thread-1"
-    ]);
-    expect(io.run).toHaveBeenNthCalledWith(2, "rm", [
-      "-f",
-      "/runner/session/acp/thread-1/.jarvis-acp-session-id"
-    ]);
-  });
-});
-
-describe("purgePrivateTranscriptMarkers, ACP crash recovery", () => {
-  const roots: string[] = [];
-  afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true }))));
-
-  it("finds and purges a marker left one folder below the session key, at the real ACP working folder", async () => {
-    const root = await mkdtemp(join(tmpdir(), "jarvis-acp-boot-sweep-"));
-    roots.push(root);
-    const neutralBase = join(root, "neutral");
-    const sessionKey = "chat:user-1:conv-1";
-    const sessionCwd = join(neutralBase, sessionKey, "acp", "proj-1");
-    const homeBase = join(root, "home");
-    const agentHome = join(homeBase, "user-1", "agents", "user-1");
-    await mkdir(sessionCwd, { recursive: true });
-    await writeFile(join(sessionCwd, ACP_IDENTITY_FILENAME), "agent-sess-1");
-    const transcriptDir = transcriptGlobDir("anthropic", sessionCwd, agentHome);
-    await mkdir(transcriptDir, { recursive: true });
-    await writeFile(join(transcriptDir, "turn-1.jsonl"), "{}\n");
-
-    const purged = await purgePrivateTranscriptMarkers(createRealTmuxIo(), neutralBase, homeBase);
-
-    expect(purged).toBe(true);
-    await expect(access(join(sessionCwd, ACP_IDENTITY_FILENAME))).rejects.toThrow();
-    await expect(access(transcriptDir)).rejects.toThrow();
-  });
-
-  it("leaves an ACP working folder alone when it never wrote a marker", async () => {
-    const root = await mkdtemp(join(tmpdir(), "jarvis-acp-boot-sweep-"));
-    roots.push(root);
-    const neutralBase = join(root, "neutral");
-    const sessionKey = "chat:user-2:conv-2";
-    const sessionCwd = join(neutralBase, sessionKey, "acp", "proj-2");
-    await mkdir(sessionCwd, { recursive: true });
-    await writeFile(join(sessionCwd, "unrelated.txt"), "kept");
-
-    const purged = await purgePrivateTranscriptMarkers(
-      createRealTmuxIo(),
-      neutralBase,
-      join(root, "home")
-    );
-
-    expect(purged).toBe(true);
-    await expect(readFile(join(sessionCwd, "unrelated.txt"), "utf8")).resolves.toBe("kept");
   });
 });
 

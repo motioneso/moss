@@ -622,6 +622,9 @@ async function invoke(
       return host.acpRead(key, params.afterSeq);
     }
     case "acpKill": {
+      // For a chat-profile session, AcpHost also purges the scratch working
+      // folder here, as its owning account, once the stop is confirmed —
+      // folded into this existing verb rather than a new one crossing the wire.
       const key = requireSessionKey(req);
       const params = (isRecord(req.params) ? req.params : {}) as Partial<RpcAcpKillParams>;
       if (

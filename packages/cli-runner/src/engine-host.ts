@@ -54,6 +54,7 @@ import type { AcpProfile, AcpProviderKind } from "@moss/acp";
 
 import { AcpHost, type AcpExecPollResult, type AcpReadResult } from "./acp-host.js";
 import { ACP_DEADLINE_DIR } from "./exec-records.js";
+import { ACP_PRIVATE_MARKER_DIR } from "./acp-private-markers.js";
 import { Mutex } from "./mutex.js";
 import { LoginBadRequestError, type LoginService } from "./login-service.js";
 import {
@@ -857,12 +858,10 @@ export class CliChatEngineHost {
   // ─── startup CLEAN-SLATE sweep (§4.1.0a (2) / §6.5) ───────────────────────────
 
   /**
-   * BEFORE accepting connections: kill every `jarv1s-live-*` mux session that exists,
-   * purge every marker-backed private transcript to completion, then clear residual
-   * neutral dirs. A container restart kills the forked tmux server while token dirs
-   * persist on the volume, so a mux-only sweep misses them. The gate guarantees ≤1 live
-   * session, so a fresh process legitimately has zero — the base is cleared wholesale
-   * only after purge succeeds.
+   * BEFORE accepting connections: kill leftover `jarv1s-live-*` mux sessions, purge every
+   * marker-backed private transcript, then clear residual neutral dirs. A restart kills the
+   * forked tmux server but leaves token dirs on the volume, so wholesale clear only runs
+   * once purge succeeds.
    */
   async startupSweep(): Promise<void> {
     // (a) kill any surviving mux sessions (rare after a container restart, but a fast
@@ -874,25 +873,22 @@ export class CliChatEngineHost {
       await killMuxSessionByName(this.deps.io, key, this.deps.homeBase).catch(() => undefined);
     }
     // (b) purge every marker-backed private transcript before the neutral dirs are erased.
-    const purged = await purgePrivateTranscriptMarkers(
+    const purgedTranscripts = await purgePrivateTranscriptMarkers(
       this.deps.io,
       this.deps.neutralBase,
       this.deps.homeBase
     );
-    if (purged) {
-      // (c) once every pointed-to transcript is confirmed purged, remove residual neutral dirs.
+    // (b.1) same for ACP chat-profile scratch folders, as their owning accounts.
+    const purgedAcp = await this.acp.sweepPrivateMarkers().catch(() => false);
+    if (purgedTranscripts && purgedAcp) {
+      // (c) once every pointed-to private folder is confirmed purged, remove residual neutral dirs.
       await this.clearNeutralBase();
     }
-    // (d) §A.3.2 install-service tools-volume sweep (DISTINCT from the auth-volume sweep
-    // above): clear orphaned `.staging/*` AND GC releases not referenced by `current`.
-    // Ordered here so it completes BEFORE the server accepts the first installProvider
-    // (the server runs startupSweep before listen, server.ts:41).
+    // (d) §A.3.2 tools-volume sweep, distinct from the auth-volume sweep above: clears
+    // orphaned `.staging/*` and unreferenced GC releases, before the first installProvider.
     await this.deps.installService?.startupSweep().catch(() => undefined);
-    // (d.1) #1081 H1: boot-time drift reconcile — re-verify every ALREADY-installed
-    // provider's live binary against the current catalog (a rebaked recipe whose binary
-    // is stuck stale in the persistent tools volume gets reinstalled here; an
-    // already-current or never-installed provider is untouched). Runs after the GC sweep
-    // above and before the server accepts its first request.
+    // (d.1) #1081 H1: reconcile every already-installed provider's binary against the
+    // current catalog, so a stale rebaked recipe gets reinstalled before the first request.
     await this.deps.installService?.reconcileInstalledProviders().catch(() => undefined);
     // (e) §L.3.4 login-session sweep: kill every `jarv1s-login-*` mux session (a fast in-place
     // restart can leave one while the in-memory login flow is gone). DISTINCT from (a), which
@@ -914,7 +910,9 @@ export class CliChatEngineHost {
       for (const name of listed.stdout
         .split("\n")
         .map((s) => s.trim())
-        .filter((name) => name.length > 0 && name !== ACP_DEADLINE_DIR)) {
+        .filter(
+          (name) => name.length > 0 && name !== ACP_DEADLINE_DIR && name !== ACP_PRIVATE_MARKER_DIR
+        )) {
         await this.deps.io
           .run("rm", ["-rf", `${this.deps.neutralBase}/${name}`])
           .catch(() => undefined);

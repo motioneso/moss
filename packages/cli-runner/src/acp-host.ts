@@ -29,6 +29,12 @@ import {
   prepareOwnedPathWithOwnership,
   type OwnershipApplier
 } from "./owned-fs.js";
+import {
+  listAcpPrivateMarkerKeys,
+  readAcpPrivateMarker,
+  removeAcpPrivateMarker,
+  writeAcpPrivateMarker
+} from "./acp-private-markers.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
@@ -112,6 +118,16 @@ export interface AcpHostDeps {
    * needing real root. Production always uses the default.
    */
   readonly allocateUidSlot?: (homeBase: string, userId: string) => { uid: number; gid: number };
+  /**
+   * Deletes a chat-profile scratch working folder as its owning account;
+   * injected so tests never truly shell out to setpriv. The production
+   * default runs the same setpriv-drop path signalProcessGroup uses to stop
+   * the process, with the runner's own Node binary doing the removal.
+   */
+  readonly purgePrivateFolder?: (
+    cwd: string,
+    identity: { readonly uid: number; readonly gid: number } | null
+  ) => Promise<void>;
 }
 
 /** Argument passed as one JSON string to agent-home-prepare.mjs. */
@@ -172,6 +188,13 @@ interface AcpSession {
   readonly child: ChildProcessWithoutNullStreams;
   readonly cwd: string;
   readonly generation: number;
+  /**
+   * The chat profile's working folder is an empty scratch folder that must
+   * not survive past this session (spec: 2026-09-06-acp-client-design.md);
+   * workshop's is the person's real project folder and is never purged.
+   * killRecord reads this to decide whether to purge on the way out.
+   */
+  readonly profile: AcpProfile;
   /**
    * The slot's own identity, present whenever per-user separation launched
    * this session. The launcher's three privileges (chown/setuid/setgid) do
@@ -276,6 +299,40 @@ async function defaultRunAgentHomePrepare(
             `AcpHost: could not prepare the agent's home: ${stderr.trim() || `exit code ${String(code)}`}`
           )
         );
+    });
+  });
+}
+
+/**
+ * Delete a chat-profile working folder as its owning account, the same
+ * setpriv-drop path signalProcessGroup uses to stop the process. Node's own
+ * binary does the removal (`-e`, an fs call) so no external `rm` program
+ * needs to exist in the image, matching the kill signal's own approach.
+ * The folder path travels through an env var, never interpolated into a
+ * script string.
+ */
+async function defaultPurgePrivateFolder(
+  cwd: string,
+  identity: { readonly uid: number; readonly gid: number } | null
+): Promise<void> {
+  if (!identity) {
+    await rm(cwd, { recursive: true, force: true });
+    return;
+  }
+  const { command, args } = buildSetprivDropCommand(
+    process.execPath,
+    ["-e", "require('node:fs').rmSync(process.env.ACP_PURGE_DIR,{recursive:true,force:true})"],
+    identity
+  );
+  await new Promise<void>((resolve, reject) => {
+    const purger = spawn(command, args, {
+      stdio: "ignore",
+      env: { ...buildSanitizedCliEnv(process.env), ACP_PURGE_DIR: cwd }
+    });
+    purger.once("error", reject);
+    purger.once("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`purge for ${cwd} exited with code ${String(code)}`));
     });
   });
 }
@@ -429,6 +486,20 @@ export class AcpHost {
     })();
     const { agentHome, sessionDir, env } = setup;
 
+    // The chat profile's scratch folder must be purgeable even after a crash
+    // between here and a clean kill, so the marker is written before the
+    // child exists at all — not after, when a crash would leave the folder
+    // unrecorded and unpurgeable (spec: purge is fail-closed).
+    if (profile === "chat") {
+      await writeAcpPrivateMarker(this.deps.neutralBase, key, {
+        sessionKey: key,
+        cwd: sessionDir,
+        home: agentHome,
+        uid,
+        gid
+      });
+    }
+
     const target =
       this.deps.resolveAdapterTarget?.(providerKind) ?? defaultResolveAdapterTarget(providerKind);
     const spawnChild =
@@ -487,6 +558,7 @@ export class AcpHost {
       child,
       cwd: sessionDir,
       identity: { uid, gid },
+      profile,
       generation: (this.generationCounter += 1),
       buffered: [],
       bufferedBytes: 0,
@@ -672,6 +744,7 @@ export class AcpHost {
     const session = this.sessions.get(key);
     if (!session) return;
     if (session.exited) {
+      await this.purgeIfChatProfile(key, session);
       this.sessions.delete(key);
       return;
     }
@@ -681,6 +754,7 @@ export class AcpHost {
     }
     const pid = session.child.pid;
     if (pid === undefined) {
+      await this.purgeIfChatProfile(key, session);
       this.sessions.delete(key);
       return;
     }
@@ -697,7 +771,69 @@ export class AcpHost {
       session.stopPromise = undefined;
       throw error;
     }
+    await this.purgeIfChatProfile(key, session);
     this.sessions.delete(key);
+  }
+
+  /**
+   * The chat profile's scratch working folder is purged as its owning
+   * account the moment the process is confirmed stopped — the marker
+   * written at spawn is removed only once that purge succeeds, so a refused
+   * purge is retried by the next boot sweep instead of silently forgotten
+   * (spec: a folder the sweep cannot enter never counts as cleaned). Never
+   * throws: a purge failure here must not block the kill itself.
+   */
+  private async purgeIfChatProfile(key: string, session: AcpSession): Promise<void> {
+    if (session.profile !== "chat") return;
+    try {
+      await this.purgePrivateWorkingFolder(session.cwd, session.identity);
+      await removeAcpPrivateMarker(this.deps.neutralBase, key);
+    } catch (error) {
+      console.error(
+        `[acp-host] ${key} could not purge its private working folder, leaving the marker for the boot sweep: ${(error as Error).message}`
+      );
+    }
+  }
+
+  /**
+   * Delete a chat-profile working folder as its owning account. Runs the
+   * injected `deps.purgePrivateFolder` when a test supplies one, else the
+   * real setpriv-drop path.
+   */
+  private async purgePrivateWorkingFolder(
+    cwd: string,
+    identity: { readonly uid: number; readonly gid: number } | null
+  ): Promise<void> {
+    const purge = this.deps.purgePrivateFolder ?? defaultPurgePrivateFolder;
+    await purge(cwd, identity);
+  }
+
+  /**
+   * Boot-time recovery: purge every folder a marker still names, as that
+   * folder's own owning account, removing the marker only once the purge
+   * succeeds. Returns false when any marker's purge failed, so the caller
+   * knows not to treat every private folder as accounted for (mirrors
+   * purgePrivateTranscriptMarkers's boolean gate on the Gemini/Codex path).
+   */
+  async sweepPrivateMarkers(): Promise<boolean> {
+    let allPurged = true;
+    for (const key of await listAcpPrivateMarkerKeys(this.deps.neutralBase)) {
+      const record = await readAcpPrivateMarker(this.deps.neutralBase, key);
+      if (!record) {
+        await removeAcpPrivateMarker(this.deps.neutralBase, key);
+        continue;
+      }
+      try {
+        await this.purgePrivateWorkingFolder(record.cwd, { uid: record.uid, gid: record.gid });
+        await removeAcpPrivateMarker(this.deps.neutralBase, key);
+      } catch (error) {
+        allPurged = false;
+        console.error(
+          `[acp-host] boot sweep could not purge ${record.cwd} for ${key}, leaving the marker: ${(error as Error).message}`
+        );
+      }
+    }
+    return allPurged;
   }
 
   /** Send SIGTERM to the session's process group as the owning identity. */

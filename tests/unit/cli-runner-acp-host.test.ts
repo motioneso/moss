@@ -17,6 +17,7 @@ import {
   symlinkSync,
   writeFileSync
 } from "node:fs";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -122,6 +123,18 @@ class FakeChild extends EventEmitter {
   }
 }
 
+// setpriv --clear-groups needs a real root process (see engine-host-types.ts's
+// perUserUid doc comment), so an unprivileged test process can never make the
+// real purge subprocess succeed. This fake proves the purge is called with the
+// right folder and identity by actually deleting the folder itself, without
+// going through setpriv.
+const fakePurgePrivateFolder = async (
+  cwd: string,
+  _identity: { readonly uid: number; readonly gid: number } | null
+): Promise<void> => {
+  await rm(cwd, { recursive: true, force: true });
+};
+
 function makeHost(dir: string, child: FakeChild) {
   let lastSpawn: { cwd: string; env: NodeJS.ProcessEnv } | null = null;
   const homeBase = join(dir, "homes");
@@ -136,7 +149,8 @@ function makeHost(dir: string, child: FakeChild) {
       lastSpawn = { cwd: opts.cwd, env: opts.env };
       return child as never;
     },
-    runAgentHomePrepare: fakeAgentHomePrepare
+    runAgentHomePrepare: fakeAgentHomePrepare,
+    purgePrivateFolder: fakePurgePrivateFolder
   });
   return { host, lastSpawn: () => lastSpawn };
 }
@@ -265,11 +279,110 @@ describe("AcpHost", () => {
       const two = await host.spawn("workshop:user:proj", "proj", "anthropic", "user-1", "chat");
       expect(two.generation).toBeGreaterThan(one.generation);
       // Stale generation from a dropped connection: no-op, live session stands.
-      host.kill("workshop:user:proj", one.generation);
+      await host.kill("workshop:user:proj", one.generation);
       expect(host.read("workshop:user:proj", 0).exited).toBe(false);
-      // Unconditional explicit kill still ends it: the record is gone.
-      host.kill("workshop:user:proj");
+      // Unconditional explicit kill still ends it: the record is gone. Awaited
+      // because a chat-profile kill now also purges the scratch folder before
+      // dropping the record.
+      await host.kill("workshop:user:proj");
       expect(() => host.read("workshop:user:proj", 0)).toThrow(/not running/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("marks a chat session's scratch folder for purge, and writes no marker for workshop", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const chatChild = new FakeChild();
+      const { host: chatHost } = makeHost(dir, chatChild);
+      const spawned = await chatHost.spawn(
+        "workshop:user:proj",
+        "proj",
+        "anthropic",
+        "user-1",
+        "chat"
+      );
+      const markerPath = join(dir, "acp-private-markers", "workshop:user:proj.json");
+      const marker = JSON.parse(readFileSync(markerPath, "utf8")) as {
+        cwd: string;
+        home: string;
+        uid: number;
+        gid: number;
+      };
+      expect(marker.cwd).toBe(spawned.cwd);
+      expect(marker.home).toBe(spawned.home);
+
+      const workshopChild = new FakeChild();
+      const { host: workshopHost } = makeHost(dir, workshopChild);
+      await workshopHost.spawn("workshop:user:other", "proj", "anthropic", "user-1", "workshop");
+      expect(existsSync(join(dir, "acp-private-markers", "workshop:user:other.json"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("purges a chat session's scratch folder and removes its marker once the kill confirms exit", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const child = new FakeChild();
+      const { host } = makeHost(dir, child);
+      const spawned = await host.spawn("workshop:user:proj", "proj", "anthropic", "user-1", "chat");
+      expect(existsSync(spawned.cwd)).toBe(true);
+      child.exit(0);
+      await host.kill("workshop:user:proj");
+      expect(existsSync(spawned.cwd)).toBe(false);
+      expect(existsSync(join(dir, "acp-private-markers", "workshop:user:proj.json"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves a workshop session's real project folder in place on kill", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const child = new FakeChild();
+      const { host } = makeHost(dir, child);
+      const spawned = await host.spawn(
+        "workshop:user:proj",
+        "proj",
+        "anthropic",
+        "user-1",
+        "workshop"
+      );
+      child.exit(0);
+      await host.kill("workshop:user:proj");
+      expect(existsSync(spawned.cwd)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("boot sweep purges every folder a leftover marker names, removing the marker only on success", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const { writeAcpPrivateMarker } =
+        await import("../../packages/cli-runner/src/acp-private-markers.js");
+      const orphanFolder = join(dir, "orphan-scratch");
+      mkdirSync(orphanFolder, { recursive: true });
+      writeFileSync(join(orphanFolder, "leftover.txt"), "stale");
+      await writeAcpPrivateMarker(dir, "workshop:orphan:proj", {
+        sessionKey: "workshop:orphan:proj",
+        cwd: orphanFolder,
+        home: join(dir, "homes", "agents", "user-1"),
+        ...selfSlot()
+      });
+
+      const host = new AcpHost({
+        neutralBase: dir,
+        homeBase: join(dir, "homes"),
+        perUserUid: true,
+        purgePrivateFolder: fakePurgePrivateFolder
+      });
+      const allPurged = await host.sweepPrivateMarkers();
+      expect(allPurged).toBe(true);
+      expect(existsSync(orphanFolder)).toBe(false);
+      expect(existsSync(join(dir, "acp-private-markers", "workshop:orphan:proj.json"))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

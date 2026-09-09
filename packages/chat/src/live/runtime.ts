@@ -46,11 +46,7 @@ import type { PersistentRuntimeLaunchConfig } from "./rpc-contract.js";
 import { createChatEngine } from "./engine-selection.js";
 import { AcpChatEngine, RpcAcpTunnel } from "./acp-chat-engine.js";
 import { CliChatUnavailableError } from "./errors.js";
-import {
-  purgeAcpPrivateTranscripts,
-  persistAcpSessionIdentity,
-  purgePrivateTranscripts
-} from "./private-transcript-cleanup.js";
+import { purgePrivateTranscripts } from "./private-transcript-cleanup.js";
 import { startIdleReapTimer, type SweepIdlePool } from "./idle-reap-timer.js";
 import { ClaudePersistentRuntime } from "./claude-persistent-runtime.js";
 import { PersistentRuntimePool } from "./persistent-runtime-pool.js";
@@ -131,8 +127,6 @@ export type ChatEngineFactory = (
      *  `ChatEngineSelectionOpts.needsStructuredOutput` in engine-selection.ts. */
     readonly needsStructuredOutput?: boolean;
     readonly acpPermissionDecider?: AcpPermissionDecider;
-    readonly purgeTranscripts?: (sessionCwd: string, sessionHome: string | null) => Promise<void>;
-    readonly persistSessionIdentity?: (neutralDir: string, sessionId: string) => Promise<void>;
   }
 ) => CliChatEngine | Promise<CliChatEngine>;
 
@@ -358,8 +352,6 @@ export function selectEngineFactory(
             userId: engineOpts.userId,
             projectId: engineOpts.conversationId,
             permissionDecider: engineOpts?.acpPermissionDecider ?? opts.acpPermissionDecider,
-            purgeTranscripts: engineOpts?.purgeTranscripts,
-            persistSessionIdentity: engineOpts?.persistSessionIdentity,
             // ACP sessions run in this process, so a rejected sign-in is first learned here —
             // but the settings screen's readiness check always asks the runner process, which
             // holds its own separate cache. Without relaying the rejection across the socket,
@@ -635,10 +627,6 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
         sessionKey,
         resolveMossEnv(process.env, "JARVIS_CLI_HOME_BASE")
       ),
-    purgeAcpPrivateTranscripts: (sessionCwd, sessionHome) =>
-      purgeAcpPrivateTranscripts(createRealTmuxIo(), sessionCwd, sessionHome),
-    persistSessionIdentity: (neutralDir, sessionId) =>
-      persistAcpSessionIdentity(createRealTmuxIo(), neutralDir, sessionId),
     serverOwnsDrain,
     recall: deps.recall,
     passiveRetrieval: deps.passiveMemoryRecall

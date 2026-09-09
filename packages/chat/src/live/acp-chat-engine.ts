@@ -22,8 +22,6 @@ export interface AcpChatEngineOptions {
   readonly projectId: string;
   readonly permissionDecider?: AcpPermissionDecider;
   readonly toolServer?: AcpToolServer;
-  readonly purgeTranscripts?: (sessionCwd: string, sessionHome: string | null) => Promise<void>;
-  readonly persistSessionIdentity?: (neutralDir: string, sessionId: string) => Promise<void>;
   readonly reportLoginRejected?: () => void;
   readonly log?: (line: string) => void;
 }
@@ -43,6 +41,10 @@ export function toAcpProviderKind(provider: ProviderKind): AcpProviderKind {
 export class AcpChatEngine implements CliChatEngine {
   readonly provider: ProviderKind;
   readonly startsToolClientPerTurn = false;
+  // The runner purges this session's private working folder as the owning account when it
+  // stops the process (spec: purge is a runner verb, not an API-side one). No purge call
+  // is needed here.
+  readonly handlesOwnPrivatePurge = true;
   private readonly client: MossAcpClient;
   private handle: AcpSessionHandle | null = null;
   private prompt: Promise<void> | null = null;
@@ -78,7 +80,6 @@ export class AcpChatEngine implements CliChatEngine {
             : undefined),
         options.personaText
       );
-      await this.opts.persistSessionIdentity?.(this.handle.cwd, this.handle.sessionId);
       // ACP config options are set after session/new and before any prompt, including the
       // explicit "default" binding. The client records a mismatch without silently changing
       // the configured model list.
@@ -160,10 +161,6 @@ export class AcpChatEngine implements CliChatEngine {
 
   async isAlive(): Promise<boolean> {
     return this.handle !== null;
-  }
-
-  async purgeTranscripts(): Promise<void> {
-    if (this.handle) await this.opts.purgeTranscripts?.(this.handle.cwd, this.handle.home);
   }
 
   async kill(_opts?: EngineKillOpts): Promise<void> {

@@ -609,7 +609,12 @@ export interface RpcAcpReadResult {
   /** True when this reply — or an earlier one — was cut (see AcpHost). */
   readonly truncated: boolean;
 }
-/** params for method "acpKill": stop the adapter for this session key. */
+/**
+ * params for method "acpKill": stop the adapter for this session key. For a
+ * chat-profile session this also purges its scratch working folder, as the
+ * folder's own owning account, once the process is confirmed stopped — the
+ * runner does this itself; no separate purge call crosses this contract.
+ */
 export interface RpcAcpKillParams {
   /**
    * When present, kill only if the live session still has this generation (the

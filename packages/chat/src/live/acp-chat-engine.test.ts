@@ -132,45 +132,15 @@ describe("AcpChatEngine", () => {
     await engine.kill();
   });
 
-  it("persists the ACP session identity before the first prompt", async () => {
+  it("declares that its own kill path purges private data, needing no API-side purge call", async () => {
     const tunnel = new PromptErrorTunnel();
-    const persistIdentity = vi.fn().mockResolvedValue(undefined);
     const engine = new AcpChatEngine("anthropic", "chat:u1:thread-1", {
       tunnel,
       userId: "u1",
-      projectId: "thread-1",
-      persistSessionIdentity: persistIdentity
+      projectId: "thread-1"
     });
 
-    await engine.launch({
-      neutralDir: "/tmp/acp",
-      personaPath: "/tmp/acp/persona.md",
-      personaText: "Be helpful."
-    });
-
-    expect(persistIdentity).toHaveBeenCalledOnce();
-    expect(persistIdentity).toHaveBeenCalledWith("/tmp/acp", "session-1");
-    expect(tunnel.sent.find(({ method }) => method === "session/prompt")).toBeUndefined();
-    await engine.kill();
-  });
-
-  it("purges using the ACP session's working folder and home", async () => {
-    const tunnel = new PromptErrorTunnel();
-    const purgeTranscripts = vi.fn().mockResolvedValue(undefined);
-    const engine = new AcpChatEngine("anthropic", "chat:u1:thread-1", {
-      tunnel,
-      userId: "u1",
-      projectId: "thread-1",
-      purgeTranscripts
-    });
-
-    await engine.launch({
-      neutralDir: "/tmp/api-neutral",
-      personaPath: "/tmp/api-neutral/persona.md"
-    });
-    await engine.purgeTranscripts();
-
-    expect(purgeTranscripts).toHaveBeenCalledWith("/tmp/acp", "/tmp/home");
+    expect(engine.handlesOwnPrivatePurge).toBe(true);
     await engine.kill();
   });
 });

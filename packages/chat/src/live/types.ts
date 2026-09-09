@@ -130,6 +130,14 @@ export interface CliChatEngine {
   kill(opts?: EngineKillOpts): Promise<void>;
   purgeTranscripts?(): Promise<void>;
   /**
+   * True when this engine's own kill path always purges a private session's data itself,
+   * as the owning account, with no API-visible purge step required. Set by the ACP engine,
+   * whose runner purges the per-user working folder on kill (spec: purge is a runner verb,
+   * not an API-side one). The incognito-availability guard treats this the same as
+   * `purgeTranscripts` being present.
+   */
+  readonly handlesOwnPrivatePurge?: boolean;
+  /**
    * #456 — re-arm the response deadline for any in-flight turn verb of this engine's session.
    * Called by the manager when it observes new transcript records (activity), so an
    * actively-producing turn never trips the RPC deadline. Optional: the in-process engine (no

@@ -158,12 +158,6 @@ export class ChatSessionManager {
       ...(threadState?.id ? { conversationId: threadState.id, userId: actorUserId } : {}),
       ...(mcpConfig?.token && this.deps.acpPermissionDeciderForToken
         ? { acpPermissionDecider: this.deps.acpPermissionDeciderForToken(mcpConfig.token) }
-        : {}),
-      ...(threadState?.incognito && this.deps.purgeAcpPrivateTranscripts
-        ? { purgeTranscripts: this.deps.purgeAcpPrivateTranscripts }
-        : {}),
-      ...(threadState?.incognito && this.deps.persistSessionIdentity
-        ? { persistSessionIdentity: this.deps.persistSessionIdentity }
         : {})
     });
     // Rebuild replay from live state for every launch; recall precedes conversation replay.
@@ -181,7 +175,7 @@ export class ChatSessionManager {
     if (threadState?.incognito && surface !== DEFAULT_CHAT_SURFACE) {
       throw new CliChatUnavailableError("private chat is only available in the drawer");
     }
-    if (threadState?.incognito && !engine.purgeTranscripts) {
+    if (threadState?.incognito && !engine.purgeTranscripts && !engine.handlesOwnPrivatePurge) {
       throw new CliChatUnavailableError("private session unavailable");
     }
     const replayParts: string[] = [];
