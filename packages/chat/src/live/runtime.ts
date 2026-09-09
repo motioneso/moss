@@ -46,7 +46,10 @@ import type { PersistentRuntimeLaunchConfig } from "./rpc-contract.js";
 import { createChatEngine } from "./engine-selection.js";
 import { AcpChatEngine, RpcAcpTunnel } from "./acp-chat-engine.js";
 import { CliChatUnavailableError } from "./errors.js";
-import { purgePrivateTranscripts } from "./private-transcript-cleanup.js";
+import {
+  persistAcpSessionIdentity,
+  purgePrivateTranscripts
+} from "./private-transcript-cleanup.js";
 import { startIdleReapTimer, type SweepIdlePool } from "./idle-reap-timer.js";
 import { ClaudePersistentRuntime } from "./claude-persistent-runtime.js";
 import { PersistentRuntimePool } from "./persistent-runtime-pool.js";
@@ -128,6 +131,7 @@ export type ChatEngineFactory = (
     readonly needsStructuredOutput?: boolean;
     readonly acpPermissionDecider?: AcpPermissionDecider;
     readonly purgeTranscripts?: () => Promise<void>;
+    readonly persistSessionIdentity?: (neutralDir: string, sessionId: string) => Promise<void>;
   }
 ) => CliChatEngine | Promise<CliChatEngine>;
 
@@ -353,7 +357,8 @@ export function selectEngineFactory(
             userId: engineOpts.userId,
             projectId: engineOpts.conversationId,
             permissionDecider: engineOpts?.acpPermissionDecider ?? opts.acpPermissionDecider,
-            purgeTranscripts: engineOpts?.purgeTranscripts
+            purgeTranscripts: engineOpts?.purgeTranscripts,
+            persistSessionIdentity: engineOpts?.persistSessionIdentity
           });
         }
       };
@@ -622,6 +627,8 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
         sessionKey,
         resolveMossEnv(process.env, "JARVIS_CLI_HOME_BASE")
       ),
+    persistSessionIdentity: (neutralDir, sessionId) =>
+      persistAcpSessionIdentity(createRealTmuxIo(), neutralDir, sessionId),
     serverOwnsDrain,
     recall: deps.recall,
     passiveRetrieval: deps.passiveMemoryRecall

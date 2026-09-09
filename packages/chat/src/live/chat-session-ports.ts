@@ -118,6 +118,7 @@ export interface ChatSessionManagerDeps {
       readonly executionMode?: AiProviderExecutionMode;
       readonly conversationId?: string;
       readonly userId?: string;
+      readonly persistSessionIdentity?: (neutralDir: string, sessionId: string) => Promise<void>;
     }
   ) => CliChatEngine | Promise<CliChatEngine>;
   readonly persistence: ChatPersistencePort;
@@ -190,6 +191,7 @@ export interface ChatSessionManagerDeps {
    */
   readonly killSession?: (sessionKey: string, opts?: EngineKillOpts) => Promise<void>;
   readonly purgePrivateTranscripts?: (sessionKey: string) => Promise<void>;
+  readonly persistSessionIdentity?: (neutralDir: string, sessionId: string) => Promise<void>;
   /** Builds the gateway-backed ACP decider for a freshly minted session token. */
   readonly acpPermissionDeciderForToken?: (token: string) => AcpPermissionDecider;
   /** Phase 3: optional recall service — injects <memory> seed before replay. */

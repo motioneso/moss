@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AcpTunnel } from "@moss/acp";
 
@@ -104,10 +104,12 @@ class PromptErrorTunnel implements AcpTunnel {
 describe("AcpChatEngine", () => {
   it("turns an authentication failure into the chat sign-in message", async () => {
     const tunnel = new PromptErrorTunnel();
+    const loginRejected = vi.fn();
     const engine = new AcpChatEngine("anthropic", "chat:u1:thread-1", {
       tunnel,
       userId: "u1",
-      projectId: "thread-1"
+      projectId: "thread-1",
+      reportLoginRejected: loginRejected
     });
 
     await engine.launch({ neutralDir: "/tmp/acp", personaPath: "/tmp/acp/persona.md" });
@@ -121,11 +123,34 @@ describe("AcpChatEngine", () => {
           "The Claude sign-in has expired; an admin can log it in again under Settings, Assistant & AI"
       })
     );
+    expect(loginRejected).toHaveBeenCalledOnce();
     expect(tunnel.sent.map(({ method }) => method)).toEqual([
       "initialize",
       "session/new",
       "session/prompt"
     ]);
+    await engine.kill();
+  });
+
+  it("persists the ACP session identity before the first prompt", async () => {
+    const tunnel = new PromptErrorTunnel();
+    const persistIdentity = vi.fn().mockResolvedValue(undefined);
+    const engine = new AcpChatEngine("anthropic", "chat:u1:thread-1", {
+      tunnel,
+      userId: "u1",
+      projectId: "thread-1",
+      persistSessionIdentity: persistIdentity
+    });
+
+    await engine.launch({
+      neutralDir: "/tmp/acp",
+      personaPath: "/tmp/acp/persona.md",
+      personaText: "Be helpful."
+    });
+
+    expect(persistIdentity).toHaveBeenCalledOnce();
+    expect(persistIdentity).toHaveBeenCalledWith("/tmp/acp", "session-1");
+    expect(tunnel.sent.find(({ method }) => method === "session/prompt")).toBeUndefined();
     await engine.kill();
   });
 });

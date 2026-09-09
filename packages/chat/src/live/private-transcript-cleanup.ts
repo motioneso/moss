@@ -19,6 +19,19 @@ export const GEMINI_OUTPUT_FILENAME = ".jarvis-gemini-output.jsonl";
 export const GEMINI_STDERR_FILENAME = ".jarvis-gemini-stderr.log";
 export const GEMINI_IDENTITY_FILENAME = ".jarvis-gemini-session-id";
 export const CODEX_IDENTITY_FILENAME = ".jarvis-codex-session-id";
+export const ACP_IDENTITY_FILENAME = ".jarvis-acp-session-id";
+
+const ACP_SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+/** Persist the protocol session id before the first prompt so a private crash leaves a sweep marker. */
+export async function persistAcpSessionIdentity(
+  io: Pick<TmuxIo, "writeFile" | "run">,
+  neutralDir: string,
+  sessionId: string
+): Promise<void> {
+  if (!ACP_SESSION_ID_PATTERN.test(sessionId)) throw new Error("invalid ACP session identity");
+  await persistIdentity(io, neutralDir, ACP_IDENTITY_FILENAME, sessionId, "ACP session");
+}
 
 export function geminiHomeRoot(homeBase: string = homedir()): string {
   return join(homeBase, ".gemini");
@@ -246,6 +259,7 @@ export async function purgePrivateTranscripts(
   const neutralDir = deriveNeutralDir(neutralBase, sessionKey);
   await removeChecked(io, ["-rf", transcriptGlobDir("anthropic", neutralDir, homeBase)]);
   await removeChecked(io, ["-f", join(neutralDir, "codex-exec-transcript.jsonl")]);
+  await removeChecked(io, ["-f", join(neutralDir, ACP_IDENTITY_FILENAME)]);
 
   const codexUuid = await readCodexSessionIdentity(io, neutralDir);
   if (codexUuid !== null) {

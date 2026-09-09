@@ -31,6 +31,12 @@ async function signIn(page: Page): Promise<void> {
   await expect(userMenu).toBeVisible();
 }
 
+async function shot(page: Page, name: string): Promise<void> {
+  const path = test.info().outputPath(`${name}.png`);
+  await page.screenshot({ path });
+  await test.info().attach(name, { path, contentType: "image/png" });
+}
+
 test("ACP chat answers, queues the next send, and refuses shell tools (#2424)", async ({
   page
 }) => {
@@ -41,17 +47,25 @@ test("ACP chat answers, queues the next send, and refuses shell tools (#2424)", 
   await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
   const composer = page.getByRole("textbox", { name: /^Message/ });
   await expect(composer).toBeVisible();
-  const assistantReplies = page.locator(".chatd-msg:not(.chatd-msg--me)");
+  const assistantReplies = page.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble");
   const repliesBefore = await assistantReplies.count();
 
   await composer.fill("Hello, please introduce yourself in one sentence.");
   await composer.press("Enter");
   await expect(assistantReplies).toHaveCount(repliesBefore + 1, { timeout: 120_000 });
+  await expect(assistantReplies.nth(repliesBefore)).not.toHaveText("");
+  await expect(assistantReplies.nth(repliesBefore)).not.toHaveText(
+    "Hello, please introduce yourself in one sentence."
+  );
+  await shot(page, "01-first-answer");
   if (!ACP_SESSION_OPEN_LINE || !ACP_LOG_PATH) {
     throw new Error("JARVIS_UAT_ACP_SESSION_OPEN_LINE and JARVIS_UAT_ACP_LOG_PATH are required");
   }
   const log = await readFile(ACP_LOG_PATH, "utf8");
   expect(log).toContain(ACP_SESSION_OPEN_LINE);
+  expect(ACP_SESSION_OPEN_LINE).toMatch(
+    /\[acp-chat\] session opened conversation=[A-Za-z0-9_-]+ provider=anthropic$/
+  );
 
   await composer.fill("Count from one to twenty, one number per line, slowly.");
   await composer.press("Enter");
@@ -61,14 +75,20 @@ test("ACP chat answers, queues the next send, and refuses shell tools (#2424)", 
     timeout: 30_000
   });
   await expect(page.locator(".chatd-next__text")).toContainText("And then say done.");
+  await shot(page, "02-queued");
   await expect(assistantReplies).toHaveCount(repliesBefore + 3, { timeout: 120_000 });
+  await expect(assistantReplies.nth(repliesBefore + 1)).toContainText(/1|one/i);
+  await expect(assistantReplies.nth(repliesBefore + 1)).toContainText(/20|twenty/i);
+  await expect(assistantReplies.nth(repliesBefore + 2)).toContainText(/done/i);
 
-  await expect(page.getByText(/Run the command/)).toHaveCount(0);
   await expect(composer).toBeVisible();
   await composer.fill('Run the command "whoami" in a shell and tell me the output.');
   await composer.press("Enter");
-  await expect(page.getByText(/cannot run shell|shell commands/i)).toBeVisible({
+  await expect(assistantReplies.last()).toContainText(/cannot run shell|shell commands|refused/i, {
     timeout: 120_000
   });
+  await shot(page, "03-shell-refused");
   await expect(page.locator('[role="region"][aria-label="Action request"]')).toHaveCount(0);
+  await expect(assistantReplies.last()).toContainText(/cannot run shell|shell commands|refused/i);
+  await shot(page, "04-shell-settled");
 });

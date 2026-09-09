@@ -161,6 +161,9 @@ export class ChatSessionManager {
         : {}),
       ...(threadState?.incognito && this.deps.purgePrivateTranscripts
         ? { purgeTranscripts: () => this.deps.purgePrivateTranscripts!(sessionKey) }
+        : {}),
+      ...(threadState?.incognito && this.deps.persistSessionIdentity
+        ? { persistSessionIdentity: this.deps.persistSessionIdentity }
         : {})
     });
     // Rebuild replay from live state for every launch; recall precedes conversation replay.
@@ -435,14 +438,14 @@ export class ChatSessionManager {
           records = result.records;
           offset = result.offset;
           complete = result.complete;
-        } catch {
+        } catch (error) {
           // #456 — a killed engine rejects its in-flight readNew. If the user stopped the turn,
           // break cleanly; otherwise rethrow (a genuine engine failure surfaces to the caller).
           if (controller.signal.aborted) {
             stopped = true;
             break;
           }
-          throw new Error("readNew failed");
+          throw error instanceof CliChatUnavailableError ? error : new Error("readNew failed");
         }
         if (controller.signal.aborted) {
           stopped = true;
@@ -505,10 +508,7 @@ export class ChatSessionManager {
         this.deps.touchMcpToken?.(sessionKey);
         return { reply };
       }
-
-      // #2164 — a bounded-fallback engine starts its MCP client per turn in `submit()`, so the
-      // #2159 gate is skipped for it; check only when no MCP tool fired. Only a non-rejected
-      // `mcp__` attempt with a call id proves attachment (r22 fixed an id-less bypass).
+      // #2164: per-turn engines need a fresh attach; only successful identified calls satisfy the gate.
       const mcpToolInvoked = mcpAttempts.some((a) => a.id != null && !rejectedCallIds.has(a.id));
       if (
         session.startsToolClientPerTurn &&

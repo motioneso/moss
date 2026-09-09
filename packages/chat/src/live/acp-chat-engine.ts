@@ -7,6 +7,7 @@ import {
   type AcpTunnel
 } from "@moss/acp";
 import type { ProviderKind } from "@moss/ai";
+import { recordProviderLoginRejected } from "./provider-probe.js";
 
 import { CliChatUnavailableError } from "./errors.js";
 import type { RpcConnection } from "./chat-engine-rpc-client.js";
@@ -22,6 +23,8 @@ export interface AcpChatEngineOptions {
   readonly permissionDecider?: AcpPermissionDecider;
   readonly toolServer?: AcpToolServer;
   readonly purgeTranscripts?: () => Promise<void>;
+  readonly persistSessionIdentity?: (neutralDir: string, sessionId: string) => Promise<void>;
+  readonly reportLoginRejected?: () => void;
   readonly log?: (line: string) => void;
 }
 
@@ -47,6 +50,7 @@ export class AcpChatEngine implements CliChatEngine {
   private complete = false;
   private cancelled = false;
   private records: TranscriptRecord[] = [];
+  private readonly reportLoginRejected: () => void;
 
   constructor(
     provider: ProviderKind,
@@ -55,6 +59,8 @@ export class AcpChatEngine implements CliChatEngine {
   ) {
     this.provider = provider;
     this.client = new MossAcpClient(opts.tunnel, {}, opts.permissionDecider ?? null);
+    this.reportLoginRejected =
+      opts.reportLoginRejected ?? (() => recordProviderLoginRejected(this.provider));
   }
 
   async launch(options: EngineLaunchOpts): Promise<{ offset: number }> {
@@ -72,6 +78,7 @@ export class AcpChatEngine implements CliChatEngine {
             : undefined),
         options.personaText
       );
+      await this.opts.persistSessionIdentity?.(options.neutralDir, this.handle.sessionId);
       // ACP config options are set after session/new and before any prompt, including the
       // explicit "default" binding. The client records a mismatch without silently changing
       // the configured model list.
@@ -85,6 +92,7 @@ export class AcpChatEngine implements CliChatEngine {
       return { offset: 0 };
     } catch (error) {
       if (isAuthRequired(error)) {
+        this.reportLoginRejected();
         await this.closeQuietly();
         throw new CliChatUnavailableError(
           `The ${providerLabel(kind)} sign-in has expired; an admin can log it in again under Settings, Assistant & AI`,
@@ -114,12 +122,15 @@ export class AcpChatEngine implements CliChatEngine {
         }
       })
       .catch((error: unknown) => {
-        this.promptError = isAuthRequired(error)
-          ? new CliChatUnavailableError(
-              `The ${providerLabel(toAcpProviderKind(this.provider))} sign-in has expired; an admin can log it in again under Settings, Assistant & AI`,
-              { cause: error }
-            )
-          : error;
+        if (isAuthRequired(error)) {
+          this.reportLoginRejected();
+          this.promptError = new CliChatUnavailableError(
+            `The ${providerLabel(toAcpProviderKind(this.provider))} sign-in has expired; an admin can log it in again under Settings, Assistant & AI`,
+            { cause: error }
+          );
+        } else {
+          this.promptError = error;
+        }
       })
       .finally(() => {
         this.complete = true;
