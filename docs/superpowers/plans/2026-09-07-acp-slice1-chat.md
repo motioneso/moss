@@ -81,8 +81,10 @@ restores, release note); the behind-the-scenes task added (spec section 14); Ope
   `chat:<userId>:<conversationId>`, working folder `<per-user home>/chat/<conversationId>/` created
   0700, reaped by the existing 180 s idle watchdog. A browser reload replays from Postgres; live
   reattach (`session/load`) is used only where the agent advertises it and is not required to
-  pass. One prompt at a time: a second send while a turn runs is queued by the session manager and
-  sent after the stop reason arrives; the composer shows it as queued.
+  pass. One prompt at a time: a second send while a turn runs is held by the composer, shown as
+  queued, and sent when the turn finishes (not only when Stop is pressed). The browser holding the
+  second message already satisfies the protocol's one-prompt-at-a-time rule, so the session manager
+  carries no queue in this slice (Architect, 2026-09-08, on Astra's task 7 finding 7).
 - **Approval card:** the gateway hold stays the enforcement point; heartbeat every 20 s on held
   calls; denial wording "This action was not approved, so it was not done. Do not try it again; let the user know."; the agent's
   built-in asks are answered from the restored policy keyed on real tool name and tool call id;
@@ -224,13 +226,13 @@ Astra-Reviewer's whole-slice read at 561265882 (2026-09-08) found that the resto
 - **Builds:** an ACP chat engine behind the session manager for the `chat` profile, chosen by
   `engine-selection.ts` for every conversation (no setting); session key and folder as decided;
   history replayed from Postgres into the prompt; the model option is set before the first prompt on every session that advertises it (Decisions, model choice), so no provider is ever prompted unset; the stop button sends `session/cancel`; a second
-  send during a turn is queued and the composer says so; stop reasons surface as typed events; an
+  send during a turn is held by the composer, which says so, and sent when the turn finishes; stop reasons surface as typed events; an
   `auth_required` answer becomes the provider's "Not logged in" status and the drawer reply "The
   <provider> sign-in has expired; an admin can log it in again under Settings, Assistant & AI";
   reply persisted through the existing transcript path; the session is started when the conversation is opened in the drawer, not on the first send, so no first prompt pays the session start (PM, 2026-09-07).
 - **Files:** `packages/chat/src/live/{engine-selection,runtime,chat-session-manager}.ts`, a new `packages/chat/src/live/acp-chat-engine.ts`, `packages/chat/src/manifest.ts`, `tests/uat/specs/2424-acp-chat-lunch.uat.spec.ts` (the live-proof script task 10 runs; modelled on `tests/uat/specs/chat-drawer-private.uat.spec.ts`).
-- **Tests:** engine unit tests (login failure text, replay shape, stop reason mapping, queue on
-  busy, cancel answers pending asks, warm start on open, model always set before the first prompt including the `default` binding); session manager tests for the queue.
+- **Tests:** engine unit tests (login failure text, replay shape, stop reason mapping, cancel
+  answers pending asks, warm start on open, model always set before the first prompt including the `default` binding); composer test that a queued message sends when the turn finishes, not only on Stop.
 - **App map:** chat manifest `features`: answers through the agent protocol, the sign-in expired
   message, queued sends.
 - **Gate:** the four checks; `pnpm vitest run packages/chat`; full gate via `verify-gate`.
