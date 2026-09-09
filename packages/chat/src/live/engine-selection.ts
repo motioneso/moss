@@ -88,7 +88,7 @@ export interface ChatEngineSelectionOpts {
   readonly acpUserId?: string;
   readonly acpProjectId?: string;
   readonly acpPermissionDecider?: AcpPermissionDecider;
-  readonly purgeTranscripts?: () => Promise<void>;
+  readonly purgeTranscripts?: (sessionCwd: string, sessionHome: string | null) => Promise<void>;
   readonly persistSessionIdentity?: (neutralDir: string, sessionId: string) => Promise<void>;
 }
 

@@ -159,8 +159,8 @@ export class ChatSessionManager {
       ...(mcpConfig?.token && this.deps.acpPermissionDeciderForToken
         ? { acpPermissionDecider: this.deps.acpPermissionDeciderForToken(mcpConfig.token) }
         : {}),
-      ...(threadState?.incognito && this.deps.purgePrivateTranscripts
-        ? { purgeTranscripts: () => this.deps.purgePrivateTranscripts!(sessionKey) }
+      ...(threadState?.incognito && this.deps.purgeAcpPrivateTranscripts
+        ? { purgeTranscripts: this.deps.purgeAcpPrivateTranscripts }
         : {}),
       ...(threadState?.incognito && this.deps.persistSessionIdentity
         ? { persistSessionIdentity: this.deps.persistSessionIdentity }

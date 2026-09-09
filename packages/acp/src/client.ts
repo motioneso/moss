@@ -286,7 +286,7 @@ export class MossAcpClient {
         // own mechanism: the agent's disallowed-tools list.
         _meta: {
           claudeCode: { options: { disallowedTools: launchOffList(surface) } },
-          ...(personaText !== undefined ? { moss: { personaText } } : {})
+          ...(personaText !== undefined ? { systemPrompt: personaText } : {})
         }
       });
       this.connections.set(session.sessionId, connection);

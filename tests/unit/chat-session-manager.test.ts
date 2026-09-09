@@ -457,6 +457,24 @@ describe("ChatSessionManager.submitTurn turn-lock release (#445)", () => {
     expect(second).toBeInstanceOf(CliChatUnavailableError);
   });
 
+  it("preserves the provider sign-in expiry error from readNew", async () => {
+    class RejectingReadEngine extends FakeEngine {
+      override async readNew(): Promise<never> {
+        throw new CliChatUnavailableError(
+          "The Claude sign-in has expired; an admin can log it in again under Settings, Assistant & AI"
+        );
+      }
+    }
+
+    const manager = new ChatSessionManager(rejectingDeps(new RejectingReadEngine()));
+
+    await expect(manager.submitTurn("u1", "Ben", "first")).rejects.toMatchObject({
+      name: "CliChatUnavailableError",
+      message:
+        "The Claude sign-in has expired; an admin can log it in again under Settings, Assistant & AI"
+    });
+  });
+
   it("invalidates the live session on delivery_unknown and never auto-resends", async () => {
     class UnknownDeliveryEngine extends FakeEngine {
       override async submit(text: string): Promise<void> {

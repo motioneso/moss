@@ -153,4 +153,24 @@ describe("AcpChatEngine", () => {
     expect(tunnel.sent.find(({ method }) => method === "session/prompt")).toBeUndefined();
     await engine.kill();
   });
+
+  it("purges using the ACP session's working folder and home", async () => {
+    const tunnel = new PromptErrorTunnel();
+    const purgeTranscripts = vi.fn().mockResolvedValue(undefined);
+    const engine = new AcpChatEngine("anthropic", "chat:u1:thread-1", {
+      tunnel,
+      userId: "u1",
+      projectId: "thread-1",
+      purgeTranscripts
+    });
+
+    await engine.launch({
+      neutralDir: "/tmp/api-neutral",
+      personaPath: "/tmp/api-neutral/persona.md"
+    });
+    await engine.purgeTranscripts();
+
+    expect(purgeTranscripts).toHaveBeenCalledWith("/tmp/acp", "/tmp/home");
+    await engine.kill();
+  });
 });

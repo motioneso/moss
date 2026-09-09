@@ -14,6 +14,7 @@ class ScriptedAgent implements AcpTunnel {
   private readonly outbox: string[] = [];
   private seq = 0;
   private promptCount = 0;
+  receivedSystemPrompt: string | null = null;
   private killed = false;
   private pendingRead: (() => void) | null = null;
   readCount = 0;
@@ -41,7 +42,11 @@ class ScriptedAgent implements AcpTunnel {
 
   async send(_sessionKey: string, line: string): Promise<void> {
     this.sent.push(line);
-    const msg = JSON.parse(line) as { id?: number; method?: string };
+    const msg = JSON.parse(line) as {
+      id?: number;
+      method?: string;
+      params?: { _meta?: { systemPrompt?: unknown } };
+    };
     if (msg.method === "initialize") {
       this.emit(
         this.failInitialize
@@ -49,6 +54,8 @@ class ScriptedAgent implements AcpTunnel {
           : { jsonrpc: "2.0", id: msg.id, result: fullCapabilities() }
       );
     } else if (msg.method === "session/new") {
+      const prompt = msg.params?._meta?.systemPrompt;
+      this.receivedSystemPrompt = typeof prompt === "string" ? prompt : null;
       this.emit({ jsonrpc: "2.0", id: msg.id, result: { sessionId: "agent-sess-1" } });
     } else if (msg.method === "session/prompt") {
       if (this.hangPrompt) return;
@@ -324,8 +331,9 @@ describe("MossAcpClient", () => {
     const { launchOffList } = await import("./tool-table.js");
     expect(opened.params._meta).toEqual({
       claudeCode: { options: { disallowedTools: launchOffList("chat") } },
-      moss: { personaText: "You are Jarvis." }
+      systemPrompt: "You are Jarvis."
     });
+    expect(agent.receivedSystemPrompt).toBe("You are Jarvis.");
     // No tool server handed over unless the caller provides one.
     expect(opened.params.mcpServers).toEqual([]);
     await client.close(handle);

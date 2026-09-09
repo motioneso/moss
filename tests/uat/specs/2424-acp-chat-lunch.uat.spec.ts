@@ -43,6 +43,10 @@ test("ACP chat answers, queues the next send, and refuses shell tools (#2424)", 
   test.skip(!ACP_CHAT_PROOF_ENABLED, "Prover enables this live proof explicitly");
   test.setTimeout(180_000);
   await signIn(page);
+  if (!ACP_SESSION_OPEN_LINE || !ACP_LOG_PATH) {
+    throw new Error("JARVIS_UAT_ACP_SESSION_OPEN_LINE and JARVIS_UAT_ACP_LOG_PATH are required");
+  }
+  const logBeforeOpen = await readFile(ACP_LOG_PATH, "utf8");
 
   await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
   const composer = page.getByRole("textbox", { name: /^Message/ });
@@ -58,13 +62,30 @@ test("ACP chat answers, queues the next send, and refuses shell tools (#2424)", 
     "Hello, please introduce yourself in one sentence."
   );
   await shot(page, "01-first-answer");
-  if (!ACP_SESSION_OPEN_LINE || !ACP_LOG_PATH) {
-    throw new Error("JARVIS_UAT_ACP_SESSION_OPEN_LINE and JARVIS_UAT_ACP_LOG_PATH are required");
-  }
   const log = await readFile(ACP_LOG_PATH, "utf8");
-  expect(log).toContain(ACP_SESSION_OPEN_LINE);
-  expect(ACP_SESSION_OPEN_LINE).toMatch(
-    /\[acp-chat\] session opened conversation=[A-Za-z0-9_-]+ provider=anthropic$/
+  expect(log.startsWith(logBeforeOpen)).toBeTruthy();
+  const freshLog = log.slice(logBeforeOpen.length);
+  const sessionOpenLine = freshLog
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.startsWith("[acp-chat] session opened conversation="));
+  expect(sessionOpenLine).toBeDefined();
+  const threadsResponse = await page.request.get(`${baseUrl()}/api/chat/threads?surface=drawer`);
+  expect(threadsResponse.ok()).toBeTruthy();
+  const threadsBody = (await threadsResponse.json()) as {
+    threads?: readonly { id?: unknown }[];
+  };
+  const currentConversationId = threadsBody.threads?.[0]?.id;
+  expect(typeof currentConversationId).toBe("string");
+  const expectedSessionOpenLine = ACP_SESSION_OPEN_LINE.replace(
+    "<conversation-id>",
+    String(currentConversationId)
+  );
+  expect(sessionOpenLine).toBe(expectedSessionOpenLine);
+  expect(sessionOpenLine).toMatch(
+    new RegExp(
+      `^\\[acp-chat\\] session opened conversation=${String(currentConversationId)} provider=anthropic$`
+    )
   );
 
   await composer.fill("Count from one to twenty, one number per line, slowly.");

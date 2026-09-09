@@ -47,6 +47,7 @@ import { createChatEngine } from "./engine-selection.js";
 import { AcpChatEngine, RpcAcpTunnel } from "./acp-chat-engine.js";
 import { CliChatUnavailableError } from "./errors.js";
 import {
+  purgeAcpPrivateTranscripts,
   persistAcpSessionIdentity,
   purgePrivateTranscripts
 } from "./private-transcript-cleanup.js";
@@ -130,7 +131,7 @@ export type ChatEngineFactory = (
      *  `ChatEngineSelectionOpts.needsStructuredOutput` in engine-selection.ts. */
     readonly needsStructuredOutput?: boolean;
     readonly acpPermissionDecider?: AcpPermissionDecider;
-    readonly purgeTranscripts?: () => Promise<void>;
+    readonly purgeTranscripts?: (sessionCwd: string, sessionHome: string | null) => Promise<void>;
     readonly persistSessionIdentity?: (neutralDir: string, sessionId: string) => Promise<void>;
   }
 ) => CliChatEngine | Promise<CliChatEngine>;
@@ -627,6 +628,8 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
         sessionKey,
         resolveMossEnv(process.env, "JARVIS_CLI_HOME_BASE")
       ),
+    purgeAcpPrivateTranscripts: (sessionCwd, sessionHome) =>
+      purgeAcpPrivateTranscripts(createRealTmuxIo(), sessionCwd, sessionHome),
     persistSessionIdentity: (neutralDir, sessionId) =>
       persistAcpSessionIdentity(createRealTmuxIo(), neutralDir, sessionId),
     serverOwnsDrain,

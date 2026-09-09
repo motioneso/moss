@@ -279,6 +279,19 @@ export async function purgePrivateTranscripts(
   }
 }
 
+/** Purge the Anthropic transcript using the ACP runner's actual cwd and HOME. */
+export async function purgeAcpPrivateTranscripts(
+  io: Pick<TmuxIo, "run">,
+  sessionCwd: string,
+  sessionHome: string | null
+): Promise<void> {
+  await removeChecked(io, [
+    "-rf",
+    transcriptGlobDir("anthropic", sessionCwd, sessionHome ?? undefined)
+  ]);
+  await removeChecked(io, ["-f", join(sessionCwd, ACP_IDENTITY_FILENAME)]);
+}
+
 export async function purgePrivateTranscriptMarkers(
   io: Pick<TmuxIo, "run" | "readFile" | "writeFile">,
   neutralBase: string,

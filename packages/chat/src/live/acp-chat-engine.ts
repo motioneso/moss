@@ -22,7 +22,7 @@ export interface AcpChatEngineOptions {
   readonly projectId: string;
   readonly permissionDecider?: AcpPermissionDecider;
   readonly toolServer?: AcpToolServer;
-  readonly purgeTranscripts?: () => Promise<void>;
+  readonly purgeTranscripts?: (sessionCwd: string, sessionHome: string | null) => Promise<void>;
   readonly persistSessionIdentity?: (neutralDir: string, sessionId: string) => Promise<void>;
   readonly reportLoginRejected?: () => void;
   readonly log?: (line: string) => void;
@@ -78,7 +78,7 @@ export class AcpChatEngine implements CliChatEngine {
             : undefined),
         options.personaText
       );
-      await this.opts.persistSessionIdentity?.(options.neutralDir, this.handle.sessionId);
+      await this.opts.persistSessionIdentity?.(this.handle.cwd, this.handle.sessionId);
       // ACP config options are set after session/new and before any prompt, including the
       // explicit "default" binding. The client records a mismatch without silently changing
       // the configured model list.
@@ -163,7 +163,7 @@ export class AcpChatEngine implements CliChatEngine {
   }
 
   async purgeTranscripts(): Promise<void> {
-    await this.opts.purgeTranscripts?.();
+    if (this.handle) await this.opts.purgeTranscripts?.(this.handle.cwd, this.handle.home);
   }
 
   async kill(_opts?: EngineKillOpts): Promise<void> {

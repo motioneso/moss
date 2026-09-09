@@ -15,6 +15,7 @@ import {
   parseGeminiProjectShortId,
   persistCodexSessionIdentity,
   persistGeminiSessionIdentity,
+  purgeAcpPrivateTranscripts,
   purgeGeminiConversation,
   purgePrivateTranscripts,
   readCodexSessionIdentity,
@@ -193,6 +194,23 @@ describe("purgePrivateTranscripts", () => {
     await expect(readFile(join(neutralDir, GEMINI_IDENTITY_FILENAME), "utf8")).resolves.toContain(
       uuid
     );
+  });
+});
+
+describe("purgeAcpPrivateTranscripts", () => {
+  it("uses the runner session cwd and HOME rather than the API session-key folder", async () => {
+    const io = makeIo();
+
+    await purgeAcpPrivateTranscripts(io, "/runner/session/acp/thread-1", "/home/agent");
+
+    expect(io.run).toHaveBeenNthCalledWith(1, "rm", [
+      "-rf",
+      "/home/agent/.claude/projects/-runner-session-acp-thread-1"
+    ]);
+    expect(io.run).toHaveBeenNthCalledWith(2, "rm", [
+      "-f",
+      "/runner/session/acp/thread-1/.jarvis-acp-session-id"
+    ]);
   });
 });
 
