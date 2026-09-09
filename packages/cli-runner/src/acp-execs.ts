@@ -168,6 +168,22 @@ export function isStoppedOrRecycled(
   );
 }
 
+/**
+ * True only when the pid is provably still the recorded process: a readable
+ * `running` status whose start time matches. This is the sole condition that
+ * may ever justify sending it a signal — "unknown" is not enough, since a
+ * signal sent on an unconfirmed identity could hit an unrelated process that
+ * later reused the pid.
+ */
+export function isConfirmedRunningSameProcess(
+  pid: number,
+  recordedStartTime: string,
+  readStatus: (pid: number) => ProcStatus
+): boolean {
+  const status = readStatus(pid);
+  return status.kind === "running" && status.startTime === recordedStartTime;
+}
+
 export class AcpExecManager {
   private readonly execs = new Map<string, Map<number, AcpExec>>();
   private execCounter = 0;

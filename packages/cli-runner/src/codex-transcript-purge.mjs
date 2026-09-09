@@ -36,32 +36,41 @@ function firstLineMatchesCwd(line, cwd) {
   );
 }
 
-function walk(dir, cwd) {
+function isConfirmedAbsence(error) {
+  return error?.code === "ENOENT";
+}
+
+// Every filesystem step below only ever swallows a confirmed-absence error
+// (the entry was already gone by the time this ran) — anything else, such as
+// permission denied, is collected and reported so the caller never treats a
+// failed purge as a successful one.
+function walk(dir, cwd, errors) {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    // A missing or unreadable folder has nothing left to purge from this level.
+  } catch (error) {
+    if (!isConfirmedAbsence(error)) errors.push(error);
     return;
   }
   for (const entry of entries) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
-      walk(path, cwd);
+      walk(path, cwd, errors);
       continue;
     }
     if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
     let line;
     try {
       line = readFirstLine(path);
-    } catch {
+    } catch (error) {
+      if (!isConfirmedAbsence(error)) errors.push(error);
       continue;
     }
     if (!firstLineMatchesCwd(line, cwd)) continue;
     try {
       unlinkSync(path);
-    } catch {
-      // A file already gone by the time this runs is not a failure to report.
+    } catch (error) {
+      if (!isConfirmedAbsence(error)) errors.push(error);
     }
   }
 }
@@ -70,7 +79,13 @@ function main() {
   const raw = process.argv[2];
   if (!raw) throw new Error("missing purge request argument");
   const request = JSON.parse(raw);
-  walk(request.root, request.cwd);
+  const errors = [];
+  walk(request.root, request.cwd, errors);
+  if (errors.length > 0) {
+    throw new Error(
+      `codex transcript purge left ${errors.length} error(s): ${errors.map((error) => error.message).join("; ")}`
+    );
+  }
 }
 
 main();

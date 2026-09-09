@@ -28,7 +28,10 @@ import {
   AcpHost
 } from "../../packages/cli-runner/src/acp-host.js";
 import { providerTokenPath } from "../../packages/cli-runner/src/provider-token-store.js";
-import { parseProcStat } from "../../packages/cli-runner/src/acp-execs.js";
+import {
+  isConfirmedRunningSameProcess,
+  parseProcStat
+} from "../../packages/cli-runner/src/acp-execs.js";
 
 const KEY = "workshop:user:proj";
 const PROJECT = "proj";
@@ -729,5 +732,24 @@ describe("parseProcStat", () => {
     // the process has exited.
     expect(parseProcStat("not a real /proc/pid/stat line").kind).toBe("unknown");
     expect(parseProcStat("1 (sh) S 0 0 0").kind).toBe("unknown");
+  });
+});
+
+describe("isConfirmedRunningSameProcess", () => {
+  it("is false for unknown status, never treating an unreadable entry as a signal-safe match (Astra finding 2)", () => {
+    expect(isConfirmedRunningSameProcess(123, "456", () => ({ kind: "unknown" }))).toBe(false);
+  });
+
+  it("is false for gone, and false for running with a mismatched start time", () => {
+    expect(isConfirmedRunningSameProcess(123, "456", () => ({ kind: "gone" }))).toBe(false);
+    expect(
+      isConfirmedRunningSameProcess(123, "456", () => ({ kind: "running", startTime: "789" }))
+    ).toBe(false);
+  });
+
+  it("is true only once status is running with the recorded start time", () => {
+    expect(
+      isConfirmedRunningSameProcess(123, "456", () => ({ kind: "running", startTime: "456" }))
+    ).toBe(true);
   });
 });

@@ -23,6 +23,7 @@ import {
   MAX_EXECS_TOTAL,
   readProcStartTime,
   readProcStatus,
+  isConfirmedRunningSameProcess,
   isStoppedOrRecycled,
   type AcpExecStartResult,
   type AcpExecPollResult
@@ -867,9 +868,10 @@ export class AcpHost {
   /**
    * Confirms the pid is the recorded process, stops it, and polls for exit.
    * "Gone" or a start-time mismatch (recycled pid) means it already exited,
-   * so purging is safe. "Unknown" — the process table entry exists but could
-   * not be read or parsed — is never treated as stopped, since that is
-   * exactly the case where the process could still be alive and writing.
+   * so purging is safe. A signal is only ever sent once the pid's identity is
+   * positively confirmed as the recorded process — "unknown" status leaves
+   * the marker untouched instead, since a signal on an unconfirmed pid could
+   * hit an unrelated process that later reused it.
    * False means still running, or unconfirmed, after the timeout.
    */
   private async confirmStoppedOrStop(
@@ -879,6 +881,7 @@ export class AcpHost {
   ): Promise<boolean> {
     const readStatus = this.deps.readProcStatus ?? readProcStatus;
     if (isStoppedOrRecycled(pid, recordedStartTime, readStatus)) return true;
+    if (!isConfirmedRunningSameProcess(pid, recordedStartTime, readStatus)) return false;
     const { command, args } = buildSetprivDropCommand(
       process.execPath,
       ["-e", "process.kill(-Number(process.env.ACP_STOP_PID), 'SIGTERM')"],
