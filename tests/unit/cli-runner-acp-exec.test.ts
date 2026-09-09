@@ -28,6 +28,7 @@ import {
   AcpHost
 } from "../../packages/cli-runner/src/acp-host.js";
 import { providerTokenPath } from "../../packages/cli-runner/src/provider-token-store.js";
+import { parseProcStat } from "../../packages/cli-runner/src/acp-execs.js";
 
 const KEY = "workshop:user:proj";
 const PROJECT = "proj";
@@ -711,5 +712,22 @@ describe("AcpHost builds", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("parseProcStat", () => {
+  it("reads a real process's own start time as running", () => {
+    const content = readFileSync(`/proc/${process.pid}/stat`, "utf8");
+    const status = parseProcStat(content);
+    expect(status.kind).toBe("running");
+  });
+
+  it("reports unknown, never running or gone, for content that cannot be parsed (Astra finding 2)", () => {
+    // Content missing the closing paren around the command name, and content
+    // that has too few space-separated fields to reach the start-time column,
+    // are both "the entry exists but its shape is unreadable" — never proof
+    // the process has exited.
+    expect(parseProcStat("not a real /proc/pid/stat line").kind).toBe("unknown");
+    expect(parseProcStat("1 (sh) S 0 0 0").kind).toBe("unknown");
   });
 });

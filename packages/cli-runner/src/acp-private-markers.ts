@@ -94,16 +94,21 @@ export async function readAcpPrivateMarker(
   baseDir: string,
   key: string
 ): Promise<AcpPrivateMarkerReadResult> {
-  let raw: Partial<Record<keyof AcpPrivateMarkerRecord, unknown>>;
+  let parsed: unknown;
   try {
-    raw = JSON.parse(await readFile(markerPath(baseDir, key), "utf8")) as Partial<
-      Record<keyof AcpPrivateMarkerRecord, unknown>
-    >;
+    parsed = JSON.parse(await readFile(markerPath(baseDir, key), "utf8"));
   } catch (error) {
     return (error as NodeJS.ErrnoException)?.code === "ENOENT"
       ? { status: "missing" }
       : { status: "invalid" };
   }
+  // A file whose whole content parses to something other than a plain object —
+  // literal `null`, a number, an array — has no fields to check below; treat it
+  // the same as any other unreadable marker instead of throwing past the caller.
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return { status: "invalid" };
+  }
+  const raw = parsed as Partial<Record<keyof AcpPrivateMarkerRecord, unknown>>;
   if (
     typeof raw.sessionKey !== "string" ||
     typeof raw.cwd !== "string" ||

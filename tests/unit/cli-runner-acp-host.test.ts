@@ -3,6 +3,7 @@
  * pipes its stdio lines. Uses spawnChild injection so these tests are
  * pure/fast/deterministic — no real processes, no timers left dangling.
  */
+import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import {
   chmodSync,
@@ -358,7 +359,7 @@ describe("AcpHost", () => {
     }
   });
 
-  it("boot sweep purges every folder a leftover marker names, removing the marker only on success", async () => {
+  it("boot sweep purges a leftover marker once its process is confirmed gone, removing the marker only on success", async () => {
     const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
     try {
       const { writeAcpPrivateMarker } =
@@ -366,6 +367,47 @@ describe("AcpHost", () => {
       const orphanFolder = join(dir, "orphan-scratch");
       mkdirSync(orphanFolder, { recursive: true });
       writeFileSync(join(orphanFolder, "leftover.txt"), "stale");
+      // A pid + start time from a process that has already fully exited and been
+      // reaped: readProcStatus for it reads "gone", so the sweep may purge without
+      // sending a stop signal anywhere.
+      const goneChild = spawnSync(process.execPath, ["-e", "process.exit(0)"]);
+      const goneStartTime = String(goneChild.pid);
+      await writeAcpPrivateMarker(dir, "workshop:orphan:proj", {
+        sessionKey: "workshop:orphan:proj",
+        cwd: orphanFolder,
+        home: join(dir, "homes", "agents", "user-1"),
+        provider: "anthropic",
+        pid: goneChild.pid ?? -1,
+        startTime: goneStartTime,
+        ...selfSlot()
+      });
+
+      const host = new AcpHost({
+        neutralBase: dir,
+        homeBase: join(dir, "homes"),
+        perUserUid: true,
+        purgePrivateFolder: fakePurgePrivateFolder,
+        readProcStatus: () => ({ kind: "gone" })
+      });
+      const allPurged = await host.sweepPrivateMarkers();
+      expect(allPurged).toBe(true);
+      expect(existsSync(orphanFolder)).toBe(false);
+      expect(existsSync(join(dir, "acp-private-markers", "workshop:orphan:proj.json"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("boot sweep leaves a marker with no recorded process untouched instead of purging it (Astra finding 1)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const { writeAcpPrivateMarker } =
+        await import("../../packages/cli-runner/src/acp-private-markers.js");
+      const orphanFolder = join(dir, "orphan-scratch");
+      mkdirSync(orphanFolder, { recursive: true });
+      writeFileSync(join(orphanFolder, "leftover.txt"), "stale");
+      // A marker written between spawn and the pid/start-time backfill (or one whose
+      // backfill write itself failed) names no process to confirm stopped.
       await writeAcpPrivateMarker(dir, "workshop:orphan:proj", {
         sessionKey: "workshop:orphan:proj",
         cwd: orphanFolder,
@@ -383,9 +425,128 @@ describe("AcpHost", () => {
         purgePrivateFolder: fakePurgePrivateFolder
       });
       const allPurged = await host.sweepPrivateMarkers();
-      expect(allPurged).toBe(true);
+      expect(allPurged).toBe(false);
+      expect(existsSync(orphanFolder)).toBe(true);
+      expect(existsSync(join(dir, "acp-private-markers", "workshop:orphan:proj.json"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("boot sweep never purges when the process's status could not be confirmed (Astra finding 2)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const { writeAcpPrivateMarker } =
+        await import("../../packages/cli-runner/src/acp-private-markers.js");
+      const orphanFolder = join(dir, "orphan-scratch");
+      mkdirSync(orphanFolder, { recursive: true });
+      writeFileSync(join(orphanFolder, "leftover.txt"), "stale");
+      await writeAcpPrivateMarker(dir, "workshop:orphan:proj", {
+        sessionKey: "workshop:orphan:proj",
+        cwd: orphanFolder,
+        home: join(dir, "homes", "agents", "user-1"),
+        provider: "anthropic",
+        pid: 999999,
+        startTime: "123456",
+        ...selfSlot()
+      });
+
+      const host = new AcpHost({
+        neutralBase: dir,
+        homeBase: join(dir, "homes"),
+        perUserUid: true,
+        purgePrivateFolder: fakePurgePrivateFolder,
+        // A reader that can neither confirm the process is gone nor that it is
+        // still running with the recorded start time — a fail-closed sweep must
+        // never treat this the same as "confirmed stopped".
+        readProcStatus: () => ({ kind: "unknown" })
+      });
+      const allPurged = await host.sweepPrivateMarkers();
+      expect(allPurged).toBe(false);
+      expect(existsSync(orphanFolder)).toBe(true);
+      expect(existsSync(join(dir, "acp-private-markers", "workshop:orphan:proj.json"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("boot sweep skips a marker whose content is the literal JSON null and still processes the rest (Astra finding 4)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const { writeAcpPrivateMarker } =
+        await import("../../packages/cli-runner/src/acp-private-markers.js");
+      const markersDir = join(dir, "acp-private-markers");
+      mkdirSync(markersDir, { recursive: true });
+      writeFileSync(join(markersDir, "workshop:null-marker:proj.json"), "null");
+
+      const orphanFolder = join(dir, "orphan-scratch");
+      mkdirSync(orphanFolder, { recursive: true });
+      writeFileSync(join(orphanFolder, "leftover.txt"), "stale");
+      const goneChild = spawnSync(process.execPath, ["-e", "process.exit(0)"]);
+      await writeAcpPrivateMarker(dir, "workshop:orphan:proj", {
+        sessionKey: "workshop:orphan:proj",
+        cwd: orphanFolder,
+        home: join(dir, "homes", "agents", "user-1"),
+        provider: "anthropic",
+        pid: goneChild.pid ?? -1,
+        startTime: String(goneChild.pid),
+        ...selfSlot()
+      });
+
+      const host = new AcpHost({
+        neutralBase: dir,
+        homeBase: join(dir, "homes"),
+        perUserUid: true,
+        purgePrivateFolder: fakePurgePrivateFolder,
+        readProcStatus: () => ({ kind: "gone" })
+      });
+      // The literal-null marker must not throw past the caller and abort the
+      // rest of the sweep — the other, valid marker still gets processed.
+      const allPurged = await host.sweepPrivateMarkers();
+      expect(allPurged).toBe(false);
+      expect(existsSync(join(markersDir, "workshop:null-marker:proj.json"))).toBe(true);
       expect(existsSync(orphanFolder)).toBe(false);
       expect(existsSync(join(dir, "acp-private-markers", "workshop:orphan:proj.json"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("boot sweep purges only this session's own Codex transcripts, matched by its recorded working folder (Astra finding 3)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-host-"));
+    try {
+      const { writeAcpPrivateMarker } =
+        await import("../../packages/cli-runner/src/acp-private-markers.js");
+      const orphanFolder = join(dir, "orphan-scratch");
+      mkdirSync(orphanFolder, { recursive: true });
+      const home = join(dir, "homes", "agents", "user-1");
+      const goneChild = spawnSync(process.execPath, ["-e", "process.exit(0)"]);
+      await writeAcpPrivateMarker(dir, "workshop:orphan:proj", {
+        sessionKey: "workshop:orphan:proj",
+        cwd: orphanFolder,
+        home,
+        provider: "openai",
+        pid: goneChild.pid ?? -1,
+        startTime: String(goneChild.pid),
+        ...selfSlot()
+      });
+
+      const purged: Array<{ home: string; cwd: string }> = [];
+      const host = new AcpHost({
+        neutralBase: dir,
+        homeBase: join(dir, "homes"),
+        perUserUid: true,
+        purgePrivateFolder: fakePurgePrivateFolder,
+        readProcStatus: () => ({ kind: "gone" }),
+        purgeCodexTranscripts: async (purgeHome, purgeCwd) => {
+          purged.push({ home: purgeHome, cwd: purgeCwd });
+        }
+      });
+      const allPurged = await host.sweepPrivateMarkers();
+      expect(allPurged).toBe(true);
+      // Asked for by this session's own home and working folder, never a
+      // whole dated Codex sessions folder shared with other conversations.
+      expect(purged).toEqual([{ home, cwd: orphanFolder }]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

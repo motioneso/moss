@@ -22,12 +22,15 @@ import {
   MAX_EXECS_PER_SESSION,
   MAX_EXECS_TOTAL,
   readProcStartTime,
+  readProcStatus,
+  isStoppedOrRecycled,
   type AcpExecStartResult,
   type AcpExecPollResult
 } from "./acp-execs.js";
 import {
   ensureOwnedTopLevel,
   prepareOwnedPathWithOwnership,
+  purgeOwnedPath as defaultPurgePrivateFolder,
   type OwnershipApplier
 } from "./owned-fs.js";
 import {
@@ -37,6 +40,7 @@ import {
   writeAcpPrivateMarker,
   type AcpPrivateMarkerRecord
 } from "./acp-private-markers.js";
+import { acpProviderTranscriptDir, defaultPurgeCodexTranscripts } from "./acp-transcript-purge.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
@@ -50,24 +54,8 @@ import {
   type AcpProfile,
   type AcpProviderKind
 } from "@moss/acp";
-import { redactSecrets, transcriptGlobDir } from "@moss/ai";
+import { redactSecrets } from "@moss/ai";
 import { sanitizeSessionKey } from "@moss/chat/live";
-
-/** A provider's own transcript store outside the scratch folder, or null if none is known. */
-function acpProviderTranscriptDir(
-  provider: AcpProviderKind,
-  cwd: string,
-  home: string
-): string | null {
-  switch (provider) {
-    case "anthropic":
-      return transcriptGlobDir("anthropic", cwd, home);
-    case "openai":
-      return transcriptGlobDir("openai-compatible", cwd, home);
-    default:
-      return null;
-  }
-}
 
 // Re-exported so callers that only know acp-host.ts keep working unchanged;
 // the definitions live in acp-execs.ts (task 5b, 2026-09-08 file-size split).
@@ -135,6 +123,18 @@ export interface AcpHostDeps {
     cwd: string,
     identity: { readonly uid: number; readonly gid: number } | null
   ) => Promise<void>;
+  /**
+   * Deletes only this session's own Codex transcript files, matched by the
+   * working folder recorded in each file's own first line; injected so tests
+   * never shell out to setpriv or touch a real Codex sessions folder.
+   */
+  readonly purgeCodexTranscripts?: (
+    home: string,
+    cwd: string,
+    identity: { readonly uid: number; readonly gid: number } | null
+  ) => Promise<void>;
+  /** Reads a pid's process-table status; injected so tests can prove the "unknown" case never purges. */
+  readonly readProcStatus?: (pid: number) => ReturnType<typeof readProcStatus>;
 }
 
 /** Argument passed as one JSON string to agent-home-prepare.mjs. */
@@ -299,40 +299,6 @@ async function defaultRunAgentHomePrepare(
             `AcpHost: could not prepare the agent's home: ${stderr.trim() || `exit code ${String(code)}`}`
           )
         );
-    });
-  });
-}
-
-/**
- * Delete a chat-profile working folder as its owning account, the same
- * setpriv-drop path signalProcessGroup uses to stop the process. Node's own
- * binary does the removal (`-e`, an fs call) so no external `rm` program
- * needs to exist in the image, matching the kill signal's own approach.
- * The folder path travels through an env var, never interpolated into a
- * script string.
- */
-async function defaultPurgePrivateFolder(
-  cwd: string,
-  identity: { readonly uid: number; readonly gid: number } | null
-): Promise<void> {
-  if (!identity) {
-    await rm(cwd, { recursive: true, force: true });
-    return;
-  }
-  const { command, args } = buildSetprivDropCommand(
-    process.execPath,
-    ["-e", "require('node:fs').rmSync(process.env.ACP_PURGE_DIR,{recursive:true,force:true})"],
-    identity
-  );
-  await new Promise<void>((resolve, reject) => {
-    const purger = spawn(command, args, {
-      stdio: "ignore",
-      env: { ...buildSanitizedCliEnv(process.env), ACP_PURGE_DIR: cwd }
-    });
-    purger.once("error", reject);
-    purger.once("exit", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`purge for ${cwd} exited with code ${String(code)}`));
     });
   });
 }
@@ -810,6 +776,10 @@ export class AcpHost {
       if (transcriptDir) {
         await this.purgePrivateWorkingFolder(transcriptDir, session.identity);
       }
+      if (session.providerKind === "openai") {
+        const purgeCodex = this.deps.purgeCodexTranscripts ?? defaultPurgeCodexTranscripts;
+        await purgeCodex(session.home, session.cwd, session.identity);
+      }
       await removeAcpPrivateMarker(this.deps.neutralBase, key);
     } catch (error) {
       console.error(
@@ -859,18 +829,29 @@ export class AcpHost {
       const record = read.record;
       const identity = { uid: record.uid, gid: record.gid };
       try {
-        if (record.pid !== null && record.startTime !== null) {
-          const stopped = await this.confirmStoppedOrStop(record.pid, record.startTime, identity);
-          if (!stopped) {
-            throw new Error(
-              `process ${record.pid} for ${key} did not stop in time, refusing to purge`
-            );
-          }
+        // A marker written between spawn and the pid/start-time backfill (or
+        // one whose backfill write itself failed) names no process to check.
+        // That is not proof the agent never started — leave it for a later
+        // sweep rather than purging a folder a live process might still hold.
+        if (record.pid === null || record.startTime === null) {
+          throw new Error(
+            `marker for ${key} names no process to confirm stopped, refusing to purge`
+          );
+        }
+        const stopped = await this.confirmStoppedOrStop(record.pid, record.startTime, identity);
+        if (!stopped) {
+          throw new Error(
+            `process ${record.pid} for ${key} did not stop in time, refusing to purge`
+          );
         }
         await this.purgePrivateWorkingFolder(record.cwd, identity);
         const transcriptDir = acpProviderTranscriptDir(record.provider, record.cwd, record.home);
         if (transcriptDir) {
           await this.purgePrivateWorkingFolder(transcriptDir, identity);
+        }
+        if (record.provider === "openai") {
+          const purgeCodex = this.deps.purgeCodexTranscripts ?? defaultPurgeCodexTranscripts;
+          await purgeCodex(record.home, record.cwd, identity);
         }
         await removeAcpPrivateMarker(this.deps.neutralBase, key);
       } catch (error) {
@@ -885,15 +866,19 @@ export class AcpHost {
 
   /**
    * Confirms the pid is the recorded process, stops it, and polls for exit.
-   * A start-time mismatch means it already exited or was recycled, so
-   * purging is already safe. False means still running after the timeout.
+   * "Gone" or a start-time mismatch (recycled pid) means it already exited,
+   * so purging is safe. "Unknown" — the process table entry exists but could
+   * not be read or parsed — is never treated as stopped, since that is
+   * exactly the case where the process could still be alive and writing.
+   * False means still running, or unconfirmed, after the timeout.
    */
   private async confirmStoppedOrStop(
     pid: number,
     recordedStartTime: string,
     identity: { readonly uid: number; readonly gid: number }
   ): Promise<boolean> {
-    if (readProcStartTime(pid) !== recordedStartTime) return true;
+    const readStatus = this.deps.readProcStatus ?? readProcStatus;
+    if (isStoppedOrRecycled(pid, recordedStartTime, readStatus)) return true;
     const { command, args } = buildSetprivDropCommand(
       process.execPath,
       ["-e", "process.kill(-Number(process.env.ACP_STOP_PID), 'SIGTERM')"],
@@ -912,10 +897,10 @@ export class AcpHost {
     });
     const deadline = Date.now() + KILL_CONFIRM_TIMEOUT_MS;
     while (Date.now() < deadline) {
-      if (readProcStartTime(pid) !== recordedStartTime) return true;
+      if (isStoppedOrRecycled(pid, recordedStartTime, readStatus)) return true;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    return readProcStartTime(pid) !== recordedStartTime;
+    return isStoppedOrRecycled(pid, recordedStartTime, readStatus);
   }
 
   /** Send SIGTERM to the session's process group as the owning identity. */

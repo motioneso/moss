@@ -10,10 +10,14 @@
  * runner base itself is trusted; the runner creates it at startup.
  */
 
+import { spawn } from "node:child_process";
 import { O_CREAT, O_DIRECTORY, O_NOFOLLOW, O_RDONLY, O_TRUNC, O_WRONLY } from "node:constants";
 import { lstat, mkdir, open, rm, unlink } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { join } from "node:path";
+
+import { buildSanitizedCliEnv } from "./sanitized-env.js";
+import { buildSetprivDropCommand } from "./setpriv.js";
 
 /**
  * Hands an open handle to its owner. Injected so tests can prove the launch
@@ -272,4 +276,37 @@ export async function ensureOwnedTopLevel(
   const createdHere = await prepareOwnedDir(key, path, true);
   await handOverOwnedPath(key, [{ path, createdHere, ownedHere: true }], uid, gid, applyOwnership);
   return { path, createdHere };
+}
+
+/**
+ * Delete an owned working folder as its owning account, the same
+ * setpriv-drop path a kill signal uses to stop the owning process. Node's
+ * own binary does the removal (`-e`, an fs call) so no external `rm`
+ * program needs to exist in the image. The folder path travels through an
+ * env var, never interpolated into a script string.
+ */
+export async function purgeOwnedPath(
+  path: string,
+  identity: { readonly uid: number; readonly gid: number } | null
+): Promise<void> {
+  if (!identity) {
+    await rm(path, { recursive: true, force: true });
+    return;
+  }
+  const { command, args } = buildSetprivDropCommand(
+    process.execPath,
+    ["-e", "require('node:fs').rmSync(process.env.ACP_PURGE_DIR,{recursive:true,force:true})"],
+    identity
+  );
+  await new Promise<void>((resolve, reject) => {
+    const purger = spawn(command, args, {
+      stdio: "ignore",
+      env: { ...buildSanitizedCliEnv(process.env), ACP_PURGE_DIR: path }
+    });
+    purger.once("error", reject);
+    purger.once("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`purge for ${path} exited with code ${String(code)}`));
+    });
+  });
 }

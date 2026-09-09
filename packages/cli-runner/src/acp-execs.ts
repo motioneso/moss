@@ -113,6 +113,61 @@ export function readProcStartTime(pid: number): string | null {
   }
 }
 
+/**
+ * A pid is exactly one of: gone (no `/proc/<pid>` entry, so definitely exited),
+ * running with a readable start time, or unknown (the entry exists but its
+ * stat file could not be read or parsed). Only "gone" or a start-time mismatch
+ * is ever safe to treat as "stopped" — "unknown" must never be, since it is
+ * exactly the case where the process could still be alive and writing.
+ */
+export type ProcStatus =
+  | { readonly kind: "gone" }
+  | { readonly kind: "running"; readonly startTime: string }
+  | { readonly kind: "unknown" };
+
+/** Parses one already-read `/proc/<pid>/stat` file's content. Exported so the "malformed content" case is directly testable, without needing a real process in that exact state. */
+export function parseProcStat(content: string): ProcStatus {
+  // The second field (command name) may hold spaces and brackets, so split
+  // after its closing bracket; the start time is the 22nd field overall.
+  const closing = content.lastIndexOf(")");
+  if (closing < 0) return { kind: "unknown" };
+  const after = content.slice(closing + 2).split(" ");
+  const startTime = after[19];
+  return startTime !== undefined && /^\d+$/.test(startTime)
+    ? { kind: "running", startTime }
+    : { kind: "unknown" };
+}
+
+export function readProcStatus(pid: number): ProcStatus {
+  let content: string;
+  try {
+    content = readFileSync(`/proc/${pid}/stat`, "utf8");
+  } catch (error) {
+    return (error as NodeJS.ErrnoException)?.code === "ENOENT"
+      ? { kind: "gone" }
+      : { kind: "unknown" };
+  }
+  return parseProcStat(content);
+}
+
+/**
+ * True only when the pid is provably not the recorded process any more:
+ * gone from the process table, or present but running a different process
+ * (start time differs, so the pid was recycled). "Unknown" — the table
+ * entry exists but could not be read or parsed — returns false, because
+ * that is exactly the case where the original process could still be alive.
+ */
+export function isStoppedOrRecycled(
+  pid: number,
+  recordedStartTime: string,
+  readStatus: (pid: number) => ProcStatus
+): boolean {
+  const status = readStatus(pid);
+  return (
+    status.kind === "gone" || (status.kind === "running" && status.startTime !== recordedStartTime)
+  );
+}
+
 export class AcpExecManager {
   private readonly execs = new Map<string, Map<number, AcpExec>>();
   private execCounter = 0;
