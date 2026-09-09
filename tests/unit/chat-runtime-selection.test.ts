@@ -118,6 +118,26 @@ describe("selectEngineFactory — boot-time fork (§3.5)", () => {
     }
   });
 
+  it("chat has no old-bridge fallback: an empty socket still resolves the RPC path when acpChat is on", async () => {
+    const { factory, connection } = selectEngineFactory({
+      env: {
+        JARVIS_CLI_RUNNER_SOCKET: "",
+        JARVIS_CLI_RUNNER_RPC_SECRET: "boot-secret"
+      } as NodeJS.ProcessEnv,
+      acpChat: true
+    });
+    try {
+      expect(connection).toBeDefined();
+      const engine = await factory("anthropic", "user-a", {
+        conversationId: "conv-1",
+        userId: "user-a"
+      });
+      expect(engine).toBeInstanceOf(AcpChatEngine);
+    } finally {
+      connection?.close();
+    }
+  });
+
   it("refuses an ACP chat launch missing its conversation or user id, instead of silently returning a bare RPC client", async () => {
     const { factory, connection } = selectEngineFactory({
       env: {

@@ -331,7 +331,8 @@ export function selectEngineFactory(
   // the same default path prod and the dev-instance script already start the runner on, instead of
   // silently dropping to the in-process tmux engine below.
   const socketPath =
-    env.JARVIS_CLI_RUNNER_SOCKET ?? (opts.acpChat ? "/run/jarv1s/cli-runner.sock" : undefined);
+    env.JARVIS_CLI_RUNNER_SOCKET?.trim() ||
+    (opts.acpChat ? "/run/jarv1s/cli-runner.sock" : undefined);
   if (socketPath) {
     const rpcSecret = env.JARVIS_CLI_RUNNER_RPC_SECRET;
     if (!rpcSecret) {
