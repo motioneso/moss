@@ -98,7 +98,7 @@ export interface AcpExecManagerDeps {
  * only the same build is ever stopped. Null when the process is gone or the
  * table cannot be read — never a reason to kill.
  */
-function readProcStartTime(pid: number): string | null {
+export function readProcStartTime(pid: number): string | null {
   try {
     const content = readFileSync(`/proc/${pid}/stat`, "utf8");
     // The second field (command name) may hold spaces and brackets, so split

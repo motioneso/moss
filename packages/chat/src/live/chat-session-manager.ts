@@ -17,12 +17,7 @@ import {
 } from "./errors.js";
 import { renderPersona } from "./persona.js";
 import { renderMemorySeedBlock } from "./recall-seed.js";
-import type {
-  ActionResultMetadata,
-  CliChatEngine,
-  EngineKillOpts,
-  TranscriptRecord
-} from "./types.js";
+import type { ActionResultMetadata, CliChatEngine, TranscriptRecord } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
 import { applyRemoteReap, countSubscribersFor, delay } from "./session-runtime-helpers.js";
 import {
@@ -944,10 +939,12 @@ export class ChatSessionManager {
         /* best-effort live purge; the row is retained regardless for the post-exit sweep */
       }
       try {
-        const killArgs: [EngineKillOpts?] = [{ preserveNeutralDir: true }];
-        await (this.deps.killSession
-          ? this.deps.killSession(sessionKey, ...killArgs)
-          : session.engine.kill(...killArgs));
+        // `deps.killSession` is the orphan-by-mux-name path for a session this manager has
+        // already lost track of (reconcile step 4) — never for a session it is still holding
+        // live right here. Using it here bypassed the engine's own kill, so an ACP session's
+        // stop-then-purge never ran and only the mux-name kill fired (Astra-Reviewer finding,
+        // 2026-09-09). A live session always goes through its own engine's kill.
+        await session.engine.kill({ preserveNeutralDir: true });
       } catch {
         /* best-effort private kill */
       }

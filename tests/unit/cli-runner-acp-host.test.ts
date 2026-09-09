@@ -370,6 +370,9 @@ describe("AcpHost", () => {
         sessionKey: "workshop:orphan:proj",
         cwd: orphanFolder,
         home: join(dir, "homes", "agents", "user-1"),
+        provider: "anthropic",
+        pid: null,
+        startTime: null,
         ...selfSlot()
       });
 

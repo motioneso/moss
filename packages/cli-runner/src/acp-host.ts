@@ -21,6 +21,7 @@ import {
   ACP_EXEC_MAX_TIMEOUT_MS,
   MAX_EXECS_PER_SESSION,
   MAX_EXECS_TOTAL,
+  readProcStartTime,
   type AcpExecStartResult,
   type AcpExecPollResult
 } from "./acp-execs.js";
@@ -33,7 +34,8 @@ import {
   listAcpPrivateMarkerKeys,
   readAcpPrivateMarker,
   removeAcpPrivateMarker,
-  writeAcpPrivateMarker
+  writeAcpPrivateMarker,
+  type AcpPrivateMarkerRecord
 } from "./acp-private-markers.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
 
@@ -48,8 +50,24 @@ import {
   type AcpProfile,
   type AcpProviderKind
 } from "@moss/acp";
-import { redactSecrets } from "@moss/ai";
+import { redactSecrets, transcriptGlobDir } from "@moss/ai";
 import { sanitizeSessionKey } from "@moss/chat/live";
+
+/** A provider's own transcript store outside the scratch folder, or null if none is known. */
+function acpProviderTranscriptDir(
+  provider: AcpProviderKind,
+  cwd: string,
+  home: string
+): string | null {
+  switch (provider) {
+    case "anthropic":
+      return transcriptGlobDir("anthropic", cwd, home);
+    case "openai":
+      return transcriptGlobDir("openai-compatible", cwd, home);
+    default:
+      return null;
+  }
+}
 
 // Re-exported so callers that only know acp-host.ts keep working unchanged;
 // the definitions live in acp-execs.ts (task 5b, 2026-09-08 file-size split).
@@ -100,13 +118,7 @@ export interface AcpHostDeps {
     uid?: number;
     gid?: number;
   }) => ChildProcessWithoutNullStreams;
-  /**
-   * Runs the below-top-level home/session preparation step as the person's
-   * own slot; injected so tests never truly shell out to setpriv and node.
-   * The production default runs `agent-home-prepare.mjs` through setpriv,
-   * exactly the way the agent's own process starts (task 5b, Architect
-   * ruling, 2026-09-08).
-   */
+  /** Runs the home/session preparation step as the person's own slot; injected so tests never shell out. */
   readonly runAgentHomePrepare?: (
     request: AgentHomePrepareRequest,
     identity: { uid: number; gid: number }
@@ -118,12 +130,7 @@ export interface AcpHostDeps {
    * needing real root. Production always uses the default.
    */
   readonly allocateUidSlot?: (homeBase: string, userId: string) => { uid: number; gid: number };
-  /**
-   * Deletes a chat-profile scratch working folder as its owning account;
-   * injected so tests never truly shell out to setpriv. The production
-   * default runs the same setpriv-drop path signalProcessGroup uses to stop
-   * the process, with the runner's own Node binary doing the removal.
-   */
+  /** Deletes a private folder as its owning account; injected so tests never shell out to setpriv. */
   readonly purgePrivateFolder?: (
     cwd: string,
     identity: { readonly uid: number; readonly gid: number } | null
@@ -141,19 +148,9 @@ export interface AcpSpawnResult {
   readonly generation: number;
   /** The HOME handed to the agent process, or null when it names none. */
   readonly home: string | null;
-  /**
-   * The spawned agent's own process id. setpriv execs into the target rather
-   * than forking, so this is the real agent process, not a wrapper — a caller
-   * can read `/proc/<pid>/status` on it for genuine identity evidence (task
-   * 5b, Astra-Reviewer finding 5b, 2026-09-08), instead of trusting a folder
-   * owner stat that only shows what was asked for.
-   */
+  /** The spawned agent's own process id (setpriv execs into it, so it's the real process). */
   readonly pid: number | null;
-  /**
-   * The slot account the agent is spawned to run as — the expected identity
-   * to check /proc/<pid>/status against, not a stand-in for it (task 5b,
-   * Astra-Reviewer finding 5, 2026-09-08).
-   */
+  /** The slot account the agent runs as — the expected identity to check /proc/<pid>/status against. */
   readonly uid: number;
   readonly gid: number;
 }
@@ -195,6 +192,9 @@ interface AcpSession {
    * killRecord reads this to decide whether to purge on the way out.
    */
   readonly profile: AcpProfile;
+  /** HOME handed to the agent process — where its own CLI may keep a transcript outside cwd. */
+  readonly home: string;
+  readonly providerKind: AcpProviderKind;
   /**
    * The slot's own identity, present whenever per-user separation launched
    * this session. The launcher's three privileges (chown/setuid/setgid) do
@@ -486,18 +486,22 @@ export class AcpHost {
     })();
     const { agentHome, sessionDir, env } = setup;
 
-    // The chat profile's scratch folder must be purgeable even after a crash
-    // between here and a clean kill, so the marker is written before the
-    // child exists at all — not after, when a crash would leave the folder
-    // unrecorded and unpurgeable (spec: purge is fail-closed).
-    if (profile === "chat") {
-      await writeAcpPrivateMarker(this.deps.neutralBase, key, {
-        sessionKey: key,
-        cwd: sessionDir,
-        home: agentHome,
-        uid,
-        gid
-      });
+    // Written before the child exists (fail-closed); pid/startTime backfilled below.
+    const chatMarkerRecord: AcpPrivateMarkerRecord | null =
+      profile === "chat"
+        ? {
+            sessionKey: key,
+            cwd: sessionDir,
+            home: agentHome,
+            uid,
+            gid,
+            provider: providerKind,
+            pid: null,
+            startTime: null
+          }
+        : null;
+    if (chatMarkerRecord) {
+      await writeAcpPrivateMarker(this.deps.neutralBase, key, chatMarkerRecord);
     }
 
     const target =
@@ -554,11 +558,22 @@ export class AcpHost {
       gid
     });
 
+    // Records the process a boot sweep must confirm has stopped before purging.
+    if (chatMarkerRecord && typeof child.pid === "number") {
+      await writeAcpPrivateMarker(this.deps.neutralBase, key, {
+        ...chatMarkerRecord,
+        pid: child.pid,
+        startTime: readProcStartTime(child.pid)
+      });
+    }
+
     const session: AcpSession = {
       child,
       cwd: sessionDir,
       identity: { uid, gid },
       profile,
+      home: agentHome,
+      providerKind,
       generation: (this.generationCounter += 1),
       buffered: [],
       bufferedBytes: 0,
@@ -787,6 +802,14 @@ export class AcpHost {
     if (session.profile !== "chat") return;
     try {
       await this.purgePrivateWorkingFolder(session.cwd, session.identity);
+      const transcriptDir = acpProviderTranscriptDir(
+        session.providerKind,
+        session.cwd,
+        session.home
+      );
+      if (transcriptDir) {
+        await this.purgePrivateWorkingFolder(transcriptDir, session.identity);
+      }
       await removeAcpPrivateMarker(this.deps.neutralBase, key);
     } catch (error) {
       console.error(
@@ -808,23 +831,47 @@ export class AcpHost {
     await purge(cwd, identity);
   }
 
-  /**
-   * Boot-time recovery: purge every folder a marker still names, as that
-   * folder's own owning account, removing the marker only once the purge
-   * succeeds. Returns false when any marker's purge failed, so the caller
-   * knows not to treat every private folder as accounted for (mirrors
-   * purgePrivateTranscriptMarkers's boolean gate on the Gemini/Codex path).
-   */
+  /** Boot-time recovery: stop and purge every folder a leftover marker names. */
   async sweepPrivateMarkers(): Promise<boolean> {
+    let keys: string[];
+    try {
+      keys = await listAcpPrivateMarkerKeys(this.deps.neutralBase);
+    } catch (error) {
+      console.error(
+        `[acp-host] boot sweep could not list private markers, none can be checked this run: ${(error as Error).message}`
+      );
+      return false;
+    }
     let allPurged = true;
-    for (const key of await listAcpPrivateMarkerKeys(this.deps.neutralBase)) {
-      const record = await readAcpPrivateMarker(this.deps.neutralBase, key);
-      if (!record) {
+    for (const key of keys) {
+      const read = await readAcpPrivateMarker(this.deps.neutralBase, key);
+      if (read.status === "missing") {
         await removeAcpPrivateMarker(this.deps.neutralBase, key);
         continue;
       }
+      if (read.status === "invalid") {
+        allPurged = false;
+        console.error(
+          `[acp-host] boot sweep found an unreadable private marker for ${key}, leaving it`
+        );
+        continue;
+      }
+      const record = read.record;
+      const identity = { uid: record.uid, gid: record.gid };
       try {
-        await this.purgePrivateWorkingFolder(record.cwd, { uid: record.uid, gid: record.gid });
+        if (record.pid !== null && record.startTime !== null) {
+          const stopped = await this.confirmStoppedOrStop(record.pid, record.startTime, identity);
+          if (!stopped) {
+            throw new Error(
+              `process ${record.pid} for ${key} did not stop in time, refusing to purge`
+            );
+          }
+        }
+        await this.purgePrivateWorkingFolder(record.cwd, identity);
+        const transcriptDir = acpProviderTranscriptDir(record.provider, record.cwd, record.home);
+        if (transcriptDir) {
+          await this.purgePrivateWorkingFolder(transcriptDir, identity);
+        }
         await removeAcpPrivateMarker(this.deps.neutralBase, key);
       } catch (error) {
         allPurged = false;
@@ -834,6 +881,41 @@ export class AcpHost {
       }
     }
     return allPurged;
+  }
+
+  /**
+   * Confirms the pid is the recorded process, stops it, and polls for exit.
+   * A start-time mismatch means it already exited or was recycled, so
+   * purging is already safe. False means still running after the timeout.
+   */
+  private async confirmStoppedOrStop(
+    pid: number,
+    recordedStartTime: string,
+    identity: { readonly uid: number; readonly gid: number }
+  ): Promise<boolean> {
+    if (readProcStartTime(pid) !== recordedStartTime) return true;
+    const { command, args } = buildSetprivDropCommand(
+      process.execPath,
+      ["-e", "process.kill(-Number(process.env.ACP_STOP_PID), 'SIGTERM')"],
+      identity
+    );
+    await new Promise<void>((resolve, reject) => {
+      const stopper = spawn(command, args, {
+        stdio: "ignore",
+        env: { ...buildSanitizedCliEnv(process.env), ACP_STOP_PID: String(pid) }
+      });
+      stopper.once("error", reject);
+      stopper.once("exit", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`stop command for pid ${pid} exited with code ${String(code)}`));
+      });
+    });
+    const deadline = Date.now() + KILL_CONFIRM_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      if (readProcStartTime(pid) !== recordedStartTime) return true;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return readProcStartTime(pid) !== recordedStartTime;
   }
 
   /** Send SIGTERM to the session's process group as the owning identity. */

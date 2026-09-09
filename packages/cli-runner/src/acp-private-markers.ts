@@ -17,6 +17,7 @@ import { readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import { prepareOwnedPath, writeOwnedFile } from "./owned-fs.js";
+import type { AcpProviderKind } from "@moss/acp";
 
 /** Top-level folder under the runner base holding ACP private-purge markers. */
 export const ACP_PRIVATE_MARKER_DIR = "acp-private-markers";
@@ -27,6 +28,17 @@ export interface AcpPrivateMarkerRecord {
   readonly home: string;
   readonly uid: number;
   readonly gid: number;
+  /** Which adapter ran here, so a boot sweep knows which provider transcript store to purge. */
+  readonly provider: AcpProviderKind;
+  /**
+   * The spawned agent's own process id, and its start time read from the system at spawn
+   * (see readProcStartTime in acp-execs.ts) — null until the process actually exists. A boot
+   * sweep compares the live start time against this before purging: a match means the process
+   * this marker was written for is still running and must be stopped first; a mismatch or a
+   * gone process means it is safe to purge straight away.
+   */
+  readonly pid: number | null;
+  readonly startTime: string | null;
 }
 
 function markerFileName(key: string): string {
@@ -63,34 +75,60 @@ export async function writeAcpPrivateMarker(
   }
 }
 
-/** Read one session's marker; null when missing or not what this module wrote. */
+/**
+ * Reading a marker back has three outcomes, and a boot sweep must not treat them alike:
+ * "missing" means there is truly nothing to purge, so the (already-absent) marker can be
+ * dropped from bookkeeping. "invalid" means the marker exists but cannot be trusted — a
+ * partial write, disk corruption, or a read error other than not-found — and purging blind
+ * would either miss a real folder or act on the wrong one, so the marker must be LEFT so the
+ * sweep counts as incomplete and a later run (or an operator) can look at it (Astra-Reviewer
+ * finding, 2026-09-09: a failed read used to be silently treated as "gone").
+ */
+export type AcpPrivateMarkerReadResult =
+  | { readonly status: "ok"; readonly record: AcpPrivateMarkerRecord }
+  | { readonly status: "missing" }
+  | { readonly status: "invalid" };
+
+/** Read one session's marker, distinguishing "gone" from "unreadable" (see the type above). */
 export async function readAcpPrivateMarker(
   baseDir: string,
   key: string
-): Promise<AcpPrivateMarkerRecord | null> {
+): Promise<AcpPrivateMarkerReadResult> {
+  let raw: Partial<Record<keyof AcpPrivateMarkerRecord, unknown>>;
   try {
-    const raw = JSON.parse(await readFile(markerPath(baseDir, key), "utf8")) as Partial<
+    raw = JSON.parse(await readFile(markerPath(baseDir, key), "utf8")) as Partial<
       Record<keyof AcpPrivateMarkerRecord, unknown>
     >;
-    if (
-      typeof raw.sessionKey !== "string" ||
-      typeof raw.cwd !== "string" ||
-      typeof raw.home !== "string" ||
-      typeof raw.uid !== "number" ||
-      typeof raw.gid !== "number"
-    ) {
-      return null;
-    }
-    return {
+  } catch (error) {
+    return (error as NodeJS.ErrnoException)?.code === "ENOENT"
+      ? { status: "missing" }
+      : { status: "invalid" };
+  }
+  if (
+    typeof raw.sessionKey !== "string" ||
+    typeof raw.cwd !== "string" ||
+    typeof raw.home !== "string" ||
+    typeof raw.uid !== "number" ||
+    typeof raw.gid !== "number" ||
+    (raw.provider !== "anthropic" && raw.provider !== "openai" && raw.provider !== "opencode") ||
+    (raw.pid !== null && typeof raw.pid !== "number") ||
+    (raw.startTime !== null && typeof raw.startTime !== "string")
+  ) {
+    return { status: "invalid" };
+  }
+  return {
+    status: "ok",
+    record: {
       sessionKey: raw.sessionKey,
       cwd: raw.cwd,
       home: raw.home,
       uid: raw.uid,
-      gid: raw.gid
-    };
-  } catch {
-    return null;
-  }
+      gid: raw.gid,
+      provider: raw.provider,
+      pid: (raw.pid as number | null | undefined) ?? null,
+      startTime: (raw.startTime as string | null | undefined) ?? null
+    }
+  };
 }
 
 /** Remove one session's marker; a no-op when it is already gone. */
@@ -98,12 +136,18 @@ export async function removeAcpPrivateMarker(baseDir: string, key: string): Prom
   await rm(markerPath(baseDir, key), { force: true }).catch(() => undefined);
 }
 
-/** Every session key with a marker on disk right now, for a boot-time sweep. */
+/**
+ * Every session key with a marker on disk right now, for a boot-time sweep. Throws when the
+ * marker folder cannot be listed for a reason other than it never having been created — a
+ * permission or I/O error is not proof the folder is empty, and a caller that read it as such
+ * would run its wholesale clear over private folders it never actually checked.
+ */
 export async function listAcpPrivateMarkerKeys(baseDir: string): Promise<string[]> {
   try {
     const names = await readdir(join(baseDir, ACP_PRIVATE_MARKER_DIR));
     return names.filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -5));
-  } catch {
-    return [];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return [];
+    throw error;
   }
 }

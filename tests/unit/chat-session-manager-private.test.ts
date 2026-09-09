@@ -186,7 +186,12 @@ describe("ChatSessionManager private cleanup", () => {
 
     await manager.reconcileLiveSessions(new Set());
 
-    expect(killSession).toHaveBeenCalledWith("u1:drawer", { preserveNeutralDir: true });
+    // A live session's own engine kill must run the stop-then-purge path directly;
+    // killSession is reserved for the orphan-by-mux-name case and must not fire here
+    // (Astra-Reviewer finding, 2026-09-09).
+    expect(killSession).not.toHaveBeenCalled();
+    expect(engine.killed).toBe(true);
+    expect(engine.preserveNeutralDir).toBe(true);
     expect(engine.purged).toBe(true);
     expect(deps.persistence.deleteThread).not.toHaveBeenCalled();
     expect(revoke).toHaveBeenCalledWith("u1:drawer");
