@@ -38,6 +38,7 @@ import {
   type RpcPollLoginParams,
   type RpcProbeProviderParams,
   type RpcProviderKind,
+  type RpcRecordLoginRejectedParams,
   type RpcReadNewParams,
   type RpcReadStructuredParams,
   type RpcRequest,
@@ -462,6 +463,17 @@ async function invoke(
       const provider = params.provider;
       if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
       return host.probeProvider(provider, { forceFresh: params.forceFresh });
+    }
+    case "recordLoginRejected": {
+      // ACP sessions run API-side and learn of a rejected sign-in there, but the settings
+      // screen's readiness check always asks THIS process (probeProvider above), which holds
+      // its own separate refusal cache. Without this call the runner keeps answering "ready"
+      // with the very credential the vendor just refused.
+      const params = req.params as RpcRecordLoginRejectedParams;
+      const provider = params.provider;
+      if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
+      await host.recordLoginRejected(provider);
+      return { ok: true };
     }
     case "installProvider": {
       // §A.2.4 TWO ordered validation gates, both mapping to bad_request (§3.7) but

@@ -317,8 +317,59 @@ export async function purgePrivateTranscriptMarkers(
     } catch {
       purged = false;
     }
+    try {
+      if (!(await purgeAcpMarkersForSessionKey(io, neutralBase, sessionKey, homeBase))) {
+        purged = false;
+      }
+    } catch {
+      purged = false;
+    }
   }
   return purged;
+}
+
+/**
+ * An ACP session's real working folder sits one level below its session key, at
+ * `<sessionKey>/acp/<projectId>`, so the plain sweep above never reaches its marker there.
+ * This finds every such marker under one session key and purges it with the session's own
+ * folder, so a crash mid-turn still gets cleaned up on the next boot.
+ */
+async function purgeAcpMarkersForSessionKey(
+  io: Pick<TmuxIo, "run">,
+  neutralBase: string,
+  sessionKey: string,
+  homeBase?: string
+): Promise<boolean> {
+  const acpDir = join(neutralBase, sessionKey, "acp");
+  const listed = await io.run("ls", ["-A", acpDir]).catch(() => ({ code: 1, stdout: "" }));
+  if (listed.code !== 0) return true;
+  const agentHome = agentHomeForSessionKey(sessionKey, homeBase);
+  let purged = true;
+  for (const projectId of listed.stdout
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean)) {
+    const sessionCwd = join(acpDir, projectId);
+    const markerCheck = await io
+      .run("ls", [join(sessionCwd, ACP_IDENTITY_FILENAME)])
+      .catch(() => ({ code: 1, stdout: "" }));
+    if (markerCheck.code !== 0) continue;
+    try {
+      await purgeAcpPrivateTranscripts(io, sessionCwd, agentHome);
+    } catch {
+      purged = false;
+    }
+  }
+  return purged;
+}
+
+/** ACP session keys are `chat:<userId>:<conversationId>`; the runner's real home for that
+ *  session is per user, `<homeBase>/<userId>/agents/<userId>`, not the generic homeBase. */
+function agentHomeForSessionKey(sessionKey: string, homeBase?: string): string | null {
+  if (!homeBase) return null;
+  const [kind, userId] = sessionKey.split(":");
+  if (kind !== "chat" || !userId) return null;
+  return join(homeBase, userId, "agents", userId);
 }
 
 function codexSessionsRoot(homeBase: string = homedir()): string {

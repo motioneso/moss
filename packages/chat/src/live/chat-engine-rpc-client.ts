@@ -75,6 +75,8 @@ import {
   type PersistentRuntimeLaunchConfig,
   type RpcProbeProviderParams,
   type RpcProbeProviderResult,
+  type RpcRecordLoginRejectedParams,
+  type RpcRecordLoginRejectedResult,
   type RpcPurgeTranscriptsResult,
   type RpcReadNewParams,
   type RpcReadNewResult,
@@ -407,6 +409,18 @@ export class RpcConnection {
   /** Non-session onboarding probe (§4.8); no sessionKey. */
   probeProvider(params: RpcProbeProviderParams): Promise<RpcProbeProviderResult> {
     return this.call<RpcProbeProviderResult>("probeProvider", undefined, params);
+  }
+
+  /**
+   * Non-session, no sessionKey, mirrors `probeProvider`. ACP sessions run in this (API) process
+   * and learn first when a saved sign-in is refused; the runner process holds the readiness cache
+   * the settings screen actually reads, so that refusal has to be relayed across the socket or the
+   * settings screen keeps showing the sign-in as good.
+   */
+  recordLoginRejected(
+    params: RpcRecordLoginRejectedParams
+  ): Promise<RpcRecordLoginRejectedResult> {
+    return this.call<RpcRecordLoginRejectedResult>("recordLoginRejected", undefined, params);
   }
 
   /**

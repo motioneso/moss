@@ -359,7 +359,14 @@ export function selectEngineFactory(
             projectId: engineOpts.conversationId,
             permissionDecider: engineOpts?.acpPermissionDecider ?? opts.acpPermissionDecider,
             purgeTranscripts: engineOpts?.purgeTranscripts,
-            persistSessionIdentity: engineOpts?.persistSessionIdentity
+            persistSessionIdentity: engineOpts?.persistSessionIdentity,
+            // ACP sessions run in this process, so a rejected sign-in is first learned here —
+            // but the settings screen's readiness check always asks the runner process, which
+            // holds its own separate cache. Without relaying the rejection across the socket,
+            // the settings screen keeps showing a refused sign-in as good.
+            reportLoginRejected: () => {
+              void connection.recordLoginRejected({ provider }).catch(() => undefined);
+            }
           });
         }
       };

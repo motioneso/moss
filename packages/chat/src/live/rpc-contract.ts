@@ -164,6 +164,7 @@ export type RpcMethod =
   | "kill" // per-session (sessionKey required); private cleanup purges before kill
   | "listLiveSessions" // non-session (reconciliation, §4.6)
   | "probeProvider" // non-session (onboarding, §4.8)
+  | "recordLoginRejected" // non-session — tell the runner's own probe cache a sign-in was refused
   | "installProvider" // non-session (on-demand installer, install-contract §A.2 — ADDITIVE)
   | "beginLogin" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
   | "pollLogin" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
@@ -484,6 +485,20 @@ export interface RpcProbeProviderResult {
   /** EXISTING OnboardingProviderCheckResponse status set (onboarding-api.ts), reused verbatim. */
   readonly status: "ready" | "needs_login" | "not_installed" | "multiplexer_unavailable" | "error";
   readonly message?: string;
+}
+
+/**
+ * params for method "recordLoginRejected" — instance-wide, no sessionKey. Tells the runner
+ * process that a sign-in was just refused, so its OWN probe cache (the one the settings screen
+ * actually asks) stops answering "ready" with that credential. ACP sessions run in the API
+ * process and learn of a rejection there, which never reaches the runner on its own.
+ */
+export interface RpcRecordLoginRejectedParams {
+  readonly provider: RpcProviderKind;
+}
+/** result for method "recordLoginRejected". */
+export interface RpcRecordLoginRejectedResult {
+  readonly ok: true;
 }
 
 /**
