@@ -66,13 +66,7 @@ interface UserSession {
    * Undefined when no MCP client was configured for this session at all.
    */
   readonly mcpToken?: string;
-  /**
-   * #2164 — true when this session's engine is a bounded-fallback (one-shot, print) engine.
-   * Those engines start their MCP client per turn inside `submit()`, so the #2159 launch-time
-   * readiness gate is skipped for them (nothing to observe yet at launch) and a tool-less reply
-   * can otherwise be accepted before we know the CLI ever attached the MCP tools at all.
-   */
-  readonly isBoundedFallbackEngine: boolean;
+  readonly startsToolClientPerTurn: boolean;
 }
 
 const MAX_SUBSCRIBERS_PER_ACTOR = 5;
@@ -142,7 +136,11 @@ export class ChatSessionManager {
     const sessionKey = surfaceSessionKey(actorUserId, surface);
     const { provider, model, executionMode } =
       await this.deps.persistence.resolveActiveProvider(actorUserId);
-    const threadState = await this.deps.persistence.getCurrentThreadState?.(actorUserId, surface);
+    let threadState = await this.deps.persistence.getCurrentThreadState?.(actorUserId, surface);
+    if (!threadState && this.deps.persistence.getCurrentThreadState) {
+      await this.deps.persistence.openNewConversation(actorUserId, undefined, surface);
+      threadState = await this.deps.persistence.getCurrentThreadState(actorUserId, surface);
+    }
     const persona =
       typeof this.deps.persona === "string"
         ? this.deps.persona
@@ -154,9 +152,16 @@ export class ChatSessionManager {
       baseDir: this.deps.neutralBase,
       persona
     });
+    const mcpConfig = await this.deps.mintMcpToken?.(actorUserId, sessionKey);
     const engine = await this.deps.engineFactory(provider, sessionKey, {
       executionMode,
-      ...(threadState?.id ? { conversationId: threadState.id, userId: actorUserId } : {})
+      ...(threadState?.id ? { conversationId: threadState.id, userId: actorUserId } : {}),
+      ...(mcpConfig?.token && this.deps.acpPermissionDeciderForToken
+        ? { acpPermissionDecider: this.deps.acpPermissionDeciderForToken(mcpConfig.token) }
+        : {}),
+      ...(threadState?.incognito && this.deps.purgePrivateTranscripts
+        ? { purgeTranscripts: () => this.deps.purgePrivateTranscripts!(sessionKey) }
+        : {})
     });
     // Rebuild replay from live state for every launch; recall precedes conversation replay.
     const recallResult = this.deps.recall ? await this.deps.recall.recall(actorUserId) : null;
@@ -176,7 +181,6 @@ export class ChatSessionManager {
     if (threadState?.incognito && !engine.purgeTranscripts) {
       throw new CliChatUnavailableError("private session unavailable");
     }
-    const mcpConfig = await this.deps.mintMcpToken?.(actorUserId, sessionKey);
     const replayParts: string[] = [];
     if (memorySeed) replayParts.push(memorySeed);
     if (oldSummary) replayParts.push(renderSummaryBlock(oldSummary));
@@ -194,13 +198,9 @@ export class ChatSessionManager {
       mcpServerUrl: mcpConfig?.mcpServerUrl
     });
 
-    // #2159 — block session readiness (and so the first user message) until this session's MCP
-    // client has completed its first tools/list, closing the race where the terminal composer
-    // reads "ready" before the CLI's own tool-discovery round trip against our server has landed.
-    // #2164 — bounded-fallback (print/one-shot) engines never start an MCP client inside launch()
-    // (only per-turn, in submit()), so waiting here would always time out and tear down the
-    // session before its first message. Only engines that start MCP during launch() get the wait.
-    if (mcpConfig?.token && !isBoundedFallbackEngine(provider, executionMode)) {
+    const startsToolClientPerTurn =
+      engine.startsToolClientPerTurn ?? isBoundedFallbackEngine(provider, executionMode);
+    if (mcpConfig?.token && !startsToolClientPerTurn) {
       const toolsListReady = await this.deps.waitForToolsListReady?.(mcpConfig.token);
       if (toolsListReady === false) {
         // The engine process this launch just started, and the token just minted for it, would
@@ -226,7 +226,7 @@ export class ChatSessionManager {
       incognito: threadState?.incognito ?? false,
       seededContextKeys: new Set(),
       mcpToken: mcpConfig?.token,
-      isBoundedFallbackEngine: isBoundedFallbackEngine(provider, executionMode)
+      startsToolClientPerTurn
     };
     this.sessions.set(sessionKey, session);
 
@@ -511,7 +511,7 @@ export class ChatSessionManager {
       // `mcp__` attempt with a call id proves attachment (r22 fixed an id-less bypass).
       const mcpToolInvoked = mcpAttempts.some((a) => a.id != null && !rejectedCallIds.has(a.id));
       if (
-        session.isBoundedFallbackEngine &&
+        session.startsToolClientPerTurn &&
         session.provider === "anthropic" &&
         session.mcpToken &&
         !mcpToolInvoked &&

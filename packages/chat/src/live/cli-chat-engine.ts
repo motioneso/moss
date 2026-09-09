@@ -126,6 +126,7 @@ interface DrainOutcome {
  * google (Gemini).
  */
 export class CliChatEngineImpl implements CliChatEngine {
+  readonly startsToolClientPerTurn: boolean;
   private readonly mux: Multiplexer;
   /** The opaque session handle returned by mux.open() at launch. */
   private handle: MuxHandle | null = null;
@@ -182,6 +183,7 @@ export class CliChatEngineImpl implements CliChatEngine {
     // the one-shot-by-default flip lives at the DB + repository write-path layer (#1238/#1239,
     // migration 0172). See #1239 for why flipping it here buys nothing in prod.
     this.executionMode = opts.executionMode ?? "interactive";
+    this.startsToolClientPerTurn = this.executionMode === "non_interactive";
     this.onDiagnostic = opts.onDiagnostic;
   }
 

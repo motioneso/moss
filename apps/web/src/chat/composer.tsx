@@ -89,6 +89,15 @@ export function Composer(props: {
     el.setSelectionRange(el.value.length, el.value.length);
   }, []);
   const [queuedText, setQueuedText] = useState<string | null>(null);
+  const wasSending = useRef(props.isSending);
+  useEffect(() => {
+    const completed = wasSending.current && !props.isSending;
+    wasSending.current = props.isSending;
+    if (!completed || queuedText === null) return;
+    const next = queuedText;
+    setQueuedText(null);
+    props.onSend(next);
+  }, [props.isSending, props.onSend, queuedText]);
   // Explicit autocomplete pick, tracked by record id (not name — duplicate names are allowed).
   // Bare-name text typed without a pick still resolves at send time; see resolveTurnInvocation.
   const [boundSkillId, setBoundSkillId] = useState<string | null>(null);

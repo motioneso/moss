@@ -18,6 +18,7 @@ import type { RecallPort } from "../recall-port.js";
 import type { CrossToolReadRunner } from "./cross-tool-reasoning.js";
 import type { NotesContextRetriever } from "./notes-retrieval.js";
 import type { PersonaFs } from "./persona.js";
+import type { AcpPermissionDecider } from "@moss/acp";
 import type { ActionResultMetadata, CliChatEngine, EngineKillOpts } from "./types.js";
 
 export interface PrivateThreadState {
@@ -189,6 +190,8 @@ export interface ChatSessionManagerDeps {
    */
   readonly killSession?: (sessionKey: string, opts?: EngineKillOpts) => Promise<void>;
   readonly purgePrivateTranscripts?: (sessionKey: string) => Promise<void>;
+  /** Builds the gateway-backed ACP decider for a freshly minted session token. */
+  readonly acpPermissionDeciderForToken?: (token: string) => AcpPermissionDecider;
   /** Phase 3: optional recall service — injects <memory> seed before replay. */
   readonly recall?: RecallPort;
   /** Optional per-turn hidden context retrieval. Empty/failed result submits the raw turn. */

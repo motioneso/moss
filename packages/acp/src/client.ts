@@ -259,7 +259,8 @@ export class MossAcpClient {
     providerKind: AcpProviderKind,
     userId: string,
     surface: AcpProfile = "workshop",
-    toolServer?: AcpToolServer
+    toolServer?: AcpToolServer,
+    personaText?: string
   ): Promise<AcpSessionHandle> {
     checkAcpProfile(surface, providerKind);
     const { cwd, home, pid, uid, gid } = await this.tunnel.spawn(
@@ -283,7 +284,10 @@ export class MossAcpClient {
         mcpServers: toolServer ? [toMcpServerEntry(toolServer)] : [],
         // The row's launch-time off-list, from the tool table through the row's
         // own mechanism: the agent's disallowed-tools list.
-        _meta: { claudeCode: { options: { disallowedTools: launchOffList(surface) } } }
+        _meta: {
+          claudeCode: { options: { disallowedTools: launchOffList(surface) } },
+          ...(personaText !== undefined ? { moss: { personaText } } : {})
+        }
       });
       this.connections.set(session.sessionId, connection);
       this.sessionKeys.set(session.sessionId, sessionKey);
@@ -414,6 +418,27 @@ export class MossAcpClient {
       value: modelId
     });
     return { applied: true, mismatch: false, mechanism: row.model, note: null };
+  }
+
+  /** Set the requested chat model, falling back to the agent's advertised value when needed. */
+  async setModelForChat(handle: AcpSessionHandle, modelId: string): Promise<AcpSetModelResult> {
+    const options = this.sessionOptions.get(handle.sessionId) ?? [];
+    const option = findModelOption(options);
+    if (!option) return this.setModel(handle, modelId);
+    const accepted = acceptedOptionValues(option);
+    const current = (option as { currentValue?: unknown }).currentValue;
+    const currentValue = typeof current === "string" && current.length > 0 ? current : undefined;
+    const requestedIsDefault = modelId === "default" || modelId.length === 0;
+    const requestedIsUnsupported = accepted !== null && !accepted.has(modelId);
+    const effective =
+      requestedIsDefault || requestedIsUnsupported
+        ? currentValue && (accepted === null || accepted.has(currentValue))
+          ? currentValue
+          : accepted?.values().next().value
+        : modelId;
+    if (typeof effective !== "string" || effective.length === 0)
+      return this.setModel(handle, modelId);
+    return this.setModel(handle, effective);
   }
 
   /**

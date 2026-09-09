@@ -57,6 +57,7 @@ const NO_RESUMABLE_TRANSCRIPT_REASON =
   "no-op: --no-session-persistence means the provider keeps no resumable transcript to purge";
 
 export class ClaudePersistentRuntimeEngine implements CliChatEngine {
+  readonly startsToolClientPerTurn = false;
   readonly provider: ProviderKind;
 
   private readonly runtime: ProviderChatRuntime;

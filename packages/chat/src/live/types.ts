@@ -100,6 +100,8 @@ export interface EngineLaunchOpts {
 /** A persistent per-user CLI session. One instance per live session. */
 export interface CliChatEngine {
   readonly provider: ProviderKind;
+  /** True only when submit() starts a fresh MCP client for each turn. */
+  readonly startsToolClientPerTurn?: boolean;
   /**
    * Launch the per-user CLI session and return the post-drain transcript `offset` (§4.0/§4.1.2).
    * CHANGED for #342 from `Promise<void>`: when the engine owns the replay-drain (the cli-runner RPC

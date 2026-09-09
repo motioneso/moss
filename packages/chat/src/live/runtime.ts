@@ -126,6 +126,8 @@ export type ChatEngineFactory = (
     /** B4: set only by a structured caller (`CliStructuredAdapter`). See
      *  `ChatEngineSelectionOpts.needsStructuredOutput` in engine-selection.ts. */
     readonly needsStructuredOutput?: boolean;
+    readonly acpPermissionDecider?: AcpPermissionDecider;
+    readonly purgeTranscripts?: () => Promise<void>;
   }
 ) => CliChatEngine | Promise<CliChatEngine>;
 
@@ -350,7 +352,8 @@ export function selectEngineFactory(
             tunnel: new RpcAcpTunnel(connection, acpSessionKey),
             userId: engineOpts.userId,
             projectId: engineOpts.conversationId,
-            permissionDecider: opts.acpPermissionDecider
+            permissionDecider: engineOpts?.acpPermissionDecider ?? opts.acpPermissionDecider,
+            purgeTranscripts: engineOpts?.purgeTranscripts
           });
         }
       };
@@ -429,6 +432,8 @@ export interface CreateChatSessionRuntimeDeps {
      * `getToolsListObservationCount`. Absent ⇒ the per-turn readiness guard does not run.
      */
     readonly getToolsListObservationCount?: (token: string) => number;
+    /** Binds ACP built-in permission asks to the minted session token. */
+    readonly acpPermissionDeciderForToken?: (token: string) => AcpPermissionDecider;
   };
   /**
    * #342 (§3.5 boot-time fork) — when set, `createChatSessionRuntime` selects the engine factory ITSELF
@@ -602,6 +607,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     listMcpTokenSessionIds: deps.mcpTokenLifecycle?.listSessionIds,
     waitForToolsListReady: deps.mcpTokenLifecycle?.waitForReady,
     getToolsListObservationCount: deps.mcpTokenLifecycle?.getToolsListObservationCount,
+    acpPermissionDeciderForToken: deps.mcpTokenLifecycle?.acpPermissionDeciderForToken,
     // §4.5 kill-by-mux-name for an api-unknown orphan: route through the guard-bypassing reconcile
     // driver while a reconcile is in flight (the only path that calls this), falling back to the public
     // connection method otherwise. Undefined on the in-process/host path (no separate cli-runner holds

@@ -21,6 +21,7 @@ export interface AcpChatEngineOptions {
   readonly projectId: string;
   readonly permissionDecider?: AcpPermissionDecider;
   readonly toolServer?: AcpToolServer;
+  readonly purgeTranscripts?: () => Promise<void>;
   readonly log?: (line: string) => void;
 }
 
@@ -38,6 +39,7 @@ export function toAcpProviderKind(provider: ProviderKind): AcpProviderKind {
  */
 export class AcpChatEngine implements CliChatEngine {
   readonly provider: ProviderKind;
+  readonly startsToolClientPerTurn = false;
   private readonly client: MossAcpClient;
   private handle: AcpSessionHandle | null = null;
   private prompt: Promise<void> | null = null;
@@ -67,12 +69,13 @@ export class AcpChatEngine implements CliChatEngine {
         this.opts.toolServer ??
           (options.mcpToken && options.mcpServerUrl
             ? { url: options.mcpServerUrl, bearer: options.mcpToken }
-            : undefined)
+            : undefined),
+        options.personaText
       );
       // ACP config options are set after session/new and before any prompt, including the
       // explicit "default" binding. The client records a mismatch without silently changing
       // the configured model list.
-      if (options.model !== undefined) await this.client.setModel(this.handle, options.model);
+      await this.client.setModelForChat(this.handle, options.model ?? "default");
       (this.opts.log ?? console.info)(
         `[acp-chat] session opened conversation=${this.opts.projectId} provider=${kind}`
       );
@@ -111,7 +114,12 @@ export class AcpChatEngine implements CliChatEngine {
         }
       })
       .catch((error: unknown) => {
-        this.promptError = error;
+        this.promptError = isAuthRequired(error)
+          ? new CliChatUnavailableError(
+              `The ${providerLabel(toAcpProviderKind(this.provider))} sign-in has expired; an admin can log it in again under Settings, Assistant & AI`,
+              { cause: error }
+            )
+          : error;
       })
       .finally(() => {
         this.complete = true;
@@ -143,19 +151,23 @@ export class AcpChatEngine implements CliChatEngine {
     return this.handle !== null;
   }
 
+  async purgeTranscripts(): Promise<void> {
+    await this.opts.purgeTranscripts?.();
+  }
+
   async kill(_opts?: EngineKillOpts): Promise<void> {
     if (!this.handle) return;
     const handle = this.handle;
-    this.handle = null;
     await this.client.close(handle);
+    this.handle = null;
   }
 
   private async closeQuietly(): Promise<void> {
     if (!this.handle) return;
     const handle = this.handle;
-    this.handle = null;
     try {
       await this.client.close(handle);
+      this.handle = null;
     } catch {
       // The launch error is the useful failure; cleanup is retried by the client when it can
       // expose an AcpSessionOpenError, and this adapter must not mask it with a second error.

@@ -298,7 +298,9 @@ describe("MossAcpClient", () => {
       "proj",
       "anthropic",
       "user-1",
-      "chat"
+      "chat",
+      undefined,
+      "You are Jarvis."
     );
     expect(handle.sessionId).toBe("agent-sess-1");
     expect(handle.cwd).toBe("/runner/session/acp/proj");
@@ -321,7 +323,8 @@ describe("MossAcpClient", () => {
       .find((msg) => msg.method === "session/new");
     const { launchOffList } = await import("./tool-table.js");
     expect(opened.params._meta).toEqual({
-      claudeCode: { options: { disallowedTools: launchOffList("chat") } }
+      claudeCode: { options: { disallowedTools: launchOffList("chat") } },
+      moss: { personaText: "You are Jarvis." }
     });
     // No tool server handed over unless the caller provides one.
     expect(opened.params.mcpServers).toEqual([]);

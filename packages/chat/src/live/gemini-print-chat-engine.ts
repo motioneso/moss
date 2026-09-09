@@ -51,6 +51,7 @@ export interface GeminiPrintChatEngineOpts {
 
 export class GeminiPrintChatEngine implements CliChatEngine {
   readonly provider = "google" as const;
+  readonly startsToolClientPerTurn = true;
   private readonly homeBase?: string;
   private readonly sessionId: string;
   private neutralDir: string | null = null;

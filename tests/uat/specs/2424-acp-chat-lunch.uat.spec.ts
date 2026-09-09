@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
 // Task 7's early live proof. The normal UAT run stays credential-free; Prover enables this
@@ -6,6 +7,8 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
 const ACP_CHAT_PROOF_ENABLED = process.env.JARVIS_UAT_ACP_CHAT_PROOF === "1";
+const ACP_SESSION_OPEN_LINE = process.env.JARVIS_UAT_ACP_SESSION_OPEN_LINE;
+const ACP_LOG_PATH = process.env.JARVIS_UAT_ACP_LOG_PATH;
 
 function baseUrl(): string {
   const value = process.env.JARVIS_UAT_BASE_URL;
@@ -38,10 +41,17 @@ test("ACP chat answers, queues the next send, and refuses shell tools (#2424)", 
   await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
   const composer = page.getByRole("textbox", { name: /^Message/ });
   await expect(composer).toBeVisible();
+  const assistantReplies = page.locator(".chatd-msg:not(.chatd-msg--me)");
+  const repliesBefore = await assistantReplies.count();
 
   await composer.fill("Hello, please introduce yourself in one sentence.");
   await composer.press("Enter");
-  await expect(page.locator(".chatd-msg").last()).toContainText(/.+/, { timeout: 120_000 });
+  await expect(assistantReplies).toHaveCount(repliesBefore + 1, { timeout: 120_000 });
+  if (!ACP_SESSION_OPEN_LINE || !ACP_LOG_PATH) {
+    throw new Error("JARVIS_UAT_ACP_SESSION_OPEN_LINE and JARVIS_UAT_ACP_LOG_PATH are required");
+  }
+  const log = await readFile(ACP_LOG_PATH, "utf8");
+  expect(log).toContain(ACP_SESSION_OPEN_LINE);
 
   await composer.fill("Count from one to twenty, one number per line, slowly.");
   await composer.press("Enter");
@@ -51,6 +61,7 @@ test("ACP chat answers, queues the next send, and refuses shell tools (#2424)", 
     timeout: 30_000
   });
   await expect(page.locator(".chatd-next__text")).toContainText("And then say done.");
+  await expect(assistantReplies).toHaveCount(repliesBefore + 3, { timeout: 120_000 });
 
   await expect(page.getByText(/Run the command/)).toHaveCount(0);
   await expect(composer).toBeVisible();

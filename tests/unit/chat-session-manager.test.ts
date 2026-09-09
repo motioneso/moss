@@ -175,6 +175,39 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
     });
   });
 
+  it("creates the first conversation before selecting the chat engine", async () => {
+    const engine = new FakeEngine(0);
+    let thread: { id: string; incognito: boolean } | undefined;
+    const openNewConversation = vi.fn(async () => {
+      thread = { id: "thread-1", incognito: false };
+    });
+    const engineFactory = vi.fn(() => engine);
+    const deps = makeMinimalDeps({
+      engineFactory,
+      persistence: {
+        resolveActiveProvider: vi
+          .fn()
+          .mockResolvedValue({ provider: "anthropic", model: "sonnet" }),
+        listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+        recordTurn: vi.fn().mockResolvedValue(undefined),
+        openNewConversation,
+        getCurrentThreadState: vi.fn(async () => thread),
+        getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+        touchExistingThread: vi.fn().mockResolvedValue(true)
+      }
+    });
+    const manager = new ChatSessionManager(deps);
+
+    await manager.ensureSession("u1", "Ben");
+
+    expect(openNewConversation).toHaveBeenCalledWith("u1", undefined, "drawer");
+    expect(engineFactory).toHaveBeenCalledWith("anthropic", "u1:drawer", {
+      executionMode: undefined,
+      conversationId: "thread-1",
+      userId: "u1"
+    });
+  });
+
   it("assembles replayBatch from prior turns and ships it on launch", async () => {
     const engine = new FakeEngine(0);
     const manager = new ChatSessionManager(

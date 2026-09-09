@@ -192,6 +192,28 @@ class ModelAgent implements AcpTunnel {
 }
 
 describe("setModel", () => {
+  it("binds chat's default to the advertised current model before prompting", async () => {
+    const agent = new ModelAgent(["m-1", "m-2"]);
+    const client = new MossAcpClient(agent);
+    const handle = await client.openSession(
+      "chat:user:conv",
+      "conv",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
+
+    await expect(client.setModelForChat(handle, "default")).resolves.toMatchObject({
+      applied: true,
+      mismatch: false
+    });
+    const switchSent = agent.sent
+      .map((line) => JSON.parse(line))
+      .find((msg) => msg.method === "session/set_config_option");
+    expect(switchSent.params.value).toBe("m-1");
+    await client.close(handle);
+  });
+
   it("sends the option when the agent advertises a model choice", async () => {
     const agent = new ModelAgent(["m-1", "m-2"]);
     const client = new MossAcpClient(agent);

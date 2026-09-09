@@ -88,6 +88,7 @@ export interface ChatEngineSelectionOpts {
   readonly acpUserId?: string;
   readonly acpProjectId?: string;
   readonly acpPermissionDecider?: AcpPermissionDecider;
+  readonly purgeTranscripts?: () => Promise<void>;
 }
 
 /**
@@ -188,7 +189,8 @@ export function createChatEngine(
       tunnel: new RpcAcpTunnel(opts.acpConnection, sessionKey),
       userId: opts.acpUserId,
       projectId: opts.acpProjectId,
-      permissionDecider: opts.acpPermissionDecider
+      permissionDecider: opts.acpPermissionDecider,
+      purgeTranscripts: opts.purgeTranscripts
     });
   }
   // #1557 Phase 1 / #1558: the persistent adapter is a third engine shape, checked ahead of the

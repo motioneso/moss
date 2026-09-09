@@ -92,6 +92,7 @@ export interface ClaudePrintChatEngineOpts {
 
 export class ClaudePrintChatEngine implements CliChatEngine {
   readonly provider = "anthropic" as const;
+  readonly startsToolClientPerTurn = true;
 
   private readonly homeBase?: string;
   private readonly credentialFile?: string;

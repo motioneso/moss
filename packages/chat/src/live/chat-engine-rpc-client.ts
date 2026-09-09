@@ -820,6 +820,7 @@ export class RpcConnection {
  * (the factory passes it) so it is never an RPC (§4.0).
  */
 export class ChatEngineRpcClient implements CliChatEngine {
+  readonly startsToolClientPerTurn: boolean;
   constructor(
     public readonly provider: ProviderKind,
     private readonly sessionKey: string,
@@ -835,7 +836,9 @@ export class ChatEngineRpcClient implements CliChatEngine {
     private readonly readPersistentConfig?: () => Promise<PersistentRuntimeLaunchConfig>,
     /** B4: forwarded to `RpcLaunchParams.needsStructuredOutput`. See its doc comment. */
     private readonly needsStructuredOutput = false
-  ) {}
+  ) {
+    this.startsToolClientPerTurn = executionMode === "non_interactive";
+  }
 
   /**
    * §4.1.0a: serialize ONLY personaText + replayBatch + mcpToken + mcpServerUrl + provider into

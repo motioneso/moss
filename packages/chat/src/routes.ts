@@ -29,6 +29,7 @@ import {
 } from "@moss/ai";
 import { PreferencesRepository } from "@moss/structured-state";
 import type { NotesRecallPort } from "@moss/notes";
+import type { AcpPermissionDecider } from "@moss/acp";
 import { getConnectorSyncAt } from "@moss/connectors";
 import type {
   ConnectorsRepository,
@@ -274,7 +275,7 @@ export function registerChatRoutes(
             })
           );
 
-          return { tokens, gateway, mcpServerUrl, aiRepository };
+          return { tokens, confirmations, gateway, mcpServerUrl, aiRepository };
         })()
       : null;
 
@@ -333,7 +334,35 @@ export function registerChatRoutes(
           waitForReady: (token: string) => wiring.tokens.waitForToolsListObserved(token),
           // #2164 r21 — per-turn observation reading (see Fable's r21 wiring-amendment ruling).
           getToolsListObservationCount: (token: string) =>
-            wiring.tokens.getToolsListObservationCount(token)
+            wiring.tokens.getToolsListObservationCount(token),
+          acpPermissionDeciderForToken: (token: string): AcpPermissionDecider => ({
+            decide: async (request, session) => {
+              const result = await wiring.gateway.requestAcpBuiltInPermission(token, {
+                cwd: session.cwd,
+                home: session.home,
+                sessionId: request.sessionId,
+                turnId: request.turnId,
+                toolCallId: request.toolCallId,
+                title: request.title,
+                toolInput:
+                  request.rawInput &&
+                  typeof request.rawInput === "object" &&
+                  !Array.isArray(request.rawInput)
+                    ? (request.rawInput as Record<string, unknown>)
+                    : {},
+                toolName: request.toolName,
+                kind: request.kind,
+                locations: request.locations
+              });
+              return result.decision === "allow" ? "allow" : "deny";
+            },
+            beginTurn: (sessionId, turnId) => {
+              wiring.confirmations.beginTurn(sessionId, turnId);
+            },
+            cancelSession: (sessionId) => {
+              wiring.confirmations.cancelSession(sessionId);
+            }
+          })
         }
       : undefined
   });

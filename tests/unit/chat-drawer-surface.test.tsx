@@ -254,6 +254,55 @@ describe("ChatDrawer surface routing (#1533)", () => {
     });
   });
 
+  it("drains a queued send after normal completion", async () => {
+    let resolveFirst!: (value: {
+      userMessageId: string;
+      assistantMessageId: string;
+      reply: string;
+      sourceFreshness: null;
+    }) => void;
+    vi.mocked(sendChatTurn).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        })
+    );
+
+    const renderer = await renderDrawer(moduleSurface);
+    await typeAndSend(renderer, "first");
+    const textarea = renderer.root.findByType("textarea");
+    await act(async () => textarea.props.onChange({ target: { value: "second" } }));
+    await act(async () => {
+      textarea.props.onKeyDown({
+        key: "Enter",
+        shiftKey: false,
+        preventDefault: () => undefined
+      });
+    });
+
+    expect(sendChatTurn).toHaveBeenCalledExactlyOnceWith(
+      "first",
+      undefined,
+      undefined,
+      moduleSurface
+    );
+    expect(findByClassName(renderer, "chatd-next__text")?.children.join("")).toBe('Next: "second"');
+
+    await act(async () => {
+      resolveFirst({
+        userMessageId: "user-1",
+        assistantMessageId: "assistant-1",
+        reply: "first",
+        sourceFreshness: null
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(sendChatTurn).toHaveBeenCalledTimes(2);
+    expect(sendChatTurn).toHaveBeenLastCalledWith("second", undefined, undefined, moduleSurface);
+  });
+
   it("routes New Chat to clearChat on the module surface", async () => {
     const renderer = await renderDrawer(moduleSurface);
     const newChatButton = findByAriaLabel(renderer, "New chat");
