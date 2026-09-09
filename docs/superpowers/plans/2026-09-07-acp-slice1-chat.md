@@ -9,7 +9,7 @@ passes its live proof.
 Revision 2 (2026-09-07): chat replaces the Workshop as slice 1 (Ben); Reviewer's findings on
 revision 1 folded in (runner restored as it was, chat profile only, spec 7 point 3 deferred with a
 reason, model list reconciliation decided, reload and queueing named, evidence rules, two missed
-restores, release note); the behind-the-scenes task added (spec section 14); OpenCode as the second live-proof provider (Scout's check passed 2026-09-07). Revision 3 (same day): Reviewer's second-pass findings: task 9 narrowed to chat's own engines (PM's ruling), the spike's timing numbers copied in, chat's model choice stated, the chat UAT spec in task 7, the tool table's missing column named; PM's ruling on the gate clock and session warm-up. Revision 4 (2026-09-08, Astra-Reviewer's review of PR 2427 at 98f840fe0): the boot script keeps the signal privilege in prod (five, not four); OpenCode's row is ready now and the live proof gates the merge, not the flag; the handshake script's side entrance goes. Revision 5 (2026-09-08, retro after the foundation work closed at 7aaf21246): task 5b's builds paragraph rewritten as twenty numbered invariants with nothing added or dropped; task 7 gets an early live proof by Prover before task 8; the retro's seven working rules recorded under order and hand-offs.
+restores, release note); the behind-the-scenes task added (spec section 14); OpenCode as the second live-proof provider (Scout's check passed 2026-09-07). Revision 3 (same day): Reviewer's second-pass findings: task 9 narrowed to chat's own engines (PM's ruling), the spike's timing numbers copied in, chat's model choice stated, the chat UAT spec in task 7, the tool table's missing column named; PM's ruling on the gate clock and session warm-up. Revision 4 (2026-09-08, Astra-Reviewer's review of PR 2427 at 98f840fe0): the boot script keeps the signal privilege in prod (five, not four); OpenCode's row is ready now and the live proof gates the merge, not the flag; the handshake script's side entrance goes. Revision 5 (2026-09-08, retro after the foundation work closed at 7aaf21246): task 5b's builds paragraph rewritten as twenty numbered invariants with nothing added or dropped; task 7 gets an early live proof by Prover before task 8; the retro's seven working rules recorded under order and hand-offs. Revision 6 (2026-09-09, Ben's ruling that builders clear at the context limit): a session-sizing rule under Tasks; task 7's remainder cut into 7b to 7d around the purge commit already built; task 8 cut into 8a (records), 8b (the fold) and 8c (the stats strip); the order line updated.
 
 ## Premises verified on `main` at e32222640 (2026-09-07)
 
@@ -111,6 +111,14 @@ Every task runs, unpiped, before every push: `pnpm lint`, `pnpm format:check`,
 runs only through the `verify-gate` skill, at the end of tasks 5, 7 and 9. No `git add -A`; commit
 by path (`shared-checkout` skill). Every product-facing task (6 to 9) updates the app map in the
 same commit range.
+
+**Session sizing (revision 6, Ben's ruling 2026-09-09).** Builders now clear themselves at the
+context limit instead of compacting, so a task must fit one builder session start to finish,
+including its check run: about 200k tokens of context. The purge in task 7 touched five areas at
+once and cost three resets. From here on a task touches one area (a handful of source files plus
+their tests) and runs one scoped test command; the full gate through `verify-gate` gets a session
+of its own, with nothing else in it. A task that needs more than that is split before it is
+assigned, never partway through.
 
 ### Task 1. Restore the protocol package from history, nothing else
 
@@ -245,25 +253,62 @@ Astra-Reviewer's whole-slice read at 561265882 (2026-09-08) found that the resto
   - Check 3, shell refused (the point of the slice). 11. Send: `Run the command "whoami" in a shell and tell me the output.` 12. Screenshot the whole reply. 13. Record: does the reply say it cannot run shell commands, and does no approval card or permission prompt appear anywhere on screen. An approval card appearing is a fail even if the command is then denied. 14. Screenshot the conversation once more after the reply settles, to show no card appeared late.
   - What Prover posts to the PR: every screenshot, the quoted log line in full, the exact wording of the queued-send notice, the exact wording of the refusal, and a plain pass or fail per check. Any check Prover could not run is named as not run, not as passed. The log line decides; the queued-send notice supports (Prover's caution: it proves the new path only if the old bridge never queued, which is read from code, not watched).
 
-### Task 8. Behind the scenes: the fold and the stats strip
+### Task 7, what is left (re-sliced, revision 6, 2026-09-09)
 
-Starts only after Ben has seen the mockup (posted in the room 2026-09-07).
+Everything in task 7 except the purge is built, reviewed and green at 4fc7309f1. The purge is built
+to the ruled shape and committed locally on the lane worktree as 7cea65f42 (the head PM was told,
+d94e1d57a, was rewritten when the builder merged main in); it is not pushed. These sessions finish
+task 7 around that commit; nothing in the purge is re-planned.
 
-- **Builds:** transcript records for thought, tool call (real name, summarised arguments), result
-  (capped), approved / not approved / refused lines, written as the protocol updates arrive so the
-  open fold is the live view; the reply record stores elapsed ms and the usage block; the stats
-  strip (`chatd-stats`, one new primitive in `components-chat.css`) under the reply: elapsed, then
-  input, output, cached-read tokens with flat icons and word tooltips, each number shown only when the agent sent it (OpenCode sends no cache split, so it shows two); a thought-token count, when sent, is stored with the block and not shown.
-- **Files:** `packages/shared/src/chat-api.ts`, `packages/chat/src/live/acp-chat-engine.ts`,
-  `packages/ui/src/chat-thread.tsx`, `packages/ui/src/styles/components-chat.css`,
-  `apps/web/src/chat/message-row.tsx`, `packages/chat/src/manifest.ts`.
-- **Tests:** record mapping unit tests (each update kind to its line; usage absent shows time
-  alone); a web test that the fold lists the lines in order and the strip renders the numbers
-  given.
-- **App map:** chat manifest `features`: the fold and the strip.
-- **Design gate:** the invented-class audit from the `design-system` skill run on `apps/web/src/chat`
-  and `packages/ui/src`, output on the PR.
-- **Gate:** the four checks; `pnpm vitest run packages/chat packages/ui apps/web`.
+- **Task 7b. Land the purge.** One session: push the local commit, wait for the pull request's
+  checks on that head, report each check by name. No code changes unless a check is red, and a red
+  check is reported, not fixed in the same session. *Done when* the purge commit is on GitHub and
+  every check on that head is green, or the red ones are named in the report.
+- **Task 7c. Purge review fixes.** Runs only if Astra's review of the purge commit range finds
+  something. One session per finding batch, one commit, checks named for the new head. *Done when*
+  Astra confirms the findings closed and the head is green.
+- **Task 7d. Handoff for the live proof.** Not a build session. The builder's handoff to Prover
+  gives the four items Prover's script asks for (dev address, account, engine, the session-open
+  log line quoted word for word) and nothing else. *Done when* Prover has the four items and the
+  dev instance runs the branch head.
+- **Prover's task 7 early live proof** stays where it is above, unchanged, and gates task 8.
+
+### Task 8, re-sliced (revision 6, 2026-09-09)
+
+Starts only after Prover's task 7 proof is on the pull request (Ben saw the mockup 2026-09-07). The
+old task 8 spanned the shared types, the engine, the thread component, the stylesheet and the web
+row at once; it is now three tasks along the seam between what is stored and what is drawn. The
+design and the records are as decided above and in the spec; only the cut changes.
+
+- **Task 8a. Records from the protocol updates (server side only).** Builds: the transcript record
+  shapes for thought, tool call (real name, summarised arguments), result (capped) and approved /
+  not approved / refused lines in `packages/shared/src/chat-api.ts`; the engine writes them as the
+  updates arrive; the reply record stores elapsed ms and the usage block; a thought-token count,
+  when sent, is stored and not shown. Files: `packages/shared/src/chat-api.ts`,
+  `packages/chat/src/live/acp-chat-engine.ts`. Tests: record mapping unit tests (each update kind
+  to its line; usage absent stores time alone). Gate: the four checks; `pnpm vitest run
+  packages/chat`. Nothing on screen changes. *Done when* a turn on the branch persists the new
+  records and the checks are green for the head.
+- **Task 8b. The fold.** Builds: the thread renders the records from 8a under the reply as a fold
+  that is the live view while the turn runs, lines in arrival order. Files:
+  `packages/ui/src/chat-thread.tsx`, `apps/web/src/chat/message-row.tsx`,
+  `packages/chat/src/manifest.ts` (app map: the fold). Tests: a web test that the fold lists the
+  lines in order. Gate: the four checks; `pnpm vitest run packages/ui apps/web`; the invented-class
+  audit from the `design-system` skill on `apps/web/src/chat` and `packages/ui/src`, output on the
+  PR. *Done when* the fold shows a real turn's lines on the branch, the audit is clean and the
+  checks are green for the head.
+- **Task 8c. The stats strip.** Builds: `chatd-stats`, one new primitive in
+  `packages/ui/src/styles/components-chat.css`, under the reply: elapsed, then input, output and
+  cached-read tokens with flat icons and word tooltips, each number shown only when the agent sent
+  it (OpenCode sends no cache split, so it shows two). Files: the stylesheet,
+  `apps/web/src/chat/message-row.tsx`, `packages/chat/src/manifest.ts` (app map: the strip).
+  Tests: a web test that the strip renders the numbers given and hides the ones absent. Gate: the
+  four checks; `pnpm vitest run apps/web`; the invented-class audit again, output on the PR. *Done
+  when* the strip shows a real turn's numbers on the branch, the audit is clean and the checks are
+  green for the head.
+
+Each of 8a, 8b and 8c is reviewed and confirmed before the next starts, per the working rules.
+Task 9 is unchanged in content and keeps its full gate, which runs in a session of its own.
 
 ### Task 9. Delete chat's half of the bridge, settings wording, second gate
 
@@ -301,7 +346,7 @@ Starts only after Ben has seen the mockup (posted in the room 2026-09-07).
 6. **Prover proves early.** The task 7 early live proof (above) runs before task 8, so the first click through the real screen is on a small change, not on the whole stack at task 10.
 7. **Status words stay separate:** implemented, reviewed, checks green, live proven. A report that uses one never implies the next.
 
-1 → 2 → 3 → 4 → 5 → 5b → 4 rerun (first kill gate, on the running service) → 5c → 6 → 7 → 8 → 9 (second gate) → 10. Task 5 may run in parallel with 3 and 4 if two builders are available; both land on the same lane branch and PR. Reviewer reviews each task's commit range before the next task starts.
+1 → 2 → 3 → 4 → 5 → 5b → 4 rerun (first kill gate, on the running service) → 5c → 6 → 7 → 7b → 7c (if needed) → 7d → Prover's task 7 proof → 8a → 8b → 8c → 9 (second gate, own session) → 10. Task 5 may run in parallel with 3 and 4 if two builders are available; both land on the same lane branch and PR. Reviewer reviews each task's commit range before the next task starts.
 
 **Stacked pull requests from task 6 onward (Ben, 2026-09-08, on PM's recommendation; nothing already open changes).** Tasks 1 to 5c stay as they are on PR 2427. From task 6 on, each task is its own pull request on its own branch, stacked on the one below it: task 6 branches from the slice branch and targets it; task 7 branches from task 6's branch and targets it; and so on. Each layer is reviewed and merged downward in order, so a merge of task 7 carries task 6 with it; a builder may start the next layer on top of an open one without waiting for a clean tree. Check names and results are reported per layer, for that layer's head. The live proof (task 10) happens once, at the top of the stack, on the slice branch after every layer has merged into it, before the slice branch goes to main. The layers and what each stands on: task 6 (approval wiring) on the slice branch, no chat engine needed; task 7 (chat through the protocol) on task 6, since its asks and cancels go through task 6's pending actions; task 8 (the fold and the stats strip) on task 7, since it writes records from the engine task 7 creates and edits that engine file, so a task 7 review fix underneath is the one place a rebase can conflict; task 9 (the deletion and the settings wording) on task 8, since it removes the old chat path only once task 7 is the sole path and its measure gate runs against that engine; task 10 is not a layer, it is Prover's proof on the assembled slice branch. Task 9 touches different files from task 8, so if two builders are free it may be built at the same time as task 8 by branching from task 7 and rebasing onto task 8 when task 8 merges; that is the one place the stack forks, and the rebase is the second builder's job.
 
