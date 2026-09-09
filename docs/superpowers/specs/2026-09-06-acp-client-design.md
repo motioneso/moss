@@ -125,7 +125,15 @@ the profile's working folder. The launch command comes from the registry entry f
 pinned by version in Moss (section 9), never resolved live at run time. The vendor login reaches
 the agent the way each provider's row says. Nothing secret ever goes on the command line. The
 runner's interface narrows to one job: start this provider's agent as this user in this folder and
-hand back the pipe, plus sign-in and model refresh. It no longer knows about chat, engines or output
+hand back the pipe, plus sign-in and model refresh, and one more verb: purge this session's private
+transcripts (Architect, 2026-09-08, on Astra's task 7 finding). The working folder and home belong
+to the per-user account, owner-only, so the API process cannot reach them; the runner created them
+and purges them as that account through the same drop-privileges launch it uses for the agent. The
+runner writes the private marker at spawn into its own folder one level above the user-owned working
+folder, recording working folder, home and provider, so its boot sweep can always read it. Order at
+shutdown is stop, wait for exit, purge, then remove the marker; a folder the sweep cannot enter never
+counts as cleaned, and a refused purge keeps the marker and blocks the wholesale clear. It still knows
+nothing about chat, engines or output
 parsing (Ben asked what the runner still brings, 2026-09-07: per-user accounts, the logins kept out
 of the API process, and the CLIs kept off the API container).
 
