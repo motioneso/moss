@@ -22,6 +22,7 @@ import {
   selectEngineFactory
 } from "../../packages/chat/src/live/runtime.js";
 import { createStructuredChatEngineFactory } from "../../packages/module-registry/src/index.js";
+import { AcpChatEngine } from "../../packages/chat/src/live/acp-chat-engine.js";
 import { ClaudePrintChatEngine } from "../../packages/chat/src/live/claude-print-chat-engine.js";
 import { CliChatEngineImpl } from "../../packages/chat/src/live/cli-chat-engine.js";
 import type { Multiplexer, MuxHandle } from "@moss/ai";
@@ -98,6 +99,43 @@ describe("selectEngineFactory — boot-time fork (§3.5)", () => {
     const engine = await factory("anthropic", "user-a");
     expect(engine).not.toBeInstanceOf(ChatEngineRpcClient);
     expect(connection).toBeUndefined();
+  });
+
+  it("chat has no old-bridge fallback: an unset socket still resolves the RPC path when acpChat is on, using the default runner socket path", async () => {
+    const { factory, connection } = selectEngineFactory({
+      env: { JARVIS_CLI_RUNNER_RPC_SECRET: "boot-secret" } as NodeJS.ProcessEnv,
+      acpChat: true
+    });
+    try {
+      expect(connection).toBeDefined();
+      const engine = await factory("anthropic", "user-a", {
+        conversationId: "conv-1",
+        userId: "user-a"
+      });
+      expect(engine).toBeInstanceOf(AcpChatEngine);
+    } finally {
+      connection?.close();
+    }
+  });
+
+  it("refuses an ACP chat launch missing its conversation or user id, instead of silently returning a bare RPC client", async () => {
+    const { factory, connection } = selectEngineFactory({
+      env: {
+        JARVIS_CLI_RUNNER_SOCKET: SOCKET,
+        JARVIS_CLI_RUNNER_RPC_SECRET: "boot-secret"
+      } as NodeJS.ProcessEnv,
+      acpChat: true
+    });
+    try {
+      expect(() => factory("anthropic", "user-a", { userId: "user-a" })).toThrow(
+        CliChatUnavailableError
+      );
+      expect(() => factory("anthropic", "user-a", { conversationId: "conv-1" })).toThrow(
+        CliChatUnavailableError
+      );
+    } finally {
+      connection?.close();
+    }
   });
 });
 

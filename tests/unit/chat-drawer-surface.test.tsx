@@ -117,7 +117,8 @@ function findByAriaLabel(renderer: ReactTestRenderer, label: string) {
 function buildElement(
   client: QueryClient,
   surface: ChatSurface,
-  clearRecords: () => void
+  clearRecords: () => void,
+  open = true
 ): ReactElement {
   return createElement(
     QueryClientProvider,
@@ -126,7 +127,7 @@ function buildElement(
       MemoryRouter,
       null,
       createElement(ChatDrawer, {
-        open: true,
+        open,
         onClose: () => undefined,
         records: [],
         clearRecords,
@@ -287,6 +288,59 @@ describe("ChatDrawer surface routing (#1533)", () => {
       moduleSurface
     );
     expect(findByClassName(renderer, "chatd-next__text")?.children.join("")).toBe('Next: "second"');
+
+    await act(async () => {
+      resolveFirst({
+        userMessageId: "user-1",
+        assistantMessageId: "assistant-1",
+        reply: "first",
+        sourceFreshness: null
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(sendChatTurn).toHaveBeenCalledTimes(2);
+    expect(sendChatTurn).toHaveBeenLastCalledWith("second", undefined, undefined, moduleSurface);
+  });
+
+  it("keeps a queued send when the composer remounts before the first turn completes", async () => {
+    let resolveFirst!: (value: {
+      userMessageId: string;
+      assistantMessageId: string;
+      reply: string;
+      sourceFreshness: null;
+    }) => void;
+    vi.mocked(sendChatTurn).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        })
+    );
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const clearRecords = vi.fn();
+    const renderer = await mountWithClient(client, moduleSurface, clearRecords);
+    await typeAndSend(renderer, "first");
+
+    const textarea = renderer.root.findByType("textarea");
+    await act(async () => textarea.props.onChange({ target: { value: "second" } }));
+    await act(async () => {
+      textarea.props.onKeyDown({
+        key: "Enter",
+        shiftKey: false,
+        preventDefault: () => undefined
+      });
+    });
+    expect(findByClassName(renderer, "chatd-next__text")?.children.join("")).toBe('Next: "second"');
+
+    await act(async () => {
+      renderer.update(buildElement(client, moduleSurface, clearRecords, false));
+    });
+    await act(async () => {
+      renderer.update(buildElement(client, moduleSurface, clearRecords, true));
+      await Promise.resolve();
+    });
 
     await act(async () => {
       resolveFirst({

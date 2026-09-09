@@ -183,7 +183,11 @@ export function ChatDrawer(props: {
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [needsProvider, setNeedsProvider] = useState(false);
-  const [drainAfterStopText, setDrainAfterStopText] = useState<{
+  // Lives here, not in the composer, so a queued second message survives the composer
+  // unmounting and remounting mid-turn (e.g. closing and reopening the drawer) — it is drained
+  // by the effect below the instant the turn ends, whether that end came from completion or
+  // from the user clicking Stop.
+  const [queuedSendText, setQueuedSendText] = useState<{
     readonly text: string;
     readonly surface: ChatSurface;
   } | null>(null);
@@ -231,7 +235,7 @@ export function ChatDrawer(props: {
     setNeedsProvider(false);
     setActivatingPrivate(false);
     setPrivateActivationError(null);
-    setDrainAfterStopText(null);
+    setQueuedSendText(null);
   }, [props.surface]);
 
   const chatRouteQuery = useQuery({
@@ -334,12 +338,12 @@ export function ChatDrawer(props: {
   );
 
   useEffect(() => {
-    if (isSending || drainAfterStopText === null) return;
-    const queued = drainAfterStopText;
-    setDrainAfterStopText(null);
+    if (isSending || queuedSendText === null) return;
+    const queued = queuedSendText;
+    setQueuedSendText(null);
     if (queued.surface !== props.surface) return;
     sendMessage(queued.text);
-  }, [drainAfterStopText, isSending, props.surface, sendMessage]);
+  }, [queuedSendText, isSending, props.surface, sendMessage]);
 
   const reviewing = reviewThreadId !== null;
   const displayRecords = reviewing
@@ -379,7 +383,7 @@ export function ChatDrawer(props: {
       setPrivateEnded(true);
       setIsSending(false);
       setPendingUser(null);
-      setDrainAfterStopText(null);
+      setQueuedSendText(null);
     }
   }, [privateEnded, privateMode, props.streamErrorCount]);
 
@@ -421,7 +425,7 @@ export function ChatDrawer(props: {
     setIsSending(false);
     setSendError(null);
     setNeedsProvider(false);
-    setDrainAfterStopText(null);
+    setQueuedSendText(null);
     setPendingUser(null);
     setFallbackRecords([]);
     privateModeDecidedLocally.current = true;
@@ -446,7 +450,7 @@ export function ChatDrawer(props: {
     setIsSending(false);
     setSendError(null);
     setNeedsProvider(false);
-    setDrainAfterStopText(null);
+    setQueuedSendText(null);
     setPendingUser(null);
     setPrivateEnded(false);
     setPrivateActivationError(null);
@@ -511,14 +515,17 @@ export function ChatDrawer(props: {
   };
 
   /** #456 — stop the in-flight turn. The backend kills the engine + emits 'Stopped by user.' over
-   *  SSE; the in-flight POST /turn then settles, clearing isSending in sendMessage's finally. */
-  const stopSending = (queuedText: string | null): void => {
-    if (queuedText !== null) {
-      setDrainAfterStopText({ text: queuedText, surface: props.surface });
-    }
+   *  SSE; the in-flight POST /turn then settles, clearing isSending in sendMessage's finally.
+   *  Any already-queued next message (see queuedSendText above) is untouched — it still drains
+   *  once isSending clears, stop or no stop. */
+  const stopSending = (): void => {
     void cancelChatTurn(props.surface).catch(() => {
       // best-effort: the turn ends server-side regardless; a network error here just clears isSending.
     });
+  };
+
+  const queueSend = (text: string): void => {
+    setQueuedSendText({ text, surface: props.surface });
   };
 
   return (
@@ -724,7 +731,10 @@ export function ChatDrawer(props: {
         needsProvider={needsProvider}
         lockedModelUnavailable={lockedModelUnavailable}
         privateMode={privateMode}
+        queuedText={queuedSendText?.surface === props.surface ? queuedSendText.text : null}
         onSend={sendMessage}
+        onQueue={queueSend}
+        onDiscardQueuedText={() => setQueuedSendText(null)}
         onStop={stopSending}
       />
     </aside>

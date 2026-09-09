@@ -290,6 +290,13 @@ function createRpcEngineFactory(opts: {
  * only in the compose path. Returns the factory, plus the `RpcConnection` when the RPC path is taken
  * (so the composition root can wire reconciliation + tear it down on shutdown).
  *
+ * NO OLD-BRIDGE FALLBACK FOR CHAT (task 7 plan): when `acpChat` is true, an unset socket still
+ * resolves to the same default path prod and the dev-instance script already start the runner on
+ * (`/run/jarv1s/cli-runner.sock`), so an ordinary dev start finds the runner already there instead
+ * of silently dropping to the in-process engine below. If the runner cannot be reached, the RPC
+ * client's own connect-with-backoff throws `CliChatUnavailableError`; a launch missing its
+ * conversation or user id throws the same rather than building a session under the wrong identity.
+ *
  * SECURITY FAIL-FAST (§3.6 / §6.6): when the socket IS selected but `JARVIS_CLI_RUNNER_RPC_SECRET` is
  * missing or empty, this THROWS at selection time — BEFORE any `RpcConnection` is constructed or any
  * socket is opened. A secret-less RPC path is fail-OPEN (the auth hello could never authenticate, and
@@ -320,7 +327,11 @@ export function selectEngineFactory(
   } = {}
 ): { factory: ChatEngineFactory; connection?: RpcConnection } {
   const env = opts.env ?? process.env;
-  const socketPath = env.JARVIS_CLI_RUNNER_SOCKET;
+  // Chat has no old-bridge fallback (§ task 7 plan): an unset socket for ACP chat still points at
+  // the same default path prod and the dev-instance script already start the runner on, instead of
+  // silently dropping to the in-process tmux engine below.
+  const socketPath =
+    env.JARVIS_CLI_RUNNER_SOCKET ?? (opts.acpChat ? "/run/jarv1s/cli-runner.sock" : undefined);
   if (socketPath) {
     const rpcSecret = env.JARVIS_CLI_RUNNER_RPC_SECRET;
     if (!rpcSecret) {
@@ -344,8 +355,14 @@ export function selectEngineFactory(
       return {
         connection,
         factory: (provider, sessionKey, engineOpts) => {
-          if (!engineOpts?.conversationId || !engineOpts.userId)
-            return factory(provider, sessionKey, engineOpts);
+          if (!engineOpts?.conversationId || !engineOpts.userId) {
+            // Chat has no old-bridge fallback: a launch with no conversation or user id cannot
+            // build the ACP session key below, so it refuses outright rather than silently
+            // constructing a plain RPC client under the wrong identity.
+            throw new CliChatUnavailableError(
+              "chat launch is missing its conversation or user id; refusing to start an agent session"
+            );
+          }
           const acpSessionKey = `chat:${engineOpts.userId}:${engineOpts.conversationId}`;
           return new AcpChatEngine(provider, acpSessionKey, {
             tunnel: new RpcAcpTunnel(connection, acpSessionKey),
