@@ -113,7 +113,11 @@ export interface ChatSessionManagerDeps {
   readonly engineFactory: (
     provider: ProviderKind,
     sessionKey: string,
-    opts?: { readonly executionMode?: AiProviderExecutionMode }
+    opts?: {
+      readonly executionMode?: AiProviderExecutionMode;
+      readonly conversationId?: string;
+      readonly userId?: string;
+    }
   ) => CliChatEngine | Promise<CliChatEngine>;
   readonly persistence: ChatPersistencePort;
   readonly personaFs: PersonaFs;

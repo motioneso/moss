@@ -106,6 +106,39 @@ export const chatModuleManifest = {
       defaultEnabled: true
     }
   ],
+  features: [
+    {
+      id: "chat.acp_answers",
+      description: "Chat answers through the agent protocol for every conversation.",
+      featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.acp_sign_in_expired",
+      description:
+        "Shows when the provider sign-in has expired and explains how an admin can restore it.",
+      featureFlagId: "chat.module",
+      errors: [
+        {
+          code: "chat.acp_sign_in_expired",
+          class: "prerequisite",
+          remediationRef: "chat.acp_sign_in_expired.settings",
+          description: "The provider sign-in has expired."
+        }
+      ],
+      remediations: [
+        {
+          id: "chat.acp_sign_in_expired.settings",
+          description: "An admin can log the provider in again under Settings, Assistant & AI.",
+          path: "/settings?section=aiproviders"
+        }
+      ]
+    },
+    {
+      id: "chat.acp_queued_sends",
+      description: "A second message during an active answer is queued and shown in the composer.",
+      featureFlagId: "chat.module"
+    }
+  ],
   routes: [
     {
       method: "GET",

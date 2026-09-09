@@ -142,11 +142,11 @@ export class ChatSessionManager {
     const sessionKey = surfaceSessionKey(actorUserId, surface);
     const { provider, model, executionMode } =
       await this.deps.persistence.resolveActiveProvider(actorUserId);
+    const threadState = await this.deps.persistence.getCurrentThreadState?.(actorUserId, surface);
     const persona =
       typeof this.deps.persona === "string"
         ? this.deps.persona
         : await this.deps.persona(actorUserId, userName, surface);
-
     const { neutralDir, personaPath } = await renderPersona(this.deps.personaFs, {
       sessionKey,
       userName,
@@ -154,9 +154,10 @@ export class ChatSessionManager {
       baseDir: this.deps.neutralBase,
       persona
     });
-
-    const engine = await this.deps.engineFactory(provider, sessionKey, { executionMode });
-
+    const engine = await this.deps.engineFactory(provider, sessionKey, {
+      executionMode,
+      ...(threadState?.id ? { conversationId: threadState.id, userId: actorUserId } : {})
+    });
     // Rebuild replay from live state for every launch; recall precedes conversation replay.
     const recallResult = this.deps.recall ? await this.deps.recall.recall(actorUserId) : null;
     const seedBudgetEnv = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
@@ -164,11 +165,11 @@ export class ChatSessionManager {
     const memorySeed = recallResult
       ? renderMemorySeedBlock(recallResult.episodicChunks, recallResult.facts, seedBudget)
       : "";
-
-    const [threadState, { recent: recentTurns, oldSummary }] = await Promise.all([
-      this.deps.persistence.getCurrentThreadState?.(actorUserId, surface),
-      this.deps.persistence.listPriorTurns(actorUserId, { forceReplay: opts?.forceReplay }, surface)
-    ]);
+    const { recent: recentTurns, oldSummary } = await this.deps.persistence.listPriorTurns(
+      actorUserId,
+      { forceReplay: opts?.forceReplay },
+      surface
+    );
     if (threadState?.incognito && surface !== DEFAULT_CHAT_SURFACE) {
       throw new CliChatUnavailableError("private chat is only available in the drawer");
     }
@@ -181,7 +182,6 @@ export class ChatSessionManager {
     if (oldSummary) replayParts.push(renderSummaryBlock(oldSummary));
     if (recentTurns.length > 0) replayParts.push(renderReplayBlock(recentTurns));
     const replayBatch = replayParts.length > 0 ? replayParts.join("\n\n") : undefined;
-
     const { offset } = await engine.launch({
       neutralDir,
       personaPath,

@@ -7,6 +7,7 @@
  * fake engine (no real tmux / `claude` binary). Everything else is real.
  */
 import { AiRepository, createRealTmuxIo, type Multiplexer, type ProviderKind } from "@moss/ai";
+import type { AcpPermissionDecider } from "@moss/acp";
 import { resolveEffectiveTimezone } from "../locale-utils.js";
 import { DEFAULT_CHAT_SURFACE, type ChatSurface } from "./chat-surface.js";
 import {
@@ -43,6 +44,7 @@ import {
 } from "./chat-engine-rpc-client.js";
 import type { PersistentRuntimeLaunchConfig } from "./rpc-contract.js";
 import { createChatEngine } from "./engine-selection.js";
+import { AcpChatEngine, RpcAcpTunnel } from "./acp-chat-engine.js";
 import { CliChatUnavailableError } from "./errors.js";
 import { purgePrivateTranscripts } from "./private-transcript-cleanup.js";
 import { startIdleReapTimer, type SweepIdlePool } from "./idle-reap-timer.js";
@@ -119,6 +121,8 @@ export type ChatEngineFactory = (
   sessionKey: string,
   opts?: {
     readonly executionMode?: AiProviderExecutionMode;
+    readonly conversationId?: string;
+    readonly userId?: string;
     /** B4: set only by a structured caller (`CliStructuredAdapter`). See
      *  `ChatEngineSelectionOpts.needsStructuredOutput` in engine-selection.ts. */
     readonly needsStructuredOutput?: boolean;
@@ -309,6 +313,9 @@ export function selectEngineFactory(
     /** #1554 — the RPC branch's counterpart: a LIVE read of all three persistent-runtime settings,
      *  called per launch and shipped in `RpcLaunchParams` (the cli-runner has no DB access). */
     readonly readPersistentRuntimeConfig?: () => Promise<PersistentRuntimeLaunchConfig>;
+    /** Chat's ACP profile is selected only by the live chat composition root. */
+    readonly acpChat?: boolean;
+    readonly acpPermissionDecider?: AcpPermissionDecider;
   } = {}
 ): { factory: ChatEngineFactory; connection?: RpcConnection } {
   const env = opts.env ?? process.env;
@@ -332,6 +339,22 @@ export function selectEngineFactory(
       logger: opts.logger,
       readPersistentRuntimeConfig: opts.readPersistentRuntimeConfig
     });
+    if (opts.acpChat && connection) {
+      return {
+        connection,
+        factory: (provider, sessionKey, engineOpts) => {
+          if (!engineOpts?.conversationId || !engineOpts.userId)
+            return factory(provider, sessionKey, engineOpts);
+          const acpSessionKey = `chat:${engineOpts.userId}:${engineOpts.conversationId}`;
+          return new AcpChatEngine(provider, acpSessionKey, {
+            tunnel: new RpcAcpTunnel(connection, acpSessionKey),
+            userId: engineOpts.userId,
+            projectId: engineOpts.conversationId,
+            permissionDecider: opts.acpPermissionDecider
+          });
+        }
+      };
+    }
     return { factory, connection };
   }
   return {
@@ -548,6 +571,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
       env: deps.engineSelection.env,
       persistentRuntimeEnabled: deps.engineSelection.persistentRuntimeEnabled,
       readPersistentRuntimeConfig: deps.engineSelection.readPersistentRuntimeConfig,
+      acpChat: true,
       onReconcile,
       onSessionReaped
     });

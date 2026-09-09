@@ -17,6 +17,9 @@
 
 import type { Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
 import type { AiProviderExecutionMode } from "@moss/shared";
+import { AcpChatEngine, RpcAcpTunnel } from "./acp-chat-engine.js";
+import type { AcpPermissionDecider } from "@moss/acp";
+import type { RpcConnection } from "./chat-engine-rpc-client.js";
 
 import { ClaudePrintChatEngine } from "./claude-print-chat-engine.js";
 import { CliChatEngineImpl } from "./cli-chat-engine.js";
@@ -80,6 +83,11 @@ export interface ChatEngineSelectionOpts {
    * from every ordinary Anthropic chat session too (review finding B4).
    */
   readonly needsStructuredOutput?: boolean;
+  /** ACP chat wiring; only the composition root supplies this for the chat profile. */
+  readonly acpConnection?: RpcConnection;
+  readonly acpUserId?: string;
+  readonly acpProjectId?: string;
+  readonly acpPermissionDecider?: AcpPermissionDecider;
 }
 
 /**
@@ -175,6 +183,14 @@ export function createChatEngine(
   io: TmuxIo,
   opts: ChatEngineSelectionOpts = {}
 ): CliChatEngine | Promise<CliChatEngine> {
+  if (opts.acpConnection && opts.acpUserId && opts.acpProjectId) {
+    return new AcpChatEngine(provider, sessionKey, {
+      tunnel: new RpcAcpTunnel(opts.acpConnection, sessionKey),
+      userId: opts.acpUserId,
+      projectId: opts.acpProjectId,
+      permissionDecider: opts.acpPermissionDecider
+    });
+  }
   // #1557 Phase 1 / #1558: the persistent adapter is a third engine shape, checked ahead of the
   // bounded-fallback/tmux fork below (ruling 2 — flag on + provider match wins, EXCEPT a call that
   // sets `needsStructuredOutput` always keeps the bounded print engine, because that engine is the
