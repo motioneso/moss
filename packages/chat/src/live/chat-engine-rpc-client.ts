@@ -417,9 +417,7 @@ export class RpcConnection {
    * the settings screen actually reads, so that refusal has to be relayed across the socket or the
    * settings screen keeps showing the sign-in as good.
    */
-  recordLoginRejected(
-    params: RpcRecordLoginRejectedParams
-  ): Promise<RpcRecordLoginRejectedResult> {
+  recordLoginRejected(params: RpcRecordLoginRejectedParams): Promise<RpcRecordLoginRejectedResult> {
     return this.call<RpcRecordLoginRejectedResult>("recordLoginRejected", undefined, params);
   }
 
