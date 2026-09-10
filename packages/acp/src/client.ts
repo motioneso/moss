@@ -135,12 +135,28 @@ export interface AcpToolAnnouncement {
   readonly rawInput: unknown;
 }
 
+/** Answers one announced tool ask with allow or deny. */
+export type AcpPermissionDecision = "allow" | "deny";
+
+export interface AcpPermissionDecisionResult {
+  readonly decision: AcpPermissionDecision;
+  /** Whether a human user was asked to approve this action. */
+  readonly asked?: boolean;
+  /** How long the approval was held waiting for a user decision (in ms). */
+  readonly holdDurationMs?: number | null;
+  /** Internal reason string (e.g. "Approved by user.", "Allowed by policy.", refusal reason). */
+  readonly reason?: string | null;
+}
+
 /**
- * Answers one announced tool ask with allow or deny. The client translates the
+ * Bridges built-in permission asks to the host's approval flow. Maps the host
  * verdict into the protocol answer; without a decider the client refuses.
  */
 export interface AcpPermissionDecider {
-  decide(request: AcpBuiltInRequest, session: AcpSessionHandle): Promise<"allow" | "deny">;
+  decide(
+    request: AcpBuiltInRequest,
+    session: AcpSessionHandle
+  ): Promise<AcpPermissionDecision | AcpPermissionDecisionResult>;
   /** Start a prompt turn with an identity that permission asks carry. */
   beginTurn?: (sessionId: string, turnId: string) => void | Promise<void>;
   /** Settle all pending permission asks when this agent session is stopped. */
@@ -592,7 +608,7 @@ export class MossAcpClient {
       locations: announced.locations
     };
     try {
-      const verdict = await this.permissionDecider.decide(builtIn, {
+      const rawVerdict = await this.permissionDecider.decide(builtIn, {
         sessionId: params.sessionId,
         cwd,
         home,
@@ -600,6 +616,7 @@ export class MossAcpClient {
         uid,
         gid
       });
+      const verdict = typeof rawVerdict === "string" ? rawVerdict : rawVerdict.decision;
       if (verdict !== "allow") return denyPermission();
       // Least privilege: single-use grant, never standing. No allow option
       // means the question itself offers nothing to take: refuse.

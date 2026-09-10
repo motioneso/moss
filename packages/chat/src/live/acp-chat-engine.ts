@@ -9,7 +9,7 @@ import {
   type AcpToolServer,
   type AcpTunnel
 } from "@moss/acp";
-import type { ProviderKind } from "@moss/ai";
+import { type ProviderKind, redactSecrets } from "@moss/ai";
 import type { ChatTurnUsageDto } from "@moss/shared";
 import { recordProviderLoginRejected } from "./provider-probe.js";
 
@@ -140,7 +140,8 @@ export function extractRealToolName(toolCall: {
   if (toolCall.name && typeof toolCall.name === "string" && toolCall.name.trim()) {
     return toolCall.name.trim();
   }
-  return toolCall.title && typeof toolCall.title === "string" ? toolCall.title.trim() : "tool";
+  // Spec forbids falling back to display title; fall back to plain word "tool" only.
+  return "tool";
 }
 
 export function extractCappedResultText(update: {
@@ -198,7 +199,8 @@ export function formatToolRecord(toolCall: {
 }): TranscriptRecord {
   const toolName = extractRealToolName(toolCall);
   const args = summarizeToolArgs(toolCall.rawInput, toolCall.locations);
-  const text = args ? `${toolName}, ${args}` : toolName;
+  const redactedArgs = redactSecrets(args ?? undefined);
+  const text = redactedArgs ? `${toolName}, ${redactedArgs}` : toolName;
   return {
     kind: "tool",
     toolName,
@@ -215,10 +217,11 @@ export function formatResultRecord(update: {
 }): TranscriptRecord | null {
   const text = extractCappedResultText(update);
   if (!text) return null;
+  const redacted = redactSecrets(text);
   return {
     kind: "result",
     ...(update.toolCallId ? { toolCallId: update.toolCallId } : {}),
-    text
+    text: redacted
   };
 }
 
@@ -242,12 +245,17 @@ export function formatApprovalRecord(opts: {
   who?: string;
   at?: Date | string;
   durationSec?: number;
+  durationMs?: number | null;
 }): TranscriptRecord {
   return {
     kind: opts.approved ? "approved" : "not_approved",
     toolName: opts.toolName,
     text: formatApprovalLine(opts),
-    ...(opts.durationSec !== undefined ? { durationMs: opts.durationSec * 1000 } : {})
+    ...(opts.durationMs != null
+      ? { durationMs: opts.durationMs }
+      : opts.durationSec !== undefined
+        ? { durationMs: opts.durationSec * 1000 }
+        : {})
   };
 }
 
@@ -309,7 +317,12 @@ export class AcpChatEngine implements CliChatEngine {
   private complete = false;
   private cancelled = false;
   private records: TranscriptRecord[] = [];
-  private currentThought: string[] = [];
+  private activeThoughtRecord: { kind: "thought"; text: string } | null = null;
+  private readonly activeToolRecords = new Map<
+    string,
+    { kind: "tool"; toolName: string; toolCallId?: string; text: string }
+  >();
+  private readonly toolArgsSummary = new Map<string, string>();
   private readonly reportLoginRejected: () => void;
 
   constructor(
@@ -336,53 +349,43 @@ export class AcpChatEngine implements CliChatEngine {
       cancelSession: decider.cancelSession?.bind(decider),
       decide: async (request: AcpBuiltInRequest, session: AcpSessionHandle) => {
         const start = Date.now();
-        const verdict = await decider.decide(request, session);
-        const durationMs = Date.now() - start;
-        const durationSec = Math.max(1, Math.round(durationMs / 1000));
-        const toolName = request.toolName ?? request.title ?? "tool";
+        const rawVerdict = await decider.decide(request, session);
+        const decision = typeof rawVerdict === "string" ? rawVerdict : rawVerdict.decision;
+        const asked = typeof rawVerdict === "object" ? rawVerdict.asked : undefined;
+        const holdDurationMs =
+          typeof rawVerdict === "object" && rawVerdict.holdDurationMs !== undefined
+            ? rawVerdict.holdDurationMs
+            : Date.now() - start;
+        const durationSec =
+          holdDurationMs != null ? Math.max(1, Math.round(holdDurationMs / 1000)) : undefined;
+        const toolName = request.toolName ?? "tool";
 
         this.flushCurrentThought();
-        if (verdict === "allow") {
-          // Spec: silent allows write nothing. If held >= 50ms, a human was asked!
-          if (durationMs >= 50) {
-            this.records.push(
-              formatApprovalRecord({
-                toolName,
-                approved: true,
-                who: "you",
-                durationSec
-              })
-            );
-          }
+        if (asked === true) {
+          this.records.push(
+            formatApprovalRecord({
+              toolName,
+              approved: decision === "allow",
+              who: "you",
+              durationSec,
+              durationMs: holdDurationMs
+            })
+          );
         } else {
-          // Denied
-          if (durationMs >= 50) {
-            this.records.push(
-              formatApprovalRecord({
-                toolName,
-                approved: false,
-                who: "you",
-                durationSec
-              })
-            );
-          } else {
-            // Instant policy refusal
-            this.records.push(formatRefusalRecord({ toolName }));
+          // Policy decided (not asked)
+          if (decision === "deny") {
+            const reason = typeof rawVerdict === "object" ? rawVerdict.reason : null;
+            this.records.push(formatRefusalRecord({ toolName, reason }));
           }
+          // Silent policy allow (!asked && decision === "allow") writes NOTHING.
         }
-        return verdict;
+        return decision;
       }
     };
   }
 
   private flushCurrentThought(): void {
-    if (this.currentThought.length > 0) {
-      const text = this.currentThought.join("");
-      this.currentThought = [];
-      if (text.trim().length > 0) {
-        this.records.push(formatThoughtRecord(text));
-      }
-    }
+    this.activeThoughtRecord = null;
   }
 
   handleSessionUpdate(
@@ -394,12 +397,22 @@ export class AcpChatEngine implements CliChatEngine {
 
     switch (kind) {
       case "agent_thought_chunk": {
-        const chunk = update as { content?: { type?: string; text?: string } };
+        const chunk = update as { content?: { type?: string; text?: string } | string };
         const text =
-          chunk.content && typeof chunk.content.text === "string" ? chunk.content.text : "";
-        if (text) {
-          this.currentThought.push(text);
+          typeof chunk.content === "string"
+            ? chunk.content
+            : chunk.content && typeof chunk.content.text === "string"
+              ? chunk.content.text
+              : "";
+        if (!text) break;
+        if (!this.activeThoughtRecord) {
+          this.activeThoughtRecord = {
+            kind: "thought",
+            text: ""
+          };
+          this.records.push(this.activeThoughtRecord);
         }
+        this.activeThoughtRecord.text += text;
         break;
       }
 
@@ -415,7 +428,23 @@ export class AcpChatEngine implements CliChatEngine {
           _meta?: unknown;
         };
         const record = formatToolRecord(toolCall);
-        this.records.push(record);
+        if (toolCall.toolCallId) {
+          const mutableRecord = {
+            kind: "tool" as const,
+            toolName: record.toolName ?? "tool",
+            toolCallId: toolCall.toolCallId,
+            text: record.text
+          };
+          this.activeToolRecords.set(toolCall.toolCallId, mutableRecord);
+          const args = summarizeToolArgs(toolCall.rawInput, toolCall.locations);
+          const redactedArgs = redactSecrets(args ?? undefined);
+          if (redactedArgs) {
+            this.toolArgsSummary.set(toolCall.toolCallId, redactedArgs);
+          }
+          this.records.push(mutableRecord);
+        } else {
+          this.records.push(record);
+        }
         break;
       }
 
@@ -423,10 +452,35 @@ export class AcpChatEngine implements CliChatEngine {
         this.flushCurrentThought();
         const toolCallUpdate = update as {
           toolCallId?: string;
+          rawInput?: unknown;
+          locations?: Array<{ path: string }>;
           rawOutput?: unknown;
           content?: unknown;
           status?: string | null;
+          _meta?: Record<string, unknown>;
         };
+        if (toolCallUpdate.toolCallId) {
+          const existing = this.activeToolRecords.get(toolCallUpdate.toolCallId);
+          if (existing) {
+            if (toolCallUpdate.rawInput !== undefined || toolCallUpdate.locations !== undefined) {
+              const newArgs = redactSecrets(
+                summarizeToolArgs(toolCallUpdate.rawInput, toolCallUpdate.locations) ?? undefined
+              );
+              if (newArgs) {
+                this.toolArgsSummary.set(toolCallUpdate.toolCallId, newArgs);
+                existing.text = `${existing.toolName ?? "tool"}, ${newArgs}`;
+              }
+            }
+            if (existing.toolName === "tool") {
+              const realName = extractRealToolName(toolCallUpdate);
+              if (realName !== "tool") {
+                existing.toolName = realName;
+                const args = this.toolArgsSummary.get(toolCallUpdate.toolCallId);
+                existing.text = args ? `${realName}, ${args}` : realName;
+              }
+            }
+          }
+        }
         const record = formatResultRecord(toolCallUpdate);
         if (record) {
           this.records.push(record);
@@ -436,59 +490,6 @@ export class AcpChatEngine implements CliChatEngine {
 
       case "agent_message_chunk": {
         this.flushCurrentThought();
-        break;
-      }
-
-      case "approval":
-      case "approved": {
-        this.flushCurrentThought();
-        const u = update as Record<string, unknown>;
-        const record = formatApprovalRecord({
-          toolName: typeof u.toolName === "string" ? u.toolName : "tool",
-          approved: u.approved !== false,
-          who:
-            typeof u.who === "string" ? u.who : typeof u.approver === "string" ? u.approver : "you",
-          at: u.at instanceof Date || typeof u.at === "string" ? u.at : new Date(),
-          durationSec:
-            typeof u.durationSec === "number"
-              ? u.durationSec
-              : typeof u.durationMs === "number"
-                ? Math.round(u.durationMs / 1000)
-                : undefined
-        });
-        this.records.push(record);
-        break;
-      }
-
-      case "not_approved": {
-        this.flushCurrentThought();
-        const u = update as Record<string, unknown>;
-        const record = formatApprovalRecord({
-          toolName: typeof u.toolName === "string" ? u.toolName : "tool",
-          approved: false,
-          who:
-            typeof u.who === "string" ? u.who : typeof u.approver === "string" ? u.approver : "you",
-          at: u.at instanceof Date || typeof u.at === "string" ? u.at : new Date(),
-          durationSec:
-            typeof u.durationSec === "number"
-              ? u.durationSec
-              : typeof u.durationMs === "number"
-                ? Math.round(u.durationMs / 1000)
-                : undefined
-        });
-        this.records.push(record);
-        break;
-      }
-
-      case "refusal":
-      case "refused": {
-        this.flushCurrentThought();
-        const u = update as Record<string, unknown>;
-        const record = formatRefusalRecord({
-          toolName: typeof u.toolName === "string" ? u.toolName : "tool",
-          reason: typeof u.reason === "string" ? u.reason : null
-        });
-        this.records.push(record);
         break;
       }
     }
@@ -539,7 +540,8 @@ export class AcpChatEngine implements CliChatEngine {
     if (!handle) throw new CliChatUnavailableError("ACP chat session is not open");
     if (this.prompt && !this.complete) throw new CliChatUnavailableError("ACP chat turn is busy");
     this.records = [];
-    this.currentThought = [];
+    this.activeThoughtRecord = null;
+    this.activeToolRecords.clear();
     this.promptError = null;
     this.complete = false;
     this.cancelled = false;

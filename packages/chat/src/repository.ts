@@ -14,6 +14,7 @@ import type {
   ChatActivityEventDto,
   ChatAttachmentDto,
   ChatSurface,
+  ChatTurnUsageDto,
   SourceFreshnessV1
 } from "@moss/shared";
 import { normalizeChatSurface } from "./live/chat-surface.js";
@@ -228,6 +229,9 @@ export class ChatRepository {
       /** #1133 — attachment display metadata (id/name/mime/size) — never bytes. */
       readonly attachments?: readonly ChatAttachmentDto[];
       readonly actionResults?: readonly ChatActivityEventDto[];
+      readonly activityRecords?: readonly unknown[];
+      readonly elapsedMs?: number;
+      readonly usage?: ChatTurnUsageDto;
     },
     surface?: ChatSurface
   ): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage } | undefined> {
@@ -261,14 +265,25 @@ export class ChatRepository {
       role: "assistant",
       status: "stored",
       body: assistantReply,
-      modelMetadata: { executed: { provider: executed.provider, model: executed.model } },
+      modelMetadata: {
+        executed: { provider: executed.provider, model: executed.model },
+        ...(opts?.elapsedMs !== undefined ? { elapsedMs: opts.elapsedMs } : {}),
+        ...(opts?.usage !== undefined ? { usage: opts.usage } : {})
+      },
       toolMetadata: {
         selectedTools: [],
         ...(opts?.sourceFreshness ? { sourceFreshness: opts.sourceFreshness } : {}),
         ...(opts?.answerProvenance !== undefined
           ? { answerProvenanceV1: opts.answerProvenance }
           : {}),
-        ...(opts?.actionResults?.length ? { activity: opts.actionResults } : {})
+        ...(opts?.actionResults?.length ? { actionResults: opts.actionResults } : {}),
+        ...(opts?.activityRecords?.length
+          ? { activity: opts.activityRecords }
+          : opts?.actionResults?.length
+            ? { activity: opts.actionResults }
+            : {}),
+        ...(opts?.elapsedMs !== undefined ? { elapsedMs: opts.elapsedMs } : {}),
+        ...(opts?.usage !== undefined ? { usage: opts.usage } : {})
       },
       now
     });

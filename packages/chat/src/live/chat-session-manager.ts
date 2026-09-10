@@ -1,6 +1,6 @@
 import type { ProviderKind } from "@moss/ai";
 import { resolveMossEnv } from "@moss/db";
-import type { AnswerProvenanceMetadataV1, SourceFreshnessV1 } from "@moss/shared";
+import type { AnswerProvenanceMetadataV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
@@ -18,8 +18,17 @@ import {
 import { renderPersona } from "./persona.js";
 import { renderMemorySeedBlock } from "./recall-seed.js";
 import type { ActionResultMetadata, CliChatEngine, TranscriptRecord } from "./types.js";
+import { formatApprovalRecord } from "./acp-chat-engine.js";
 import type { ReapReason } from "./provider-runtime.js";
-import { applyRemoteReap, countSubscribersFor, delay } from "./session-runtime-helpers.js";
+import {
+  applyRemoteReap,
+  cleanupPrivateSession,
+  countSubscribersFor,
+  delay,
+  drainEngine,
+  sweepOrphanedPrivateThreads,
+  waitForNewToolsListObservation
+} from "./session-runtime-helpers.js";
 import {
   DEFAULT_CHAT_SURFACE,
   normalizeChatSurface,
@@ -34,14 +43,20 @@ export {
   renderSummaryBlock
 } from "./chat-context-blocks.js";
 export { ChatStreamLimitError, ChatThreadNotFoundError, ChatTurnInFlightError } from "./errors.js";
-export type {
+import type {
   ChatPersistencePort,
   ChatSessionManagerDeps,
   Clock,
   PassiveRetrievalPort,
   PrivateThreadState
 } from "./chat-session-ports.js";
-import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
+export type {
+  ChatPersistencePort,
+  ChatSessionManagerDeps,
+  Clock,
+  PassiveRetrievalPort,
+  PrivateThreadState
+};
 
 type Subscriber = (record: TranscriptRecord) => void;
 
@@ -67,8 +82,6 @@ interface UserSession {
 const MAX_SUBSCRIBERS_PER_ACTOR = 5;
 const MAX_SUBSCRIBERS_TOTAL_PER_ACTOR = MAX_SUBSCRIBERS_PER_ACTOR * 2;
 const PRIVATE_DETACH_GRACE_MS = 30_000;
-const TOOLS_LIST_OBSERVATION_TIMEOUT_MS = 10_000;
-const TOOLS_LIST_OBSERVATION_POLL_MS = 25;
 
 export class ChatSessionManager {
   private readonly sessions = new Map<string, UserSession>();
@@ -83,6 +96,8 @@ export class ChatSessionManager {
   /** #456 — per-turn stop controllers, keyed by actor + surface. */
   private readonly turnControllers = new Map<string, AbortController>();
   private readonly actionResultsBySession = new Map<string, ActionResultMetadata[]>();
+  private readonly actionRequestTimes = new Map<string, number>();
+  private readonly turnActivityBySession = new Map<string, TranscriptRecord[]>();
   private readonly pollMs: number;
   /** #456 — idle/heartbeat watchdog window; 0 disables (tests only). */
   private readonly idleWatchdogMs: number;
@@ -226,26 +241,10 @@ export class ChatSessionManager {
     if (replayBatch !== undefined && !this.serverOwnsDrain) {
       await engine.submit(replayBatch);
       // Drain (and discard) so real turn records start from a clean offset.
-      session.transcriptOffset = await this.drain(engine, session.transcriptOffset);
+      session.transcriptOffset = await drainEngine(engine, session.transcriptOffset, this.pollMs);
     }
 
     return session;
-  }
-
-  // #2164 r21 — true once a fresh attach lands (count exceeds baseline), false after
-  // TOOLS_LIST_OBSERVATION_TIMEOUT_MS, undefined when there's nothing to compare (guard skipped).
-  private async waitForNewToolsListObservation(
-    token: string,
-    baselineCount: number | undefined
-  ): Promise<boolean | undefined> {
-    const getCount = this.deps.getToolsListObservationCount;
-    if (!getCount || baselineCount === undefined) return undefined;
-    const deadline = this.deps.clock.now() + TOOLS_LIST_OBSERVATION_TIMEOUT_MS;
-    for (;;) {
-      if (getCount(token) > baselineCount) return true;
-      if (this.deps.clock.now() >= deadline) return false;
-      await delay(TOOLS_LIST_OBSERVATION_POLL_MS);
-    }
   }
 
   /**
@@ -324,7 +323,11 @@ export class ChatSessionManager {
     const session = await this.ensureSession(actorUserId, userName, undefined, chatSurface);
     if (idempotencyKey && session.seededContextKeys.has(idempotencyKey)) return;
     await session.engine.submit(seed);
-    session.transcriptOffset = await this.drain(session.engine, session.transcriptOffset);
+    session.transcriptOffset = await drainEngine(
+      session.engine,
+      session.transcriptOffset,
+      this.pollMs
+    );
     if (idempotencyKey) session.seededContextKeys.add(idempotencyKey);
     session.lastActivity = this.deps.clock.now();
     this.deps.touchMcpToken?.(sessionKey);
@@ -361,6 +364,10 @@ export class ChatSessionManager {
     const sessionKey = surfaceSessionKey(actorUserId, surface);
     this.turnControllers.set(sessionKey, controller);
     this.actionResultsBySession.set(sessionKey, []);
+    const turnActivityRecords: TranscriptRecord[] = [];
+    this.turnActivityBySession.set(sessionKey, turnActivityRecords);
+    let turnElapsedMs: number | undefined;
+    let turnUsage: ChatTurnUsageDto | undefined;
 
     try {
       const attachments = opts?.attachments ?? [];
@@ -449,8 +456,17 @@ export class ChatSessionManager {
         }
         for (const record of records) {
           const rejectionOnly = record.kind === "tool" && !record.toolName && !record.text?.trim();
-          if (!rejectionOnly) this.emit(actorUserId, surface, record);
-          if (record.kind === "reply") reply = record.text;
+          if (!rejectionOnly) {
+            this.emit(actorUserId, surface, record);
+            if (record.kind !== "reply" && record.kind !== "status") {
+              turnActivityRecords.push(record);
+            }
+          }
+          if (record.kind === "reply") {
+            reply = record.text;
+            if (record.elapsedMs !== undefined) turnElapsedMs = record.elapsedMs;
+            if (record.usage !== undefined) turnUsage = record.usage;
+          }
           if (record.kind === "tool" && record.toolName) {
             invokedToolNames.add(record.toolName);
             if (record.toolName.startsWith("mcp__"))
@@ -506,7 +522,9 @@ export class ChatSessionManager {
         !mcpToolInvoked &&
         reply
       ) {
-        const toolsListReady = await this.waitForNewToolsListObservation(
+        const toolsListReady = await waitForNewToolsListObservation(
+          this.deps.getToolsListObservationCount,
+          () => this.deps.clock.now(),
           session.mcpToken,
           toolsListBaseline
         );
@@ -560,7 +578,10 @@ export class ChatSessionManager {
                   sizeBytes: meta.sizeBytes
                 }))
               : undefined,
-          actionResults: this.actionResultsBySession.get(sessionKey)
+          actionResults: this.actionResultsBySession.get(sessionKey),
+          activityRecords: turnActivityRecords,
+          elapsedMs: turnElapsedMs,
+          usage: turnUsage
         },
         surface
       );
@@ -573,7 +594,9 @@ export class ChatSessionManager {
           kind: "reply",
           text: reply,
           messageId: stored.assistantMessageId,
-          sourceFreshness: stored.sourceFreshness
+          sourceFreshness: stored.sourceFreshness,
+          ...(turnElapsedMs !== undefined ? { elapsedMs: turnElapsedMs } : {}),
+          ...(turnUsage !== undefined ? { usage: turnUsage } : {})
         });
       }
 
@@ -584,6 +607,7 @@ export class ChatSessionManager {
         sourceFreshness: stored?.sourceFreshness
       };
     } finally {
+      this.turnActivityBySession.delete(sessionKey);
       this.actionResultsBySession.delete(sessionKey);
       this.turnControllers.delete(sessionKey);
     }
@@ -641,11 +665,14 @@ export class ChatSessionManager {
     );
     if (!currentThread?.incognito) return;
 
-    await this.cleanupPrivateSession(
+    await cleanupPrivateSession(
       actorUserId,
       chatSurface,
       currentThread.id,
-      this.sessions.get(surfaceSessionKey(actorUserId, chatSurface))
+      this.sessions.get(surfaceSessionKey(actorUserId, chatSurface)),
+      this.deps,
+      this.sessions,
+      (k) => this.clearPrivateDetachTimer(k)
     );
   }
 
@@ -758,16 +785,39 @@ export class ChatSessionManager {
   injectRecord(actorUserId: string, record: TranscriptRecord, surface?: string): void {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
+    if (record.kind === "action_request" && record.actionRequestId) {
+      this.actionRequestTimes.set(record.actionRequestId, this.deps.clock.now());
+    }
     if (record.kind === "action_result" && record.outcome) {
       const results = this.actionResultsBySession.get(sessionKey);
       if (results && results.length < 20) {
         results.push({
           kind: "action_result",
-          text: record.text.slice(0, 200),
+          text: (record.text ?? "").slice(0, 200),
           ...(record.toolName ? { toolName: record.toolName.slice(0, 120) } : {}),
           outcome: record.outcome
         });
       }
+      const toolName = record.toolName ?? "tool";
+      const approved = record.outcome !== "denied";
+      const reqTime = record.actionRequestId
+        ? this.actionRequestTimes.get(record.actionRequestId)
+        : undefined;
+      const holdDurationMs =
+        reqTime !== undefined ? this.deps.clock.now() - reqTime : record.durationMs;
+      const durationSec =
+        holdDurationMs != null ? Math.max(1, Math.round(holdDurationMs / 1000)) : undefined;
+      const mappedRecord = formatApprovalRecord({
+        toolName,
+        approved,
+        who: "you",
+        durationSec,
+        durationMs: holdDurationMs
+      });
+      const turnRecords = this.turnActivityBySession.get(sessionKey);
+      if (turnRecords) turnRecords.push(mappedRecord);
+      this.emit(actorUserId, chatSurface, mappedRecord);
+      return;
     }
     this.emit(actorUserId, chatSurface, record);
   }
@@ -824,11 +874,14 @@ export class ChatSessionManager {
               session.actorUserId,
               session.surface
             );
-            await this.cleanupPrivateSession(
+            await cleanupPrivateSession(
               session.actorUserId,
               session.surface,
               thread?.incognito ? thread.id : undefined,
-              session
+              session,
+              this.deps,
+              this.sessions,
+              (k) => this.clearPrivateDetachTimer(k)
             );
           } else {
             try {
@@ -854,7 +907,9 @@ export class ChatSessionManager {
           await this.deps.killSession?.(liveKey);
         }
       }
-      await this.sweepOrphanedPrivateThreads(effectiveLive);
+      await sweepOrphanedPrivateThreads(effectiveLive, this.deps, this.sessions, (k) =>
+        this.clearPrivateDetachTimer(k)
+      );
     });
   }
 
@@ -918,74 +973,5 @@ export class ChatSessionManager {
     if (!timer) return;
     clearTimeout(timer);
     this.privateDetachTimers.delete(actorUserId);
-  }
-
-  private async cleanupPrivateSession(
-    actorUserId: string,
-    surface: ChatSurface,
-    threadId: string | undefined,
-    session: UserSession | undefined
-  ): Promise<void> {
-    const sessionKey = surfaceSessionKey(actorUserId, surface);
-    // #744/#1086 — the incognito row is the boot sweep's ONLY reclaim handle. A live CLI can
-    // recreate its transcript after rm, so only the engine-less post-exit sweep may clear it.
-    let purged = false;
-    if (session) {
-      try {
-        if (session.engine.purgeTranscripts) {
-          await session.engine.purgeTranscripts();
-        }
-      } catch {
-        /* best-effort live purge; the row is retained regardless for the post-exit sweep */
-      }
-      try {
-        // `deps.killSession` is the orphan-by-mux-name path for a session this manager has
-        // already lost track of (reconcile step 4) — never for a session it is still holding
-        // live right here. Using it here bypassed the engine's own kill, so an ACP session's
-        // stop-then-purge never ran and only the mux-name kill fired (Astra-Reviewer finding,
-        // 2026-09-09). A live session always goes through its own engine's kill.
-        await session.engine.kill({ preserveNeutralDir: true });
-      } catch {
-        /* best-effort private kill */
-      }
-      // Process teardown is unconditional. The marker and row survive until a later sweep can
-      // prove the process is gone and purge without a recreate race (#1086).
-      this.sessions.delete(sessionKey);
-      this.clearPrivateDetachTimer(sessionKey);
-      this.deps.revokeMcpToken?.(sessionKey);
-    } else {
-      try {
-        if (this.deps.purgePrivateTranscripts) {
-          await this.deps.purgePrivateTranscripts(sessionKey);
-          purged = true;
-        }
-      } catch {
-        /* best-effort restart purge; keep the row for the next reconcile/boot sweep */
-      }
-    }
-    if (purged && threadId) {
-      await this.deps.persistence.deleteThread?.(actorUserId, threadId, surface);
-    }
-  }
-
-  private async sweepOrphanedPrivateThreads(effectiveLive: ReadonlySet<string>): Promise<void> {
-    const rows = (await this.deps.persistence.listIncognitoThreadStates?.()) ?? [];
-    for (const row of rows) {
-      const surface = normalizeChatSurface(row.surface);
-      const sessionKey = surfaceSessionKey(row.actorUserId, surface);
-      if (effectiveLive.has(sessionKey) || this.sessions.has(sessionKey)) continue;
-      await this.cleanupPrivateSession(row.actorUserId, surface, row.threadId, undefined);
-    }
-  }
-
-  private async drain(engine: CliChatEngine, fromOffset: number): Promise<number> {
-    let offset = fromOffset;
-    for (;;) {
-      const { offset: next, complete } = await engine.readNew(offset);
-      offset = next;
-      if (complete) break;
-      if (this.pollMs > 0) await delay(this.pollMs);
-    }
-    return offset;
   }
 }

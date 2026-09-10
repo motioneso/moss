@@ -10,6 +10,7 @@ import type {
   AiProviderExecutionMode,
   ChatAttachmentDto,
   ChatSurface,
+  ChatTurnUsageDto,
   SourceFreshnessV1
 } from "@moss/shared";
 import type { MemoryRecallItem } from "@moss/memory";
@@ -19,7 +20,12 @@ import type { CrossToolReadRunner } from "./cross-tool-reasoning.js";
 import type { NotesContextRetriever } from "./notes-retrieval.js";
 import type { PersonaFs } from "./persona.js";
 import type { AcpPermissionDecider } from "@moss/acp";
-import type { ActionResultMetadata, CliChatEngine, EngineKillOpts } from "./types.js";
+import type {
+  ActionResultMetadata,
+  CliChatEngine,
+  EngineKillOpts,
+  TranscriptRecord
+} from "./types.js";
 
 export interface PrivateThreadState {
   readonly actorUserId: string;
@@ -53,6 +59,9 @@ export interface ChatPersistencePort {
       /** #1133 — display metadata for files sent with this turn (user-message tool_metadata). */
       readonly attachments?: readonly ChatAttachmentDto[];
       readonly actionResults?: readonly ActionResultMetadata[];
+      readonly activityRecords?: readonly TranscriptRecord[];
+      readonly elapsedMs?: number;
+      readonly usage?: ChatTurnUsageDto;
     },
     surface?: ChatSurface
   ): Promise<

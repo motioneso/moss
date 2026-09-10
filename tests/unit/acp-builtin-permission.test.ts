@@ -96,7 +96,12 @@ describe("agent built-in permission through the shared approval card", () => {
       "resolved"
     );
 
-    await expect(pending).resolves.toEqual({ decision: "allow", reason: "Approved by user." });
+    await expect(pending).resolves.toMatchObject({
+      decision: "allow",
+      reason: "Approved by user.",
+      asked: true
+    });
+    expect((await pending).holdDurationMs).toBeGreaterThan(0);
     await vi.waitFor(() => expect(store.emitted).toHaveLength(2));
     expect(store.emitted[1]).toMatchObject({
       kind: "action_result",
@@ -243,7 +248,12 @@ describe("agent built-in permission through the shared approval card", () => {
         },
         toolName: "Task"
       })
-    ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    ).resolves.toEqual({
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: false,
+      holdDurationMs: null
+    });
     expect(store.created).toHaveLength(0);
     expect(store.emitted).toHaveLength(0);
   });
@@ -268,7 +278,12 @@ describe("agent built-in permission through the shared approval card", () => {
         },
         toolName: null
       })
-    ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    ).resolves.toEqual({
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: false,
+      holdDurationMs: null
+    });
     expect(store.created).toHaveLength(0);
     expect(awaitResolution).not.toHaveBeenCalled();
     expect(store.emitted).toHaveLength(0);
@@ -290,7 +305,11 @@ describe("agent built-in permission through the shared approval card", () => {
         toolInput: { command: "pnpm build" },
         toolName: "Bash"
       })
-    ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    ).resolves.toMatchObject({
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: true
+    });
     expect(store.emitted.at(-1)).toMatchObject({
       kind: "action_result",
       outcome: "denied",
@@ -318,7 +337,12 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(gateway.resolveActionRequest("u1", "acp-action-1", "cancelled")).resolves.toBe(
       "resolved"
     );
-    await expect(pending).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    await expect(pending).resolves.toMatchObject({
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: true
+    });
+    expect((await pending).holdDurationMs).toBeGreaterThan(0);
     expect(store.emitted.at(-1)).toMatchObject({
       kind: "action_result",
       outcome: "denied",
@@ -344,7 +368,7 @@ describe("agent built-in permission through the shared approval card", () => {
         toolInput: { file_path: "src/index.ts" },
         toolName: "Read"
       })
-    ).resolves.toMatchObject({ decision: "allow" });
+    ).resolves.toMatchObject({ decision: "allow", asked: false, holdDurationMs: null });
     await expect(
       gateway.requestAcpBuiltInPermission(token, {
         cwd: CWD,
@@ -356,7 +380,7 @@ describe("agent built-in permission through the shared approval card", () => {
         toolInput: { file_path: "src/out.txt" },
         toolName: "Write"
       })
-    ).resolves.toMatchObject({ decision: "allow" });
+    ).resolves.toMatchObject({ decision: "allow", asked: false, holdDurationMs: null });
     expect(store.created).toHaveLength(0);
     expect(store.emitted).toHaveLength(0);
   });
@@ -377,7 +401,12 @@ describe("agent built-in permission through the shared approval card", () => {
         toolInput: { whatever: true },
         toolName: "Skill"
       })
-    ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    ).resolves.toEqual({
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: false,
+      holdDurationMs: null
+    });
     expect(store.created).toHaveLength(0);
     expect(store.emitted).toHaveLength(0);
   });
@@ -404,7 +433,12 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")).resolves.toBe(
       "resolved"
     );
-    await expect(pending).resolves.toEqual({ decision: "allow", reason: "Approved by user." });
+    await expect(pending).resolves.toMatchObject({
+      decision: "allow",
+      reason: "Approved by user.",
+      asked: true
+    });
+    expect((await pending).holdDurationMs).toBeGreaterThanOrEqual(2000);
   });
 
   it("keeps a stopped turn cancelled after the next turn starts", async () => {
@@ -434,7 +468,11 @@ describe("agent built-in permission through the shared approval card", () => {
     releaseCreate();
     await vi.waitFor(() => expect(store.created).toHaveLength(1));
     expect(confirmations.isAwaiting("acp-action-1")).toBe(false);
-    await expect(pending).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    await expect(pending).resolves.toMatchObject({
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: true
+    });
     await expect(gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")).resolves.toBe(
       "expired"
     );
@@ -454,7 +492,11 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(gateway.resolveActionRequest("u1", "acp-action-2", "confirmed")).resolves.toBe(
       "resolved"
     );
-    await expect(next).resolves.toEqual({ decision: "allow", reason: "Approved by user." });
+    await expect(next).resolves.toMatchObject({
+      decision: "allow",
+      reason: "Approved by user.",
+      asked: true
+    });
   });
 
   it("writes one audit line per ask and per refusal, none for silent allows", async () => {

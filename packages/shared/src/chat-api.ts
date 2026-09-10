@@ -27,6 +27,8 @@ export interface ChatActivityEventDto {
   readonly text: string;
   readonly toolName?: string;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
+  readonly toolCallId?: string;
+  readonly durationMs?: number;
 }
 
 export interface ChatThreadDto {
@@ -92,6 +94,10 @@ export interface ChatMessageDto {
   readonly answerProvenanceCitedIds?: readonly string[];
   /** #1133 — attachments the user sent with this message (user messages only). */
   readonly attachments?: readonly ChatAttachmentDto[];
+  /** Elapsed duration of this turn in milliseconds, when available. */
+  readonly elapsedMs?: number;
+  /** Token usage reported for this turn, when available. */
+  readonly usage?: ChatTurnUsageDto;
 }
 
 export interface ListChatThreadsResponse {

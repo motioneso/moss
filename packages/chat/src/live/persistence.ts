@@ -24,12 +24,13 @@ import type {
   AiProviderExecutionMode,
   ChatAttachmentDto,
   ChatSurface,
+  ChatTurnUsageDto,
   SourceFreshnessEntry,
   SourceFreshnessV1
 } from "@moss/shared";
 import { localDay } from "@moss/shared";
 import { CHAT_ARCHIVE_ENABLED_PREF_KEY } from "@moss/settings";
-import type { ActionResultMetadata } from "./types.js";
+import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { PgBoss } from "pg-boss";
 
 import { sendJob } from "@moss/jobs";
@@ -229,6 +230,9 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       readonly answerProvenance?: AnswerProvenanceMetadataV1;
       readonly attachments?: readonly ChatAttachmentDto[];
       readonly actionResults?: readonly ActionResultMetadata[];
+      readonly activityRecords?: readonly TranscriptRecord[];
+      readonly elapsedMs?: number;
+      readonly usage?: ChatTurnUsageDto;
     },
     surface?: ChatSurface
   ): Promise<{ readonly userMessageId: string; readonly assistantMessageId: string } | undefined> {
@@ -260,7 +264,10 @@ export class DataContextChatPersistence implements ChatPersistencePort {
               sourceFreshness,
               answerProvenance: opts?.answerProvenance,
               attachments: opts?.attachments,
-              actionResults: opts?.actionResults
+              actionResults: opts?.actionResults,
+              activityRecords: opts?.activityRecords,
+              elapsedMs: opts?.elapsedMs,
+              usage: opts?.usage
             },
             chatSurface
           );

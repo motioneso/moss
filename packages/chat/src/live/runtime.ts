@@ -621,7 +621,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     clock: { now: () => Date.now() },
     idleMs: deps.idleMs ?? DEFAULT_IDLE_MS,
     neutralBase: resolveChatHome(),
-    persona: (actorUserId, userName, surface) =>
+    persona: (actorUserId: string, userName: string, surface: ChatSurface) =>
       resolveChatPersona(deps, actorUserId, userName, surface),
     mintMcpToken: deps.mcpTokenLifecycle?.mint,
     revokeMcpToken: deps.mcpTokenLifecycle?.revoke,
@@ -636,9 +636,10 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     // connection method otherwise. Undefined on the in-process/host path (no separate cli-runner holds
     // orphans — reconcile step 4 no-ops there).
     killSession: connection
-      ? (sessionKey, opts) => killOrphan(activeReconcileDriver, connection!, sessionKey, opts)
+      ? (sessionKey: string, opts?: EngineKillOpts) =>
+          killOrphan(activeReconcileDriver, connection!, sessionKey, opts)
       : undefined,
-    purgePrivateTranscripts: (sessionKey) =>
+    purgePrivateTranscripts: (sessionKey: string) =>
       purgePrivateTranscripts(
         createRealTmuxIo(),
         resolveChatHome(),

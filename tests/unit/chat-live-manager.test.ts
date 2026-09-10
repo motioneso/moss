@@ -602,7 +602,7 @@ describe("ChatSessionManager", () => {
     const persistence = new FakePersistence();
     const engines: TranscriptFakeEngine[] = [];
     const manager = new ChatSessionManager({
-      engineFactory: (provider, sessionKey) => {
+      engineFactory: (provider: ProviderKind, sessionKey: string) => {
         const e = new TranscriptFakeEngine(provider, sessionKey, (text) => `reply to: ${text}`);
         engines.push(e);
         return e;
@@ -663,7 +663,7 @@ describe("ChatSessionManager", () => {
     const persistence = new FakePersistence();
     const engines: SlowEngine[] = [];
     const manager = new ChatSessionManager({
-      engineFactory: (provider, sessionKey) => {
+      engineFactory: (provider: ProviderKind, sessionKey: string) => {
         const e = new SlowEngine(provider, sessionKey);
         engines.push(e);
         return e;
@@ -693,7 +693,7 @@ describe("ChatSessionManager", () => {
     const persistence = new FakePersistence();
     const engines: GatedEngine[] = [];
     const manager = new ChatSessionManager({
-      engineFactory: (provider, sessionKey) => {
+      engineFactory: (provider: ProviderKind, sessionKey: string) => {
         const e = new GatedEngine(provider, sessionKey);
         engines.push(e);
         return e;
@@ -733,7 +733,7 @@ describe("ChatSessionManager", () => {
     const persistence = new FakePersistence();
     const engines: GatedEngine[] = [];
     const manager = new ChatSessionManager({
-      engineFactory: (provider, sessionKey) => {
+      engineFactory: (provider: ProviderKind, sessionKey: string) => {
         const e = new GatedEngine(provider, sessionKey);
         engines.push(e);
         return e;

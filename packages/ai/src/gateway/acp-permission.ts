@@ -30,7 +30,6 @@ import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import { APPROVAL_REFUSED_REASON } from "./native-tool-guard.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type { SessionNotifier } from "./types.js";
-import type { NativeToolPermissionResponse } from "./gateway.js";
 
 /**
  * One built-in tool ask from the outside agent (ACP `session/request_permission`).
@@ -55,7 +54,12 @@ export interface AcpBuiltInPermissionRequest {
   readonly locations?: readonly AcpToolCallLocation[] | null;
 }
 
-export type AcpBuiltInPermissionResponse = NativeToolPermissionResponse;
+export interface AcpBuiltInPermissionResponse {
+  readonly decision: "allow" | "deny";
+  readonly reason: string;
+  readonly asked?: boolean;
+  readonly holdDurationMs?: number | null;
+}
 
 /** Narrow view of the gateway dependencies this ask needs. */
 export interface AcpPermissionGatewayDeps {
@@ -298,6 +302,7 @@ export async function requestAcpBuiltInPermission(
     }
   });
 
+  const holdDurationMs = result.asked ? Date.now() - startedAt : null;
   if (!result.asked && result.decision === "deny" && result.reason) {
     // Refused with no row, but never silently: the audit line names the agent,
     // the folder and the reason word, so the refusal itself stays visible.
@@ -310,9 +315,23 @@ export async function requestAcpBuiltInPermission(
       durationMs: null,
       inputSummary: summarize("refused", result.reason)
     });
-    return { decision: "deny", reason: APPROVAL_REFUSED_REASON };
+    return {
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: false,
+      holdDurationMs: null
+    };
   }
-  return result.decision === "allow"
-    ? { decision: "allow", reason: result.asked ? "Approved by user." : "Allowed by policy." }
-    : { decision: "deny", reason: APPROVAL_REFUSED_REASON };
+  return {
+    decision: result.decision === "allow" ? "allow" : "deny",
+    reason: result.asked
+      ? result.decision === "allow"
+        ? "Approved by user."
+        : APPROVAL_REFUSED_REASON
+      : result.decision === "allow"
+        ? "Allowed by policy."
+        : APPROVAL_REFUSED_REASON,
+    asked: result.asked,
+    holdDurationMs
+  };
 }

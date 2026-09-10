@@ -354,7 +354,12 @@ export function registerChatRoutes(
                 kind: request.kind,
                 locations: request.locations
               });
-              return result.decision === "allow" ? "allow" : "deny";
+              return {
+                decision: result.decision,
+                asked: result.asked,
+                holdDurationMs: result.holdDurationMs,
+                reason: result.reason
+              };
             },
             beginTurn: (sessionId, turnId) => {
               wiring.confirmations.beginTurn(sessionId, turnId);
