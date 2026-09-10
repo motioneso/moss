@@ -1,7 +1,7 @@
 // tests/uat/fixtures/scripted-provider/launch-args.ts
 //
 // #1121: parses the argv the real `claude` CLI would receive from
-// packages/chat/src/live/claude-print-chat-engine.ts's buildCommand (bounded/print engine) after
+// packages/chat/src/live/structured-claude-engine.ts's buildCommand (bounded/print engine) after
 // shell word-splitting. Fail-closed: anything not exactly one of the two known-safe shapes is
 // "rejected", including buildStructuredCommand's shape (used by the non-interactive/structured
 // engine path, which this fixture does not support) and any unrecognized flag.
@@ -86,7 +86,7 @@ export function parseClaudeLaunchArgs(argv: readonly string[]): ParsedLaunch {
   if (hasMcpPartial) return rejected("partial --mcp-config/--settings/--allowedTools combination");
   // The real read-only launch command passes NO bare --tools value alongside the MCP trio: on
   // Claude CLI 2.1.183 any --tools value also drops the mcp__jarvis__* tools. See
-  // claude-print-chat-engine.ts's buildCommand. A --tools flag alongside the trio is a mismatch
+  // structured-claude-engine.ts's buildCommand. A --tools flag alongside the trio is a mismatch
   // the fixture still rejects.
   if (hasMcpTrio && bareTools !== undefined) {
     return rejected("--tools alongside the MCP flag trio");

@@ -13,7 +13,7 @@ import {
   isComposerEmpty,
   sanitizeSessionKey,
   SESSION_PREFIX
-} from "../../packages/chat/src/live/cli-chat-engine.js";
+} from "../../packages/chat/src/live/module-build-cli-engine.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
 import type { Multiplexer } from "../../packages/ai/src/adapters/multiplexer.js";
 
@@ -612,7 +612,7 @@ describe("CliChatEngineImpl — provider transcript resolution", () => {
   });
 });
 
-// Branch-review LOW (cli-chat-engine.ts:253): the launch line carries the per-session
+// Branch-review LOW (module-build-cli-engine.ts:253): the launch line carries the per-session
 // MCP bearer token inline (Codex env-var prefix). A backend whose thrown error echoes
 // the launch line must never carry the token into the server log via the wrapped cause.
 describe("CliChatEngineImpl — failure-path token redaction", () => {

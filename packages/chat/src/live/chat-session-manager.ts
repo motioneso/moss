@@ -6,7 +6,7 @@ import type { StoredAttachmentMeta } from "../attachments-service.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
 import { renderAttachmentsManifest } from "./attachments-manifest.js";
 import { renderReplayBlock, renderSummaryBlock } from "./chat-context-blocks.js";
-import { isBoundedFallbackEngine } from "./engine-selection.js";
+import { isBoundedFallbackEngine } from "./structured-engine-selection.js";
 import { buildEngineText } from "./engine-text.js";
 import {
   ChatStreamLimitError,

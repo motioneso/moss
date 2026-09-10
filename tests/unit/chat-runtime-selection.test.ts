@@ -23,8 +23,8 @@ import {
 } from "../../packages/chat/src/live/runtime.js";
 import { createStructuredChatEngineFactory } from "../../packages/module-registry/src/index.js";
 import { AcpChatEngine } from "../../packages/chat/src/live/acp-chat-engine.js";
-import { ClaudePrintChatEngine } from "../../packages/chat/src/live/claude-print-chat-engine.js";
-import { CliChatEngineImpl } from "../../packages/chat/src/live/cli-chat-engine.js";
+import { ClaudePrintChatEngine } from "../../packages/chat/src/live/structured-claude-engine.js";
+import { CliChatEngineImpl } from "../../packages/chat/src/live/module-build-cli-engine.js";
 import type { Multiplexer, MuxHandle } from "@moss/ai";
 
 const SOCKET = "/run/jarv1s/cli-runner.sock";

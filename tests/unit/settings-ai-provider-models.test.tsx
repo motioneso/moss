@@ -89,6 +89,36 @@ function chatTag(renderer: ReactTestRenderer) {
 }
 
 describe("ProviderModels chat tag", () => {
+  it("checks a CLI provider at initialization and surfaces a refused sign-in", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const clientModule = await import("../../apps/web/src/api/client.js");
+    vi.mocked(clientModule.refreshAiProviderModels).mockResolvedValueOnce({
+      models: [],
+      reason: "not_logged_in"
+    });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(ProviderModels, {
+            provider: { ...provider, authMethod: "cli" } as AiProviderConfigDto,
+            models: [],
+            onModelOverride: vi.fn(),
+            onModelStatusChange: vi.fn(),
+            onModelDelete: vi.fn()
+          })
+        )
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+    expect(renderer.root.findByProps({ role: "status" }).children.join(" ")).toBe("Not logged in");
+    expect(clientModule.refreshAiProviderModels).toHaveBeenCalledWith("p1");
+  });
+
   it("shows when the ACP provider keeps the login's model default", async () => {
     const { renderer } = await render([], vi.fn(), {
       ...provider,

@@ -43,7 +43,7 @@ vi.mock("node:child_process", async (importOriginal) => {
   };
 });
 
-const { ClaudePrintChatEngine } = await import("./claude-print-chat-engine.js");
+const { ClaudePrintChatEngine } = await import("./structured-claude-engine.js");
 
 function stubIo(): TmuxIo {
   return {

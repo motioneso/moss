@@ -605,7 +605,7 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
   });
 
   // #2164 r23 security correction (item 1) — the r22 suppression keyed on `rejected`, but the
-  // interactive Anthropic path (cli-chat-engine.ts) never sets that flag; it can still emit a
+  // interactive Anthropic path (module-build-cli-engine.ts) never sets that flag; it can still emit a
   // blank `{ kind: "tool", text: "" }` record with no toolName. The choke point must suppress
   // any nameless, textless tool record regardless of `rejected`, while a record that does carry
   // a toolName — even with empty text, e.g. an mcp__ call — is still a real activity step and

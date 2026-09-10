@@ -1,12 +1,12 @@
 /**
  * Per-provider CLI launch-line builders + the per-session secret/config files they
- * reference, split out of cli-chat-engine.ts for the 1000-line file cap (#1170 —
+ * reference, split out of module-build-cli-engine.ts for the 1000-line file cap (#1170 —
  * same pattern as the #1157 opts split). Behavior is verbatim from the engine;
  * only the `this.*` fields became the explicit `LaunchCommandContext` below.
  *
  * The Claude launch flags are SECURITY-CRITICAL and were empirically verified in
  * the Phase 1 spike (docs/superpowers/spikes/2026-06-08-cli-capability-matrix.md);
- * see the cli-chat-engine.ts header for the flag-by-flag rationale.
+ * see the module-build-cli-engine.ts header for the flag-by-flag rationale.
  */
 
 import { existsSync } from "node:fs";
@@ -16,7 +16,7 @@ import type { ProviderKind, TmuxIo } from "@moss/ai";
 import type { AiProviderExecutionMode } from "@moss/shared";
 
 import { modelOverrideFlag, shellQuote } from "./cli-engine-helpers.js";
-import { writeClaudePermissionHook } from "./claude-permission-hook.js";
+import { writeClaudePermissionHook } from "./persistent-claude-permission-hook.js";
 import type { EngineLaunchOpts } from "./types.js";
 import { vaultReadOnlyToolPatterns } from "./vault-allowlist.js";
 
@@ -75,7 +75,7 @@ async function buildClaudeCommand(
     ctx.credentialFile && existsSync(ctx.credentialFile)
       ? `CLAUDE_CODE_OAUTH_TOKEN="$(cat ${shellQuote(ctx.credentialFile)})" claude`
       : "claude";
-  // #1071: REVERT of #1068 (see cli-chat-engine.ts header for the full root-cause narrative).
+  // #1071: REVERT of #1068 (see module-build-cli-engine.ts header for the full root-cause narrative).
   // `default` is correct; #1068's `bypassPermissions` was the prod-chat 503 regression — in
   // claude 2.1.183 it triggers a BLOCKING bypass-mode accept-warning that
   // bypassPermissionsModeAccepted:true does NOT suppress → REPL never ready →

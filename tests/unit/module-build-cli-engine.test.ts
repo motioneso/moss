@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { CliChatEngineImpl } from "../../packages/chat/src/live/cli-chat-engine.js";
+import { CliChatEngineImpl } from "../../packages/chat/src/live/module-build-cli-engine.js";
 import type { TmuxIo } from "../../packages/ai/src/adapters/tmux-bridge.js";
 
 // ─── anthropic / Claude Code transcript fixtures ─────────────────────────────

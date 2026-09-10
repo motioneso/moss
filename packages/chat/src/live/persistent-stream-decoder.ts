@@ -3,7 +3,7 @@
  * `--output-format stream-json` stdout (#1557 Phase 1, P1.2).
  *
  * Replaces the one-shot structured engine's unbounded accumulator
- * (`claude-print-chat-engine.ts`'s `structuredOutput += chunk`, `:99-101`) with two explicit
+ * (`structured-claude-engine.ts`'s `structuredOutput += chunk`, `:99-101`) with two explicit
  * bounds. Feed raw stdout text via `write()` as it arrives and stdout close via `end()`; consume
  * decoded `RuntimeTurnEvent`s via `events()` as they are parsed — there is no offset/`readNew`
  * polling API, this is push-based straight into `ProviderChatRuntime.streamEvents()`.

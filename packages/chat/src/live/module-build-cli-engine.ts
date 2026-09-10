@@ -19,7 +19,7 @@
  *                                     triggers a BLOCKING bypass-mode accept warning that the REPL
  *                                     can't answer → verified-submit fails → 503. Native-tool safety
  *                                     comes from --tools "" / the PreToolUse allowlist hook, NOT this
- *                                     flag (see buildClaudeCommand + claude-permission-hook).
+ *                                     flag (see buildClaudeCommand + persistent-claude-permission-hook).
  *   --tools ""                      — empty allowlist disables ALL native tools (F1: a
  *                                     denylist was bypassed via the Monitor tool)
  *   --append-system-prompt-file P   — inject persona (survives /clear; append, not replace)
@@ -46,7 +46,7 @@ import {
 import type { AiProviderExecutionMode } from "@moss/shared";
 
 import { CliChatUnavailableError } from "./errors.js";
-import { CodexExecSession } from "./codex-exec-session.js";
+import { CodexExecSession } from "./module-build-codex-exec-session.js";
 import { redactCause, sanitizeInput } from "./cli-engine-helpers.js";
 import { composerHasExactEcho, isComposerEmpty } from "./composer-evidence.js";
 import {
@@ -54,16 +54,16 @@ import {
   type CliChatEngineDiagnostic,
   type CliChatEngineOpts,
   type VerifiedSubmitOpts
-} from "./cli-chat-engine-opts.js";
+} from "./module-build-cli-engine-opts.js";
 import { killMuxSessionByName, SESSION_PREFIX } from "./cli-session-lifecycle.js";
 // #1170 file-cap split: launch-line builders + per-session secret/config writers
-// moved verbatim to cli-launch-commands.ts (same pattern as the #1157 opts split).
+// moved verbatim to module-build-launch-commands.ts (same pattern as the #1157 opts split).
 import {
   buildLaunchCommand,
   resolvePersonaPath,
   writeCodexTokenEnv,
   writeGeminiSettings
-} from "./cli-launch-commands.js";
+} from "./module-build-launch-commands.js";
 import {
   codexTranscriptMatchesIdentity,
   codexTranscriptPath,
@@ -97,7 +97,7 @@ export {
   type CliChatEngineDiagnostic,
   type CliChatEngineOpts,
   type VerifiedSubmitOpts
-} from "./cli-chat-engine-opts.js";
+} from "./module-build-cli-engine-opts.js";
 export {
   deriveNeutralDir,
   killMuxSessionByName,

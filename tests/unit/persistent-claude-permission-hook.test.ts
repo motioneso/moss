@@ -18,7 +18,7 @@ import {
   deriveClaudePermissionUrl,
   writeClaudeOneShotPermissionHook,
   writeClaudePermissionHook
-} from "../../packages/chat/src/live/claude-permission-hook.js";
+} from "../../packages/chat/src/live/persistent-claude-permission-hook.js";
 import type { TmuxIo } from "@moss/ai";
 
 function fakeIo(): TmuxIo & {

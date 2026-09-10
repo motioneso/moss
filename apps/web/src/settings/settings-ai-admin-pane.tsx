@@ -324,6 +324,34 @@ function ProviderCard(props: {
   );
 }
 
+function OpenCodeAcpCard() {
+  const [model, setModel] = useState("default");
+  return (
+    <div className="prov" aria-label="OpenCode ACP provider">
+      <div className="prov__head">
+        <span className="prov__mark">O</span>
+        <div className="prov__id">
+          <div className="prov__name">OpenCode</div>
+          <div className="prov__auth">
+            <Terminal size={12} aria-hidden="true" /> ACP chat provider
+          </div>
+        </div>
+      </div>
+      <div className="prov__edit">
+        <Field
+          label="Chat model"
+          hint="The ACP agent may replace this with an advertised model when the session initializes."
+        >
+          <Select value={model} onChange={(event) => setModel(event.target.value)}>
+            <option value="default">Login default</option>
+            <option value="muse-spark-1.3-free">Muse Spark 1.3 free</option>
+          </Select>
+        </Field>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------- Service bindings */
 
 // A binding is either a mode or a specific capable model. Strict background services start with an
@@ -642,20 +670,24 @@ export function AiProvidersPane() {
         }
       >
         {providers.length === 0 ? (
-          <div className="ai-empty">
-            <div className="ai-empty__ic">
-              <GitCommitHorizontal size={20} aria-hidden="true" />
-            </div>
-            <div className="ai-empty__main">
-              <div className="ai-empty__t">No providers yet</div>
-              <div className="ai-empty__d">
-                {assistantName} can't chat until at least one provider is added. Connect one to
-                bring its models online for everyone on this instance.
+          <>
+            <div className="ai-empty">
+              <div className="ai-empty__ic">
+                <GitCommitHorizontal size={20} aria-hidden="true" />
+              </div>
+              <div className="ai-empty__main">
+                <div className="ai-empty__t">No providers yet</div>
+                <div className="ai-empty__d">
+                  {assistantName} can't chat until at least one provider is added. Connect one to
+                  bring its models online for everyone on this instance.
+                </div>
               </div>
             </div>
-          </div>
+            <OpenCodeAcpCard />
+          </>
         ) : (
           <div className="prov-list">
+            <OpenCodeAcpCard />
             {providers.map((provider) => (
               <ProviderCard
                 key={provider.id}

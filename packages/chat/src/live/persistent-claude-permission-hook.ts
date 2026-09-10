@@ -15,7 +15,7 @@ export const CLAUDE_PERMISSION_TOKEN_FILENAME = ".jarvis-claude-permission-token
 // prod outage, issue #1157):
 //   server confirm window < hook internal deadline < Claude Code hook timeout
 // routes.ts imports NATIVE_CONFIRM_TIMEOUT_MS so the server side cannot drift silently;
-// tests/unit/claude-permission-hook.test.ts asserts the ordering.
+// tests/unit/persistent-claude-permission-hook.test.ts asserts the ordering.
 export const NATIVE_CONFIRM_TIMEOUT_MS = 150_000;
 export const HOOK_INTERNAL_DEADLINE_S = 170;
 export const HOOK_TIMEOUT_SECONDS = 180;

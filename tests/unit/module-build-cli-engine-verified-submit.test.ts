@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Multiplexer } from "../../packages/ai/src/adapters/multiplexer.js";
-import { CliChatEngineImpl } from "../../packages/chat/src/live/cli-chat-engine.js";
-import type { VerifiedSubmitError } from "../../packages/chat/src/live/cli-chat-engine.js";
+import { CliChatEngineImpl } from "../../packages/chat/src/live/module-build-cli-engine.js";
+import type { VerifiedSubmitError } from "../../packages/chat/src/live/module-build-cli-engine.js";
 import { CODEX_IDENTITY_FILENAME } from "../../packages/chat/src/live/private-transcript-cleanup.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
 
@@ -395,7 +395,7 @@ describe("CliChatEngineImpl — verified interactive submit", () => {
     // deadline, waitForUserAckWithEnterNudge's nudgeAfterMs) only bounds the polling
     // loop's OWN sleep/deadline check — it never wrapped the individual
     // `await this.mux.*(handle)` call inside it with its own timeout. If that single
-    // RPC (here: pressEnter at cli-chat-engine.ts ~419) never settles, execution never
+    // RPC (here: pressEnter at module-build-cli-engine.ts ~419) never settles, execution never
     // reaches the nudge loop at all, so its 7s/14s/21s bound never fires. Relay-6 added
     // `raceMux` (a per-call `muxCallMs` timeout) around every such RPC, so the hang is
     // now provably bounded: this test proves the fix, not the bug.

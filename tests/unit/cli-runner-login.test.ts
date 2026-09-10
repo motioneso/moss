@@ -27,13 +27,13 @@ import {
 } from "../../packages/cli-runner/src/provider-token-store.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
 import { ClaudePersistentRuntimeEngine } from "../../packages/chat/src/live/persistent-runtime-engine.js";
-import { createChatEngine } from "../../packages/chat/src/live/engine-selection.js";
+import { createStructuredEngine } from "../../packages/chat/src/live/structured-engine-selection.js";
 import {
   LOGIN_SESSION_PREFIX,
   SESSION_PREFIX,
   listLoginMuxSessionsWithAge
-} from "../../packages/chat/src/live/cli-chat-engine.js";
-import type { ProbeProviderResult } from "../../packages/chat/src/live/cli-chat-engine.js";
+} from "../../packages/chat/src/live/module-build-cli-engine.js";
+import type { ProbeProviderResult } from "../../packages/chat/src/live/module-build-cli-engine.js";
 import type { LoginAdapter } from "../../packages/chat/src/live/login-contract.js";
 import type {
   CatalogEntry,
@@ -670,7 +670,7 @@ describe("§L.6.1 unified exclusivity gate (engine-host)", () => {
     const f = makeLoginIo("https://claude.ai/oauth/authorize?code=abc");
     const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
     const host = makeHost(f.io, svc);
-    const persistent = createChatEngine("anthropic", "user-9", f.io, {
+    const persistent = createStructuredEngine("anthropic", "user-9", f.io, {
       persistentRuntimeEnabled: true
     });
     expect(persistent).toBeInstanceOf(ClaudePersistentRuntimeEngine);

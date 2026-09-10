@@ -28,7 +28,7 @@ import {
 } from "../../packages/cli-runner/src/connection.js";
 import { CliChatEngineHost } from "../../packages/cli-runner/src/engine-host.js";
 import { TerminalHost } from "../../packages/cli-runner/src/terminal-host.js";
-import { VerifiedSubmitError } from "../../packages/chat/src/live/cli-chat-engine.js";
+import { VerifiedSubmitError } from "../../packages/chat/src/live/module-build-cli-engine.js";
 
 const SECRET = "test-rpc-secret";
 const BOOT = "boot-uuid-1";

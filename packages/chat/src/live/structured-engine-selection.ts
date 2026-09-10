@@ -21,10 +21,10 @@ import { AcpChatEngine, RpcAcpTunnel } from "./acp-chat-engine.js";
 import type { AcpPermissionDecider } from "@moss/acp";
 import type { RpcConnection } from "./chat-engine-rpc-client.js";
 
-import { ClaudePrintChatEngine } from "./claude-print-chat-engine.js";
-import { CliChatEngineImpl } from "./cli-chat-engine.js";
-import type { CliChatEngineDiagnostic } from "./cli-chat-engine-opts.js";
-import { GeminiPrintChatEngine } from "./gemini-print-chat-engine.js";
+import { ClaudePrintChatEngine } from "./structured-claude-engine.js";
+import { CliChatEngineImpl } from "./module-build-cli-engine.js";
+import type { CliChatEngineDiagnostic } from "./module-build-cli-engine-opts.js";
+import { GeminiPrintChatEngine } from "./structured-gemini-engine.js";
 import { ClaudePersistentRuntimeEngine } from "./persistent-runtime-engine.js";
 import type { AdmitCapablePool } from "./persistent-runtime-pool.js";
 import type { CliChatEngine, EngineLaunchOpts } from "./types.js";
@@ -178,7 +178,7 @@ async function admitPersistentOrFallback(
  * becomes a `Promise` when a real pool is wired in, i.e. only for the two composition roots task
  * #5 connects (`engine-host.ts`, `runtime.ts`'s `createRealEngineFactory`).
  */
-export function createChatEngine(
+export function createStructuredEngine(
   provider: ProviderKind,
   sessionKey: string,
   io: TmuxIo,

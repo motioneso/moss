@@ -23,7 +23,7 @@ import {
   registerMcpTransportRoute,
   registerNativePermissionRoute
 } from "../../packages/chat/src/mcp-transport.js";
-import { CLAUDE_PERMISSION_HOOK_SOURCE } from "../../packages/chat/src/live/claude-permission-hook.js";
+import { CLAUDE_PERMISSION_HOOK_SOURCE } from "../../packages/chat/src/live/persistent-claude-permission-hook.js";
 import { resolveYoloMode } from "../../packages/chat/src/routes.js";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";

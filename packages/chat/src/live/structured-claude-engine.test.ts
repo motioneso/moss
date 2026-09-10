@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it, afterEach } from "vitest";
 
-import { ClaudePrintChatEngine } from "./claude-print-chat-engine.js";
+import { ClaudePrintChatEngine } from "./structured-claude-engine.js";
 import { CliTranscriptLocationMismatchError } from "./errors.js";
 import type { TmuxIo } from "@moss/ai";
 

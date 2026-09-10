@@ -33,7 +33,7 @@ vi.mock("node:child_process", async (importOriginal) => {
   };
 });
 
-const { GeminiPrintChatEngine } = await import("./gemini-print-chat-engine.js");
+const { GeminiPrintChatEngine } = await import("./structured-gemini-engine.js");
 
 function stubIo(): TmuxIo {
   return {

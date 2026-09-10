@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { GeminiPrintChatEngine } from "../../packages/chat/src/live/gemini-print-chat-engine.js";
+import { GeminiPrintChatEngine } from "../../packages/chat/src/live/structured-gemini-engine.js";
 import {
   GEMINI_IDENTITY_FILENAME,
   GEMINI_OUTPUT_FILENAME,

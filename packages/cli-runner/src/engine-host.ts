@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import {
   CliChatUnavailableError,
   VerifiedSubmitError,
-  createChatEngine,
+  createStructuredEngine,
   deriveNeutralDir,
   invalidateProviderProbeCache,
   killMuxSessionByName,
@@ -26,7 +26,7 @@ import {
   removeNeutralDir,
   sanitizeSessionKey,
   type CliChatEngine,
-  // #1350: type-only now — the host builds its engine through `createChatEngine`, never by
+  // #1350: type-only now — the host builds its engine through `createStructuredEngine`, never by
   // naming an implementation. Kept solely for the `hasVerifiedSubmit` capability narrow.
   type CliChatEngineImpl,
   type ProbeProviderResult,
@@ -343,7 +343,7 @@ export class CliChatEngineHost {
     // does in the in-process factory. Before this the runner ALWAYS built the tmux REPL
     // engine, which made #1239's flip a no-op on every containerized deploy and took prod
     // chat down completely.
-    const engine = await createChatEngine(params.provider as ProviderKind, key, sessionIo, {
+    const engine = await createStructuredEngine(params.provider as ProviderKind, key, sessionIo, {
       mux: this.deps.mux,
       homeBase: this.deps.homeBase,
       ownsDrain: true,
@@ -382,7 +382,7 @@ export class CliChatEngineHost {
     }
 
     // Review B4 follow-up — `params.schema` present means this is a structured one-shot call
-    // (email extraction via `CliStructuredAdapter`). `createChatEngine` already built the bounded
+    // (email extraction via `CliStructuredAdapter`). `createStructuredEngine` already built the bounded
     // print engine for it (`needsStructuredOutput` above), so the launch call itself must be
     // `launchStructured`, not the ordinary `launch` — the ordinary one never spawns the
     // JSON-stream child process the structured submit/read verbs below depend on.
@@ -962,7 +962,7 @@ function hasVerifiedSubmit(engine: CliChatEngine): engine is CliChatEngineImpl {
 
 /**
  * Review B4 follow-up — mirrors `hasVerifiedSubmit`'s feature-detect pattern. Only the bounded
- * print engine (`ClaudePrintChatEngine`, built by `createChatEngine` whenever
+ * print engine (`ClaudePrintChatEngine`, built by `createStructuredEngine` whenever
  * `needsStructuredOutput` is set) implements these three methods.
  */
 type StructuredCapableEngine = CliChatEngine & {

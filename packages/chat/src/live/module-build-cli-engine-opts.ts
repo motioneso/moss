@@ -1,7 +1,7 @@
 /**
  * Construction options + submit contract types for CliChatEngineImpl, split out of
- * cli-chat-engine.ts (#1157) to keep that file under the repo's 1000-line cap. All names
- * are re-exported from cli-chat-engine.ts so existing import paths keep working.
+ * module-build-cli-engine.ts (#1157) to keep that file under the repo's 1000-line cap. All names
+ * are re-exported from module-build-cli-engine.ts so existing import paths keep working.
  */
 
 import type { Multiplexer } from "@moss/ai";

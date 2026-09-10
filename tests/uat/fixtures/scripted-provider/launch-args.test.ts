@@ -250,7 +250,7 @@ describe("parseClaudeLaunchArgs against the real read-only launch line", () => {
 
   it("parses the line ClaudePrintChatEngine actually spawns as bounded, with MCP present", async () => {
     const { ClaudePrintChatEngine } =
-      await import("../../../../packages/chat/src/live/claude-print-chat-engine.js");
+      await import("../../../../packages/chat/src/live/structured-claude-engine.js");
     const io = fakeIo();
     const engine = new ClaudePrintChatEngine("user-1", io, {
       homeBase: "/home/test",

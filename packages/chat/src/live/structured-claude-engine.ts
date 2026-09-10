@@ -16,7 +16,7 @@ import {
 
 import { CliTranscriptLocationMismatchError } from "./errors.js";
 import type { ChatRecordKind, CliChatEngine, EngineLaunchOpts, TranscriptRecord } from "./types.js";
-import { writeClaudeOneShotPermissionHook } from "./claude-permission-hook.js";
+import { writeClaudeOneShotPermissionHook } from "./persistent-claude-permission-hook.js";
 import { vaultReadOnlyToolPatterns } from "./vault-allowlist.js";
 
 const PROMPT_FILENAME = ".jarvis-claude-print-prompt.txt";

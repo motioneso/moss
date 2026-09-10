@@ -43,7 +43,7 @@ import {
   type RpcReconcileDriver
 } from "./chat-engine-rpc-client.js";
 import type { PersistentRuntimeLaunchConfig } from "./rpc-contract.js";
-import { createChatEngine } from "./engine-selection.js";
+import { createStructuredEngine } from "./structured-engine-selection.js";
 import { AcpChatEngine, RpcAcpTunnel } from "./acp-chat-engine.js";
 import { CliChatUnavailableError } from "./errors.js";
 import { purgePrivateTranscripts } from "./private-transcript-cleanup.js";
@@ -124,7 +124,7 @@ export type ChatEngineFactory = (
     readonly conversationId?: string;
     readonly userId?: string;
     /** B4: set only by a structured caller (`CliStructuredAdapter`). See
-     *  `ChatEngineSelectionOpts.needsStructuredOutput` in engine-selection.ts. */
+     *  `ChatEngineSelectionOpts.needsStructuredOutput` in structured-engine-selection.ts. */
     readonly needsStructuredOutput?: boolean;
     readonly acpPermissionDecider?: AcpPermissionDecider;
     readonly nextSequence?: () => number;
@@ -178,7 +178,7 @@ export function createRealEngineFactory(
   const homeBase = resolveMossEnv(process.env, "JARVIS_CLI_HOME_BASE");
 
   // #1554 task #5 — construct the warm pool ONCE, at factory-build time, when a cap is supplied.
-  // `createRuntime` mirrors the exact `createChatEngine`/`ClaudePersistentRuntime` construction
+  // `createRuntime` mirrors the exact `createStructuredEngine`/`ClaudePersistentRuntime` construction
   // this factory already did unconditionally pre-task-5: `createRealTmuxIo()` fresh per call (it
   // was never cached here either — see the closure below), no `credentialFile` (unchanged: this
   // factory never computed one for the in-process topology).
@@ -210,7 +210,7 @@ export function createRealEngineFactory(
         : (opts.persistentRuntimeEnabled ?? false);
     // #1350: selection lives in ONE shared helper so this root and the cli-runner's
     // EngineHost cannot drift apart on which engine a mode gets.
-    return createChatEngine(provider, sessionKey, createRealTmuxIo(), {
+    return createStructuredEngine(provider, sessionKey, createRealTmuxIo(), {
       mux: opts.mux,
       homeBase,
       executionMode: engineOpts?.executionMode,
@@ -218,11 +218,11 @@ export function createRealEngineFactory(
       // #1557 Phase 1: read from `chat.persistent_runtime.enabled` by the caller
       // (`chat-multiplexer.ts`'s `resolveChatEngineFactory`, the host-dev boot path). The
       // cli-runner RPC root (`engine-host.ts`) never reaches this factory — it calls
-      // `createChatEngine` directly with its OWN pool (#1350 two-roots guard: each root wires its
+      // `createStructuredEngine` directly with its OWN pool (#1350 two-roots guard: each root wires its
       // own pool instance; they never share one).
       persistentRuntimeEnabled,
       // #1554 task #5 — consulted only when persistentRuntimeEnabled resolves true AND the
-      // provider is anthropic (engine-selection.ts's fork). Undefined when no cap was supplied.
+      // provider is anthropic (structured-engine-selection.ts's fork). Undefined when no cap was supplied.
       persistentPool,
       // #1157: surface silently-discarded composer input (char count only — never content).
       onDiagnostic: (event) =>

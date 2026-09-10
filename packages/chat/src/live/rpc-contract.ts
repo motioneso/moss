@@ -283,7 +283,7 @@ export interface RpcLaunchParams {
   readonly provider: RpcProviderKind;
   readonly executionMode?: AiProviderExecutionMode;
   /** #1350/B4: set only by a structured caller. See `ChatEngineSelectionOpts.needsStructuredOutput`
-   *  in engine-selection.ts — this carries the same call-boundary signal across the socket so the
+   *  in structured-engine-selection.ts — this carries the same call-boundary signal across the socket so the
    *  cli-runner root can't drift from the in-process root on which calls keep the bounded print
    *  engine regardless of the persistent-runtime flag. */
   readonly needsStructuredOutput?: boolean;

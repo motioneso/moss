@@ -7,8 +7,8 @@
 // revocation (Finding A) — it proves the one thing only observable from outside the process: real
 // child-process lifetime and pool-slot reclamation, via `ps`, never logs.
 //
-// Real `PersistentRuntimePool` + real `ClaudePersistentRuntime` + real `createChatEngine`
-// (engine-selection.ts) drive this test. The only substitution is `ClaudePersistentRuntime`'s
+// Real `PersistentRuntimePool` + real `ClaudePersistentRuntime` + real `createStructuredEngine`
+// (structured-engine-selection.ts) drive this test. The only substitution is `ClaudePersistentRuntime`'s
 // `spawnChild` seam (explicitly "Injected for tests" per its own doc comment) pointed at
 // tests/integration/fixtures/persistent-pool-fake-cli.mjs — a real, separately-spawned Node
 // process standing in for the `claude` binary so no real CLI install or API credentials are
@@ -28,11 +28,11 @@ import { createRealTmuxIo } from "@moss/ai";
 import { PersistentRuntimePool } from "../../packages/chat/src/live/persistent-runtime-pool.js";
 import { ClaudePersistentRuntime } from "../../packages/chat/src/live/claude-persistent-runtime.js";
 import { ClaudePersistentRuntimeEngine } from "../../packages/chat/src/live/persistent-runtime-engine.js";
-import { ClaudePrintChatEngine } from "../../packages/chat/src/live/claude-print-chat-engine.js";
+import { ClaudePrintChatEngine } from "../../packages/chat/src/live/structured-claude-engine.js";
 import {
-  createChatEngine,
+  createStructuredEngine,
   isBoundedFallbackEngine
-} from "../../packages/chat/src/live/engine-selection.js";
+} from "../../packages/chat/src/live/structured-engine-selection.js";
 import type {
   ReapReason,
   RuntimeTurnEvent
@@ -146,17 +146,17 @@ describe("persistent pool reap is real (#1554 e2e-P2)", () => {
   });
 
   it("step 1: cap=2 admits sessions 1-2 as real persistent processes, denies session 3 to the bounded fallback", async () => {
-    const engine1 = await createChatEngine("anthropic", "session-1", io, {
+    const engine1 = await createStructuredEngine("anthropic", "session-1", io, {
       persistentRuntimeEnabled: true,
       executionMode: "non_interactive",
       persistentPool: pool
     });
-    const engine2 = await createChatEngine("anthropic", "session-2", io, {
+    const engine2 = await createStructuredEngine("anthropic", "session-2", io, {
       persistentRuntimeEnabled: true,
       executionMode: "non_interactive",
       persistentPool: pool
     });
-    const engine3 = await createChatEngine("anthropic", "session-3", io, {
+    const engine3 = await createStructuredEngine("anthropic", "session-3", io, {
       persistentRuntimeEnabled: true,
       executionMode: "non_interactive",
       persistentPool: pool
@@ -165,7 +165,7 @@ describe("persistent pool reap is real (#1554 e2e-P2)", () => {
     expect(engine1).toBeInstanceOf(ClaudePersistentRuntimeEngine);
     expect(engine2).toBeInstanceOf(ClaudePersistentRuntimeEngine);
     // Structural, not a log line: session 3 was denied admission (cap=2, no idle victim yet) and
-    // engine-selection's own bounded-fallback rule independently agrees anthropic/non_interactive
+    // structured-engine-selection's own bounded-fallback rule independently agrees anthropic/non_interactive
     // is the bounded-fallback shape.
     expect(engine3).toBeInstanceOf(ClaudePrintChatEngine);
     expect(isBoundedFallbackEngine("anthropic", "non_interactive")).toBe(true);
@@ -222,7 +222,7 @@ describe("persistent pool reap is real (#1554 e2e-P2)", () => {
   });
 
   it("step 3: a 4th session reclaims the reaped slot and is admitted as persistent (real process again)", async () => {
-    const engine4 = await createChatEngine("anthropic", "session-4", io, {
+    const engine4 = await createStructuredEngine("anthropic", "session-4", io, {
       persistentRuntimeEnabled: true,
       executionMode: "non_interactive",
       persistentPool: pool

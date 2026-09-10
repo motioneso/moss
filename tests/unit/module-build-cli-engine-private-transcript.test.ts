@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { CliChatEngineImpl } from "../../packages/chat/src/live/cli-chat-engine.js";
+import { CliChatEngineImpl } from "../../packages/chat/src/live/module-build-cli-engine.js";
 import {
   CODEX_IDENTITY_FILENAME,
   codexTranscriptPath

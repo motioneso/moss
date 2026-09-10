@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Multiplexer } from "../../packages/ai/src/adapters/multiplexer.js";
 import { createRealTmuxIo } from "../../packages/ai/src/adapters/tmux-bridge.js";
-import { CliChatEngineImpl, probeProvider } from "../../packages/chat/src/live/cli-chat-engine.js";
+import {
+  CliChatEngineImpl,
+  probeProvider
+} from "../../packages/chat/src/live/module-build-cli-engine.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
 import { clearProviderProbeCacheForTests } from "../../packages/chat/src/live/provider-probe.js";
 

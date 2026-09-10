@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { TmuxIo } from "@moss/ai";
-import { isBoundedFallbackEngine, createChatEngine } from "./engine-selection.js";
-import { ClaudePrintChatEngine } from "./claude-print-chat-engine.js";
+import { isBoundedFallbackEngine, createStructuredEngine } from "./structured-engine-selection.js";
+import { ClaudePrintChatEngine } from "./structured-claude-engine.js";
 import { ClaudePersistentRuntimeEngine } from "./persistent-runtime-engine.js";
 import type { AdmitCapablePool } from "./persistent-runtime-pool.js";
 import type { ProviderChatRuntime } from "./provider-runtime.js";
@@ -44,9 +44,9 @@ describe("isBoundedFallbackEngine", () => {
   });
 });
 
-describe("createChatEngine", () => {
+describe("createStructuredEngine", () => {
   it("selects ClaudePrintChatEngine when persistentRuntimeEnabled is explicitly false", () => {
-    const engine = createChatEngine("anthropic", "session-1", fakeIo(), {
+    const engine = createStructuredEngine("anthropic", "session-1", fakeIo(), {
       executionMode: "non_interactive",
       persistentRuntimeEnabled: false
     });
@@ -60,7 +60,7 @@ describe("createChatEngine", () => {
     // Realistic: ordinary chat's provider default execution mode is "non_interactive" (the DB
     // default), and it is NOT a structured call — the pool must still be consulted (review B4).
     const pool: AdmitCapablePool = { admit: vi.fn(async () => ({ kind: "denied" as const })) };
-    const engine = await createChatEngine("anthropic", "session-1", fakeIo(), {
+    const engine = await createStructuredEngine("anthropic", "session-1", fakeIo(), {
       executionMode: "non_interactive",
       persistentRuntimeEnabled: true,
       persistentPool: pool
@@ -76,7 +76,7 @@ describe("createChatEngine", () => {
     const pool: AdmitCapablePool = {
       admit: vi.fn(async () => ({ kind: "admitted" as const, runtime }))
     };
-    const engine = await createChatEngine("anthropic", "session-1", fakeIo(), {
+    const engine = await createStructuredEngine("anthropic", "session-1", fakeIo(), {
       persistentRuntimeEnabled: true,
       persistentPool: pool
     });
@@ -85,7 +85,7 @@ describe("createChatEngine", () => {
   });
 
   it("stays synchronous (no pool supplied) so pre-task-5 call sites are unaffected", () => {
-    const engine = createChatEngine("anthropic", "session-1", fakeIo(), {
+    const engine = createStructuredEngine("anthropic", "session-1", fakeIo(), {
       executionMode: "non_interactive",
       persistentRuntimeEnabled: false
     });
@@ -103,7 +103,7 @@ describe("createChatEngine", () => {
     const pool: AdmitCapablePool = {
       admit: vi.fn(async () => ({ kind: "admitted" as const, runtime }))
     };
-    const engine = await createChatEngine("anthropic", "session-1", fakeIo(), {
+    const engine = await createStructuredEngine("anthropic", "session-1", fakeIo(), {
       executionMode: "non_interactive",
       needsStructuredOutput: true,
       persistentRuntimeEnabled: true,
@@ -122,7 +122,7 @@ describe("createChatEngine", () => {
     const pool: AdmitCapablePool = {
       admit: vi.fn(async () => ({ kind: "admitted" as const, runtime }))
     };
-    const engine = await createChatEngine("anthropic", "session-1", fakeIo(), {
+    const engine = await createStructuredEngine("anthropic", "session-1", fakeIo(), {
       executionMode: "non_interactive",
       persistentRuntimeEnabled: true,
       persistentPool: pool
@@ -134,7 +134,7 @@ describe("createChatEngine", () => {
   // #1558 — the Codex adapter takes the same unconditional-construct path as Claude when the
   // flag is on and no pool is supplied (the shared pool stays Claude-only).
   it("selects the persistent engine for openai-compatible when the flag is on", () => {
-    const engine = createChatEngine("openai-compatible", "session-1", fakeIo(), {
+    const engine = createStructuredEngine("openai-compatible", "session-1", fakeIo(), {
       persistentRuntimeEnabled: true
     });
     expect(engine).not.toBeInstanceOf(Promise);

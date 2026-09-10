@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
@@ -148,6 +148,13 @@ export function ProviderModels(props: {
   const [open, setOpen] = useState(false);
   const hasManual = props.models.some((m) => m.origin === "manual");
   const [refreshOutcome, setRefreshOutcome] = useState<string | null>(null);
+  const initializationQuery = useQuery({
+    queryKey: queryKeys.ai.providerInitialization(provider.id),
+    queryFn: () => refreshAiProviderModels(provider.id),
+    enabled: provider.authMethod === "cli",
+    staleTime: 60_000,
+    retry: false
+  });
 
   const refreshMutation = useMutation({
     mutationFn: () => refreshAiProviderModels(provider.id),
@@ -160,6 +167,13 @@ export function ProviderModels(props: {
     },
     onError: (error) => setRefreshOutcome(readError(error))
   });
+  const initializationOutcome =
+    refreshOutcome ??
+    (initializationQuery.data
+      ? describeRefreshOutcome(initializationQuery.data)
+      : initializationQuery.isError
+        ? "Could not reach the provider"
+        : null);
 
   return (
     <div className="prov__models">
@@ -200,6 +214,11 @@ export function ProviderModels(props: {
           </Button>
         </span>
       </div>
+      {initializationOutcome !== null ? (
+        <div className="prov__synced" role="status">
+          {initializationOutcome}
+        </div>
+      ) : null}
       {!open ? null : (
         <>
           {adding ? (

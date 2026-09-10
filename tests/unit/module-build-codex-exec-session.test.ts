@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { CodexExecSession } from "../../packages/chat/src/live/codex-exec-session.js";
+import { CodexExecSession } from "../../packages/chat/src/live/module-build-codex-exec-session.js";
 
 const NEUTRAL_DIR = "/tmp/neutral-codex";
 const PROMPT_PATH = `${NEUTRAL_DIR}/codex-exec-prompt.txt`;
