@@ -320,6 +320,8 @@ export interface RpcLaunchParams {
    * it passes `--model <id>`; absent ⇒ also omit.
    */
   readonly model?: string;
+  /** Saved OpenCode ACP model choice, applied after session/new when advertised. */
+  readonly acpModel?: string;
   /**
    * #1554 — `chat.persistent_runtime.enabled`, read LIVE by the api on every launch and carried
    * here. This is the plan's live-reload mechanism for the RPC/containerized topology ("Settings &

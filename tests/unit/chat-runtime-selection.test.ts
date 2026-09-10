@@ -12,6 +12,10 @@
  * engine use, and the fail-fast throws before construction), so they need no real cli-runner.
  */
 import { describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   ChatEngineRpcClient,
@@ -259,6 +263,33 @@ describe("createChatSessionRuntime — boot reconciliation", () => {
     } finally {
       runtime.shutdown();
       ensureConnected.mockRestore();
+    }
+  });
+
+  it("checks provider login before creating a child under a missing chat home", async () => {
+    const chatHome = join(tmpdir(), `jarv1s-chat-check-${randomUUID()}`);
+    vi.stubEnv("JARVIS_CHAT_HOME", chatHome);
+    const launch = vi.fn().mockRejectedValue(new Error("Authentication required"));
+    const kill = vi.fn().mockResolvedValue(undefined);
+    const runtime = createChatSessionRuntime({
+      dataContext: {
+        withDataContext: async (
+          _access: { readonly actorUserId: string; readonly requestId: string },
+          fn: (db: never) => unknown
+        ) => fn({} as never)
+      } as never,
+      engineFactory: vi.fn().mockResolvedValue({ launch, kill } as never)
+    });
+
+    try {
+      await expect(runtime.checkProviderInitialization("user-1", "anthropic")).resolves.toEqual({
+        status: "needs_login"
+      });
+      expect(launch).toHaveBeenCalledOnce();
+    } finally {
+      runtime.shutdown();
+      vi.unstubAllEnvs();
+      await rm(chatHome, { recursive: true, force: true });
     }
   });
 });

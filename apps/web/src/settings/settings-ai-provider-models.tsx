@@ -171,15 +171,14 @@ export function ProviderModels(props: {
     onError: (error) => setRefreshOutcome(readError(error))
   });
   const initializationOutcome =
-    refreshOutcome ??
-    (initializationQuery.data?.status === "needs_login"
+    initializationQuery.data?.status === "needs_login"
       ? "Not logged in"
       : initializationQuery.data?.status === "multiplexer_unavailable" ||
           initializationQuery.data?.status === "not_installed"
         ? "The sign-in helper is not running"
         : initializationQuery.data?.status === "error" || initializationQuery.isError
           ? "Could not reach the provider"
-          : null);
+          : null;
   return (
     <div className="prov__models">
       <div className="prov__modelshd">

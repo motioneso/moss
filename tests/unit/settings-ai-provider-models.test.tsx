@@ -130,7 +130,40 @@ describe("ProviderModels chat tag", () => {
       ...provider,
       authMethod: "cli"
     } as AiProviderConfigDto);
-    expect(renderer.root.findByProps({ role: "status" }).children.join(" ")).toBe("Not logged in");
+    expect(
+      renderer.root
+        .findAllByProps({ role: "status" })
+        .map((node) => node.children.join(" "))
+        .some((text) => text === "Not logged in")
+    ).toBe(true);
+  });
+
+  it("keeps ACP login refusal visible after model refresh succeeds", async () => {
+    const onboardingClient = await import("../../apps/web/src/api/onboarding-connect-client.js");
+    const clientModule = await import("../../apps/web/src/api/client.js");
+    vi.mocked(onboardingClient.checkOnboardingProvider).mockResolvedValueOnce({
+      status: "needs_login"
+    });
+    vi.mocked(clientModule.refreshAiProviderModels).mockResolvedValueOnce({ models: [] });
+    const { renderer } = await render([], vi.fn(), {
+      ...provider,
+      authMethod: "cli"
+    } as AiProviderConfigDto);
+
+    const refresh = renderer.root
+      .findAllByType("button")
+      .find((button) => String(button.props.children).includes("Refresh models"));
+    if (!refresh) throw new Error("Refresh models button not found");
+    await act(async () => {
+      (refresh.props.onClick as () => void)();
+    });
+
+    expect(
+      renderer.root
+        .findAllByProps({ role: "status" })
+        .map((node) => node.children.join(" "))
+        .some((text) => text === "Not logged in")
+    ).toBe(true);
   });
 
   it("shows when the ACP provider keeps the login's model default", async () => {

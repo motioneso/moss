@@ -35,7 +35,7 @@ export interface AcpChatEngineOptions {
 
 /** ACP's provider names and Moss's configured provider names are deliberately different. */
 export function toAcpProviderKind(provider: ProviderKind): AcpProviderKind {
-  if (provider === "openai-compatible") return "openai";
+  if (provider === "openai-compatible") return "opencode";
   if (provider === "anthropic") return "anthropic";
   return "google";
 }

@@ -233,6 +233,24 @@ describe("verified-submit RPC client", () => {
     );
   });
 
+  it("carries the saved OpenCode model through the launch RPC", async () => {
+    const launch = vi.fn().mockResolvedValue({ offset: 0 });
+    const client = new ChatEngineRpcClient("openai-compatible", "u1", {
+      launch
+    } as unknown as RpcConnection);
+
+    await client.launch({
+      neutralDir: "/unused",
+      personaPath: "/unused/persona.md",
+      acpModel: "muse-spark-1.3-free"
+    });
+
+    expect(launch).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({ acpModel: "muse-spark-1.3-free" })
+    );
+  });
+
   // #1554 — the api half of the live-reload channel: the cli-runner has no DB access, so every
   // launch must carry a FRESH read of the three persistent-runtime settings (plan, "Settings &
   // flags"). A settings read that throws must degrade the launch to persistent-off, never fail it.

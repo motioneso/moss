@@ -10,7 +10,8 @@ import {
   formatResultRecord,
   formatThoughtRecord,
   formatToolRecord,
-  MAX_RESULT_CHARS
+  MAX_RESULT_CHARS,
+  toAcpProviderKind
 } from "./acp-chat-engine.js";
 import { serializeSubscriberRecords } from "../../../../tests/unit/helpers/boundary-test-gate.js";
 
@@ -225,6 +226,10 @@ class PromptMockTunnel implements AcpTunnel {
 }
 
 describe("AcpChatEngine", () => {
+  it("routes the openai-compatible chat row to OpenCode", () => {
+    expect(toAcpProviderKind("openai-compatible")).toBe("opencode");
+  });
+
   it("turns an authentication failure into the chat sign-in message", async () => {
     const tunnel = new PromptErrorTunnel();
     const loginRejected = vi.fn();

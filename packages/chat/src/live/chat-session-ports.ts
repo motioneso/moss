@@ -130,6 +130,7 @@ export interface ChatSessionManagerDeps {
       readonly executionMode?: AiProviderExecutionMode;
       readonly conversationId?: string;
       readonly userId?: string;
+      readonly acpModel?: string;
       readonly nextSequence?: () => number;
     }
   ) => CliChatEngine | Promise<CliChatEngine>;

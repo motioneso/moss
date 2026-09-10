@@ -213,6 +213,7 @@ export class ChatSessionManager {
       // #367: launch builders emit `--model` only for a concrete settings override; the
       // `"default"` sentinel omits it so the CLI rides its own interactive/account model.
       model,
+      ...(acpModel ? { acpModel } : {}),
       mcpToken: mcpConfig?.token,
       mcpServerUrl: mcpConfig?.mcpServerUrl
     });

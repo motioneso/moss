@@ -7,7 +7,7 @@
  * fake engine (no real tmux / `claude` binary). Everything else is real.
  */
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { AiRepository, createRealTmuxIo, type Multiplexer, type ProviderKind } from "@moss/ai";
@@ -128,6 +128,8 @@ export type ChatEngineFactory = (
     readonly executionMode?: AiProviderExecutionMode;
     readonly conversationId?: string;
     readonly userId?: string;
+    /** Saved OpenCode ACP model choice for the next live session. */
+    readonly acpModel?: string;
     /** B4: set only by a structured caller (`CliStructuredAdapter`). See
      *  `ChatEngineSelectionOpts.needsStructuredOutput` in structured-engine-selection.ts. */
     readonly needsStructuredOutput?: boolean;
@@ -745,11 +747,13 @@ async function checkProviderInitialization(
   const checkId = randomUUID().replaceAll("-", "");
   const sessionKey = `settings-check-${checkId}`;
   const projectId = `settings-check-${checkId}`;
-  const neutralDir = await mkdtemp(join(resolveChatHome(), "provider-check-"));
-  const personaPath = join(neutralDir, "persona.md");
-  await writeFile(personaPath, "You are running a Moss provider initialization check.", "utf8");
+  let neutralDir: string | undefined;
   let engine: CliChatEngine | null = null;
   try {
+    await mkdir(resolveChatHome(), { recursive: true });
+    neutralDir = await mkdtemp(join(resolveChatHome(), "provider-check-"));
+    const personaPath = join(neutralDir, "persona.md");
+    await writeFile(personaPath, "You are running a Moss provider initialization check.", "utf8");
     engine = await engineFactory(provider, sessionKey, {
       conversationId: projectId,
       userId: actorUserId
@@ -765,7 +769,9 @@ async function checkProviderInitialization(
         : { status: "error" };
   } finally {
     await engine?.kill().catch(() => undefined);
-    await rm(neutralDir, { recursive: true, force: true }).catch(() => undefined);
+    if (neutralDir) {
+      await rm(neutralDir, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 }
 

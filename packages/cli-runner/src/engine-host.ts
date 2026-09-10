@@ -403,6 +403,7 @@ export class CliChatEngineHost {
       replayAttemptId: params.replayAttemptId,
       // #367: forward the resolved model id so buildClaudeCommand emits `--model <id>`.
       model: params.model,
+      acpModel: params.acpModel,
       // #2228: let the CLI run its own web search tool and report sources.
       nativeSearch: params.nativeSearch
     };
