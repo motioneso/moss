@@ -256,6 +256,8 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
     return {
       kind: parsed.kind,
       text: parsed.text,
+      id: typeof parsed.id === "string" ? parsed.id : undefined,
+      sequence: typeof parsed.sequence === "number" ? parsed.sequence : undefined,
       messageId: typeof parsed.messageId === "string" ? parsed.messageId : undefined,
       actionRequestId:
         typeof parsed.actionRequestId === "string" ? parsed.actionRequestId : undefined,
@@ -290,7 +292,16 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
         parsed.sourceFreshness && typeof parsed.sourceFreshness === "object"
           ? (parsed.sourceFreshness as SourceFreshnessV1)
           : undefined,
-      preview: parsePreview(parsed.preview)
+      preview: parsePreview(parsed.preview),
+      decidedBy:
+        parsed.decidedBy === "person" ||
+        parsed.decidedBy === "policy" ||
+        parsed.decidedBy === "timeout" ||
+        parsed.decidedBy === "cancelled"
+          ? parsed.decidedBy
+          : undefined,
+      reason: typeof parsed.reason === "string" ? parsed.reason : undefined,
+      durationMs: typeof parsed.durationMs === "number" ? parsed.durationMs : undefined
     };
   } catch {
     return null;

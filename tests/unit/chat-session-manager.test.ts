@@ -170,9 +170,11 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
 
     await manager.ensureSession("u1", "Ben");
 
-    expect(engineFactory).toHaveBeenCalledWith("openai-compatible", "u1:drawer", {
-      executionMode: "non_interactive"
-    });
+    expect(engineFactory).toHaveBeenCalledWith(
+      "openai-compatible",
+      "u1:drawer",
+      expect.objectContaining({ executionMode: "non_interactive" })
+    );
   });
 
   it("creates the first conversation before selecting the chat engine", async () => {
@@ -201,11 +203,15 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
     await manager.ensureSession("u1", "Ben");
 
     expect(openNewConversation).toHaveBeenCalledWith("u1", undefined, "drawer");
-    expect(engineFactory).toHaveBeenCalledWith("anthropic", "u1:drawer", {
-      executionMode: undefined,
-      conversationId: "thread-1",
-      userId: "u1"
-    });
+    expect(engineFactory).toHaveBeenCalledWith(
+      "anthropic",
+      "u1:drawer",
+      expect.objectContaining({
+        executionMode: undefined,
+        conversationId: "thread-1",
+        userId: "u1"
+      })
+    );
   });
 
   it("assembles replayBatch from prior turns and ships it on launch", async () => {
@@ -781,7 +787,6 @@ describe("ChatSessionManager.reconcileLiveSessions (#342 §5.3)", () => {
     // reaped by mux name.
     expect(killSession).toHaveBeenCalledWith("uOrphan");
 
-    // Proof the Map entry is gone: a fresh ensureSession relaunches a NEW engine (launches twice).
     await manager.ensureSession("uStale", "Ben");
     expect(engines).toHaveLength(2);
     expect(engineFactory).toHaveBeenCalledTimes(2);
@@ -791,7 +796,6 @@ describe("ChatSessionManager.reconcileLiveSessions (#342 §5.3)", () => {
 describe("ChatSessionManager maintenance mutex (#342 §5.4)", () => {
   it("serializes reconcileLiveSessions and reapIdle (mutually exclusive)", async () => {
     const events: string[] = [];
-    // An engine whose kill records ordering so we can prove no interleave.
     const makeEngine = (label: string) => ({
       provider: "anthropic" as const,
       launch: vi.fn().mockResolvedValue({ offset: 0 }),

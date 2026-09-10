@@ -238,6 +238,7 @@ export async function requestAcpBuiltInPermission(
   });
 
   const startedAt = Date.now();
+  let humanHoldDurationMs: number | null = null;
   const result = await decideAcpPermission(builtIn, folders, async () => {
     const toolName = builtIn.toolName ?? "";
     const action = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
@@ -265,19 +266,41 @@ export async function requestAcpBuiltInPermission(
       toolName,
       summary: acpCardText(builtIn)
     });
+    const holdStartedAt = Date.now();
 
     try {
       const outcome = await pendingResolution;
+      const holdDurationMs = Math.max(0, Date.now() - holdStartedAt);
+      humanHoldDurationMs = holdDurationMs;
       deps.notifier.emit(
         chatSessionId,
         outcome === "confirmed"
-          ? { kind: "action_result", actionRequestId: action.id, toolName, outcome: "allowed" }
+          ? {
+              kind: "action_result",
+              actionRequestId: action.id,
+              toolName,
+              outcome: "allowed",
+              decidedBy: "person",
+              holdDurationMs
+            }
           : {
               kind: "action_result",
               actionRequestId: action.id,
               toolName,
               outcome: "denied",
-              reason: outcome === "cancelled" ? "Action cancelled." : APPROVAL_REFUSED_REASON
+              decidedBy:
+                outcome === "timeout"
+                  ? "timeout"
+                  : outcome === "cancelled"
+                    ? "cancelled"
+                    : "person",
+              holdDurationMs,
+              reason:
+                outcome === "timeout"
+                  ? "Action timed out."
+                  : outcome === "cancelled"
+                    ? "Action cancelled."
+                    : APPROVAL_REFUSED_REASON
             }
       );
       await writeAcpAuditLine(deps, access, chatSessionId, {
@@ -302,7 +325,18 @@ export async function requestAcpBuiltInPermission(
     }
   });
 
-  const holdDurationMs = result.asked ? Date.now() - startedAt : null;
+  const holdDurationMs = result.asked ? humanHoldDurationMs : null;
+  if (!result.asked) {
+    deps.notifier.emit(chatSessionId, {
+      kind: "action_result",
+      actionRequestId: builtIn.toolCallId,
+      toolName: builtIn.toolName ?? "(unnamed)",
+      outcome: result.decision === "allow" ? "allowed" : "denied",
+      decidedBy: "policy",
+      holdDurationMs: null,
+      ...(result.reason ? { reason: result.reason } : {})
+    });
+  }
   if (!result.asked && result.decision === "deny" && result.reason) {
     // Refused with no row, but never silently: the audit line names the agent,
     // the folder and the reason word, so the refusal itself stays visible.

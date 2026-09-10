@@ -354,12 +354,7 @@ export function registerChatRoutes(
                 kind: request.kind,
                 locations: request.locations
               });
-              return {
-                decision: result.decision,
-                asked: result.asked,
-                holdDurationMs: result.holdDurationMs,
-                reason: result.reason
-              };
+              return result.decision;
             },
             beginTurn: (sessionId, turnId) => {
               wiring.confirmations.beginTurn(sessionId, turnId);

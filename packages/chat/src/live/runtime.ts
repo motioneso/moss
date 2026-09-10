@@ -127,6 +127,7 @@ export type ChatEngineFactory = (
      *  `ChatEngineSelectionOpts.needsStructuredOutput` in engine-selection.ts. */
     readonly needsStructuredOutput?: boolean;
     readonly acpPermissionDecider?: AcpPermissionDecider;
+    readonly nextSequence?: () => number;
   }
 ) => CliChatEngine | Promise<CliChatEngine>;
 
@@ -370,6 +371,7 @@ export function selectEngineFactory(
             userId: engineOpts.userId,
             projectId: engineOpts.conversationId,
             permissionDecider: engineOpts?.acpPermissionDecider ?? opts.acpPermissionDecider,
+            nextSequence: engineOpts?.nextSequence,
             // ACP sessions run in this process, so a rejected sign-in is first learned here —
             // but the settings screen's readiness check always asks the runner process, which
             // holds its own separate cache. Without relaying the rejection across the socket,

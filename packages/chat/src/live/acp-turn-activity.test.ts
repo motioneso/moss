@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ProviderKind } from "@moss/ai";
-import type { AcpPermissionDecider, AcpPermissionDecisionResult, AcpTunnel } from "@moss/acp";
+import { redactSecrets, type ProviderKind } from "@moss/ai";
+import type { AcpPermissionDecider, AcpTunnel } from "@moss/acp";
 import {
   ChatSessionManager,
   type ChatPersistencePort,
@@ -11,6 +11,11 @@ import { AcpChatEngine, formatResultRecord, formatToolRecord } from "./acp-chat-
 import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { ChatAttachmentDto, ChatTurnUsageDto } from "@moss/shared";
 import type { PersonaFs } from "./persona.js";
+import {
+  SECRET_SHAPE_CORPUS,
+  serializeSubscriberRecord,
+  serializeSubscriberRecords
+} from "../../../../tests/unit/helpers/boundary-test-gate.js";
 
 const noopPersonaFs: PersonaFs = {
   async mkdir() {},
@@ -226,18 +231,15 @@ describe("task 8a Architect regressions", () => {
     let engineRef: AcpChatEngine | undefined;
 
     const deps: ChatSessionManagerDeps = {
-      engineFactory: (provider, sessionKey) => {
+      engineFactory: (provider, sessionKey, options) => {
         engineRef = new AcpChatEngine(provider, sessionKey, {
           tunnel,
           userId: "user-1",
           projectId: "p1",
           permissionDecider: {
-            decide: async () => ({
-              decision: "allow",
-              asked: true,
-              holdDurationMs: 1500
-            })
-          }
+            decide: async () => "allow"
+          },
+          nextSequence: options?.nextSequence
         });
         return engineRef;
       },
@@ -272,11 +274,20 @@ describe("task 8a Architect regressions", () => {
         toolCallId: "tc-1",
         rawOutput: "Found 2 events"
       });
-      // 4. Approval via request_permission
+      // The approval arrives while these engine records are still buffered.
       t.sendAgentRequest("session/request_permission", {
         sessionId: "session-1",
         toolCall: { toolCallId: "tc-1", title: "calendar.list" },
         options: [{ optionId: "opt-1", name: "Allow", kind: "allow_once" }]
+      });
+      manager.injectRecord("user-1", {
+        kind: "action_result",
+        actionRequestId: "tc-1",
+        toolName: "calendar.list",
+        outcome: "executed",
+        decidedBy: "person",
+        durationMs: 1500,
+        text: "Allowed"
       });
       // Reply
       t.emitUpdate({
@@ -300,11 +311,17 @@ describe("task 8a Architect regressions", () => {
     });
 
     const activity = recorded.opts?.activityRecords ?? [];
-    expect(activity.map((r) => r.kind)).toEqual(["thought", "tool", "result", "approved"]);
-    expect(activity[0]?.text).toBe("Planning actions");
-    expect(activity[1]?.text).toBe("calendar.list, today");
-    expect(activity[2]?.text).toBe("Found 2 events");
-    expect(activity[3]?.text).toMatch(/calendar\.list, approved by you at \d\d:\d\d after 2 s/);
+    expect(activity.map((r) => r.kind)).toEqual([
+      "action_result",
+      "approved",
+      "thought",
+      "tool",
+      "result"
+    ]);
+    expect(activity[2]?.text).toBe("Planning actions");
+    expect(activity[3]?.text).toBe("calendar.list, today");
+    expect(activity[4]?.text).toBe("Found 2 events");
+    expect(activity[1]?.text).toMatch(/calendar\.list, approved by you at \d\d:\d\d after 2 s/);
 
     // Elapsed alone when usage absent
     const tunnel2 = new MockTunnel();
@@ -329,37 +346,39 @@ describe("task 8a Architect regressions", () => {
     await engineRef?.kill();
   });
 
-  it("Regression 2: Result and tool argument summary containing bearer token and key secrets are emitted and stored masked", async () => {
-    const keySecret = "jst_abcdef1234567890abcdef1234567890abcdef";
-    const bearerSecret = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.t-ae7H8M3FsVbeOmOoxRDU08";
+  it("Regression 2: Result and tool argument summaries mask every supported secret shape", async () => {
+    for (const secretShape of SECRET_SHAPE_CORPUS) {
+      expect(redactSecrets(secretShape.sample)).not.toContain(secretShape.value);
+    }
 
     // 1. Tool argument summary redaction
+    const queryShape = SECRET_SHAPE_CORPUS.find(({ name }) => name === "query api_key")!;
     const toolRecord = formatToolRecord({
       toolCallId: "call-sec",
       toolName: "fetch",
       rawInput: {
-        url: `https://api.example.com?auth=${bearerSecret}&token=${keySecret}`
+        url: queryShape.sample,
+        path: "/plain/path"
       }
     });
 
-    expect(toolRecord.text).not.toContain(keySecret);
-    expect(toolRecord.text).not.toContain(bearerSecret);
+    expect(toolRecord.text).not.toContain(queryShape.value);
+    expect(toolRecord.text).toContain("/plain/path");
     expect(toolRecord.text.toLowerCase()).toContain("[redacted");
 
     // 2. Result text redaction
-    const resultRecord = formatResultRecord({
-      toolCallId: "call-sec",
-      rawOutput: `Returned secret key: ${keySecret} with header ${bearerSecret}`
-    });
-
-    expect(resultRecord?.text).not.toContain(keySecret);
-    expect(resultRecord?.text).not.toContain(bearerSecret);
-    expect(resultRecord?.text.toLowerCase()).toContain("[redacted");
+    for (const secretShape of SECRET_SHAPE_CORPUS) {
+      const resultRecord = formatResultRecord({
+        toolCallId: "call-sec",
+        rawOutput: secretShape.sample
+      });
+      expect(resultRecord?.text).not.toContain(secretShape.value);
+    }
   });
 
-  it("Regression 3: Provenance records human allow, policy allow, policy deny, human deny", async () => {
+  it("Regression 3: Engine permission wrapper delegates without writing approval records", async () => {
     const tunnel = new MockTunnel();
-    let currentVerdict: AcpPermissionDecisionResult = { decision: "allow" };
+    let currentVerdict: "allow" | "deny" = "allow";
 
     const decider: AcpPermissionDecider = {
       decide: async () => currentVerdict
@@ -377,42 +396,34 @@ describe("task 8a Architect regressions", () => {
       }
     ).wrapPermissionDecider(decider)!;
 
-    // 1. Person allow (asked: true, 1800ms) -> Approved by you after 2 s
-    currentVerdict = { decision: "allow", asked: true, holdDurationMs: 1800 };
+    // The manager owns approval-line derivation from gateway action_result records.
+    currentVerdict = "allow";
     await wrapped.decide({ toolName: "bash", toolCallId: "t1" } as never, {} as never);
-    let { records } = await engine.readNew(0);
-    const allowRecord = records.find((r) => r.kind === "approved");
-    expect(allowRecord).toBeDefined();
-    expect(allowRecord?.text).toMatch(/bash, approved by you at \d\d:\d\d after 2 s/);
+    let records = serializeSubscriberRecords((await engine.readNew(0)).records);
+    expect(records.filter((r) => r.kind === "approved")).toHaveLength(0);
 
-    // 2. Silent policy allow (asked: false, 200ms) -> writes NOTHING
-    currentVerdict = { decision: "allow", asked: false, holdDurationMs: 200 };
+    // All decisions pass through to ACP without creating duplicate engine records.
+    currentVerdict = "allow";
     const offsetBefore = (await engine.readNew(0)).offset;
     await wrapped.decide({ toolName: "read_file", toolCallId: "t2" } as never, {} as never);
-    const afterPolicyAllow = await engine.readNew(offsetBefore);
+    const afterPolicyAllow = serializeSubscriberRecords(
+      (await engine.readNew(offsetBefore)).records
+    );
     expect(
-      afterPolicyAllow.records.filter(
+      afterPolicyAllow.filter(
         (r) => r.kind === "approved" || r.kind === "not_approved" || r.kind === "refused"
       )
     ).toHaveLength(0);
 
-    // 3. Policy deny (asked: false, reason "Forbidden command") -> Refused
-    currentVerdict = { decision: "deny", asked: false, reason: "Forbidden command" };
+    currentVerdict = "deny";
     await wrapped.decide({ toolName: "delete_db", toolCallId: "t3" } as never, {} as never);
-    records = (await engine.readNew(0)).records;
-    const policyDenyRecord = records.find((r) => r.kind === "refused");
-    expect(policyDenyRecord).toBeDefined();
-    expect(policyDenyRecord?.text).toBe("delete_db, refused (Forbidden command)");
+    records = serializeSubscriberRecords((await engine.readNew(0)).records);
+    expect(records.filter((r) => r.kind === "refused")).toHaveLength(0);
 
-    // 4. Person deny (asked: true, 3100ms) -> Not approved by you after 3 s
-    currentVerdict = { decision: "deny", asked: true, holdDurationMs: 3100 };
+    currentVerdict = "deny";
     await wrapped.decide({ toolName: "format_disk", toolCallId: "t4" } as never, {} as never);
-    records = (await engine.readNew(0)).records;
-    const personDenyRecord = records.find((r) => r.kind === "not_approved");
-    expect(personDenyRecord).toBeDefined();
-    expect(personDenyRecord?.text).toMatch(
-      /format_disk, not approved by you at \d\d:\d\d after 3 s/
-    );
+    records = serializeSubscriberRecords((await engine.readNew(0)).records);
+    expect(records.filter((r) => r.kind === "not_approved")).toHaveLength(0);
   });
 
   it("Regression 4: Moss tool approval maps injected action_result into Approved/Not approved line with hold time", () => {
@@ -432,7 +443,7 @@ describe("task 8a Architect regressions", () => {
 
     const manager = new ChatSessionManager(deps);
     const seen: TranscriptRecord[] = [];
-    manager.subscribe("user-1", (r) => seen.push(r));
+    manager.subscribe("user-1", (r) => seen.push(serializeSubscriberRecord(r)));
 
     // Request at T=0
     manager.injectRecord("user-1", {
@@ -450,9 +461,27 @@ describe("task 8a Architect regressions", () => {
       actionRequestId: "req-cal-1",
       toolName: "calendar.createEvent",
       outcome: "executed",
-      text: ""
+      decidedBy: "person",
+      durationMs: 2400,
+      text: "",
+      result: { eventId: "event-1" },
+      affectsQueryKeys: ["calendar.events"]
     });
 
+    const originalResult = seen.find(
+      (r) => r.kind === "action_result" && r.actionRequestId === "req-cal-1"
+    );
+    expect(originalResult).toEqual({
+      kind: "action_result",
+      actionRequestId: "req-cal-1",
+      toolName: "calendar.createEvent",
+      outcome: "executed",
+      decidedBy: "person",
+      durationMs: 2400,
+      text: "",
+      result: { eventId: "event-1" },
+      affectsQueryKeys: ["calendar.events"]
+    });
     const approvals = seen.filter((r) => r.kind === "approved");
     expect(approvals).toHaveLength(1);
     expect(approvals[0]?.text).toMatch(
@@ -471,6 +500,8 @@ describe("task 8a Architect regressions", () => {
       actionRequestId: "req-cal-2",
       toolName: "calendar.deleteEvent",
       outcome: "denied",
+      decidedBy: "person",
+      durationMs: 4100,
       text: ""
     });
 
@@ -479,6 +510,63 @@ describe("task 8a Architect regressions", () => {
     expect(notApproved[0]?.text).toMatch(
       /calendar\.deleteEvent, not approved by you at \d\d:\d\d after 4 s/
     );
+
+    // Every gateway decision has explicit provenance; policy allow is intentionally silent.
+    manager.injectRecord("user-1", {
+      kind: "action_result",
+      actionRequestId: "req-person-allow",
+      toolName: "tasks.create",
+      outcome: "executed",
+      decidedBy: "person",
+      durationMs: 1200,
+      text: "executed"
+    });
+    manager.injectRecord("user-1", {
+      kind: "action_result",
+      actionRequestId: "req-policy-deny",
+      toolName: "tasks.delete",
+      outcome: "denied",
+      decidedBy: "policy",
+      reason: "rate limited",
+      text: "denied"
+    });
+    manager.injectRecord("user-1", {
+      kind: "action_result",
+      actionRequestId: "req-policy-allow",
+      toolName: "tasks.list",
+      outcome: "allowed",
+      decidedBy: "policy",
+      text: "allowed"
+    });
+    manager.injectRecord("user-1", {
+      kind: "action_result",
+      actionRequestId: "req-timeout",
+      toolName: "tasks.update",
+      outcome: "denied",
+      decidedBy: "timeout",
+      reason: "Action timed out.",
+      durationMs: 3000,
+      text: "denied"
+    });
+    manager.injectRecord("user-1", {
+      kind: "action_result",
+      actionRequestId: "req-cancel",
+      toolName: "tasks.update",
+      outcome: "denied",
+      decidedBy: "cancelled",
+      reason: "Action cancelled.",
+      durationMs: 300,
+      text: "denied"
+    });
+    expect(
+      seen.filter((r) => r.toolName === "tasks.list" && r.kind !== "action_result")
+    ).toHaveLength(0);
+    expect(seen.filter((r) => r.toolName === "tasks.delete" && r.kind === "refused")).toHaveLength(
+      1
+    );
+    const nonHuman = seen.filter((r) => r.toolName === "tasks.update" && r.kind === "not_approved");
+    expect(nonHuman).toHaveLength(2);
+    expect(nonHuman.every((r) => !r.text.includes("by you"))).toBe(true);
   });
 
   it("Regression 5: Tool update refreshes line with path; display title without real name never shows title", async () => {
@@ -500,12 +588,13 @@ describe("task 8a Architect regressions", () => {
     });
 
     const { records } = await engine.readNew(0);
-    expect(records).toHaveLength(1);
+    const serializedRecords = serializeSubscriberRecords(records);
+    expect(serializedRecords).toHaveLength(1);
     // Never displays title "Search for files in repo"; falls back to "tool"
-    expect(records[0]?.text).toBe("tool, /workspace/src");
-    expect(records[0]?.text).not.toContain("Search for files");
+    expect(serializedRecords[0]?.text).toBe("tool, /workspace/src");
+    expect(serializedRecords[0]?.text).not.toContain("Search for files");
 
-    const toolLineRef = records[0]!;
+    const firstRecord = serializedRecords[0]!;
 
     // Later update carries real tool name and path
     engine.handleSessionUpdate({
@@ -517,8 +606,13 @@ describe("task 8a Architect regressions", () => {
       }
     });
 
-    // Existing live tool record is refreshed in-place
-    expect(toolLineRef.text).toBe("grep, /workspace/src/index.ts");
+    const updates = serializeSubscriberRecords((await engine.readNew(0)).records);
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toMatchObject({
+      id: firstRecord.id,
+      sequence: firstRecord.sequence,
+      text: "grep, /workspace/src/index.ts"
+    });
   });
 
   it("Regression 6: Live thought: first chunk emits Thought record, second chunk extends it live; storage holds one joined line", async () => {
@@ -537,12 +631,11 @@ describe("task 8a Architect regressions", () => {
       }
     });
 
-    const { records: afterFirstChunk } = await engine.readNew(0);
+    const { records } = await engine.readNew(0);
+    const afterFirstChunk = serializeSubscriberRecords(records);
     expect(afterFirstChunk).toHaveLength(1);
     expect(afterFirstChunk[0]?.kind).toBe("thought");
     expect(afterFirstChunk[0]?.text).toBe("Considering the problem.");
-
-    const liveThoughtRef = afterFirstChunk[0]!;
 
     // Second thought chunk
     engine.handleSessionUpdate({
@@ -552,7 +645,12 @@ describe("task 8a Architect regressions", () => {
       }
     });
 
-    // Subscriber holds the exact same record object extended in-place
-    expect(liveThoughtRef.text).toBe("Considering the problem. Looking at calendar entries.");
+    const updates = serializeSubscriberRecords((await engine.readNew(0)).records);
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toMatchObject({
+      id: afterFirstChunk[0]?.id,
+      sequence: afterFirstChunk[0]?.sequence,
+      text: "Considering the problem. Looking at calendar entries."
+    });
   });
 });

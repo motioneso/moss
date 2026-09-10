@@ -102,10 +102,19 @@ export function readActivity(value: unknown): ChatActivityEventDto[] {
           {
             kind: record.kind,
             text: record.text,
+            ...(typeof record.id === "string" ? { id: record.id } : {}),
+            ...(typeof record.sequence === "number" ? { sequence: record.sequence } : {}),
             ...(typeof record.toolName === "string" ? { toolName: record.toolName } : {}),
             ...(outcome ? { outcome } : {}),
             ...(typeof record.toolCallId === "string" ? { toolCallId: record.toolCallId } : {}),
-            ...(typeof record.durationMs === "number" ? { durationMs: record.durationMs } : {})
+            ...(typeof record.durationMs === "number" ? { durationMs: record.durationMs } : {}),
+            ...(record.decidedBy === "person" ||
+            record.decidedBy === "policy" ||
+            record.decidedBy === "timeout" ||
+            record.decidedBy === "cancelled"
+              ? { decidedBy: record.decidedBy }
+              : {}),
+            ...(typeof record.reason === "string" ? { reason: record.reason } : {})
           }
         ]
       : [];

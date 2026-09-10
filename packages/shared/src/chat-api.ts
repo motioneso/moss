@@ -25,10 +25,14 @@ export function normalizeChatSurface(value?: unknown): ChatSurface {
 export interface ChatActivityEventDto {
   readonly kind: string;
   readonly text: string;
+  readonly id?: string;
+  readonly sequence?: number;
   readonly toolName?: string;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
   readonly toolCallId?: string;
   readonly durationMs?: number;
+  readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
+  readonly reason?: string;
 }
 
 export interface ChatThreadDto {
@@ -163,6 +167,8 @@ export interface ActionRequestPreview {
 export interface TranscriptRecord {
   readonly kind: ChatRecordKind;
   readonly text: string;
+  readonly id?: string;
+  readonly sequence?: number;
   readonly messageId?: string;
   readonly actionRequestId?: string;
   readonly workflowApprovalId?: string;
@@ -171,6 +177,8 @@ export interface TranscriptRecord {
   readonly summary?: string;
   readonly status?: WorkflowApprovalStatusDto;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
+  readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
+  readonly reason?: string;
   readonly result?: Record<string, unknown>;
   /** Dot-path tokens into the frontend `queryKeys` object, resolved by app-shell's generic invalidation effect. */
   readonly affectsQueryKeys?: readonly string[];

@@ -11,7 +11,7 @@ import {
   type ChatSurface
 } from "./chat-surface.js";
 import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
-import type { CliChatEngine } from "./types.js";
+import type { CliChatEngine, TranscriptRecord } from "./types.js";
 
 /** Resolves after `ms` milliseconds. Used for polling backoff during turn/drain loops. */
 export function delay(ms: number): Promise<void> {
@@ -87,6 +87,25 @@ export async function waitForNewToolsListObservation(
 
 export interface PrivateSessionRecord {
   readonly engine: CliChatEngine;
+}
+
+/** Replace one live record in persisted activity while retaining creation order. */
+export function upsertActivityRecord(records: TranscriptRecord[], record: TranscriptRecord): void {
+  if (record.id) {
+    const existing = records.findIndex((item) => item.id === record.id);
+    if (existing >= 0) {
+      records[existing] = record;
+      return;
+    }
+  }
+  const insertion = records.findIndex(
+    (item) =>
+      record.sequence !== undefined &&
+      item.sequence !== undefined &&
+      item.sequence > record.sequence
+  );
+  if (insertion >= 0) records.splice(insertion, 0, record);
+  else records.push(record);
 }
 
 export async function cleanupPrivateSession(

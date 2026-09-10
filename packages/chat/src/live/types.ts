@@ -21,6 +21,10 @@ export type ChatRecordKind =
 export interface TranscriptRecord {
   readonly kind: ChatRecordKind;
   readonly text: string;
+  /** Stable identity for live replacement records (thought/tool updates). */
+  readonly id?: string;
+  /** Creation order shared by the engine and manager for one live session. */
+  readonly sequence?: number;
   readonly messageId?: string;
   readonly actionRequestId?: string;
   readonly toolName?: string;
@@ -38,6 +42,10 @@ export interface TranscriptRecord {
   readonly sources?: readonly { readonly title: string; readonly url: string }[];
   readonly summary?: string;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
+  /** Who made an action decision; absent on records from older producers. */
+  readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
+  /** Bounded reason for a non-person decision. */
+  readonly reason?: string;
   /** Live-only structured result for a module-owned inline artifact. */
   readonly result?: Record<string, unknown>;
   /** #1310: dot-path tokens into the frontend `queryKeys` object, for `action_result` records whose tool executed. */

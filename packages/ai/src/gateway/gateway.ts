@@ -57,12 +57,6 @@ const defaultGatewayLogger: GatewayLogger = {
   error: (event, fields) => console.error(JSON.stringify({ event, ...fields }))
 };
 
-/**
- * Private runHandler return shape: the public envelope plus the audit-log fields, computed once
- * so every call site records them identically. `audit.errorClass` is `null` only for a genuine
- * success (a module self-reporting failure inside an `ok:true` result is not one); the live-stream
- * outcome keys off it too. Never exposed outside this file.
- */
 interface RunHandlerOutcome {
   readonly response: GatewayToolResponse;
   readonly audit: {
@@ -72,10 +66,6 @@ interface RunHandlerOutcome {
   };
 }
 
-/**
- * Closed set of conventional error shapes a module handler may return inside an `ok:true`
- * ToolResult. Checked on the raw pre-sanitize payload (#1252) — top-level only, no recursion.
- */
 function isModuleReportedError(data: Record<string, unknown>): boolean {
   if (data.status === "error") return true;
   if (data.ok === false) return true;
@@ -166,14 +156,7 @@ export interface NativeToolPermissionResponse {
 
 const NATIVE_TOOL_MODULE_ID = "claude-native";
 const NATIVE_TOOL_MODULE_NAME = "Claude Native Tools";
-// #1158: read-only native META-tools that must never require a user confirmation.
-// Claude Code loads its MCP tool schemas lazily via the native ToolSearch tool; gating it
-// behind the confirm flow deadlocks the permission hook (150s confirm wait == 150s hook
-// deadline), the hook fails closed, claude retries in silence, and the #456 idle watchdog
-// kills the live engine (prod outage 2026-07-18, issue #1157). Allow immediately with no
-// pending action row — ToolSearch fires many times per conversation and cannot mutate
-// anything, so a row per call is audit spam. Keep this set minimal: anything unlisted
-// (including read-only tools like Grep/Read) stays on the confirm path.
+// #1158: read-only native meta-tools that must never require confirmation.
 const NATIVE_READONLY_AUTO_ALLOW = new Set(["ToolSearch"]);
 
 /**
@@ -244,6 +227,8 @@ export class AssistantToolGateway {
           actionRequestId: ctx.requestId,
           toolName: found.dto.name,
           outcome: "denied",
+          decidedBy: "policy",
+          holdDurationMs: null,
           reason: "Rate limit exceeded for unattended runs of this tool."
         });
         void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
@@ -265,6 +250,8 @@ export class AssistantToolGateway {
         actionRequestId: ctx.requestId,
         toolName: found.dto.name,
         outcome: audit.errorClass === null ? "executed" : "error",
+        decidedBy: "policy",
+        holdDurationMs: null,
         ...(result.ok
           ? { result: liveStreamResult(found.tool, result) }
           : { reason: gatewayFailureReason(result) }),
@@ -306,6 +293,8 @@ export class AssistantToolGateway {
           actionRequestId: ctx.requestId,
           toolName: found.dto.name,
           outcome: audit.errorClass === null ? "executed" : "error",
+          decidedBy: "policy",
+          holdDurationMs: null,
           ...(result.ok
             ? { result: liveStreamResult(found.tool, result) }
             : { reason: gatewayFailureReason(result) }),
@@ -360,8 +349,6 @@ export class AssistantToolGateway {
       })());
 
     if (yoloGranted) {
-      // #1085 F4: Jarvis observes the permission grant, not the native tool's completion. Persist
-      // that grant before allowing it instead of fire-and-forget auditing a fictional "success".
       const action = await this.deps.runner.withDataContext(
         access,
         async (scopedDb: DataContextDb) => {
@@ -389,7 +376,9 @@ export class AssistantToolGateway {
         kind: "action_result",
         actionRequestId: action.id,
         toolName,
-        outcome: "allowed"
+        outcome: "allowed",
+        decidedBy: "policy",
+        holdDurationMs: null
       });
       return { decision: "allow", reason: "Allowed by YOLO." };
     }
@@ -417,12 +406,8 @@ export class AssistantToolGateway {
       toolName,
       summary: nativeToolSummary(toolName, input)
     });
+    const holdStartedAt = Date.now();
 
-    // #2149: markDone (in the finally below) unblocks resolveAndAwaitCompletion, which the
-    // Approve/Deny HTTP route awaits before responding. This path has no handler to run — it
-    // only grants a permission decision — but it still shares the wake-up mechanism with
-    // confirmAndRun, so it must report back the same way or an Approve of a native tool would
-    // hang waiting for a markDone that never comes.
     try {
       const outcome = await pendingResolution;
       if (outcome !== "confirmed") {
@@ -431,7 +416,15 @@ export class AssistantToolGateway {
           actionRequestId: action.id,
           toolName,
           outcome: "denied",
-          reason: APPROVAL_REFUSED_REASON
+          decidedBy:
+            outcome === "timeout" ? "timeout" : outcome === "cancelled" ? "cancelled" : "person",
+          holdDurationMs: Math.max(0, Date.now() - holdStartedAt),
+          reason:
+            outcome === "timeout"
+              ? "Action timed out."
+              : outcome === "cancelled"
+                ? "Action cancelled."
+                : APPROVAL_REFUSED_REASON
         });
         return {
           decision: "deny",
@@ -439,17 +432,13 @@ export class AssistantToolGateway {
         };
       }
 
-      // #1661: "allowed", not "executed". This method decides a native tool's PERMISSION and
-      // returns `decision: "allow"` — the tool then runs outside the gateway's sight, so nothing
-      // here ever learns whether it worked. Saying "executed" told the user the action completed
-      // on the strength of their own click. The YOLO branch above already got this right and
-      // says why (#1085 F4: observe the grant, never fire-and-forget a fictional success); this
-      // sibling branch, forty lines down and doing the identical thing, was missed.
       this.deps.notifier.emit(chatSessionId, {
         kind: "action_result",
         actionRequestId: action.id,
         toolName,
-        outcome: "allowed"
+        outcome: "allowed",
+        decidedBy: "person",
+        holdDurationMs: Math.max(0, Date.now() - holdStartedAt)
       });
       return { decision: "allow", reason: "Approved by user." };
     } finally {
@@ -760,11 +749,7 @@ export class AssistantToolGateway {
 
     const summary = [notice, this.summaryFor(found.tool, input, ctx)].filter(Boolean).join(" ");
 
-    // Optional rich, server-derived card preview (e.g. email reply recipient/subject/body),
-    // computed under the actor's DataContextDb. It rides the live stream ONLY — the persisted
-    // row's `inputSummary` above stays key-names-only (metadata-only persistence). A preview
-    // hook that throws must NOT block the card: guard and fall back to summary-only (never let
-    // a thrown message, which could carry sensitive detail, reach the emit).
+    // Rich previews are live-only; persisted input remains metadata-only.
     let preview: ActionRequestPreview | undefined;
     const previewHook = found.tool.preview;
     if (previewHook) {
@@ -784,15 +769,10 @@ export class AssistantToolGateway {
       summary,
       ...(preview ? { preview } : {})
     });
+    const holdStartedAt = Date.now();
 
     const outcome = await pendingResolution;
 
-    // #2149: markDone unblocks resolveAndAwaitCompletion, which the Approve/Deny HTTP route
-    // awaits before responding — must fire once this call has fully finished handling the
-    // outcome (both branches below), on every exit path, so the caller never observes
-    // "confirmed" before the handler run below has actually happened. Deliberately outside the
-    // fire-and-forget `recordAudit` calls (`void this.recordAudit(...)`) — those stay
-    // unawaited on purpose and must not reopen the same kind of delay on the audit write.
     try {
       if (outcome !== "confirmed") {
         this.deps.notifier.emit(ctx.chatSessionId, {
@@ -800,7 +780,15 @@ export class AssistantToolGateway {
           actionRequestId: action.id,
           toolName: found.dto.name,
           outcome: "denied",
-          reason: outcome === "cancelled" ? "Action cancelled." : APPROVAL_REFUSED_REASON
+          decidedBy:
+            outcome === "timeout" ? "timeout" : outcome === "cancelled" ? "cancelled" : "person",
+          holdDurationMs: Math.max(0, Date.now() - holdStartedAt),
+          reason:
+            outcome === "timeout"
+              ? "Action timed out."
+              : outcome === "cancelled"
+                ? "Action cancelled."
+                : APPROVAL_REFUSED_REASON
         });
         const approvalMode =
           outcome === "timeout" ? "timeout" : outcome === "rejected" ? "rejected" : "cancelled";
@@ -820,6 +808,8 @@ export class AssistantToolGateway {
         actionRequestId: action.id,
         toolName: found.dto.name,
         outcome: audit.errorClass === null ? "executed" : "error",
+        decidedBy: "person",
+        holdDurationMs: Math.max(0, Date.now() - holdStartedAt),
         ...(result.ok
           ? { result: liveStreamResult(found.tool, result) }
           : { reason: gatewayFailureReason(result) }),
@@ -873,9 +863,7 @@ export class AssistantToolGateway {
   private async executableTools(actorUserId: string): Promise<ExecutableTool[]> {
     const modules: readonly MossModuleManifest[] =
       await this.deps.resolveActiveModules(actorUserId);
-    // #2228: web.search is backed by Brave or by the actor's model-native provider; it is the only
-    // search path a chat turn can reach (CLI engines cannot search on their own here), so it is
-    // hidden only when the actor has no engine at all. Resolved once per listing, not per tool.
+    // #2228: hide web.search only when no search engine is available.
     const webSearchEngine = this.deps.webSearchEngineForActor
       ? await this.deps.webSearchEngineForActor(actorUserId)
       : "brave";

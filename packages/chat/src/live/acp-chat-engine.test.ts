@@ -12,6 +12,7 @@ import {
   formatToolRecord,
   MAX_RESULT_CHARS
 } from "./acp-chat-engine.js";
+import { serializeSubscriberRecords } from "../../../../tests/unit/helpers/boundary-test-gate.js";
 
 class PromptErrorTunnel implements AcpTunnel {
   readonly sent: Array<{ method?: string; params?: Record<string, unknown> }> = [];
@@ -308,19 +309,24 @@ describe("AcpChatEngine", () => {
         }
       });
 
-      const { records } = await engine.readNew(0);
-      expect(records).toEqual([
-        {
-          kind: "thought",
-          text: "Sam is in contacts. Thursday is the 10th."
-        },
-        {
-          kind: "tool",
-          toolName: "calendar.listEvents",
-          toolCallId: "call-1",
-          text: "calendar.listEvents, Thursday 11:00 to 14:00"
-        }
-      ]);
+      const records = serializeSubscriberRecords((await engine.readNew(0)).records);
+      expect(records).toHaveLength(3);
+      expect(records[0]).toMatchObject({
+        kind: "thought",
+        text: "Sam is in contacts. "
+      });
+      expect(records[1]).toMatchObject({
+        kind: "thought",
+        id: records[0]?.id,
+        sequence: records[0]?.sequence,
+        text: "Sam is in contacts. Thursday is the 10th."
+      });
+      expect(records[2]).toMatchObject({
+        kind: "tool",
+        toolName: "calendar.listEvents",
+        toolCallId: "call-1",
+        text: "calendar.listEvents, Thursday 11:00 to 14:00"
+      });
     });
 
     it("maps a tool_call update to a tool line with real name and summarised arguments", () => {
@@ -510,7 +516,7 @@ describe("AcpChatEngine", () => {
       // Allow prompt to finish
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      const { records } = await engine.readNew(0);
+      const records = serializeSubscriberRecords((await engine.readNew(0)).records);
       const { complete } = await engine.readNew(0);
       expect(complete).toBe(true);
       const replyRecord = records.find((r) => r.kind === "reply");
@@ -541,7 +547,7 @@ describe("AcpChatEngine", () => {
       await engine.submit("Hello");
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      const { records } = await engine.readNew(0);
+      const records = serializeSubscriberRecords((await engine.readNew(0)).records);
       const { complete } = await engine.readNew(0);
       expect(complete).toBe(true);
       const replyRecord = records.find((r) => r.kind === "reply");

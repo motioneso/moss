@@ -1,7 +1,7 @@
+import { randomUUID } from "node:crypto";
 import {
   MossAcpClient,
   toolNameFromMeta,
-  type AcpBuiltInRequest,
   type AcpPermissionDecider,
   type AcpProviderKind,
   type AcpSessionHandle,
@@ -29,6 +29,8 @@ export interface AcpChatEngineOptions {
   readonly toolServer?: AcpToolServer;
   readonly reportLoginRejected?: () => void;
   readonly log?: (line: string) => void;
+  /** Shared with ChatSessionManager so injected records retain creation order. */
+  readonly nextSequence?: () => number;
 }
 
 /** ACP's provider names and Moss's configured provider names are deliberately different. */
@@ -229,28 +231,34 @@ export function formatApprovalLine(opts: {
   toolName: string;
   approved: boolean;
   who?: string;
+  reason?: string;
   at?: Date | string;
   durationSec?: number;
 }): string {
-  const who = opts.who ?? "you";
   const timeStr = formatRecordTime(opts.at ?? new Date());
   const durStr = opts.durationSec !== undefined ? ` after ${opts.durationSec} s` : "";
-  const verb = opts.approved ? "approved" : "not approved";
-  return `${opts.toolName}, ${verb} by ${who} at ${timeStr}${durStr}`;
+  if (opts.approved)
+    return `${opts.toolName}, approved by ${opts.who ?? "you"} at ${timeStr}${durStr}`;
+  if (opts.who) return `${opts.toolName}, not approved by ${opts.who} at ${timeStr}${durStr}`;
+  return `${opts.toolName}, not approved${opts.reason ? ` (${opts.reason})` : ""} at ${timeStr}${durStr}`;
 }
 
 export function formatApprovalRecord(opts: {
   toolName: string;
   approved: boolean;
   who?: string;
+  reason?: string;
   at?: Date | string;
   durationSec?: number;
   durationMs?: number | null;
+  sequence?: number;
 }): TranscriptRecord {
   return {
     kind: opts.approved ? "approved" : "not_approved",
     toolName: opts.toolName,
     text: formatApprovalLine(opts),
+    ...(opts.reason ? { reason: opts.reason } : {}),
+    ...(opts.sequence !== undefined ? { sequence: opts.sequence } : {}),
     ...(opts.durationMs != null
       ? { durationMs: opts.durationMs }
       : opts.durationSec !== undefined
@@ -269,11 +277,13 @@ export function formatRefusalLine(opts: { toolName: string; reason?: string | nu
 export function formatRefusalRecord(opts: {
   toolName: string;
   reason?: string | null;
+  sequence?: number;
 }): TranscriptRecord {
   return {
     kind: "refused",
     toolName: opts.toolName,
-    text: formatRefusalLine(opts)
+    text: formatRefusalLine(opts),
+    ...(opts.sequence !== undefined ? { sequence: opts.sequence } : {})
   };
 }
 
@@ -317,13 +327,26 @@ export class AcpChatEngine implements CliChatEngine {
   private complete = false;
   private cancelled = false;
   private records: TranscriptRecord[] = [];
-  private activeThoughtRecord: { kind: "thought"; text: string } | null = null;
+  private activeThoughtRecord: {
+    kind: "thought";
+    id: string;
+    sequence: number;
+    text: string;
+  } | null = null;
   private readonly activeToolRecords = new Map<
     string,
-    { kind: "tool"; toolName: string; toolCallId?: string; text: string }
+    {
+      kind: "tool";
+      id: string;
+      sequence: number;
+      toolName: string;
+      toolCallId?: string;
+      text: string;
+    }
   >();
   private readonly toolArgsSummary = new Map<string, string>();
   private readonly reportLoginRejected: () => void;
+  private localSequence = 0;
 
   constructor(
     provider: ProviderKind,
@@ -347,41 +370,12 @@ export class AcpChatEngine implements CliChatEngine {
     return {
       beginTurn: decider.beginTurn?.bind(decider),
       cancelSession: decider.cancelSession?.bind(decider),
-      decide: async (request: AcpBuiltInRequest, session: AcpSessionHandle) => {
-        const start = Date.now();
-        const rawVerdict = await decider.decide(request, session);
-        const decision = typeof rawVerdict === "string" ? rawVerdict : rawVerdict.decision;
-        const asked = typeof rawVerdict === "object" ? rawVerdict.asked : undefined;
-        const holdDurationMs =
-          typeof rawVerdict === "object" && rawVerdict.holdDurationMs !== undefined
-            ? rawVerdict.holdDurationMs
-            : Date.now() - start;
-        const durationSec =
-          holdDurationMs != null ? Math.max(1, Math.round(holdDurationMs / 1000)) : undefined;
-        const toolName = request.toolName ?? "tool";
-
-        this.flushCurrentThought();
-        if (asked === true) {
-          this.records.push(
-            formatApprovalRecord({
-              toolName,
-              approved: decision === "allow",
-              who: "you",
-              durationSec,
-              durationMs: holdDurationMs
-            })
-          );
-        } else {
-          // Policy decided (not asked)
-          if (decision === "deny") {
-            const reason = typeof rawVerdict === "object" ? rawVerdict.reason : null;
-            this.records.push(formatRefusalRecord({ toolName, reason }));
-          }
-          // Silent policy allow (!asked && decision === "allow") writes NOTHING.
-        }
-        return decision;
-      }
+      decide: (request, session) => decider.decide(request, session)
     };
+  }
+
+  private nextRecordSequence(): number {
+    return this.opts.nextSequence?.() ?? ++this.localSequence;
   }
 
   private flushCurrentThought(): void {
@@ -408,11 +402,18 @@ export class AcpChatEngine implements CliChatEngine {
         if (!this.activeThoughtRecord) {
           this.activeThoughtRecord = {
             kind: "thought",
-            text: ""
+            id: randomUUID(),
+            sequence: this.nextRecordSequence(),
+            text
+          };
+          this.records.push(this.activeThoughtRecord);
+        } else {
+          this.activeThoughtRecord = {
+            ...this.activeThoughtRecord,
+            text: this.activeThoughtRecord.text + text
           };
           this.records.push(this.activeThoughtRecord);
         }
-        this.activeThoughtRecord.text += text;
         break;
       }
 
@@ -431,6 +432,8 @@ export class AcpChatEngine implements CliChatEngine {
         if (toolCall.toolCallId) {
           const mutableRecord = {
             kind: "tool" as const,
+            id: randomUUID(),
+            sequence: this.nextRecordSequence(),
             toolName: record.toolName ?? "tool",
             toolCallId: toolCall.toolCallId,
             text: record.text
@@ -443,7 +446,7 @@ export class AcpChatEngine implements CliChatEngine {
           }
           this.records.push(mutableRecord);
         } else {
-          this.records.push(record);
+          this.records.push({ ...record, id: randomUUID(), sequence: this.nextRecordSequence() });
         }
         break;
       }
@@ -462,28 +465,33 @@ export class AcpChatEngine implements CliChatEngine {
         if (toolCallUpdate.toolCallId) {
           const existing = this.activeToolRecords.get(toolCallUpdate.toolCallId);
           if (existing) {
+            let next = existing;
             if (toolCallUpdate.rawInput !== undefined || toolCallUpdate.locations !== undefined) {
               const newArgs = redactSecrets(
                 summarizeToolArgs(toolCallUpdate.rawInput, toolCallUpdate.locations) ?? undefined
               );
               if (newArgs) {
                 this.toolArgsSummary.set(toolCallUpdate.toolCallId, newArgs);
-                existing.text = `${existing.toolName ?? "tool"}, ${newArgs}`;
+                next = { ...next, text: `${next.toolName}, ${newArgs}` };
               }
             }
-            if (existing.toolName === "tool") {
+            if (next.toolName === "tool") {
               const realName = extractRealToolName(toolCallUpdate);
               if (realName !== "tool") {
-                existing.toolName = realName;
+                next = { ...next, toolName: realName };
                 const args = this.toolArgsSummary.get(toolCallUpdate.toolCallId);
-                existing.text = args ? `${realName}, ${args}` : realName;
+                next = { ...next, text: args ? `${realName}, ${args}` : realName };
               }
+            }
+            if (next !== existing) {
+              this.activeToolRecords.set(toolCallUpdate.toolCallId, next);
+              this.records.push(next);
             }
           }
         }
         const record = formatResultRecord(toolCallUpdate);
         if (record) {
-          this.records.push(record);
+          this.records.push({ ...record, sequence: this.nextRecordSequence() });
         }
         break;
       }
@@ -552,11 +560,18 @@ export class AcpChatEngine implements CliChatEngine {
         this.flushCurrentThought();
         const elapsedMs = Math.max(0, Date.now() - startedAt);
         if (result.text) {
-          this.records.push(formatReplyRecord(result.text, elapsedMs, result.usage));
+          this.records.push({
+            ...formatReplyRecord(result.text, elapsedMs, result.usage),
+            sequence: this.nextRecordSequence()
+          });
         }
         const reason = String(result.stopReason);
         if (reason !== "end_turn") {
-          this.records.push({ kind: "status", text: stopReasonText(reason, this.cancelled) });
+          this.records.push({
+            kind: "status",
+            text: stopReasonText(reason, this.cancelled),
+            sequence: this.nextRecordSequence()
+          });
         }
       })
       .catch((error: unknown) => {
