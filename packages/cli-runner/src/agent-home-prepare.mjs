@@ -74,10 +74,53 @@ async function readSecretFiles() {
   return files;
 }
 
+async function assertRealPath(path) {
+  const parts = path.split(sep).filter((part) => part.length > 0);
+  let current = path.startsWith(sep) ? sep : "";
+  for (const part of parts) {
+    current = current === sep ? `${sep}${part}` : current === "" ? part : `${current}${sep}${part}`;
+    const stat = await lstat(current).catch(() => null);
+    if (!stat || stat.isSymbolicLink()) {
+      throw new Error(`refusing symlinked credential path: ${path}`);
+    }
+  }
+}
+
+async function readSecretSource(file) {
+  await assertRealPath(file.sourcePath);
+  const handle = await open(file.sourcePath, O_RDONLY | O_NOFOLLOW);
+  try {
+    const content = await handle.readFile("utf8");
+    if (file.kind === "codex-auth") {
+      const parsed = JSON.parse(content);
+      if (
+        !parsed ||
+        typeof parsed !== "object" ||
+        typeof parsed.tokens?.access_token !== "string" ||
+        parsed.tokens.access_token.length === 0 ||
+        typeof parsed.tokens?.account_id !== "string" ||
+        parsed.tokens.account_id.length === 0
+      ) {
+        throw new Error("missing Codex login");
+      }
+      await handle.chmod(0o600);
+    }
+    return content;
+  } finally {
+    await handle.close();
+  }
+}
+
 async function writeSecretFile(file) {
-  if (!file || typeof file.path !== "string" || typeof file.content !== "string") {
+  if (!file || typeof file.path !== "string") {
     throw new Error("invalid secret file input");
   }
+  if (typeof file.sourcePath === "string") {
+    const content = await readSecretSource(file);
+    if (file.sourcePath === file.path) return;
+    file = { ...file, content };
+  }
+  if (typeof file.content !== "string") throw new Error("invalid secret file input");
   await ensureDirTree(file.path.slice(0, file.path.lastIndexOf(sep)));
   const handle = await open(file.path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o600);
   try {
@@ -93,6 +136,11 @@ async function main() {
   if (!raw) throw new Error("missing preparation request argument");
   const request = JSON.parse(raw);
   const secretFiles = await readSecretFiles();
+
+  // Validate sources before directory setup can remove a symlinked `.codex` directory.
+  for (const file of secretFiles) {
+    if (typeof file?.sourcePath === "string") await readSecretSource(file);
+  }
 
   for (const dir of request.dirs) {
     await ensureDirTree(dir);

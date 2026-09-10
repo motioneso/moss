@@ -3,8 +3,10 @@ import { Check, ChevronDown, GitCommitHorizontal, Lock } from "lucide-react";
 import { useRef, useState } from "react";
 
 import {
+  getChatSettings,
   getChatModelOverrideSettings,
   putChatModelOverride,
+  putChatSettings,
   switchChatProvider
 } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
@@ -49,6 +51,17 @@ export function ChatModelPill(props: {
   });
   const mutation = useMutation({
     mutationFn: async (vars: { readonly choice: ModelChoice; readonly surface: ChatSurface }) => {
+      // OpenCode is an ACP variant of the Codex route. Choosing a configured Codex model must
+      // retire a previous OpenCode card choice before the next launch resolves its provider.
+      if (vars.choice.model.providerKind === "openai-compatible") {
+        const chatSettings = await getChatSettings();
+        if (chatSettings.chat.openCodeModel !== undefined) {
+          const cleared = await putChatSettings({
+            chat: { responseStyle: chatSettings.chat.responseStyle }
+          });
+          queryClient.setQueryData(queryKeys.chat.settings, cleared);
+        }
+      }
       const result = await putChatModelOverride({ modelId: vars.choice.modelId });
       queryClient.setQueryData(queryKeys.ai.chatModelOverride, result);
       if (vars.choice.relation === "same-provider") {

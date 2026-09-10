@@ -43,7 +43,7 @@ import {
 } from "./acp-private-markers.js";
 import { acpProviderTranscriptDir, defaultPurgeCodexTranscripts } from "./acp-transcript-purge.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
-import { readCodexAuthFile } from "./acp-codex-auth.js";
+import { codexAuthPath, preflightCodexAuthFile } from "./acp-codex-auth.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
@@ -83,7 +83,6 @@ export interface AcpHostDeps {
   readonly resolveAdapterTarget?: (kind: AcpProviderKind) => AcpAdapterTarget;
   /** Reads a file; injected so tests can stub the login token. */
   readonly readTokenFile?: (path: string) => Promise<string>;
-  readonly readCodexAuthFile?: (path: string) => Promise<string>;
   /**
    * Spawns the adapter child; injected so tests never start a process. The
    * production default runs the resolved target (node plus the adapter entry,
@@ -149,7 +148,9 @@ export interface AgentHomePrepareRequest {
 
 export interface AgentHomeSecretFile {
   readonly path: string;
-  readonly content: string;
+  readonly sourcePath?: string;
+  readonly content?: string;
+  readonly kind?: "codex-auth";
 }
 
 export interface AcpSpawnResult {
@@ -384,10 +385,8 @@ export class AcpHost {
     if (!this.deps.perUserUid || !homeBase) {
       throw new Error("acpSpawn requires per-user identity: refusing the shared home");
     }
-    const codexAuth =
-      providerKind === "openai"
-        ? await readCodexAuthFile(homeBase, userId, this.deps.readCodexAuthFile)
-        : null;
+    const codexAuth = providerKind === "openai" ? codexAuthPath(homeBase, userId) : null;
+    if (codexAuth) await preflightCodexAuthFile(homeBase, userId);
 
     // One slot per person, never per conversation.
     const allocate = this.deps.allocateUidSlot ?? defaultAllocateUidSlot;
@@ -395,14 +394,6 @@ export class AcpHost {
     const uid = slot.uid;
     const gid = slot.gid;
 
-    // The launcher's own folder work stops at each person's top level: the
-    // slot's home folder, and the conversation's session-key folder. A
-    // returning person's top level already exists and is already theirs, so
-    // the launcher only checks the kernel's record of it — it must never try
-    // to open a folder that belongs to someone else (task 5b, Architect
-    // ruling on Astra-Reviewer round-four finding, 2026-09-08 — the old code
-    // tried to recreate/re-enter the whole tree on every launch and refused
-    // a second launch for the same person once their home was owner-only).
     const setup = await (async () => {
       let agentHomeTop: Awaited<ReturnType<typeof ensureOwnedTopLevel>> | undefined;
       let sessionTop: Awaited<ReturnType<typeof ensureOwnedTopLevel>> | undefined;
@@ -453,11 +444,20 @@ export class AcpHost {
         const prepareDirs = [sessionDir];
         if (denyFile) prepareDirs.push(join(agentHome, ".config", "opencode"));
         if (codexAuth) prepareDirs.push(join(agentHome, ".codex"));
-        const secretFiles = codexAuth
-          ? [{ path: join(agentHome, ".codex", "auth.json"), content: codexAuth }]
-          : [];
         const runAgentHomePrepare = this.deps.runAgentHomePrepare ?? defaultRunAgentHomePrepare;
-        await runAgentHomePrepare({ dirs: prepareDirs, denyFile }, { uid, gid }, secretFiles);
+        await runAgentHomePrepare(
+          { dirs: prepareDirs, denyFile },
+          { uid, gid },
+          codexAuth
+            ? [
+                {
+                  path: join(agentHome, ".codex", "auth.json"),
+                  sourcePath: codexAuth,
+                  kind: "codex-auth" as const
+                }
+              ]
+            : []
+        );
         return { agentHome, sessionDir, env };
       } catch (error) {
         if (agentHomeTop?.createdHere) {

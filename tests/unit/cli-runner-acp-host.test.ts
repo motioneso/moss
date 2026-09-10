@@ -57,11 +57,8 @@ const selfSlotWithRealFile = (homeBase: string, userId: string): { uid: number; 
 // Stands in for the real setpriv+node preparation step (task 5b, Architect
 // ruling, 2026-09-08): these tests run unprivileged, so this fake does the
 // same folder/deny-file work plainly, without ever switching identity. It
-// still walks each folder level and refuses to write through a planted
-// symlink, matching packages/cli-runner/src/agent-home-prepare.mjs, so the
-// symlink tests below keep proving what they always proved. The real step's
-// own behavior (running as the slot through setpriv) is proved separately,
-// not by these routing tests.
+// It walks folder levels without writing through planted symlinks. The real
+// owner-switched step is exercised in its own credential-boundary tests.
 function ensureRealDirSync(path: string): void {
   const stat = lstatSync(path, { throwIfNoEntry: false }) ?? null;
   if (stat?.isSymbolicLink()) rmSync(path, { force: true });
@@ -795,7 +792,7 @@ describe("task 5b launch follows the row", () => {
         writeFileSync(join(source, "auth.json"), auth, { mode: 0o600 });
       }
       const child = new FakeChild();
-      const handedOff: Array<readonly { path: string; content: string }[]> = [];
+      const handedOff: Array<readonly AgentHomeSecretFile[]> = [];
       const { host, seen } = makeUserHost(dir, home, child, async (request, identity, files) => {
         handedOff.push(files ?? []);
         await fakeAgentHomePrepare(request);
@@ -806,9 +803,12 @@ describe("task 5b launch follows the row", () => {
         [join(home, "agents", "user-a", ".codex", "auth.json")],
         [join(home, "agents", "user-b", ".codex", "auth.json")]
       ]);
-      expect(handedOff[0]?.[0]?.content).toBe(authByUser["user-a"]);
-      expect(handedOff[1]?.[0]?.content).toBe(authByUser["user-b"]);
-      expect(handedOff[0]?.[0]?.content).not.toBe(handedOff[1]?.[0]?.content);
+      expect(handedOff[0]?.[0]?.sourcePath).toBe(
+        join(home, "agents", "user-a", ".codex", "auth.json")
+      );
+      expect(handedOff[1]?.[0]?.sourcePath).toBe(
+        join(home, "agents", "user-b", ".codex", "auth.json")
+      );
       expect(seen[0]?.env.HOME).toBe(first.home);
       expect(seen[1]?.env.HOME).toBe(second.home);
       expect(seen.every(({ env }) => env.CODEX_HOME === undefined)).toBe(true);
