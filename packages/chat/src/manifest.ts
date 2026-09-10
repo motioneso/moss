@@ -143,6 +143,12 @@ export const chatModuleManifest = {
       description:
         "Each ACP reply carries a collapsed Thinking fold with its thoughts, tool calls and outcomes, updated live and restored from chat history.",
       featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.acp_turn_stats_strip",
+      description:
+        "Each ACP reply shows elapsed time and the token counts reported by the provider.",
+      featureFlagId: "chat.module"
     }
   ],
   routes: [

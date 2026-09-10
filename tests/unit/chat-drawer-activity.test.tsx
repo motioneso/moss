@@ -489,4 +489,33 @@ describe("chat drawer activity outcomes", () => {
       }
     ]);
   });
+
+  it("renders reply stats and hides token counts the provider did not send", () => {
+    const withUsage = renderToString(
+      createElement(RecordRow, {
+        record: {
+          kind: "reply",
+          text: "Done.",
+          elapsedMs: 24000,
+          usage: { inputTokens: 2, outputTokens: 1200, cachedReadTokens: 4500 }
+        }
+      })
+    );
+    expect(withUsage).toContain('aria-label="Reply stats"');
+    expect(withUsage).toContain("24.0 s");
+    expect(withUsage).toContain("1.2k");
+    expect(withUsage).toContain("4.5k");
+    expect(withUsage).toContain('title="Tokens sent to the model"');
+    expect(withUsage).toContain('title="Tokens the model wrote"');
+
+    const elapsedOnly = renderToString(
+      createElement(RecordRow, {
+        record: { kind: "reply", text: "No counts.", elapsedMs: 1000 }
+      })
+    );
+    expect(elapsedOnly).toContain("1.0 s");
+    expect(elapsedOnly).not.toContain("Tokens sent");
+    expect(elapsedOnly).not.toContain("Tokens the model wrote");
+    expect(elapsedOnly).not.toContain("Tokens served from cache");
+  });
 });

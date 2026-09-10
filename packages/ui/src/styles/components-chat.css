@@ -381,6 +381,40 @@
   color: var(--text-faint);
 }
 
+/* Quiet elapsed and token counts under each assistant reply. */
+.chatd-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -8px 0 16px 36px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.chatd-stats__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.chatd-stats svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chatd-stats__sep {
+  color: var(--surface-3);
+}
+
 .chatd-md h1,
 .chatd-md h2,
 .chatd-md h3,

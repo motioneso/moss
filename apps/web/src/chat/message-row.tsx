@@ -1,5 +1,16 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookmarkPlus, MoreHorizontal, Paperclip, ThumbsDown, ThumbsUp, Undo2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  BookmarkPlus,
+  Clock3,
+  Database,
+  MoreHorizontal,
+  Paperclip,
+  ThumbsDown,
+  ThumbsUp,
+  Undo2
+} from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -102,24 +113,88 @@ export function RecordRow(props: {
 
   // reply (and any unforeseen non-activity kind) — assistant bubble, rendered as markdown.
   return (
-    <div className="chatd-msg">
-      <span className="chatd-msg__av">
-        <BrandMark size={14} />
-      </span>
-      <div className="chatd-bubble">
-        <MarkdownMessage
-          text={text}
-          answerProvenance={props.record.answerProvenance}
-          answerProvenanceCitedIds={props.record.answerProvenanceCitedIds}
-        />
+    <>
+      <div className="chatd-msg">
+        <span className="chatd-msg__av">
+          <BrandMark size={14} />
+        </span>
+        <div className="chatd-bubble">
+          <MarkdownMessage
+            text={text}
+            answerProvenance={props.record.answerProvenance}
+            answerProvenanceCitedIds={props.record.answerProvenanceCitedIds}
+          />
+        </div>
+        <ChatFreshnessFooter sourceFreshness={props.record.sourceFreshness} />
+        {props.record.messageId ? (
+          <ChatFeedbackMenu messageId={props.record.messageId} canRemember={false} corner />
+        ) : null}
       </div>
-      <ChatFreshnessFooter sourceFreshness={props.record.sourceFreshness} />
-      {props.record.messageId ? (
-        <ChatFeedbackMenu messageId={props.record.messageId} canRemember={false} corner />
-      ) : null}
+      <ReplyStats elapsedMs={props.record.elapsedMs} usage={props.record.usage} />
+    </>
+  );
+}
+
+function ReplyStats(props: {
+  readonly elapsedMs?: number;
+  readonly usage?: TranscriptRecord["usage"];
+}) {
+  const items = [
+    props.elapsedMs !== undefined
+      ? { label: "Time to answer", value: formatElapsed(props.elapsedMs), icon: <Clock3 /> }
+      : null,
+    props.usage?.inputTokens !== undefined
+      ? {
+          label: "Tokens sent to the model",
+          value: formatTokens(props.usage.inputTokens),
+          icon: <ArrowDown />
+        }
+      : null,
+    props.usage?.outputTokens !== undefined
+      ? {
+          label: "Tokens the model wrote",
+          value: formatTokens(props.usage.outputTokens),
+          icon: <ArrowUp />
+        }
+      : null,
+    props.usage?.cachedReadTokens !== undefined
+      ? {
+          label: "Tokens served from cache",
+          value: formatTokens(props.usage.cachedReadTokens),
+          icon: <Database />
+        }
+      : null
+  ].filter((item): item is NonNullable<typeof item> => item !== null);
+
+  if (items.length === 0) return null;
+  return (
+    <div className="chatd-stats" aria-label="Reply stats">
+      {items.flatMap((item, index) => [
+        index > 0 ? (
+          <span className="chatd-stats__sep" aria-hidden="true" key={`${item.label}-separator`}>
+            ·
+          </span>
+        ) : null,
+        <span className="chatd-stats__item" title={item.label} key={item.label}>
+          {item.icon}
+          {item.value}
+        </span>
+      ])}
     </div>
   );
 }
+
+function formatElapsed(elapsedMs: number): string {
+  return `${(Math.max(0, elapsedMs) / 1000).toFixed(1)} s`;
+}
+
+function formatTokens(tokens: number): string {
+  if (tokens < 1000) return TOKEN_NUMBER_FORMAT.format(tokens);
+  const decimals = tokens < 10_000 ? 1 : 0;
+  return `${(tokens / 1000).toFixed(decimals).replace(/\.0$/, "")}k`;
+}
+
+const TOKEN_NUMBER_FORMAT = new Intl.NumberFormat("en-US");
 
 /** #1133 — read-only chips on a sent user message showing what rode along with it. */
 export function AttachmentChips(props: { readonly attachments?: readonly ChatAttachmentDto[] }) {
