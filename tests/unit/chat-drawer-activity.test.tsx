@@ -205,6 +205,123 @@ describe("chat drawer activity outcomes", () => {
     container.remove();
   });
 
+  it("keeps separate approval folds across turns when history is restored", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const firstTurn = serializeSubscriberRecords<TranscriptRecord>([
+      { kind: "user", text: "First" },
+      { kind: "approved", sequence: 2, text: "First approved" },
+      { kind: "tool", id: "tool-1", sequence: 3, text: "calendar.tool1" },
+      { kind: "reply", text: "First reply" }
+    ]);
+    const live = serializeSubscriberRecords<TranscriptRecord>([
+      ...firstTurn,
+      { kind: "user", text: "Second" },
+      { kind: "approved", sequence: 2, text: "Second approved" },
+      { kind: "tool", id: "tool-2", sequence: 3, text: "calendar.tool2" },
+      { kind: "reply", text: "Second reply" }
+    ]);
+    const history = recordsFromMessages([
+      {
+        id: "user-1",
+        threadId: "thread-1",
+        ownerUserId: "user-1",
+        role: "user",
+        status: "stored",
+        body: "First",
+        modelRoute: null,
+        tools: [],
+        activity: [],
+        createdAt: "2026-07-30T00:00:00.000Z",
+        updatedAt: "2026-07-30T00:00:00.000Z"
+      },
+      {
+        id: "assistant-1",
+        threadId: "thread-1",
+        ownerUserId: "user-1",
+        role: "assistant",
+        status: "stored",
+        body: "First reply",
+        modelRoute: null,
+        tools: [
+          {
+            name: "calendar.tool1",
+            moduleId: "calendar",
+            moduleName: "Calendar",
+            permissionId: "calendar.tool1",
+            risk: "read"
+          }
+        ],
+        activity: [{ kind: "approved", sequence: 2, text: "First approved" }],
+        createdAt: "2026-07-30T00:00:00.000Z",
+        updatedAt: "2026-07-30T00:00:00.000Z"
+      },
+      {
+        id: "user-2",
+        threadId: "thread-1",
+        ownerUserId: "user-1",
+        role: "user",
+        status: "stored",
+        body: "Second",
+        modelRoute: null,
+        tools: [],
+        activity: [],
+        createdAt: "2026-07-30T00:00:00.000Z",
+        updatedAt: "2026-07-30T00:00:00.000Z"
+      },
+      {
+        id: "assistant-2",
+        threadId: "thread-1",
+        ownerUserId: "user-1",
+        role: "assistant",
+        status: "stored",
+        body: "Second reply",
+        modelRoute: null,
+        tools: [
+          {
+            name: "calendar.tool2",
+            moduleId: "calendar",
+            moduleName: "Calendar",
+            permissionId: "calendar.tool2",
+            risk: "read"
+          }
+        ],
+        activity: [{ kind: "approved", sequence: 2, text: "Second approved" }],
+        createdAt: "2026-07-30T00:00:00.000Z",
+        updatedAt: "2026-07-30T00:00:00.000Z"
+      }
+    ]);
+    const render = (records: readonly TranscriptRecord[]) =>
+      root.render(
+        createElement(Thread, {
+          records,
+          working: false,
+          renderRecord: (record) => createElement("p", null, record.text)
+        })
+      );
+
+    await act(async () => render(firstTurn));
+    const firstFold = container.querySelector<HTMLDetailsElement>("details");
+    expect(firstFold).not.toBeNull();
+    firstFold!.open = true;
+    await act(async () => render(live));
+    const secondFold = container.querySelectorAll<HTMLDetailsElement>("details")[1];
+    expect(secondFold).not.toBeNull();
+    secondFold!.open = true;
+    await act(async () => render(history));
+
+    const folds = container.querySelectorAll("details");
+    expect(folds).toHaveLength(2);
+    expect(folds[0]).toBe(firstFold);
+    expect(folds[1]).toBe(secondFold);
+    expect(folds[0]?.open).toBe(true);
+    expect(folds[1]?.open).toBe(true);
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
   it("renders workflow approval records with the workflow approval card", () => {
     const html = renderToString(
       createElement(

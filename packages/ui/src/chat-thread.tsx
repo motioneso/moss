@@ -36,21 +36,19 @@ export function Thread(props: {
   readonly renderRecord?: ThreadRenderRecord;
 }) {
   const renderRecord = props.renderRecord ?? defaultRenderRecord;
+  let activityKey = 0;
   return (
     <div className="chatd-thread" aria-live="polite">
-      {groupRecords(props.records, props.working).map((item, index) =>
-        item.type === "activity" ? (
-          <ActivityPeek
-            key={`activity-${item.records[0]?.id ?? item.records[0]?.sequence ?? index}`}
-            records={item.records}
-            inProgress={item.inProgress}
-          />
-        ) : item.type === "status" ? (
-          <StatusLine key={index} record={item.record} />
-        ) : (
-          <Fragment key={index}>{renderRecord(item.record, index)}</Fragment>
-        )
-      )}
+      {groupRecords(props.records, props.working).map((item, index) => {
+        if (item.type === "activity") {
+          const key = `activity-${activityKey++}`;
+          return <ActivityPeek key={key} records={item.records} inProgress={item.inProgress} />;
+        }
+        if (item.type === "status") {
+          return <StatusLine key={index} record={item.record} />;
+        }
+        return <Fragment key={index}>{renderRecord(item.record, index)}</Fragment>;
+      })}
     </div>
   );
 }
