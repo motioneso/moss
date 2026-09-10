@@ -359,19 +359,8 @@ export class ChatSessionManager {
     assistantMessageId?: string;
     sourceFreshness?: SourceFreshnessV1 | null;
   }> {
-    // #1157: a failed launch (dead tmux server, stale daemon state) gets one retry before surfacing.
-    let session: UserSession;
-    try {
-      session = await this.ensureSession(actorUserId, userName, undefined, surface);
-    } catch (err) {
-      if (!(err instanceof CliChatUnavailableError)) throw err;
-      this.pendingForcedReplay.add(surfaceSessionKey(actorUserId, surface));
-      session = await this.ensureSession(actorUserId, userName, undefined, surface);
-    }
-
-    // #456 — stopTurn(actorUserId) aborts this; the poll loop exits cleanly after each readNew.
-    const controller = new AbortController();
     const sessionKey = surfaceSessionKey(actorUserId, surface);
+    const controller = new AbortController();
     this.turnControllers.set(sessionKey, controller);
     this.actionResultsBySession.set(sessionKey, []);
     const turnActivityRecords: TranscriptRecord[] = [];
@@ -390,10 +379,20 @@ export class ChatSessionManager {
     const flushPending = (beforeSequence?: number) => {
       lastDeliveredSequence = flushPendingInOrder(lastDeliveredSequence, beforeSequence);
     };
+    // #1157: a failed launch (dead tmux server, stale daemon state) gets one retry before surfacing.
+    let session: UserSession;
     let turnElapsedMs: number | undefined;
     let turnUsage: ChatTurnUsageDto | undefined;
 
     try {
+      try {
+        session = await this.ensureSession(actorUserId, userName, undefined, surface);
+      } catch (err) {
+        if (!(err instanceof CliChatUnavailableError)) throw err;
+        this.pendingForcedReplay.add(sessionKey);
+        session = await this.ensureSession(actorUserId, userName, undefined, surface);
+      }
+
       const attachments = opts?.attachments ?? [];
       const { text: builtEngineText, pendingItems } = await buildEngineText(
         {

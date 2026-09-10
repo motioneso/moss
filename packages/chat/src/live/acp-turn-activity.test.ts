@@ -246,6 +246,65 @@ class MockTunnel implements AcpTunnel {
 }
 
 describe("task 8a Architect regressions", () => {
+  it("Regression 0a: queued action results survive rejected session startup and are cleaned up", async () => {
+    const persistence = new FakePersistence();
+    let resolveStartup!: () => void;
+    let rejectStartup!: (error: Error) => void;
+    const startup = new Promise<void>((resolve) => {
+      resolveStartup = resolve;
+    });
+    persistence.resolveActiveProvider = () =>
+      new Promise<never>((_resolve, reject) => {
+        resolveStartup();
+        rejectStartup = reject;
+      });
+    const manager = new ChatSessionManager({
+      engineFactory: () => {
+        throw new Error("engine should not be reached");
+      },
+      persistence,
+      personaFs: noopPersonaFs,
+      clock: new FakeClock(),
+      idleMs: 60_000,
+      neutralBase: "/tmp",
+      persona: "persona",
+      pollMs: 0
+    });
+    const seen: TranscriptRecord[] = [];
+    manager.subscribe("user-1", (record) => seen.push(serializeSubscriberRecord(record)));
+
+    const turn = manager.submitTurn("user-1", "Ben", "New turn");
+    await startup;
+    const result: TranscriptRecord = {
+      kind: "action_result",
+      actionRequestId: "previous-action-1",
+      toolName: "calendar.create",
+      outcome: "executed",
+      decidedBy: "person",
+      text: "Created event",
+      result: { eventId: "event-1" },
+      affectsQueryKeys: ["calendar.events"]
+    };
+    manager.injectRecord("user-1", result);
+    rejectStartup(new Error("provider resolution failed"));
+
+    await expect(turn).rejects.toThrow("provider resolution failed");
+    expect(seen).toEqual([
+      result,
+      expect.objectContaining({
+        kind: "approved",
+        toolName: "calendar.create",
+        sequence: 2
+      })
+    ]);
+    const pending = (
+      manager as unknown as {
+        pendingActionResultsBySession: Map<string, unknown[]>;
+      }
+    ).pendingActionResultsBySession;
+    expect(pending.size).toBe(0);
+  });
+
   it("Regression 0: Completed action results survive an empty poll followed by a provider error", async () => {
     const persistence = new FakePersistence();
     const clock = new FakeClock();
