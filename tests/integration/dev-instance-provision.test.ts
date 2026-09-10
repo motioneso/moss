@@ -295,6 +295,30 @@ describe("dev-instance provision (#1258)", () => {
       expect(secondChanged).toBe(false);
     });
 
+    it("stores only the bare token when the decrypted source is an env assignment", async () => {
+      const { persistCliRunnerToken } = await import("../../scripts/dev-instance/cli-token.js");
+      const { providerTokenPath } = await import("@moss/cli-runner");
+
+      const cliHomeBase = await mkdtemp(join(tmpdir(), "dev-instance-cli-token-"));
+      cliHomeBases.push(cliHomeBase);
+      const config = fakeConfig({ cliHomeBase });
+
+      const wrappedChanged = await persistCliRunnerToken(
+        config,
+        "CLAUDE_CODE_OAUTH_TOKEN=wrapped-token\n"
+      );
+      expect(wrappedChanged).toBe(true);
+      expect(await readFile(providerTokenPath(cliHomeBase, "anthropic"), "utf8")).toBe(
+        "wrapped-token"
+      );
+
+      const bareChanged = await persistCliRunnerToken(config, "wrapped-token");
+      expect(bareChanged).toBe(false);
+      expect(await readFile(providerTokenPath(cliHomeBase, "anthropic"), "utf8")).toBe(
+        "wrapped-token"
+      );
+    });
+
     it("rewrites the file when the stored token differs", async () => {
       const { persistCliRunnerToken } = await import("../../scripts/dev-instance/cli-token.js");
       const { providerTokenPath } = await import("@moss/cli-runner");

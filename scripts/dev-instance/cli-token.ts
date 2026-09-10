@@ -24,6 +24,7 @@ import type { DevInstanceConfig } from "./config.js";
 const TOKEN_PROVIDER_KINDS: Partial<Record<AiProviderKind, RpcProviderKind>> = {
   anthropic: "anthropic"
 };
+const CLAUDE_CODE_OAUTH_TOKEN_PREFIX = "CLAUDE_CODE_OAUTH_TOKEN=";
 
 /** The cli-runner provider this database provider kind logs in as, or null if it uses no token. */
 export function tokenProviderFor(kind: AiProviderKind): RpcProviderKind | null {
@@ -39,6 +40,10 @@ export async function persistCliRunnerToken(
   config: DevInstanceConfig,
   token: string
 ): Promise<boolean> {
+  const trimmedToken = token.trim();
+  const bareToken = trimmedToken.startsWith(CLAUDE_CODE_OAUTH_TOKEN_PREFIX)
+    ? trimmedToken.slice(CLAUDE_CODE_OAUTH_TOKEN_PREFIX.length).trim()
+    : trimmedToken;
   const provider = tokenProviderFor(config.providerKind);
   if (!provider) {
     throw new Error(
@@ -46,13 +51,13 @@ export async function persistCliRunnerToken(
         "nothing to persist"
     );
   }
-  if (token.trim().length === 0) {
+  if (bareToken.length === 0) {
     throw new Error("refusing to persist an empty CLI token");
   }
 
   const existing = await readProviderToken(config.cliHomeBase, provider);
-  if (existing === token.trim()) return false;
+  if (existing === bareToken) return false;
 
-  await persistProviderToken(config.cliHomeBase, provider, token.trim());
+  await persistProviderToken(config.cliHomeBase, provider, bareToken);
   return true;
 }
