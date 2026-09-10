@@ -132,6 +132,7 @@ function ModelLine(props: {
 export function ProviderModels(props: {
   readonly provider: AiProviderConfigDto;
   readonly models: readonly AiConfiguredModelDto[];
+  readonly modelChoiceNote?: string;
   readonly onModelOverride: (model: AiConfiguredModelDto, allowed: boolean) => void;
   readonly onModelStatusChange: (
     model: AiConfiguredModelDto,
@@ -203,6 +204,11 @@ export function ProviderModels(props: {
         <>
           {adding ? (
             <AddModelForm providerConfigId={provider.id} onClose={() => setAdding(false)} />
+          ) : null}
+          {props.modelChoiceNote ? (
+            <div className="prov__synced" role="note">
+              {props.modelChoiceNote}
+            </div>
           ) : null}
           <div className="prov__modellist">
             {props.models.length ? (

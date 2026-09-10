@@ -134,11 +134,9 @@ export interface ChatRoutesDependencies {
   readonly listModuleManifests?: () => readonly MossModuleManifest[];
   /**
    * #342 (§3.5 boot-time fork) — when no explicit {@link chatEngineFactory} is supplied, hand this to
-   * {@link createChatSessionRuntime} so the runtime selects the engine factory itself: the RPC client
-   * over the cli-runner socket when `JARVIS_CLI_RUNNER_SOCKET` is set (else the in-process engine). The
-   * runtime then owns the §5.3 reconciliation hook (which needs the manager) and the §5.5 idle reaper.
-   * Forwarded by `registerBuiltInApiRoutes` only on the socket path; the host-dev path keeps passing a
-   * resolved {@link chatEngineFactory} (admin `chat.multiplexer` setting + auto-detect) instead.
+   * {@link createChatSessionRuntime} so chat selects its ACP engine over the cli-runner socket. The
+   * runtime owns the §5.3 reconciliation hook (which needs the manager) and the §5.5 idle reaper.
+   * Structured/module callers keep their separate late-bound factory until slice 2 moves them.
    */
   readonly engineSelection?: CreateChatSessionRuntimeDeps["engineSelection"];
   /**
@@ -285,10 +283,8 @@ export function registerChatRoutes(
     rootDb: dependencies.rootDb,
     dataContext: dependencies.dataContext,
     engineFactory: dependencies.chatEngineFactory,
-    // #342 (§3.5): only select the engine ourselves when no explicit factory was injected (tests/host
-    // pass a resolved factory). `selectEngineFactory` inside the runtime picks the RPC client when
-    // JARVIS_CLI_RUNNER_SOCKET is set (and fail-fasts on a missing §6.6 secret), else the in-process
-    // engine. An explicit chatEngineFactory always wins inside the runtime, so passing both is safe.
+    // #342 (§3.5): only select the ACP engine ourselves when no explicit factory was injected. An
+    // explicit chatEngineFactory always wins for tests and embedders.
     engineSelection: dependencies.chatEngineFactory ? undefined : dependencies.engineSelection,
     boss: dependencies.boss,
     connectorSyncAt: dependencies.connectorsRepository

@@ -128,6 +128,10 @@ function ProviderCard(props: {
   // a live owner-gated terminal onto the CLI instead of calling testMutation.
   const [terminalOpen, setTerminalOpen] = useState(false);
   const canAutomateLogin = supportsAutomatedProviderLogin(provider);
+  const modelChoiceNote =
+    provider.providerKind === "google"
+      ? "Chat uses this provider's login default because its ACP adapter does not expose model choice yet."
+      : undefined;
   const testMutation = useMutation({
     mutationFn: () => testAiProvider(provider.id),
     onSuccess: ({ result }) =>
@@ -172,6 +176,11 @@ function ProviderCard(props: {
                 ? "API key stored"
                 : "API key needed"}
           </div>
+          {provider.authMethod === "cli" ? (
+            <div className="prov__auth">
+              Chat checks this sign-in when the ACP adapter initializes.
+            </div>
+          ) : null}
         </div>
         <div className="prov__acts">
           {canAutomateLogin ? (
@@ -300,6 +309,7 @@ function ProviderCard(props: {
       <ProviderModels
         provider={provider}
         models={props.models}
+        modelChoiceNote={modelChoiceNote}
         onModelOverride={props.onModelOverride}
         onModelStatusChange={props.onModelStatusChange}
         onModelDelete={props.onModelDelete}
@@ -821,6 +831,10 @@ export function AiProvidersPane() {
           ))}
         </Group>
       ) : null}
+      <Note icon={<Terminal size={13} aria-hidden="true" />}>
+        OpenCode uses the ACP chat path. Its agent reports the available model choice when the
+        session initializes.
+      </Note>
       {/* #874: Voice (STT) is its own dedicated admin section, independent of the chat providers. */}
       <VoiceConfigGroup />
       <ChatLockGroup />

@@ -337,6 +337,16 @@ export function selectEngineFactory(
   if (socketPath) {
     const rpcSecret = env.JARVIS_CLI_RUNNER_RPC_SECRET;
     if (!rpcSecret) {
+      // A chat selection without an explicit socket is the test/host shape before the runner
+      // secret is provisioned. Keep chat ACP-only and unavailable there; never resurrect the
+      // in-process bridge. An explicitly configured socket remains a hard boot failure.
+      if (opts.acpChat && !env.JARVIS_CLI_RUNNER_SOCKET?.trim()) {
+        return {
+          factory: unavailableEngineFactory(
+            "JARVIS_CLI_RUNNER_RPC_SECRET is required for the ACP chat runner"
+          )
+        };
+      }
       // Fail-fast: refuse to construct the RPC factory without the shared hello secret (§6.6). This
       // throws at BOOT/selection — never reaches connection construction or a launch. No secret value
       // is interpolated (there is none).

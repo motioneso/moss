@@ -45,7 +45,8 @@ function model(overrides: Partial<AiConfiguredModelDto>): AiConfiguredModelDto {
 
 async function render(
   models: readonly AiConfiguredModelDto[],
-  onModelOverride = vi.fn()
+  onModelOverride = vi.fn(),
+  providerOverride: AiProviderConfigDto = provider
 ): Promise<{ renderer: ReactTestRenderer; onModelOverride: ReturnType<typeof vi.fn> }> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let renderer!: ReactTestRenderer;
@@ -55,8 +56,12 @@ async function render(
         QueryClientProvider,
         { client },
         createElement(ProviderModels, {
-          provider,
+          provider: providerOverride,
           models,
+          modelChoiceNote:
+            providerOverride.providerKind === "google"
+              ? "Chat uses this provider's login default because its ACP adapter does not expose model choice yet."
+              : undefined,
           onModelOverride,
           onModelStatusChange: vi.fn(),
           onModelDelete: vi.fn()
@@ -84,6 +89,16 @@ function chatTag(renderer: ReactTestRenderer) {
 }
 
 describe("ProviderModels chat tag", () => {
+  it("shows when the ACP provider keeps the login's model default", async () => {
+    const { renderer } = await render([], vi.fn(), {
+      ...provider,
+      providerKind: "google"
+    } as AiProviderConfigDto);
+    expect(renderer.root.findByProps({ role: "note" }).children.join(" ")).toContain(
+      "login default"
+    );
+  });
+
   it("renders the Chat tag as a pressed toggle and no separate switch", async () => {
     const { renderer } = await render([model({})]);
     const tag = chatTag(renderer);

@@ -536,12 +536,10 @@ export interface BuiltInRouteDependencies {
    */
   readonly connectTerminalRpc?: (options: TerminalRpcConnectOptions) => Promise<TerminalRpcHandle>;
   /**
-   * #342 (§3.5 boot-time fork) — built by `registerBuiltInApiRoutes` only on the socket path
-   * (JARVIS_CLI_RUNNER_SOCKET set) and forwarded to `registerChatRoutes`, where the chat runtime uses
-   * it to select the RPC client (and fail-fast on a missing §6.6 secret), wire the §5.3 reconciliation
-   * hook, and start the §5.5 idle reaper. Absent on the in-process / host-dev path (the late-bound
-   * {@link chatEngineFactory} wrapper is used there instead, preserving admin `chat.multiplexer`
-   * resolution).
+   * #342 (§3.5 boot-time fork) — built by `registerBuiltInApiRoutes` whenever no explicit test or
+   * embedding factory is supplied, and forwarded to `registerChatRoutes`, where the chat runtime
+   * selects ACP itself. The late-bound {@link chatEngineFactory} remains for structured/module
+   * callers until slice 2 moves them.
    */
   readonly chatEngineSelection?: ChatRoutesDependencies["engineSelection"];
   /** Chat-owned passive graph recall seam; no module imports graph internals directly. */
@@ -1962,11 +1960,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         rootDb: deps.rootDb,
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
-        // #342 (§3.5): on the RPC/socket path the chat runtime selects the engine itself via
-        // `engineSelection`, so we must NOT also pass the in-process late-bound factory wrapper (which
-        // would win the explicit-factory branch and never select the RPC client, and would throw
-        // "not resolved yet" because the host-dev onReady resolver is skipped on the socket path). On
-        // the host-dev path `engineSelection` is undefined and the resolved factory is passed instead.
+        // Chat always selects ACP through `engineSelection`; the late-bound bridge remains available
+        // only to structured/module callers through `createCliStructuredAdapter` below.
         chatEngineFactory: deps.chatEngineSelection ? undefined : deps.chatEngineFactory,
         engineSelection: deps.chatEngineSelection,
         adoptChatRpcConnection: deps.adoptChatRpcConnection,
@@ -3213,23 +3208,21 @@ export function registerBuiltInApiRoutes(
     platformDiagnostics,
     chatEngineFactory,
     createCliStructuredAdapter: createCliStructuredAdapterFactory(structuredChatEngineFactory),
-    // #342 (§3.5 boot-time fork): on the socket path hand the chat runtime an `engineSelection` so it
-    // selects the RPC client itself (fail-fast on a missing §6.6 secret), wires the §5.3 reconciliation
-    // hook, and starts the §5.5 idle reaper. The {method,id,sessionKey,bytes}-only debug logger (§6.4)
-    // is intentionally omitted (no frame-body logging). Tests that inject an explicit chatEngineFactory
-    // bypass this entirely (no socket selection). Undefined on the in-process / host-dev path.
+    // #342 (§3.5 boot-time fork): chat always receives an `engineSelection`, so the chat runtime
+    // selects ACP itself (including the runner's default socket path when the env var is absent).
+    // The {method,id,sessionKey,bytes}-only debug logger (§6.4) is intentionally omitted (no
+    // frame-body logging). Tests that inject an explicit chatEngineFactory bypass this entirely.
     // #1554: the RPC branch also carries a live read of the persistent-runtime settings, since the
     // cli-runner has no DB access — it learns `chat.persistent_runtime.*` only from launch params.
-    chatEngineSelection:
-      socketConfigured && !dependencies.chatEngineFactory
-        ? {
-            env,
-            readPersistentRuntimeConfig: createPersistentRuntimeConfigLiveReader(
-              dependencies.rootDb,
-              (msg) => server.log.info(msg)
-            )
-          }
-        : undefined,
+    chatEngineSelection: !dependencies.chatEngineFactory
+      ? {
+          env,
+          readPersistentRuntimeConfig: createPersistentRuntimeConfigLiveReader(
+            dependencies.rootDb,
+            (msg) => server.log.info(msg)
+          )
+        }
+      : undefined,
     passiveMemoryRecall: {
       async recall(scopedDb, ownerUserId, query, options) {
         const provider = await createRuntimeEmbeddingProvider(scopedDb);

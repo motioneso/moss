@@ -138,6 +138,18 @@ describe("selectEngineFactory — boot-time fork (§3.5)", () => {
     }
   });
 
+  it("chat stays ACP-only when the default runner socket has no secret", () => {
+    const { factory, connection } = selectEngineFactory({
+      env: {} as NodeJS.ProcessEnv,
+      acpChat: true
+    });
+
+    expect(connection).toBeUndefined();
+    expect(() =>
+      factory("anthropic", "user-a", { conversationId: "conv-1", userId: "user-a" })
+    ).toThrow(CliChatUnavailableError);
+  });
+
   it("refuses an ACP chat launch missing its conversation or user id, instead of silently returning a bare RPC client", async () => {
     const { factory, connection } = selectEngineFactory({
       env: {
