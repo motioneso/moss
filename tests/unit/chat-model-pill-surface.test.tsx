@@ -270,6 +270,36 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
     expect(putChatModelOverride).toHaveBeenCalledExactlyOnceWith({ modelId: "cross-provider" });
   });
 
+  it("clears a stale OpenCode choice when the selected Codex pill is clicked", async () => {
+    vi.mocked(getChatModelOverrideSettings).mockResolvedValueOnce({
+      settings: {
+        ...settingsFixture(),
+        currentOverrideModelId: "cross-provider",
+        effectiveOverrideModelId: "cross-provider",
+        selectedModel: crossProviderModel
+      }
+    });
+    vi.mocked(getChatSettings).mockResolvedValueOnce({
+      chat: { responseStyle: "balanced", openCodeModel: "muse-spark-1.3-free" }
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderer = await renderPill(client, moduleSurface);
+
+    await openMenu(renderer);
+    const buttons = menuButtons(renderer);
+    await act(async () => {
+      buttons[2]!.props.onClick();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(putChatSettings).toHaveBeenCalledExactlyOnceWith({
+      chat: { responseStyle: "balanced" }
+    });
+    expect(putChatModelOverride).toHaveBeenCalledExactlyOnceWith({ modelId: "cross-provider" });
+  });
+
   it("does not invalidate/clear the newly rendered surface's threads key when a same-provider mutation resolves after a surface flip", async () => {
     let resolveSwitch!: (value: undefined) => void;
     vi.mocked(switchChatProvider).mockImplementationOnce(

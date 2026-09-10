@@ -326,7 +326,21 @@ function ChatModel() {
   });
   const settings = settingsQuery.data?.settings;
   const mutation = useMutation({
-    mutationFn: (modelId: string | null) => putChatModelOverride({ modelId }),
+    mutationFn: async (modelId: string | null) => {
+      const selectedModel = modelId
+        ? selectableOverrideModels.find((model) => model.id === modelId)
+        : defaultModel;
+      if (selectedModel?.providerKind === "openai-compatible") {
+        const chatSettings = await getChatSettings();
+        if (chatSettings.chat.openCodeModel !== undefined) {
+          const cleared = await putChatSettings({
+            chat: { responseStyle: chatSettings.chat.responseStyle }
+          });
+          queryClient.setQueryData(queryKeys.chat.settings, cleared);
+        }
+      }
+      return putChatModelOverride({ modelId });
+    },
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.ai.chatModelOverride, result);
       const model = result.settings.effectiveOverrideModelId

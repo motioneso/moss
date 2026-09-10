@@ -92,7 +92,12 @@ export function ChatModelPill(props: {
   }
 
   const selectChoice = (choice: ModelChoice) => {
-    if (choice.selected || mutation.isPending || props.disabled) return;
+    if (
+      (choice.selected && choice.model.providerKind !== "openai-compatible") ||
+      mutation.isPending ||
+      props.disabled
+    )
+      return;
     if (choice.relation === "cross-provider") {
       // COPY-TBD: final product copy can tune this native confirm text.
       const ok = window.confirm(
