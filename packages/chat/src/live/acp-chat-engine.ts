@@ -35,8 +35,8 @@ export interface AcpChatEngineOptions {
 }
 
 /** ACP's provider names and Moss's configured provider names are deliberately different. */
-export function toAcpProviderKind(provider: ProviderKind): AcpProviderKind {
-  if (provider === "openai-compatible") return "openai";
+export function toAcpProviderKind(provider: ProviderKind, acpModel?: string): AcpProviderKind {
+  if (provider === "openai-compatible") return acpModel === undefined ? "openai" : "opencode";
   if (provider === "anthropic") return "anthropic";
   return "google";
 }
@@ -508,7 +508,7 @@ export class AcpChatEngine implements CliChatEngine {
   }
 
   async launch(options: EngineLaunchOpts): Promise<{ offset: number }> {
-    const kind = toAcpProviderKind(this.provider);
+    const kind = toAcpProviderKind(this.provider, options.acpModel);
     try {
       this.handle = await this.client.openSession(
         this.sessionKey,

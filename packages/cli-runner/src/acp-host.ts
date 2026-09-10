@@ -386,7 +386,7 @@ export class AcpHost {
     }
     const codexAuth =
       providerKind === "openai"
-        ? await readCodexAuthFile(homeBase, this.deps.readCodexAuthFile)
+        ? await readCodexAuthFile(homeBase, userId, this.deps.readCodexAuthFile)
         : null;
 
     // One slot per person, never per conversation.

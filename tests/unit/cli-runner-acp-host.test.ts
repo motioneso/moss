@@ -758,9 +758,9 @@ describe("task 5b launch follows the row", () => {
     try {
       mkdirSync(join(home, ".jarvis", "cli-tokens"), { recursive: true });
       writeFileSync(join(home, ".jarvis", "cli-tokens", "anthropic"), "tok_test-token");
-      mkdirSync(join(home, ".codex"), { recursive: true });
+      mkdirSync(join(home, "agents", "user-1", ".codex"), { recursive: true });
       writeFileSync(
-        join(home, ".codex", "auth.json"),
+        join(home, "agents", "user-1", ".codex", "auth.json"),
         JSON.stringify({ tokens: { access_token: "fixture", account_id: "fixture" } })
       );
       const child = new FakeChild();
@@ -781,29 +781,38 @@ describe("task 5b launch follows the row", () => {
     }
   });
 
-  it("hands Codex auth to the isolated home, never its environment", async () => {
+  it("uses each user's Codex auth, never another user's credential or the environment", async () => {
     const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
     const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
     try {
-      const auth = JSON.stringify({ tokens: { access_token: "fixture", account_id: "fixture" } });
-      mkdirSync(join(home, ".codex"), { recursive: true });
-      writeFileSync(join(home, ".codex", "auth.json"), auth);
+      const authByUser = {
+        "user-a": JSON.stringify({ tokens: { access_token: "token-a", account_id: "account-a" } }),
+        "user-b": JSON.stringify({ tokens: { access_token: "token-b", account_id: "account-b" } })
+      };
+      for (const [userId, auth] of Object.entries(authByUser)) {
+        const source = join(home, "agents", userId, ".codex");
+        mkdirSync(source, { recursive: true });
+        writeFileSync(join(source, "auth.json"), auth, { mode: 0o600 });
+      }
       const child = new FakeChild();
-      let handedOff: readonly { path: string; content: string }[] = [];
+      const handedOff: Array<readonly { path: string; content: string }[]> = [];
       const { host, seen } = makeUserHost(dir, home, child, async (request, identity, files) => {
-        handedOff = files ?? [];
+        handedOff.push(files ?? []);
         await fakeAgentHomePrepare(request);
       });
-
-      const spawned = await host.spawn("chat:user-1:codex", "proj", "openai", "user-1", "chat");
-
-      expect(handedOff.map(({ path }) => path)).toEqual([
-        join(home, "agents", "user-1", ".codex", "auth.json")
+      const first = await host.spawn("chat:user-a:codex", "proj", "openai", "user-a", "chat");
+      const second = await host.spawn("chat:user-b:codex", "proj", "openai", "user-b", "chat");
+      expect(handedOff.map((files) => files.map(({ path }) => path))).toEqual([
+        [join(home, "agents", "user-a", ".codex", "auth.json")],
+        [join(home, "agents", "user-b", ".codex", "auth.json")]
       ]);
-      expect(handedOff[0]?.content).toBe(auth);
-      expect(seen[0]?.env.HOME).toBe(spawned.home);
-      expect(seen[0]?.env.CODEX_HOME).toBeUndefined();
-      expect(seen[0]?.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+      expect(handedOff[0]?.[0]?.content).toBe(authByUser["user-a"]);
+      expect(handedOff[1]?.[0]?.content).toBe(authByUser["user-b"]);
+      expect(handedOff[0]?.[0]?.content).not.toBe(handedOff[1]?.[0]?.content);
+      expect(seen[0]?.env.HOME).toBe(first.home);
+      expect(seen[1]?.env.HOME).toBe(second.home);
+      expect(seen.every(({ env }) => env.CODEX_HOME === undefined)).toBe(true);
+      expect(seen.every(({ env }) => env.CLAUDE_CODE_OAUTH_TOKEN === undefined)).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
       rmSync(home, { recursive: true, force: true });
@@ -811,12 +820,8 @@ describe("task 5b launch follows the row", () => {
   });
 
   it("writes the OpenCode deny file from the table, preserving the rest", async () => {
-    // The writer runs at spawn for chat. This test runs the real preparation
-    // script directly to isolate its merge behavior; task 10 proves the
-    // wired path in the real per-user home.
     const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
     try {
-      // A login-owned config the write must preserve, not clobber.
       const existingDir = join(home, "agents", "user-1", ".config", "opencode");
       mkdirSync(existingDir, { recursive: true });
       writeFileSync(
@@ -851,6 +856,8 @@ describe("task 5b launch follows the row", () => {
       const target = join(home, "agents", "user-1", ".codex", "auth.json");
       const scriptPath = join(process.cwd(), "packages/cli-runner/src/agent-home-prepare.mjs");
       const { spawnSync } = await import("node:child_process");
+      mkdirSync(join(home, "agents", "user-1", ".codex"), { recursive: true });
+      writeFileSync(target, "old-auth", { mode: 0o644 });
       const result = spawnSync(
         process.execPath,
         [scriptPath, JSON.stringify({ dirs: [], denyFile: null })],

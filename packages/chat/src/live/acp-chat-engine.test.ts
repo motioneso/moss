@@ -226,8 +226,9 @@ class PromptMockTunnel implements AcpTunnel {
 }
 
 describe("AcpChatEngine", () => {
-  it("routes the openai-compatible chat row to OpenCode", () => {
+  it("routes Codex and OpenCode independently", () => {
     expect(toAcpProviderKind("openai-compatible")).toBe("openai");
+    expect(toAcpProviderKind("openai-compatible", "muse-spark-1.3-free")).toBe("opencode");
   });
 
   it("turns an authentication failure into the chat sign-in message", async () => {

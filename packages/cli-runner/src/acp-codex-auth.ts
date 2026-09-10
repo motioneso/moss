@@ -3,13 +3,19 @@ import { join } from "node:path";
 
 export type CodexAuthFileReader = (path: string) => Promise<string>;
 
-/** Read and validate the runner-owned Codex login without returning parsed secrets. */
+/** The Codex login source owned by the user whose slot is about to run. */
+export function codexAuthPath(homeBase: string, userId: string): string {
+  return join(homeBase, "agents", userId, ".codex", "auth.json");
+}
+
+/** Read and validate the selected user's Codex login without returning parsed secrets. */
 export async function readCodexAuthFile(
   homeBase: string,
+  userId: string,
   read: CodexAuthFileReader = (path) => readFile(path, "utf8")
 ): Promise<string> {
   try {
-    const raw = await read(join(homeBase, ".codex", "auth.json"));
+    const raw = await read(codexAuthPath(homeBase, userId));
     const parsed = JSON.parse(raw) as {
       tokens?: { access_token?: unknown; account_id?: unknown };
     };

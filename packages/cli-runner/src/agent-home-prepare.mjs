@@ -81,6 +81,7 @@ async function writeSecretFile(file) {
   await ensureDirTree(file.path.slice(0, file.path.lastIndexOf(sep)));
   const handle = await open(file.path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o600);
   try {
+    await handle.chmod(0o600);
     await handle.writeFile(file.content, "utf8");
   } finally {
     await handle.close();
