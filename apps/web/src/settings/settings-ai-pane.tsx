@@ -324,6 +324,11 @@ function ChatModel() {
     queryFn: getChatModelOverrideSettings,
     retry: false
   });
+  const chatSettingsQuery = useQuery({
+    queryKey: queryKeys.chat.settings,
+    queryFn: getChatSettings,
+    retry: false
+  });
   const settings = settingsQuery.data?.settings;
   const mutation = useMutation({
     mutationFn: async (modelId: string | null) => {
@@ -369,6 +374,10 @@ function ChatModel() {
     ? (selectableOverrideModels.find((m) => m.id === currentOverride) ?? null)
     : defaultModel;
   const hasWebSearch = selectedModel?.capabilities.includes("web-search") ?? false;
+  const canReaffirmSelection =
+    currentOverride !== null &&
+    selectedModel?.providerKind === "openai-compatible" &&
+    chatSettingsQuery.data?.chat.openCodeModel !== undefined;
 
   return (
     <Group
@@ -399,6 +408,16 @@ function ChatModel() {
                   </option>
                 ))}
               </Select>
+              {canReaffirmSelection ? (
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  disabled={mutation.isPending || settingsQuery.isLoading}
+                  onClick={() => mutation.mutate(currentOverride)}
+                >
+                  Use {selectedModel.providerDisplayName} for chat
+                </Button>
+              ) : null}
               {hasWebSearch ? <Badge tone="steel">Web search</Badge> : null}
             </Field>
           ) : (
