@@ -100,6 +100,10 @@ export function groupRecords(
       items.push({ type: "status", record });
     } else if (ACTIVITY_KINDS.has(record.kind) && record.kind !== "action_request") {
       buffer.push(record);
+    } else if (record.kind === "action_result") {
+      // The gateway result stays a standalone notification, but its derived approval belongs
+      // to this turn's one activity fold. Keep collecting activity around the notification.
+      items.push({ type: "record", record });
     } else {
       flush(false);
       items.push({ type: "record", record });

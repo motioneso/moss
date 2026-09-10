@@ -529,6 +529,61 @@ describe("task 8a Architect regressions", () => {
     await engineRef?.kill();
   });
 
+  it("Regression 1b: Consecutive manager turns keep their activity in creation order", async () => {
+    const tunnel = new MockTunnel();
+    const persistence = new FakePersistence();
+    const clock = new FakeClock();
+    let engineRef: AcpChatEngine | undefined;
+    let turn = 0;
+    const deps: ChatSessionManagerDeps = {
+      engineFactory: (provider, sessionKey, options) => {
+        engineRef = new AcpChatEngine(provider, sessionKey, {
+          tunnel,
+          userId: "user-1",
+          projectId: "p1",
+          nextSequence: options?.nextSequence
+        });
+        return engineRef;
+      },
+      persistence,
+      personaFs: noopPersonaFs,
+      clock,
+      idleMs: 60_000,
+      neutralBase: "/tmp",
+      persona: "persona",
+      pollMs: 0
+    };
+    const manager = new ChatSessionManager(deps);
+    const seen: TranscriptRecord[] = [];
+    manager.subscribe("user-1", (record) => seen.push(serializeSubscriberRecord(record)));
+    tunnel.onPrompt = (t, promptId) => {
+      turn += 1;
+      engineRef!.handleSessionUpdate({
+        update: {
+          sessionUpdate: "agent_thought_chunk",
+          content: { type: "text", text: `Thought ${turn}` }
+        }
+      });
+      t.emitUpdate({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: `Reply ${turn}` }
+      });
+      t.emitPromptResult(promptId);
+    };
+
+    await manager.submitTurn("user-1", "Ben", "First");
+    await manager.submitTurn("user-1", "Ben", "Second");
+
+    expect(seen.filter((record) => record.kind === "thought").map((record) => record.text)).toEqual(
+      ["Thought 1", "Thought 2"]
+    );
+    expect(persistence.recorded.map((record) => record.opts?.activityRecords?.[0]?.text)).toEqual([
+      "Thought 1",
+      "Thought 2"
+    ]);
+    await engineRef?.kill();
+  });
+
   it("Regression 2: Result and tool argument summaries mask every supported secret shape", async () => {
     for (const secretShape of SECRET_SHAPE_CORPUS) {
       expect(redactSecrets(secretShape.sample)).not.toContain(secretShape.value);

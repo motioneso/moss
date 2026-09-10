@@ -209,16 +209,29 @@ export function upsertTranscriptRecord(
   records: readonly TranscriptRecord[],
   record: TranscriptRecord
 ): TranscriptRecord[] {
+  // ACP sequence numbers restart for each user turn. Stable ids and ordering therefore
+  // only apply inside the current turn; scanning older turns lets a later `sequence: 1`
+  // activity record jump in front of the first turn's `sequence: 2` record.
+  let turnStart = 0;
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    if (records[index]?.kind === "user") {
+      turnStart = index + 1;
+      break;
+    }
+  }
+  const currentTurn = records.slice(turnStart);
   if (record.id) {
-    const existing = records.findIndex((item) => item.id === record.id);
+    const existingInTurn = currentTurn.findIndex((item) => item.id === record.id);
+    const existing = existingInTurn === -1 ? -1 : turnStart + existingInTurn;
     if (existing >= 0) return records.map((item, index) => (index === existing ? record : item));
   }
-  const insertion = records.findIndex(
+  const insertionInTurn = currentTurn.findIndex(
     (item) =>
       record.sequence !== undefined &&
       item.sequence !== undefined &&
       item.sequence > record.sequence
   );
+  const insertion = insertionInTurn === -1 ? -1 : turnStart + insertionInTurn;
   if (insertion >= 0) {
     return [...records.slice(0, insertion), record, ...records.slice(insertion)];
   }

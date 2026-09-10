@@ -3,8 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { ChatMessageDto } from "@moss/shared";
-import { Thread, activityVerb } from "@moss/ui";
+import type { ChatMessageDto, TranscriptRecord } from "@moss/shared";
+import { Thread, activityVerb, groupRecords } from "@moss/ui";
 import { recordsFromMessages } from "../../apps/web/src/chat/chat-drawer.js";
 import { RecordRow } from "../../apps/web/src/chat/message-row.js";
 import { parseRecord, upsertTranscriptRecord } from "../../apps/web/src/chat/use-chat-stream.js";
@@ -56,6 +56,97 @@ describe("chat drawer activity outcomes", () => {
     expect(html.indexOf("Plan more")).toBeLessThan(html.indexOf("calendar.list"));
     expect(html.indexOf("calendar.list")).toBeLessThan(html.indexOf("2 events"));
     expect(html.indexOf("2 events")).toBeLessThan(html.indexOf("Approved by you"));
+  });
+
+  it("keeps per-turn sequence resets in their originating live turn", () => {
+    const records: TranscriptRecord[] = [
+      { kind: "user" as const, text: "First" },
+      { kind: "thought" as const, id: "thought-1", sequence: 1, text: "First thought" },
+      { kind: "tool" as const, id: "tool-1", sequence: 2, text: "first.tool" },
+      { kind: "reply" as const, text: "First reply" },
+      { kind: "user" as const, text: "Second" }
+    ].map(serializeSubscriberRecord);
+
+    let live = records;
+    live = upsertTranscriptRecord(
+      live,
+      serializeSubscriberRecord({
+        kind: "thought",
+        id: "thought-2",
+        sequence: 1,
+        text: "Second thought"
+      })
+    );
+    live = upsertTranscriptRecord(
+      live,
+      serializeSubscriberRecord({ kind: "tool", id: "tool-2", sequence: 2, text: "second.tool" })
+    );
+
+    expect(live.map((record) => record.text)).toEqual([
+      "First",
+      "First thought",
+      "first.tool",
+      "First reply",
+      "Second",
+      "Second thought",
+      "second.tool"
+    ]);
+  });
+
+  it("keeps one activity fold per turn for live and reloaded approval results", () => {
+    const live: TranscriptRecord[] = [
+      { kind: "user" as const, text: "Run it" },
+      { kind: "thought" as const, sequence: 1, text: "Planning" },
+      {
+        kind: "action_result" as const,
+        text: "Executed: calendar.list",
+        outcome: "executed" as const
+      },
+      { kind: "approved" as const, sequence: 3, text: "calendar.list, approved by you" },
+      { kind: "reply" as const, text: "Done." }
+    ].map(serializeSubscriberRecord);
+    const history = recordsFromMessages([
+      {
+        id: "m-live",
+        threadId: "t1",
+        ownerUserId: "u1",
+        role: "user",
+        status: "stored",
+        body: "Run it",
+        modelRoute: null,
+        tools: [],
+        activity: [],
+        createdAt: "2026-07-30T00:00:00.000Z",
+        updatedAt: "2026-07-30T00:00:00.000Z"
+      },
+      {
+        id: "m-history",
+        threadId: "t1",
+        ownerUserId: "u1",
+        role: "assistant",
+        status: "stored",
+        body: "Done.",
+        modelRoute: null,
+        tools: [],
+        activity: [
+          { kind: "thought", sequence: 1, text: "Planning" },
+          { kind: "action_result", text: "Executed: calendar.list", outcome: "executed" },
+          { kind: "approved", sequence: 3, text: "calendar.list, approved by you" }
+        ],
+        createdAt: "2026-07-30T00:00:00.000Z",
+        updatedAt: "2026-07-30T00:00:00.000Z"
+      }
+    ]);
+
+    const liveItems = groupRecords(live, false);
+    const historyItems = groupRecords(history, false);
+    const liveFold = liveItems.find((item) => item.type === "activity");
+    const historyFold = historyItems.find((item) => item.type === "activity");
+    expect(liveFold).toEqual(historyFold);
+    expect(liveItems.filter((item) => item.type === "activity")).toHaveLength(1);
+    expect(historyItems.filter((item) => item.type === "activity")).toHaveLength(1);
+    expect(liveItems.filter((item) => item.type === "record")).toHaveLength(3);
+    expect(historyItems.filter((item) => item.type === "record")).toHaveLength(3);
   });
 
   it("renders workflow approval records with the workflow approval card", () => {
