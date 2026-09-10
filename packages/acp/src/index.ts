@@ -27,6 +27,7 @@ export {
   isPrivateWebAddress,
   selectAllowOptionId,
   toolNameFromMeta,
+  toolNameFromRawInput,
   ACP_DESTRUCTIVE_TOOL_NAMES,
   ACP_PATH_INPUT_KEYS
 } from "./permissions.js";

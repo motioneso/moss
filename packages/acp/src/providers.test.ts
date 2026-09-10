@@ -43,9 +43,8 @@ describe("profile gate", () => {
     expect(() => checkAcpProfile("chat", "opencode")).not.toThrow();
   });
 
-  it("holds Codex until a stored login reaches the agent home", () => {
-    expect(() => checkAcpProfile("chat", "openai")).toThrow(AcpCapabilityError);
-    expect(() => checkAcpProfile("chat", "openai")).toThrow(/Not logged in/);
+  it("offers Codex for chat when the runner hands off its login", () => {
+    expect(() => checkAcpProfile("chat", "openai")).not.toThrow();
     expect(getAcpProviderRow("openai").model).toContain("CODEX_CONFIG");
   });
 
@@ -59,13 +58,13 @@ describe("profile gate", () => {
     expect(() => checkAcpProfile("unattended", "anthropic")).toThrow(/not built yet/);
   });
 
-  it("refuses to open a Codex chat session: no stored login", async () => {
+  it("opens a Codex chat session after the runner hands off its login", async () => {
     const agent = new ModelAgent(["m-1"]);
     const client = new MossAcpClient(agent);
     await expect(
       client.openSession("chat:user:conv", "conv", "openai", "user-1", "chat")
-    ).rejects.toThrow(/Not logged in/);
-    expect(agent.sent).toHaveLength(0);
+    ).resolves.toMatchObject({ sessionId: "agent-sess-1" });
+    expect(agent.sent.some((line) => JSON.parse(line).method === "session/new")).toBe(true);
   });
 
   it("refuses to open a Workshop session before anything is spawned", async () => {

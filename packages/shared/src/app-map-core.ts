@@ -200,6 +200,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "is struck through), " +
       "and an ACP note when the provider cannot honour a model choice, explaining that chat stays " +
       "on the login's default. The page also identifies the OpenCode ACP card and its saved model setting, " +
+      "and the normal Codex ACP row hands the signed-in credential into that user's isolated runner home, " +
       "and provides a minus button (disable) and a trash button (remove after confirmation; the provider's " +
       "default entry cannot be removed). The Models section collapses from its header. CLI provider " +
       "cards run the ACP adapter's initialize check automatically and show 'Not logged in' when it is refused; " +

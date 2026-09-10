@@ -12,6 +12,7 @@ import {
   isInsideSessionFolder,
   selectAllowOptionId,
   toolNameFromMeta,
+  toolNameFromRawInput,
   type AcpBuiltInRequest,
   type AcpSessionFolders
 } from "./permissions.js";
@@ -376,6 +377,10 @@ describe("helpers", () => {
     expect(toolNameFromMeta(null)).toBeNull();
     expect(toolNameFromMeta({ toolName: "  " })).toBeNull();
     expect(toolNameFromMeta({ toolName: 7 })).toBeNull();
+    expect(toolNameFromRawInput({ server: "moss", tool: "calendar.listEvents" })).toBe(
+      "mcp__moss__calendar_listEvents"
+    );
+    expect(toolNameFromRawInput({ server: "moss" })).toBeNull();
   });
 
   it("collects paths from locations and the known input fields", () => {

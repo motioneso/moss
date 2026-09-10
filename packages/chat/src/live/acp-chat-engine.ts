@@ -7,6 +7,7 @@ import {
   type AcpSessionHandle,
   type AcpSessionNotification,
   type AcpToolServer,
+  toolNameFromRawInput,
   type AcpTunnel
 } from "@moss/acp";
 import { type ProviderKind, redactSecrets } from "@moss/ai";
@@ -35,7 +36,7 @@ export interface AcpChatEngineOptions {
 
 /** ACP's provider names and Moss's configured provider names are deliberately different. */
 export function toAcpProviderKind(provider: ProviderKind): AcpProviderKind {
-  if (provider === "openai-compatible") return "opencode";
+  if (provider === "openai-compatible") return "openai";
   if (provider === "anthropic") return "anthropic";
   return "google";
 }
@@ -125,6 +126,7 @@ export function extractRealToolName(toolCall: {
   toolName?: string;
   name?: string;
   title?: string;
+  rawInput?: unknown;
   _meta?: unknown;
 }): string {
   if (toolCall.toolName && typeof toolCall.toolName === "string" && toolCall.toolName.trim()) {
@@ -139,6 +141,8 @@ export function extractRealToolName(toolCall: {
       return meta.toolName.trim();
     }
   }
+  const fromRawInput = toolNameFromRawInput(toolCall.rawInput);
+  if (fromRawInput) return fromRawInput;
   if (toolCall.name && typeof toolCall.name === "string" && toolCall.name.trim()) {
     return toolCall.name.trim();
   }

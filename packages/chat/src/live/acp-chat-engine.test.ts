@@ -227,7 +227,7 @@ class PromptMockTunnel implements AcpTunnel {
 
 describe("AcpChatEngine", () => {
   it("routes the openai-compatible chat row to OpenCode", () => {
-    expect(toAcpProviderKind("openai-compatible")).toBe("opencode");
+    expect(toAcpProviderKind("openai-compatible")).toBe("openai");
   });
 
   it("turns an authentication failure into the chat sign-in message", async () => {
@@ -399,6 +399,18 @@ describe("AcpChatEngine", () => {
         toolName: "Bash",
         toolCallId: "call-5",
         text: "Bash"
+      });
+
+      const call6 = formatToolRecord({
+        toolCallId: "call-6",
+        name: "mcp.moss.calendar.listEvents",
+        rawInput: { server: "moss", tool: "calendar.listEvents", arguments: {} }
+      });
+      expect(call6).toEqual({
+        kind: "tool",
+        toolName: "mcp__moss__calendar_listEvents",
+        toolCallId: "call-6",
+        text: "mcp__moss__calendar_listEvents"
       });
     });
 

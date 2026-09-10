@@ -28,7 +28,12 @@ import { randomUUID } from "node:crypto";
 import { checkAcpProfile, checkAgentCapabilities, type AcpProfile } from "./capabilities.js";
 import { getAcpProviderRow, type AcpProviderKind } from "./providers.js";
 import { launchOffList } from "./tool-table.js";
-import { selectAllowOptionId, toolNameFromMeta, type AcpBuiltInRequest } from "./permissions.js";
+import {
+  selectAllowOptionId,
+  toolNameFromMeta,
+  toolNameFromRawInput,
+  type AcpBuiltInRequest
+} from "./permissions.js";
 import { createTunnelStream, type TunnelStream } from "./stream.js";
 import type { AcpTunnel } from "./tunnel.js";
 
@@ -521,7 +526,7 @@ export class MossAcpClient {
     const rawKind = fields.kind;
     const rawLocations = fields.locations;
     table.set(toolCallId, {
-      toolName: toolNameFromMeta(claudeCode),
+      toolName: toolNameFromMeta(claudeCode) ?? toolNameFromRawInput(fields.rawInput),
       kind: typeof rawKind === "string" ? rawKind : null,
       locations: Array.isArray(rawLocations) ? (rawLocations as ToolCallLocation[]) : null,
       rawInput: fields.rawInput

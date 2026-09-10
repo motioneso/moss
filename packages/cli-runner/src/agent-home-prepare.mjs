@@ -16,6 +16,7 @@
 //
 // Invoked with exactly one argv element: a JSON string shaped like
 // { dirs: string[], denyFile: null | { path: string, permissionKeys: string[] } }
+// Secret files arrive as a JSON array on stdin, never in argv or env.
 // Never invoked through a shell, so no interpolation risk.
 import { O_CREAT, O_NOFOLLOW, O_RDONLY, O_TRUNC, O_WRONLY } from "node:constants";
 import { lstat, mkdir, open, rm } from "node:fs/promises";
@@ -64,10 +65,33 @@ async function readExistingConfig(path) {
   }
 }
 
+async function readSecretFiles() {
+  let raw = "";
+  for await (const chunk of process.stdin) raw += chunk;
+  if (!raw) return [];
+  const files = JSON.parse(raw);
+  if (!Array.isArray(files)) throw new Error("secret file input must be an array");
+  return files;
+}
+
+async function writeSecretFile(file) {
+  if (!file || typeof file.path !== "string" || typeof file.content !== "string") {
+    throw new Error("invalid secret file input");
+  }
+  await ensureDirTree(file.path.slice(0, file.path.lastIndexOf(sep)));
+  const handle = await open(file.path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o600);
+  try {
+    await handle.writeFile(file.content, "utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
 async function main() {
   const raw = process.argv[2];
   if (!raw) throw new Error("missing preparation request argument");
   const request = JSON.parse(raw);
+  const secretFiles = await readSecretFiles();
 
   for (const dir of request.dirs) {
     await ensureDirTree(dir);
@@ -93,6 +117,8 @@ async function main() {
       await handle.close();
     }
   }
+
+  for (const file of secretFiles) await writeSecretFile(file);
 }
 
 main().then(

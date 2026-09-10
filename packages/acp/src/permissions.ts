@@ -76,6 +76,18 @@ export function toolNameFromMeta(meta: unknown): string | null {
   return typeof name === "string" && name.trim() !== "" ? name : null;
 }
 
+/** Codex ACP identifies MCP calls in the adapter-owned raw input envelope. */
+export function toolNameFromRawInput(rawInput: unknown): string | null {
+  if (!rawInput || typeof rawInput !== "object" || Array.isArray(rawInput)) return null;
+  const input = rawInput as Record<string, unknown>;
+  return typeof input.server === "string" &&
+    input.server.trim() !== "" &&
+    typeof input.tool === "string" &&
+    input.tool.trim() !== ""
+    ? `mcp__${input.server}__${input.tool.replaceAll(".", "_")}`
+    : null;
+}
+
 /**
  * Every file path the request names, once each: the announced locations plus
  * the known tool input fields (the adapter builds the former from the latter,

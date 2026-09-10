@@ -23,7 +23,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { AcpHost, defaultResolveAdapterTarget } from "../../packages/cli-runner/src/acp-host.js";
+import {
+  AcpHost,
+  defaultResolveAdapterTarget,
+  type AgentHomePrepareRequest,
+  type AgentHomeSecretFile
+} from "../../packages/cli-runner/src/acp-host.js";
 import { allocateUidSlot as realAllocateUidSlot } from "../../packages/cli-runner/src/uid-allocator.js";
 
 // These tests exercise spawn routing (folders, env, deny files), not the real
@@ -76,10 +81,13 @@ function ensureDirTreeSync(path: string): void {
   }
 }
 
-async function fakeAgentHomePrepare(request: {
-  dirs: readonly string[];
-  denyFile: { path: string; permissionKeys: readonly string[] } | null;
-}): Promise<void> {
+type AgentHomePrepare = (
+  request: AgentHomePrepareRequest,
+  identity: { uid: number; gid: number },
+  secretFiles?: readonly AgentHomeSecretFile[]
+) => Promise<void>;
+
+async function fakeAgentHomePrepare(request: AgentHomePrepareRequest): Promise<void> {
   for (const dir of request.dirs) ensureDirTreeSync(dir);
   if (request.denyFile) {
     const { path, permissionKeys } = request.denyFile;
@@ -685,7 +693,12 @@ describe("AcpHost", () => {
 });
 
 describe("task 5b launch follows the row", () => {
-  function makeUserHost(neutralBase: string, homeBase: string, child: FakeChild) {
+  function makeUserHost(
+    neutralBase: string,
+    homeBase: string,
+    child: FakeChild,
+    runAgentHomePrepare: AgentHomePrepare = async (request) => fakeAgentHomePrepare(request)
+  ) {
     const seen: Array<{ command: string; args: string[]; cwd: string; env: NodeJS.ProcessEnv }> =
       [];
     const host = new AcpHost({
@@ -698,7 +711,7 @@ describe("task 5b launch follows the row", () => {
         seen.push({ command: opts.command, args: opts.args, cwd: opts.cwd, env: opts.env });
         return child as never;
       },
-      runAgentHomePrepare: fakeAgentHomePrepare
+      runAgentHomePrepare
     });
     return { host, seen };
   }
@@ -745,6 +758,11 @@ describe("task 5b launch follows the row", () => {
     try {
       mkdirSync(join(home, ".jarvis", "cli-tokens"), { recursive: true });
       writeFileSync(join(home, ".jarvis", "cli-tokens", "anthropic"), "tok_test-token");
+      mkdirSync(join(home, ".codex"), { recursive: true });
+      writeFileSync(
+        join(home, ".codex", "auth.json"),
+        JSON.stringify({ tokens: { access_token: "fixture", account_id: "fixture" } })
+      );
       const child = new FakeChild();
       const { host, seen } = makeUserHost(dir, home, child);
       // Ready rows run under either profile; not-ready rows refuse chat, so
@@ -757,6 +775,35 @@ describe("task 5b launch follows the row", () => {
       expect(seen[1]?.env.INITIAL_AGENT_MODE).toBe("read-only");
       expect(seen[2]?.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
       expect(seen[2]?.env.INITIAL_AGENT_MODE).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("hands Codex auth to the isolated home, never its environment", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
+    const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+    try {
+      const auth = JSON.stringify({ tokens: { access_token: "fixture", account_id: "fixture" } });
+      mkdirSync(join(home, ".codex"), { recursive: true });
+      writeFileSync(join(home, ".codex", "auth.json"), auth);
+      const child = new FakeChild();
+      let handedOff: readonly { path: string; content: string }[] = [];
+      const { host, seen } = makeUserHost(dir, home, child, async (request, identity, files) => {
+        handedOff = files ?? [];
+        await fakeAgentHomePrepare(request);
+      });
+
+      const spawned = await host.spawn("chat:user-1:codex", "proj", "openai", "user-1", "chat");
+
+      expect(handedOff.map(({ path }) => path)).toEqual([
+        join(home, "agents", "user-1", ".codex", "auth.json")
+      ]);
+      expect(handedOff[0]?.content).toBe(auth);
+      expect(seen[0]?.env.HOME).toBe(spawned.home);
+      expect(seen[0]?.env.CODEX_HOME).toBeUndefined();
+      expect(seen[0]?.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
     } finally {
       rmSync(dir, { recursive: true, force: true });
       rmSync(home, { recursive: true, force: true });
@@ -793,6 +840,28 @@ describe("task 5b launch follows the row", () => {
       for (const key of expected) expect(written.permission?.[key]).toBe("deny");
       expect(written.model).toBe("keep-me");
       expect(written.permission?.read).toBe("allow");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("writes secret preparation files from stdin with owner-only mode", async () => {
+    const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
+    try {
+      const target = join(home, "agents", "user-1", ".codex", "auth.json");
+      const scriptPath = join(process.cwd(), "packages/cli-runner/src/agent-home-prepare.mjs");
+      const { spawnSync } = await import("node:child_process");
+      const result = spawnSync(
+        process.execPath,
+        [scriptPath, JSON.stringify({ dirs: [], denyFile: null })],
+        {
+          encoding: "utf8",
+          input: JSON.stringify([{ path: target, content: "fixture-auth" }])
+        }
+      );
+      expect(result.status).toBe(0);
+      expect(readFileSync(target, "utf8")).toBe("fixture-auth");
+      expect((statSync(target).mode & 0o777).toString(8)).toBe("600");
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

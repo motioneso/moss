@@ -43,6 +43,7 @@ import {
 } from "./acp-private-markers.js";
 import { acpProviderTranscriptDir, defaultPurgeCodexTranscripts } from "./acp-transcript-purge.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
+import { readCodexAuthFile } from "./acp-codex-auth.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
@@ -82,6 +83,7 @@ export interface AcpHostDeps {
   readonly resolveAdapterTarget?: (kind: AcpProviderKind) => AcpAdapterTarget;
   /** Reads a file; injected so tests can stub the login token. */
   readonly readTokenFile?: (path: string) => Promise<string>;
+  readonly readCodexAuthFile?: (path: string) => Promise<string>;
   /**
    * Spawns the adapter child; injected so tests never start a process. The
    * production default runs the resolved target (node plus the adapter entry,
@@ -110,7 +112,8 @@ export interface AcpHostDeps {
   /** Runs the home/session preparation step as the person's own slot; injected so tests never shell out. */
   readonly runAgentHomePrepare?: (
     request: AgentHomePrepareRequest,
-    identity: { uid: number; gid: number }
+    identity: { uid: number; gid: number },
+    secretFiles?: readonly AgentHomeSecretFile[]
   ) => Promise<void>;
   /**
    * Overrides the real per-person uid/gid slot allocator. Injected only so
@@ -142,6 +145,11 @@ export interface AcpHostDeps {
 export interface AgentHomePrepareRequest {
   readonly dirs: readonly string[];
   readonly denyFile: { readonly path: string; readonly permissionKeys: readonly string[] } | null;
+}
+
+export interface AgentHomeSecretFile {
+  readonly path: string;
+  readonly content: string;
 }
 
 export interface AcpSpawnResult {
@@ -274,7 +282,8 @@ export function defaultResolveAdapterTarget(kind: AcpProviderKind): AcpAdapterTa
  */
 async function defaultRunAgentHomePrepare(
   request: AgentHomePrepareRequest,
-  identity: { uid: number; gid: number }
+  identity: { uid: number; gid: number },
+  secretFiles: readonly AgentHomeSecretFile[] = []
 ): Promise<void> {
   const script = createRequire(import.meta.url).resolve("./agent-home-prepare.mjs");
   const { command, args } = buildSetprivDropCommand(
@@ -284,9 +293,10 @@ async function defaultRunAgentHomePrepare(
   );
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {
-      stdio: ["ignore", "ignore", "pipe"],
+      stdio: ["pipe", "ignore", "pipe"],
       env: buildSanitizedCliEnv(process.env)
     });
+    child.stdin.end(JSON.stringify(secretFiles));
     let stderr = "";
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
@@ -374,6 +384,10 @@ export class AcpHost {
     if (!this.deps.perUserUid || !homeBase) {
       throw new Error("acpSpawn requires per-user identity: refusing the shared home");
     }
+    const codexAuth =
+      providerKind === "openai"
+        ? await readCodexAuthFile(homeBase, this.deps.readCodexAuthFile)
+        : null;
 
     // One slot per person, never per conversation.
     const allocate = this.deps.allocateUidSlot ?? defaultAllocateUidSlot;
@@ -438,8 +452,12 @@ export class AcpHost {
             : null;
         const prepareDirs = [sessionDir];
         if (denyFile) prepareDirs.push(join(agentHome, ".config", "opencode"));
+        if (codexAuth) prepareDirs.push(join(agentHome, ".codex"));
+        const secretFiles = codexAuth
+          ? [{ path: join(agentHome, ".codex", "auth.json"), content: codexAuth }]
+          : [];
         const runAgentHomePrepare = this.deps.runAgentHomePrepare ?? defaultRunAgentHomePrepare;
-        await runAgentHomePrepare({ dirs: prepareDirs, denyFile }, { uid, gid });
+        await runAgentHomePrepare({ dirs: prepareDirs, denyFile }, { uid, gid }, secretFiles);
         return { agentHome, sessionDir, env };
       } catch (error) {
         if (agentHomeTop?.createdHere) {
