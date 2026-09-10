@@ -53,7 +53,14 @@ export function Thread(props: {
 
 const ACTIVITY_KINDS: ReadonlySet<ChatRecordKind> = new Set<ChatRecordKind>([
   "thinking",
+  "thought",
   "tool",
+  "result",
+  "approval",
+  "approved",
+  "not_approved",
+  "refusal",
+  "refused",
   "status"
 ]);
 
@@ -70,8 +77,9 @@ type RenderItem =
  * Status records ("I'll get today's top headlines for you.") surface in the thread as their own
  * quiet lines so it is obvious the assistant is working; thinking and tool steps collapse into
  * one "Thinking..." line per turn, placed after the statuses and just above the reply. The line
- * is never removed once the reply lands — it stays for historical context. (Note: only action
- * results are persisted server-side, so restored conversations carry no steps to show.)
+ * is never removed once the reply lands — it stays for historical context. Records come from the
+ * persisted activity list as well as the live stream, so a restored conversation shows the same
+ * steps as the turn did.
  */
 export function groupRecords(
   records: readonly TranscriptRecord[],
@@ -138,6 +146,19 @@ export function ActivityPeek(props: {
 }
 
 export function activityVerb(record: TranscriptRecord): string {
+  const labels: Partial<Record<ChatRecordKind, string>> = {
+    thinking: "Thinking",
+    thought: "Thought",
+    tool: "Tool",
+    result: "Result",
+    approval: "Approval",
+    approved: "Approved",
+    not_approved: "Not approved",
+    refusal: "Refusal",
+    refused: "Refused"
+  };
+  const label = labels[record.kind];
+  if (label) return label;
   if (record.kind === "action_result") {
     // #1661: "allowed" no longer implies unattended mode (a user's own approval reports it too,
     // because the gateway sees the grant and not the run), and "error" is not a denial — the

@@ -7,6 +7,8 @@ import type { ChatMessageDto } from "@moss/shared";
 import { Thread, activityVerb } from "@moss/ui";
 import { recordsFromMessages } from "../../apps/web/src/chat/chat-drawer.js";
 import { RecordRow } from "../../apps/web/src/chat/message-row.js";
+import { parseRecord, upsertTranscriptRecord } from "../../apps/web/src/chat/use-chat-stream.js";
+import { serializeSubscriberRecord } from "./helpers/boundary-test-gate.js";
 
 const allowedRecord = {
   kind: "action_result" as const,
@@ -15,6 +17,47 @@ const allowedRecord = {
 };
 
 describe("chat drawer activity outcomes", () => {
+  it("renders ACP lines in arrival order and replaces live records by stable id", () => {
+    const first = parseRecord(
+      JSON.stringify({ kind: "thought", id: "thought-1", sequence: 1, text: "Plan" })
+    );
+    const replacement = parseRecord(
+      JSON.stringify({ kind: "thought", id: "thought-1", sequence: 1, text: "Plan more" })
+    );
+    const tool = parseRecord(
+      JSON.stringify({ kind: "tool", id: "tool-1", sequence: 2, text: "calendar.list" })
+    );
+    expect(first).not.toBeNull();
+    expect(replacement).not.toBeNull();
+    expect(tool).not.toBeNull();
+
+    let records = upsertTranscriptRecord([], serializeSubscriberRecord(first!));
+    records = upsertTranscriptRecord(records, serializeSubscriberRecord(tool!));
+    records = upsertTranscriptRecord(records, serializeSubscriberRecord(replacement!));
+    expect(records).toEqual([
+      { kind: "thought", id: "thought-1", sequence: 1, text: "Plan more" },
+      { kind: "tool", id: "tool-1", sequence: 2, text: "calendar.list" }
+    ]);
+
+    const html = renderToString(
+      createElement(Thread, {
+        records: [
+          ...records,
+          { kind: "result", id: "result-1", sequence: 3, text: "2 events" },
+          { kind: "approved", id: "approval-1", sequence: 4, text: "Approved by you" },
+          { kind: "reply", text: "Done." }
+        ]
+      })
+    );
+    expect(html).toContain("Thought");
+    expect(html).toContain("Tool");
+    expect(html).toContain("Result");
+    expect(html).toContain("Approved");
+    expect(html.indexOf("Plan more")).toBeLessThan(html.indexOf("calendar.list"));
+    expect(html.indexOf("calendar.list")).toBeLessThan(html.indexOf("2 events"));
+    expect(html.indexOf("2 events")).toBeLessThan(html.indexOf("Approved by you"));
+  });
+
   it("renders workflow approval records with the workflow approval card", () => {
     const html = renderToString(
       createElement(
@@ -129,6 +172,56 @@ describe("chat drawer activity outcomes", () => {
         text: "LinkedIn monitoring enabled",
         toolName: "job-search.portal.set-enabled",
         outcome: "executed"
+      }
+    ]);
+  });
+
+  it("restores the ACP fold records and reply metadata from history", () => {
+    const message: ChatMessageDto = {
+      id: "m2",
+      threadId: "t1",
+      ownerUserId: "u1",
+      role: "assistant",
+      status: "stored",
+      body: "Done.",
+      modelRoute: null,
+      tools: [],
+      activity: [
+        { kind: "thought", id: "thought-1", sequence: 1, text: "Plan" },
+        {
+          kind: "tool",
+          id: "tool-1",
+          sequence: 2,
+          text: "calendar.list",
+          toolName: "calendar.list"
+        },
+        { kind: "result", id: "result-1", sequence: 3, text: "2 events" }
+      ],
+      elapsedMs: 2400,
+      usage: { inputTokens: 12, outputTokens: 8 },
+      createdAt: "2026-07-30T00:00:00.000Z",
+      updatedAt: "2026-07-30T00:00:00.000Z"
+    };
+
+    expect(recordsFromMessages([message])).toEqual([
+      { kind: "thought", id: "thought-1", sequence: 1, text: "Plan" },
+      {
+        kind: "tool",
+        id: "tool-1",
+        sequence: 2,
+        text: "calendar.list",
+        toolName: "calendar.list"
+      },
+      { kind: "result", id: "result-1", sequence: 3, text: "2 events" },
+      {
+        kind: "reply",
+        text: "Done.",
+        messageId: "m2",
+        sourceFreshness: undefined,
+        answerProvenance: undefined,
+        answerProvenanceCitedIds: undefined,
+        elapsedMs: 2400,
+        usage: { inputTokens: 12, outputTokens: 8 }
       }
     ]);
   });

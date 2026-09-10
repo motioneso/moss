@@ -1,4 +1,5 @@
 import type {
+  ChatActivityEventDto,
   ChatMessageDto,
   ChatSurface,
   SourceFreshnessV1,
@@ -37,7 +38,14 @@ function isChatRecordKind(value: string): value is ChatRecordKind {
   switch (value) {
     case "user":
     case "thinking":
+    case "thought":
     case "tool":
+    case "result":
+    case "approval":
+    case "approved":
+    case "not_approved":
+    case "refusal":
+    case "refused":
     case "status":
     case "reply":
     case "error":
@@ -90,7 +98,7 @@ export function useChatStream(
               return current.map((r, i) => (i === realIdx ? record : r));
             }
           }
-          return [...current, record];
+          return upsertTranscriptRecord(current, record);
         });
       }
     };
@@ -197,7 +205,27 @@ export function mergeWorkflowApprovalRecords(
   ];
 }
 
-function recordsFromMessages(messages: readonly ChatMessageDto[]): TranscriptRecord[] {
+export function upsertTranscriptRecord(
+  records: readonly TranscriptRecord[],
+  record: TranscriptRecord
+): TranscriptRecord[] {
+  if (record.id) {
+    const existing = records.findIndex((item) => item.id === record.id);
+    if (existing >= 0) return records.map((item, index) => (index === existing ? record : item));
+  }
+  const insertion = records.findIndex(
+    (item) =>
+      record.sequence !== undefined &&
+      item.sequence !== undefined &&
+      item.sequence > record.sequence
+  );
+  if (insertion >= 0) {
+    return [...records.slice(0, insertion), record, ...records.slice(insertion)];
+  }
+  return [...records, record];
+}
+
+export function recordsFromMessages(messages: readonly ChatMessageDto[]): TranscriptRecord[] {
   return messages.flatMap((message): TranscriptRecord[] => {
     if (message.role === "user") {
       return [
@@ -209,34 +237,44 @@ function recordsFromMessages(messages: readonly ChatMessageDto[]): TranscriptRec
         }
       ];
     }
-    const actionResults: TranscriptRecord[] = message.activity.flatMap((activity) =>
-      activity.kind === "action_result" &&
-      (activity.outcome === "executed" ||
-        activity.outcome === "denied" ||
-        activity.outcome === "error" ||
-        activity.outcome === "allowed")
-        ? [
-            {
-              kind: "action_result",
-              text: activity.text,
-              toolName: activity.toolName,
-              outcome: activity.outcome
-            }
-          ]
-        : []
-    );
+    const activity = message.activity.filter((event) => event.kind !== "action_result");
+    const actionResults = message.activity.filter((event) => event.kind === "action_result");
     return [
+      ...activity.map(activityRecord),
+      ...(activity.some((event) => event.kind === "tool")
+        ? []
+        : message.tools.map((tool) => ({
+            kind: "tool" as const,
+            text: tool.name
+          }))),
       {
-        kind: "reply",
+        kind: message.status === "error" ? ("error" as const) : ("reply" as const),
         text: message.body,
         messageId: message.id,
         sourceFreshness: message.sourceFreshness,
         answerProvenance: message.answerProvenance,
-        answerProvenanceCitedIds: message.answerProvenanceCitedIds
+        answerProvenanceCitedIds: message.answerProvenanceCitedIds,
+        ...(message.elapsedMs !== undefined ? { elapsedMs: message.elapsedMs } : {}),
+        ...(message.usage !== undefined ? { usage: message.usage } : {})
       },
-      ...actionResults
+      ...actionResults.map(activityRecord)
     ];
   });
+}
+
+function activityRecord(activity: ChatActivityEventDto): TranscriptRecord {
+  return {
+    kind: isChatRecordKind(activity.kind) ? activity.kind : "status",
+    text: activity.text,
+    ...(activity.id !== undefined ? { id: activity.id } : {}),
+    ...(activity.sequence !== undefined ? { sequence: activity.sequence } : {}),
+    ...(activity.toolName !== undefined ? { toolName: activity.toolName } : {}),
+    ...(activity.toolCallId !== undefined ? { toolCallId: activity.toolCallId } : {}),
+    ...(activity.outcome !== undefined ? { outcome: activity.outcome } : {}),
+    ...(activity.durationMs !== undefined ? { durationMs: activity.durationMs } : {}),
+    ...(activity.decidedBy !== undefined ? { decidedBy: activity.decidedBy } : {}),
+    ...(activity.reason !== undefined ? { reason: activity.reason } : {})
+  };
 }
 
 export function shouldEndPrivateChatOnStreamDisconnect(input: {
@@ -264,6 +302,7 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       workflowApprovalId:
         typeof parsed.workflowApprovalId === "string" ? parsed.workflowApprovalId : undefined,
       toolName: typeof parsed.toolName === "string" ? parsed.toolName : undefined,
+      toolCallId: typeof parsed.toolCallId === "string" ? parsed.toolCallId : undefined,
       summary: typeof parsed.summary === "string" ? parsed.summary : undefined,
       status:
         parsed.status === "pending" ||
@@ -301,9 +340,28 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
           ? parsed.decidedBy
           : undefined,
       reason: typeof parsed.reason === "string" ? parsed.reason : undefined,
-      durationMs: typeof parsed.durationMs === "number" ? parsed.durationMs : undefined
+      durationMs: typeof parsed.durationMs === "number" ? parsed.durationMs : undefined,
+      elapsedMs: typeof parsed.elapsedMs === "number" ? parsed.elapsedMs : undefined,
+      usage: parseUsage(parsed.usage)
     };
   } catch {
     return null;
   }
+}
+
+function parseUsage(value: unknown): TranscriptRecord["usage"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const usage = value as Record<string, unknown>;
+  const result: Record<string, number> = {};
+  for (const key of [
+    "inputTokens",
+    "outputTokens",
+    "cachedReadTokens",
+    "cachedWriteTokens",
+    "thoughtTokens",
+    "totalTokens"
+  ]) {
+    if (typeof usage[key] === "number") result[key] = usage[key];
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }

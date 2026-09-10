@@ -137,6 +137,12 @@ export const chatModuleManifest = {
       id: "chat.acp_queued_sends",
       description: "A second message during an active answer is queued and shown in the composer.",
       featureFlagId: "chat.module"
+    },
+    {
+      id: "chat.acp_turn_activity_fold",
+      description:
+        "Each ACP reply carries a collapsed Thinking fold with its thoughts, tool calls and outcomes, updated live and restored from chat history.",
+      featureFlagId: "chat.module"
     }
   ],
   routes: [
