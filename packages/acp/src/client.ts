@@ -20,7 +20,8 @@ import {
   type SessionConfigOption,
   type SessionNotification,
   type StopReason,
-  type ToolCallLocation
+  type ToolCallLocation,
+  type Usage
 } from "@agentclientprotocol/sdk";
 import { randomUUID } from "node:crypto";
 
@@ -101,6 +102,7 @@ export interface AcpPromptResult {
   readonly stopReason: StopReason;
   readonly text: string;
   readonly toolCallsSeen: number;
+  readonly usage?: Usage | null;
 }
 
 /**
@@ -362,7 +364,8 @@ export class MossAcpClient {
       return {
         stopReason: response.stopReason,
         text: chunks.join(""),
-        toolCallsSeen: this.toolCalls.get(handle.sessionId) ?? 0
+        toolCallsSeen: this.toolCalls.get(handle.sessionId) ?? 0,
+        usage: response.usage ?? null
       };
     } finally {
       if (timer) clearTimeout(timer);

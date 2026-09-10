@@ -1,11 +1,18 @@
 import type { ProviderKind } from "@moss/ai"; // "anthropic" | "openai-compatible" | "google"
 import type { ActionRequestPreview } from "@moss/module-sdk";
-import type { SourceFreshnessV1 } from "@moss/shared";
+import type { ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
 
 export type ChatRecordKind =
   | "user"
   | "thinking"
+  | "thought"
   | "tool"
+  | "result"
+  | "approval"
+  | "approved"
+  | "not_approved"
+  | "refusal"
+  | "refused"
   | "status"
   | "reply"
   | "error"
@@ -42,6 +49,12 @@ export interface TranscriptRecord {
    * persisted. Present only on `action_request` records whose tool declared a `preview` hook.
    */
   readonly preview?: ActionRequestPreview;
+  /** Elapsed time in milliseconds for the prompt turn (from submit to stop reason). */
+  readonly elapsedMs?: number;
+  /** Token usage block for the prompt turn. */
+  readonly usage?: ChatTurnUsageDto;
+  /** Duration of an approval hold in milliseconds, when recorded. */
+  readonly durationMs?: number;
 }
 
 export interface ActionResultMetadata {

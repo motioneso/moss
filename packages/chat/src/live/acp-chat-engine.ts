@@ -1,12 +1,16 @@
 import {
   MossAcpClient,
+  toolNameFromMeta,
+  type AcpBuiltInRequest,
   type AcpPermissionDecider,
   type AcpProviderKind,
   type AcpSessionHandle,
+  type AcpSessionNotification,
   type AcpToolServer,
   type AcpTunnel
 } from "@moss/acp";
 import type { ProviderKind } from "@moss/ai";
+import type { ChatTurnUsageDto } from "@moss/shared";
 import { recordProviderLoginRejected } from "./provider-probe.js";
 
 import { CliChatUnavailableError } from "./errors.js";
@@ -15,6 +19,7 @@ import type { RpcAcpKillParams, RpcAcpSpawnParams } from "./rpc-contract.js";
 import type { CliChatEngine, EngineKillOpts, EngineLaunchOpts, TranscriptRecord } from "./types.js";
 
 const ACP_PROFILE = "chat" as const;
+export const MAX_RESULT_CHARS = 500;
 
 export interface AcpChatEngineOptions {
   readonly tunnel: AcpTunnel;
@@ -31,6 +36,258 @@ export function toAcpProviderKind(provider: ProviderKind): AcpProviderKind {
   if (provider === "openai-compatible") return "openai";
   if (provider === "anthropic") return "anthropic";
   return "google";
+}
+
+export function toChatTurnUsageDto(usage: unknown): ChatTurnUsageDto | undefined {
+  if (!usage || typeof usage !== "object") return undefined;
+  const u = usage as Record<string, unknown>;
+  const dto: Record<string, number> = {};
+  if (typeof u.inputTokens === "number") dto.inputTokens = u.inputTokens;
+  if (typeof u.outputTokens === "number") dto.outputTokens = u.outputTokens;
+  if (typeof u.cachedReadTokens === "number") dto.cachedReadTokens = u.cachedReadTokens;
+  if (typeof u.cachedWriteTokens === "number") dto.cachedWriteTokens = u.cachedWriteTokens;
+  if (typeof u.thoughtTokens === "number") dto.thoughtTokens = u.thoughtTokens;
+  if (typeof u.totalTokens === "number") dto.totalTokens = u.totalTokens;
+  return Object.keys(dto).length > 0 ? (dto as ChatTurnUsageDto) : undefined;
+}
+
+export function summarizeToolArgs(
+  rawInput: unknown,
+  locations?: readonly { path: string }[] | null
+): string | null {
+  const parts: string[] = [];
+
+  // 1. Paths from locations and rawInput
+  const paths = new Set<string>();
+  if (locations && Array.isArray(locations)) {
+    for (const loc of locations) {
+      if (typeof loc?.path === "string" && loc.path.trim()) {
+        paths.add(loc.path.trim());
+      }
+    }
+  }
+  if (rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)) {
+    const input = rawInput as Record<string, unknown>;
+    for (const key of ["file_path", "notebook_path", "path", "filePath"]) {
+      const val = input[key];
+      if (typeof val === "string" && val.trim()) {
+        paths.add(val.trim());
+      }
+    }
+  }
+  if (paths.size > 0) {
+    parts.push([...paths].join(", "));
+  }
+
+  // 2. Web address / url
+  if (rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)) {
+    const input = rawInput as Record<string, unknown>;
+    for (const key of ["url", "address", "uri"]) {
+      const val = input[key];
+      if (typeof val === "string" && val.trim()) {
+        parts.push(val.trim());
+        break;
+      }
+    }
+  }
+
+  // 3. Time window (calendar, search, etc.)
+  if (rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)) {
+    const input = rawInput as Record<string, unknown>;
+    if (typeof input.window === "string" && input.window.trim()) {
+      parts.push(input.window.trim());
+    } else if (input.window && typeof input.window === "object" && !Array.isArray(input.window)) {
+      const win = input.window as Record<string, unknown>;
+      if (win.start && win.end) {
+        parts.push(`${String(win.start)} to ${String(win.end)}`);
+      }
+    } else if (input.windowStart && input.windowEnd) {
+      parts.push(`${String(input.windowStart)} to ${String(input.windowEnd)}`);
+    } else if (input.startsAfter && input.startsBefore) {
+      parts.push(`${String(input.startsAfter)} to ${String(input.startsBefore)}`);
+    }
+  }
+
+  // 4. Query (for search)
+  if (parts.length === 0 && rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)) {
+    const input = rawInput as Record<string, unknown>;
+    if (typeof input.query === "string" && input.query.trim()) {
+      parts.push(input.query.trim());
+    }
+  }
+
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
+export function extractRealToolName(toolCall: {
+  toolName?: string;
+  name?: string;
+  title?: string;
+  _meta?: unknown;
+}): string {
+  if (toolCall.toolName && typeof toolCall.toolName === "string" && toolCall.toolName.trim()) {
+    return toolCall.toolName.trim();
+  }
+  if (toolCall._meta && typeof toolCall._meta === "object") {
+    const meta = toolCall._meta as Record<string, unknown>;
+    const claudeCode = meta.claudeCode;
+    const fromMeta = toolNameFromMeta(claudeCode);
+    if (fromMeta) return fromMeta;
+    if (typeof meta.toolName === "string" && meta.toolName.trim()) {
+      return meta.toolName.trim();
+    }
+  }
+  if (toolCall.name && typeof toolCall.name === "string" && toolCall.name.trim()) {
+    return toolCall.name.trim();
+  }
+  return toolCall.title && typeof toolCall.title === "string" ? toolCall.title.trim() : "tool";
+}
+
+export function extractCappedResultText(update: {
+  rawOutput?: unknown;
+  content?: unknown;
+  status?: string | null;
+}): string {
+  let text = "";
+  if (typeof update.rawOutput === "string") {
+    text = update.rawOutput.trim();
+  } else if (update.rawOutput && typeof update.rawOutput === "object") {
+    const raw = update.rawOutput as Record<string, unknown>;
+    if (typeof raw.text === "string") text = raw.text.trim();
+    else if (typeof raw.output === "string") text = raw.output.trim();
+    else if (typeof raw.message === "string") text = raw.message.trim();
+    else text = JSON.stringify(update.rawOutput);
+  } else if (Array.isArray(update.content)) {
+    const parts: string[] = [];
+    for (const item of update.content) {
+      if (item && typeof item === "object") {
+        if (item.type === "content" && item.content && typeof item.content.text === "string") {
+          parts.push(item.content.text);
+        } else if (typeof item.text === "string") {
+          parts.push(item.text);
+        }
+      }
+    }
+    text = parts.join("\n").trim();
+  } else if (update.status === "failed") {
+    text = "Failed";
+  } else if (update.status === "completed") {
+    text = "Completed";
+  }
+  if (text.length > MAX_RESULT_CHARS) {
+    return text.slice(0, MAX_RESULT_CHARS) + "…";
+  }
+  return text;
+}
+
+export function formatThoughtRecord(text: string): TranscriptRecord {
+  return {
+    kind: "thought",
+    text
+  };
+}
+
+export function formatToolRecord(toolCall: {
+  toolCallId?: string;
+  toolName?: string;
+  name?: string;
+  title?: string;
+  locations?: Array<{ path: string }>;
+  rawInput?: unknown;
+  _meta?: unknown;
+}): TranscriptRecord {
+  const toolName = extractRealToolName(toolCall);
+  const args = summarizeToolArgs(toolCall.rawInput, toolCall.locations);
+  const text = args ? `${toolName}, ${args}` : toolName;
+  return {
+    kind: "tool",
+    toolName,
+    ...(toolCall.toolCallId ? { toolCallId: toolCall.toolCallId } : {}),
+    text
+  };
+}
+
+export function formatResultRecord(update: {
+  toolCallId?: string;
+  rawOutput?: unknown;
+  content?: unknown;
+  status?: string | null;
+}): TranscriptRecord | null {
+  const text = extractCappedResultText(update);
+  if (!text) return null;
+  return {
+    kind: "result",
+    ...(update.toolCallId ? { toolCallId: update.toolCallId } : {}),
+    text
+  };
+}
+
+export function formatApprovalLine(opts: {
+  toolName: string;
+  approved: boolean;
+  who?: string;
+  at?: Date | string;
+  durationSec?: number;
+}): string {
+  const who = opts.who ?? "you";
+  const timeStr = formatRecordTime(opts.at ?? new Date());
+  const durStr = opts.durationSec !== undefined ? ` after ${opts.durationSec} s` : "";
+  const verb = opts.approved ? "approved" : "not approved";
+  return `${opts.toolName}, ${verb} by ${who} at ${timeStr}${durStr}`;
+}
+
+export function formatApprovalRecord(opts: {
+  toolName: string;
+  approved: boolean;
+  who?: string;
+  at?: Date | string;
+  durationSec?: number;
+}): TranscriptRecord {
+  return {
+    kind: opts.approved ? "approved" : "not_approved",
+    toolName: opts.toolName,
+    text: formatApprovalLine(opts),
+    ...(opts.durationSec !== undefined ? { durationMs: opts.durationSec * 1000 } : {})
+  };
+}
+
+export function formatRefusalLine(opts: { toolName: string; reason?: string | null }): string {
+  if (opts.reason && opts.reason.trim()) {
+    return `${opts.toolName}, refused (${opts.reason.trim()})`;
+  }
+  return `${opts.toolName}, refused`;
+}
+
+export function formatRefusalRecord(opts: {
+  toolName: string;
+  reason?: string | null;
+}): TranscriptRecord {
+  return {
+    kind: "refused",
+    toolName: opts.toolName,
+    text: formatRefusalLine(opts)
+  };
+}
+
+export function formatReplyRecord(
+  text: string,
+  elapsedMs: number,
+  usage?: unknown
+): TranscriptRecord {
+  const usageDto = toChatTurnUsageDto(usage);
+  return {
+    kind: "reply",
+    text,
+    elapsedMs,
+    ...(usageDto ? { usage: usageDto } : {})
+  };
+}
+
+function formatRecordTime(dateOrStr: Date | string): string {
+  if (typeof dateOrStr === "string") return dateOrStr;
+  const h = String(dateOrStr.getHours()).padStart(2, "0");
+  const m = String(dateOrStr.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
 }
 
 /**
@@ -52,6 +309,7 @@ export class AcpChatEngine implements CliChatEngine {
   private complete = false;
   private cancelled = false;
   private records: TranscriptRecord[] = [];
+  private currentThought: string[] = [];
   private readonly reportLoginRejected: () => void;
 
   constructor(
@@ -60,9 +318,180 @@ export class AcpChatEngine implements CliChatEngine {
     private readonly opts: AcpChatEngineOptions
   ) {
     this.provider = provider;
-    this.client = new MossAcpClient(opts.tunnel, {}, opts.permissionDecider ?? null);
+    this.client = new MossAcpClient(
+      opts.tunnel,
+      {
+        onSessionUpdate: (notification) => this.handleSessionUpdate(notification)
+      },
+      this.wrapPermissionDecider(opts.permissionDecider)
+    );
     this.reportLoginRejected =
       opts.reportLoginRejected ?? (() => recordProviderLoginRejected(this.provider));
+  }
+
+  private wrapPermissionDecider(decider?: AcpPermissionDecider): AcpPermissionDecider | undefined {
+    if (!decider) return undefined;
+    return {
+      beginTurn: decider.beginTurn?.bind(decider),
+      cancelSession: decider.cancelSession?.bind(decider),
+      decide: async (request: AcpBuiltInRequest, session: AcpSessionHandle) => {
+        const start = Date.now();
+        const verdict = await decider.decide(request, session);
+        const durationMs = Date.now() - start;
+        const durationSec = Math.max(1, Math.round(durationMs / 1000));
+        const toolName = request.toolName ?? request.title ?? "tool";
+
+        this.flushCurrentThought();
+        if (verdict === "allow") {
+          // Spec: silent allows write nothing. If held >= 50ms, a human was asked!
+          if (durationMs >= 50) {
+            this.records.push(
+              formatApprovalRecord({
+                toolName,
+                approved: true,
+                who: "you",
+                durationSec
+              })
+            );
+          }
+        } else {
+          // Denied
+          if (durationMs >= 50) {
+            this.records.push(
+              formatApprovalRecord({
+                toolName,
+                approved: false,
+                who: "you",
+                durationSec
+              })
+            );
+          } else {
+            // Instant policy refusal
+            this.records.push(formatRefusalRecord({ toolName }));
+          }
+        }
+        return verdict;
+      }
+    };
+  }
+
+  private flushCurrentThought(): void {
+    if (this.currentThought.length > 0) {
+      const text = this.currentThought.join("");
+      this.currentThought = [];
+      if (text.trim().length > 0) {
+        this.records.push(formatThoughtRecord(text));
+      }
+    }
+  }
+
+  handleSessionUpdate(
+    notification: AcpSessionNotification | { update: Record<string, unknown> }
+  ): void {
+    const update = notification.update;
+    if (!update || typeof update !== "object") return;
+    const kind = (update as { sessionUpdate?: string }).sessionUpdate;
+
+    switch (kind) {
+      case "agent_thought_chunk": {
+        const chunk = update as { content?: { type?: string; text?: string } };
+        const text =
+          chunk.content && typeof chunk.content.text === "string" ? chunk.content.text : "";
+        if (text) {
+          this.currentThought.push(text);
+        }
+        break;
+      }
+
+      case "tool_call": {
+        this.flushCurrentThought();
+        const toolCall = update as {
+          toolCallId?: string;
+          toolName?: string;
+          name?: string;
+          title?: string;
+          locations?: Array<{ path: string }>;
+          rawInput?: unknown;
+          _meta?: unknown;
+        };
+        const record = formatToolRecord(toolCall);
+        this.records.push(record);
+        break;
+      }
+
+      case "tool_call_update": {
+        this.flushCurrentThought();
+        const toolCallUpdate = update as {
+          toolCallId?: string;
+          rawOutput?: unknown;
+          content?: unknown;
+          status?: string | null;
+        };
+        const record = formatResultRecord(toolCallUpdate);
+        if (record) {
+          this.records.push(record);
+        }
+        break;
+      }
+
+      case "agent_message_chunk": {
+        this.flushCurrentThought();
+        break;
+      }
+
+      case "approval":
+      case "approved": {
+        this.flushCurrentThought();
+        const u = update as Record<string, unknown>;
+        const record = formatApprovalRecord({
+          toolName: typeof u.toolName === "string" ? u.toolName : "tool",
+          approved: u.approved !== false,
+          who:
+            typeof u.who === "string" ? u.who : typeof u.approver === "string" ? u.approver : "you",
+          at: u.at instanceof Date || typeof u.at === "string" ? u.at : new Date(),
+          durationSec:
+            typeof u.durationSec === "number"
+              ? u.durationSec
+              : typeof u.durationMs === "number"
+                ? Math.round(u.durationMs / 1000)
+                : undefined
+        });
+        this.records.push(record);
+        break;
+      }
+
+      case "not_approved": {
+        this.flushCurrentThought();
+        const u = update as Record<string, unknown>;
+        const record = formatApprovalRecord({
+          toolName: typeof u.toolName === "string" ? u.toolName : "tool",
+          approved: false,
+          who:
+            typeof u.who === "string" ? u.who : typeof u.approver === "string" ? u.approver : "you",
+          at: u.at instanceof Date || typeof u.at === "string" ? u.at : new Date(),
+          durationSec:
+            typeof u.durationSec === "number"
+              ? u.durationSec
+              : typeof u.durationMs === "number"
+                ? Math.round(u.durationMs / 1000)
+                : undefined
+        });
+        this.records.push(record);
+        break;
+      }
+
+      case "refusal":
+      case "refused": {
+        this.flushCurrentThought();
+        const u = update as Record<string, unknown>;
+        const record = formatRefusalRecord({
+          toolName: typeof u.toolName === "string" ? u.toolName : "tool",
+          reason: typeof u.reason === "string" ? u.reason : null
+        });
+        this.records.push(record);
+        break;
+      }
+    }
   }
 
   async launch(options: EngineLaunchOpts): Promise<{ offset: number }> {
@@ -110,19 +539,26 @@ export class AcpChatEngine implements CliChatEngine {
     if (!handle) throw new CliChatUnavailableError("ACP chat session is not open");
     if (this.prompt && !this.complete) throw new CliChatUnavailableError("ACP chat turn is busy");
     this.records = [];
+    this.currentThought = [];
     this.promptError = null;
     this.complete = false;
     this.cancelled = false;
+    const startedAt = Date.now();
     this.prompt = this.client
       .prompt(handle, text)
       .then((result) => {
-        if (result.text) this.records.push({ kind: "reply", text: result.text });
+        this.flushCurrentThought();
+        const elapsedMs = Math.max(0, Date.now() - startedAt);
+        if (result.text) {
+          this.records.push(formatReplyRecord(result.text, elapsedMs, result.usage));
+        }
         const reason = String(result.stopReason);
         if (reason !== "end_turn") {
           this.records.push({ kind: "status", text: stopReasonText(reason, this.cancelled) });
         }
       })
       .catch((error: unknown) => {
+        this.flushCurrentThought();
         if (isAuthRequired(error)) {
           this.reportLoginRejected();
           this.promptError = new CliChatUnavailableError(

@@ -43,7 +43,11 @@ export type {
   AcpSessionFolders
 } from "./permissions.js";
 /** The protocol's file-location shape, re-exported so callers need no SDK dependency. */
-export type { ToolCallLocation as AcpToolCallLocation } from "@agentclientprotocol/sdk";
+export type {
+  SessionNotification as AcpSessionNotification,
+  ToolCallLocation as AcpToolCallLocation,
+  Usage as AcpUsage
+} from "@agentclientprotocol/sdk";
 export { createTunnelStream } from "./stream.js";
 export type { AcpExecPoll, AcpTunnel } from "./tunnel.js";
 /** Re-exported so tunnel backers can build protocol handlers without an SDK dependency. */
