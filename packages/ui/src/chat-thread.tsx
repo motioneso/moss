@@ -40,7 +40,11 @@ export function Thread(props: {
     <div className="chatd-thread" aria-live="polite">
       {groupRecords(props.records, props.working).map((item, index) =>
         item.type === "activity" ? (
-          <ActivityPeek key={index} records={item.records} inProgress={item.inProgress} />
+          <ActivityPeek
+            key={`activity-${item.records[0]?.id ?? item.records[0]?.sequence ?? index}`}
+            records={item.records}
+            inProgress={item.inProgress}
+          />
         ) : item.type === "status" ? (
           <StatusLine key={index} record={item.record} />
         ) : (
@@ -98,11 +102,11 @@ export function groupRecords(
   for (const record of records) {
     if (record.kind === "status") {
       items.push({ type: "status", record });
-    } else if (ACTIVITY_KINDS.has(record.kind) && record.kind !== "action_request") {
+    } else if (ACTIVITY_KINDS.has(record.kind)) {
       buffer.push(record);
-    } else if (record.kind === "action_result") {
-      // The gateway result stays a standalone notification, but its derived approval belongs
-      // to this turn's one activity fold. Keep collecting activity around the notification.
+    } else if (record.kind === "action_request" || record.kind === "action_result") {
+      // Action notifications stay standalone, but their related activity remains one turn fold.
+      // Keep collecting around the notification instead of flushing the fold at this boundary.
       items.push({ type: "record", record });
     } else {
       flush(false);

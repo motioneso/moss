@@ -1,4 +1,8 @@
+// @vitest-environment jsdom
+
 import { createElement } from "react";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -8,7 +12,12 @@ import { Thread, activityVerb, groupRecords } from "@moss/ui";
 import { recordsFromMessages } from "../../apps/web/src/chat/chat-drawer.js";
 import { RecordRow } from "../../apps/web/src/chat/message-row.js";
 import { parseRecord, upsertTranscriptRecord } from "../../apps/web/src/chat/use-chat-stream.js";
-import { serializeSubscriberRecord } from "./helpers/boundary-test-gate.js";
+import {
+  serializeSubscriberRecord,
+  serializeSubscriberRecords
+} from "./helpers/boundary-test-gate.js";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const allowedRecord = {
   kind: "action_result" as const,
@@ -98,6 +107,11 @@ describe("chat drawer activity outcomes", () => {
       { kind: "user" as const, text: "Run it" },
       { kind: "thought" as const, sequence: 1, text: "Planning" },
       {
+        kind: "action_request" as const,
+        actionRequestId: "request-1",
+        text: "Approve calendar.list"
+      },
+      {
         kind: "action_result" as const,
         text: "Executed: calendar.list",
         outcome: "executed" as const
@@ -145,8 +159,50 @@ describe("chat drawer activity outcomes", () => {
     expect(liveFold).toEqual(historyFold);
     expect(liveItems.filter((item) => item.type === "activity")).toHaveLength(1);
     expect(historyItems.filter((item) => item.type === "activity")).toHaveLength(1);
-    expect(liveItems.filter((item) => item.type === "record")).toHaveLength(3);
+    expect(liveItems.filter((item) => item.type === "record")).toHaveLength(4);
     expect(historyItems.filter((item) => item.type === "record")).toHaveLength(3);
+  });
+
+  it("keeps an open activity fold mounted when approval records arrive", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const initial = serializeSubscriberRecords<TranscriptRecord>([
+      { kind: "user", text: "Run it" },
+      { kind: "thought", id: "thought-1", sequence: 1, text: "Planning" },
+      { kind: "tool", id: "tool-1", sequence: 2, text: "calendar.list" }
+    ]);
+    const render = (records: readonly TranscriptRecord[]) =>
+      root.render(
+        createElement(Thread, {
+          records,
+          working: true,
+          renderRecord: (record) => createElement("p", null, record.text)
+        })
+      );
+
+    await act(async () => render(initial));
+    const before = container.querySelector<HTMLDetailsElement>("details");
+    expect(before).not.toBeNull();
+    before!.open = true;
+
+    const arriving = serializeSubscriberRecords<TranscriptRecord>([
+      {
+        kind: "action_request",
+        actionRequestId: "request-1",
+        text: "Approve calendar.list"
+      },
+      { kind: "action_result", text: "Executed", outcome: "executed" },
+      { kind: "approved", id: "approval-1", sequence: 4, text: "Approved by you" }
+    ]);
+    await act(async () => render([...initial, ...arriving]));
+    const after = container.querySelector<HTMLDetailsElement>("details");
+    expect(container.querySelectorAll("details")).toHaveLength(1);
+    expect(after).toBe(before);
+    expect(after?.open).toBe(true);
+
+    await act(async () => root.unmount());
+    container.remove();
   });
 
   it("renders workflow approval records with the workflow approval card", () => {
