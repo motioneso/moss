@@ -375,7 +375,6 @@ function ChatModel() {
     : defaultModel;
   const hasWebSearch = selectedModel?.capabilities.includes("web-search") ?? false;
   const canReaffirmSelection =
-    currentOverride !== null &&
     selectedModel?.providerKind === "openai-compatible" &&
     chatSettingsQuery.data?.chat.openCodeModel !== undefined;
 

@@ -85,6 +85,51 @@ test("reaffirms a selected Codex model and clears the saved OpenCode choice", as
   await expect(page.getByRole("button", { name: "Use Codex for chat" })).toHaveCount(0);
 });
 
+test("reaffirms the Codex admin default and clears the saved OpenCode choice", async ({ page }) => {
+  const codex = createMockAiModel("codex", {
+    providerKind: "openai-compatible",
+    providerDisplayName: "Codex",
+    providerModelId: "gpt-5-codex",
+    displayName: "Codex"
+  });
+  let chatSettings: { chat: { responseStyle: "balanced"; openCodeModel?: string } } = {
+    chat: { responseStyle: "balanced", openCodeModel: "muse-spark-1.3-free" }
+  };
+
+  await mockSettingsApi(page);
+  await page.route("**/api/ai/chat-model-override", async (route) => {
+    await route.fulfill({
+      json: {
+        settings: {
+          overrideEnabled: true,
+          currentOverrideModelId: null,
+          effectiveOverrideModelId: null,
+          defaultModel: codex,
+          selectedModel: codex,
+          selectableOverrideModels: [codex]
+        }
+      }
+    });
+  });
+  await page.route("**/api/chat/settings", async (route) => {
+    if (route.request().method() === "PUT") {
+      const input = route.request().postDataJSON() as { chat: typeof chatSettings.chat };
+      chatSettings = { chat: input.chat };
+    }
+    await route.fulfill({ json: chatSettings });
+  });
+
+  await page.goto("/settings?section=assistant");
+  await expect(page.getByRole("heading", { name: "Assistant & AI" })).toBeVisible();
+  await expect(page.getByLabel("Chat model")).toHaveValue("default");
+
+  const reaffirm = page.getByRole("button", { name: "Use Codex for chat" });
+  await expect(reaffirm).toBeVisible();
+  await reaffirm.click();
+  await expect.poll(() => chatSettings.chat.openCodeModel).toBeUndefined();
+  await expect(page.getByRole("button", { name: "Use Codex for chat" })).toHaveCount(0);
+});
+
 test("desktop shell renders grouped IA, merged panes, and history-aware mode changes", async ({
   page
 }) => {
