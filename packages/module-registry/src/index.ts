@@ -561,6 +561,8 @@ export interface BuiltInRouteDependencies {
    * in-process path.
    */
   readonly adoptChatRpcConnection?: (connection: RpcConnection) => void;
+  /** Publishes the chat runtime's ACP initialize check to the Settings probe. */
+  readonly adoptAcpProviderInitialization?: ChatRoutesDependencies["adoptAcpProviderInitialization"];
   /**
    * #1081 H2 — set by `registerBuiltInApiRoutes` and consumed inside `registerChatRoutes`:
    * the same late-bound "adopt" seam as {@link adoptChatRpcConnection}, but publishing the
@@ -636,6 +638,10 @@ export interface BuiltInRouteDependencies {
     readonly cliPresent: (kind: OnboardingProviderKind) => Promise<boolean>;
     readonly testProviderConnection: (
       kind: OnboardingProviderKind
+    ) => Promise<OnboardingProviderCheckResponse>;
+    readonly acpProviderInitialization?: (
+      kind: OnboardingProviderKind,
+      actorUserId: string
     ) => Promise<OnboardingProviderCheckResponse>;
     readonly connectorAccountExists: (scopedDb: DataContextDb) => Promise<boolean>;
   };
@@ -1965,6 +1971,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         chatEngineFactory: deps.chatEngineSelection ? undefined : deps.chatEngineFactory,
         engineSelection: deps.chatEngineSelection,
         adoptChatRpcConnection: deps.adoptChatRpcConnection,
+        adoptAcpProviderInitialization: deps.adoptAcpProviderInitialization,
         // #1081 H2: same late-bound "adopt" seam as adoptChatRpcConnection above, publishing
         // the manager's dropSessionsForProvider back to the composition root.
         adoptDropSessionsForProvider: deps.adoptDropSessionsForProvider,
@@ -3065,6 +3072,12 @@ export function registerBuiltInApiRoutes(
   // late-bound `getRpcConnection` lets a connection that is wired AFTER probe construction still be
   // used (the probes only dereference it at call time, which is strictly post-boot).
   const cliPresent = makeCliPresentProbe(getRpcConnection);
+  let acpProviderInitialization:
+    | ((
+        kind: OnboardingProviderKind,
+        actorUserId: string
+      ) => Promise<OnboardingProviderCheckResponse>)
+    | undefined;
 
   // The factory is resolved asynchronously in onReady (a settings read) on the in-process path, but
   // routes register synchronously. Bridge with a late-bound wrapper: it is only ever invoked when a
@@ -3100,6 +3113,13 @@ export function registerBuiltInApiRoutes(
       env,
       connection: getRpcConnection
     }),
+    acpProviderInitialization: (
+      kind: OnboardingProviderKind,
+      actorUserId: string
+    ): Promise<OnboardingProviderCheckResponse> =>
+      acpProviderInitialization
+        ? acpProviderInitialization(kind, actorUserId)
+        : Promise.resolve({ status: "multiplexer_unavailable" }),
     connectorAccountExists: async (scopedDb: DataContextDb) =>
       (await new ConnectorsRepository().listAccounts(scopedDb)).length > 0
   };
@@ -3241,6 +3261,9 @@ export function registerBuiltInApiRoutes(
     // probes through it and to ensureConnected()/close() it at the composition-root boundary.
     adoptChatRpcConnection: (connection: RpcConnection) => {
       rpcConnection = connection;
+    },
+    adoptAcpProviderInitialization: (check) => {
+      acpProviderInitialization = (provider, actorUserId) => check(actorUserId, provider);
     },
     // #1081 H2: mirrors adoptChatRpcConnection immediately above — publishes the chat session
     // manager's dropSessionsForProvider so the onboarding-install seam (built earlier in this

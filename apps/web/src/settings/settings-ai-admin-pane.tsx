@@ -16,12 +16,14 @@ import { useState } from "react";
 import { Button, IconButton } from "@moss/ui";
 import {
   createAiProvider,
+  getChatSettings,
   getChatModelOverrideSettings,
   listAiModels,
   listAiProviders,
   listAiServiceBindings,
   lookupAiCapabilityRoute,
   putAdminChatModelOverrideEnabled,
+  putChatSettings,
   putAiServiceBinding,
   revokeAiProvider,
   setInstanceDefaultProvider,
@@ -325,7 +327,18 @@ function ProviderCard(props: {
 }
 
 function OpenCodeAcpCard() {
-  const [model, setModel] = useState("default");
+  const queryClient = useQueryClient();
+  const settingsQuery = useQuery({
+    queryKey: queryKeys.chat.settings,
+    queryFn: getChatSettings,
+    retry: false
+  });
+  const settingsMutation = useMutation({
+    mutationFn: putChatSettings,
+    onSuccess: (result) => queryClient.setQueryData(queryKeys.chat.settings, result)
+  });
+  const model = settingsQuery.data?.chat.openCodeModel ?? "default";
+
   return (
     <div className="prov" aria-label="OpenCode ACP provider">
       <div className="prov__head">
@@ -340,9 +353,20 @@ function OpenCodeAcpCard() {
       <div className="prov__edit">
         <Field
           label="Chat model"
-          hint="The ACP agent may replace this with an advertised model when the session initializes."
+          hint="Saved for the next OpenCode ACP session; the agent applies it when it advertises a model choice."
         >
-          <Select value={model} onChange={(event) => setModel(event.target.value)}>
+          <Select
+            value={model}
+            disabled={settingsQuery.isLoading || settingsMutation.isPending}
+            onChange={(event) =>
+              settingsMutation.mutate({
+                chat: {
+                  responseStyle: settingsQuery.data?.chat.responseStyle ?? "balanced",
+                  openCodeModel: event.target.value as "default" | "muse-spark-1.3-free"
+                }
+              })
+            }
+          >
             <option value="default">Login default</option>
             <option value="muse-spark-1.3-free">Muse Spark 1.3 free</option>
           </Select>
@@ -865,7 +889,7 @@ export function AiProvidersPane() {
       ) : null}
       <Note icon={<Terminal size={13} aria-hidden="true" />}>
         OpenCode uses the ACP chat path. Its agent reports the available model choice when the
-        session initializes.
+        session initializes, and the saved choice is passed into the next ACP launch.
       </Note>
       {/* #874: Voice (STT) is its own dedicated admin section, independent of the chat providers. */}
       <VoiceConfigGroup />

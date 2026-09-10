@@ -251,7 +251,12 @@ function Persona({ who }: { readonly who: string }) {
         options={["Concise", "Balanced", "Detailed"]}
         onChange={(v) =>
           chatSettingsMutation.mutate({
-            chat: { responseStyle: v.toLowerCase() as ChatResponseStyle }
+            chat: {
+              responseStyle: v.toLowerCase() as ChatResponseStyle,
+              ...(chatSettingsQuery.data?.chat.openCodeModel
+                ? { openCodeModel: chatSettingsQuery.data.chat.openCodeModel }
+                : {})
+            }
           })
         }
       />

@@ -12,12 +12,14 @@ import { useState } from "react";
 
 import { Button } from "@moss/ui";
 import { refreshAiProviderModels } from "../api/client.js";
+import { checkOnboardingProvider } from "../api/onboarding-connect-client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { readError } from "./settings-types.js";
 import { AddModelForm, CAP_SHORT, EditModelForm, TIERS } from "./settings-ai-edit-model-form.js";
 import type {
   AiConfiguredModelDto,
   AiProviderConfigDto,
+  OnboardingProviderKind,
   RefreshAiProviderModelsResponse
 } from "@moss/shared";
 
@@ -150,12 +152,13 @@ export function ProviderModels(props: {
   const [refreshOutcome, setRefreshOutcome] = useState<string | null>(null);
   const initializationQuery = useQuery({
     queryKey: queryKeys.ai.providerInitialization(provider.id),
-    queryFn: () => refreshAiProviderModels(provider.id),
-    enabled: provider.authMethod === "cli",
+    queryFn: () => checkOnboardingProvider(provider.providerKind as OnboardingProviderKind),
+    enabled:
+      provider.authMethod === "cli" &&
+      ["anthropic", "openai-compatible", "google"].includes(provider.providerKind),
     staleTime: 60_000,
     retry: false
   });
-
   const refreshMutation = useMutation({
     mutationFn: () => refreshAiProviderModels(provider.id),
     onSuccess: (result) => {
@@ -169,12 +172,14 @@ export function ProviderModels(props: {
   });
   const initializationOutcome =
     refreshOutcome ??
-    (initializationQuery.data
-      ? describeRefreshOutcome(initializationQuery.data)
-      : initializationQuery.isError
-        ? "Could not reach the provider"
-        : null);
-
+    (initializationQuery.data?.status === "needs_login"
+      ? "Not logged in"
+      : initializationQuery.data?.status === "multiplexer_unavailable" ||
+          initializationQuery.data?.status === "not_installed"
+        ? "The sign-in helper is not running"
+        : initializationQuery.data?.status === "error" || initializationQuery.isError
+          ? "Could not reach the provider"
+          : null);
   return (
     <div className="prov__models">
       <div className="prov__modelshd">

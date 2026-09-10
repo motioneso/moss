@@ -11,6 +11,9 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   createAiModel: vi.fn(),
   updateAiModel: vi.fn()
 }));
+vi.mock("../../apps/web/src/api/onboarding-connect-client.js", () => ({
+  checkOnboardingProvider: vi.fn(async () => ({ status: "ready" }))
+}));
 
 import { ProviderModels } from "../../apps/web/src/settings/settings-ai-provider-models.js";
 import type { AiConfiguredModelDto, AiProviderConfigDto } from "@moss/shared";
@@ -89,7 +92,7 @@ function chatTag(renderer: ReactTestRenderer) {
 }
 
 describe("ProviderModels chat tag", () => {
-  it("checks a CLI provider at initialization and surfaces a refused sign-in", async () => {
+  it("does not infer ACP login state from the model-list refresh", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const clientModule = await import("../../apps/web/src/api/client.js");
     vi.mocked(clientModule.refreshAiProviderModels).mockResolvedValueOnce({
@@ -112,11 +115,22 @@ describe("ProviderModels chat tag", () => {
         )
       );
     });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(renderer.root.findAll((node) => node.props?.role === "status")).toHaveLength(0);
+    expect(clientModule.refreshAiProviderModels).not.toHaveBeenCalled();
+    const onboardingClient = await import("../../apps/web/src/api/onboarding-connect-client.js");
+    expect(onboardingClient.checkOnboardingProvider).toHaveBeenCalledWith("openai-compatible");
+  });
+
+  it("shows ACP initialization refusal as not logged in", async () => {
+    const onboardingClient = await import("../../apps/web/src/api/onboarding-connect-client.js");
+    vi.mocked(onboardingClient.checkOnboardingProvider).mockResolvedValueOnce({
+      status: "needs_login"
     });
+    const { renderer } = await render([], vi.fn(), {
+      ...provider,
+      authMethod: "cli"
+    } as AiProviderConfigDto);
     expect(renderer.root.findByProps({ role: "status" }).children.join(" ")).toBe("Not logged in");
-    expect(clientModule.refreshAiProviderModels).toHaveBeenCalledWith("p1");
   });
 
   it("shows when the ACP provider keeps the login's model default", async () => {

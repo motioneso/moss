@@ -110,6 +110,8 @@ export interface EngineLaunchOpts {
    * omit. See rpc-contract.ts RpcLaunchParams.model.
    */
   readonly model?: string;
+  /** Saved OpenCode ACP card choice, applied after session/new when the agent advertises a model option. */
+  readonly acpModel?: string;
   /**
    * #2228: let the CLI use its own web search tool for this launch and report the pages it used
    * as `sources` on the tool records. Off by default: chat's ordinary launches route search

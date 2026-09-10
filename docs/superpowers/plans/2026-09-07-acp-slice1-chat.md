@@ -324,6 +324,21 @@ Task 9 is unchanged in content and keeps its full gate, which runs in a session 
 - **App map:** `aiproviders` entry: login-check wording, model-choice note, OpenCode.
 - **Gate:** the four checks; `pnpm vitest run packages/chat apps/web`; full gate via `verify-gate`.
 
+**Task 9 amendment applied (Ben, 2026-09-10).** The settled head has no bridge implementation that
+is exclusive to drawer chat: every surviving legacy engine has a named slice-2 caller. The retained
+caller map is: `structured-engine-selection.ts` → `packages/cli-runner/src/engine-host.ts` and
+`packages/module-registry/src/chat-multiplexer.ts`; `module-build-cli-engine.ts`,
+`module-build-cli-engine-opts.ts`, `module-build-launch-commands.ts`, and
+`module-build-codex-exec-session.ts` → the cli-runner host and module-build runtime;
+`structured-claude-engine.ts` and `structured-gemini-engine.ts` → the cli-runner host and
+`CliStructuredAdapter`; `persistent-claude-permission-hook.ts` → persistent and structured
+launches; and `persistent-runtime-*` plus the engine types/configuration → module chat, module
+builds, and unattended callers. No file is deleted because deleting any of these would cross the
+approved slice boundary; the retired drawer bridge reaches ACP through `selectEngineFactory`.
+The OpenCode model choice is persisted in the owner's chat settings and passed through the live
+session launch to ACP after `session/new`, so it survives a Settings remount and affects the next
+ACP session when the agent advertises that option.
+
 ### Task 10. Live proof and slice exit (Prover, not Builder)
 
 - **Proof:** on dev, "add lunch with Sam on Thursday at noon" in the drawer, the approval card

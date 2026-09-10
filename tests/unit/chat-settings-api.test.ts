@@ -22,6 +22,15 @@ describe("chat settings api", () => {
     });
   });
 
+  it("keeps the saved OpenCode ACP model with chat settings", () => {
+    expect(
+      normalizeChatSettings({ responseStyle: "balanced", openCodeModel: "muse-spark-1.3-free" })
+    ).toEqual({ responseStyle: "balanced", openCodeModel: "muse-spark-1.3-free" });
+    expect(normalizeChatSettings({ responseStyle: "balanced", openCodeModel: "other" })).toEqual({
+      responseStyle: "balanced"
+    });
+  });
+
   it("exports a shared preference key", () => {
     expect(CHAT_SETTINGS_PREFERENCE_KEY).toBe("chat.settings.v1");
   });

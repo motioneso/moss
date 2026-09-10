@@ -158,6 +158,11 @@ export interface OnboardingProbes {
   readonly testProviderConnection: (
     kind: OnboardingProviderKind
   ) => Promise<OnboardingProviderCheckResponse>;
+  /** ACP adapter initialize/session-new check used by the Settings provider cards. */
+  readonly acpProviderInitialization?: (
+    kind: OnboardingProviderKind,
+    actorUserId: string
+  ) => Promise<OnboardingProviderCheckResponse>;
   /** Connector-account existence — a scoped read (needs the request's RLS scope). */
   readonly connectorAccountExists: (scopedDb: DataContextDb) => Promise<boolean>;
 }
@@ -626,7 +631,9 @@ export function registerOnboardingRoutes(
           await dependencies.assertBootstrapOwnerAdminUser(scopedDb, accessContext.actorUserId);
         });
 
-        return await probes.testProviderConnection(body.providerKind);
+        return await (probes.acpProviderInitialization
+          ? probes.acpProviderInitialization(body.providerKind, accessContext.actorUserId)
+          : probes.testProviderConnection(body.providerKind));
       } catch (error) {
         return dependencies.handleRouteError(error, reply);
       }

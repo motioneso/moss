@@ -35,9 +35,12 @@ export interface PrivateThreadState {
 
 export interface ChatPersistencePort {
   /** The active "chat" provider+model for this user (router-selected). */
-  resolveActiveProvider(
-    actorUserId: string
-  ): Promise<{ provider: ProviderKind; model: string; executionMode?: AiProviderExecutionMode }>;
+  resolveActiveProvider(actorUserId: string): Promise<{
+    provider: ProviderKind;
+    model: string;
+    executionMode?: AiProviderExecutionMode;
+    acpModel?: string;
+  }>;
   /** Prior stored turns split into recent verbatim turns + older rolling summary. */
   listPriorTurns(
     actorUserId: string,

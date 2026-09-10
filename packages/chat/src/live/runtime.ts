@@ -6,6 +6,10 @@
  * The engineFactory is injectable so integration tests can swap in an in-memory
  * fake engine (no real tmux / `claude` binary). Everything else is real.
  */
+import { randomUUID } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { AiRepository, createRealTmuxIo, type Multiplexer, type ProviderKind } from "@moss/ai";
 import type { AcpPermissionDecider } from "@moss/acp";
 import { resolveEffectiveTimezone } from "../locale-utils.js";
@@ -24,6 +28,7 @@ import {
   normalizeChatSettings,
   renderChatResponseStyleInstruction,
   renderPersonaText,
+  type OnboardingProviderCheckResponse,
   type AiProviderExecutionMode
 } from "@moss/shared";
 import type { PgBoss } from "pg-boss";
@@ -524,6 +529,11 @@ export interface ChatSessionRuntime {
   readonly manager: ChatSessionManager;
   /** Resolve the acting user's display name for persona rendering. */
   resolveUserName(actorUserId: string): Promise<string>;
+  /** Opens the ACP adapter and runs its initialize/session-new checks for Settings. */
+  checkProviderInitialization(
+    actorUserId: string,
+    provider: ProviderKind
+  ): Promise<OnboardingProviderCheckResponse>;
   /**
    * #342 — the shared RPC connection when the cli-runner socket path was selected (else undefined, on
    * the in-process/host path). The composition root may `ensureConnected()` it on boot so the §5.3
@@ -558,6 +568,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     aiRepository: new AiRepository(),
     boss: deps.boss,
     connectorSyncAt: deps.connectorSyncAt,
+    chatPreferences: deps.chatPreferences,
     localePreferences: deps.localePreferences
   });
 
@@ -719,9 +730,43 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
   return {
     manager,
     resolveUserName: (actorUserId) => persistence.resolveUserName(actorUserId),
+    checkProviderInitialization: (actorUserId, provider) =>
+      checkProviderInitialization(engineFactory, actorUserId, provider),
     connection,
     shutdown
   };
+}
+
+async function checkProviderInitialization(
+  engineFactory: ChatEngineFactory,
+  actorUserId: string,
+  provider: ProviderKind
+): Promise<OnboardingProviderCheckResponse> {
+  const checkId = randomUUID().replaceAll("-", "");
+  const sessionKey = `settings-check-${checkId}`;
+  const projectId = `settings-check-${checkId}`;
+  const neutralDir = await mkdtemp(join(resolveChatHome(), "provider-check-"));
+  const personaPath = join(neutralDir, "persona.md");
+  await writeFile(personaPath, "You are running a Moss provider initialization check.", "utf8");
+  let engine: CliChatEngine | null = null;
+  try {
+    engine = await engineFactory(provider, sessionKey, {
+      conversationId: projectId,
+      userId: actorUserId
+    });
+    await engine.launch({ neutralDir, personaPath });
+    return { status: "ready" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return /auth[_ -]?required|authentication required|not logged in|sign-in|login/i.test(message)
+      ? { status: "needs_login" }
+      : error instanceof CliChatUnavailableError
+        ? { status: "multiplexer_unavailable" }
+        : { status: "error" };
+  } finally {
+    await engine?.kill().catch(() => undefined);
+    await rm(neutralDir, { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 /**

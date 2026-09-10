@@ -148,7 +148,7 @@ export class ChatSessionManager {
     surface: ChatSurface
   ): Promise<UserSession> {
     const sessionKey = surfaceSessionKey(actorUserId, surface);
-    const { provider, model, executionMode } =
+    const { provider, model, executionMode, acpModel } =
       await this.deps.persistence.resolveActiveProvider(actorUserId);
     let threadState = await this.deps.persistence.getCurrentThreadState?.(actorUserId, surface);
     if (!threadState && this.deps.persistence.getCurrentThreadState) {
@@ -175,6 +175,7 @@ export class ChatSessionManager {
     };
     const engine = await this.deps.engineFactory(provider, sessionKey, {
       executionMode,
+      ...(acpModel ? { acpModel } : {}),
       ...(threadState?.id ? { conversationId: threadState.id, userId: actorUserId } : {}),
       ...(mcpConfig?.token && this.deps.acpPermissionDeciderForToken
         ? { acpPermissionDecider: this.deps.acpPermissionDeciderForToken(mcpConfig.token) }

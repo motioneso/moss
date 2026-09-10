@@ -57,6 +57,7 @@ import type { PassiveMemoryGraphRecallPort } from "./live/passive-retrieval.js";
 import { createChatSessionRuntime, type ChatEngineFactory } from "./live/runtime.js";
 import type {
   CreateChatSessionRuntimeDeps,
+  ChatSessionRuntime,
   PersonaPreferencesPort,
   RpcConnection
 } from "./live/runtime.js";
@@ -146,6 +147,10 @@ export interface ChatRoutesDependencies {
    * the in-process path (the runtime exposes no connection).
    */
   readonly adoptChatRpcConnection?: (connection: RpcConnection) => void;
+  /** Publishes the ACP initialize check for the admin provider status route. */
+  readonly adoptAcpProviderInitialization?: (
+    check: ChatSessionRuntime["checkProviderInitialization"]
+  ) => void;
   /**
    * #1081 H2 — same late-bound "adopt" seam as {@link adoptChatRpcConnection}, but for the
    * chat session manager itself (built inside this function, AFTER the composition root
@@ -369,6 +374,7 @@ export function registerChatRoutes(
   if (runtime.connection) {
     dependencies.adoptChatRpcConnection?.(runtime.connection);
   }
+  dependencies.adoptAcpProviderInitialization?.(runtime.checkProviderInitialization);
 
   // #1081 H2: publish the session manager's drop-by-provider method back to the composition
   // root (same "adopt" seam as above), unconditionally — unlike the RPC connection,

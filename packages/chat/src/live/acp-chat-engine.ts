@@ -521,7 +521,10 @@ export class AcpChatEngine implements CliChatEngine {
       // ACP config options are set after session/new and before any prompt, including the
       // explicit "default" binding. The client records a mismatch without silently changing
       // the configured model list.
-      await this.client.setModelForChat(this.handle, options.model ?? "default");
+      await this.client.setModelForChat(
+        this.handle,
+        options.acpModel ?? options.model ?? "default"
+      );
       (this.opts.log ?? console.info)(
         `[acp-chat] session opened conversation=${this.opts.projectId} provider=${kind}`
       );
