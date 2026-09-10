@@ -252,6 +252,30 @@ describe("task 8a Architect regressions", () => {
     };
 
     const manager = new ChatSessionManager(deps);
+    const serializedSeen: TranscriptRecord[] = [];
+    const writeOrder: string[] = [];
+    let approvalInjected = false;
+    manager.subscribe("user-1", (record) => {
+      const snapshot = serializeSubscriberRecord(record);
+      serializedSeen.push(snapshot);
+      if (snapshot.kind === "tool" && !approvalInjected) {
+        approvalInjected = true;
+        writeOrder.push("tool-write-held");
+        manager.injectRecord("user-1", {
+          kind: "action_result",
+          actionRequestId: "tc-1",
+          toolName: "calendar.list",
+          outcome: "executed",
+          decidedBy: "person",
+          durationMs: 1500,
+          text: "Allowed"
+        });
+        writeOrder.push("approval-written");
+      } else if (snapshot.kind === "result" && approvalInjected) {
+        // The manager has upserted the buffered tool before the next engine record is emitted.
+        writeOrder.push("tool-write-released");
+      }
+    });
 
     tunnel.onPrompt = (t, promptId) => {
       // 1. Thought
@@ -280,15 +304,6 @@ describe("task 8a Architect regressions", () => {
         toolCall: { toolCallId: "tc-1", title: "calendar.list" },
         options: [{ optionId: "opt-1", name: "Allow", kind: "allow_once" }]
       });
-      manager.injectRecord("user-1", {
-        kind: "action_result",
-        actionRequestId: "tc-1",
-        toolName: "calendar.list",
-        outcome: "executed",
-        decidedBy: "person",
-        durationMs: 1500,
-        text: "Allowed"
-      });
       // Reply
       t.emitUpdate({
         sessionUpdate: "agent_message_chunk",
@@ -311,17 +326,23 @@ describe("task 8a Architect regressions", () => {
     });
 
     const activity = recorded.opts?.activityRecords ?? [];
+    expect(writeOrder).toEqual(["tool-write-held", "approval-written", "tool-write-released"]);
+    expect(
+      serializedSeen
+        .filter((record) => record.kind === "tool" || record.kind === "approved")
+        .map((record) => record.kind)
+    ).toEqual(["tool", "approved"]);
     expect(activity.map((r) => r.kind)).toEqual([
-      "action_result",
-      "approved",
       "thought",
       "tool",
-      "result"
+      "result",
+      "action_result",
+      "approved"
     ]);
-    expect(activity[2]?.text).toBe("Planning actions");
-    expect(activity[3]?.text).toBe("calendar.list, today");
-    expect(activity[4]?.text).toBe("Found 2 events");
-    expect(activity[1]?.text).toMatch(/calendar\.list, approved by you at \d\d:\d\d after 2 s/);
+    expect(activity[0]?.text).toBe("Planning actions");
+    expect(activity[1]?.text).toBe("calendar.list, today");
+    expect(activity[2]?.text).toBe("Found 2 events");
+    expect(activity[4]?.text).toMatch(/calendar\.list, approved by you at \d\d:\d\d after 2 s/);
 
     // Elapsed alone when usage absent
     const tunnel2 = new MockTunnel();
@@ -329,19 +350,61 @@ describe("task 8a Architect regressions", () => {
     const persistence2 = new FakePersistence();
     const deps2: ChatSessionManagerDeps = {
       ...deps,
-      engineFactory: (provider, sessionKey) =>
+      engineFactory: (provider, sessionKey, options) =>
         new AcpChatEngine(provider, sessionKey, {
           tunnel: tunnel2,
           userId: "user-1",
-          projectId: "p1"
+          projectId: "p1",
+          nextSequence: options?.nextSequence
         }),
       persistence: persistence2
     };
     const manager2 = new ChatSessionManager(deps2);
+    const serializedMirror: TranscriptRecord[] = [];
+    manager2.subscribe("user-1", (record) =>
+      serializedMirror.push(serializeSubscriberRecord(record))
+    );
+    tunnel2.onPrompt = (t, promptId) => {
+      // Mirror case: the approval is created first, then the engine announces the tool.
+      manager2.injectRecord("user-1", {
+        kind: "action_result",
+        actionRequestId: "mirror-1",
+        toolName: "calendar.list",
+        outcome: "executed",
+        decidedBy: "person",
+        durationMs: 1500,
+        text: "Allowed"
+      });
+      t.emitUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "mirror-1",
+        title: "calendar.list",
+        name: "calendar.list",
+        rawInput: { window: "today" }
+      });
+      t.emitUpdate({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "Mirror finished." }
+      });
+      t.emitPromptResult(promptId);
+    };
     await manager2.submitTurn("user-1", "Ben", "Hello");
     expect(persistence2.recorded).toHaveLength(1);
     expect(typeof persistence2.recorded[0]?.opts?.elapsedMs).toBe("number");
     expect(persistence2.recorded[0]?.opts?.usage).toBeUndefined();
+    const mirrorActivity = persistence2.recorded[0]?.opts?.activityRecords ?? [];
+    expect(mirrorActivity.filter((r) => r.kind === "approved" || r.kind === "tool")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "approved" }),
+        expect.objectContaining({ kind: "tool" })
+      ])
+    );
+    expect(
+      mirrorActivity.filter((r) => r.kind === "approved" || r.kind === "tool").map((r) => r.kind)
+    ).toEqual(["approved", "tool"]);
+    expect(
+      serializedMirror.filter((r) => r.kind === "approved" || r.kind === "tool").map((r) => r.kind)
+    ).toEqual(["approved", "tool"]);
 
     await engineRef?.kill();
   });

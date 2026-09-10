@@ -27,6 +27,7 @@ import type { ActionAuditAgentSummary, ActionAuditInputSummary } from "@moss/sha
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AiRepository } from "../repository.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
+import { actionResultRecord } from "./action-result-record.js";
 import { APPROVAL_REFUSED_REASON } from "./native-tool-guard.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type { SessionNotifier } from "./types.js";
@@ -274,34 +275,34 @@ export async function requestAcpBuiltInPermission(
       humanHoldDurationMs = holdDurationMs;
       deps.notifier.emit(
         chatSessionId,
-        outcome === "confirmed"
-          ? {
-              kind: "action_result",
-              actionRequestId: action.id,
-              toolName,
-              outcome: "allowed",
-              decidedBy: "person",
-              holdDurationMs
-            }
-          : {
-              kind: "action_result",
-              actionRequestId: action.id,
-              toolName,
-              outcome: "denied",
-              decidedBy:
-                outcome === "timeout"
-                  ? "timeout"
-                  : outcome === "cancelled"
-                    ? "cancelled"
-                    : "person",
-              holdDurationMs,
-              reason:
-                outcome === "timeout"
-                  ? "Action timed out."
-                  : outcome === "cancelled"
-                    ? "Action cancelled."
-                    : APPROVAL_REFUSED_REASON
-            }
+        actionResultRecord(
+          outcome === "confirmed"
+            ? {
+                actionRequestId: action.id,
+                toolName,
+                outcome: "allowed",
+                decidedBy: "person",
+                holdDurationMs
+              }
+            : {
+                actionRequestId: action.id,
+                toolName,
+                outcome: "denied",
+                decidedBy:
+                  outcome === "timeout"
+                    ? "timeout"
+                    : outcome === "cancelled"
+                      ? "cancelled"
+                      : "person",
+                holdDurationMs,
+                reason:
+                  outcome === "timeout"
+                    ? "Action timed out."
+                    : outcome === "cancelled"
+                      ? "Action cancelled."
+                      : APPROVAL_REFUSED_REASON
+              }
+        )
       );
       await writeAcpAuditLine(deps, access, chatSessionId, {
         toolName,
@@ -326,16 +327,18 @@ export async function requestAcpBuiltInPermission(
   });
 
   const holdDurationMs = result.asked ? humanHoldDurationMs : null;
-  if (!result.asked) {
-    deps.notifier.emit(chatSessionId, {
-      kind: "action_result",
-      actionRequestId: builtIn.toolCallId,
-      toolName: builtIn.toolName ?? "(unnamed)",
-      outcome: result.decision === "allow" ? "allowed" : "denied",
-      decidedBy: "policy",
-      holdDurationMs: null,
-      ...(result.reason ? { reason: result.reason } : {})
-    });
+  if (!result.asked && result.decision === "deny") {
+    deps.notifier.emit(
+      chatSessionId,
+      actionResultRecord({
+        actionRequestId: builtIn.toolCallId,
+        toolName: builtIn.toolName ?? "(unnamed)",
+        outcome: "denied",
+        decidedBy: "policy",
+        holdDurationMs: null,
+        ...(result.reason ? { reason: result.reason } : {})
+      })
+    );
   }
   if (!result.asked && result.decision === "deny" && result.reason) {
     // Refused with no row, but never silently: the audit line names the agent,

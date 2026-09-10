@@ -18,7 +18,6 @@ import {
 import { renderPersona } from "./persona.js";
 import { renderMemorySeedBlock } from "./recall-seed.js";
 import type { ActionResultMetadata, CliChatEngine, TranscriptRecord } from "./types.js";
-import { formatApprovalRecord, formatRefusalRecord } from "./acp-chat-engine.js";
 import type { ReapReason } from "./provider-runtime.js";
 import {
   applyRemoteReap,
@@ -26,6 +25,7 @@ import {
   countSubscribersFor,
   delay,
   drainEngine,
+  injectActionResultRecord,
   sweepOrphanedPrivateThreads,
   upsertActivityRecord,
   waitForNewToolsListObservation
@@ -71,7 +71,11 @@ interface UserSession {
   transcriptOffset: number;
   incognito: boolean;
   readonly seededContextKeys: Set<string>;
-  /** #2164 — token used to check MCP tools-list readiness after bounded-fallback turns. */
+  /**
+   * #2164 — the token this session's engine was launched with, kept so a bounded-fallback
+   * turn can check MCP tools-list readiness after the fact (see `mcpToken` usage in `runTurn`).
+   * Undefined when no MCP client was configured for this session at all.
+   */
   readonly mcpToken?: string;
   readonly startsToolClientPerTurn: boolean;
 }
@@ -98,7 +102,9 @@ export class ChatSessionManager {
   private readonly pollMs: number;
   /** #456 — idle/heartbeat watchdog window; 0 disables (tests only). */
   private readonly idleWatchdogMs: number;
+  /** #342: RPC engines own replay submit/drain; in-process engines do it here. */
   private readonly serverOwnsDrain: boolean;
+  /** #342: serializes reconciliation and idle reaping, which both mutate sessions/tokens. */
   private maintenanceMutex: Promise<void> = Promise.resolve();
 
   constructor(private readonly deps: ChatSessionManagerDeps) {
@@ -611,6 +617,7 @@ export class ChatSessionManager {
     } finally {
       this.turnActivityBySession.delete(sessionKey);
       this.actionResultsBySession.delete(sessionKey);
+      this.sequenceBySession.delete(sessionKey);
       this.turnControllers.delete(sessionKey);
     }
   }
@@ -779,66 +786,22 @@ export class ChatSessionManager {
     };
   }
 
-  /** Inject a gateway record into the live transcript stream. */
+  /**
+   * Inject a synthetic record into the fan-out for the given user. Used by the
+   * MCP gateway notifier (Phase 2) to push action_request and action_result
+   * records into the live transcript stream without going through the engine.
+   */
   injectRecord(actorUserId: string, record: TranscriptRecord, surface?: string): void {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
     if (record.kind === "action_result" && record.outcome) {
-      const results = this.actionResultsBySession.get(sessionKey);
-      if (results && results.length < 20) {
-        results.push({
-          kind: "action_result",
-          text: (record.text ?? "").slice(0, 200),
-          ...(record.toolName ? { toolName: record.toolName.slice(0, 120) } : {}),
-          outcome: record.outcome
-        });
-      }
-      // Preserve the gateway record exactly; the approval line is an additional derived record.
-      this.emit(actorUserId, chatSurface, record);
-      const ordered =
-        record.sequence === undefined
-          ? { ...record, sequence: (this.sequenceBySession.get(sessionKey) ?? 0) + 1 }
-          : record;
-      const currentSequence = this.sequenceBySession.get(sessionKey) ?? 0;
-      if (ordered.sequence !== undefined && ordered.sequence > currentSequence) {
-        this.sequenceBySession.set(sessionKey, ordered.sequence);
-      }
-      const turnRecords = this.turnActivityBySession.get(sessionKey);
-      if (turnRecords) upsertActivityRecord(turnRecords, ordered);
-
-      const toolName = record.toolName ?? "tool";
-      const decidedBy = record.decidedBy ?? "person";
-      const holdDurationMs = record.durationMs;
-      const durationSec =
-        holdDurationMs != null ? Math.max(1, Math.round(holdDurationMs / 1000)) : undefined;
-      let mappedRecord: TranscriptRecord | null = null;
-      const approvalSequence =
-        (this.sequenceBySession.get(sessionKey) ?? ordered.sequence ?? 0) + 1;
-      this.sequenceBySession.set(sessionKey, approvalSequence);
-      if (decidedBy === "policy") {
-        if (record.outcome === "denied") {
-          mappedRecord = formatRefusalRecord({
-            toolName,
-            reason: record.reason,
-            sequence: approvalSequence
-          });
-        }
-      } else {
-        const approved = decidedBy === "person" && record.outcome !== "denied";
-        mappedRecord = formatApprovalRecord({
-          toolName,
-          approved,
-          who: decidedBy === "person" ? "you" : undefined,
-          reason: record.reason,
-          durationSec,
-          durationMs: holdDurationMs,
-          sequence: approvalSequence
-        });
-      }
-      if (mappedRecord) {
-        if (turnRecords) upsertActivityRecord(turnRecords, mappedRecord);
-        this.emit(actorUserId, chatSurface, mappedRecord);
-      }
+      injectActionResultRecord(record, {
+        sessionKey,
+        sequenceBySession: this.sequenceBySession,
+        turnRecords: this.turnActivityBySession.get(sessionKey),
+        actionResults: this.actionResultsBySession.get(sessionKey),
+        emit: (next) => this.emit(actorUserId, chatSurface, next)
+      });
       return;
     }
     this.emit(actorUserId, chatSurface, record);

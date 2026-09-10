@@ -11,7 +11,8 @@ import {
   type ChatSurface
 } from "./chat-surface.js";
 import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
-import type { CliChatEngine, TranscriptRecord } from "./types.js";
+import { formatApprovalRecord, formatRefusalRecord } from "./acp-chat-engine.js";
+import type { ActionResultMetadata, CliChatEngine, TranscriptRecord } from "./types.js";
 
 /** Resolves after `ms` milliseconds. Used for polling backoff during turn/drain loops. */
 export function delay(ms: number): Promise<void> {
@@ -106,6 +107,66 @@ export function upsertActivityRecord(records: TranscriptRecord[], record: Transc
   );
   if (insertion >= 0) records.splice(insertion, 0, record);
   else records.push(record);
+}
+
+/** Inject one gateway result, preserving its live payload and deriving any approval line after it. */
+export function injectActionResultRecord(
+  record: TranscriptRecord,
+  options: {
+    readonly sessionKey: string;
+    readonly sequenceBySession: Map<string, number>;
+    readonly turnRecords?: TranscriptRecord[];
+    readonly actionResults?: ActionResultMetadata[];
+    readonly emit: (record: TranscriptRecord) => void;
+  }
+): void {
+  if (record.kind !== "action_result" || !record.outcome) return;
+  if (options.actionResults && options.actionResults.length < 20) {
+    options.actionResults.push({
+      kind: "action_result",
+      text: (record.text ?? "").slice(0, 200),
+      ...(record.toolName ? { toolName: record.toolName.slice(0, 120) } : {}),
+      outcome: record.outcome
+    });
+  }
+
+  // Pass through the gateway record unchanged before deriving the display line.
+  options.emit(record);
+  const nextSequence = () => {
+    const next = (options.sequenceBySession.get(options.sessionKey) ?? 0) + 1;
+    options.sequenceBySession.set(options.sessionKey, next);
+    return next;
+  };
+  const ordered = record.sequence === undefined ? { ...record, sequence: nextSequence() } : record;
+  const currentSequence = options.sequenceBySession.get(options.sessionKey) ?? 0;
+  if (ordered.sequence !== undefined && ordered.sequence > currentSequence) {
+    options.sequenceBySession.set(options.sessionKey, ordered.sequence);
+  }
+  if (options.turnRecords) upsertActivityRecord(options.turnRecords, ordered);
+
+  const toolName = record.toolName ?? "tool";
+  const decidedBy = record.decidedBy ?? "person";
+  const durationSec =
+    record.durationMs != null ? Math.max(1, Math.round(record.durationMs / 1000)) : undefined;
+  const approvalSequence = nextSequence();
+  const mappedRecord =
+    decidedBy === "policy"
+      ? record.outcome === "denied"
+        ? formatRefusalRecord({ toolName, reason: record.reason, sequence: approvalSequence })
+        : null
+      : formatApprovalRecord({
+          toolName,
+          approved: decidedBy === "person" && record.outcome !== "denied",
+          who: decidedBy === "person" ? "you" : undefined,
+          reason: record.reason,
+          durationSec,
+          durationMs: record.durationMs,
+          sequence: approvalSequence
+        });
+  if (mappedRecord) {
+    if (options.turnRecords) upsertActivityRecord(options.turnRecords, mappedRecord);
+    options.emit(mappedRecord);
+  }
 }
 
 export async function cleanupPrivateSession(

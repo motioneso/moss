@@ -255,9 +255,12 @@ describe("agent built-in permission through the shared approval card", () => {
       holdDurationMs: null
     });
     expect(store.created).toHaveLength(0);
-    expect(store.emitted).toMatchObject([
-      { kind: "action_result", outcome: "denied", decidedBy: "policy" }
-    ]);
+    expect(store.emitted).toHaveLength(1);
+    expect(store.emitted[0]).toMatchObject({
+      kind: "action_result",
+      outcome: "denied",
+      decidedBy: "policy"
+    });
   });
 
   it("refuses a read-mimicking title with no real name and no row", async () => {
@@ -288,9 +291,12 @@ describe("agent built-in permission through the shared approval card", () => {
     });
     expect(store.created).toHaveLength(0);
     expect(awaitResolution).not.toHaveBeenCalled();
-    expect(store.emitted).toMatchObject([
-      { kind: "action_result", outcome: "denied", decidedBy: "policy" }
-    ]);
+    expect(store.emitted).toHaveLength(1);
+    expect(store.emitted[0]).toMatchObject({
+      kind: "action_result",
+      outcome: "denied",
+      decidedBy: "policy"
+    });
   });
 
   it("denies with the shared refusal wording when the hold expires", async () => {
@@ -387,10 +393,7 @@ describe("agent built-in permission through the shared approval card", () => {
       })
     ).resolves.toMatchObject({ decision: "allow", asked: false, holdDurationMs: null });
     expect(store.created).toHaveLength(0);
-    expect(store.emitted).toMatchObject([
-      { kind: "action_result", outcome: "allowed", decidedBy: "policy" },
-      { kind: "action_result", outcome: "allowed", decidedBy: "policy" }
-    ]);
+    expect(store.emitted).toHaveLength(0);
   });
 
   it("refuses the unrecognised with no card row and no retry wording", async () => {

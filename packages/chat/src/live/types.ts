@@ -46,7 +46,7 @@ export interface TranscriptRecord {
   readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
   /** Bounded reason for a non-person decision. */
   readonly reason?: string;
-  /** Live-only structured result for a module-owned inline artifact. */
+  /** Sanitized structured result for a module-owned inline artifact. */
   readonly result?: Record<string, unknown>;
   /** #1310: dot-path tokens into the frontend `queryKeys` object, for `action_result` records whose tool executed. */
   readonly affectsQueryKeys?: readonly string[];
