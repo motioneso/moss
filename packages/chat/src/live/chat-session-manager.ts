@@ -25,7 +25,7 @@ import {
   countSubscribersFor,
   delay,
   drainEngine,
-  flushPendingActionResults,
+  createPendingActionResultFlusher,
   injectActionResultRecord,
   type PendingActionResult,
   sweepOrphanedPrivateThreads,
@@ -369,14 +369,27 @@ export class ChatSessionManager {
       session = await this.ensureSession(actorUserId, userName, undefined, surface);
     }
 
-    // #456 — per-turn stop signal. stopTurn(actorUserId) aborts this; the poll loop checks
-    // signal.aborted after every readNew and breaks cleanly (no error) when set.
+    // #456 — stopTurn(actorUserId) aborts this; the poll loop exits cleanly after each readNew.
     const controller = new AbortController();
     const sessionKey = surfaceSessionKey(actorUserId, surface);
     this.turnControllers.set(sessionKey, controller);
     this.actionResultsBySession.set(sessionKey, []);
     const turnActivityRecords: TranscriptRecord[] = [];
     this.turnActivityBySession.set(sessionKey, turnActivityRecords);
+    let lastDeliveredSequence = 0;
+    const flushPendingInOrder = createPendingActionResultFlusher(
+      this.pendingActionResultsBySession,
+      actorUserId,
+      surface,
+      sessionKey,
+      this.sequenceBySession,
+      turnActivityRecords,
+      this.actionResultsBySession.get(sessionKey),
+      (userId, chatSurface, next) => this.emit(userId, chatSurface, next)
+    );
+    const flushPending = (beforeSequence?: number) => {
+      lastDeliveredSequence = flushPendingInOrder(lastDeliveredSequence, beforeSequence);
+    };
     let turnElapsedMs: number | undefined;
     let turnUsage: ChatTurnUsageDto | undefined;
 
@@ -446,12 +459,12 @@ export class ChatSessionManager {
           offset = result.offset;
           complete = result.complete;
         } catch (error) {
-          // #456 — a killed engine rejects its in-flight readNew. If the user stopped the turn,
-          // break cleanly; otherwise rethrow (a genuine engine failure surfaces to the caller).
+          // #456 — a killed engine rejects readNew; stop exits cleanly, other failures surface.
           if (controller.signal.aborted) {
             stopped = true;
             break;
           }
+          flushPending();
           throw error instanceof CliChatUnavailableError ? error : new Error("readNew failed");
         }
         if (controller.signal.aborted) {
@@ -466,6 +479,7 @@ export class ChatSessionManager {
           session.engine.resetActivityDeadline?.();
         }
         for (const record of records) {
+          if (record.sequence !== undefined) flushPending(record.sequence);
           const rejectionOnly = record.kind === "tool" && !record.toolName && !record.text?.trim();
           if (!rejectionOnly) {
             this.emit(actorUserId, surface, record);
@@ -485,28 +499,21 @@ export class ChatSessionManager {
           }
           if (record.kind === "tool" && record.rejected && record.toolCallId)
             rejectedCallIds.add(record.toolCallId);
+          if (record.sequence !== undefined) {
+            lastDeliveredSequence = Math.max(lastDeliveredSequence, record.sequence);
+          }
         }
-        if (records.length > 0 || complete) {
-          flushPendingActionResults(
-            this.pendingActionResultsBySession,
-            actorUserId,
-            surface,
-            sessionKey,
-            this.sequenceBySession,
-            turnActivityRecords,
-            this.actionResultsBySession.get(sessionKey),
-            (userId, chatSurface, next) => this.emit(userId, chatSurface, next)
-          );
+        if (complete) {
+          flushPending();
+          break;
         }
-        if (complete) break;
-        // #456 — user-driven Stop: the signal aborts mid-turn; break cleanly (no error) so the
-        // turn-in-flight lock releases and the UI returns to input-ready. Persist nothing.
+        flushPending(lastDeliveredSequence + 2);
+        // #456 — user-driven Stop exits cleanly so the turn lock releases; persist nothing.
         if (controller.signal.aborted) {
           stopped = true;
           break;
         }
-        // #456 — idle/heartbeat watchdog: break only when the engine emitted NOTHING for the full
-        // window (an actively-producing turn keeps resetting the deadline). No reply → recordTurn skipped.
+        // #456 — idle watchdog ends only after a full quiet window; active output resets it.
         if (
           this.idleWatchdogMs > 0 &&
           this.deps.clock.now() - lastEmissionAt > this.idleWatchdogMs
@@ -630,6 +637,7 @@ export class ChatSessionManager {
         sourceFreshness: stored?.sourceFreshness
       };
     } finally {
+      flushPending();
       this.turnActivityBySession.delete(sessionKey);
       this.actionResultsBySession.delete(sessionKey);
       this.pendingActionResultsBySession.delete(sessionKey);
@@ -814,13 +822,14 @@ export class ChatSessionManager {
       const currentSequence = this.sequenceBySession.get(sessionKey) ?? 0;
       if (this.turnsInFlight.has(sessionKey)) {
         const recordSequence = record.sequence ?? currentSequence + 1;
-        this.sequenceBySession.set(sessionKey, Math.max(currentSequence, recordSequence));
+        const approvalSequence = Math.max(currentSequence, recordSequence) + 1;
+        this.sequenceBySession.set(sessionKey, approvalSequence);
         let pending = this.pendingActionResultsBySession.get(sessionKey);
         if (!pending) {
           pending = [];
           this.pendingActionResultsBySession.set(sessionKey, pending);
         }
-        pending.push({ record, recordSequence });
+        pending.push({ record, recordSequence, approvalSequence });
         return;
       }
       injectActionResultRecord(record, {

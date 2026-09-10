@@ -8,7 +8,7 @@ import {
   type Clock
 } from "./chat-session-manager.js";
 import { AcpChatEngine, formatResultRecord, formatToolRecord } from "./acp-chat-engine.js";
-import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
+import type { ActionResultMetadata, CliChatEngine, TranscriptRecord } from "./types.js";
 import type { ChatAttachmentDto, ChatTurnUsageDto } from "@moss/shared";
 import type { PersonaFs } from "./persona.js";
 import {
@@ -91,6 +91,33 @@ class FakePersistence implements ChatPersistencePort {
     });
     return { userMessageId: "user-msg-1", assistantMessageId: "asst-msg-1" };
   }
+}
+
+class EmptyThenErrorEngine implements CliChatEngine {
+  readonly provider = "anthropic" as ProviderKind;
+  private reads = 0;
+
+  constructor(private readonly injectResult: () => void) {}
+
+  async launch(): Promise<{ offset: number }> {
+    return { offset: 0 };
+  }
+
+  async submit(): Promise<void> {}
+
+  async readNew(): Promise<{ records: TranscriptRecord[]; offset: number; complete: boolean }> {
+    if (++this.reads === 1) return { records: [], offset: 0, complete: false };
+    this.injectResult();
+    throw new Error("provider failed");
+  }
+
+  async interrupt(): Promise<void> {}
+
+  async isAlive(): Promise<boolean> {
+    return true;
+  }
+
+  async kill(): Promise<void> {}
 }
 
 class MockTunnel implements AcpTunnel {
@@ -219,6 +246,45 @@ class MockTunnel implements AcpTunnel {
 }
 
 describe("task 8a Architect regressions", () => {
+  it("Regression 0: Completed action results survive an empty poll followed by a provider error", async () => {
+    const persistence = new FakePersistence();
+    const clock = new FakeClock();
+    let injectResult = (): void => undefined;
+    const result: TranscriptRecord = {
+      kind: "action_result",
+      actionRequestId: "req-error-1",
+      toolName: "calendar.createEvent",
+      outcome: "executed",
+      decidedBy: "person",
+      text: "Created event",
+      result: { eventId: "event-1" },
+      affectsQueryKeys: ["calendar.events"]
+    };
+    const seen: TranscriptRecord[] = [];
+    const manager = new ChatSessionManager({
+      engineFactory: () => new EmptyThenErrorEngine(() => injectResult()),
+      persistence,
+      personaFs: noopPersonaFs,
+      clock,
+      idleMs: 60_000,
+      neutralBase: "/tmp",
+      persona: "persona",
+      pollMs: 0
+    });
+    injectResult = () => manager.injectRecord("user-1", result);
+    manager.subscribe("user-1", (record) => seen.push(serializeSubscriberRecord(record)));
+
+    await expect(manager.submitTurn("user-1", "Ben", "Run action")).rejects.toThrow(
+      "readNew failed"
+    );
+    expect(seen).toEqual([
+      { kind: "user", text: "Run action" },
+      result,
+      expect.objectContaining({ kind: "approved", toolName: "calendar.createEvent" })
+    ]);
+    expect(persistence.recorded).toHaveLength(0);
+  });
+
   it("Regression 1: Persistence stores 1 thought + 1 tool + 1 result + 1 approval in order + elapsed ms and usage (and elapsed alone when usage absent)", async () => {
     const clock = new FakeClock();
     const persistence = new FakePersistence();
@@ -396,10 +462,10 @@ describe("task 8a Architect regressions", () => {
     );
     expect(
       mirrorActivity.filter((r) => r.kind === "approved" || r.kind === "tool").map((r) => r.kind)
-    ).toEqual(["tool", "approved"]);
+    ).toEqual(["approved", "tool"]);
     expect(
       serializedMirror.filter((r) => r.kind === "approved" || r.kind === "tool").map((r) => r.kind)
-    ).toEqual(["tool", "approved"]);
+    ).toEqual(["approved", "tool"]);
 
     await engineRef?.kill();
   });

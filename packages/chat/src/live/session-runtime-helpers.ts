@@ -188,12 +188,24 @@ export function flushPendingActionResults(
   sequenceBySession: Map<string, number>,
   turnRecords: TranscriptRecord[] | undefined,
   actionResults: ActionResultMetadata[] | undefined,
-  emit: (actorUserId: string, surface: ChatSurface, record: TranscriptRecord) => void
+  emit: (actorUserId: string, surface: ChatSurface, record: TranscriptRecord) => void,
+  beforeSequence?: number
 ): void {
   const pending = pendingBySession.get(sessionKey);
   if (!pending) return;
-  pendingBySession.delete(sessionKey);
-  for (const item of pending) {
+  const ready =
+    beforeSequence === undefined
+      ? pending
+      : pending.filter((item) => item.recordSequence < beforeSequence);
+  if (ready.length === 0) return;
+  if (ready.length === pending.length) pendingBySession.delete(sessionKey);
+  else {
+    pendingBySession.set(
+      sessionKey,
+      pending.filter((item) => item.recordSequence >= beforeSequence!)
+    );
+  }
+  for (const item of ready) {
     injectActionResultRecord(item.record, {
       sessionKey,
       sequenceBySession,
@@ -204,6 +216,41 @@ export function flushPendingActionResults(
       emit: (next) => emit(actorUserId, surface, next)
     });
   }
+}
+
+export function createPendingActionResultFlusher(
+  pendingBySession: Map<string, PendingActionResult[]>,
+  actorUserId: string,
+  surface: ChatSurface,
+  sessionKey: string,
+  sequenceBySession: Map<string, number>,
+  turnRecords: TranscriptRecord[] | undefined,
+  actionResults: ActionResultMetadata[] | undefined,
+  emit: (actorUserId: string, surface: ChatSurface, record: TranscriptRecord) => void
+): (lastDeliveredSequence: number, beforeSequence?: number) => number {
+  return (lastDeliveredSequence, beforeSequence) => {
+    const pending = pendingBySession.get(sessionKey) ?? [];
+    const ready =
+      beforeSequence === undefined
+        ? pending
+        : pending.filter((item) => item.recordSequence < beforeSequence);
+    if (ready.length === 0) return lastDeliveredSequence;
+    flushPendingActionResults(
+      pendingBySession,
+      actorUserId,
+      surface,
+      sessionKey,
+      sequenceBySession,
+      turnRecords,
+      actionResults,
+      emit,
+      beforeSequence
+    );
+    return ready.reduce(
+      (max, item) => Math.max(max, item.approvalSequence ?? item.recordSequence),
+      lastDeliveredSequence
+    );
+  };
 }
 
 export async function cleanupPrivateSession(
