@@ -25,7 +25,9 @@ import {
   countSubscribersFor,
   delay,
   drainEngine,
+  flushPendingActionResults,
   injectActionResultRecord,
+  type PendingActionResult,
   sweepOrphanedPrivateThreads,
   upsertActivityRecord,
   waitForNewToolsListObservation
@@ -99,6 +101,7 @@ export class ChatSessionManager {
   private readonly actionResultsBySession = new Map<string, ActionResultMetadata[]>();
   private readonly turnActivityBySession = new Map<string, TranscriptRecord[]>();
   private readonly sequenceBySession = new Map<string, number>();
+  private readonly pendingActionResultsBySession = new Map<string, PendingActionResult[]>();
   private readonly pollMs: number;
   /** #456 — idle/heartbeat watchdog window; 0 disables (tests only). */
   private readonly idleWatchdogMs: number;
@@ -483,6 +486,18 @@ export class ChatSessionManager {
           if (record.kind === "tool" && record.rejected && record.toolCallId)
             rejectedCallIds.add(record.toolCallId);
         }
+        if (records.length > 0 || complete) {
+          flushPendingActionResults(
+            this.pendingActionResultsBySession,
+            actorUserId,
+            surface,
+            sessionKey,
+            this.sequenceBySession,
+            turnActivityRecords,
+            this.actionResultsBySession.get(sessionKey),
+            (userId, chatSurface, next) => this.emit(userId, chatSurface, next)
+          );
+        }
         if (complete) break;
         // #456 — user-driven Stop: the signal aborts mid-turn; break cleanly (no error) so the
         // turn-in-flight lock releases and the UI returns to input-ready. Persist nothing.
@@ -617,6 +632,7 @@ export class ChatSessionManager {
     } finally {
       this.turnActivityBySession.delete(sessionKey);
       this.actionResultsBySession.delete(sessionKey);
+      this.pendingActionResultsBySession.delete(sessionKey);
       this.sequenceBySession.delete(sessionKey);
       this.turnControllers.delete(sessionKey);
     }
@@ -795,6 +811,18 @@ export class ChatSessionManager {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
     if (record.kind === "action_result" && record.outcome) {
+      const currentSequence = this.sequenceBySession.get(sessionKey) ?? 0;
+      if (this.turnsInFlight.has(sessionKey)) {
+        const recordSequence = record.sequence ?? currentSequence + 1;
+        this.sequenceBySession.set(sessionKey, Math.max(currentSequence, recordSequence));
+        let pending = this.pendingActionResultsBySession.get(sessionKey);
+        if (!pending) {
+          pending = [];
+          this.pendingActionResultsBySession.set(sessionKey, pending);
+        }
+        pending.push({ record, recordSequence });
+        return;
+      }
       injectActionResultRecord(record, {
         sessionKey,
         sequenceBySession: this.sequenceBySession,

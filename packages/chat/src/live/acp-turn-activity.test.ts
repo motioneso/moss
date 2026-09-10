@@ -253,52 +253,48 @@ describe("task 8a Architect regressions", () => {
 
     const manager = new ChatSessionManager(deps);
     const serializedSeen: TranscriptRecord[] = [];
-    const writeOrder: string[] = [];
-    let approvalInjected = false;
     manager.subscribe("user-1", (record) => {
       const snapshot = serializeSubscriberRecord(record);
       serializedSeen.push(snapshot);
-      if (snapshot.kind === "tool" && !approvalInjected) {
-        approvalInjected = true;
-        writeOrder.push("tool-write-held");
-        manager.injectRecord("user-1", {
-          kind: "action_result",
-          actionRequestId: "tc-1",
-          toolName: "calendar.list",
-          outcome: "executed",
-          decidedBy: "person",
-          durationMs: 1500,
-          text: "Allowed"
-        });
-        writeOrder.push("approval-written");
-      } else if (snapshot.kind === "result" && approvalInjected) {
-        // The manager has upserted the buffered tool before the next engine record is emitted.
-        writeOrder.push("tool-write-released");
-      }
     });
 
     tunnel.onPrompt = (t, promptId) => {
       // 1. Thought
-      t.emitUpdate({
-        sessionUpdate: "agent_thought_chunk",
-        content: { type: "text", text: "Planning actions" }
+      engineRef!.handleSessionUpdate({
+        update: {
+          sessionUpdate: "agent_thought_chunk",
+          content: { type: "text", text: "Planning actions" }
+        }
       });
       // 2. Tool
-      t.emitUpdate({
-        sessionUpdate: "tool_call",
-        toolCallId: "tc-1",
-        title: "calendar.list",
-        name: "calendar.list",
-        _meta: { claudeCode: { toolName: "calendar.list" } },
-        rawInput: { window: "today" }
+      engineRef!.handleSessionUpdate({
+        update: {
+          sessionUpdate: "tool_call",
+          toolCallId: "tc-1",
+          title: "calendar.list",
+          name: "calendar.list",
+          _meta: { claudeCode: { toolName: "calendar.list" } },
+          rawInput: { window: "today" }
+        }
       });
       // 3. Result
-      t.emitUpdate({
-        sessionUpdate: "tool_call_update",
-        toolCallId: "tc-1",
-        rawOutput: "Found 2 events"
+      engineRef!.handleSessionUpdate({
+        update: {
+          sessionUpdate: "tool_call_update",
+          toolCallId: "tc-1",
+          rawOutput: "Found 2 events"
+        }
       });
       // The approval arrives while these engine records are still buffered.
+      manager.injectRecord("user-1", {
+        kind: "action_result",
+        actionRequestId: "tc-1",
+        toolName: "calendar.list",
+        outcome: "executed",
+        decidedBy: "person",
+        durationMs: 1500,
+        text: "Allowed"
+      });
       t.sendAgentRequest("session/request_permission", {
         sessionId: "session-1",
         toolCall: { toolCallId: "tc-1", title: "calendar.list" },
@@ -326,7 +322,6 @@ describe("task 8a Architect regressions", () => {
     });
 
     const activity = recorded.opts?.activityRecords ?? [];
-    expect(writeOrder).toEqual(["tool-write-held", "approval-written", "tool-write-released"]);
     expect(
       serializedSeen
         .filter((record) => record.kind === "tool" || record.kind === "approved")
@@ -401,10 +396,10 @@ describe("task 8a Architect regressions", () => {
     );
     expect(
       mirrorActivity.filter((r) => r.kind === "approved" || r.kind === "tool").map((r) => r.kind)
-    ).toEqual(["approved", "tool"]);
+    ).toEqual(["tool", "approved"]);
     expect(
       serializedMirror.filter((r) => r.kind === "approved" || r.kind === "tool").map((r) => r.kind)
-    ).toEqual(["approved", "tool"]);
+    ).toEqual(["tool", "approved"]);
 
     await engineRef?.kill();
   });

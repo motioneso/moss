@@ -14,6 +14,12 @@ import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
 import { formatApprovalRecord, formatRefusalRecord } from "./acp-chat-engine.js";
 import type { ActionResultMetadata, CliChatEngine, TranscriptRecord } from "./types.js";
 
+export interface PendingActionResult {
+  readonly record: TranscriptRecord;
+  readonly recordSequence: number;
+  readonly approvalSequence?: number;
+}
+
 /** Resolves after `ms` milliseconds. Used for polling backoff during turn/drain loops. */
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -115,6 +121,8 @@ export function injectActionResultRecord(
   options: {
     readonly sessionKey: string;
     readonly sequenceBySession: Map<string, number>;
+    readonly recordSequence?: number;
+    readonly approvalSequence?: number;
     readonly turnRecords?: TranscriptRecord[];
     readonly actionResults?: ActionResultMetadata[];
     readonly emit: (record: TranscriptRecord) => void;
@@ -137,7 +145,10 @@ export function injectActionResultRecord(
     options.sequenceBySession.set(options.sessionKey, next);
     return next;
   };
-  const ordered = record.sequence === undefined ? { ...record, sequence: nextSequence() } : record;
+  const ordered =
+    record.sequence === undefined
+      ? { ...record, sequence: options.recordSequence ?? nextSequence() }
+      : record;
   const currentSequence = options.sequenceBySession.get(options.sessionKey) ?? 0;
   if (ordered.sequence !== undefined && ordered.sequence > currentSequence) {
     options.sequenceBySession.set(options.sessionKey, ordered.sequence);
@@ -148,7 +159,7 @@ export function injectActionResultRecord(
   const decidedBy = record.decidedBy ?? "person";
   const durationSec =
     record.durationMs != null ? Math.max(1, Math.round(record.durationMs / 1000)) : undefined;
-  const approvalSequence = nextSequence();
+  const approvalSequence = options.approvalSequence ?? nextSequence();
   const mappedRecord =
     decidedBy === "policy"
       ? record.outcome === "denied"
@@ -166,6 +177,32 @@ export function injectActionResultRecord(
   if (mappedRecord) {
     if (options.turnRecords) upsertActivityRecord(options.turnRecords, mappedRecord);
     options.emit(mappedRecord);
+  }
+}
+
+export function flushPendingActionResults(
+  pendingBySession: Map<string, PendingActionResult[]>,
+  actorUserId: string,
+  surface: ChatSurface,
+  sessionKey: string,
+  sequenceBySession: Map<string, number>,
+  turnRecords: TranscriptRecord[] | undefined,
+  actionResults: ActionResultMetadata[] | undefined,
+  emit: (actorUserId: string, surface: ChatSurface, record: TranscriptRecord) => void
+): void {
+  const pending = pendingBySession.get(sessionKey);
+  if (!pending) return;
+  pendingBySession.delete(sessionKey);
+  for (const item of pending) {
+    injectActionResultRecord(item.record, {
+      sessionKey,
+      sequenceBySession,
+      recordSequence: item.recordSequence,
+      approvalSequence: item.approvalSequence,
+      turnRecords,
+      actionResults,
+      emit: (next) => emit(actorUserId, surface, next)
+    });
   }
 }
 
