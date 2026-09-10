@@ -1,0 +1,28 @@
+{
+  "views": 16,
+  "pageErrors": [],
+  "checks": [
+    "reading and sources",
+    "preparation materials",
+    "partial acceptance",
+    "adjustment and conflicts",
+    "retained draft",
+    "save retry",
+    "Today schedule and preparation update",
+    "updated task details",
+    "no evening plan",
+    "unavailable briefing and retry",
+    "delayed email",
+    "unscheduled tasks keep deadlines",
+    "automatic mode needs no approval",
+    "one-click accept all and recovery",
+    "bulk acceptance respects conflicts and unscheduled tasks",
+    "news/sports default on and independent opt-outs",
+    "photos and followed-team prose",
+    "tonight and quiet night",
+    "news/sports links return to Today sections",
+    "draft times survive preference changes",
+    "saved choices survive preference changes",
+    "zero task blocks keeps calendar commitments"
+  ]
+}
