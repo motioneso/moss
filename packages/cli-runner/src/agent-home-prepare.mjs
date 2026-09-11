@@ -24,8 +24,10 @@ import { sep } from "node:path";
 
 async function ensureRealDir(path) {
   const stat = await lstat(path).catch(() => null);
-  if (stat && stat.isSymbolicLink()) await rm(path, { force: true });
-  if (!stat || stat.isSymbolicLink()) {
+  if (stat && stat.isSymbolicLink()) {
+    throw new Error(`refusing symlinked path: ${path}`);
+  }
+  if (!stat) {
     await mkdir(path, { mode: 0o700 }).catch((error) => {
       if (error.code !== "EEXIST") throw error;
     });

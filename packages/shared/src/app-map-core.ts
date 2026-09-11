@@ -211,6 +211,8 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "repeating an old success, until a fresh login is accepted. Chat checks CLI sign-ins when the " +
       "ACP adapter initializes. The page also includes an OpenCode ACP card with a saved Chat model setting; " +
       "the saved choice is passed to the ACP chat launch and applied when the agent advertises that option. " +
+      "Codex sign-in is per user and is checked in that user's isolated runner home; a missing or malformed " +
+      "credential asks that user to sign in rather than reporting a provider failure. " +
       "Pressing Log in on a provider " +
       "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
       "genuinely broken sign-in always gets a fresh place to sign back in. A " +

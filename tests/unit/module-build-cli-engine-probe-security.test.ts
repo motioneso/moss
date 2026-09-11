@@ -143,6 +143,29 @@ describe("probeProvider (§4.8)", () => {
     expect(res.status).toBe("multiplexer_unavailable");
     expect(run).not.toHaveBeenCalled();
   });
+
+  it("does not reuse one user's readiness result for another isolated user", async () => {
+    const run = vi
+      .fn()
+      .mockResolvedValueOnce({ code: 0, stdout: "OK\n", stderr: "" })
+      .mockResolvedValueOnce({ code: 1, stdout: "", stderr: "401 invalid bearer token" });
+    const shared = { io: { run }, cliPresent: async () => true };
+    await expect(
+      probeProvider("anthropic", {
+        ...shared,
+        cacheScope: "user-a",
+        credentialEnv: { CLAUDE_CODE_OAUTH_TOKEN: "a" }
+      })
+    ).resolves.toMatchObject({ status: "ready" });
+    await expect(
+      probeProvider("anthropic", {
+        ...shared,
+        cacheScope: "user-b",
+        credentialEnv: { CLAUDE_CODE_OAUTH_TOKEN: "b" }
+      })
+    ).resolves.toMatchObject({ status: "needs_login" });
+    expect(run).toHaveBeenCalledTimes(2);
+  });
 });
 
 // ─── #342 §12 (4b) DOCUMENTING test: 0600 + redactSecrets do NOT protect a same-UID

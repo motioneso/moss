@@ -16,8 +16,16 @@ async function assertRealPath(path: string): Promise<void> {
   let current = path.startsWith("/") ? "/" : "";
   for (const part of parts) {
     current = current === "/" ? `/${part}` : current ? `${current}/${part}` : part;
-    const stat = await lstat(current);
-    if (!stat || stat.isSymbolicLink()) throw new Error("symlinked Codex login");
+    let stat;
+    try {
+      stat = await lstat(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new Error("missing Codex login", { cause: error });
+      }
+      throw error;
+    }
+    if (stat.isSymbolicLink()) throw new Error("symlinked Codex login");
   }
 }
 
@@ -34,16 +42,28 @@ async function readRealFile(path: string): Promise<string> {
 /** Check only metadata before allocating a slot; content is still read by the owner process. */
 export async function preflightCodexAuthFile(homeBase: string, userId: string): Promise<void> {
   try {
-    await assertRealPath(codexAuthPath(homeBase, userId));
+    const path = codexAuthPath(homeBase, userId);
+    await assertRealPath(path);
+    const stat = await lstat(path);
+    if (!stat.isFile()) throw new Error("missing Codex login");
+    const parsed = JSON.parse(await readRealFile(path)) as {
+      tokens?: { access_token?: unknown; account_id?: unknown };
+    };
+    if (
+      typeof parsed.tokens?.access_token !== "string" ||
+      parsed.tokens.access_token.length === 0 ||
+      typeof parsed.tokens.account_id !== "string" ||
+      parsed.tokens.account_id.length === 0
+    ) {
+      throw new Error("missing Codex login");
+    }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    // A protected owner home is expected here; the owner-switched preparation step will do the
-    // real read. Missing or linked paths are refused before any slot/file side effect.
-    if (code === "EACCES" || code === "EPERM") return;
-    throw new Error("Not logged in (no Codex credential in runner home)", { cause: error });
+    if ((error as Error).message === "missing Codex login" || code === "ENOENT") {
+      throw new Error("Not logged in (no Codex credential in runner home)", { cause: error });
+    }
+    throw new Error("Codex credential cannot be accessed safely", { cause: error });
   }
-  const stat = await lstat(codexAuthPath(homeBase, userId));
-  if (!stat.isFile()) throw new Error("Not logged in (no Codex credential in runner home)");
 }
 
 /** Read and validate the selected user's Codex login without returning parsed secrets. */
@@ -67,7 +87,9 @@ export async function readCodexAuthFile(
       throw new Error("missing Codex login");
     }
     return raw;
-  } catch {
-    throw new Error("Not logged in (no Codex credential in runner home)");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "symlinked Codex login" || message.includes("permission")) throw error;
+    throw new Error("Not logged in (no Codex credential in runner home)", { cause: error });
   }
 }

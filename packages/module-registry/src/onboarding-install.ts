@@ -167,7 +167,7 @@ export function buildOnboardingInstall(deps: {
     installability,
     installClient,
     stateStore,
-    reconcileInstallStates: async (scopedDb) => {
+    reconcileInstallStates: async (scopedDb, actorUserId) => {
       const out: Partial<Record<OnboardingProviderKind, ProviderInstallState>> = {};
       const rows = await repository.readAllProviderInstallStates(scopedDb);
       if (rows.length === 0) return out;
@@ -191,10 +191,13 @@ export function buildOnboardingInstall(deps: {
         try {
           const conn = deps.getConnection();
           const probe = conn
-            ? await conn.probeProvider({
-                provider: row.provider,
-                ...(row.state === "ready" ? { forceFresh: true } : {})
-              })
+            ? await conn.probeProvider(
+                {
+                  provider: row.provider,
+                  ...(row.state === "ready" ? { forceFresh: true } : {})
+                },
+                actorUserId
+              )
             : ({ status: "error" } as const);
           const corrected =
             row.state === "installing"

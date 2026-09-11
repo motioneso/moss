@@ -11,6 +11,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  preflightCodexAuthFile,
+  codexAuthPath
+} from "../../packages/cli-runner/src/acp-codex-auth.js";
 
 const scriptPath = join(process.cwd(), "packages/cli-runner/src/agent-home-prepare.mjs");
 
@@ -22,6 +26,49 @@ function requestFor(source: string) {
 }
 
 describe("ACP Codex credential boundary", () => {
+  it("treats missing and malformed credentials as a recoverable sign-in requirement", async () => {
+    const home = mkdtempSync(join(tmpdir(), "acp-credentials-"));
+    const auth = codexAuthPath(home, "user-1");
+    try {
+      await expect(preflightCodexAuthFile(home, "user-1")).rejects.toThrow(/Not logged in/);
+      mkdirSync(join(home, "agents", "user-1", ".codex"), { recursive: true });
+      writeFileSync(auth, "{}", { mode: 0o600 });
+      await expect(preflightCodexAuthFile(home, "user-1")).rejects.toThrow(/Not logged in/);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("does not treat a shared-home credential as an isolated user's login", async () => {
+    const home = mkdtempSync(join(tmpdir(), "acp-credentials-"));
+    try {
+      mkdirSync(join(home, ".codex"), { recursive: true });
+      writeFileSync(
+        join(home, ".codex", "auth.json"),
+        JSON.stringify({ tokens: { access_token: "shared", account_id: "shared" } }),
+        { mode: 0o600 }
+      );
+      await expect(preflightCodexAuthFile(home, "user-1")).rejects.toThrow(/Not logged in/);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps symlinked parent credentials a hard failure", async () => {
+    const home = mkdtempSync(join(tmpdir(), "acp-credentials-"));
+    const outside = join(home, "outside");
+    try {
+      mkdirSync(outside, { recursive: true });
+      mkdirSync(join(home, "agents"), { recursive: true });
+      symlinkSync(outside, join(home, "agents", "user-1"));
+      await expect(preflightCodexAuthFile(home, "user-1")).rejects.toThrow(
+        /cannot be accessed safely/
+      );
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it("rejects symlinked credential files without touching the linked target", () => {
     const home = mkdtempSync(join(tmpdir(), "acp-credentials-"));
     const outside = join(home, "outside-auth.json");
