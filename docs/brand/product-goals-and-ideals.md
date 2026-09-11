@@ -220,9 +220,11 @@ Briefings should be tunable by module and by user preference. Goals, values, and
 what Moss considers relevant, but user-defined source, topic, avoid-topic, and module settings remain
 the source of truth.
 
-News should be user-enabled rather than injected blindly. Once enabled, Moss may provide a neutral
-default focused on world news and major global events, not local news or national political chatter by
-default. Users should be able to configure sources, topics, and exclusions.
+News and sports are included in the morning briefing by default, with independent user preferences
+to exclude either (Ben, September 10, 2026). Include concise prose around major stories and followed
+teams, alongside links to fuller coverage. Explicit exclusions and disabled modules take precedence.
+News defaults to world news and major global events, rather than local news or national political
+chatter. Users can configure sources, topics, and exclusions.
 
 Avoid-topic preferences should suppress ambient or gossip-like content. They may be overridden when the
 topic materially affects the user, such as a policy change, travel ban, safety issue, legal/financial
