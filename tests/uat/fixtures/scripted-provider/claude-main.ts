@@ -10,7 +10,7 @@
 // profile.d script prepends it ahead of JARVIS_CLI_TOOLS_PREFIX/bin on PATH — deliberately
 // not JARVIS_CLI_TOOLS_PREFIX itself, which the production installer also owns and would
 // otherwise clobber this fixture's bin/claude on every container boot. The real bounded/print engine
-// (packages/chat/src/live/claude-print-chat-engine.ts submit(), ~line 74) spawns the CLI
+// (packages/chat/src/live/structured-claude-engine.ts submit(), ~line 74) spawns the CLI
 // detached with stdio:"ignore" and never inspects stdout or the exit code — it only polls the
 // Anthropic transcript JSONL file for new records. So the only channel that matters to the
 // real caller is that file; exit code and stderr matter only to this fixture's own
@@ -34,7 +34,7 @@ import {
 import { UAT_CHAT_SCRIPTS, type UatChatScript } from "../../seed/types.js";
 
 const TOOLS_CALL_TIMEOUT_MS = 170_000; // 20s margin over NATIVE_CONFIRM_TIMEOUT_MS=150_000
-// (packages/chat/src/live/claude-permission-hook.ts:17, wired at gateway-services.ts:152) —
+// (packages/chat/src/live/persistent-claude-permission-hook.ts:17, wired at gateway-services.ts:152) —
 // tools/call blocks server-side until ConfirmationRegistry.awaitResolution() settles.
 const TOOLS_LIST_TIMEOUT_MS = 15_000;
 export const FAILURE_LOG_PATH = "/data/cli-auth/uat-scripted-provider-failures.log";

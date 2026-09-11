@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
@@ -12,12 +12,14 @@ import { useState } from "react";
 
 import { Button } from "@moss/ui";
 import { refreshAiProviderModels } from "../api/client.js";
+import { checkOnboardingProvider } from "../api/onboarding-connect-client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { readError } from "./settings-types.js";
 import { AddModelForm, CAP_SHORT, EditModelForm, TIERS } from "./settings-ai-edit-model-form.js";
 import type {
   AiConfiguredModelDto,
   AiProviderConfigDto,
+  OnboardingProviderKind,
   RefreshAiProviderModelsResponse
 } from "@moss/shared";
 
@@ -132,6 +134,7 @@ function ModelLine(props: {
 export function ProviderModels(props: {
   readonly provider: AiProviderConfigDto;
   readonly models: readonly AiConfiguredModelDto[];
+  readonly modelChoiceNote?: string;
   readonly onModelOverride: (model: AiConfiguredModelDto, allowed: boolean) => void;
   readonly onModelStatusChange: (
     model: AiConfiguredModelDto,
@@ -147,7 +150,15 @@ export function ProviderModels(props: {
   const [open, setOpen] = useState(false);
   const hasManual = props.models.some((m) => m.origin === "manual");
   const [refreshOutcome, setRefreshOutcome] = useState<string | null>(null);
-
+  const initializationQuery = useQuery({
+    queryKey: queryKeys.ai.providerInitialization(provider.id),
+    queryFn: () => checkOnboardingProvider(provider.providerKind as OnboardingProviderKind),
+    enabled:
+      provider.authMethod === "cli" &&
+      ["anthropic", "openai-compatible", "google"].includes(provider.providerKind),
+    staleTime: 60_000,
+    retry: false
+  });
   const refreshMutation = useMutation({
     mutationFn: () => refreshAiProviderModels(provider.id),
     onSuccess: (result) => {
@@ -159,7 +170,15 @@ export function ProviderModels(props: {
     },
     onError: (error) => setRefreshOutcome(readError(error))
   });
-
+  const initializationOutcome =
+    initializationQuery.data?.status === "needs_login"
+      ? "Not logged in"
+      : initializationQuery.data?.status === "multiplexer_unavailable" ||
+          initializationQuery.data?.status === "not_installed"
+        ? "The sign-in helper is not running"
+        : initializationQuery.data?.status === "error" || initializationQuery.isError
+          ? "Could not reach the provider"
+          : null;
   return (
     <div className="prov__models">
       <div className="prov__modelshd">
@@ -199,10 +218,20 @@ export function ProviderModels(props: {
           </Button>
         </span>
       </div>
+      {initializationOutcome !== null ? (
+        <div className="prov__synced" role="status">
+          {initializationOutcome}
+        </div>
+      ) : null}
       {!open ? null : (
         <>
           {adding ? (
             <AddModelForm providerConfigId={provider.id} onClose={() => setAdding(false)} />
+          ) : null}
+          {props.modelChoiceNote ? (
+            <div className="prov__synced" role="note">
+              {props.modelChoiceNote}
+            </div>
           ) : null}
           <div className="prov__modellist">
             {props.models.length ? (

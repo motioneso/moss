@@ -40,7 +40,7 @@ import { ChatUserMemorySettingsRepository } from "./memory-settings-repository.j
 import { buildCalendarWriteService } from "./calendar-write-impl.js";
 import { buildEmailWriteService } from "./email-write-impl.js";
 import { buildModuleBuildStartService } from "./module-build-start-impl.js";
-import { NATIVE_CONFIRM_TIMEOUT_MS } from "./live/claude-permission-hook.js";
+import { NATIVE_CONFIRM_TIMEOUT_MS } from "./live/persistent-claude-permission-hook.js";
 import type { CurrentViewReadService } from "./live/current-view.js";
 import type { ChatAttachmentsService } from "./attachments-service.js";
 import { createNotesReadToolTrustBoundary } from "./live/notes-tool-trust.js";
@@ -156,7 +156,7 @@ export function buildChatGatewayDependencies(args: {
     confirmations: args.confirmations,
     notifier: args.notifier,
     // #1158: MUST stay below the permission hook's internal deadline — see the deadline
-    // ordering comment in live/claude-permission-hook.ts (unit-tested invariant).
+    // ordering comment in live/persistent-claude-permission-hook.ts (unit-tested invariant).
     confirmTimeoutMs: NATIVE_CONFIRM_TIMEOUT_MS,
     agencyPrefs: buildAgencyPrefs({
       runner: args.runner,

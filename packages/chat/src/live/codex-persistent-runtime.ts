@@ -8,7 +8,7 @@
  * `codex exec --json` for the first turn on a runtime instance, then
  * `codex exec resume --last --json` for every turn after that, so Codex continues the same
  * logical conversation across separate process launches (the same fix already used for one-shot
- * Codex calls in `codex-exec-session.ts`). Because there is no process staying alive between
+ * Codex calls in `module-build-codex-exec-session.ts`). Because there is no process staying alive between
  * turns, there is nothing "warm" sitting idle in memory the way there is for Claude — that is a
  * known, accepted tradeoff (see `docs/specs/1558.md`), not a bug.
  */
@@ -48,7 +48,7 @@ const PROMPT_FILENAME = "codex-exec-prompt.txt";
 /** This reader reads one provider's output; a refused sign-in it sees belongs to that provider. */
 const DECODED_PROVIDER: ProviderKind = "openai-compatible";
 
-// #1136 (mirrored from codex-exec-session.ts): codex exec hands the model a literal
+// #1136 (mirrored from module-build-codex-exec-session.ts): codex exec hands the model a literal
 // `User:`/`Assistant:` transcript, so a role marker inside replayed text reads as a real turn
 // boundary. The notice states the trust boundary the framing alone cannot express.
 const UNTRUSTED_REPLAY_NOTICE =

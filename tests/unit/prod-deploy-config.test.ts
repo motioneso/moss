@@ -156,6 +156,8 @@ describe("prod deploy config — opt-in Caddy TLS profile (#1504, part of #901)"
 
   it("test case 2: profile-free port and env requirements are unchanged", () => {
     const services = renderProdCompose([]);
+    expect(services.jarv1s?.cap_drop).toEqual(["ALL"]);
+    expect(services.jarv1s?.cap_add).toEqual(["CHOWN", "SETUID", "SETGID", "FOWNER", "KILL"]);
     expect(services.jarv1s?.ports).toContainEqual(
       expect.objectContaining({ published: "1533", target: 3000 })
     );

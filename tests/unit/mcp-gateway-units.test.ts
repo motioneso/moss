@@ -271,7 +271,8 @@ describe("native Claude tool permission bridge", () => {
       })
     ).resolves.toEqual({
       decision: "deny",
-      reason: "Timed out awaiting confirmation."
+      reason:
+        "This action was not approved, so it was not done. Do not try it again; let the user know."
     });
     expect(emitted.at(-1)).toMatchObject({
       kind: "action_result",
@@ -342,7 +343,11 @@ describe("native Claude tool permission bridge", () => {
 
     await expect(
       gateway.requestNativeToolPermission(token, { toolName: "Grep", toolInput: {} })
-    ).resolves.toEqual({ decision: "deny", reason: "Timed out awaiting confirmation." });
+    ).resolves.toEqual({
+      decision: "deny",
+      reason:
+        "This action was not approved, so it was not done. Do not try it again; let the user know."
+    });
   });
 
   it.each([
@@ -389,14 +394,7 @@ describe("native Claude tool permission bridge", () => {
 
     expect(result).toEqual({ decision: "allow", reason: "Allowed by YOLO." });
     expect(createPendingCalled).toBe(true);
-    expect(emitted).toEqual([
-      expect.objectContaining({
-        kind: "action_result",
-        actionRequestId: "native-yolo-1",
-        toolName,
-        outcome: "allowed"
-      })
-    ]);
+    expect(emitted).toHaveLength(0);
     // #1085 F4: the awaited confirmed action records the grant without claiming the native tool
     // completed successfully; returning before these writes would recreate the audit gap.
     expect(created[0]).toMatchObject({

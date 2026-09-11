@@ -3,22 +3,22 @@
  * `persistentRuntimeEnabled: false` pin (Phase 1 pinned the RPC topology off, #1350
  * two-composition-roots guard). Pool presence (`EngineHostDeps.persistentRuntimePool`, wired at
  * `main.ts`'s composition root) now gates it: absent ⇒ unchanged pre-task-5 behavior (always
- * bounded/tmux, `createChatEngine` called with `persistentRuntimeEnabled: false`); present ⇒
- * `createChatEngine` is called with `persistentRuntimeEnabled: true` and the pool forwarded as
- * `persistentPool` (the admission seam `engine-selection.ts` consults — already covered end to
- * end by `packages/chat/src/live/engine-selection.test.ts`).
+ * bounded/tmux, `createStructuredEngine` called with `persistentRuntimeEnabled: false`); present ⇒
+ * `createStructuredEngine` is called with `persistentRuntimeEnabled: true` and the pool forwarded as
+ * `persistentPool` (the admission seam `structured-engine-selection.ts` consults — already covered end to
+ * end by `packages/chat/src/live/structured-engine-selection.test.ts`).
  *
- * `createChatEngine` itself is mocked here so this test proves ONLY the opts `launchOnce` passes
+ * `createStructuredEngine` itself is mocked here so this test proves ONLY the opts `launchOnce` passes
  * it, without needing to drive a real tmux/provider launch.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type * as MossChatLiveModule from "@moss/chat/live";
 
-const { createChatEngineMock } = vi.hoisted(() => ({ createChatEngineMock: vi.fn() }));
+const { createStructuredEngineMock } = vi.hoisted(() => ({ createStructuredEngineMock: vi.fn() }));
 
 vi.mock("@moss/chat/live", async (importOriginal) => {
   const actual = await importOriginal<typeof MossChatLiveModule>();
-  return { ...actual, createChatEngine: createChatEngineMock };
+  return { ...actual, createStructuredEngine: createStructuredEngineMock };
 });
 
 import type { TmuxIo } from "../../packages/ai/src/adapters/tmux-bridge.js";
@@ -49,11 +49,11 @@ function fakeEngine() {
 
 describe("CliChatEngineHost.launch — persistent-pool pin lift (#1554 task #5)", () => {
   afterEach(() => {
-    createChatEngineMock.mockReset();
+    createStructuredEngineMock.mockReset();
   });
 
-  it("calls createChatEngine with persistentRuntimeEnabled:false and no pool when persistentRuntimePool is absent", async () => {
-    createChatEngineMock.mockResolvedValue(fakeEngine());
+  it("calls createStructuredEngine with persistentRuntimeEnabled:false and no pool when persistentRuntimePool is absent", async () => {
+    createStructuredEngineMock.mockResolvedValue(fakeEngine());
     const host = new CliChatEngineHost({
       io: fakeIo(),
       neutralBase: NEUTRAL_BASE,
@@ -63,14 +63,14 @@ describe("CliChatEngineHost.launch — persistent-pool pin lift (#1554 task #5)"
 
     await host.launch("session-1", { provider: "anthropic", personaText: "" });
 
-    expect(createChatEngineMock).toHaveBeenCalledTimes(1);
-    const opts = createChatEngineMock.mock.calls[0]![3];
+    expect(createStructuredEngineMock).toHaveBeenCalledTimes(1);
+    const opts = createStructuredEngineMock.mock.calls[0]![3];
     expect(opts.persistentRuntimeEnabled).toBe(false);
     expect(opts.persistentPool).toBeUndefined();
   });
 
-  it("calls createChatEngine with persistentRuntimeEnabled:true and the pool forwarded when persistentRuntimePool is present", async () => {
-    createChatEngineMock.mockResolvedValue(fakeEngine());
+  it("calls createStructuredEngine with persistentRuntimeEnabled:true and the pool forwarded when persistentRuntimePool is present", async () => {
+    createStructuredEngineMock.mockResolvedValue(fakeEngine());
     const pool: AdmitCapablePool = { admit: vi.fn(async () => ({ kind: "denied" as const })) };
     const host = new CliChatEngineHost({
       io: fakeIo(),
@@ -82,8 +82,8 @@ describe("CliChatEngineHost.launch — persistent-pool pin lift (#1554 task #5)"
 
     await host.launch("session-2", { provider: "anthropic", personaText: "" });
 
-    expect(createChatEngineMock).toHaveBeenCalledTimes(1);
-    const opts = createChatEngineMock.mock.calls[0]![3];
+    expect(createStructuredEngineMock).toHaveBeenCalledTimes(1);
+    const opts = createStructuredEngineMock.mock.calls[0]![3];
     expect(opts.persistentRuntimeEnabled).toBe(true);
     expect(opts.persistentPool).toBe(pool);
   });

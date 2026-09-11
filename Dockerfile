@@ -72,9 +72,13 @@ ENV JARVIS_WEB_DIST_DIR=/app/apps/web/dist
 # provider CLIs. ca-certificates is REQUIRED for codex auth/model HTTPS calls
 # (without it codex login fails: `no native root CA certificates found`).
 # bubblewrap lets codex use its native sandbox instead of falling back to the
-# bundled helper. --no-install-recommends keeps the layer small.
+# bundled helper. util-linux provides setpriv, which the launcher (start-jarv1s.ts)
+# and the cli-runner use to switch between accounts while controlling exactly which
+# Linux capabilities travel with the switch (task 5b, 2026-09-08) — most base images
+# carry it already, but this makes it a guaranteed dependency rather than an assumption.
+# --no-install-recommends keeps the layer small.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends tmux git ca-certificates bubblewrap \
+  && apt-get install -y --no-install-recommends tmux git ca-certificates bubblewrap util-linux \
   && pnpm exec playwright install --with-deps chromium \
   && rm -rf /var/lib/apt/lists/*
 # Put the installed provider CLIs (tools volume bin) on PATH for the tmux PANE shells

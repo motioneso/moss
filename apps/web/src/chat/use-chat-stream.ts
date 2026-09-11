@@ -1,4 +1,5 @@
 import type {
+  ChatActivityEventDto,
   ChatMessageDto,
   ChatSurface,
   SourceFreshnessV1,
@@ -37,7 +38,14 @@ function isChatRecordKind(value: string): value is ChatRecordKind {
   switch (value) {
     case "user":
     case "thinking":
+    case "thought":
     case "tool":
+    case "result":
+    case "approval":
+    case "approved":
+    case "not_approved":
+    case "refusal":
+    case "refused":
     case "status":
     case "reply":
     case "error":
@@ -90,7 +98,7 @@ export function useChatStream(
               return current.map((r, i) => (i === realIdx ? record : r));
             }
           }
-          return [...current, record];
+          return upsertTranscriptRecord(current, record);
         });
       }
     };
@@ -197,7 +205,40 @@ export function mergeWorkflowApprovalRecords(
   ];
 }
 
-function recordsFromMessages(messages: readonly ChatMessageDto[]): TranscriptRecord[] {
+export function upsertTranscriptRecord(
+  records: readonly TranscriptRecord[],
+  record: TranscriptRecord
+): TranscriptRecord[] {
+  // ACP sequence numbers restart for each user turn. Stable ids and ordering therefore
+  // only apply inside the current turn; scanning older turns lets a later `sequence: 1`
+  // activity record jump in front of the first turn's `sequence: 2` record.
+  let turnStart = 0;
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    if (records[index]?.kind === "user") {
+      turnStart = index + 1;
+      break;
+    }
+  }
+  const currentTurn = records.slice(turnStart);
+  if (record.id) {
+    const existingInTurn = currentTurn.findIndex((item) => item.id === record.id);
+    const existing = existingInTurn === -1 ? -1 : turnStart + existingInTurn;
+    if (existing >= 0) return records.map((item, index) => (index === existing ? record : item));
+  }
+  const insertionInTurn = currentTurn.findIndex(
+    (item) =>
+      record.sequence !== undefined &&
+      item.sequence !== undefined &&
+      item.sequence > record.sequence
+  );
+  const insertion = insertionInTurn === -1 ? -1 : turnStart + insertionInTurn;
+  if (insertion >= 0) {
+    return [...records.slice(0, insertion), record, ...records.slice(insertion)];
+  }
+  return [...records, record];
+}
+
+export function recordsFromMessages(messages: readonly ChatMessageDto[]): TranscriptRecord[] {
   return messages.flatMap((message): TranscriptRecord[] => {
     if (message.role === "user") {
       return [
@@ -209,34 +250,44 @@ function recordsFromMessages(messages: readonly ChatMessageDto[]): TranscriptRec
         }
       ];
     }
-    const actionResults: TranscriptRecord[] = message.activity.flatMap((activity) =>
-      activity.kind === "action_result" &&
-      (activity.outcome === "executed" ||
-        activity.outcome === "denied" ||
-        activity.outcome === "error" ||
-        activity.outcome === "allowed")
-        ? [
-            {
-              kind: "action_result",
-              text: activity.text,
-              toolName: activity.toolName,
-              outcome: activity.outcome
-            }
-          ]
-        : []
-    );
+    const activity = message.activity.filter((event) => event.kind !== "action_result");
+    const actionResults = message.activity.filter((event) => event.kind === "action_result");
     return [
+      ...activity.map(activityRecord),
+      ...(activity.some((event) => event.kind === "tool")
+        ? []
+        : message.tools.map((tool) => ({
+            kind: "tool" as const,
+            text: tool.name
+          }))),
       {
-        kind: "reply",
+        kind: message.status === "error" ? ("error" as const) : ("reply" as const),
         text: message.body,
         messageId: message.id,
         sourceFreshness: message.sourceFreshness,
         answerProvenance: message.answerProvenance,
-        answerProvenanceCitedIds: message.answerProvenanceCitedIds
+        answerProvenanceCitedIds: message.answerProvenanceCitedIds,
+        ...(message.elapsedMs !== undefined ? { elapsedMs: message.elapsedMs } : {}),
+        ...(message.usage !== undefined ? { usage: message.usage } : {})
       },
-      ...actionResults
+      ...actionResults.map(activityRecord)
     ];
   });
+}
+
+function activityRecord(activity: ChatActivityEventDto): TranscriptRecord {
+  return {
+    kind: isChatRecordKind(activity.kind) ? activity.kind : "status",
+    text: activity.text,
+    ...(activity.id !== undefined ? { id: activity.id } : {}),
+    ...(activity.sequence !== undefined ? { sequence: activity.sequence } : {}),
+    ...(activity.toolName !== undefined ? { toolName: activity.toolName } : {}),
+    ...(activity.toolCallId !== undefined ? { toolCallId: activity.toolCallId } : {}),
+    ...(activity.outcome !== undefined ? { outcome: activity.outcome } : {}),
+    ...(activity.durationMs !== undefined ? { durationMs: activity.durationMs } : {}),
+    ...(activity.decidedBy !== undefined ? { decidedBy: activity.decidedBy } : {}),
+    ...(activity.reason !== undefined ? { reason: activity.reason } : {})
+  };
 }
 
 export function shouldEndPrivateChatOnStreamDisconnect(input: {
@@ -256,12 +307,15 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
     return {
       kind: parsed.kind,
       text: parsed.text,
+      id: typeof parsed.id === "string" ? parsed.id : undefined,
+      sequence: typeof parsed.sequence === "number" ? parsed.sequence : undefined,
       messageId: typeof parsed.messageId === "string" ? parsed.messageId : undefined,
       actionRequestId:
         typeof parsed.actionRequestId === "string" ? parsed.actionRequestId : undefined,
       workflowApprovalId:
         typeof parsed.workflowApprovalId === "string" ? parsed.workflowApprovalId : undefined,
       toolName: typeof parsed.toolName === "string" ? parsed.toolName : undefined,
+      toolCallId: typeof parsed.toolCallId === "string" ? parsed.toolCallId : undefined,
       summary: typeof parsed.summary === "string" ? parsed.summary : undefined,
       status:
         parsed.status === "pending" ||
@@ -290,9 +344,37 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
         parsed.sourceFreshness && typeof parsed.sourceFreshness === "object"
           ? (parsed.sourceFreshness as SourceFreshnessV1)
           : undefined,
-      preview: parsePreview(parsed.preview)
+      preview: parsePreview(parsed.preview),
+      decidedBy:
+        parsed.decidedBy === "person" ||
+        parsed.decidedBy === "policy" ||
+        parsed.decidedBy === "timeout" ||
+        parsed.decidedBy === "cancelled"
+          ? parsed.decidedBy
+          : undefined,
+      reason: typeof parsed.reason === "string" ? parsed.reason : undefined,
+      durationMs: typeof parsed.durationMs === "number" ? parsed.durationMs : undefined,
+      elapsedMs: typeof parsed.elapsedMs === "number" ? parsed.elapsedMs : undefined,
+      usage: parseUsage(parsed.usage)
     };
   } catch {
     return null;
   }
+}
+
+function parseUsage(value: unknown): TranscriptRecord["usage"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const usage = value as Record<string, unknown>;
+  const result: Record<string, number> = {};
+  for (const key of [
+    "inputTokens",
+    "outputTokens",
+    "cachedReadTokens",
+    "cachedWriteTokens",
+    "thoughtTokens",
+    "totalTokens"
+  ]) {
+    if (typeof usage[key] === "number") result[key] = usage[key];
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }

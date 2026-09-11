@@ -7,9 +7,12 @@ packages:
 # reproduces it. onnxruntime-node + sharp download pre-built binaries (no
 # compiler) and are required by @huggingface/transformers (M-A1 embeddings);
 # protobufjs's postinstall is a harmless version-scheme warning, intentionally blocked.
+# opencode-ai's postinstall places the platform binary the runner launches
+# (slice 1 task 3); without it the package's launcher is an error placeholder.
 onlyBuiltDependencies:
   - onnxruntime-node
   - sharp
   - node-pty
+  - opencode-ai
 ignoredBuiltDependencies:
   - protobufjs

@@ -24,6 +24,8 @@ const createAiProvider = vi.fn(async (_input: unknown) => ({
 }));
 
 vi.mock("../../apps/web/src/api/client.js", () => ({
+  getChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" } })),
+  putChatSettings: vi.fn(),
   listAiProviders: vi.fn(async () => ({ providers: [] })),
   listAiModels: vi.fn(async () => ({ models: [] })),
   listAiServiceBindings: vi.fn(async () => ({ bindings: {} })),

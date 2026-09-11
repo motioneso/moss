@@ -25,8 +25,14 @@ export function normalizeChatSurface(value?: unknown): ChatSurface {
 export interface ChatActivityEventDto {
   readonly kind: string;
   readonly text: string;
+  readonly id?: string;
+  readonly sequence?: number;
   readonly toolName?: string;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
+  readonly toolCallId?: string;
+  readonly durationMs?: number;
+  readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
+  readonly reason?: string;
 }
 
 export interface ChatThreadDto {
@@ -92,6 +98,10 @@ export interface ChatMessageDto {
   readonly answerProvenanceCitedIds?: readonly string[];
   /** #1133 — attachments the user sent with this message (user messages only). */
   readonly attachments?: readonly ChatAttachmentDto[];
+  /** Elapsed duration of this turn in milliseconds, when available. */
+  readonly elapsedMs?: number;
+  /** Token usage reported for this turn, when available. */
+  readonly usage?: ChatTurnUsageDto;
 }
 
 export interface ListChatThreadsResponse {
@@ -107,6 +117,20 @@ export interface ListChatThreadMessagesResponse {
 }
 
 /**
+ * Token usage reported for a single chat turn.
+ * All counts are optional: providers report what they know, and a provider
+ * that reports nothing leaves usage absent.
+ */
+export interface ChatTurnUsageDto {
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly cachedReadTokens?: number;
+  readonly cachedWriteTokens?: number;
+  readonly thoughtTokens?: number;
+  readonly totalTokens?: number;
+}
+
+/**
  * One row of a rendered chat transcript — the shape the shared `Thread` component reads.
  * Defined here (moved from the web app's chat stream hook) so the shell and every module
  * thread render the same records from one definition.
@@ -114,7 +138,14 @@ export interface ListChatThreadMessagesResponse {
 export type ChatRecordKind =
   | "user"
   | "thinking"
+  | "thought"
   | "tool"
+  | "result"
+  | "approval"
+  | "approved"
+  | "not_approved"
+  | "refusal"
+  | "refused"
   | "status"
   | "reply"
   | "error"
@@ -136,13 +167,18 @@ export interface ActionRequestPreview {
 export interface TranscriptRecord {
   readonly kind: ChatRecordKind;
   readonly text: string;
+  readonly id?: string;
+  readonly sequence?: number;
   readonly messageId?: string;
   readonly actionRequestId?: string;
   readonly workflowApprovalId?: string;
   readonly toolName?: string;
+  readonly toolCallId?: string;
   readonly summary?: string;
   readonly status?: WorkflowApprovalStatusDto;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
+  readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
+  readonly reason?: string;
   readonly result?: Record<string, unknown>;
   /** Dot-path tokens into the frontend `queryKeys` object, resolved by app-shell's generic invalidation effect. */
   readonly affectsQueryKeys?: readonly string[];
@@ -152,6 +188,12 @@ export interface TranscriptRecord {
   readonly preview?: ActionRequestPreview;
   /** Chips shown on a sent user message (optimistic, post-response, and history rows). */
   readonly attachments?: readonly ChatAttachmentDto[];
+  /** Elapsed time in milliseconds for the prompt turn (from submit to stop reason). */
+  readonly elapsedMs?: number;
+  /** Token usage block for the prompt turn. */
+  readonly usage?: ChatTurnUsageDto;
+  /** Duration of an approval hold in milliseconds, when recorded. */
+  readonly durationMs?: number;
 }
 
 export type MemoryCorrectionReasonDto = "rejected" | "corrected";

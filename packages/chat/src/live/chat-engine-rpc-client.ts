@@ -48,6 +48,14 @@ import { performClientHello } from "./rpc-handshake.js";
 import {
   decodeFrame,
   encodeFrame,
+  type RpcAcpKillParams,
+  type RpcAcpKillResult,
+  type RpcAcpReadParams,
+  type RpcAcpReadResult,
+  type RpcAcpSendParams,
+  type RpcAcpSendResult,
+  type RpcAcpSpawnParams,
+  type RpcAcpSpawnResult,
   type RpcCancelSubmitParams,
   type RpcCancelSubmitResult,
   type RpcErr,
@@ -67,6 +75,8 @@ import {
   type PersistentRuntimeLaunchConfig,
   type RpcProbeProviderParams,
   type RpcProbeProviderResult,
+  type RpcRecordLoginRejectedParams,
+  type RpcRecordLoginRejectedResult,
   type RpcPurgeTranscriptsResult,
   type RpcReadNewParams,
   type RpcReadNewResult,
@@ -339,6 +349,28 @@ export class RpcConnection {
     return this.call<RpcInterruptResult>("interrupt", sessionKey, {});
   }
 
+  // Slice 1 task 3 — ACP tunnel verbs. Session-scoped like the turn verbs; acpRead is a
+  // quick poll (the API-side client in @moss/acp paces it), so the default deadline applies.
+  acpSpawn(sessionKey: string, params: RpcAcpSpawnParams): Promise<RpcAcpSpawnResult> {
+    return this.call<RpcAcpSpawnResult>("acpSpawn", sessionKey, params);
+  }
+
+  acpSend(sessionKey: string, params: RpcAcpSendParams): Promise<RpcAcpSendResult> {
+    return this.call<RpcAcpSendResult>("acpSend", sessionKey, params);
+  }
+
+  acpRead(sessionKey: string, params: RpcAcpReadParams): Promise<RpcAcpReadResult> {
+    return this.call<RpcAcpReadResult>("acpRead", sessionKey, params);
+  }
+
+  acpKill(sessionKey: string, params: RpcAcpKillParams = {}): Promise<RpcAcpKillResult> {
+    return this.call<RpcAcpKillResult>("acpKill", sessionKey, params);
+  }
+
+  // The runner speaks acpExecStart/acpExecPoll/acpExecKill
+  // (server side is live); the matching client verbs land with the API-side
+  // tunnel backing, which is their first caller.
+
   /**
    * #456 — re-arm the response deadline for any in-flight turn verb.
    * of the given sessionKey. Called by the manager when it observes new transcript records from a
@@ -377,6 +409,11 @@ export class RpcConnection {
   /** Non-session onboarding probe (§4.8); no sessionKey. */
   probeProvider(params: RpcProbeProviderParams): Promise<RpcProbeProviderResult> {
     return this.call<RpcProbeProviderResult>("probeProvider", undefined, params);
+  }
+
+  /** Non-session, mirrors `probeProvider`. Relays a rejection learned here to the runner's own cache. */
+  recordLoginRejected(params: RpcRecordLoginRejectedParams): Promise<RpcRecordLoginRejectedResult> {
+    return this.call<RpcRecordLoginRejectedResult>("recordLoginRejected", undefined, params);
   }
 
   /**
@@ -790,6 +827,7 @@ export class RpcConnection {
  * (the factory passes it) so it is never an RPC (§4.0).
  */
 export class ChatEngineRpcClient implements CliChatEngine {
+  readonly startsToolClientPerTurn: boolean;
   constructor(
     public readonly provider: ProviderKind,
     private readonly sessionKey: string,
@@ -805,7 +843,9 @@ export class ChatEngineRpcClient implements CliChatEngine {
     private readonly readPersistentConfig?: () => Promise<PersistentRuntimeLaunchConfig>,
     /** B4: forwarded to `RpcLaunchParams.needsStructuredOutput`. See its doc comment. */
     private readonly needsStructuredOutput = false
-  ) {}
+  ) {
+    this.startsToolClientPerTurn = executionMode === "non_interactive";
+  }
 
   /**
    * §4.1.0a: serialize ONLY personaText + replayBatch + mcpToken + mcpServerUrl + provider into
@@ -861,6 +901,7 @@ export class ChatEngineRpcClient implements CliChatEngine {
       ...(opts.replayBatch !== undefined ? { replayBatch: opts.replayBatch } : {}),
       ...(opts.replayBatch ? { replayAttemptId: opts.replayAttemptId ?? randomUUID() } : {}),
       ...(opts.model !== undefined ? { model: opts.model } : {}),
+      ...(opts.acpModel !== undefined ? { acpModel: opts.acpModel } : {}),
       ...(opts.nativeSearch !== undefined ? { nativeSearch: opts.nativeSearch } : {}),
       ...(persistent
         ? {

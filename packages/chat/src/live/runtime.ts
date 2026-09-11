@@ -6,7 +6,12 @@
  * The engineFactory is injectable so integration tests can swap in an in-memory
  * fake engine (no real tmux / `claude` binary). Everything else is real.
  */
+import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { AiRepository, createRealTmuxIo, type Multiplexer, type ProviderKind } from "@moss/ai";
+import type { AcpPermissionDecider } from "@moss/acp";
 import { resolveEffectiveTimezone } from "../locale-utils.js";
 import { DEFAULT_CHAT_SURFACE, type ChatSurface } from "./chat-surface.js";
 import {
@@ -23,6 +28,7 @@ import {
   normalizeChatSettings,
   renderChatResponseStyleInstruction,
   renderPersonaText,
+  type OnboardingProviderCheckResponse,
   type AiProviderExecutionMode
 } from "@moss/shared";
 import type { PgBoss } from "pg-boss";
@@ -42,7 +48,8 @@ import {
   type RpcReconcileDriver
 } from "./chat-engine-rpc-client.js";
 import type { PersistentRuntimeLaunchConfig } from "./rpc-contract.js";
-import { createChatEngine } from "./engine-selection.js";
+import { createStructuredEngine } from "./structured-engine-selection.js";
+import { AcpChatEngine, RpcAcpTunnel } from "./acp-chat-engine.js";
 import { CliChatUnavailableError } from "./errors.js";
 import { purgePrivateTranscripts } from "./private-transcript-cleanup.js";
 import { startIdleReapTimer, type SweepIdlePool } from "./idle-reap-timer.js";
@@ -119,9 +126,15 @@ export type ChatEngineFactory = (
   sessionKey: string,
   opts?: {
     readonly executionMode?: AiProviderExecutionMode;
+    readonly conversationId?: string;
+    readonly userId?: string;
+    /** Saved OpenCode ACP model choice for the next live session. */
+    readonly acpModel?: string;
     /** B4: set only by a structured caller (`CliStructuredAdapter`). See
-     *  `ChatEngineSelectionOpts.needsStructuredOutput` in engine-selection.ts. */
+     *  `ChatEngineSelectionOpts.needsStructuredOutput` in structured-engine-selection.ts. */
     readonly needsStructuredOutput?: boolean;
+    readonly acpPermissionDecider?: AcpPermissionDecider;
+    readonly nextSequence?: () => number;
   }
 ) => CliChatEngine | Promise<CliChatEngine>;
 
@@ -172,7 +185,7 @@ export function createRealEngineFactory(
   const homeBase = resolveMossEnv(process.env, "JARVIS_CLI_HOME_BASE");
 
   // #1554 task #5 — construct the warm pool ONCE, at factory-build time, when a cap is supplied.
-  // `createRuntime` mirrors the exact `createChatEngine`/`ClaudePersistentRuntime` construction
+  // `createRuntime` mirrors the exact `createStructuredEngine`/`ClaudePersistentRuntime` construction
   // this factory already did unconditionally pre-task-5: `createRealTmuxIo()` fresh per call (it
   // was never cached here either — see the closure below), no `credentialFile` (unchanged: this
   // factory never computed one for the in-process topology).
@@ -204,7 +217,7 @@ export function createRealEngineFactory(
         : (opts.persistentRuntimeEnabled ?? false);
     // #1350: selection lives in ONE shared helper so this root and the cli-runner's
     // EngineHost cannot drift apart on which engine a mode gets.
-    return createChatEngine(provider, sessionKey, createRealTmuxIo(), {
+    return createStructuredEngine(provider, sessionKey, createRealTmuxIo(), {
       mux: opts.mux,
       homeBase,
       executionMode: engineOpts?.executionMode,
@@ -212,11 +225,11 @@ export function createRealEngineFactory(
       // #1557 Phase 1: read from `chat.persistent_runtime.enabled` by the caller
       // (`chat-multiplexer.ts`'s `resolveChatEngineFactory`, the host-dev boot path). The
       // cli-runner RPC root (`engine-host.ts`) never reaches this factory — it calls
-      // `createChatEngine` directly with its OWN pool (#1350 two-roots guard: each root wires its
+      // `createStructuredEngine` directly with its OWN pool (#1350 two-roots guard: each root wires its
       // own pool instance; they never share one).
       persistentRuntimeEnabled,
       // #1554 task #5 — consulted only when persistentRuntimeEnabled resolves true AND the
-      // provider is anthropic (engine-selection.ts's fork). Undefined when no cap was supplied.
+      // provider is anthropic (structured-engine-selection.ts's fork). Undefined when no cap was supplied.
       persistentPool,
       // #1157: surface silently-discarded composer input (char count only — never content).
       onDiagnostic: (event) =>
@@ -285,6 +298,13 @@ function createRpcEngineFactory(opts: {
  * only in the compose path. Returns the factory, plus the `RpcConnection` when the RPC path is taken
  * (so the composition root can wire reconciliation + tear it down on shutdown).
  *
+ * NO OLD-BRIDGE FALLBACK FOR CHAT (task 7 plan): when `acpChat` is true, an unset socket still
+ * resolves to the same default path prod and the dev-instance script already start the runner on
+ * (`/run/jarv1s/cli-runner.sock`), so an ordinary dev start finds the runner already there instead
+ * of silently dropping to the in-process engine below. If the runner cannot be reached, the RPC
+ * client's own connect-with-backoff throws `CliChatUnavailableError`; a launch missing its
+ * conversation or user id throws the same rather than building a session under the wrong identity.
+ *
  * SECURITY FAIL-FAST (§3.6 / §6.6): when the socket IS selected but `JARVIS_CLI_RUNNER_RPC_SECRET` is
  * missing or empty, this THROWS at selection time — BEFORE any `RpcConnection` is constructed or any
  * socket is opened. A secret-less RPC path is fail-OPEN (the auth hello could never authenticate, and
@@ -309,13 +329,31 @@ export function selectEngineFactory(
     /** #1554 — the RPC branch's counterpart: a LIVE read of all three persistent-runtime settings,
      *  called per launch and shipped in `RpcLaunchParams` (the cli-runner has no DB access). */
     readonly readPersistentRuntimeConfig?: () => Promise<PersistentRuntimeLaunchConfig>;
+    /** Chat's ACP profile is selected only by the live chat composition root. */
+    readonly acpChat?: boolean;
+    readonly acpPermissionDecider?: AcpPermissionDecider;
   } = {}
 ): { factory: ChatEngineFactory; connection?: RpcConnection } {
   const env = opts.env ?? process.env;
-  const socketPath = env.JARVIS_CLI_RUNNER_SOCKET;
+  // Chat has no old-bridge fallback (§ task 7 plan): an unset socket for ACP chat still points at
+  // the same default path prod and the dev-instance script already start the runner on, instead of
+  // silently dropping to the in-process tmux engine below.
+  const socketPath =
+    env.JARVIS_CLI_RUNNER_SOCKET?.trim() ||
+    (opts.acpChat ? "/run/jarv1s/cli-runner.sock" : undefined);
   if (socketPath) {
     const rpcSecret = env.JARVIS_CLI_RUNNER_RPC_SECRET;
     if (!rpcSecret) {
+      // A chat selection without an explicit socket is the test/host shape before the runner
+      // secret is provisioned. Keep chat ACP-only and unavailable there; never resurrect the
+      // in-process bridge. An explicitly configured socket remains a hard boot failure.
+      if (opts.acpChat && !env.JARVIS_CLI_RUNNER_SOCKET?.trim()) {
+        return {
+          factory: unavailableEngineFactory(
+            "JARVIS_CLI_RUNNER_RPC_SECRET is required for the ACP chat runner"
+          )
+        };
+      }
       // Fail-fast: refuse to construct the RPC factory without the shared hello secret (§6.6). This
       // throws at BOOT/selection — never reaches connection construction or a launch. No secret value
       // is interpolated (there is none).
@@ -332,6 +370,36 @@ export function selectEngineFactory(
       logger: opts.logger,
       readPersistentRuntimeConfig: opts.readPersistentRuntimeConfig
     });
+    if (opts.acpChat && connection) {
+      return {
+        connection,
+        factory: (provider, sessionKey, engineOpts) => {
+          if (!engineOpts?.conversationId || !engineOpts.userId) {
+            // Chat has no old-bridge fallback: a launch with no conversation or user id cannot
+            // build the ACP session key below, so it refuses outright rather than silently
+            // constructing a plain RPC client under the wrong identity.
+            throw new CliChatUnavailableError(
+              "chat launch is missing its conversation or user id; refusing to start an agent session"
+            );
+          }
+          const acpSessionKey = `chat:${engineOpts.userId}:${engineOpts.conversationId}`;
+          return new AcpChatEngine(provider, acpSessionKey, {
+            tunnel: new RpcAcpTunnel(connection, acpSessionKey),
+            userId: engineOpts.userId,
+            projectId: engineOpts.conversationId,
+            permissionDecider: engineOpts?.acpPermissionDecider ?? opts.acpPermissionDecider,
+            nextSequence: engineOpts?.nextSequence,
+            // ACP sessions run in this process, so a rejected sign-in is first learned here —
+            // but the settings screen's readiness check always asks the runner process, which
+            // holds its own separate cache. Without relaying the rejection across the socket,
+            // the settings screen keeps showing a refused sign-in as good.
+            reportLoginRejected: () => {
+              void connection.recordLoginRejected({ provider }).catch(() => undefined);
+            }
+          });
+        }
+      };
+    }
     return { factory, connection };
   }
   return {
@@ -406,6 +474,8 @@ export interface CreateChatSessionRuntimeDeps {
      * `getToolsListObservationCount`. Absent ⇒ the per-turn readiness guard does not run.
      */
     readonly getToolsListObservationCount?: (token: string) => number;
+    /** Binds ACP built-in permission asks to the minted session token. */
+    readonly acpPermissionDeciderForToken?: (token: string) => AcpPermissionDecider;
   };
   /**
    * #342 (§3.5 boot-time fork) — when set, `createChatSessionRuntime` selects the engine factory ITSELF
@@ -461,6 +531,11 @@ export interface ChatSessionRuntime {
   readonly manager: ChatSessionManager;
   /** Resolve the acting user's display name for persona rendering. */
   resolveUserName(actorUserId: string): Promise<string>;
+  /** Opens the ACP adapter and runs its initialize/session-new checks for Settings. */
+  checkProviderInitialization(
+    actorUserId: string,
+    provider: ProviderKind
+  ): Promise<OnboardingProviderCheckResponse>;
   /**
    * #342 — the shared RPC connection when the cli-runner socket path was selected (else undefined, on
    * the in-process/host path). The composition root may `ensureConnected()` it on boot so the §5.3
@@ -495,6 +570,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     aiRepository: new AiRepository(),
     boss: deps.boss,
     connectorSyncAt: deps.connectorSyncAt,
+    chatPreferences: deps.chatPreferences,
     localePreferences: deps.localePreferences
   });
 
@@ -548,6 +624,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
       env: deps.engineSelection.env,
       persistentRuntimeEnabled: deps.engineSelection.persistentRuntimeEnabled,
       readPersistentRuntimeConfig: deps.engineSelection.readPersistentRuntimeConfig,
+      acpChat: true,
       onReconcile,
       onSessionReaped
     });
@@ -569,7 +646,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     clock: { now: () => Date.now() },
     idleMs: deps.idleMs ?? DEFAULT_IDLE_MS,
     neutralBase: resolveChatHome(),
-    persona: (actorUserId, userName, surface) =>
+    persona: (actorUserId: string, userName: string, surface: ChatSurface) =>
       resolveChatPersona(deps, actorUserId, userName, surface),
     mintMcpToken: deps.mcpTokenLifecycle?.mint,
     revokeMcpToken: deps.mcpTokenLifecycle?.revoke,
@@ -578,14 +655,16 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     listMcpTokenSessionIds: deps.mcpTokenLifecycle?.listSessionIds,
     waitForToolsListReady: deps.mcpTokenLifecycle?.waitForReady,
     getToolsListObservationCount: deps.mcpTokenLifecycle?.getToolsListObservationCount,
+    acpPermissionDeciderForToken: deps.mcpTokenLifecycle?.acpPermissionDeciderForToken,
     // §4.5 kill-by-mux-name for an api-unknown orphan: route through the guard-bypassing reconcile
     // driver while a reconcile is in flight (the only path that calls this), falling back to the public
     // connection method otherwise. Undefined on the in-process/host path (no separate cli-runner holds
     // orphans — reconcile step 4 no-ops there).
     killSession: connection
-      ? (sessionKey, opts) => killOrphan(activeReconcileDriver, connection!, sessionKey, opts)
+      ? (sessionKey: string, opts?: EngineKillOpts) =>
+          killOrphan(activeReconcileDriver, connection!, sessionKey, opts)
       : undefined,
-    purgePrivateTranscripts: (sessionKey) =>
+    purgePrivateTranscripts: (sessionKey: string) =>
       purgePrivateTranscripts(
         createRealTmuxIo(),
         resolveChatHome(),
@@ -653,9 +732,47 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
   return {
     manager,
     resolveUserName: (actorUserId) => persistence.resolveUserName(actorUserId),
+    checkProviderInitialization: (actorUserId, provider) =>
+      checkProviderInitialization(engineFactory, actorUserId, provider),
     connection,
     shutdown
   };
+}
+
+async function checkProviderInitialization(
+  engineFactory: ChatEngineFactory,
+  actorUserId: string,
+  provider: ProviderKind
+): Promise<OnboardingProviderCheckResponse> {
+  const checkId = randomUUID().replaceAll("-", "");
+  const sessionKey = `settings-check-${checkId}`;
+  const projectId = `settings-check-${checkId}`;
+  let neutralDir: string | undefined;
+  let engine: CliChatEngine | null = null;
+  try {
+    await mkdir(resolveChatHome(), { recursive: true });
+    neutralDir = await mkdtemp(join(resolveChatHome(), "provider-check-"));
+    const personaPath = join(neutralDir, "persona.md");
+    await writeFile(personaPath, "You are running a Moss provider initialization check.", "utf8");
+    engine = await engineFactory(provider, sessionKey, {
+      conversationId: projectId,
+      userId: actorUserId
+    });
+    await engine.launch({ neutralDir, personaPath });
+    return { status: "ready" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return /auth[_ -]?required|authentication required|not logged in|sign-in|login/i.test(message)
+      ? { status: "needs_login" }
+      : error instanceof CliChatUnavailableError
+        ? { status: "multiplexer_unavailable" }
+        : { status: "error" };
+  } finally {
+    await engine?.kill().catch(() => undefined);
+    if (neutralDir) {
+      await rm(neutralDir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
 }
 
 /**

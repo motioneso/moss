@@ -18,12 +18,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { TmuxIo } from "../../packages/ai/src/adapters/tmux-bridge.js";
 import { CliChatEngineHost } from "../../packages/cli-runner/src/engine-host.js";
 import {
-  createChatEngine,
+  createStructuredEngine,
   isBoundedFallbackEngine
-} from "../../packages/chat/src/live/engine-selection.js";
-import { ClaudePrintChatEngine } from "../../packages/chat/src/live/claude-print-chat-engine.js";
-import { GeminiPrintChatEngine } from "../../packages/chat/src/live/gemini-print-chat-engine.js";
-import { CliChatEngineImpl } from "../../packages/chat/src/live/cli-chat-engine.js";
+} from "../../packages/chat/src/live/structured-engine-selection.js";
+import { ClaudePrintChatEngine } from "../../packages/chat/src/live/structured-claude-engine.js";
+import { GeminiPrintChatEngine } from "../../packages/chat/src/live/structured-gemini-engine.js";
+import { CliChatEngineImpl } from "../../packages/chat/src/live/module-build-cli-engine.js";
 
 const NEUTRAL_BASE = "/tmp/jarvis-1350-neutral";
 
@@ -71,19 +71,19 @@ describe("#1350 the shared engine selector", () => {
   it("returns the one-shot engines for non_interactive anthropic and google", () => {
     const { io } = makeRecordingIo();
     expect(
-      createChatEngine("anthropic", "alice", io, { executionMode: "non_interactive" })
+      createStructuredEngine("anthropic", "alice", io, { executionMode: "non_interactive" })
     ).toBeInstanceOf(ClaudePrintChatEngine);
     expect(
-      createChatEngine("google", "alice", io, { executionMode: "non_interactive" })
+      createStructuredEngine("google", "alice", io, { executionMode: "non_interactive" })
     ).toBeInstanceOf(GeminiPrintChatEngine);
   });
 
   it("returns the interactive engine when the mode is interactive or absent", () => {
     const { io } = makeRecordingIo();
     expect(
-      createChatEngine("anthropic", "alice", io, { executionMode: "interactive" })
+      createStructuredEngine("anthropic", "alice", io, { executionMode: "interactive" })
     ).toBeInstanceOf(CliChatEngineImpl);
-    expect(createChatEngine("anthropic", "alice", io, {})).toBeInstanceOf(CliChatEngineImpl);
+    expect(createStructuredEngine("anthropic", "alice", io, {})).toBeInstanceOf(CliChatEngineImpl);
   });
 
   it("keeps every other provider on the interactive engine even when non_interactive", () => {
@@ -91,7 +91,7 @@ describe("#1350 the shared engine selector", () => {
     // openai-compatible has its own in-engine non-interactive handling; it must NOT be
     // silently rerouted to a print engine that cannot speak its transcript schema.
     expect(
-      createChatEngine("openai-compatible", "alice", io, { executionMode: "non_interactive" })
+      createStructuredEngine("openai-compatible", "alice", io, { executionMode: "non_interactive" })
     ).toBeInstanceOf(CliChatEngineImpl);
     expect(isBoundedFallbackEngine("openai-compatible", "non_interactive")).toBe(false);
   });

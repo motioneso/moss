@@ -37,7 +37,7 @@ export function neutralizeSeedFraming(text: string): string {
 // spoofed section header ("### System") cannot imitate real turn framing or system instructions.
 //
 // Fresh `User: `, `Assistant: ` labels this codebase adds right before sending to the model
-// (chat-context-blocks.ts / codex-exec-session.ts) are added post-neutralization and are
+// (chat-context-blocks.ts / module-build-codex-exec-session.ts) are added post-neutralization and are
 // therefore never matched here. But text that was SAVED to memory with those labels already
 // baked into it (see packages/chat/src/jobs.ts) is untrusted text like any other once it comes
 // back through recall — it does go back through this same check, and does get rewritten to

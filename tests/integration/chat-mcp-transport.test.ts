@@ -23,7 +23,7 @@ import {
   registerMcpTransportRoute,
   registerNativePermissionRoute
 } from "../../packages/chat/src/mcp-transport.js";
-import { CLAUDE_PERMISSION_HOOK_SOURCE } from "../../packages/chat/src/live/claude-permission-hook.js";
+import { CLAUDE_PERMISSION_HOOK_SOURCE } from "../../packages/chat/src/live/persistent-claude-permission-hook.js";
 import { resolveYoloMode } from "../../packages/chat/src/routes.js";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
@@ -641,7 +641,11 @@ describe("native permission YOLO", () => {
     confirmations.resolve(request.actionRequestId, "rejected");
     const response = await pending;
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ decision: "deny", reason: "Denied by user." });
+    expect(response.json()).toEqual({
+      decision: "deny",
+      reason:
+        "This action was not approved, so it was not done. Do not try it again; let the user know."
+    });
   }
 
   it("auto-grants allowlisted Write only when effective persisted YOLO state is active", async () => {
@@ -652,6 +656,10 @@ describe("native permission YOLO", () => {
       await setEffectiveYoloState({ master: true, allowed: true, enabled: true });
       const chatSessionId = randomUUID();
       const rawSecret = "never-persist-this-native-input-value";
+      const persistedActionsBefore = await runner.withDataContext(
+        { actorUserId: ids.userA, requestId: `grant-before-${randomUUID()}` },
+        (scopedDb) => repository.listAssistantActions(scopedDb)
+      );
       const token = tokens.mint({
         actorUserId: ids.userA,
         chatSessionId,
@@ -671,28 +679,17 @@ describe("native permission YOLO", () => {
       expect(hookResult.code).toBe(0);
       expect(hookResult.stderr).toBe("");
       expect(JSON.parse(hookResult.stdout).hookSpecificOutput.permissionDecision).toBe("allow");
-      expect(emitted).toEqual([
-        {
-          chatSessionId,
-          record: expect.objectContaining({
-            kind: "action_result",
-            toolName: "Write",
-            outcome: "allowed"
-          })
-        }
-      ]);
-
-      const allowedRecord = emitted[0]?.record;
-      if (!allowedRecord || allowedRecord.kind !== "action_result") {
-        throw new Error("expected allowed action result");
-      }
+      expect(emitted).toEqual([]);
       const persistedActions = await runner.withDataContext(
         { actorUserId: ids.userA, requestId: `grant-check-${randomUUID()}` },
         (scopedDb) => repository.listAssistantActions(scopedDb)
       );
       const persistedGrant = persistedActions.find(
-        (row) => row.id === allowedRecord.actionRequestId
+        (row) =>
+          !persistedActionsBefore.some((previous) => previous.id === row.id) &&
+          row.tool_name === "Write"
       );
+      if (!persistedGrant) throw new Error("expected persisted native grant");
       expect(persistedGrant?.status).toBe("confirmed");
       expect(persistedGrant?.input_summary).toEqual({
         inputKeys: ["content", "file_path"],

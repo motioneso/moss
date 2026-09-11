@@ -8,6 +8,20 @@ export interface CoreAppSurfaceDeclaration {
   readonly scope: "user" | "admin";
 }
 
+export interface CoreAppErrorDeclaration {
+  readonly code: string;
+  readonly class: "prerequisite" | "transient" | "validation" | "permission" | "bug";
+  readonly remediationRef?: string;
+  readonly description: string;
+}
+
+export interface CoreAppRemediationDeclaration {
+  readonly id: string;
+  readonly description: string;
+  readonly path?: string;
+  readonly scope?: "user" | "admin" | "system";
+}
+
 export interface AppMapItem {
   readonly moduleId: string;
   readonly id?: string;
@@ -88,7 +102,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "assistant",
     label: "Assistant & AI",
     description:
-      "Choose assistant behavior, persona dials, response style (concise, balanced, or detailed, each shown with an example answer of that length), and model routing available to this user. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > Assistant & AI) to turn on the microphone in chat.",
+      "Choose assistant behavior, persona dials, response style (concise, balanced, or detailed, each shown with an example answer of that length), and model routing available to this user. Selecting a Codex model clears a saved OpenCode chat choice. When a default chat model is set, a note explains that an admin must add a transcription model (in Admin > Assistant & AI) to turn on the microphone in chat.",
     path: "/settings?section=assistant",
     scope: "user"
   },
@@ -184,14 +198,20 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "reads '* Manually added', and they survive refreshes and re-logins). Each model row has " +
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
       "is struck through), " +
-      "a minus button (disable) and a trash button (remove after confirmation; the provider's " +
-      "default entry cannot be removed). The Models section collapses from its header. The " +
-      "'Not logged in' message only appears after someone presses Refresh models; the provider " +
-      "card itself does not notice a broken sign-in on its own. A refresh the provider answers " +
-      "by refusing the stored sign-in reads 'Not logged in' too. Once a provider has refused a " +
+      "and an ACP note when the provider cannot honour a model choice, explaining that chat stays " +
+      "on the login's default. The page also identifies the OpenCode ACP card and its saved model setting, " +
+      "and the normal Codex ACP row hands the signed-in credential into that user's isolated runner home, " +
+      "and provides a minus button (disable) and a trash button (remove after confirmation; the provider's " +
+      "default entry cannot be removed). The Models section collapses from its header. CLI provider " +
+      "cards run the ACP adapter's initialize check automatically and show 'Not logged in' when it is refused; " +
+      "the Refresh models button only asks for the provider's current model list. A refresh the provider answers " +
+      "by refusing the stored sign-in does not serve as the ACP login check. Once a provider has refused a " +
       "sign-in - on a model refresh, or on a chat message it would not answer - that sign-in " +
       "counts as expired for that provider, so the next check asks for a fresh login instead of " +
-      "repeating an old success, until a fresh login is accepted. Pressing Log in on a provider " +
+      "repeating an old success, until a fresh login is accepted. Chat checks CLI sign-ins when the " +
+      "ACP adapter initializes. The page also includes an OpenCode ACP card with a saved Chat model setting; " +
+      "the saved choice is passed to the ACP chat launch and applied when the agent advertises that option. " +
+      "Pressing Log in on a provider " +
       "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
       "genuinely broken sign-in always gets a fresh place to sign back in. A " +
       "separate Web search group has a 'Use your model's built-in web search' switch, on by " +
@@ -237,5 +257,23 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "Generate and rotate the encryption keys that lock stored credentials. A banner here and on the settings home names any key that still needs attention; a stored key that no longer opens shows as stopped with a Replace key remediation, while an unusable value in the settings file shows as stopped with guidance to fix or remove it there and no button. Keys are never shown.",
     path: "/settings?section=enckeys",
     scope: "admin"
+  }
+];
+
+export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
+  {
+    code: "core.ai.action_not_approved",
+    class: "permission",
+    remediationRef: "core.ai.ask_user",
+    description: "An agent action was not approved, so it was not done."
+  }
+];
+
+export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "core.ai.ask_user",
+    description: "Ask the user to approve the action before trying it again.",
+    path: "/",
+    scope: "user"
   }
 ];

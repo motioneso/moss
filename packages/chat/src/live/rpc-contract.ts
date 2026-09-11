@@ -164,6 +164,7 @@ export type RpcMethod =
   | "kill" // per-session (sessionKey required); private cleanup purges before kill
   | "listLiveSessions" // non-session (reconciliation, §4.6)
   | "probeProvider" // non-session (onboarding, §4.8)
+  | "recordLoginRejected" // non-session — tell the runner's own probe cache a sign-in was refused
   | "installProvider" // non-session (on-demand installer, install-contract §A.2 — ADDITIVE)
   | "beginLogin" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
   | "pollLogin" // non-session (login presentation, login-contract §L.2 — ADDITIVE)
@@ -174,7 +175,20 @@ export type RpcMethod =
   | "openTerminal"
   | "writeTerminal"
   | "resizeTerminal"
-  | "killTerminal";
+  | "killTerminal"
+  // Slice 1 task 3 — ACP agent tunnel. The runner spawns the provider's ACP
+  // adapter as the session user and pipes its stdio lines; all protocol
+  // intelligence stays API-side in @moss/acp.
+  | "acpSpawn"
+  | "acpSend"
+  | "acpRead"
+  | "acpKill"
+  // Slice 1 task 3 — runner-side builds. The caller names a
+  // project, never a folder; the runner locks the working directory to the
+  // session project folder, caps output at 256 KiB, and kills past the deadline.
+  | "acpExecStart"
+  | "acpExecPoll"
+  | "acpExecKill";
 
 export type RpcErrorCode =
   | "unavailable" // engine could not launch / multiplexer down / NOT_LAUNCHED → CliChatUnavailableError (retryable HTTP 503)
@@ -269,7 +283,7 @@ export interface RpcLaunchParams {
   readonly provider: RpcProviderKind;
   readonly executionMode?: AiProviderExecutionMode;
   /** #1350/B4: set only by a structured caller. See `ChatEngineSelectionOpts.needsStructuredOutput`
-   *  in engine-selection.ts — this carries the same call-boundary signal across the socket so the
+   *  in structured-engine-selection.ts — this carries the same call-boundary signal across the socket so the
    *  cli-runner root can't drift from the in-process root on which calls keep the bounded print
    *  engine regardless of the persistent-runtime flag. */
   readonly needsStructuredOutput?: boolean;
@@ -306,6 +320,8 @@ export interface RpcLaunchParams {
    * it passes `--model <id>`; absent ⇒ also omit.
    */
   readonly model?: string;
+  /** Saved OpenCode ACP model choice, applied after session/new when advertised. */
+  readonly acpModel?: string;
   /**
    * #1554 — `chat.persistent_runtime.enabled`, read LIVE by the api on every launch and carried
    * here. This is the plan's live-reload mechanism for the RPC/containerized topology ("Settings &
@@ -474,6 +490,20 @@ export interface RpcProbeProviderResult {
 }
 
 /**
+ * params for method "recordLoginRejected" — instance-wide, no sessionKey. Tells the runner
+ * process that a sign-in was just refused, so its OWN probe cache (the one the settings screen
+ * actually asks) stops answering "ready" with that credential. ACP sessions run in the API
+ * process and learn of a rejection there, which never reaches the runner on its own.
+ */
+export interface RpcRecordLoginRejectedParams {
+  readonly provider: RpcProviderKind;
+}
+/** result for method "recordLoginRejected". */
+export interface RpcRecordLoginRejectedResult {
+  readonly ok: true;
+}
+
+/**
  * params for method "listProviderModels" (#2208) — instance-wide query, no sessionKey. The runner
  * reads the provider's stored login credential from the cli-auth volume and asks the vendor for
  * its live model list; ONLY model ids cross the socket (never the credential, never in `message`).
@@ -509,4 +539,126 @@ export interface RpcResizeTerminalParams {
 /** params for method "killTerminal": terminate the PTY + its process tree. */
 export interface RpcKillTerminalParams {
   readonly terminalId: string;
+}
+
+// Slice 1 task 3 — ACP tunnel params/results (interface-pair pattern, mirrors RpcSubmit*).
+// The runner is a line pipe: it never parses the ACP JSON, it only frames stdout lines.
+// Secrets cross only inside these socket payloads, never argv or env of an unrelated process.
+/** params for method "acpSpawn": start one provider's agent for this session key. */
+export interface RpcAcpSpawnParams {
+  /**
+   * Project the agent works in. The runner creates
+   * `<session-dir>/<projectId>/` as the adapter's working folder; path characters
+   * outside `[A-Za-z0-9_-]` are rejected.
+   */
+  readonly projectId: string;
+  /**
+   * Which provider's adapter to run. Required: a spawn without one is refused,
+   * and the host refuses an unknown kind. There is no default provider.
+   */
+  readonly providerKind: string;
+  /** Whose account slot the agent runs in. Required: slots belong to people, never sessions. */
+  readonly userId: string;
+  /** Which surface the session serves. The host applies that profile's launch rules. */
+  readonly profile: string;
+}
+/** result for method "acpSpawn": the runner-side working folder the client hands to session/new. */
+export interface RpcAcpSpawnResult {
+  readonly cwd: string;
+  /**
+   * Session generation, monotonic per runner process. A later spawn of the same
+   * key evicts the earlier one; `acpKill` with a stale generation is a no-op so
+   * a dropped connection can never kill another connection's live session.
+   */
+  readonly generation: number;
+  /** The HOME handed to the agent process, or null when it names none. */
+  readonly home: string | null;
+  /** The spawned agent's own process id, or null when it could not be read. */
+  readonly pid: number | null;
+  /**
+   * The slot account the agent is spawned to run as — the expected identity
+   * to check /proc/<pid>/status against, not a stand-in for it (task 5b,
+   * Astra-Reviewer finding 5, 2026-09-08).
+   */
+  readonly uid: number;
+  readonly gid: number;
+}
+/** params for method "acpSend": one client-to-agent JSON-RPC line (no trailing newline). */
+export interface RpcAcpSendParams {
+  readonly line: string;
+}
+/** result for method "acpSend". */
+export interface RpcAcpSendResult {
+  readonly accepted: true;
+}
+/** params for method "acpRead": drain adapter stdout lines after a sequence cursor. */
+export interface RpcAcpReadParams {
+  readonly afterSeq: number;
+}
+/** result for method "acpRead": buffered lines plus liveness. */
+export interface RpcAcpReadResult {
+  readonly lines: readonly string[];
+  /**
+   * Sequence number of `lines[0]` (1-based line counter); the next cursor is
+   * `firstSeq + lines.length - 1`, or the passed cursor when lines is empty.
+   * The reader must advance by lines delivered, never by `nextSeq`, or a reply
+   * cut by the total cap would skip lines forever.
+   */
+  readonly firstSeq: number;
+  readonly nextSeq: number;
+  readonly exited: boolean;
+  readonly exitCode: number | null;
+  /** True when this reply — or an earlier one — was cut (see AcpHost). */
+  readonly truncated: boolean;
+}
+/**
+ * params for method "acpKill": stop the adapter for this session key. For a
+ * chat-profile session this also purges its scratch working folder, as the
+ * folder's own owning account, once the process is confirmed stopped — the
+ * runner does this itself; no separate purge call crosses this contract.
+ */
+export interface RpcAcpKillParams {
+  /**
+   * When present, kill only if the live session still has this generation (the
+   * connection-close path). Absent means unconditional (explicit lifecycle).
+   */
+  readonly generation?: number;
+}
+/** result for method "acpKill". */
+export interface RpcAcpKillResult {
+  readonly ok: true;
+}
+// Slice 1 task 3 — runner-side builds (interface-pair
+// pattern, mirrors RpcAcpSpawn*). The working directory is derived runner-side from
+// the session key plus projectId; there is deliberately no folder parameter.
+/** params for method "acpExecStart": run one shell command in the session project folder. */
+export interface RpcAcpExecStartParams {
+  readonly projectId: string;
+  readonly command: string;
+  /** Deadline in ms; defaults to 5 min runner-side, never more than 10 min. */
+  readonly timeoutMs?: number;
+}
+/** result for method "acpExecStart": the build id to poll. */
+export interface RpcAcpExecStartResult {
+  readonly execId: number;
+}
+/** params for method "acpExecPoll": read output so far for one build. */
+export interface RpcAcpExecPollParams {
+  readonly execId: number;
+}
+/** result for method "acpExecPoll": output so far plus completion. */
+export interface RpcAcpExecPollResult {
+  readonly output: string;
+  readonly done: boolean;
+  readonly exitCode: number | null;
+  readonly truncated: boolean;
+  readonly timedOut: boolean;
+}
+/** params for method "acpExecKill": stop one build. Idempotent. */
+export interface RpcAcpExecKillParams {
+  readonly execId: number;
+}
+/** result for method "acpExecKill". */
+export interface RpcAcpExecKillResult {
+  readonly ok: true;
 }

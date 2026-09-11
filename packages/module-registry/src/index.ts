@@ -536,12 +536,10 @@ export interface BuiltInRouteDependencies {
    */
   readonly connectTerminalRpc?: (options: TerminalRpcConnectOptions) => Promise<TerminalRpcHandle>;
   /**
-   * #342 (§3.5 boot-time fork) — built by `registerBuiltInApiRoutes` only on the socket path
-   * (JARVIS_CLI_RUNNER_SOCKET set) and forwarded to `registerChatRoutes`, where the chat runtime uses
-   * it to select the RPC client (and fail-fast on a missing §6.6 secret), wire the §5.3 reconciliation
-   * hook, and start the §5.5 idle reaper. Absent on the in-process / host-dev path (the late-bound
-   * {@link chatEngineFactory} wrapper is used there instead, preserving admin `chat.multiplexer`
-   * resolution).
+   * #342 (§3.5 boot-time fork) — built by `registerBuiltInApiRoutes` whenever no explicit test or
+   * embedding factory is supplied, and forwarded to `registerChatRoutes`, where the chat runtime
+   * selects ACP itself. The late-bound {@link chatEngineFactory} remains for structured/module
+   * callers until slice 2 moves them.
    */
   readonly chatEngineSelection?: ChatRoutesDependencies["engineSelection"];
   /** Chat-owned passive graph recall seam; no module imports graph internals directly. */
@@ -563,6 +561,8 @@ export interface BuiltInRouteDependencies {
    * in-process path.
    */
   readonly adoptChatRpcConnection?: (connection: RpcConnection) => void;
+  /** Publishes the chat runtime's ACP initialize check to the Settings probe. */
+  readonly adoptAcpProviderInitialization?: ChatRoutesDependencies["adoptAcpProviderInitialization"];
   /**
    * #1081 H2 — set by `registerBuiltInApiRoutes` and consumed inside `registerChatRoutes`:
    * the same late-bound "adopt" seam as {@link adoptChatRpcConnection}, but publishing the
@@ -638,6 +638,10 @@ export interface BuiltInRouteDependencies {
     readonly cliPresent: (kind: OnboardingProviderKind) => Promise<boolean>;
     readonly testProviderConnection: (
       kind: OnboardingProviderKind
+    ) => Promise<OnboardingProviderCheckResponse>;
+    readonly acpProviderInitialization?: (
+      kind: OnboardingProviderKind,
+      actorUserId: string
     ) => Promise<OnboardingProviderCheckResponse>;
     readonly connectorAccountExists: (scopedDb: DataContextDb) => Promise<boolean>;
   };
@@ -1962,14 +1966,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         rootDb: deps.rootDb,
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
-        // #342 (§3.5): on the RPC/socket path the chat runtime selects the engine itself via
-        // `engineSelection`, so we must NOT also pass the in-process late-bound factory wrapper (which
-        // would win the explicit-factory branch and never select the RPC client, and would throw
-        // "not resolved yet" because the host-dev onReady resolver is skipped on the socket path). On
-        // the host-dev path `engineSelection` is undefined and the resolved factory is passed instead.
+        // Chat always selects ACP through `engineSelection`; the late-bound bridge remains available
+        // only to structured/module callers through `createCliStructuredAdapter` below.
         chatEngineFactory: deps.chatEngineSelection ? undefined : deps.chatEngineFactory,
         engineSelection: deps.chatEngineSelection,
         adoptChatRpcConnection: deps.adoptChatRpcConnection,
+        adoptAcpProviderInitialization: deps.adoptAcpProviderInitialization,
         // #1081 H2: same late-bound "adopt" seam as adoptChatRpcConnection above, publishing
         // the manager's dropSessionsForProvider back to the composition root.
         adoptDropSessionsForProvider: deps.adoptDropSessionsForProvider,
@@ -3070,6 +3072,12 @@ export function registerBuiltInApiRoutes(
   // late-bound `getRpcConnection` lets a connection that is wired AFTER probe construction still be
   // used (the probes only dereference it at call time, which is strictly post-boot).
   const cliPresent = makeCliPresentProbe(getRpcConnection);
+  let acpProviderInitialization:
+    | ((
+        kind: OnboardingProviderKind,
+        actorUserId: string
+      ) => Promise<OnboardingProviderCheckResponse>)
+    | undefined;
 
   // The factory is resolved asynchronously in onReady (a settings read) on the in-process path, but
   // routes register synchronously. Bridge with a late-bound wrapper: it is only ever invoked when a
@@ -3105,6 +3113,13 @@ export function registerBuiltInApiRoutes(
       env,
       connection: getRpcConnection
     }),
+    acpProviderInitialization: (
+      kind: OnboardingProviderKind,
+      actorUserId: string
+    ): Promise<OnboardingProviderCheckResponse> =>
+      acpProviderInitialization
+        ? acpProviderInitialization(kind, actorUserId)
+        : Promise.resolve({ status: "multiplexer_unavailable" }),
     connectorAccountExists: async (scopedDb: DataContextDb) =>
       (await new ConnectorsRepository().listAccounts(scopedDb)).length > 0
   };
@@ -3213,23 +3228,21 @@ export function registerBuiltInApiRoutes(
     platformDiagnostics,
     chatEngineFactory,
     createCliStructuredAdapter: createCliStructuredAdapterFactory(structuredChatEngineFactory),
-    // #342 (§3.5 boot-time fork): on the socket path hand the chat runtime an `engineSelection` so it
-    // selects the RPC client itself (fail-fast on a missing §6.6 secret), wires the §5.3 reconciliation
-    // hook, and starts the §5.5 idle reaper. The {method,id,sessionKey,bytes}-only debug logger (§6.4)
-    // is intentionally omitted (no frame-body logging). Tests that inject an explicit chatEngineFactory
-    // bypass this entirely (no socket selection). Undefined on the in-process / host-dev path.
+    // #342 (§3.5 boot-time fork): chat always receives an `engineSelection`, so the chat runtime
+    // selects ACP itself (including the runner's default socket path when the env var is absent).
+    // The {method,id,sessionKey,bytes}-only debug logger (§6.4) is intentionally omitted (no
+    // frame-body logging). Tests that inject an explicit chatEngineFactory bypass this entirely.
     // #1554: the RPC branch also carries a live read of the persistent-runtime settings, since the
     // cli-runner has no DB access — it learns `chat.persistent_runtime.*` only from launch params.
-    chatEngineSelection:
-      socketConfigured && !dependencies.chatEngineFactory
-        ? {
-            env,
-            readPersistentRuntimeConfig: createPersistentRuntimeConfigLiveReader(
-              dependencies.rootDb,
-              (msg) => server.log.info(msg)
-            )
-          }
-        : undefined,
+    chatEngineSelection: !dependencies.chatEngineFactory
+      ? {
+          env,
+          readPersistentRuntimeConfig: createPersistentRuntimeConfigLiveReader(
+            dependencies.rootDb,
+            (msg) => server.log.info(msg)
+          )
+        }
+      : undefined,
     passiveMemoryRecall: {
       async recall(scopedDb, ownerUserId, query, options) {
         const provider = await createRuntimeEmbeddingProvider(scopedDb);
@@ -3248,6 +3261,9 @@ export function registerBuiltInApiRoutes(
     // probes through it and to ensureConnected()/close() it at the composition-root boundary.
     adoptChatRpcConnection: (connection: RpcConnection) => {
       rpcConnection = connection;
+    },
+    adoptAcpProviderInitialization: (check) => {
+      acpProviderInitialization = (provider, actorUserId) => check(actorUserId, provider);
     },
     // #1081 H2: mirrors adoptChatRpcConnection immediately above — publishes the chat session
     // manager's dropSessionsForProvider so the onboarding-install seam (built earlier in this

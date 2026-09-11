@@ -2,7 +2,7 @@
  * Claude adapter for the persistent provider chat runtime (#1557 Phase 1, P1.3/P1.4).
  *
  * One warm child process serves every turn on a session until reaped — piped stdio (not the
- * detached/ignore pattern in `claude-print-chat-engine.ts`), fed one `stream-json` user frame per
+ * detached/ignore pattern in `structured-claude-engine.ts`), fed one `stream-json` user frame per
  * `submitTurn`, decoded push-style through the bounded `PersistentStreamDecoder` (P1.2). Admission
  * is fail-closed: `launch()` never resolves, and no user frame is ever written, until the
  * server-side MCP session for the minted token has both initialized and listed tools
@@ -20,7 +20,7 @@ import {
 } from "@moss/ai";
 
 import { PersistentStreamDecoder } from "./persistent-stream-decoder.js";
-import { writeClaudePermissionHook } from "./claude-permission-hook.js";
+import { writeClaudePermissionHook } from "./persistent-claude-permission-hook.js";
 import type {
   CancelOutcome,
   ChildState,

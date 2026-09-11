@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import {
   CliChatUnavailableError,
   VerifiedSubmitError,
-  createChatEngine,
+  createStructuredEngine,
   deriveNeutralDir,
   invalidateProviderProbeCache,
   killMuxSessionByName,
@@ -26,7 +26,7 @@ import {
   removeNeutralDir,
   sanitizeSessionKey,
   type CliChatEngine,
-  // #1350: type-only now — the host builds its engine through `createChatEngine`, never by
+  // #1350: type-only now — the host builds its engine through `createStructuredEngine`, never by
   // naming an implementation. Kept solely for the `hasVerifiedSubmit` capability narrow.
   type CliChatEngineImpl,
   type ProbeProviderResult,
@@ -50,7 +50,11 @@ import {
   startIdleReapTimer as startPoolIdleReapTimer
 } from "@moss/chat/live";
 import type { ProviderKind } from "@moss/ai";
+import type { AcpProfile, AcpProviderKind } from "@moss/acp";
 
+import { AcpHost, type AcpExecPollResult, type AcpReadResult } from "./acp-host.js";
+import { ACP_DEADLINE_DIR } from "./exec-records.js";
+import { ACP_PRIVATE_MARKER_DIR } from "./acp-private-markers.js";
 import { Mutex } from "./mutex.js";
 import { LoginBadRequestError, type LoginService } from "./login-service.js";
 import {
@@ -110,6 +114,69 @@ export class CliChatEngineHost {
   constructor(private readonly deps: EngineHostDeps) {
     this.launchTimeoutMs = deps.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT_MS;
     this.verifiedSubmitTimeoutMs = deps.verifiedSubmitTimeoutMs ?? VERIFIED_SUBMIT_DEADLINE_MS;
+    // Slice 1 task 3 — the ACP adapter host rides the same identity config (uid slot
+    // when enabled, shared home base, per-session dirs). It is deliberately OUTSIDE
+    // the chat admission gate below: agent sessions are a separate surface
+    // and must never contend with the single-active-user chat lock.
+    this.acp = new AcpHost({
+      neutralBase: deps.neutralBase,
+      homeBase: deps.homeBase,
+      perUserUid: deps.perUserUid
+    });
+  }
+
+  private readonly acp: AcpHost;
+
+  /**
+   * Slice 1 task 3 — ACP tunnel verbs. Thin delegates: admission, policy, and the
+   * protocol all live elsewhere (API-side client, gateway); the host only pipes lines.
+   * The spawn carries the provider kind and the host refuses one without it.
+   */
+  async acpSpawn(
+    sessionKey: string,
+    projectId: string,
+    providerKind: AcpProviderKind,
+    userId: string,
+    profile: AcpProfile
+  ): Promise<{
+    cwd: string;
+    generation: number;
+    home: string | null;
+    pid: number | null;
+    uid: number;
+    gid: number;
+  }> {
+    return this.acp.spawn(sessionKey, projectId, providerKind, userId, profile);
+  }
+
+  acpSend(sessionKey: string, line: string): void {
+    this.acp.send(sessionKey, line);
+  }
+
+  acpRead(sessionKey: string, afterSeq: number): AcpReadResult {
+    return this.acp.read(sessionKey, afterSeq);
+  }
+
+  acpKill(sessionKey: string, opts: { generation?: number } = {}): Promise<void> {
+    return this.acp.kill(sessionKey, opts.generation);
+  }
+
+  /** Runner-side builds; contract lives in AcpHost. */
+  async acpExecStart(
+    sessionKey: string,
+    projectId: string,
+    command: string,
+    timeoutMs?: number
+  ): Promise<{ execId: number }> {
+    return this.acp.execStart(sessionKey, projectId, command, timeoutMs);
+  }
+
+  acpExecPoll(sessionKey: string, execId: number): AcpExecPollResult {
+    return this.acp.execPoll(sessionKey, execId);
+  }
+
+  acpExecKill(sessionKey: string, execId: number): void {
+    this.acp.execKill(sessionKey, execId);
   }
 
   /** Registers a listener for session-reaped events; returns an unregister function. */
@@ -276,7 +343,7 @@ export class CliChatEngineHost {
     // does in the in-process factory. Before this the runner ALWAYS built the tmux REPL
     // engine, which made #1239's flip a no-op on every containerized deploy and took prod
     // chat down completely.
-    const engine = await createChatEngine(params.provider as ProviderKind, key, sessionIo, {
+    const engine = await createStructuredEngine(params.provider as ProviderKind, key, sessionIo, {
       mux: this.deps.mux,
       homeBase: this.deps.homeBase,
       ownsDrain: true,
@@ -315,7 +382,7 @@ export class CliChatEngineHost {
     }
 
     // Review B4 follow-up — `params.schema` present means this is a structured one-shot call
-    // (email extraction via `CliStructuredAdapter`). `createChatEngine` already built the bounded
+    // (email extraction via `CliStructuredAdapter`). `createStructuredEngine` already built the bounded
     // print engine for it (`needsStructuredOutput` above), so the launch call itself must be
     // `launchStructured`, not the ordinary `launch` — the ordinary one never spawns the
     // JSON-stream child process the structured submit/read verbs below depend on.
@@ -336,6 +403,7 @@ export class CliChatEngineHost {
       replayAttemptId: params.replayAttemptId,
       // #367: forward the resolved model id so buildClaudeCommand emits `--model <id>`.
       model: params.model,
+      acpModel: params.acpModel,
       // #2228: let the CLI run its own web search tool and report sources.
       nativeSearch: params.nativeSearch
     };
@@ -637,6 +705,13 @@ export class CliChatEngineHost {
     return { status: result.status, message: result.message };
   }
 
+  /** Relays a sign-in rejection learned in the API process into this cache. */
+  async recordLoginRejected(provider: RpcProviderKind): Promise<void> {
+    const { homeBase } = this.deps;
+    const credentialEnv = homeBase && (await readProviderCredentialEnv(homeBase, provider));
+    recordProviderLoginRejected(provider as ProviderKind, credentialEnv || undefined);
+  }
+
   // ─── listProviderModels (#2208) — non-session; credential never crosses the socket ───
 
   /** Built on first use: `codex --version` is read at most once per runner process. */
@@ -784,12 +859,10 @@ export class CliChatEngineHost {
   // ─── startup CLEAN-SLATE sweep (§4.1.0a (2) / §6.5) ───────────────────────────
 
   /**
-   * BEFORE accepting connections: kill every `jarv1s-live-*` mux session that exists,
-   * purge every marker-backed private transcript to completion, then clear residual
-   * neutral dirs. A container restart kills the forked tmux server while token dirs
-   * persist on the volume, so a mux-only sweep misses them. The gate guarantees ≤1 live
-   * session, so a fresh process legitimately has zero — the base is cleared wholesale
-   * only after purge succeeds.
+   * BEFORE accepting connections: kill leftover `jarv1s-live-*` mux sessions, purge every
+   * marker-backed private transcript, then clear residual neutral dirs. A restart kills the
+   * forked tmux server but leaves token dirs on the volume, so wholesale clear only runs
+   * once purge succeeds.
    */
   async startupSweep(): Promise<void> {
     // (a) kill any surviving mux sessions (rare after a container restart, but a fast
@@ -801,33 +874,32 @@ export class CliChatEngineHost {
       await killMuxSessionByName(this.deps.io, key, this.deps.homeBase).catch(() => undefined);
     }
     // (b) purge every marker-backed private transcript before the neutral dirs are erased.
-    const purged = await purgePrivateTranscriptMarkers(
+    const purgedTranscripts = await purgePrivateTranscriptMarkers(
       this.deps.io,
       this.deps.neutralBase,
       this.deps.homeBase
     );
-    if (purged) {
-      // (c) once every pointed-to transcript is confirmed purged, remove residual neutral dirs.
+    // (b.1) same for ACP chat-profile scratch folders, as their owning accounts.
+    const purgedAcp = await this.acp.sweepPrivateMarkers().catch(() => false);
+    if (purgedTranscripts && purgedAcp) {
+      // (c) once every pointed-to private folder is confirmed purged, remove residual neutral dirs.
       await this.clearNeutralBase();
     }
-    // (d) §A.3.2 install-service tools-volume sweep (DISTINCT from the auth-volume sweep
-    // above): clear orphaned `.staging/*` AND GC releases not referenced by `current`.
-    // Ordered here so it completes BEFORE the server accepts the first installProvider
-    // (the server runs startupSweep before listen, server.ts:41).
+    // (d) §A.3.2 tools-volume sweep, distinct from the auth-volume sweep above: clears
+    // orphaned `.staging/*` and unreferenced GC releases, before the first installProvider.
     await this.deps.installService?.startupSweep().catch(() => undefined);
-    // (d.1) #1081 H1: boot-time drift reconcile — re-verify every ALREADY-installed
-    // provider's live binary against the current catalog (a rebaked recipe whose binary
-    // is stuck stale in the persistent tools volume gets reinstalled here; an
-    // already-current or never-installed provider is untouched). Runs after the GC sweep
-    // above and before the server accepts its first request.
+    // (d.1) #1081 H1: reconcile every already-installed provider's binary against the
+    // current catalog, so a stale rebaked recipe gets reinstalled before the first request.
     await this.deps.installService?.reconcileInstalledProviders().catch(() => undefined);
     // (e) §L.3.4 login-session sweep: kill every `jarv1s-login-*` mux session (a fast in-place
     // restart can leave one while the in-memory login flow is gone). DISTINCT from (a), which
     // only enumerates `jarv1s-live-*` chat sessions.
     await this.deps.loginService?.startupSweep().catch(() => undefined);
+    // (f) orphaned-build sweep: after the clean-out, never beside it.
+    await this.acp.reapOrphanedExecs().catch(() => undefined);
   }
 
-  /** `rm -rf <neutralBase>/* ` then recreate the base dir (`0700`). */
+  /** `rm -rf <neutralBase>/* ` then recreate the shared traversable base (`0711`). */
   private async clearNeutralBase(): Promise<void> {
     // Remove children individually (not the base itself) so the mount point/volume root
     // is preserved; recreate the base so the first launch's mkdir -p is a no-op.
@@ -839,14 +911,16 @@ export class CliChatEngineHost {
       for (const name of listed.stdout
         .split("\n")
         .map((s) => s.trim())
-        .filter(Boolean)) {
+        .filter(
+          (name) => name.length > 0 && name !== ACP_DEADLINE_DIR && name !== ACP_PRIVATE_MARKER_DIR
+        )) {
         await this.deps.io
           .run("rm", ["-rf", `${this.deps.neutralBase}/${name}`])
           .catch(() => undefined);
       }
     }
     await this.deps.io.run("mkdir", ["-p", this.deps.neutralBase]).catch(() => undefined);
-    await this.deps.io.run("chmod", ["700", this.deps.neutralBase]).catch(() => undefined);
+    await this.deps.io.run("chmod", ["711", this.deps.neutralBase]).catch(() => undefined);
   }
 
   // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -889,7 +963,7 @@ function hasVerifiedSubmit(engine: CliChatEngine): engine is CliChatEngineImpl {
 
 /**
  * Review B4 follow-up — mirrors `hasVerifiedSubmit`'s feature-detect pattern. Only the bounded
- * print engine (`ClaudePrintChatEngine`, built by `createChatEngine` whenever
+ * print engine (`ClaudePrintChatEngine`, built by `createStructuredEngine` whenever
  * `needsStructuredOutput` is set) implements these three methods.
  */
 type StructuredCapableEngine = CliChatEngine & {

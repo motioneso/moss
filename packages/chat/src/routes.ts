@@ -29,6 +29,7 @@ import {
 } from "@moss/ai";
 import { PreferencesRepository } from "@moss/structured-state";
 import type { NotesRecallPort } from "@moss/notes";
+import type { AcpPermissionDecider } from "@moss/acp";
 import { getConnectorSyncAt } from "@moss/connectors";
 import type {
   ConnectorsRepository,
@@ -56,6 +57,7 @@ import type { PassiveMemoryGraphRecallPort } from "./live/passive-retrieval.js";
 import { createChatSessionRuntime, type ChatEngineFactory } from "./live/runtime.js";
 import type {
   CreateChatSessionRuntimeDeps,
+  ChatSessionRuntime,
   PersonaPreferencesPort,
   RpcConnection
 } from "./live/runtime.js";
@@ -133,11 +135,9 @@ export interface ChatRoutesDependencies {
   readonly listModuleManifests?: () => readonly MossModuleManifest[];
   /**
    * #342 (§3.5 boot-time fork) — when no explicit {@link chatEngineFactory} is supplied, hand this to
-   * {@link createChatSessionRuntime} so the runtime selects the engine factory itself: the RPC client
-   * over the cli-runner socket when `JARVIS_CLI_RUNNER_SOCKET` is set (else the in-process engine). The
-   * runtime then owns the §5.3 reconciliation hook (which needs the manager) and the §5.5 idle reaper.
-   * Forwarded by `registerBuiltInApiRoutes` only on the socket path; the host-dev path keeps passing a
-   * resolved {@link chatEngineFactory} (admin `chat.multiplexer` setting + auto-detect) instead.
+   * {@link createChatSessionRuntime} so chat selects its ACP engine over the cli-runner socket. The
+   * runtime owns the §5.3 reconciliation hook (which needs the manager) and the §5.5 idle reaper.
+   * Structured/module callers keep their separate late-bound factory until slice 2 moves them.
    */
   readonly engineSelection?: CreateChatSessionRuntimeDeps["engineSelection"];
   /**
@@ -147,6 +147,10 @@ export interface ChatRoutesDependencies {
    * the in-process path (the runtime exposes no connection).
    */
   readonly adoptChatRpcConnection?: (connection: RpcConnection) => void;
+  /** Publishes the ACP initialize check for the admin provider status route. */
+  readonly adoptAcpProviderInitialization?: (
+    check: ChatSessionRuntime["checkProviderInitialization"]
+  ) => void;
   /**
    * #1081 H2 — same late-bound "adopt" seam as {@link adoptChatRpcConnection}, but for the
    * chat session manager itself (built inside this function, AFTER the composition root
@@ -274,7 +278,7 @@ export function registerChatRoutes(
             })
           );
 
-          return { tokens, gateway, mcpServerUrl, aiRepository };
+          return { tokens, confirmations, gateway, mcpServerUrl, aiRepository };
         })()
       : null;
 
@@ -284,10 +288,8 @@ export function registerChatRoutes(
     rootDb: dependencies.rootDb,
     dataContext: dependencies.dataContext,
     engineFactory: dependencies.chatEngineFactory,
-    // #342 (§3.5): only select the engine ourselves when no explicit factory was injected (tests/host
-    // pass a resolved factory). `selectEngineFactory` inside the runtime picks the RPC client when
-    // JARVIS_CLI_RUNNER_SOCKET is set (and fail-fasts on a missing §6.6 secret), else the in-process
-    // engine. An explicit chatEngineFactory always wins inside the runtime, so passing both is safe.
+    // #342 (§3.5): only select the ACP engine ourselves when no explicit factory was injected. An
+    // explicit chatEngineFactory always wins for tests and embedders.
     engineSelection: dependencies.chatEngineFactory ? undefined : dependencies.engineSelection,
     boss: dependencies.boss,
     connectorSyncAt: dependencies.connectorsRepository
@@ -333,7 +335,35 @@ export function registerChatRoutes(
           waitForReady: (token: string) => wiring.tokens.waitForToolsListObserved(token),
           // #2164 r21 — per-turn observation reading (see Fable's r21 wiring-amendment ruling).
           getToolsListObservationCount: (token: string) =>
-            wiring.tokens.getToolsListObservationCount(token)
+            wiring.tokens.getToolsListObservationCount(token),
+          acpPermissionDeciderForToken: (token: string): AcpPermissionDecider => ({
+            decide: async (request, session) => {
+              const result = await wiring.gateway.requestAcpBuiltInPermission(token, {
+                cwd: session.cwd,
+                home: session.home,
+                sessionId: request.sessionId,
+                turnId: request.turnId,
+                toolCallId: request.toolCallId,
+                title: request.title,
+                toolInput:
+                  request.rawInput &&
+                  typeof request.rawInput === "object" &&
+                  !Array.isArray(request.rawInput)
+                    ? (request.rawInput as Record<string, unknown>)
+                    : {},
+                toolName: request.toolName,
+                kind: request.kind,
+                locations: request.locations
+              });
+              return result.decision;
+            },
+            beginTurn: (sessionId, turnId) => {
+              wiring.confirmations.beginTurn(sessionId, turnId);
+            },
+            cancelSession: (sessionId) => {
+              wiring.confirmations.cancelSession(sessionId);
+            }
+          })
         }
       : undefined
   });
@@ -344,6 +374,7 @@ export function registerChatRoutes(
   if (runtime.connection) {
     dependencies.adoptChatRpcConnection?.(runtime.connection);
   }
+  dependencies.adoptAcpProviderInitialization?.(runtime.checkProviderInitialization);
 
   // #1081 H2: publish the session manager's drop-by-provider method back to the composition
   // root (same "adopt" seam as above), unconditionally — unlike the RPC connection,

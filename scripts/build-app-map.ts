@@ -4,7 +4,15 @@ import { fileURLToPath } from "node:url";
 import { resolveMossEnv } from "@moss/db";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
-import { CORE_APP_SCREENS, CORE_APP_SETTINGS, type CoreAppSurfaceDeclaration } from "@moss/shared";
+import {
+  CORE_APP_ERRORS,
+  CORE_APP_REMEDIATIONS,
+  CORE_APP_SCREENS,
+  CORE_APP_SETTINGS,
+  type CoreAppErrorDeclaration,
+  type CoreAppRemediationDeclaration,
+  type CoreAppSurfaceDeclaration
+} from "@moss/shared";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -12,6 +20,8 @@ export interface BuildAppMapInput {
   readonly manifests: readonly MossModuleManifest[];
   readonly coreScreens: readonly CoreAppSurfaceDeclaration[];
   readonly coreSettings: readonly CoreAppSurfaceDeclaration[];
+  readonly coreErrors?: readonly CoreAppErrorDeclaration[];
+  readonly coreRemediations?: readonly CoreAppRemediationDeclaration[];
   readonly version: string;
   readonly buildId: string;
   readonly narrative: string;
@@ -49,20 +59,29 @@ export function buildAppMap(input: BuildAppMapInput) {
       ...settings
     ],
     features,
-    errors: features.flatMap((feature) =>
-      (feature.errors ?? []).map((error) => ({
-        moduleId: feature.moduleId,
-        featureId: feature.id,
-        ...error
-      }))
-    ),
-    remediations: features.flatMap((feature) =>
-      (feature.remediations ?? []).map((remediation) => ({
-        moduleId: feature.moduleId,
-        featureId: feature.id,
+    errors: [
+      ...(input.coreErrors ?? []).map((error) => ({ moduleId: "core", ...error })),
+      ...features.flatMap((feature) =>
+        (feature.errors ?? []).map((error) => ({
+          moduleId: feature.moduleId,
+          featureId: feature.id,
+          ...error
+        }))
+      )
+    ],
+    remediations: [
+      ...(input.coreRemediations ?? []).map((remediation) => ({
+        moduleId: "core",
         ...remediation
-      }))
-    ),
+      })),
+      ...features.flatMap((feature) =>
+        (feature.remediations ?? []).map((remediation) => ({
+          moduleId: feature.moduleId,
+          featureId: feature.id,
+          ...remediation
+        }))
+      )
+    ],
     narrative: { authoritative: false as const, markdown: input.narrative }
   };
 }
@@ -77,6 +96,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     manifests: getBuiltInModuleManifests(),
     coreScreens: CORE_APP_SCREENS,
     coreSettings: CORE_APP_SETTINGS,
+    coreErrors: CORE_APP_ERRORS,
+    coreRemediations: CORE_APP_REMEDIATIONS,
     version: resolveMossEnv(process.env, "JARVIS_APP_VERSION")?.trim() || "development",
     buildId: resolveMossEnv(process.env, "JARVIS_GIT_COMMIT")?.trim().slice(0, 12) || "development",
     narrative: readFileSync(resolve(root, "docs/WHATS_NEW.md"), "utf8")

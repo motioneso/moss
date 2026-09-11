@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { redactExact, redactSecrets } from "../../packages/ai/src/adapters/redact.js";
+import { SECRET_SHAPE_CORPUS } from "./helpers/boundary-test-gate.js";
 
 describe("redactSecrets", () => {
   it("returns an empty string for undefined/empty input", () => {
@@ -57,5 +58,12 @@ describe("redactExact (#342 Phase 3 login-contract §L.6.3)", () => {
     expect(redactExact(undefined, "secret")).toBe("");
     expect(redactExact("text", undefined)).toBe("text");
     expect(redactExact("the cat sat", "cat")).toBe("the cat sat"); // < 4 chars ⇒ not treated as a secret
+  });
+
+  it("masks every shared secret shape and preserves plain paths", () => {
+    for (const secretShape of SECRET_SHAPE_CORPUS) {
+      expect(redactSecrets(secretShape.sample)).not.toContain(secretShape.value);
+    }
+    expect(redactSecrets("/plain/path")).toBe("/plain/path");
   });
 });

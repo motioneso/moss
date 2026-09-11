@@ -65,6 +65,30 @@ describe("chat.setResponseStyle tool", () => {
     expect(otherStored).toBeNull();
   });
 
+  it("preserves the saved OpenCode model when changing response style", async () => {
+    await dataContext.withDataContext(
+      { actorUserId: ids.userB, requestId: "req:response-style-opencode-seed" },
+      (scopedDb) =>
+        preferences.upsert(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY, {
+          responseStyle: "balanced",
+          openCodeModel: "muse-spark-1.3-free"
+        })
+    );
+    await dataContext.withDataContext(
+      { actorUserId: ids.userB, requestId: "req:response-style-opencode" },
+      (scopedDb) => chatSetResponseStyleExecute(scopedDb, { style: "detailed" }, toolCtx(ids.userB))
+    );
+
+    const stored = await dataContext.withDataContext(
+      { actorUserId: ids.userB, requestId: "req:response-style-opencode-read" },
+      (scopedDb) => preferences.getWithRevision(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY)
+    );
+    expect(stored?.value).toEqual({
+      responseStyle: "detailed",
+      openCodeModel: "muse-spark-1.3-free"
+    });
+  });
+
   it("declares the style enum on inputSchema so the gateway rejects anything outside it", () => {
     expect(chatSetResponseStyleInputSchema.properties.style.enum).toEqual([
       "concise",
