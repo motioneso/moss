@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Shared CLI startup repair.** Moss automatically repairs older shared CLI installations so separate accounts can use the pinned software without reinstalling. [PR #2458](https://github.com/motioneso/moss/pull/2458)
 - **Clarify Codex sign-in recovery.** Moss now distinguishes an account without a usable Codex sign-in from a provider failure and explains the administrator-only recovery path. [PR #2456](https://github.com/motioneso/moss/pull/2456)
 
 ### 2026-09-07
