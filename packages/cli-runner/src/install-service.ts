@@ -33,6 +33,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import {
   chmod,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -457,6 +458,11 @@ export class InstallService {
     await mkdir(releasesDir, { recursive: true });
     const releaseDir = path.join(releasesDir, randToken());
 
+    // Keep the staging tree private until verification is complete, then make only the
+    // published release root traversable by isolated accounts. The contents retain npm's
+    // normal non-writable modes, and a chmod failure aborts before the atomic rename.
+    await chmod(staging, 0o755);
+
     // The verified tree IS the staging dir's node_modules + .bin layout; rename the whole
     // staging scratch contents into the release lane by renaming staging → releaseDir.
     // (Same-fs under the tools volume ⇒ atomic. The `finally` rm of `staging` then no-ops.)
@@ -593,6 +599,11 @@ export class InstallService {
   ): Promise<RpcInstallProviderResult | null> {
     const liveBin = this.binPath(recipe.binary);
     if (!(await isExecutable(liveBin))) return null;
+
+    if (recipe.kind === "npm") {
+      const release = await this.resolveCurrent(provider);
+      if (!release || !(await isPublishedNpmRelease(release))) return null;
+    }
 
     const probe = await this.deps.io.run(liveBin, ["--version"], { env: this.installerEnv });
     if (probe.code !== 0 || !probe.stdout.includes(recipe.version)) return null;
@@ -828,6 +839,15 @@ async function isExecutable(file: string): Promise<boolean> {
   try {
     const st = await stat(file);
     return st.isFile() && (st.mode & 0o111) !== 0;
+  } catch {
+    return false;
+  }
+}
+
+async function isPublishedNpmRelease(release: string): Promise<boolean> {
+  try {
+    const st = await lstat(release);
+    return st.isDirectory() && (st.mode & 0o777) === 0o755;
   } catch {
     return false;
   }
