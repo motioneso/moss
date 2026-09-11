@@ -35,7 +35,7 @@ describe("checkAgentCapabilities", () => {
     expect(() => checkAgentCapabilities("workshop", response)).toThrow(/pinned to version 1/);
   });
 
-  it("fails the chat row closed: no on-wire proof of the switch-off", () => {
-    expect(() => checkAgentCapabilities("chat", workshopResponse())).toThrow(AcpCapabilityError);
+  it("passes the chat row on the wire: version pinned, tool server over HTTP", () => {
+    expect(() => checkAgentCapabilities("chat", workshopResponse())).not.toThrow();
   });
 });

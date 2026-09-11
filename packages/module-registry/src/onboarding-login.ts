@@ -132,16 +132,28 @@ export function buildOnboardingLogin(deps: {
   };
 
   const loginClient: ProviderLoginClient = {
-    begin: async (provider) =>
-      mapOutcome(await runLoginRpc(() => requireConn().beginLogin({ provider }))),
-    poll: async (provider, loginId) =>
-      mapOutcome(await runLoginRpc(() => requireConn().pollLogin({ provider, loginId }))),
-    submitToken: async (provider, loginId, token) =>
+    begin: async (provider, actorUserId) =>
       mapOutcome(
-        await runLoginRpc(() => requireConn().submitLoginToken({ provider, loginId, token }))
+        await runLoginRpc(() =>
+          requireConn().beginLogin({ provider }, actorUserId ?? "legacy-user")
+        )
       ),
-    cancel: async (provider, loginId) => {
-      await runLoginRpc(() => requireConn().cancelLogin({ provider, loginId }));
+    poll: async (provider, loginId, actorUserId) =>
+      mapOutcome(
+        await runLoginRpc(() =>
+          requireConn().pollLogin({ provider, loginId }, actorUserId ?? "legacy-user")
+        )
+      ),
+    submitToken: async (provider, loginId, token, actorUserId) =>
+      mapOutcome(
+        await runLoginRpc(() =>
+          requireConn().submitLoginToken({ provider, loginId, token }, actorUserId ?? "legacy-user")
+        )
+      ),
+    cancel: async (provider, loginId, actorUserId) => {
+      await runLoginRpc(() =>
+        requireConn().cancelLogin({ provider, loginId }, actorUserId ?? "legacy-user")
+      );
     }
   };
 

@@ -19,17 +19,19 @@ import {
   type MossDatabase,
   type PreferencesPort
 } from "@moss/db";
+import { CHAT_SETTINGS_PREFERENCE_KEY, normalizeChatSettings } from "@moss/shared";
 import type {
   AnswerProvenanceMetadataV1,
   AiProviderExecutionMode,
   ChatAttachmentDto,
   ChatSurface,
+  ChatTurnUsageDto,
   SourceFreshnessEntry,
   SourceFreshnessV1
 } from "@moss/shared";
 import { localDay } from "@moss/shared";
 import { CHAT_ARCHIVE_ENABLED_PREF_KEY } from "@moss/settings";
-import type { ActionResultMetadata } from "./types.js";
+import type { ActionResultMetadata, TranscriptRecord } from "./types.js";
 import type { PgBoss } from "pg-boss";
 
 import { sendJob } from "@moss/jobs";
@@ -74,6 +76,8 @@ export interface DataContextChatPersistenceDeps {
   ) => Promise<Date | null>;
   /** Used to read the user's IANA timezone from their locale preference (key "locale"). */
   readonly localePreferences?: PreferencesPort;
+  /** Reads the user's saved ACP model choice for the live launch. */
+  readonly chatPreferences?: PreferencesPort;
 }
 
 export function toolNameToSource(toolName: string): string | null {
@@ -138,6 +142,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   private readonly boss: PgBoss | undefined;
   private readonly connectorSyncAt: DataContextChatPersistenceDeps["connectorSyncAt"];
   private readonly localePreferences: PreferencesPort | undefined;
+  private readonly chatPreferences: PreferencesPort | undefined;
 
   constructor(deps: DataContextChatPersistenceDeps) {
     this.rootDb = deps.rootDb;
@@ -147,23 +152,37 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     this.boss = deps.boss;
     this.connectorSyncAt = deps.connectorSyncAt;
     this.localePreferences = deps.localePreferences;
+    this.chatPreferences = deps.chatPreferences;
   }
 
-  async resolveActiveProvider(
-    actorUserId: string
-  ): Promise<{ provider: ProviderKind; model: string; executionMode: AiProviderExecutionMode }> {
-    const model = await this.run(actorUserId, "resolve-provider", (scopedDb) =>
-      this.ai.selectChatModelForUser(scopedDb)
+  async resolveActiveProvider(actorUserId: string): Promise<{
+    provider: ProviderKind;
+    model: string;
+    executionMode: AiProviderExecutionMode;
+    acpModel?: string;
+  }> {
+    const { model, acpModel } = await this.run(
+      actorUserId,
+      "resolve-provider",
+      async (scopedDb) => {
+        const [model, rawChatSettings] = await Promise.all([
+          this.ai.selectChatModelForUser(scopedDb),
+          this.chatPreferences?.get(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY)
+        ]);
+        return { model, acpModel: normalizeChatSettings(rawChatSettings).openCodeModel };
+      }
     );
 
     if (!model) {
       throw new Error("No active chat-capable model is configured for this user.");
     }
 
+    const provider = toLiveProvider(model);
     return {
-      provider: toLiveProvider(model),
+      provider,
       model: model.provider_model_id,
-      executionMode: model.provider_execution_mode
+      executionMode: model.provider_execution_mode,
+      ...(provider === "openai-compatible" && acpModel ? { acpModel } : {})
     };
   }
 
@@ -229,6 +248,9 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       readonly answerProvenance?: AnswerProvenanceMetadataV1;
       readonly attachments?: readonly ChatAttachmentDto[];
       readonly actionResults?: readonly ActionResultMetadata[];
+      readonly activityRecords?: readonly TranscriptRecord[];
+      readonly elapsedMs?: number;
+      readonly usage?: ChatTurnUsageDto;
     },
     surface?: ChatSurface
   ): Promise<{ readonly userMessageId: string; readonly assistantMessageId: string } | undefined> {
@@ -260,7 +282,10 @@ export class DataContextChatPersistence implements ChatPersistencePort {
               sourceFreshness,
               answerProvenance: opts?.answerProvenance,
               attachments: opts?.attachments,
-              actionResults: opts?.actionResults
+              actionResults: opts?.actionResults,
+              activityRecords: opts?.activityRecords,
+              elapsedMs: opts?.elapsedMs,
+              usage: opts?.usage
             },
             chatSurface
           );

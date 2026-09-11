@@ -1,19 +1,14 @@
 /**
- * Moss as an ACP client, Workshop side (#2369 slice 1).
+ * Moss as an ACP client (slice 1, chat first).
  *
  * One internal interface for the rest of Moss: open a session, send a prompt,
  * stream events, answer permission, cancel, close. The adapter subprocess runs on
  * the cli-runner host; this client owns the protocol over the line tunnel.
  *
- * Slice 1 advertises no file or terminal capabilities (files and commands are
- * Moss tools, so a later protocol version never touches file handling). The
- * caller hands over Moss's own tool server at session open: its address plus a
- * per-session bearer, carried inside the session request over the runner socket.
- * From there the adapter passes the entry, bearer and all, into the agent
- * launch, so the bearer reaches the agent process command line, where any box
- * login can read it. That exposure is inherent to the outside-agent design. It
- * stays cheap because the token is per-session, narrowed to Workshop tools,
- * given a fixed end time, and revoked when the session closes.
+ * Slice 1 serves the `chat` profile only: scratch folder, the agent's own
+ * shell and file writes off, Moss's tool server on. The caller hands over
+ * Moss's own tool server at session open: its address plus a per-session
+ * bearer, carried inside the session request over the runner socket.
  */
 
 import {
@@ -22,14 +17,24 @@ import {
   type McpServer,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
+  type SessionConfigOption,
   type SessionNotification,
   type StopReason,
-  type ToolCallLocation
+  type ToolCallLocation,
+  type Usage
 } from "@agentclientprotocol/sdk";
+import { randomUUID } from "node:crypto";
 
-import { checkAgentCapabilities, type AcpSurface } from "./capabilities.js";
-import { selectAllowOptionId, toolNameFromMeta, type AcpBuiltInRequest } from "./permissions.js";
-import { createTunnelStream } from "./stream.js";
+import { checkAcpProfile, checkAgentCapabilities, type AcpProfile } from "./capabilities.js";
+import { getAcpProviderRow, type AcpProviderKind } from "./providers.js";
+import { launchOffList } from "./tool-table.js";
+import {
+  selectAllowOptionId,
+  toolNameFromMeta,
+  toolNameFromRawInput,
+  type AcpBuiltInRequest
+} from "./permissions.js";
+import { createTunnelStream, type TunnelStream } from "./stream.js";
 import type { AcpTunnel } from "./tunnel.js";
 
 /** Announcements remembered per session; oldest dropped past the cap. */
@@ -45,6 +50,41 @@ export interface AcpSessionHandle {
   readonly cwd: string;
   /** The HOME handed to the agent process, or null when it names none. */
   readonly home: string | null;
+  /** The spawned agent's own process id, or null when it could not be read. */
+  readonly pid: number | null;
+  /** The slot account the agent should be running as — the identity evidence to check against. */
+  readonly uid: number;
+  readonly gid: number;
+}
+
+/** Cleanup retained for a failed open whose runner stop can be retried. */
+export interface AcpSessionCleanupHandle {
+  close(): Promise<void>;
+}
+
+/** A failed open whose runner cleanup can be retried after a refused stop. */
+export class AcpSessionOpenError extends Error {
+  readonly startupError: unknown;
+  readonly cleanupError: unknown;
+  readonly cleanup: AcpSessionCleanupHandle;
+  readonly retryCleanup: () => Promise<void>;
+
+  constructor(startupError: unknown, cleanupError: unknown, cleanup: AcpSessionCleanupHandle) {
+    const startupMessage =
+      startupError instanceof Error ? startupError.message : String(startupError);
+    const cleanupMessage =
+      cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+    super(
+      `ACP session failed to open (${startupMessage}); cleanup failed (${cleanupMessage}); ` +
+        "call cleanup.close() to finish stopping the agent",
+      { cause: startupError }
+    );
+    this.name = "AcpSessionOpenError";
+    this.startupError = startupError;
+    this.cleanupError = cleanupError;
+    this.cleanup = cleanup;
+    this.retryCleanup = () => cleanup.close();
+  }
 }
 
 /**
@@ -67,6 +107,21 @@ export interface AcpPromptResult {
   readonly stopReason: StopReason;
   readonly text: string;
   readonly toolCallsSeen: number;
+  readonly usage?: Usage | null;
+}
+
+/**
+ * What `setModel` did. `applied` means the agent accepted the model id
+ * through the advertised `category: "model"` option. Anything else keeps the
+ * session on the login's default and says so: `mismatch` when the id is not
+ * one the agent accepts, `mechanism` naming the row's fallback (e.g. Codex's
+ * launch-time config) when no option is advertised.
+ */
+export interface AcpSetModelResult {
+  readonly applied: boolean;
+  readonly mismatch: boolean;
+  readonly mechanism: string;
+  readonly note: string | null;
 }
 
 export interface AcpClientEvents {
@@ -85,12 +140,19 @@ export interface AcpToolAnnouncement {
   readonly rawInput: unknown;
 }
 
+/** Answers one announced tool ask with allow or deny. */
+export type AcpPermissionDecision = "allow" | "deny";
+
 /**
- * Answers one announced tool ask with allow or deny. The client translates the
+ * Bridges built-in permission asks to the host's approval flow. Maps the host
  * verdict into the protocol answer; without a decider the client refuses.
  */
 export interface AcpPermissionDecider {
-  decide(request: AcpBuiltInRequest, session: AcpSessionHandle): Promise<"allow" | "deny">;
+  decide(request: AcpBuiltInRequest, session: AcpSessionHandle): Promise<AcpPermissionDecision>;
+  /** Start a prompt turn with an identity that permission asks carry. */
+  beginTurn?: (sessionId: string, turnId: string) => void | Promise<void>;
+  /** Settle all pending permission asks when this agent session is stopped. */
+  cancelSession?: (sessionId: string) => void | Promise<void>;
 }
 
 export interface AcpPromptOptions {
@@ -128,13 +190,61 @@ function toMcpServerEntry(toolServer: AcpToolServer): McpServer {
   };
 }
 
+/**
+ * The advertised `category: "model"` option, if the agent offers one. Matched
+ * on the semantic category only, as the spec names it; anything else is not a
+ * model choice even when its id or name says otherwise.
+ */
+export function findModelOption(
+  options: readonly SessionConfigOption[]
+): SessionConfigOption | null {
+  return options.find((option) => option.category === "model") ?? null;
+}
+
+/**
+ * The ids the option accepts, or null when it takes free-form values. Reads
+ * the select option's `options` list, including grouped options.
+ */
+export function acceptedOptionValues(option: SessionConfigOption): Set<string> | null {
+  const options = (option as { options?: unknown }).options;
+  if (options === undefined || options === null) return null;
+  if (!Array.isArray(options)) return null;
+  const ids = new Set<string>();
+  for (const entry of options) {
+    if (!entry || typeof entry !== "object") continue;
+    if ("value" in entry && typeof (entry as { value?: unknown }).value === "string") {
+      ids.add((entry as { value: string }).value);
+    } else if ("options" in entry && Array.isArray((entry as { options?: unknown }).options)) {
+      for (const nested of (entry as { options: unknown[] }).options) {
+        if (
+          nested &&
+          typeof nested === "object" &&
+          "value" in nested &&
+          typeof (nested as { value?: unknown }).value === "string"
+        ) {
+          ids.add((nested as { value: string }).value);
+        }
+      }
+    }
+  }
+  return ids;
+}
+
 export class MossAcpClient {
   private readonly connections = new Map<string, ClientSideConnection>();
+  private readonly sessionKeys = new Map<string, string>();
+  private readonly streams = new Map<string, TunnelStream>();
   private readonly texts = new Map<string, string[]>();
   private readonly toolCalls = new Map<string, number>();
   private readonly closers = new Map<string, () => void>();
   private readonly sessionCwds = new Map<string, string>();
   private readonly sessionHomes = new Map<string, string | null>();
+  private readonly sessionPids = new Map<string, number | null>();
+  private readonly sessionUids = new Map<string, number>();
+  private readonly sessionGids = new Map<string, number>();
+  private readonly sessionKinds = new Map<string, AcpProviderKind>();
+  private readonly sessionOptions = new Map<string, readonly SessionConfigOption[]>();
+  private readonly turnIds = new Map<string, string>();
   private readonly announcements = new Map<string, Map<string, AcpToolAnnouncement>>();
   private readonly announcementWaiters = new Map<string, () => void>();
 
@@ -144,36 +254,92 @@ export class MossAcpClient {
     private readonly permissionDecider: AcpPermissionDecider | null = null
   ) {}
 
+  /**
+   * The provider kind travels with the session from open time: it picks the
+   * adapter row for the model fallback, and the profile gate refuses anything
+   * but a ready provider on the chat profile before anything is spawned. There
+   * is no default kind; a caller that does not know the provider cannot open.
+   * The user id travels with it: the runner's account slot belongs to the
+   * person, never the session. The profile travels too, so the runner applies
+   * that surface's launch rules.
+   */
   async openSession(
     sessionKey: string,
     projectId: string,
-    surface: AcpSurface = "workshop",
-    toolServer?: AcpToolServer
+    providerKind: AcpProviderKind,
+    userId: string,
+    surface: AcpProfile = "workshop",
+    toolServer?: AcpToolServer,
+    personaText?: string
   ): Promise<AcpSessionHandle> {
-    const { cwd, home } = await this.tunnel.spawn(sessionKey, projectId);
+    checkAcpProfile(surface, providerKind);
+    const { cwd, home, pid, uid, gid } = await this.tunnel.spawn(
+      sessionKey,
+      projectId,
+      providerKind,
+      userId,
+      surface
+    );
     const stream = createTunnelStream(this.tunnel, sessionKey);
     const connection = new ClientSideConnection(() => this.createClientHandler(), stream);
-    const init = await connection.initialize({
-      protocolVersion: 1,
-      clientCapabilities: {},
-      clientInfo: { name: "moss", version: "0.1.0" }
-    });
-    checkAgentCapabilities(surface, init);
-    const session = await connection.newSession({
-      cwd,
-      mcpServers: toolServer ? [toMcpServerEntry(toolServer)] : [],
-      // The agent's own file and shell tools stay off on purpose: files and
-      // commands are Moss tools, and the vendor default prompt is not a policy
-      // we accept. The runner-side settings file denies them a second time.
-      _meta: { disableBuiltInTools: true }
-    });
-    this.connections.set(session.sessionId, connection);
-    this.texts.set(session.sessionId, []);
-    this.toolCalls.set(session.sessionId, 0);
-    this.sessionCwds.set(session.sessionId, cwd);
-    this.sessionHomes.set(session.sessionId, home);
-    if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
-    return { sessionId: session.sessionId, cwd, home };
+    try {
+      const init = await connection.initialize({
+        protocolVersion: 1,
+        clientCapabilities: {},
+        clientInfo: { name: "moss", version: "0.1.0" }
+      });
+      checkAgentCapabilities(surface, init);
+      const session = await connection.newSession({
+        cwd,
+        mcpServers: toolServer ? [toMcpServerEntry(toolServer)] : [],
+        // The row's launch-time off-list, from the tool table through the row's
+        // own mechanism: the agent's disallowed-tools list.
+        _meta: {
+          claudeCode: { options: { disallowedTools: launchOffList(surface) } },
+          ...(personaText !== undefined ? { systemPrompt: personaText } : {})
+        }
+      });
+      this.connections.set(session.sessionId, connection);
+      this.sessionKeys.set(session.sessionId, sessionKey);
+      this.streams.set(session.sessionId, stream);
+      this.texts.set(session.sessionId, []);
+      this.toolCalls.set(session.sessionId, 0);
+      this.sessionCwds.set(session.sessionId, cwd);
+      this.sessionHomes.set(session.sessionId, home);
+      this.sessionPids.set(session.sessionId, pid);
+      this.sessionUids.set(session.sessionId, uid);
+      this.sessionGids.set(session.sessionId, gid);
+      this.sessionKinds.set(session.sessionId, providerKind);
+      this.sessionOptions.set(session.sessionId, session.configOptions ?? []);
+      if (toolServer?.onClose) this.closers.set(session.sessionId, toolServer.onClose);
+      return { sessionId: session.sessionId, cwd, home, pid, uid, gid };
+    } catch (error) {
+      let killed = false;
+      let stopped = false;
+      let revoked = false;
+      const cleanup: AcpSessionCleanupHandle = {
+        close: async (): Promise<void> => {
+          if (!killed) {
+            await this.tunnel.kill(sessionKey);
+            killed = true;
+          }
+          if (!stopped) {
+            await stream.stop();
+            stopped = true;
+          }
+          if (!revoked) {
+            revoked = true;
+            toolServer?.onClose?.();
+          }
+        }
+      };
+      try {
+        await cleanup.close();
+      } catch (cleanupError) {
+        throw new AcpSessionOpenError(error, cleanupError, cleanup);
+      }
+      throw error;
+    }
   }
 
   async prompt(
@@ -182,7 +348,12 @@ export class MossAcpClient {
     options: AcpPromptOptions = {}
   ): Promise<AcpPromptResult> {
     const connection = this.requireConnection(handle.sessionId);
+    const turnId = randomUUID();
+    this.turnIds.set(handle.sessionId, turnId);
+    await this.permissionDecider?.beginTurn?.(handle.sessionId, turnId);
     const timeoutMs = options.timeoutMs ?? DEFAULT_PROMPT_TIMEOUT_MS;
+    this.texts.set(handle.sessionId, []);
+    this.toolCalls.set(handle.sessionId, 0);
     let timer: ReturnType<typeof setTimeout> | null = null;
     try {
       const response = await Promise.race([
@@ -192,7 +363,7 @@ export class MossAcpClient {
         }),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
-            void connection.cancel({ sessionId: handle.sessionId }).catch(() => undefined);
+            void this.cancel(handle).catch(() => undefined);
             reject(new Error(`ACP prompt timed out after ${timeoutMs} ms`));
           }, timeoutMs);
         })
@@ -201,7 +372,8 @@ export class MossAcpClient {
       return {
         stopReason: response.stopReason,
         text: chunks.join(""),
-        toolCallsSeen: this.toolCalls.get(handle.sessionId) ?? 0
+        toolCallsSeen: this.toolCalls.get(handle.sessionId) ?? 0,
+        usage: response.usage ?? null
       };
     } finally {
       if (timer) clearTimeout(timer);
@@ -210,15 +382,105 @@ export class MossAcpClient {
 
   async cancel(handle: AcpSessionHandle): Promise<void> {
     const connection = this.requireConnection(handle.sessionId);
-    await connection.cancel({ sessionId: handle.sessionId });
+    const permissionCancellation = this.cancelPendingPermissions(handle.sessionId);
+    try {
+      await connection.cancel({ sessionId: handle.sessionId });
+    } finally {
+      await permissionCancellation;
+    }
   }
 
+  /**
+   * Send the model choice to the agent (slice 1 task 2). The provider kind
+   * comes from the session, carried since open time, so no call path can name
+   * the wrong row or silently fall back to one. Uses the advertised
+   * `category: "model"` option where the agent offers one; otherwise the row's
+   * launch-time fallback applies and the session stays on the login's default.
+   * A mismatch (the id is not one the agent accepts) is recorded on the result
+   * and never merged into any list.
+   */
+  async setModel(handle: AcpSessionHandle, modelId: string): Promise<AcpSetModelResult> {
+    const connection = this.requireConnection(handle.sessionId);
+    const providerKind = this.sessionKinds.get(handle.sessionId);
+    if (!providerKind) throw new Error("ACP session is not open");
+    const options = this.sessionOptions.get(handle.sessionId) ?? [];
+    const option = findModelOption(options);
+    const row = getAcpProviderRow(providerKind);
+    if (!option) {
+      return {
+        applied: false,
+        mismatch: false,
+        mechanism: row.model,
+        note: `the ${row.agent} agent advertised no model option; session stays on the login's default`
+      };
+    }
+    const accepted = acceptedOptionValues(option);
+    if (accepted !== null && !accepted.has(modelId)) {
+      return {
+        applied: false,
+        mismatch: true,
+        mechanism: row.model,
+        note: `model ${modelId} is not one the ${row.agent} agent accepts`
+      };
+    }
+    await connection.setSessionConfigOption({
+      sessionId: handle.sessionId,
+      configId: option.id,
+      value: modelId
+    });
+    return { applied: true, mismatch: false, mechanism: row.model, note: null };
+  }
+
+  /** Set the requested chat model, falling back to the agent's advertised value when needed. */
+  async setModelForChat(handle: AcpSessionHandle, modelId: string): Promise<AcpSetModelResult> {
+    const options = this.sessionOptions.get(handle.sessionId) ?? [];
+    const option = findModelOption(options);
+    if (!option) return this.setModel(handle, modelId);
+    const accepted = acceptedOptionValues(option);
+    const current = (option as { currentValue?: unknown }).currentValue;
+    const currentValue = typeof current === "string" && current.length > 0 ? current : undefined;
+    const requestedIsDefault = modelId === "default" || modelId.length === 0;
+    const requestedIsUnsupported = accepted !== null && !accepted.has(modelId);
+    const effective =
+      requestedIsDefault || requestedIsUnsupported
+        ? currentValue && (accepted === null || accepted.has(currentValue))
+          ? currentValue
+          : accepted?.values().next().value
+        : modelId;
+    if (typeof effective !== "string" || effective.length === 0)
+      return this.setModel(handle, modelId);
+    return this.setModel(handle, effective);
+  }
+
+  /**
+   * A refused or unconfirmed stop is rethrown, not swallowed: a blanket
+   * catch here previously let a rejecting tunnel make close() report
+   * success and stop polling, so the caller believed the session was gone
+   * while the process kept running (task 5b, Astra-Reviewer round-four
+   * finding, 2026-09-08). Session tracking is only torn down once the stop
+   * actually succeeds, so a caller that retries after a failure still finds
+   * the session to retry against.
+   */
   async close(handle: AcpSessionHandle): Promise<void> {
+    const sessionKey = this.sessionKeys.get(handle.sessionId);
+    const stream = this.streams.get(handle.sessionId);
+    await this.cancelPendingPermissions(handle.sessionId);
+    if (sessionKey) {
+      await this.tunnel.kill(sessionKey);
+      await stream?.stop();
+    }
     this.connections.delete(handle.sessionId);
+    this.sessionKeys.delete(handle.sessionId);
+    this.streams.delete(handle.sessionId);
     this.texts.delete(handle.sessionId);
     this.toolCalls.delete(handle.sessionId);
     this.sessionCwds.delete(handle.sessionId);
     this.sessionHomes.delete(handle.sessionId);
+    this.sessionPids.delete(handle.sessionId);
+    this.sessionUids.delete(handle.sessionId);
+    this.sessionGids.delete(handle.sessionId);
+    this.sessionKinds.delete(handle.sessionId);
+    this.sessionOptions.delete(handle.sessionId);
     this.announcements.delete(handle.sessionId);
     // Wake any questions still waiting: they re-check, find nothing, refuse.
     for (const [key, wake] of [...this.announcementWaiters]) {
@@ -238,6 +500,10 @@ export class MossAcpClient {
     const connection = this.connections.get(sessionId);
     if (!connection) throw new Error("ACP session is not open");
     return connection;
+  }
+
+  private async cancelPendingPermissions(sessionId: string): Promise<void> {
+    await this.permissionDecider?.cancelSession?.(sessionId);
   }
 
   /** Remember one announced tool use, waking its question if already waiting. */
@@ -260,7 +526,7 @@ export class MossAcpClient {
     const rawKind = fields.kind;
     const rawLocations = fields.locations;
     table.set(toolCallId, {
-      toolName: toolNameFromMeta(claudeCode),
+      toolName: toolNameFromMeta(claudeCode) ?? toolNameFromRawInput(fields.rawInput),
       kind: typeof rawKind === "string" ? rawKind : null,
       locations: Array.isArray(rawLocations) ? (rawLocations as ToolCallLocation[]) : null,
       rawInput: fields.rawInput
@@ -304,6 +570,12 @@ export class MossAcpClient {
       return denyPermission();
     }
     const home = this.sessionHomes.get(params.sessionId) ?? null;
+    const pid = this.sessionPids.get(params.sessionId) ?? null;
+    const uid = this.sessionUids.get(params.sessionId);
+    const gid = this.sessionGids.get(params.sessionId);
+    if (uid === undefined || gid === undefined) return denyPermission();
+    const turnId = this.turnIds.get(params.sessionId) ?? randomUUID();
+    this.turnIds.set(params.sessionId, turnId);
     const toolCallId = params.toolCall.toolCallId;
     let announced = this.announcements.get(params.sessionId)?.get(toolCallId);
     if (!announced) {
@@ -319,6 +591,7 @@ export class MossAcpClient {
     }
     const builtIn: AcpBuiltInRequest = {
       sessionId: params.sessionId,
+      turnId,
       toolCallId,
       title: params.toolCall.title ?? "",
       rawInput: params.toolCall.rawInput,
@@ -327,11 +600,15 @@ export class MossAcpClient {
       locations: announced.locations
     };
     try {
-      const verdict = await this.permissionDecider.decide(builtIn, {
+      const rawVerdict = await this.permissionDecider.decide(builtIn, {
         sessionId: params.sessionId,
         cwd,
-        home
+        home,
+        pid,
+        uid,
+        gid
       });
+      const verdict = rawVerdict;
       if (verdict !== "allow") return denyPermission();
       // Least privilege: single-use grant, never standing. No allow option
       // means the question itself offers nothing to take: refuse.

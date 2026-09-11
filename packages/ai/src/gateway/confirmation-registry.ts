@@ -2,6 +2,8 @@ export type ResolutionStatus = "confirmed" | "rejected" | "cancelled";
 export type AwaitOutcome = ResolutionStatus | "timeout";
 
 interface Waiter {
+  readonly sessionId?: string;
+  readonly turnId?: string;
   readonly settle: (outcome: AwaitOutcome) => void;
 }
 
@@ -12,15 +14,29 @@ interface Waiter {
 export class ConfirmationRegistry {
   private readonly waiters = new Map<string, Waiter>();
   private readonly completions = new Map<string, () => void>();
+  private readonly activeTurns = new Map<string, string>();
+  private readonly cancelledTurns = new Set<string>();
 
-  awaitResolution(actionRequestId: string, timeoutMs: number): Promise<AwaitOutcome> {
+  awaitResolution(
+    actionRequestId: string,
+    timeoutMs: number,
+    sessionId?: string,
+    turnId?: string
+  ): Promise<AwaitOutcome> {
     return new Promise<AwaitOutcome>((resolve) => {
+      if (turnId && this.cancelledTurns.has(turnId)) {
+        resolve("cancelled");
+        return;
+      }
+
       const timer = setTimeout(() => {
         this.waiters.delete(actionRequestId);
         resolve("timeout");
       }, timeoutMs);
 
       this.waiters.set(actionRequestId, {
+        sessionId,
+        turnId,
         settle: (outcome) => {
           clearTimeout(timer);
           this.waiters.delete(actionRequestId);
@@ -28,6 +44,25 @@ export class ConfirmationRegistry {
         }
       });
     });
+  }
+
+  /** Cancel every live ACP ask belonging to the active turn of a stopped session. */
+  cancelSession(sessionId: string): number {
+    const turnId = this.activeTurns.get(sessionId);
+    if (!turnId) return 0;
+    this.cancelledTurns.add(turnId);
+    let cancelled = 0;
+    for (const waiter of this.waiters.values()) {
+      if (waiter.turnId !== turnId) continue;
+      waiter.settle("cancelled");
+      cancelled += 1;
+    }
+    return cancelled;
+  }
+
+  /** Set the identity used to cancel asks from this turn. */
+  beginTurn(sessionId: string, turnId: string): void {
+    this.activeTurns.set(sessionId, turnId);
   }
 
   /**

@@ -7,7 +7,7 @@
  * (`provider-runtime.ts`) — this adapter is the seam that reconciles the two: a single
  * long-lived pump consumes the runtime's event stream into a monotonically-growing
  * `TranscriptRecord` buffer that `readNew` slices by index, exactly like
- * `claude-print-chat-engine.ts`'s `readStructured` re-slices its own buffer.
+ * `structured-claude-engine.ts`'s `readStructured` re-slices its own buffer.
  *
  * Error-class mapping (plan decision, `docs/superpowers/plans/2026-08-10-1557-*.md` §Neutral
  * lifecycle contract):
@@ -57,6 +57,7 @@ const NO_RESUMABLE_TRANSCRIPT_REASON =
   "no-op: --no-session-persistence means the provider keeps no resumable transcript to purge";
 
 export class ClaudePersistentRuntimeEngine implements CliChatEngine {
+  readonly startsToolClientPerTurn = false;
   readonly provider: ProviderKind;
 
   private readonly runtime: ProviderChatRuntime;

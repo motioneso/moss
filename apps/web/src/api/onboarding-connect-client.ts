@@ -1,4 +1,6 @@
 import type {
+  OnboardingProviderCheckResponse,
+  OnboardingProviderKind,
   OnboardingProviderInstallRequest,
   OnboardingProviderInstallResponse,
   OnboardingProviderLoginBeginRequest,
@@ -8,6 +10,15 @@ import type {
 } from "@moss/shared";
 
 import { requestJson } from "./client.js";
+
+export async function checkOnboardingProvider(
+  providerKind: OnboardingProviderKind
+): Promise<OnboardingProviderCheckResponse> {
+  return requestJson<OnboardingProviderCheckResponse>("/api/onboarding/provider-check", {
+    method: "POST",
+    body: { providerKind }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // #365 onboarding provider-connect: thin client wrappers over the existing install/login

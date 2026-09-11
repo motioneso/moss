@@ -23,6 +23,22 @@ describe("buildAppMap", () => {
           ]
         }
       ],
+      coreErrors: [
+        {
+          code: "core.test.denied",
+          class: "permission",
+          remediationRef: "core.test.ask",
+          description: "The test action was not approved."
+        }
+      ],
+      coreRemediations: [
+        {
+          id: "core.test.ask",
+          description: "Ask the user to approve the test action.",
+          path: "/",
+          scope: "user"
+        }
+      ],
       coreScreens: [],
       coreSettings: [],
       version: "2.3.4",
@@ -31,6 +47,8 @@ describe("buildAppMap", () => {
     });
     expect(artifact.build).toEqual({ version: "2.3.4", buildId: "abcdef123456" });
     expect(artifact.screens[0]).toMatchObject({ moduleId: "fixture", id: "fixture" });
+    expect(artifact.errors[0]).toMatchObject({ moduleId: "core", code: "core.test.denied" });
+    expect(artifact.remediations[0]).toMatchObject({ moduleId: "core", id: "core.test.ask" });
     expect(artifact.narrative).toEqual({
       authoritative: false,
       markdown: "human-written release note"

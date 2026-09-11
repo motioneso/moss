@@ -1,0 +1,37 @@
+# NOTE: `User=REPLACE_WITH_INSTALL_USER` and every `REPLACE_WITH_INSTALL_HOME` path
+# below are PLACEHOLDERS the installing operator MUST edit to match their system
+# (user, home folder, repo path, and EnvironmentFile path) at install time. A system
+# unit does not expand a literal `~`, so these must be real absolute paths, not `~/...`.
+#
+# #2427 (task 5b): the dev cli-runner hands each conversation's process to its own
+# account and folders, which takes the chown, setuid and setgid privileges. A plain
+# `systemd --user` unit cannot carry ambient capabilities — that needs a system unit
+# (root-managed) that still runs the process as the ordinary dev account below.
+# Install this in place of any `systemd --user` cli-runner unit already running.
+[Unit]
+Description=Jarv1s dev cli-runner (per-user launcher)
+After=network.target
+
+[Service]
+Type=simple
+User=REPLACE_WITH_INSTALL_USER
+AmbientCapabilities=CAP_CHOWN CAP_SETUID CAP_SETGID
+CapabilityBoundingSet=CAP_CHOWN CAP_SETUID CAP_SETGID
+NoNewPrivileges=true
+WorkingDirectory=REPLACE_WITH_INSTALL_HOME/Jarv1s
+EnvironmentFile=REPLACE_WITH_INSTALL_HOME/.config/moss/dev/cli-runner.env
+# Turns on the per-conversation account/folder separation this unit's capabilities
+# exist for (task 5b, 2026-09-08) — without it the cli-runner falls back to running
+# every conversation under the dev account itself. This must be set on the ExecStart
+# line itself, not an Environment= line above: systemd always lets a value from
+# EnvironmentFile win over an inline Environment= line no matter which comes first
+# in the file, so the only way to force this one is to set it later than systemd's
+# own environment build, on the command being started (Astra finding, task 5b round
+# 3, 2026-09-08).
+ExecStart=/usr/bin/env JARVIS_CLI_PER_USER_UID=1 REPLACE_WITH_INSTALL_HOME/Jarv1s/node_modules/.bin/tsx packages/cli-runner/src/main-entry.ts
+Restart=always
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

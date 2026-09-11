@@ -12,6 +12,10 @@
  * engine use, and the fail-fast throws before construction), so they need no real cli-runner.
  */
 import { describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   ChatEngineRpcClient,
@@ -22,8 +26,9 @@ import {
   selectEngineFactory
 } from "../../packages/chat/src/live/runtime.js";
 import { createStructuredChatEngineFactory } from "../../packages/module-registry/src/index.js";
-import { ClaudePrintChatEngine } from "../../packages/chat/src/live/claude-print-chat-engine.js";
-import { CliChatEngineImpl } from "../../packages/chat/src/live/cli-chat-engine.js";
+import { AcpChatEngine } from "../../packages/chat/src/live/acp-chat-engine.js";
+import { ClaudePrintChatEngine } from "../../packages/chat/src/live/structured-claude-engine.js";
+import { CliChatEngineImpl } from "../../packages/chat/src/live/module-build-cli-engine.js";
 import type { Multiplexer, MuxHandle } from "@moss/ai";
 
 const SOCKET = "/run/jarv1s/cli-runner.sock";
@@ -98,6 +103,75 @@ describe("selectEngineFactory — boot-time fork (§3.5)", () => {
     const engine = await factory("anthropic", "user-a");
     expect(engine).not.toBeInstanceOf(ChatEngineRpcClient);
     expect(connection).toBeUndefined();
+  });
+
+  it("chat has no old-bridge fallback: an unset socket still resolves the RPC path when acpChat is on, using the default runner socket path", async () => {
+    const { factory, connection } = selectEngineFactory({
+      env: { JARVIS_CLI_RUNNER_RPC_SECRET: "boot-secret" } as NodeJS.ProcessEnv,
+      acpChat: true
+    });
+    try {
+      expect(connection).toBeDefined();
+      const engine = await factory("anthropic", "user-a", {
+        conversationId: "conv-1",
+        userId: "user-a"
+      });
+      expect(engine).toBeInstanceOf(AcpChatEngine);
+    } finally {
+      connection?.close();
+    }
+  });
+
+  it("chat has no old-bridge fallback: an empty socket still resolves the RPC path when acpChat is on", async () => {
+    const { factory, connection } = selectEngineFactory({
+      env: {
+        JARVIS_CLI_RUNNER_SOCKET: "",
+        JARVIS_CLI_RUNNER_RPC_SECRET: "boot-secret"
+      } as NodeJS.ProcessEnv,
+      acpChat: true
+    });
+    try {
+      expect(connection).toBeDefined();
+      const engine = await factory("anthropic", "user-a", {
+        conversationId: "conv-1",
+        userId: "user-a"
+      });
+      expect(engine).toBeInstanceOf(AcpChatEngine);
+    } finally {
+      connection?.close();
+    }
+  });
+
+  it("chat stays ACP-only when the default runner socket has no secret", () => {
+    const { factory, connection } = selectEngineFactory({
+      env: {} as NodeJS.ProcessEnv,
+      acpChat: true
+    });
+
+    expect(connection).toBeUndefined();
+    expect(() =>
+      factory("anthropic", "user-a", { conversationId: "conv-1", userId: "user-a" })
+    ).toThrow(CliChatUnavailableError);
+  });
+
+  it("refuses an ACP chat launch missing its conversation or user id, instead of silently returning a bare RPC client", async () => {
+    const { factory, connection } = selectEngineFactory({
+      env: {
+        JARVIS_CLI_RUNNER_SOCKET: SOCKET,
+        JARVIS_CLI_RUNNER_RPC_SECRET: "boot-secret"
+      } as NodeJS.ProcessEnv,
+      acpChat: true
+    });
+    try {
+      expect(() => factory("anthropic", "user-a", { userId: "user-a" })).toThrow(
+        CliChatUnavailableError
+      );
+      expect(() => factory("anthropic", "user-a", { conversationId: "conv-1" })).toThrow(
+        CliChatUnavailableError
+      );
+    } finally {
+      connection?.close();
+    }
   });
 });
 
@@ -189,6 +263,33 @@ describe("createChatSessionRuntime — boot reconciliation", () => {
     } finally {
       runtime.shutdown();
       ensureConnected.mockRestore();
+    }
+  });
+
+  it("checks provider login before creating a child under a missing chat home", async () => {
+    const chatHome = join(tmpdir(), `jarv1s-chat-check-${randomUUID()}`);
+    vi.stubEnv("JARVIS_CHAT_HOME", chatHome);
+    const launch = vi.fn().mockRejectedValue(new Error("Authentication required"));
+    const kill = vi.fn().mockResolvedValue(undefined);
+    const runtime = createChatSessionRuntime({
+      dataContext: {
+        withDataContext: async (
+          _access: { readonly actorUserId: string; readonly requestId: string },
+          fn: (db: never) => unknown
+        ) => fn({} as never)
+      } as never,
+      engineFactory: vi.fn().mockResolvedValue({ launch, kill } as never)
+    });
+
+    try {
+      await expect(runtime.checkProviderInitialization("user-1", "anthropic")).resolves.toEqual({
+        status: "needs_login"
+      });
+      expect(launch).toHaveBeenCalledOnce();
+    } finally {
+      runtime.shutdown();
+      vi.unstubAllEnvs();
+      await rm(chatHome, { recursive: true, force: true });
     }
   });
 });

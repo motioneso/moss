@@ -1,0 +1,22 @@
+{
+  "views": 32,
+  "pageErrors": [],
+  "checks": [
+    "draft resume",
+    "prior decisions carried in",
+    "reflection correction",
+    "lighter day and focus",
+    "partial selection",
+    "calendar conflict",
+    "save failure and retry",
+    "both placement settings",
+    "morning handoff",
+    "unavailable briefing",
+    "zero selected blocks",
+    "literal notes",
+    "Escape/focus return",
+    "unsent note retained",
+    "current scheduling settings honored on resume",
+    "proposed moves and removals preserve existing calendar blocks"
+  ]
+}

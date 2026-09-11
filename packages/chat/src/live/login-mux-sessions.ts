@@ -1,9 +1,9 @@
 /**
- * Login MUX-session helpers (login-contract §L.6.1). Extracted from cli-chat-engine.ts so that
+ * Login MUX-session helpers (login-contract §L.6.1). Extracted from module-build-cli-engine.ts so that
  * file stays under the 1000-line maintainability cap; this is the cohesive cluster of helpers that
  * operate on `jarv1s-login-*` tmux sessions (the disk liveness signal the unified admission gate,
  * the startup sweep, and the v0.1.3 max-age reaper consume). They depend only on the shared
- * `TmuxIo` run seam — no engine state — so they live cleanly on their own. cli-chat-engine.ts
+ * `TmuxIo` run seam — no engine state — so they live cleanly on their own. module-build-cli-engine.ts
  * re-exports them, so every existing import site is unchanged.
  */
 import { resolveTmuxSocketPath, type TmuxIo } from "@moss/ai";

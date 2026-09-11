@@ -1,0 +1,246 @@
+// Runs AS the person's own slot account, through setpriv, never as the
+// launcher: this is the only code allowed to create and write anything
+// below a person's top-level home or session folder (task 5b, Architect
+// ruling on Astra-Reviewer round-four finding, 2026-09-08). Because it runs
+// already switched to the person's uid/gid, plain mkdir/writeFile land
+// already owned by them — no chown anywhere in this file, and none needed.
+//
+// Each folder level below the top is still built one segment at a time with
+// a symlink check first: a previous command running as this same person
+// could have planted a link partway down the path, and a plain recursive
+// mkdir silently writes through a link like that into wherever it points
+// (proven empirically before writing this). Real privilege never crosses
+// this boundary either way — the process is already running as the person —
+// but a planted link could still misdirect a write to the wrong folder, so
+// every level is still checked.
+//
+// Invoked with exactly one argv element: a JSON string shaped like
+// { dirs: string[], denyFile: null | { path: string, permissionKeys: string[] } }
+// Secret files arrive as a JSON array on stdin, never in argv or env.
+// Never invoked through a shell, so no interpolation risk.
+import { O_CREAT, O_NOFOLLOW, O_NONBLOCK, O_RDONLY, O_TRUNC, O_WRONLY } from "node:constants";
+import { lstat, mkdir, open, rm } from "node:fs/promises";
+import { sep } from "node:path";
+
+async function ensureRealDir(path) {
+  let stat;
+  try {
+    stat = await lstat(path);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  if (stat && stat.isSymbolicLink()) {
+    throw new Error(`refusing symlinked path: ${path}`);
+  }
+  if (!stat) {
+    await mkdir(path, { mode: 0o700 }).catch((error) => {
+      if (error.code !== "EEXIST") throw error;
+    });
+    return;
+  }
+  if (!stat.isDirectory()) throw new Error(`refusing to prepare ${path}: not a real folder`);
+}
+
+async function ensureDirTree(path) {
+  const parts = path.split(sep).filter((part) => part.length > 0);
+  let current = path.startsWith(sep) ? sep : "";
+  for (const part of parts) {
+    current = current === "" ? part : current === sep ? `${sep}${part}` : `${current}${sep}${part}`;
+    await ensureRealDir(current);
+  }
+}
+
+async function readExistingConfig(path) {
+  const handle = await open(path, O_RDONLY | O_NOFOLLOW).catch((error) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!handle) return {};
+  try {
+    const parsed = JSON.parse(await handle.readFile("utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(`existing settings file is not a JSON object: ${path}`);
+    }
+    return parsed;
+  } catch (error) {
+    throw new Error(
+      `could not read existing settings file ${path}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    );
+  } finally {
+    await handle.close();
+  }
+}
+
+async function readSecretFiles() {
+  let raw = "";
+  for await (const chunk of process.stdin) raw += chunk;
+  if (!raw) return [];
+  const files = JSON.parse(raw);
+  if (!Array.isArray(files)) throw new Error("secret file input must be an array");
+  return files;
+}
+
+async function assertRealPath(path) {
+  const parts = path.split(sep).filter((part) => part.length > 0);
+  let current = path.startsWith(sep) ? sep : "";
+  for (const part of parts) {
+    current = current === sep ? `${sep}${part}` : current === "" ? part : `${current}${sep}${part}`;
+    let stat;
+    try {
+      stat = await lstat(current);
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        throw new Error("Not logged in (no usable Codex credential in your runner home)", {
+          cause: error
+        });
+      }
+      throw error;
+    }
+    if (stat.isSymbolicLink()) {
+      throw new Error(`refusing symlinked credential path: ${path}`);
+    }
+  }
+}
+
+async function readSecretSource(file) {
+  await assertRealPath(file.sourcePath);
+  let sourceStat;
+  try {
+    sourceStat = await lstat(file.sourcePath);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw new Error("Not logged in (no usable Codex credential in your runner home)", {
+        cause: error
+      });
+    }
+    throw error;
+  }
+  if (!sourceStat.isFile()) {
+    throw new Error(`refusing non-regular credential path: ${file.sourcePath}`);
+  }
+  // O_NONBLOCK keeps a planted FIFO from hanging the owner process before the
+  // descriptor's regular-file check runs. The fstat closes the replacement
+  // race between the component walk and open.
+  let handle;
+  try {
+    handle = await open(file.sourcePath, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw new Error("Not logged in (no usable Codex credential in your runner home)", {
+        cause: error
+      });
+    }
+    throw error;
+  }
+  try {
+    if (!(await handle.stat()).isFile()) {
+      throw new Error(`refusing non-regular credential path: ${file.sourcePath}`);
+    }
+    let content;
+    try {
+      content = await handle.readFile("utf8");
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        throw new Error("Not logged in (no usable Codex credential in your runner home)", {
+          cause: error
+        });
+      }
+      throw error;
+    }
+    if (file.kind === "codex-auth") {
+      let parsed;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        throw new Error("Not logged in (no usable Codex credential in your runner home)");
+      }
+      if (
+        !parsed ||
+        typeof parsed !== "object" ||
+        typeof parsed.tokens?.access_token !== "string" ||
+        parsed.tokens.access_token.length === 0 ||
+        typeof parsed.tokens?.account_id !== "string" ||
+        parsed.tokens.account_id.length === 0
+      ) {
+        throw new Error("Not logged in (no usable Codex credential in your runner home)");
+      }
+      await handle.chmod(0o600);
+    }
+    return content;
+  } finally {
+    await handle.close();
+  }
+}
+
+async function writeSecretFile(file) {
+  if (!file || typeof file.path !== "string") {
+    throw new Error("invalid secret file input");
+  }
+  if (typeof file.sourcePath === "string") {
+    const content = await readSecretSource(file);
+    if (file.sourcePath === file.path) return;
+    file = { ...file, content };
+  }
+  if (typeof file.content !== "string") throw new Error("invalid secret file input");
+  await ensureDirTree(file.path.slice(0, file.path.lastIndexOf(sep)));
+  const handle = await open(file.path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o600);
+  try {
+    await handle.chmod(0o600);
+    await handle.writeFile(file.content, "utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
+async function main() {
+  const raw = process.argv[2];
+  if (!raw) throw new Error("missing preparation request argument");
+  const request = JSON.parse(raw);
+  const secretFiles = await readSecretFiles();
+
+  // Validate sources before directory setup can remove a symlinked `.codex` directory.
+  for (const file of secretFiles) {
+    if (typeof file?.sourcePath === "string") await readSecretSource(file);
+  }
+
+  for (const dir of request.dirs) {
+    await ensureDirTree(dir);
+  }
+
+  if (request.denyFile) {
+    const { path, permissionKeys } = request.denyFile;
+    let first;
+    try {
+      first = await lstat(path);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (first && first.isSymbolicLink()) await rm(path, { force: true });
+    const config = await readExistingConfig(path);
+    const permission =
+      config.permission &&
+      typeof config.permission === "object" &&
+      !Array.isArray(config.permission)
+        ? { ...config.permission }
+        : {};
+    for (const permissionKey of permissionKeys) permission[permissionKey] = "deny";
+    config.permission = permission;
+    const handle = await open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o600);
+    try {
+      await handle.writeFile(JSON.stringify(config, null, 2), "utf8");
+    } finally {
+      await handle.close();
+    }
+  }
+
+  for (const file of secretFiles) await writeSecretFile(file);
+}
+
+main().then(
+  () => process.exit(0),
+  (error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+);

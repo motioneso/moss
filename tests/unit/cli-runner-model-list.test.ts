@@ -302,6 +302,28 @@ describe("google model-list adapter", () => {
 });
 
 describe("engine-host listProviderModels", () => {
+  it("uses an isolated Codex owner reader instead of the launcher's file access", async () => {
+    const home = await mkdtemp(path.join(tmpdir(), "model-list-owner-reader-"));
+    const { f, calls } = fakeFetch(async () =>
+      jsonResponse({ models: [{ slug: "gpt-5.6", visibility: "list" }] })
+    );
+    const readCodexAuthFile = vi.fn(async (authPath: string) => {
+      expect(authPath).toBe(path.join(home, ".codex", "auth.json"));
+      return JSON.stringify({
+        tokens: { access_token: CODEX_TOKEN, account_id: CODEX_ACCOUNT }
+      });
+    });
+    const result = await listProviderModels("openai-compatible", {
+      homeBase: home,
+      fetch: f,
+      codexVersion: async () => "0.139.0",
+      readCodexAuthFile
+    });
+    expect(result).toEqual({ status: "ok", models: [{ id: "gpt-5.6" }] });
+    expect(readCodexAuthFile).toHaveBeenCalledTimes(1);
+    expect(calls).toHaveLength(1);
+  });
+
   it("reads codex --version through the host io once and threads homeBase + fetch", async () => {
     const home = await homeWithCodexAuth();
     const run = vi.fn().mockResolvedValue({ code: 0, stdout: "codex-cli 0.139.0\n" });

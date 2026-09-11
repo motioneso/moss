@@ -116,6 +116,37 @@ describe("ChatSessionManager tools/list readiness gate (#2159)", () => {
     expect(engine.killed).toBe(false);
   });
 
+  it("uses the engine capability instead of provider and execution mode", async () => {
+    const engine = new FakeEngine(0) as FakeEngine & { startsToolClientPerTurn: boolean };
+    engine.startsToolClientPerTurn = false;
+    const waitForToolsListReady = vi.fn();
+    const manager = new ChatSessionManager(
+      makeMinimalDeps({
+        engineFactory: () => engine,
+        mintMcpToken: vi
+          .fn()
+          .mockResolvedValue({ token: "jst_x", mcpServerUrl: "http://localhost:3000/api/mcp" }),
+        waitForToolsListReady,
+        persistence: {
+          resolveActiveProvider: vi.fn().mockResolvedValue({
+            provider: "anthropic",
+            model: "sonnet",
+            executionMode: "non_interactive"
+          }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn: vi.fn().mockResolvedValue(undefined),
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      }) as never
+    );
+
+    await manager.ensureSession("u1", "Ben");
+
+    expect(waitForToolsListReady).toHaveBeenCalledWith("jst_x");
+  });
+
   it("rejects instead of letting the first message through when waitForToolsListReady times out (resolves false)", async () => {
     const engine = new FakeEngine(0);
     const waitForToolsListReady = vi.fn().mockResolvedValue(false);
@@ -574,7 +605,7 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
   });
 
   // #2164 r23 security correction (item 1) — the r22 suppression keyed on `rejected`, but the
-  // interactive Anthropic path (cli-chat-engine.ts) never sets that flag; it can still emit a
+  // interactive Anthropic path (module-build-cli-engine.ts) never sets that flag; it can still emit a
   // blank `{ kind: "tool", text: "" }` record with no toolName. The choke point must suppress
   // any nameless, textless tool record regardless of `rejected`, while a record that does carry
   // a toolName — even with empty text, e.g. an mcp__ call — is still a real activity step and

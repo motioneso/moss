@@ -75,6 +75,8 @@ import {
   type PersistentRuntimeLaunchConfig,
   type RpcProbeProviderParams,
   type RpcProbeProviderResult,
+  type RpcRecordLoginRejectedParams,
+  type RpcRecordLoginRejectedResult,
   type RpcPurgeTranscriptsResult,
   type RpcReadNewParams,
   type RpcReadNewResult,
@@ -347,7 +349,7 @@ export class RpcConnection {
     return this.call<RpcInterruptResult>("interrupt", sessionKey, {});
   }
 
-  // #2369 slice 1 — ACP tunnel verbs. Session-scoped like the turn verbs; acpRead is a
+  // Slice 1 task 3 — ACP tunnel verbs. Session-scoped like the turn verbs; acpRead is a
   // quick poll (the API-side client in @moss/acp paces it), so the default deadline applies.
   acpSpawn(sessionKey: string, params: RpcAcpSpawnParams): Promise<RpcAcpSpawnResult> {
     return this.call<RpcAcpSpawnResult>("acpSpawn", sessionKey, params);
@@ -365,9 +367,9 @@ export class RpcConnection {
     return this.call<RpcAcpKillResult>("acpKill", sessionKey, params);
   }
 
-  // #2369 phase 3 — the runner speaks acpExecStart/acpExecPoll/acpExecKill
+  // The runner speaks acpExecStart/acpExecPoll/acpExecKill
   // (server side is live); the matching client verbs land with the API-side
-  // tunnel backing in phase 5, which is their first caller.
+  // tunnel backing, which is their first caller.
 
   /**
    * #456 — re-arm the response deadline for any in-flight turn verb.
@@ -404,9 +406,20 @@ export class RpcConnection {
     return this.call<RpcListLiveSessionsResult>("listLiveSessions", undefined, {});
   }
 
-  /** Non-session onboarding probe (§4.8); no sessionKey. */
-  probeProvider(params: RpcProbeProviderParams): Promise<RpcProbeProviderResult> {
-    return this.call<RpcProbeProviderResult>("probeProvider", undefined, params);
+  /** Onboarding probe (§4.8), scoped to the authenticated actor when supplied. */
+  probeProvider(
+    params: RpcProbeProviderParams,
+    actorUserId?: string
+  ): Promise<RpcProbeProviderResult> {
+    return this.call<RpcProbeProviderResult>("probeProvider", actorUserId, params);
+  }
+
+  /** Relays a rejection learned here to the runner's user-scoped cache. */
+  recordLoginRejected(
+    params: RpcRecordLoginRejectedParams,
+    actorUserId?: string
+  ): Promise<RpcRecordLoginRejectedResult> {
+    return this.call<RpcRecordLoginRejectedResult>("recordLoginRejected", actorUserId, params);
   }
 
   /**
@@ -427,40 +440,27 @@ export class RpcConnection {
     return this.call<RpcInstallProviderResult>("installProvider", undefined, params);
   }
 
-  /**
-   * §L.2 login verbs (additive, Phase 3). NON-SESSION (no sessionKey), exactly like
-   * `installProvider` — instance-wide, gated solely by the §3.6 auth hello + the §L.6.1 unified
-   * exclusivity gate (server-side). A failed login FLOW is a normal terminal OUTCOME — an `RpcOk`
-   * with `status:"error"`, NOT an `RpcErr` (§L.2.4): these resolve (do not reject) with
-   * `{ status:"error", message }`. Only a malformed/blocked input (`bad_request` — not a kind, a
-   * blocked/no-adapter provider, a stale loginId) or an unexpected server fault (`internal`)
-   * crosses as an `RpcErr`, which `call()` maps to a thrown typed error (§4.7).
-   *
-   * The pasted `token` in submitLoginToken is AUTH MATERIAL (§L.6.3): it crosses ONLY in this
-   * socket payload and is never logged (frame bodies are never logged, §6.4) / persisted / echoed.
-   */
-  beginLogin(params: RpcBeginLoginParams): Promise<RpcBeginLoginResult> {
-    return this.call<RpcBeginLoginResult>("beginLogin", undefined, params);
+  /** §L.2 login verbs, scoped to the authenticated actor; token payloads remain secret-free. */
+  beginLogin(params: RpcBeginLoginParams, actorUserId: string): Promise<RpcBeginLoginResult> {
+    return this.call<RpcBeginLoginResult>("beginLogin", actorUserId, params);
   }
 
-  pollLogin(params: RpcPollLoginParams): Promise<RpcPollLoginResult> {
-    return this.call<RpcPollLoginResult>("pollLogin", undefined, params);
+  pollLogin(params: RpcPollLoginParams, actorUserId: string): Promise<RpcPollLoginResult> {
+    return this.call<RpcPollLoginResult>("pollLogin", actorUserId, params);
   }
 
-  submitLoginToken(params: RpcSubmitLoginTokenParams): Promise<RpcSubmitLoginTokenResult> {
-    return this.call<RpcSubmitLoginTokenResult>("submitLoginToken", undefined, params);
+  submitLoginToken(
+    params: RpcSubmitLoginTokenParams,
+    actorUserId: string
+  ): Promise<RpcSubmitLoginTokenResult> {
+    return this.call<RpcSubmitLoginTokenResult>("submitLoginToken", actorUserId, params);
   }
 
-  cancelLogin(params: RpcCancelLoginParams): Promise<RpcCancelLoginResult> {
-    return this.call<RpcCancelLoginResult>("cancelLogin", undefined, params);
+  cancelLogin(params: RpcCancelLoginParams, actorUserId: string): Promise<RpcCancelLoginResult> {
+    return this.call<RpcCancelLoginResult>("cancelLogin", actorUserId, params);
   }
 
-  /**
-   * #2208 listProviderModels — NON-SESSION, like probeProvider. The runner asks the provider's
-   * vendor for its live model list with the credential it already holds; ONLY ids come back.
-   * Every non-ok outcome (not logged in, unsupported, vendor failure) is a normal result, not an
-   * `RpcErr`. Server-bounded at 5 s per vendor call, so no client deadline is applied here.
-   */
+  /** #2208: vendor model ids only; non-ok outcomes are normal results. */
   listProviderModels(params: RpcListProviderModelsParams): Promise<RpcListProviderModelsResult> {
     return this.call<RpcListProviderModelsResult>("listProviderModels", undefined, params);
   }
@@ -820,6 +820,7 @@ export class RpcConnection {
  * (the factory passes it) so it is never an RPC (§4.0).
  */
 export class ChatEngineRpcClient implements CliChatEngine {
+  readonly startsToolClientPerTurn: boolean;
   constructor(
     public readonly provider: ProviderKind,
     private readonly sessionKey: string,
@@ -835,7 +836,9 @@ export class ChatEngineRpcClient implements CliChatEngine {
     private readonly readPersistentConfig?: () => Promise<PersistentRuntimeLaunchConfig>,
     /** B4: forwarded to `RpcLaunchParams.needsStructuredOutput`. See its doc comment. */
     private readonly needsStructuredOutput = false
-  ) {}
+  ) {
+    this.startsToolClientPerTurn = executionMode === "non_interactive";
+  }
 
   /**
    * §4.1.0a: serialize ONLY personaText + replayBatch + mcpToken + mcpServerUrl + provider into
@@ -891,6 +894,7 @@ export class ChatEngineRpcClient implements CliChatEngine {
       ...(opts.replayBatch !== undefined ? { replayBatch: opts.replayBatch } : {}),
       ...(opts.replayBatch ? { replayAttemptId: opts.replayAttemptId ?? randomUUID() } : {}),
       ...(opts.model !== undefined ? { model: opts.model } : {}),
+      ...(opts.acpModel !== undefined ? { acpModel: opts.acpModel } : {}),
       ...(opts.nativeSearch !== undefined ? { nativeSearch: opts.nativeSearch } : {}),
       ...(persistent
         ? {

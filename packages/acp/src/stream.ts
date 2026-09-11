@@ -15,6 +15,11 @@ export interface TunnelStreamOptions {
   readonly pollMs?: number;
 }
 
+export interface TunnelStream extends Stream {
+  /** Stop polling and resolve after the poll loop has exited. */
+  stop(): Promise<void>;
+}
+
 const DEFAULT_POLL_MS = 200;
 
 function isJsonRpcMessage(value: unknown): value is AnyMessage {
@@ -27,9 +32,13 @@ export function createTunnelStream(
   tunnel: AcpTunnel,
   sessionKey: string,
   options: TunnelStreamOptions = {}
-): Stream {
+): TunnelStream {
   const pollMs = options.pollMs ?? DEFAULT_POLL_MS;
   let stopped = false;
+  let resolveStopped!: () => void;
+  const stoppedPromise = new Promise<void>((resolve) => {
+    resolveStopped = resolve;
+  });
   let seq = 0;
 
   const writable = new WritableStream<AnyMessage>({
@@ -87,11 +96,15 @@ export function createTunnelStream(
               delivered = true;
             }
             if (result.exited) {
-              // Drain first: lines already enqueued above still reach the
-              // toolkit; with nothing left the stream ends and the pump stops.
-              controller.close();
-              stopped = true;
-              return;
+              // The runner may cap one read while the process has already
+              // exited. Keep polling until the cursor reaches the retained
+              // buffer's end, then close.
+              if (seq >= result.nextSeq) {
+                controller.close();
+                stopped = true;
+                return;
+              }
+              continue;
             }
             if (!delivered) {
               await new Promise((resolve) => setTimeout(resolve, pollMs));
@@ -99,6 +112,9 @@ export function createTunnelStream(
           }
         } catch (error) {
           controller.error(error);
+        } finally {
+          stopped = true;
+          resolveStopped();
         }
       })();
     },
@@ -107,5 +123,12 @@ export function createTunnelStream(
     }
   });
 
-  return { writable, readable };
+  return {
+    writable,
+    readable,
+    async stop() {
+      stopped = true;
+      await stoppedPromise;
+    }
+  };
 }

@@ -27,10 +27,10 @@ import type { ActionAuditAgentSummary, ActionAuditInputSummary } from "@moss/sha
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import type { AiRepository } from "../repository.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
+import { actionResultRecord } from "./action-result-record.js";
 import { APPROVAL_REFUSED_REASON } from "./native-tool-guard.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type { SessionNotifier } from "./types.js";
-import type { NativeToolPermissionResponse } from "./gateway.js";
 
 /**
  * One built-in tool ask from the outside agent (ACP `session/request_permission`).
@@ -44,6 +44,8 @@ export interface AcpBuiltInPermissionRequest {
   /** The HOME handed to the agent process, or null when it names none. */
   readonly home: string | null;
   readonly sessionId: string;
+  /** Identity of the prompt turn that created this ask. */
+  readonly turnId: string;
   readonly toolCallId: string;
   readonly title: string;
   readonly toolInput: Record<string, unknown>;
@@ -53,7 +55,12 @@ export interface AcpBuiltInPermissionRequest {
   readonly locations?: readonly AcpToolCallLocation[] | null;
 }
 
-export type AcpBuiltInPermissionResponse = NativeToolPermissionResponse;
+export interface AcpBuiltInPermissionResponse {
+  readonly decision: "allow" | "deny";
+  readonly reason: string;
+  readonly asked?: boolean;
+  readonly holdDurationMs?: number | null;
+}
 
 /** Narrow view of the gateway dependencies this ask needs. */
 export interface AcpPermissionGatewayDeps {
@@ -73,7 +80,7 @@ const MAX_SUMMARY_PATH_LENGTH = 200;
 /** The card shows the agent's own description at most this long. */
 const MAX_CARD_TEXT = 200;
 
-type AcpAuditMode = "auto" | "confirmed" | "rejected" | "timeout";
+type AcpAuditMode = "auto" | "confirmed" | "rejected" | "cancelled" | "timeout";
 type AcpActionKind = "write" | "outbound" | "destructive";
 
 /**
@@ -217,6 +224,7 @@ export async function requestAcpBuiltInPermission(
   const folders = { cwd: request.cwd, home: request.home };
   const builtIn: AcpBuiltInRequest = {
     sessionId: request.sessionId,
+    turnId: request.turnId,
     toolCallId: request.toolCallId,
     title: request.title,
     rawInput: input,
@@ -231,6 +239,7 @@ export async function requestAcpBuiltInPermission(
   });
 
   const startedAt = Date.now();
+  let humanHoldDurationMs: number | null = null;
   const result = await decideAcpPermission(builtIn, folders, async () => {
     const toolName = builtIn.toolName ?? "";
     const action = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
@@ -245,7 +254,12 @@ export async function requestAcpBuiltInPermission(
       })
     );
 
-    const pendingResolution = deps.confirmations.awaitResolution(action.id, deps.confirmTimeoutMs);
+    const pendingResolution = deps.confirmations.awaitResolution(
+      action.id,
+      deps.confirmTimeoutMs,
+      request.sessionId,
+      request.turnId
+    );
 
     deps.notifier.emit(chatSessionId, {
       kind: "action_request",
@@ -253,26 +267,54 @@ export async function requestAcpBuiltInPermission(
       toolName,
       summary: acpCardText(builtIn)
     });
+    const holdStartedAt = Date.now();
 
     try {
       const outcome = await pendingResolution;
+      const holdDurationMs = Math.max(0, Date.now() - holdStartedAt);
+      humanHoldDurationMs = holdDurationMs;
       deps.notifier.emit(
         chatSessionId,
-        outcome === "confirmed"
-          ? { kind: "action_result", actionRequestId: action.id, toolName, outcome: "allowed" }
-          : {
-              kind: "action_result",
-              actionRequestId: action.id,
-              toolName,
-              outcome: "denied",
-              reason: APPROVAL_REFUSED_REASON
-            }
+        actionResultRecord(
+          outcome === "confirmed"
+            ? {
+                actionRequestId: action.id,
+                toolName,
+                outcome: "allowed",
+                decidedBy: "person",
+                holdDurationMs
+              }
+            : {
+                actionRequestId: action.id,
+                toolName,
+                outcome: "denied",
+                decidedBy:
+                  outcome === "timeout"
+                    ? "timeout"
+                    : outcome === "cancelled"
+                      ? "cancelled"
+                      : "person",
+                holdDurationMs,
+                reason:
+                  outcome === "timeout"
+                    ? "Action timed out."
+                    : outcome === "cancelled"
+                      ? "Action cancelled."
+                      : APPROVAL_REFUSED_REASON
+              }
+        )
       );
       await writeAcpAuditLine(deps, access, chatSessionId, {
         toolName,
         actionKind,
         mode:
-          outcome === "confirmed" ? "confirmed" : outcome === "timeout" ? "timeout" : "rejected",
+          outcome === "confirmed"
+            ? "confirmed"
+            : outcome === "timeout"
+              ? "timeout"
+              : outcome === "cancelled"
+                ? "cancelled"
+                : "rejected",
         outcome: outcome === "confirmed" ? "success" : "failed",
         errorClass: outcome === "confirmed" ? null : outcome,
         durationMs: Date.now() - startedAt,
@@ -284,6 +326,20 @@ export async function requestAcpBuiltInPermission(
     }
   });
 
+  const holdDurationMs = result.asked ? humanHoldDurationMs : null;
+  if (!result.asked && result.decision === "deny") {
+    deps.notifier.emit(
+      chatSessionId,
+      actionResultRecord({
+        actionRequestId: builtIn.toolCallId,
+        toolName: builtIn.toolName ?? "(unnamed)",
+        outcome: "denied",
+        decidedBy: "policy",
+        holdDurationMs: null,
+        ...(result.reason ? { reason: result.reason } : {})
+      })
+    );
+  }
   if (!result.asked && result.decision === "deny" && result.reason) {
     // Refused with no row, but never silently: the audit line names the agent,
     // the folder and the reason word, so the refusal itself stays visible.
@@ -296,9 +352,23 @@ export async function requestAcpBuiltInPermission(
       durationMs: null,
       inputSummary: summarize("refused", result.reason)
     });
-    return { decision: "deny", reason: APPROVAL_REFUSED_REASON };
+    return {
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: false,
+      holdDurationMs: null
+    };
   }
-  return result.decision === "allow"
-    ? { decision: "allow", reason: result.asked ? "Approved by user." : "Allowed by policy." }
-    : { decision: "deny", reason: APPROVAL_REFUSED_REASON };
+  return {
+    decision: result.decision === "allow" ? "allow" : "deny",
+    reason: result.asked
+      ? result.decision === "allow"
+        ? "Approved by user."
+        : APPROVAL_REFUSED_REASON
+      : result.decision === "allow"
+        ? "Allowed by policy."
+        : APPROVAL_REFUSED_REASON,
+    asked: result.asked,
+    holdDurationMs
+  };
 }

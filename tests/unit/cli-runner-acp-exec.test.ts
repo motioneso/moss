@@ -28,9 +28,23 @@ import {
   AcpHost
 } from "../../packages/cli-runner/src/acp-host.js";
 import { providerTokenPath } from "../../packages/cli-runner/src/provider-token-store.js";
+import {
+  isConfirmedRunningSameProcess,
+  parseProcStat
+} from "../../packages/cli-runner/src/acp-execs.js";
 
 const KEY = "workshop:user:proj";
 const PROJECT = "proj";
+
+// This suite proves exec behavior, not real chown privilege — a plain test
+// process has no CAP_CHOWN, so the one test that turns on per-user identity
+// needs a no-op stand-in for handing a folder to its owner. The real
+// throw-and-clean-up behavior is proved in cli-runner-owned-fs.test.ts.
+const acceptOwnership = async (): Promise<void> => undefined;
+
+const acceptAgentHomePrepare = async (request: { dirs: readonly string[] }): Promise<void> => {
+  for (const dir of request.dirs) mkdirSync(dir, { recursive: true });
+};
 
 function makeHost(dir: string) {
   return new AcpHost({ neutralBase: dir });
@@ -103,16 +117,27 @@ describe("AcpHost builds", () => {
         stdin: { write: () => undefined },
         kill: () => true
       }) as never;
+      const homeBase = join(dir, "homes");
+      mkdirSync(homeBase, { recursive: true });
       const host = new AcpHost({
         neutralBase: dir,
-        resolveAdapterEntry: () => "/fake/adapter.js",
-        spawnChild: () => child
+        homeBase,
+        perUserUid: true,
+        resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
+        spawnChild: () => child,
+        applyOwnership: acceptOwnership,
+        runAgentHomePrepare: acceptAgentHomePrepare
       });
-      const spawned = await host.spawn(KEY, PROJECT);
-      const { execId } = await host.execStart(KEY, PROJECT, "pwd");
-      await pollUntil(host.execPoll.bind(host, KEY, execId));
-      const final = host.execPoll(KEY, execId);
+      const spawned = await host.spawn(KEY, PROJECT, "anthropic", "user-1", "chat");
+      // Real shell runs need no account switch in tests (non-root cannot
+      // setuid), so the build itself runs on a host without per-user
+      // identity; the folder assertion is what this test owns.
+      const execHost = new AcpHost({ neutralBase: dir });
+      const { execId } = await execHost.execStart(KEY, PROJECT, "pwd");
+      await pollUntil(execHost.execPoll.bind(execHost, KEY, execId));
+      const final = execHost.execPoll(KEY, execId);
       expect(final.output.trim()).toBe(spawned.cwd);
+      expect(statSync(join(homeBase, "agents")).mode & 0o777).toBe(0o711);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -472,6 +497,40 @@ describe("AcpHost builds", () => {
     }
   });
 
+  it("sweep removes the session folder with its last record, and empty leftovers", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
+    try {
+      // One overdue record with no start time: dropped without touching any
+      // process, leaving its session folder empty.
+      const recordDir = join(dir, "acp-deadlines", KEY);
+      mkdirSync(recordDir, { recursive: true });
+      writeFileSync(
+        join(recordDir, "9.json"),
+        JSON.stringify({
+          pid: 123456789,
+          deadlineAt: Date.now() - 1000,
+          sessionKey: KEY,
+          projectId: PROJECT,
+          startedAt: Date.now(),
+          startTime: null
+        })
+      );
+      // A folder an earlier owner emptied by seeing the finish itself.
+      const leftoverDir = join(dir, "acp-deadlines", "workshop:user:gone");
+      mkdirSync(leftoverDir, { recursive: true });
+
+      const host = makeHost(dir);
+      await host.reapOrphanedExecs();
+
+      expect(existsSync(join(recordDir, "9.json"))).toBe(false);
+      expect(existsSync(recordDir)).toBe(false);
+      expect(existsSync(leftoverDir)).toBe(false);
+      expect(existsSync(join(dir, "acp-deadlines"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("arms no backup timer for a build this runner is already running", async () => {
     const dir = mkdtempSync(join(tmpdir(), "acp-exec-"));
     try {
@@ -656,5 +715,41 @@ describe("AcpHost builds", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("parseProcStat", () => {
+  it("reads a real process's own start time as running", () => {
+    const content = readFileSync(`/proc/${process.pid}/stat`, "utf8");
+    const status = parseProcStat(content);
+    expect(status.kind).toBe("running");
+  });
+
+  it("reports unknown, never running or gone, for content that cannot be parsed (Astra finding 2)", () => {
+    // Content missing the closing paren around the command name, and content
+    // that has too few space-separated fields to reach the start-time column,
+    // are both "the entry exists but its shape is unreadable" — never proof
+    // the process has exited.
+    expect(parseProcStat("not a real /proc/pid/stat line").kind).toBe("unknown");
+    expect(parseProcStat("1 (sh) S 0 0 0").kind).toBe("unknown");
+  });
+});
+
+describe("isConfirmedRunningSameProcess", () => {
+  it("is false for unknown status, never treating an unreadable entry as a signal-safe match (Astra finding 2)", () => {
+    expect(isConfirmedRunningSameProcess(123, "456", () => ({ kind: "unknown" }))).toBe(false);
+  });
+
+  it("is false for gone, and false for running with a mismatched start time", () => {
+    expect(isConfirmedRunningSameProcess(123, "456", () => ({ kind: "gone" }))).toBe(false);
+    expect(
+      isConfirmedRunningSameProcess(123, "456", () => ({ kind: "running", startTime: "789" }))
+    ).toBe(false);
+  });
+
+  it("is true only once status is running with the recorded start time", () => {
+    expect(
+      isConfirmedRunningSameProcess(123, "456", () => ({ kind: "running", startTime: "456" }))
+    ).toBe(true);
   });
 });

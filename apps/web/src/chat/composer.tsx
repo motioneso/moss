@@ -69,8 +69,13 @@ export function Composer(props: {
   readonly lockedModelUnavailable: boolean;
   /** #1133 — attach UI is hidden and pending chips are dropped in private/incognito chat. */
   readonly privateMode: boolean;
+  /** Owned by the drawer (chat-drawer.tsx), not this component, so it survives this composer
+   *  unmounting and remounting mid-turn. Null means nothing is queued. */
+  readonly queuedText: string | null;
   readonly onSend: (text: string, attachments?: readonly ChatAttachmentDto[]) => void;
-  readonly onStop: (queuedText: string | null) => void;
+  readonly onQueue: (text: string) => void;
+  readonly onDiscardQueuedText: () => void;
+  readonly onStop: () => void;
 }) {
   // Lazy initializer: the starter seeds the input on mount only. After that, the user owns the
   // value — typing/sending clears it and we never re-seed from the prop (no useEffect that would
@@ -88,7 +93,6 @@ export function Composer(props: {
     el.focus();
     el.setSelectionRange(el.value.length, el.value.length);
   }, []);
-  const [queuedText, setQueuedText] = useState<string | null>(null);
   // Explicit autocomplete pick, tracked by record id (not name — duplicate names are allowed).
   // Bare-name text typed without a pick still resolves at send time; see resolveTurnInvocation.
   const [boundSkillId, setBoundSkillId] = useState<string | null>(null);
@@ -234,7 +238,7 @@ export function Composer(props: {
       // drain path can't replay attachments (they would be silently lost).
       if (readyAttachments.length > 0) return;
       if (!composedText) return;
-      setQueuedText(composedText);
+      props.onQueue(composedText);
       setText("");
       setBoundSkillId(null);
       return;
@@ -247,16 +251,15 @@ export function Composer(props: {
   };
 
   const restoreQueuedText = () => {
-    if (queuedText === null) return;
-    setText(queuedText);
-    setQueuedText(null);
+    if (props.queuedText === null) return;
+    setText(props.queuedText);
+    props.onDiscardQueuedText();
   };
 
-  const discardQueuedText = () => setQueuedText(null);
+  const discardQueuedText = () => props.onDiscardQueuedText();
 
   const stop = () => {
-    props.onStop(queuedText);
-    setQueuedText(null);
+    props.onStop();
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -528,7 +531,7 @@ export function Composer(props: {
           )}
         </button>
       </div>
-      {queuedText !== null ? (
+      {props.queuedText !== null ? (
         <div className="chatd-next" aria-live="polite">
           <button
             aria-label="Edit queued message"
@@ -536,7 +539,7 @@ export function Composer(props: {
             type="button"
             onClick={restoreQueuedText}
           >
-            Next: &quot;{queuedText}&quot;
+            Next: &quot;{props.queuedText}&quot;
           </button>
           <button
             aria-label="Discard queued message"

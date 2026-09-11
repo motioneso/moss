@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 // Entry first: the adapter's modules only load in a working order this way.
-import "@zed-industries/claude-code-acp";
-import { toolInfoFromToolUse } from "@zed-industries/claude-code-acp/dist/tools.js";
+import "@agentclientprotocol/claude-agent-acp";
+import { toolInfoFromToolUse } from "@agentclientprotocol/claude-agent-acp/dist/tools.js";
 import type { PermissionOption } from "@agentclientprotocol/sdk";
 
 import {
@@ -12,6 +12,7 @@ import {
   isInsideSessionFolder,
   selectAllowOptionId,
   toolNameFromMeta,
+  toolNameFromRawInput,
   type AcpBuiltInRequest,
   type AcpSessionFolders
 } from "./permissions.js";
@@ -23,6 +24,7 @@ const FOLDERS: AcpSessionFolders = { cwd: CWD, home: HOME };
 function request(partial: Partial<AcpBuiltInRequest>): AcpBuiltInRequest {
   return {
     sessionId: "agent-sess-1",
+    turnId: "turn-1",
     toolCallId: "call-1",
     title: "",
     rawInput: {},
@@ -280,6 +282,7 @@ describe("adapter-built fixtures", () => {
     const info = toolInfoFromToolUse({ name, input });
     return {
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-9",
       title: info.title,
       rawInput: input,
@@ -374,6 +377,10 @@ describe("helpers", () => {
     expect(toolNameFromMeta(null)).toBeNull();
     expect(toolNameFromMeta({ toolName: "  " })).toBeNull();
     expect(toolNameFromMeta({ toolName: 7 })).toBeNull();
+    expect(toolNameFromRawInput({ server: "moss", tool: "calendar.listEvents" })).toBe(
+      "mcp__moss__calendar_listEvents"
+    );
+    expect(toolNameFromRawInput({ server: "moss" })).toBeNull();
   });
 
   it("collects paths from locations and the known input fields", () => {

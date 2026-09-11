@@ -67,6 +67,9 @@ function toTranscriptRecord(record: GatewaySessionRecord): TranscriptRecord | nu
       actionRequestId: record.actionRequestId,
       toolName: record.toolName,
       outcome: record.outcome,
+      ...(record.decidedBy ? { decidedBy: record.decidedBy } : {}),
+      ...(record.holdDurationMs != null ? { durationMs: record.holdDurationMs } : {}),
+      ...(record.reason ? { reason: record.reason } : {}),
       ...(record.result ? { result: record.result } : {}),
       ...(record.affectsQueryKeys ? { affectsQueryKeys: record.affectsQueryKeys } : {})
     };

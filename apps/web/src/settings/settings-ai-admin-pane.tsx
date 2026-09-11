@@ -16,12 +16,14 @@ import { useState } from "react";
 import { Button, IconButton } from "@moss/ui";
 import {
   createAiProvider,
+  getChatSettings,
   getChatModelOverrideSettings,
   listAiModels,
   listAiProviders,
   listAiServiceBindings,
   lookupAiCapabilityRoute,
   putAdminChatModelOverrideEnabled,
+  putChatSettings,
   putAiServiceBinding,
   revokeAiProvider,
   setInstanceDefaultProvider,
@@ -128,6 +130,10 @@ function ProviderCard(props: {
   // a live owner-gated terminal onto the CLI instead of calling testMutation.
   const [terminalOpen, setTerminalOpen] = useState(false);
   const canAutomateLogin = supportsAutomatedProviderLogin(provider);
+  const modelChoiceNote =
+    provider.providerKind === "google"
+      ? "Chat uses this provider's login default because its ACP adapter does not expose model choice yet."
+      : undefined;
   const testMutation = useMutation({
     mutationFn: () => testAiProvider(provider.id),
     onSuccess: ({ result }) =>
@@ -172,6 +178,11 @@ function ProviderCard(props: {
                 ? "API key stored"
                 : "API key needed"}
           </div>
+          {provider.authMethod === "cli" ? (
+            <div className="prov__auth">
+              Chat checks this sign-in when the ACP adapter initializes.
+            </div>
+          ) : null}
         </div>
         <div className="prov__acts">
           {canAutomateLogin ? (
@@ -300,6 +311,7 @@ function ProviderCard(props: {
       <ProviderModels
         provider={provider}
         models={props.models}
+        modelChoiceNote={modelChoiceNote}
         onModelOverride={props.onModelOverride}
         onModelStatusChange={props.onModelStatusChange}
         onModelDelete={props.onModelDelete}
@@ -310,6 +322,56 @@ function ProviderCard(props: {
       {terminalOpen ? (
         <TerminalModal provider={provider} onClose={() => setTerminalOpen(false)} />
       ) : null}
+    </div>
+  );
+}
+
+function OpenCodeAcpCard() {
+  const queryClient = useQueryClient();
+  const settingsQuery = useQuery({
+    queryKey: queryKeys.chat.settings,
+    queryFn: getChatSettings,
+    retry: false
+  });
+  const settingsMutation = useMutation({
+    mutationFn: putChatSettings,
+    onSuccess: (result) => queryClient.setQueryData(queryKeys.chat.settings, result)
+  });
+  const model = settingsQuery.data?.chat.openCodeModel ?? "default";
+
+  return (
+    <div className="prov" aria-label="OpenCode ACP provider">
+      <div className="prov__head">
+        <span className="prov__mark">O</span>
+        <div className="prov__id">
+          <div className="prov__name">OpenCode</div>
+          <div className="prov__auth">
+            <Terminal size={12} aria-hidden="true" /> ACP chat provider
+          </div>
+        </div>
+      </div>
+      <div className="prov__edit">
+        <Field
+          label="Chat model"
+          hint="Saved for the next OpenCode ACP session; the agent applies it when it advertises a model choice."
+        >
+          <Select
+            value={model}
+            disabled={settingsQuery.isLoading || settingsMutation.isPending}
+            onChange={(event) =>
+              settingsMutation.mutate({
+                chat: {
+                  responseStyle: settingsQuery.data?.chat.responseStyle ?? "balanced",
+                  openCodeModel: event.target.value as "default" | "muse-spark-1.3-free"
+                }
+              })
+            }
+          >
+            <option value="default">Login default</option>
+            <option value="muse-spark-1.3-free">Muse Spark 1.3 free</option>
+          </Select>
+        </Field>
+      </div>
     </div>
   );
 }
@@ -632,20 +694,24 @@ export function AiProvidersPane() {
         }
       >
         {providers.length === 0 ? (
-          <div className="ai-empty">
-            <div className="ai-empty__ic">
-              <GitCommitHorizontal size={20} aria-hidden="true" />
-            </div>
-            <div className="ai-empty__main">
-              <div className="ai-empty__t">No providers yet</div>
-              <div className="ai-empty__d">
-                {assistantName} can't chat until at least one provider is added. Connect one to
-                bring its models online for everyone on this instance.
+          <>
+            <div className="ai-empty">
+              <div className="ai-empty__ic">
+                <GitCommitHorizontal size={20} aria-hidden="true" />
+              </div>
+              <div className="ai-empty__main">
+                <div className="ai-empty__t">No providers yet</div>
+                <div className="ai-empty__d">
+                  {assistantName} can't chat until at least one provider is added. Connect one to
+                  bring its models online for everyone on this instance.
+                </div>
               </div>
             </div>
-          </div>
+            <OpenCodeAcpCard />
+          </>
         ) : (
           <div className="prov-list">
+            <OpenCodeAcpCard />
             {providers.map((provider) => (
               <ProviderCard
                 key={provider.id}
@@ -821,6 +887,10 @@ export function AiProvidersPane() {
           ))}
         </Group>
       ) : null}
+      <Note icon={<Terminal size={13} aria-hidden="true" />}>
+        OpenCode uses the ACP chat path. Its agent reports the available model choice when the
+        session initializes, and the saved choice is passed into the next ACP launch.
+      </Note>
       {/* #874: Voice (STT) is its own dedicated admin section, independent of the chat providers. */}
       <VoiceConfigGroup />
       <ChatLockGroup />

@@ -7,12 +7,13 @@ import {
   InvalidSessionTokenError,
   SessionTokenRegistry
 } from "@moss/ai";
-import { decideAcpPermission, MossAcpClient, type AcpTunnel } from "@moss/acp";
 
 const CWD = "/runner/session/acp/proj";
 
 interface FakeStore {
   created: unknown[];
+  createStarted: boolean;
+  createGate?: Promise<void>;
   emitted: unknown[];
   audit: unknown[];
   actionRow: { id: string; status: string };
@@ -26,6 +27,8 @@ function buildGateway(store: FakeStore, confirmTimeoutMs = 1000) {
     repository: {
       // Rows are numbered in creation order so two asks can be told apart.
       createPendingAssistantAction: async (_db: unknown, input: unknown) => {
+        store.createStarted = true;
+        await store.createGate;
         store.created.push(input);
         return { ...store.actionRow, id: `acp-action-${store.created.length}` };
       },
@@ -51,119 +54,11 @@ function buildGateway(store: FakeStore, confirmTimeoutMs = 1000) {
 function freshStore(): FakeStore {
   return {
     created: [],
+    createStarted: false,
     emitted: [],
     audit: [],
     actionRow: { id: "acp-action-1", status: "pending" }
   };
-}
-
-/**
- * Scripted stand-in for the patched adapter: answers the handshake and sends
- * permission asks shaped exactly like the real one — tool call id, raw input,
- * display title, and the real tool name in metadata.
- */
-class ScriptedAgent implements AcpTunnel {
-  readonly sent: string[] = [];
-  private readonly outbox: string[] = [];
-  private seq = 0;
-
-  async spawn(): Promise<{ cwd: string; home: string | null; generation: number }> {
-    return { cwd: CWD, home: "/home/agent", generation: 1 };
-  }
-
-  async send(_sessionKey: string, line: string): Promise<void> {
-    this.sent.push(line);
-    const msg = JSON.parse(line) as { id?: number; method?: string };
-    if (msg.method === "initialize") {
-      this.emit({
-        jsonrpc: "2.0",
-        id: msg.id,
-        result: {
-          protocolVersion: 1,
-          agentCapabilities: { mcpCapabilities: { http: true } }
-        }
-      });
-    } else if (msg.method === "session/new") {
-      this.emit({ jsonrpc: "2.0", id: msg.id, result: { sessionId: "agent-sess-1" } });
-    }
-  }
-
-  async read(_sessionKey: string, afterSeq: number) {
-    const lines = this.outbox.slice(afterSeq);
-    return { lines, firstSeq: afterSeq + 1, nextSeq: this.seq, exited: false, truncated: false };
-  }
-
-  async kill(): Promise<void> {}
-
-  async execStart(): Promise<{ execId: number }> {
-    return { execId: 1 };
-  }
-
-  async execPoll() {
-    return {
-      output: "",
-      done: true,
-      exitCode: 0 as number | null,
-      truncated: false,
-      timedOut: false
-    };
-  }
-
-  async execKill(): Promise<void> {}
-
-  /**
-   * The adapter announces each tool use before asking about it. The
-   * announcement carries the real name under metadata, alongside the raw
-   * input, kind and locations the client also records.
-   */
-  agentAnnouncesToolCall(): void {
-    this.emit({
-      jsonrpc: "2.0",
-      method: "session/update",
-      params: {
-        sessionId: "agent-sess-1",
-        update: {
-          sessionUpdate: "tool_call",
-          toolCallId: "call-9",
-          title: "`pnpm build`",
-          kind: "execute",
-          rawInput: { command: "pnpm build" },
-          status: "pending",
-          _meta: { claudeCode: { toolName: "Bash" } }
-        }
-      }
-    });
-  }
-
-  /**
-   * The adapter's permission question, in its exact shape: only the tool call
-   * id, the raw input and the display title.
-   */
-  agentAsksPermission(id: number): void {
-    this.emit({
-      jsonrpc: "2.0",
-      id,
-      method: "session/request_permission",
-      params: {
-        sessionId: "agent-sess-1",
-        toolCall: {
-          toolCallId: "call-9",
-          title: "`pnpm build`",
-          rawInput: { command: "pnpm build" }
-        },
-        options: [
-          { kind: "allow_always", name: "Always Allow", optionId: "allow_always" },
-          { kind: "allow_once", name: "Allow", optionId: "allow" },
-          { kind: "reject_once", name: "Reject", optionId: "reject" }
-        ]
-      }
-    });
-  }
-
-  private emit(message: unknown): void {
-    this.outbox.push(JSON.stringify(message));
-    this.seq += 1;
-  }
 }
 
 describe("agent built-in permission through the shared approval card", () => {
@@ -176,6 +71,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-9",
       title: "`pnpm build`",
       toolInput: { command: "pnpm build" },
@@ -200,7 +96,12 @@ describe("agent built-in permission through the shared approval card", () => {
       "resolved"
     );
 
-    await expect(pending).resolves.toEqual({ decision: "allow", reason: "Approved by user." });
+    await expect(pending).resolves.toMatchObject({
+      decision: "allow",
+      reason: "Approved by user.",
+      asked: true
+    });
+    expect((await pending).holdDurationMs).toBeGreaterThan(0);
     await vi.waitFor(() => expect(store.emitted).toHaveLength(2));
     expect(store.emitted[1]).toMatchObject({
       kind: "action_result",
@@ -219,6 +120,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-9",
       title: "`pnpm build`",
       toolInput: { command: "pnpm build" },
@@ -266,6 +168,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-9",
       title: "Read File",
       toolInput: { file_path: "/etc/hosts" },
@@ -296,6 +199,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd,
         home: "/home/agent",
         sessionId,
+        turnId: `${sessionId}-turn`,
         toolCallId: `${sessionId}-call`,
         title: "`pnpm build`",
         toolInput: { command: "pnpm build" },
@@ -335,6 +239,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-7",
         title: "Read the repository and summarize the layout",
         toolInput: {
@@ -343,9 +248,19 @@ describe("agent built-in permission through the shared approval card", () => {
         },
         toolName: "Task"
       })
-    ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    ).resolves.toEqual({
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: false,
+      holdDurationMs: null
+    });
     expect(store.created).toHaveLength(0);
-    expect(store.emitted).toHaveLength(0);
+    expect(store.emitted).toHaveLength(1);
+    expect(store.emitted[0]).toMatchObject({
+      kind: "action_result",
+      outcome: "denied",
+      decidedBy: "policy"
+    });
   });
 
   it("refuses a read-mimicking title with no real name and no row", async () => {
@@ -359,6 +274,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-8",
         title: "Read the repository and summarize the layout",
         toolInput: {
@@ -367,10 +283,20 @@ describe("agent built-in permission through the shared approval card", () => {
         },
         toolName: null
       })
-    ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    ).resolves.toEqual({
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: false,
+      holdDurationMs: null
+    });
     expect(store.created).toHaveLength(0);
     expect(awaitResolution).not.toHaveBeenCalled();
-    expect(store.emitted).toHaveLength(0);
+    expect(store.emitted).toHaveLength(1);
+    expect(store.emitted[0]).toMatchObject({
+      kind: "action_result",
+      outcome: "denied",
+      decidedBy: "policy"
+    });
   });
 
   it("denies with the shared refusal wording when the hold expires", async () => {
@@ -383,17 +309,58 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-9",
         title: "`pnpm build`",
         toolInput: { command: "pnpm build" },
         toolName: "Bash"
       })
-    ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    ).resolves.toMatchObject({
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: true
+    });
     expect(store.emitted.at(-1)).toMatchObject({
       kind: "action_result",
       outcome: "denied",
-      reason: APPROVAL_REFUSED_REASON
+      reason: "Action timed out.",
+      decidedBy: "timeout"
     });
+  });
+
+  it("answers a pending ask as cancelled and records the cancellation", async () => {
+    const store = freshStore();
+    const { gateway, tokens } = buildGateway(store, 30_000);
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+
+    const pending = gateway.requestAcpBuiltInPermission(token, {
+      cwd: CWD,
+      home: "/home/agent",
+      sessionId: "agent-sess-1",
+      turnId: "turn-1",
+      toolCallId: "call-cancel",
+      title: "`pnpm build`",
+      toolInput: { command: "pnpm build" },
+      toolName: "Bash"
+    });
+    await vi.waitFor(() => expect(store.emitted).toHaveLength(1));
+
+    await expect(gateway.resolveActionRequest("u1", "acp-action-1", "cancelled")).resolves.toBe(
+      "resolved"
+    );
+    await expect(pending).resolves.toMatchObject({
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: true
+    });
+    expect((await pending).holdDurationMs).toBeGreaterThan(0);
+    expect(store.emitted.at(-1)).toMatchObject({
+      kind: "action_result",
+      outcome: "denied",
+      reason: "Action cancelled."
+    });
+    expect(store.audit).toHaveLength(1);
+    expect(store.audit[0]).toMatchObject({ approvalMode: "cancelled", outcome: "failed" });
   });
 
   it("allows reads and in-folder writes with no card row", async () => {
@@ -406,23 +373,25 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-2",
         title: "Read src/index.ts",
         toolInput: { file_path: "src/index.ts" },
         toolName: "Read"
       })
-    ).resolves.toMatchObject({ decision: "allow" });
+    ).resolves.toMatchObject({ decision: "allow", asked: false, holdDurationMs: null });
     await expect(
       gateway.requestAcpBuiltInPermission(token, {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-3",
         title: "Write src/out.txt",
         toolInput: { file_path: "src/out.txt" },
         toolName: "Write"
       })
-    ).resolves.toMatchObject({ decision: "allow" });
+    ).resolves.toMatchObject({ decision: "allow", asked: false, holdDurationMs: null });
     expect(store.created).toHaveLength(0);
     expect(store.emitted).toHaveLength(0);
   });
@@ -437,14 +406,22 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-4",
         title: "Invent everything",
         toolInput: { whatever: true },
         toolName: "Skill"
       })
-    ).resolves.toEqual({ decision: "deny", reason: APPROVAL_REFUSED_REASON });
+    ).resolves.toEqual({
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: false,
+      holdDurationMs: null
+    });
     expect(store.created).toHaveLength(0);
-    expect(store.emitted).toHaveLength(0);
+    expect(store.emitted).toMatchObject([
+      { kind: "action_result", outcome: "denied", decidedBy: "policy" }
+    ]);
   });
 
   it("still allows when the person answers slowly, with no shorter clock firing", async () => {
@@ -456,6 +433,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-6",
       title: "`pnpm build`",
       toolInput: { command: "pnpm build" },
@@ -468,7 +446,70 @@ describe("agent built-in permission through the shared approval card", () => {
     await expect(gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")).resolves.toBe(
       "resolved"
     );
-    await expect(pending).resolves.toEqual({ decision: "allow", reason: "Approved by user." });
+    await expect(pending).resolves.toMatchObject({
+      decision: "allow",
+      reason: "Approved by user.",
+      asked: true
+    });
+    expect((await pending).holdDurationMs).toBeGreaterThanOrEqual(2000);
+  });
+
+  it("keeps a stopped turn cancelled after the next turn starts", async () => {
+    const store = freshStore();
+    const { gateway, tokens, confirmations } = buildGateway(store, 30_000);
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
+
+    let releaseCreate!: () => void;
+    store.createGate = new Promise<void>((resolve) => {
+      releaseCreate = resolve;
+    });
+    confirmations.beginTurn("agent-sess-1", "turn-old");
+    const pending = gateway.requestAcpBuiltInPermission(token, {
+      cwd: CWD,
+      home: "/home/agent",
+      sessionId: "agent-sess-1",
+      turnId: "turn-old",
+      toolCallId: "call-9",
+      title: "`pnpm build`",
+      toolInput: { command: "pnpm build" },
+      toolName: "Bash"
+    });
+    await vi.waitFor(() => expect(store.createStarted).toBe(true));
+    expect(confirmations.cancelSession("agent-sess-1")).toBe(0);
+    confirmations.beginTurn("agent-sess-1", "turn-new");
+    store.createGate = undefined;
+    releaseCreate();
+    await vi.waitFor(() => expect(store.created).toHaveLength(1));
+    expect(confirmations.isAwaiting("acp-action-1")).toBe(false);
+    await expect(pending).resolves.toMatchObject({
+      decision: "deny",
+      reason: APPROVAL_REFUSED_REASON,
+      asked: true
+    });
+    await expect(gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")).resolves.toBe(
+      "expired"
+    );
+
+    const next = gateway.requestAcpBuiltInPermission(token, {
+      cwd: CWD,
+      home: "/home/agent",
+      sessionId: "agent-sess-1",
+      turnId: "turn-new",
+      toolCallId: "call-next",
+      title: "`pnpm build`",
+      toolInput: { command: "pnpm build" },
+      toolName: "Bash"
+    });
+    await vi.waitFor(() => expect(store.created).toHaveLength(2));
+    await vi.waitFor(() => expect(confirmations.isAwaiting("acp-action-2")).toBe(true));
+    await expect(gateway.resolveActionRequest("u1", "acp-action-2", "confirmed")).resolves.toBe(
+      "resolved"
+    );
+    await expect(next).resolves.toMatchObject({
+      decision: "allow",
+      reason: "Approved by user.",
+      asked: true
+    });
   });
 
   it("writes one audit line per ask and per refusal, none for silent allows", async () => {
@@ -484,6 +525,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-9",
         title: "`pnpm build`",
         toolInput: { command: "pnpm build" },
@@ -521,6 +563,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-9",
       title: "`pnpm build`",
       toolInput: { command: "pnpm build" },
@@ -540,6 +583,7 @@ describe("agent built-in permission through the shared approval card", () => {
       cwd: CWD,
       home: "/home/agent",
       sessionId: "agent-sess-1",
+      turnId: "turn-1",
       toolCallId: "call-2",
       title: "Read src/a.ts",
       toolInput: { file_path: "src/a.ts" },
@@ -576,6 +620,7 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-9",
         title: "t",
         toolInput: refusal.input,
@@ -598,67 +643,13 @@ describe("agent built-in permission through the shared approval card", () => {
         cwd: CWD,
         home: "/home/agent",
         sessionId: "agent-sess-1",
+        turnId: "turn-1",
         toolCallId: "call-5",
         title: "`pnpm build`",
         toolInput: { command: "pnpm build" },
         toolName: "Bash"
       })
     ).rejects.toThrow(InvalidSessionTokenError);
-  });
-
-  it("runs an attended approval end to end: agent asks, person confirms, agent may proceed", async () => {
-    const store = freshStore();
-    const { gateway, tokens } = buildGateway(store);
-    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "s1", allowedToolNames: null });
-    const agent = new ScriptedAgent();
-    const client = new MossAcpClient(
-      agent,
-      {},
-      {
-        decide: async (builtIn, session) =>
-          decideAcpPermission(
-            builtIn,
-            { cwd: session.cwd, home: session.home },
-            async (announced) => {
-              const verdict = await gateway.requestAcpBuiltInPermission(token, {
-                cwd: session.cwd,
-                home: session.home,
-                sessionId: announced.sessionId,
-                toolCallId: announced.toolCallId,
-                title: announced.title,
-                toolInput:
-                  announced.rawInput && typeof announced.rawInput === "object"
-                    ? (announced.rawInput as Record<string, unknown>)
-                    : {},
-                toolName: announced.toolName,
-                kind: announced.kind
-              });
-              return verdict.decision === "allow" ? "allow" : "deny";
-            }
-          ).then((result) => result.decision)
-      }
-    );
-    const handle = await client.openSession("workshop:u1:proj", "proj");
-    agent.agentAnnouncesToolCall();
-    agent.agentAsksPermission(11);
-
-    // The card is up; the person confirms through the Approve path.
-    await vi.waitFor(() => expect(store.emitted).toHaveLength(1));
-    await expect(gateway.resolveActionRequest("u1", "acp-action-1", "confirmed")).resolves.toBe(
-      "resolved"
-    );
-
-    await vi.waitFor(() => {
-      const answers = agent.sent
-        .map((line) => JSON.parse(line))
-        .filter((msg) => msg.id === 11 && msg.result !== undefined);
-      expect(answers.length).toBe(1);
-    });
-    const answer = agent.sent
-      .map((line) => JSON.parse(line))
-      .find((msg) => msg.id === 11 && msg.result !== undefined);
-    expect(answer.result.outcome).toEqual({ outcome: "selected", optionId: "allow" });
-    await client.close(handle);
   });
 });
 

@@ -10,6 +10,7 @@ import type {
   AiProviderExecutionMode,
   ChatAttachmentDto,
   ChatSurface,
+  ChatTurnUsageDto,
   SourceFreshnessV1
 } from "@moss/shared";
 import type { MemoryRecallItem } from "@moss/memory";
@@ -18,7 +19,13 @@ import type { RecallPort } from "../recall-port.js";
 import type { CrossToolReadRunner } from "./cross-tool-reasoning.js";
 import type { NotesContextRetriever } from "./notes-retrieval.js";
 import type { PersonaFs } from "./persona.js";
-import type { ActionResultMetadata, CliChatEngine, EngineKillOpts } from "./types.js";
+import type { AcpPermissionDecider } from "@moss/acp";
+import type {
+  ActionResultMetadata,
+  CliChatEngine,
+  EngineKillOpts,
+  TranscriptRecord
+} from "./types.js";
 
 export interface PrivateThreadState {
   readonly actorUserId: string;
@@ -28,9 +35,12 @@ export interface PrivateThreadState {
 
 export interface ChatPersistencePort {
   /** The active "chat" provider+model for this user (router-selected). */
-  resolveActiveProvider(
-    actorUserId: string
-  ): Promise<{ provider: ProviderKind; model: string; executionMode?: AiProviderExecutionMode }>;
+  resolveActiveProvider(actorUserId: string): Promise<{
+    provider: ProviderKind;
+    model: string;
+    executionMode?: AiProviderExecutionMode;
+    acpModel?: string;
+  }>;
   /** Prior stored turns split into recent verbatim turns + older rolling summary. */
   listPriorTurns(
     actorUserId: string,
@@ -52,6 +62,9 @@ export interface ChatPersistencePort {
       /** #1133 — display metadata for files sent with this turn (user-message tool_metadata). */
       readonly attachments?: readonly ChatAttachmentDto[];
       readonly actionResults?: readonly ActionResultMetadata[];
+      readonly activityRecords?: readonly TranscriptRecord[];
+      readonly elapsedMs?: number;
+      readonly usage?: ChatTurnUsageDto;
     },
     surface?: ChatSurface
   ): Promise<
@@ -113,7 +126,13 @@ export interface ChatSessionManagerDeps {
   readonly engineFactory: (
     provider: ProviderKind,
     sessionKey: string,
-    opts?: { readonly executionMode?: AiProviderExecutionMode }
+    opts?: {
+      readonly executionMode?: AiProviderExecutionMode;
+      readonly conversationId?: string;
+      readonly userId?: string;
+      readonly acpModel?: string;
+      readonly nextSequence?: () => number;
+    }
   ) => CliChatEngine | Promise<CliChatEngine>;
   readonly persistence: ChatPersistencePort;
   readonly personaFs: PersonaFs;
@@ -185,6 +204,8 @@ export interface ChatSessionManagerDeps {
    */
   readonly killSession?: (sessionKey: string, opts?: EngineKillOpts) => Promise<void>;
   readonly purgePrivateTranscripts?: (sessionKey: string) => Promise<void>;
+  /** Builds the gateway-backed ACP decider for a freshly minted session token. */
+  readonly acpPermissionDeciderForToken?: (token: string) => AcpPermissionDecider;
   /** Phase 3: optional recall service — injects <memory> seed before replay. */
   readonly recall?: RecallPort;
   /** Optional per-turn hidden context retrieval. Empty/failed result submits the raw turn. */

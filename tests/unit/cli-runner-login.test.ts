@@ -27,13 +27,13 @@ import {
 } from "../../packages/cli-runner/src/provider-token-store.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
 import { ClaudePersistentRuntimeEngine } from "../../packages/chat/src/live/persistent-runtime-engine.js";
-import { createChatEngine } from "../../packages/chat/src/live/engine-selection.js";
+import { createStructuredEngine } from "../../packages/chat/src/live/structured-engine-selection.js";
 import {
   LOGIN_SESSION_PREFIX,
   SESSION_PREFIX,
   listLoginMuxSessionsWithAge
-} from "../../packages/chat/src/live/cli-chat-engine.js";
-import type { ProbeProviderResult } from "../../packages/chat/src/live/cli-chat-engine.js";
+} from "../../packages/chat/src/live/module-build-cli-engine.js";
+import type { ProbeProviderResult } from "../../packages/chat/src/live/module-build-cli-engine.js";
 import type { LoginAdapter } from "../../packages/chat/src/live/login-contract.js";
 import type {
   CatalogEntry,
@@ -670,7 +670,7 @@ describe("§L.6.1 unified exclusivity gate (engine-host)", () => {
     const f = makeLoginIo("https://claude.ai/oauth/authorize?code=abc");
     const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
     const host = makeHost(f.io, svc);
-    const persistent = createChatEngine("anthropic", "user-9", f.io, {
+    const persistent = createStructuredEngine("anthropic", "user-9", f.io, {
       persistentRuntimeEnabled: true
     });
     expect(persistent).toBeInstanceOf(ClaudePersistentRuntimeEngine);
@@ -868,6 +868,42 @@ describe("#2027 google (Gemini CLI) login adapter", () => {
     expect(out.authorizationUrl).toBe(GEMINI_AUTH_URL);
     expect(out.userCode).toBeUndefined();
     await svc.cancel("google", loginId);
+  });
+});
+
+describe("provider runtime compatibility", () => {
+  it("keeps Anthropic and Google on the shared runtime, isolating Codex", async () => {
+    const f = makeLoginIo("https://auth.openai.com/codex/device\n4DUN-GY7Y3");
+    const isolatedHome = path.join(homeBase, "agents", "user-a");
+    const resolved: { provider: RpcProviderKind; userId: string }[] = [];
+    const probed: { provider: RpcProviderKind; homeBase?: string }[] = [];
+    const svc = new LoginService({
+      io: f.io,
+      adapters: LOGIN_ADAPTERS,
+      homeBase,
+      resolveUserRuntime: async (provider, userId) => {
+        resolved.push({ provider, userId });
+        return { userId, homeBase: isolatedHome, uid: 100001, gid: 100001, io: f.io };
+      },
+      probe: async (provider, opts) => {
+        probed.push({ provider, homeBase: opts?.runtime?.homeBase });
+        return { status: "needs_login" };
+      },
+      settleMs: 0
+    });
+
+    for (const provider of ["anthropic", "google", "openai-compatible"] as const) {
+      const loginId = svc.reserve(provider, "user-a");
+      await svc.start(loginId);
+      await svc.cancel(provider, loginId, "user-a");
+    }
+
+    expect(resolved).toEqual([{ provider: "openai-compatible", userId: "user-a" }]);
+    expect(probed).toEqual([
+      { provider: "anthropic", homeBase },
+      { provider: "google", homeBase },
+      { provider: "openai-compatible", homeBase: isolatedHome }
+    ]);
   });
 });
 

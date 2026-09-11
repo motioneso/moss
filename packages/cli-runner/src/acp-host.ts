@@ -1,47 +1,96 @@
 /**
- * AcpHost — spawns the ACP adapter (Claude Code via its ACP bridge) as the session
- * user and pipes its stdio lines for the API-side client in `@moss/acp` (#2369 slice 1).
+ * AcpHost — spawns a provider's ACP adapter as the session user and pipes its
+ * stdio lines for the API-side client in `@moss/acp` (slice 1, chat first).
  *
  * The runner is deliberately a dumb line pipe: it never parses ACP JSON. Spawning
  * mirrors the chat engine topology (sanitized env, per-user UID when enabled, HOME at
  * the shared home base, per-session working folder), and the vendor login reaches the
- * child through its environment, never the command line.
+ * child through its environment, never the command line. Which adapter runs comes
+ * from the spawn's provider kind, resolved to that row's pinned registry entry;
+ * a spawn without a kind is refused — there is no default provider anywhere.
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createRequire } from "node:module";
-import { readFile, readdir, unlink } from "node:fs/promises";
-import { readFileSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { readFile, rm } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import {
-  ACP_DEADLINE_DIR,
-  execRecordPath,
-  readExecRecord,
-  writeExecRecord
-} from "./exec-records.js";
-import { prepareOwnedPath, writeOwnedFile } from "./owned-fs.js";
+  AcpExecManager,
+  ACP_EXEC_OUTPUT_CAP_BYTES,
+  ACP_EXEC_DEFAULT_TIMEOUT_MS,
+  ACP_EXEC_MAX_TIMEOUT_MS,
+  MAX_EXECS_PER_SESSION,
+  MAX_EXECS_TOTAL,
+  readProcStartTime,
+  readProcStatus,
+  isConfirmedRunningSameProcess,
+  isStoppedOrRecycled,
+  type AcpExecStartResult,
+  type AcpExecPollResult
+} from "./acp-execs.js";
+import {
+  ensureOwnedTopLevel,
+  prepareOwnedPathWithOwnership,
+  purgeOwnedPath as defaultPurgePrivateFolder,
+  type OwnershipApplier
+} from "./owned-fs.js";
+import {
+  listAcpPrivateMarkerKeys,
+  readAcpPrivateMarker,
+  removeAcpPrivateMarker,
+  writeAcpPrivateMarker,
+  type AcpPrivateMarkerRecord
+} from "./acp-private-markers.js";
+import { acpProviderTranscriptDir, defaultPurgeCodexTranscripts } from "./acp-transcript-purge.js";
+import { buildSetprivDropCommand } from "./setpriv.js";
+import { codexAuthPath } from "./acp-codex-auth.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
-import { allocateUidSlot } from "./uid-allocator.js";
+import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
 import { providerTokenPath } from "./provider-token-store.js";
+import {
+  getAcpProviderRow,
+  launchOffList,
+  lookupAcpToolFamily,
+  opencodeDenyPermissionKeys,
+  type AcpProfile,
+  type AcpProviderKind
+} from "@moss/acp";
 import { redactSecrets } from "@moss/ai";
 import { sanitizeSessionKey } from "@moss/chat/live";
+
+// Re-exported so callers that only know acp-host.ts keep working unchanged;
+// the definitions live in acp-execs.ts (task 5b, 2026-09-08 file-size split).
+export {
+  ACP_EXEC_OUTPUT_CAP_BYTES,
+  ACP_EXEC_DEFAULT_TIMEOUT_MS,
+  ACP_EXEC_MAX_TIMEOUT_MS,
+  MAX_EXECS_PER_SESSION,
+  MAX_EXECS_TOTAL
+};
+export type { AcpExecStartResult, AcpExecPollResult };
 
 export interface AcpHostDeps {
   readonly neutralBase: string;
   readonly homeBase?: string;
   /** Mirrors the engine host flag: setuid spawn only with a root container. */
   readonly perUserUid?: boolean;
-  /** Resolves the adapter entry file; injected so tests never touch node_modules. */
-  readonly resolveAdapterEntry?: () => string;
+  /** Hands a folder/file to its owner; injected so tests can prove routing without real
+   * chown privileges. Prod default really calls chown; the failure-and-cleanup behavior
+   * itself is proved separately in cli-runner-owned-fs.test.ts against an unreachable id. */
+  readonly applyOwnership?: OwnershipApplier;
+  /** Resolves the adapter spawn target; injected so tests never touch node_modules. */
+  readonly resolveAdapterTarget?: (kind: AcpProviderKind) => AcpAdapterTarget;
   /** Reads a file; injected so tests can stub the login token. */
   readonly readTokenFile?: (path: string) => Promise<string>;
   /**
    * Spawns the adapter child; injected so tests never start a process. The
-   * production default is a piped-stdio spawn under the session identity.
+   * production default runs the resolved target (node plus the adapter entry,
+   * or the provider's binary) with piped stdio under the session identity.
    */
   readonly spawnChild?: (opts: {
-    entry: string;
+    command: string;
+    args: string[];
     cwd: string;
     env: NodeJS.ProcessEnv;
     uid?: number;
@@ -59,6 +108,49 @@ export interface AcpHostDeps {
     uid?: number;
     gid?: number;
   }) => ChildProcessWithoutNullStreams;
+  /** Runs the home/session preparation step as the person's own slot; injected so tests never shell out. */
+  readonly runAgentHomePrepare?: (
+    request: AgentHomePrepareRequest,
+    identity: { uid: number; gid: number },
+    secretFiles?: readonly AgentHomeSecretFile[]
+  ) => Promise<void>;
+  /**
+   * Overrides the real per-person uid/gid slot allocator. Injected only so
+   * tests can prove folder reuse against a genuinely reachable identity (their
+   * own real uid/gid, which unprivileged chown always accepts) without
+   * needing real root. Production always uses the default.
+   */
+  readonly allocateUidSlot?: (homeBase: string, userId: string) => { uid: number; gid: number };
+  /** Deletes a private folder as its owning account; injected so tests never shell out to setpriv. */
+  readonly purgePrivateFolder?: (
+    cwd: string,
+    identity: { readonly uid: number; readonly gid: number } | null
+  ) => Promise<void>;
+  /**
+   * Deletes only this session's own Codex transcript files, matched by the
+   * working folder recorded in each file's own first line; injected so tests
+   * never shell out to setpriv or touch a real Codex sessions folder.
+   */
+  readonly purgeCodexTranscripts?: (
+    home: string,
+    cwd: string,
+    identity: { readonly uid: number; readonly gid: number } | null
+  ) => Promise<void>;
+  /** Reads a pid's process-table status; injected so tests can prove the "unknown" case never purges. */
+  readonly readProcStatus?: (pid: number) => ReturnType<typeof readProcStatus>;
+}
+
+/** Argument passed as one JSON string to agent-home-prepare.mjs. */
+export interface AgentHomePrepareRequest {
+  readonly dirs: readonly string[];
+  readonly denyFile: { readonly path: string; readonly permissionKeys: readonly string[] } | null;
+}
+
+export interface AgentHomeSecretFile {
+  readonly path: string;
+  readonly sourcePath?: string;
+  readonly content?: string;
+  readonly kind?: "codex-auth";
 }
 
 export interface AcpSpawnResult {
@@ -66,6 +158,11 @@ export interface AcpSpawnResult {
   readonly generation: number;
   /** The HOME handed to the agent process, or null when it names none. */
   readonly home: string | null;
+  /** The spawned agent's own process id (setpriv execs into it, so it's the real process). */
+  readonly pid: number | null;
+  /** The slot account the agent runs as — the expected identity to check /proc/<pid>/status against. */
+  readonly uid: number;
+  readonly gid: number;
 }
 
 export interface AcpReadResult {
@@ -91,59 +188,32 @@ const MAX_REPLY_BYTES = 1024 * 1024;
 const IDLE_REAP_MS = 30 * 60 * 1000;
 /** Single-line cap: a pathological stdout line must not blow the RPC frame cap. */
 const MAX_LINE_BYTES = 256 * 1024;
-/**
- * Retained-output backstop for one build command: the head is kept, the tail
- * is dropped, and the poll reply says it was cut. Matches the tool contract.
- */
-export const ACP_EXEC_OUTPUT_CAP_BYTES = 256 * 1024;
-/** Default build deadline (5 min); the poller returns partial output past it. */
-export const ACP_EXEC_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
-/** Upper bound for one build deadline (10 min); the runner never holds longer. */
-export const ACP_EXEC_MAX_TIMEOUT_MS = 10 * 60 * 1000;
-/** Finished build records are kept this long for a final poll, then swept. */
-const EXEC_RETAIN_MS = 10 * 60 * 1000;
-/** Backstop per session so one runaway agent cannot pile up build records. */
-export const MAX_EXECS_PER_SESSION = 32;
-/**
- * Backstop across all sessions so runs cannot pile up without bound. Eight
- * fully-loaded sessions fit; the 32-per-session cap still applies inside it.
- * Each record holds at most 256 KiB of output, so the worst case is 64 MiB
- * retained plus one process per running record.
- */
-export const MAX_EXECS_TOTAL = 8 * MAX_EXECS_PER_SESSION;
-
-export interface AcpExecStartResult {
-  readonly execId: number;
-}
-
-export interface AcpExecPollResult {
-  /** Full output so far (stdout plus stderr, arrival order), capped at 256 KiB. */
-  readonly output: string;
-  readonly done: boolean;
-  readonly exitCode: number | null;
-  /** True once output past the cap was dropped; the head is what you get. */
-  readonly truncated: boolean;
-  /** True when the deadline killed the command; output is whatever ran so far. */
-  readonly timedOut: boolean;
-}
-
-interface AcpExec {
-  readonly id: number;
-  readonly child: ChildProcessWithoutNullStreams;
-  output: string;
-  outputBytes: number;
-  truncated: boolean;
-  timedOut: boolean;
-  done: boolean;
-  exitCode: number | null;
-  lastActivity: number;
-  deadline: ReturnType<typeof setTimeout> | null;
-}
+/** How long a stop waits for the signalled process to actually exit before reporting it as refused. */
+const KILL_CONFIRM_TIMEOUT_MS = 5000;
 
 interface AcpSession {
   readonly child: ChildProcessWithoutNullStreams;
   readonly cwd: string;
   readonly generation: number;
+  /**
+   * The chat profile's working folder is an empty scratch folder that must
+   * not survive past this session (spec: 2026-09-06-acp-client-design.md);
+   * workshop's is the person's real project folder and is never purged.
+   * killRecord reads this to decide whether to purge on the way out.
+   */
+  readonly profile: AcpProfile;
+  /** HOME handed to the agent process — where its own CLI may keep a transcript outside cwd. */
+  readonly home: string;
+  readonly providerKind: AcpProviderKind;
+  /**
+   * The slot's own identity, present whenever per-user separation launched
+   * this session. The launcher's three privileges (chown/setuid/setgid) do
+   * not include signalling another account's process, so a stop is sent
+   * through setpriv running as this identity instead (task 5b, Astra-Reviewer
+   * finding 3, 2026-09-08). Null only for a session launched without
+   * per-user identity.
+   */
+  readonly identity: { readonly uid: number; readonly gid: number } | null;
   buffered: string[];
   bufferedBytes: number;
   nextSeq: number;
@@ -160,10 +230,89 @@ interface AcpSession {
   exited: boolean;
   exitCode: number | null;
   lastActivity: number;
+  /**
+   * Set once a stop signal is in flight for this session, so an idle sweep or
+   * a second kill call while it is confirming does not send the signal twice.
+   * Cleared again if the stop fails, so a later call can retry.
+   */
+  stopping: boolean;
+  /**
+   * The in-flight stop's own promise, so a concurrent caller awaits and
+   * relays the SAME outcome instead of returning success immediately while
+   * the first stop is still running (task 5b, Astra-Reviewer round-four
+   * finding: a concurrent close returned success while the process was
+   * still alive, 2026-09-08). Cleared alongside `stopping`.
+   */
+  stopPromise: Promise<void> | undefined;
 }
 
-function defaultResolveAdapterEntry(): string {
-  return createRequire(import.meta.url).resolve("@zed-industries/claude-code-acp/dist/index.js");
+/** What runs for one adapter spawn: node plus the row's pinned entry, or the provider binary. */
+export interface AcpAdapterTarget {
+  readonly command: string;
+  readonly args: string[];
+}
+
+/** Node-spawnable adapter entries by provider kind, from the pinned registry packages. */
+const ADAPTER_ENTRY_PACKAGES = {
+  anthropic: "@agentclientprotocol/claude-agent-acp/dist/index.js",
+  openai: "@agentclientprotocol/codex-acp/dist/index.js"
+} as const;
+
+/** Resolve the spawn target for a provider kind; unknown kinds are refused by the row lookup. */
+export function defaultResolveAdapterTarget(kind: AcpProviderKind): AcpAdapterTarget {
+  getAcpProviderRow(kind);
+  if (kind === "opencode") {
+    // Pinned package launcher (postinstall places the platform binary there).
+    const packageJson = createRequire(import.meta.url).resolve("opencode-ai/package.json");
+    return { command: join(dirname(packageJson), "bin", "opencode.exe"), args: ["acp"] };
+  }
+  const entry = ADAPTER_ENTRY_PACKAGES[kind as keyof typeof ADAPTER_ENTRY_PACKAGES];
+  if (!entry) throw new Error(`No adapter package installed for provider kind: ${kind}`);
+  return {
+    command: process.execPath,
+    args: [createRequire(import.meta.url).resolve(entry)]
+  };
+}
+
+/**
+ * Run the below-top-level preparation step as the person's own slot: setpriv
+ * switches identity, then the runner's own Node binary runs the script,
+ * given the request as one JSON argv element (never through a shell, so
+ * nothing in it is ever interpolated). A non-zero exit fails the launch with
+ * the step's own stderr (task 5b, Architect ruling, 2026-09-08).
+ */
+async function defaultRunAgentHomePrepare(
+  request: AgentHomePrepareRequest,
+  identity: { uid: number; gid: number },
+  secretFiles: readonly AgentHomeSecretFile[] = []
+): Promise<void> {
+  const script = createRequire(import.meta.url).resolve("./agent-home-prepare.mjs");
+  const { command, args } = buildSetprivDropCommand(
+    process.execPath,
+    [script, JSON.stringify(request)],
+    identity
+  );
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ["pipe", "ignore", "pipe"],
+      env: buildSanitizedCliEnv(process.env)
+    });
+    child.stdin.end(JSON.stringify(secretFiles));
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.once("error", (error) => reject(error));
+    child.once("exit", (code) => {
+      if (code === 0) resolve();
+      else
+        reject(
+          new Error(
+            `AcpHost: could not prepare the agent's home: ${stderr.trim() || `exit code ${String(code)}`}`
+          )
+        );
+    });
+  });
 }
 
 /**
@@ -172,221 +321,243 @@ function defaultResolveAdapterEntry(): string {
  * only the same build is ever stopped. Null when the process is gone or the
  * table cannot be read — never a reason to kill.
  */
-function readProcStartTime(pid: number): string | null {
-  try {
-    const content = readFileSync(`/proc/${pid}/stat`, "utf8");
-    // The second field (command name) may hold spaces and brackets, so split
-    // after its closing bracket; the start time is the 22nd field overall.
-    const closing = content.lastIndexOf(")");
-    if (closing < 0) return null;
-    const after = content.slice(closing + 2).split(" ");
-    const startTime = after[19];
-    return startTime !== undefined && /^\d+$/.test(startTime) ? startTime : null;
-  } catch {
-    return null;
-  }
-}
-
 export class AcpHost {
   private readonly sessions = new Map<string, AcpSession>();
   private generationCounter = 0;
-  private readonly execs = new Map<string, Map<number, AcpExec>>();
-  private execCounter = 0;
-  /**
-   * Kill timers armed for builds owned by a dead runner, keyed by record
-   * file. Stops a restarted runner from arming the same deadline twice.
-   */
-  private readonly orphanTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly execManager: AcpExecManager;
 
   constructor(private readonly deps: AcpHostDeps) {
     // No sweep here: the constructor cannot wait, and an unwaited sweep
     // races the startup clean-out over the same folder. The engine runs the
     // sweep after its clean-out, and every build start runs it as a backstop.
+    this.execManager = new AcpExecManager(deps);
   }
 
   /**
-   * Stop builds that outlived the runner process that started them. Reads
-   * every deadline record left on disk: builds past their deadline are
-   * stopped at once, builds still within it get a kill timer in this process
-   * so a second restart keeps them covered too. A record is only acted on
-   * when the live process still has the start time saved in it, so a
-   * recycled process number is never killed. Builds this runner is already
-   * running are skipped: their live deadline owns them, and arming a second
-   * timer would leave a kill aimed at nothing. Safe to call any number of
-   * times. Must run after the startup clean-out, never beside it.
+   * Stop builds that outlived the runner process that started them. Delegates
+   * to the exec manager (acp-execs.ts); see there for the full contract. Safe
+   * to call any number of times. Must run after the startup clean-out, never
+   * beside it.
    */
   async reapOrphanedExecs(): Promise<void> {
-    const deadlineBase = join(this.deps.neutralBase, ACP_DEADLINE_DIR);
-    const sessionDirs = await readdir(deadlineBase, { withFileTypes: true }).catch(() => []);
-    for (const entry of sessionDirs) {
-      if (!entry.isDirectory()) continue;
-      const execDir = join(deadlineBase, entry.name);
-      const files = await readdir(execDir).catch(() => [] as string[]);
-      for (const file of files) {
-        if (!file.endsWith(".json")) continue;
-        const execId = Number(file.slice(0, -".json".length));
-        const recordPath = join(execDir, file);
-        if (this.orphanTimers.has(recordPath)) continue;
-        if (Number.isInteger(execId)) {
-          const live = this.execs.get(entry.name)?.get(execId);
-          if (live && !live.done) continue;
-        }
-        const record = await readExecRecord(recordPath);
-        if (!record) continue;
-        const waitMs = record.deadlineAt - Date.now();
-        if (waitMs <= 0) {
-          await this.stopOrphan(recordPath);
-        } else {
-          const timer = setTimeout(() => {
-            void this.stopOrphan(recordPath);
-          }, waitMs);
-          // A leftover deadline must never hold the runner process open.
-          (timer as unknown as { unref?: () => void }).unref?.();
-          this.orphanTimers.set(recordPath, timer);
-        }
-      }
-    }
+    await this.execManager.reapOrphanedExecs();
   }
 
   /**
-   * Carry out one leftover deadline: re-read the record (a missing record
-   * means the owning runner saw the finish, so stand down), then stop the
-   * process only when it still is the build the record names. The record is
-   * removed either way, so one leftover never kills twice and the timer map
-   * never grows past the records on disk.
+   * Start one provider's agent as the session user and hand back the pipe.
+   * Kind, user and profile are all required and undefaulted; the launch
+   * follows the selected row (per-person slot and home, per-row login and
+   * off-list).
    */
-  private async stopOrphan(recordPath: string): Promise<void> {
-    this.orphanTimers.delete(recordPath);
-    const record = await readExecRecord(recordPath);
-    if (!record) return;
-    if (record.startTime !== null && readProcStartTime(record.pid) === record.startTime) {
-      this.killPidGroup(record.pid);
-    } else {
-      console.warn(`[acp-host] orphan build record does not match a running build; dropping it`);
-    }
-    await unlink(recordPath).catch(() => undefined);
-  }
-
-  /** Forget a backup timer armed for a build that has since finished. */
-  private cancelOrphanTimer(recordPath: string): void {
-    const timer = this.orphanTimers.get(recordPath);
-    if (timer !== undefined) {
-      clearTimeout(timer);
-      this.orphanTimers.delete(recordPath);
-    }
-  }
-
-  async spawn(sessionKey: string, projectId: string): Promise<AcpSpawnResult> {
+  async spawn(
+    sessionKey: string,
+    projectId: string,
+    providerKind: AcpProviderKind,
+    userId: string,
+    profile: AcpProfile
+  ): Promise<AcpSpawnResult> {
+    if (!providerKind) throw new Error("acpSpawn.providerKind is required: no default provider");
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(projectId)) {
       throw new Error("acpSpawn.projectId must match [A-Za-z0-9_-]{1,64}");
     }
+    if (typeof userId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(userId)) {
+      throw new Error("acpSpawn.userId must match [A-Za-z0-9_-]{1,64}");
+    }
+    if (profile !== "chat" && profile !== "workshop")
+      throw new Error("acpSpawn.profile must be chat or workshop");
+    // A row marked not ready refuses here, whoever asks: the launcher is the
+    // only piece that knows the home has no login, and later unattended
+    // callers come through it directly. Before any side effect, so a refused
+    // spawn allocates no slot, kills no prior session and writes no file.
+    if (profile === "chat") {
+      const row = getAcpProviderRow(providerKind);
+      if (!row.chatReady) {
+        throw new Error(`Not logged in (${row.chatBlockReason ?? "provider not ready"})`);
+      }
+    }
     const key = sanitizeSessionKey(sessionKey);
-    this.killRecord(key);
+    await this.killRecord(key);
 
-    let uid: number | undefined;
-    let gid: number | undefined;
-    if (this.deps.perUserUid && this.deps.homeBase) {
-      const slot = allocateUidSlot(this.deps.homeBase, key);
-      uid = slot.uid;
-      gid = slot.gid;
+    // Per-user identity is mandatory on this path: without it every agent
+    // would share one account and one home, and the deny file would land in
+    // a shared folder. Refuse rather than fall back.
+    const homeBase = this.deps.homeBase;
+    if (!this.deps.perUserUid || !homeBase) {
+      throw new Error("acpSpawn requires per-user identity: refusing the shared home");
     }
-    // Same link-safe folder setup the build path uses, at every level: a
-    // command that ran here earlier can plant a link at this folder or any of
-    // its parents, so each level is cleared of links and verified before the
-    // next builds on it. Owner-only whatever the identity option says: with
-    // it off every session shares one account, so this narrows nothing
-    // between people — the real containment there is the disabled built-ins
-    // plus the per-session folder (asserted in cli-runner-acp-host.test.ts),
-    // not these bits. Still the only safe default: group and world get
-    // nothing.
-    const sessionDir = await prepareOwnedPath(
-      this.deps.neutralBase,
-      key,
-      uid,
-      gid,
-      key,
-      "acp",
-      projectId
-    );
+    const codexAuth = providerKind === "openai" ? codexAuthPath(homeBase, userId) : null;
 
-    // Project settings at the path the adapter actually reads
-    // (<cwd>/.claude/settings.json). A bare tool name denies every use of it,
-    // so even an adapter that ignored the disabled-built-ins flag could neither
-    // shell out nor write. Written before spawn so the first session is scoped.
-    const settingsDir = await prepareOwnedPath(
-      this.deps.neutralBase,
-      key,
-      uid,
-      gid,
-      key,
-      "acp",
-      projectId,
-      ".claude"
-    );
-    const settingsPath = join(settingsDir, "settings.json");
-    // Belt and braces with the policy: the shell and writer names stay off, and
-    // reads of the login-token corners plus the system pseudofolders are denied
-    // even if a future adapter ever launched those tools. Whether the vendor
-    // matcher honors these rules needs a live check in phase 5.
-    await writeOwnedFile(
-      key,
-      settingsPath,
-      JSON.stringify({
-        permissions: {
-          deny: [
-            "Bash",
-            "KillShell",
-            "Write",
-            "Edit",
-            "MultiEdit",
-            "NotebookEdit",
-            "Read(~/.jarvis/**)",
-            "Read(~/.claude/**)",
-            "Read(~/.claude.json)",
-            "Read(~/.codex/**)",
-            "Read(~/.gemini/**)",
-            "Read(//proc/**)",
-            "Read(//sys/**)",
-            "Read(//dev/**)",
-            "Read(//run/**)"
-          ]
+    // One slot per person, never per conversation.
+    const allocate = this.deps.allocateUidSlot ?? defaultAllocateUidSlot;
+    const slot = allocate(this.deps.homeBase, userId);
+    const uid = slot.uid;
+    const gid = slot.gid;
+
+    const setup = await (async () => {
+      let agentHomeTop: Awaited<ReturnType<typeof ensureOwnedTopLevel>> | undefined;
+      let sessionTop: Awaited<ReturnType<typeof ensureOwnedTopLevel>> | undefined;
+      try {
+        const agentsParent = (await prepareOwnedPathWithOwnership(homeBase, userId, ["agents"], 1))
+          .path;
+        agentHomeTop = await ensureOwnedTopLevel(
+          userId,
+          agentsParent,
+          userId,
+          uid,
+          gid,
+          this.deps.applyOwnership
+        );
+        const agentHome = agentHomeTop.path;
+        sessionTop = await ensureOwnedTopLevel(
+          key,
+          this.deps.neutralBase,
+          key,
+          uid,
+          gid,
+          this.deps.applyOwnership
+        );
+        const sessionDir = join(sessionTop.path, "acp", projectId);
+
+        const env: NodeJS.ProcessEnv = {
+          ...buildSanitizedCliEnv(process.env),
+          HOME: agentHome
+        };
+        if (providerKind === "anthropic") {
+          const token = await this.readLoginToken(homeBase);
+          if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
         }
-      }),
-      uid,
-      gid
-    );
+        if (
+          providerKind === "openai" &&
+          launchOffList(profile).some((name) => lookupAcpToolFamily(name) === "shell")
+        ) {
+          env.INITIAL_AGENT_MODE = "read-only";
+        }
 
-    const env: NodeJS.ProcessEnv = {
-      ...buildSanitizedCliEnv(process.env),
-      ...(this.deps.homeBase ? { HOME: this.deps.homeBase } : {})
-    };
-    // Same login the chat engine uses: the stored subscription token, via the
-    // environment only — never argv (which leaks through `ps`).
-    if (this.deps.homeBase) {
-      const token = await this.readLoginToken(this.deps.homeBase);
-      if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
+        const denyFile =
+          providerKind === "opencode" && profile === "chat"
+            ? {
+                path: join(agentHome, ".config", "opencode", "opencode.json"),
+                permissionKeys: [...opencodeDenyPermissionKeys()]
+              }
+            : null;
+        const prepareDirs = [sessionDir];
+        if (denyFile) prepareDirs.push(join(agentHome, ".config", "opencode"));
+        if (codexAuth) prepareDirs.push(join(agentHome, ".codex"));
+        const runAgentHomePrepare = this.deps.runAgentHomePrepare ?? defaultRunAgentHomePrepare;
+        await runAgentHomePrepare(
+          { dirs: prepareDirs, denyFile },
+          { uid, gid },
+          codexAuth
+            ? [
+                {
+                  path: join(agentHome, ".codex", "auth.json"),
+                  sourcePath: codexAuth,
+                  kind: "codex-auth" as const
+                }
+              ]
+            : []
+        );
+        return { agentHome, sessionDir, env };
+      } catch (error) {
+        if (agentHomeTop?.createdHere) {
+          await rm(agentHomeTop.path, { force: true, recursive: true }).catch(() => undefined);
+        }
+        if (sessionTop?.createdHere) {
+          await rm(sessionTop.path, { force: true, recursive: true }).catch(() => undefined);
+        }
+        throw error;
+      }
+    })();
+    const { agentHome, sessionDir, env } = setup;
+
+    // Written before the child exists (fail-closed); pid/startTime backfilled below.
+    const chatMarkerRecord: AcpPrivateMarkerRecord | null =
+      profile === "chat"
+        ? {
+            sessionKey: key,
+            cwd: sessionDir,
+            home: agentHome,
+            uid,
+            gid,
+            provider: providerKind,
+            pid: null,
+            startTime: null
+          }
+        : null;
+    if (chatMarkerRecord) {
+      await writeAcpPrivateMarker(this.deps.neutralBase, key, chatMarkerRecord);
     }
 
-    const entry = this.deps.resolveAdapterEntry?.() ?? defaultResolveAdapterEntry();
+    const target =
+      this.deps.resolveAdapterTarget?.(providerKind) ?? defaultResolveAdapterTarget(providerKind);
     const spawnChild =
       this.deps.spawnChild ??
-      ((opts) =>
+      ((opts) => {
+        // The launcher itself now carries ambient capabilities (task 5b) that
+        // would otherwise pass straight through a plain account switch to
+        // every agent it starts, handing each one the power to switch to any
+        // account. setpriv both switches to the person's own slot and drops
+        // every inheritable/ambient capability on the way, so the spawned
+        // process ends with none (Astra-Reviewer finding 2, 2026-09-08). The
+        // outer spawn then runs as the launcher's own identity, not the
+        // target uid/gid — setpriv performs that switch itself.
+        //
+        // The working directory is entered after the identity switch, never
+        // by this outer spawn's own cwd option: by now the session folder has
+        // already been handed over to the target account, and the launcher
+        // can no longer enter a folder it does not own (task 5b,
+        // Astra-Reviewer finding 2, 2026-09-08). setpriv itself has no cd
+        // step, so the privileged path wraps the real command in a shell that
+        // cd's after setpriv has already switched identity and is about to
+        // exec it; the folder name travels as its own argument, never
+        // interpolated into the script text.
+        const launch =
+          opts.uid !== undefined && opts.gid !== undefined
+            ? buildSetprivDropCommand(
+                "sh",
+                ["-c", 'cd "$1" && shift && exec "$@"', "sh", opts.cwd, opts.command, ...opts.args],
+                { uid: opts.uid, gid: opts.gid }
+              )
+            : { command: opts.command, args: [...opts.args] };
         // detached: the adapter owns a process group, so kill takes down the
         // whole tree (the agent SDK's own CLI grandchild included) — a plain
         // child.kill would orphan it. Same shape as the persistent chat runtime.
-        spawn(process.execPath, [opts.entry], {
-          cwd: opts.cwd,
+        return spawn(launch.command, launch.args, {
+          // No cwd here for the privileged path — see above. The
+          // non-privileged fallback (uid/gid undefined, tests only) keeps
+          // entering the folder directly, since there is no identity switch
+          // to wait for.
+          cwd: opts.uid !== undefined && opts.gid !== undefined ? undefined : opts.cwd,
           env: opts.env,
           stdio: ["pipe", "pipe", "pipe"],
-          detached: true,
-          ...(opts.uid !== undefined ? { uid: opts.uid } : {}),
-          ...(opts.gid !== undefined ? { gid: opts.gid } : {})
-        }) as ChildProcessWithoutNullStreams);
-    const child = spawnChild({ entry, cwd: sessionDir, env, uid, gid });
+          detached: true
+        }) as ChildProcessWithoutNullStreams;
+      });
+    const child = spawnChild({
+      command: target.command,
+      args: target.args,
+      cwd: sessionDir,
+      env,
+      uid,
+      gid
+    });
+
+    // Records the process a boot sweep must confirm has stopped before purging.
+    if (chatMarkerRecord && typeof child.pid === "number") {
+      await writeAcpPrivateMarker(this.deps.neutralBase, key, {
+        ...chatMarkerRecord,
+        pid: child.pid,
+        startTime: readProcStartTime(child.pid)
+      });
+    }
 
     const session: AcpSession = {
       child,
       cwd: sessionDir,
+      identity: { uid, gid },
+      profile,
+      home: agentHome,
+      providerKind,
       generation: (this.generationCounter += 1),
       buffered: [],
       bufferedBytes: 0,
@@ -395,7 +566,9 @@ export class AcpHost {
       truncated: false,
       exited: false,
       exitCode: null,
-      lastActivity: Date.now()
+      lastActivity: Date.now(),
+      stopping: false,
+      stopPromise: undefined
     };
     let pending = "";
     child.stdout.on("data", (chunk: Buffer) => {
@@ -430,9 +603,15 @@ export class AcpHost {
     this.sessions.set(key, session);
     // The agent's home travels with the spawn result so the permission policy
     // can refuse its sensitive corners without ever reading them. Null when
-    // the child environment names no home.
-    const home = typeof env.HOME === "string" && env.HOME !== "" ? env.HOME : null;
-    return { cwd: sessionDir, generation: session.generation, home };
+    // the agent runs without a home.
+    return {
+      cwd: sessionDir,
+      generation: session.generation,
+      home: agentHome,
+      pid: child.pid ?? null,
+      uid,
+      gid
+    };
   }
 
   send(sessionKey: string, line: string): void {
@@ -488,14 +667,8 @@ export class AcpHost {
 
   /**
    * Run one build command starting in the session project folder and return
-   * its id. The caller names a project, never a folder: the working directory
-   * is always `<neutralBase>/<sessionKey>/acp/<projectId>/`, the same folder
-   * an adapter spawn for that session uses. The command itself is not
-   * restricted to that folder. Output past 256 KiB is dropped (the poll reply
-   * keeps the head and says it was cut); past the deadline the command is
-   * killed and the poll reply carries whatever ran so far. The deadline is
-   * also written to disk next to the session, so a restarted runner still
-   * stops a build that outlived the process that started it.
+   * its id. Delegates to the exec manager (acp-execs.ts); see there for the
+   * full contract.
    */
   async execStart(
     sessionKey: string,
@@ -503,203 +676,15 @@ export class AcpHost {
     command: string,
     timeoutMs: number = ACP_EXEC_DEFAULT_TIMEOUT_MS
   ): Promise<AcpExecStartResult> {
-    // Pick up deadlines left by a dead runner before admitting anything new.
-    // A scan failure must never refuse a build; the constructor already tried.
-    await this.reapOrphanedExecs().catch(() => undefined);
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(projectId)) {
-      throw new Error("acpExecStart.projectId must match [A-Za-z0-9_-]{1,64}");
-    }
-    const key = sanitizeSessionKey(sessionKey);
-    if (typeof command !== "string" || command.length === 0 || command.includes("\0")) {
-      throw new Error("acpExecStart.command must be a non-empty string");
-    }
-    if (Buffer.byteLength(command, "utf8") > MAX_LINE_BYTES) {
-      throw new Error("acpExecStart.command must be within 256 KiB");
-    }
-    if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > ACP_EXEC_MAX_TIMEOUT_MS) {
-      throw new Error("acpExecStart.timeoutMs must be a positive integer within 10 minutes");
-    }
-
-    let uid: number | undefined;
-    let gid: number | undefined;
-    if (this.deps.perUserUid && this.deps.homeBase) {
-      const slot = allocateUidSlot(this.deps.homeBase, key);
-      uid = slot.uid;
-      gid = slot.gid;
-    }
-    const sessionDir = await prepareOwnedPath(
-      this.deps.neutralBase,
-      key,
-      uid,
-      gid,
-      key,
-      "acp",
-      projectId
-    );
-    // The build's own home, in its own scratch area rather than the shared
-    // home base, so the login token file is not under the build's home.
-    const homeDir = await prepareOwnedPath(
-      this.deps.neutralBase,
-      key,
-      uid,
-      gid,
-      key,
-      "acp-home",
-      projectId
-    );
-
-    // Scrubbed environment with the build's own home. What is actually true:
-    // the build's home no longer points at the shared home, so the login
-    // token is not in the child's home and nothing hands it over — but the
-    // command is not confined, and one that goes looking under the shared
-    // account can still reach the shared home. The runner's folder-naming
-    // variables are dropped below so the environment does not point there
-    // either. What stays (PATH, HOME, TERM, locale basics) is what a build
-    // needs to run and carries no secret.
-    const env: NodeJS.ProcessEnv = {
-      ...buildSanitizedCliEnv(process.env),
-      HOME: homeDir
-    };
-    for (const key of [
-      "JARVIS_CLI_HOME",
-      "MOSS_CLI_HOME",
-      "JARVIS_CLI_HOME_BASE",
-      "MOSS_CLI_HOME_BASE",
-      "JARVIS_CLI_NEUTRAL_BASE",
-      "MOSS_CLI_NEUTRAL_BASE"
-    ]) {
-      delete env[key];
-    }
-    const spawnExec =
-      this.deps.spawnExec ??
-      ((opts) =>
-        spawn("sh", ["-c", opts.command], {
-          cwd: opts.cwd,
-          env: opts.env,
-          stdio: ["ignore", "pipe", "pipe"],
-          detached: true,
-          ...(opts.uid !== undefined ? { uid: opts.uid } : {}),
-          ...(opts.gid !== undefined ? { gid: opts.gid } : {})
-          // stdin is ignored (builds never read it), so the stdio shape needs
-          // the explicit step before it matches the session-child type.
-        }) as unknown as ChildProcessWithoutNullStreams);
-    const child = spawnExec({ command, cwd: sessionDir, env, uid, gid });
-
-    this.sweepExecs();
-    let bySession = this.execs.get(key);
-    try {
-      if (bySession && bySession.size >= MAX_EXECS_PER_SESSION) {
-        const oldestDone = [...bySession.values()].find((record) => record.done);
-        if (!oldestDone)
-          throw new Error("acpExecStart: too many running commands for this session");
-        this.dropExec(key, bySession, oldestDone.id);
-      } else if (this.totalExecCount() >= MAX_EXECS_TOTAL) {
-        if (!this.evictOldestDoneExec()) {
-          throw new Error("acpExecStart: too many running commands across sessions");
-        }
-      }
-    } catch (error) {
-      // The cap bounds running builds, not just records: a refused build is
-      // stopped before the refusal leaves this function.
-      this.killSpawnedChild(child);
-      throw error;
-    }
-    bySession = this.execs.get(key) ?? new Map<number, AcpExec>();
-    const id = (this.execCounter += 1);
-    const recordPath = execRecordPath(this.deps.neutralBase, key, id);
-    const record: AcpExec = {
-      id,
-      child,
-      output: "",
-      outputBytes: 0,
-      truncated: false,
-      timedOut: false,
-      done: false,
-      exitCode: null,
-      lastActivity: Date.now(),
-      deadline: null
-    };
-    const finish = (code: number | null): void => {
-      if (record.done) return;
-      record.done = true;
-      record.exitCode = code;
-      record.lastActivity = Date.now();
-      if (record.deadline) {
-        clearTimeout(record.deadline);
-        record.deadline = null;
-      }
-      // The deadline no longer needs to survive anything: this runner saw the end.
-      // Cancelling first matters: a backup timer armed by a restarted runner
-      // would otherwise fire later against a recycled process number.
-      this.cancelOrphanTimer(recordPath);
-      try {
-        unlinkSync(recordPath);
-      } catch {
-        /* never written, or the reaper already took it */
-      }
-    };
-    child.stdout.on("data", (chunk: Buffer) => this.appendExecOutput(record, chunk));
-    child.stderr.on("data", (chunk: Buffer) => this.appendExecOutput(record, chunk));
-    child.on("exit", (code) => finish(code));
-    child.on("error", () => finish(null));
-    const timer = setTimeout(() => {
-      record.deadline = null;
-      record.timedOut = true;
-      record.lastActivity = Date.now();
-      this.killExecProcess(record);
-    }, timeoutMs);
-    // The deadline must never hold the runner process open on its own.
-    (timer as unknown as { unref?: () => void }).unref?.();
-    record.deadline = timer;
-    bySession.set(id, record);
-    this.execs.set(key, bySession);
-    // The deadline on disk is what lets a restarted runner stop this build.
-    // A write failure is said out loud but never refuses the build: the
-    // in-memory deadline still guards this runner's lifetime.
-    await writeExecRecord(this.deps.neutralBase, key, id, {
-      pid: child.pid,
-      deadlineAt: Date.now() + timeoutMs,
-      sessionKey: key,
-      projectId,
-      startedAt: Date.now(),
-      startTime: child.pid === undefined ? null : readProcStartTime(child.pid)
-    }).catch((error: unknown) => {
-      console.warn(`[acp-host] ${key} could not persist build ${id}: ${(error as Error).message}`);
-    });
-    // A fast build may have finished while the record was being written, so
-    // the finish handler already ran before there was a file to remove.
-    // Leaving it behind would arm a kill against a recycled process number.
-    const settled = bySession.get(id);
-    if (!settled || settled.done) {
-      try {
-        unlinkSync(execRecordPath(this.deps.neutralBase, key, id));
-      } catch {
-        /* the finish handler already removed it */
-      }
-    }
-    return { execId: id };
+    return this.execManager.execStart(sessionKey, projectId, command, timeoutMs);
   }
 
   execPoll(sessionKey: string, execId: number): AcpExecPollResult {
-    this.sweepExecs();
-    const record = this.requireExec(sessionKey, execId);
-    record.lastActivity = Date.now();
-    return {
-      output: record.output,
-      done: record.done,
-      exitCode: record.exitCode,
-      truncated: record.truncated,
-      timedOut: record.timedOut
-    };
+    return this.execManager.execPoll(sessionKey, execId);
   }
 
   execKill(sessionKey: string, execId: number): void {
-    this.sweepExecs();
-    const key = sanitizeSessionKey(sessionKey);
-    const record = this.execs.get(key)?.get(execId);
-    // Idempotent like the adapter kill: an absent or finished command is a no-op.
-    if (!record || record.done) return;
-    this.killExecProcess(record);
+    this.execManager.execKill(sessionKey, execId);
   }
 
   /**
@@ -719,7 +704,7 @@ export class AcpHost {
     }
   }
 
-  kill(sessionKey: string, expectedGeneration?: number): void {
+  async kill(sessionKey: string, expectedGeneration?: number): Promise<void> {
     this.sweepIdle();
     const key = sanitizeSessionKey(sessionKey);
     const session = this.sessions.get(key);
@@ -727,7 +712,7 @@ export class AcpHost {
     // A guarded kill from a dropped connection must not take down a session
     // another connection respawned after it: generations differ, so no-op.
     if (expectedGeneration !== undefined && session.generation !== expectedGeneration) return;
-    this.killRecord(key);
+    await this.killRecord(key);
   }
 
   private requireLive(sessionKey: string): AcpSession {
@@ -738,181 +723,267 @@ export class AcpHost {
     return session;
   }
 
-  /** Append build output up to the cap; past it the head is kept and the flag is set. */
-  private appendExecOutput(record: AcpExec, chunk: Buffer): void {
-    if (record.outputBytes >= ACP_EXEC_OUTPUT_CAP_BYTES) {
-      record.truncated = true;
-      return;
-    }
-    const text = chunk.toString("utf8");
-    const room = ACP_EXEC_OUTPUT_CAP_BYTES - record.outputBytes;
-    const size = Buffer.byteLength(text, "utf8");
-    if (size <= room) {
-      record.output += text;
-      record.outputBytes += size;
-    } else {
-      // Head only; a split multibyte tail decodes to U+FFFD, and the flag says so.
-      record.output += Buffer.from(text, "utf8").subarray(0, room).toString("utf8");
-      record.outputBytes = ACP_EXEC_OUTPUT_CAP_BYTES;
-      record.truncated = true;
-    }
-    record.lastActivity = Date.now();
-  }
-
-  private requireExec(sessionKey: string, execId: number): AcpExec {
-    if (!Number.isInteger(execId) || execId <= 0) {
-      throw new Error("acpExec.execId must be a positive integer");
-    }
-    const key = sanitizeSessionKey(sessionKey);
-    const record = this.execs.get(key)?.get(execId);
-    if (!record) throw new Error("Build command is not running");
-    return record;
-  }
-
-  private dropExec(key: string, bySession: Map<number, AcpExec>, execId: number): void {
-    const record = bySession.get(execId);
-    bySession.delete(execId);
-    if (record?.deadline) clearTimeout(record.deadline);
-    this.cancelOrphanTimer(execRecordPath(this.deps.neutralBase, key, execId));
-    try {
-      unlinkSync(execRecordPath(this.deps.neutralBase, key, execId));
-    } catch {
-      /* never written, finished already, or the reaper took it */
-    }
-    if (bySession.size === 0) this.execs.delete(key);
-  }
-
   /**
-   * Best-effort stop of one process group by id, for builds owned by a dead
-   * runner where no child handle exists. A missing process is the common
-   * case (it exited on its own) and is not an error.
+   * Stop one session's process group and wait for it to actually exit before
+   * dropping the record for it. The launcher's three privileges (chown,
+   * setuid, setgid) do not cover signalling another account's process, so
+   * a session launched under a slot identity is stopped through setpriv
+   * running AS that same slot, which needs no further privilege to signal
+   * its own process group. A refused or unconfirmed stop is thrown, not
+   * swallowed, and the session record is kept so the caller can retry
+   * (task 5b, Astra-Reviewer finding 3, 2026-09-08).
+   *
+   * A caller that arrives while a stop is already in flight awaits and
+   * relays that SAME stop's outcome, rather than returning success right
+   * away while the process is still alive — the earlier version did the
+   * latter, so a concurrent close reported the session gone before it
+   * actually was (task 5b, Astra-Reviewer round-four finding, 2026-09-08).
    */
-  private killPidGroup(pid: number): void {
-    try {
-      process.kill(-pid, "SIGTERM");
-      return;
-    } catch {
-      /* fall through to the direct kill */
-    }
-    try {
-      process.kill(pid, "SIGTERM");
-    } catch {
-      /* already gone */
-    }
-  }
-
-  /** Every build record held right now, finished or running, in every session. */
-  private totalExecCount(): number {
-    let total = 0;
-    for (const bySession of this.execs.values()) total += bySession.size;
-    return total;
-  }
-
-  /**
-   * Drop the longest-idle finished build across all sessions to make room for
-   * a new one. Running builds are never dropped: when everything held is
-   * still running there is nothing safe to make room with. Returns true when
-   * a record was dropped.
-   */
-  private evictOldestDoneExec(): boolean {
-    let oldestKey: string | null = null;
-    let oldestSession: Map<number, AcpExec> | null = null;
-    let oldestId = -1;
-    let oldestActivity = Number.POSITIVE_INFINITY;
-    for (const [key, bySession] of this.execs) {
-      for (const [id, record] of bySession) {
-        if (record.done && record.lastActivity < oldestActivity) {
-          oldestKey = key;
-          oldestSession = bySession;
-          oldestId = id;
-          oldestActivity = record.lastActivity;
-        }
-      }
-    }
-    if (oldestKey === null || oldestSession === null) return false;
-    this.dropExec(oldestKey, oldestSession, oldestId);
-    return true;
-  }
-
-  /**
-   * Best-effort stop of a child that was started but will never be tracked
-   * (cap refusal): the group first, then the child directly. The process may
-   * already be gone; that is not an error.
-   */
-  private killSpawnedChild(child: ChildProcessWithoutNullStreams): void {
-    const pid = child.pid;
-    if (pid !== undefined) {
-      try {
-        process.kill(-pid, "SIGTERM");
-        return;
-      } catch {
-        /* fall through to the direct kill */
-      }
-    }
-    try {
-      child.kill("SIGTERM");
-    } catch {
-      /* already gone */
-    }
-  }
-
-  /** Best-effort process-group kill for one build; the exit handler settles the record. */
-  private killExecProcess(record: AcpExec): void {
-    if (record.done) return;
-    const pid = record.child.pid;
-    if (pid !== undefined) {
-      try {
-        process.kill(-pid, "SIGTERM");
-        return;
-      } catch {
-        /* fall through to the direct kill */
-      }
-    }
-    try {
-      record.child.kill("SIGTERM");
-    } catch {
-      /* already gone */
-    }
-  }
-
-  /** Drop finished build records past their retain window so polling clients can go away. */
-  private sweepExecs(): void {
-    const now = Date.now();
-    for (const [key, bySession] of this.execs) {
-      for (const [id, record] of bySession) {
-        if (record.done && now - record.lastActivity > EXEC_RETAIN_MS) {
-          this.dropExec(key, bySession, id);
-        }
-      }
-    }
-  }
-
-  private killRecord(key: string): void {
+  private async killRecord(key: string): Promise<void> {
     const session = this.sessions.get(key);
-    this.sessions.delete(key);
-    if (!session || session.exited) return;
-    // Kill the group first (adapter plus any CLI grandchild), then fall back to
-    // the direct child. Every step is best-effort: the process may already be gone.
+    if (!session) return;
+    if (session.exited) {
+      await this.purgeIfChatProfile(key, session);
+      this.sessions.delete(key);
+      return;
+    }
+    if (session.stopping) {
+      await session.stopPromise;
+      return;
+    }
     const pid = session.child.pid;
-    if (pid !== undefined) {
+    if (pid === undefined) {
+      await this.purgeIfChatProfile(key, session);
+      this.sessions.delete(key);
+      return;
+    }
+    session.stopping = true;
+    const stopPromise = (async () => {
+      await this.signalProcessGroup(session, pid);
+      await this.awaitExit(session);
+    })();
+    session.stopPromise = stopPromise;
+    try {
+      await stopPromise;
+    } catch (error) {
+      session.stopping = false;
+      session.stopPromise = undefined;
+      throw error;
+    }
+    await this.purgeIfChatProfile(key, session);
+    this.sessions.delete(key);
+  }
+
+  /**
+   * The chat profile's scratch working folder is purged as its owning
+   * account the moment the process is confirmed stopped — the marker
+   * written at spawn is removed only once that purge succeeds, so a refused
+   * purge is retried by the next boot sweep instead of silently forgotten
+   * (spec: a folder the sweep cannot enter never counts as cleaned). Never
+   * throws: a purge failure here must not block the kill itself.
+   */
+  private async purgeIfChatProfile(key: string, session: AcpSession): Promise<void> {
+    if (session.profile !== "chat") return;
+    try {
+      await this.purgePrivateWorkingFolder(session.cwd, session.identity);
+      const transcriptDir = acpProviderTranscriptDir(
+        session.providerKind,
+        session.cwd,
+        session.home
+      );
+      if (transcriptDir) {
+        await this.purgePrivateWorkingFolder(transcriptDir, session.identity);
+      }
+      if (session.providerKind === "openai") {
+        const purgeCodex = this.deps.purgeCodexTranscripts ?? defaultPurgeCodexTranscripts;
+        await purgeCodex(session.home, session.cwd, session.identity);
+      }
+      await removeAcpPrivateMarker(this.deps.neutralBase, key);
+    } catch (error) {
+      console.error(
+        `[acp-host] ${key} could not purge its private working folder, leaving the marker for the boot sweep: ${(error as Error).message}`
+      );
+    }
+  }
+
+  /**
+   * Delete a chat-profile working folder as its owning account. Runs the
+   * injected `deps.purgePrivateFolder` when a test supplies one, else the
+   * real setpriv-drop path.
+   */
+  private async purgePrivateWorkingFolder(
+    cwd: string,
+    identity: { readonly uid: number; readonly gid: number } | null
+  ): Promise<void> {
+    const purge = this.deps.purgePrivateFolder ?? defaultPurgePrivateFolder;
+    await purge(cwd, identity);
+  }
+
+  /** Boot-time recovery: stop and purge every folder a leftover marker names. */
+  async sweepPrivateMarkers(): Promise<boolean> {
+    let keys: string[];
+    try {
+      keys = await listAcpPrivateMarkerKeys(this.deps.neutralBase);
+    } catch (error) {
+      console.error(
+        `[acp-host] boot sweep could not list private markers, none can be checked this run: ${(error as Error).message}`
+      );
+      return false;
+    }
+    let allPurged = true;
+    for (const key of keys) {
+      const read = await readAcpPrivateMarker(this.deps.neutralBase, key);
+      if (read.status === "missing") {
+        await removeAcpPrivateMarker(this.deps.neutralBase, key);
+        continue;
+      }
+      if (read.status === "invalid") {
+        allPurged = false;
+        console.error(
+          `[acp-host] boot sweep found an unreadable private marker for ${key}, leaving it`
+        );
+        continue;
+      }
+      const record = read.record;
+      const identity = { uid: record.uid, gid: record.gid };
       try {
-        process.kill(-pid, "SIGTERM");
-        return;
-      } catch {
-        /* fall through to the direct kill */
+        // A marker written between spawn and the pid/start-time backfill (or
+        // one whose backfill write itself failed) names no process to check.
+        // That is not proof the agent never started — leave it for a later
+        // sweep rather than purging a folder a live process might still hold.
+        if (record.pid === null || record.startTime === null) {
+          throw new Error(
+            `marker for ${key} names no process to confirm stopped, refusing to purge`
+          );
+        }
+        const stopped = await this.confirmStoppedOrStop(record.pid, record.startTime, identity);
+        if (!stopped) {
+          throw new Error(
+            `process ${record.pid} for ${key} did not stop in time, refusing to purge`
+          );
+        }
+        await this.purgePrivateWorkingFolder(record.cwd, identity);
+        const transcriptDir = acpProviderTranscriptDir(record.provider, record.cwd, record.home);
+        if (transcriptDir) {
+          await this.purgePrivateWorkingFolder(transcriptDir, identity);
+        }
+        if (record.provider === "openai") {
+          const purgeCodex = this.deps.purgeCodexTranscripts ?? defaultPurgeCodexTranscripts;
+          await purgeCodex(record.home, record.cwd, identity);
+        }
+        await removeAcpPrivateMarker(this.deps.neutralBase, key);
+      } catch (error) {
+        allPurged = false;
+        console.error(
+          `[acp-host] boot sweep could not purge ${record.cwd} for ${key}, leaving the marker: ${(error as Error).message}`
+        );
       }
     }
-    try {
-      session.child.kill("SIGTERM");
-    } catch {
-      /* already gone */
+    return allPurged;
+  }
+
+  /**
+   * Confirms the pid is the recorded process, stops it, and polls for exit.
+   * "Gone" or a start-time mismatch (recycled pid) means it already exited,
+   * so purging is safe. A signal is only ever sent once the pid's identity is
+   * positively confirmed as the recorded process — "unknown" status leaves
+   * the marker untouched instead, since a signal on an unconfirmed pid could
+   * hit an unrelated process that later reused it.
+   * False means still running, or unconfirmed, after the timeout.
+   */
+  private async confirmStoppedOrStop(
+    pid: number,
+    recordedStartTime: string,
+    identity: { readonly uid: number; readonly gid: number }
+  ): Promise<boolean> {
+    const readStatus = this.deps.readProcStatus ?? readProcStatus;
+    if (isStoppedOrRecycled(pid, recordedStartTime, readStatus)) return true;
+    if (!isConfirmedRunningSameProcess(pid, recordedStartTime, readStatus)) return false;
+    const { command, args } = buildSetprivDropCommand(
+      process.execPath,
+      ["-e", "process.kill(-Number(process.env.ACP_STOP_PID), 'SIGTERM')"],
+      identity
+    );
+    await new Promise<void>((resolve, reject) => {
+      const stopper = spawn(command, args, {
+        stdio: "ignore",
+        env: { ...buildSanitizedCliEnv(process.env), ACP_STOP_PID: String(pid) }
+      });
+      stopper.once("error", reject);
+      stopper.once("exit", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`stop command for pid ${pid} exited with code ${String(code)}`));
+      });
+    });
+    const deadline = Date.now() + KILL_CONFIRM_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      if (isStoppedOrRecycled(pid, recordedStartTime, readStatus)) return true;
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
+    return isStoppedOrRecycled(pid, recordedStartTime, readStatus);
+  }
+
+  /** Send SIGTERM to the session's process group as the owning identity. */
+  private async signalProcessGroup(session: AcpSession, pid: number): Promise<void> {
+    if (!session.identity) {
+      // No per-user identity: the launcher started this child directly under
+      // its own account, so it may signal it directly, same as before.
+      try {
+        process.kill(-pid, "SIGTERM");
+      } catch {
+        session.child.kill("SIGTERM");
+      }
+      return;
+    }
+    // The runtime image has no separate `kill` program (only util-linux for
+    // setpriv), so the stop signal is sent by the runner's own Node binary
+    // instead, run through setpriv as the slot straight at the process
+    // group — no shell in between (task 5b, Architect ruling on
+    // Astra-Reviewer round-four finding, 2026-09-08). The pid travels by
+    // environment variable, not by argv, so there is no ambiguity about how
+    // Node indexes process.argv under -e.
+    const { command, args } = buildSetprivDropCommand(
+      process.execPath,
+      ["-e", "process.kill(-Number(process.env.ACP_STOP_PID), 'SIGTERM')"],
+      session.identity
+    );
+    await new Promise<void>((resolve, reject) => {
+      const stopper = spawn(command, args, {
+        stdio: "ignore",
+        env: { ...buildSanitizedCliEnv(process.env), ACP_STOP_PID: String(pid) }
+      });
+      stopper.once("error", (error) => reject(error));
+      stopper.once("exit", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`stop command for pid ${pid} exited with code ${String(code)}`));
+      });
+    });
+  }
+
+  /** Wait for the session's own exit handler to fire, or time out and report it. */
+  private async awaitExit(session: AcpSession, timeoutMs = KILL_CONFIRM_TIMEOUT_MS): Promise<void> {
+    if (session.exited) return;
+    await new Promise<void>((resolve, reject) => {
+      const onExit = (): void => {
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        session.child.removeListener("exit", onExit);
+        reject(new Error("stop signal sent, but the process did not exit in time"));
+      }, timeoutMs);
+      session.child.once("exit", onExit);
+    });
   }
 
   private sweepIdle(): void {
     const now = Date.now();
     for (const [key, session] of this.sessions) {
-      if (now - session.lastActivity > IDLE_REAP_MS) this.killRecord(key);
+      if (now - session.lastActivity > IDLE_REAP_MS && !session.stopping) {
+        this.killRecord(key).catch((error: unknown) => {
+          console.error(`[acp-host] ${key} idle stop failed: ${(error as Error).message}`);
+        });
+      }
     }
   }
 

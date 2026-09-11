@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import {
   CliChatUnavailableError,
   VerifiedSubmitError,
-  createChatEngine,
+  createStructuredEngine,
   deriveNeutralDir,
   invalidateProviderProbeCache,
   killMuxSessionByName,
@@ -26,7 +26,7 @@ import {
   removeNeutralDir,
   sanitizeSessionKey,
   type CliChatEngine,
-  // #1350: type-only now — the host builds its engine through `createChatEngine`, never by
+  // #1350: type-only now — the host builds its engine through `createStructuredEngine`, never by
   // naming an implementation. Kept solely for the `hasVerifiedSubmit` capability narrow.
   type CliChatEngineImpl,
   type ProbeProviderResult,
@@ -50,11 +50,13 @@ import {
   startIdleReapTimer as startPoolIdleReapTimer
 } from "@moss/chat/live";
 import type { ProviderKind } from "@moss/ai";
+import type { AcpProfile, AcpProviderKind } from "@moss/acp";
 
-import { AcpHost } from "./acp-host.js";
+import { AcpHost, type AcpExecPollResult, type AcpReadResult } from "./acp-host.js";
 import { ACP_DEADLINE_DIR } from "./exec-records.js";
+import { ACP_PRIVATE_MARKER_DIR } from "./acp-private-markers.js";
 import { Mutex } from "./mutex.js";
-import { LoginBadRequestError, type LoginService } from "./login-service.js";
+import { LoginBadRequestError, type LoginService, type LoginUserRuntime } from "./login-service.js";
 import {
   createCodexVersionReader,
   listProviderModels,
@@ -112,9 +114,9 @@ export class CliChatEngineHost {
   constructor(private readonly deps: EngineHostDeps) {
     this.launchTimeoutMs = deps.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT_MS;
     this.verifiedSubmitTimeoutMs = deps.verifiedSubmitTimeoutMs ?? VERIFIED_SUBMIT_DEADLINE_MS;
-    // #2369 slice 1 — the ACP adapter host rides the same identity config (uid slot
+    // Slice 1 task 3 — the ACP adapter host rides the same identity config (uid slot
     // when enabled, shared home base, per-session dirs). It is deliberately OUTSIDE
-    // the chat admission gate below: Workshop agent sessions are a separate surface
+    // the chat admission gate below: agent sessions are a separate surface
     // and must never contend with the single-active-user chat lock.
     this.acp = new AcpHost({
       neutralBase: deps.neutralBase,
@@ -126,39 +128,40 @@ export class CliChatEngineHost {
   private readonly acp: AcpHost;
 
   /**
-   * #2369 slice 1 — ACP tunnel verbs. Thin delegates: admission, policy, and the
+   * Slice 1 task 3 — ACP tunnel verbs. Thin delegates: admission, policy, and the
    * protocol all live elsewhere (API-side client, gateway); the host only pipes lines.
+   * The spawn carries the provider kind and the host refuses one without it.
    */
   async acpSpawn(
     sessionKey: string,
-    projectId: string
-  ): Promise<{ cwd: string; generation: number }> {
-    return this.acp.spawn(sessionKey, projectId);
+    projectId: string,
+    providerKind: AcpProviderKind,
+    userId: string,
+    profile: AcpProfile
+  ): Promise<{
+    cwd: string;
+    generation: number;
+    home: string | null;
+    pid: number | null;
+    uid: number;
+    gid: number;
+  }> {
+    return this.acp.spawn(sessionKey, projectId, providerKind, userId, profile);
   }
 
   acpSend(sessionKey: string, line: string): void {
     this.acp.send(sessionKey, line);
   }
 
-  acpRead(
-    sessionKey: string,
-    afterSeq: number
-  ): {
-    lines: readonly string[];
-    firstSeq: number;
-    nextSeq: number;
-    exited: boolean;
-    exitCode: number | null;
-    truncated: boolean;
-  } {
+  acpRead(sessionKey: string, afterSeq: number): AcpReadResult {
     return this.acp.read(sessionKey, afterSeq);
   }
 
-  acpKill(sessionKey: string, opts: { generation?: number } = {}): void {
-    this.acp.kill(sessionKey, opts.generation);
+  acpKill(sessionKey: string, opts: { generation?: number } = {}): Promise<void> {
+    return this.acp.kill(sessionKey, opts.generation);
   }
 
-  /** #2369 phase 3 — runner-side builds; contract lives in AcpHost. */
+  /** Runner-side builds; contract lives in AcpHost. */
   async acpExecStart(
     sessionKey: string,
     projectId: string,
@@ -168,16 +171,7 @@ export class CliChatEngineHost {
     return this.acp.execStart(sessionKey, projectId, command, timeoutMs);
   }
 
-  acpExecPoll(
-    sessionKey: string,
-    execId: number
-  ): {
-    output: string;
-    done: boolean;
-    exitCode: number | null;
-    truncated: boolean;
-    timedOut: boolean;
-  } {
+  acpExecPoll(sessionKey: string, execId: number): AcpExecPollResult {
     return this.acp.execPoll(sessionKey, execId);
   }
 
@@ -349,7 +343,7 @@ export class CliChatEngineHost {
     // does in the in-process factory. Before this the runner ALWAYS built the tmux REPL
     // engine, which made #1239's flip a no-op on every containerized deploy and took prod
     // chat down completely.
-    const engine = await createChatEngine(params.provider as ProviderKind, key, sessionIo, {
+    const engine = await createStructuredEngine(params.provider as ProviderKind, key, sessionIo, {
       mux: this.deps.mux,
       homeBase: this.deps.homeBase,
       ownsDrain: true,
@@ -388,7 +382,7 @@ export class CliChatEngineHost {
     }
 
     // Review B4 follow-up — `params.schema` present means this is a structured one-shot call
-    // (email extraction via `CliStructuredAdapter`). `createChatEngine` already built the bounded
+    // (email extraction via `CliStructuredAdapter`). `createStructuredEngine` already built the bounded
     // print engine for it (`needsStructuredOutput` above), so the launch call itself must be
     // `launchStructured`, not the ordinary `launch` — the ordinary one never spawns the
     // JSON-stream child process the structured submit/read verbs below depend on.
@@ -409,6 +403,7 @@ export class CliChatEngineHost {
       replayAttemptId: params.replayAttemptId,
       // #367: forward the resolved model id so buildClaudeCommand emits `--model <id>`.
       model: params.model,
+      acpModel: params.acpModel,
       // #2228: let the CLI run its own web search tool and report sources.
       nativeSearch: params.nativeSearch
     };
@@ -681,33 +676,48 @@ export class CliChatEngineHost {
   }
 
   // ─── probeProvider (§4.8) — no token, no replay ───────────────────────────────
-
   async probeProvider(
     provider: RpcProviderKind,
-    opts?: { readonly forceFresh?: boolean }
+    userIdOrOpts?: string | { readonly forceFresh?: boolean },
+    maybeOpts?: { readonly forceFresh?: boolean }
   ): Promise<RpcProbeProviderResult> {
-    const credentialEnv = this.deps.homeBase
-      ? await readProviderCredentialEnv(this.deps.homeBase, provider)
+    const userId = typeof userIdOrOpts === "string" ? userIdOrOpts : undefined;
+    const opts = typeof userIdOrOpts === "string" ? maybeOpts : userIdOrOpts;
+    const cacheScope = provider === "openai-compatible" ? userId : undefined;
+    const runtime = cacheScope ? await this.deps.resolveUserRuntime?.(cacheScope) : undefined;
+    const homeBase = runtime?.homeBase ?? this.deps.homeBase;
+    const credentialEnv = homeBase
+      ? await readProviderCredentialEnv(homeBase, provider)
       : undefined;
     // #2242: a caller asking for a real check (an explicit re-login, or the periodic
     // install-state reconciliation) must never be answered from a saved success that may have
     // gone stale — drop it explicitly before running the check, belt-and-suspenders alongside
     // `forceFresh` skipping the cache read below.
-    if (opts?.forceFresh) invalidateProviderProbeCache(provider as ProviderKind, credentialEnv);
+    if (opts?.forceFresh)
+      invalidateProviderProbeCache(provider as ProviderKind, credentialEnv, cacheScope);
     const result: ProbeProviderResult = await probeProvider(provider as ProviderKind, {
-      io: this.deps.io,
+      io: runtime?.io ?? this.deps.io,
       cliPresent: this.deps.cliPresent,
       multiplexerUsable: this.deps.multiplexerUsable,
       // #363: inject the persisted claude OAuth token so `auth status` reports loggedIn.
       credentialEnv,
-      homeBase: this.deps.homeBase,
+      homeBase,
+      cacheScope,
       forceFresh: opts?.forceFresh,
       // #2242 (round 3): the real request that can retire a recorded refusal for a provider whose
       // own check cannot prove a sign-in (codex). Only reached when a refusal is standing AND the
       // caller asked for a real check, so pressing Log in costs one vendor call, not every check.
-      verifyCredential: () => this.verifyProviderCredential(provider)
+      verifyCredential: () => this.verifyProviderCredential(provider, runtime)
     });
     return { status: result.status, message: result.message };
+  }
+  /** Relays a sign-in rejection learned in the API process into this cache. */
+  async recordLoginRejected(provider: RpcProviderKind, userId?: string): Promise<void> {
+    const cacheScope = provider === "openai-compatible" ? userId : undefined;
+    const runtime = cacheScope ? await this.deps.resolveUserRuntime?.(cacheScope) : undefined;
+    const homeBase = runtime?.homeBase ?? this.deps.homeBase;
+    const credentialEnv = homeBase && (await readProviderCredentialEnv(homeBase, provider));
+    recordProviderLoginRejected(provider as ProviderKind, credentialEnv || undefined, cacheScope);
   }
 
   // ─── listProviderModels (#2208) — non-session; credential never crosses the socket ───
@@ -718,24 +728,24 @@ export class CliChatEngineHost {
   /** #2242 (round 3): one real vendor request with the saved sign-in, so a check can tell an
    *  accepted sign-in from the refused one it already knows about. */
   private async verifyProviderCredential(
-    provider: RpcProviderKind
+    provider: RpcProviderKind,
+    runtime?: LoginUserRuntime
   ): Promise<"accepted" | "refused" | "unknown"> {
-    this.readCodexVersion ??= createCodexVersionReader(this.deps.io);
+    if (provider === "openai-compatible" && runtime && !runtime.readCodexAuthFile) {
+      throw new Error("isolated Codex verification requires an owner credential reader");
+    }
+    const io = runtime?.io ?? this.deps.io;
+    this.readCodexVersion ??= createCodexVersionReader(io);
     return verifyProviderCredential(provider, {
-      homeBase: this.deps.homeBase,
+      homeBase: runtime?.homeBase ?? this.deps.homeBase,
       fetch: this.deps.fetch,
-      io: this.deps.io,
-      codexVersion: this.readCodexVersion
+      io,
+      codexVersion: this.readCodexVersion,
+      readCodexAuthFile: runtime?.readCodexAuthFile
     });
   }
 
-  /**
-   * #2208: ask the provider's vendor for its live model list using the credential the runner
-   * already holds on the cli-auth volume. Only ids cross the socket; a missing credential is
-   * `not_logged_in`, a vendor/transport failure is a plain `error`, gemini is `unsupported`.
-   * Not gated by the §L.6.1 exclusivity mutex: it reads a file and makes one HTTPS call, never
-   * touching tmux or the CLI's own state.
-   */
+  /** #2208: return provider model ids without crossing the login/admission mutex. */
   async listProviderModels(provider: RpcProviderKind): Promise<RpcListProviderModelsResult> {
     this.readCodexVersion ??= createCodexVersionReader(this.deps.io);
     // #2242: this call uses the same saved credential as the readiness check, so a vendor
@@ -756,18 +766,10 @@ export class CliChatEngineHost {
 
   // ─── installProvider (§A.2.4) — delegates to the install service ──────────────
 
-  /**
-   * §A.2.4: delegate to the §A.3 install service. Does NOT pass through the
-   * per-sessionKey queue (no session) nor the §4.1.0a admission mutex (no live engine —
-   * the install lane is volume-disjoint from admission, §A.5.1); the service takes its
-   * OWN per-provider lock (§A.3.1). A failed install is a TERMINAL OUTCOME
-   * `{state:"error"}` (not a throw); a blocked/in-flight provider throws
-   * `InstallBadRequestError` (mapped to bad_request by connection.ts).
-   */
+  /** §A.2.4: delegate to the install service; its own provider lock owns this lane. */
   async installProvider(provider: RpcProviderKind): Promise<RpcInstallProviderResult> {
     if (!this.deps.installService) {
-      // No installer wired (e.g. a host-mode build) — surface a terminal error outcome
-      // rather than a throw, so the api persists `error` and offers a retry.
+      // Host-mode builds have no installer; preserve the terminal retryable outcome.
       return { state: "error", message: "install service unavailable on this build" };
     }
     return this.deps.installService.installProvider(provider);
@@ -775,19 +777,11 @@ export class CliChatEngineHost {
 
   // ─── login verbs (§L.2) — non-session; unified §L.6.1 exclusivity gate ─────────
 
-  /**
-   * §L.2.2 beginLogin: admit ONLY when no live chat session AND no other login is in flight
-   * (the §L.6.1 unified exclusivity gate, under the SAME admission mutex as launch). Reserve the
-   * single login slot inside the lock, then start the flow outside it. A blocked/no-adapter
-   * provider throws `LoginBadRequestError` (→ bad_request); a chat/login-busy rejection throws
-   * `CliChatUnavailableError` (→ unavailable). No wire-contract change.
-   *
-   * #2232: if a login for this SAME provider is already in flight (e.g. two begin requests fired
-   * back to back by a double-mounted dialog), this reports that flow's current status instead of
-   * refusing — the caller sees the login it already started, not an error. A different provider,
-   * or a login only visible as a stray disk session, still gets the busy rejection.
-   */
-  async beginLogin(provider: RpcProviderKind): Promise<RpcBeginLoginResult> {
+  /** §L.2.2: admit one user-scoped login under the unified chat/login mutex. */
+  async beginLogin(
+    provider: RpcProviderKind,
+    userId = "legacy-user"
+  ): Promise<RpcBeginLoginResult> {
     const svc = this.deps.loginService;
     if (!svc) throw new LoginBadRequestError("login not available on this build");
     if (!svc.hasAdapter(provider)) {
@@ -802,39 +796,48 @@ export class CliChatEngineHost {
       }
       // One login at a time regardless of the single-user flag (one flow slot, §L.3.1).
       if (await svc.isLoginActive()) {
-        reuseLoginId = svc.activeLoginId(provider);
+        reuseLoginId = svc.activeLoginId(provider, userId);
         if (reuseLoginId === undefined) {
           throw new CliChatUnavailableError("a provider login is already in progress");
         }
       } else {
-        loginId = svc.reserve(provider); // SYNC slot claim inside the lock (§L.6.1)
+        loginId = svc.reserve(provider, userId); // SYNC slot claim inside the lock (§L.6.1)
       }
     } finally {
       release();
     }
-    if (reuseLoginId !== undefined) return svc.poll(provider, reuseLoginId);
+    if (reuseLoginId !== undefined) return svc.poll(provider, reuseLoginId, userId);
     // Start the flow OUTSIDE the lock (the reservation holds the slot). On any failure the
     // service clears the flow + reaps the session (§L.3.1).
     return svc.start(loginId!);
   }
 
   /** §L.2.3 pollLogin — re-derive status (probe + runtime smoke); a stale loginId ⇒ bad_request. */
-  pollLogin(provider: RpcProviderKind, loginId: string): Promise<RpcPollLoginResult> {
-    return this.requireLogin().poll(provider, loginId);
+  pollLogin(
+    provider: RpcProviderKind,
+    loginId: string,
+    userId = "legacy-user"
+  ): Promise<RpcPollLoginResult> {
+    return this.requireLogin().poll(provider, loginId, userId);
   }
 
   /** §L.2.3 submitLoginToken — feed the pasted code argv-free (§L.6.3); a stale loginId ⇒ bad_request. */
   submitLoginToken(
     provider: RpcProviderKind,
     loginId: string,
-    token: string
+    token: string,
+    userId = "legacy-user"
   ): Promise<RpcSubmitLoginTokenResult> {
-    return this.requireLogin().submitToken(provider, loginId, token);
+    return this.requireLogin().submitToken(provider, loginId, token, userId);
   }
 
   /** §L.2.3 cancelLogin — kill the login session + release the slot. Idempotent. */
-  async cancelLogin(provider: RpcProviderKind, loginId: string): Promise<RpcCancelLoginResult> {
-    await this.requireLogin().cancel(provider, loginId);
+  async cancelLogin(
+    provider: RpcProviderKind,
+    loginId: string,
+    userId = "legacy-user"
+  ): Promise<RpcCancelLoginResult> {
+    await this.requireLogin().cancel(provider, loginId, userId);
     return { ok: true };
   }
 
@@ -857,12 +860,10 @@ export class CliChatEngineHost {
   // ─── startup CLEAN-SLATE sweep (§4.1.0a (2) / §6.5) ───────────────────────────
 
   /**
-   * BEFORE accepting connections: kill every `jarv1s-live-*` mux session that exists,
-   * purge every marker-backed private transcript to completion, then clear residual
-   * neutral dirs. A container restart kills the forked tmux server while token dirs
-   * persist on the volume, so a mux-only sweep misses them. The gate guarantees ≤1 live
-   * session, so a fresh process legitimately has zero — the base is cleared wholesale
-   * only after purge succeeds.
+   * BEFORE accepting connections: kill leftover `jarv1s-live-*` mux sessions, purge every
+   * marker-backed private transcript, then clear residual neutral dirs. A restart kills the
+   * forked tmux server but leaves token dirs on the volume, so wholesale clear only runs
+   * once purge succeeds.
    */
   async startupSweep(): Promise<void> {
     // (a) kill any surviving mux sessions (rare after a container restart, but a fast
@@ -874,35 +875,32 @@ export class CliChatEngineHost {
       await killMuxSessionByName(this.deps.io, key, this.deps.homeBase).catch(() => undefined);
     }
     // (b) purge every marker-backed private transcript before the neutral dirs are erased.
-    const purged = await purgePrivateTranscriptMarkers(
+    const purgedTranscripts = await purgePrivateTranscriptMarkers(
       this.deps.io,
       this.deps.neutralBase,
       this.deps.homeBase
     );
-    if (purged) {
-      // (c) once every pointed-to transcript is confirmed purged, remove residual neutral dirs.
+    // (b.1) same for ACP chat-profile scratch folders, as their owning accounts.
+    const purgedAcp = await this.acp.sweepPrivateMarkers().catch(() => false);
+    if (purgedTranscripts && purgedAcp) {
+      // (c) once every pointed-to private folder is confirmed purged, remove residual neutral dirs.
       await this.clearNeutralBase();
     }
-    // (d) §A.3.2 install-service tools-volume sweep (DISTINCT from the auth-volume sweep
-    // above): clear orphaned `.staging/*` AND GC releases not referenced by `current`.
-    // Ordered here so it completes BEFORE the server accepts the first installProvider
-    // (the server runs startupSweep before listen, server.ts:41).
+    // (d) §A.3.2 tools-volume sweep, distinct from the auth-volume sweep above: clears
+    // orphaned `.staging/*` and unreferenced GC releases, before the first installProvider.
     await this.deps.installService?.startupSweep().catch(() => undefined);
-    // (d.1) #1081 H1: boot-time drift reconcile — re-verify every ALREADY-installed
-    // provider's live binary against the current catalog (a rebaked recipe whose binary
-    // is stuck stale in the persistent tools volume gets reinstalled here; an
-    // already-current or never-installed provider is untouched). Runs after the GC sweep
-    // above and before the server accepts its first request.
+    // (d.1) #1081 H1: reconcile every already-installed provider's binary against the
+    // current catalog, so a stale rebaked recipe gets reinstalled before the first request.
     await this.deps.installService?.reconcileInstalledProviders().catch(() => undefined);
     // (e) §L.3.4 login-session sweep: kill every `jarv1s-login-*` mux session (a fast in-place
     // restart can leave one while the in-memory login flow is gone). DISTINCT from (a), which
     // only enumerates `jarv1s-live-*` chat sessions.
     await this.deps.loginService?.startupSweep().catch(() => undefined);
-    // (f) #2396 orphaned-build sweep: after the clean-out, never beside it.
+    // (f) orphaned-build sweep: after the clean-out, never beside it.
     await this.acp.reapOrphanedExecs().catch(() => undefined);
   }
 
-  /** `rm -rf <neutralBase>/* ` then recreate the base dir (`0700`). */
+  /** `rm -rf <neutralBase>/* ` then recreate the shared traversable base (`0711`). */
   private async clearNeutralBase(): Promise<void> {
     // Remove children individually (not the base itself) so the mount point/volume root
     // is preserved; recreate the base so the first launch's mkdir -p is a no-op.
@@ -914,14 +912,16 @@ export class CliChatEngineHost {
       for (const name of listed.stdout
         .split("\n")
         .map((s) => s.trim())
-        .filter((name) => name.length > 0 && name !== ACP_DEADLINE_DIR)) {
+        .filter(
+          (name) => name.length > 0 && name !== ACP_DEADLINE_DIR && name !== ACP_PRIVATE_MARKER_DIR
+        )) {
         await this.deps.io
           .run("rm", ["-rf", `${this.deps.neutralBase}/${name}`])
           .catch(() => undefined);
       }
     }
     await this.deps.io.run("mkdir", ["-p", this.deps.neutralBase]).catch(() => undefined);
-    await this.deps.io.run("chmod", ["700", this.deps.neutralBase]).catch(() => undefined);
+    await this.deps.io.run("chmod", ["711", this.deps.neutralBase]).catch(() => undefined);
   }
 
   // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -964,7 +964,7 @@ function hasVerifiedSubmit(engine: CliChatEngine): engine is CliChatEngineImpl {
 
 /**
  * Review B4 follow-up — mirrors `hasVerifiedSubmit`'s feature-detect pattern. Only the bounded
- * print engine (`ClaudePrintChatEngine`, built by `createChatEngine` whenever
+ * print engine (`ClaudePrintChatEngine`, built by `createStructuredEngine` whenever
  * `needsStructuredOutput` is set) implements these three methods.
  */
 type StructuredCapableEngine = CliChatEngine & {

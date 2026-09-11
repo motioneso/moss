@@ -28,7 +28,7 @@ import {
 } from "../../packages/cli-runner/src/connection.js";
 import { CliChatEngineHost } from "../../packages/cli-runner/src/engine-host.js";
 import { TerminalHost } from "../../packages/cli-runner/src/terminal-host.js";
-import { VerifiedSubmitError } from "../../packages/chat/src/live/cli-chat-engine.js";
+import { VerifiedSubmitError } from "../../packages/chat/src/live/module-build-cli-engine.js";
 
 const SECRET = "test-rpc-secret";
 const BOOT = "boot-uuid-1";
@@ -280,15 +280,19 @@ describe("serveConnection (§3.4/§3.7)", () => {
     expect(channel.closed).toBe(false); // connection stays open (§3.7)
   });
 
-  // #2369 slice 1 — a dropped socket kills this connection's agent sessions with
+  // Slice 1 task 3 — a dropped socket kills this connection's agent sessions with
   // the generation it saw, so a respawned session on another connection survives.
   it("closing the connection kills its agent sessions with their generation", async () => {
     const host = fakeHost();
     vi.spyOn(host, "acpSpawn").mockResolvedValue({
       cwd: "/tmp/neutral-base/workshop:u:p/acp/p",
-      generation: 7
+      generation: 7,
+      home: null,
+      pid: null,
+      uid: 2001,
+      gid: 2001
     });
-    const kill = vi.spyOn(host, "acpKill").mockReturnValue(undefined);
+    const kill = vi.spyOn(host, "acpKill").mockResolvedValue(undefined);
     const channel = new FakeChannel();
     serveConnection(channel, deps(host));
     authenticate(channel);
@@ -299,31 +303,37 @@ describe("serveConnection (§3.4/§3.7)", () => {
         id: 31,
         method: "acpSpawn",
         sessionKey: "workshop:u:p",
-        params: { projectId: "p" }
+        params: { projectId: "p", providerKind: "anthropic", userId: "user-1", profile: "chat" }
       })
     );
     await new Promise((r) => setTimeout(r, 5));
     const ok = channel.decodeAll().find((f) => (f as RpcOk).id === 31) as RpcOk;
     expect(ok.t).toBe("ok");
     expect((ok.result as { generation: number }).generation).toBe(7);
+    expect(host.acpSpawn).toHaveBeenCalledWith("workshop:u:p", "p", "anthropic", "user-1", "chat");
 
     channel.triggerClose();
     expect(kill).toHaveBeenCalledWith("workshop:u:p", { generation: 7 });
   });
 
-  // #2369 slice 1 phase 3 — runner-side builds: dispatch validates shape and
-  // returns the host result verbatim, without closing on bad params.
-  it("dispatches acpExecStart/acpExecPoll/acpExecKill and rejects bad shapes", async () => {
+  it("kills a spawn that finishes after its connection disconnects", async () => {
     const host = fakeHost();
-    const start = vi.spyOn(host, "acpExecStart").mockResolvedValue({ execId: 9 });
-    const poll = vi.spyOn(host, "acpExecPoll").mockReturnValue({
-      output: "hi",
-      done: true,
-      exitCode: 0,
-      truncated: false,
-      timedOut: false
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
     });
-    const kill = vi.spyOn(host, "acpExecKill").mockReturnValue(undefined);
+    vi.spyOn(host, "acpSpawn").mockImplementation(async () => {
+      await gate;
+      return {
+        cwd: "/tmp/neutral-base/workshop:u:p/acp/p",
+        generation: 8,
+        home: null,
+        pid: null,
+        uid: 2001,
+        gid: 2001
+      };
+    });
+    const kill = vi.spyOn(host, "acpKill").mockResolvedValue(undefined);
     const channel = new FakeChannel();
     serveConnection(channel, deps(host));
     authenticate(channel);
@@ -331,73 +341,88 @@ describe("serveConnection (§3.4/§3.7)", () => {
     channel.feed(
       encodeFrame({
         t: "req",
-        id: 41,
-        method: "acpExecStart",
+        id: 35,
+        method: "acpSpawn",
         sessionKey: "workshop:u:p",
-        params: { projectId: "p", command: "pnpm build" }
+        params: { projectId: "p", providerKind: "anthropic", userId: "user-1", profile: "chat" }
       })
     );
-    await new Promise((r) => setTimeout(r, 5));
-    const started = channel.decodeAll().find((f) => (f as RpcOk).id === 41) as RpcOk;
-    expect(started.t).toBe("ok");
-    expect(started.result).toEqual({ execId: 9 });
-    expect(start).toHaveBeenCalledWith("workshop:u:p", "p", "pnpm build", undefined);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    channel.triggerClose();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    expect(kill).toHaveBeenCalledWith("workshop:u:p", { generation: 8 });
+  });
+
+  // Slice 1 task 3 — a spawn without a provider kind is refused, with no default.
+  it("refuses acpSpawn without a provider kind (stays open)", async () => {
+    const host = fakeHost();
+    const spawn = vi.spyOn(host, "acpSpawn");
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
 
     channel.feed(
       encodeFrame({
         t: "req",
-        id: 42,
-        method: "acpExecPoll",
-        sessionKey: "workshop:u:p",
-        params: { execId: 9 }
-      })
-    );
-    await new Promise((r) => setTimeout(r, 5));
-    const polled = channel.decodeAll().find((f) => (f as RpcOk).id === 42) as RpcOk;
-    expect(polled.t).toBe("ok");
-    expect((polled.result as { output: string }).output).toBe("hi");
-    expect(poll).toHaveBeenCalledWith("workshop:u:p", 9);
-
-    channel.feed(
-      encodeFrame({
-        t: "req",
-        id: 43,
-        method: "acpExecKill",
-        sessionKey: "workshop:u:p",
-        params: { execId: 9 }
-      })
-    );
-    await new Promise((r) => setTimeout(r, 5));
-    const killed = channel.decodeAll().find((f) => (f as RpcOk).id === 43) as RpcOk;
-    expect(killed.t).toBe("ok");
-    expect(kill).toHaveBeenCalledWith("workshop:u:p", 9);
-
-    // Bad shapes stay open: missing command, non-integer execId.
-    channel.feed(
-      encodeFrame({
-        t: "req",
-        id: 44,
-        method: "acpExecStart",
+        id: 32,
+        method: "acpSpawn",
         sessionKey: "workshop:u:p",
         params: { projectId: "p" }
       })
     );
     await new Promise((r) => setTimeout(r, 5));
-    const badStart = channel.decodeAll().find((f) => (f as RpcErr).id === 44) as RpcErr;
-    expect(badStart.error.code).toBe("bad_request");
+    const err = channel.decodeAll().find((f) => (f as RpcErr).id === 32) as RpcErr;
+    expect(err.t).toBe("err");
+    expect(err.error.code).toBe("bad_request");
+    expect(spawn).not.toHaveBeenCalled();
+    expect(channel.closed).toBe(false);
+  });
 
-    channel.feed(
-      encodeFrame({
-        t: "req",
-        id: 45,
-        method: "acpExecPoll",
-        sessionKey: "workshop:u:p",
-        params: { execId: -2 }
-      })
-    );
-    await new Promise((r) => setTimeout(r, 5));
-    const badPoll = channel.decodeAll().find((f) => (f as RpcErr).id === 45) as RpcErr;
-    expect(badPoll.error.code).toBe("bad_request");
+  // A spawn without a user id or profile is refused the same way.
+  it("refuses acpSpawn without userId or profile (stays open)", async () => {
+    const host = fakeHost();
+    const spawn = vi.spyOn(host, "acpSpawn");
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
+
+    for (const [id, params] of [
+      [33, { projectId: "p", providerKind: "anthropic", profile: "chat" }],
+      [34, { projectId: "p", providerKind: "anthropic", userId: "user-1" }]
+    ] as const) {
+      channel.feed(encodeFrame({ t: "req", id, method: "acpSpawn", sessionKey: "s", params }));
+      await new Promise((r) => setTimeout(r, 5));
+      const err = channel.decodeAll().find((f) => (f as RpcErr).id === id) as RpcErr;
+      expect(err.t).toBe("err");
+      expect(err.error.code).toBe("bad_request");
+    }
+    expect(spawn).not.toHaveBeenCalled();
+    expect(channel.closed).toBe(false);
+  });
+
+  // The three command-running methods are unregistered until Workshop's own
+  // slice: parked code stays unreachable over the wire.
+  it("refuses acpExecStart/acpExecPoll/acpExecKill as unknown methods (stays open)", async () => {
+    const host = fakeHost();
+    const start = vi.spyOn(host, "acpExecStart");
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
+
+    for (const [id, method, params] of [
+      [41, "acpExecStart", { projectId: "p", command: "pnpm build" }],
+      [42, "acpExecPoll", { execId: 9 }],
+      [43, "acpExecKill", { execId: 9 }]
+    ] as const) {
+      channel.feed(encodeFrame({ t: "req", id, method, sessionKey: "workshop:u:p", params }));
+      await new Promise((r) => setTimeout(r, 5));
+      const refused = channel.decodeAll().find((f) => (f as RpcErr).id === id) as RpcErr;
+      expect(refused.t).toBe("err");
+      expect(refused.error.code).toBe("bad_request");
+    }
+    expect(start).not.toHaveBeenCalled();
     expect(channel.closed).toBe(false);
   });
 

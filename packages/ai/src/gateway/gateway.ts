@@ -22,6 +22,7 @@ import {
   type AcpBuiltInPermissionRequest,
   type AcpBuiltInPermissionResponse
 } from "./acp-permission.js";
+import { actionHoldDurationMs, emitActionResultRecord } from "./action-result-record.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import {
@@ -45,6 +46,12 @@ import {
   nativeYoloCanAutoAllow,
   safeNativeToolName
 } from "./native-tool-guard.js";
+import {
+  emitNativePermissionResult,
+  type NativeToolPermissionRequest,
+  type NativeToolPermissionResponse
+} from "./native-tool-permission.js";
+export type { NativeToolPermissionRequest, NativeToolPermissionResponse };
 import { isSelfOperationExcluded } from "./self-operation.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type { ActiveModulesResolver, GatewayToolResponse, SessionNotifier } from "./types.js";
@@ -153,17 +160,6 @@ interface ExecutableTool {
   readonly dto: AiAssistantToolDto;
 }
 
-export interface NativeToolPermissionRequest {
-  readonly toolName: string;
-  readonly toolInput: Record<string, unknown>;
-  readonly workingDirectory?: string;
-}
-
-export interface NativeToolPermissionResponse {
-  readonly decision: "allow" | "deny";
-  readonly reason: string;
-}
-
 const NATIVE_TOOL_MODULE_ID = "claude-native";
 const NATIVE_TOOL_MODULE_NAME = "Claude Native Tools";
 // #1158: read-only native META-tools that must never require a user confirmation.
@@ -239,11 +235,12 @@ export class AssistantToolGateway {
     const lookup = this.deps.actionPolicy?.(ctx) ?? defaultPolicyLookup;
     if (found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true) {
       if (!this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
-        this.deps.notifier.emit(ctx.chatSessionId, {
-          kind: "action_result",
+        emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
           actionRequestId: ctx.requestId,
           toolName: found.dto.name,
           outcome: "denied",
+          decidedBy: "policy",
+          holdDurationMs: null,
           reason: "Rate limit exceeded for unattended runs of this tool."
         });
         void this.recordAudit({ actorUserId: ctx.actorUserId, requestId: ctx.requestId }, found, {
@@ -260,11 +257,12 @@ export class AssistantToolGateway {
         };
       }
       const { response: result, audit } = await this.runHandler(found, input, ctx);
-      this.deps.notifier.emit(ctx.chatSessionId, {
-        kind: "action_result",
+      emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
         actionRequestId: ctx.requestId,
         toolName: found.dto.name,
         outcome: audit.errorClass === null ? "executed" : "error",
+        decidedBy: "policy",
+        holdDurationMs: null,
         ...(result.ok
           ? { result: liveStreamResult(found.tool, result) }
           : { reason: gatewayFailureReason(result) }),
@@ -301,11 +299,12 @@ export class AssistantToolGateway {
       }
       const { response: result, audit } = await this.runHandler(found, input, ctx);
       if (found.tool.risk !== "read") {
-        this.deps.notifier.emit(ctx.chatSessionId, {
-          kind: "action_result",
+        emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
           actionRequestId: ctx.requestId,
           toolName: found.dto.name,
           outcome: audit.errorClass === null ? "executed" : "error",
+          decidedBy: "policy",
+          holdDurationMs: null,
           ...(result.ok
             ? { result: liveStreamResult(found.tool, result) }
             : { reason: gatewayFailureReason(result) }),
@@ -341,7 +340,6 @@ export class AssistantToolGateway {
     const input = request.toolInput;
     const requestId = `native_${randomUUID()}`;
     const access: AccessContext = { actorUserId, requestId };
-
     const ctx: ToolContext = {
       actorUserId,
       requestId,
@@ -362,34 +360,21 @@ export class AssistantToolGateway {
     if (yoloGranted) {
       // #1085 F4: Jarvis observes the permission grant, not the native tool's completion. Persist
       // that grant before allowing it instead of fire-and-forget auditing a fictional "success".
-      const action = await this.deps.runner.withDataContext(
-        access,
-        async (scopedDb: DataContextDb) => {
-          const pending = await this.deps.repository.createPendingAssistantAction(scopedDb, {
-            toolModuleId: NATIVE_TOOL_MODULE_ID,
-            toolModuleName: NATIVE_TOOL_MODULE_NAME,
-            toolName,
-            permissionId: `${NATIVE_TOOL_MODULE_ID}.${toolName}`,
-            risk: nativeToolRisk(toolName),
-            inputSummary: summarizeAssistantToolInput(input),
-            requestId
-          });
-          const confirmed = await this.deps.repository.resolveAssistantAction(
-            scopedDb,
-            pending.id,
-            {
-              status: "confirmed"
-            }
-          );
-          if (!confirmed) throw new Error("Could not persist native YOLO permission grant");
-          return confirmed;
-        }
-      );
-      this.deps.notifier.emit(chatSessionId, {
-        kind: "action_result",
-        actionRequestId: action.id,
-        toolName,
-        outcome: "allowed"
+      await this.deps.runner.withDataContext(access, async (scopedDb: DataContextDb) => {
+        const pending = await this.deps.repository.createPendingAssistantAction(scopedDb, {
+          toolModuleId: NATIVE_TOOL_MODULE_ID,
+          toolModuleName: NATIVE_TOOL_MODULE_NAME,
+          toolName,
+          permissionId: `${NATIVE_TOOL_MODULE_ID}.${toolName}`,
+          risk: nativeToolRisk(toolName),
+          inputSummary: summarizeAssistantToolInput(input),
+          requestId
+        });
+        const confirmed = await this.deps.repository.resolveAssistantAction(scopedDb, pending.id, {
+          status: "confirmed"
+        });
+        if (!confirmed) throw new Error("Could not persist native YOLO permission grant");
+        return confirmed;
       });
       return { decision: "allow", reason: "Allowed by YOLO." };
     }
@@ -405,7 +390,6 @@ export class AssistantToolGateway {
         requestId
       })
     );
-
     const pendingResolution = this.deps.confirmations.awaitResolution(
       action.id,
       this.deps.confirmTimeoutMs
@@ -417,6 +401,7 @@ export class AssistantToolGateway {
       toolName,
       summary: nativeToolSummary(toolName, input)
     });
+    const holdStartedAt = Date.now();
 
     // #2149: markDone (in the finally below) unblocks resolveAndAwaitCompletion, which the
     // Approve/Deny HTTP route awaits before responding. This path has no handler to run — it
@@ -425,31 +410,37 @@ export class AssistantToolGateway {
     // hang waiting for a markDone that never comes.
     try {
       const outcome = await pendingResolution;
+      const holdDurationMs = actionHoldDurationMs(holdStartedAt);
       if (outcome !== "confirmed") {
-        this.deps.notifier.emit(chatSessionId, {
-          kind: "action_result",
+        emitNativePermissionResult(this.deps.notifier, chatSessionId, {
           actionRequestId: action.id,
           toolName,
           outcome: "denied",
-          reason: APPROVAL_REFUSED_REASON
+          decidedBy:
+            outcome === "timeout" ? "timeout" : outcome === "cancelled" ? "cancelled" : "person",
+          holdDurationMs,
+          reason:
+            outcome === "timeout"
+              ? "Action timed out."
+              : outcome === "cancelled"
+                ? "Action cancelled."
+                : APPROVAL_REFUSED_REASON
         });
-        return {
-          decision: "deny",
-          reason: APPROVAL_REFUSED_REASON
-        };
+        return { decision: "deny", reason: APPROVAL_REFUSED_REASON };
       }
 
-      // #1661: "allowed", not "executed". This method decides a native tool's PERMISSION and
-      // returns `decision: "allow"` — the tool then runs outside the gateway's sight, so nothing
-      // here ever learns whether it worked. Saying "executed" told the user the action completed
-      // on the strength of their own click. The YOLO branch above already got this right and
-      // says why (#1085 F4: observe the grant, never fire-and-forget a fictional success); this
-      // sibling branch, forty lines down and doing the identical thing, was missed.
-      this.deps.notifier.emit(chatSessionId, {
-        kind: "action_result",
+      // #1661: "allowed", not "executed". This method decides a native tool's PERMISSION and returns
+      // `decision: "allow"` — the tool then runs outside the gateway's sight, so nothing here ever
+      // learns whether it worked. Saying "executed" told the user the action completed on the
+      // strength of their own click. The YOLO branch above already got this right and says why
+      // (#1085 F4: observe the grant, never fire-and-forget a fictional success); this sibling
+      // branch, forty lines down and doing the identical thing, was missed.
+      emitNativePermissionResult(this.deps.notifier, chatSessionId, {
         actionRequestId: action.id,
         toolName,
-        outcome: "allowed"
+        outcome: "allowed",
+        decidedBy: "person",
+        holdDurationMs
       });
       return { decision: "allow", reason: "Approved by user." };
     } finally {
@@ -784,6 +775,7 @@ export class AssistantToolGateway {
       summary,
       ...(preview ? { preview } : {})
     });
+    const holdStartedAt = Date.now();
 
     const outcome = await pendingResolution;
 
@@ -795,12 +787,19 @@ export class AssistantToolGateway {
     // unawaited on purpose and must not reopen the same kind of delay on the audit write.
     try {
       if (outcome !== "confirmed") {
-        this.deps.notifier.emit(ctx.chatSessionId, {
-          kind: "action_result",
+        emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
           actionRequestId: action.id,
           toolName: found.dto.name,
           outcome: "denied",
-          reason: outcome === "cancelled" ? "Action cancelled." : APPROVAL_REFUSED_REASON
+          decidedBy:
+            outcome === "timeout" ? "timeout" : outcome === "cancelled" ? "cancelled" : "person",
+          holdDurationMs: actionHoldDurationMs(holdStartedAt),
+          reason:
+            outcome === "timeout"
+              ? "Action timed out."
+              : outcome === "cancelled"
+                ? "Action cancelled."
+                : APPROVAL_REFUSED_REASON
         });
         const approvalMode =
           outcome === "timeout" ? "timeout" : outcome === "rejected" ? "rejected" : "cancelled";
@@ -815,11 +814,12 @@ export class AssistantToolGateway {
       }
 
       const { response: result, audit } = await this.runHandler(found, input, ctx);
-      this.deps.notifier.emit(ctx.chatSessionId, {
-        kind: "action_result",
+      emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
         actionRequestId: action.id,
         toolName: found.dto.name,
         outcome: audit.errorClass === null ? "executed" : "error",
+        decidedBy: "person",
+        holdDurationMs: actionHoldDurationMs(holdStartedAt),
         ...(result.ok
           ? { result: liveStreamResult(found.tool, result) }
           : { reason: gatewayFailureReason(result) }),

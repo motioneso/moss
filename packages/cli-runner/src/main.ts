@@ -31,11 +31,15 @@ import { LOGIN_ADAPTERS } from "./login-adapters.js";
 import { createCodexVersionReader, verifyProviderCredential } from "./model-list-adapters.js";
 import { ensureGeminiOnboarded } from "./provider-first-run.js";
 import { readProviderCredentialEnv } from "./provider-token-store.js";
-import { LoginService } from "./login-service.js";
+import { LoginService, type LoginUserRuntime } from "./login-service.js";
 import { createSanitizedTmuxIo } from "./runner-io.js";
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
+import { buildSetprivDropCommand } from "./setpriv.js";
 import { CliRunnerServer } from "./server.js";
 import { TerminalHost } from "./terminal-host.js";
+import { ensureOwnedTopLevel, prepareOwnedPathWithOwnership } from "./owned-fs.js";
+import { allocateUidSlot } from "./uid-allocator.js";
+import { createCodexAuthFileReader } from "./acp-codex-auth.js";
 
 export interface CliRunnerConfig {
   readonly socketPath: string;
@@ -169,6 +173,37 @@ export function sourceSelfUpdateDisableEnv(
   return set;
 }
 
+/** Resolve one isolated login runtime with owner-switched commands and credential reads. */
+export async function resolveIsolatedUserRuntime(
+  config: Pick<CliRunnerConfig, "perUserUid" | "homeBase">,
+  userId: string
+): Promise<LoginUserRuntime> {
+  if (!config.perUserUid) {
+    throw new Error("per-user CLI isolation is disabled; refusing shared-home login");
+  }
+  const slot = allocateUidSlot(config.homeBase, userId);
+  const agentsParent = (await prepareOwnedPathWithOwnership(config.homeBase, userId, ["agents"], 1))
+    .path;
+  const agentHome = (await ensureOwnedTopLevel(userId, agentsParent, userId, slot.uid, slot.gid))
+    .path;
+  const baseIo = createSanitizedTmuxIo(buildCliRunnerChildEnv({ homeBase: agentHome }));
+  const io: LoginUserRuntime["io"] = {
+    ...baseIo,
+    run: async (command, args, opts) => {
+      const dropped = buildSetprivDropCommand(command, args, slot);
+      return baseIo.run(dropped.command, dropped.args, { env: opts?.env });
+    }
+  };
+  return {
+    userId,
+    homeBase: agentHome,
+    uid: slot.uid,
+    gid: slot.gid,
+    io,
+    readCodexAuthFile: createCodexAuthFileReader({ homeBase: agentHome, userId, io })
+  };
+}
+
 /** Construct the engine host + server from config (no I/O until `server.start()`). */
 export function createCliRunner(
   config: CliRunnerConfig,
@@ -207,6 +242,8 @@ export function createCliRunner(
   // (§L.6.2), and detects completion via the SAME §4.8 probe. Its adapters are the validated
   // login allowlist (§L.1.3, consistency-checked against the install catalog). It participates
   // in the host's §L.6.1 unified exclusivity gate (login ⟂ chat).
+  const resolveUserRuntime = (userId: string): Promise<LoginUserRuntime> =>
+    resolveIsolatedUserRuntime(config, userId);
   // #2242 (round 3): read once per runner process, as the model-list path does — the real
   // vendor request needs the installed tool's version or the answer comes back empty.
   const readCodexVersionOnce = createCodexVersionReader(io);
@@ -214,33 +251,51 @@ export function createCliRunner(
     io,
     adapters: LOGIN_ADAPTERS,
     homeBase: config.homeBase,
+    resolveUserRuntime: async (provider, userId) => {
+      if (provider !== "openai-compatible") {
+        throw new Error(`isolated runtime requested for unsupported provider: ${provider}`);
+      }
+      return resolveUserRuntime(userId);
+    },
     // Completion signal: the §4.8 provider auth probe (no token, no replay) — same deps the
     // host's probeProvider uses, PLUS the #363 claude-scoped credential env so `auth status`
     // reports loggedIn once the captured token is persisted (settling the flow `ready`).
-    probe: async (provider: RpcProviderKind, opts?: { readonly forceFresh?: boolean }) =>
+    probe: async (
+      provider: RpcProviderKind,
+      opts?: { readonly forceFresh?: boolean; readonly runtime?: LoginUserRuntime }
+    ) =>
       probeProvider(provider as ProviderKind, {
-        io,
+        io: opts?.runtime?.io ?? io,
         cliPresent: (p: ProviderKind) => cliAvailable(p),
         multiplexerUsable: () => tmuxAvailable(),
-        credentialEnv: await readProviderCredentialEnv(config.homeBase, provider),
-        homeBase: config.homeBase,
+        credentialEnv: await readProviderCredentialEnv(
+          opts?.runtime?.homeBase ?? config.homeBase,
+          provider
+        ),
+        homeBase: opts?.runtime?.homeBase ?? config.homeBase,
+        cacheScope: provider === "openai-compatible" ? opts?.runtime?.userId : undefined,
         forceFresh: opts?.forceFresh,
         // #2242 (round 3): a refused sign-in is remembered until the vendor accepts a new one.
         // Codex's own check cannot prove a sign-in, so this real request is how a person who
         // has genuinely just logged in gets past that memory and the flow settles ready.
         verifyCredential: () =>
-          verifyProviderCredential(provider, {
-            homeBase: config.homeBase,
-            io,
-            codexVersion: readCodexVersionOnce
-          })
+          provider === "openai-compatible" && opts?.runtime && !opts.runtime.readCodexAuthFile
+            ? Promise.reject(
+                new Error("isolated Codex verification requires an owner credential reader")
+              )
+            : verifyProviderCredential(provider, {
+                homeBase: opts?.runtime?.homeBase ?? config.homeBase,
+                io: opts?.runtime?.io ?? io,
+                codexVersion: readCodexVersionOnce,
+                readCodexAuthFile: opts?.runtime?.readCodexAuthFile
+              })
       }),
     // (#2027) Seed first-run state on the auth volume BEFORE the login session opens. gemini
     // otherwise stops on its sign-in-method menu and never prints the authorization URL.
     // Deliberately google-only: claude and codex need a working DIR to seed against (per-folder
     // trust), which the login flow does not have, and both already log in without seeding.
-    prepareProvider: async (provider: RpcProviderKind) => {
-      if (provider === "google") await ensureGeminiOnboarded(config.homeBase);
+    prepareProvider: async (provider: RpcProviderKind, runtime: LoginUserRuntime) => {
+      if (provider === "google") await ensureGeminiOnboarded(runtime.homeBase);
     }
   });
 
@@ -280,6 +335,7 @@ export function createCliRunner(
     perUserUid: config.perUserUid,
     installService,
     loginService,
+    resolveUserRuntime,
     // Presence-only PATH probe INSIDE cli-runner (the tools volume is on PATH, §7.1).
     cliPresent: (provider: ProviderKind) => cliAvailable(provider),
     multiplexerUsable: () => tmuxAvailable(),

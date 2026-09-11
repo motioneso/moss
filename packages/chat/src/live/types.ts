@@ -1,11 +1,18 @@
 import type { ProviderKind } from "@moss/ai"; // "anthropic" | "openai-compatible" | "google"
 import type { ActionRequestPreview } from "@moss/module-sdk";
-import type { SourceFreshnessV1 } from "@moss/shared";
+import type { ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
 
 export type ChatRecordKind =
   | "user"
   | "thinking"
+  | "thought"
   | "tool"
+  | "result"
+  | "approval"
+  | "approved"
+  | "not_approved"
+  | "refusal"
+  | "refused"
   | "status"
   | "reply"
   | "error"
@@ -14,6 +21,10 @@ export type ChatRecordKind =
 export interface TranscriptRecord {
   readonly kind: ChatRecordKind;
   readonly text: string;
+  /** Stable identity for live replacement records (thought/tool updates). */
+  readonly id?: string;
+  /** Creation order shared by the engine and manager for one live session. */
+  readonly sequence?: number;
   readonly messageId?: string;
   readonly actionRequestId?: string;
   readonly toolName?: string;
@@ -31,7 +42,11 @@ export interface TranscriptRecord {
   readonly sources?: readonly { readonly title: string; readonly url: string }[];
   readonly summary?: string;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
-  /** Live-only structured result for a module-owned inline artifact. */
+  /** Who made an action decision; absent on records from older producers. */
+  readonly decidedBy?: "person" | "policy" | "timeout" | "cancelled";
+  /** Bounded reason for a non-person decision. */
+  readonly reason?: string;
+  /** Sanitized structured result for a module-owned inline artifact. */
   readonly result?: Record<string, unknown>;
   /** #1310: dot-path tokens into the frontend `queryKeys` object, for `action_result` records whose tool executed. */
   readonly affectsQueryKeys?: readonly string[];
@@ -42,6 +57,12 @@ export interface TranscriptRecord {
    * persisted. Present only on `action_request` records whose tool declared a `preview` hook.
    */
   readonly preview?: ActionRequestPreview;
+  /** Elapsed time in milliseconds for the prompt turn (from submit to stop reason). */
+  readonly elapsedMs?: number;
+  /** Token usage block for the prompt turn. */
+  readonly usage?: ChatTurnUsageDto;
+  /** Duration of an approval hold in milliseconds, when recorded. */
+  readonly durationMs?: number;
 }
 
 export interface ActionResultMetadata {
@@ -89,6 +110,8 @@ export interface EngineLaunchOpts {
    * omit. See rpc-contract.ts RpcLaunchParams.model.
    */
   readonly model?: string;
+  /** Saved OpenCode ACP card choice, applied after session/new when the agent advertises a model option. */
+  readonly acpModel?: string;
   /**
    * #2228: let the CLI use its own web search tool for this launch and report the pages it used
    * as `sources` on the tool records. Off by default: chat's ordinary launches route search
@@ -100,6 +123,8 @@ export interface EngineLaunchOpts {
 /** A persistent per-user CLI session. One instance per live session. */
 export interface CliChatEngine {
   readonly provider: ProviderKind;
+  /** True only when submit() starts a fresh MCP client for each turn. */
+  readonly startsToolClientPerTurn?: boolean;
   /**
    * Launch the per-user CLI session and return the post-drain transcript `offset` (§4.0/§4.1.2).
    * CHANGED for #342 from `Promise<void>`: when the engine owns the replay-drain (the cli-runner RPC
@@ -127,6 +152,14 @@ export interface CliChatEngine {
   isAlive(): Promise<boolean>;
   kill(opts?: EngineKillOpts): Promise<void>;
   purgeTranscripts?(): Promise<void>;
+  /**
+   * True when this engine's own kill path always purges a private session's data itself,
+   * as the owning account, with no API-visible purge step required. Set by the ACP engine,
+   * whose runner purges the per-user working folder on kill (spec: purge is a runner verb,
+   * not an API-side one). The incognito-availability guard treats this the same as
+   * `purgeTranscripts` being present.
+   */
+  readonly handlesOwnPrivatePurge?: boolean;
   /**
    * #456 — re-arm the response deadline for any in-flight turn verb of this engine's session.
    * Called by the manager when it observes new transcript records (activity), so an

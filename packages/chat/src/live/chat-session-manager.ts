@@ -1,12 +1,12 @@
 import type { ProviderKind } from "@moss/ai";
 import { resolveMossEnv } from "@moss/db";
-import type { AnswerProvenanceMetadataV1, SourceFreshnessV1 } from "@moss/shared";
+import type { AnswerProvenanceMetadataV1, ChatTurnUsageDto, SourceFreshnessV1 } from "@moss/shared";
 
 import type { StoredAttachmentMeta } from "../attachments-service.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
 import { renderAttachmentsManifest } from "./attachments-manifest.js";
 import { renderReplayBlock, renderSummaryBlock } from "./chat-context-blocks.js";
-import { isBoundedFallbackEngine } from "./engine-selection.js";
+import { isBoundedFallbackEngine } from "./structured-engine-selection.js";
 import { buildEngineText } from "./engine-text.js";
 import {
   ChatStreamLimitError,
@@ -17,14 +17,21 @@ import {
 } from "./errors.js";
 import { renderPersona } from "./persona.js";
 import { renderMemorySeedBlock } from "./recall-seed.js";
-import type {
-  ActionResultMetadata,
-  CliChatEngine,
-  EngineKillOpts,
-  TranscriptRecord
-} from "./types.js";
+import type { ActionResultMetadata, CliChatEngine, TranscriptRecord } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
-import { applyRemoteReap, countSubscribersFor, delay } from "./session-runtime-helpers.js";
+import {
+  applyRemoteReap,
+  cleanupPrivateSession,
+  countSubscribersFor,
+  delay,
+  drainEngine,
+  createPendingActionResultFlusher,
+  injectActionResultRecord,
+  type PendingActionResult,
+  sweepOrphanedPrivateThreads,
+  upsertActivityRecord,
+  waitForNewToolsListObservation
+} from "./session-runtime-helpers.js";
 import {
   DEFAULT_CHAT_SURFACE,
   normalizeChatSurface,
@@ -39,14 +46,20 @@ export {
   renderSummaryBlock
 } from "./chat-context-blocks.js";
 export { ChatStreamLimitError, ChatThreadNotFoundError, ChatTurnInFlightError } from "./errors.js";
-export type {
+import type {
   ChatPersistencePort,
   ChatSessionManagerDeps,
   Clock,
   PassiveRetrievalPort,
   PrivateThreadState
 } from "./chat-session-ports.js";
-import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
+export type {
+  ChatPersistencePort,
+  ChatSessionManagerDeps,
+  Clock,
+  PassiveRetrievalPort,
+  PrivateThreadState
+};
 
 type Subscriber = (record: TranscriptRecord) => void;
 
@@ -66,20 +79,12 @@ interface UserSession {
    * Undefined when no MCP client was configured for this session at all.
    */
   readonly mcpToken?: string;
-  /**
-   * #2164 — true when this session's engine is a bounded-fallback (one-shot, print) engine.
-   * Those engines start their MCP client per turn inside `submit()`, so the #2159 launch-time
-   * readiness gate is skipped for them (nothing to observe yet at launch) and a tool-less reply
-   * can otherwise be accepted before we know the CLI ever attached the MCP tools at all.
-   */
-  readonly isBoundedFallbackEngine: boolean;
+  readonly startsToolClientPerTurn: boolean;
 }
 
 const MAX_SUBSCRIBERS_PER_ACTOR = 5;
 const MAX_SUBSCRIBERS_TOTAL_PER_ACTOR = MAX_SUBSCRIBERS_PER_ACTOR * 2;
 const PRIVATE_DETACH_GRACE_MS = 30_000;
-const TOOLS_LIST_OBSERVATION_TIMEOUT_MS = 10_000;
-const TOOLS_LIST_OBSERVATION_POLL_MS = 25;
 
 export class ChatSessionManager {
   private readonly sessions = new Map<string, UserSession>();
@@ -94,6 +99,9 @@ export class ChatSessionManager {
   /** #456 — per-turn stop controllers, keyed by actor + surface. */
   private readonly turnControllers = new Map<string, AbortController>();
   private readonly actionResultsBySession = new Map<string, ActionResultMetadata[]>();
+  private readonly turnActivityBySession = new Map<string, TranscriptRecord[]>();
+  private readonly sequenceBySession = new Map<string, number>();
+  private readonly pendingActionResultsBySession = new Map<string, PendingActionResult[]>();
   private readonly pollMs: number;
   /** #456 — idle/heartbeat watchdog window; 0 disables (tests only). */
   private readonly idleWatchdogMs: number;
@@ -140,13 +148,17 @@ export class ChatSessionManager {
     surface: ChatSurface
   ): Promise<UserSession> {
     const sessionKey = surfaceSessionKey(actorUserId, surface);
-    const { provider, model, executionMode } =
+    const { provider, model, executionMode, acpModel } =
       await this.deps.persistence.resolveActiveProvider(actorUserId);
+    let threadState = await this.deps.persistence.getCurrentThreadState?.(actorUserId, surface);
+    if (!threadState && this.deps.persistence.getCurrentThreadState) {
+      await this.deps.persistence.openNewConversation(actorUserId, undefined, surface);
+      threadState = await this.deps.persistence.getCurrentThreadState(actorUserId, surface);
+    }
     const persona =
       typeof this.deps.persona === "string"
         ? this.deps.persona
         : await this.deps.persona(actorUserId, userName, surface);
-
     const { neutralDir, personaPath } = await renderPersona(this.deps.personaFs, {
       sessionKey,
       userName,
@@ -154,9 +166,22 @@ export class ChatSessionManager {
       baseDir: this.deps.neutralBase,
       persona
     });
-
-    const engine = await this.deps.engineFactory(provider, sessionKey, { executionMode });
-
+    const mcpConfig = await this.deps.mintMcpToken?.(actorUserId, sessionKey);
+    if (!this.sequenceBySession.has(sessionKey)) this.sequenceBySession.set(sessionKey, 0);
+    const nextSequence = () => {
+      const next = (this.sequenceBySession.get(sessionKey) ?? 0) + 1;
+      this.sequenceBySession.set(sessionKey, next);
+      return next;
+    };
+    const engine = await this.deps.engineFactory(provider, sessionKey, {
+      executionMode,
+      ...(acpModel ? { acpModel } : {}),
+      ...(threadState?.id ? { conversationId: threadState.id, userId: actorUserId } : {}),
+      ...(mcpConfig?.token && this.deps.acpPermissionDeciderForToken
+        ? { acpPermissionDecider: this.deps.acpPermissionDeciderForToken(mcpConfig.token) }
+        : {}),
+      nextSequence
+    });
     // Rebuild replay from live state for every launch; recall precedes conversation replay.
     const recallResult = this.deps.recall ? await this.deps.recall.recall(actorUserId) : null;
     const seedBudgetEnv = resolveMossEnv(process.env, "JARVIS_CHAT_SEED_BUDGET_TOKENS");
@@ -164,24 +189,22 @@ export class ChatSessionManager {
     const memorySeed = recallResult
       ? renderMemorySeedBlock(recallResult.episodicChunks, recallResult.facts, seedBudget)
       : "";
-
-    const [threadState, { recent: recentTurns, oldSummary }] = await Promise.all([
-      this.deps.persistence.getCurrentThreadState?.(actorUserId, surface),
-      this.deps.persistence.listPriorTurns(actorUserId, { forceReplay: opts?.forceReplay }, surface)
-    ]);
+    const { recent: recentTurns, oldSummary } = await this.deps.persistence.listPriorTurns(
+      actorUserId,
+      { forceReplay: opts?.forceReplay },
+      surface
+    );
     if (threadState?.incognito && surface !== DEFAULT_CHAT_SURFACE) {
       throw new CliChatUnavailableError("private chat is only available in the drawer");
     }
-    if (threadState?.incognito && !engine.purgeTranscripts) {
+    if (threadState?.incognito && !engine.purgeTranscripts && !engine.handlesOwnPrivatePurge) {
       throw new CliChatUnavailableError("private session unavailable");
     }
-    const mcpConfig = await this.deps.mintMcpToken?.(actorUserId, sessionKey);
     const replayParts: string[] = [];
     if (memorySeed) replayParts.push(memorySeed);
     if (oldSummary) replayParts.push(renderSummaryBlock(oldSummary));
     if (recentTurns.length > 0) replayParts.push(renderReplayBlock(recentTurns));
     const replayBatch = replayParts.length > 0 ? replayParts.join("\n\n") : undefined;
-
     const { offset } = await engine.launch({
       neutralDir,
       personaPath,
@@ -190,17 +213,14 @@ export class ChatSessionManager {
       // #367: launch builders emit `--model` only for a concrete settings override; the
       // `"default"` sentinel omits it so the CLI rides its own interactive/account model.
       model,
+      ...(acpModel ? { acpModel } : {}),
       mcpToken: mcpConfig?.token,
       mcpServerUrl: mcpConfig?.mcpServerUrl
     });
 
-    // #2159 — block session readiness (and so the first user message) until this session's MCP
-    // client has completed its first tools/list, closing the race where the terminal composer
-    // reads "ready" before the CLI's own tool-discovery round trip against our server has landed.
-    // #2164 — bounded-fallback (print/one-shot) engines never start an MCP client inside launch()
-    // (only per-turn, in submit()), so waiting here would always time out and tear down the
-    // session before its first message. Only engines that start MCP during launch() get the wait.
-    if (mcpConfig?.token && !isBoundedFallbackEngine(provider, executionMode)) {
+    const startsToolClientPerTurn =
+      engine.startsToolClientPerTurn ?? isBoundedFallbackEngine(provider, executionMode);
+    if (mcpConfig?.token && !startsToolClientPerTurn) {
       const toolsListReady = await this.deps.waitForToolsListReady?.(mcpConfig.token);
       if (toolsListReady === false) {
         // The engine process this launch just started, and the token just minted for it, would
@@ -226,7 +246,7 @@ export class ChatSessionManager {
       incognito: threadState?.incognito ?? false,
       seededContextKeys: new Set(),
       mcpToken: mcpConfig?.token,
-      isBoundedFallbackEngine: isBoundedFallbackEngine(provider, executionMode)
+      startsToolClientPerTurn
     };
     this.sessions.set(sessionKey, session);
 
@@ -234,26 +254,10 @@ export class ChatSessionManager {
     if (replayBatch !== undefined && !this.serverOwnsDrain) {
       await engine.submit(replayBatch);
       // Drain (and discard) so real turn records start from a clean offset.
-      session.transcriptOffset = await this.drain(engine, session.transcriptOffset);
+      session.transcriptOffset = await drainEngine(engine, session.transcriptOffset, this.pollMs);
     }
 
     return session;
-  }
-
-  // #2164 r21 — true once a fresh attach lands (count exceeds baseline), false after
-  // TOOLS_LIST_OBSERVATION_TIMEOUT_MS, undefined when there's nothing to compare (guard skipped).
-  private async waitForNewToolsListObservation(
-    token: string,
-    baselineCount: number | undefined
-  ): Promise<boolean | undefined> {
-    const getCount = this.deps.getToolsListObservationCount;
-    if (!getCount || baselineCount === undefined) return undefined;
-    const deadline = this.deps.clock.now() + TOOLS_LIST_OBSERVATION_TIMEOUT_MS;
-    for (;;) {
-      if (getCount(token) > baselineCount) return true;
-      if (this.deps.clock.now() >= deadline) return false;
-      await delay(TOOLS_LIST_OBSERVATION_POLL_MS);
-    }
   }
 
   /**
@@ -332,7 +336,11 @@ export class ChatSessionManager {
     const session = await this.ensureSession(actorUserId, userName, undefined, chatSurface);
     if (idempotencyKey && session.seededContextKeys.has(idempotencyKey)) return;
     await session.engine.submit(seed);
-    session.transcriptOffset = await this.drain(session.engine, session.transcriptOffset);
+    session.transcriptOffset = await drainEngine(
+      session.engine,
+      session.transcriptOffset,
+      this.pollMs
+    );
     if (idempotencyKey) session.seededContextKeys.add(idempotencyKey);
     session.lastActivity = this.deps.clock.now();
     this.deps.touchMcpToken?.(sessionKey);
@@ -353,24 +361,40 @@ export class ChatSessionManager {
     assistantMessageId?: string;
     sourceFreshness?: SourceFreshnessV1 | null;
   }> {
-    // #1157: a failed launch (dead tmux server, stale daemon state) gets one retry before surfacing.
-    let session: UserSession;
-    try {
-      session = await this.ensureSession(actorUserId, userName, undefined, surface);
-    } catch (err) {
-      if (!(err instanceof CliChatUnavailableError)) throw err;
-      this.pendingForcedReplay.add(surfaceSessionKey(actorUserId, surface));
-      session = await this.ensureSession(actorUserId, userName, undefined, surface);
-    }
-
-    // #456 — per-turn stop signal. stopTurn(actorUserId) aborts this; the poll loop checks
-    // signal.aborted after every readNew and breaks cleanly (no error) when set.
-    const controller = new AbortController();
     const sessionKey = surfaceSessionKey(actorUserId, surface);
+    const controller = new AbortController();
     this.turnControllers.set(sessionKey, controller);
     this.actionResultsBySession.set(sessionKey, []);
+    const turnActivityRecords: TranscriptRecord[] = [];
+    this.turnActivityBySession.set(sessionKey, turnActivityRecords);
+    let lastDeliveredSequence = 0;
+    const flushPendingInOrder = createPendingActionResultFlusher(
+      this.pendingActionResultsBySession,
+      actorUserId,
+      surface,
+      sessionKey,
+      this.sequenceBySession,
+      turnActivityRecords,
+      this.actionResultsBySession.get(sessionKey),
+      (userId, chatSurface, next) => this.emit(userId, chatSurface, next)
+    );
+    const flushPending = (beforeSequence?: number) => {
+      lastDeliveredSequence = flushPendingInOrder(lastDeliveredSequence, beforeSequence);
+    };
+    // #1157: a failed launch (dead tmux server, stale daemon state) gets one retry before surfacing.
+    let session: UserSession;
+    let turnElapsedMs: number | undefined;
+    let turnUsage: ChatTurnUsageDto | undefined;
 
     try {
+      try {
+        session = await this.ensureSession(actorUserId, userName, undefined, surface);
+      } catch (err) {
+        if (!(err instanceof CliChatUnavailableError)) throw err;
+        this.pendingForcedReplay.add(sessionKey);
+        session = await this.ensureSession(actorUserId, userName, undefined, surface);
+      }
+
       const attachments = opts?.attachments ?? [];
       const { text: builtEngineText, pendingItems } = await buildEngineText(
         {
@@ -435,14 +459,14 @@ export class ChatSessionManager {
           records = result.records;
           offset = result.offset;
           complete = result.complete;
-        } catch {
-          // #456 — a killed engine rejects its in-flight readNew. If the user stopped the turn,
-          // break cleanly; otherwise rethrow (a genuine engine failure surfaces to the caller).
+        } catch (error) {
+          // #456 — a killed engine rejects readNew; stop exits cleanly, other failures surface.
           if (controller.signal.aborted) {
             stopped = true;
             break;
           }
-          throw new Error("readNew failed");
+          flushPending();
+          throw error instanceof CliChatUnavailableError ? error : new Error("readNew failed");
         }
         if (controller.signal.aborted) {
           stopped = true;
@@ -456,9 +480,19 @@ export class ChatSessionManager {
           session.engine.resetActivityDeadline?.();
         }
         for (const record of records) {
+          if (record.sequence !== undefined) flushPending(record.sequence);
           const rejectionOnly = record.kind === "tool" && !record.toolName && !record.text?.trim();
-          if (!rejectionOnly) this.emit(actorUserId, surface, record);
-          if (record.kind === "reply") reply = record.text;
+          if (!rejectionOnly) {
+            this.emit(actorUserId, surface, record);
+            if (record.kind !== "reply" && record.kind !== "status") {
+              upsertActivityRecord(turnActivityRecords, record);
+            }
+          }
+          if (record.kind === "reply") {
+            reply = record.text;
+            if (record.elapsedMs !== undefined) turnElapsedMs = record.elapsedMs;
+            if (record.usage !== undefined) turnUsage = record.usage;
+          }
           if (record.kind === "tool" && record.toolName) {
             invokedToolNames.add(record.toolName);
             if (record.toolName.startsWith("mcp__"))
@@ -466,16 +500,21 @@ export class ChatSessionManager {
           }
           if (record.kind === "tool" && record.rejected && record.toolCallId)
             rejectedCallIds.add(record.toolCallId);
+          if (record.sequence !== undefined) {
+            lastDeliveredSequence = Math.max(lastDeliveredSequence, record.sequence);
+          }
         }
-        if (complete) break;
-        // #456 — user-driven Stop: the signal aborts mid-turn; break cleanly (no error) so the
-        // turn-in-flight lock releases and the UI returns to input-ready. Persist nothing.
+        if (complete) {
+          flushPending();
+          break;
+        }
+        flushPending(lastDeliveredSequence + 2);
+        // #456 — user-driven Stop exits cleanly so the turn lock releases; persist nothing.
         if (controller.signal.aborted) {
           stopped = true;
           break;
         }
-        // #456 — idle/heartbeat watchdog: break only when the engine emitted NOTHING for the full
-        // window (an actively-producing turn keeps resetting the deadline). No reply → recordTurn skipped.
+        // #456 — idle watchdog ends only after a full quiet window; active output resets it.
         if (
           this.idleWatchdogMs > 0 &&
           this.deps.clock.now() - lastEmissionAt > this.idleWatchdogMs
@@ -505,19 +544,18 @@ export class ChatSessionManager {
         this.deps.touchMcpToken?.(sessionKey);
         return { reply };
       }
-
-      // #2164 — a bounded-fallback engine starts its MCP client per turn in `submit()`, so the
-      // #2159 gate is skipped for it; check only when no MCP tool fired. Only a non-rejected
-      // `mcp__` attempt with a call id proves attachment (r22 fixed an id-less bypass).
+      // #2164: per-turn engines need a fresh attach; only successful identified calls satisfy the gate.
       const mcpToolInvoked = mcpAttempts.some((a) => a.id != null && !rejectedCallIds.has(a.id));
       if (
-        session.isBoundedFallbackEngine &&
+        session.startsToolClientPerTurn &&
         session.provider === "anthropic" &&
         session.mcpToken &&
         !mcpToolInvoked &&
         reply
       ) {
-        const toolsListReady = await this.waitForNewToolsListObservation(
+        const toolsListReady = await waitForNewToolsListObservation(
+          this.deps.getToolsListObservationCount,
+          () => this.deps.clock.now(),
           session.mcpToken,
           toolsListBaseline
         );
@@ -571,7 +609,10 @@ export class ChatSessionManager {
                   sizeBytes: meta.sizeBytes
                 }))
               : undefined,
-          actionResults: this.actionResultsBySession.get(sessionKey)
+          actionResults: this.actionResultsBySession.get(sessionKey),
+          activityRecords: turnActivityRecords,
+          elapsedMs: turnElapsedMs,
+          usage: turnUsage
         },
         surface
       );
@@ -584,7 +625,9 @@ export class ChatSessionManager {
           kind: "reply",
           text: reply,
           messageId: stored.assistantMessageId,
-          sourceFreshness: stored.sourceFreshness
+          sourceFreshness: stored.sourceFreshness,
+          ...(turnElapsedMs !== undefined ? { elapsedMs: turnElapsedMs } : {}),
+          ...(turnUsage !== undefined ? { usage: turnUsage } : {})
         });
       }
 
@@ -595,7 +638,11 @@ export class ChatSessionManager {
         sourceFreshness: stored?.sourceFreshness
       };
     } finally {
+      flushPending();
+      this.turnActivityBySession.delete(sessionKey);
       this.actionResultsBySession.delete(sessionKey);
+      this.pendingActionResultsBySession.delete(sessionKey);
+      this.sequenceBySession.delete(sessionKey);
       this.turnControllers.delete(sessionKey);
     }
   }
@@ -652,11 +699,14 @@ export class ChatSessionManager {
     );
     if (!currentThread?.incognito) return;
 
-    await this.cleanupPrivateSession(
+    await cleanupPrivateSession(
       actorUserId,
       chatSurface,
       currentThread.id,
-      this.sessions.get(surfaceSessionKey(actorUserId, chatSurface))
+      this.sessions.get(surfaceSessionKey(actorUserId, chatSurface)),
+      this.deps,
+      this.sessions,
+      (k) => this.clearPrivateDetachTimer(k)
     );
   }
 
@@ -770,15 +820,27 @@ export class ChatSessionManager {
     const chatSurface = normalizeChatSurface(surface);
     const sessionKey = surfaceSessionKey(actorUserId, chatSurface);
     if (record.kind === "action_result" && record.outcome) {
-      const results = this.actionResultsBySession.get(sessionKey);
-      if (results && results.length < 20) {
-        results.push({
-          kind: "action_result",
-          text: record.text.slice(0, 200),
-          ...(record.toolName ? { toolName: record.toolName.slice(0, 120) } : {}),
-          outcome: record.outcome
-        });
+      const currentSequence = this.sequenceBySession.get(sessionKey) ?? 0;
+      if (this.turnsInFlight.has(sessionKey)) {
+        const recordSequence = record.sequence ?? currentSequence + 1;
+        const approvalSequence = Math.max(currentSequence, recordSequence) + 1;
+        this.sequenceBySession.set(sessionKey, approvalSequence);
+        let pending = this.pendingActionResultsBySession.get(sessionKey);
+        if (!pending) {
+          pending = [];
+          this.pendingActionResultsBySession.set(sessionKey, pending);
+        }
+        pending.push({ record, recordSequence, approvalSequence });
+        return;
       }
+      injectActionResultRecord(record, {
+        sessionKey,
+        sequenceBySession: this.sequenceBySession,
+        turnRecords: this.turnActivityBySession.get(sessionKey),
+        actionResults: this.actionResultsBySession.get(sessionKey),
+        emit: (next) => this.emit(actorUserId, chatSurface, next)
+      });
+      return;
     }
     this.emit(actorUserId, chatSurface, record);
   }
@@ -835,11 +897,14 @@ export class ChatSessionManager {
               session.actorUserId,
               session.surface
             );
-            await this.cleanupPrivateSession(
+            await cleanupPrivateSession(
               session.actorUserId,
               session.surface,
               thread?.incognito ? thread.id : undefined,
-              session
+              session,
+              this.deps,
+              this.sessions,
+              (k) => this.clearPrivateDetachTimer(k)
             );
           } else {
             try {
@@ -865,7 +930,9 @@ export class ChatSessionManager {
           await this.deps.killSession?.(liveKey);
         }
       }
-      await this.sweepOrphanedPrivateThreads(effectiveLive);
+      await sweepOrphanedPrivateThreads(effectiveLive, this.deps, this.sessions, (k) =>
+        this.clearPrivateDetachTimer(k)
+      );
     });
   }
 
@@ -929,72 +996,5 @@ export class ChatSessionManager {
     if (!timer) return;
     clearTimeout(timer);
     this.privateDetachTimers.delete(actorUserId);
-  }
-
-  private async cleanupPrivateSession(
-    actorUserId: string,
-    surface: ChatSurface,
-    threadId: string | undefined,
-    session: UserSession | undefined
-  ): Promise<void> {
-    const sessionKey = surfaceSessionKey(actorUserId, surface);
-    // #744/#1086 — the incognito row is the boot sweep's ONLY reclaim handle. A live CLI can
-    // recreate its transcript after rm, so only the engine-less post-exit sweep may clear it.
-    let purged = false;
-    if (session) {
-      try {
-        if (session.engine.purgeTranscripts) {
-          await session.engine.purgeTranscripts();
-        }
-      } catch {
-        /* best-effort live purge; the row is retained regardless for the post-exit sweep */
-      }
-      try {
-        const killArgs: [EngineKillOpts?] = [{ preserveNeutralDir: true }];
-        await (this.deps.killSession
-          ? this.deps.killSession(sessionKey, ...killArgs)
-          : session.engine.kill(...killArgs));
-      } catch {
-        /* best-effort private kill */
-      }
-      // Process teardown is unconditional. The marker and row survive until a later sweep can
-      // prove the process is gone and purge without a recreate race (#1086).
-      this.sessions.delete(sessionKey);
-      this.clearPrivateDetachTimer(sessionKey);
-      this.deps.revokeMcpToken?.(sessionKey);
-    } else {
-      try {
-        if (this.deps.purgePrivateTranscripts) {
-          await this.deps.purgePrivateTranscripts(sessionKey);
-          purged = true;
-        }
-      } catch {
-        /* best-effort restart purge; keep the row for the next reconcile/boot sweep */
-      }
-    }
-    if (purged && threadId) {
-      await this.deps.persistence.deleteThread?.(actorUserId, threadId, surface);
-    }
-  }
-
-  private async sweepOrphanedPrivateThreads(effectiveLive: ReadonlySet<string>): Promise<void> {
-    const rows = (await this.deps.persistence.listIncognitoThreadStates?.()) ?? [];
-    for (const row of rows) {
-      const surface = normalizeChatSurface(row.surface);
-      const sessionKey = surfaceSessionKey(row.actorUserId, surface);
-      if (effectiveLive.has(sessionKey) || this.sessions.has(sessionKey)) continue;
-      await this.cleanupPrivateSession(row.actorUserId, surface, row.threadId, undefined);
-    }
-  }
-
-  private async drain(engine: CliChatEngine, fromOffset: number): Promise<number> {
-    let offset = fromOffset;
-    for (;;) {
-      const { offset: next, complete } = await engine.readNew(offset);
-      offset = next;
-      if (complete) break;
-      if (this.pollMs > 0) await delay(this.pollMs);
-    }
-    return offset;
   }
 }

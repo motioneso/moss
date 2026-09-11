@@ -47,6 +47,8 @@ export interface AcpSessionFolders {
 
 export interface AcpBuiltInRequest {
   readonly sessionId: string;
+  /** Identity of the prompt turn that created this ask. */
+  readonly turnId: string;
   readonly toolCallId: string;
   /** Display text only. Passed through for the card; never decides. */
   readonly title: string;
@@ -72,6 +74,18 @@ export function toolNameFromMeta(meta: unknown): string | null {
   if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null;
   const name = (meta as Record<string, unknown>).toolName;
   return typeof name === "string" && name.trim() !== "" ? name : null;
+}
+
+/** Codex ACP identifies MCP calls in the adapter-owned raw input envelope. */
+export function toolNameFromRawInput(rawInput: unknown): string | null {
+  if (!rawInput || typeof rawInput !== "object" || Array.isArray(rawInput)) return null;
+  const input = rawInput as Record<string, unknown>;
+  return typeof input.server === "string" &&
+    input.server.trim() !== "" &&
+    typeof input.tool === "string" &&
+    input.tool.trim() !== ""
+    ? `mcp__${input.server}__${input.tool.replaceAll(".", "_")}`
+    : null;
 }
 
 /**

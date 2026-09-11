@@ -36,24 +36,33 @@ export function Thread(props: {
   readonly renderRecord?: ThreadRenderRecord;
 }) {
   const renderRecord = props.renderRecord ?? defaultRenderRecord;
+  let activityKey = 0;
   return (
     <div className="chatd-thread" aria-live="polite">
-      {groupRecords(props.records, props.working).map((item, index) =>
-        item.type === "activity" ? (
-          <ActivityPeek key={index} records={item.records} inProgress={item.inProgress} />
-        ) : item.type === "status" ? (
-          <StatusLine key={index} record={item.record} />
-        ) : (
-          <Fragment key={index}>{renderRecord(item.record, index)}</Fragment>
-        )
-      )}
+      {groupRecords(props.records, props.working).map((item, index) => {
+        if (item.type === "activity") {
+          const key = `activity-${activityKey++}`;
+          return <ActivityPeek key={key} records={item.records} inProgress={item.inProgress} />;
+        }
+        if (item.type === "status") {
+          return <StatusLine key={index} record={item.record} />;
+        }
+        return <Fragment key={index}>{renderRecord(item.record, index)}</Fragment>;
+      })}
     </div>
   );
 }
 
 const ACTIVITY_KINDS: ReadonlySet<ChatRecordKind> = new Set<ChatRecordKind>([
   "thinking",
+  "thought",
   "tool",
+  "result",
+  "approval",
+  "approved",
+  "not_approved",
+  "refusal",
+  "refused",
   "status"
 ]);
 
@@ -70,8 +79,9 @@ type RenderItem =
  * Status records ("I'll get today's top headlines for you.") surface in the thread as their own
  * quiet lines so it is obvious the assistant is working; thinking and tool steps collapse into
  * one "Thinking..." line per turn, placed after the statuses and just above the reply. The line
- * is never removed once the reply lands — it stays for historical context. (Note: only action
- * results are persisted server-side, so restored conversations carry no steps to show.)
+ * is never removed once the reply lands — it stays for historical context. Records come from the
+ * persisted activity list as well as the live stream, so a restored conversation shows the same
+ * steps as the turn did.
  */
 export function groupRecords(
   records: readonly TranscriptRecord[],
@@ -90,8 +100,12 @@ export function groupRecords(
   for (const record of records) {
     if (record.kind === "status") {
       items.push({ type: "status", record });
-    } else if (ACTIVITY_KINDS.has(record.kind) && record.kind !== "action_request") {
+    } else if (ACTIVITY_KINDS.has(record.kind)) {
       buffer.push(record);
+    } else if (record.kind === "action_request" || record.kind === "action_result") {
+      // Action notifications stay standalone, but their related activity remains one turn fold.
+      // Keep collecting around the notification instead of flushing the fold at this boundary.
+      items.push({ type: "record", record });
     } else {
       flush(false);
       items.push({ type: "record", record });
@@ -138,6 +152,19 @@ export function ActivityPeek(props: {
 }
 
 export function activityVerb(record: TranscriptRecord): string {
+  const labels: Partial<Record<ChatRecordKind, string>> = {
+    thinking: "Thinking",
+    thought: "Thought",
+    tool: "Tool",
+    result: "Result",
+    approval: "Approval",
+    approved: "Approved",
+    not_approved: "Not approved",
+    refusal: "Refusal",
+    refused: "Refused"
+  };
+  const label = labels[record.kind];
+  if (label) return label;
   if (record.kind === "action_result") {
     // #1661: "allowed" no longer implies unattended mode (a user's own approval reports it too,
     // because the gateway sees the grant and not the run), and "error" is not a denial — the

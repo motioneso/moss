@@ -4,6 +4,7 @@ import type {
   ChatMessageDto,
   ChatSelectedToolMetadataDto,
   ChatThreadDto,
+  ChatTurnUsageDto,
   FreshnessKind,
   SourceFreshnessEntry,
   SourceFreshnessV1
@@ -41,6 +42,7 @@ export function serializeThread(
 
 export function serializeMessage(message: ChatMessage): ChatMessageDto {
   const toolMetadata = asRecord(message.tool_metadata);
+  const modelMetadata = asRecord(message.model_metadata);
   const storedProvenance = readStoredProvenance(toolMetadata);
   const answerProvenance =
     storedProvenance != null && storedProvenance.supportItems.length > 0
@@ -50,6 +52,13 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
     storedProvenance != null && storedProvenance.citedSupportIds.length > 0
       ? [...storedProvenance.citedSupportIds]
       : undefined;
+  const elapsedMs =
+    typeof toolMetadata.elapsedMs === "number"
+      ? toolMetadata.elapsedMs
+      : typeof modelMetadata.elapsedMs === "number"
+        ? modelMetadata.elapsedMs
+        : undefined;
+  const usage = (toolMetadata.usage ?? modelMetadata.usage) as ChatTurnUsageDto | undefined;
   return {
     id: message.id,
     threadId: message.thread_id,
@@ -65,7 +74,9 @@ export function serializeMessage(message: ChatMessage): ChatMessageDto {
     createdAt: toIsoString(message.created_at),
     updatedAt: toIsoString(message.updated_at),
     answerProvenance,
-    answerProvenanceCitedIds
+    answerProvenanceCitedIds,
+    ...(elapsedMs !== undefined ? { elapsedMs } : {}),
+    ...(usage !== undefined ? { usage } : {})
   };
 }
 
@@ -91,8 +102,19 @@ export function readActivity(value: unknown): ChatActivityEventDto[] {
           {
             kind: record.kind,
             text: record.text,
+            ...(typeof record.id === "string" ? { id: record.id } : {}),
+            ...(typeof record.sequence === "number" ? { sequence: record.sequence } : {}),
             ...(typeof record.toolName === "string" ? { toolName: record.toolName } : {}),
-            ...(outcome ? { outcome } : {})
+            ...(outcome ? { outcome } : {}),
+            ...(typeof record.toolCallId === "string" ? { toolCallId: record.toolCallId } : {}),
+            ...(typeof record.durationMs === "number" ? { durationMs: record.durationMs } : {}),
+            ...(record.decidedBy === "person" ||
+            record.decidedBy === "policy" ||
+            record.decidedBy === "timeout" ||
+            record.decidedBy === "cancelled"
+              ? { decidedBy: record.decidedBy }
+              : {}),
+            ...(typeof record.reason === "string" ? { reason: record.reason } : {})
           }
         ]
       : [];

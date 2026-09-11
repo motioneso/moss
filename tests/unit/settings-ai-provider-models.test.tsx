@@ -11,6 +11,9 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   createAiModel: vi.fn(),
   updateAiModel: vi.fn()
 }));
+vi.mock("../../apps/web/src/api/onboarding-connect-client.js", () => ({
+  checkOnboardingProvider: vi.fn(async () => ({ status: "ready" }))
+}));
 
 import { ProviderModels } from "../../apps/web/src/settings/settings-ai-provider-models.js";
 import type { AiConfiguredModelDto, AiProviderConfigDto } from "@moss/shared";
@@ -45,7 +48,8 @@ function model(overrides: Partial<AiConfiguredModelDto>): AiConfiguredModelDto {
 
 async function render(
   models: readonly AiConfiguredModelDto[],
-  onModelOverride = vi.fn()
+  onModelOverride = vi.fn(),
+  providerOverride: AiProviderConfigDto = provider
 ): Promise<{ renderer: ReactTestRenderer; onModelOverride: ReturnType<typeof vi.fn> }> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let renderer!: ReactTestRenderer;
@@ -55,8 +59,12 @@ async function render(
         QueryClientProvider,
         { client },
         createElement(ProviderModels, {
-          provider,
+          provider: providerOverride,
           models,
+          modelChoiceNote:
+            providerOverride.providerKind === "google"
+              ? "Chat uses this provider's login default because its ACP adapter does not expose model choice yet."
+              : undefined,
           onModelOverride,
           onModelStatusChange: vi.fn(),
           onModelDelete: vi.fn()
@@ -84,6 +92,90 @@ function chatTag(renderer: ReactTestRenderer) {
 }
 
 describe("ProviderModels chat tag", () => {
+  it("does not infer ACP login state from the model-list refresh", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const clientModule = await import("../../apps/web/src/api/client.js");
+    vi.mocked(clientModule.refreshAiProviderModels).mockResolvedValueOnce({
+      models: [],
+      reason: "not_logged_in"
+    });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(ProviderModels, {
+            provider: { ...provider, authMethod: "cli" } as AiProviderConfigDto,
+            models: [],
+            onModelOverride: vi.fn(),
+            onModelStatusChange: vi.fn(),
+            onModelDelete: vi.fn()
+          })
+        )
+      );
+    });
+    expect(renderer.root.findAll((node) => node.props?.role === "status")).toHaveLength(0);
+    expect(clientModule.refreshAiProviderModels).not.toHaveBeenCalled();
+    const onboardingClient = await import("../../apps/web/src/api/onboarding-connect-client.js");
+    expect(onboardingClient.checkOnboardingProvider).toHaveBeenCalledWith("openai-compatible");
+  });
+
+  it("shows ACP initialization refusal as not logged in", async () => {
+    const onboardingClient = await import("../../apps/web/src/api/onboarding-connect-client.js");
+    vi.mocked(onboardingClient.checkOnboardingProvider).mockResolvedValueOnce({
+      status: "needs_login"
+    });
+    const { renderer } = await render([], vi.fn(), {
+      ...provider,
+      authMethod: "cli"
+    } as AiProviderConfigDto);
+    expect(
+      renderer.root
+        .findAllByProps({ role: "status" })
+        .map((node) => node.children.join(" "))
+        .some((text) => text === "Not logged in")
+    ).toBe(true);
+  });
+
+  it("keeps ACP login refusal visible after model refresh succeeds", async () => {
+    const onboardingClient = await import("../../apps/web/src/api/onboarding-connect-client.js");
+    const clientModule = await import("../../apps/web/src/api/client.js");
+    vi.mocked(onboardingClient.checkOnboardingProvider).mockResolvedValueOnce({
+      status: "needs_login"
+    });
+    vi.mocked(clientModule.refreshAiProviderModels).mockResolvedValueOnce({ models: [] });
+    const { renderer } = await render([], vi.fn(), {
+      ...provider,
+      authMethod: "cli"
+    } as AiProviderConfigDto);
+
+    const refresh = renderer.root
+      .findAllByType("button")
+      .find((button) => String(button.props.children).includes("Refresh models"));
+    if (!refresh) throw new Error("Refresh models button not found");
+    await act(async () => {
+      (refresh.props.onClick as () => void)();
+    });
+
+    expect(
+      renderer.root
+        .findAllByProps({ role: "status" })
+        .map((node) => node.children.join(" "))
+        .some((text) => text === "Not logged in")
+    ).toBe(true);
+  });
+
+  it("shows when the ACP provider keeps the login's model default", async () => {
+    const { renderer } = await render([], vi.fn(), {
+      ...provider,
+      providerKind: "google"
+    } as AiProviderConfigDto);
+    expect(renderer.root.findByProps({ role: "note" }).children.join(" ")).toContain(
+      "login default"
+    );
+  });
+
   it("renders the Chat tag as a pressed toggle and no separate switch", async () => {
     const { renderer } = await render([model({})]);
     const tag = chatTag(renderer);

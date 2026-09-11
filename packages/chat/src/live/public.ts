@@ -1,6 +1,6 @@
 /**
  * Public "./live" subpath (#802) — the slice of chat's CLI-engine protocol that
- * `@moss/cli-runner` depends on: engine hosting (`cli-chat-engine`), RPC wire
+ * `@moss/cli-runner` depends on: engine hosting (`module-build-cli-engine`), RPC wire
  * framing (`rpc-contract`), provider install flow (`install-contract`), provider
  * login flow (`login-contract`), and the shared unavailable-engine error
  * (`errors`).
@@ -13,7 +13,7 @@
  * #744 adds `private-transcript-cleanup`: the cli-runner's engine-host needs
  * `purgePrivateTranscripts` for crash recovery when no engine object survives.
  * Collision-safe — that module's local `sanitizeSessionKey`/`deriveNeutralDir`
- * are NOT exported, so they don't clash with cli-chat-engine's public ones.
+ * are NOT exported, so they don't clash with module-build-cli-engine's public ones.
  *
  * #1059 adds `terminal-rpc-client`: the owner-terminal WebSocket relay (composed in
  * packages/module-registry, which already declares BOTH @moss/ai and @moss/chat as
@@ -23,18 +23,18 @@
  * `exports` map and fails at runtime with ERR_PACKAGE_PATH_NOT_EXPORTED — re-exporting it
  * here makes it resolvable through the one declared "./live" subpath instead.
  */
-export * from "./cli-chat-engine.js";
+export * from "./module-build-cli-engine.js";
 // #1258 — the dev-instance CLI's `cli-runner-reachable` doctor check needs the bare
 // connect-plus-hello primitive (no RPC verb) to probe cli-runner without a chat session.
 export { RpcConnection } from "./chat-engine-rpc-client.js";
-// #1350 — the ONE engine-selection rule. The cli-runner's EngineHost must build its engine
+// #1350 — the ONE structured-engine-selection rule. The cli-runner's EngineHost must build its engine
 // through this, not by hand, or `execution_mode` silently means nothing on a containerized deploy.
-export * from "./engine-selection.js";
-export { buildLaunchCommand, type LaunchCommandContext } from "./cli-launch-commands.js";
+export * from "./structured-engine-selection.js";
+export { buildLaunchCommand, type LaunchCommandContext } from "./module-build-launch-commands.js";
 export {
   writeClaudePermissionHook,
   type ClaudePermissionHookOpts
-} from "./claude-permission-hook.js";
+} from "./persistent-claude-permission-hook.js";
 export type { EngineLaunchOpts } from "./types.js";
 // The engine interface itself, so hosts can hold any engine (one-shot or interactive) rather
 // than narrowing to the tmux implementation and quietly assuming a pane exists.

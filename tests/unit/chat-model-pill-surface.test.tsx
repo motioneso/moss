@@ -16,7 +16,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // No jsdom — ChatModelPill's dismissable-menu effect registers real `document` listeners once
 // its menu opens, and ChatDrawer's private-mode effect touches `window`.
-vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+vi.stubGlobal("window", {
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  confirm: vi.fn(() => true)
+});
 vi.stubGlobal("document", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
 
 import { DEFAULT_CHAT_SURFACE, type AiConfiguredModelDto, type ChatSurface } from "@moss/shared";
@@ -49,8 +53,10 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
   getPersonaSettings: vi.fn(async () => ({
     persona: { assistantName: "Alfred", personaText: "" }
   })),
+  getChatSettings: vi.fn(async () => ({ chat: { responseStyle: "balanced" as const } })),
   getChatModelOverrideSettings: vi.fn(),
   putChatModelOverride: vi.fn(),
+  putChatSettings: vi.fn(),
   switchChatProvider: vi.fn()
 }));
 
@@ -61,8 +67,10 @@ vi.mock("../../apps/web/src/chat/chat-model-pill.js", async (importOriginal) => 
 
 import {
   clearChat,
+  getChatSettings,
   getChatModelOverrideSettings,
   putChatModelOverride,
+  putChatSettings,
   switchChatProvider
 } from "../../apps/web/src/api/client.js";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
@@ -208,12 +216,16 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
   beforeEach(() => {
     vi.mocked(getChatModelOverrideSettings).mockResolvedValue({ settings: settingsFixture() });
     vi.mocked(putChatModelOverride).mockResolvedValue({ settings: settingsFixture() });
+    vi.mocked(getChatSettings).mockResolvedValue({ chat: { responseStyle: "balanced" } });
+    vi.mocked(putChatSettings).mockResolvedValue({ chat: { responseStyle: "balanced" } });
     vi.mocked(switchChatProvider).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     vi.mocked(getChatModelOverrideSettings).mockReset();
+    vi.mocked(getChatSettings).mockReset();
     vi.mocked(putChatModelOverride).mockReset();
+    vi.mocked(putChatSettings).mockReset();
     vi.mocked(switchChatProvider).mockReset();
   });
 
@@ -234,6 +246,58 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
 
     expect(switchChatProvider).toHaveBeenCalledExactlyOnceWith(moduleSurface);
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.chat.threads(moduleSurface) });
+  });
+
+  it("clears the saved OpenCode choice before selecting a Codex model", async () => {
+    vi.mocked(getChatSettings).mockResolvedValueOnce({
+      chat: { responseStyle: "balanced", openCodeModel: "muse-spark-1.3-free" }
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderer = await renderPill(client, moduleSurface);
+
+    await openMenu(renderer);
+    const buttons = menuButtons(renderer);
+    await act(async () => {
+      buttons[2]!.props.onClick();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(putChatSettings).toHaveBeenCalledExactlyOnceWith({
+      chat: { responseStyle: "balanced" }
+    });
+    expect(putChatModelOverride).toHaveBeenCalledExactlyOnceWith({ modelId: "cross-provider" });
+  });
+
+  it("clears a stale OpenCode choice when the selected Codex pill is clicked", async () => {
+    vi.mocked(getChatModelOverrideSettings).mockResolvedValueOnce({
+      settings: {
+        ...settingsFixture(),
+        currentOverrideModelId: "cross-provider",
+        effectiveOverrideModelId: "cross-provider",
+        selectedModel: crossProviderModel
+      }
+    });
+    vi.mocked(getChatSettings).mockResolvedValueOnce({
+      chat: { responseStyle: "balanced", openCodeModel: "muse-spark-1.3-free" }
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderer = await renderPill(client, moduleSurface);
+
+    await openMenu(renderer);
+    const buttons = menuButtons(renderer);
+    await act(async () => {
+      buttons[2]!.props.onClick();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(putChatSettings).toHaveBeenCalledExactlyOnceWith({
+      chat: { responseStyle: "balanced" }
+    });
+    expect(putChatModelOverride).toHaveBeenCalledExactlyOnceWith({ modelId: "cross-provider" });
   });
 
   it("does not invalidate/clear the newly rendered surface's threads key when a same-provider mutation resolves after a surface flip", async () => {

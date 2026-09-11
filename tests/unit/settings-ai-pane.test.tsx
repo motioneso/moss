@@ -213,6 +213,120 @@ describe("Response style visibility", () => {
   });
 });
 
+describe("Chat model routing", () => {
+  const codexModel = {
+    id: "codex",
+    providerConfigId: "codex-provider",
+    providerKind: "openai-compatible" as const,
+    providerDisplayName: "Codex",
+    providerStatus: "active" as const,
+    providerModelId: "gpt-5-codex",
+    displayName: "Codex",
+    capabilities: ["chat" as const],
+    status: "active" as const,
+    tier: "interactive" as const,
+    allowUserOverride: true,
+    origin: "discovered" as const,
+    createdAt: "2026-09-10T00:00:00.000Z",
+    updatedAt: "2026-09-10T00:00:00.000Z"
+  };
+
+  it("clears a saved OpenCode choice before selecting a Codex model", async () => {
+    const api = await import("../../apps/web/src/api/client.js");
+    vi.mocked(api.getChatSettings).mockClear();
+    vi.mocked(api.putChatSettings).mockClear();
+    vi.mocked(api.putChatModelOverride).mockClear();
+    const settings = {
+      overrideEnabled: true,
+      currentOverrideModelId: null,
+      effectiveOverrideModelId: null,
+      defaultModel: codexModel,
+      selectedModel: null,
+      selectableOverrideModels: [codexModel]
+    };
+    chatModelOverrideGet.mockResolvedValueOnce({ settings });
+    const writes: string[] = [];
+    vi.mocked(api.getChatSettings).mockResolvedValue({
+      chat: { responseStyle: "balanced", openCodeModel: "muse-spark-1.3-free" }
+    });
+    vi.mocked(api.putChatSettings).mockImplementation(async () => {
+      writes.push("chat-settings");
+      return { chat: { responseStyle: "balanced" } };
+    });
+    vi.mocked(api.putChatModelOverride).mockImplementation(async () => {
+      writes.push("chat-model");
+      return { settings };
+    });
+
+    const renderer = await renderAssistantPane();
+    const select = renderer.root.findByProps({ "aria-label": "Chat model" });
+    await act(async () => {
+      select.props.onChange({ target: { value: "codex" } });
+      await flush();
+    });
+
+    expect(api.putChatSettings).toHaveBeenCalledExactlyOnceWith({
+      chat: { responseStyle: "balanced" }
+    });
+    expect(api.putChatModelOverride).toHaveBeenCalledExactlyOnceWith({ modelId: "codex" });
+    expect(writes).toEqual(["chat-settings", "chat-model"]);
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("clears a saved OpenCode choice when reaffirming the selected Codex model", async () => {
+    const api = await import("../../apps/web/src/api/client.js");
+    vi.mocked(api.getChatSettings).mockClear();
+    vi.mocked(api.putChatSettings).mockClear();
+    vi.mocked(api.putChatModelOverride).mockClear();
+    vi.mocked(api.getChatSettings).mockResolvedValue({
+      chat: { responseStyle: "balanced", openCodeModel: "muse-spark-1.3-free" }
+    });
+    vi.mocked(api.putChatSettings).mockResolvedValue({ chat: { responseStyle: "balanced" } });
+    vi.mocked(api.putChatModelOverride).mockResolvedValue({
+      settings: {
+        overrideEnabled: true,
+        currentOverrideModelId: "codex",
+        effectiveOverrideModelId: "codex",
+        defaultModel: codexModel,
+        selectedModel: codexModel,
+        selectableOverrideModels: [codexModel]
+      }
+    });
+    chatModelOverrideGet.mockResolvedValueOnce({
+      settings: {
+        overrideEnabled: true,
+        currentOverrideModelId: "codex",
+        effectiveOverrideModelId: "codex",
+        defaultModel: codexModel,
+        selectedModel: codexModel,
+        selectableOverrideModels: [codexModel]
+      }
+    });
+
+    const renderer = await renderAssistantPane();
+    const reaffirm = renderer.root
+      .findAllByType("button")
+      .find((instance) => renderedText(instance.children).includes("Use Codex for chat"));
+    if (!reaffirm) throw new Error("reaffirm Codex button not found");
+    await act(async () => {
+      reaffirm.props.onClick();
+      await flush();
+    });
+
+    expect(api.putChatSettings).toHaveBeenCalledExactlyOnceWith({
+      chat: { responseStyle: "balanced" }
+    });
+    expect(api.putChatModelOverride).toHaveBeenCalledExactlyOnceWith({ modelId: "codex" });
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
 describe("Transcription setup note", () => {
   it("tells the reader a transcription model turns on the chat microphone", async () => {
     chatModelOverrideGet.mockResolvedValueOnce({

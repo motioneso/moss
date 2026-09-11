@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { MossAcpClient } from "./client.js";
+import { AcpSessionOpenError, MossAcpClient } from "./client.js";
 import type { AcpTunnel } from "./tunnel.js";
 
 /**
@@ -13,21 +13,53 @@ class ScriptedAgent implements AcpTunnel {
   readonly sent: string[] = [];
   private readonly outbox: string[] = [];
   private seq = 0;
+  private promptCount = 0;
+  receivedSystemPrompt: string | null = null;
+  private killed = false;
+  private pendingRead: (() => void) | null = null;
+  readCount = 0;
+  killCalls: string[] = [];
+  pollingStopped = false;
   hangPrompt = false;
+  failInitialize = false;
+  killFailure: Error | null = null;
 
-  async spawn(): Promise<{ cwd: string; home: string | null; generation: number }> {
-    return { cwd: "/runner/session/acp/proj", home: "/home/agent", generation: 1 };
+  async spawn(): Promise<{
+    cwd: string;
+    home: string | null;
+    pid: number | null;
+    uid: number;
+    gid: number;
+  }> {
+    return {
+      cwd: "/runner/session/acp/proj",
+      home: "/home/agent",
+      pid: 12345,
+      uid: 2001,
+      gid: 2001
+    };
   }
 
   async send(_sessionKey: string, line: string): Promise<void> {
     this.sent.push(line);
-    const msg = JSON.parse(line) as { id?: number; method?: string };
+    const msg = JSON.parse(line) as {
+      id?: number;
+      method?: string;
+      params?: { _meta?: { systemPrompt?: unknown } };
+    };
     if (msg.method === "initialize") {
-      this.emit({ jsonrpc: "2.0", id: msg.id, result: fullCapabilities() });
+      this.emit(
+        this.failInitialize
+          ? { jsonrpc: "2.0", id: msg.id, error: { code: -32000, message: "init failed" } }
+          : { jsonrpc: "2.0", id: msg.id, result: fullCapabilities() }
+      );
     } else if (msg.method === "session/new") {
+      const prompt = msg.params?._meta?.systemPrompt;
+      this.receivedSystemPrompt = typeof prompt === "string" ? prompt : null;
       this.emit({ jsonrpc: "2.0", id: msg.id, result: { sessionId: "agent-sess-1" } });
     } else if (msg.method === "session/prompt") {
       if (this.hangPrompt) return;
+      const promptNumber = ++this.promptCount;
       this.emit({
         jsonrpc: "2.0",
         method: "session/update",
@@ -35,7 +67,10 @@ class ScriptedAgent implements AcpTunnel {
           sessionId: "agent-sess-1",
           update: {
             sessionUpdate: "agent_message_chunk",
-            content: { type: "text", text: "hello from the agent" }
+            content: {
+              type: "text",
+              text: promptNumber === 1 ? "hello from the agent" : `reply-${promptNumber}`
+            }
           }
         }
       });
@@ -46,13 +81,29 @@ class ScriptedAgent implements AcpTunnel {
           sessionId: "agent-sess-1",
           update: {
             sessionUpdate: "tool_call",
-            toolCallId: "call-1",
+            toolCallId: `call-${promptNumber}-1`,
             title: "Read",
             status: "pending",
             kind: "read"
           }
         }
       });
+      if (promptNumber > 1) {
+        this.emit({
+          jsonrpc: "2.0",
+          method: "session/update",
+          params: {
+            sessionId: "agent-sess-1",
+            update: {
+              sessionUpdate: "tool_call",
+              toolCallId: `call-${promptNumber}-2`,
+              title: "Read again",
+              status: "pending",
+              kind: "read"
+            }
+          }
+        });
+      }
       this.emit({ jsonrpc: "2.0", id: msg.id, result: { stopReason: "end_turn" } });
     }
   }
@@ -67,11 +118,57 @@ class ScriptedAgent implements AcpTunnel {
     exited: boolean;
     truncated: boolean;
   }> {
+    this.readCount += 1;
+    if (this.killed) {
+      this.pollingStopped = true;
+      return {
+        lines: [],
+        firstSeq: afterSeq + 1,
+        nextSeq: this.seq,
+        exited: true,
+        truncated: false
+      };
+    }
     const lines = this.outbox.slice(afterSeq);
+    if (lines.length === 0) {
+      return new Promise((resolve) => {
+        this.pendingRead = () => {
+          this.pendingRead = null;
+          if (this.killed) this.pollingStopped = true;
+          resolve(
+            this.killed
+              ? {
+                  lines: [],
+                  firstSeq: afterSeq + 1,
+                  nextSeq: this.seq,
+                  exited: true,
+                  truncated: false
+                }
+              : {
+                  lines: this.outbox.slice(afterSeq),
+                  firstSeq: afterSeq + 1,
+                  nextSeq: this.seq,
+                  exited: false,
+                  truncated: false
+                }
+          );
+        };
+      });
+    }
     return { lines, firstSeq: afterSeq + 1, nextSeq: this.seq, exited: false, truncated: false };
   }
 
-  async kill(): Promise<void> {}
+  async kill(sessionKey: string): Promise<void> {
+    this.killCalls.push(sessionKey);
+    if (this.killFailure) {
+      const error = this.killFailure;
+      this.killFailure = null;
+      throw error;
+    }
+    this.killed = true;
+    const wake = this.pendingRead;
+    setTimeout(() => wake?.(), 20);
+  }
 
   async execStart(): Promise<{ execId: number }> {
     return { execId: 1 };
@@ -128,6 +225,7 @@ class ScriptedAgent implements AcpTunnel {
   private emit(message: unknown): void {
     this.outbox.push(JSON.stringify(message));
     this.seq += 1;
+    this.pendingRead?.();
   }
 }
 
@@ -142,10 +240,75 @@ function fullCapabilities() {
 }
 
 describe("MossAcpClient", () => {
+  it("cleans up the spawned agent and tool server when initialization fails", async () => {
+    const agent = new ScriptedAgent();
+    agent.failInitialize = true;
+    let revoked = 0;
+    const client = new MossAcpClient(agent);
+
+    await expect(
+      client.openSession("chat:user:proj", "proj", "anthropic", "user-1", "chat", {
+        url: "http://moss.local/api/mcp",
+        bearer: "test-token",
+        onClose: () => {
+          revoked += 1;
+        }
+      })
+    ).rejects.toThrow();
+
+    expect(agent.killCalls).toEqual(["chat:user:proj"]);
+    expect(agent.pollingStopped).toBe(true);
+    expect(revoked).toBe(1);
+  });
+
+  it("reports refused startup cleanup and leaves a retry path", async () => {
+    const agent = new ScriptedAgent();
+    agent.failInitialize = true;
+    agent.killFailure = new Error("STOP REFUSED");
+    let revoked = 0;
+    const client = new MossAcpClient(agent);
+
+    let failure: unknown;
+    try {
+      await client.openSession("chat:user:proj", "proj", "anthropic", "user-1", "chat", {
+        url: "http://moss.local/api/mcp",
+        bearer: "test-token",
+        onClose: () => {
+          revoked += 1;
+        }
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(AcpSessionOpenError);
+    if (!(failure instanceof AcpSessionOpenError)) throw failure;
+    expect(failure.message).toMatch(/cleanup failed \(STOP REFUSED\)/);
+    expect(agent.killCalls).toEqual(["chat:user:proj"]);
+    expect(revoked).toBe(0);
+    expect(typeof failure.cleanup.close).toBe("function");
+
+    await failure.cleanup.close();
+    expect(agent.killCalls).toEqual(["chat:user:proj", "chat:user:proj"]);
+    expect(agent.pollingStopped).toBe(true);
+    expect(revoked).toBe(1);
+
+    await failure.retryCleanup();
+    expect(agent.killCalls).toHaveLength(2);
+  });
+
   it("opens a session, collects streamed text, and reports the stop reason", async () => {
     const agent = new ScriptedAgent();
     const client = new MossAcpClient(agent);
-    const handle = await client.openSession("workshop:user:proj", "proj");
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat",
+      undefined,
+      "You are Jarvis."
+    );
     expect(handle.sessionId).toBe("agent-sess-1");
     expect(handle.cwd).toBe("/runner/session/acp/proj");
 
@@ -154,29 +317,104 @@ describe("MossAcpClient", () => {
     expect(result.text).toBe("hello from the agent");
     expect(result.toolCallsSeen).toBe(1);
 
-    // The client pinned protocol v1 and advertised no file or terminal access.
+    // The client pinned protocol v1 and sent the row's off-list.
     const init = agent.sent
       .map((line) => JSON.parse(line))
       .find((msg) => msg.method === "initialize");
     expect(init.params.protocolVersion).toBe(1);
     expect(init.params.clientCapabilities ?? {}).toEqual({});
-    // The agent's own tools are switched off: files and commands are Moss tools.
+    // The row's off-list travels in the row's mechanism: the agent's
+    // disallowed-tools list, taken from the tool table's chat column.
     const opened = agent.sent
       .map((line) => JSON.parse(line))
       .find((msg) => msg.method === "session/new");
-    expect(opened.params._meta).toEqual({ disableBuiltInTools: true });
+    const { launchOffList } = await import("./tool-table.js");
+    expect(opened.params._meta).toEqual({
+      claudeCode: { options: { disallowedTools: launchOffList("chat") } },
+      systemPrompt: "You are Jarvis."
+    });
+    expect(agent.receivedSystemPrompt).toBe("You are Jarvis.");
+    // This proves the field name and shape Moss sends, but only against this
+    // stand-in agent, not the real installed adapter package. That adapter
+    // keeps its own copy of the Claude Agent SDK in an isolated pnpm install
+    // unreachable from this package's module graph, so no vi.mock here can
+    // intercept its calls without either a live credentialed subprocess test
+    // or a fragile path into its private install. Confirmed instead by
+    // reading the adapter's own source: it reads params._meta.systemPrompt
+    // as a plain string, matching this test exactly. The live chat proof's
+    // persona check (an instruction only the real persona text produces) is
+    // the substitute for an automated adapter-level test.
     // No tool server handed over unless the caller provides one.
     expect(opened.params.mcpServers).toEqual([]);
     await client.close(handle);
   });
 
+  it("isolates reply text and tool counts between prompt turns", async () => {
+    const agent = new ScriptedAgent();
+    const beginTurn = vi.fn();
+    const client = new MossAcpClient(agent, {}, { decide: async () => "deny", beginTurn });
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
+
+    await expect(client.prompt(handle, "first")).resolves.toMatchObject({
+      text: "hello from the agent",
+      toolCallsSeen: 1
+    });
+    await expect(client.prompt(handle, "second")).resolves.toMatchObject({
+      text: "reply-2",
+      toolCallsSeen: 2
+    });
+    expect(beginTurn).toHaveBeenNthCalledWith(1, "agent-sess-1", expect.any(String));
+    expect(beginTurn).toHaveBeenNthCalledWith(2, "agent-sess-1", expect.any(String));
+    expect(beginTurn.mock.calls[0]?.[1]).not.toBe(beginTurn.mock.calls[1]?.[1]);
+    await client.close(handle);
+  });
+
+  it("kills the runner session and ends polling before revoking on close", async () => {
+    const agent = new ScriptedAgent();
+    const order: string[] = [];
+    const client = new MossAcpClient(agent);
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat",
+      {
+        url: "http://moss.local/api/mcp",
+        bearer: "jst_test-token",
+        onClose: () => order.push(agent.pollingStopped ? "revoke" : "polling-active")
+      }
+    );
+
+    await client.close(handle);
+    expect(agent.killCalls).toEqual(["workshop:user:proj"]);
+    expect(order).toEqual(["revoke"]);
+    expect(agent.pollingStopped).toBe(true);
+    const readsAfterStop = agent.readCount;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(agent.readCount).toBe(readsAfterStop);
+  });
+
   it("hands Moss's tool server over inside the session opening", async () => {
     const agent = new ScriptedAgent();
     const client = new MossAcpClient(agent);
-    const handle = await client.openSession("workshop:user:proj", "proj", "workshop", {
-      url: "http://moss.local/api/mcp",
-      bearer: "jst_test-token"
-    });
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat",
+      {
+        url: "http://moss.local/api/mcp",
+        bearer: "jst_test-token"
+      }
+    );
     expect(handle.sessionId).toBe("agent-sess-1");
 
     const opened = agent.sent
@@ -200,13 +438,20 @@ describe("MossAcpClient", () => {
     const agent = new ScriptedAgent();
     const client = new MossAcpClient(agent);
     let revoked = 0;
-    const handle = await client.openSession("workshop:user:proj", "proj", "workshop", {
-      url: "http://moss.local/api/mcp",
-      bearer: "jst_test-token",
-      onClose: () => {
-        revoked += 1;
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat",
+      {
+        url: "http://moss.local/api/mcp",
+        bearer: "jst_test-token",
+        onClose: () => {
+          revoked += 1;
+        }
       }
-    });
+    );
     await client.close(handle);
     expect(revoked).toBe(1);
     // Closing again revokes nothing further.
@@ -219,7 +464,13 @@ describe("MossAcpClient", () => {
     const agent = new ScriptedAgent();
     agent.hangPrompt = true;
     const client = new MossAcpClient(agent);
-    const handle = await client.openSession("workshop:user:proj", "proj");
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
     await expect(client.prompt(handle, "hello?", { timeoutMs: 50 })).rejects.toThrow(
       /timed out after 50 ms/
     );
@@ -246,7 +497,13 @@ describe("MossAcpClient", () => {
         }
       }
     );
-    const handle = await client.openSession("workshop:user:proj", "proj");
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
     agent.agentAnnouncesToolCall({
       toolCallId: "call-9",
       title: "Read src/a.ts",
@@ -264,6 +521,47 @@ describe("MossAcpClient", () => {
     await client.close(handle);
   });
 
+  it("settles a gateway-backed permission ask before cancelling the ACP session", async () => {
+    const agent = new ScriptedAgent();
+    let resolveDecision: ((decision: "allow" | "deny") => void) | undefined;
+    const decider = {
+      decide: vi.fn(
+        () =>
+          new Promise<"allow" | "deny">((resolve) => {
+            resolveDecision = resolve;
+          })
+      ),
+      cancelSession: vi.fn(() => {
+        resolveDecision?.("deny");
+      })
+    };
+    const client = new MossAcpClient(agent, {}, decider);
+    const handle = await client.openSession(
+      "chat:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
+
+    agent.agentAnnouncesToolCall({
+      toolCallId: "call-9",
+      title: "`pnpm build`",
+      kind: "execute",
+      rawInput: { command: "pnpm build" },
+      _meta: { claudeCode: { toolName: "Bash" } }
+    });
+    agent.agentAsksPermission(8, { title: "`pnpm build`", rawInput: { command: "pnpm build" } });
+    await vi.waitFor(() => expect(decider.decide).toHaveBeenCalledOnce());
+
+    await client.cancel(handle);
+
+    expect(decider.cancelSession).toHaveBeenCalledWith("agent-sess-1");
+    const answer = await waitForAnswer(agent, 8);
+    expect(answer.result.outcome).toEqual({ outcome: "cancelled" });
+    await client.close(handle);
+  });
+
   it("decides by the announced name when the question lands first", async () => {
     const agent = new ScriptedAgent();
     const seen: Array<string | null> = [];
@@ -277,7 +575,13 @@ describe("MossAcpClient", () => {
         }
       }
     );
-    const handle = await client.openSession("workshop:user:proj", "proj");
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
     agent.agentAsksPermission(8, { title: "`pnpm build`", rawInput: { command: "pnpm build" } });
     await new Promise((resolve) => setTimeout(resolve, 50));
     agent.agentAnnouncesToolCall({
@@ -296,7 +600,13 @@ describe("MossAcpClient", () => {
   it("refuses when no announcement arrives within the bound", async () => {
     const agent = new ScriptedAgent();
     const client = new MossAcpClient(agent, {}, { decide: async () => "allow" as const });
-    const handle = await client.openSession("workshop:user:proj", "proj");
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
     agent.agentAsksPermission(8, { title: "Read everything", rawInput: { prompt: "go" } });
     // The two second announcement wait runs before the refusal.
     const answer = await waitForAnswer(agent, 8, 10_000);
@@ -307,7 +617,13 @@ describe("MossAcpClient", () => {
   it("refuses when the announcement carries no name", async () => {
     const agent = new ScriptedAgent();
     const client = new MossAcpClient(agent, {}, { decide: async () => "allow" as const });
-    const handle = await client.openSession("workshop:user:proj", "proj");
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
     agent.agentAnnouncesToolCall({ toolCallId: "call-9", title: "mystery" });
     agent.agentAsksPermission(8, { title: "mystery", rawInput: {} });
     const answer = await waitForAnswer(agent, 8);
@@ -318,7 +634,13 @@ describe("MossAcpClient", () => {
   it("denies permission answers when no decider is wired", async () => {
     const agent = new ScriptedAgent();
     const client = new MossAcpClient(agent);
-    const handle = await client.openSession("workshop:user:proj", "proj");
+    const handle = await client.openSession(
+      "workshop:user:proj",
+      "proj",
+      "anthropic",
+      "user-1",
+      "chat"
+    );
     agent.agentAnnouncesToolCall({
       toolCallId: "call-9",
       title: "Read src/a.ts",

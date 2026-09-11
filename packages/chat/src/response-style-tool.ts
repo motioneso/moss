@@ -32,7 +32,10 @@ export const chatSetResponseStyleExecute: ToolExecute = async (
   assertDataContextDb(scopedDb);
   const { style } = input as { style: ChatResponseStyle };
   const current = await preferences.getWithRevision(scopedDb, CHAT_SETTINGS_PREFERENCE_KEY);
-  const next = normalizeChatSettings({ responseStyle: style });
+  const next = normalizeChatSettings({
+    ...normalizeChatSettings(current?.value),
+    responseStyle: style
+  });
   await preferences.upsertWithRevision(
     scopedDb,
     CHAT_SETTINGS_PREFERENCE_KEY,

@@ -1,15 +1,21 @@
-export { MossAcpClient } from "./client.js";
+export { AcpSessionOpenError, MossAcpClient } from "./client.js";
 export type {
   AcpClientEvents,
   AcpPermissionDecider,
+  AcpPermissionDecision,
   AcpPromptOptions,
   AcpPromptResult,
+  AcpSessionCleanupHandle,
   AcpSessionHandle,
+  AcpSetModelResult,
   AcpToolAnnouncement,
   AcpToolServer
 } from "./client.js";
-export { AcpCapabilityError, checkAgentCapabilities } from "./capabilities.js";
-export type { AcpSurface } from "./capabilities.js";
+export { acceptedOptionValues, findModelOption } from "./client.js";
+export { AcpCapabilityError, checkAcpProfile, checkAgentCapabilities } from "./capabilities.js";
+export type { AcpProfile, AcpSurface } from "./capabilities.js";
+export { getAcpProviderRow, listAcpProviderRows, opencodeDenyPermissionKeys } from "./providers.js";
+export type { AcpProviderKind, AcpProviderRow } from "./providers.js";
 export {
   acpRequestFamily,
   classifyAcpPermission,
@@ -21,6 +27,7 @@ export {
   isPrivateWebAddress,
   selectAllowOptionId,
   toolNameFromMeta,
+  toolNameFromRawInput,
   ACP_DESTRUCTIVE_TOOL_NAMES,
   ACP_PATH_INPUT_KEYS
 } from "./permissions.js";
@@ -38,6 +45,12 @@ export type {
   AcpSessionFolders
 } from "./permissions.js";
 /** The protocol's file-location shape, re-exported so callers need no SDK dependency. */
-export type { ToolCallLocation as AcpToolCallLocation } from "@agentclientprotocol/sdk";
+export type {
+  SessionNotification as AcpSessionNotification,
+  ToolCallLocation as AcpToolCallLocation,
+  Usage as AcpUsage
+} from "@agentclientprotocol/sdk";
 export { createTunnelStream } from "./stream.js";
 export type { AcpExecPoll, AcpTunnel } from "./tunnel.js";
+/** Re-exported so tunnel backers can build protocol handlers without an SDK dependency. */
+export { ClientSideConnection } from "@agentclientprotocol/sdk";

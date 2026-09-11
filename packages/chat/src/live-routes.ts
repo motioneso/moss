@@ -54,6 +54,7 @@ import {
   ChatTurnInFlightError
 } from "./live/chat-session-manager.js";
 import { CliChatUnavailableError } from "./live/errors.js";
+import { knownAuthFailureMessage } from "./live/auth-errors.js";
 import type { PageContextStore } from "./live/page-context-store.js";
 import { renderModuleControlContext, sanitizeExternalData } from "./live/prompt-safety.js";
 import type { ChatSessionRuntime } from "./live/runtime.js";
@@ -493,6 +494,32 @@ export function registerChatLiveRoutes(
     const surfaceResult = readOptionalSurface((request.query as Record<string, unknown>).surface);
     if ("error" in surfaceResult) return reply.code(400).send({ error: surfaceResult.error });
 
+    // Open the protocol session when the conversation drawer opens. The first user prompt then
+    // pays no session-start cost, and the session key can include the current conversation id.
+    const ensureSession = (
+      runtime.manager as unknown as {
+        ensureSession?: (
+          actorUserId: string,
+          userName: string,
+          opts?: { readonly forceReplay?: boolean },
+          surface?: string
+        ) => Promise<unknown>;
+      }
+    ).ensureSession;
+    if (ensureSession) {
+      try {
+        await ensureSession.call(
+          runtime.manager,
+          access.actorUserId,
+          await runtime.resolveUserName(access.actorUserId),
+          undefined,
+          surfaceResult.surface
+        );
+      } catch (error) {
+        return handleLiveRouteError(error, reply);
+      }
+    }
+
     // Subscriptions are keyed by the caller's actor + surface — a stream only ever
     // receives that actor's transcript records, never another user's.
     let unsubscribe: () => void;
@@ -665,6 +692,10 @@ function handleLiveRouteError(error: unknown, reply: FastifyReply) {
   }
 
   if (error instanceof CliChatUnavailableError) {
+    const authMessage = knownAuthFailureMessage(error.message);
+    if (authMessage) {
+      return reply.code(503).send({ error: authMessage });
+    }
     // Log the underlying cause server-side; send a fixed, sanitized message (the
     // error covers both "no multiplexer configured" and "launch failed").
     reply.log?.warn?.(

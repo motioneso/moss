@@ -13,8 +13,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type * as MossChatLiveModule from "@moss/chat/live";
 
-const { createChatEngineMock, persistentRuntimePoolMock } = vi.hoisted(() => ({
-  createChatEngineMock: vi.fn(),
+const { createStructuredEngineMock, persistentRuntimePoolMock } = vi.hoisted(() => ({
+  createStructuredEngineMock: vi.fn(),
   persistentRuntimePoolMock: vi.fn()
 }));
 
@@ -22,7 +22,7 @@ vi.mock("@moss/chat/live", async (importOriginal) => {
   const actual = await importOriginal<typeof MossChatLiveModule>();
   return {
     ...actual,
-    createChatEngine: createChatEngineMock,
+    createStructuredEngine: createStructuredEngineMock,
     PersistentRuntimePool: vi.fn().mockImplementation(function FakePersistentRuntimePool(
       this: unknown,
       opts: unknown
@@ -72,12 +72,12 @@ function bootConfig(): PersistentRuntimeLiveConfig {
 
 describe("CliChatEngineHost — persistent config live-reloads from RPC launch params (#1554)", () => {
   afterEach(() => {
-    createChatEngineMock.mockReset();
+    createStructuredEngineMock.mockReset();
     persistentRuntimePoolMock.mockClear();
   });
 
   it("flips persistent routing on and back off across two launches on the SAME host (no restart)", async () => {
-    createChatEngineMock.mockResolvedValue(fakeEngine());
+    createStructuredEngineMock.mockResolvedValue(fakeEngine());
     const pool: AdmitCapablePool = { admit: vi.fn(async () => ({ kind: "denied" as const })) };
     const liveConfig = bootConfig();
     const host = new CliChatEngineHost({
@@ -95,8 +95,8 @@ describe("CliChatEngineHost — persistent config live-reloads from RPC launch p
       personaText: "",
       persistentRuntimeEnabled: true
     });
-    expect(createChatEngineMock.mock.calls[0]![3].persistentRuntimeEnabled).toBe(true);
-    expect(createChatEngineMock.mock.calls[0]![3].persistentPool).toBe(pool);
+    expect(createStructuredEngineMock.mock.calls[0]![3].persistentRuntimeEnabled).toBe(true);
+    expect(createStructuredEngineMock.mock.calls[0]![3].persistentPool).toBe(pool);
 
     // Launch 2: the operator flipped the setting OFF — same process, same host instance.
     await host.launch("session-b", {
@@ -104,11 +104,11 @@ describe("CliChatEngineHost — persistent config live-reloads from RPC launch p
       personaText: "",
       persistentRuntimeEnabled: false
     });
-    expect(createChatEngineMock.mock.calls[1]![3].persistentRuntimeEnabled).toBe(false);
+    expect(createStructuredEngineMock.mock.calls[1]![3].persistentRuntimeEnabled).toBe(false);
   });
 
   it("updates the shared cap / idle-reap holder from each launch's params", async () => {
-    createChatEngineMock.mockResolvedValue(fakeEngine());
+    createStructuredEngineMock.mockResolvedValue(fakeEngine());
     const liveConfig = bootConfig();
     const host = new CliChatEngineHost({
       io: fakeIo(),
@@ -139,7 +139,7 @@ describe("CliChatEngineHost — persistent config live-reloads from RPC launch p
   });
 
   it("ignores non-positive / non-numeric cap and idle-reap values (fail-closed, never 0)", async () => {
-    createChatEngineMock.mockResolvedValue(fakeEngine());
+    createStructuredEngineMock.mockResolvedValue(fakeEngine());
     const liveConfig = bootConfig();
     const host = new CliChatEngineHost({
       io: fakeIo(),
@@ -162,7 +162,7 @@ describe("CliChatEngineHost — persistent config live-reloads from RPC launch p
 
 describe("createCliRunner — pool is unconditional and reads the live holder (#1554)", () => {
   afterEach(() => {
-    createChatEngineMock.mockReset();
+    createStructuredEngineMock.mockReset();
     persistentRuntimePoolMock.mockClear();
   });
 

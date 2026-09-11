@@ -394,14 +394,7 @@ describe("native Claude tool permission bridge", () => {
 
     expect(result).toEqual({ decision: "allow", reason: "Allowed by YOLO." });
     expect(createPendingCalled).toBe(true);
-    expect(emitted).toEqual([
-      expect.objectContaining({
-        kind: "action_result",
-        actionRequestId: "native-yolo-1",
-        toolName,
-        outcome: "allowed"
-      })
-    ]);
+    expect(emitted).toHaveLength(0);
     // #1085 F4: the awaited confirmed action records the grant without claiming the native tool
     // completed successfully; returning before these writes would recreate the audit gap.
     expect(created[0]).toMatchObject({

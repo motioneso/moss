@@ -186,7 +186,7 @@ const RAW_CATALOG: Record<RpcProviderKind, CatalogEntry> = {
       // would override that, but it is not in the §7.2 env allowlist and appears nowhere in this
       // repo), so the installer writes /data/cli-auth/.gemini/settings.json. This is a DIFFERENT
       // file from the per-session workspace settings chat writes at launch (`writeGeminiSettings`
-      // in packages/chat/src/live/cli-launch-commands.ts) — that one sets no `general` keys, so it
+      // in packages/chat/src/live/module-build-launch-commands.ts) — that one sets no `general` keys, so it
       // cannot override these. Do not merge the two.
       selfUpdateDisable: {
         kind: "config",

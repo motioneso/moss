@@ -35,11 +35,11 @@ import {
   CliChatEngineImpl,
   SESSION_PREFIX,
   VerifiedSubmitError
-} from "../../packages/chat/src/live/cli-chat-engine.js";
-import { GeminiPrintChatEngine } from "../../packages/chat/src/live/gemini-print-chat-engine.js";
-import { ClaudePrintChatEngine } from "../../packages/chat/src/live/claude-print-chat-engine.js";
+} from "../../packages/chat/src/live/module-build-cli-engine.js";
+import { GeminiPrintChatEngine } from "../../packages/chat/src/live/structured-gemini-engine.js";
+import { ClaudePrintChatEngine } from "../../packages/chat/src/live/structured-claude-engine.js";
 import { ClaudePersistentRuntimeEngine } from "../../packages/chat/src/live/persistent-runtime-engine.js";
-import { createChatEngine } from "../../packages/chat/src/live/engine-selection.js";
+import { createStructuredEngine } from "../../packages/chat/src/live/structured-engine-selection.js";
 import {
   decodeFrame,
   encodeFrame,
@@ -217,7 +217,7 @@ describe("§4.1.0a single-active-user gate", () => {
   it("counts a persistent-runtime engine with no mux session as live", async () => {
     const { io } = makeFakeIo();
     const host = makeHost(io);
-    const persistent = createChatEngine("anthropic", "alice", io, {
+    const persistent = createStructuredEngine("anthropic", "alice", io, {
       persistentRuntimeEnabled: true
     });
     expect(persistent).toBeInstanceOf(ClaudePersistentRuntimeEngine);
@@ -236,7 +236,7 @@ describe("§4.1.0a single-active-user gate", () => {
     async (provider, Engine) => {
       const { io, live, run } = makeFakeIo();
       const host = makeHost(io);
-      const bounded = createChatEngine(provider, "bounded", io, {
+      const bounded = createStructuredEngine(provider, "bounded", io, {
         executionMode: "non_interactive"
       });
       expect(bounded).toBeInstanceOf(Engine);
@@ -314,7 +314,7 @@ describe("§4.5 kill-by-mux-name + §4.6 listLiveSessions", () => {
   it("does not reap a registry-only engine as a mux orphan", async () => {
     const { io, live, run } = makeFakeIo();
     const host = makeHost(io);
-    const persistent = createChatEngine("anthropic", "persistent", io, {
+    const persistent = createStructuredEngine("anthropic", "persistent", io, {
       persistentRuntimeEnabled: true
     });
     expect(persistent).toBeInstanceOf(ClaudePersistentRuntimeEngine);

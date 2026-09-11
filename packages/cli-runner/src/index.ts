@@ -50,3 +50,10 @@ export {
   providerTokenPath,
   isTokenProvider
 } from "./provider-token-store.js";
+// Task 5b (2026-09-08): setpriv command-line builders shared by the launcher's own
+// capability raise (scripts/start-jarv1s.ts) and every per-person capability drop.
+export {
+  buildSetprivRaiseCommand,
+  buildSetprivDropCommand,
+  type SetprivCommand
+} from "./setpriv.js";
