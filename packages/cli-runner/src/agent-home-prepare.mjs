@@ -18,7 +18,7 @@
 // { dirs: string[], denyFile: null | { path: string, permissionKeys: string[] } }
 // Secret files arrive as a JSON array on stdin, never in argv or env.
 // Never invoked through a shell, so no interpolation risk.
-import { O_CREAT, O_NOFOLLOW, O_RDONLY, O_TRUNC, O_WRONLY } from "node:constants";
+import { O_CREAT, O_NOFOLLOW, O_NONBLOCK, O_RDONLY, O_TRUNC, O_WRONLY } from "node:constants";
 import { lstat, mkdir, open, rm } from "node:fs/promises";
 import { sep } from "node:path";
 
@@ -90,8 +90,18 @@ async function assertRealPath(path) {
 
 async function readSecretSource(file) {
   await assertRealPath(file.sourcePath);
-  const handle = await open(file.sourcePath, O_RDONLY | O_NOFOLLOW);
+  const sourceStat = await lstat(file.sourcePath);
+  if (!sourceStat.isFile()) {
+    throw new Error(`refusing non-regular credential path: ${file.sourcePath}`);
+  }
+  // O_NONBLOCK keeps a planted FIFO from hanging the owner process before the
+  // descriptor's regular-file check runs. The fstat closes the replacement
+  // race between the component walk and open.
+  const handle = await open(file.sourcePath, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
   try {
+    if (!(await handle.stat()).isFile()) {
+      throw new Error(`refusing non-regular credential path: ${file.sourcePath}`);
+    }
     const content = await handle.readFile("utf8");
     if (file.kind === "codex-auth") {
       const parsed = JSON.parse(content);

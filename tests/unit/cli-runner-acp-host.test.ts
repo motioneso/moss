@@ -973,22 +973,19 @@ describe("not-ready rows refuse at the launcher", () => {
     const dir = mkdtempSync(join(tmpdir(), "acp-5b-"));
     const home = mkdtempSync(join(tmpdir(), "acp-5b-home-"));
     try {
-      const child = new FakeChild();
-      let spawned = 0;
       const host = new AcpHost({
         neutralBase: dir,
         homeBase: home,
         perUserUid: true,
+        allocateUidSlot: selfSlot,
         resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
-        spawnChild: () => {
-          spawned += 1;
-          return child as never;
+        runAgentHomePrepare: async () => {
+          throw new Error("missing Codex login");
         }
       });
       await expect(host.spawn("chat:user-1:a", "proj", "openai", "user-1", "chat")).rejects.toThrow(
-        /Not logged in/
+        /missing Codex login/
       );
-      expect(spawned).toBe(0);
       expect(existsSync(join(home, "uid-slots.json"))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });

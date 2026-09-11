@@ -39,33 +39,6 @@ async function readRealFile(path: string): Promise<string> {
   }
 }
 
-/** Check only metadata before allocating a slot; content is still read by the owner process. */
-export async function preflightCodexAuthFile(homeBase: string, userId: string): Promise<void> {
-  try {
-    const path = codexAuthPath(homeBase, userId);
-    await assertRealPath(path);
-    const stat = await lstat(path);
-    if (!stat.isFile()) throw new Error("missing Codex login");
-    const parsed = JSON.parse(await readRealFile(path)) as {
-      tokens?: { access_token?: unknown; account_id?: unknown };
-    };
-    if (
-      typeof parsed.tokens?.access_token !== "string" ||
-      parsed.tokens.access_token.length === 0 ||
-      typeof parsed.tokens.account_id !== "string" ||
-      parsed.tokens.account_id.length === 0
-    ) {
-      throw new Error("missing Codex login");
-    }
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if ((error as Error).message === "missing Codex login" || code === "ENOENT") {
-      throw new Error("Not logged in (no Codex credential in runner home)", { cause: error });
-    }
-    throw new Error("Codex credential cannot be accessed safely", { cause: error });
-  }
-}
-
 /** Read and validate the selected user's Codex login without returning parsed secrets. */
 export async function readCodexAuthFile(
   homeBase: string,

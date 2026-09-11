@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   chmodSync,
   mkdirSync,
@@ -11,10 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  preflightCodexAuthFile,
-  codexAuthPath
-} from "../../packages/cli-runner/src/acp-codex-auth.js";
+import { codexAuthPath } from "../../packages/cli-runner/src/acp-codex-auth.js";
 
 const scriptPath = join(process.cwd(), "packages/cli-runner/src/agent-home-prepare.mjs");
 
@@ -26,20 +23,7 @@ function requestFor(source: string) {
 }
 
 describe("ACP Codex credential boundary", () => {
-  it("treats missing and malformed credentials as a recoverable sign-in requirement", async () => {
-    const home = mkdtempSync(join(tmpdir(), "acp-credentials-"));
-    const auth = codexAuthPath(home, "user-1");
-    try {
-      await expect(preflightCodexAuthFile(home, "user-1")).rejects.toThrow(/Not logged in/);
-      mkdirSync(join(home, "agents", "user-1", ".codex"), { recursive: true });
-      writeFileSync(auth, "{}", { mode: 0o600 });
-      await expect(preflightCodexAuthFile(home, "user-1")).rejects.toThrow(/Not logged in/);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
-  it("does not treat a shared-home credential as an isolated user's login", async () => {
+  it("does not treat a shared-home credential as an isolated user's login", () => {
     const home = mkdtempSync(join(tmpdir(), "acp-credentials-"));
     try {
       mkdirSync(join(home, ".codex"), { recursive: true });
@@ -48,22 +32,37 @@ describe("ACP Codex credential boundary", () => {
         JSON.stringify({ tokens: { access_token: "shared", account_id: "shared" } }),
         { mode: 0o600 }
       );
-      await expect(preflightCodexAuthFile(home, "user-1")).rejects.toThrow(/Not logged in/);
+      const result = spawnSync(process.execPath, requestFor(home), {
+        encoding: "utf8",
+        input: JSON.stringify([
+          {
+            path: join(home, "agents", "user-1", ".codex", "auth.json"),
+            sourcePath: codexAuthPath(home, "user-1"),
+            kind: "codex-auth"
+          }
+        ])
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr ?? "").not.toContain("shared");
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
   });
 
-  it("keeps symlinked parent credentials a hard failure", async () => {
+  it("keeps symlinked parent credentials a hard failure", () => {
     const home = mkdtempSync(join(tmpdir(), "acp-credentials-"));
     const outside = join(home, "outside");
     try {
       mkdirSync(outside, { recursive: true });
       mkdirSync(join(home, "agents"), { recursive: true });
       symlinkSync(outside, join(home, "agents", "user-1"));
-      await expect(preflightCodexAuthFile(home, "user-1")).rejects.toThrow(
-        /cannot be accessed safely/
-      );
+      const source = codexAuthPath(home, "user-1");
+      const result = spawnSync(process.execPath, requestFor(home), {
+        encoding: "utf8",
+        input: JSON.stringify([{ path: source, sourcePath: source, kind: "codex-auth" }])
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr ?? "").toContain("refusing symlinked credential path");
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -117,6 +116,25 @@ describe("ACP Codex credential boundary", () => {
       expect(result.stderr ?? "").not.toContain("owner-only");
     } finally {
       chmodSync(join(home, "agents", "user-1"), 0o700);
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a FIFO credential without blocking the owner preparation", () => {
+    const home = mkdtempSync(join(tmpdir(), "acp-credentials-"));
+    const source = join(home, "agents", "user-1", ".codex", "auth.json");
+    try {
+      mkdirSync(join(home, "agents", "user-1", ".codex"), { recursive: true, mode: 0o700 });
+      execFileSync("mkfifo", [source]);
+      const result = spawnSync(process.execPath, requestFor(home), {
+        encoding: "utf8",
+        input: JSON.stringify([{ path: source, sourcePath: source, kind: "codex-auth" }]),
+        timeout: 1000
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.status).not.toBe(0);
+      expect(result.stderr ?? "").toContain("non-regular credential path");
+    } finally {
       rmSync(home, { recursive: true, force: true });
     }
   });
