@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-11
+
+#### Fixed
+
+- **Clarify Codex sign-in recovery.** Moss now distinguishes an account without a usable Codex sign-in from a provider failure and explains the administrator-only recovery path. [PR #2456](https://github.com/motioneso/moss/pull/2456)
+
 ### 2026-09-07
 
 #### Changed
