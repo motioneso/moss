@@ -251,7 +251,12 @@ export function createCliRunner(
     io,
     adapters: LOGIN_ADAPTERS,
     homeBase: config.homeBase,
-    resolveUserRuntime,
+    resolveUserRuntime: async (provider, userId) => {
+      if (provider !== "openai-compatible") {
+        throw new Error(`isolated runtime requested for unsupported provider: ${provider}`);
+      }
+      return resolveUserRuntime(userId);
+    },
     // Completion signal: the §4.8 provider auth probe (no token, no replay) — same deps the
     // host's probeProvider uses, PLUS the #363 claude-scoped credential env so `auth status`
     // reports loggedIn once the captured token is persisted (settling the flow `ready`).
@@ -268,7 +273,7 @@ export function createCliRunner(
           provider
         ),
         homeBase: opts?.runtime?.homeBase ?? config.homeBase,
-        cacheScope: opts?.runtime?.userId,
+        cacheScope: provider === "openai-compatible" ? opts?.runtime?.userId : undefined,
         forceFresh: opts?.forceFresh,
         // #2242 (round 3): a refused sign-in is remembered until the vendor accepts a new one.
         // Codex's own check cannot prove a sign-in, so this real request is how a person who

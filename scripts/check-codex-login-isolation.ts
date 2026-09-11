@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   chownSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -21,12 +22,18 @@ import { createCliRunner, resolveIsolatedUserRuntime } from "../packages/cli-run
 import { LOGIN_ADAPTERS } from "../packages/cli-runner/src/login-adapters.js";
 import { LoginService } from "../packages/cli-runner/src/login-service.js";
 import type { LoginUserRuntime } from "../packages/cli-runner/src/login-service.js";
+import { ensureGeminiOnboarded } from "../packages/cli-runner/src/provider-first-run.js";
+import {
+  providerTokenPath,
+  readProviderCredentialEnv
+} from "../packages/cli-runner/src/provider-token-store.js";
 import {
   clearProviderProbeCacheForTests,
   probeProvider,
   recordProviderLoginRejected
 } from "../packages/chat/src/live/provider-probe.js";
 import type { ProbeProviderResult } from "../packages/chat/src/live/provider-probe.js";
+import type { RpcProviderKind } from "../packages/chat/src/live/rpc-contract.js";
 import type { TmuxIo } from "../packages/ai/src/adapters/tmux-bridge.js";
 
 const LAUNCHER_UID = 1000;
@@ -296,6 +303,231 @@ async function task2Child(base: string): Promise<void> {
   );
 }
 
+interface LoginIoState {
+  pane: string;
+  readonly calls: { command: string; args: string[] }[];
+  readonly live: Set<string>;
+  failPaste: boolean;
+}
+
+function loginIo(state: LoginIoState): TmuxIo {
+  return {
+    run: async (command, args) => {
+      state.calls.push({ command, args: [...args] });
+      if (command !== "tmux") return { code: 0, stdout: "", stderr: "" };
+      const verb = args[0] === "-S" ? args[2] : args[0];
+      if (verb === "new-session") {
+        state.live.add(args[args.indexOf("-s") + 1]!);
+      } else if (verb === "kill-session") {
+        state.live.delete(args[args.indexOf("-t") + 1]!.replace(/^=/, ""));
+      } else if (verb === "capture-pane") {
+        return { code: 0, stdout: state.pane, stderr: "" };
+      } else if (verb === "send-keys" && state.failPaste) {
+        const pasted = state.calls.some(({ args: callArgs }) => callArgs.includes("paste-buffer"));
+        if (pasted) throw new Error("synthetic paste failure");
+      }
+      return { code: 0, stdout: "", stderr: "" };
+    },
+    sleep: async () => undefined,
+    readFile: async () => "",
+    writeFile: async () => undefined
+  };
+}
+
+function absent(path: string): void {
+  assert.equal(existsSync(path), false, `unexpected path exists: ${path}`);
+}
+
+async function assertAbsentAsOwner(runtime: LoginUserRuntime, path: string): Promise<void> {
+  const result = await runtime.io.run(process.execPath, [
+    "-e",
+    "const fs=require('node:fs'); process.exit(fs.existsSync(process.argv[1]) ? 1 : 0);",
+    path
+  ]);
+  assert.equal(result.code, 0, result.stderr);
+}
+
+async function waitFor(predicate: () => boolean, message: string): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  throw new Error(message);
+}
+
+async function task3Child(base: string): Promise<void> {
+  assert.equal(process.getuid?.(), LAUNCHER_UID);
+  assert.equal(process.getgid?.(), LAUNCHER_UID);
+
+  const sharedHome = join(base, "home");
+  const googleHome = join(sharedHome, "google-shared-home");
+  mkdirSync(googleHome, { mode: 0o733 });
+  chownSync(googleHome, LAUNCHER_UID, LAUNCHER_UID);
+  const ownerRuntimes = new Map<string, LoginUserRuntime>();
+  for (const userId of ["user-anthropic", "user-google"]) {
+    ownerRuntimes.set(
+      userId,
+      await resolveIsolatedUserRuntime({ perUserUid: true, homeBase: sharedHome }, userId)
+    );
+  }
+  const resolverCalls: string[] = [];
+  const observedProbeHomes: string[] = [];
+  const resolveOwnerRuntime = async (
+    provider: RpcProviderKind,
+    userId: string
+  ): Promise<LoginUserRuntime> => {
+    resolverCalls.push(`${provider}:${userId}`);
+    const runtime = ownerRuntimes.get(userId);
+    assert(runtime, `missing competing owner runtime for ${userId}`);
+    return runtime;
+  };
+  const sharedProbe = async (
+    provider: RpcProviderKind,
+    opts?: { readonly runtime?: LoginUserRuntime }
+  ) => {
+    observedProbeHomes.push(`${provider}:${opts?.runtime?.homeBase ?? ""}`);
+    return { status: "needs_login" as const };
+  };
+  const anthropicOwner = ownerRuntimes.get("user-anthropic")!;
+  const googleOwner = ownerRuntimes.get("user-google")!;
+  assert.notEqual(anthropicOwner.homeBase, sharedHome);
+  assert.notEqual(googleOwner.homeBase, sharedHome);
+  const token = "sk-ant-oat-synthetic-task3-token-0123456789abcdefghij";
+  const successState: LoginIoState = {
+    pane: "https://claude.com/cai/oauth/authorize?code=synthetic",
+    calls: [],
+    live: new Set(),
+    failPaste: false
+  };
+  const successService = new LoginService({
+    io: loginIo(successState),
+    homeBase: sharedHome,
+    adapters: LOGIN_ADAPTERS,
+    resolveUserRuntime: resolveOwnerRuntime,
+    probe: sharedProbe,
+    settleMs: 0,
+    surfaceTimeoutMs: 200
+  });
+  const successLogin = successService.reserve("anthropic", "user-anthropic");
+  const started = await successService.start(successLogin);
+  assert.equal(started.status, "awaiting_token");
+  successState.pane = `Long-lived authentication token created\n${token}`;
+  const successOutcome = await successService.submitToken(
+    "anthropic",
+    successLogin,
+    "synthetic-paste-code",
+    "user-anthropic"
+  );
+  assert.equal(successOutcome.status, "awaiting_token");
+
+  const tokenPath = providerTokenPath(sharedHome, "anthropic");
+  assert.equal(readFileSync(tokenPath, "utf8"), token);
+  assert.equal(statSync(tokenPath).mode & 0o777, 0o600);
+  const credentialEnv = await readProviderCredentialEnv(sharedHome, "anthropic");
+  assert.equal(credentialEnv.CLAUDE_CODE_OAUTH_TOKEN, token);
+  assert(
+    successState.calls.some(
+      ({ command, args }) => command === "tmux" && args.includes("delete-buffer")
+    ),
+    "successful paste did not delete its tmux buffer"
+  );
+  const successPaste = successState.calls.find(
+    ({ command, args }) => command === "tmux" && args.includes("load-buffer")
+  );
+  assert(successPaste, "successful paste did not load a token file");
+  absent(successPaste.args.at(-1)!);
+  await assertAbsentAsOwner(
+    anthropicOwner,
+    join(anthropicOwner.homeBase, ".jarvis", "cli-tokens", "anthropic")
+  );
+  await successService.cancel("anthropic", successLogin, "user-anthropic");
+
+  rmSync(tokenPath, { force: true });
+  const failureState: LoginIoState = {
+    pane: "https://claude.com/cai/oauth/authorize?code=synthetic-failure",
+    calls: [],
+    live: new Set(),
+    failPaste: true
+  };
+  const failureService = new LoginService({
+    io: loginIo(failureState),
+    homeBase: sharedHome,
+    adapters: LOGIN_ADAPTERS,
+    resolveUserRuntime: resolveOwnerRuntime,
+    probe: sharedProbe,
+    settleMs: 0,
+    surfaceTimeoutMs: 200
+  });
+  const failureLogin = failureService.reserve("anthropic", "user-anthropic");
+  await failureService.start(failureLogin);
+  const failureOutcome = await failureService.submitToken(
+    "anthropic",
+    failureLogin,
+    "synthetic-failure-code",
+    "user-anthropic"
+  );
+  assert.equal(failureOutcome.status, "error");
+  const failurePaste = failureState.calls.find(
+    ({ command, args }) => command === "tmux" && args.includes("load-buffer")
+  );
+  assert(failurePaste, "failed paste did not load a token file");
+  await waitFor(
+    () => failureState.calls.some(({ args }) => args.includes("delete-buffer")),
+    "failed paste cleanup did not delete its tmux buffer"
+  );
+  absent(failurePaste.args.at(-1)!);
+  absent(tokenPath);
+  await assertAbsentAsOwner(
+    anthropicOwner,
+    join(anthropicOwner.homeBase, ".jarvis", "cli-tokens", "anthropic")
+  );
+  await failureService.cancel("anthropic", failureLogin, "user-anthropic");
+
+  const googleState: LoginIoState = {
+    pane: "https://accounts.google.com/o/oauth2/v2/auth?state=synthetic",
+    calls: [],
+    live: new Set(),
+    failPaste: false
+  };
+  let preparedHome: string | undefined;
+  const googleService = new LoginService({
+    io: loginIo(googleState),
+    homeBase: googleHome,
+    adapters: LOGIN_ADAPTERS,
+    resolveUserRuntime: resolveOwnerRuntime,
+    probe: sharedProbe,
+    prepareProvider: async (provider, runtime) => {
+      assert.equal(provider, "google");
+      preparedHome = runtime.homeBase;
+      await ensureGeminiOnboarded(runtime.homeBase);
+    },
+    settleMs: 0,
+    surfaceTimeoutMs: 200
+  });
+  const googleLogin = googleService.reserve("google", "user-google");
+  const googleOutcome = await googleService.start(googleLogin);
+  assert.equal(googleOutcome.status, "awaiting_token");
+  assert.equal(preparedHome, googleHome);
+  const googleSettings = JSON.parse(
+    readFileSync(join(googleHome, ".gemini", "settings.json"), "utf8")
+  ) as { security?: { auth?: { selectedType?: string } } };
+  assert.equal(googleSettings.security?.auth?.selectedType, "oauth-personal");
+  await assertAbsentAsOwner(googleOwner, join(googleOwner.homeBase, ".gemini", "settings.json"));
+  await googleService.cancel("google", googleLogin, "user-google");
+
+  assert.deepEqual(resolverCalls, [], "non-Codex login selected an owner runtime");
+  assert.deepEqual(observedProbeHomes, [
+    `anthropic:${sharedHome}`,
+    `anthropic:${sharedHome}`,
+    `anthropic:${sharedHome}`,
+    `google:${googleHome}`
+  ]);
+
+  console.log(
+    "Task 3 shared Anthropic/Google login runtime, token persistence, cleanup, and Codex isolation diagnostic passed."
+  );
+}
+
 function runAs(uid: number, capabilities: string, mode: string, base: string) {
   return spawnSync(
     "setpriv",
@@ -475,6 +707,10 @@ async function child(mode: string, base: string): Promise<void> {
     await task2Child(base);
     return;
   }
+  if (mode === "task-3") {
+    await task3Child(base);
+    return;
+  }
   const host = makeHost(base);
   if (mode === "valid-1" || mode === "valid-2") {
     await spawnValid(host, `session-${mode}`);
@@ -574,7 +810,9 @@ function runChild(mode: string, base: string): void {
       `diagnostic child ${mode} failed (status=${String(result.status)}): ${result.stderr.trim()}`
     );
   }
-  if (mode === "task-2" && result.stdout.trim()) console.log(result.stdout.trim());
+  if ((mode === "task-2" || mode === "task-3") && result.stdout.trim()) {
+    console.log(result.stdout.trim());
+  }
 }
 
 async function main(): Promise<void> {
@@ -600,6 +838,7 @@ async function main(): Promise<void> {
       return;
     }
     runChild("task-2", fixture.base);
+    runChild("task-3", fixture.base);
     runChild("valid-1", fixture.base);
     runChild("valid-2", fixture.base);
 

@@ -94,8 +94,11 @@ export interface LoginServiceDeps {
     provider: RpcProviderKind,
     runtime: LoginUserRuntime
   ) => Promise<void>;
-  /** Resolve the isolated HOME and UID/GID used by chat for one authenticated user. */
-  readonly resolveUserRuntime?: (userId: string) => Promise<LoginUserRuntime>;
+  /** Resolve the isolated HOME and UID/GID used by Codex for one authenticated user. */
+  readonly resolveUserRuntime?: (
+    provider: RpcProviderKind,
+    userId: string
+  ) => Promise<LoginUserRuntime>;
 }
 
 export interface LoginUserRuntime {
@@ -241,7 +244,7 @@ export class LoginService {
   async start(loginId: string): Promise<LoginFlowOutcome> {
     const flow = this.requireFlow(loginId);
     try {
-      flow.runtime = await this.resolveRuntime(flow.userId);
+      flow.runtime = await this.resolveRuntime(flow.provider, flow.userId);
       // (#2027) First-run seeding BEFORE the session opens: once the CLI is running it is too
       // late — it has already read its settings and painted its menu.
       if (this.deps.prepareProvider) await this.deps.prepareProvider(flow.provider, flow.runtime);
@@ -339,7 +342,7 @@ export class LoginService {
     try {
       // argv-free paste: write the token to a 0600 temp file, load it into a tmux buffer,
       // paste it into the login pane, then Enter. NEVER send-keys-with-the-token (argv leak).
-      const runtime = flow.runtime ?? (await this.resolveRuntime(flow.userId));
+      const runtime = flow.runtime ?? (await this.resolveRuntime(flow.provider, flow.userId));
       flow.runtime = runtime;
       tmpDir = await mkdtemp(path.join(runtime.homeBase, ".login-"));
       const tokenFile = path.join(tmpDir, "code");
@@ -460,7 +463,7 @@ export class LoginService {
     // OLD cached "ready" answer and report success before the in-flight real check comes back
     // with the true (expired) status, which is exactly how two overlapping requests could report
     // a false success.
-    const runtime = flow.runtime ?? (await this.resolveRuntime(flow.userId));
+    const runtime = flow.runtime ?? (await this.resolveRuntime(flow.provider, flow.userId));
     flow.runtime = runtime;
     const probe = flow.initialProbe
       ? await flow.initialProbe
@@ -555,7 +558,7 @@ export class LoginService {
   /** Open the captured login session (detached) + run the login command via send-keys. */
   private async openLoginSession(flow: LoginFlow): Promise<void> {
     const session = `${LOGIN_SESSION_PREFIX}${flow.sessionName}`;
-    const runtime = flow.runtime ?? (await this.resolveRuntime(flow.userId));
+    const runtime = flow.runtime ?? (await this.resolveRuntime(flow.provider, flow.userId));
     flow.runtime = runtime;
     // WIDE pane (-x): the provider prints its authorization URL on one line and its TUI
     // HARD-wraps at the pane width — a narrow pane splits the URL across lines (a literal
@@ -663,8 +666,13 @@ export class LoginService {
     return this.flow;
   }
 
-  private async resolveRuntime(userId: string): Promise<LoginUserRuntime> {
-    if (this.deps.resolveUserRuntime) return this.deps.resolveUserRuntime(userId);
+  private async resolveRuntime(
+    provider: RpcProviderKind,
+    userId: string
+  ): Promise<LoginUserRuntime> {
+    if (provider === "openai-compatible" && this.deps.resolveUserRuntime) {
+      return this.deps.resolveUserRuntime(provider, userId);
+    }
     return {
       userId,
       homeBase: this.homeBase,

@@ -676,7 +676,6 @@ export class CliChatEngineHost {
   }
 
   // ─── probeProvider (§4.8) — no token, no replay ───────────────────────────────
-
   async probeProvider(
     provider: RpcProviderKind,
     userIdOrOpts?: string | { readonly forceFresh?: boolean },
@@ -684,7 +683,8 @@ export class CliChatEngineHost {
   ): Promise<RpcProbeProviderResult> {
     const userId = typeof userIdOrOpts === "string" ? userIdOrOpts : undefined;
     const opts = typeof userIdOrOpts === "string" ? maybeOpts : userIdOrOpts;
-    const runtime = userId ? await this.deps.resolveUserRuntime?.(userId) : undefined;
+    const cacheScope = provider === "openai-compatible" ? userId : undefined;
+    const runtime = cacheScope ? await this.deps.resolveUserRuntime?.(cacheScope) : undefined;
     const homeBase = runtime?.homeBase ?? this.deps.homeBase;
     const credentialEnv = homeBase
       ? await readProviderCredentialEnv(homeBase, provider)
@@ -694,7 +694,7 @@ export class CliChatEngineHost {
     // gone stale — drop it explicitly before running the check, belt-and-suspenders alongside
     // `forceFresh` skipping the cache read below.
     if (opts?.forceFresh)
-      invalidateProviderProbeCache(provider as ProviderKind, credentialEnv, userId);
+      invalidateProviderProbeCache(provider as ProviderKind, credentialEnv, cacheScope);
     const result: ProbeProviderResult = await probeProvider(provider as ProviderKind, {
       io: runtime?.io ?? this.deps.io,
       cliPresent: this.deps.cliPresent,
@@ -702,7 +702,7 @@ export class CliChatEngineHost {
       // #363: inject the persisted claude OAuth token so `auth status` reports loggedIn.
       credentialEnv,
       homeBase,
-      cacheScope: userId,
+      cacheScope,
       forceFresh: opts?.forceFresh,
       // #2242 (round 3): the real request that can retire a recorded refusal for a provider whose
       // own check cannot prove a sign-in (codex). Only reached when a refusal is standing AND the
@@ -711,13 +711,13 @@ export class CliChatEngineHost {
     });
     return { status: result.status, message: result.message };
   }
-
   /** Relays a sign-in rejection learned in the API process into this cache. */
   async recordLoginRejected(provider: RpcProviderKind, userId?: string): Promise<void> {
-    const runtime = userId ? await this.deps.resolveUserRuntime?.(userId) : undefined;
+    const cacheScope = provider === "openai-compatible" ? userId : undefined;
+    const runtime = cacheScope ? await this.deps.resolveUserRuntime?.(cacheScope) : undefined;
     const homeBase = runtime?.homeBase ?? this.deps.homeBase;
     const credentialEnv = homeBase && (await readProviderCredentialEnv(homeBase, provider));
-    recordProviderLoginRejected(provider as ProviderKind, credentialEnv || undefined, userId);
+    recordProviderLoginRejected(provider as ProviderKind, credentialEnv || undefined, cacheScope);
   }
 
   // ─── listProviderModels (#2208) — non-session; credential never crosses the socket ───

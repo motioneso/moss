@@ -871,6 +871,42 @@ describe("#2027 google (Gemini CLI) login adapter", () => {
   });
 });
 
+describe("provider runtime compatibility", () => {
+  it("keeps Anthropic and Google on the shared runtime, isolating Codex", async () => {
+    const f = makeLoginIo("https://auth.openai.com/codex/device\n4DUN-GY7Y3");
+    const isolatedHome = path.join(homeBase, "agents", "user-a");
+    const resolved: { provider: RpcProviderKind; userId: string }[] = [];
+    const probed: { provider: RpcProviderKind; homeBase?: string }[] = [];
+    const svc = new LoginService({
+      io: f.io,
+      adapters: LOGIN_ADAPTERS,
+      homeBase,
+      resolveUserRuntime: async (provider, userId) => {
+        resolved.push({ provider, userId });
+        return { userId, homeBase: isolatedHome, uid: 100001, gid: 100001, io: f.io };
+      },
+      probe: async (provider, opts) => {
+        probed.push({ provider, homeBase: opts?.runtime?.homeBase });
+        return { status: "needs_login" };
+      },
+      settleMs: 0
+    });
+
+    for (const provider of ["anthropic", "google", "openai-compatible"] as const) {
+      const loginId = svc.reserve(provider, "user-a");
+      await svc.start(loginId);
+      await svc.cancel(provider, loginId, "user-a");
+    }
+
+    expect(resolved).toEqual([{ provider: "openai-compatible", userId: "user-a" }]);
+    expect(probed).toEqual([
+      { provider: "anthropic", homeBase },
+      { provider: "google", homeBase },
+      { provider: "openai-compatible", homeBase: isolatedHome }
+    ]);
+  });
+});
+
 describe("#2027 google adapter validation against the catalog", () => {
   const googleCatalog = (status: "supported" | "blocked"): ProviderCatalog => ({
     anthropic: { provider: "anthropic", status: "blocked", blockedReason: "n/a here" },
