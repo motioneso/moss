@@ -1,35 +1,11 @@
-/**
- * §A.3 INSTALL SERVICE invariants (#342 Phase 2 — supply-chain core).
- *
- * Covers the frozen acceptance criteria (install-contract §A.7.4):
- *  - serialize-rejects-concurrent (§A.3.1): a second same-provider install while one is
- *    in flight ⇒ InstallBadRequestError ("install already in progress"); different
- *    providers may run concurrently.
- *  - catalog-status gate (§A.2.3): a blocked provider (agy) ⇒ InstallBadRequestError
- *    ("provider not installable: <reason>").
- *  - verify-before-promote (§A.3.4): nothing is placed on PATH until the binary exists,
- *    its resolved + --version equal the pinned version, and (codex/claude) the per-arch
- *    native package is present.
- *  - rollback-on-verify-fail (§A.3.5): a version mismatch / missing binary leaves no live
- *    install and returns {state:"error"}.
- *  - atomic-promote-only-after-verify: the live PATH bin appears ONLY after a successful
- *    verify; `current` resolves into releases/<rand>, never into .staging.
- *  - idempotent-noop (§A.3.6): a re-install of the already-pinned + byte-identical version
- *    is a no-op with alreadyInstalled:true (no re-promote).
- *  - --ignore-scripts asserted (§A.3.3): the npm invocation carries `ci` + `--ignore-scripts`.
- *  - sanitized installer env (§A.3.3): the installer env = §7.2 allowlist + registry/proxy
- *    ONLY; no app/DB/vault/RPC secret.
- *  - startup sweep (§A.3.2): clears orphaned `.staging/*` and GCs unreferenced releases.
- *  - kind:"env" self-update-disable reaches the LAUNCHED CLI env (§A.3.7, R6): NOT merely
- *    the allowlist.
- */
-
 import {
+  chmod,
   lstat,
   mkdtemp,
   mkdir,
   readFile,
   readlink,
+  rename,
   rm,
   stat,
   symlink,
@@ -40,6 +16,7 @@ import path from "node:path";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
 import type { TmuxIo } from "../../packages/ai/src/index.js";
+import type * as FsPromises from "node:fs/promises";
 import {
   InstallService,
   InstallBadRequestError,
@@ -52,7 +29,19 @@ import { createSanitizedTmuxIo } from "../../packages/cli-runner/src/runner-io.j
 import { resolveDefaultToolsPrefix } from "../../packages/cli-runner/src/tools-prefix.js";
 import type { RpcProviderKind } from "../../packages/chat/src/live/rpc-contract.js";
 
-// ─── A fake TmuxIo that simulates npm ci + --version + ls against a real temp tree ──
+const chmodFailure = vi.hoisted(() => ({ enabled: false }));
+vi.mock("node:fs/promises", async () => {
+  const actual = await vi.importActual<typeof FsPromises>("node:fs/promises");
+  return {
+    ...actual,
+    chmod: async (...args: Parameters<typeof actual.chmod>) => {
+      if (chmodFailure.enabled && String(args[0]).includes("/.staging/")) {
+        throw new Error("synthetic release permission failure");
+      }
+      return actual.chmod(...args);
+    }
+  };
+});
 
 interface FakeIoOptions {
   /** Version the simulated `npm ci` materializes + the binary's `--version` reports. */
@@ -61,33 +50,15 @@ interface FakeIoOptions {
   readonly probeVersion?: string;
   /** When set, `npm ci` fails (non-zero) to simulate an install failure. */
   readonly ciFails?: boolean;
-  /** When false, the simulated install leaves no executable binary (verify fail). */
   readonly produceBinary?: boolean;
-  /**
-   * When true (the default for claude), the simulated `bin/claude.exe` wrapper is a STUB that
-   * exits 1 with the "native binary not installed" error UNLESS the §A.1.3 placement step has
-   * symlinked the per-arch native binary over it — exactly the real claude@2.1.183 behaviour.
-   * The fake's `--version` probe therefore checks whether the wrapper resolves to the native
-   * binary (a symlink) before reporting the version.
-   */
   readonly stubWrapper?: boolean;
-  /**
-   * Which catalog provider is being installed. Decides the package name, the bin name and
-   * whether per-arch native packages exist — the simulated tree must match the real package
-   * or verify (§A.3.4) reads a shape the recipe never asked for. Defaults to `anthropic`.
-   */
   readonly provider?: RpcProviderKind;
 }
 
-/** The node_modules shape the fake `npm ci` materializes for a given provider. */
 interface FakePackageShape {
-  /** The published package name (must equal the recipe's `pkg` — verify reads its package.json). */
   readonly pkg: string;
-  /** Package-relative path of the file `.bin/<binName>` points at. */
   readonly wrapperRel: string;
-  /** The package's exposed command (must equal the recipe's `binary`). */
   readonly binName: string;
-  /** Per-arch native packages the lockfile pins (claude only; empty for a pure-JS package). */
   readonly archPackages: readonly string[];
 }
 
@@ -98,9 +69,6 @@ const FAKE_PACKAGE_SHAPES: Partial<Record<RpcProviderKind, FakePackageShape>> = 
     binName: "claude",
     archPackages: ["@anthropic-ai/claude-code-linux-x64", "@anthropic-ai/claude-code-linux-arm64"]
   },
-  // #2026: @google/gemini-cli ships ONE bundled JavaScript program (bin: { gemini:
-  // "bundle/gemini.js" }) and NO per-arch native packages, so the fake tree has no arch dirs
-  // and the wrapper is runnable straight out of `npm ci --ignore-scripts`.
   google: {
     pkg: "@google/gemini-cli",
     wrapperRel: "bundle/gemini.js",
@@ -115,9 +83,7 @@ interface RecordedRun {
   readonly env?: NodeJS.ProcessEnv;
 }
 
-/** Marker bytes the fake writes into the per-arch native binary file (§A.1.3 placement target). */
 const NATIVE_MARKER = "JARV1S_FAKE_NATIVE_CLAUDE_BINARY";
-/** Marker bytes the fake writes into a STUB `bin/claude.exe` wrapper (errors until replaced). */
 const STUB_MARKER = "claude native binary not installed";
 
 function makeFakeIo(opts: FakeIoOptions): { io: TmuxIo; runs: RecordedRun[] } {
@@ -129,8 +95,6 @@ function makeFakeIo(opts: FakeIoOptions): { io: TmuxIo; runs: RecordedRun[] } {
     run: async (cmd, args, runOpts) => {
       runs.push({ cmd, args: [...args], env: runOpts?.env });
 
-      // Simulate `npm ci --ignore-scripts --prefix <staging>`: materialize a node_modules
-      // tree with the pinned package + its per-arch native package + a .bin/<binary>.
       if (cmd === "npm" && args[0] === "ci") {
         if (opts.ciFails) return { code: 1, stdout: "", stderr: "npm ci boom" };
         const prefixIdx = args.indexOf("--prefix");
@@ -142,9 +106,6 @@ function makeFakeIo(opts: FakeIoOptions): { io: TmuxIo; runs: RecordedRun[] } {
           path.join(nm, pkg, "package.json"),
           JSON.stringify({ name: pkg, version: opts.installedVersion })
         );
-        // per-arch native packages present (the lockfile-pinned deps). Each ships the REAL
-        // native binary file `claude`, marked with NATIVE_MARKER so the fake --version probe
-        // can tell the (placed) native binary from the un-replaced stub wrapper.
         for (const archPkg of shape.archPackages) {
           const archDir = path.join(nm, archPkg);
           await mkdir(archDir, { recursive: true });
@@ -153,8 +114,6 @@ function makeFakeIo(opts: FakeIoOptions): { io: TmuxIo; runs: RecordedRun[] } {
         const binDir = path.join(nm, ".bin");
         await mkdir(binDir, { recursive: true });
         if (opts.produceBinary !== false) {
-          // The package's exposed bin (claude: bin/claude.exe; gemini: bundle/gemini.js). When
-          // stub, it is the ERROR STUB until §A.1.3 placement replaces it; else a plain runnable.
           const wrapper = path.join(nm, pkg, shape.wrapperRel);
           await writeFile(
             wrapper,
@@ -163,15 +122,11 @@ function makeFakeIo(opts: FakeIoOptions): { io: TmuxIo; runs: RecordedRun[] } {
               mode: 0o755
             }
           );
-          // npm's bin symlink, e.g. .bin/claude → ../@anthropic-ai/claude-code/bin/claude.exe.
           await symlink(path.join("..", pkg, shape.wrapperRel), path.join(binDir, shape.binName));
         }
         return { code: 0, stdout: "", stderr: "" };
       }
 
-      // Simulate `<bin> --version` (the §A.5 re-probe). For a stub-wrapper install, the wrapper
-      // ERRORS (exit 1) until the §A.1.3 placement step has replaced it with the native binary —
-      // detected by reading the file the path resolves to and checking for NATIVE_MARKER.
       if (args.length === 1 && args[0] === "--version") {
         if (opts.stubWrapper) {
           let resolved: string;
@@ -188,7 +143,6 @@ function makeFakeIo(opts: FakeIoOptions): { io: TmuxIo; runs: RecordedRun[] } {
         return { code: 0, stdout: `${v}\n`, stderr: "" };
       }
 
-      // `ls -A <dir>` for GC / sweep — defer to the real fs.
       if (cmd === "ls") {
         const dir = args[args.length - 1] as string;
         try {
@@ -234,9 +188,6 @@ const GEMINI_PINNED =
   PROVIDER_CATALOG.google.recipe?.kind === "npm" ? PROVIDER_CATALOG.google.recipe.version : "0.0.0";
 
 describe("InstallService — catalog gate (§A.2.3)", () => {
-  // #2026 made google installable, so the gate can no longer be proved with whichever real
-  // provider happens to be blocked today. Drive it from a FIXTURE catalog instead: the gate
-  // itself keeps its coverage no matter what the real catalog says.
   it("rejects a provider the catalog marks blocked, with InstallBadRequestError", async () => {
     const blockedCatalog = {
       ...PROVIDER_CATALOG,
@@ -280,15 +231,11 @@ describe("InstallService — google/Gemini pinned recipe (#2026)", () => {
     expect(result.version).toBe(GEMINI_PINNED);
     expect(result.binaryChanged).toBe(true);
 
-    // §A.3.3: lifecycle scripts never run, and it is `ci` against the committed lockfile —
-    // never a bare `npm install`, which would resolve fresh bytes and defeat the pin.
     const ci = runs.find((r) => r.cmd === "npm" && r.args[0] === "ci");
     expect(ci).toBeDefined();
     expect(ci?.args).toContain("--ignore-scripts");
     expect(ci?.args).not.toContain("install");
 
-    // The promoted command is `gemini` — the package ships no `agy` command, so a recipe that
-    // named `agy` would leave nothing on PATH here.
     const binStat = await stat(path.join(toolsPrefix, "bin", "gemini"));
     expect(binStat.isFile() || binStat.isSymbolicLink?.() || true).toBe(true);
     const current = await readlink(path.join(toolsPrefix, "providers", "google", "current"));
@@ -297,9 +244,6 @@ describe("InstallService — google/Gemini pinned recipe (#2026)", () => {
   });
 
   it("writes the settings file that turns the tool's own self-update off (§A.3.7)", async () => {
-    // Gemini replaces itself by spawning a global npm install of a newer version, which would
-    // swap the pinned bytes. Both `general` switches must be written false under the runner's
-    // HOME; either one left true reopens that path.
     const { io } = makeFakeIo({ installedVersion: GEMINI_PINNED, provider: "google" });
     const svc = new InstallService({
       io,
@@ -320,7 +264,6 @@ describe("InstallService — google/Gemini pinned recipe (#2026)", () => {
   });
 
   it("refuses to promote when the installed gemini reports a version other than the pin", async () => {
-    // §A.3.4/§A.3.5: a drifted tool never reaches PATH.
     const { io } = makeFakeIo({
       installedVersion: GEMINI_PINNED,
       probeVersion: "99.99.99",
@@ -363,15 +306,12 @@ describe("InstallService — npm install happy path (§A.3.3/§A.3.4/§A.3.5)", 
     expect(ci?.args).toContain("--ignore-scripts");
     expect(ci?.args).not.toContain("install"); // never a bare `npm install`
 
-    // §A.3.5: the live PATH bin exists and `current` resolves into releases/<rand>,
-    // NEVER into .staging.
     const binStat = await stat(path.join(toolsPrefix, "bin", "claude"));
     expect(binStat.isFile() || binStat.isSymbolicLink?.() || true).toBe(true);
     const current = await readlink(path.join(toolsPrefix, "providers", "anthropic", "current"));
     expect(current).toMatch(/^releases\//);
     expect(current).not.toContain(".staging");
 
-    // §A.3.2: the ephemeral staging scratch is emptied on success.
     const stagingRoot = path.join(toolsPrefix, ".staging");
     const stagingEntries = await import("node:fs/promises").then((m) =>
       m.readdir(stagingRoot).catch(() => [] as string[])
@@ -382,9 +322,6 @@ describe("InstallService — npm install happy path (§A.3.3/§A.3.4/§A.3.5)", 
 
 describe("InstallService — §A.1.3 explicit native-binary placement (stub wrapper)", () => {
   it("symlinks the per-arch native binary over the stub wrapper before verify → claude --version passes", async () => {
-    // Mirror real claude@2.1.183: bin/claude.exe is a STUB that errors until the per-arch
-    // native binary is placed over it. The recipe carries archBinaryPlacement, so the install
-    // service must place it; otherwise the stub's --version (exit 1) fails verify.
     const { io } = makeFakeIo({ installedVersion: PINNED, stubWrapper: true });
     const svc = new InstallService({
       io,
@@ -398,8 +335,6 @@ describe("InstallService — §A.1.3 explicit native-binary placement (stub wrap
     expect(result.state).toBe("installed");
     expect(result.version).toBe(PINNED);
 
-    // The promoted wrapper is now a SYMLINK pointing at the per-arch native binary (not the
-    // 233MB-stub file), inside the release lane.
     const current = await readlink(path.join(toolsPrefix, "providers", "anthropic", "current"));
     const releaseDir = path.join(toolsPrefix, "providers", "anthropic", current);
     const wrapper = path.join(
@@ -412,7 +347,6 @@ describe("InstallService — §A.1.3 explicit native-binary placement (stub wrap
     );
     const wrapperLink = await readlink(wrapper);
     expect(wrapperLink).toMatch(/claude-code-linux-x64\/claude$/);
-    // The resolved bytes are the native binary, not the stub.
     const { readFile } = await import("node:fs/promises");
     expect(await readFile(wrapper, "utf8")).toContain(NATIVE_MARKER);
   });
@@ -457,7 +391,6 @@ describe("InstallService — §A.1.3 explicit native-binary placement (stub wrap
 
 describe("InstallService — verify-before-promote + rollback (§A.3.4/§A.3.5)", () => {
   it("a --version mismatch is a verify failure → state:error, nothing on PATH", async () => {
-    // The simulated binary reports a DIFFERENT version than the pinned recipe.
     const { io } = makeFakeIo({ installedVersion: PINNED, probeVersion: "9.9.9-wrong" });
     const svc = new InstallService({
       io,
@@ -559,7 +492,6 @@ describe("InstallService — idempotent re-install (§A.3.6)", () => {
     // explicitly false (not merely falsy/omitted), so callers can safely branch on it.
     expect(second.binaryChanged).toBe(false);
 
-    // No second `npm ci` ran — the no-op did not re-stage/re-promote.
     const ciCountAfterSecond = runs.filter((r) => r.cmd === "npm" && r.args[0] === "ci").length;
     expect(ciCountAfterSecond).toBe(ciCountAfterFirst);
   });
@@ -635,7 +567,6 @@ describe("InstallService — boot-time reconcile of installed providers (#1081 H
   });
 
   it("leaves a NEVER-installed provider completely untouched (not a fresh install)", async () => {
-    // Fresh toolsPrefix/homeBase — nothing installed for ANY provider yet.
     const { io } = makeFakeIo({ installedVersion: PINNED });
     const svc = new InstallService({
       io,
@@ -668,11 +599,207 @@ describe("InstallService — startup sweep (§A.3.2)", () => {
     const svc = new InstallService({ io, catalog: PROVIDER_CATALOG, toolsPrefix, homeBase });
     await svc.startupSweep();
 
-    // .staging is gone entirely.
     await expect(stat(path.join(toolsPrefix, ".staging"))).rejects.toBeTruthy();
     // the referenced release survives, the orphan is GC'd.
     await expect(stat(path.join(releasesDir, "keep"))).resolves.toBeTruthy();
     await expect(stat(path.join(releasesDir, "orphan"))).rejects.toBeTruthy();
+  });
+});
+
+describe("InstallService — shared release permissions", () => {
+  it("publishes npm release roots as traversable but non-writable by isolated users", async () => {
+    const { io } = makeFakeIo({ installedVersion: PINNED });
+    const svc = new InstallService({
+      io,
+      catalog: PROVIDER_CATALOG,
+      toolsPrefix,
+      homeBase,
+      hostArch: "x64"
+    });
+
+    const result = await svc.installProvider("anthropic");
+    expect(result.state).toBe("installed");
+
+    const providerDir = path.join(toolsPrefix, "providers", "anthropic");
+    const current = await readlink(path.join(providerDir, "current"));
+    const release = path.resolve(providerDir, current);
+    expect((await stat(release)).mode & 0o777).toBe(0o755);
+  });
+
+  it("replaces a same-hash legacy release instead of accepting it as a no-op", async () => {
+    const { io, runs } = makeFakeIo({ installedVersion: PINNED });
+    const svc = new InstallService({
+      io,
+      catalog: PROVIDER_CATALOG,
+      toolsPrefix,
+      homeBase,
+      hostArch: "x64"
+    });
+
+    await svc.installProvider("anthropic");
+    const providerDir = path.join(toolsPrefix, "providers", "anthropic");
+    const legacyTarget = await readlink(path.join(providerDir, "current"));
+    await chmod(path.resolve(providerDir, legacyTarget), 0o700);
+
+    const result = await svc.installProvider("anthropic");
+    expect(result.state).toBe("installed");
+    expect(result.alreadyInstalled).toBeUndefined();
+    expect(result.binaryChanged).toBe(true);
+    expect(runs.filter((r) => r.cmd === "npm" && r.args[0] === "ci")).toHaveLength(2);
+    expect(await readlink(path.join(providerDir, "current"))).not.toBe(legacyTarget);
+  });
+
+  it("repairs a legacy release through startup reconciliation in a fresh service", async () => {
+    const first = makeFakeIo({ installedVersion: PINNED });
+    const svc1 = new InstallService({
+      io: first.io,
+      catalog: PROVIDER_CATALOG,
+      toolsPrefix,
+      homeBase,
+      hostArch: "x64"
+    });
+    await svc1.installProvider("anthropic");
+
+    const providerDir = path.join(toolsPrefix, "providers", "anthropic");
+    const legacyTarget = await readlink(path.join(providerDir, "current"));
+    await chmod(path.resolve(providerDir, legacyTarget), 0o700);
+
+    const second = makeFakeIo({ installedVersion: PINNED });
+    const svc2 = new InstallService({
+      io: second.io,
+      catalog: PROVIDER_CATALOG,
+      toolsPrefix,
+      homeBase,
+      hostArch: "x64"
+    });
+    await svc2.startupSweep();
+    await svc2.reconcileInstalledProviders();
+
+    expect(await readlink(path.join(providerDir, "current"))).not.toBe(legacyTarget);
+    expect(second.runs.filter((r) => r.cmd === "npm" && r.args[0] === "ci")).toHaveLength(1);
+    const repaired = await readlink(path.join(providerDir, "current"));
+    expect((await stat(path.resolve(providerDir, repaired))).mode & 0o777).toBe(0o755);
+  });
+
+  it("does not accept a release-root symlink as a healthy published release", async () => {
+    const { io, runs } = makeFakeIo({ installedVersion: PINNED });
+    const svc = new InstallService({
+      io,
+      catalog: PROVIDER_CATALOG,
+      toolsPrefix,
+      homeBase,
+      hostArch: "x64"
+    });
+    await svc.installProvider("anthropic");
+
+    const providerDir = path.join(toolsPrefix, "providers", "anthropic");
+    const current = await readlink(path.join(providerDir, "current"));
+    const release = path.resolve(providerDir, current);
+    const moved = release + "-target";
+    await rename(release, moved);
+    await symlink(path.basename(moved), release);
+
+    const result = await svc.installProvider("anthropic");
+    expect(result.state).toBe("installed");
+    expect(result.binaryChanged).toBe(true);
+    expect(runs.filter((r) => r.cmd === "npm" && r.args[0] === "ci")).toHaveLength(2);
+  });
+
+  it("reinstalls when the current release is missing or has nonconforming permissions", async () => {
+    const { io, runs } = makeFakeIo({ installedVersion: PINNED });
+    const svc = new InstallService({
+      io,
+      catalog: PROVIDER_CATALOG,
+      toolsPrefix,
+      homeBase,
+      hostArch: "x64"
+    });
+    await svc.installProvider("anthropic");
+    const providerDir = path.join(toolsPrefix, "providers", "anthropic");
+    const firstTarget = await readlink(path.join(providerDir, "current"));
+    await rm(path.resolve(providerDir, firstTarget), { recursive: true, force: true });
+    await svc.installProvider("anthropic");
+    const secondTarget = await readlink(path.join(providerDir, "current"));
+    await chmod(path.resolve(providerDir, secondTarget), 0o750);
+    const result = await svc.installProvider("anthropic");
+    expect(result.state).toBe("installed");
+    expect(result.binaryChanged).toBe(true);
+    expect(runs.filter((r) => r.cmd === "npm" && r.args[0] === "ci")).toHaveLength(3);
+  });
+  it("does not publish when release permission hardening fails", async () => {
+    const { io } = makeFakeIo({ installedVersion: PINNED });
+    const svc = new InstallService({
+      io,
+      catalog: PROVIDER_CATALOG,
+      toolsPrefix,
+      homeBase,
+      hostArch: "x64"
+    });
+    const first = await svc.installProvider("anthropic");
+    expect(first.state).toBe("installed");
+    const providerDir = path.join(toolsPrefix, "providers", "anthropic");
+    const priorTarget = await readlink(path.join(providerDir, "current"));
+    const priorBytes = await readFile(path.join(toolsPrefix, "bin", "claude"));
+    await chmod(path.resolve(providerDir, priorTarget), 0o700);
+    chmodFailure.enabled = true;
+    const result = await svc.installProvider("anthropic");
+    chmodFailure.enabled = false;
+    expect(result.state).toBe("error");
+    expect(await readlink(path.join(providerDir, "current"))).toBe(priorTarget);
+    expect(await readFile(path.join(toolsPrefix, "bin", "claude"))).toEqual(priorBytes);
+  });
+  it("continues startup reconciliation after one provider install fails", async () => {
+    const catalog = {
+      anthropic: PROVIDER_CATALOG.anthropic,
+      google: PROVIDER_CATALOG.google
+    } as typeof PROVIDER_CATALOG;
+    const anthropic = makeFakeIo({ installedVersion: PINNED });
+    const google = makeFakeIo({ installedVersion: GEMINI_PINNED, provider: "google" });
+    const io: TmuxIo = {
+      ...anthropic.io,
+      run: async (cmd, args, opts) => {
+        const staging = args[args.indexOf("--prefix") + 1] as string | undefined;
+        return staging?.includes("/google-") || cmd.includes("/google-")
+          ? google.io.run(cmd, args, opts)
+          : anthropic.io.run(cmd, args, opts);
+      }
+    };
+    const first = new InstallService({ io, catalog, toolsPrefix, homeBase, hostArch: "x64" });
+    await first.installProvider("anthropic");
+    const googleResult = await first.installProvider("google");
+    expect(googleResult.state, JSON.stringify(googleResult)).toBe("installed");
+    const anthropicDir = path.join(toolsPrefix, "providers", "anthropic");
+    const googleDir = path.join(toolsPrefix, "providers", "google");
+    const anthropicTarget = await readlink(path.join(anthropicDir, "current"));
+    const googleTarget = await readlink(path.join(googleDir, "current"));
+    await chmod(path.resolve(anthropicDir, anthropicTarget), 0o700);
+    const failingAnthropic: TmuxIo = {
+      ...io,
+      run: async (cmd, args, opts) => {
+        const staging = args[args.indexOf("--prefix") + 1] as string | undefined;
+        if (cmd === "npm" && staging?.includes("/anthropic-")) {
+          return { code: 1, stdout: "", stderr: "synthetic provider failure" };
+        }
+        return io.run(cmd, args, opts);
+      }
+    };
+    const second = new InstallService({
+      io: failingAnthropic,
+      catalog,
+      toolsPrefix,
+      homeBase,
+      hostArch: "x64"
+    });
+    const installSpy = vi.spyOn(second, "installProvider");
+    await second.reconcileInstalledProviders();
+    const anthropicResult = await (installSpy.mock.results[
+      installSpy.mock.calls.findIndex(([provider]) => provider === "anthropic")
+    ]!.value as Promise<{
+      state: string;
+    }>);
+    expect(anthropicResult.state).toBe("error");
+    expect(await readlink(path.join(anthropicDir, "current"))).toBe(anthropicTarget);
+    expect(await readlink(path.join(googleDir, "current"))).not.toBe(googleTarget);
   });
 });
 

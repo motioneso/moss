@@ -221,7 +221,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "default, with a status line reading 'On, using Brave', 'On, using each person's chat " +
       "model', or 'Off. Add a Brave key or turn on built-in search.' A Brave Search API key " +
       "field below it is described as giving consistent results for every model, including " +
-      "local ones.",
+      "local ones. Shared CLI software is usable by separate Moss accounts; runner startup " +
+      "automatically repairs the older installation-directory permission defect using the pinned " +
+      "version, so users need no reinstall action. Codex sign-in remains administrator-only for " +
+      "the same account.",
     path: "/settings?section=aiproviders",
     scope: "admin"
   },
