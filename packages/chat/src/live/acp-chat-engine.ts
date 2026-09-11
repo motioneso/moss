@@ -540,10 +540,7 @@ export class AcpChatEngine implements CliChatEngine {
       if (isAuthRequired(error)) {
         this.reportLoginRejected();
         await this.closeQuietly();
-        throw new CliChatUnavailableError(
-          `The ${providerLabel(kind)} sign-in has expired; an admin can log it in again under Settings, Assistant & AI`,
-          { cause: error }
-        );
+        throw new CliChatUnavailableError(authFailureMessage(kind), { cause: error });
       }
       await this.closeQuietly();
       throw error;
@@ -586,7 +583,7 @@ export class AcpChatEngine implements CliChatEngine {
         if (isAuthRequired(error)) {
           this.reportLoginRejected();
           this.promptError = new CliChatUnavailableError(
-            `The ${providerLabel(toAcpProviderKind(this.provider))} sign-in has expired; an admin can log it in again under Settings, Assistant & AI`,
+            authFailureMessage(toAcpProviderKind(this.provider)),
             { cause: error }
           );
         } else {
@@ -714,6 +711,13 @@ function providerLabel(kind: AcpProviderKind): string {
     default:
       return "Google";
   }
+}
+
+function authFailureMessage(kind: AcpProviderKind): string {
+  if (kind === "openai") {
+    return "Codex is not signed in for this account. Sign-in is currently available only to administrators in Settings, Assistant & AI, using this same Moss account.";
+  }
+  return `The ${providerLabel(kind)} sign-in has expired; an admin can log it in again under Settings, Assistant & AI`;
 }
 
 function stopReasonText(reason: string, cancelled: boolean): string {

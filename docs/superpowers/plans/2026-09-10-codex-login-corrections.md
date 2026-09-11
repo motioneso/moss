@@ -63,6 +63,8 @@ Files: `packages/cli-runner/src/agent-home-prepare.mjs`, `acp-codex-auth.ts` as 
 
 Acceptance: table-driven actual preparation cases cover missing file, `{broken`, `null`, `[]`, `{}`, missing tokens, empty values, valid login, permission denial and both parent/file symlinks. Assert the classifications and absence of synthetic secret fragments in errors. Chat launch and prompt failures use the same truthful Codex remediation. Existing admin gates still reject ordinary-user login requests before any state write or runner call.
 
+Task 4 final scope: missing or malformed Codex credentials use the fixed runner-home login-required classification; provider rejections retain their separate remediation, and the administrator-only Codex Settings surface is described without implying ordinary-user recovery.
+
 ## Required checks and report
 
 Builder adds ONE shared executable `scripts/check-codex-login-isolation.ts` for the production-UID regression cases above. It uses only temporary synthetic state, actual production modules and mocked providers/tmux. It must fail if started without the expected disposable-container setup; no skip-as-pass. Reuse the fixture pattern from `/tmp/acp-review-95b-proof.mts`, but reverse its old assertions: that scratch file proves the defects and is not an acceptance test. Do not overwrite the original reviewer evidence.

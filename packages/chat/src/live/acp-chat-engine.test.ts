@@ -22,6 +22,8 @@ class PromptErrorTunnel implements AcpTunnel {
   private killed = false;
   private waiting: (() => void) | null = null;
 
+  constructor(private readonly failOnSessionNew = false) {}
+
   async spawn() {
     return { cwd: "/tmp/acp", home: "/tmp/home", pid: 1, uid: 1, gid: 1 };
   }
@@ -46,7 +48,15 @@ class PromptErrorTunnel implements AcpTunnel {
         }
       });
     } else if (message.method === "session/new") {
-      this.emit({ jsonrpc: "2.0", id: message.id, result: { sessionId: "session-1" } });
+      this.emit(
+        this.failOnSessionNew
+          ? {
+              jsonrpc: "2.0",
+              id: message.id,
+              error: { code: -32000, message: "Authentication required" }
+            }
+          : { jsonrpc: "2.0", id: message.id, result: { sessionId: "session-1" } }
+      );
     } else if (message.method === "session/prompt") {
       this.emit({
         jsonrpc: "2.0",
@@ -259,6 +269,34 @@ describe("AcpChatEngine", () => {
       "session/prompt"
     ]);
     await engine.kill();
+  });
+
+  it("uses the truthful Codex remediation for launch and prompt auth failures", async () => {
+    const expected =
+      "Codex is not signed in for this account. Sign-in is currently available only to administrators in Settings, Assistant & AI, using this same Moss account.";
+
+    const launchFailure = new AcpChatEngine("openai-compatible", "chat:u1:launch", {
+      tunnel: new PromptErrorTunnel(true),
+      userId: "u1",
+      projectId: "launch"
+    });
+    await expect(
+      launchFailure.launch({ neutralDir: "/tmp/acp", personaPath: "/tmp/acp/persona.md" })
+    ).rejects.toMatchObject({ name: "CliChatUnavailableError", message: expected });
+
+    const promptFailure = new AcpChatEngine("openai-compatible", "chat:u1:prompt", {
+      tunnel: new PromptErrorTunnel(),
+      userId: "u1",
+      projectId: "prompt"
+    });
+    await promptFailure.launch({ neutralDir: "/tmp/acp", personaPath: "/tmp/acp/persona.md" });
+    await promptFailure.submit("hello");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await expect(promptFailure.readNew(0)).rejects.toMatchObject({
+      name: "CliChatUnavailableError",
+      message: expected
+    });
+    await promptFailure.kill();
   });
 
   it("declares that its own kill path purges private data, needing no API-side purge call", async () => {

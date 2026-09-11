@@ -980,11 +980,11 @@ describe("not-ready rows refuse at the launcher", () => {
         allocateUidSlot: selfSlot,
         resolveAdapterTarget: () => ({ command: "/fake/node", args: ["/fake/adapter.js"] }),
         runAgentHomePrepare: async () => {
-          throw new Error("missing Codex login");
+          throw new Error("Not logged in (no usable Codex credential in your runner home)");
         }
       });
       await expect(host.spawn("chat:user-1:a", "proj", "openai", "user-1", "chat")).rejects.toThrow(
-        /missing Codex login/
+        /Not logged in \(no usable Codex credential in your runner home\)/
       );
       expect(existsSync(join(home, "uid-slots.json"))).toBe(false);
     } finally {

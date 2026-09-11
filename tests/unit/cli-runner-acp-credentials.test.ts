@@ -14,15 +14,77 @@ import { describe, expect, it } from "vitest";
 import { codexAuthPath } from "../../packages/cli-runner/src/acp-codex-auth.js";
 
 const scriptPath = join(process.cwd(), "packages/cli-runner/src/agent-home-prepare.mjs");
+const loginRequired = "Not logged in (no usable Codex credential in your runner home)";
 
 function requestFor(source: string) {
-  return [
-    scriptPath,
-    JSON.stringify({ dirs: [join(source, "agents", "user-1", ".codex")], denyFile: null })
-  ];
+  return [scriptPath, requestPayloadFor(source)];
+}
+
+function requestPayloadFor(source: string) {
+  return JSON.stringify({ dirs: [join(source, "agents", "user-1", ".codex")], denyFile: null });
+}
+
+function expectOperationalPermissionFailure(result: ReturnType<typeof spawnSync>) {
+  expect(result.status).not.toBe(0);
+  expect(result.stderr ?? "").toMatch(/\b(?:EACCES|EPERM)\b/);
+  expect(result.stderr ?? "").not.toContain(loginRequired);
 }
 
 describe("ACP Codex credential boundary", () => {
+  it.each([
+    ["missing file", undefined],
+    ["invalid JSON", "{broken"],
+    ["JSON null", "null"],
+    ["JSON array", "[]"],
+    ["empty object", "{}"],
+    ["missing access token", JSON.stringify({ tokens: { account_id: "account" } })],
+    ["missing account id", JSON.stringify({ tokens: { access_token: "token" } })],
+    ["empty access token", JSON.stringify({ tokens: { access_token: "", account_id: "account" } })],
+    ["empty account id", JSON.stringify({ tokens: { access_token: "token", account_id: "" } })],
+    [
+      "non-string access token",
+      JSON.stringify({ tokens: { access_token: 42, account_id: "account" } })
+    ],
+    ["non-string account id", JSON.stringify({ tokens: { access_token: "token", account_id: 42 } })]
+  ])("classifies %s as login required without echoing credential data", (_label, content) => {
+    const home = mkdtempSync(join(tmpdir(), "acp-credentials-"));
+    const source = codexAuthPath(home, "user-1");
+    try {
+      mkdirSync(join(home, "agents", "user-1", ".codex"), { recursive: true });
+      if (content !== undefined) writeFileSync(source, content, { mode: 0o600 });
+      const result = spawnSync(process.execPath, requestFor(home), {
+        encoding: "utf8",
+        input: JSON.stringify([{ path: source, sourcePath: source, kind: "codex-auth" }])
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain(loginRequired);
+      expect(result.stderr).not.toContain("synthetic-secret");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts a usable credential and preserves its fixed error-free path", () => {
+    const home = mkdtempSync(join(tmpdir(), "acp-credentials-"));
+    const source = codexAuthPath(home, "user-1");
+    try {
+      mkdirSync(join(home, "agents", "user-1", ".codex"), { recursive: true });
+      writeFileSync(
+        source,
+        JSON.stringify({ tokens: { access_token: "synthetic-secret", account_id: "account" } }),
+        { mode: 0o600 }
+      );
+      const result = spawnSync(process.execPath, requestFor(home), {
+        encoding: "utf8",
+        input: JSON.stringify([{ path: source, sourcePath: source, kind: "codex-auth" }])
+      });
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe("");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it("does not treat a shared-home credential as an isolated user's login", () => {
     const home = mkdtempSync(join(tmpdir(), "acp-credentials-"));
     try {
@@ -43,6 +105,7 @@ describe("ACP Codex credential boundary", () => {
         ])
       });
       expect(result.status).not.toBe(0);
+      expect(result.stderr ?? "").toContain(loginRequired);
       expect(result.stderr ?? "").not.toContain("shared");
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -111,9 +174,30 @@ describe("ACP Codex credential boundary", () => {
         ...(runAsWrongUid ? { uid: 65534, gid: 65534 } : {})
       });
       expect(result.error).toBeUndefined();
-      expect(result.status).not.toBe(0);
+      expectOperationalPermissionFailure(result);
       expect(result.stdout ?? "").not.toContain("owner-only");
       expect(result.stderr ?? "").not.toContain("owner-only");
+
+      const mutatedSource = readFileSync(scriptPath, "utf8").replaceAll(
+        'if (error?.code === "ENOENT") {',
+        'if (error?.code === "ENOENT" || error?.code === "EACCES" || error?.code === "EPERM") {'
+      );
+      const mutatedResult = spawnSync(
+        process.execPath,
+        [
+          "--input-type=module",
+          "-e",
+          `await import("data:text/javascript," + encodeURIComponent(${JSON.stringify(mutatedSource)}));`,
+          "mutation-runner",
+          requestPayloadFor(home)
+        ],
+        {
+          encoding: "utf8",
+          input: JSON.stringify([{ path: source, sourcePath: source, kind: "codex-auth" }])
+        }
+      );
+      expect(mutatedResult.stderr ?? "").toContain(loginRequired);
+      expect(() => expectOperationalPermissionFailure(mutatedResult)).toThrow();
     } finally {
       chmodSync(join(home, "agents", "user-1"), 0o700);
       rmSync(home, { recursive: true, force: true });

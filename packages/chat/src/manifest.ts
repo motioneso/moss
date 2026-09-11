@@ -115,20 +115,22 @@ export const chatModuleManifest = {
     {
       id: "chat.acp_sign_in_expired",
       description:
-        "Shows when the provider sign-in has expired and explains how an admin can restore it.",
+        "Shows when a provider rejects its sign-in and explains the provider-specific recovery path.",
       featureFlagId: "chat.module",
       errors: [
         {
           code: "chat.acp_sign_in_expired",
           class: "prerequisite",
           remediationRef: "chat.acp_sign_in_expired.settings",
-          description: "The provider sign-in has expired."
+          description:
+            "The provider rejected its sign-in; this is distinct from a missing or malformed Codex runner credential."
         }
       ],
       remediations: [
         {
           id: "chat.acp_sign_in_expired.settings",
-          description: "An admin can log the provider in again under Settings, Assistant & AI.",
+          description:
+            "For Codex, an administrator signs in under Settings, Assistant & AI using the same Moss account; other providers keep their existing sign-in path.",
           path: "/settings?section=aiproviders"
         }
       ]

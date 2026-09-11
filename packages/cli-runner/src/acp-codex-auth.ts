@@ -1,10 +1,12 @@
-import { O_NOFOLLOW, O_RDONLY } from "node:constants";
+import { O_NOFOLLOW, O_NONBLOCK, O_RDONLY } from "node:constants";
 import { lstat, open, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { TmuxIo } from "@moss/ai";
 
 export type CodexAuthFileReader = (path: string) => Promise<string>;
+
+const CODEX_LOGIN_REQUIRED = "Not logged in (no usable Codex credential in your runner home)";
 
 const OWNER_READ_SCRIPT = `
 const fs = require("node:fs");
@@ -30,8 +32,8 @@ try {
   } finally {
     fs.closeSync(fd);
   }
-} catch {
-  process.exitCode = 1;
+} catch (error) {
+  process.exitCode = error && typeof error === "object" && error.code === "ENOENT" ? 2 : 1;
 }
 `;
 
@@ -45,6 +47,7 @@ export function createCodexAuthFileReader(runtime: {
   return async (path: string): Promise<string> => {
     if (path !== expectedPath) throw new Error("Codex credential path is outside the runtime home");
     const result = await runtime.io.run(process.execPath, ["-e", OWNER_READ_SCRIPT, expectedPath]);
+    if (result.code === 2) throw new Error("missing Codex login");
     if (result.code !== 0) throw new Error("Codex credential could not be read by its owner");
     return result.stdout;
   };
@@ -77,8 +80,9 @@ async function assertRealPath(path: string): Promise<void> {
 
 async function readRealFile(path: string): Promise<string> {
   await assertRealPath(path);
-  const handle = await open(path, O_RDONLY | O_NOFOLLOW);
+  const handle = await open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
   try {
+    if (!(await handle.stat()).isFile()) throw new Error("non-regular Codex login");
     return await handle.readFile("utf8");
   } finally {
     await handle.close();
@@ -94,21 +98,31 @@ export async function readCodexAuthFile(
   try {
     const path = codexAuthPath(homeBase, userId);
     const raw = read === defaultReadCodexAuthFile ? await readRealFile(path) : await read(path);
-    const parsed = JSON.parse(raw) as {
-      tokens?: { access_token?: unknown; account_id?: unknown };
-    };
+    let parsed: { tokens?: { access_token?: unknown; account_id?: unknown } };
+    try {
+      parsed = JSON.parse(raw) as {
+        tokens?: { access_token?: unknown; account_id?: unknown };
+      };
+    } catch {
+      throw new Error(CODEX_LOGIN_REQUIRED);
+    }
     if (
       typeof parsed.tokens?.access_token !== "string" ||
       parsed.tokens.access_token.length === 0 ||
       typeof parsed.tokens.account_id !== "string" ||
       parsed.tokens.account_id.length === 0
     ) {
-      throw new Error("missing Codex login");
+      throw new Error(CODEX_LOGIN_REQUIRED);
     }
     return raw;
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (message === "symlinked Codex login" || message.includes("permission")) throw error;
-    throw new Error("Not logged in (no Codex credential in runner home)", { cause: error });
+    if (message === CODEX_LOGIN_REQUIRED) throw error;
+    if (message === "missing Codex login" || (error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(CODEX_LOGIN_REQUIRED, {
+        cause: error
+      });
+    }
+    throw error;
   }
 }
