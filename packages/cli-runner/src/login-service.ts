@@ -104,6 +104,8 @@ export interface LoginUserRuntime {
   readonly uid: number;
   readonly gid: number;
   readonly io: TmuxIo;
+  /** Owner-switched reader for the Codex credential in this runtime's home. */
+  readonly readCodexAuthFile?: (path: string) => Promise<string>;
 }
 
 const DEFAULT_HOME_BASE = "/data/cli-auth";

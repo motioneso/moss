@@ -34,10 +34,12 @@ import { readProviderCredentialEnv } from "./provider-token-store.js";
 import { LoginService, type LoginUserRuntime } from "./login-service.js";
 import { createSanitizedTmuxIo } from "./runner-io.js";
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
+import { buildSetprivDropCommand } from "./setpriv.js";
 import { CliRunnerServer } from "./server.js";
 import { TerminalHost } from "./terminal-host.js";
 import { ensureOwnedTopLevel, prepareOwnedPathWithOwnership } from "./owned-fs.js";
 import { allocateUidSlot } from "./uid-allocator.js";
+import { createCodexAuthFileReader } from "./acp-codex-auth.js";
 
 export interface CliRunnerConfig {
   readonly socketPath: string;
@@ -171,6 +173,37 @@ export function sourceSelfUpdateDisableEnv(
   return set;
 }
 
+/** Resolve one isolated login runtime with owner-switched commands and credential reads. */
+export async function resolveIsolatedUserRuntime(
+  config: Pick<CliRunnerConfig, "perUserUid" | "homeBase">,
+  userId: string
+): Promise<LoginUserRuntime> {
+  if (!config.perUserUid) {
+    throw new Error("per-user CLI isolation is disabled; refusing shared-home login");
+  }
+  const slot = allocateUidSlot(config.homeBase, userId);
+  const agentsParent = (await prepareOwnedPathWithOwnership(config.homeBase, userId, ["agents"], 1))
+    .path;
+  const agentHome = (await ensureOwnedTopLevel(userId, agentsParent, userId, slot.uid, slot.gid))
+    .path;
+  const baseIo = createSanitizedTmuxIo(buildCliRunnerChildEnv({ homeBase: agentHome }));
+  const io: LoginUserRuntime["io"] = {
+    ...baseIo,
+    run: async (command, args, opts) => {
+      const dropped = buildSetprivDropCommand(command, args, slot);
+      return baseIo.run(dropped.command, dropped.args, { env: opts?.env });
+    }
+  };
+  return {
+    userId,
+    homeBase: agentHome,
+    uid: slot.uid,
+    gid: slot.gid,
+    io,
+    readCodexAuthFile: createCodexAuthFileReader({ homeBase: agentHome, userId, io })
+  };
+}
+
 /** Construct the engine host + server from config (no I/O until `server.start()`). */
 export function createCliRunner(
   config: CliRunnerConfig,
@@ -209,24 +242,8 @@ export function createCliRunner(
   // (§L.6.2), and detects completion via the SAME §4.8 probe. Its adapters are the validated
   // login allowlist (§L.1.3, consistency-checked against the install catalog). It participates
   // in the host's §L.6.1 unified exclusivity gate (login ⟂ chat).
-  const resolveUserRuntime = async (userId: string): Promise<LoginUserRuntime> => {
-    if (!config.perUserUid) {
-      throw new Error("per-user CLI isolation is disabled; refusing shared-home login");
-    }
-    const slot = allocateUidSlot(config.homeBase, userId);
-    const agentsParent = (
-      await prepareOwnedPathWithOwnership(config.homeBase, userId, ["agents"], 1)
-    ).path;
-    const agentHome = (await ensureOwnedTopLevel(userId, agentsParent, userId, slot.uid, slot.gid))
-      .path;
-    return {
-      userId,
-      homeBase: agentHome,
-      uid: slot.uid,
-      gid: slot.gid,
-      io: createSanitizedTmuxIo(process.env, slot)
-    };
-  };
+  const resolveUserRuntime = (userId: string): Promise<LoginUserRuntime> =>
+    resolveIsolatedUserRuntime(config, userId);
   // #2242 (round 3): read once per runner process, as the model-list path does — the real
   // vendor request needs the installed tool's version or the answer comes back empty.
   const readCodexVersionOnce = createCodexVersionReader(io);
@@ -257,11 +274,16 @@ export function createCliRunner(
         // Codex's own check cannot prove a sign-in, so this real request is how a person who
         // has genuinely just logged in gets past that memory and the flow settles ready.
         verifyCredential: () =>
-          verifyProviderCredential(provider, {
-            homeBase: opts?.runtime?.homeBase ?? config.homeBase,
-            io: opts?.runtime?.io ?? io,
-            codexVersion: readCodexVersionOnce
-          })
+          provider === "openai-compatible" && opts?.runtime && !opts.runtime.readCodexAuthFile
+            ? Promise.reject(
+                new Error("isolated Codex verification requires an owner credential reader")
+              )
+            : verifyProviderCredential(provider, {
+                homeBase: opts?.runtime?.homeBase ?? config.homeBase,
+                io: opts?.runtime?.io ?? io,
+                codexVersion: readCodexVersionOnce,
+                readCodexAuthFile: opts?.runtime?.readCodexAuthFile
+              })
       }),
     // (#2027) Seed first-run state on the auth volume BEFORE the login session opens. gemini
     // otherwise stops on its sign-in-method menu and never prints the authorization URL.

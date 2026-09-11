@@ -16,8 +16,17 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { AcpHost } from "../packages/cli-runner/src/acp-host.js";
+import { CliChatEngineHost } from "../packages/cli-runner/src/engine-host.js";
+import { createCliRunner, resolveIsolatedUserRuntime } from "../packages/cli-runner/src/main.js";
 import { LOGIN_ADAPTERS } from "../packages/cli-runner/src/login-adapters.js";
 import { LoginService } from "../packages/cli-runner/src/login-service.js";
+import type { LoginUserRuntime } from "../packages/cli-runner/src/login-service.js";
+import {
+  clearProviderProbeCacheForTests,
+  probeProvider,
+  recordProviderLoginRejected
+} from "../packages/chat/src/live/provider-probe.js";
+import type { ProbeProviderResult } from "../packages/chat/src/live/provider-probe.js";
 import type { TmuxIo } from "../packages/ai/src/adapters/tmux-bridge.js";
 
 const LAUNCHER_UID = 1000;
@@ -102,6 +111,189 @@ function childSource(): string {
     "const sourceStat = fs.statSync(authPath);",
     "process.stdout.write(JSON.stringify({ uid: process.getuid(), gid: process.getgid(), Groups: field('Groups'), authUsable: auth.tokens?.access_token === 'synthetic-access' && auth.tokens?.account_id === 'synthetic-account', authUnchanged: authText === '{\"tokens\":{\"access_token\":\"synthetic-access\",\"account_id\":\"synthetic-account\"}}', sourceUid: sourceStat.uid, sourceGid: sourceStat.gid, sourceMode: sourceStat.mode & 0o777, CapPrm: field('CapPrm'), CapEff: field('CapEff'), CapInh: field('CapInh'), CapAmb: field('CapAmb') }) + '\\n');"
   ].join(" ");
+}
+
+const ownerIdentitySource = [
+  "const fs = require('node:fs');",
+  "const status = fs.readFileSync('/proc/self/status', 'utf8');",
+  "const field = (name) => status.split('\\n').find((line) => line.startsWith(name + ':')).slice(name.length + 1).trim();",
+  "process.stdout.write(JSON.stringify({ uid: process.getuid(), gid: process.getgid(), home: process.env.HOME, Groups: field('Groups'), CapPrm: field('CapPrm'), CapEff: field('CapEff'), CapInh: field('CapInh'), CapAmb: field('CapAmb') }));"
+].join(" ");
+
+async function task2Child(base: string): Promise<void> {
+  const homeBase = join(base, "home");
+  const userA = await resolveIsolatedUserRuntime({ perUserUid: true, homeBase }, "user-a");
+  const userB = await resolveIsolatedUserRuntime({ perUserUid: true, homeBase }, "user-b");
+  const identity = await userA.io.run(process.execPath, ["-e", ownerIdentitySource]);
+  assert.equal(identity.code, 0, identity.stderr);
+  const observed = JSON.parse(identity.stdout) as Record<string, string | number>;
+  assert.equal(observed.uid, OWNER_UID);
+  assert.equal(observed.gid, OWNER_UID);
+  assert.equal(observed.home, userA.homeBase);
+  assert.equal(observed.Groups, "");
+  for (const field of ["CapPrm", "CapEff", "CapInh", "CapAmb"])
+    assert.equal(observed[field], "0000000000000000", `${field} was not dropped`);
+
+  clearProviderProbeCacheForTests();
+  const ready = await probeProvider("openai-compatible", {
+    io: userA.io,
+    cliPresent: async () => true,
+    cacheScope: "user-a"
+  });
+  assert.equal(ready.status, "ready");
+  const needsLogin = await probeProvider("openai-compatible", {
+    io: userB.io,
+    cliPresent: async () => true,
+    cacheScope: "user-b"
+  });
+  assert.equal(needsLogin.status, "needs_login");
+
+  const vendor = (status: number) => async (): Promise<Response> => {
+    if (status === 0) throw new Error("synthetic network failure");
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => ({ models: [] })
+    } as Response;
+  };
+  // Reach the callback composed by createCliRunner itself. The diagnostic deliberately exercises
+  // that production closure, rather than rebuilding a lookalike probe with test-only deps.
+  const runner = createCliRunner({
+    socketPath: join(base, "runner", "sock"),
+    rpcSecret: "synthetic-rpc-secret",
+    singleUser: true,
+    perUserUid: true,
+    neutralBase: join(base, "neutral"),
+    homeBase: join(base, "home"),
+    toolsPrefix: join(base, "tools"),
+    persistentRuntimeEnabled: false,
+    persistentPoolCap: 4,
+    persistentIdleReapMinutes: 30
+  });
+  const runnerDeps = (
+    runner as unknown as {
+      deps: { host: CliChatEngineHost };
+    }
+  ).deps;
+  const hostDeps = (
+    runnerDeps.host as unknown as {
+      deps: { loginService: LoginService };
+    }
+  ).deps;
+  const loginDeps = (
+    hostDeps.loginService as unknown as {
+      deps: {
+        probe: (
+          provider: "openai-compatible",
+          opts?: { readonly forceFresh?: boolean; readonly runtime?: LoginUserRuntime }
+        ) => Promise<ProbeProviderResult>;
+      };
+    }
+  ).deps;
+  const productionProbe = loginDeps.probe;
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const status of [401, 0, 503]) {
+      clearProviderProbeCacheForTests();
+      recordProviderLoginRejected("openai-compatible", undefined, "user-a");
+      globalThis.fetch = vendor(status);
+      const result = await productionProbe("openai-compatible", {
+        forceFresh: true,
+        runtime: userA
+      });
+      assert.equal(result.status, "needs_login", `main verification status=${status}`);
+      // A normal follow-up must still honor the refusal; it cannot clear the cache by observing
+      // the local Codex auth file alone. This runs before the cache is reset for the next case.
+      globalThis.fetch = vendor(200);
+      const cached = await productionProbe("openai-compatible", { runtime: userA });
+      assert.equal(cached.status, "needs_login", `cached refusal status=${status}`);
+    }
+    clearProviderProbeCacheForTests();
+    recordProviderLoginRejected("openai-compatible", undefined, "user-a");
+    globalThis.fetch = vendor(200);
+    assert.equal(
+      (await productionProbe("openai-compatible", { forceFresh: true, runtime: userA })).status,
+      "ready"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const launcherIo: TmuxIo = {
+    run: async () => ({ code: 0, stdout: "", stderr: "" }),
+    sleep: async () => undefined,
+    readFile: async () => "",
+    writeFile: async () => undefined
+  };
+  let hostFetch: typeof globalThis.fetch = vendor(200);
+  const host = new CliChatEngineHost({
+    io: launcherIo,
+    neutralBase: join(base, "neutral"),
+    homeBase: join(base, "home"),
+    singleUser: true,
+    perUserUid: true,
+    cliPresent: async () => true,
+    fetch: (...args) => hostFetch(...args),
+    resolveUserRuntime: async (userId) =>
+      userId === "user-a"
+        ? userA
+        : await resolveIsolatedUserRuntime({ perUserUid: true, homeBase }, userId)
+  });
+  for (const status of [401, 0, 503, 200]) {
+    clearProviderProbeCacheForTests();
+    recordProviderLoginRejected("openai-compatible", undefined, "user-a");
+    hostFetch = vendor(status);
+    const result = await host.probeProvider("openai-compatible", "user-a", {
+      forceFresh: true
+    });
+    assert.equal(
+      result.status,
+      status === 200 ? "ready" : "needs_login",
+      `engine verification status=${status}`
+    );
+  }
+
+  const fifoUser = await resolveIsolatedUserRuntime({ perUserUid: true, homeBase }, "user-fifo");
+  const fifoSetup = await fifoUser.io.run(process.execPath, [
+    "-e",
+    "const fs=require('node:fs'); const cp=require('node:child_process'); const path=require('node:path'); const dir=path.join(process.env.HOME,'.codex'); fs.mkdirSync(dir,{mode:0o700}); const auth=path.join(dir,'auth.json'); cp.execFileSync('mkfifo',[auth]); fs.chmodSync(auth,0o600);"
+  ]);
+  assert.equal(fifoSetup.code, 0, fifoSetup.stderr);
+  clearProviderProbeCacheForTests();
+  recordProviderLoginRejected("openai-compatible", undefined, "user-fifo");
+  let fifoReads = 0;
+  const fifoRuntime: LoginUserRuntime = {
+    ...fifoUser,
+    readCodexAuthFile: async (path) => {
+      fifoReads += 1;
+      return fifoUser.readCodexAuthFile!(path);
+    }
+  };
+  globalThis.fetch = vendor(200);
+  const fifoService = new LoginService({
+    io: launcherIo,
+    homeBase,
+    adapters: LOGIN_ADAPTERS,
+    resolveUserRuntime: async () => fifoRuntime,
+    probe: (provider, opts) => {
+      assert.equal(provider, "openai-compatible");
+      return productionProbe(provider, opts);
+    },
+    settleMs: 0,
+    surfaceTimeoutMs: 200
+  });
+  const fifoLogin = fifoService.reserve("openai-compatible", "user-fifo");
+  const fifoStart = fifoService.start(fifoLogin);
+  const fifoOutcome = await Promise.race([
+    fifoStart,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("FIFO reader hung")), 1500))
+  ]);
+  assert.equal(fifoOutcome.status, "awaiting_authorization");
+  assert.equal(fifoReads, 1, "FIFO verification reader was not called exactly once");
+  await fifoService.cancel("openai-compatible", fifoLogin, "user-fifo");
+  console.log(
+    "Task 2 owner runtime, account scope, callback regressions, and FIFO diagnostic passed."
+  );
 }
 
 function runAs(uid: number, capabilities: string, mode: string, base: string) {
@@ -279,6 +471,10 @@ async function child(mode: string, base: string): Promise<void> {
     await negativeCrossUserChild();
     return;
   }
+  if (mode === "task-2") {
+    await task2Child(base);
+    return;
+  }
   const host = makeHost(base);
   if (mode === "valid-1" || mode === "valid-2") {
     await spawnValid(host, `session-${mode}`);
@@ -320,6 +516,13 @@ function prepareBase(): { base: string } {
   chownSync(owner, OWNER_UID, OWNER_UID);
   const neutral = join(base, "neutral");
   mkdirSync(neutral, { mode: 0o711 });
+  const bin = join(base, "bin");
+  mkdirSync(bin, { mode: 0o755 });
+  writeFileSync(
+    join(bin, "codex"),
+    "#!/usr/bin/env node\nconst fs = require('node:fs');\nif (process.argv.includes('--version')) { process.stdout.write('codex-cli 0.139.0\\n'); process.exit(0); }\nconst auth = process.env.HOME + '/.codex/auth.json';\nif (!fs.existsSync(auth)) { process.stderr.write('not logged in'); process.exit(1); }\nprocess.stdout.write('Logged in using ChatGPT\\n');\n",
+    { mode: 0o755 }
+  );
   return { base };
 }
 
@@ -371,6 +574,7 @@ function runChild(mode: string, base: string): void {
       `diagnostic child ${mode} failed (status=${String(result.status)}): ${result.stderr.trim()}`
     );
   }
+  if (mode === "task-2" && result.stdout.trim()) console.log(result.stdout.trim());
 }
 
 async function main(): Promise<void> {
@@ -387,11 +591,15 @@ async function main(): Promise<void> {
       chownSync(sharedPath, LAUNCHER_UID, LAUNCHER_UID);
       chmodSync(sharedPath, 0o711);
     }
+    chmodSync(join(fixture.base, "home"), 0o733);
     chmodSync(fixture.base, 0o711);
+    const oldPath = process.env.PATH;
+    process.env.PATH = `${join(fixture.base, "bin")}:${oldPath ?? "/usr/bin:/bin"}`;
     if (process.argv[2] === "--negative-cross-user" || process.argv[2] === "--negative-symlink") {
       runNegativeChild(process.argv[2], fixture.base);
       return;
     }
+    runChild("task-2", fixture.base);
     runChild("valid-1", fixture.base);
     runChild("valid-2", fixture.base);
 

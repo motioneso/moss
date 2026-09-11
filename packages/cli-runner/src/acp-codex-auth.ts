@@ -2,7 +2,53 @@ import { O_NOFOLLOW, O_RDONLY } from "node:constants";
 import { lstat, open, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { TmuxIo } from "@moss/ai";
+
 export type CodexAuthFileReader = (path: string) => Promise<string>;
+
+const OWNER_READ_SCRIPT = `
+const fs = require("node:fs");
+const path = process.argv[1];
+try {
+  const parts = path.split("/").filter(Boolean);
+  let current = path.startsWith("/") ? "/" : "";
+  for (const part of parts) {
+    current = current === "/" ? "/" + part : current ? current + "/" + part : part;
+    if (fs.lstatSync(current).isSymbolicLink()) throw new Error("symlink");
+  }
+  const sourceStat = fs.lstatSync(path);
+  if (!sourceStat.isFile()) throw new Error("regular file");
+  // O_NONBLOCK prevents a planted FIFO from hanging the owner process before
+  // the descriptor's regular-file check runs.
+  const fd = fs.openSync(
+    path,
+    fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK
+  );
+  try {
+    if (!fs.fstatSync(fd).isFile()) throw new Error("regular file");
+    process.stdout.write(fs.readFileSync(fd, "utf8"));
+  } finally {
+    fs.closeSync(fd);
+  }
+} catch {
+  process.exitCode = 1;
+}
+`;
+
+/** Build the only reader allowed to supply an isolated Codex verification credential. */
+export function createCodexAuthFileReader(runtime: {
+  readonly homeBase: string;
+  readonly userId: string;
+  readonly io: Pick<TmuxIo, "run">;
+}): CodexAuthFileReader {
+  const expectedPath = join(runtime.homeBase, ".codex", "auth.json");
+  return async (path: string): Promise<string> => {
+    if (path !== expectedPath) throw new Error("Codex credential path is outside the runtime home");
+    const result = await runtime.io.run(process.execPath, ["-e", OWNER_READ_SCRIPT, expectedPath]);
+    if (result.code !== 0) throw new Error("Codex credential could not be read by its owner");
+    return result.stdout;
+  };
+}
 
 const defaultReadCodexAuthFile: CodexAuthFileReader = (path) => readFile(path, "utf8");
 

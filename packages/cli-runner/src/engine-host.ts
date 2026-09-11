@@ -731,13 +731,17 @@ export class CliChatEngineHost {
     provider: RpcProviderKind,
     runtime?: LoginUserRuntime
   ): Promise<"accepted" | "refused" | "unknown"> {
+    if (provider === "openai-compatible" && runtime && !runtime.readCodexAuthFile) {
+      throw new Error("isolated Codex verification requires an owner credential reader");
+    }
     const io = runtime?.io ?? this.deps.io;
     this.readCodexVersion ??= createCodexVersionReader(io);
     return verifyProviderCredential(provider, {
       homeBase: runtime?.homeBase ?? this.deps.homeBase,
       fetch: this.deps.fetch,
       io,
-      codexVersion: this.readCodexVersion
+      codexVersion: this.readCodexVersion,
+      readCodexAuthFile: runtime?.readCodexAuthFile
     });
   }
 
