@@ -86,6 +86,7 @@ export function buildChildEnv(
   if (role !== "cli-runner") {
     return {
       ...env,
+      PATH: `${env.JARVIS_CLI_TOOLS_PREFIX ?? "/data/cli-tools"}/bin:${env.PATH ?? "/usr/local/bin:/usr/bin:/bin"}`,
       PORT: env.PORT ?? "3000",
       HOST: env.HOST ?? "0.0.0.0",
       HF_HOME: env.HF_HOME ?? "/app/.cache/huggingface",
