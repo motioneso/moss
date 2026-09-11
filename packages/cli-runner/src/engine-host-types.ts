@@ -8,7 +8,7 @@ import type { Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
 import type { AdmitCapablePool, ReapReason, RpcLaunchResult, SweepIdlePool } from "@moss/chat/live";
 
 import type { InstallService } from "./install-service.js";
-import type { LoginService } from "./login-service.js";
+import type { LoginService, LoginUserRuntime } from "./login-service.js";
 
 export interface EngineHostDeps {
   readonly io: TmuxIo;
@@ -58,6 +58,8 @@ export interface EngineHostDeps {
    * volume-disjoint and lock-only). Absent ⇒ the login verbs report unavailable on this build.
    */
   readonly loginService?: LoginService;
+  /** Resolve the same isolated home and UID used by ACP chat for an authenticated user. */
+  readonly resolveUserRuntime?: (userId: string) => Promise<LoginUserRuntime>;
   /**
    * #2208 `listProviderModels`: the vendor HTTP client the model-list adapters call. Absent ⇒
    * `globalThis.fetch`. Injected by tests so no unit test ever reaches a vendor.

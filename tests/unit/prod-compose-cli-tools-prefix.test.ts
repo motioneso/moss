@@ -40,4 +40,9 @@ describe("docker-compose.prod.yml JARVIS_CLI_TOOLS_PREFIX resolution", () => {
       /JARVIS_CLI_TOOLS_PREFIX: \/app\/tests\/uat\/fixtures\/scripted-provider/
     );
   });
+
+  it("defaults per-user CLI isolation on", () => {
+    const config = resolveConfig();
+    expect(config).toMatch(/JARVIS_CLI_PER_USER_UID: "1"/);
+  });
 });

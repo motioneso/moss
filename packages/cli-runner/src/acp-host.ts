@@ -43,7 +43,7 @@ import {
 } from "./acp-private-markers.js";
 import { acpProviderTranscriptDir, defaultPurgeCodexTranscripts } from "./acp-transcript-purge.js";
 import { buildSetprivDropCommand } from "./setpriv.js";
-import { codexAuthPath, preflightCodexAuthFile } from "./acp-codex-auth.js";
+import { codexAuthPath } from "./acp-codex-auth.js";
 
 import { buildSanitizedCliEnv } from "./sanitized-env.js";
 import { allocateUidSlot as defaultAllocateUidSlot } from "./uid-allocator.js";
@@ -386,7 +386,6 @@ export class AcpHost {
       throw new Error("acpSpawn requires per-user identity: refusing the shared home");
     }
     const codexAuth = providerKind === "openai" ? codexAuthPath(homeBase, userId) : null;
-    if (codexAuth) await preflightCodexAuthFile(homeBase, userId);
 
     // One slot per person, never per conversation.
     const allocate = this.deps.allocateUidSlot ?? defaultAllocateUidSlot;

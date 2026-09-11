@@ -206,11 +206,14 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "cards run the ACP adapter's initialize check automatically and show 'Not logged in' when it is refused; " +
       "the Refresh models button only asks for the provider's current model list. A refresh the provider answers " +
       "by refusing the stored sign-in does not serve as the ACP login check. Once a provider has refused a " +
-      "sign-in - on a model refresh, or on a chat message it would not answer - that sign-in " +
-      "counts as expired for that provider, so the next check asks for a fresh login instead of " +
-      "repeating an old success, until a fresh login is accepted. Chat checks CLI sign-ins when the " +
+      "sign-in - on a model refresh, or on a chat message it would not answer - is recorded as a " +
+      "provider rejection, distinct from a missing or malformed Codex runner credential. Chat checks CLI sign-ins when the " +
       "ACP adapter initializes. The page also includes an OpenCode ACP card with a saved Chat model setting; " +
       "the saved choice is passed to the ACP chat launch and applied when the agent advertises that option. " +
+      "Codex sign-in is per user and is checked in that user's isolated runner home; a missing or malformed " +
+      "credential is reported as not signed in for that account rather than as a provider failure. " +
+      "The current Codex sign-in surface is administrator-only under Settings, Assistant & AI, and " +
+      "the administrator must use the same Moss account; other users do not have a recovery path there. " +
       "Pressing Log in on a provider " +
       "always re-checks the sign-in for real rather than reusing an old saved answer, so a " +
       "genuinely broken sign-in always gets a fresh place to sign back in. A " +

@@ -155,13 +155,13 @@ export function makeChatMultiplexerStatusProbe(
  */
 export function makeCliPresentProbe(
   getConnection?: () => RpcConnection | undefined
-): (kind: OnboardingProviderKind) => Promise<boolean> {
-  return (kind) => {
+): (kind: OnboardingProviderKind, actorUserId?: string) => Promise<boolean> {
+  return (kind, actorUserId) => {
     const connection = getConnection?.();
     if (connection) {
       return boundedProbe(
         connection
-          .probeProvider({ provider: kind })
+          .probeProvider({ provider: kind }, ...(actorUserId === undefined ? [] : [actorUserId]))
           .then((result) => result.status !== "not_installed")
           .catch(() => false)
       );
@@ -191,12 +191,18 @@ export function makeProviderConnectionCheckProbe(deps: {
    * in-process spawn path below is the host-dev fallback (no connection).
    */
   readonly connection?: () => RpcConnection | undefined;
-}): (kind: OnboardingProviderKind) => Promise<OnboardingProviderCheckResponse> {
-  return async (kind) => {
+}): (
+  kind: OnboardingProviderKind,
+  actorUserId?: string
+) => Promise<OnboardingProviderCheckResponse> {
+  return async (kind, actorUserId) => {
     const connection = deps.connection?.();
     if (connection) {
       try {
-        return await connection.probeProvider({ provider: kind });
+        return await connection.probeProvider(
+          { provider: kind },
+          ...(actorUserId === undefined ? [] : [actorUserId])
+        );
       } catch (error) {
         // A socket failure is the in-container analogue of an unreachable multiplexer.
         return error instanceof CliChatUnavailableError

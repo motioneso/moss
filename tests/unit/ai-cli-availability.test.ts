@@ -1,7 +1,27 @@
-import { describe, it, expect } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import { describe, expect, it } from "vitest";
 import { cliAvailable, tmuxAvailable } from "../../packages/ai/src/cli-availability.js";
 
 describe("cliAvailable", () => {
+  it("finds a real temporary provider binary and rejects a missing binary", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "moss-cli-availability-"));
+    const previousPath = process.env.PATH;
+    try {
+      await writeFile(path.join(dir, "claude"), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+      process.env.PATH = dir;
+
+      expect(await cliAvailable("anthropic")).toBe(true);
+      expect(await cliAvailable("openai-compatible")).toBe(false);
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("maps anthropic to claude binary and returns true when found", async () => {
     const deps = { which: async (bin: string) => (bin === "claude" ? "/usr/bin/claude" : null) };
     expect(await cliAvailable("anthropic", deps)).toBe(true);

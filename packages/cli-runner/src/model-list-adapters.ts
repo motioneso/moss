@@ -43,6 +43,8 @@ export interface ModelListAdapterDeps {
   readonly fetch?: typeof globalThis.fetch;
   /** The sanitized execFile-style runner, used ONLY to read `codex --version`. */
   readonly io?: Pick<TmuxIo, "run">;
+  /** Optional owner-switched reader for an isolated Codex credential. */
+  readonly readCodexAuthFile?: (path: string) => Promise<string>;
   /** Optional override of the codex CLI version (tests / a pre-read value). */
   readonly codexVersion?: () => Promise<string | undefined>;
   /**
@@ -224,11 +226,14 @@ export function codexAuthPath(homeBase: string): string {
 }
 
 async function readCodexAuth(
-  homeBase: string
+  homeBase: string,
+  read: ((path: string) => Promise<string>) | undefined
 ): Promise<{ accessToken: string; accountId: string } | undefined> {
   let raw: string;
   try {
-    raw = await readFile(codexAuthPath(homeBase), "utf8");
+    raw = read
+      ? await read(codexAuthPath(homeBase))
+      : await readFile(codexAuthPath(homeBase), "utf8");
   } catch {
     return undefined;
   }
@@ -246,7 +251,7 @@ async function readCodexAuth(
 
 const codexAdapter: ModelListAdapter = async (deps) => {
   if (!deps.homeBase) return { status: "not_logged_in" };
-  const auth = await readCodexAuth(deps.homeBase);
+  const auth = await readCodexAuth(deps.homeBase, deps.readCodexAuthFile);
   if (!auth) return { status: "not_logged_in" };
   const readVersion = deps.codexVersion ?? createCodexVersionReader(deps.io);
   const version = await readVersion();

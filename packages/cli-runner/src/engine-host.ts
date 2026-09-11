@@ -56,7 +56,7 @@ import { AcpHost, type AcpExecPollResult, type AcpReadResult } from "./acp-host.
 import { ACP_DEADLINE_DIR } from "./exec-records.js";
 import { ACP_PRIVATE_MARKER_DIR } from "./acp-private-markers.js";
 import { Mutex } from "./mutex.js";
-import { LoginBadRequestError, type LoginService } from "./login-service.js";
+import { LoginBadRequestError, type LoginService, type LoginUserRuntime } from "./login-service.js";
 import {
   createCodexVersionReader,
   listProviderModels,
@@ -676,40 +676,48 @@ export class CliChatEngineHost {
   }
 
   // ─── probeProvider (§4.8) — no token, no replay ───────────────────────────────
-
   async probeProvider(
     provider: RpcProviderKind,
-    opts?: { readonly forceFresh?: boolean }
+    userIdOrOpts?: string | { readonly forceFresh?: boolean },
+    maybeOpts?: { readonly forceFresh?: boolean }
   ): Promise<RpcProbeProviderResult> {
-    const credentialEnv = this.deps.homeBase
-      ? await readProviderCredentialEnv(this.deps.homeBase, provider)
+    const userId = typeof userIdOrOpts === "string" ? userIdOrOpts : undefined;
+    const opts = typeof userIdOrOpts === "string" ? maybeOpts : userIdOrOpts;
+    const cacheScope = provider === "openai-compatible" ? userId : undefined;
+    const runtime = cacheScope ? await this.deps.resolveUserRuntime?.(cacheScope) : undefined;
+    const homeBase = runtime?.homeBase ?? this.deps.homeBase;
+    const credentialEnv = homeBase
+      ? await readProviderCredentialEnv(homeBase, provider)
       : undefined;
     // #2242: a caller asking for a real check (an explicit re-login, or the periodic
     // install-state reconciliation) must never be answered from a saved success that may have
     // gone stale — drop it explicitly before running the check, belt-and-suspenders alongside
     // `forceFresh` skipping the cache read below.
-    if (opts?.forceFresh) invalidateProviderProbeCache(provider as ProviderKind, credentialEnv);
+    if (opts?.forceFresh)
+      invalidateProviderProbeCache(provider as ProviderKind, credentialEnv, cacheScope);
     const result: ProbeProviderResult = await probeProvider(provider as ProviderKind, {
-      io: this.deps.io,
+      io: runtime?.io ?? this.deps.io,
       cliPresent: this.deps.cliPresent,
       multiplexerUsable: this.deps.multiplexerUsable,
       // #363: inject the persisted claude OAuth token so `auth status` reports loggedIn.
       credentialEnv,
-      homeBase: this.deps.homeBase,
+      homeBase,
+      cacheScope,
       forceFresh: opts?.forceFresh,
       // #2242 (round 3): the real request that can retire a recorded refusal for a provider whose
       // own check cannot prove a sign-in (codex). Only reached when a refusal is standing AND the
       // caller asked for a real check, so pressing Log in costs one vendor call, not every check.
-      verifyCredential: () => this.verifyProviderCredential(provider)
+      verifyCredential: () => this.verifyProviderCredential(provider, runtime)
     });
     return { status: result.status, message: result.message };
   }
-
   /** Relays a sign-in rejection learned in the API process into this cache. */
-  async recordLoginRejected(provider: RpcProviderKind): Promise<void> {
-    const { homeBase } = this.deps;
+  async recordLoginRejected(provider: RpcProviderKind, userId?: string): Promise<void> {
+    const cacheScope = provider === "openai-compatible" ? userId : undefined;
+    const runtime = cacheScope ? await this.deps.resolveUserRuntime?.(cacheScope) : undefined;
+    const homeBase = runtime?.homeBase ?? this.deps.homeBase;
     const credentialEnv = homeBase && (await readProviderCredentialEnv(homeBase, provider));
-    recordProviderLoginRejected(provider as ProviderKind, credentialEnv || undefined);
+    recordProviderLoginRejected(provider as ProviderKind, credentialEnv || undefined, cacheScope);
   }
 
   // ─── listProviderModels (#2208) — non-session; credential never crosses the socket ───
@@ -720,24 +728,24 @@ export class CliChatEngineHost {
   /** #2242 (round 3): one real vendor request with the saved sign-in, so a check can tell an
    *  accepted sign-in from the refused one it already knows about. */
   private async verifyProviderCredential(
-    provider: RpcProviderKind
+    provider: RpcProviderKind,
+    runtime?: LoginUserRuntime
   ): Promise<"accepted" | "refused" | "unknown"> {
-    this.readCodexVersion ??= createCodexVersionReader(this.deps.io);
+    if (provider === "openai-compatible" && runtime && !runtime.readCodexAuthFile) {
+      throw new Error("isolated Codex verification requires an owner credential reader");
+    }
+    const io = runtime?.io ?? this.deps.io;
+    this.readCodexVersion ??= createCodexVersionReader(io);
     return verifyProviderCredential(provider, {
-      homeBase: this.deps.homeBase,
+      homeBase: runtime?.homeBase ?? this.deps.homeBase,
       fetch: this.deps.fetch,
-      io: this.deps.io,
-      codexVersion: this.readCodexVersion
+      io,
+      codexVersion: this.readCodexVersion,
+      readCodexAuthFile: runtime?.readCodexAuthFile
     });
   }
 
-  /**
-   * #2208: ask the provider's vendor for its live model list using the credential the runner
-   * already holds on the cli-auth volume. Only ids cross the socket; a missing credential is
-   * `not_logged_in`, a vendor/transport failure is a plain `error`, gemini is `unsupported`.
-   * Not gated by the §L.6.1 exclusivity mutex: it reads a file and makes one HTTPS call, never
-   * touching tmux or the CLI's own state.
-   */
+  /** #2208: return provider model ids without crossing the login/admission mutex. */
   async listProviderModels(provider: RpcProviderKind): Promise<RpcListProviderModelsResult> {
     this.readCodexVersion ??= createCodexVersionReader(this.deps.io);
     // #2242: this call uses the same saved credential as the readiness check, so a vendor
@@ -758,18 +766,10 @@ export class CliChatEngineHost {
 
   // ─── installProvider (§A.2.4) — delegates to the install service ──────────────
 
-  /**
-   * §A.2.4: delegate to the §A.3 install service. Does NOT pass through the
-   * per-sessionKey queue (no session) nor the §4.1.0a admission mutex (no live engine —
-   * the install lane is volume-disjoint from admission, §A.5.1); the service takes its
-   * OWN per-provider lock (§A.3.1). A failed install is a TERMINAL OUTCOME
-   * `{state:"error"}` (not a throw); a blocked/in-flight provider throws
-   * `InstallBadRequestError` (mapped to bad_request by connection.ts).
-   */
+  /** §A.2.4: delegate to the install service; its own provider lock owns this lane. */
   async installProvider(provider: RpcProviderKind): Promise<RpcInstallProviderResult> {
     if (!this.deps.installService) {
-      // No installer wired (e.g. a host-mode build) — surface a terminal error outcome
-      // rather than a throw, so the api persists `error` and offers a retry.
+      // Host-mode builds have no installer; preserve the terminal retryable outcome.
       return { state: "error", message: "install service unavailable on this build" };
     }
     return this.deps.installService.installProvider(provider);
@@ -777,19 +777,11 @@ export class CliChatEngineHost {
 
   // ─── login verbs (§L.2) — non-session; unified §L.6.1 exclusivity gate ─────────
 
-  /**
-   * §L.2.2 beginLogin: admit ONLY when no live chat session AND no other login is in flight
-   * (the §L.6.1 unified exclusivity gate, under the SAME admission mutex as launch). Reserve the
-   * single login slot inside the lock, then start the flow outside it. A blocked/no-adapter
-   * provider throws `LoginBadRequestError` (→ bad_request); a chat/login-busy rejection throws
-   * `CliChatUnavailableError` (→ unavailable). No wire-contract change.
-   *
-   * #2232: if a login for this SAME provider is already in flight (e.g. two begin requests fired
-   * back to back by a double-mounted dialog), this reports that flow's current status instead of
-   * refusing — the caller sees the login it already started, not an error. A different provider,
-   * or a login only visible as a stray disk session, still gets the busy rejection.
-   */
-  async beginLogin(provider: RpcProviderKind): Promise<RpcBeginLoginResult> {
+  /** §L.2.2: admit one user-scoped login under the unified chat/login mutex. */
+  async beginLogin(
+    provider: RpcProviderKind,
+    userId = "legacy-user"
+  ): Promise<RpcBeginLoginResult> {
     const svc = this.deps.loginService;
     if (!svc) throw new LoginBadRequestError("login not available on this build");
     if (!svc.hasAdapter(provider)) {
@@ -804,39 +796,48 @@ export class CliChatEngineHost {
       }
       // One login at a time regardless of the single-user flag (one flow slot, §L.3.1).
       if (await svc.isLoginActive()) {
-        reuseLoginId = svc.activeLoginId(provider);
+        reuseLoginId = svc.activeLoginId(provider, userId);
         if (reuseLoginId === undefined) {
           throw new CliChatUnavailableError("a provider login is already in progress");
         }
       } else {
-        loginId = svc.reserve(provider); // SYNC slot claim inside the lock (§L.6.1)
+        loginId = svc.reserve(provider, userId); // SYNC slot claim inside the lock (§L.6.1)
       }
     } finally {
       release();
     }
-    if (reuseLoginId !== undefined) return svc.poll(provider, reuseLoginId);
+    if (reuseLoginId !== undefined) return svc.poll(provider, reuseLoginId, userId);
     // Start the flow OUTSIDE the lock (the reservation holds the slot). On any failure the
     // service clears the flow + reaps the session (§L.3.1).
     return svc.start(loginId!);
   }
 
   /** §L.2.3 pollLogin — re-derive status (probe + runtime smoke); a stale loginId ⇒ bad_request. */
-  pollLogin(provider: RpcProviderKind, loginId: string): Promise<RpcPollLoginResult> {
-    return this.requireLogin().poll(provider, loginId);
+  pollLogin(
+    provider: RpcProviderKind,
+    loginId: string,
+    userId = "legacy-user"
+  ): Promise<RpcPollLoginResult> {
+    return this.requireLogin().poll(provider, loginId, userId);
   }
 
   /** §L.2.3 submitLoginToken — feed the pasted code argv-free (§L.6.3); a stale loginId ⇒ bad_request. */
   submitLoginToken(
     provider: RpcProviderKind,
     loginId: string,
-    token: string
+    token: string,
+    userId = "legacy-user"
   ): Promise<RpcSubmitLoginTokenResult> {
-    return this.requireLogin().submitToken(provider, loginId, token);
+    return this.requireLogin().submitToken(provider, loginId, token, userId);
   }
 
   /** §L.2.3 cancelLogin — kill the login session + release the slot. Idempotent. */
-  async cancelLogin(provider: RpcProviderKind, loginId: string): Promise<RpcCancelLoginResult> {
-    await this.requireLogin().cancel(provider, loginId);
+  async cancelLogin(
+    provider: RpcProviderKind,
+    loginId: string,
+    userId = "legacy-user"
+  ): Promise<RpcCancelLoginResult> {
+    await this.requireLogin().cancel(provider, loginId, userId);
     return { ok: true };
   }
 

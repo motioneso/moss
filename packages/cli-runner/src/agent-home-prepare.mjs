@@ -18,14 +18,21 @@
 // { dirs: string[], denyFile: null | { path: string, permissionKeys: string[] } }
 // Secret files arrive as a JSON array on stdin, never in argv or env.
 // Never invoked through a shell, so no interpolation risk.
-import { O_CREAT, O_NOFOLLOW, O_RDONLY, O_TRUNC, O_WRONLY } from "node:constants";
+import { O_CREAT, O_NOFOLLOW, O_NONBLOCK, O_RDONLY, O_TRUNC, O_WRONLY } from "node:constants";
 import { lstat, mkdir, open, rm } from "node:fs/promises";
 import { sep } from "node:path";
 
 async function ensureRealDir(path) {
-  const stat = await lstat(path).catch(() => null);
-  if (stat && stat.isSymbolicLink()) await rm(path, { force: true });
-  if (!stat || stat.isSymbolicLink()) {
+  let stat;
+  try {
+    stat = await lstat(path);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  if (stat && stat.isSymbolicLink()) {
+    throw new Error(`refusing symlinked path: ${path}`);
+  }
+  if (!stat) {
     await mkdir(path, { mode: 0o700 }).catch((error) => {
       if (error.code !== "EEXIST") throw error;
     });
@@ -79,8 +86,18 @@ async function assertRealPath(path) {
   let current = path.startsWith(sep) ? sep : "";
   for (const part of parts) {
     current = current === sep ? `${sep}${part}` : current === "" ? part : `${current}${sep}${part}`;
-    const stat = await lstat(current).catch(() => null);
-    if (!stat || stat.isSymbolicLink()) {
+    let stat;
+    try {
+      stat = await lstat(current);
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        throw new Error("Not logged in (no usable Codex credential in your runner home)", {
+          cause: error
+        });
+      }
+      throw error;
+    }
+    if (stat.isSymbolicLink()) {
       throw new Error(`refusing symlinked credential path: ${path}`);
     }
   }
@@ -88,11 +105,56 @@ async function assertRealPath(path) {
 
 async function readSecretSource(file) {
   await assertRealPath(file.sourcePath);
-  const handle = await open(file.sourcePath, O_RDONLY | O_NOFOLLOW);
+  let sourceStat;
   try {
-    const content = await handle.readFile("utf8");
+    sourceStat = await lstat(file.sourcePath);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw new Error("Not logged in (no usable Codex credential in your runner home)", {
+        cause: error
+      });
+    }
+    throw error;
+  }
+  if (!sourceStat.isFile()) {
+    throw new Error(`refusing non-regular credential path: ${file.sourcePath}`);
+  }
+  // O_NONBLOCK keeps a planted FIFO from hanging the owner process before the
+  // descriptor's regular-file check runs. The fstat closes the replacement
+  // race between the component walk and open.
+  let handle;
+  try {
+    handle = await open(file.sourcePath, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw new Error("Not logged in (no usable Codex credential in your runner home)", {
+        cause: error
+      });
+    }
+    throw error;
+  }
+  try {
+    if (!(await handle.stat()).isFile()) {
+      throw new Error(`refusing non-regular credential path: ${file.sourcePath}`);
+    }
+    let content;
+    try {
+      content = await handle.readFile("utf8");
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        throw new Error("Not logged in (no usable Codex credential in your runner home)", {
+          cause: error
+        });
+      }
+      throw error;
+    }
     if (file.kind === "codex-auth") {
-      const parsed = JSON.parse(content);
+      let parsed;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        throw new Error("Not logged in (no usable Codex credential in your runner home)");
+      }
       if (
         !parsed ||
         typeof parsed !== "object" ||
@@ -101,7 +163,7 @@ async function readSecretSource(file) {
         typeof parsed.tokens?.account_id !== "string" ||
         parsed.tokens.account_id.length === 0
       ) {
-        throw new Error("missing Codex login");
+        throw new Error("Not logged in (no usable Codex credential in your runner home)");
       }
       await handle.chmod(0o600);
     }
@@ -148,7 +210,12 @@ async function main() {
 
   if (request.denyFile) {
     const { path, permissionKeys } = request.denyFile;
-    const first = await lstat(path).catch(() => null);
+    let first;
+    try {
+      first = await lstat(path);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
     if (first && first.isSymbolicLink()) await rm(path, { force: true });
     const config = await readExistingConfig(path);
     const permission =

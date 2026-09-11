@@ -51,6 +51,7 @@ import { ChatGatewayNotifier } from "./gateway-notifier.js";
 import { readRouteSurface } from "./live/chat-surface.js";
 import { registerChatLiveRoutes, type EveningInterviewSeed } from "./live-routes.js";
 import { CliChatUnavailableError } from "./live/errors.js";
+import { knownAuthFailureMessage } from "./live/auth-errors.js";
 import { createCurrentViewReadService, type CurrentViewReadService } from "./live/current-view.js";
 import { PageContextStore } from "./live/page-context-store.js";
 import type { PassiveMemoryGraphRecallPort } from "./live/passive-retrieval.js";
@@ -753,6 +754,10 @@ export function registerChatRoutes(
 
 function handleRouteError(error: unknown, reply: FastifyReply) {
   if (error instanceof CliChatUnavailableError) {
+    const authMessage = knownAuthFailureMessage(error.message);
+    if (authMessage) {
+      return reply.code(503).send({ error: authMessage });
+    }
     reply.log?.warn?.({ err: error }, "live chat unavailable");
     return reply.code(503).send({ error: "Live chat is currently unavailable on this host." });
   }

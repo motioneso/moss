@@ -72,7 +72,7 @@ export interface LoginServiceDeps {
    */
   readonly probe: (
     provider: RpcProviderKind,
-    opts?: { readonly forceFresh?: boolean }
+    opts?: { readonly forceFresh?: boolean; readonly runtime?: LoginUserRuntime }
   ) => Promise<ProbeProviderResult>;
   /** auth/home base for the 0600 paste temp file (§L.6.3). Default /data/cli-auth. */
   readonly homeBase?: string;
@@ -90,7 +90,25 @@ export interface LoginServiceDeps {
    * that menu, so the authorization URL never prints and login times out with no surface. Optional
    * so an existing caller (and every existing test) keeps working unchanged.
    */
-  readonly prepareProvider?: (provider: RpcProviderKind) => Promise<void>;
+  readonly prepareProvider?: (
+    provider: RpcProviderKind,
+    runtime: LoginUserRuntime
+  ) => Promise<void>;
+  /** Resolve the isolated HOME and UID/GID used by Codex for one authenticated user. */
+  readonly resolveUserRuntime?: (
+    provider: RpcProviderKind,
+    userId: string
+  ) => Promise<LoginUserRuntime>;
+}
+
+export interface LoginUserRuntime {
+  readonly userId: string;
+  readonly homeBase: string;
+  readonly uid: number;
+  readonly gid: number;
+  readonly io: TmuxIo;
+  /** Owner-switched reader for the Codex credential in this runtime's home. */
+  readonly readCodexAuthFile?: (path: string) => Promise<string>;
 }
 
 const DEFAULT_HOME_BASE = "/data/cli-auth";
@@ -104,7 +122,9 @@ const DEFAULT_SURFACE_TIMEOUT_MS = 12_000;
 /** The single in-flight login (§L.3.1). */
 interface LoginFlow {
   readonly provider: RpcProviderKind;
+  readonly userId: string;
   readonly loginId: string;
+  readonly sessionName: string;
   readonly adapter: LoginAdapter;
   /** The in-flight pasted token (paste mode) — held for redactExact + the echo-drop (§L.6.2/§L.6.3). */
   heldToken?: string;
@@ -124,6 +144,7 @@ interface LoginFlow {
    * every caller waiting on this flow's readiness waits on the SAME real result.
    */
   initialProbe?: Promise<ProbeProviderResult>;
+  runtime?: LoginUserRuntime;
 }
 
 export class LoginService {
@@ -178,8 +199,12 @@ export class LoginService {
    * there is no in-memory flow, or the active flow is for a different provider, or the "active"
    * signal is only a disk session with no flow in memory (nothing to reuse).
    */
-  activeLoginId(provider: RpcProviderKind): string | undefined {
-    return this.flow && this.flow.provider === provider ? this.flow.loginId : undefined;
+  activeLoginId(provider: RpcProviderKind, userId?: string): string | undefined {
+    return this.flow &&
+      this.flow.provider === provider &&
+      (userId === undefined || this.flow.userId === userId)
+      ? this.flow.loginId
+      : undefined;
   }
 
   /**
@@ -187,12 +212,26 @@ export class LoginService {
    * mutex so a concurrent launch/begin sees it). Returns the minted loginId. Throws
    * LoginBadRequestError if a flow already exists (defensive — the gate should have rejected).
    */
-  reserve(provider: RpcProviderKind): string {
+  reserve(provider: RpcProviderKind, userId = "legacy-user"): string {
     const adapter = this.deps.adapters[provider];
     if (!adapter) throw new LoginBadRequestError("provider not loginable");
     if (this.flow) throw new LoginBadRequestError("a login is already in progress");
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(userId)) {
+      throw new LoginBadRequestError("invalid login user");
+    }
     const loginId = randomUUID();
-    this.flow = { provider, loginId, adapter, submitted: false, timer: undefined };
+    // Keep the historic name for direct in-process callers; authenticated RPC callers always
+    // supply their real user id and therefore get an isolated session name.
+    const sessionName = userId === "legacy-user" ? provider : `${userId}-${provider}`;
+    this.flow = {
+      provider,
+      userId,
+      loginId,
+      sessionName,
+      adapter,
+      submitted: false,
+      timer: undefined
+    };
     return loginId;
   }
 
@@ -204,11 +243,11 @@ export class LoginService {
    */
   async start(loginId: string): Promise<LoginFlowOutcome> {
     const flow = this.requireFlow(loginId);
-    const session = `${LOGIN_SESSION_PREFIX}${flow.provider}`;
     try {
+      flow.runtime = await this.resolveRuntime(flow.provider, flow.userId);
       // (#2027) First-run seeding BEFORE the session opens: once the CLI is running it is too
       // late — it has already read its settings and painted its menu.
-      if (this.deps.prepareProvider) await this.deps.prepareProvider(flow.provider);
+      if (this.deps.prepareProvider) await this.deps.prepareProvider(flow.provider, flow.runtime);
 
       // Already authenticated? (a re-login of a ready provider) — short-circuit. #2242: this
       // MUST be a real check (forceFresh), never a saved answer — a person pressing Log in is
@@ -217,7 +256,10 @@ export class LoginService {
       // is held on the flow (not just awaited locally) so an overlapping poll() on the SAME flow
       // (engine-host's reuse path) shares this exact real result instead of racing a separate,
       // cache-hitting probe of its own (§L.6.1 overlap).
-      const probePromise = this.deps.probe(flow.provider, { forceFresh: true });
+      const probePromise = this.deps.probe(flow.provider, {
+        forceFresh: true,
+        runtime: flow.runtime
+      });
       flow.initialProbe = probePromise;
       const pre = await probePromise;
       if (flow.initialProbe === probePromise) flow.initialProbe = undefined;
@@ -226,8 +268,7 @@ export class LoginService {
       }
 
       // Open the captured login session + run the login command (no secret in the launch line).
-      const launchLine = flow.adapter.loginArgv.join(" ");
-      const startPromise = this.openLoginSession(session, launchLine);
+      const startPromise = this.openLoginSession(flow);
       let timedOut = false;
       try {
         await this.withTimeout(startPromise, this.startTimeoutMs, () => {
@@ -235,7 +276,7 @@ export class LoginService {
         });
       } catch (err) {
         // Best-effort kill + LATE-SUCCESS reap (mirrors engine-host launch §L.3.1).
-        await killLoginMuxSession(this.deps.io, flow.provider, this.homeBase).catch(
+        await killLoginMuxSession(this.deps.io, flow.sessionName, this.homeBase).catch(
           () => undefined
         );
         if (timedOut) {
@@ -246,7 +287,7 @@ export class LoginService {
             )
             .then(async (createdLate) => {
               if (createdLate)
-                await killLoginMuxSession(this.deps.io, flow.provider, this.homeBase).catch(
+                await killLoginMuxSession(this.deps.io, flow.sessionName, this.homeBase).catch(
                   () => undefined
                 );
             });
@@ -271,8 +312,12 @@ export class LoginService {
   }
 
   /** §L.2.3 poll: re-derive status via probe (+ runtime smoke on ready); else refresh the surface. */
-  async poll(provider: RpcProviderKind, loginId: string): Promise<LoginFlowOutcome> {
-    const flow = this.matchFlow(provider, loginId);
+  async poll(
+    provider: RpcProviderKind,
+    loginId: string,
+    userId?: string
+  ): Promise<LoginFlowOutcome> {
+    const flow = this.matchFlow(provider, loginId, userId);
     this.extendDeadline(flow);
     return this.deriveStatus(flow);
   }
@@ -285,18 +330,21 @@ export class LoginService {
   async submitToken(
     provider: RpcProviderKind,
     loginId: string,
-    token: string
+    token: string,
+    userId?: string
   ): Promise<LoginFlowOutcome> {
-    const flow = this.matchFlow(provider, loginId);
+    const flow = this.matchFlow(provider, loginId, userId);
     flow.heldToken = token;
     flow.submitted = true;
     this.extendDeadline(flow);
-    const session = `${LOGIN_SESSION_PREFIX}${flow.provider}`;
+    const session = `${LOGIN_SESSION_PREFIX}${flow.sessionName}`;
     let tmpDir: string | undefined;
     try {
       // argv-free paste: write the token to a 0600 temp file, load it into a tmux buffer,
       // paste it into the login pane, then Enter. NEVER send-keys-with-the-token (argv leak).
-      tmpDir = await mkdtemp(path.join(this.homeBase, ".login-"));
+      const runtime = flow.runtime ?? (await this.resolveRuntime(flow.provider, flow.userId));
+      flow.runtime = runtime;
+      tmpDir = await mkdtemp(path.join(runtime.homeBase, ".login-"));
       const tokenFile = path.join(tmpDir, "code");
       await writeFile(tokenFile, token, { encoding: "utf8", mode: 0o600 });
       await this.deps.io.run("tmux", this.withSocket(["load-buffer", "-b", session, tokenFile]));
@@ -310,7 +358,7 @@ export class LoginService {
       // code in the tmux SERVER-global buffer set, which SURVIVES killing the login session — a
       // same-UID reader could `show-buffer -b <name>` it afterwards. Delete the named buffer the
       // instant the paste has consumed it so the code does not linger past the paste.
-      await this.deleteLoginBuffer(flow.provider);
+      await this.deleteLoginBuffer(flow.sessionName);
       // #363: token-based providers (claude) PRINT a long-lived credential on success rather
       // than persisting one. Capture it from the success pane + persist it (0600) BEFORE the
       // probe runs, so the credential-injected `auth status` settles the flow `ready`.
@@ -326,10 +374,14 @@ export class LoginService {
   }
 
   /** §L.2.3 cancel: kill the login session + clear the flow. Idempotent (no match ⇒ ok). */
-  async cancel(provider: RpcProviderKind, loginId: string): Promise<void> {
-    if (!this.flow || this.flow.provider !== provider || this.flow.loginId !== loginId) {
-      // No matching in-flight login — best-effort reap any orphan session for the provider.
-      await killLoginMuxSession(this.deps.io, provider, this.homeBase).catch(() => undefined);
+  async cancel(provider: RpcProviderKind, loginId: string, userId?: string): Promise<void> {
+    if (
+      !this.flow ||
+      this.flow.provider !== provider ||
+      this.flow.loginId !== loginId ||
+      (userId !== undefined && this.flow.userId !== userId)
+    ) {
+      // No matching in-flight login. A mismatched identity must not reap another user's session.
       return;
     }
     await this.teardown(this.flow);
@@ -387,17 +439,17 @@ export class LoginService {
       undefined,
       this.homeBase
     ).catch(() => [] as { provider: string; ageMs: number }[]);
-    for (const { provider, ageMs } of sessions) {
+    for (const { provider: sessionName, ageMs } of sessions) {
       if (ageMs <= maxAgeMs) continue; // a within-lifetime (possibly active) login — leave it
       // Clear a matching in-memory flow (+ its armed deadline timer) so the slot is freed and the
       // late deadline reaper does not double-teardown.
-      if (this.flow && this.flow.provider === provider) {
+      if (this.flow && this.flow.sessionName === sessionName) {
         if (this.flow.timer) clearTimeout(this.flow.timer);
         this.flow.heldToken = undefined;
         this.flow = null;
       }
-      await killLoginMuxSession(this.deps.io, provider, this.homeBase).catch(() => undefined);
-      await this.deleteLoginBuffer(provider as RpcProviderKind).catch(() => undefined);
+      await killLoginMuxSession(this.deps.io, sessionName, this.homeBase).catch(() => undefined);
+      await this.deleteLoginBuffer(sessionName).catch(() => undefined);
     }
   }
 
@@ -411,13 +463,15 @@ export class LoginService {
     // OLD cached "ready" answer and report success before the in-flight real check comes back
     // with the true (expired) status, which is exactly how two overlapping requests could report
     // a false success.
+    const runtime = flow.runtime ?? (await this.resolveRuntime(flow.provider, flow.userId));
+    flow.runtime = runtime;
     const probe = flow.initialProbe
       ? await flow.initialProbe
-      : await this.deps.probe(flow.provider);
+      : await this.deps.probe(flow.provider, { runtime });
     if (probe.status === "ready") {
       // §L.9.1 runtime smoke: a bounded non-interactive re-confirmation that auth actually works
       // (a second clean probe), not merely a printed success line.
-      const smoke = await this.deps.probe(flow.provider);
+      const smoke = await this.deps.probe(flow.provider, { runtime });
       if (smoke.status === "ready") return this.settle(flow, "ready");
       return this.settle(flow, "error", "login smoke check failed");
     }
@@ -459,7 +513,7 @@ export class LoginService {
   private async captureAndPersistToken(flow: LoginFlow): Promise<void> {
     const pattern = flow.adapter.tokenCapturePattern;
     if (!pattern) return;
-    const session = `${LOGIN_SESSION_PREFIX}${flow.provider}`;
+    const session = `${LOGIN_SESSION_PREFIX}${flow.sessionName}`;
     const attempts = Math.max(1, Math.ceil(this.surfaceTimeoutMs / Math.max(this.settleMs, 200)));
     for (let i = 0; i < attempts; i++) {
       await this.deps.io.sleep(this.settleMs);
@@ -470,14 +524,18 @@ export class LoginService {
       const match = pane.stdout.match(pattern);
       if (match) {
         flow.capturedToken = match[0]; // SECRET — for redactExact; never surfaced.
-        await persistProviderToken(this.homeBase, flow.provider, match[0]);
+        await persistProviderToken(
+          flow.runtime?.homeBase ?? this.homeBase,
+          flow.provider,
+          match[0]
+        );
         return;
       }
     }
   }
 
   private async captureSurface(flow: LoginFlow): Promise<LoginSurface> {
-    const session = `${LOGIN_SESSION_PREFIX}${flow.provider}`;
+    const session = `${LOGIN_SESSION_PREFIX}${flow.sessionName}`;
     // -J joins any soft-wrapped lines (belt-and-suspenders alongside the wide login pane,
     // which prevents the hard-wrap that -J cannot rejoin) so a long URL is captured whole.
     const pane = await this.deps.io
@@ -498,7 +556,10 @@ export class LoginService {
   }
 
   /** Open the captured login session (detached) + run the login command via send-keys. */
-  private async openLoginSession(session: string, launchLine: string): Promise<void> {
+  private async openLoginSession(flow: LoginFlow): Promise<void> {
+    const session = `${LOGIN_SESSION_PREFIX}${flow.sessionName}`;
+    const runtime = flow.runtime ?? (await this.resolveRuntime(flow.provider, flow.userId));
+    flow.runtime = runtime;
     // WIDE pane (-x): the provider prints its authorization URL on one line and its TUI
     // HARD-wraps at the pane width — a narrow pane splits the URL across lines (a literal
     // newline mid-URL that capture-pane -J can't rejoin), so the surfaced URL was truncated
@@ -515,12 +576,31 @@ export class LoginService {
     // REQUIRED: in a target-pane context (send-keys/paste-buffer/capture-pane) tmux 3.3a
     // parses a bare `=<session>` as a PANE name and fails with "can't find pane", which
     // broke every login. The `:` scopes it to the session so the active pane resolves.
+    const command = [
+      "setpriv",
+      `--reuid=${runtime.uid}`,
+      `--regid=${runtime.gid}`,
+      "--clear-groups",
+      "--inh-caps=-all",
+      "--ambient-caps=-all",
+      "--",
+      "sh",
+      "-c",
+      'umask 077; exec env "$@"',
+      "jarvis-login",
+      `HOME=${runtime.homeBase}`,
+      `JARVIS_CLI_HOME=${runtime.homeBase}`,
+      `JARVIS_CLI_HOME_BASE=${runtime.homeBase}`,
+      ...flow.adapter.loginArgv
+    ]
+      .map(shellQuote)
+      .join(" ");
     const sent = await this.deps.io.run(
       "tmux",
-      this.withSocket(["send-keys", "-t", `=${session}:`, launchLine, "Enter"])
+      this.withSocket(["send-keys", "-t", `=${session}:`, command, "Enter"])
     );
     if (sent.code !== 0) {
-      await killLoginMuxSession(this.deps.io, sessionProvider(session), this.homeBase).catch(
+      await killLoginMuxSession(this.deps.io, flow.sessionName, this.homeBase).catch(
         () => undefined
       );
       throw new Error(`login command send failed: ${redactSecrets(sent.stderr)}`);
@@ -539,16 +619,16 @@ export class LoginService {
     if (flow.timer) clearTimeout(flow.timer);
     flow.heldToken = undefined;
     if (this.flow && this.flow.loginId === flow.loginId) this.flow = null;
-    await killLoginMuxSession(this.deps.io, flow.provider, this.homeBase).catch(() => undefined);
+    await killLoginMuxSession(this.deps.io, flow.sessionName, this.homeBase).catch(() => undefined);
     // Phase-4 Obs 1-A: defensively drop the server-global paste buffer too (it outlives the
     // session) — covers a teardown reached before submitToken's explicit delete (e.g. an error
     // or timeout mid-paste). delete-buffer on an absent buffer is a harmless no-op.
-    await this.deleteLoginBuffer(flow.provider);
+    await this.deleteLoginBuffer(flow.sessionName);
   }
 
   /** Phase-4 Obs 1-A: remove the `<jarv1s-login-provider>` server-global tmux paste buffer. */
-  private async deleteLoginBuffer(provider: RpcProviderKind): Promise<void> {
-    const session = `${LOGIN_SESSION_PREFIX}${provider}`;
+  private async deleteLoginBuffer(sessionName: string): Promise<void> {
+    const session = `${LOGIN_SESSION_PREFIX}${sessionName}`;
     await this.deps.io
       .run("tmux", this.withSocket(["delete-buffer", "-b", session]))
       .catch(() => undefined);
@@ -574,11 +654,32 @@ export class LoginService {
     return this.flow;
   }
 
-  private matchFlow(provider: RpcProviderKind, loginId: string): LoginFlow {
-    if (!this.flow || this.flow.provider !== provider || this.flow.loginId !== loginId) {
+  private matchFlow(provider: RpcProviderKind, loginId: string, userId?: string): LoginFlow {
+    if (
+      !this.flow ||
+      this.flow.provider !== provider ||
+      this.flow.loginId !== loginId ||
+      (userId !== undefined && this.flow.userId !== userId)
+    ) {
       throw new LoginBadRequestError("no such login");
     }
     return this.flow;
+  }
+
+  private async resolveRuntime(
+    provider: RpcProviderKind,
+    userId: string
+  ): Promise<LoginUserRuntime> {
+    if (provider === "openai-compatible" && this.deps.resolveUserRuntime) {
+      return this.deps.resolveUserRuntime(provider, userId);
+    }
+    return {
+      userId,
+      homeBase: this.homeBase,
+      uid: typeof process.getuid === "function" ? process.getuid() : 0,
+      gid: typeof process.getgid === "function" ? process.getgid() : 0,
+      io: this.deps.io
+    };
   }
 
   private async withTimeout<T>(p: Promise<T>, ms: number, onTimeout?: () => void): Promise<T> {
@@ -599,11 +700,8 @@ export class LoginService {
   }
 }
 
-/** Recover the provider literal from a `jarv1s-login-<provider>` session name. */
-function sessionProvider(session: string): string {
-  return session.startsWith(LOGIN_SESSION_PREFIX)
-    ? session.slice(LOGIN_SESSION_PREFIX.length)
-    : session;
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 /**

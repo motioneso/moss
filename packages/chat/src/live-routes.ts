@@ -54,6 +54,7 @@ import {
   ChatTurnInFlightError
 } from "./live/chat-session-manager.js";
 import { CliChatUnavailableError } from "./live/errors.js";
+import { knownAuthFailureMessage } from "./live/auth-errors.js";
 import type { PageContextStore } from "./live/page-context-store.js";
 import { renderModuleControlContext, sanitizeExternalData } from "./live/prompt-safety.js";
 import type { ChatSessionRuntime } from "./live/runtime.js";
@@ -691,8 +692,9 @@ function handleLiveRouteError(error: unknown, reply: FastifyReply) {
   }
 
   if (error instanceof CliChatUnavailableError) {
-    if (/sign-in has expired/i.test(error.message)) {
-      return reply.code(503).send({ error: error.message });
+    const authMessage = knownAuthFailureMessage(error.message);
+    if (authMessage) {
+      return reply.code(503).send({ error: authMessage });
     }
     // Log the underlying cause server-side; send a fixed, sanitized message (the
     // error covers both "no multiplexer configured" and "launch failed").

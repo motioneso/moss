@@ -15,6 +15,7 @@ import type { ChatTurnUsageDto } from "@moss/shared";
 import { recordProviderLoginRejected } from "./provider-probe.js";
 
 import { CliChatUnavailableError } from "./errors.js";
+import { authFailureMessage } from "./auth-errors.js";
 import type { RpcConnection } from "./chat-engine-rpc-client.js";
 import type { RpcAcpKillParams, RpcAcpSpawnParams } from "./rpc-contract.js";
 import type { CliChatEngine, EngineKillOpts, EngineLaunchOpts, TranscriptRecord } from "./types.js";
@@ -540,10 +541,7 @@ export class AcpChatEngine implements CliChatEngine {
       if (isAuthRequired(error)) {
         this.reportLoginRejected();
         await this.closeQuietly();
-        throw new CliChatUnavailableError(
-          `The ${providerLabel(kind)} sign-in has expired; an admin can log it in again under Settings, Assistant & AI`,
-          { cause: error }
-        );
+        throw new CliChatUnavailableError(authFailureMessage(kind), { cause: error });
       }
       await this.closeQuietly();
       throw error;
@@ -586,7 +584,7 @@ export class AcpChatEngine implements CliChatEngine {
         if (isAuthRequired(error)) {
           this.reportLoginRejected();
           this.promptError = new CliChatUnavailableError(
-            `The ${providerLabel(toAcpProviderKind(this.provider))} sign-in has expired; an admin can log it in again under Settings, Assistant & AI`,
+            authFailureMessage(toAcpProviderKind(this.provider)),
             { cause: error }
           );
         } else {
@@ -701,19 +699,6 @@ function isAuthRequired(error: unknown): boolean {
   return /auth[_ -]?required|authentication required|not logged in|sign-in has expired/i.test(
     message
   );
-}
-
-function providerLabel(kind: AcpProviderKind): string {
-  switch (kind) {
-    case "anthropic":
-      return "Claude";
-    case "openai":
-      return "Codex";
-    case "opencode":
-      return "OpenCode";
-    default:
-      return "Google";
-  }
 }
 
 function stopReasonText(reason: string, cancelled: boolean): string {

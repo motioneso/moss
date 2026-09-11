@@ -462,7 +462,9 @@ async function invoke(
       const params = req.params as RpcProbeProviderParams;
       const provider = params.provider;
       if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
-      return host.probeProvider(provider, { forceFresh: params.forceFresh });
+      return host.probeProvider(provider, requireSessionKey(req), {
+        forceFresh: params.forceFresh
+      });
     }
     case "recordLoginRejected": {
       // ACP sessions run API-side and learn of a rejected sign-in there, but the settings
@@ -472,7 +474,7 @@ async function invoke(
       const params = req.params as RpcRecordLoginRejectedParams;
       const provider = params.provider;
       if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
-      await host.recordLoginRejected(provider);
+      await host.recordLoginRejected(provider, requireSessionKey(req));
       return { ok: true };
     }
     case "installProvider": {
@@ -502,7 +504,7 @@ async function invoke(
       // (no adapter / agy) lives in the login service (LoginBadRequestError → bad_request).
       const provider = (req.params as RpcBeginLoginParams).provider;
       if (!isProviderKind(provider)) throw new BadRequestError("unknown provider");
-      return host.beginLogin(provider);
+      return host.beginLogin(provider, requireSessionKey(req));
     }
     case "pollLogin": {
       const p = req.params as RpcPollLoginParams;
@@ -510,7 +512,7 @@ async function invoke(
       if (typeof p.loginId !== "string" || p.loginId.length === 0) {
         throw new BadRequestError("missing loginId");
       }
-      return host.pollLogin(p.provider, p.loginId);
+      return host.pollLogin(p.provider, p.loginId, requireSessionKey(req));
     }
     case "submitLoginToken": {
       const p = req.params as RpcSubmitLoginTokenParams;
@@ -522,7 +524,7 @@ async function invoke(
       if (typeof p.token !== "string" || p.token.length === 0) {
         throw new BadRequestError("missing token");
       }
-      return host.submitLoginToken(p.provider, p.loginId, p.token);
+      return host.submitLoginToken(p.provider, p.loginId, p.token, requireSessionKey(req));
     }
     case "cancelLogin": {
       const p = req.params as RpcCancelLoginParams;
@@ -530,7 +532,7 @@ async function invoke(
       if (typeof p.loginId !== "string" || p.loginId.length === 0) {
         throw new BadRequestError("missing loginId");
       }
-      return host.cancelLogin(p.provider, p.loginId);
+      return host.cancelLogin(p.provider, p.loginId, requireSessionKey(req));
     }
     // #1059 owner terminal — non-session verbs (no sessionKey, mirrors listLiveSessions):
     // the terminal is a single instance-wide resource, not per-chat-session.

@@ -136,7 +136,8 @@ export interface ProviderInstallStateStore {
  * a transient probe never breaks the status load).
  */
 export type ReconcileInstallStatesPort = (
-  scopedDb: DataContextDb
+  scopedDb: DataContextDb,
+  actorUserId?: string
 ) => Promise<Partial<Record<OnboardingProviderKind, ProviderInstallState>>>;
 
 /** The injected install seam (install-contract §A.5.1). Absent ⇒ the install route fails closed. */
@@ -153,15 +154,16 @@ export interface OnboardingInstallDependencies {
 
 export interface OnboardingProbes {
   /** Provider CLI presence (presence-only). Bounded live probe. */
-  readonly cliPresent: (kind: OnboardingProviderKind) => Promise<boolean>;
+  readonly cliPresent: (kind: OnboardingProviderKind, actorUserId?: string) => Promise<boolean>;
   /** Explicit provider auth/connection check. Bounded live probe; never run by status. */
   readonly testProviderConnection: (
-    kind: OnboardingProviderKind
+    kind: OnboardingProviderKind,
+    actorUserId?: string
   ) => Promise<OnboardingProviderCheckResponse>;
   /** ACP adapter initialize/session-new check used by the Settings provider cards. */
   readonly acpProviderInitialization?: (
     kind: OnboardingProviderKind,
-    actorUserId: string
+    actorUserId?: string
   ) => Promise<OnboardingProviderCheckResponse>;
   /** Connector-account existence — a scoped read (needs the request's RLS scope). */
   readonly connectorAccountExists: (scopedDb: DataContextDb) => Promise<boolean>;
@@ -290,17 +292,26 @@ export type ProviderLoginabilityPort = (provider: OnboardingProviderKind) => Pro
  * never logged/persisted/echoed.
  */
 export interface ProviderLoginClient {
-  readonly begin: (provider: OnboardingProviderKind) => Promise<ProviderLoginOutcome>;
+  readonly begin: (
+    provider: OnboardingProviderKind,
+    actorUserId?: string
+  ) => Promise<ProviderLoginOutcome>;
   readonly poll: (
     provider: OnboardingProviderKind,
-    loginId: string
+    loginId: string,
+    actorUserId?: string
   ) => Promise<ProviderLoginOutcome>;
   readonly submitToken: (
     provider: OnboardingProviderKind,
     loginId: string,
-    token: string
+    token: string,
+    actorUserId?: string
   ) => Promise<ProviderLoginOutcome>;
-  readonly cancel: (provider: OnboardingProviderKind, loginId: string) => Promise<void>;
+  readonly cancel: (
+    provider: OnboardingProviderKind,
+    loginId: string,
+    actorUserId: string
+  ) => Promise<void>;
 }
 
 /** Persists the §L.4 login transitions under the ADMIN-scoped DataContextDb the route resolves. */
@@ -551,7 +562,7 @@ export function registerOnboardingRoutes(
             // write RLS). The reconcile MUST come after the admin gate above. Absent seam ⇒ the
             // Phase-1 presence-only surface (no installState).
             const installStateByKind = install
-              ? await install.reconcileInstallStates(scopedDb)
+              ? await install.reconcileInstallStates(scopedDb, accessContext.actorUserId)
               : undefined;
             // #365: derive per-provider catalog installability (the `supported` set) from the
             // install seam's PURE installability port, so the wizard offers Connect data-drivenly
@@ -585,9 +596,9 @@ export function registerOnboardingRoutes(
           google = hit.google;
         } else {
           [anthropic, openaiCompatible, google] = await Promise.all([
-            probes.cliPresent("anthropic"),
-            probes.cliPresent("openai-compatible"),
-            probes.cliPresent("google")
+            probes.cliPresent("anthropic", actorId),
+            probes.cliPresent("openai-compatible", actorId),
+            probes.cliPresent("google", actorId)
           ]);
           cliProbeCache.set(actorId, {
             anthropic,
@@ -633,7 +644,7 @@ export function registerOnboardingRoutes(
 
         return await (probes.acpProviderInitialization
           ? probes.acpProviderInitialization(body.providerKind, accessContext.actorUserId)
-          : probes.testProviderConnection(body.providerKind));
+          : probes.testProviderConnection(body.providerKind, accessContext.actorUserId));
       } catch (error) {
         return dependencies.handleRouteError(error, reply);
       }
@@ -743,7 +754,7 @@ export function registerOnboardingRoutes(
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
           await dependencies.assertBootstrapOwnerAdminUser(scopedDb, accessContext.actorUserId);
           await login.stateStore.persistNeedsLogin(scopedDb, { provider: providerKind, requestId });
-          const outcome = await login.loginClient.begin(providerKind);
+          const outcome = await login.loginClient.begin(providerKind, accessContext.actorUserId);
           const installState = await login.stateStore.persistLoginTerminal(scopedDb, {
             provider: providerKind,
             status: outcome.status,
@@ -774,7 +785,11 @@ export function registerOnboardingRoutes(
         const requestId = dependencies.requireRequestId(accessContext);
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
           await dependencies.assertBootstrapOwnerAdminUser(scopedDb, accessContext.actorUserId);
-          const outcome = await login.loginClient.poll(providerKind, loginId);
+          const outcome = await login.loginClient.poll(
+            providerKind,
+            loginId,
+            accessContext.actorUserId
+          );
           const installState = await login.stateStore.persistLoginTerminal(scopedDb, {
             provider: providerKind,
             status: outcome.status,
@@ -811,7 +826,12 @@ export function registerOnboardingRoutes(
         const requestId = dependencies.requireRequestId(accessContext);
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
           await dependencies.assertBootstrapOwnerAdminUser(scopedDb, accessContext.actorUserId);
-          const outcome = await login.loginClient.submitToken(providerKind, loginId, token);
+          const outcome = await login.loginClient.submitToken(
+            providerKind,
+            loginId,
+            token,
+            accessContext.actorUserId
+          );
           const installState = await login.stateStore.persistLoginTerminal(scopedDb, {
             provider: providerKind,
             status: outcome.status,
@@ -841,7 +861,7 @@ export function registerOnboardingRoutes(
         const accessContext = await dependencies.resolveAccessContext(request);
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
           await dependencies.assertBootstrapOwnerAdminUser(scopedDb, accessContext.actorUserId);
-          await login.loginClient.cancel(providerKind, loginId);
+          await login.loginClient.cancel(providerKind, loginId, accessContext.actorUserId);
           const installState = await login.stateStore.readState(scopedDb, providerKind);
           const result: OnboardingProviderLoginCancelResponse = {
             providerKind,

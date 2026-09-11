@@ -158,6 +158,27 @@ describe("start-jarv1s startup plan", () => {
     expect(env.PATH).toBe("/custom/cli-tools/bin:/usr/bin:/bin");
   });
 
+  it.each<ChildRole>(["api", "worker", "cli-runner"])(
+    "%s prepends the default CLI-tools directory and preserves PATH",
+    (role) => {
+      const env = buildChildEnv(role, { PATH: "/usr/bin:/bin" } as NodeJS.ProcessEnv);
+
+      expect(env.PATH).toBe("/data/cli-tools/bin:/usr/bin:/bin");
+    }
+  );
+
+  it.each<ChildRole>(["api", "worker", "cli-runner"])(
+    "%s prepends a custom CLI-tools directory and preserves PATH",
+    (role) => {
+      const env = buildChildEnv(role, {
+        PATH: "/usr/bin:/bin",
+        JARVIS_CLI_TOOLS_PREFIX: "/custom/cli-tools"
+      } as NodeJS.ProcessEnv);
+
+      expect(env.PATH).toBe("/custom/cli-tools/bin:/usr/bin:/bin");
+    }
+  );
+
   it.each<ChildRole>(["api", "worker"])("%s keeps app runtime env", (role) => {
     const env = buildChildEnv(role, {
       PATH: "/bin",

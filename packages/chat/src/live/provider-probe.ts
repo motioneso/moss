@@ -32,8 +32,12 @@ function credentialFingerprint(credentialEnv?: NodeJS.ProcessEnv): string {
   return credentialEnv?.CLAUDE_CODE_OAUTH_TOKEN ?? "";
 }
 
-function probeCacheKey(provider: ProviderKind, credentialEnv?: NodeJS.ProcessEnv): string {
-  return `${provider}:${credentialFingerprint(credentialEnv)}`;
+function probeCacheKey(
+  provider: ProviderKind,
+  credentialEnv?: NodeJS.ProcessEnv,
+  scope?: string
+): string {
+  return `${provider}:${scope ?? "shared"}:${credentialFingerprint(credentialEnv)}`;
 }
 
 /**
@@ -57,13 +61,14 @@ interface LoginRejectionEntry {
  * minutes on, which meant simply waiting made an unchanged, still-refused credential read as
  * ready again. Only proof that the vendor now accepts a sign-in retires a refusal.
  */
-const loginRejections = new Map<ProviderKind, LoginRejectionEntry>();
+const loginRejections = new Map<string, LoginRejectionEntry>();
 
 function hasLoginRejection(
   provider: ProviderKind,
-  credentialEnv: NodeJS.ProcessEnv | undefined
+  credentialEnv: NodeJS.ProcessEnv | undefined,
+  scope?: string
 ): boolean {
-  const entry = loginRejections.get(provider);
+  const entry = loginRejections.get(`${provider}:${scope ?? "shared"}`);
   if (!entry) return false;
   return entry.credential === null || entry.credential === credentialFingerprint(credentialEnv);
 }
@@ -93,9 +98,10 @@ export function clearProviderProbeCacheForTests(): void {
  */
 export function invalidateProviderProbeCache(
   provider: ProviderKind,
-  credentialEnv?: NodeJS.ProcessEnv
+  credentialEnv?: NodeJS.ProcessEnv,
+  scope?: string
 ): void {
-  probeCache.delete(probeCacheKey(provider, credentialEnv));
+  probeCache.delete(probeCacheKey(provider, credentialEnv, scope));
   // #2242 (round 3): the recorded refusal deliberately SURVIVES this. Pressing Log in used to
   // wipe it, which let the very same refused credential come straight back as ready without the
   // vendor accepting anything new — so pressing Log in could close the sign-in screen instead of
@@ -113,15 +119,16 @@ export function invalidateProviderProbeCache(
  */
 export function recordProviderLoginRejected(
   provider: ProviderKind,
-  credentialEnv?: NodeJS.ProcessEnv
+  credentialEnv?: NodeJS.ProcessEnv,
+  scope?: string
 ): void {
-  loginRejections.set(provider, {
+  loginRejections.set(`${provider}:${scope ?? "shared"}`, {
     credential: credentialEnv === undefined ? null : credentialFingerprint(credentialEnv)
   });
   // Drop every saved success for this provider too: the refusal proves the saved answer wrong,
   // and leaving it behind would let it reappear the moment the refusal ages out.
   for (const key of [...probeCache.keys()]) {
-    if (key.startsWith(`${provider}:`)) probeCache.delete(key);
+    if (key.startsWith(`${provider}:${scope ?? "shared"}:`)) probeCache.delete(key);
   }
 }
 
@@ -142,6 +149,8 @@ export async function probeProvider(
     readonly multiplexerUsable?: () => Promise<boolean>;
     readonly credentialEnv?: NodeJS.ProcessEnv;
     readonly homeBase?: string;
+    /** User scope for readiness and rejection caches; prevents one isolated account answering for another. */
+    readonly cacheScope?: string;
     /**
      * #2242: skip the saved answer and run the real check now. An explicit re-login must never
      * be told "you're already logged in" on the strength of an old saved answer — if the login
@@ -165,7 +174,7 @@ export async function probeProvider(
   }
   try {
     if (!(await deps.cliPresent(provider))) return { status: "not_installed" };
-    const key = probeCacheKey(provider, deps.credentialEnv);
+    const key = probeCacheKey(provider, deps.credentialEnv, deps.cacheScope);
     const now = Date.now();
     // #2242 (round 3): a known refusal is consulted BEFORE any provider's own check, for every
     // provider, and an explicit fresh check no longer waves it away. Codex's check only asks the
@@ -173,12 +182,12 @@ export async function probeProvider(
     // the answer "ready" for the very credential the vendor had just refused. A forced check gets
     // past a refusal only by proving the sign-in for real: claude and gemini do that with their
     // own check below; codex needs the runner's real request, and stays at needs_login without it.
-    if (hasLoginRejection(provider, deps.credentialEnv)) {
+    if (hasLoginRejection(provider, deps.credentialEnv, deps.cacheScope)) {
       if (!deps.forceFresh) return { status: "needs_login" };
       if (!checkProvesCredential(provider)) {
         const verdict = deps.verifyCredential ? await deps.verifyCredential() : "unknown";
         if (verdict !== "accepted") return { status: "needs_login" };
-        loginRejections.delete(provider);
+        loginRejections.delete(`${provider}:${deps.cacheScope ?? "shared"}`);
       }
     }
     if (provider !== "anthropic") {
@@ -188,7 +197,7 @@ export async function probeProvider(
           : await probeGeminiAuth(deps.io);
       // A check that really proves the credential and comes back ready retires the old refusal.
       if (result.status === "ready" && checkProvesCredential(provider)) {
-        loginRejections.delete(provider);
+        loginRejections.delete(`${provider}:${deps.cacheScope ?? "shared"}`);
       }
       return result;
     }
@@ -197,7 +206,9 @@ export async function probeProvider(
       if (cached && cached.expiresAt > now) return cached.result;
     }
     const result = await probeClaudeAuth(deps.io, deps.credentialEnv, deps.homeBase);
-    if (result.status === "ready") loginRejections.delete(provider);
+    if (result.status === "ready") {
+      loginRejections.delete(`${provider}:${deps.cacheScope ?? "shared"}`);
+    }
     probeCache.set(key, { result, expiresAt: now + PROBE_CACHE_TTL_MS });
     return result;
   } catch {

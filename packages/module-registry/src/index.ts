@@ -635,13 +635,14 @@ export interface BuiltInRouteDependencies {
    * @moss/connectors PACKAGE dependency (module isolation). Each probes lazily, per request.
    */
   readonly onboardingProbes?: {
-    readonly cliPresent: (kind: OnboardingProviderKind) => Promise<boolean>;
+    readonly cliPresent: (kind: OnboardingProviderKind, actorUserId?: string) => Promise<boolean>;
     readonly testProviderConnection: (
-      kind: OnboardingProviderKind
+      kind: OnboardingProviderKind,
+      actorUserId?: string
     ) => Promise<OnboardingProviderCheckResponse>;
     readonly acpProviderInitialization?: (
       kind: OnboardingProviderKind,
-      actorUserId: string
+      actorUserId?: string
     ) => Promise<OnboardingProviderCheckResponse>;
     readonly connectorAccountExists: (scopedDb: DataContextDb) => Promise<boolean>;
   };
@@ -3075,7 +3076,7 @@ export function registerBuiltInApiRoutes(
   let acpProviderInitialization:
     | ((
         kind: OnboardingProviderKind,
-        actorUserId: string
+        actorUserId?: string
       ) => Promise<OnboardingProviderCheckResponse>)
     | undefined;
 
@@ -3115,10 +3116,10 @@ export function registerBuiltInApiRoutes(
     }),
     acpProviderInitialization: (
       kind: OnboardingProviderKind,
-      actorUserId: string
+      actorUserId?: string
     ): Promise<OnboardingProviderCheckResponse> =>
       acpProviderInitialization
-        ? acpProviderInitialization(kind, actorUserId)
+        ? acpProviderInitialization(kind, actorUserId ?? "legacy-user")
         : Promise.resolve({ status: "multiplexer_unavailable" }),
     connectorAccountExists: async (scopedDb: DataContextDb) =>
       (await new ConnectorsRepository().listAccounts(scopedDb)).length > 0
@@ -3263,7 +3264,8 @@ export function registerBuiltInApiRoutes(
       rpcConnection = connection;
     },
     adoptAcpProviderInitialization: (check) => {
-      acpProviderInitialization = (provider, actorUserId) => check(actorUserId, provider);
+      acpProviderInitialization = (provider, actorUserId) =>
+        check(actorUserId ?? "legacy-user", provider);
     },
     // #1081 H2: mirrors adoptChatRpcConnection immediately above — publishes the chat session
     // manager's dropSessionsForProvider so the onboarding-install seam (built earlier in this

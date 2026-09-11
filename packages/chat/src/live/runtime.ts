@@ -394,7 +394,9 @@ export function selectEngineFactory(
             // holds its own separate cache. Without relaying the rejection across the socket,
             // the settings screen keeps showing a refused sign-in as good.
             reportLoginRejected: () => {
-              void connection.recordLoginRejected({ provider }).catch(() => undefined);
+              void connection
+                .recordLoginRejected({ provider }, engineOpts.userId)
+                .catch(() => undefined);
             }
           });
         }
