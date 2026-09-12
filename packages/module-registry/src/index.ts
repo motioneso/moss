@@ -1853,6 +1853,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             return task ? { id: task.id, ownerUserId: task.owner_user_id } : undefined;
           }
         }),
+        findSourceRun: (scopedDb, runId) =>
+          new BriefingsRepository().getOwnedRunById(scopedDb, runId),
         resolveTimeZone: (request, accessContext) =>
           resolveRequestTimeZoneForRoute(
             request,

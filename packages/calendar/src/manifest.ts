@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import type { MossModuleManifest, ToolRequiresConfirmation } from "@moss/module-sdk";
 import { calendarMonitorProvider } from "./monitor-provider.js";
 import {
+  createDayPlanRequestSchema,
+  createDayPlanResponseSchema,
   getCalendarBriefingSettingsResponseSchema,
   getDayPlanResponseSchema,
   getCalendarEventResponseSchema,
@@ -122,7 +124,8 @@ export const calendarModuleManifest = {
     {
       id: "calendar.manage",
       label: "Manage calendar module",
-      description: "Manage Calendar module settings and connector-backed cache behavior.",
+      description:
+        "Manage Calendar module settings, connector-backed cache behavior, and your own saved day plans.",
       scope: "user",
       actions: ["manage"]
     }
@@ -176,6 +179,13 @@ export const calendarModuleManifest = {
       path: "/api/calendar/day-plan",
       responseSchema: getDayPlanResponseSchema,
       permissionId: "calendar.view"
+    },
+    {
+      method: "POST",
+      path: "/api/calendar/day-plans",
+      requestSchema: createDayPlanRequestSchema,
+      responseSchema: createDayPlanResponseSchema,
+      permissionId: "calendar.manage"
     },
     {
       method: "GET",
@@ -384,6 +394,33 @@ export const calendarModuleManifest = {
           code: "day_plan_invalid",
           class: "validation",
           description: "Use a real YYYY-MM-DD date and a valid IANA timezone."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_timezone",
+          description:
+            "Check your timezone in profile settings, or request the plan's saved timezone.",
+          path: "/settings?section=profile"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_create",
+      description:
+        "Create your saved day plan for a date and timezone, with an optional actor-owned briefing run as provenance. Creation starts from an empty plan and never schedules or changes an event.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description:
+            "Use a real YYYY-MM-DD date, a valid IANA timezone, and a well-formed briefing-run id when one is supplied."
+        },
+        {
+          code: "briefing_run_not_available",
+          class: "validation",
+          description:
+            "The named briefing run is missing or owned by someone else; both cases look the same so runs cannot be probed."
         }
       ],
       remediations: [

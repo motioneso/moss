@@ -258,6 +258,46 @@ export const getDayPlanRouteSchema = {
   }
 } as const;
 
+export interface CreateDayPlanRequest {
+  date: string;
+  timeZone?: string;
+  sourceRunId?: string | null;
+}
+
+export interface CreateDayPlanResponse {
+  plan: DayPlanDto;
+}
+
+export const createDayPlanRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["date"],
+  properties: {
+    // PostgreSQL dates have no year zero.
+    date: { type: "string", pattern: `^(?!0000)${DAY_RE.source.slice(1)}` },
+    timeZone: { type: "string", minLength: 1, maxLength: 64 },
+    sourceRunId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] }
+  }
+} as const;
+
+export const createDayPlanResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["plan"],
+  properties: { plan: dayPlanDtoSchema }
+} as const;
+
+export const createDayPlanRouteSchema = {
+  body: createDayPlanRequestSchema,
+  response: {
+    200: createDayPlanResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema,
+    503: errorResponseSchema
+  }
+} as const;
+
 export interface DayPlanOperationInput {
   planId: string;
   expectedRevision: number;
