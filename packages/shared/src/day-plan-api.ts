@@ -2,6 +2,12 @@
 // Reads separate recorded placement from proposals;
 // draft saves only change proposals. Later application work owns actual placement.
 import { errorResponseSchema, nullableStringSchema } from "./schema-fragments.js";
+import {
+  briefingRunStatusSchema,
+  briefingTypeSchema,
+  type BriefingRunStatus,
+  type BriefingType
+} from "./briefings-api.js";
 
 export const DAY_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
@@ -132,9 +138,35 @@ export interface GetDayPlanQuery {
   timeZone?: string;
 }
 
-/** Stored draft snapshot; task labels and references are not current source validation. */
+/** A task referenced by the plan, projected from the current actor-visible record. */
+export interface DayPlanTaskSummary {
+  id: string;
+  title: string;
+  status: DayPlanTaskSummaryStatus;
+  dueAt: string | null;
+  doAt: string | null;
+  effort: DayPlanTaskSummaryEffort | null;
+}
+
+export type DayPlanTaskSummaryStatus = "todo" | "suggested" | "done" | "archived";
+
+export type DayPlanTaskSummaryEffort = "quick" | "medium" | "large";
+
+/** Bounded origin-run reference for the plan's source run. */
+export interface DayPlanSourceRunSummary {
+  id: string;
+  briefingType: BriefingType;
+  status: BriefingRunStatus;
+  createdAt: string;
+}
+
+/** Stored draft snapshot plus current actor-visible task facts and source-run reference. */
 export interface GetDayPlanResponse {
   plan: DayPlanDto | null;
+  tasks: DayPlanTaskSummary[];
+  unavailableTaskIds: string[];
+  sourceRun: DayPlanSourceRunSummary | null;
+  sourceRunUnavailable: boolean;
 }
 
 export const dayPlanDtoSchema = {
@@ -231,11 +263,43 @@ export const dayPlanDtoSchema = {
   }
 } as const;
 
+export const dayPlanTaskSummarySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "title", "status", "dueAt", "doAt", "effort"],
+  properties: {
+    id: { type: "string" },
+    title: { type: "string" },
+    status: { type: "string", enum: ["todo", "suggested", "done", "archived"] },
+    dueAt: { type: ["string", "null"] },
+    doAt: { type: ["string", "null"] },
+    effort: { type: ["string", "null"], enum: ["quick", "medium", "large", null] }
+  }
+} as const;
+
+export const dayPlanSourceRunSummarySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "briefingType", "status", "createdAt"],
+  properties: {
+    id: { type: "string" },
+    briefingType: briefingTypeSchema,
+    status: briefingRunStatusSchema,
+    createdAt: { type: "string" }
+  }
+} as const;
+
 export const getDayPlanResponseSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["plan"],
-  properties: { plan: { anyOf: [dayPlanDtoSchema, { type: "null" }] } }
+  required: ["plan", "tasks", "unavailableTaskIds", "sourceRun", "sourceRunUnavailable"],
+  properties: {
+    plan: { anyOf: [dayPlanDtoSchema, { type: "null" }] },
+    tasks: { type: "array", items: dayPlanTaskSummarySchema },
+    unavailableTaskIds: { type: "array", items: { type: "string" } },
+    sourceRun: { anyOf: [dayPlanSourceRunSummarySchema, { type: "null" }] },
+    sourceRunUnavailable: { type: "boolean" }
+  }
 } as const;
 
 export const getDayPlanRouteSchema = {

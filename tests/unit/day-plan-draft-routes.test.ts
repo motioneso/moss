@@ -65,6 +65,8 @@ function buildApp(options: { save?: DayPlanDto; auth?: Error } = {}) {
       saveDraft
     },
     findSourceRun: async () => undefined,
+    findTask: async () => undefined,
+    findRun: async () => undefined,
     dataContext: {
       withDataContext: async <T>(
         context: AccessContext,

@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { AccessContext, DataContextDb } from "@moss/db";
+import type { AccessContext, BriefingRun, DataContextDb, Task } from "@moss/db";
 import type { DayPlanRepository } from "@moss/calendar";
 import type { DayPlanDto, GetDayPlanResponse } from "@moss/shared";
 
@@ -61,7 +61,46 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
 });
 
-function buildApp(plan: DayPlanDto | undefined = snapshot) {
+const visibleTask: Task = {
+  id: "task-a",
+  owner_user_id: "actor-a",
+  list_id: "list-a",
+  parent_task_id: null,
+  title: "Current task title",
+  description: null,
+  status: "done",
+  priority: 1,
+  position: 0,
+  due_at: new Date("2026-09-14T18:00:00.000Z"),
+  do_at: new Date("2026-09-12T16:00:00.000Z"),
+  completed_at: null,
+  effort: "medium",
+  source: "manual",
+  source_ref: null,
+  external_key: null,
+  recurrence: null,
+  recurrence_series_id: null,
+  suggestion_metadata: null,
+  created_at: new Date("2026-09-12T15:00:00.000Z"),
+  updated_at: new Date("2026-09-12T15:00:00.000Z")
+};
+
+const visibleRun: BriefingRun = {
+  id: "run-a",
+  definition_id: "definition-a",
+  owner_user_id: "actor-a",
+  status: "succeeded",
+  run_kind: "manual",
+  briefing_type: "evening",
+  summary_text: "Evening summary",
+  source_metadata: {},
+  created_at: new Date("2026-09-12T10:00:00.000Z")
+};
+
+function buildApp(
+  plan: DayPlanDto | undefined = snapshot,
+  options: { run?: BriefingRun | null; tasks?: Map<string, Task | undefined> } = {}
+) {
   const app = Fastify();
   servers.push(app);
   const contexts: AccessContext[] = [];
@@ -69,6 +108,11 @@ function buildApp(plan: DayPlanDto | undefined = snapshot) {
   const read = vi.fn<DayPlanRepository["getForDay"]>().mockResolvedValue(plan);
   const resolveTimeZone = vi.fn(async () => "America/Los_Angeles");
   const resolveAccessContext = vi.fn(async () => actor);
+  const taskStore = options.tasks ?? new Map<string, Task | undefined>([["task-a", visibleTask]]);
+  const findTask = vi.fn(async (_db: DataContextDb, taskId: string) => taskStore.get(taskId));
+  const findRun = vi.fn(async () =>
+    options.run === undefined ? visibleRun : (options.run ?? undefined)
+  );
   registerDayPlanRoutes(app, {
     resolveAccessContext,
     resolveTimeZone,
@@ -78,6 +122,8 @@ function buildApp(plan: DayPlanDto | undefined = snapshot) {
       saveDraft: async () => undefined as never
     },
     findSourceRun: async () => undefined,
+    findTask,
+    findRun,
     dataContext: {
       withDataContext: async <T>(
         context: AccessContext,
@@ -98,12 +144,88 @@ describe("saved day-plan read route", () => {
       url: "/api/calendar/day-plan?date=2026-09-12&actorUserId=actor-b&ownerUserId=actor-b"
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json<GetDayPlanResponse>()).toEqual({ plan: snapshot });
+    const body = response.json<GetDayPlanResponse>();
+    expect(body.plan).toEqual(snapshot);
+    expect(body.tasks).toEqual([
+      {
+        id: "task-a",
+        title: "Current task title",
+        status: "done",
+        dueAt: "2026-09-14T18:00:00.000Z",
+        doAt: "2026-09-12T16:00:00.000Z",
+        effort: "medium"
+      }
+    ]);
+    expect(body.unavailableTaskIds).toEqual([]);
+    expect(body.sourceRun).toEqual({
+      id: "run-a",
+      briefingType: "evening",
+      status: "succeeded",
+      createdAt: "2026-09-12T10:00:00.000Z"
+    });
+    expect(body.sourceRunUnavailable).toBe(false);
     expect(read).toHaveBeenCalledExactlyOnceWith(scopedDb, {
       localDay: "2026-09-12",
       timeZone: "America/Los_Angeles"
     });
     expect(contexts).toEqual([actor]);
+  });
+
+  it("keeps stored content identical while projecting changed task facts", async () => {
+    const changed = new Map<string, Task | undefined>([
+      ["task-a", { ...visibleTask, title: "Renamed by the owner", status: "archived" as const }]
+    ]);
+    const { app } = buildApp(snapshot, { tasks: changed });
+    const response = await app.inject({ url: "/api/calendar/day-plan?date=2026-09-12" });
+    expect(response.statusCode).toBe(200);
+    const body = response.json<GetDayPlanResponse>();
+    expect(body.plan).toEqual(snapshot);
+    expect(body.plan?.blocks[0]).toMatchObject({ taskId: "task-a", title: "Saved task title" });
+    expect(body.tasks).toEqual([
+      {
+        id: "task-a",
+        title: "Renamed by the owner",
+        status: "archived",
+        dueAt: "2026-09-14T18:00:00.000Z",
+        doAt: "2026-09-12T16:00:00.000Z",
+        effort: "medium"
+      }
+    ]);
+    expect(body.unavailableTaskIds).toEqual([]);
+  });
+
+  it("reports missing tasks without failing the read", async () => {
+    const missing = new Map<string, Task | undefined>([["task-a", undefined]]);
+    const { app } = buildApp(snapshot, { tasks: missing });
+    const response = await app.inject({ url: "/api/calendar/day-plan?date=2026-09-12" });
+    expect(response.statusCode).toBe(200);
+    const body = response.json<GetDayPlanResponse>();
+    expect(body.plan).toEqual(snapshot);
+    expect(body.tasks).toEqual([]);
+    expect(body.unavailableTaskIds).toEqual(["task-a"]);
+    expect(body.sourceRun).not.toBeNull();
+    expect(body.sourceRunUnavailable).toBe(false);
+  });
+
+  it("reports a missing source run without failing the read", async () => {
+    const { app } = buildApp(snapshot, { run: null });
+    const response = await app.inject({ url: "/api/calendar/day-plan?date=2026-09-12" });
+    expect(response.statusCode).toBe(200);
+    const body = response.json<GetDayPlanResponse>();
+    expect(body.plan).toEqual(snapshot);
+    expect(body.sourceRun).toBeNull();
+    expect(body.sourceRunUnavailable).toBe(true);
+  });
+
+  it("returns a null source run without flagging it missing", async () => {
+    const noSource: DayPlanDto = { ...snapshot, sourceRunId: null };
+    const { app } = buildApp(noSource);
+    const response = await app.inject({ url: "/api/calendar/day-plan?date=2026-09-12" });
+    expect(response.statusCode).toBe(200);
+    const body = response.json<GetDayPlanResponse>();
+    expect(body.plan).toEqual(noSource);
+    expect(body.sourceRun).toBeNull();
+    expect(body.sourceRunUnavailable).toBe(false);
   });
 
   it("fails closed when a read returns undeclared storage fields", async () => {
@@ -119,7 +241,13 @@ describe("saved day-plan read route", () => {
     read.mockResolvedValue(undefined);
     const response = await app.inject({ url: "/api/calendar/day-plan?date=2026-09-12" });
     expect(response.statusCode).toBe(200);
-    expect(response.json<GetDayPlanResponse>()).toEqual({ plan: null });
+    expect(response.json<GetDayPlanResponse>()).toEqual({
+      plan: null,
+      tasks: [],
+      unavailableTaskIds: [],
+      sourceRun: null,
+      sourceRunUnavailable: false
+    });
     expect(read).toHaveBeenCalledOnce();
   });
 
@@ -133,7 +261,12 @@ describe("saved day-plan read route", () => {
     const { app } = buildApp(nullablePlan);
     const response = await app.inject({ url: "/api/calendar/day-plan?date=2026-09-12" });
     expect(response.statusCode).toBe(200);
-    expect(response.json<GetDayPlanResponse>()).toEqual({ plan: nullablePlan });
+    const body = response.json<GetDayPlanResponse>();
+    expect(body.plan).toEqual(nullablePlan);
+    expect(body.tasks.map((task) => task.id)).toEqual(["task-a"]);
+    expect(body.unavailableTaskIds).toEqual([]);
+    expect(body.sourceRun).toBeNull();
+    expect(body.sourceRunUnavailable).toBe(false);
   });
 
   it("uses an explicit original timezone instead of the current locale", async () => {

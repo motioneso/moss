@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import type { AccessContext, BriefingRun, DataContextDb, DataContextRunner, Task } from "@moss/db";
 import { handleRouteError, HttpError } from "@moss/module-sdk";
 import {
   createDayPlanRouteSchema,
@@ -8,6 +8,9 @@ import {
   saveDayPlanRouteSchema,
   type CreateDayPlanRequest,
   type CreateDayPlanResponse,
+  type DayPlanDto,
+  type DayPlanSourceRunSummary,
+  type DayPlanTaskSummary,
   type GetDayPlanQuery,
   type GetDayPlanResponse,
   type SaveDayPlanRequest,
@@ -22,11 +25,21 @@ import {
 } from "./day-plan-model.js";
 import type { DayPlanRepository } from "./day-plan-repository.js";
 
+export interface DayPlanTaskProjection {
+  (scopedDb: DataContextDb, taskId: string): Promise<Task | undefined>;
+}
+
+export interface DayPlanRunProjection {
+  (scopedDb: DataContextDb, runId: string): Promise<BriefingRun | undefined>;
+}
+
 export interface DayPlanRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
   readonly dayPlanRepository: Pick<DayPlanRepository, "getForDay" | "createForDay" | "saveDraft">;
   readonly findSourceRun: (scopedDb: DataContextDb, runId: string) => Promise<unknown>;
+  readonly findTask?: DayPlanTaskProjection;
+  readonly findRun: DayPlanRunProjection;
   readonly resolveTimeZone: (
     request: FastifyRequest,
     accessContext: AccessContext
@@ -104,6 +117,81 @@ async function rejectUnknownSaveFields(request: FastifyRequest, reply: FastifyRe
   }
 }
 
+function toIso(value: Date | string | null): string | null {
+  if (value === null || value === undefined) return null;
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+// The stored plan is returned unchanged. Task summaries and the source-run
+// reference are a live projection beside it: current actor-visible records
+// only, with missing references reported instead of failing the read.
+async function enrichSavedRead(
+  scopedDb: DataContextDb,
+  dependencies: DayPlanRoutesDependencies,
+  plan: DayPlanDto | null
+): Promise<GetDayPlanResponse> {
+  if (!plan) {
+    return {
+      plan: null,
+      tasks: [],
+      unavailableTaskIds: [],
+      sourceRun: null,
+      sourceRunUnavailable: false
+    };
+  }
+  const referencedIds: string[] = [];
+  const seen = new Set<string>();
+  const remember = (taskId: string | null) => {
+    if (taskId !== null && !seen.has(taskId)) {
+      seen.add(taskId);
+      referencedIds.push(taskId);
+    }
+  };
+  for (const taskId of plan.eveningIntent?.priorityTaskIds ?? []) remember(taskId);
+  for (const correction of plan.eveningIntent?.corrections ?? []) remember(correction.taskId);
+  for (const commitment of plan.eveningIntent?.commitments ?? []) remember(commitment.taskId);
+  for (const block of plan.blocks) remember(block.taskId);
+
+  const tasks: DayPlanTaskSummary[] = [];
+  const unavailableTaskIds: string[] = [];
+  if (dependencies.findTask) {
+    for (const taskId of referencedIds) {
+      const task = await dependencies.findTask(scopedDb, taskId);
+      if (!task) {
+        unavailableTaskIds.push(taskId);
+        continue;
+      }
+      tasks.push({
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        dueAt: toIso(task.due_at),
+        doAt: toIso(task.do_at),
+        effort: task.effort
+      });
+    }
+  } else {
+    unavailableTaskIds.push(...referencedIds);
+  }
+
+  let sourceRun: DayPlanSourceRunSummary | null = null;
+  let sourceRunUnavailable = false;
+  if (plan.sourceRunId !== null) {
+    const run = await dependencies.findRun(scopedDb, plan.sourceRunId);
+    if (run) {
+      sourceRun = {
+        id: run.id,
+        briefingType: run.briefing_type,
+        status: run.status,
+        createdAt: toIso(run.created_at) ?? ""
+      };
+    } else {
+      sourceRunUnavailable = true;
+    }
+  }
+  return { plan, tasks, unavailableTaskIds, sourceRun, sourceRunUnavailable };
+}
+
 export function registerDayPlanRoutes(
   server: FastifyInstance,
   dependencies: DayPlanRoutesDependencies
@@ -118,10 +206,17 @@ export function registerDayPlanRoutes(
         const timeZone = normalizeTimeZone(
           request.query.timeZone ?? (await dependencies.resolveTimeZone(request, accessContext))
         );
-        const plan = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          dependencies.dayPlanRepository.getForDay(scopedDb, { localDay, timeZone })
+        const enriched = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const plan = await dependencies.dayPlanRepository.getForDay(scopedDb, {
+              localDay,
+              timeZone
+            });
+            return enrichSavedRead(scopedDb, dependencies, plan ?? null);
+          }
         );
-        return { plan: plan ?? null } satisfies GetDayPlanResponse;
+        return enriched satisfies GetDayPlanResponse;
       } catch (error) {
         if (error instanceof DayPlanValidationError) {
           return reply.code(400).send({ error: error.message, code: error.code });

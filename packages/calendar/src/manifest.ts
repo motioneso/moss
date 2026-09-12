@@ -396,8 +396,9 @@ export const calendarModuleManifest = {
     {
       id: "calendar.saved_day_plan_read",
       description:
-        "Read your saved day plan for a date and timezone, with recorded placements and pending " +
-        "changes. Reading does not change the plan or refresh task and calendar facts. An unsaved day returns no plan.",
+        "Read your saved day plan for a date and timezone, with actor-visible tasks, unavailable " +
+        "references, pending changes, and source-run summary. Reading does not change the plan or " +
+        "refresh calendar facts. An unsaved day returns no plan.",
       errors: [
         {
           code: "day_plan_invalid",
