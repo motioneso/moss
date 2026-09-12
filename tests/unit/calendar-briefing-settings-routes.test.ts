@@ -27,6 +27,8 @@ function buildApp(initial: Record<string, unknown> = {}) {
   const app = Fastify();
   registerCalendarRoutes(app, {
     resolveAccessContext: async () => userA,
+    dayPlanRepository: { getForDay: async () => undefined },
+    resolveTimeZone: async () => "UTC",
     dataContext: {
       withDataContext: async <T>(_ac: AccessContext, work: (db: DataContextDb) => Promise<T>) =>
         work({} as DataContextDb)

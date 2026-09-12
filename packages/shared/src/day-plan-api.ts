@@ -1,6 +1,8 @@
-// Day-plan storage contract (R2.2-T01). Pure types and const lists: browser-safe,
-// no runtime or Node imports. Reads separate recorded placement from proposals;
+// Day-plan storage and saved-read contract. Browser-safe types and JSON schemas.
+// Reads separate recorded placement from proposals;
 // draft saves only change proposals. Later application work owns actual placement.
+import { errorResponseSchema, nullableStringSchema } from "./schema-fragments.js";
+
 export const DAY_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 export const DAY_PLAN_BLOCK_KINDS = [
@@ -124,6 +126,137 @@ export interface DayPlanDto {
   blocks: DayPlanBlockDto[];
   eveningIntent: DayPlanEveningIntent | null;
 }
+
+export interface GetDayPlanQuery {
+  date: string;
+  timeZone?: string;
+}
+
+/** Stored draft snapshot; task labels and references are not current source validation. */
+export interface GetDayPlanResponse {
+  plan: DayPlanDto | null;
+}
+
+export const dayPlanDtoSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "localDay", "timeZone", "revision", "sourceRunId", "blocks", "eveningIntent"],
+  properties: {
+    id: { type: "string" },
+    localDay: { type: "string" },
+    timeZone: { type: "string" },
+    revision: { type: "integer" },
+    sourceRunId: nullableStringSchema,
+    blocks: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "kind", "taskId", "title", "position", "actualPlacement", "pendingChange"],
+        properties: {
+          id: { type: "string" },
+          kind: { type: "string", enum: DAY_PLAN_BLOCK_KINDS },
+          taskId: nullableStringSchema,
+          title: nullableStringSchema,
+          position: { type: "integer" },
+          actualPlacement: {
+            type: ["object", "null"],
+            additionalProperties: false,
+            required: ["startsAt", "durationMinutes", "calendarEventRef"],
+            properties: {
+              startsAt: nullableStringSchema,
+              durationMinutes: { type: ["number", "null"] },
+              calendarEventRef: nullableStringSchema
+            }
+          },
+          pendingChange: {
+            anyOf: [
+              { type: "null" },
+              {
+                type: "object",
+                additionalProperties: false,
+                required: ["kind"],
+                properties: { kind: { type: "string", const: "remove" } }
+              },
+              {
+                type: "object",
+                additionalProperties: false,
+                required: ["kind", "startsAt", "durationMinutes"],
+                properties: {
+                  kind: { type: "string", enum: ["add", "move"] },
+                  startsAt: { type: "string" },
+                  durationMinutes: { type: "number" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    eveningIntent: {
+      type: ["object", "null"],
+      additionalProperties: false,
+      required: ["priorityTaskIds", "capacity", "notes", "corrections", "commitments"],
+      properties: {
+        priorityTaskIds: { type: "array", items: { type: "string" } },
+        capacity: { enum: [...DAY_PLAN_INTENT_CAPACITIES, null] },
+        notes: nullableStringSchema,
+        corrections: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["taskId", "note", "source"],
+            properties: {
+              taskId: nullableStringSchema,
+              note: { type: "string" },
+              source: { type: "string", enum: DAY_PLAN_CORRECTION_SOURCES }
+            }
+          }
+        },
+        commitments: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["taskId", "decision"],
+            properties: {
+              taskId: { type: "string" },
+              decision: { type: "string", enum: DAY_PLAN_COMMITMENT_DECISIONS }
+            }
+          }
+        }
+      }
+    }
+  }
+} as const;
+
+export const getDayPlanResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["plan"],
+  properties: { plan: { anyOf: [dayPlanDtoSchema, { type: "null" }] } }
+} as const;
+
+export const getDayPlanRouteSchema = {
+  querystring: {
+    type: "object",
+    additionalProperties: false,
+    required: ["date"],
+    properties: {
+      // PostgreSQL dates have no year zero.
+      date: { type: "string", pattern: `^(?!0000)${DAY_RE.source.slice(1)}` },
+      timeZone: { type: "string", minLength: 1, maxLength: 64 }
+    }
+  },
+  response: {
+    200: getDayPlanResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema,
+    503: errorResponseSchema
+  }
+} as const;
 
 export interface DayPlanOperationInput {
   planId: string;
