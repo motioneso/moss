@@ -29,7 +29,8 @@ function buildApp(initial: Record<string, unknown> = {}) {
     resolveAccessContext: async () => userA,
     dayPlanRepository: {
       getForDay: async () => undefined,
-      createForDay: async () => undefined as never
+      createForDay: async () => undefined as never,
+      saveDraft: async () => undefined as never
     },
     findSourceRun: async () => undefined,
     resolveTimeZone: async () => "UTC",

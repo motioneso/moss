@@ -54,7 +54,8 @@ function buildApp(
     resolveTimeZone,
     dayPlanRepository: {
       getForDay: async () => undefined,
-      createForDay: create
+      createForDay: create,
+      saveDraft: async () => undefined as never
     },
     findSourceRun,
     dataContext: {
