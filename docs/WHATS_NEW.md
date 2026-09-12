@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-12
+
+#### Added
+
+- **Save a day plan.** You can create an empty saved day plan for a chosen day and timezone. [PR #2469](https://github.com/motioneso/moss/pull/2469)
+
 ### 2026-09-11
 
 #### Fixed
