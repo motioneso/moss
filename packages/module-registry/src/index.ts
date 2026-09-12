@@ -1855,6 +1855,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         }),
         findSourceRun: (scopedDb, runId) =>
           new BriefingsRepository().getOwnedRunById(scopedDb, runId),
+        findTask: (scopedDb, taskId) => new TasksRepository().getById(scopedDb, taskId),
+        findRun: (scopedDb, runId) => new BriefingsRepository().getOwnedRunById(scopedDb, runId),
         resolveTimeZone: (request, accessContext) =>
           resolveRequestTimeZoneForRoute(
             request,
