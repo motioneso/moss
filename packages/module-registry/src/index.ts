@@ -96,6 +96,7 @@ import {
 } from "@moss/briefings";
 import {
   CalendarRepository,
+  DayPlanRepository,
   calendarFollowThroughSourceRef,
   isCalendarFollowThroughEvent,
   isCalendarFollowThroughTask,
@@ -1846,6 +1847,21 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       registerCalendarRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
+        dayPlanRepository: new DayPlanRepository({
+          findTask: async (scopedDb, taskId) => {
+            const task = await new TasksRepository().getById(scopedDb, taskId);
+            return task ? { id: task.id, ownerUserId: task.owner_user_id } : undefined;
+          }
+        }),
+        findSourceRun: (scopedDb, runId) =>
+          new BriefingsRepository().getOwnedRunById(scopedDb, runId),
+        resolveTimeZone: (request, accessContext) =>
+          resolveRequestTimeZoneForRoute(
+            request,
+            accessContext,
+            deps.dataContext,
+            new PreferencesRepository()
+          ),
         calendarWritebackPolicy: {
           set: (scopedDb, moduleId, actionFamilyId, tier) =>
             new AiRepository().setActionPolicy(scopedDb, moduleId, actionFamilyId, tier)

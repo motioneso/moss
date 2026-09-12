@@ -301,6 +301,54 @@ export type BriefingRunStatus = "succeeded" | "blocked" | "failed";
 export type BriefingRunKind = "manual" | "scheduled";
 export type BriefingType = "morning" | "evening" | "weekly_review";
 
+export interface DayPlansTable {
+  id: string;
+  owner_user_id: string;
+  local_day: string;
+  time_zone: string;
+  revision: number;
+  evening_intent: JsonColumn;
+  source_run_id: string | null;
+  legacy_0229_priority: string | null;
+  legacy_0229_capacity: string | null;
+  legacy_0229_notes: string | null;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface DayPlanBlocksTable {
+  id: string;
+  plan_id: string;
+  owner_user_id: string;
+  task_id: string | null;
+  kind: "focus" | "meeting" | "prep" | "break" | "personal" | "unscheduled";
+  title: string | null;
+  actual_placement: JsonColumn | null;
+  pending_change: JsonColumn | null;
+  legacy_0229_placement: string | null;
+  legacy_0229_proposed_placement: string | null;
+  legacy_0229_starts_at: NullableTimestampColumn;
+  legacy_0229_ends_at: NullableTimestampColumn;
+  legacy_0229_duration_minutes: number | null;
+  position: number;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface DayPlanOperationsTable {
+  id: string;
+  plan_id: string;
+  owner_user_id: string;
+  operation_key: string | null;
+  block_id: string | null;
+  kind: "add" | "move" | "remove";
+  idempotency_key: string;
+  expected_revision: number;
+  outcome: "pending" | "applied" | "failed" | "unknown";
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
 export interface TasksTable {
   id: string;
   owner_user_id: string;
@@ -1545,6 +1593,9 @@ export interface MossDatabase {
   "app.connector_accounts": ConnectorAccountsTable;
   "app.connector_oauth_pending": ConnectorOauthPendingTable;
   "app.calendar_events": CalendarEventsTable;
+  "app.day_plans": DayPlansTable;
+  "app.day_plan_blocks": DayPlanBlocksTable;
+  "app.day_plan_operations": DayPlanOperationsTable;
   "app.email_messages": EmailMessagesTable;
   "app.email_triage_feedback": EmailTriageFeedbackTable;
   "app.email_action_suppression": EmailActionSuppressionTable;
@@ -1626,6 +1677,9 @@ export type PushSubscription = Selectable<PushSubscriptionsTable>;
 export type PushSigningKeyRow = Selectable<PushSigningKeyTable>;
 export type ConnectorProvider = Selectable<ConnectorDefinitionsTable>;
 export type CalendarEvent = Selectable<CalendarEventsTable>;
+export type DayPlan = Selectable<DayPlansTable>;
+export type DayPlanBlock = Selectable<DayPlanBlocksTable>;
+export type DayPlanOperation = Selectable<DayPlanOperationsTable>;
 export type EmailMessage = Selectable<EmailMessagesTable>;
 export type AiAssistantActionRequest = Selectable<AiAssistantActionRequestsTable>;
 export type MossActionAuditLog = Selectable<MossActionAuditLogTable>;

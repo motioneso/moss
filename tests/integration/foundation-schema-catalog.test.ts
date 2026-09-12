@@ -408,7 +408,15 @@ describe("MVP foundation schema catalog", () => {
         // #2349 — the Workshop assistant replies to a saved project message.
         { version: "0227", name: "0227_workshop_project_feed_reply.sql" },
         // #2362 — Workshop projects rename in place and delete with their feed.
-        { version: "0228", name: "0228_workshop_project_rename_delete.sql" }
+        { version: "0228", name: "0228_workshop_project_rename_delete.sql" },
+        // #2453 R2.2-T01 — Calendar owns one saved day plan per actor and day.
+        { version: "0229", name: "0229_day_plans.sql" },
+        { version: "0229a", name: "0229a_day_plan_preserve_legacy.sql" },
+        // #2453 R2.2-T01 correction — actual vs proposed placement, full intent,
+        // idempotent operations, and composite ownership constraints.
+        { version: "0230", name: "0230_day_plan_ownership.sql" },
+        { version: "0231", name: "0231_day_plan_reconcile_storage.sql" },
+        { version: "0232", name: "0232_day_plan_blank_legacy_notes.sql" }
       ]);
     } finally {
       await client.end();
