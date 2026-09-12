@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Save a day-plan draft.** You can save evening intent and draft blocks on an existing saved day plan with revision protection. [PR #2471](https://github.com/motioneso/moss/pull/2471)
 - **Save a day plan.** You can create an empty saved day plan for a chosen day and timezone. [PR #2469](https://github.com/motioneso/moss/pull/2469)
 
 ### 2026-09-11
