@@ -7,6 +7,8 @@ import {
   createDayPlanResponseSchema,
   getCalendarBriefingSettingsResponseSchema,
   getDayPlanResponseSchema,
+  saveDayPlanRequestSchema,
+  saveDayPlanResponseSchema,
   getCalendarEventResponseSchema,
   listCalendarEventsResponseSchema,
   updateCalendarBriefingSettingsRequestSchema,
@@ -185,6 +187,13 @@ export const calendarModuleManifest = {
       path: "/api/calendar/day-plans",
       requestSchema: createDayPlanRequestSchema,
       responseSchema: createDayPlanResponseSchema,
+      permissionId: "calendar.manage"
+    },
+    {
+      method: "PATCH",
+      path: "/api/calendar/day-plans/:id/draft",
+      requestSchema: saveDayPlanRequestSchema,
+      responseSchema: saveDayPlanResponseSchema,
       permissionId: "calendar.manage"
     },
     {
@@ -429,6 +438,36 @@ export const calendarModuleManifest = {
           description:
             "Check your timezone in profile settings, or request the plan's saved timezone.",
           path: "/settings?section=profile"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_draft",
+      description:
+        "Save evening intent and draft blocks. Only this proposal changes; saves may fail if plan changed, task unavailable, or placed block omitted without pending removal. Drafts are not previewed, approved, scheduled, or written to a calendar.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description:
+            "Use a real date, valid timezone, positive revision and writable draft fields."
+        },
+        {
+          code: "day_plan_conflict",
+          class: "transient",
+          description: "Read the latest plan revision and retry the draft."
+        },
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan, block or task is unavailable to this actor."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest saved day plan before retrying the draft.",
+          path: "/calendar"
         }
       ]
     },

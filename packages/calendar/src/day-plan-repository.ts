@@ -171,6 +171,11 @@ export class DayPlanRepository {
       for (const taskId of intent.priorityTaskIds) {
         await this.requireOwnedTask(scopedDb, actorUserId, taskId, "priority");
       }
+      for (const correction of intent.corrections) {
+        if (correction.taskId !== null) {
+          await this.requireOwnedTask(scopedDb, actorUserId, correction.taskId, "correction");
+        }
+      }
       for (const commitment of intent.commitments) {
         await this.requireOwnedTask(scopedDb, actorUserId, commitment.taskId, "commitment");
       }

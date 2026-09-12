@@ -298,6 +298,151 @@ export const createDayPlanRouteSchema = {
   }
 } as const;
 
+export interface SaveDayPlanRequest {
+  date: string;
+  timeZone: string;
+  expectedRevision: number;
+  eveningIntent?: Partial<DayPlanEveningIntent> | null;
+  blocks?: Array<{
+    id?: string;
+    kind: DayPlanBlockKind;
+    taskId: string | null;
+    title: string | null;
+    pendingChange?: DayPlanPendingChange | null;
+  }>;
+}
+
+export interface SaveDayPlanResponse {
+  plan: DayPlanDto;
+}
+
+const uuidSchema = { type: "string", format: "uuid" } as const;
+const nullableUuidSchema = { anyOf: [uuidSchema, { type: "null" }] } as const;
+const instantSchema = {
+  type: "string",
+  pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
+} as const;
+
+const dayPlanPendingChangeSchema = {
+  anyOf: [
+    { type: "null" },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind"],
+      properties: {
+        kind: { type: "string", enum: ["add", "move", "remove"] },
+        startsAt: instantSchema,
+        durationMinutes: { type: "integer", minimum: 5, maximum: 720 }
+      },
+      allOf: [
+        {
+          if: { properties: { kind: { const: "remove" } }, required: ["kind"] },
+          then: {
+            not: { anyOf: [{ required: ["startsAt"] }, { required: ["durationMinutes"] }] }
+          }
+        },
+        {
+          if: {
+            properties: { kind: { enum: ["add", "move"] } },
+            required: ["kind"]
+          },
+          then: { required: ["startsAt", "durationMinutes"] }
+        }
+      ]
+    }
+  ]
+} as const;
+
+const dayPlanDraftBlockRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["kind", "taskId", "title"],
+  properties: {
+    id: { type: "string", format: "uuid" },
+    kind: { type: "string", enum: DAY_PLAN_BLOCK_KINDS },
+    taskId: nullableUuidSchema,
+    title: nullableStringSchema,
+    pendingChange: dayPlanPendingChangeSchema
+  }
+} as const;
+
+const dayPlanEveningIntentPatchSchema = {
+  type: "object",
+  additionalProperties: false,
+  minProperties: 1,
+  properties: {
+    priorityTaskIds: { type: "array", items: uuidSchema },
+    capacity: { enum: [...DAY_PLAN_INTENT_CAPACITIES, null] },
+    notes: nullableStringSchema,
+    corrections: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["taskId", "note", "source"],
+        properties: {
+          taskId: nullableUuidSchema,
+          note: { type: "string" },
+          source: { type: "string", enum: DAY_PLAN_CORRECTION_SOURCES }
+        }
+      }
+    },
+    commitments: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["taskId", "decision"],
+        properties: {
+          taskId: uuidSchema,
+          decision: { type: "string", enum: DAY_PLAN_COMMITMENT_DECISIONS }
+        }
+      }
+    }
+  }
+} as const;
+
+export const saveDayPlanRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["date", "timeZone", "expectedRevision"],
+  anyOf: [{ required: ["eveningIntent"] }, { required: ["blocks"] }],
+  properties: {
+    // PostgreSQL dates have no year zero.
+    date: { type: "string", pattern: `^(?!0000)${DAY_RE.source.slice(1)}` },
+    timeZone: { type: "string", minLength: 1, maxLength: 64 },
+    expectedRevision: { type: "integer", minimum: 1 },
+    eveningIntent: { anyOf: [dayPlanEveningIntentPatchSchema, { type: "null" }] },
+    blocks: { type: "array", items: dayPlanDraftBlockRequestSchema }
+  }
+} as const;
+
+export const saveDayPlanResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["plan"],
+  properties: { plan: dayPlanDtoSchema }
+} as const;
+
+export const saveDayPlanRouteSchema = {
+  params: {
+    type: "object",
+    additionalProperties: false,
+    required: ["id"],
+    properties: { id: { type: "string", format: "uuid" } }
+  },
+  body: saveDayPlanRequestSchema,
+  response: {
+    200: saveDayPlanResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema,
+    503: errorResponseSchema
+  }
+} as const;
+
 export interface DayPlanOperationInput {
   planId: string;
   expectedRevision: number;
