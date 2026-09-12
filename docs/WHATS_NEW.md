@@ -29,6 +29,20 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-12
+
+#### Added
+
+- **Save a day-plan draft.** You can save evening intent and draft blocks on an existing saved day plan with revision protection. [PR #2471](https://github.com/motioneso/moss/pull/2471)
+- **Save a day plan.** You can create an empty saved day plan for a chosen day and timezone. [PR #2469](https://github.com/motioneso/moss/pull/2469)
+
+### 2026-09-11
+
+#### Fixed
+
+- **Shared CLI startup repair.** Moss automatically repairs older shared CLI installations so separate accounts can use the pinned software without reinstalling. [PR #2458](https://github.com/motioneso/moss/pull/2458)
+- **Clarify Codex sign-in recovery.** Moss now distinguishes an account without a usable Codex sign-in from a provider failure and explains the administrator-only recovery path. [PR #2456](https://github.com/motioneso/moss/pull/2456)
+
 ### 2026-09-07
 
 #### Changed
