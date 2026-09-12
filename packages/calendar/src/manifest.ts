@@ -4,6 +4,7 @@ import type { MossModuleManifest, ToolRequiresConfirmation } from "@moss/module-
 import { calendarMonitorProvider } from "./monitor-provider.js";
 import {
   getCalendarBriefingSettingsResponseSchema,
+  getDayPlanResponseSchema,
   getCalendarEventResponseSchema,
   listCalendarEventsResponseSchema,
   updateCalendarBriefingSettingsRequestSchema,
@@ -113,7 +114,8 @@ export const calendarModuleManifest = {
     {
       id: "calendar.view",
       label: "View calendar",
-      description: "Read cached calendar events owned by or shared with the active actor.",
+      description:
+        "Read calendar events owned by or shared with you, and your own saved day-plan snapshots.",
       scope: "user",
       actions: ["view"]
     },
@@ -169,6 +171,12 @@ export const calendarModuleManifest = {
     }
   ],
   routes: [
+    {
+      method: "GET",
+      path: "/api/calendar/day-plan",
+      responseSchema: getDayPlanResponseSchema,
+      permissionId: "calendar.view"
+    },
     {
       method: "GET",
       path: "/api/calendar/events",
@@ -366,6 +374,27 @@ export const calendarModuleManifest = {
     }
   ],
   features: [
+    {
+      id: "calendar.saved_day_plan_read",
+      description:
+        "Read your saved day plan for a date and timezone, with recorded placements and pending " +
+        "changes. Reading does not change the plan or refresh task and calendar facts. An unsaved day returns no plan.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description: "Use a real YYYY-MM-DD date and a valid IANA timezone."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_timezone",
+          description:
+            "Check your timezone in profile settings, or request the plan's saved timezone.",
+          path: "/settings?section=profile"
+        }
+      ]
+    },
     {
       id: "calendar.delete_event_confirmation",
       description:

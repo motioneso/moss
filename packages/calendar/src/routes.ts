@@ -14,6 +14,7 @@ import { PreferencesRepository } from "@moss/structured-state";
 
 import { CalendarRepository } from "./repository.js";
 import { serializeCalendarEvent } from "./serialize.js";
+import { registerDayPlanRoutes, type DayPlanRoutesDependencies } from "./day-plan-routes.js";
 
 const CALENDAR_BRIEFING_LOOKAHEAD_KEY = "calendar.briefing_lookahead_days";
 const CALENDAR_SIGNAL_SUGGEST_TASKS_KEY = "calendar.signal_suggest_tasks";
@@ -25,7 +26,7 @@ const CALENDAR_TIME_BLOCK_MODE_KEY = "calendar.time_block_mode";
 const CALENDAR_WRITEBACK_MODULE_ID = "calendar";
 const CALENDAR_WRITEBACK_FAMILY_ID = "calendar_writeback";
 
-export interface CalendarRoutesDependencies {
+export interface CalendarRoutesDependencies extends DayPlanRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
   readonly repository?: CalendarRepository;
@@ -50,6 +51,8 @@ export function registerCalendarRoutes(
 ): void {
   const repository = dependencies.repository ?? new CalendarRepository();
   const preferencesRepository = dependencies.preferencesRepository ?? new PreferencesRepository();
+
+  registerDayPlanRoutes(server, dependencies);
 
   server.get(
     "/api/calendar/events",
