@@ -17,6 +17,13 @@ provider-specific AI path is required by the design.
 
 **Revision:** R2.2 — R2 approved by Ben; verification and builder recommendations updated by his subsequent rulings.
 
+**September 12 task-record addendum:** Ben subsequently permitted the next bounded task to start
+while T01's full GitHub checks run. The [T02A saved-plan read record](2026-09-12-today-briefings-t02a-read-api.md)
+subdivides T02 and defines that overlap, temporary PM/Architect ownership, separate change requests,
+dependency correction/rebase procedure and unchanged merge gates. It supersedes this document's
+wait-before-next-build requirement only for that authorized overlap. Remaining T02 behavior is
+still required; T02A alone does not complete T02 or authorize another task.
+
 **Status:** Approved visual/interaction scope retained. This revision makes the implementation
 decisions and sequential task boundaries concrete. Ben approved R2 in the room; implementation
 and task dispatch remain outstanding. R2.1 changed verification execution; R2.2 favors Muse Spark builders. Product scope and task order are unchanged. Only this master plan changes. The linked eight slice documents remain technical
