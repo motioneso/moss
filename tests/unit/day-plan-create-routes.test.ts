@@ -58,6 +58,8 @@ function buildApp(
       saveDraft: async () => undefined as never
     },
     findSourceRun,
+    findTask: async () => undefined,
+    findRun: async () => undefined,
     dataContext: {
       withDataContext: async <T>(
         context: AccessContext,

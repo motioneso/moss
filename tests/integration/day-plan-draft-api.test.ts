@@ -590,7 +590,7 @@ describe("saved day-plan draft real API boundary", () => {
     const stale = await patch(ids.sessionA, concurrentPayload("too late"));
     expect(stale.statusCode).toBe(409);
     const afterConcurrent = await read(ids.sessionA);
-    expect(afterConcurrent).toEqual({ plan: winningPlan });
+    expect(afterConcurrent.plan).toEqual(winningPlan);
 
     const reset = await patch(ids.sessionA, {
       date: DAY,

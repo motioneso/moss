@@ -33,6 +33,8 @@ function buildApp(initial: Record<string, unknown> = {}) {
       saveDraft: async () => undefined as never
     },
     findSourceRun: async () => undefined,
+    findTask: async () => undefined,
+    findRun: async () => undefined,
     resolveTimeZone: async () => "UTC",
     dataContext: {
       withDataContext: async <T>(_ac: AccessContext, work: (db: DataContextDb) => Promise<T>) =>
