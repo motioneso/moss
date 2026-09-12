@@ -79,7 +79,7 @@
     "test:email-rejudge": "tsx scripts/test-integration.ts tests/integration/email-rejudge-owner-scope.test.ts",
     "test:focus-time": "tsx scripts/test-integration.ts tests/integration/focus-time.test.ts tests/integration/focus-time-seam.test.ts",
     "test:calendar-delete": "tsx scripts/test-integration.ts tests/integration/calendar-delete.test.ts",
-    "test:today-briefings": "pnpm db:migrate && pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/day-plan-read-api.test.ts -t \"live acceptance: authenticated saved day-plan read\"",
+    "test:today-briefings": "pnpm db:migrate && pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/day-plan-create-api.test.ts -t \"live acceptance: authenticated saved day-plan creation\"",
     "test:release-hardening": "tsx scripts/test-integration.ts tests/integration/release-hardening.test.ts",
     "test:shares": "tsx scripts/test-integration.ts tests/integration/shares.test.ts",
     "test:notifications": "tsx scripts/test-integration.ts tests/integration/notifications.test.ts tests/integration/notifications-hardening.test.ts tests/integration/notifications-keyed-upsert.test.ts tests/integration/push-subscriptions.test.ts",

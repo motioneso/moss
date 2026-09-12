@@ -72,7 +72,8 @@ function buildApp(plan: DayPlanDto | undefined = snapshot) {
   registerDayPlanRoutes(app, {
     resolveAccessContext,
     resolveTimeZone,
-    dayPlanRepository: { getForDay: read },
+    dayPlanRepository: { getForDay: read, createForDay: async () => undefined as never },
+    findSourceRun: async () => undefined,
     dataContext: {
       withDataContext: async <T>(
         context: AccessContext,
