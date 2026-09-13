@@ -442,6 +442,70 @@ describe("apply addition execution boundary: replay and verification", () => {
     expect(gateCalls).toBe(2);
   });
 
+  it("executes only the selected failed items on selective retry", async () => {
+    const { plan, batch } = await seedReservedBatch(nextDay());
+    const failing = loggingWriter({
+      create: () => ({
+        created: false,
+        resolvedStart: ADD_A_START,
+        resolvedEnd: "2026-09-12T16:30:00.000Z",
+        shifted: false,
+        conflict: "no-clear-slot",
+        calendarMirror: "skipped-error"
+      })
+    });
+    const first = await new ApplyExecutionService(
+      baseDeps({ writer: failing.writer })
+    ).executeReservedAdditions(executeInput(plan.id, batch.idempotencyKey));
+    expect(first.items.every((item) => item.outcome === "failed")).toBe(true);
+
+    const stored = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.getApplyBatch(scopedDb, { planId: plan.id, idempotencyKey: batch.idempotencyKey })
+    );
+    const selected = stored!.items[0]!.id;
+    const { writer, inner } = loggingWriter();
+    const retried = await new ApplyExecutionService(baseDeps({ writer })).executeReservedAdditions({
+      ...executeInput(plan.id, batch.idempotencyKey),
+      itemIds: [selected]
+    });
+    expect(retried.status).toBe("completed");
+    expect(retried.items.find((item) => item.itemId === selected)?.outcome).toBe("applied");
+    expect(
+      retried.items
+        .filter((item) => item.itemId !== selected)
+        .every((item) => item.outcome === "failed")
+    ).toBe(true);
+    // Exactly one provider create ran: the unselected item was never touched.
+    expect(inner.creates).toHaveLength(1);
+    const after = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.getApplyBatch(scopedDb, { planId: plan.id, idempotencyKey: batch.idempotencyKey })
+    );
+    expect(after!.items.find((item) => item.id === selected)?.outcome).toBe("applied");
+    expect(
+      after!.items.filter((item) => item.id !== selected).every((item) => item.outcome === "failed")
+    ).toBe(true);
+  });
+
+  it("denies a stale selective retry in the opening snapshot", async () => {
+    const { plan, batch } = await seedReservedBatch(nextDay());
+    const { writer } = loggingWriter();
+    const first = await new ApplyExecutionService(baseDeps({ writer })).executeReservedAdditions(
+      executeInput(plan.id, batch.idempotencyKey)
+    );
+    expect(first.items.every((item) => item.outcome === "applied")).toBe(true);
+
+    const retrying = loggingWriter();
+    const denied = await new ApplyExecutionService(
+      baseDeps({ writer: retrying.writer })
+    ).executeReservedAdditions({
+      ...executeInput(plan.id, batch.idempotencyKey),
+      itemIds: [batch.items[0]!.id]
+    });
+    expect(denied.status).toBe("denied");
+    expect(denied.denialReason).toMatch(/retry-ineligible/);
+    expect(retrying.inner.creates).toHaveLength(0);
+  });
+
   it("carries a verified cache miss through as not-cached", async () => {
     const { plan, batch } = await seedReservedBatch(nextDay());
     const { writer, inner } = loggingWriter({

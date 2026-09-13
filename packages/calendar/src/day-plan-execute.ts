@@ -132,6 +132,9 @@ export interface ApplyExecutionInput {
   readonly toolCtx: ToolContext;
   readonly planId: string;
   readonly idempotencyKey: string;
+  // Selective retry: only these operation item ids may execute. Omitted
+  // means every pending or unknown item.
+  readonly itemIds?: readonly string[];
 }
 
 interface PreparedItem {
@@ -154,11 +157,19 @@ function taskFactOf(status: ApplyExecutionTaskFact["status"]): DayPlanPreviewTas
 }
 
 function toReportItem(
+  itemId: string | null,
   blockId: string | null,
   outcome: DayPlanOperationOutcome,
   result: ApplyItemResult | null
 ): ApplyExecutionReport["items"][number] {
-  return { blockId, outcome, result };
+  return { itemId, blockId, outcome, result };
+}
+
+// Route-level execution hook. The selective retry path passes explicit item
+// ids; the service rechecks them in its opening snapshot and executes only
+// those ids once, leaving every unselected item stored and unchanged.
+export interface ApplyExecutionRouteCallback {
+  (input: ApplyExecutionInput): Promise<ApplyExecutionReport>;
 }
 
 export class ApplyExecutionService {
@@ -175,7 +186,7 @@ export class ApplyExecutionService {
     }
     if (snapshot.pending.length === 0) {
       const settledOnly: ApplyExecutionReport["items"] = snapshot.settled.map((item) =>
-        toReportItem(item.blockId, item.outcome, item.result)
+        toReportItem(item.id, item.blockId, item.outcome, item.result)
       );
       return {
         operationId: snapshot.batch.id,
@@ -209,7 +220,7 @@ export class ApplyExecutionService {
       return this.deniedReport(snapshot.batch, conflict);
     }
     const reports: ApplyExecutionReport["items"] = snapshot.settled.map((item) =>
-      toReportItem(item.blockId, item.outcome, item.result)
+      toReportItem(item.id, item.blockId, item.outcome, item.result)
     );
     for (const item of snapshot.pending) {
       reports.push(await this.executeItem(input, snapshot.batch, snapshot.plan, item));
@@ -223,7 +234,9 @@ export class ApplyExecutionService {
   }
 
   private deniedReport(batch: DayPlanApplyBatchDto, reason: string): ApplyExecutionReport {
-    const items = batch.items.map((item) => toReportItem(item.blockId, item.outcome, item.result));
+    const items = batch.items.map((item) =>
+      toReportItem(item.id, item.blockId, item.outcome, item.result)
+    );
     return {
       operationId: batch.id,
       planId: batch.planId,
@@ -300,13 +313,28 @@ export class ApplyExecutionService {
     const plan = await this.deps.batches.getById(scopedDb, batch.planId);
     if (!plan) throw new HttpError(404, "day plan is not available");
     const blockById = new Map(plan.blocks.map((block) => [block.id, block]));
+    const selected = input.itemIds === undefined ? undefined : new Set(input.itemIds);
     const settled: DayPlanApplyBatchDto["items"] = [];
     const pending: PreparedItem[] = [];
     for (const item of batch.items) {
-      // Applied and failed items are settled facts: only pending and unknown
-      // items enter reconciliation and execution, so an ordinary replay makes
-      // no facts or provider call for them. T04C owns explicit bounded retry.
-      if (item.outcome === "applied" || item.outcome === "failed") {
+      // Selective retry leaves every unselected item stored and unchanged:
+      // it is reported as-is and never validated or executed.
+      if (selected !== undefined && !selected.has(item.id)) {
+        settled.push(item);
+        continue;
+      }
+      if (selected !== undefined) {
+        // The route already validated the selection atomically; the snapshot
+        // rechecks it so a changed item can never execute on a stale retry.
+        // A selected failed or unknown item skips the settled short-circuit
+        // below and enters pending classification.
+        if (item.kind !== "add" || (item.outcome !== "failed" && item.outcome !== "unknown")) {
+          return deny(`retry-ineligible: item ${item.id} is not a failed or unknown addition`);
+        }
+      } else if (item.outcome === "applied" || item.outcome === "failed") {
+        // Applied and failed items are settled facts: only pending and unknown
+        // items enter reconciliation and execution, so an ordinary replay makes
+        // no facts or provider call for them.
         settled.push(item);
         continue;
       }
@@ -384,7 +412,7 @@ export class ApplyExecutionService {
     ): Promise<ApplyExecutionReport["items"][number]> => {
       const result: ApplyItemResult = { status: "failed", reason, providerEventId };
       await this.finalize(input, batch.id, item.itemId, "failed", result);
-      return toReportItem(item.blockId, "failed", result);
+      return toReportItem(item.itemId, item.blockId, "failed", result);
     };
     const unknown = async (
       reason: ApplyItemFailureReason,
@@ -392,7 +420,7 @@ export class ApplyExecutionService {
     ): Promise<ApplyExecutionReport["items"][number]> => {
       const result: ApplyItemResult = { status: "unknown", reason, providerEventId };
       await this.finalize(input, batch.id, item.itemId, "unknown", result);
-      return toReportItem(item.blockId, "unknown", result);
+      return toReportItem(item.itemId, item.blockId, "unknown", result);
     };
 
     // Reconcile first: an earlier attempt may already own this identity.
@@ -532,7 +560,7 @@ export class ApplyExecutionService {
       });
       return settled;
     });
-    return toReportItem(item.blockId, "applied", result);
+    return toReportItem(item.itemId, item.blockId, "applied", result);
   }
 
   private async finalize(
