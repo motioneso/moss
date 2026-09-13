@@ -12,6 +12,7 @@ import {
   dayPlanApplyStatusRouteSchema,
   getDayPlanRouteSchema,
   previewDayPlanRouteSchema,
+  recoverDayPlanApplyRouteSchema,
   retryDayPlanApplyRouteSchema,
   saveDayPlanRouteSchema,
   type ApplyDayPlanRequest,
@@ -29,6 +30,7 @@ import {
   type GetDayPlanResponse,
   type PreviewDayPlanRequest,
   type PreviewDayPlanResponse,
+  type RecoverDayPlanApplyRequest,
   type RetryDayPlanApplyRequest,
   type SaveDayPlanRequest,
   type SaveDayPlanResponse
@@ -813,7 +815,63 @@ export function registerDayPlanRoutes(
           toolCtx: toolContextOf(accessContext),
           planId: batch.planId,
           idempotencyKey: batch.idempotencyKey,
+          operationId: batch.id,
           itemIds: [...body.itemIds]
+        });
+        return report satisfies ApplyExecutionReport;
+      } catch (error) {
+        if (error instanceof DayPlanValidationError) {
+          return reply.code(400).send({ error: error.message, code: error.code });
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  const RECOVER_BODY_KEYS: ReadonlySet<string> = new Set([]);
+
+  // Recover takes no selection: the body must be absent or an empty object.
+  async function rejectUnknownRecoverFields(request: FastifyRequest, reply: FastifyReply) {
+    const body = request.body;
+    if (body === undefined) {
+      request.body = {};
+      return;
+    }
+    if (!isObject(body)) {
+      return reply.code(400).send({ error: "request must be an object", code: "day_plan_invalid" });
+    }
+    const unknown = firstUnknown(body, RECOVER_BODY_KEYS, "");
+    if (unknown) {
+      return reply.code(400).send({ error: `unknown field: ${unknown}`, code: "day_plan_invalid" });
+    }
+  }
+
+  server.post<{ Params: { id: string; operationId: string }; Body: RecoverDayPlanApplyRequest }>(
+    "/api/calendar/day-plans/:id/operations/:operationId/recover",
+    {
+      schema: recoverDayPlanApplyRouteSchema,
+      onRequest: authenticateApplyAccess,
+      preValidation: rejectUnknownRecoverFields
+    },
+    async (request, reply) => {
+      try {
+        const accessContext = requireApplyAccess(request);
+        // Fail closed before any item read or write when execution is down.
+        const execute = requireApplyExecution();
+        const batch = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          dependencies.dayPlanRepository.getApplyBatchById(scopedDb, {
+            planId: request.params.id,
+            operationId: request.params.operationId
+          })
+        );
+        if (!batch) throw new HttpError(404, "day plan apply operation is not available");
+        // No selection: the service resumes pending and unknown additions.
+        const report = await execute({
+          access: accessContext,
+          toolCtx: toolContextOf(accessContext),
+          planId: batch.planId,
+          idempotencyKey: batch.idempotencyKey,
+          operationId: batch.id
         });
         return report satisfies ApplyExecutionReport;
       } catch (error) {
