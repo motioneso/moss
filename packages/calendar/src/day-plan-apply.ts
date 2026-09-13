@@ -3,7 +3,7 @@
 // never reads or writes anything itself and never calls a provider.
 import type { DayPlanApplySelectionEntry, DayPlanPendingChange } from "@moss/shared";
 
-import { DayPlanValidationError } from "./day-plan-model.js";
+import { requireSelectedPlanBlock } from "./day-plan-model.js";
 
 // The operations-row kind marking a batch header. Single-slot reservations keep
 // the shared add/move/remove kinds; only reserveApplyBatch writes this value.
@@ -53,14 +53,7 @@ export function resolveApplySelection(
   const explicit = new Map<string, DayPlanApplySelectionEntry>();
   for (const id of normalizeApplyIntent(selectedBlockIds)) {
     if (explicit.has(id)) continue;
-    const block = byId.get(id);
-    if (!block) {
-      throw new DayPlanValidationError(`selected change ${id} is not part of this plan`);
-    }
-    if (!block.pendingChange) {
-      throw new DayPlanValidationError(`selected change ${id} has no pending change`);
-    }
-    explicit.set(id, entryOf(block));
+    explicit.set(id, entryOf(requireSelectedPlanBlock(byId, id)));
   }
   for (const block of blocks) {
     if (explicit.has(block.id)) continue;
@@ -72,6 +65,22 @@ export function resolveApplySelection(
     if (pa !== pb) return pa - pb;
     return a.blockId < b.blockId ? -1 : a.blockId > b.blockId ? 1 : 0;
   });
+}
+
+export interface PendingChangeShape {
+  readonly kind: string;
+  readonly startsAt?: string | null;
+  readonly durationMinutes?: number | null;
+}
+
+export function pendingChangesEqual(
+  a: PendingChangeShape | null,
+  b: PendingChangeShape | null
+): boolean {
+  if (a === null || b === null) return a === b;
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "remove" || b.kind === "remove") return true;
+  return a.startsAt === b.startsAt && a.durationMinutes === b.durationMinutes;
 }
 
 export function applySelectionsEqual(

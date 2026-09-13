@@ -13,7 +13,7 @@ import type {
   PreviewDayPlanResponse
 } from "@moss/shared";
 
-import { DayPlanValidationError } from "./day-plan-model.js";
+import { requireSelectedPlanBlock } from "./day-plan-model.js";
 
 export type DayPlanPreviewTaskStatus = "done" | "archived" | "other";
 
@@ -98,13 +98,7 @@ export function buildDayPlanPreview(input: BuildDayPlanPreviewInput): PreviewDay
   for (const id of input.selectedBlockIds) {
     if (seen.has(id)) continue;
     seen.add(id);
-    const block = blockById.get(id);
-    if (!block) {
-      throw new DayPlanValidationError(`selected change ${id} is not part of this plan`);
-    }
-    if (!block.pendingChange) {
-      throw new DayPlanValidationError(`selected change ${id} has no pending change`);
-    }
+    requireSelectedPlanBlock(blockById, id);
     orderedIds.push(id);
   }
 

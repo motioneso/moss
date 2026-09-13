@@ -359,6 +359,7 @@ export interface DayPlanOperationItemsTable {
   kind: "add" | "move" | "remove";
   pending_change: unknown;
   outcome: "pending" | "applied" | "failed" | "unknown";
+  result: unknown;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }

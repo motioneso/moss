@@ -428,6 +428,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0234",
           name: "0234_day_plan_apply_batch.sql"
+        },
+        // R2.2-T04B — one typed execution result per reserved apply item.
+        {
+          version: "0235",
+          name: "0235_day_plan_apply_item_result.sql"
         }
       ]);
     } finally {

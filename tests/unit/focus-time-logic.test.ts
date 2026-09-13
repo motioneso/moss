@@ -244,6 +244,9 @@ describe("CalendarWriteService interface shape", () => {
       },
       async rescheduleEvent() {
         return { ok: false, reason: "not_found" };
+      },
+      async lookupEvent() {
+        return { found: false };
       }
     };
     const res = await fake.createEvent(

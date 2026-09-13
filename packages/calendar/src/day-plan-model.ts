@@ -22,6 +22,21 @@ import {
 export const MIN_DURATION_MINUTES = 5;
 export const MAX_DURATION_MINUTES = 12 * 60;
 
+// One shared selection rule for preview and apply: a selected id must name a
+// block of this plan, and that block must still carry a pending change.
+export function requireSelectedPlanBlock<
+  T extends { readonly id: string; readonly pendingChange: unknown }
+>(blocksById: ReadonlyMap<string, T>, id: string): T {
+  const block = blocksById.get(id);
+  if (!block) {
+    throw new DayPlanValidationError(`selected change ${id} is not part of this plan`);
+  }
+  if (!block.pendingChange) {
+    throw new DayPlanValidationError(`selected change ${id} has no pending change`);
+  }
+  return block;
+}
+
 export class DayPlanValidationError extends Error {
   readonly code = "day_plan_invalid";
 
