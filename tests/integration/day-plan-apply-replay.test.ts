@@ -486,7 +486,7 @@ describe("apply addition execution boundary: replay and verification", () => {
     ).toBe(true);
   });
 
-  it("denies a stale selective retry in the opening snapshot", async () => {
+  it("returns 409 for a stale selective retry in the opening snapshot", async () => {
     const { plan, batch } = await seedReservedBatch(nextDay());
     const { writer } = loggingWriter();
     const first = await new ApplyExecutionService(baseDeps({ writer })).executeReservedAdditions(
@@ -495,14 +495,12 @@ describe("apply addition execution boundary: replay and verification", () => {
     expect(first.items.every((item) => item.outcome === "applied")).toBe(true);
 
     const retrying = loggingWriter();
-    const denied = await new ApplyExecutionService(
-      baseDeps({ writer: retrying.writer })
-    ).executeReservedAdditions({
-      ...executeInput(plan.id, batch.idempotencyKey),
-      itemIds: [batch.items[0]!.id]
-    });
-    expect(denied.status).toBe("denied");
-    expect(denied.denialReason).toMatch(/retry-ineligible/);
+    await expect(
+      new ApplyExecutionService(baseDeps({ writer: retrying.writer })).executeReservedAdditions({
+        ...executeInput(plan.id, batch.idempotencyKey),
+        itemIds: [batch.items[0]!.id]
+      })
+    ).rejects.toMatchObject({ statusCode: 409 });
     expect(retrying.inner.creates).toHaveLength(0);
   });
 

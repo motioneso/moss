@@ -116,7 +116,7 @@ export interface ApplyExecutionDeps {
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
   readonly batches: Pick<
     DayPlanRepository,
-    "getApplyBatch" | "getById" | "recordItemResult" | "mirrorAppliedBlock"
+    "getApplyBatch" | "getApplyBatchById" | "getById" | "recordItemResult" | "mirrorAppliedBlock"
   >;
   readonly findTask: (
     scopedDb: DataContextDb,
@@ -132,6 +132,10 @@ export interface ApplyExecutionInput {
   readonly toolCtx: ToolContext;
   readonly planId: string;
   readonly idempotencyKey: string;
+  // Resume by operation id: when present the service loads the batch with
+  // getApplyBatchById instead of the idempotency key. Retry and recover pass
+  // this; the initial apply does not.
+  readonly operationId?: string;
   // Selective retry: only these operation item ids may execute. Omitted
   // means every pending or unknown item.
   readonly itemIds?: readonly string[];
@@ -301,10 +305,16 @@ export class ApplyExecutionService {
         readonly taskFacts: Map<string, DayPlanPreviewTaskFact>;
       }
   > {
-    const batch = await this.deps.batches.getApplyBatch(scopedDb, {
-      planId: input.planId,
-      idempotencyKey: input.idempotencyKey
-    });
+    const batch =
+      input.operationId === undefined
+        ? await this.deps.batches.getApplyBatch(scopedDb, {
+            planId: input.planId,
+            idempotencyKey: input.idempotencyKey
+          })
+        : await this.deps.batches.getApplyBatchById(scopedDb, {
+            planId: input.planId,
+            operationId: input.operationId
+          });
     if (!batch) throw new HttpError(404, "day plan apply batch is not available");
     const deny = (reason: string) => ({ denied: true as const, reason, batch });
     if (batch.items.some((item) => item.kind !== "add")) {
@@ -327,9 +337,10 @@ export class ApplyExecutionService {
         // The route already validated the selection atomically; the snapshot
         // rechecks it so a changed item can never execute on a stale retry.
         // A selected failed or unknown item skips the settled short-circuit
-        // below and enters pending classification.
+        // below and enters pending classification. A stale selection is a
+        // 409, never a denied report.
         if (item.kind !== "add" || (item.outcome !== "failed" && item.outcome !== "unknown")) {
-          return deny(`retry-ineligible: item ${item.id} is not a failed or unknown addition`);
+          throw new HttpError(409, "day plan apply retry selection is not eligible");
         }
       } else if (item.outcome === "applied" || item.outcome === "failed") {
         // Applied and failed items are settled facts: only pending and unknown
@@ -532,35 +543,49 @@ export class ApplyExecutionService {
         : item.durationMinutes;
     const frozen = batch.items.find((entry) => entry.id === item.itemId)?.pendingChange ?? null;
     // Mirror and outcome record share one transaction: a crash between them
-    // must never leave a mirrored block with a pending outcome behind.
-    const result = await this.deps.dataContext.withDataContext(input.access, async (scopedDb) => {
-      const mirror = await this.deps.batches.mirrorAppliedBlock(scopedDb, {
-        planId: plan.id,
-        blockId: item.blockId,
-        expectedPending: frozen as DayPlanPendingChange | null,
-        actualPlacement: {
+    // must never leave a mirrored block with a pending outcome behind. When
+    // this transaction fails after the provider create succeeded, the item is
+    // recorded unknown with the event id so the next recover adopts it; the
+    // response is unknown, never applied, and the batch continues.
+    let result: ApplyItemResult;
+    try {
+      result = await this.deps.dataContext.withDataContext(input.access, async (scopedDb) => {
+        const mirror = await this.deps.batches.mirrorAppliedBlock(scopedDb, {
+          planId: plan.id,
+          blockId: item.blockId,
+          expectedPending: frozen as DayPlanPendingChange | null,
+          actualPlacement: {
+            startsAt,
+            durationMinutes,
+            calendarEventRef: providerEventId
+          }
+        });
+        const settled: ApplyItemResult = {
+          status: "applied",
+          providerEventId,
           startsAt,
           durationMinutes,
-          calendarEventRef: providerEventId
-        }
+          calendarMirror,
+          blockMirror: mirror === "mirrored" ? "mirrored" : "mismatch-preserved"
+        };
+        await this.deps.batches.recordItemResult(scopedDb, {
+          itemId: item.itemId,
+          operationId: batch.id,
+          outcome: "applied",
+          result: settled
+        });
+        return settled;
       });
-      const settled: ApplyItemResult = {
-        status: "applied",
-        providerEventId,
-        startsAt,
-        durationMinutes,
-        calendarMirror,
-        blockMirror: mirror === "mirrored" ? "mirrored" : "mismatch-preserved"
-      };
-      await this.deps.batches.recordItemResult(scopedDb, {
-        itemId: item.itemId,
-        operationId: batch.id,
-        outcome: "applied",
-        result: settled
-      });
-      return settled;
-    });
-    return toReportItem(item.itemId, item.blockId, "applied", result);
+      return toReportItem(item.itemId, item.blockId, "applied", result);
+    } catch {
+      const unresolved: ApplyItemResult = { status: "unknown", reason: "unknown", providerEventId };
+      try {
+        await this.finalize(input, batch.id, item.itemId, "unknown", unresolved);
+      } catch {
+        // The record itself failed: still report unknown, never applied.
+      }
+      return toReportItem(item.itemId, item.blockId, "unknown", unresolved);
+    }
   }
 
   private async finalize(
@@ -570,8 +595,17 @@ export class ApplyExecutionService {
     outcome: DayPlanOperationOutcome,
     result: ApplyItemResult
   ): Promise<void> {
-    await this.deps.dataContext.withDataContext(input.access, (scopedDb) =>
-      this.deps.batches.recordItemResult(scopedDb, { itemId, operationId, outcome, result })
-    );
+    await this.deps.dataContext.withDataContext(input.access, async (scopedDb) => {
+      if (outcome !== "applied") {
+        // A concurrent resume may have recorded this item applied after our
+        // snapshot: never reset a recorded application with our observation.
+        const current = await this.deps.batches.getApplyBatchById(scopedDb, {
+          planId: input.planId,
+          operationId
+        });
+        if (current?.items.find((entry) => entry.id === itemId)?.outcome === "applied") return;
+      }
+      await this.deps.batches.recordItemResult(scopedDb, { itemId, operationId, outcome, result });
+    });
   }
 }

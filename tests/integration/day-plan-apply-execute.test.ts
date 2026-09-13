@@ -634,6 +634,7 @@ describe("apply addition execution boundary", () => {
     let failNextRecord = true;
     const flakyBatches: ApplyExecutionDeps["batches"] = {
       getApplyBatch: (...args) => repository.getApplyBatch(...args),
+      getApplyBatchById: (...args) => repository.getApplyBatchById(...args),
       getById: (...args) => repository.getById(...args),
       mirrorAppliedBlock: (...args) => repository.mirrorAppliedBlock(...args),
       recordItemResult: async (...args) => {
@@ -645,11 +646,21 @@ describe("apply addition execution boundary", () => {
       }
     };
     const deps = baseDeps({ writer, batches: flakyBatches });
-    await expect(
-      new ApplyExecutionService(deps).executeReservedAdditions(
-        executeInput(plan.id, batch.idempotencyKey)
-      )
-    ).rejects.toThrow("finalize boom");
+    // Provider success with a failed local write stays truthful: the item is
+    // recorded unknown with its event id, never applied, and the batch runs on.
+    const partial = await new ApplyExecutionService(deps).executeReservedAdditions(
+      executeInput(plan.id, batch.idempotencyKey)
+    );
+    expect(partial.status).toBe("completed");
+    expect(partial.items).toHaveLength(2);
+    const firstPartial = partial.items[0]!;
+    expect(firstPartial.outcome).toBe("unknown");
+    expect(firstPartial.result?.status).toBe("unknown");
+    const partialEventId =
+      firstPartial.result?.status === "unknown" ? firstPartial.result.providerEventId : undefined;
+    expect(typeof partialEventId).toBe("string");
+    expect(partial.items[1]?.outcome).toBe("applied");
+    expect(inner.creates).toHaveLength(2);
 
     const report = await new ApplyExecutionService(deps).executeReservedAdditions(
       executeInput(plan.id, batch.idempotencyKey)

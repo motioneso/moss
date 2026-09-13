@@ -379,3 +379,99 @@ describe("day plan apply routes", () => {
     expect(missing.statusCode).toBe(404);
   });
 });
+
+describe("day plan apply recover route", () => {
+  it("authenticates before validating the recover body", async () => {
+    const execute = vi.fn();
+    const app = buildApp({
+      resolveAccessContext: async () => {
+        throw new Error("Session is missing or expired");
+      },
+      dayPlanRepository: fakeRepository(),
+      applyExecution: execute
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/calendar/day-plans/${PLAN_ID}/operations/${OPERATION_ID}/recover`,
+      payload: { nonsense: true }
+    });
+    expect(response.statusCode).toBe(401);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects recover bodies with any field", async () => {
+    const lookup = vi.fn(async () => batchFixture([itemFixture(ITEM_A, "pending")]));
+    const execute = vi.fn(async () => appliedReport([]));
+    const app = buildApp({
+      dayPlanRepository: fakeRepository({ getApplyBatchById: lookup as never }),
+      applyExecution: execute
+    });
+    for (const payload of [{ itemIds: [ITEM_A] }, { extra: true }]) {
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/calendar/day-plans/${PLAN_ID}/operations/${OPERATION_ID}/recover`,
+        payload
+      });
+      expect(response.statusCode).toBe(400);
+    }
+    expect(lookup).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("recovers by operation id and passes no selection", async () => {
+    const batch = batchFixture([itemFixture(ITEM_A, "pending"), itemFixture(ITEM_B, "unknown")]);
+    const calls: ApplyExecutionInput[] = [];
+    const executor = async (input: ApplyExecutionInput): Promise<ApplyExecutionReport> => {
+      calls.push(input);
+      return appliedReport(
+        batch.items.map((item) => ({
+          itemId: item.id,
+          blockId: item.blockId,
+          outcome: "applied" as const,
+          result: null
+        }))
+      );
+    };
+    const lookup = vi.fn(async () => batch);
+    const app = buildApp({
+      dayPlanRepository: fakeRepository({ getApplyBatchById: lookup as never }),
+      applyExecution: executor
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/calendar/day-plans/${PLAN_ID}/operations/${OPERATION_ID}/recover`,
+      payload: {}
+    });
+    expect(response.statusCode).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ planId: PLAN_ID, operationId: OPERATION_ID });
+    expect(calls[0]!.itemIds).toBeUndefined();
+
+    const missingApp = buildApp({
+      dayPlanRepository: fakeRepository({ getApplyBatchById: async () => undefined }),
+      applyExecution: async () => {
+        throw new Error("execution must not run");
+      }
+    });
+    const missing = await missingApp.inject({
+      method: "POST",
+      url: `/api/calendar/day-plans/${PLAN_ID}/operations/${OPERATION_ID}/recover`,
+      payload: {}
+    });
+    expect(missing.statusCode).toBe(404);
+  });
+
+  it("fails closed with 503 before any item read when execution is down", async () => {
+    const lookup = vi.fn();
+    const app = buildApp({
+      dayPlanRepository: fakeRepository({ getApplyBatchById: lookup as never })
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/calendar/day-plans/${PLAN_ID}/operations/${OPERATION_ID}/recover`,
+      payload: {}
+    });
+    expect(response.statusCode).toBe(503);
+    expect(lookup).not.toHaveBeenCalled();
+  });
+});

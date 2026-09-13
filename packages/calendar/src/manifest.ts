@@ -12,6 +12,7 @@ import {
   getDayPlanResponseSchema,
   previewDayPlanRequestSchema,
   previewDayPlanResponseSchema,
+  recoverDayPlanApplyRequestSchema,
   retryDayPlanApplyRequestSchema,
   saveDayPlanRequestSchema,
   saveDayPlanResponseSchema,
@@ -226,6 +227,13 @@ export const calendarModuleManifest = {
       method: "POST",
       path: "/api/calendar/day-plans/:id/operations/:operationId/retry",
       requestSchema: retryDayPlanApplyRequestSchema,
+      responseSchema: applyExecutionReportSchema,
+      permissionId: "calendar.manage"
+    },
+    {
+      method: "POST",
+      path: "/api/calendar/day-plans/:id/operations/:operationId/recover",
+      requestSchema: recoverDayPlanApplyRequestSchema,
       responseSchema: applyExecutionReportSchema,
       permissionId: "calendar.manage"
     },
@@ -592,6 +600,36 @@ export const calendarModuleManifest = {
         {
           id: "calendar.saved_day_plan_refresh",
           description: "Read the latest operation status before retrying.",
+          path: "/calendar"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_apply_recover",
+      description:
+        "Resume one interrupted apply by operation id. Pending and unknown additions " +
+        "reconcile by provider identity; applied and failed items stay stored.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description: "Recover takes no selection: send no body or an empty object."
+        },
+        {
+          code: "day_plan_conflict",
+          class: "transient",
+          description: "A stale selection is rejected; read the latest operation status first."
+        },
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan or operation is unavailable to this actor."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest operation status before recovering.",
           path: "/calendar"
         }
       ]

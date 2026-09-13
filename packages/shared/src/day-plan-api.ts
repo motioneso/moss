@@ -948,3 +948,31 @@ export const retryDayPlanApplyRouteSchema = {
     503: errorResponseSchema
   }
 } as const;
+
+// Recover has no selection: the body must be absent or empty. The route
+// resumes pending and unknown additions of one operation by id.
+export type RecoverDayPlanApplyRequest = Record<string, never>;
+
+export const recoverDayPlanApplyRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {}
+} as const;
+
+export const recoverDayPlanApplyRouteSchema = {
+  params: {
+    type: "object",
+    additionalProperties: false,
+    required: ["id", "operationId"],
+    properties: { id: uuidSchema, operationId: uuidSchema }
+  },
+  body: recoverDayPlanApplyRequestSchema,
+  response: {
+    200: applyExecutionReportSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema,
+    503: errorResponseSchema
+  }
+} as const;
