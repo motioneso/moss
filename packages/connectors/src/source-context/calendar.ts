@@ -7,6 +7,7 @@ import {
   isFeatureGranted,
   resolveEffectiveGrants
 } from "../feature-grants.js";
+import { pickLatestSyncAt } from "../freshness.js";
 import type { SyncLogger } from "../sync-jobs.js";
 import {
   classifyLiveReadFailure,
@@ -22,6 +23,7 @@ import {
 
 export const CALENDAR_DEFAULT_LOOKAHEAD_MS = 48 * 60 * 60 * 1000;
 export const CALENDAR_DEFAULT_LIMIT = 50;
+export const CALENDAR_MAX_LIMIT = 200;
 
 const DEFAULT_TIMEZONE = resolveMossEnv(process.env, "JARVIS_DEFAULT_TZ") ?? "America/New_York";
 const EARLY_LOCAL_HOUR = 9;
@@ -239,13 +241,16 @@ export async function listCalendarContext(
     ? new Date(input.windowEnd)
     : new Date(windowStart.getTime() + CALENDAR_DEFAULT_LOOKAHEAD_MS);
   const window: WindowBounds = { windowStart, windowEnd };
-  const limit = Math.max(1, Math.min(input.limit ?? CALENDAR_DEFAULT_LIMIT, 200));
+  const limit = Math.max(1, Math.min(input.limit ?? CALENDAR_DEFAULT_LIMIT, CALENDAR_MAX_LIMIT));
 
   const allAccounts = await deps.connectorsRepository.listAccounts(scopedDb);
+  const asOf = pickLatestSyncAt(allAccounts, "calendar")?.toISOString() ?? null;
   const calendarCapable = allAccounts.filter(
     (account) => resolveEffectiveGrants(account.scopes, null).calendar
   );
-  if (calendarCapable.length === 0) return { items: [], accounts: [], gaps: [] };
+  if (calendarCapable.length === 0) {
+    return { items: [], accounts: [], gaps: [], truncated: false, asOf };
+  }
 
   const unflagged: UnflaggedItem[] = [];
   const accounts: SourceContextAccountResult[] = [];
@@ -345,5 +350,5 @@ export async function listCalendarContext(
     ...item,
     flags: flags[index] ?? []
   }));
-  return { items, accounts, gaps };
+  return { items, accounts, gaps, truncated: capped.length < unflagged.length, asOf };
 }

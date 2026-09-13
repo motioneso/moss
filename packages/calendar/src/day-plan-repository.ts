@@ -225,6 +225,18 @@ export class DayPlanRepository {
     return toPlanDto(plan, await this.loadBlocks(scopedDb, plan.id));
   }
 
+  async getById(scopedDb: DataContextDb, planId: string): Promise<DayPlanDto | undefined> {
+    assertDataContextDb(scopedDb);
+    const plan = await scopedDb.db
+      .selectFrom("app.day_plans")
+      .selectAll()
+      .select(sql<string>`to_char(local_day, 'YYYY-MM-DD')`.as("local_day"))
+      .where("id", "=", planId)
+      .executeTakeFirst();
+    if (!plan) return undefined;
+    return toPlanDto(plan, await this.loadBlocks(scopedDb, plan.id));
+  }
+
   async createForDay(scopedDb: DataContextDb, input: DayPlanCreateInput): Promise<DayPlanDto> {
     assertDataContextDb(scopedDb);
     let localDay: string;

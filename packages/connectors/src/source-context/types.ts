@@ -119,6 +119,10 @@ export interface CalendarContextResult {
   readonly items: readonly CalendarContextItem[];
   readonly accounts: readonly SourceContextAccountResult[];
   readonly gaps: readonly SourceContextGap[];
+  /** True when more matching events existed than `items` returned (see `limit`). */
+  readonly truncated: boolean;
+  /** Latest connector sync this result is drawn from, or null if no calendar account has synced. */
+  readonly asOf: string | null;
 }
 
 export interface ListEmailContextInput {

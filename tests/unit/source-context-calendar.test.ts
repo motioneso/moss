@@ -270,6 +270,6 @@ describe("listCalendarContext", () => {
       }
     });
     const result = await listCalendarContext(scopedDb, deps, {});
-    expect(result).toEqual({ items: [], accounts: [], gaps: [] });
+    expect(result).toEqual({ items: [], accounts: [], gaps: [], truncated: false, asOf: null });
   });
 });

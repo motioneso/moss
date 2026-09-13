@@ -507,6 +507,196 @@ export const saveDayPlanRouteSchema = {
   }
 } as const;
 
+export const DAY_PLAN_PREVIEW_CONFLICT_KINDS = ["calendar_busy", "selected_overlap"] as const;
+export type DayPlanPreviewConflictKind = (typeof DAY_PLAN_PREVIEW_CONFLICT_KINDS)[number];
+
+// "task_unavailable" covers both a missing task id and a task owned by someone else — the two
+// look the same to the actor by design, so a preview never turns into an oracle for other users' tasks.
+export const DAY_PLAN_PREVIEW_INELIGIBLE_REASONS = [
+  "task_done",
+  "task_archived",
+  "task_unavailable"
+] as const;
+export type DayPlanPreviewIneligibleReason = (typeof DAY_PLAN_PREVIEW_INELIGIBLE_REASONS)[number];
+
+// "stale" means every account that answered came back from cache fallback with no gaps — known
+// commitments are still reported, just not confirmed live. "unavailable" means no connected
+// account, a gap (auth/revoked/disabled/unsupported), or a truncated read: a conflict search
+// there could miss a real commitment, so absence of a conflict is not treated as proof of a free
+// slot.
+export const DAY_PLAN_CALENDAR_AVAILABILITIES = ["available", "stale", "unavailable"] as const;
+export type DayPlanCalendarAvailability = (typeof DAY_PLAN_CALENDAR_AVAILABILITIES)[number];
+
+export interface PreviewDayPlanRequest {
+  expectedRevision: number;
+  // Selection is by block id: a block's saved pending change IS the change being previewed.
+  selectedChangeBlockIds: string[];
+}
+
+export interface DayPlanPreviewTiming {
+  startsAt: string;
+  durationMinutes: number;
+}
+
+/** Deterministic before/after for one selected block. `after` is null for a pending removal. */
+export interface DayPlanPreviewBlockDetail {
+  blockId: string;
+  taskId: string | null;
+  changeKind: DayPlanPendingKind;
+  before: DayPlanPreviewTiming | null;
+  after: DayPlanPreviewTiming | null;
+  eligible: boolean;
+  ineligibleReason: DayPlanPreviewIneligibleReason | null;
+  deadlineRisk: boolean;
+}
+
+/** The actor-visible calendar commitment behind a "calendar_busy" conflict. */
+export interface DayPlanPreviewConflictCalendarEvent {
+  eventKey: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  accountLabel: string;
+}
+
+export interface DayPlanPreviewConflict {
+  blockId: string;
+  kind: DayPlanPreviewConflictKind;
+  // Set only for kind "selected_overlap": the other selected block it overlaps.
+  withBlockId: string | null;
+  detail: string;
+  // Set only for kind "calendar_busy": the named commitment it overlaps.
+  calendarEvent: DayPlanPreviewConflictCalendarEvent | null;
+}
+
+export interface PreviewDayPlanResponse {
+  revision: number;
+  calendarAvailability: DayPlanCalendarAvailability;
+  // The most recent connector sync this preview's calendar facts are drawn from, or null when no
+  // connected calendar account has ever synced. Present whenever calendarAvailability is "stale"
+  // or "available"; always null when "unavailable".
+  calendarAsOf: string | null;
+  blocks: DayPlanPreviewBlockDetail[];
+  eligibleBlockIds: string[];
+  conflicts: DayPlanPreviewConflict[];
+}
+
+const dayPlanPreviewTimingSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["startsAt", "durationMinutes"],
+  properties: {
+    startsAt: { type: "string" },
+    durationMinutes: { type: "number" }
+  }
+} as const;
+
+export const previewDayPlanRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["expectedRevision", "selectedChangeBlockIds"],
+  properties: {
+    expectedRevision: { type: "integer", minimum: 1 },
+    selectedChangeBlockIds: { type: "array", items: { type: "string", format: "uuid" } }
+  }
+} as const;
+
+const dayPlanPreviewConflictCalendarEventSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["eventKey", "title", "startsAt", "endsAt", "accountLabel"],
+  properties: {
+    eventKey: { type: "string" },
+    title: { type: "string" },
+    startsAt: { type: "string" },
+    endsAt: { type: "string" },
+    accountLabel: { type: "string" }
+  }
+} as const;
+
+export const previewDayPlanResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "revision",
+    "calendarAvailability",
+    "calendarAsOf",
+    "blocks",
+    "eligibleBlockIds",
+    "conflicts"
+  ],
+  properties: {
+    revision: { type: "integer" },
+    calendarAvailability: { type: "string", enum: DAY_PLAN_CALENDAR_AVAILABILITIES },
+    calendarAsOf: { type: ["string", "null"] },
+    blocks: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "blockId",
+          "taskId",
+          "changeKind",
+          "before",
+          "after",
+          "eligible",
+          "ineligibleReason",
+          "deadlineRisk"
+        ],
+        properties: {
+          blockId: { type: "string" },
+          taskId: nullableStringSchema,
+          changeKind: { type: "string", enum: DAY_PLAN_PENDING_KINDS },
+          before: { anyOf: [dayPlanPreviewTimingSchema, { type: "null" }] },
+          after: { anyOf: [dayPlanPreviewTimingSchema, { type: "null" }] },
+          eligible: { type: "boolean" },
+          ineligibleReason: {
+            anyOf: [{ type: "string", enum: DAY_PLAN_PREVIEW_INELIGIBLE_REASONS }, { type: "null" }]
+          },
+          deadlineRisk: { type: "boolean" }
+        }
+      }
+    },
+    eligibleBlockIds: { type: "array", items: { type: "string" } },
+    conflicts: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["blockId", "kind", "withBlockId", "detail", "calendarEvent"],
+        properties: {
+          blockId: { type: "string" },
+          kind: { type: "string", enum: DAY_PLAN_PREVIEW_CONFLICT_KINDS },
+          withBlockId: nullableStringSchema,
+          detail: { type: "string" },
+          calendarEvent: {
+            anyOf: [dayPlanPreviewConflictCalendarEventSchema, { type: "null" }]
+          }
+        }
+      }
+    }
+  }
+} as const;
+
+export const previewDayPlanRouteSchema = {
+  params: {
+    type: "object",
+    additionalProperties: false,
+    required: ["id"],
+    properties: { id: { type: "string", format: "uuid" } }
+  },
+  body: previewDayPlanRequestSchema,
+  response: {
+    200: previewDayPlanResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema,
+    503: errorResponseSchema
+  }
+} as const;
+
 export interface DayPlanOperationInput {
   planId: string;
   expectedRevision: number;

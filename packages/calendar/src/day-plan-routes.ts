@@ -1,18 +1,22 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import type { AccessContext, BriefingRun, DataContextDb, DataContextRunner, Task } from "@moss/db";
-import { handleRouteError, HttpError } from "@moss/module-sdk";
+import { handleRouteError, HttpError, localDayRange } from "@moss/module-sdk";
 import {
   createDayPlanRouteSchema,
   getDayPlanRouteSchema,
+  previewDayPlanRouteSchema,
   saveDayPlanRouteSchema,
   type CreateDayPlanRequest,
   type CreateDayPlanResponse,
+  type DayPlanCalendarAvailability,
   type DayPlanDto,
   type DayPlanSourceRunSummary,
   type DayPlanTaskSummary,
   type GetDayPlanQuery,
   type GetDayPlanResponse,
+  type PreviewDayPlanRequest,
+  type PreviewDayPlanResponse,
   type SaveDayPlanRequest,
   type SaveDayPlanResponse
 } from "@moss/shared";
@@ -24,6 +28,7 @@ import {
   normalizeTimeZone
 } from "./day-plan-model.js";
 import type { DayPlanRepository } from "./day-plan-repository.js";
+import { buildDayPlanPreview, type DayPlanPreviewTaskFact } from "./day-plan-preview.js";
 
 export interface DayPlanTaskProjection {
   (scopedDb: DataContextDb, taskId: string): Promise<Task | undefined>;
@@ -33,10 +38,43 @@ export interface DayPlanRunProjection {
   (scopedDb: DataContextDb, runId: string): Promise<BriefingRun | undefined>;
 }
 
+// The connectors package's own hard cap (source-context/calendar.ts CALENDAR_MAX_LIMIT). Kept as
+// a literal, not an import, so the preview route never gains an @moss/connectors dependency.
+const DAY_PLAN_PREVIEW_CALENDAR_LIMIT = 200;
+
+// Structural interface — no @moss/connectors import (module isolation, mirrors tools.ts).
+// Shape mirrors the connectors SourceContextService calendar surface.
+export interface DayPlanCalendarContextItemShape {
+  readonly eventKey: string;
+  readonly title: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly allDay: boolean;
+  readonly account: { readonly providerLabel: string };
+}
+
+export interface DayPlanSourceContextService {
+  listCalendarContext(
+    scopedDb: DataContextDb,
+    input: { windowStart?: string; windowEnd?: string; limit?: number }
+  ): Promise<{
+    items: readonly DayPlanCalendarContextItemShape[];
+    accounts: readonly { source: "live" | "cache" }[];
+    gaps: readonly unknown[];
+    /** True when more matching events existed than `items` returned. */
+    truncated: boolean;
+    /** Latest connector sync these facts are drawn from, or null if none has synced. */
+    asOf: string | null;
+  }>;
+}
+
 export interface DayPlanRoutesDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
-  readonly dayPlanRepository: Pick<DayPlanRepository, "getForDay" | "createForDay" | "saveDraft">;
+  readonly dayPlanRepository: Pick<
+    DayPlanRepository,
+    "getForDay" | "createForDay" | "saveDraft" | "getById"
+  >;
   readonly findSourceRun: (scopedDb: DataContextDb, runId: string) => Promise<unknown>;
   readonly findTask?: DayPlanTaskProjection;
   readonly findRun: DayPlanRunProjection;
@@ -44,6 +82,8 @@ export interface DayPlanRoutesDependencies {
     request: FastifyRequest,
     accessContext: AccessContext
   ) => Promise<string>;
+  /** Absent means the deployment has no connector-backed calendar reads — preview then always reports "unavailable". */
+  readonly sourceContext?: DayPlanSourceContextService;
 }
 
 const SAVE_BODY_KEYS = new Set(["date", "timeZone", "expectedRevision", "eveningIntent", "blocks"]);
@@ -108,6 +148,59 @@ function findUnknownSaveField(body: unknown): string | undefined {
     }
   }
   return undefined;
+}
+
+const PREVIEW_BODY_KEYS = new Set(["expectedRevision", "selectedChangeBlockIds"]);
+
+async function rejectUnknownPreviewFields(request: FastifyRequest, reply: FastifyReply) {
+  const body = request.body;
+  if (!isObject(body)) {
+    return reply.code(400).send({ error: "request must be an object", code: "day_plan_invalid" });
+  }
+  const unknown = firstUnknown(body, PREVIEW_BODY_KEYS, "");
+  if (unknown) {
+    return reply.code(400).send({ error: `unknown field: ${unknown}`, code: "day_plan_invalid" });
+  }
+}
+
+function taskStatusForPreview(status: Task["status"]): "done" | "archived" | "other" {
+  if (status === "done") return "done";
+  if (status === "archived") return "archived";
+  return "other";
+}
+
+/**
+ * UTC bounds the calendar read must cover: the plan's whole local day (DST-safe, via the shared
+ * `localDayRange` helper — never a fixed 24 hours), widened to also cover every selected block's
+ * before and after timing. A saved proposal is not constrained to its plan's local day, so a
+ * change starting late in the evening or crossing local midnight must still be checked.
+ */
+function previewCalendarWindow(
+  plan: DayPlanDto,
+  selectedBlockIds: readonly string[]
+): { start: string; end: string } {
+  const dayRange = localDayRange(plan.localDay, plan.timeZone);
+  let startMs = dayRange.start.getTime();
+  let endMs = dayRange.end.getTime();
+  const extend = (startsAt: string | null, durationMinutes: number | null) => {
+    if (startsAt === null || durationMinutes === null) return;
+    const s = new Date(startsAt).getTime();
+    const e = s + durationMinutes * 60_000;
+    if (s < startMs) startMs = s;
+    if (e > endMs) endMs = e;
+  };
+  const blockById = new Map(plan.blocks.map((block) => [block.id, block]));
+  for (const id of selectedBlockIds) {
+    const block = blockById.get(id);
+    if (!block) continue;
+    if (block.actualPlacement) {
+      extend(block.actualPlacement.startsAt, block.actualPlacement.durationMinutes);
+    }
+    if (block.pendingChange && block.pendingChange.kind !== "remove") {
+      extend(block.pendingChange.startsAt, block.pendingChange.durationMinutes);
+    }
+  }
+  return { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() };
 }
 
 async function rejectUnknownSaveFields(request: FastifyRequest, reply: FastifyReply) {
@@ -334,6 +427,120 @@ export function registerDayPlanRoutes(
           })
         );
         return { plan } satisfies SaveDayPlanResponse;
+      } catch (error) {
+        if (error instanceof DayPlanValidationError) {
+          return reply.code(400).send({ error: error.message, code: error.code });
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  const previewAccessContexts = new WeakMap<FastifyRequest, AccessContext>();
+  const authenticatePreview = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      previewAccessContexts.set(request, await dependencies.resolveAccessContext(request));
+    } catch (error) {
+      handleRouteError(error, reply);
+    }
+  };
+
+  server.post<{ Params: { id: string }; Body: PreviewDayPlanRequest }>(
+    "/api/calendar/day-plans/:id/preview",
+    {
+      schema: previewDayPlanRouteSchema,
+      onRequest: authenticatePreview,
+      preValidation: rejectUnknownPreviewFields
+    },
+    async (request, reply) => {
+      try {
+        const accessContext = previewAccessContexts.get(request);
+        if (!accessContext) throw new HttpError(500, "day plan access context is unavailable");
+        const body = request.body;
+        if (!Number.isInteger(body.expectedRevision) || body.expectedRevision < 1) {
+          throw new HttpError(400, "expectedRevision must be a positive integer");
+        }
+        const preview = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const plan = await dependencies.dayPlanRepository.getById(scopedDb, request.params.id);
+            if (!plan) throw new HttpError(404, "day plan is not available");
+            if (plan.revision !== body.expectedRevision) {
+              throw new HttpError(409, "day plan changed since it was read");
+            }
+
+            const taskIds = new Set<string>();
+            for (const block of plan.blocks) {
+              if (block.taskId !== null) taskIds.add(block.taskId);
+            }
+            const taskFacts = new Map<string, DayPlanPreviewTaskFact>();
+            if (dependencies.findTask) {
+              for (const taskId of taskIds) {
+                const task = await dependencies.findTask(scopedDb, taskId);
+                if (task) {
+                  taskFacts.set(taskId, {
+                    status: taskStatusForPreview(task.status),
+                    dueAt: toIso(task.due_at)
+                  });
+                }
+              }
+            }
+
+            let busyIntervals: {
+              start: string;
+              end: string;
+              eventKey: string;
+              title: string;
+              accountLabel: string;
+            }[] = [];
+            let calendarAvailability: DayPlanCalendarAvailability = "unavailable";
+            let calendarAsOf: string | null = null;
+            if (dependencies.sourceContext) {
+              const { start, end } = previewCalendarWindow(plan, body.selectedChangeBlockIds);
+              const context = await dependencies.sourceContext.listCalendarContext(scopedDb, {
+                windowStart: start,
+                windowEnd: end,
+                limit: DAY_PLAN_PREVIEW_CALENDAR_LIMIT
+              });
+              calendarAsOf = context.asOf;
+              const hasKnownAccount = context.accounts.length > 0;
+              const complete = hasKnownAccount && context.gaps.length === 0 && !context.truncated;
+              if (complete) {
+                calendarAvailability = context.accounts.every(
+                  (account) => account.source === "live"
+                )
+                  ? "available"
+                  : "stale";
+              }
+              // Every known commitment feeds conflict detection whenever the read is complete
+              // (live or stale) — a stale cache still knows about a real commitment, it just
+              // cannot certify there is nothing more. Only a gap or truncation withholds facts
+              // entirely, and then calendarAvailability stays "unavailable".
+              if (complete) {
+                busyIntervals = context.items
+                  .filter((item) => !item.allDay)
+                  .map((item) => ({
+                    start: item.startsAt,
+                    end: item.endsAt,
+                    eventKey: item.eventKey,
+                    title: item.title,
+                    accountLabel: item.account.providerLabel
+                  }));
+              }
+            }
+
+            return buildDayPlanPreview({
+              plan,
+              selectedBlockIds: body.selectedChangeBlockIds,
+              taskFacts,
+              busyIntervals,
+              calendarAvailability,
+              calendarAsOf,
+              now: new Date()
+            });
+          }
+        );
+        return preview satisfies PreviewDayPlanResponse;
       } catch (error) {
         if (error instanceof DayPlanValidationError) {
           return reply.code(400).send({ error: error.message, code: error.code });
