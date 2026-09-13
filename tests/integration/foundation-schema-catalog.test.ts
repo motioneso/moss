@@ -416,7 +416,13 @@ describe("MVP foundation schema catalog", () => {
         // idempotent operations, and composite ownership constraints.
         { version: "0230", name: "0230_day_plan_ownership.sql" },
         { version: "0231", name: "0231_day_plan_reconcile_storage.sql" },
-        { version: "0232", name: "0232_day_plan_blank_legacy_notes.sql" }
+        { version: "0232", name: "0232_day_plan_blank_legacy_notes.sql" },
+        // R2.2-T03-R3 — a deleted task must stay distinguishable from "no task" in preview,
+        // so the block keeps the task id as history instead of it being nulled out.
+        {
+          version: "0233",
+          name: "0233_day_plan_block_task_soft_reference.sql"
+        }
       ]);
     } finally {
       await client.end();

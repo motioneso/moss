@@ -20,6 +20,8 @@ export interface CreateCachedCalendarEventInput {
 export interface ListVisibleCalendarEventsOptions {
   readonly startsAfter?: Date;
   readonly startsBefore?: Date;
+  /** Events still running at this instant or later — use instead of startsAfter to catch events that started earlier but overlap it. */
+  readonly endsAfter?: Date;
   readonly limit?: number;
 }
 
@@ -35,6 +37,7 @@ export class CalendarRepository {
       .selectAll()
       .$if(opts?.startsAfter != null, (qb) => qb.where("starts_at", ">=", opts!.startsAfter!))
       .$if(opts?.startsBefore != null, (qb) => qb.where("starts_at", "<", opts!.startsBefore!))
+      .$if(opts?.endsAfter != null, (qb) => qb.where("ends_at", ">", opts!.endsAfter!))
       .orderBy("starts_at", "asc")
       .orderBy("id");
 

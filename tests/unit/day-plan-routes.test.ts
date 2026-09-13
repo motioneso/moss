@@ -119,7 +119,8 @@ function buildApp(
     dayPlanRepository: {
       getForDay: read,
       createForDay: async () => undefined as never,
-      saveDraft: async () => undefined as never
+      saveDraft: async () => undefined as never,
+      getById: async () => undefined as never
     },
     findSourceRun: async () => undefined,
     findTask,

@@ -1867,7 +1867,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         calendarWritebackPolicy: {
           set: (scopedDb, moduleId, actionFamilyId, tier) =>
             new AiRepository().setActionPolicy(scopedDb, moduleId, actionFamilyId, tier)
-        }
+        },
+        // Absent when there is no connector-backed calendar read available (mirrors the AI
+        // and chat modules' same gate on deps.connectorsRepository).
+        sourceContext: deps.connectorsRepository
+          ? buildRuntimeSourceContextService({
+              createCliStructuredAdapter: deps.createCliStructuredAdapter
+            })
+          : undefined
       }),
     registerWorkers: (boss, deps) => registerCalendarJobWorkers(boss, deps.dataContext)
   },
