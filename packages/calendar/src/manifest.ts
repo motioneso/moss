@@ -7,6 +7,8 @@ import {
   createDayPlanResponseSchema,
   getCalendarBriefingSettingsResponseSchema,
   getDayPlanResponseSchema,
+  previewDayPlanRequestSchema,
+  previewDayPlanResponseSchema,
   saveDayPlanRequestSchema,
   saveDayPlanResponseSchema,
   getCalendarEventResponseSchema,
@@ -195,6 +197,13 @@ export const calendarModuleManifest = {
       requestSchema: saveDayPlanRequestSchema,
       responseSchema: saveDayPlanResponseSchema,
       permissionId: "calendar.manage"
+    },
+    {
+      method: "POST",
+      path: "/api/calendar/day-plans/:id/preview",
+      requestSchema: previewDayPlanRequestSchema,
+      responseSchema: previewDayPlanResponseSchema,
+      permissionId: "calendar.view"
     },
     {
       method: "GET",
@@ -469,6 +478,44 @@ export const calendarModuleManifest = {
           id: "calendar.saved_day_plan_refresh",
           description: "Read the latest saved day plan before retrying the draft.",
           path: "/calendar"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_preview",
+      description:
+        "Preview selected pending changes: timing, eligibility, conflicts, deadline risk. " +
+        "Read-only. Conflicts use a live calendar read, else the last synced state; if no read " +
+        "is possible, outside conflicts are skipped rather than assumed clear.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description:
+            "Use a positive integer revision and only change ids that belong to this plan and have a saved pending change."
+        },
+        {
+          code: "day_plan_conflict",
+          class: "transient",
+          description: "Read the latest plan revision and retry the preview."
+        },
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan is unavailable to this actor."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest saved day plan before retrying the preview.",
+          path: "/calendar"
+        },
+        {
+          id: "calendar.saved_day_plan_reconnect",
+          description:
+            "Reconnect or fix a calendar account so conflicts are checked against real commitments again.",
+          path: "/settings/connectors"
         }
       ]
     },

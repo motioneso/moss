@@ -292,7 +292,9 @@ describe("saved day-plan real API boundary", () => {
     );
     const afterDelete = await read(ids.sessionA, query);
     expect(afterDelete.plan).toEqual(expectedAfterDelete);
-    expect(afterDelete.plan?.blocks[0]?.taskId).toBeNull();
+    // The block keeps the task id as history instead of it being nulled out, so a deleted task
+    // stays distinguishable from a block that never named a task.
+    expect(afterDelete.plan?.blocks[0]?.taskId).toBe(task.id);
     expect(afterDelete.plan?.blocks[0]?.title).toBe("Saved draft label");
     expect(afterDelete.tasks).toEqual([]);
     expect(afterDelete.unavailableTaskIds).toEqual([task.id]);
