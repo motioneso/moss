@@ -422,6 +422,12 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0233",
           name: "0233_day_plan_block_task_soft_reference.sql"
+        },
+        // R2.2-T04A — one durable apply batch per actor, plan and idempotency key:
+        // batch snapshot column, per-item records, and the batch header kind.
+        {
+          version: "0234",
+          name: "0234_day_plan_apply_batch.sql"
         }
       ]);
     } finally {

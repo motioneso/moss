@@ -717,3 +717,41 @@ export interface DayPlanOperationDto {
   outcome: DayPlanOperationOutcome;
   payload: Record<string, unknown>;
 }
+
+// One entry of a resolved apply selection: the block plus the pending change
+// frozen at reservation time. Removals carry no timing.
+export interface DayPlanApplySelectionEntry {
+  blockId: string;
+  kind: "add" | "move" | "remove";
+  startsAt: string | null;
+  durationMinutes: number | null;
+}
+
+export interface DayPlanApplyBatchInput {
+  planId: string;
+  expectedRevision: number;
+  idempotencyKey: string;
+  operationKey?: string;
+  // Explicitly reviewed block ids. Omitted or empty means every block that
+  // still carries an eligible addition.
+  selectedBlockIds?: string[];
+}
+
+export interface DayPlanApplyBatchItemDto {
+  id: string;
+  blockId: string | null;
+  kind: "add" | "move" | "remove";
+  pendingChange: DayPlanApplySelectionEntry;
+  outcome: DayPlanOperationOutcome;
+}
+
+export interface DayPlanApplyBatchDto {
+  id: string;
+  planId: string;
+  idempotencyKey: string;
+  operationKey: string | null;
+  expectedRevision: number;
+  outcome: DayPlanOperationOutcome;
+  selection: DayPlanApplySelectionEntry[];
+  items: DayPlanApplyBatchItemDto[];
+}
