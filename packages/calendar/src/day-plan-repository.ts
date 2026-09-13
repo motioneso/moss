@@ -9,6 +9,9 @@ import { sql } from "kysely";
 
 import type {
   DayPlanActualPlacement,
+  DayPlanApplyBatchDto,
+  DayPlanApplyBatchInput,
+  DayPlanApplySelectionEntry,
   DayPlanBlockDto,
   DayPlanBlockInput,
   DayPlanCreateInput,
@@ -16,12 +19,20 @@ import type {
   DayPlanEveningIntent,
   DayPlanOperationDto,
   DayPlanOperationInput,
+  DayPlanOperationOutcome,
   DayPlanPendingChange,
   DayPlanSaveInput
 } from "@moss/shared";
 import { assertDataContextDb, type DataContextDb, type DayPlan, type DayPlanBlock } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
 
+import {
+  DAY_PLAN_APPLY_BATCH_KIND,
+  applyIntentsEqual,
+  applySelectionsEqual,
+  normalizeApplyIntent,
+  resolveApplySelection
+} from "./day-plan-apply.js";
 import {
   DayPlanValidationError,
   emptyEveningIntent,
@@ -122,6 +133,97 @@ function toOperationDto(row: {
     expectedRevision: row.expected_revision,
     outcome: row.outcome as DayPlanOperationDto["outcome"],
     payload: {}
+  };
+}
+
+function readSelectionEntry(value: unknown): DayPlanApplySelectionEntry {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new HttpError(500, "stored apply batch is unreadable");
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.blockId !== "string" ||
+    (row.kind !== "add" && row.kind !== "move" && row.kind !== "remove")
+  ) {
+    throw new HttpError(500, "stored apply batch is unreadable");
+  }
+  return {
+    blockId: row.blockId,
+    kind: row.kind,
+    startsAt: typeof row.startsAt === "string" ? row.startsAt : null,
+    durationMinutes: typeof row.durationMinutes === "number" ? row.durationMinutes : null
+  };
+}
+
+interface StoredBatchSnapshot {
+  // Null for snapshots written before request intent was stored; those never
+  // replay and always conflict, which is the safe direction.
+  readonly intent: readonly string[] | null;
+  readonly selection: readonly DayPlanApplySelectionEntry[];
+}
+
+function readBatchSnapshot(value: unknown): StoredBatchSnapshot {
+  if (Array.isArray(value)) {
+    return { intent: null, selection: value.map(readSelectionEntry) };
+  }
+  if (typeof value !== "object" || value === null) {
+    throw new HttpError(500, "stored apply batch is unreadable");
+  }
+  const row = value as Record<string, unknown>;
+  if (
+    !Array.isArray(row.intent) ||
+    !row.intent.every((id): id is string => typeof id === "string") ||
+    !Array.isArray(row.selection)
+  ) {
+    throw new HttpError(500, "stored apply batch is unreadable");
+  }
+  return { intent: [...row.intent], selection: row.selection.map(readSelectionEntry) };
+}
+
+function toBatchDto(
+  header: {
+    id: string;
+    plan_id: string;
+    idempotency_key: string;
+    operation_key: string | null;
+    expected_revision: number;
+    outcome: DayPlanOperationOutcome;
+    selection_snapshot: unknown;
+  },
+  items: {
+    id: string;
+    block_id: string | null;
+    kind: string;
+    pending_change: unknown;
+    outcome: DayPlanOperationOutcome;
+  }[]
+): DayPlanApplyBatchDto {
+  const selection = readBatchSnapshot(header.selection_snapshot).selection;
+  const order = new Map(selection.map((entry, index) => [entry.blockId, index]));
+  const sorted = [...items].sort(
+    (a, b) =>
+      (order.get(a.block_id ?? "") ?? items.length) - (order.get(b.block_id ?? "") ?? items.length)
+  );
+  return {
+    id: header.id,
+    planId: header.plan_id,
+    idempotencyKey: header.idempotency_key,
+    operationKey: header.operation_key,
+    expectedRevision: header.expected_revision,
+    outcome: header.outcome,
+    selection: [...selection],
+    items: sorted.map((item) => {
+      if (item.kind !== "add" && item.kind !== "move" && item.kind !== "remove") {
+        throw new HttpError(500, "stored apply batch is unreadable");
+      }
+      return {
+        id: item.id,
+        blockId: item.block_id,
+        kind: item.kind,
+        pendingChange: readSelectionEntry(item.pending_change),
+        outcome: item.outcome
+      };
+    })
   };
 }
 
@@ -526,6 +628,244 @@ export class DayPlanRepository {
       throw new HttpError(409, "idempotency key is already used for a different operation");
     }
     return toOperationDto(raced);
+  }
+
+  // Reads one reserved apply batch with its per-item records. Returns undefined
+  // when no batch header was reserved under this identity.
+  async getApplyBatch(
+    scopedDb: DataContextDb,
+    input: { planId: string; idempotencyKey: string }
+  ): Promise<DayPlanApplyBatchDto | undefined> {
+    assertDataContextDb(scopedDb);
+    const header = await scopedDb.db
+      .selectFrom("app.day_plan_operations")
+      .selectAll()
+      .where("plan_id", "=", input.planId)
+      .where("idempotency_key", "=", input.idempotencyKey)
+      .executeTakeFirst();
+    if (!header || header.kind !== DAY_PLAN_APPLY_BATCH_KIND) return undefined;
+    const items = await scopedDb.db
+      .selectFrom("app.day_plan_operation_items")
+      .selectAll()
+      .where("operation_id", "=", header.id)
+      .execute();
+    return toBatchDto(header, items);
+  }
+
+  // Reserves one durable apply batch before any provider mutation: the reviewed
+  // explicit selection plus every still-pending addition, frozen as an immutable
+  // snapshot under one operation identity with stable per-item pending records.
+  // A reservation is a durable fact: an exact replay — same actor, plan, key,
+  // original expected revision, operation key and normalized intent — returns the
+  // stored reservation even after the plan revision advances. Any difference
+  // conflicts, and a fresh key against a stale revision is rejected. Every write
+  // runs inside the caller's data-context transaction, so a failed item leaves no
+  // partial rows. No route exposes this; execution belongs to later work.
+  async reserveApplyBatch(
+    scopedDb: DataContextDb,
+    input: DayPlanApplyBatchInput
+  ): Promise<DayPlanApplyBatchDto> {
+    assertDataContextDb(scopedDb);
+    let idempotencyKey: string;
+    try {
+      idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
+    } catch (error) {
+      if (error instanceof DayPlanValidationError)
+        throw new HttpError(400, (error as Error).message);
+      throw error;
+    }
+    if (!Number.isInteger(input.expectedRevision) || input.expectedRevision < 1) {
+      throw new HttpError(400, "expectedRevision must be a positive integer");
+    }
+    if (input.selectedBlockIds !== undefined && !Array.isArray(input.selectedBlockIds)) {
+      throw new HttpError(400, "selectedBlockIds must be a list");
+    }
+    const intent = normalizeApplyIntent(input.selectedBlockIds);
+    const operationKey = input.operationKey ?? null;
+    const plan = await scopedDb.db
+      .selectFrom("app.day_plans")
+      .selectAll()
+      .select(sql<string>`to_char(local_day, 'YYYY-MM-DD')`.as("local_day"))
+      .where("id", "=", input.planId)
+      // Serialize reservations with draft revision updates in this transaction.
+      .forUpdate()
+      .executeTakeFirst();
+    if (!plan) throw new HttpError(404, "day plan is not available");
+    const replayed = await this.readMatchingBatch(
+      scopedDb,
+      plan.id,
+      input.expectedRevision,
+      idempotencyKey,
+      operationKey,
+      intent
+    );
+    if (replayed === null) {
+      throw new HttpError(409, "idempotency key is already used for a different operation");
+    }
+    if (replayed !== undefined) return replayed;
+    if (plan.revision !== input.expectedRevision) {
+      throw new HttpError(409, "day plan changed since it was read");
+    }
+    const stored = await this.loadBlocks(scopedDb, plan.id);
+    let selection: DayPlanApplySelectionEntry[];
+    try {
+      selection = resolveApplySelection(
+        stored.map((row) => ({
+          id: row.id,
+          position: row.position,
+          pendingChange: readPending(row.pending_change)
+        })),
+        input.selectedBlockIds
+      );
+    } catch (error) {
+      if (error instanceof DayPlanValidationError)
+        throw new HttpError(400, (error as Error).message);
+      throw error;
+    }
+    if (selection.length === 0) {
+      throw new HttpError(400, "no pending changes to reserve");
+    }
+    const settled = await this.settleBatchHeader(
+      scopedDb,
+      plan.id,
+      input.expectedRevision,
+      idempotencyKey,
+      operationKey,
+      intent,
+      selection
+    );
+    const items = await scopedDb.db
+      .selectFrom("app.day_plan_operation_items")
+      .selectAll()
+      .where("operation_id", "=", settled.id)
+      .execute();
+    return toBatchDto(settled, items);
+  }
+
+  // Returns the stored batch when the request repeats the reservation exactly,
+  // undefined when no header exists under this identity, and null when a header
+  // exists but differs — a conflicting reuse of the idempotency key.
+  private async readMatchingBatch(
+    scopedDb: DataContextDb,
+    planId: string,
+    expectedRevision: number,
+    idempotencyKey: string,
+    operationKey: string | null,
+    intent: readonly string[]
+  ): Promise<DayPlanApplyBatchDto | undefined | null> {
+    const header = await scopedDb.db
+      .selectFrom("app.day_plan_operations")
+      .selectAll()
+      .where("plan_id", "=", planId)
+      .where("idempotency_key", "=", idempotencyKey)
+      .executeTakeFirst();
+    if (!header) return undefined;
+    if (header.kind !== DAY_PLAN_APPLY_BATCH_KIND) return null;
+    const snapshot = readBatchSnapshot(header.selection_snapshot);
+    if (
+      header.expected_revision !== expectedRevision ||
+      header.operation_key !== operationKey ||
+      snapshot.intent === null ||
+      !applyIntentsEqual(snapshot.intent, intent)
+    ) {
+      return null;
+    }
+    const items = await scopedDb.db
+      .selectFrom("app.day_plan_operation_items")
+      .selectAll()
+      .where("operation_id", "=", header.id)
+      .execute();
+    return toBatchDto(header, items);
+  }
+
+  private async settleBatchHeader(
+    scopedDb: DataContextDb,
+    planId: string,
+    expectedRevision: number,
+    idempotencyKey: string,
+    operationKey: string | null,
+    intent: readonly string[],
+    selection: DayPlanApplySelectionEntry[]
+  ) {
+    const matches = (header: {
+      kind: string;
+      expected_revision: number;
+      operation_key: string | null;
+      selection_snapshot: unknown;
+    }): boolean => {
+      if (
+        header.kind !== DAY_PLAN_APPLY_BATCH_KIND ||
+        header.expected_revision !== expectedRevision ||
+        header.operation_key !== operationKey
+      ) {
+        return false;
+      }
+      const snapshot = readBatchSnapshot(header.selection_snapshot);
+      return (
+        snapshot.intent !== null &&
+        applyIntentsEqual(snapshot.intent, intent) &&
+        applySelectionsEqual(snapshot.selection, selection)
+      );
+    };
+    const existing = await scopedDb.db
+      .selectFrom("app.day_plan_operations")
+      .selectAll()
+      .where("plan_id", "=", planId)
+      .where("idempotency_key", "=", idempotencyKey)
+      .executeTakeFirst();
+    if (existing) {
+      if (!matches(existing)) {
+        throw new HttpError(409, "idempotency key is already used for a different operation");
+      }
+      return existing;
+    }
+    const inserted = await scopedDb.db
+      .insertInto("app.day_plan_operations")
+      .values({
+        id: randomUUID(),
+        plan_id: planId,
+        owner_user_id: sql<string>`app.current_actor_user_id()`,
+        operation_key: operationKey,
+        block_id: null,
+        kind: DAY_PLAN_APPLY_BATCH_KIND,
+        idempotency_key: idempotencyKey,
+        expected_revision: expectedRevision,
+        outcome: "pending",
+        // Arrays reach node-postgres as Postgres arrays, never JSON, so the
+        // snapshot is stringified on write and parsed back as jsonb on read.
+        selection_snapshot: JSON.stringify({ intent, selection })
+      })
+      .onConflict((oc) => oc.columns(["owner_user_id", "plan_id", "idempotency_key"]).doNothing())
+      .returningAll()
+      .executeTakeFirst();
+    if (inserted) {
+      await scopedDb.db
+        .insertInto("app.day_plan_operation_items")
+        .values(
+          selection.map((entry) => ({
+            id: randomUUID(),
+            operation_id: inserted.id,
+            plan_id: planId,
+            owner_user_id: sql<string>`app.current_actor_user_id()`,
+            block_id: entry.blockId,
+            kind: entry.kind,
+            pending_change: entry as unknown as Record<string, unknown>,
+            outcome: "pending" as const
+          }))
+        )
+        .execute();
+      return inserted;
+    }
+    const raced = await scopedDb.db
+      .selectFrom("app.day_plan_operations")
+      .selectAll()
+      .where("plan_id", "=", planId)
+      .where("idempotency_key", "=", idempotencyKey)
+      .executeTakeFirstOrThrow();
+    if (!matches(raced)) {
+      throw new HttpError(409, "idempotency key is already used for a different operation");
+    }
+    return raced;
   }
 }
 
