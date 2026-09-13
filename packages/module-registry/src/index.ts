@@ -96,7 +96,6 @@ import {
 } from "@moss/briefings";
 import {
   CalendarRepository,
-  DayPlanRepository,
   calendarFollowThroughSourceRef,
   isCalendarFollowThroughEvent,
   isCalendarFollowThroughTask,
@@ -114,6 +113,7 @@ import {
   CliChatUnavailableError,
   buildEveningInterviewSeed,
   buildCalendarWriteService,
+  buildDayPlanApplyComposition,
   chatCommitmentProvider,
   ChatRepository,
   createChatFeedbackTargetVerifier,
@@ -1843,16 +1843,18 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     manifest: calendarModuleManifest,
     sqlMigrationDirectories: [calendarModuleSqlMigrationDirectory],
     queueDefinitions: CALENDAR_QUEUE_DEFINITIONS,
-    registerRoutes: (server, deps) =>
-      registerCalendarRoutes(server, {
+    registerRoutes: (server, deps) => {
+      // One shared day-plan repository for routes and apply execution, plus
+      // the optional execution callback the apply routes call after reserving.
+      const dayPlanApply = buildDayPlanApplyComposition({
+        dataContext: deps.dataContext,
+        connectorsRepository: deps.connectorsRepository
+      });
+      return registerCalendarRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
-        dayPlanRepository: new DayPlanRepository({
-          findTask: async (scopedDb, taskId) => {
-            const task = await new TasksRepository().getById(scopedDb, taskId);
-            return task ? { id: task.id, ownerUserId: task.owner_user_id } : undefined;
-          }
-        }),
+        dayPlanRepository: dayPlanApply.dayPlanRepository,
+        ...(dayPlanApply.applyExecution ? { applyExecution: dayPlanApply.applyExecution } : {}),
         findSourceRun: (scopedDb, runId) =>
           new BriefingsRepository().getOwnedRunById(scopedDb, runId),
         findTask: (scopedDb, taskId) => new TasksRepository().getById(scopedDb, taskId),
@@ -1875,7 +1877,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
               createCliStructuredAdapter: deps.createCliStructuredAdapter
             })
           : undefined
-      }),
+      });
+    },
     registerWorkers: (boss, deps) => registerCalendarJobWorkers(boss, deps.dataContext)
   },
   {

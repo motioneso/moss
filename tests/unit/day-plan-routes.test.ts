@@ -120,7 +120,10 @@ function buildApp(
       getForDay: read,
       createForDay: async () => undefined as never,
       saveDraft: async () => undefined as never,
-      getById: async () => undefined as never
+      getById: async () => undefined as never,
+      reserveApplyBatch: async () => undefined as never,
+      getApplyBatch: async () => undefined,
+      getApplyBatchById: async () => undefined
     },
     findSourceRun: async () => undefined,
     findTask,

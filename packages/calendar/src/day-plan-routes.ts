@@ -1,14 +1,26 @@
+import { randomUUID } from "node:crypto";
+
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import type { AccessContext, BriefingRun, DataContextDb, DataContextRunner, Task } from "@moss/db";
+import { isUuid } from "@moss/db";
 import { handleRouteError, HttpError, localDayRange } from "@moss/module-sdk";
+import type { ToolContext } from "@moss/module-sdk";
 import {
+  applyDayPlanRouteSchema,
   createDayPlanRouteSchema,
+  dayPlanApplyStatusRouteSchema,
   getDayPlanRouteSchema,
   previewDayPlanRouteSchema,
+  retryDayPlanApplyRouteSchema,
   saveDayPlanRouteSchema,
+  type ApplyDayPlanRequest,
+  type ApplyExecutionReport,
   type CreateDayPlanRequest,
   type CreateDayPlanResponse,
+  type DayPlanApplyBatchDto,
+  type DayPlanApplyOperationStatus,
+  type DayPlanApplyStatusResponse,
   type DayPlanCalendarAvailability,
   type DayPlanDto,
   type DayPlanSourceRunSummary,
@@ -17,9 +29,11 @@ import {
   type GetDayPlanResponse,
   type PreviewDayPlanRequest,
   type PreviewDayPlanResponse,
+  type RetryDayPlanApplyRequest,
   type SaveDayPlanRequest,
   type SaveDayPlanResponse
 } from "@moss/shared";
+import type { ApplyExecutionRouteCallback } from "./day-plan-execute.js";
 
 import {
   DayPlanValidationError,
@@ -73,8 +87,18 @@ export interface DayPlanRoutesDependencies {
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
   readonly dayPlanRepository: Pick<
     DayPlanRepository,
-    "getForDay" | "createForDay" | "saveDraft" | "getById"
+    | "getForDay"
+    | "createForDay"
+    | "saveDraft"
+    | "getById"
+    | "reserveApplyBatch"
+    | "getApplyBatch"
+    | "getApplyBatchById"
   >;
+  // Absent when this deployment has no connector-backed execution runtime.
+  // Apply and retry fail closed with 503 before any mutation; status reads
+  // durable state and never needs it.
+  readonly applyExecution?: ApplyExecutionRouteCallback;
   readonly findSourceRun: (scopedDb: DataContextDb, runId: string) => Promise<unknown>;
   readonly findTask?: DayPlanTaskProjection;
   readonly findRun: DayPlanRunProjection;
@@ -97,7 +121,11 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function firstUnknown(value: Record<string, unknown>, allowed: Set<string>, prefix: string) {
+function firstUnknown(
+  value: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  prefix: string
+) {
   const key = Object.keys(value).find((entry) => !allowed.has(entry));
   return key === undefined ? undefined : `${prefix}${key}`;
 }
@@ -539,6 +567,255 @@ export function registerDayPlanRoutes(
           }
         );
         return preview satisfies PreviewDayPlanResponse;
+      } catch (error) {
+        if (error instanceof DayPlanValidationError) {
+          return reply.code(400).send({ error: error.message, code: error.code });
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  const applyAccessContexts = new WeakMap<FastifyRequest, AccessContext>();
+  const authenticateApplyAccess = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      applyAccessContexts.set(request, await dependencies.resolveAccessContext(request));
+    } catch (error) {
+      handleRouteError(error, reply);
+    }
+  };
+
+  function requireApplyAccess(request: FastifyRequest): AccessContext {
+    const accessContext = applyAccessContexts.get(request);
+    if (!accessContext) throw new HttpError(500, "day plan access context is unavailable");
+    return accessContext;
+  }
+
+  function requireApplyExecution(): ApplyExecutionRouteCallback {
+    const execute = dependencies.applyExecution;
+    if (!execute) throw new HttpError(503, "day plan apply is unavailable");
+    return execute;
+  }
+
+  function toolContextOf(accessContext: AccessContext): ToolContext {
+    return {
+      actorUserId: accessContext.actorUserId,
+      requestId: accessContext.requestId ?? randomUUID(),
+      chatSessionId: ""
+    };
+  }
+
+  function toStatusResponse(batch: DayPlanApplyBatchDto): DayPlanApplyStatusResponse {
+    const status: DayPlanApplyOperationStatus = batch.items.some(
+      (item) => item.outcome === "pending" || item.outcome === "unknown"
+    )
+      ? "pending"
+      : "completed";
+    return {
+      operationId: batch.id,
+      planId: batch.planId,
+      status,
+      items: batch.items.map((item) => ({
+        itemId: item.id,
+        blockId: item.blockId,
+        outcome: item.outcome,
+        result: item.result
+      }))
+    };
+  }
+
+  const APPLY_BODY_KEYS: ReadonlySet<string> = new Set([
+    "expectedRevision",
+    "idempotencyKey",
+    "operationKey",
+    "selectedBlockIds"
+  ]);
+
+  async function rejectUnknownApplyFields(request: FastifyRequest, reply: FastifyReply) {
+    const body = request.body;
+    if (!isObject(body)) {
+      return reply.code(400).send({ error: "request must be an object", code: "day_plan_invalid" });
+    }
+    const unknown = firstUnknown(body, APPLY_BODY_KEYS, "");
+    if (unknown) {
+      return reply.code(400).send({ error: `unknown field: ${unknown}`, code: "day_plan_invalid" });
+    }
+    if (!Number.isInteger(body.expectedRevision) || (body.expectedRevision as number) < 1) {
+      return reply
+        .code(400)
+        .send({ error: "expectedRevision must be a positive integer", code: "day_plan_invalid" });
+    }
+    if (
+      typeof body.idempotencyKey !== "string" ||
+      body.idempotencyKey.trim().length === 0 ||
+      body.idempotencyKey.trim().length > 128
+    ) {
+      return reply
+        .code(400)
+        .send({ error: "idempotencyKey must be non-empty text", code: "day_plan_invalid" });
+    }
+    if (
+      body.operationKey !== undefined &&
+      body.operationKey !== null &&
+      typeof body.operationKey !== "string"
+    ) {
+      return reply
+        .code(400)
+        .send({ error: "operationKey must be a string", code: "day_plan_invalid" });
+    }
+    if (body.selectedBlockIds !== undefined) {
+      if (
+        !Array.isArray(body.selectedBlockIds) ||
+        body.selectedBlockIds.some((id) => typeof id !== "string" || !isUuid(id))
+      ) {
+        return reply
+          .code(400)
+          .send({ error: "selectedBlockIds must be a list of ids", code: "day_plan_invalid" });
+      }
+      if (new Set(body.selectedBlockIds).size !== body.selectedBlockIds.length) {
+        return reply
+          .code(400)
+          .send({ error: "selectedBlockIds must not repeat an id", code: "day_plan_invalid" });
+      }
+    }
+  }
+
+  server.post<{ Params: { id: string }; Body: ApplyDayPlanRequest }>(
+    "/api/calendar/day-plans/:id/apply",
+    {
+      schema: applyDayPlanRouteSchema,
+      onRequest: authenticateApplyAccess,
+      preValidation: rejectUnknownApplyFields
+    },
+    async (request, reply) => {
+      try {
+        const accessContext = requireApplyAccess(request);
+        const execute = requireApplyExecution();
+        const body = request.body;
+        // One short reservation transaction, closed before execution runs
+        // any facts or provider work with its own staging.
+        const batch = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          dependencies.dayPlanRepository.reserveApplyBatch(scopedDb, {
+            planId: request.params.id,
+            expectedRevision: body.expectedRevision,
+            idempotencyKey: body.idempotencyKey,
+            ...(body.operationKey ? { operationKey: body.operationKey } : {}),
+            ...(body.selectedBlockIds !== undefined
+              ? { selectedBlockIds: body.selectedBlockIds }
+              : {})
+          })
+        );
+        const report = await execute({
+          access: accessContext,
+          toolCtx: toolContextOf(accessContext),
+          planId: batch.planId,
+          idempotencyKey: batch.idempotencyKey
+        });
+        return report satisfies ApplyExecutionReport;
+      } catch (error) {
+        if (error instanceof DayPlanValidationError) {
+          return reply.code(400).send({ error: error.message, code: error.code });
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.get<{ Params: { id: string; operationId: string } }>(
+    "/api/calendar/day-plans/:id/operations/:operationId",
+    {
+      schema: dayPlanApplyStatusRouteSchema,
+      onRequest: authenticateApplyAccess
+    },
+    async (request, reply) => {
+      try {
+        const accessContext = requireApplyAccess(request);
+        // Database-only: works when provider composition is unavailable.
+        const batch = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          dependencies.dayPlanRepository.getApplyBatchById(scopedDb, {
+            planId: request.params.id,
+            operationId: request.params.operationId
+          })
+        );
+        if (!batch) throw new HttpError(404, "day plan apply operation is not available");
+        return toStatusResponse(batch) satisfies DayPlanApplyStatusResponse;
+      } catch (error) {
+        if (error instanceof DayPlanValidationError) {
+          return reply.code(400).send({ error: error.message, code: error.code });
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  const RETRY_BODY_KEYS: ReadonlySet<string> = new Set(["itemIds"]);
+
+  async function rejectUnknownRetryFields(request: FastifyRequest, reply: FastifyReply) {
+    const body = request.body;
+    if (!isObject(body)) {
+      return reply.code(400).send({ error: "request must be an object", code: "day_plan_invalid" });
+    }
+    const unknown = firstUnknown(body, RETRY_BODY_KEYS, "");
+    if (unknown) {
+      return reply.code(400).send({ error: `unknown field: ${unknown}`, code: "day_plan_invalid" });
+    }
+    if (
+      !Array.isArray(body.itemIds) ||
+      body.itemIds.length === 0 ||
+      body.itemIds.some((id) => typeof id !== "string" || !isUuid(id))
+    ) {
+      return reply
+        .code(400)
+        .send({ error: "itemIds must be a non-empty list of ids", code: "day_plan_invalid" });
+    }
+    if (new Set(body.itemIds).size !== body.itemIds.length) {
+      return reply
+        .code(400)
+        .send({ error: "itemIds must not repeat an id", code: "day_plan_invalid" });
+    }
+  }
+
+  server.post<{ Params: { id: string; operationId: string }; Body: RetryDayPlanApplyRequest }>(
+    "/api/calendar/day-plans/:id/operations/:operationId/retry",
+    {
+      schema: retryDayPlanApplyRouteSchema,
+      onRequest: authenticateApplyAccess,
+      preValidation: rejectUnknownRetryFields
+    },
+    async (request, reply) => {
+      try {
+        const accessContext = requireApplyAccess(request);
+        const execute = requireApplyExecution();
+        const body = request.body;
+        // One short read-only validation transaction: the whole selection is
+        // accepted or rejected before any facts or provider work, and nothing
+        // is written here.
+        const batch = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          dependencies.dayPlanRepository.getApplyBatchById(scopedDb, {
+            planId: request.params.id,
+            operationId: request.params.operationId
+          })
+        );
+        if (!batch) throw new HttpError(404, "day plan apply operation is not available");
+        const byId = new Map(batch.items.map((item) => [item.id, item]));
+        for (const itemId of body.itemIds) {
+          const item = byId.get(itemId);
+          if (
+            !item ||
+            item.kind !== "add" ||
+            (item.outcome !== "failed" && item.outcome !== "unknown")
+          ) {
+            throw new HttpError(409, "day plan apply retry selection is not eligible");
+          }
+        }
+        const report = await execute({
+          access: accessContext,
+          toolCtx: toolContextOf(accessContext),
+          planId: batch.planId,
+          idempotencyKey: batch.idempotencyKey,
+          itemIds: [...body.itemIds]
+        });
+        return report satisfies ApplyExecutionReport;
       } catch (error) {
         if (error instanceof DayPlanValidationError) {
           return reply.code(400).send({ error: error.message, code: error.code });

@@ -3,12 +3,16 @@ import { fileURLToPath } from "node:url";
 import type { MossModuleManifest, ToolRequiresConfirmation } from "@moss/module-sdk";
 import { calendarMonitorProvider } from "./monitor-provider.js";
 import {
+  applyDayPlanRequestSchema,
+  applyExecutionReportSchema,
   createDayPlanRequestSchema,
   createDayPlanResponseSchema,
+  dayPlanApplyStatusResponseSchema,
   getCalendarBriefingSettingsResponseSchema,
   getDayPlanResponseSchema,
   previewDayPlanRequestSchema,
   previewDayPlanResponseSchema,
+  retryDayPlanApplyRequestSchema,
   saveDayPlanRequestSchema,
   saveDayPlanResponseSchema,
   getCalendarEventResponseSchema,
@@ -204,6 +208,26 @@ export const calendarModuleManifest = {
       requestSchema: previewDayPlanRequestSchema,
       responseSchema: previewDayPlanResponseSchema,
       permissionId: "calendar.view"
+    },
+    {
+      method: "POST",
+      path: "/api/calendar/day-plans/:id/apply",
+      requestSchema: applyDayPlanRequestSchema,
+      responseSchema: applyExecutionReportSchema,
+      permissionId: "calendar.manage"
+    },
+    {
+      method: "GET",
+      path: "/api/calendar/day-plans/:id/operations/:operationId",
+      responseSchema: dayPlanApplyStatusResponseSchema,
+      permissionId: "calendar.view"
+    },
+    {
+      method: "POST",
+      path: "/api/calendar/day-plans/:id/operations/:operationId/retry",
+      requestSchema: retryDayPlanApplyRequestSchema,
+      responseSchema: applyExecutionReportSchema,
+      permissionId: "calendar.manage"
     },
     {
       method: "GET",
@@ -477,6 +501,97 @@ export const calendarModuleManifest = {
         {
           id: "calendar.saved_day_plan_refresh",
           description: "Read the latest saved day plan before retrying the draft.",
+          path: "/calendar"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_apply",
+      description:
+        "Apply reserved addition-only blocks: reserves the reviewed selection, writes each " +
+        "addition once, and returns the truthful per-item report. Exact replay returns the " +
+        "same operation without duplicate events.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description:
+            "Use a positive integer revision, non-empty idempotency key, and only block ids that belong to this plan."
+        },
+        {
+          code: "day_plan_conflict",
+          class: "transient",
+          description:
+            "Read the latest plan revision and retry the apply, or reuse the key exactly to replay."
+        },
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan is unavailable to this actor."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest saved day plan before retrying the apply.",
+          path: "/calendar"
+        },
+        {
+          id: "calendar.saved_day_plan_reconnect",
+          description:
+            "Reconnect or fix a calendar account so additions are written against real commitments again.",
+          path: "/settings/connectors"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_apply_status",
+      description:
+        "Read one apply operation with its durable per-item outcomes. Database-only. " +
+        "Pending while any item is pending or unknown, completed once all are settled.",
+      errors: [
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan or operation is unavailable to this actor."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest saved day plan before checking the operation again.",
+          path: "/calendar"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_apply_retry",
+      description:
+        "Retry only selected failed or unknown additions of one operation, once each. " +
+        "The selection validates atomically first; unselected items keep stored results.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description: "Retry needs a non-empty list of unique item ids."
+        },
+        {
+          code: "day_plan_conflict",
+          class: "transient",
+          description:
+            "Only failed or unknown additions can be retried; applied, pending, moved, " +
+            "removed, missing, or stale selections reject the whole retry."
+        },
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan, operation, or item is unavailable to this actor."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest operation status before retrying.",
           path: "/calendar"
         }
       ]

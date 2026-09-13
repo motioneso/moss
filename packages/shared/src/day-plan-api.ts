@@ -798,6 +798,7 @@ export interface ApplyItemUnresolvedResult {
 export type ApplyItemResult = ApplyItemAppliedResult | ApplyItemUnresolvedResult;
 
 export interface ApplyExecutionItemReport {
+  itemId: string | null;
   blockId: string | null;
   outcome: DayPlanOperationOutcome;
   result: ApplyItemResult | null;
@@ -810,3 +811,140 @@ export interface ApplyExecutionReport {
   denialReason?: string;
   items: ApplyExecutionItemReport[];
 }
+
+// Durable operation status derived from stored item outcomes: pending while
+// any item is still pending or unknown, completed once every item is applied
+// or failed. A denied execution attempt writes nothing, so it never
+// fabricates a stored terminal result.
+export const DAY_PLAN_APPLY_OPERATION_STATUSES = ["pending", "completed"] as const;
+export type DayPlanApplyOperationStatus = (typeof DAY_PLAN_APPLY_OPERATION_STATUSES)[number];
+
+export interface DayPlanApplyStatusResponse {
+  operationId: string;
+  planId: string;
+  status: DayPlanApplyOperationStatus;
+  items: ApplyExecutionItemReport[];
+}
+
+export interface ApplyDayPlanRequest {
+  expectedRevision: number;
+  idempotencyKey: string;
+  operationKey?: string | null;
+  selectedBlockIds?: string[];
+}
+
+export interface RetryDayPlanApplyRequest {
+  itemIds: string[];
+}
+
+const applyExecutionItemReportSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["itemId", "blockId", "outcome", "result"],
+  properties: {
+    itemId: { anyOf: [uuidSchema, { type: "null" }] },
+    blockId: { anyOf: [uuidSchema, { type: "null" }] },
+    outcome: { type: "string", enum: ["pending", "applied", "failed", "unknown"] },
+    result: { anyOf: [{ type: "object" }, { type: "null" }] }
+  }
+} as const;
+
+export const applyExecutionReportSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["operationId", "planId", "status", "items"],
+  properties: {
+    operationId: uuidSchema,
+    planId: uuidSchema,
+    status: { type: "string", enum: ["completed", "denied"] },
+    denialReason: { type: "string" },
+    items: { type: "array", items: applyExecutionItemReportSchema }
+  }
+} as const;
+
+export const dayPlanApplyStatusResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["operationId", "planId", "status", "items"],
+  properties: {
+    operationId: uuidSchema,
+    planId: uuidSchema,
+    status: { type: "string", enum: ["pending", "completed"] },
+    items: { type: "array", items: applyExecutionItemReportSchema }
+  }
+} as const;
+
+export const applyDayPlanRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["expectedRevision", "idempotencyKey"],
+  properties: {
+    expectedRevision: { type: "integer", minimum: 1 },
+    idempotencyKey: { type: "string", minLength: 1, maxLength: 128 },
+    operationKey: { anyOf: [{ type: "string", minLength: 1 }, { type: "null" }] },
+    selectedBlockIds: { type: "array", items: uuidSchema }
+  }
+} as const;
+
+const applyDayPlanParamsSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id"],
+  properties: { id: uuidSchema }
+} as const;
+
+export const applyDayPlanRouteSchema = {
+  params: applyDayPlanParamsSchema,
+  body: applyDayPlanRequestSchema,
+  response: {
+    200: applyExecutionReportSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema,
+    503: errorResponseSchema
+  }
+} as const;
+
+export const dayPlanApplyStatusRouteSchema = {
+  params: {
+    type: "object",
+    additionalProperties: false,
+    required: ["id", "operationId"],
+    properties: { id: uuidSchema, operationId: uuidSchema }
+  },
+  response: {
+    200: dayPlanApplyStatusResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema,
+    503: errorResponseSchema
+  }
+} as const;
+
+export const retryDayPlanApplyRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["itemIds"],
+  properties: {
+    itemIds: { type: "array", minItems: 1, items: uuidSchema }
+  }
+} as const;
+
+export const retryDayPlanApplyRouteSchema = {
+  params: {
+    type: "object",
+    additionalProperties: false,
+    required: ["id", "operationId"],
+    properties: { id: uuidSchema, operationId: uuidSchema }
+  },
+  body: retryDayPlanApplyRequestSchema,
+  response: {
+    200: applyExecutionReportSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema,
+    503: errorResponseSchema
+  }
+} as const;

@@ -90,6 +90,7 @@ export type {
   RpcSubmitLoginTokenResult
 } from "./live/login-contract.js";
 export * from "./manifest.js";
+export * from "./module-registry/day-plan-apply-composition.js";
 export * from "./feedback-verifier.js";
 export * from "./memory-distillation.js";
 export * from "./memory-settings-repository.js";
