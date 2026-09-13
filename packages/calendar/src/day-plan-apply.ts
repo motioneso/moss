@@ -134,15 +134,29 @@ function readItemResult(value: unknown): ApplyItemResult | null {
   if (row.status === "applied") {
     if (
       typeof row.providerEventId !== "string" ||
-      typeof row.startsAt !== "string" ||
-      typeof row.durationMinutes !== "number" ||
       (row.calendarMirror !== "written" &&
         row.calendarMirror !== "skipped-rls" &&
         row.calendarMirror !== "skipped-error" &&
         row.calendarMirror !== "not-checked" &&
-        row.calendarMirror !== "not-cached") ||
+        row.calendarMirror !== "not-cached" &&
+        row.calendarMirror !== "evicted") ||
       (row.blockMirror !== "mirrored" && row.blockMirror !== "mismatch-preserved")
     ) {
+      throw new HttpError(500, "stored apply batch is unreadable");
+    }
+    // Removals carry the deleted event's last observed window, or null timing
+    // when the pre-delete readback never saw it. Additions and moves always
+    // carry the applied window.
+    if (row.removed === true) {
+      if (
+        (row.startsAt !== null && typeof row.startsAt !== "string") ||
+        (row.durationMinutes !== null && typeof row.durationMinutes !== "number")
+      ) {
+        throw new HttpError(500, "stored apply batch is unreadable");
+      }
+      return row as unknown as ApplyItemResult;
+    }
+    if (typeof row.startsAt !== "string" || typeof row.durationMinutes !== "number") {
       throw new HttpError(500, "stored apply batch is unreadable");
     }
     return row as unknown as ApplyItemResult;

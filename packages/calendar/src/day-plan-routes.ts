@@ -35,6 +35,13 @@ import {
   type SaveDayPlanRequest,
   type SaveDayPlanResponse
 } from "@moss/shared";
+import { batchHasChanges } from "./day-plan-change-approval.js";
+import {
+  gateReservedChanges,
+  registerDayPlanChangeConfirmRoute,
+  resolveChangeAuth
+} from "./day-plan-change-routes.js";
+import type { DayPlanChangeApprovalPort } from "./day-plan-change-approval.js";
 import type { ApplyExecutionRouteCallback } from "./day-plan-execute.js";
 
 import {
@@ -101,6 +108,9 @@ export interface DayPlanRoutesDependencies {
   // Apply and retry fail closed with 503 before any mutation; status reads
   // durable state and never needs it.
   readonly applyExecution?: ApplyExecutionRouteCallback;
+  // Database-backed approval store for reserved moves and removals. Absent in
+  // tests that predate the change gate; gated batches fail closed with 503.
+  readonly changeApproval?: DayPlanChangeApprovalPort;
   readonly findSourceRun: (scopedDb: DataContextDb, runId: string) => Promise<unknown>;
   readonly findTask?: DayPlanTaskProjection;
   readonly findRun: DayPlanRunProjection;
@@ -707,6 +717,36 @@ export function registerDayPlanRoutes(
               : {})
           })
         );
+        // A reserved move or removal never executes straight from apply under
+        // the default tier: the gate answers 202 with the bound change set
+        // and records the pending approval, with no item outcome and zero
+        // provider calls. Trusted_auto proceeds with the same execution
+        // service, which re-checks the tier on its own entry.
+        if (batchHasChanges(batch)) {
+          const gate = await gateReservedChanges({
+            access: accessContext,
+            dataContext: dependencies.dataContext,
+            dayPlanRepository: dependencies.dayPlanRepository,
+            changeApproval: dependencies.changeApproval,
+            batch
+          });
+          if (!gate.proceed) {
+            return reply.code(202).send({
+              status: gate.status,
+              operationId: gate.operationId,
+              approvalId: gate.approvalId,
+              changes: gate.changes
+            });
+          }
+          const gated = await execute({
+            access: accessContext,
+            toolCtx: toolContextOf(accessContext),
+            planId: batch.planId,
+            idempotencyKey: batch.idempotencyKey,
+            changeAuth: { tier: gate.tier, approval: null }
+          });
+          return gated satisfies ApplyExecutionReport;
+        }
         const report = await execute({
           access: accessContext,
           toolCtx: toolContextOf(accessContext),
@@ -802,21 +842,31 @@ export function registerDayPlanRoutes(
         const byId = new Map(batch.items.map((item) => [item.id, item]));
         for (const itemId of body.itemIds) {
           const item = byId.get(itemId);
-          if (
-            !item ||
-            item.kind !== "add" ||
-            (item.outcome !== "failed" && item.outcome !== "unknown")
-          ) {
+          if (!item || (item.outcome !== "failed" && item.outcome !== "unknown")) {
             throw new HttpError(409, "day plan apply retry selection is not eligible");
           }
         }
+        // Retrying a move or removal re-checks the change gate: a confirmed
+        // approval for the unchanged operation is reused with no per-item
+        // prompt, and applied items are never re-executed.
+        const retryNeedsGate = body.itemIds.some((itemId) => byId.get(itemId)!.kind !== "add");
         const report = await execute({
           access: accessContext,
           toolCtx: toolContextOf(accessContext),
           planId: batch.planId,
           idempotencyKey: batch.idempotencyKey,
           operationId: batch.id,
-          itemIds: [...body.itemIds]
+          itemIds: [...body.itemIds],
+          ...(retryNeedsGate
+            ? {
+                changeAuth: await resolveChangeAuth({
+                  access: accessContext,
+                  dataContext: dependencies.dataContext,
+                  changeApproval: dependencies.changeApproval,
+                  operationId: batch.id
+                })
+              }
+            : {})
         });
         return report satisfies ApplyExecutionReport;
       } catch (error) {
@@ -865,13 +915,29 @@ export function registerDayPlanRoutes(
           })
         );
         if (!batch) throw new HttpError(404, "day plan apply operation is not available");
-        // No selection: the service resumes pending and unknown additions.
+        // No selection: the service resumes pending and unknown items of any
+        // kind. A confirmed approval for the unchanged operation is reused
+        // with no per-item prompt; applied items are never re-executed.
+        const recoverNeedsGate = batch.items.some(
+          (item) =>
+            item.kind !== "add" && (item.outcome === "pending" || item.outcome === "unknown")
+        );
         const report = await execute({
           access: accessContext,
           toolCtx: toolContextOf(accessContext),
           planId: batch.planId,
           idempotencyKey: batch.idempotencyKey,
-          operationId: batch.id
+          operationId: batch.id,
+          ...(recoverNeedsGate
+            ? {
+                changeAuth: await resolveChangeAuth({
+                  access: accessContext,
+                  dataContext: dependencies.dataContext,
+                  changeApproval: dependencies.changeApproval,
+                  operationId: batch.id
+                })
+              }
+            : {})
         });
         return report satisfies ApplyExecutionReport;
       } catch (error) {
@@ -880,6 +946,24 @@ export function registerDayPlanRoutes(
         }
         return handleRouteError(error, reply);
       }
+    }
+  );
+
+  // The confirm route lives in day-plan-change-routes.ts so this file stays
+  // under its size limit. It shares the apply auth and execution helpers.
+  registerDayPlanChangeConfirmRoute(
+    server,
+    {
+      dataContext: dependencies.dataContext,
+      dayPlanRepository: dependencies.dayPlanRepository,
+      ...(dependencies.changeApproval ? { changeApproval: dependencies.changeApproval } : {}),
+      ...(dependencies.applyExecution ? { applyExecution: dependencies.applyExecution } : {})
+    },
+    {
+      authenticateApplyAccess,
+      requireApplyAccess,
+      requireApplyExecution,
+      toolContextOf
     }
   );
 }

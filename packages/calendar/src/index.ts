@@ -1,5 +1,8 @@
 export * from "./day-plan-apply.js";
+export * from "./day-plan-change-approval.js";
+export * from "./day-plan-change-routes.js";
 export * from "./day-plan-execute.js";
+export * from "./day-plan-execute-changes.js";
 export * from "./day-plan-model.js";
 export * from "./day-plan-repository.js";
 export type { DayPlanSourceContextService } from "./day-plan-routes.js";

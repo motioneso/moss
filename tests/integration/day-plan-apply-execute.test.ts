@@ -128,6 +128,12 @@ function makeWriter(script: WriterScript = {}): ApplyWriterPort & {
         end: "2026-09-12T16:30:00.000Z",
         provenance: provenanceProps(created)
       };
+    },
+    async moveBlockEvent() {
+      throw new Error("moveBlockEvent must not run in this addition-only test");
+    },
+    async removeBlockEvent() {
+      throw new Error("removeBlockEvent must not run in this addition-only test");
     }
   };
 }
@@ -174,6 +180,12 @@ describe("apply addition execution boundary", () => {
       async lookupAddition(input) {
         events.push("writer-lookup");
         return inner.lookupAddition(input);
+      },
+      async moveBlockEvent() {
+        throw new Error("moveBlockEvent must not run in this addition-only test");
+      },
+      async removeBlockEvent() {
+        throw new Error("removeBlockEvent must not run in this addition-only test");
       }
     };
     return { writer, inner };
@@ -419,8 +431,12 @@ describe("apply addition execution boundary", () => {
       baseDeps({ writer: mixedWriter })
     ).executeReservedAdditions(executeInput(mixedSaved.id, mixedBatch.idempotencyKey));
     expect(mixedReport.status).toBe("denied");
-    expect(mixedReport.denialReason).toMatch(/mixed-batch/);
+    // R2.2-T05: reserved moves run only with trusted_auto or a confirmed
+    // approval, so without either the service denies at the change gate with
+    // zero provider calls of any kind.
+    expect(mixedReport.denialReason).toMatch(/confirmation-required/);
     expect(mixedInner.creates).toHaveLength(0);
+    expect(mixedInner.lookups).toHaveLength(0);
 
     // Revoked access, stale facts, and a protected-time conflict deny the rest.
     const cases: { name: string; overrides: Partial<ApplyExecutionDeps>; reason: RegExp }[] = [
@@ -718,6 +734,12 @@ describe("apply addition execution boundary", () => {
       async lookupAddition(input) {
         events.push("writer-lookup");
         return mutating.lookupAddition(input);
+      },
+      async moveBlockEvent() {
+        throw new Error("moveBlockEvent must not run in this addition-only test");
+      },
+      async removeBlockEvent() {
+        throw new Error("removeBlockEvent must not run in this addition-only test");
       }
     };
     const report = await new ApplyExecutionService(

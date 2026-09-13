@@ -27,15 +27,22 @@ import {
 import {
   GoogleApiError,
   GoogleConnectError,
-  featureGrantsPrefKey,
-  isFeatureGranted,
   type GoogleConnectionService,
   type ConnectorsRepository,
   type GoogleApiClient
 } from "@moss/connectors";
 import type { ToolContext } from "@moss/module-sdk";
 import type { ApplyEventProvenance } from "@moss/shared";
-import { PreferencesRepository } from "@moss/structured-state";
+import type { PreferencesRepository } from "@moss/structured-state";
+
+import {
+  deleteApplyEvent,
+  ensureApplyToken,
+  isCalendarFeatureGranted,
+  readApplyReads,
+  rescheduleApplyEvent,
+  type StagedRunner
+} from "./calendar-apply-staging.js";
 
 export interface CalendarWriteImplDeps {
   readonly googleService: GoogleConnectionService;
@@ -56,95 +63,6 @@ export interface CalendarWriteImplDeps {
 // Google interprets a 'Z'-suffixed dateTime as the exact UTC instant. A tz IS still needed here,
 // though: to tell an all-day freeBusy interval (start/end at local midnight, duration a
 // multiple of 24h) apart from a real timed conflict before it reaches chooseSlot — see step 3.
-
-type StagedRunner = Pick<DataContextRunner, "withDataContext">;
-
-interface ApplyStagedReads {
-  readonly accountId: string;
-  readonly clientId: string;
-  readonly clientSecret: string;
-  readonly refreshToken: string;
-  readonly grantedScopes: string[];
-  readonly accessToken: string;
-  readonly tokenExpiry: string;
-}
-
-// Stage 1: account, permission, credential and scope reads in one short
-// transaction. Nothing here touches the network.
-async function readApplyReads(
-  deps: CalendarWriteImplDeps,
-  dataContext: StagedRunner,
-  access: AccessContext
-): Promise<{ readonly denied: string } | { readonly reads: ApplyStagedReads }> {
-  return dataContext.withDataContext(access, async (scopedDb) => {
-    const calendarScope = await deps.connectorsRepository.getCalendarWriteScopeState(scopedDb);
-    if (!calendarScope?.hasScope) {
-      return {
-        denied:
-          "Your Google connection doesn't have calendar-write permission yet — reconnect in Settings to grant it."
-      };
-    }
-    if (!(await isCalendarFeatureGranted(deps, scopedDb, calendarScope.accountId))) {
-      return { denied: "Calendar access is disabled for this account in Settings." };
-    }
-    const credential = await deps.googleService.readActiveCredential(scopedDb);
-    if (!credential) {
-      return { denied: "Connect Google in Settings first." };
-    }
-    return {
-      reads: {
-        accountId: credential.accountId,
-        clientId: credential.bundle.clientId,
-        clientSecret: credential.bundle.clientSecret,
-        refreshToken: credential.bundle.refreshToken,
-        grantedScopes: [...credential.bundle.grantedScopes],
-        accessToken: credential.bundle.accessToken,
-        tokenExpiry: credential.bundle.tokenExpiry
-      }
-    };
-  });
-}
-
-// Stage 2: token refresh runs with no transaction open; the refreshed
-// credential persists in a new short transaction only after confirming the
-// same account is still active with the same refresh token.
-async function ensureApplyToken(
-  deps: CalendarWriteImplDeps,
-  dataContext: StagedRunner,
-  access: AccessContext,
-  reads: ApplyStagedReads
-): Promise<{ readonly accessToken: string } | { readonly denied: string }> {
-  if (new Date(reads.tokenExpiry).getTime() - Date.now() > 60_000) {
-    return { accessToken: reads.accessToken };
-  }
-  let refreshed: { accessToken: string; tokenExpiry: string };
-  try {
-    refreshed = await deps.googleService.refreshCredential({
-      clientId: reads.clientId,
-      clientSecret: reads.clientSecret,
-      refreshToken: reads.refreshToken
-    });
-  } catch {
-    return { denied: "Couldn't refresh your Google access — reconnect in Settings." };
-  }
-  const stored = await dataContext.withDataContext(access, (scopedDb) =>
-    deps.googleService.storeRefreshedCredential(
-      scopedDb,
-      { accountId: reads.accountId, refreshToken: reads.refreshToken },
-      {
-        clientId: reads.clientId,
-        clientSecret: reads.clientSecret,
-        accessToken: refreshed.accessToken,
-        tokenExpiry: refreshed.tokenExpiry,
-        grantedScopes: reads.grantedScopes
-      }
-    )
-  );
-  if (!stored) {
-    return { denied: "Your Google connection changed during the request — reconnect in Settings." };
-  }
-  return { accessToken: refreshed.accessToken };
-}
 
 // Reserved apply addition with staged transactions: reads, then provider work
 // with no transaction open, then a fresh transaction for the cache mirror.
@@ -545,6 +463,21 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
       ctx: ToolContext,
       input: DeleteEventInput
     ): Promise<DeleteEventResult> {
+      // Reserved apply removals never touch the caller's handle: they stage
+      // their own short transactions and run the provider delete with none
+      // open. Interactive deletes continue below with the caller's handle.
+      if (scopedDbRaw === undefined || scopedDbRaw === null) {
+        if (!deps.dataContext) {
+          throw new Error("Apply removals require a dataContext staging handle.");
+        }
+        return deleteApplyEvent(
+          deps,
+          deps.dataContext,
+          { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
+          ctx,
+          input.eventId
+        );
+      }
       assertDataContextDb(scopedDbRaw);
       const scopedDb = scopedDbRaw as DataContextDb;
 
@@ -662,9 +595,25 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
 
     async rescheduleEvent(
       scopedDbRaw: unknown,
-      _ctx: ToolContext,
+      ctx: ToolContext,
       input: RescheduleEventInput
     ): Promise<RescheduleEventResult> {
+      // Reserved apply moves never touch the caller's handle: they stage
+      // their own short transactions and run the provider patch with none
+      // open. Interactive reschedules continue below with the caller's handle.
+      if (scopedDbRaw === undefined || scopedDbRaw === null) {
+        if (!deps.dataContext) {
+          throw new Error("Apply moves require a dataContext staging handle.");
+        }
+        return rescheduleApplyEvent(
+          deps,
+          deps.dataContext,
+          { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
+          input.eventRef,
+          input.newStart,
+          input.newEnd
+        );
+      }
       assertDataContextDb(scopedDbRaw);
       const scopedDb = scopedDbRaw as DataContextDb;
 
@@ -800,7 +749,8 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
         summary: event.summary ?? null,
         start: event.start?.dateTime ?? event.start?.date ?? null,
         end: event.end?.dateTime ?? event.end?.date ?? null,
-        provenance: { ...(event.extendedProperties?.private ?? {}) }
+        provenance: { ...(event.extendedProperties?.private ?? {}) },
+        attendeeCount: event.attendees?.length ?? 0
       };
     }
   };
@@ -817,16 +767,6 @@ function applyProvenanceProperties(
     jarvisPlanRevision: String(provenance.planRevision),
     jarvisOperationId: provenance.operationId
   };
-}
-
-async function isCalendarFeatureGranted(
-  deps: CalendarWriteImplDeps,
-  scopedDb: DataContextDb,
-  accountId: string
-): Promise<boolean> {
-  const preferencesRepository = deps.preferencesRepository ?? new PreferencesRepository();
-  const featureGrants = await preferencesRepository.get(scopedDb, featureGrantsPrefKey(accountId));
-  return isFeatureGranted(featureGrants, "calendar");
 }
 
 async function mirrorEvent(

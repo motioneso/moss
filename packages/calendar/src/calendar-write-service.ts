@@ -51,6 +51,9 @@ export type CalendarEventLookup =
       readonly start: string | null;
       readonly end: string | null;
       readonly provenance: Record<string, string>;
+      // Provider-side attendee count when the reader saw it. The change path
+      // refuses attendee moves and removals regardless of tier or approval.
+      readonly attendeeCount?: number | null;
     };
 
 export interface DeleteEventInput {

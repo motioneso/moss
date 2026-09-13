@@ -5,6 +5,7 @@ import { calendarMonitorProvider } from "./monitor-provider.js";
 import {
   applyDayPlanRequestSchema,
   applyExecutionReportSchema,
+  confirmDayPlanApplyRequestSchema,
   createDayPlanRequestSchema,
   createDayPlanResponseSchema,
   dayPlanApplyStatusResponseSchema,
@@ -234,6 +235,13 @@ export const calendarModuleManifest = {
       method: "POST",
       path: "/api/calendar/day-plans/:id/operations/:operationId/recover",
       requestSchema: recoverDayPlanApplyRequestSchema,
+      responseSchema: applyExecutionReportSchema,
+      permissionId: "calendar.manage"
+    },
+    {
+      method: "POST",
+      path: "/api/calendar/day-plans/:id/operations/:operationId/confirm",
+      requestSchema: confirmDayPlanApplyRequestSchema,
       responseSchema: applyExecutionReportSchema,
       permissionId: "calendar.manage"
     },
@@ -516,9 +524,9 @@ export const calendarModuleManifest = {
     {
       id: "calendar.saved_day_plan_apply",
       description:
-        "Apply reserved addition-only blocks: reserves the reviewed selection, writes each " +
-        "addition once, and returns the truthful per-item report. Exact replay returns the " +
-        "same operation without duplicate events.",
+        "Apply reserved blocks: reserves the reviewed selection and writes additions at " +
+        "once. A batch with moves or removals answers 202 for confirmation first, unless " +
+        "automatic calendar changes are turned on.",
       errors: [
         {
           code: "day_plan_invalid",
@@ -575,7 +583,7 @@ export const calendarModuleManifest = {
     {
       id: "calendar.saved_day_plan_apply_retry",
       description:
-        "Retry only selected failed or unknown additions of one operation, once each. " +
+        "Retry only selected failed or unknown items of one operation, once each. " +
         "The selection validates atomically first; unselected items keep stored results.",
       errors: [
         {
@@ -587,8 +595,8 @@ export const calendarModuleManifest = {
           code: "day_plan_conflict",
           class: "transient",
           description:
-            "Only failed or unknown additions can be retried; applied, pending, moved, " +
-            "removed, missing, or stale selections reject the whole retry."
+            "Only failed or unknown items can be retried; applied, pending, missing, " +
+            "or stale selections reject the whole retry."
         },
         {
           code: "day_plan_not_available",
@@ -607,7 +615,7 @@ export const calendarModuleManifest = {
     {
       id: "calendar.saved_day_plan_apply_recover",
       description:
-        "Resume one interrupted apply by operation id. Pending and unknown additions " +
+        "Resume one interrupted apply by operation id. Pending and unknown items " +
         "reconcile by provider identity; applied and failed items stay stored.",
       errors: [
         {
@@ -630,6 +638,38 @@ export const calendarModuleManifest = {
         {
           id: "calendar.saved_day_plan_refresh",
           description: "Read the latest operation status before recovering.",
+          path: "/calendar"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_apply_confirm",
+      description:
+        "Confirm one reserved move/removal batch: validates the bound approval once, " +
+        "then runs the same execution. Anything else stops at 409 with no writes.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description: "Confirm needs the pending approval id bound to this operation."
+        },
+        {
+          code: "day_plan_conflict",
+          class: "transient",
+          description:
+            "Only the pending approval bound to this exact operation, revision and " +
+            "change set may confirm; replays and foreign approvals stop at 409."
+        },
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan or operation is unavailable to this actor."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest operation status before confirming.",
           path: "/calendar"
         }
       ]
