@@ -1,4 +1,5 @@
 import type { ToolContext } from "@moss/module-sdk";
+import type { ApplyEventProvenance } from "@moss/shared";
 
 export interface FocusBlockWindow {
   readonly start: Date;
@@ -21,7 +22,12 @@ export interface ProposeFocusResult {
   readonly conflict: "none" | "shifted" | "no-clear-slot";
   readonly googleEventId?: string;
   readonly calendarEventId?: string;
-  readonly calendarMirror: "written" | "skipped-rls" | "skipped-error";
+  readonly calendarMirror:
+    | "written"
+    | "skipped-rls"
+    | "skipped-error"
+    | "not-checked"
+    | "not-cached";
   /** Human-facing reason when created=false (e.g. re-consent, no connection). Never a secret. */
   readonly message?: string;
 }
@@ -29,7 +35,23 @@ export interface ProposeFocusResult {
 export interface CalendarWriteOptions {
   readonly requireCacheMirror?: boolean;
   readonly followThroughTargetRef?: string;
+  // Stable apply identity written onto the provider event as private metadata.
+  // Present only for reserved apply additions, never for interactive focus blocks.
+  readonly provenance?: ApplyEventProvenance;
 }
+
+// Provider readback for exactly one event id: found carries the stored summary,
+// timing and private provenance metadata the writer recorded at creation.
+export type CalendarEventLookup =
+  | { readonly found: false }
+  | {
+      readonly found: true;
+      readonly id: string;
+      readonly summary: string | null;
+      readonly start: string | null;
+      readonly end: string | null;
+      readonly provenance: Record<string, string>;
+    };
 
 export interface DeleteEventInput {
   readonly eventId: string; // Jarvis cached event uuid (authoritative)
@@ -80,4 +102,9 @@ export interface CalendarWriteService {
     ctx: ToolContext,
     input: RescheduleEventInput
   ): Promise<RescheduleEventResult>;
+  lookupEvent(
+    scopedDb: unknown, // DataContextDb; calendar/impl narrows via assertDataContextDb
+    ctx: ToolContext,
+    input: { eventId: string }
+  ): Promise<CalendarEventLookup>;
 }

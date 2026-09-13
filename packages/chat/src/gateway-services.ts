@@ -58,6 +58,7 @@ export function buildChatToolServices(deps: {
   googleApiClient?: GoogleApiClient;
   connectorsRepository?: ConnectorsRepository;
   cipher?: ConnectorSecretCipher;
+  dataContext?: Pick<DataContextRunner, "withDataContext">;
   boss?: PgBoss;
   featureGrantService?: FeatureGrantService;
   listModuleManifests?: () => readonly MossModuleManifest[];
@@ -69,6 +70,7 @@ export function buildChatToolServices(deps: {
       googleApiClient: deps.googleApiClient,
       connectorsRepository: deps.connectorsRepository,
       calendarRepository: new CalendarRepository(),
+      dataContext: deps.dataContext,
       enqueueCacheEvict: deps.boss
         ? (eventId, actorUserId) =>
             sendCalendarCacheEvictJob(deps.boss!, { targetItemId: eventId, actorUserId })

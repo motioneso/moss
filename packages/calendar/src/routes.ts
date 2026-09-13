@@ -19,10 +19,10 @@ import { registerDayPlanRoutes, type DayPlanRoutesDependencies } from "./day-pla
 const CALENDAR_BRIEFING_LOOKAHEAD_KEY = "calendar.briefing_lookahead_days";
 const CALENDAR_SIGNAL_SUGGEST_TASKS_KEY = "calendar.signal_suggest_tasks";
 const CALENDAR_SIGNAL_CREATE_TASKS_KEY = "calendar.signal_create_tasks";
-const CALENDAR_SIGNAL_SUGGEST_TIME_BLOCKS_KEY = "calendar.signal_suggest_time_blocks";
-const CALENDAR_SIGNAL_BLOCK_TIME_KEY = "calendar.signal_block_time";
+export const CALENDAR_SIGNAL_SUGGEST_TIME_BLOCKS_KEY = "calendar.signal_suggest_time_blocks";
+export const CALENDAR_SIGNAL_BLOCK_TIME_KEY = "calendar.signal_block_time";
 const CALENDAR_PREP_TASK_MODE_KEY = "calendar.prep_task_mode";
-const CALENDAR_TIME_BLOCK_MODE_KEY = "calendar.time_block_mode";
+export const CALENDAR_TIME_BLOCK_MODE_KEY = "calendar.time_block_mode";
 const CALENDAR_WRITEBACK_MODULE_ID = "calendar";
 const CALENDAR_WRITEBACK_FAMILY_ID = "calendar_writeback";
 

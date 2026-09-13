@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "kysely";
 
 import type {
+  ApplyItemResult,
   DayPlanActualPlacement,
   DayPlanApplyBatchDto,
   DayPlanApplyBatchInput,
@@ -31,6 +32,7 @@ import {
   applyIntentsEqual,
   applySelectionsEqual,
   normalizeApplyIntent,
+  pendingChangesEqual,
   resolveApplySelection
 } from "./day-plan-apply.js";
 import {
@@ -42,6 +44,7 @@ import {
   normalizeIdempotencyKey,
   normalizeLocalDay,
   normalizeOperationKind,
+  normalizeOperationOutcome,
   normalizeSourceRunId,
   normalizeTimeZone
 } from "./day-plan-model.js";
@@ -155,6 +158,37 @@ function readSelectionEntry(value: unknown): DayPlanApplySelectionEntry {
   };
 }
 
+function readItemResult(value: unknown): ApplyItemResult | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new HttpError(500, "stored apply batch is unreadable");
+  }
+  const row = value as Record<string, unknown>;
+  if (row.status === "applied") {
+    if (
+      typeof row.providerEventId !== "string" ||
+      typeof row.startsAt !== "string" ||
+      typeof row.durationMinutes !== "number" ||
+      (row.calendarMirror !== "written" &&
+        row.calendarMirror !== "skipped-rls" &&
+        row.calendarMirror !== "skipped-error" &&
+        row.calendarMirror !== "not-checked" &&
+        row.calendarMirror !== "not-cached") ||
+      (row.blockMirror !== "mirrored" && row.blockMirror !== "mismatch-preserved")
+    ) {
+      throw new HttpError(500, "stored apply batch is unreadable");
+    }
+    return row as unknown as ApplyItemResult;
+  }
+  if (row.status === "failed" || row.status === "unknown") {
+    if (typeof row.reason !== "string") {
+      throw new HttpError(500, "stored apply batch is unreadable");
+    }
+    return row as unknown as ApplyItemResult;
+  }
+  throw new HttpError(500, "stored apply batch is unreadable");
+}
+
 interface StoredBatchSnapshot {
   // Null for snapshots written before request intent was stored; those never
   // replay and always conflict, which is the safe direction.
@@ -196,6 +230,7 @@ function toBatchDto(
     kind: string;
     pending_change: unknown;
     outcome: DayPlanOperationOutcome;
+    result: unknown;
   }[]
 ): DayPlanApplyBatchDto {
   const selection = readBatchSnapshot(header.selection_snapshot).selection;
@@ -221,7 +256,8 @@ function toBatchDto(
         blockId: item.block_id,
         kind: item.kind,
         pendingChange: readSelectionEntry(item.pending_change),
-        outcome: item.outcome
+        outcome: item.outcome,
+        result: readItemResult(item.result)
       };
     })
   };
@@ -866,6 +902,88 @@ export class DayPlanRepository {
       throw new HttpError(409, "idempotency key is already used for a different operation");
     }
     return raced;
+  }
+
+  // Records one item's execution outcome with its typed result. Finalization
+  // runs in its own short actor-scoped transaction per item.
+  async recordItemResult(
+    scopedDb: DataContextDb,
+    input: {
+      itemId: string;
+      operationId: string;
+      outcome: DayPlanOperationOutcome;
+      result: ApplyItemResult;
+    }
+  ): Promise<void> {
+    assertDataContextDb(scopedDb);
+    let outcome: DayPlanOperationOutcome;
+    try {
+      outcome = normalizeOperationOutcome(input.outcome);
+    } catch (error) {
+      if (error instanceof DayPlanValidationError)
+        throw new HttpError(400, (error as Error).message);
+      throw error;
+    }
+    const updated = await scopedDb.db
+      .updateTable("app.day_plan_operation_items")
+      .set({
+        outcome,
+        result: JSON.stringify(input.result),
+        updated_at: new Date()
+      })
+      .where("id", "=", input.itemId)
+      .where("operation_id", "=", input.operationId)
+      .executeTakeFirst();
+    if (updated.numUpdatedRows !== 1n) {
+      throw new HttpError(404, "day plan operation item is not available");
+    }
+  }
+
+  // Mirrors a verified provider success onto the plan block only when the block
+  // still carries exactly the frozen pending change: sets the recorded
+  // placement and clears the proposal. A concurrently changed draft is
+  // preserved and reported as a mismatch instead.
+  async mirrorAppliedBlock(
+    scopedDb: DataContextDb,
+    input: {
+      planId: string;
+      blockId: string;
+      expectedPending: DayPlanPendingChange | null;
+      actualPlacement: DayPlanActualPlacement;
+    }
+  ): Promise<"mirrored" | "mismatch"> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.day_plan_blocks")
+      .selectAll()
+      .where("id", "=", input.blockId)
+      .where("plan_id", "=", input.planId)
+      .forUpdate()
+      .executeTakeFirst();
+    if (!row) throw new HttpError(404, "day plan block is not available");
+    if (!pendingChangesEqual(readPending(row.pending_change), input.expectedPending)) {
+      return "mismatch";
+    }
+    await scopedDb.db
+      .updateTable("app.day_plan_blocks")
+      .set({
+        actual_placement: input.actualPlacement as unknown as Record<string, unknown>,
+        pending_change: null,
+        updated_at: new Date()
+      })
+      .where("id", "=", input.blockId)
+      .where("plan_id", "=", input.planId)
+      .execute();
+    // A mirrored placement is a plan change like any draft save: the revision
+    // advances in the same transaction so a stale draft can never re-propose
+    // an addition that is already on the calendar. A mismatch preserves both
+    // the newer draft and its revision.
+    await scopedDb.db
+      .updateTable("app.day_plans")
+      .set({ revision: sql<number>`revision + 1` })
+      .where("id", "=", input.planId)
+      .execute();
+    return "mirrored";
   }
 }
 

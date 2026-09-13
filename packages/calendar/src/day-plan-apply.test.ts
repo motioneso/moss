@@ -4,6 +4,7 @@ import {
   applyIntentsEqual,
   applySelectionsEqual,
   normalizeApplyIntent,
+  pendingChangesEqual,
   resolveApplySelection,
   type DayPlanApplyResolvableBlock
 } from "./day-plan-apply.js";
@@ -91,5 +92,20 @@ describe("apply intent", () => {
     expect(applyIntentsEqual(["a", "b"], ["a", "b"])).toBe(true);
     expect(applyIntentsEqual(["b", "a"], ["a", "b"])).toBe(false);
     expect(applyIntentsEqual(["a"], ["a", "b"])).toBe(false);
+  });
+});
+
+describe("pending change equality", () => {
+  it("compares timing-bearing changes field by field", () => {
+    const add = { kind: "add", startsAt: "2026-09-12T16:00:00.000Z", durationMinutes: 30 };
+    expect(pendingChangesEqual(add, { ...add })).toBe(true);
+    expect(pendingChangesEqual(add, { ...add, durationMinutes: 45 })).toBe(false);
+    expect(
+      pendingChangesEqual(add, { kind: "move", startsAt: add.startsAt, durationMinutes: 30 })
+    ).toBe(false);
+    expect(pendingChangesEqual({ kind: "remove" }, { kind: "remove" })).toBe(true);
+    expect(pendingChangesEqual(add, { kind: "remove" })).toBe(false);
+    expect(pendingChangesEqual(null, null)).toBe(true);
+    expect(pendingChangesEqual(add, null)).toBe(false);
   });
 });

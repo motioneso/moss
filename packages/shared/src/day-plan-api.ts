@@ -743,6 +743,7 @@ export interface DayPlanApplyBatchItemDto {
   kind: "add" | "move" | "remove";
   pendingChange: DayPlanApplySelectionEntry;
   outcome: DayPlanOperationOutcome;
+  result: ApplyItemResult | null;
 }
 
 export interface DayPlanApplyBatchDto {
@@ -754,4 +755,58 @@ export interface DayPlanApplyBatchDto {
   outcome: DayPlanOperationOutcome;
   selection: DayPlanApplySelectionEntry[];
   items: DayPlanApplyBatchItemDto[];
+}
+
+// Stable provider identity for one reserved addition, written onto the provider
+// event as private metadata and used to reconcile retries without duplicates.
+export interface ApplyEventProvenance {
+  actorUserId: string;
+  planId: string;
+  blockId: string;
+  planRevision: number;
+  operationId: string;
+}
+
+// Stable machine-readable reasons for per-item failure or ambiguity.
+export type ApplyItemFailureReason =
+  | "task-unavailable"
+  | "task-ineligible"
+  | "block-changed"
+  | "access-denied"
+  | "facts-unavailable"
+  | "conflict"
+  | "provider-rejected"
+  | "provenance-mismatch"
+  | "mixed-batch"
+  | "unknown";
+
+export interface ApplyItemAppliedResult {
+  status: "applied";
+  providerEventId: string;
+  startsAt: string;
+  durationMinutes: number;
+  calendarMirror: "written" | "skipped-rls" | "skipped-error" | "not-checked" | "not-cached";
+  blockMirror: "mirrored" | "mismatch-preserved";
+}
+
+export interface ApplyItemUnresolvedResult {
+  status: "failed" | "unknown";
+  reason: ApplyItemFailureReason;
+  providerEventId?: string;
+}
+
+export type ApplyItemResult = ApplyItemAppliedResult | ApplyItemUnresolvedResult;
+
+export interface ApplyExecutionItemReport {
+  blockId: string | null;
+  outcome: DayPlanOperationOutcome;
+  result: ApplyItemResult | null;
+}
+
+export interface ApplyExecutionReport {
+  operationId: string;
+  planId: string;
+  status: "completed" | "denied";
+  denialReason?: string;
+  items: ApplyExecutionItemReport[];
 }
