@@ -243,7 +243,7 @@ describe("saved day-plan preview real API boundary", () => {
     expect(after.json<GetDayPlanResponse>()).toEqual(beforeBody);
   });
 
-  it("resolves done, archived and invisible tasks to their preview eligibility", async () => {
+  it("live acceptance: preview resolves done, archived and invisible tasks to their preview eligibility", async () => {
     const doneTask = await dataContext.withDataContext(userA, (scopedDb) =>
       new TasksRepository().create(scopedDb, { title: "Already done", status: "done" })
     );
@@ -341,7 +341,7 @@ describe("saved day-plan preview real API boundary", () => {
     expect(body.eligibleBlockIds).toEqual([]);
   });
 
-  it("checks a live-read calendar conflict by the actor-visible event, and excludes a block's own event", async () => {
+  it("live acceptance: preview checks a live-read calendar conflict by the actor-visible event, and excludes a block's own event", async () => {
     const cipher = createConnectorSecretCipher();
     const connectorsRepo = new ConnectorsRepository();
     await dataContext.withDataContext(
@@ -471,7 +471,7 @@ describe("saved day-plan preview real API boundary", () => {
     ]);
   });
 
-  it("falls back to the last synced calendar state when the live read fails, and still names a stale conflict", async () => {
+  it("live acceptance: preview falls back to the last synced calendar state when the live read fails, and still names a stale conflict", async () => {
     const cipher = createConnectorSecretCipher();
     const connectorsRepo = new ConnectorsRepository();
     const account = await dataContext.withDataContext(
@@ -586,7 +586,7 @@ describe("saved day-plan preview real API boundary", () => {
     ]);
   });
 
-  it("keeps the saved plan and its preview stable after the server restarts against the same database", async () => {
+  it("live acceptance: preview keeps the saved plan and its preview stable after the server restarts against the same database", async () => {
     const task = await dataContext.withDataContext(userA, (scopedDb) =>
       new TasksRepository().create(scopedDb, {
         title: "Survive a restart",
