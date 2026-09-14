@@ -113,6 +113,7 @@ function render(input: {
   readonly unavailableTaskIds?: readonly string[];
   readonly loading?: boolean;
   readonly error?: boolean;
+  readonly calendarError?: boolean;
 }): string {
   const response = dayPlanResponse(input.plan ?? null);
   response.unavailableTaskIds = [...(input.unavailableTaskIds ?? [])];
@@ -124,6 +125,7 @@ function render(input: {
       now: NOW,
       loading: input.loading ?? false,
       error: input.error ?? false,
+      calendarError: input.calendarError ?? false,
       onOpenTask: () => undefined
     })
   );
@@ -192,6 +194,7 @@ describe("DayPlanSection", () => {
         now: NOW,
         loading: false,
         error: false,
+        calendarError: false,
         onOpenTask: () => undefined
       })
     );

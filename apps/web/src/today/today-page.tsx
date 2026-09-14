@@ -306,7 +306,118 @@ export function TodayPage(props: {
       </nav>
 
       <div className="cmd-grid">
-        <div>
+        {/* .cmd-aside is the full-height rail carrying the column keyline; the sticky
+            content lives in __inner so the border grows to the main column's bottom while
+            the cards stay pinned at top (Ben 2026-07-07: border stopped mid-scroll). */}
+        <aside className="cmd-aside" aria-label="Quick actions and widgets">
+          <div className="cmd-aside__inner">
+            {nextEvent ? (
+              <div className="cmd-next">
+                <div className="cmd-next__k">{nextStarted ? "Now · ends in" : "Next event in"}</div>
+                <div className="cmd-next__v">
+                  {countdownLabel(nextStarted ? nextEvent.endsAt : nextEvent.startsAt, now)}
+                </div>
+                <div className="cmd-next__what">
+                  {nextEvent.title} · {timeLabel(nextEvent.startsAt, locale)}
+                  {ampm(nextEvent.startsAt, locale)}
+                </div>
+              </div>
+            ) : null}
+
+            {hasStatSignal ? (
+              <div className="cmd-glance">
+                <div className="cmd-glance__title">At a glance</div>
+                <div className="cmd-glance__grid">
+                  <StatTile
+                    label="Priorities"
+                    value={priorities.length}
+                    icon={<Target size={12} aria-hidden="true" />}
+                    onClick={() => navigate("/tasks?focus=priorities")}
+                  />
+                  <StatTile
+                    label="At risk"
+                    value={atRisk.length}
+                    warn={atRisk.length > 0}
+                    icon={<Clock size={12} aria-hidden="true" />}
+                    onClick={() => navigate("/tasks?focus=atrisk")}
+                  />
+                  <StatTile
+                    label="Events"
+                    value={todayEvents.length}
+                    icon={<CalendarDays size={12} aria-hidden="true" />}
+                    onClick={() => navigate("/calendar")}
+                  />
+                  <StatTile
+                    label="Done today"
+                    value={doneToday}
+                    icon={<CheckCircle2 size={12} aria-hidden="true" />}
+                    onClick={() => navigate("/tasks?focus=donetoday")}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <Card title="Today's agenda" meta={`${upcoming.length} left`} padding="sm">
+              {upcoming.length > 0 ? (
+                <div>
+                  {upcoming.map((event, index) => (
+                    <AgendaRow
+                      key={event.id}
+                      time={timeLabel(event.startsAt, locale)}
+                      title={event.title}
+                      location={event.location}
+                      status={index === 0 ? "now" : "default"}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="agenda-clear" role="status">
+                  Nothing left on the calendar today. <b>Enjoy the evening.</b>
+                </div>
+              )}
+            </Card>
+
+            {eveningDefinition?.enabled && todayMode === "day" ? (
+              <EveningReviewSection
+                kind="compact"
+                run={latestEveningRun}
+                loading={eveningRunsQuery.isPending}
+                locale={locale}
+                targetTime={targetTimeFor(eveningDefinition, "evening")}
+                onFeedbackChanged={() =>
+                  void queryClient.invalidateQueries({
+                    queryKey: queryKeys.briefings.runs(eveningDefinition.id)
+                  })
+                }
+              />
+            ) : null}
+
+            {eveningDefinition?.enabled && todayMode === "evening" ? (
+              <EveningPrepCard
+                interviewPending={eveningInterviewMutation.isPending}
+                onPrep={() => {
+                  // #891: open the drawer immediately (like the topbar chat button and
+                  // openChatWith) rather than waiting for the seed POST to resolve.
+                  // Previously openChat lived in the mutation's onSuccess, so a slow or
+                  // failing /api/chat/evening-interview left the button doing nothing —
+                  // the drawer never opened. The seeded turn streams into the now-open
+                  // drawer via the global chat SSE stream.
+                  chatControls.openChat();
+                  eveningInterviewMutation.mutate();
+                }}
+              />
+            ) : null}
+
+            <TodayQuickActions
+              enabled={wellnessEnabled}
+              theme={theme}
+              timeZone={locale.timezone}
+              disabledModuleIds={disabledModuleIds}
+            />
+          </div>
+        </aside>
+
+        <div className="cmd-main">
           {todayMode === "evening" && eveningDefinition?.enabled ? (
             <div id="assessment">
               <EveningReviewSection
@@ -366,7 +477,9 @@ export function TodayPage(props: {
                   />
                 ))
               ) : (
-                <p className="cmd-empty">Nothing pressing right now.</p>
+                <p className="cmd-empty" role="status">
+                  Nothing pressing right now.
+                </p>
               )}
             </div>
             {startHere.length > 0 ? (
@@ -386,6 +499,7 @@ export function TodayPage(props: {
             now={now}
             loading={dayPlanQuery.isPending}
             error={dayPlanQuery.isError}
+            calendarError={eventsQuery.isError}
             onOpenTask={(id) => setDialog({ id })}
           />
 
@@ -450,117 +564,6 @@ export function TodayPage(props: {
 
           <ProactiveCards />
         </div>
-
-        {/* .cmd-aside is the full-height rail carrying the column keyline; the sticky
-            content lives in __inner so the border grows to the main column's bottom while
-            the cards stay pinned at top (Ben 2026-07-07: border stopped mid-scroll). */}
-        <aside className="cmd-aside">
-          <div className="cmd-aside__inner">
-            {nextEvent ? (
-              <div className="cmd-next">
-                <div className="cmd-next__k">{nextStarted ? "Now · ends in" : "Next event in"}</div>
-                <div className="cmd-next__v">
-                  {countdownLabel(nextStarted ? nextEvent.endsAt : nextEvent.startsAt, now)}
-                </div>
-                <div className="cmd-next__what">
-                  {nextEvent.title} · {timeLabel(nextEvent.startsAt, locale)}
-                  {ampm(nextEvent.startsAt, locale)}
-                </div>
-              </div>
-            ) : null}
-
-            {hasStatSignal ? (
-              <div className="cmd-glance">
-                <div className="cmd-glance__title">At a glance</div>
-                <div className="cmd-glance__grid">
-                  <StatTile
-                    label="Priorities"
-                    value={priorities.length}
-                    icon={<Target size={12} />}
-                    onClick={() => navigate("/tasks?focus=priorities")}
-                  />
-                  <StatTile
-                    label="At risk"
-                    value={atRisk.length}
-                    warn={atRisk.length > 0}
-                    icon={<Clock size={12} />}
-                    onClick={() => navigate("/tasks?focus=atrisk")}
-                  />
-                  <StatTile
-                    label="Events"
-                    value={todayEvents.length}
-                    icon={<CalendarDays size={12} />}
-                    onClick={() => navigate("/calendar")}
-                  />
-                  <StatTile
-                    label="Done today"
-                    value={doneToday}
-                    icon={<CheckCircle2 size={12} />}
-                    onClick={() => navigate("/tasks?focus=donetoday")}
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            <Card title="Today's agenda" meta={`${upcoming.length} left`} padding="sm">
-              {upcoming.length > 0 ? (
-                <div>
-                  {upcoming.map((event, index) => (
-                    <AgendaRow
-                      key={event.id}
-                      time={timeLabel(event.startsAt, locale)}
-                      title={event.title}
-                      location={event.location}
-                      status={index === 0 ? "now" : "default"}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="agenda-clear">
-                  Nothing left on the calendar today. <b>Enjoy the evening.</b>
-                </div>
-              )}
-            </Card>
-
-            {eveningDefinition?.enabled && todayMode === "day" ? (
-              <EveningReviewSection
-                kind="compact"
-                run={latestEveningRun}
-                loading={eveningRunsQuery.isPending}
-                locale={locale}
-                targetTime={targetTimeFor(eveningDefinition, "evening")}
-                onFeedbackChanged={() =>
-                  void queryClient.invalidateQueries({
-                    queryKey: queryKeys.briefings.runs(eveningDefinition.id)
-                  })
-                }
-              />
-            ) : null}
-
-            {eveningDefinition?.enabled && todayMode === "evening" ? (
-              <EveningPrepCard
-                interviewPending={eveningInterviewMutation.isPending}
-                onPrep={() => {
-                  // #891: open the drawer immediately (like the topbar chat button and
-                  // openChatWith) rather than waiting for the seed POST to resolve.
-                  // Previously openChat lived in the mutation's onSuccess, so a slow or
-                  // failing /api/chat/evening-interview left the button doing nothing —
-                  // the drawer never opened. The seeded turn streams into the now-open
-                  // drawer via the global chat SSE stream.
-                  chatControls.openChat();
-                  eveningInterviewMutation.mutate();
-                }}
-              />
-            ) : null}
-
-            <TodayQuickActions
-              enabled={wellnessEnabled}
-              theme={theme}
-              timeZone={locale.timezone}
-              disabledModuleIds={disabledModuleIds}
-            />
-          </div>
-        </aside>
       </div>
       {dialog ? (
         <TaskDetailsDialog
@@ -590,11 +593,15 @@ function MorningBriefingSection(props: {
       <div className="jds-brief__title">Your day, in focus</div>
       {freshness ? <BriefingStaleBanner freshness={freshness} /> : null}
       {props.loading ? (
-        <div className="agenda-clear">Gathering your morning briefing…</div>
+        <div className="agenda-clear" role="status">
+          Gathering your morning briefing…
+        </div>
       ) : hasSummary ? (
         <BriefingProse summaryText={props.run?.summaryText ?? ""} />
       ) : (
-        <div className="agenda-clear">Your morning briefing is not ready yet.</div>
+        <div className="agenda-clear" role="status">
+          Your morning briefing is not ready yet.
+        </div>
       )}
     </section>
   );

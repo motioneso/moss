@@ -186,6 +186,7 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
 function XIcon() {
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 24 24"
       width="18"
       height="18"

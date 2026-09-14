@@ -42,7 +42,7 @@ export function TodayWeatherRow(props: {
   const wx = props.weather ?? null;
   if (!wx || props.isError) {
     return (
-      <p className="cmd-empty">
+      <p className="cmd-empty" role="status">
         Weather isn&apos;t available right now.{" "}
         <Link to="/settings?section=profile">Weather settings</Link>
       </p>

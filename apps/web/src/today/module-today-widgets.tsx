@@ -51,7 +51,7 @@ class ModuleWidgetBoundary extends Component<BoundaryProps, BoundaryState> {
   render() {
     if (this.state.failed) {
       return (
-        <div className="cmd-empty">
+        <div className="cmd-empty" role="status">
           Couldn&apos;t load this widget right now.{" "}
           <button type="button" onClick={this.handleRetry}>
             Retry

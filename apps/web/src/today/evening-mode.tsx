@@ -160,7 +160,9 @@ export function EveningReviewSection(props: {
       ) : null}
       {freshness ? <BriefingStaleBanner freshness={freshness} /> : null}
       {props.loading ? (
-        <div className="agenda-clear">Gathering your evening review…</div>
+        <div className="agenda-clear" role="status">
+          Gathering your evening review…
+        </div>
       ) : props.run && hasSummary ? (
         <>
           {props.kind === "primary" ? <BriefingProse summaryText={props.run.summaryText} /> : null}
