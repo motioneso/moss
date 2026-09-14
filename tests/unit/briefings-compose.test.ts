@@ -884,3 +884,61 @@ describe("composeBriefing — source freshness", () => {
     expect(result.sourceMetadata.sourceTimestamps).toBeUndefined();
   });
 });
+
+describe("composeBriefing — disabled-module gate", () => {
+  it("skips a selected tool whose module is inactive and records module_disabled", async () => {
+    let executions = 0;
+    const deps = {
+      ...makeFakeDeps(),
+      resolveActiveModules: async () => []
+    };
+    const result = await composeBriefing(
+      fakeScopedDb,
+      definition({ selected_tool_names: ["tasks.list", "sports.followedFactsToday"] }),
+      runInput,
+      {
+        ...deps,
+        moduleManifests: deps.moduleManifests.map((manifest) => ({
+          ...manifest,
+          assistantTools: (manifest.assistantTools ?? []).map((tool) =>
+            tool.name === "sports.followedFactsToday"
+              ? {
+                  ...tool,
+                  execute: (async (...args: never[]) => {
+                    executions += 1;
+                    return (tool.execute as (...a: never[]) => unknown)(...args);
+                  }) as typeof tool.execute
+                }
+              : tool
+          )
+        }))
+      }
+    );
+    const gaps = (result.sourceMetadata.gaps ?? []) as Array<{
+      source: string;
+      reason: string;
+    }>;
+    expect(gaps.some((g) => g.source === "sports" && g.reason === "module_disabled")).toBe(true);
+    expect(executions).toBe(0);
+    expect(result.status).toBe("succeeded");
+  });
+
+  it("invokes the tool when the resolver reports its module active", async () => {
+    const deps = makeFakeDeps();
+    const activeDeps: ComposeDeps = {
+      ...deps,
+      resolveActiveModules: async () => deps.moduleManifests
+    };
+    const result = await composeBriefing(
+      fakeScopedDb,
+      definition({ selected_tool_names: ["tasks.list", "sports.followedFactsToday"] }),
+      runInput,
+      activeDeps
+    );
+    const gaps = (result.sourceMetadata.gaps ?? []) as Array<{
+      source: string;
+      reason: string;
+    }>;
+    expect(gaps.some((g) => g.source === "sports")).toBe(false);
+  });
+});

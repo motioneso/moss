@@ -406,8 +406,10 @@ function requiredReadToolNames(
   fieldName: string,
   moduleManifests: readonly MossModuleManifest[]
 ): string[] {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new HttpError(400, `${fieldName} must be a non-empty array`);
+  // An explicit empty list selects no tools. Anything that is not an array
+  // (false, null, a lone value that fails membership below) is still 400.
+  if (!Array.isArray(value)) {
+    throw new HttpError(400, `${fieldName} must be an array`);
   }
 
   const toolsByName = new Map(
@@ -536,6 +538,7 @@ export function defaultToolNamesFor(type: BriefingType): string[] {
         "email.listVisibleMessages",
         "vault",
         "goals.list",
+        "news.topHeadlinesToday",
         "sports.followedFactsToday"
       ];
     case "evening":

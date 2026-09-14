@@ -130,7 +130,6 @@ export const briefingTypeSchema = {
 
 const selectedToolNamesSchema = {
   type: "array",
-  minItems: 1,
   items: { type: "string" }
 } as const;
 

@@ -439,6 +439,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0236",
           name: "0236_day_plan_worker_apply_grants.sql"
+        },
+        // R3.1-T08 — briefing definitions allow an explicit empty selected-tool list.
+        {
+          version: "0237",
+          name: "0237_briefing_selected_tool_names_allow_empty.sql"
         }
       ]);
     } finally {

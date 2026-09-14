@@ -34,7 +34,11 @@ export const briefingsModuleManifest = {
   },
   notifications: { supported: true },
   database: {
-    migrations: ["sql/0015_briefings_module.sql", "sql/0116_briefing_type.sql"],
+    migrations: [
+      "sql/0015_briefings_module.sql",
+      "sql/0116_briefing_type.sql",
+      "sql/0237_briefing_selected_tool_names_allow_empty.sql"
+    ],
     migrationDirectories: ["packages/briefings/sql"],
     ownedTables: ["app.briefing_definitions", "app.briefing_runs"]
   },
