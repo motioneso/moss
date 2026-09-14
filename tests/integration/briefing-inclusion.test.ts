@@ -1,5 +1,5 @@
 import { Client } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 
@@ -214,5 +214,57 @@ describe("briefing source inclusion boundary", () => {
     );
     expect(retried?.created).toBe(true);
     expect(sportsExecutions).toBe(1);
+  });
+
+  it("runs both briefing tools through worker startup with zero tool_failed gaps", async () => {
+    // T09 (#2313): the scheduled briefing runs in the worker process, so worker startup
+    // must configure both briefing services. Fresh module graph first: the harness API
+    // server already configured this process's singletons through the route entries, and
+    // a reset also refreshes the db brand symbol, so every handle below comes from the
+    // fresh graph (only the kysely pools and boss instances are reused). The provider
+    // fetch is dead on purpose; configured services degrade to neutral empty gaps while
+    // a bypassed setup would record tool_failed gaps instead.
+    vi.resetModules();
+    const freshRegistry = await import("../../packages/module-registry/src/index.js");
+    const freshDb = await import("@moss/db");
+    const freshBriefings = await import("@moss/briefings");
+    const freshHelpers = await import("./briefings.helpers.js");
+    const freshContext = new freshDb.DataContextRunner(appDb);
+    const freshRepository = new freshBriefings.BriefingsRepository();
+    const deadFetch = (async () => {
+      throw new Error("provider down");
+    }) as typeof fetch;
+    await freshRegistry.registerBuiltInModuleWorkers(workerBoss, {
+      rootDb: workerDb,
+      dataContext: freshContext,
+      fetchFn: deadFetch
+    });
+    const manifests = freshRegistry.getBuiltInModuleManifests();
+    const definition = await freshContext.withDataContext(freshHelpers.userAContext(), (scopedDb) =>
+      freshRepository.createDefinition(scopedDb, {
+        title: "Worker-startup briefing",
+        selectedToolNames: ["sports.followedFactsToday", "news.topHeadlinesToday"]
+      })
+    );
+    const deps: ComposeDeps = {
+      ...freshHelpers.makeComposeDeps(),
+      moduleManifests: manifests
+    };
+    const outcome = await freshContext.withDataContext(freshHelpers.userAContext(), (scopedDb) =>
+      freshRepository.generateRun(scopedDb, definition.id, {
+        moduleManifests: manifests,
+        runKind: "manual",
+        composeDeps: deps
+      })
+    );
+    expect(outcome?.created).toBe(true);
+    expect(outcome?.run?.status).toBe("succeeded");
+    const gaps =
+      (outcome?.run?.source_metadata as { gaps?: { source: string; reason: string }[] })?.gaps ??
+      [];
+    expect(gaps.filter((gap) => gap.reason === "tool_failed")).toEqual([]);
+    // The dead provider degrades to an empty sports section; news has no morning section
+    // in this slice, so its half is proven by the unit startup test.
+    expect(gaps).toContainEqual({ source: "sports", reason: "empty" });
   });
 });
