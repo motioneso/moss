@@ -505,28 +505,40 @@ export class ApplyExecutionService {
   ): Promise<DayPlanApplyBatchDto> {
     const outcomeById = new Map(batch.items.map((item) => [item.id, item.outcome]));
     const failedIds = new Set<string>();
+    const lostIds = new Set<string>();
     for (const { itemId } of executing) {
       if (outcomeById.get(itemId) !== "pending") continue;
-      await this.deps.batches.recordItemResult(scopedDb, {
+      const written = await this.deps.batches.recordItemResult(scopedDb, {
         itemId,
         operationId: batch.id,
         outcome: "failed",
         result: { status: "failed", reason: "access-denied" }
       });
-      failedIds.add(itemId);
+      if (written === "recorded") failedIds.add(itemId);
+      else lostIds.add(itemId);
     }
-    if (failedIds.size === 0) return batch;
+    if (failedIds.size === 0 && lostIds.size === 0) return batch;
+    const storedById = new Map(batch.items.map((item) => [item.id, item]));
+    if (lostIds.size > 0) {
+      const stored = await this.deps.batches.getApplyBatchById(scopedDb, {
+        planId: batch.planId,
+        operationId: batch.id
+      });
+      for (const item of stored?.items ?? []) storedById.set(item.id, item);
+    }
     return {
       ...batch,
-      items: batch.items.map((item) =>
-        failedIds.has(item.id)
-          ? {
-              ...item,
-              outcome: "failed" as const,
-              result: { status: "failed" as const, reason: "access-denied" as const }
-            }
-          : item
-      )
+      items: batch.items.map((item) => {
+        if (failedIds.has(item.id)) {
+          return {
+            ...item,
+            outcome: "failed" as const,
+            result: { status: "failed" as const, reason: "access-denied" as const }
+          };
+        }
+        if (lostIds.has(item.id)) return storedById.get(item.id) ?? item;
+        return item;
+      })
     };
   }
 
@@ -557,16 +569,16 @@ export class ApplyExecutionService {
       providerEventId?: string
     ): Promise<ApplyExecutionReport["items"][number]> => {
       const result: ApplyItemResult = { status: "failed", reason, providerEventId };
-      await this.finalize(input, batch.id, item.itemId, "failed", result);
-      return toReportItem(item.itemId, item.blockId, "failed", result);
+      const settled = await this.finalize(input, batch.id, item.itemId, "failed", result);
+      return toReportItem(item.itemId, item.blockId, settled.outcome, settled.result);
     };
     const unknown = async (
       reason: ApplyItemFailureReason,
       providerEventId?: string
     ): Promise<ApplyExecutionReport["items"][number]> => {
       const result: ApplyItemResult = { status: "unknown", reason, providerEventId };
-      await this.finalize(input, batch.id, item.itemId, "unknown", result);
-      return toReportItem(item.itemId, item.blockId, "unknown", result);
+      const settled = await this.finalize(input, batch.id, item.itemId, "unknown", result);
+      return toReportItem(item.itemId, item.blockId, settled.outcome, settled.result);
     };
 
     // Reconcile first: an earlier attempt may already own this identity.
@@ -682,7 +694,7 @@ export class ApplyExecutionService {
     // this transaction fails after the provider create succeeded, the item is
     // recorded unknown with the event id so the next recover adopts it; the
     // response is unknown, never applied, and the batch continues.
-    let result: ApplyItemResult;
+    let result: { outcome: DayPlanOperationOutcome; result: ApplyItemResult };
     try {
       result = await this.deps.dataContext.withDataContext(input.access, async (scopedDb) => {
         const mirror = await this.deps.batches.mirrorAppliedBlock(scopedDb, {
@@ -703,23 +715,32 @@ export class ApplyExecutionService {
           calendarMirror,
           blockMirror: mirror === "mirrored" ? "mirrored" : "mismatch-preserved"
         };
-        await this.deps.batches.recordItemResult(scopedDb, {
+        const written = await this.deps.batches.recordItemResult(scopedDb, {
           itemId: item.itemId,
           operationId: batch.id,
           outcome: "applied",
-          result: settled
+          result: settled,
+          expectedOutcomes: ["pending", "failed", "unknown"]
         });
-        return settled;
+        if (written === "recorded") return { outcome: "applied" as const, result: settled };
+        const current = await this.deps.batches.getApplyBatchById(scopedDb, {
+          planId: plan.id,
+          operationId: batch.id
+        });
+        const stored = current?.items.find((entry) => entry.id === item.itemId);
+        if (stored?.result) return { outcome: stored.outcome, result: stored.result };
+        return { outcome: "applied" as const, result: settled };
       });
-      return toReportItem(item.itemId, item.blockId, "applied", result);
+      return toReportItem(item.itemId, item.blockId, result.outcome, result.result);
     } catch {
       const unresolved: ApplyItemResult = { status: "unknown", reason: "unknown", providerEventId };
       try {
-        await this.finalize(input, batch.id, item.itemId, "unknown", unresolved);
+        const settled = await this.finalize(input, batch.id, item.itemId, "unknown", unresolved);
+        return toReportItem(item.itemId, item.blockId, settled.outcome, settled.result);
       } catch {
         // The record itself failed: still report unknown, never applied.
+        return toReportItem(item.itemId, item.blockId, "unknown", unresolved);
       }
-      return toReportItem(item.itemId, item.blockId, "unknown", unresolved);
     }
   }
 
@@ -729,8 +750,8 @@ export class ApplyExecutionService {
     itemId: string,
     outcome: DayPlanOperationOutcome,
     result: ApplyItemResult
-  ): Promise<void> {
-    await finalizeItemResult(
+  ): Promise<{ outcome: DayPlanOperationOutcome; result: ApplyItemResult }> {
+    return finalizeItemResult(
       {
         access: input.access,
         planId: input.planId,

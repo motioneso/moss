@@ -9,6 +9,10 @@ import { newsModuleManifest } from "../../packages/news/src/manifest.js";
 import { emailModuleManifest } from "../../packages/email/src/manifest.js";
 import { calendarModuleManifest } from "../../packages/calendar/src/manifest.js";
 import { webModuleManifest } from "../../packages/web-research/src/manifest.js";
+import {
+  DAY_PLAN_DENIED_CODE,
+  DAY_PLAN_DENIED_REMEDIATION_REF
+} from "../../packages/shared/src/day-plan-api.js";
 import { sportsModuleManifest } from "../../packages/sports/src/manifest.js";
 import { getBuiltInModuleManifests } from "../../packages/module-registry/src/index.js";
 import { isSelfOperationExcluded } from "../../packages/ai/src/gateway/self-operation.js";
@@ -293,6 +297,19 @@ describe("Calendar automatic planning switches and denial help (R2.3-T06B)", () 
       expect(behavior?.description?.trim().length).toBeGreaterThan(0);
       expect(behavior?.description?.trim().length).toBeLessThanOrEqual(240);
     }
+  });
+
+  it("declares the denial from the shared day-plan constants", () => {
+    // T07: the map and the runtime read the same pair, so they cannot drift.
+    const features = calendarModuleManifest.features ?? [];
+    const status = features.find(
+      (feature) => feature.id === "calendar.saved_day_plan_apply_status"
+    );
+    const denied = (status?.errors ?? []).find((error) => error.code === DAY_PLAN_DENIED_CODE);
+    expect(denied, "expected the shared denial code in the map").toBeDefined();
+    expect(denied && "remediationRef" in denied ? denied.remediationRef : undefined).toBe(
+      DAY_PLAN_DENIED_REMEDIATION_REF
+    );
   });
 
   it("reports denials with a prerequisite error and a settings remediation", () => {

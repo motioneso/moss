@@ -850,11 +850,17 @@ export interface ApplyExecutionReport {
 export const DAY_PLAN_APPLY_OPERATION_STATUSES = ["pending", "completed"] as const;
 export type DayPlanApplyOperationStatus = (typeof DAY_PLAN_APPLY_OPERATION_STATUSES)[number];
 
+export const DAY_PLAN_DENIED_CODE = "day_plan_denied" as const;
+export const DAY_PLAN_DENIED_REMEDIATION_REF = "calendar.automatic_planning_policy" as const;
 export interface DayPlanApplyStatusResponse {
   operationId: string;
   planId: string;
   status: DayPlanApplyOperationStatus;
   items: ApplyExecutionItemReport[];
+  denial?: {
+    code: typeof DAY_PLAN_DENIED_CODE;
+    remediationRef: typeof DAY_PLAN_DENIED_REMEDIATION_REF;
+  };
 }
 
 export interface ApplyDayPlanRequest {
@@ -876,7 +882,16 @@ export const dayPlanApplyStatusResponseSchema = {
     operationId: uuidSchema,
     planId: uuidSchema,
     status: { type: "string", enum: ["pending", "completed"] },
-    items: { type: "array", items: applyExecutionItemReportSchema }
+    items: { type: "array", items: applyExecutionItemReportSchema },
+    denial: {
+      type: "object",
+      additionalProperties: false,
+      required: ["code", "remediationRef"],
+      properties: {
+        code: { type: "string", enum: [DAY_PLAN_DENIED_CODE] },
+        remediationRef: { type: "string", enum: [DAY_PLAN_DENIED_REMEDIATION_REF] }
+      }
+    }
   }
 } as const;
 

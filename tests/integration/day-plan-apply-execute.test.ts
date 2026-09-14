@@ -15,6 +15,7 @@ import {
 import {
   ApplyExecutionService,
   applyAdditionEventId,
+  finalizeItemResult,
   type ApplyExecutionDeps,
   type ApplyWriterPort,
   type ProposeFocusResult
@@ -837,6 +838,127 @@ describe("apply addition execution boundary", () => {
       expect(item.outcome).toBe("failed");
       expect(item.result).toMatchObject({ status: "failed", reason: "access-denied" });
     }
+    assertWriterOutsideTransactions();
+  });
+
+  it("settles one pending item exactly once when two finalizers race", async () => {
+    // T07: the guarded UPDATE runs through real transactions, so the second
+    // writer loses instead of overwriting the first.
+    setupLoggingRunner();
+    const { plan, batch } = await seedReservedBatch(nextDay());
+    const item = batch.items[0]!;
+    const first = { status: "failed" as const, reason: "conflict" as const };
+    const second = { status: "failed" as const, reason: "provider-rejected" as const };
+    const firstWrite = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.recordItemResult(scopedDb, {
+        itemId: item.id,
+        operationId: batch.id,
+        outcome: "failed",
+        result: first
+      })
+    );
+    expect(firstWrite).toBe("recorded");
+    const secondWrite = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.recordItemResult(scopedDb, {
+        itemId: item.id,
+        operationId: batch.id,
+        outcome: "failed",
+        result: second
+      })
+    );
+    expect(secondWrite).toBe("lost");
+    const stored = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.getApplyBatchById(scopedDb, { planId: plan.id, operationId: batch.id })
+    );
+    expect(stored?.items.find((entry) => entry.id === item.id)?.result).toMatchObject(first);
+    assertWriterOutsideTransactions();
+  });
+
+  it("reports the stored outcome when a finalization loses the race", async () => {
+    // T07: a loser never changes the execution report from what is stored.
+    setupLoggingRunner();
+    const { plan, batch } = await seedReservedBatch(nextDay());
+    const item = batch.items[0]!;
+    const applied = {
+      status: "applied" as const,
+      providerEventId: "evt-stored",
+      startsAt: ADD_A_START,
+      durationMinutes: 30,
+      calendarMirror: "written" as const,
+      blockMirror: "mismatch-preserved" as const
+    };
+    const firstWrite = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.recordItemResult(scopedDb, {
+        itemId: item.id,
+        operationId: batch.id,
+        outcome: "applied",
+        result: applied
+      })
+    );
+    expect(firstWrite).toBe("recorded");
+    const settled = await finalizeItemResult(
+      { access: userAContext(), planId: plan.id, dataContext: runner, batches: repository },
+      batch.id,
+      item.id,
+      "failed",
+      { status: "failed", reason: "conflict" }
+    );
+    expect(settled.outcome).toBe("applied");
+    expect(settled.result).toMatchObject({ status: "applied", providerEventId: "evt-stored" });
+    const stored = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.getApplyBatchById(scopedDb, { planId: plan.id, operationId: batch.id })
+    );
+    expect(stored?.items.find((entry) => entry.id === item.id)?.outcome).toBe("applied");
+  });
+
+  it("reports stored applied when an unknown finalization loses the race", async () => {
+    // T07-B1: the unknown helper must report the stored winner, never its
+    // own attempt. A concurrent settler records applied, then the readback
+    // fails and the unknown write loses.
+    setupLoggingRunner();
+    const { plan, batch } = await seedReservedBatch(nextDay());
+    const [first, second] = batch.items;
+    const storedApplied = {
+      status: "applied" as const,
+      providerEventId: "evt-race-winner",
+      startsAt: ADD_A_START,
+      durationMinutes: 30,
+      calendarMirror: "written" as const,
+      blockMirror: "mismatch-preserved" as const
+    };
+    const { writer, inner } = loggingWriter();
+    const racingWriter: ApplyWriterPort = {
+      ...writer,
+      async lookupAddition() {
+        await dataContext.withDataContext(userAContext(), (scopedDb) =>
+          repository.recordItemResult(scopedDb, {
+            itemId: first!.id,
+            operationId: batch.id,
+            outcome: "applied",
+            result: storedApplied
+          })
+        );
+        throw new Error("provenance readback failed");
+      }
+    };
+    const report = await new ApplyExecutionService(
+      baseDeps({ writer: racingWriter })
+    ).executeReservedAdditions(executeInput(plan.id, batch.idempotencyKey));
+    expect(report.status).toBe("completed");
+    const firstReport = report.items.find((item) => item.itemId === first!.id);
+    expect(firstReport?.outcome).toBe("applied");
+    expect(firstReport?.result).toMatchObject({
+      status: "applied",
+      providerEventId: "evt-race-winner"
+    });
+    const secondReport = report.items.find((item) => item.itemId === second!.id);
+    expect(secondReport?.outcome).toBe("unknown");
+    const stored = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.getApplyBatchById(scopedDb, { planId: plan.id, operationId: batch.id })
+    );
+    expect(stored?.items.find((entry) => entry.id === first!.id)?.outcome).toBe("applied");
+    expect(stored?.items.find((entry) => entry.id === second!.id)?.outcome).toBe("unknown");
+    expect(inner.creates).toHaveLength(0);
     assertWriterOutsideTransactions();
   });
 

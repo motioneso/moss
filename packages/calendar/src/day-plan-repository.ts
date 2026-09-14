@@ -892,7 +892,8 @@ export class DayPlanRepository {
   }
 
   // Records one item's execution outcome with its typed result. Finalization
-  // runs in its own short actor-scoped transaction per item.
+  // runs in its own short actor-scoped transaction per item. The settle is a
+  // single guarded UPDATE on the expected outcome; the loser reports lost.
   async recordItemResult(
     scopedDb: DataContextDb,
     input: {
@@ -900,8 +901,9 @@ export class DayPlanRepository {
       operationId: string;
       outcome: DayPlanOperationOutcome;
       result: ApplyItemResult;
+      expectedOutcomes?: readonly DayPlanOperationOutcome[];
     }
-  ): Promise<void> {
+  ): Promise<"recorded" | "lost"> {
     assertDataContextDb(scopedDb);
     let outcome: DayPlanOperationOutcome;
     try {
@@ -911,6 +913,16 @@ export class DayPlanRepository {
         throw new HttpError(400, (error as Error).message);
       throw error;
     }
+    const expected = input.expectedOutcomes ?? ["pending"];
+    const normalizedExpected = expected.map((entry) => {
+      try {
+        return normalizeOperationOutcome(entry);
+      } catch (error) {
+        if (error instanceof DayPlanValidationError)
+          throw new HttpError(400, (error as Error).message);
+        throw error;
+      }
+    });
     const updated = await scopedDb.db
       .updateTable("app.day_plan_operation_items")
       .set({
@@ -920,10 +932,19 @@ export class DayPlanRepository {
       })
       .where("id", "=", input.itemId)
       .where("operation_id", "=", input.operationId)
+      .where("outcome", "in", [...normalizedExpected])
       .executeTakeFirst();
-    if (updated.numUpdatedRows !== 1n) {
+    if (updated.numUpdatedRows === 1n) return "recorded";
+    const existing = await scopedDb.db
+      .selectFrom("app.day_plan_operation_items")
+      .select("outcome")
+      .where("id", "=", input.itemId)
+      .where("operation_id", "=", input.operationId)
+      .executeTakeFirst();
+    if (!existing) {
       throw new HttpError(404, "day plan operation item is not available");
     }
+    return "lost";
   }
 
   // Mirrors a verified provider success onto the plan block only when the block

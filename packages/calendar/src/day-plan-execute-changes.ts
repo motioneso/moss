@@ -72,18 +72,28 @@ export async function finalizeItemResult(
   operationId: string,
   itemId: string,
   outcome: DayPlanOperationOutcome,
-  result: ApplyItemResult
-): Promise<void> {
-  await ctx.dataContext.withDataContext(ctx.access, async (scopedDb) => {
-    if (outcome !== "applied") {
-      const current = await ctx.batches.getApplyBatchById(scopedDb, {
-        planId: ctx.planId,
-        operationId
-      });
-      if (current?.items.find((entry) => entry.id === itemId)?.outcome === "applied") return;
-    }
-    await ctx.batches.recordItemResult(scopedDb, { itemId, operationId, outcome, result });
+  result: ApplyItemResult,
+  options?: { expectedOutcomes?: readonly DayPlanOperationOutcome[] }
+): Promise<{ outcome: DayPlanOperationOutcome; result: ApplyItemResult }> {
+  const expectedOutcomes = options?.expectedOutcomes ?? ["pending", "failed", "unknown"];
+  const stored = await ctx.dataContext.withDataContext(ctx.access, async (scopedDb) => {
+    const written = await ctx.batches.recordItemResult(scopedDb, {
+      itemId,
+      operationId,
+      outcome,
+      result,
+      expectedOutcomes: [...expectedOutcomes]
+    });
+    if (written === "recorded") return null;
+    const current = await ctx.batches.getApplyBatchById(scopedDb, {
+      planId: ctx.planId,
+      operationId
+    });
+    const item = current?.items.find((entry) => entry.id === itemId);
+    if (!item || !item.result) return null;
+    return { outcome: item.outcome, result: item.result };
   });
+  return stored ?? { outcome, result };
 }
 
 function endsAtOf(startsAt: string, durationMinutes: number): string {
@@ -149,8 +159,8 @@ async function failChange(
   providerEventId?: string
 ): Promise<ApplyExecutionReport["items"][number]> {
   const result: ApplyItemResult = { status: "failed", reason, providerEventId };
-  await finalizeItemResult(ctx, ctx.batch.id, item.itemId, "failed", result);
-  return toExecutionReportItem(item.itemId, item.blockId, "failed", result);
+  const settled = await finalizeItemResult(ctx, ctx.batch.id, item.itemId, "failed", result);
+  return toExecutionReportItem(item.itemId, item.blockId, settled.outcome, settled.result);
 }
 
 async function unknownChange(
@@ -159,8 +169,8 @@ async function unknownChange(
   providerEventId?: string
 ): Promise<ApplyExecutionReport["items"][number]> {
   const result: ApplyItemResult = { status: "unknown", reason: "unknown", providerEventId };
-  await finalizeItemResult(ctx, ctx.batch.id, item.itemId, "unknown", result);
-  return toExecutionReportItem(item.itemId, item.blockId, "unknown", result);
+  const settled = await finalizeItemResult(ctx, ctx.batch.id, item.itemId, "unknown", result);
+  return toExecutionReportItem(item.itemId, item.blockId, settled.outcome, settled.result);
 }
 
 // Mirror and outcome record share one transaction, exactly as additions do.
@@ -194,15 +204,23 @@ async function mirrorMoveApplied(
         calendarMirror,
         blockMirror: mirror === "mirrored" ? "mirrored" : "mismatch-preserved"
       };
-      await ctx.batches.recordItemResult(scopedDb, {
+      const written = await ctx.batches.recordItemResult(scopedDb, {
         itemId: item.itemId,
         operationId: ctx.batch.id,
         outcome: "applied",
-        result: settled
+        result: settled,
+        expectedOutcomes: ["pending", "failed", "unknown"]
       });
-      return settled;
+      if (written === "recorded") return { outcome: "applied" as const, result: settled };
+      const current = await ctx.batches.getApplyBatchById(scopedDb, {
+        planId: ctx.plan.id,
+        operationId: ctx.batch.id
+      });
+      const stored = current?.items.find((entry) => entry.id === item.itemId);
+      if (stored?.result) return { outcome: stored.outcome, result: stored.result };
+      return { outcome: "applied" as const, result: settled };
     });
-    return toExecutionReportItem(item.itemId, item.blockId, "applied", result);
+    return toExecutionReportItem(item.itemId, item.blockId, result.outcome, result.result);
   } catch {
     return unknownChange(ctx, item, ref);
   }
@@ -241,15 +259,23 @@ async function mirrorRemovalApplied(
         calendarMirror,
         blockMirror: mirror === "mirrored" ? "mirrored" : "mismatch-preserved"
       };
-      await ctx.batches.recordItemResult(scopedDb, {
+      const written = await ctx.batches.recordItemResult(scopedDb, {
         itemId: item.itemId,
         operationId: ctx.batch.id,
         outcome: "applied",
-        result: settled
+        result: settled,
+        expectedOutcomes: ["pending", "failed", "unknown"]
       });
-      return settled;
+      if (written === "recorded") return { outcome: "applied" as const, result: settled };
+      const current = await ctx.batches.getApplyBatchById(scopedDb, {
+        planId: ctx.plan.id,
+        operationId: ctx.batch.id
+      });
+      const stored = current?.items.find((entry) => entry.id === item.itemId);
+      if (stored?.result) return { outcome: stored.outcome, result: stored.result };
+      return { outcome: "applied" as const, result: settled };
     });
-    return toExecutionReportItem(item.itemId, item.blockId, "applied", result);
+    return toExecutionReportItem(item.itemId, item.blockId, result.outcome, result.result);
   } catch {
     return unknownChange(ctx, item, ref);
   }

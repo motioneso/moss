@@ -10,7 +10,11 @@ import {
   type MossDatabase
 } from "@moss/db";
 import type { ApplyExecutionInput } from "@moss/calendar";
-import type { ApplyExecutionReport } from "@moss/shared";
+import {
+  DAY_PLAN_DENIED_CODE,
+  DAY_PLAN_DENIED_REMEDIATION_REF,
+  type ApplyExecutionReport
+} from "@moss/shared";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import { registerDayPlanRoutes } from "../../packages/calendar/src/day-plan-routes.js";
@@ -83,7 +87,8 @@ function closingExecutor(calls: ApplyExecutionInput[], finish: { outcome: "appli
           itemId: item.id,
           operationId: batch.id,
           outcome: finish.outcome,
-          result
+          result,
+          expectedOutcomes: ["pending", "failed", "unknown"]
         })
       );
       items.push({ itemId: item.id, blockId: item.blockId, outcome: finish.outcome, result });
@@ -356,5 +361,81 @@ describe("day plan apply routes boundary", () => {
     });
     expect(rejected.statusCode).toBe(409);
     expect(calls.filter((call) => call.itemIds !== undefined)).toHaveLength(0);
+  });
+
+  it("carries the declared denial on a writeback-off denial and omits it when applied", async () => {
+    // T07: the app map declares day_plan_denied, so the 200 status body must
+    // carry it whenever a stored item failed with access-denied.
+    const denying = async (input: ApplyExecutionInput): Promise<ApplyExecutionReport> => {
+      const batch = await dataContext.withDataContext(input.access, (scopedDb) =>
+        repository.getApplyBatch(scopedDb, {
+          planId: input.planId,
+          idempotencyKey: input.idempotencyKey
+        })
+      );
+      for (const item of batch!.items) {
+        await dataContext.withDataContext(input.access, (scopedDb) =>
+          repository.recordItemResult(scopedDb, {
+            itemId: item.id,
+            operationId: batch!.id,
+            outcome: "failed",
+            result: { status: "failed", reason: "access-denied" }
+          })
+        );
+      }
+      const stored = await dataContext.withDataContext(input.access, (scopedDb) =>
+        repository.getApplyBatch(scopedDb, {
+          planId: input.planId,
+          idempotencyKey: input.idempotencyKey
+        })
+      );
+      return {
+        operationId: stored!.id,
+        planId: stored!.planId,
+        status: "completed",
+        items: stored!.items.map((item) => ({
+          itemId: item.id,
+          blockId: item.blockId,
+          outcome: item.outcome,
+          result: item.result
+        }))
+      };
+    };
+    const deniedApp = buildApp(userA(), denying);
+    const deniedPlan = await seedPlan(userA(), nextDay());
+    const denied = await deniedApp.inject({
+      method: "POST",
+      url: `/api/calendar/day-plans/${deniedPlan.id}/apply`,
+      payload: { expectedRevision: deniedPlan.revision, idempotencyKey: "route-deny-1" }
+    });
+    const deniedOperationId = (denied.json() as { operationId: string }).operationId;
+    const deniedStatus = await deniedApp.inject({
+      method: "GET",
+      url: `/api/calendar/day-plans/${deniedPlan.id}/operations/${deniedOperationId}`
+    });
+    expect(deniedStatus.statusCode).toBe(200);
+    const deniedBody = deniedStatus.json() as {
+      status: string;
+      items: { outcome: string; result: { reason?: string } | null }[];
+      denial?: { code: string; remediationRef: string };
+    };
+    expect(deniedBody.status).toBe("completed");
+    expect(deniedBody.items.every((item) => item.outcome === "failed")).toBe(true);
+    expect(deniedBody.denial?.code).toBe(DAY_PLAN_DENIED_CODE);
+    expect(deniedBody.denial?.remediationRef).toBe(DAY_PLAN_DENIED_REMEDIATION_REF);
+
+    const appliedApp = buildApp(userA(), closingExecutor([], { outcome: "applied" }));
+    const appliedPlan = await seedPlan(userA(), nextDay());
+    const applied = await appliedApp.inject({
+      method: "POST",
+      url: `/api/calendar/day-plans/${appliedPlan.id}/apply`,
+      payload: { expectedRevision: appliedPlan.revision, idempotencyKey: "route-deny-2" }
+    });
+    const appliedOperationId = (applied.json() as { operationId: string }).operationId;
+    const appliedStatus = await appliedApp.inject({
+      method: "GET",
+      url: `/api/calendar/day-plans/${appliedPlan.id}/operations/${appliedOperationId}`
+    });
+    expect((appliedStatus.json() as { denial?: unknown }).denial).toBeUndefined();
   });
 });
