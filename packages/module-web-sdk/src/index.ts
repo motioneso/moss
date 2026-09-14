@@ -42,6 +42,7 @@ export interface ModuleWebRoute {
 }
 
 export interface ModuleTodayWidget {
+  /** Today placement: "brief" (editorial, below the plan) or "quick-actions" (the dock). */
   readonly slot: string;
   readonly element: ReactNode;
 }

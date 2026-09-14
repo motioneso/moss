@@ -138,6 +138,13 @@ test("morning and evening prose and action rows render accept dismiss view reply
       })
     })
   );
+  await page.route("**/api/weather/today", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: null })
+    })
+  );
   await page
     .context()
     .route("https://example.test/**", (route) =>
