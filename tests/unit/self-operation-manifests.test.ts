@@ -277,6 +277,42 @@ describe("Calendar self-operation manifest classification", () => {
   });
 });
 
+describe("Calendar automatic planning switches and denial help (R2.3-T06B)", () => {
+  function calendarBehaviors() {
+    return (calendarModuleManifest.sourceBehaviors ?? []).flatMap(
+      (source) => source.behaviors ?? []
+    );
+  }
+
+  it("declares planning and writeback as real default-on switches", () => {
+    const behaviors = calendarBehaviors();
+    for (const id of ["calendar.planning", "calendar.writeback"]) {
+      const behavior = behaviors.find((candidate) => candidate.id === id);
+      expect(behavior, `expected behavior ${id} to exist`).toBeDefined();
+      expect(behavior?.default).toBe("default-on");
+      expect(behavior?.description?.trim().length).toBeGreaterThan(0);
+      expect(behavior?.description?.trim().length).toBeLessThanOrEqual(240);
+    }
+  });
+
+  it("reports denials with a prerequisite error and a settings remediation", () => {
+    const features = calendarModuleManifest.features ?? [];
+    const status = features.find(
+      (feature) => feature.id === "calendar.saved_day_plan_apply_status"
+    );
+    expect(status, "expected status tool to exist").toBeDefined();
+    const denied = (status?.errors ?? []).find((error) => error.code === "day_plan_denied");
+    expect(denied, "expected day_plan_denied error").toBeDefined();
+    expect(denied?.class).toBe("prerequisite");
+    expect(denied?.description?.trim().length).toBeLessThanOrEqual(240);
+    const remediationRef = denied && "remediationRef" in denied ? denied.remediationRef : undefined;
+    const remediation = (status?.remediations ?? []).find((item) => item.id === remediationRef);
+    expect(remediation, "expected the denial remediation in the same feature").toBeDefined();
+    expect(remediation?.path).toBe("/settings/modules/calendar");
+    expect(remediation?.description?.trim().length).toBeLessThanOrEqual(240);
+  });
+});
+
 describe("Web Research self-operation manifest classification", () => {
   it("classifies web.read as risk read, so it runs without confirmation and cannot be promoted", () => {
     const tools: readonly ModuleAssistantToolManifest[] = webModuleManifest.assistantTools ?? [];

@@ -844,8 +844,9 @@ export interface ApplyExecutionReport {
 
 // Durable operation status derived from stored item outcomes: pending while
 // any item is still pending or unknown, completed once every item is applied
-// or failed. A denied execution attempt writes nothing, so it never
-// fabricates a stored terminal result.
+// or failed. An access-gate denial records its pending items as failed with
+// the access-denied reason; any other denied attempt writes nothing, so it
+// never fabricates a stored terminal result.
 export const DAY_PLAN_APPLY_OPERATION_STATUSES = ["pending", "completed"] as const;
 export type DayPlanApplyOperationStatus = (typeof DAY_PLAN_APPLY_OPERATION_STATUSES)[number];
 

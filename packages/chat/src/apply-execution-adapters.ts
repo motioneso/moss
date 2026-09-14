@@ -23,6 +23,7 @@ import {
   type GoogleConnectionService
 } from "@moss/connectors";
 import { parseCalendarAutomationMode } from "@moss/shared";
+import { isBehaviorEnabled, type SourceBehaviorPolicyDeps } from "@moss/source-behaviors";
 import { PreferencesRepository } from "@moss/structured-state";
 
 export const WRITEBACK_POLICY_KEY = "assistant.action_policy.v1.calendar.calendar_writeback";
@@ -30,6 +31,9 @@ export const WRITEBACK_POLICY_KEY = "assistant.action_policy.v1.calendar.calenda
 export interface ApplyAccessGateDeps {
   readonly connectorsRepository: Pick<ConnectorsRepository, "getCalendarWriteScopeState">;
   readonly preferencesRepository?: Pick<PreferencesRepository, "get">;
+  // Behaviour policy for the "Write events back" switch (R2.3-T06B). Absent,
+  // the switch is treated as on, preserving the pre-switch gate exactly.
+  readonly sourceBehaviorPolicy?: SourceBehaviorPolicyDeps;
 }
 
 // Every check reads current state: an active writable account, Calendar write
@@ -62,6 +66,16 @@ export function buildApplyAccessGate(deps: ApplyAccessGateDeps): ApplyExecutionA
       );
       if (mode === "off") {
         return { ok: false, reason: "time blocking is off" };
+      }
+      if (deps.sourceBehaviorPolicy) {
+        const writebackOn = await isBehaviorEnabled(
+          scopedDb,
+          deps.sourceBehaviorPolicy,
+          "calendar.writeback"
+        );
+        if (!writebackOn) {
+          return { ok: false, reason: "calendar writeback behavior is off" };
+        }
       }
       const storedTier = await prefs.get(scopedDb, WRITEBACK_POLICY_KEY);
       if (storedTier === "ask_each_time" || storedTier === "trusted_auto") {

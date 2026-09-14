@@ -29,6 +29,8 @@ import {
 } from "@moss/connectors";
 import { TasksRepository } from "@moss/tasks";
 
+import type { SourceBehaviorPolicyDeps } from "@moss/source-behaviors";
+
 import {
   buildApplyAccessGate,
   buildApplyFactsAdapter,
@@ -42,6 +44,7 @@ export interface DayPlanApplyCompositionDeps {
   readonly connectorsRepository?: ConnectorsRepository;
   readonly googleConnectionService?: GoogleConnectionService;
   readonly googleApiClient?: GoogleApiClient;
+  readonly sourceBehaviorPolicy?: SourceBehaviorPolicyDeps;
 }
 
 export interface DayPlanApplyComposition {
@@ -176,7 +179,10 @@ export function buildDayPlanApplyComposition(
       dataContext,
       batches: dayPlanRepository,
       findTask: findExecutionTask(taskRepository),
-      accessGate: buildApplyAccessGate({ connectorsRepository }),
+      accessGate: buildApplyAccessGate({
+        connectorsRepository,
+        ...(deps.sourceBehaviorPolicy ? { sourceBehaviorPolicy: deps.sourceBehaviorPolicy } : {})
+      }),
       facts: buildApplyFactsAdapter({
         dataContext,
         connectorsRepository,
@@ -234,7 +240,10 @@ export function buildDayPlanAutoApplyExecutor(
     dataContext
   });
   const preferences = deps.preferencesRepository ?? new PreferencesRepository();
-  const routeGate = buildApplyAccessGate({ connectorsRepository });
+  const routeGate = buildApplyAccessGate({
+    connectorsRepository,
+    ...(deps.sourceBehaviorPolicy ? { sourceBehaviorPolicy: deps.sourceBehaviorPolicy } : {})
+  });
   return async (input) => {
     const access: AccessContext = input.access;
     const service = new ApplyExecutionService({

@@ -808,6 +808,38 @@ describe("apply addition execution boundary", () => {
     assertWriterOutsideTransactions();
   });
 
+  it("an access-gate denial stores failed outcomes with the denial reason", async () => {
+    // T06B acceptance: the worker report alone is not enough, the status
+    // route reads stored items, so a denial must settle them durably.
+    setupLoggingRunner();
+    const { plan, batch } = await seedReservedBatch(nextDay());
+    const { writer, inner } = loggingWriter();
+    const service = new ApplyExecutionService(
+      baseDeps({
+        writer,
+        accessGate: {
+          checkAccess: async () => ({ ok: false, reason: "calendar writeback behavior is off" })
+        }
+      })
+    );
+    const report = await service.executeReservedAdditions(
+      executeInput(plan.id, batch.idempotencyKey)
+    );
+    expect(report.status).toBe("denied");
+    expect(report.denialReason).toContain("calendar writeback behavior is off");
+    expect(inner.creates).toHaveLength(0);
+    expect(inner.lookups).toHaveLength(0);
+    const stored = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.getApplyBatchById(scopedDb, { planId: plan.id, operationId: batch.id })
+    );
+    expect(stored?.items).toHaveLength(2);
+    for (const item of stored?.items ?? []) {
+      expect(item.outcome).toBe("failed");
+      expect(item.result).toMatchObject({ status: "failed", reason: "access-denied" });
+    }
+    assertWriterOutsideTransactions();
+  });
+
   it("isolates actors and rejects unknown batches", async () => {
     const { plan, batch } = await seedReservedBatch(nextDay());
     const service = new ApplyExecutionService(baseDeps());

@@ -157,6 +157,164 @@ describe("day-plan auto effects", () => {
     expect(reserveApplyBatch).not.toHaveBeenCalled();
   });
 
+  it("links one legacy event as a placed block with no reservation", async () => {
+    const reserveApplyBatch = vi.fn();
+    const appendBlocks = vi.fn(
+      async (
+        _db: unknown,
+        input: {
+          blocks: {
+            id?: string;
+            pendingChange?: unknown;
+            actualPlacement?: unknown;
+          }[];
+        }
+      ) => ({
+        id: input.blocks.length > 0 ? "plan-1" : "plan-1",
+        localDay: "2026-09-14",
+        timeZone: "America/Los_Angeles",
+        revision: 2,
+        sourceRunId: null,
+        blocks: []
+      })
+    );
+    const repository = stubRepository({ reserveApplyBatch });
+    (repository as Record<string, unknown>).appendBlocks = appendBlocks;
+    const result = await reserveAutoPlanBlocks(
+      repository,
+      scopedDb,
+      {
+        runId: "run-1",
+        definitionId: "def-1",
+        localDay: "2026-09-14",
+        timeZone: "America/Los_Angeles",
+        signals: [{ ...SIGNAL }]
+      },
+      {
+        calendar: {
+          listFollowThroughEvents: async () =>
+            [
+              {
+                id: "cache-1",
+                external_id: "google-evt-1",
+                starts_at: "2026-09-14T15:00:00.000Z",
+                ends_at: "2026-09-14T16:00:00.000Z",
+                external_metadata: {
+                  jarvisCreated: true,
+                  followThroughTargetRef: "calendar:prep_needed:abc"
+                }
+              }
+            ] as never
+        }
+      }
+    );
+    expect(result?.operationId).toBeNull();
+    expect(result?.autoBlockIds).toHaveLength(0);
+    expect(reserveApplyBatch).not.toHaveBeenCalled();
+    expect(appendBlocks).toHaveBeenCalledOnce();
+    const blocks = (appendBlocks.mock.calls[0]?.[1].blocks ?? []) as {
+      pendingChange?: unknown;
+      actualPlacement?: unknown;
+    }[];
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.pendingChange).toBeUndefined();
+    expect(blocks[0]?.actualPlacement).toMatchObject({
+      startsAt: "2026-09-14T15:00:00.000Z",
+      durationMinutes: 60,
+      calendarEventRef: "google-evt-1"
+    });
+  });
+
+  it("ambiguous legacy events drop that target and log the count", async () => {
+    const logged: unknown[] = [];
+    const reserveApplyBatch = vi.fn(
+      async (_scopedDb: unknown, _input: Record<string, unknown>) => ({ id: "operation-1" })
+    );
+    const repository = stubRepository({ reserveApplyBatch });
+    const result = await reserveAutoPlanBlocks(
+      repository,
+      scopedDb,
+      {
+        runId: "run-1",
+        definitionId: "def-1",
+        localDay: "2026-09-14",
+        timeZone: "America/Los_Angeles",
+        signals: [{ ...SIGNAL }]
+      },
+      {
+        calendar: {
+          listFollowThroughEvents: async () =>
+            [
+              { id: "cache-1", external_id: "google-evt-1" },
+              { id: "cache-2", external_id: "google-evt-2" }
+            ] as never
+        },
+        logger: { warn: (event: unknown) => void logged.push(event) }
+      }
+    );
+    expect(result?.operationId).toBeNull();
+    expect(result?.autoBlockIds).toHaveLength(0);
+    expect(reserveApplyBatch).not.toHaveBeenCalled();
+    expect(logged).toEqual([{ event: "day_plan_auto_legacy_ambiguous", count: 2 }]);
+  });
+
+  it("links a referenced suggest block as placed with no reservation", async () => {
+    const reserveApplyBatch = vi.fn();
+    const appendBlocks = vi.fn(async (_db: unknown, input: { blocks: unknown[] }) => ({
+      id: "plan-1",
+      localDay: "2026-09-14",
+      timeZone: "America/Los_Angeles",
+      revision: 2,
+      sourceRunId: null,
+      blocks: []
+    }));
+    const repository = stubRepository({ reserveApplyBatch });
+    (repository as Record<string, unknown>).appendBlocks = appendBlocks;
+    const result = await reserveAutoPlanBlocks(
+      repository,
+      scopedDb,
+      {
+        runId: "run-1",
+        definitionId: "def-1",
+        localDay: "2026-09-14",
+        timeZone: "America/Los_Angeles",
+        signals: [
+          {
+            type: "travel_transition_pressure",
+            summary: "Buffer",
+            suggestedActions: ["suggest_time_block"],
+            startsAt: "2026-09-14T16:00:00.000Z",
+            endsAt: "2026-09-14T17:00:00.000Z",
+            followThrough: { targetRef: "calendar:travel:abc" }
+          }
+        ]
+      },
+      {
+        calendar: {
+          listFollowThroughEvents: async () =>
+            [
+              {
+                id: "cache-1",
+                external_id: "google-evt-9",
+                starts_at: "2026-09-14T16:00:00.000Z",
+                ends_at: "2026-09-14T16:30:00.000Z",
+                external_metadata: {
+                  jarvisCreated: true,
+                  followThroughTargetRef: "calendar:travel:abc"
+                }
+              }
+            ] as never
+        }
+      }
+    );
+    expect(result?.operationId).toBeNull();
+    expect(result?.suggestBlockIds).toHaveLength(0);
+    expect(reserveApplyBatch).not.toHaveBeenCalled();
+    const blocks = appendBlocks.mock.calls[0]?.[1].blocks as { actualPlacement?: unknown }[];
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.actualPlacement).toMatchObject({ calendarEventRef: "google-evt-9" });
+  });
+
   it("marks a revision race without throwing", async () => {
     const repository = stubRepository({
       reserveApplyBatch: async () => {

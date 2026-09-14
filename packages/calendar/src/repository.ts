@@ -4,6 +4,8 @@ import { sql } from "kysely";
 
 import { assertDataContextDb, type CalendarEvent, type DataContextDb } from "@moss/db";
 
+import { isCalendarFollowThroughEvent } from "./follow-through.js";
+
 export interface CreateCachedCalendarEventInput {
   readonly id?: string;
   readonly connectorAccountId: string;
@@ -70,6 +72,24 @@ export class CalendarRepository {
       .where("connector_account_id", "=", input.connectorAccountId)
       .where("external_id", "=", input.externalId)
       .executeTakeFirst();
+  }
+
+  // Legacy automatic events for one follow-through target (R2.3-T06B). Matches
+  // on the stored metadata reference only, never on title or time; every row
+  // is confirmed with the same recogniser the writer path uses.
+  async listFollowThroughEvents(
+    scopedDb: DataContextDb,
+    input: { readonly targetRef: string }
+  ): Promise<CalendarEvent[]> {
+    assertDataContextDb(scopedDb);
+
+    const rows = await scopedDb.db
+      .selectFrom("app.calendar_events")
+      .selectAll()
+      .where(sql`external_metadata->>'followThroughTargetRef'`, "=", input.targetRef)
+      .orderBy("id")
+      .execute();
+    return rows.filter((row) => isCalendarFollowThroughEvent(row, input.targetRef));
   }
 
   async upsertCachedEvent(

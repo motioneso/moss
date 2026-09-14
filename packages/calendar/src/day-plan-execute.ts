@@ -479,8 +479,55 @@ export class ApplyExecutionService {
       if (task) taskFacts.set(taskId, taskFactOf(task.status));
     }
     const gate = await this.deps.accessGate.checkAccess(scopedDb);
-    if (!gate.ok) return deny(`access-denied: ${gate.reason}`);
+    if (!gate.ok) {
+      // An access denial settles the working set durably: the status route
+      // reads stored items, so without this a denied batch would read as
+      // pending forever. Only pending items are settled; unknown items may
+      // have executed and unselected items stay stored and unchanged.
+      const reason = `access-denied: ${gate.reason}`;
+      return {
+        denied: true as const,
+        reason,
+        batch: await this.recordAccessDenial(scopedDb, batch, [...pending, ...changes])
+      };
+    }
     return { denied: false, batch, plan, settled, pending, changes, taskFacts };
+  }
+
+  // Records an access-gate denial on the working set inside the opening
+  // snapshot transaction: pending additions and changes become failed with
+  // the access-denied reason and zero provider calls. Unknown, settled and
+  // unselected items are left stored and unchanged.
+  private async recordAccessDenial(
+    scopedDb: DataContextDb,
+    batch: DayPlanApplyBatchDto,
+    executing: readonly { readonly itemId: string }[]
+  ): Promise<DayPlanApplyBatchDto> {
+    const outcomeById = new Map(batch.items.map((item) => [item.id, item.outcome]));
+    const failedIds = new Set<string>();
+    for (const { itemId } of executing) {
+      if (outcomeById.get(itemId) !== "pending") continue;
+      await this.deps.batches.recordItemResult(scopedDb, {
+        itemId,
+        operationId: batch.id,
+        outcome: "failed",
+        result: { status: "failed", reason: "access-denied" }
+      });
+      failedIds.add(itemId);
+    }
+    if (failedIds.size === 0) return batch;
+    return {
+      ...batch,
+      items: batch.items.map((item) =>
+        failedIds.has(item.id)
+          ? {
+              ...item,
+              outcome: "failed" as const,
+              result: { status: "failed" as const, reason: "access-denied" as const }
+            }
+          : item
+      )
+    };
   }
 
   // One item, no service-owned transaction: reconcile, live-recheck, create,

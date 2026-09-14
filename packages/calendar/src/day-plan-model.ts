@@ -11,6 +11,7 @@ import {
   DAY_RE,
   type DayPlanActualPlacement,
   type DayPlanBlockInput,
+  type DayPlanBlockKind,
   type DayPlanEveningIntent,
   type DayPlanIntentCorrection,
   type DayPlanOpenCommitment,
@@ -263,6 +264,17 @@ export function mergeEveningIntent(
 export function normalizeEveningIntent(value: unknown): DayPlanEveningIntent | null {
   if (value === null || value === undefined) return null;
   return mergeEveningIntent(emptyEveningIntent(), value as Partial<DayPlanEveningIntent>);
+}
+
+// An already-placed block for a legacy automatic event (R2.3-T06B): the
+// recorded placement is set at insert with no pending proposal. Draft saves
+// never accept this shape; only the automatic step builds it.
+export interface DayPlanPlacedBlockInput {
+  readonly id: string;
+  readonly kind: DayPlanBlockKind;
+  readonly taskId: string | null;
+  readonly title: string | null;
+  readonly actualPlacement: DayPlanActualPlacement;
 }
 
 export function normalizeBlockInput(
