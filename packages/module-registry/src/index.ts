@@ -1525,6 +1525,17 @@ export function resolveGrantSelfOperationForModule(
       : (genericGrant?.(scopedDb, manifest) ?? Promise.resolve());
 }
 
+// One shared day-plan reader for the briefings module: the run worker's automatic
+// plan effects and the run-read route's plan comparison use the same object, so the
+// route never constructs a second repository.
+const briefingsTasksRepositoryForAuto = new TasksRepository();
+const briefingsAutoDayPlanRepository = new DayPlanRepository({
+  findTask: async (scopedDb, taskId) => {
+    const task = await briefingsTasksRepositoryForAuto.getById(scopedDb, taskId);
+    return task ? { id: task.id, ownerUserId: task.owner_user_id } : undefined;
+  }
+});
+
 const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: settingsModuleManifest,
@@ -2057,6 +2068,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         listModuleManifests: deps.listModuleManifests,
         boss: deps.boss,
+        dayPlanRead: briefingsAutoDayPlanRepository,
         feedbackRepository: usefulnessFeedbackRepository
       }),
     registerWorkers: (boss, dependencies) => {
@@ -2066,13 +2078,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       // Automatic plan effects (R2.3-T06): the generation transaction
       // reserves day-plan blocks through this repository, and the
       // after-commit hook dispatches the batch to the calendar apply queue.
-      const tasksRepositoryForAuto = new TasksRepository();
-      const autoDayPlanRepository = new DayPlanRepository({
-        findTask: async (scopedDb, taskId) => {
-          const task = await tasksRepositoryForAuto.getById(scopedDb, taskId);
-          return task ? { id: task.id, ownerUserId: task.owner_user_id } : undefined;
-        }
-      });
+      // The repository itself lives at module scope (briefingsAutoDayPlanRepository)
+      // so the run-read route shares it.
+      const autoDayPlanRepository = briefingsAutoDayPlanRepository;
       return registerBriefingsJobWorkers(boss, dependencies.dataContext, {
         dayPlanAuto: buildDayPlanAutoPort(autoDayPlanRepository, {
           calendar: new CalendarRepository(),
