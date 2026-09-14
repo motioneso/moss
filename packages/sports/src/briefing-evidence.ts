@@ -2,7 +2,6 @@ import {
   SPORTS_EVIDENCE_GAMES_MAX,
   SPORTS_EVIDENCE_STORIES_PER_TEAM_MAX,
   SPORTS_EVIDENCE_STORIES_TOTAL_MAX,
-  localDay,
   type GameSummary,
   type SportsBriefingEvidenceV1,
   type SportsBriefingEvidenceGameV1,
@@ -28,34 +27,12 @@ export interface SportsBriefingFact {
   readonly text: string;
 }
 
-const POSTPONED_PATTERN = /postpon|ppd|cancel/i;
+// `deriveGamePhase` lives in `@moss/shared` (T11) so the owning Today widgets can reuse the
+// local-day rule in the browser without importing this service module's server-only graph.
+// Imported for use below and re-exported so existing server callers and tests keep working.
+import { deriveGamePhase } from "@moss/shared";
 
-function isValidZone(timeZone: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone }).format(0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Derive one game's local-day phase from the actor's time zone and instants. */
-export function deriveGamePhase(
-  game: Pick<GameSummary, "state" | "statusDetail" | "startsAt">,
-  now: Date,
-  timeZone: string
-): SportsBriefingGamePhase {
-  if (POSTPONED_PATTERN.test(game.statusDetail ?? "")) return "postponed";
-  if (game.state === "live") return "live";
-  if (game.state === "final") return "final";
-  const zone = isValidZone(timeZone) ? timeZone : "UTC";
-  const startsAt = new Date(game.startsAt);
-  if (Number.isNaN(startsAt.getTime())) return "upcoming";
-  if (localDay(startsAt, zone) === localDay(now, zone) && startsAt.getTime() > now.getTime()) {
-    return "tonight";
-  }
-  return "upcoming";
-}
+export { deriveGamePhase };
 
 /** Section state: live wins, then tonight, then finals; quiet needs a full empty answer. */
 export function deriveSportsState(

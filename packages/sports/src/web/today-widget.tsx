@@ -1,11 +1,20 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
+import { EMPTY_FOLLOWED_TEAMS, followedTeamIndex } from "../news-ranking.js";
+import { useUserLocale } from "./locale.js";
 import { getSportsOverview } from "./sports-client.js";
 import { sportsQueryKeys } from "./query-keys.js";
 import { hasLiveGame, LIVE_REFETCH_INTERVAL_MS } from "./sports-page.js";
 import { orderFollowedCards, TickerLeague, TickerTeam } from "./sports-ticker.js";
 import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
+import {
+  QUIET_NIGHT_LINE,
+  ScoreRow,
+  TonightRow,
+  selectScoreRows,
+  selectTonightRows
+} from "./today-scores.js";
 
 /**
  * Today "Sports desk" widget (#799 module-web-registry Phase A).
@@ -23,7 +32,9 @@ import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-me
  */
 export function SportsTodayWidget(): ReactNode {
   const queryClient = useQueryClient();
+  const locale = useUserLocale();
   const [hiddenStoryRefs, setHiddenStoryRefs] = useState<ReadonlySet<string>>(new Set());
+  const [failedLeadPhoto, setFailedLeadPhoto] = useState<string | null>(null);
   const onStoryChanged = useCallback<StoryFeedbackChange>(
     (storyRef, kind) => {
       if (kind === "less_like_this") {
@@ -70,8 +81,32 @@ export function SportsTodayWidget(): ReactNode {
   );
   const lead = topStories[0] ?? null;
   const briefs = topStories.slice(1, 4);
-  // Show the desk if there's ANY content: top stories, followed teams, or an active league.
-  if (!data || (topStories.length === 0 && teamCards.length === 0 && leagueCards.length === 0)) {
+  // Scores and Tonight come from the same response through the pure T11 selectors: finals and
+  // live games split followed-first, tonight by the actor's local day. Phase helpers never see
+  // teamKey — followed marking is always the provider's permanent id via isFollowed.
+  const now = new Date();
+  const followedPairs = data ? followedTeamIndex(data.followedTeams) : null;
+  const scoreGroups =
+    data && followedPairs ? selectScoreRows(data, followedPairs, now, locale.timezone) : null;
+  const tonightGroups =
+    data && followedPairs ? selectTonightRows(data, followedPairs, now, locale.timezone) : null;
+  const followedRows = scoreGroups?.followedRows ?? [];
+  const elsewhereRows = scoreGroups?.elsewhereRows ?? [];
+  const tonightRows = tonightGroups?.tonightRows ?? [];
+  const postponedRows = tonightGroups?.postponedRows ?? [];
+  const hasScores = followedRows.length > 0 || elsewhereRows.length > 0;
+  const hasTonight = tonightRows.length > 0 || postponedRows.length > 0;
+  // Show the desk if there's ANY content: scores, tonight games, top stories, followed teams,
+  // or an active league. The quiet-night line below needs this gate — it renders only when the
+  // band is empty and the desk is up for another reason.
+  if (
+    !data ||
+    (!hasScores &&
+      !hasTonight &&
+      topStories.length === 0 &&
+      teamCards.length === 0 &&
+      leagueCards.length === 0)
+  ) {
     return null;
   }
 
@@ -87,6 +122,55 @@ export function SportsTodayWidget(): ReactNode {
       <div className="jds-brief__head">
         <span className="jds-brief__kicker">Sports desk</span>
       </div>
+      {hasScores ? (
+        <>
+          <div className="jds-brief__title">Scores</div>
+          {followedRows.length > 0 ? (
+            <>
+              <div className="sp-tksub">Your followed teams</div>
+              <ul className="sp-scores">
+                {followedRows.map((row) => (
+                  <ScoreRow
+                    key={row.game.id}
+                    row={row}
+                    followed={followedPairs ?? EMPTY_FOLLOWED_TEAMS}
+                  />
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {elsewhereRows.length > 0 ? (
+            <>
+              <div className="sp-tksub">Elsewhere worth a look</div>
+              <ul className="sp-scores">
+                {elsewhereRows.map((row) => (
+                  <ScoreRow
+                    key={row.game.id}
+                    row={row}
+                    followed={followedPairs ?? EMPTY_FOLLOWED_TEAMS}
+                  />
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </>
+      ) : null}
+      {/* The band always renders once the desk is up: rows when there are games tonight, the
+          quiet line when the band is empty. The null gate above is what keeps an empty desk
+          from rendering at all. */}
+      <div className="sp-tksub">Tonight</div>
+      {hasTonight ? (
+        <ul className="sp-tonight">
+          {tonightRows.map((row) => (
+            <TonightRow key={row.game.id} row={row} locale={locale} />
+          ))}
+          {postponedRows.map((row) => (
+            <TonightRow key={row.game.id} row={row} locale={locale} />
+          ))}
+        </ul>
+      ) : (
+        <p className="sp-tonight__quiet">{QUIET_NIGHT_LINE}</p>
+      )}
       {/* Main story + brief list, mirroring the News desk layout (Ben: "we should have a main story
           and then some other top stories from the world of sport before we see the your teams
           section"). Sports-local .sp-lead/.sp-brief classes match the news lead visually while
@@ -102,8 +186,14 @@ export function SportsTodayWidget(): ReactNode {
               the hover rule; see sports-4-grid.css. */}
           <div className="sp-lead-wrap sp-fbhost">
             <a className="sp-lead" href={lead.url} target="_blank" rel="noreferrer">
-              {lead.imageUrl ? (
-                <img className="sp-lead__photo" src={lead.imageUrl} alt="" loading="lazy" />
+              {lead.imageUrl && lead.imageUrl !== failedLeadPhoto ? (
+                <img
+                  className="sp-lead__photo"
+                  src={lead.imageUrl}
+                  alt=""
+                  loading="lazy"
+                  onError={() => setFailedLeadPhoto(lead.imageUrl)}
+                />
               ) : null}
               <span className="sp-lead__tag">
                 {lead.competitionLabel} · {lead.publisherLabel}

@@ -4,6 +4,9 @@
 // sections (T10). The prompt receives only sanitized fact lines; these blocks
 // travel through tool `metaKeys` into `sourceMetadata.editorial` for widgets.
 
+import { localDay } from "./time.js";
+import type { GameSummary } from "./sports-api.js";
+
 export const SPORTS_EVIDENCE_GAMES_MAX = 8;
 export const SPORTS_EVIDENCE_STORIES_PER_TEAM_MAX = 3;
 export const SPORTS_EVIDENCE_STORIES_TOTAL_MAX = 6;
@@ -12,6 +15,39 @@ export const NEWS_EVIDENCE_SUMMARY_MAX = 240;
 
 export type SportsBriefingGamePhase = "final" | "live" | "tonight" | "postponed" | "upcoming";
 export type SportsBriefingState = "live" | "tonight" | "finals" | "quiet" | "unknown";
+
+const POSTPONED_PATTERN = /postpon|ppd|cancel/i;
+
+function isValidZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * One game's local-day phase from the actor's time zone and instants (T10, moved to
+ * `@moss/shared` in T11 so the owning Today widgets can reuse it in the browser without
+ * pulling the sports service's server-only imports into the web bundle).
+ */
+export function deriveGamePhase(
+  game: Pick<GameSummary, "state" | "statusDetail" | "startsAt">,
+  now: Date,
+  timeZone: string
+): SportsBriefingGamePhase {
+  if (POSTPONED_PATTERN.test(game.statusDetail ?? "")) return "postponed";
+  if (game.state === "live") return "live";
+  if (game.state === "final") return "final";
+  const zone = isValidZone(timeZone) ? timeZone : "UTC";
+  const startsAt = new Date(game.startsAt);
+  if (Number.isNaN(startsAt.getTime())) return "upcoming";
+  if (localDay(startsAt, zone) === localDay(now, zone) && startsAt.getTime() > now.getTime()) {
+    return "tonight";
+  }
+  return "upcoming";
+}
 
 export interface SportsBriefingEvidenceGameV1 {
   readonly id: string;
