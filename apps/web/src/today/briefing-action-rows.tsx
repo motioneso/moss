@@ -93,7 +93,9 @@ export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps)
         <div className="jds-brief__head">
           <span className="jds-brief__kicker">Needs you</span>
         </div>
-        <p className="cmd-empty">Checking what needs you…</p>
+        <p className="cmd-empty" role="status">
+          Checking what needs you…
+        </p>
       </section>
     );
   }
