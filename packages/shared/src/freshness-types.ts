@@ -1,4 +1,9 @@
-export type FreshnessKind = "connector_sync" | "vault_write" | "memory_update" | "realtime";
+export type FreshnessKind =
+  | "connector_sync"
+  | "vault_write"
+  | "memory_update"
+  | "module_cache"
+  | "realtime";
 
 export interface SourceFreshnessEntry {
   readonly source: string;

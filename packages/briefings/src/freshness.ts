@@ -6,6 +6,12 @@ type ConnectorKind = "email" | "calendar";
 interface ResolveFreshnessOpts {
   connectorSyncAt?: (scopedDb: DataContextDb, kind: ConnectorKind) => Promise<Date | null>;
   vaultLastWriteAt?: (scopedDb: DataContextDb) => Promise<Date | null>;
+  /**
+   * Validated evidence capture times by section key (T10). When a key is present,
+   * freshness is `module_cache` with that `asOf`; when present-but-null the block
+   * was dropped and `asOf` is null. Absent keys fall through as before.
+   */
+  moduleCapturedAt?: Record<string, string | null>;
 }
 
 const CONNECTOR_SOURCE_KINDS = new Map<string, ConnectorKind>([
@@ -32,8 +38,14 @@ export async function resolveBriefingFreshness(
 ): Promise<SourceFreshnessV1> {
   const capturedAtIso = capturedAt.toISOString();
 
+  const moduleCapturedAt = opts.moduleCapturedAt ?? {};
+  const MODULE_CACHE_SOURCES = new Set(["sports", "news"]);
+
   const sources: SourceFreshnessEntry[] = await Promise.all(
     sectionKeys.map(async (key): Promise<SourceFreshnessEntry> => {
+      if (MODULE_CACHE_SOURCES.has(key) && key in moduleCapturedAt) {
+        return { source: key, freshnessKind: "module_cache", asOf: moduleCapturedAt[key] ?? null };
+      }
       if (REALTIME_SOURCES.has(key)) {
         return { source: key, freshnessKind: "realtime", asOf: capturedAtIso };
       }

@@ -1,6 +1,7 @@
 import type { DatasetClient } from "@moss/datasets";
 import type { AccessContext, DataContextDb } from "@moss/db";
 import type {
+  NewsBriefingEvidenceV1,
   NewsCatalogResponse,
   NewsCustomSourceDto,
   NewsCustomTopicDto,
@@ -20,6 +21,8 @@ import {
 import type { NewsSnapshotRecord } from "./personalization-repository.js";
 import type { NewsStoryFeedbackPort, NewsStoryTargetRow } from "./story-feedback-port.js";
 import { rankStories, type RankInput } from "./ranking.js";
+import { NEWS_EVIDENCE_STORIES_MAX } from "@moss/shared";
+import { newsFactsFor, projectNewsBriefingEvidence } from "./briefing-evidence.js";
 import { NEWS_CATALOG, NEWS_TOPICS, topicOption, type NewsSourceEntry } from "./source/catalog.js";
 import type { RssFeedItem } from "./source/rss-source.js";
 
@@ -170,14 +173,25 @@ export class NewsService {
   }
 
   /** Briefing facts: one compact "Title — Source" line per top story, capped at 5. */
-  async getTopHeadlinesForToday(scopedDb: DataContextDb): Promise<{ facts: string[] }> {
-    const [prefs, exclusions, customSources, customTopics, snapshot] = await Promise.all([
-      this.repository.list(scopedDb),
-      this.personalization.listExclusions(scopedDb),
-      this.personalization.listCustomSources(scopedDb),
-      this.personalization.listCustomTopics(scopedDb),
-      this.personalization.readLatestSnapshot(scopedDb)
-    ]);
+  async getTopHeadlinesForToday(
+    scopedDb: DataContextDb,
+    actorUserId?: string
+  ): Promise<{ facts: string[]; evidence: NewsBriefingEvidenceV1 }> {
+    const now = this.now();
+    const capturedAt = now.toISOString();
+    const [prefs, exclusions, customSources, customTopics, snapshot, dismissedRefs] =
+      await Promise.all([
+        this.repository.list(scopedDb),
+        this.personalization.listExclusions(scopedDb),
+        this.personalization.listCustomSources(scopedDb),
+        this.personalization.listCustomTopics(scopedDb),
+        this.personalization.readLatestSnapshot(scopedDb),
+        actorUserId && this.storyFeedback?.listDismissedRefs
+          ? this.storyFeedback
+              .listDismissedRefs(scopedDb, actorUserId)
+              .catch(() => new Set<string>())
+          : Promise.resolve(new Set<string>())
+      ]);
     const overview =
       this.composePersonalized(
         snapshot,
@@ -185,11 +199,13 @@ export class NewsService {
         exclusions,
         customSources,
         customTopics,
-        this.now(),
-        new Set<string>()
+        now,
+        dismissedRefs
       ) ?? (await this.composeOverview(prefs, exclusions));
+    const top = overview.topStories.slice(0, NEWS_EVIDENCE_STORIES_MAX);
     return {
-      facts: overview.topStories.slice(0, 5).map((h) => `${h.title} — ${h.sourceLabel}`)
+      facts: newsFactsFor(top),
+      evidence: projectNewsBriefingEvidence(top, capturedAt, overview.degraded)
     };
   }
 

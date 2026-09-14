@@ -2,6 +2,7 @@ import type { DatasetClient } from "@moss/datasets";
 import type { AccessContext, DataContextDb } from "@moss/db";
 import {
   localDay,
+  type SportsBriefingEvidenceV1,
   type FollowedLeagueCard,
   type FollowedLeagueRef,
   type FollowedTeamCard,
@@ -48,7 +49,6 @@ import {
   currentGameAcrossGroup,
   currentTeamGame,
   filterTeamHeadlines,
-  findTeamGame,
   firstDefined,
   inGamedayWindow,
   joinLabels,
@@ -62,12 +62,12 @@ import {
   sideFor,
   scheduleSideFor,
   standingLine,
-  teamFact,
   toResolvedGames,
   toTeamStories,
   computeFormAcross,
   computeFormDetailAcross
 } from "./followed-card.js";
+import { composeSportsBriefingEvidence } from "./briefing-evidence.js";
 import type { SourceHeadline, SourceTeamRef, StandingsTable } from "./source/sports-source.js";
 import type { SportsPublicSourceReader } from "./source/public-source-reader.js";
 import type {
@@ -874,60 +874,76 @@ export class SportsService {
   }
 
   /**
-   * Compact today-facts for followed competitions/teams, for the daily briefing.
-   * `scopedDb` is already opened under `withDataContext` by the caller. Never throws.
+   * Compact today-facts plus bounded evidence for followed competitions/teams, for the
+   * daily briefing. `scopedDb` is already opened under `withDataContext` by the caller.
+   * Never throws. Reuses the overview's two-day scoreboard window and cached headline
+   * read; no `publicSourceReader.refresh` here (the cached league headlines are enough
+   * for the bounded story strip).
    */
   async getFollowedFactsForToday(
     scopedDb: DataContextDb,
-    _actorUserId: string
-  ): Promise<{ facts: FollowedFact[] }> {
+    _actorUserId: string,
+    opts?: { readonly timeZone?: string }
+  ): Promise<{ facts: FollowedFact[]; evidence: SportsBriefingEvidenceV1 }> {
+    const now = this.now();
+    const capturedAt = now.toISOString();
+    const timeZone =
+      typeof opts?.timeZone === "string" && opts.timeZone.trim() !== "" ? opts.timeZone : "UTC";
     try {
       const rawFollows = await this.repository.list(scopedDb);
       const follows = rawFollows.filter((f) => catalogEntry(f.competitionKey) !== undefined);
-      const today = this.today();
       const state: DegradeState = { degraded: false };
-      const boards = new Map<string, GameSummary[]>();
-      const teamLists = new Map<string, readonly SourceTeamRef[]>();
-      const facts: FollowedFact[] = [];
-      for (const follow of follows) {
-        const comp = follow.competitionKey;
-        if (!boards.has(comp)) {
-          boards.set(
-            comp,
-            await this.cached<GameSummary[]>(
+      const today = this.today();
+      const dayBefore = localDay(new Date(now.getTime() - DAY_MS), ESPN_TIMEZONE);
+      const competitionKeys =
+        follows.length > 0
+          ? [...new Set(follows.map((f) => f.competitionKey))]
+          : [...DEFAULT_SLATE_COMPETITION_KEYS];
+      const scoreboardByComp = new Map<string, GameSummary[]>();
+      const teamsByComp = new Map<string, readonly SourceTeamRef[]>();
+      const headlinesByComp = new Map<string, SourceHeadline[]>();
+      await Promise.all(
+        competitionKeys.map(async (competitionKey) => {
+          const [board, teams, headlines] = await Promise.all([
+            this.cached<GameSummary[]>(
               "scoreboard",
-              { competitionKey: comp, day: today },
+              { competitionKey, day: dayBefore, endDay: today },
               [],
               state
-            )
-          );
-        }
-        const games = boards.get(comp) ?? [];
-        if (follow.teamKey) {
-          // The briefing resolves the saved follow against today's team list exactly like the
-          // page does (review finding S1). Reading the saved short name straight off the board,
-          // as this used to, told someone following Pacific Lutheran about Pacific Tigers the
-          // moment both schools answered "PAC". A follow that cannot be told apart is skipped:
-          // the briefing says nothing rather than saying the wrong thing.
-          if (!teamLists.has(comp)) {
-            teamLists.set(comp, await this.teamsFor(comp, state));
-          }
-          const identity = resolveFollowIdentity(follow, teamLists.get(comp) ?? []);
-          const target = matchTargetFor(identity);
-          if (target === null) continue;
-          const game = findTeamGame(games, target);
-          if (game) facts.push({ competitionKey: comp, text: teamFact(game, target) });
-        } else if (games.length > 0) {
-          const label = catalogEntry(comp)?.label ?? comp;
-          facts.push({
-            competitionKey: comp,
-            text: `${games.length} ${label} game${games.length === 1 ? "" : "s"} play today.`
-          });
-        }
-      }
-      return { facts };
+            ),
+            this.teamsFor(competitionKey, state),
+            this.cached<SourceHeadline[]>("headlines", { competitionKey }, [], state)
+          ]);
+          scoreboardByComp.set(competitionKey, board);
+          teamsByComp.set(competitionKey, teams);
+          headlinesByComp.set(competitionKey, resolveEspnHeadlineTeamKeys(headlines, teams));
+        })
+      );
+      const composed = composeSportsBriefingEvidence({
+        follows,
+        teamsByComp,
+        scoreboardByComp,
+        headlinesByComp,
+        now,
+        timeZone,
+        degraded: state.degraded,
+        capturedAt,
+        refFor: this.storyFeedback?.refFor
+      });
+      return { facts: composed.facts, evidence: composed.evidence };
     } catch {
-      return { facts: [] };
+      return {
+        facts: [],
+        evidence: {
+          version: 1,
+          capturedAt,
+          degraded: true,
+          state: "unknown",
+          ambiguousFollowCount: 0,
+          games: [],
+          stories: []
+        }
+      };
     }
   }
 

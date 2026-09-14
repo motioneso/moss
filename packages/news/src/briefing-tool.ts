@@ -41,7 +41,7 @@ export function configureNewsBriefingService(datasetClient: DatasetClient): void
 export const newsTopHeadlinesTodayExecute: ToolExecute = async (
   scopedDb,
   _input,
-  _ctx
+  ctx
 ): Promise<ToolResult> => {
   assertDataContextDb(scopedDb);
   if (!service) {
@@ -49,6 +49,6 @@ export const newsTopHeadlinesTodayExecute: ToolExecute = async (
       "news briefing tool used before configureNewsBriefingService ran (composition-root bug)"
     );
   }
-  const { facts } = await service.getTopHeadlinesForToday(scopedDb);
-  return { data: { facts } };
+  const { facts, evidence } = await service.getTopHeadlinesForToday(scopedDb, ctx.actorUserId);
+  return { data: { facts, evidence } };
 };

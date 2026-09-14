@@ -18,7 +18,8 @@ export function fallback(
   chats: Section,
   vaultNotes: Array<{ path: string; id: string; excerpt: string }>,
   structuredPayload: BriefingStructuredPayloadV1,
-  sourceTimestamps?: SourceFreshnessV1
+  sourceTimestamps?: SourceFreshnessV1,
+  editorial?: Record<string, unknown>
 ): ComposeResult {
   const text = sections
     .map(
@@ -41,6 +42,7 @@ export function fallback(
       notes: vaultNotes,
       aiModel: null,
       gaps,
+      ...(editorial !== undefined ? { editorial } : {}),
       degraded: true,
       degradedReason: reason,
       ...(sourceTimestamps !== undefined ? { sourceTimestamps } : {})
