@@ -112,7 +112,52 @@ export function cannedToolData(toolName: string): Record<string, unknown> {
         turns: [{ role: "user", excerpt: "what's up", threadTitle: "T", createdAt: TODAY_ISO }]
       };
     case "sports.followedFactsToday":
-      return { facts: [{ competitionKey: "nfl", text: "Cowboys play tonight 7:20pm" }] };
+      return {
+        facts: [{ competitionKey: "nfl", text: "Cowboys play tonight 7:20pm" }],
+        evidence: {
+          version: 1,
+          capturedAt: FIXED_NOW.toISOString(),
+          degraded: false,
+          state: "tonight",
+          ambiguousFollowCount: 0,
+          games: [
+            {
+              id: "g1",
+              competitionKey: "nfl",
+              startsAt: "2026-06-13T23:20:00.000Z",
+              phase: "tonight",
+              statusDetail: "7:20 PM",
+              headline: "Cowboys play tonight",
+              homeShort: "DAL",
+              awayShort: "MIN",
+              homeScore: null,
+              awayScore: null
+            }
+          ],
+          stories: []
+        }
+      };
+    case "news.topHeadlinesToday":
+      return {
+        facts: [{ competitionKey: "news", text: "Markets rally — Wire" }],
+        evidence: {
+          version: 1,
+          capturedAt: FIXED_NOW.toISOString(),
+          degraded: false,
+          stories: [
+            {
+              id: "s1",
+              title: "Markets rally",
+              sourceLabel: "Wire",
+              sourceKey: "wire",
+              url: "https://example.com/markets",
+              publishedAt: "2026-06-13T10:00:00.000Z",
+              summary: "Markets rose on calm trading.",
+              imageUrl: null
+            }
+          ]
+        }
+      };
     default:
       return {};
   }
@@ -140,7 +185,8 @@ export function makeFakeManifests(failTool?: string): MossModuleManifest[] {
     "calendar.listVisibleEvents",
     "email.listVisibleMessages",
     "chat.listTodaysTurns",
-    "sports.followedFactsToday"
+    "sports.followedFactsToday",
+    "news.topHeadlinesToday"
   ];
   const assistantTools = toolNames.map((name) => {
     const execute: ToolExecute = async (): Promise<ToolResult> => {

@@ -561,9 +561,12 @@ describe("NewsService.getTopHeadlinesForToday (#897)", () => {
           sourceKey === "bbc" ? Array.from({ length: 8 }, () => item()) : []
       })
     );
-    const { facts } = await service.getTopHeadlinesForToday({} as DataContextDb);
+    const { facts, evidence } = await service.getTopHeadlinesForToday({} as DataContextDb);
     expect(facts).toHaveLength(5);
     expect(facts[0]).toMatch(/^Story \d+ — BBC News$/);
+    expect(evidence.stories).toHaveLength(5);
+    expect(evidence.version).toBe(1);
+    expect(typeof evidence.capturedAt).toBe("string");
   });
 
   it("returns no facts (no throw) when every feed fails", async () => {
@@ -574,8 +577,55 @@ describe("NewsService.getTopHeadlinesForToday (#897)", () => {
         }
       })
     );
-    const { facts } = await service.getTopHeadlinesForToday({} as DataContextDb);
+    const { facts, evidence } = await service.getTopHeadlinesForToday({} as DataContextDb);
     expect(facts).toEqual([]);
+    expect(evidence.stories).toEqual([]);
+  });
+
+  it("returns bounded evidence with image references and capped summaries", async () => {
+    const service = new NewsService(
+      makeDeps({
+        snapshot: snapshot([
+          snapshotArticle("one", { excerpt: "x".repeat(500) }),
+          snapshotArticle("two", { imageUrl: null })
+        ])
+      })
+    );
+    const { evidence } = await service.getTopHeadlinesForToday({} as DataContextDb);
+    expect(evidence.stories.length).toBeLessThanOrEqual(5);
+    for (const story of evidence.stories) {
+      expect(story.summary.length).toBeLessThanOrEqual(240);
+    }
+    expect(evidence.stories[0]?.imageUrl).toBe("/api/news/images/one");
+    expect(evidence.stories[1]?.imageUrl).toBeNull();
+  });
+
+  it("honours dismissed refs on the briefing path when the actor is known", async () => {
+    const refFor = (canonicalUrl: string) => `news:ref-for-${canonicalUrl}`;
+    const dismissed = new Set([refFor("https://preferred.example/one")]);
+    const service = new NewsService(
+      makeDeps({
+        snapshot: snapshot([snapshotArticle("one"), snapshotArticle("two")]),
+        storyFeedback: {
+          storyRef: refFor,
+          listDismissedRefs: async () => dismissed,
+          registerTargets: async () => {},
+          applyRelevance: async () => ({
+            status: "applied",
+            kept: [],
+            boosts: [],
+            suppressedCount: 0,
+            overriddenCount: 0
+          })
+        }
+      })
+    );
+    const { facts, evidence } = await service.getTopHeadlinesForToday(
+      {} as DataContextDb,
+      userA.actorUserId
+    );
+    expect(facts).toEqual(["Headline two — Preferred Wire"]);
+    expect(evidence.stories.map((story) => story.id)).toEqual(["two"]);
   });
 });
 

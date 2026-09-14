@@ -88,3 +88,47 @@ describe("resolveBriefingFreshness", () => {
     expect(result.sources.find((s) => s.source === "vault")!.asOf).toBe(VAULT_AT.toISOString());
   });
 });
+
+describe("resolveBriefingFreshness — module_cache (T10)", () => {
+  it("returns module_cache with the evidence captured time for sports and news", async () => {
+    const asOf = "2026-07-01T18:00:00.000Z";
+    const result = await resolveBriefingFreshness(
+      scopedDb,
+      ["sports", "news", "tasks"],
+      CAPTURED_AT,
+      {
+        moduleCapturedAt: { sports: asOf, news: asOf }
+      }
+    );
+    expect(result.sources.find((s) => s.source === "sports")).toEqual({
+      source: "sports",
+      freshnessKind: "module_cache",
+      asOf
+    });
+    expect(result.sources.find((s) => s.source === "news")).toEqual({
+      source: "news",
+      freshnessKind: "module_cache",
+      asOf
+    });
+    expect(result.sources.find((s) => s.source === "tasks")?.freshnessKind).toBe("realtime");
+  });
+
+  it("returns asOf null when the evidence block was dropped", async () => {
+    const result = await resolveBriefingFreshness(scopedDb, ["sports"], CAPTURED_AT, {
+      moduleCapturedAt: { sports: null }
+    });
+    expect(result.sources.find((s) => s.source === "sports")).toEqual({
+      source: "sports",
+      freshnessKind: "module_cache",
+      asOf: null
+    });
+  });
+
+  it("falls through to realtime for sports/news with no evidence entry", async () => {
+    const result = await resolveBriefingFreshness(scopedDb, ["sports", "news"], CAPTURED_AT, {});
+    for (const entry of result.sources) {
+      expect(entry.freshnessKind).toBe("realtime");
+      expect(entry.asOf).toBe(CAPTURED_ISO);
+    }
+  });
+});

@@ -378,7 +378,17 @@ export const sportsModuleManifest = {
         "List compact, non-sensitive facts about the actor's followed teams/competitions playing today (one short line per follow). Read-only; briefing-oriented, not a live scores/schedule browser.",
       permissionId: "sports.view",
       risk: "read",
-      inputSchema: { type: "object", properties: {} },
+      inputSchema: {
+        type: "object",
+        properties: {
+          timeZone: {
+            type: "string",
+            minLength: 1,
+            maxLength: 100,
+            description: "The briefing definition's IANA time zone, for local-day game phases."
+          }
+        }
+      },
       execute: sportsFollowedFactsTodayExecute
     },
     {

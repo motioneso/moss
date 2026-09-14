@@ -905,11 +905,62 @@ describe("SportsService.getFollowedFactsForToday", () => {
       }
     });
     const service = new SportsService(makeDeps({ source: badSource }));
-    const { facts } = await service.getFollowedFactsForToday(
+    const { facts, evidence } = await service.getFollowedFactsForToday(
       {} as DataContextDb,
       userA.actorUserId
     );
     expect(facts).toEqual([]);
+    expect(evidence.degraded).toBe(true);
+    expect(evidence.state).toBe("unknown");
+  });
+
+  it("returns degraded unknown evidence with no facts when every dataset fails", async () => {
+    const badSource = makeSource({
+      getScoreboard: async () => {
+        throw new Error("ESPN down");
+      },
+      listTeams: async () => {
+        throw new Error("ESPN down");
+      },
+      getHeadlines: async () => {
+        throw new Error("ESPN down");
+      }
+    });
+    const service = new SportsService(makeDeps({ source: badSource }));
+    const { facts, evidence } = await service.getFollowedFactsForToday(
+      {} as DataContextDb,
+      userA.actorUserId,
+      { timeZone: "America/New_York" }
+    );
+    expect(facts).toEqual([]);
+    expect(evidence.degraded).toBe(true);
+    expect(evidence.state).toBe("unknown");
+    expect(evidence.ambiguousFollowCount).toBe(0);
+  });
+
+  it("counts an ambiguous follow with no fact or game", async () => {
+    const service = new SportsService(
+      makeDeps({
+        source: makeSource({ listTeams: async () => [] }),
+        follows: [
+          {
+            id: "f9",
+            competitionKey: "nfl",
+            teamKey: "DAL",
+            sourceTeamId: null,
+            createdAt: "2026-06-01T00:00:00.000Z"
+          }
+        ]
+      })
+    );
+    const { facts, evidence } = await service.getFollowedFactsForToday(
+      {} as DataContextDb,
+      userA.actorUserId,
+      { timeZone: "UTC" }
+    );
+    expect(facts).toEqual([]);
+    expect(evidence.ambiguousFollowCount).toBe(1);
+    expect(evidence.games).toEqual([]);
   });
 });
 
@@ -939,20 +990,21 @@ describe("SportsService.today() timezone handling (#761)", () => {
   });
 
   it("uses the Eastern calendar date for the briefing's followed-facts lookup too", async () => {
-    const seenDates: string[] = [];
+    const seenRanges: { day: string; endDay?: string }[] = [];
     const source = makeSource({
-      getScoreboard: async (_competitionKey, day) => {
-        seenDates.push(day);
+      getScoreboard: async (_competitionKey, day, endDay) => {
+        seenRanges.push({ day, endDay });
         return [dalLiveGame];
       }
     });
     const service = new SportsService({ ...makeDeps({ source }), now: () => LATE_EVENING_ET });
-    const { facts } = await service.getFollowedFactsForToday(
+    const { facts, evidence } = await service.getFollowedFactsForToday(
       {} as DataContextDb,
       userA.actorUserId
     );
-    expect(seenDates).toEqual([ET_DATE]);
+    expect(seenRanges).toEqual([{ day: "2026-07-03", endDay: ET_DATE }]);
     expect(facts.length).toBeGreaterThan(0);
+    expect(evidence.games.length).toBeGreaterThan(0);
   });
 
   it("still ends the window on the same Eastern day at a UTC instant that's also same-day (control)", async () => {
