@@ -177,3 +177,49 @@ describe("collectExternalBriefingContributions (#1282)", () => {
     expect(result[0]!.items[0]).not.toHaveProperty("href");
   });
 });
+
+// T13B: the refresh/history read is only useful if the manifest declares the new
+// route, the two error codes and the remediation paths a screen can follow.
+describe("briefings manifest refresh and history entries (T13B)", () => {
+  it("declares the run-read route under briefings.view", async () => {
+    const { briefingsModuleManifest } = await import("@moss/briefings");
+    const route = (briefingsModuleManifest.routes ?? []).find(
+      (candidate) =>
+        candidate.method === "GET" &&
+        candidate.path === "/api/briefings/definitions/:id/runs/:runId"
+    );
+    expect(route, "expected the run-read route in the manifest").toBeDefined();
+    expect(route?.permissionId).toBe("briefings.view");
+  });
+
+  it("declares the refresh, history, source-gap and plan-handoff features", async () => {
+    const { briefingsModuleManifest } = await import("@moss/briefings");
+    const ids = (briefingsModuleManifest.features ?? []).map((feature) => feature.id);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "briefings.refresh",
+        "briefings.history",
+        "briefings.source_gaps",
+        "briefings.plan_handoff"
+      ])
+    );
+  });
+
+  it("declares both run error codes on a briefings feature", async () => {
+    const { briefingsModuleManifest } = await import("@moss/briefings");
+    const codes = (briefingsModuleManifest.features ?? []).flatMap((feature) =>
+      (feature.errors ?? []).map((error) => error.code)
+    );
+    expect(codes).toContain("briefing_run_in_flight");
+    expect(codes).toContain("briefing_run_not_available");
+  });
+
+  it("points every briefings remediation at the module's own entry", async () => {
+    const { briefingsModuleManifest } = await import("@moss/briefings");
+    const paths = (briefingsModuleManifest.features ?? []).flatMap((feature) =>
+      (feature.remediations ?? []).map((remediation) => remediation.path)
+    );
+    expect(paths.length).toBeGreaterThan(0);
+    expect(paths).toEqual(paths.map(() => "/briefings"));
+  });
+});

@@ -589,7 +589,8 @@ describe("Briefings module M6 read-only scheduled summaries", () => {
     expect(first.json<{ jobId: string }>().jobId).toBeTruthy();
     expect(second.statusCode).toBe(409);
     expect(second.json()).toEqual({
-      error: "A briefing run with this idempotency key is already queued or running"
+      error: "A briefing run with this idempotency key is already queued or running",
+      code: "briefing_run_in_flight"
     });
 
     const client = new Client({ connectionString: connectionStrings.bootstrap });
