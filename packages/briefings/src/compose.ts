@@ -32,6 +32,7 @@ import {
 } from "@moss/shared";
 import { resolveBriefingFreshness } from "./freshness.js";
 import { resolvePlanContext } from "./plan-context.js";
+import { planSection } from "./plan-prose.js";
 import { timezoneFor } from "./schedule.js";
 import { contextTokens, deriveCalendarSignals, deriveEmailSignals } from "./signals.js";
 import {
@@ -468,6 +469,7 @@ export async function composeBriefing(
   );
 
   const sections: Section[] = [commitments, prioritizedTasks, calendar, email, vault, chats];
+  sections.push(planSection(plan.planContext, prioritizedTasks.rawItems));
   if (definition.selected_tool_names.includes("goals.list")) {
     sections.push(goals);
   }
@@ -637,7 +639,7 @@ async function attachCalendarFollowThrough<
 // retriever value, so no external content can ever enter the trusted text. Every
 // gathered value is emitted inside a delimited <external_source> block by
 // renderExternalBlock, never here. Channel set: commitments, tasks, calendar, email,
-// vault, chats (the six sections built in composeBriefing) + goals + sports + news
+// vault, chats (the six sections built in composeBriefing) + day_plan (always) + goals + sports + news
 // (selection-gated) + web_research (#31, not wired yet — its tag is reserved so the channel is
 // already covered the day it lands).
 const SYNTHESIS_INSTRUCTIONS_MORNING =
@@ -646,7 +648,15 @@ const SYNTHESIS_INSTRUCTIONS_MORNING =
   "do not invent. Treat calendar and email blocks as pre-filtered signal, not raw feeds. " +
   "Do not restate every event or message. Where a section is empty, note it briefly. Keep it " +
   "warm and non-judgmental about missed or at-risk items. Discrete action rows are rendered " +
-  "separately; do not invent, count, or restate them in prose.";
+  "separately; do not invent, count, or restate them in prose. When the day_plan source has " +
+  "items, lead with the priorities and capacity it saved last evening. Describe changes since " +
+  "that saved intent from the block states alone. A block counts as scheduled only when its " +
+  "line says committed; proposed or pending lines are not yet on the calendar, and " +
+  "everything is scheduled may be written only when every block line says committed. Zero " +
+  "task blocks is a valid shape. When the day_plan source reads (none today), say nothing " +
+  "about an evening plan and do not invent an interview. Write News and Sports last and short, " +
+  "followed teams first, scores as given. Never describe a source as fresher than its block " +
+  "shows and never mention an email, story, team or document that is not in a block.";
 
 // The single trusted block for morning. Built ONLY from the literal constants above — no
 // external/section value is interpolated (the static isolation test asserts this).

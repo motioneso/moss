@@ -57,6 +57,7 @@ describe("briefings prompt-isolation (static)", () => {
       "email",
       "vault",
       "chats",
+      "day_plan",
       "tasks_reconciliation",
       "calendar_tomorrow",
       "email_today",
