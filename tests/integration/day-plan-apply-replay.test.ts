@@ -124,6 +124,12 @@ function makeWriter(script: WriterScript = {}): ApplyWriterPort & {
         end: "2026-09-12T16:30:00.000Z",
         provenance: provenanceProps(created)
       };
+    },
+    async moveBlockEvent() {
+      throw new Error("moveBlockEvent must not run in this addition-only test");
+    },
+    async removeBlockEvent() {
+      throw new Error("removeBlockEvent must not run in this addition-only test");
     }
   };
 }
@@ -170,6 +176,12 @@ describe("apply addition execution boundary: replay and verification", () => {
       async lookupAddition(input) {
         events.push("writer-lookup");
         return inner.lookupAddition(input);
+      },
+      async moveBlockEvent() {
+        throw new Error("moveBlockEvent must not run in this addition-only test");
+      },
+      async removeBlockEvent() {
+        throw new Error("removeBlockEvent must not run in this addition-only test");
       }
     };
     return { writer, inner };
@@ -282,6 +294,12 @@ describe("apply addition execution boundary: replay and verification", () => {
       },
       async lookupAddition() {
         return { found: false };
+      },
+      async moveBlockEvent() {
+        throw new Error("moveBlockEvent must not run in this addition-only test");
+      },
+      async removeBlockEvent() {
+        throw new Error("removeBlockEvent must not run in this addition-only test");
       }
     };
     const report = await new ApplyExecutionService(
@@ -332,6 +350,12 @@ describe("apply addition execution boundary: replay and verification", () => {
       },
       async lookupAddition() {
         throw new Error("writer must not run on settled replay");
+      },
+      async moveBlockEvent() {
+        throw new Error("moveBlockEvent must not run in this addition-only test");
+      },
+      async removeBlockEvent() {
+        throw new Error("removeBlockEvent must not run in this addition-only test");
       }
     };
     const silent = () =>

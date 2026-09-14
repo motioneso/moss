@@ -3,6 +3,12 @@
 // draft saves only change proposals. Later application work owns actual placement.
 import { errorResponseSchema, nullableStringSchema } from "./schema-fragments.js";
 import {
+  applyConfirmationRequiredSchema,
+  applyExecutionItemReportSchema,
+  applyExecutionReportSchema,
+  uuidSchema
+} from "./day-plan-changes-api.js";
+import {
   briefingRunStatusSchema,
   briefingTypeSchema,
   type BriefingRunStatus,
@@ -380,7 +386,6 @@ export interface SaveDayPlanResponse {
   plan: DayPlanDto;
 }
 
-const uuidSchema = { type: "string", format: "uuid" } as const;
 const nullableUuidSchema = { anyOf: [uuidSchema, { type: "null" }] } as const;
 const instantSchema = {
   type: "string",
@@ -777,15 +782,37 @@ export type ApplyItemFailureReason =
   | "conflict"
   | "provider-rejected"
   | "provenance-mismatch"
+  | "has-attendees"
   | "mixed-batch"
   | "unknown";
+
+export type ApplyCalendarMirror =
+  | "written"
+  | "skipped-rls"
+  | "skipped-error"
+  | "not-checked"
+  | "not-cached"
+  | "evicted";
 
 export interface ApplyItemAppliedResult {
   status: "applied";
   providerEventId: string;
   startsAt: string;
   durationMinutes: number;
-  calendarMirror: "written" | "skipped-rls" | "skipped-error" | "not-checked" | "not-cached";
+  calendarMirror: ApplyCalendarMirror;
+  blockMirror: "mirrored" | "mismatch-preserved";
+}
+
+// Removal outcome: the provider event is gone and the block mirror cleared.
+// Timing carries the deleted event's last observed window when the pre-delete
+// readback saw it, else null; the mirror reports the cache eviction.
+export interface ApplyItemRemovedResult {
+  status: "applied";
+  removed: true;
+  providerEventId: string;
+  startsAt: string | null;
+  durationMinutes: number | null;
+  calendarMirror: ApplyItemAppliedResult["calendarMirror"];
   blockMirror: "mirrored" | "mismatch-preserved";
 }
 
@@ -795,7 +822,10 @@ export interface ApplyItemUnresolvedResult {
   providerEventId?: string;
 }
 
-export type ApplyItemResult = ApplyItemAppliedResult | ApplyItemUnresolvedResult;
+export type ApplyItemResult =
+  | ApplyItemAppliedResult
+  | ApplyItemRemovedResult
+  | ApplyItemUnresolvedResult;
 
 export interface ApplyExecutionItemReport {
   itemId: string | null;
@@ -837,31 +867,6 @@ export interface RetryDayPlanApplyRequest {
   itemIds: string[];
 }
 
-const applyExecutionItemReportSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["itemId", "blockId", "outcome", "result"],
-  properties: {
-    itemId: { anyOf: [uuidSchema, { type: "null" }] },
-    blockId: { anyOf: [uuidSchema, { type: "null" }] },
-    outcome: { type: "string", enum: ["pending", "applied", "failed", "unknown"] },
-    result: { anyOf: [{ type: "object" }, { type: "null" }] }
-  }
-} as const;
-
-export const applyExecutionReportSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["operationId", "planId", "status", "items"],
-  properties: {
-    operationId: uuidSchema,
-    planId: uuidSchema,
-    status: { type: "string", enum: ["completed", "denied"] },
-    denialReason: { type: "string" },
-    items: { type: "array", items: applyExecutionItemReportSchema }
-  }
-} as const;
-
 export const dayPlanApplyStatusResponseSchema = {
   type: "object",
   additionalProperties: false,
@@ -898,6 +903,7 @@ export const applyDayPlanRouteSchema = {
   body: applyDayPlanRequestSchema,
   response: {
     200: applyExecutionReportSchema,
+    202: applyConfirmationRequiredSchema,
     400: errorResponseSchema,
     401: errorResponseSchema,
     404: errorResponseSchema,

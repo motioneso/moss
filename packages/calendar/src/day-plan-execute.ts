@@ -23,12 +23,25 @@ import { HttpError } from "@moss/module-sdk";
 import { buildDayPlanPreview, type DayPlanPreviewTaskFact } from "./day-plan-preview.js";
 import { DayPlanValidationError } from "./day-plan-model.js";
 import { pendingChangesEqual } from "./day-plan-apply.js";
+import {
+  buildChangeBinding,
+  checkChangeGate,
+  type ApplyChangeAuth
+} from "./day-plan-change-approval.js";
 import type { DayPlanRepository } from "./day-plan-repository.js";
 import type {
   CalendarEventLookup,
+  DeleteEventResult,
   FocusBlockWindow,
-  ProposeFocusResult
+  ProposeFocusResult,
+  RescheduleEventResult
 } from "./calendar-write-service.js";
+import {
+  executeChangeItem,
+  finalizeItemResult,
+  type ChangeExecutionContext,
+  type ChangePreparedItem
+} from "./day-plan-execute-changes.js";
 
 // Deterministic provider identity for one reserved addition. Same inputs always
 // yield the same id, so a retried insert collides instead of duplicating.
@@ -97,7 +110,7 @@ export interface ApplyExecutionFacts {
   }): Promise<{ readonly intervals: readonly ApplyBusyInterval[]; readonly complete: boolean }>;
 }
 
-// Narrow provider port for apply additions. Carries no database handle: the
+// Narrow provider port for apply execution. Carries no database handle: the
 // service never lends a transaction to provider I/O, and the composition host
 // manages whatever short handle its writer needs internally.
 export interface ApplyWriterPort {
@@ -110,6 +123,16 @@ export interface ApplyWriterPort {
     readonly ctx: ToolContext;
     readonly eventId: string;
   }): Promise<CalendarEventLookup>;
+  moveBlockEvent(input: {
+    readonly ctx: ToolContext;
+    readonly eventRef: string;
+    readonly newStart: Date;
+    readonly newEnd: Date;
+  }): Promise<RescheduleEventResult>;
+  removeBlockEvent(input: {
+    readonly ctx: ToolContext;
+    readonly eventRef: string;
+  }): Promise<DeleteEventResult>;
 }
 
 export interface ApplyExecutionDeps {
@@ -139,6 +162,10 @@ export interface ApplyExecutionInput {
   // Selective retry: only these operation item ids may execute. Omitted
   // means every pending or unknown item.
   readonly itemIds?: readonly string[];
+  // Move and removal authorization, re-checked against the frozen batch on
+  // every entry. Omitted means no confirmed approval and no promotion, so
+  // reserved moves and removals deny with confirmation-required.
+  readonly changeAuth?: ApplyChangeAuth;
 }
 
 interface PreparedItem {
@@ -188,7 +215,7 @@ export class ApplyExecutionService {
     if (snapshot.denied) {
       return this.deniedReport(snapshot.batch, snapshot.reason);
     }
-    if (snapshot.pending.length === 0) {
+    if (snapshot.pending.length === 0 && snapshot.changes.length === 0) {
       const settledOnly: ApplyExecutionReport["items"] = snapshot.settled.map((item) =>
         toReportItem(item.id, item.blockId, item.outcome, item.result)
       );
@@ -199,35 +226,71 @@ export class ApplyExecutionService {
         items: settledOnly
       };
     }
-    // Whole-batch facts run with no service-owned transaction open: the
-    // facts adapter stages its own short reads and runs token refresh and
-    // every Google read at transaction depth zero. Incomplete facts deny the
-    // whole batch with zero creates.
-    const window = {
-      start: snapshot.pending.map((item) => item.startsAt).sort()[0]!,
-      end: snapshot.pending
-        .map((item) => endsAtOf(item.startsAt, item.durationMinutes))
-        .sort()
-        .at(-1)!
-    };
-    const availability = await this.deps.facts.readAvailability(window);
-    if (!availability.complete) {
-      return this.deniedReport(
-        snapshot.batch,
-        "facts-unavailable: current calendar facts are incomplete"
-      );
-    }
-    const conflict = this.checkConflicts(snapshot.plan, snapshot.pending, snapshot.taskFacts, {
-      intervals: availability.intervals
+    // The change gate re-checks on every entry: reserved moves and removals
+    // run only with trusted_auto or the exact confirmed binding of this
+    // batch. A denial writes nothing and makes zero provider calls.
+    const gate = checkChangeGate({
+      batch: snapshot.batch,
+      executingItemIds: [
+        ...snapshot.pending.map((item) => item.itemId),
+        ...snapshot.changes.map((item) => item.itemId)
+      ],
+      binding: buildChangeBinding({
+        actorUserId: input.access.actorUserId,
+        batch: snapshot.batch,
+        plan: snapshot.plan
+      }),
+      auth: input.changeAuth
     });
-    if (conflict) {
-      return this.deniedReport(snapshot.batch, conflict);
+    if (!gate.ok) {
+      return this.deniedReport(snapshot.batch, gate.reason);
     }
     const reports: ApplyExecutionReport["items"] = snapshot.settled.map((item) =>
       toReportItem(item.id, item.blockId, item.outcome, item.result)
     );
-    for (const item of snapshot.pending) {
-      reports.push(await this.executeItem(input, snapshot.batch, snapshot.plan, item));
+    // Whole-batch facts cover pending additions only and run with no
+    // service-owned transaction open. Moves recheck their own target window
+    // per item; removals need no recheck.
+    if (snapshot.pending.length > 0) {
+      const window = {
+        start: snapshot.pending.map((item) => item.startsAt).sort()[0]!,
+        end: snapshot.pending
+          .map((item) => endsAtOf(item.startsAt, item.durationMinutes))
+          .sort()
+          .at(-1)!
+      };
+      const availability = await this.deps.facts.readAvailability(window);
+      if (!availability.complete) {
+        return this.deniedReport(
+          snapshot.batch,
+          "facts-unavailable: current calendar facts are incomplete"
+        );
+      }
+      const conflict = this.checkConflicts(snapshot.plan, snapshot.pending, snapshot.taskFacts, {
+        intervals: availability.intervals
+      });
+      if (conflict) {
+        return this.deniedReport(snapshot.batch, conflict);
+      }
+      for (const item of snapshot.pending) {
+        reports.push(await this.executeItem(input, snapshot.batch, snapshot.plan, item));
+      }
+    }
+    if (snapshot.changes.length > 0) {
+      const changeCtx: ChangeExecutionContext = {
+        access: input.access,
+        toolCtx: input.toolCtx,
+        planId: input.planId,
+        dataContext: this.deps.dataContext,
+        batches: this.deps.batches,
+        facts: this.deps.facts,
+        writer: this.deps.writer,
+        batch: snapshot.batch,
+        plan: snapshot.plan
+      };
+      for (const item of snapshot.changes) {
+        reports.push(await executeChangeItem(changeCtx, item));
+      }
     }
     return {
       operationId: snapshot.batch.id,
@@ -302,6 +365,7 @@ export class ApplyExecutionService {
         readonly plan: DayPlanDto;
         readonly settled: DayPlanApplyBatchDto["items"];
         readonly pending: PreparedItem[];
+        readonly changes: ChangePreparedItem[];
         readonly taskFacts: Map<string, DayPlanPreviewTaskFact>;
       }
   > {
@@ -317,15 +381,13 @@ export class ApplyExecutionService {
           });
     if (!batch) throw new HttpError(404, "day plan apply batch is not available");
     const deny = (reason: string) => ({ denied: true as const, reason, batch });
-    if (batch.items.some((item) => item.kind !== "add")) {
-      return deny("mixed-batch: reserved batch contains a move or removal");
-    }
     const plan = await this.deps.batches.getById(scopedDb, batch.planId);
     if (!plan) throw new HttpError(404, "day plan is not available");
     const blockById = new Map(plan.blocks.map((block) => [block.id, block]));
     const selected = input.itemIds === undefined ? undefined : new Set(input.itemIds);
     const settled: DayPlanApplyBatchDto["items"] = [];
     const pending: PreparedItem[] = [];
+    const changes: ChangePreparedItem[] = [];
     for (const item of batch.items) {
       // Selective retry leaves every unselected item stored and unchanged:
       // it is reported as-is and never validated or executed.
@@ -336,10 +398,10 @@ export class ApplyExecutionService {
       if (selected !== undefined) {
         // The route already validated the selection atomically; the snapshot
         // rechecks it so a changed item can never execute on a stale retry.
-        // A selected failed or unknown item skips the settled short-circuit
-        // below and enters pending classification. A stale selection is a
-        // 409, never a denied report.
-        if (item.kind !== "add" || (item.outcome !== "failed" && item.outcome !== "unknown")) {
+        // A selected failed or unknown item of any kind skips the settled
+        // short-circuit below and enters classification. A stale selection
+        // is a 409, never a denied report.
+        if (item.outcome !== "failed" && item.outcome !== "unknown") {
           throw new HttpError(409, "day plan apply retry selection is not eligible");
         }
       } else if (item.outcome === "applied" || item.outcome === "failed") {
@@ -355,8 +417,10 @@ export class ApplyExecutionService {
         return deny("block-changed: reserved block no longer matches its frozen change");
       }
       const change = item.pendingChange;
-      if (change.kind !== "add" || !change.startsAt || !change.durationMinutes) {
-        return deny("block-changed: reserved addition lost its timing");
+      if (change.kind === "add") {
+        if (!change.startsAt || !change.durationMinutes) {
+          return deny("block-changed: reserved addition lost its timing");
+        }
       }
       if (block.taskId !== null) {
         const task = await this.deps.findTask(scopedDb, block.taskId);
@@ -367,19 +431,43 @@ export class ApplyExecutionService {
           return deny("task-ineligible: reserved task is done or archived");
         }
       }
-      pending.push({
+      if (change.kind === "add") {
+        const startsAt = change.startsAt;
+        const durationMinutes = change.durationMinutes;
+        if (!startsAt || !durationMinutes) {
+          return deny("block-changed: reserved addition lost its timing");
+        }
+        pending.push({
+          itemId: item.id,
+          blockId: item.blockId,
+          startsAt,
+          durationMinutes,
+          title: block.title ?? "Planned block"
+        });
+        continue;
+      }
+      // Moves and removals execute through the change path once the gate
+      // below passes. The stored provider reference rides along for the
+      // provenance readback; a block that was never applied fails there.
+      if (change.kind === "move" && (!change.startsAt || !change.durationMinutes)) {
+        return deny("block-changed: reserved move lost its timing");
+      }
+      changes.push({
         itemId: item.id,
         blockId: item.blockId,
-        startsAt: change.startsAt,
-        durationMinutes: change.durationMinutes,
-        title: block.title ?? "Planned block"
+        kind: change.kind,
+        startsAt: change.kind === "move" ? change.startsAt : null,
+        durationMinutes: change.kind === "move" ? change.durationMinutes : null,
+        title: block.title ?? "Planned block",
+        storedEventRef: block.actualPlacement?.calendarEventRef ?? null,
+        resumeUnknown: item.outcome === "unknown"
       });
     }
     // Nothing left to do: settled outcomes are already recorded, so report
     // them unchanged without consulting task state, the access gate, facts,
     // or the provider. Current policy can never revoke a recorded outcome.
-    if (pending.length === 0) {
-      return { denied: false, batch, plan, settled, pending, taskFacts: new Map() };
+    if (pending.length === 0 && changes.length === 0) {
+      return { denied: false, batch, plan, settled, pending, changes, taskFacts: new Map() };
     }
     const taskIds = new Set<string>();
     for (const block of plan.blocks) {
@@ -392,7 +480,7 @@ export class ApplyExecutionService {
     }
     const gate = await this.deps.accessGate.checkAccess(scopedDb);
     if (!gate.ok) return deny(`access-denied: ${gate.reason}`);
-    return { denied: false, batch, plan, settled, pending, taskFacts };
+    return { denied: false, batch, plan, settled, pending, changes, taskFacts };
   }
 
   // One item, no service-owned transaction: reconcile, live-recheck, create,
@@ -595,17 +683,17 @@ export class ApplyExecutionService {
     outcome: DayPlanOperationOutcome,
     result: ApplyItemResult
   ): Promise<void> {
-    await this.deps.dataContext.withDataContext(input.access, async (scopedDb) => {
-      if (outcome !== "applied") {
-        // A concurrent resume may have recorded this item applied after our
-        // snapshot: never reset a recorded application with our observation.
-        const current = await this.deps.batches.getApplyBatchById(scopedDb, {
-          planId: input.planId,
-          operationId
-        });
-        if (current?.items.find((entry) => entry.id === itemId)?.outcome === "applied") return;
-      }
-      await this.deps.batches.recordItemResult(scopedDb, { itemId, operationId, outcome, result });
-    });
+    await finalizeItemResult(
+      {
+        access: input.access,
+        planId: input.planId,
+        dataContext: this.deps.dataContext,
+        batches: this.deps.batches
+      },
+      operationId,
+      itemId,
+      outcome,
+      result
+    );
   }
 }

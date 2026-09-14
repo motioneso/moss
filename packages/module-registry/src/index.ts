@@ -1855,6 +1855,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         dayPlanRepository: dayPlanApply.dayPlanRepository,
         ...(dayPlanApply.applyExecution ? { applyExecution: dayPlanApply.applyExecution } : {}),
+        changeApproval: dayPlanApply.changeApproval,
         findSourceRun: (scopedDb, runId) =>
           new BriefingsRepository().getOwnedRunById(scopedDb, runId),
         findTask: (scopedDb, taskId) => new TasksRepository().getById(scopedDb, taskId),

@@ -115,6 +115,12 @@ function makeWriter(script: WriterScript = {}): ApplyWriterPort & {
         end: "2026-09-12T16:30:00.000Z",
         provenance: provenanceProps(created)
       };
+    },
+    async moveBlockEvent() {
+      throw new Error("moveBlockEvent must not run in this addition-only test");
+    },
+    async removeBlockEvent() {
+      throw new Error("removeBlockEvent must not run in this addition-only test");
     }
   };
 }
@@ -349,6 +355,12 @@ describe("day plan apply recover boundary", () => {
       },
       async lookupAddition(input) {
         return inner.lookupAddition(input);
+      },
+      async moveBlockEvent() {
+        throw new Error("moveBlockEvent must not run in this addition-only test");
+      },
+      async removeBlockEvent() {
+        throw new Error("removeBlockEvent must not run in this addition-only test");
       }
     };
     const input = recoverInput(plan.id, batch.idempotencyKey, batch.id);

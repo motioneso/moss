@@ -20,6 +20,16 @@ describe("day plan apply composition", () => {
     expect(composition.applyExecution).toBeUndefined();
   });
 
+  it("always wires the database-backed change approval port", () => {
+    const composition = buildDayPlanApplyComposition({ dataContext: stubDataContext() });
+    expect(composition.changeApproval).toBeDefined();
+    expect(typeof composition.changeApproval.createPendingApproval).toBe("function");
+    expect(typeof composition.changeApproval.confirmApproval).toBe("function");
+    expect(typeof composition.changeApproval.findPendingApprovalForOperation).toBe("function");
+    expect(typeof composition.changeApproval.findConfirmedApprovalForOperation).toBe("function");
+    expect(typeof composition.changeApproval.listActionPolicies).toBe("function");
+  });
+
   it("returns no callback when only Google services are present", () => {
     const composition = buildDayPlanApplyComposition({
       dataContext: stubDataContext(),
