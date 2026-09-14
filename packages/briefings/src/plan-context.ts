@@ -32,7 +32,8 @@ const CORRECTION_NOTE_CAP = 200;
 const BLOCK_TITLE_CAP = 120;
 
 function cut(value: string, max: number): string {
-  return value.length > max ? value.slice(0, max) : value;
+  const points = Array.from(value);
+  return points.length > max ? points.slice(0, max).join("") : value;
 }
 
 function projectBlock(block: DayPlanBlockDto): BriefingPlanBlockV1 {

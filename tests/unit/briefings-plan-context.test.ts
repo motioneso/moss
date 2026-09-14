@@ -6,7 +6,7 @@ import {
   projectPlanContext,
   resolvePlanContext
 } from "../../packages/briefings/src/plan-context.js";
-import type { BriefingGap } from "../../packages/briefings/src/compose.js";
+import { composeBriefing, type BriefingGap } from "../../packages/briefings/src/compose.js";
 import { definition, fakeScopedDb, makeFakeDeps, runInput } from "./briefings-compose.harness.js";
 
 function plan(overrides: Partial<DayPlanDto> = {}): DayPlanDto {
@@ -240,5 +240,71 @@ describe("plan schema vocabularies", () => {
       }
     ).anyOf[0].properties;
     expect(intentProps.capacity?.enum).toEqual([...shared.DAY_PLAN_INTENT_CAPACITIES, null]);
+  });
+});
+
+describe("composeBriefing — plan context (T12)", () => {
+  const dayPlan = {
+    id: "plan-1",
+    localDay: "2026-06-13",
+    timeZone: "UTC",
+    revision: 3,
+    sourceRunId: null,
+    eveningIntent: null,
+    blocks: []
+  };
+  it("morning payload carries planContext and metadata the snapshot", async () => {
+    const deps = makeFakeDeps({ dayPlan: { plan: dayPlan } });
+    const result = await composeBriefing(fakeScopedDb, definition(), runInput, deps);
+    expect(result.status).toBe("succeeded");
+    const payload = result.structuredPayload as {
+      planContext?: { planId: string; revision: number };
+    };
+    expect(payload.planContext).toMatchObject({ planId: "plan-1", revision: 3 });
+    const meta = result.sourceMetadata as { planSnapshot?: { planId: string; revision: number } };
+    expect(meta.planSnapshot).toMatchObject({ planId: "plan-1", revision: 3 });
+  });
+  it("evening payload carries planContext and keeps morning_plan behavior", async () => {
+    const deps = makeFakeDeps({ dayPlan: { plan: dayPlan } });
+    const result = await composeBriefing(
+      fakeScopedDb,
+      definition({ briefing_type: "evening", title: "Evening review" }),
+      runInput,
+      deps
+    );
+    expect(result.status).toBe("succeeded");
+    const payload = result.structuredPayload as { planContext?: { planId: string } };
+    expect(payload.planContext?.planId).toBe("plan-1");
+  });
+  it("omits both keys without a port, identical to the base", async () => {
+    const result = await composeBriefing(fakeScopedDb, definition(), runInput, makeFakeDeps());
+    expect("planContext" in result.structuredPayload).toBe(false);
+    expect("planSnapshot" in result.sourceMetadata).toBe(false);
+  });
+});
+
+describe("cut is surrogate safe (T13)", () => {
+  it("a note capped inside a surrogate pair does not end in a lone surrogate", () => {
+    // One ASCII char plus emoji: the old UTF-16 slice lands mid-pair at unit 400.
+    const emoji = `x${"😀".repeat(500)}`;
+    const context = projectPlanContext(plan({ eveningIntent: null }));
+    expect(context).toBeDefined();
+    const cutNote = (() => {
+      const projected = projectPlanContext(
+        plan({
+          eveningIntent: {
+            priorityTaskIds: [],
+            capacity: null,
+            notes: emoji,
+            corrections: [],
+            commitments: []
+          }
+        })
+      );
+      return projected.eveningIntent?.notes ?? "";
+    })();
+    expect(Array.from(cutNote).length).toBeLessThanOrEqual(400);
+    expect(/[\uD800-\uDBFF]$/.test(cutNote)).toBe(false);
+    expect(() => JSON.stringify({ note: cutNote })).not.toThrow();
   });
 });

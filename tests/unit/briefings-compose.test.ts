@@ -679,11 +679,12 @@ describe("composeBriefing — prompt boundary-forgery (escaped inert data)", () 
       expect(capturedMessages).toHaveLength(1);
       const prompt = (capturedMessages[0] as readonly { content: string }[])[0]!.content;
 
-      // (a) No forged structural boundary: exactly one trusted pair, six external pairs.
+      // (a) No forged structural boundary: exactly one trusted pair, seven external pairs
+      // (the six base sections plus the always-present day_plan block).
       expect(prompt.match(/<trusted_instructions>/g) ?? []).toHaveLength(1);
       expect(prompt.match(/<\/trusted_instructions>/g) ?? []).toHaveLength(1);
-      expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(6);
-      expect(prompt.match(/<\/external_source>/g) ?? []).toHaveLength(6);
+      expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(7);
+      expect(prompt.match(/<\/external_source>/g) ?? []).toHaveLength(7);
 
       // (b) The canary never reaches the trusted preamble.
       const trustedMatch = prompt.match(/<trusted_instructions>([\s\S]*?)<\/trusted_instructions>/);
@@ -943,42 +944,42 @@ describe("composeBriefing — disabled-module gate", () => {
   });
 });
 
-describe("composeBriefing — plan context (T12)", () => {
-  const dayPlan = {
+describe("composeBriefing — plan prose (T13)", () => {
+  const plan = {
     id: "plan-1",
     localDay: "2026-06-13",
     timeZone: "UTC",
-    revision: 3,
+    revision: 1,
     sourceRunId: null,
-    eveningIntent: null,
+    eveningIntent: {
+      priorityTaskIds: ["t1"],
+      capacity: "light",
+      notes: null,
+      corrections: [],
+      commitments: []
+    },
     blocks: []
   };
-  it("morning payload carries planContext and metadata the snapshot", async () => {
-    const deps = makeFakeDeps({ dayPlan: { plan: dayPlan } });
-    const result = await composeBriefing(fakeScopedDb, definition(), runInput, deps);
-    expect(result.status).toBe("succeeded");
-    const payload = result.structuredPayload as {
-      planContext?: { planId: string; revision: number };
-    };
-    expect(payload.planContext).toMatchObject({ planId: "plan-1", revision: 3 });
-    const meta = result.sourceMetadata as { planSnapshot?: { planId: string; revision: number } };
-    expect(meta.planSnapshot).toMatchObject({ planId: "plan-1", revision: 3 });
-  });
-  it("evening payload carries planContext and keeps morning_plan behavior", async () => {
-    const deps = makeFakeDeps({ dayPlan: { plan: dayPlan } });
-    const result = await composeBriefing(
-      fakeScopedDb,
-      definition({ briefing_type: "evening", title: "Evening review" }),
-      runInput,
-      deps
+  async function promptFor(def: ReturnType<typeof definition>, opts: object, input = runInput) {
+    const seen: string[] = [];
+    const deps = makeFakeDeps({
+      ...opts,
+      generateChat: async (g: GenerateChatInput) => {
+        seen.push(g.messages.map((m) => m.content).join("\n"));
+        return { text: "synth narrative" };
+      }
+    });
+    const result = await composeBriefing(fakeScopedDb, def, input, deps);
+    return { prompt: seen.join("\n"), result };
+  }
+  it("morning prompt carries the day_plan block after chats and before goals", async () => {
+    const { prompt } = await promptFor(
+      definition({ selected_tool_names: ["tasks.list", "goals.list"] }),
+      { dayPlan: { plan } }
     );
-    expect(result.status).toBe("succeeded");
-    const payload = result.structuredPayload as { planContext?: { planId: string } };
-    expect(payload.planContext?.planId).toBe("plan-1");
-  });
-  it("omits both keys without a port, identical to the base", async () => {
-    const result = await composeBriefing(fakeScopedDb, definition(), runInput, makeFakeDeps());
-    expect("planContext" in result.structuredPayload).toBe(false);
-    expect("planSnapshot" in result.sourceMetadata).toBe(false);
+    const day = prompt.indexOf('<external_source type="day_plan">');
+    expect(day).toBeGreaterThan(prompt.indexOf('<external_source type="chats">'));
+    expect(day).toBeLessThan(prompt.indexOf('<external_source type="goals">'));
+    expect(prompt).toContain("Capacity (saved last evening): light");
   });
 });
