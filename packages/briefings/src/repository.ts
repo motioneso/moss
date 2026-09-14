@@ -16,7 +16,7 @@ import {
 } from "@moss/db";
 import type { MossModuleManifest } from "@moss/module-sdk";
 
-import { composeBriefing, type ComposeDeps } from "./compose.js";
+import { composeBriefing, sourceIncludedInBriefings, type ComposeDeps } from "./compose.js";
 import { emptyStructuredPayload } from "./action-rows.js";
 import { defaultScheduleMetadataFor, timezoneFor } from "./schedule.js";
 import type { BriefingStructuredPayloadV1 } from "@moss/shared";
@@ -374,6 +374,12 @@ export class BriefingsRepository {
     readonly dispatch: GenerateBriefingRunOutcome["auto"];
   } | null> {
     if (!input.dayPlanAuto || composed.status !== "succeeded") return null;
+    // R2.3-T06B: "Use for planning" off means no automatic plan effect in any
+    // mode. The check lives here so the port keeps no behaviour dependency;
+    // prep tasks were already created during composition and are unaffected.
+    if (!(await sourceIncludedInBriefings(scopedDb, input.composeDeps, "calendar.planning"))) {
+      return null;
+    }
     const signals = readAutoSignals(composed.sourceMetadata);
     if (signals.length === 0) return null;
     const timeZone = timezoneFor(definition.schedule_metadata);

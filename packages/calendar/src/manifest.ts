@@ -165,8 +165,9 @@ export const calendarModuleManifest = {
         {
           id: "calendar.planning",
           name: "Use for planning",
-          description: "Your assistant schedules its own events around your calendar.",
-          default: "coming-soon"
+          description:
+            "Let scheduled briefings turn your meetings into saved day-plan blocks automatically.",
+          default: "default-on"
         },
         {
           id: "calendar.detect-commitments",
@@ -177,8 +178,9 @@ export const calendarModuleManifest = {
         {
           id: "calendar.writeback",
           name: "Write events back",
-          description: "Let your assistant create and move calendar events for you.",
-          default: "coming-soon"
+          description:
+            "Let saved day-plan additions write to your calendar when applied or scheduled.",
+          default: "default-on"
         }
       ]
     }
@@ -325,13 +327,13 @@ export const calendarModuleManifest = {
       permissionId: "calendar.manage",
       risk: "write",
       executionPolicy: "auto",
-      // Wired for auto-run, but NOT granted at install: the proactive follow-through worker
-      // (buildCalendarFollowThroughPort.executeAutoActions, module-registry/src/index.ts:711) is a
-      // second, un-gated reader of calendar_writeback's tier — on a block_time signal it calls
-      // calendarWrite.createEvent directly, no card, no chat session, no gateway. Granting
-      // trusted_auto at install would arm unattended background calendar writes the moment the
-      // module is enabled. Fable's security review on PR #1268 caught this; the user must promote
-      // calendar_writeback to trusted_auto themselves (#1263).
+      // Wired for auto-run, but NOT granted at install: scheduled briefings compose
+      // block_time intents, the generation transaction reserves an apply batch, and the
+      // calendar apply worker executes it through the gated execution service (same gate
+      // as this tool). Granting trusted_auto at install would arm unattended background
+      // calendar writes the moment the module is enabled. Fable's security review on
+      // PR #1268 caught this; the user must promote calendar_writeback to trusted_auto
+      // themselves (#1263).
       selfOperationGrant: "user_promotable",
       actionFamilyId: "calendar_writeback",
       requiresServices: ["calendarWrite"],
@@ -570,6 +572,13 @@ export const calendarModuleManifest = {
           code: "day_plan_not_available",
           class: "validation",
           description: "The plan or operation is unavailable to this actor."
+        },
+        {
+          code: "day_plan_denied",
+          class: "prerequisite",
+          description:
+            "An apply item was denied by the access gate; automatic planning is off in settings.",
+          remediationRef: "calendar.automatic_planning_policy"
         }
       ],
       remediations: [
@@ -577,6 +586,11 @@ export const calendarModuleManifest = {
           id: "calendar.saved_day_plan_refresh",
           description: "Read the latest saved day plan before checking the operation again.",
           path: "/calendar"
+        },
+        {
+          id: "calendar.automatic_planning_policy",
+          description: "Turn automatic planning back on in calendar settings, then retry.",
+          path: "/settings/modules/calendar"
         }
       ]
     },

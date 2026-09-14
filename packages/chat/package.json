@@ -25,6 +25,7 @@
     "@moss/priority": "workspace:*",
     "@moss/settings": "workspace:*",
     "@moss/shared": "workspace:*",
+    "@moss/source-behaviors": "workspace:*",
     "@moss/structured-state": "workspace:*",
     "@moss/tasks": "workspace:*",
     "@moss/usefulness-feedback": "workspace:*",

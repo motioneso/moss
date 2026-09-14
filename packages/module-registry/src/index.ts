@@ -1753,7 +1753,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       // the optional execution callback the apply routes call after reserving.
       const dayPlanApply = buildDayPlanApplyComposition({
         dataContext: deps.dataContext,
-        connectorsRepository: deps.connectorsRepository
+        connectorsRepository: deps.connectorsRepository,
+        sourceBehaviorPolicy: {
+          manifests: getBuiltInModuleManifests(),
+          preferencesRepository: new PreferencesRepository()
+        }
       });
       return registerCalendarRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
@@ -1789,7 +1793,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       registerCalendarJobWorkers(boss, deps.dataContext, {
         applyExecution: buildDayPlanAutoApplyExecutor({
           dataContext: deps.dataContext,
-          connectorsRepository: new ConnectorsRepository()
+          connectorsRepository: new ConnectorsRepository(),
+          sourceBehaviorPolicy: {
+            manifests: getBuiltInModuleManifests(),
+            preferencesRepository: new PreferencesRepository()
+          }
         })
       })
   },
@@ -1996,7 +2004,10 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         }
       });
       return registerBriefingsJobWorkers(boss, dependencies.dataContext, {
-        dayPlanAuto: buildDayPlanAutoPort(autoDayPlanRepository),
+        dayPlanAuto: buildDayPlanAutoPort(autoDayPlanRepository, {
+          calendar: new CalendarRepository(),
+          ...(briefingsLogger ? { logger: briefingsLogger } : {})
+        }),
         dispatchDayPlanApply: (payload) => sendDayPlanApplyJob(boss, payload),
         moduleManifests: getBuiltInModuleManifests(),
         // A13: inject the full synthesis deps so the production scheduled briefing

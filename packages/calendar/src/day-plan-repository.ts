@@ -38,6 +38,7 @@ import {
   toBatchDto
 } from "./day-plan-apply.js";
 import {
+  type DayPlanPlacedBlockInput,
   DayPlanValidationError,
   emptyEveningIntent,
   mergeEveningIntent,
@@ -50,6 +51,7 @@ import {
   normalizeSourceRunId,
   normalizeTimeZone
 } from "./day-plan-model.js";
+import { normalizeAppendBlockInput } from "./day-plan-auto.js";
 
 export interface DayPlanTaskLookup {
   (
@@ -388,19 +390,22 @@ export class DayPlanRepository {
   // are skipped, never duplicated.
   async appendBlocks(
     scopedDb: DataContextDb,
-    input: DayPlanSaveInput & { planId: string }
+    input: Omit<DayPlanSaveInput, "blocks"> & {
+      planId: string;
+      blocks?: readonly (DayPlanBlockInput | DayPlanPlacedBlockInput)[];
+    }
   ): Promise<DayPlanDto> {
     assertDataContextDb(scopedDb);
     let localDay: string;
     let timeZone: string;
-    let blocks: ReturnType<typeof normalizeBlockInput>[];
+    let blocks: ReturnType<typeof normalizeAppendBlockInput>[];
     try {
       localDay = normalizeLocalDay(input.localDay);
       timeZone = normalizeTimeZone(input.timeZone);
       if (!Array.isArray(input.blocks)) {
         throw new DayPlanValidationError("blocks must be a list");
       }
-      blocks = input.blocks.map(normalizeBlockInput);
+      blocks = input.blocks.map(normalizeAppendBlockInput);
     } catch (error) {
       if (error instanceof DayPlanValidationError)
         throw new HttpError(400, (error as Error).message);
@@ -437,7 +442,10 @@ export class DayPlanRepository {
           task_id: block.taskId,
           kind: block.kind,
           title: block.title,
-          actual_placement: null,
+          actual_placement: (block.actualPlacement ?? null) as unknown as Record<
+            string,
+            unknown
+          > | null,
           pending_change: (block.pendingChange ?? null) as unknown as Record<
             string,
             unknown

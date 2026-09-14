@@ -124,9 +124,9 @@ describe("source behavior settings API", () => {
       toggleable: true
     });
     expect(findBehavior(body, "calendar.writeback")).toMatchObject({
-      enabled: false,
-      default: "coming-soon",
-      toggleable: false
+      enabled: true,
+      default: "default-on",
+      toggleable: true
     });
     expect(findBehavior(body, "people.notes.suggest-updates")).toMatchObject({
       sourceId: "people-notes",

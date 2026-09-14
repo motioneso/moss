@@ -20,6 +20,8 @@ import {
   type GoogleCalendarEvent
 } from "@moss/connectors";
 import { PreferencesRepository } from "@moss/structured-state";
+import { SOURCE_BEHAVIOR_PREFERENCE_KEY } from "@moss/source-behaviors";
+import { getBuiltInModuleManifests } from "@moss/module-registry";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import { captureFetch } from "./focus-time-helpers.js";
@@ -130,6 +132,28 @@ describe("apply production adapters", () => {
     await setPref(ids.userA, MODE_KEY, "off");
     await expect(checkGate()).resolves.toMatchObject({ ok: false, reason: /off/ });
     await setPref(ids.userA, MODE_KEY, "auto");
+  });
+
+  it("denies every reserved execution when the writeback behavior switch is off", async () => {
+    const accountId = await seedAccount(ids.userA, [CALENDAR_SCOPE]);
+    await setPref(ids.userA, `connector.${accountId}.feature_grants`, {
+      email: true,
+      calendar: true
+    });
+    await setPref(ids.userA, TIER_KEY, "trusted_auto");
+    await setPref(ids.userA, MODE_KEY, "auto");
+    await setPref(ids.userA, SOURCE_BEHAVIOR_PREFERENCE_KEY, { "calendar.writeback": false });
+    const gate = buildApplyAccessGate({
+      connectorsRepository: connectors,
+      sourceBehaviorPolicy: {
+        manifests: getBuiltInModuleManifests(),
+        preferencesRepository: prefs
+      }
+    });
+    await expect(
+      dataContext.withDataContext(lane(ids.userA, "gate"), (scopedDb) => gate.checkAccess(scopedDb))
+    ).resolves.toMatchObject({ ok: false, reason: "calendar writeback behavior is off" });
+    await setPref(ids.userA, SOURCE_BEHAVIOR_PREFERENCE_KEY, { "calendar.writeback": true });
   });
 
   it("denies with no account, no calendar scope, or a revoked grant", async () => {

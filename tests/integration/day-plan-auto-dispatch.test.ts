@@ -13,6 +13,7 @@ import {
 } from "@moss/briefings";
 import {
   ApplyExecutionService,
+  CalendarRepository,
   DayPlanRepository,
   buildDayPlanAutoPort,
   isDayPlanApplyPayloadMetadataOnly,
@@ -28,6 +29,7 @@ import {
   type MossDatabase
 } from "@moss/db";
 import type { MemoryRetriever } from "@moss/memory";
+import { ConnectorsRepository, createConnectorSecretCipher } from "@moss/connectors";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
 import { buildCalendarFollowThroughPort } from "@moss/module-registry";
 import type { MossModuleManifest, ToolExecute } from "@moss/module-sdk";
@@ -695,5 +697,288 @@ describe("automatic plan generation and dispatch", () => {
     await expect(
       applyWork!([{ id: "job-apply-2", data: { ...payload, scopedDb: {} } }])
     ).rejects.toThrow("non-metadata payload fields");
+  });
+
+  // R2.3-T06B appended cases: legacy association and the planning switch.
+  // Every case above is untouched (invariant 4).
+
+  // The composer derives each signal summary (and therefore each followThrough
+  // targetRef) from the event; tests cannot guess it. Learn the real refs with
+  // one throwaway run, reset the database, then seed legacy rows for them.
+  async function learnTargetRefs(events: () => unknown[]): Promise<Map<string, string>> {
+    const definition = await createDefinition(world.dataContext, world.briefings);
+    const outcome = await generateScheduled(definition.id, events);
+    const meta = outcome?.run.source_metadata as Record<string, unknown>;
+    const signals = (meta["calendarSignals"] as Record<string, unknown>[]) ?? [];
+    const refs = new Map<string, string>();
+    for (const signal of signals) {
+      const follow = signal["followThrough"] as Record<string, unknown> | undefined;
+      const eventIds = (signal["eventIds"] as string[]) ?? [];
+      if (typeof follow?.["targetRef"] === "string") {
+        for (const id of eventIds) refs.set(id, follow["targetRef"] as string);
+      }
+    }
+    await resetFoundationDatabase();
+    return refs;
+  }
+
+  async function seedGoogleAccountForLegacy(): Promise<string> {
+    const connectors = new ConnectorsRepository();
+    const cipher = createConnectorSecretCipher();
+    const scopes = ["https://www.googleapis.com/auth/calendar"];
+    return world.dataContext.withDataContext(userA(), (scopedDb) =>
+      connectors
+        .upsertGoogleAccount(scopedDb, {
+          scopes,
+          encryptedSecret: cipher.encryptJson({
+            kind: "google-oauth",
+            clientId: "cid",
+            clientSecret: "csecret",
+            accessToken: "atoken",
+            refreshToken: "rtoken",
+            tokenExpiry: new Date(Date.now() + 3_600_000).toISOString(),
+            grantedScopes: scopes
+          })
+        })
+        .then((account) => account.id)
+    );
+  }
+
+  async function seedLegacyEvent(
+    targetRef: string,
+    overrides: { readonly title?: string; readonly externalMetadata?: Record<string, unknown> } = {}
+  ) {
+    const accountId = await seedGoogleAccountForLegacy();
+    const startsAt = new Date(Date.now() + 2 * 60_60_000);
+    const endsAt = new Date(startsAt.getTime() + 60_60_000);
+    return world.dataContext.withDataContext(userA(), (scopedDb) =>
+      new CalendarRepository().upsertCachedEvent(scopedDb, {
+        connectorAccountId: accountId,
+        externalId: `legacy-${randomUUID()}`,
+        title: overrides.title ?? "Client presentation prep",
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        externalMetadata: overrides.externalMetadata ?? {
+          jarvisCreated: true,
+          followThroughTargetRef: targetRef
+        }
+      })
+    );
+  }
+
+  function autoWithLegacy(log: unknown[] = []) {
+    return buildDayPlanAutoPort(world.plans, {
+      calendar: new CalendarRepository(),
+      logger: {
+        warn: (event: unknown) => {
+          log.push(event);
+        }
+      }
+    });
+  }
+
+  async function planForToday() {
+    return world.dataContext.withDataContext(userA(), (scopedDb) =>
+      world.plans.getForDay(scopedDb, {
+        localDay: new Date().toISOString().slice(0, 10),
+        timeZone: "UTC"
+      })
+    );
+  }
+
+  it("one legacy event links the block as placed with no reservation or job", async () => {
+    Object.assign(world.prefs, autoModes());
+    const refs = await learnTargetRefs(() => [prepEvent(new Date())]);
+    const targetRef = refs.get("evt-prep-1");
+    expect(targetRef).toEqual(expect.any(String));
+    const legacy = await seedLegacyEvent(targetRef!);
+    const definition = await createDefinition(world.dataContext, world.briefings);
+    const outcome = await generateScheduled(
+      definition.id,
+      () => [prepEvent(new Date())],
+      undefined,
+      autoWithLegacy()
+    );
+    expect(outcome?.created).toBe(true);
+    expect(outcome?.auto ?? null).toBeNull();
+
+    const plan = await planForToday();
+    expect(plan?.blocks).toHaveLength(1);
+    expect(plan?.blocks[0]?.pendingChange).toBeNull();
+    expect(plan?.blocks[0]?.actualPlacement).toMatchObject({
+      calendarEventRef: legacy.external_id
+    });
+    expect(plan?.blocks[0]?.taskId).toEqual(expect.any(String));
+
+    const batch = await world.dataContext.withDataContext(userA(), (scopedDb) =>
+      world.plans.getApplyBatch(scopedDb, {
+        planId: plan!.id,
+        idempotencyKey: `day-plan-auto:${outcome!.run.id}`
+      })
+    );
+    expect(batch).toBeUndefined();
+    expect(world.dispatched).toHaveLength(0);
+  });
+
+  it("a same-title cached event without a reference still reserves and dispatches", async () => {
+    Object.assign(world.prefs, autoModes());
+    await seedLegacyEvent("unrelated-ref", {
+      externalMetadata: { jarvisCreated: true }
+    });
+    const definition = await createDefinition(world.dataContext, world.briefings);
+    const outcome = await generateScheduled(
+      definition.id,
+      () => [prepEvent(new Date())],
+      undefined,
+      autoWithLegacy()
+    );
+    expect(outcome?.created).toBe(true);
+    expect(outcome?.auto).toMatchObject({ planId: expect.any(String) });
+    const plan = await planForToday();
+    expect(plan?.blocks).toHaveLength(1);
+    expect(plan?.blocks[0]?.pendingChange).toMatchObject({ kind: "add" });
+  });
+
+  it("suggest signals without a composer reference still propose without linking", async () => {
+    Object.assign(world.prefs, {
+      "calendar.prep_task_mode": "suggest",
+      "calendar.time_block_mode": "suggest"
+    });
+    // Suggest signals carry no followThrough reference, so even a same-title
+    // legacy row must not link: the block stays a proposal with no reservation.
+    await seedLegacyEvent("calendar:prep_needed:unmatched", {
+      title: "Client presentation prep"
+    });
+    const definition = await createDefinition(world.dataContext, world.briefings);
+    const events = () => {
+      const first = prepEvent(new Date());
+      const secondStart = new Date(new Date(first.endsAt).getTime() + 10 * 60_000);
+      const secondEnd = new Date(secondStart.getTime() + 60 * 60_000);
+      return [
+        first,
+        {
+          id: "evt-followup-1",
+          title: "Team standup",
+          startsAt: secondStart.toISOString(),
+          endsAt: secondEnd.toISOString(),
+          attendeeCount: 4
+        }
+      ];
+    };
+    const outcome = await generateScheduled(definition.id, events, undefined, autoWithLegacy());
+    expect(outcome?.created).toBe(true);
+    expect(outcome?.auto ?? null).toBeNull();
+    const plan = await planForToday();
+    expect(plan).toBeDefined();
+    for (const block of plan?.blocks ?? []) {
+      expect(block.pendingChange).toMatchObject({ kind: "add" });
+      expect(block.actualPlacement).toBeNull();
+    }
+    expect(world.dispatched).toHaveLength(0);
+  });
+
+  it("ambiguous legacy events skip that target, keep other targets, and log the count", async () => {
+    Object.assign(world.prefs, autoModes());
+    const log: unknown[] = [];
+    const twoEvents = () => {
+      const now = new Date();
+      const secondStart = new Date(now.getTime() + 5 * 60_60_000);
+      const secondEnd = new Date(now.getTime() + 6 * 60_60_000);
+      return [
+        prepEvent(now),
+        {
+          id: "evt-prep-2",
+          title: "Follow-up prep",
+          startsAt: secondStart.toISOString(),
+          endsAt: secondEnd.toISOString(),
+          attendeeCount: 6
+        }
+      ];
+    };
+    const refs = await learnTargetRefs(twoEvents);
+    const firstRef = refs.get("evt-prep-1");
+    expect(firstRef).toEqual(expect.any(String));
+    await seedLegacyEvent(firstRef!);
+    await seedLegacyEvent(firstRef!);
+    const definition = await createDefinition(world.dataContext, world.briefings);
+    const outcome = await generateScheduled(
+      definition.id,
+      twoEvents,
+      undefined,
+      autoWithLegacy(log)
+    );
+    expect(outcome?.created).toBe(true);
+    const plan = await planForToday();
+    // Only the unambiguous target yields a block; the ambiguous one is left alone.
+    expect(plan?.blocks).toHaveLength(1);
+    expect(plan?.blocks[0]?.pendingChange).toMatchObject({ kind: "add" });
+    expect(outcome?.auto).toMatchObject({ planId: plan!.id });
+    const batch = await world.dataContext.withDataContext(userA(), (scopedDb) =>
+      world.plans.getApplyBatch(scopedDb, {
+        planId: plan!.id,
+        idempotencyKey: `day-plan-auto:${outcome!.run.id}`
+      })
+    );
+    expect(batch?.items).toHaveLength(1);
+    expect(log).toContainEqual(
+      expect.objectContaining({ event: "day_plan_auto_legacy_ambiguous", count: 2 })
+    );
+  });
+
+  it("planning switch off creates no block and no job while the prep task still exists", async () => {
+    Object.assign(world.prefs, autoModes(), {
+      sourceBehaviors: { "calendar.planning": false }
+    });
+    try {
+      const definition = await createDefinition(world.dataContext, world.briefings);
+      const outcome = await generateScheduled(
+        definition.id,
+        () => [prepEvent(new Date())],
+        undefined,
+        autoWithLegacy()
+      );
+      expect(outcome?.created).toBe(true);
+      expect(outcome?.auto ?? null).toBeNull();
+      expect(await planForToday()).toBeUndefined();
+      expect(world.dispatched).toHaveLength(0);
+      const tasks = await world.dataContext.withDataContext(userA(), (scopedDb) =>
+        world.tasks.listVisible(scopedDb)
+      );
+      expect(tasks.filter((task) => task.source === "calendar")).not.toHaveLength(0);
+    } finally {
+      delete world.prefs["sourceBehaviors"];
+    }
+  });
+
+  it("a second run reuses the existing legacy task id", async () => {
+    Object.assign(world.prefs, autoModes());
+    const refs = await learnTargetRefs(() => [prepEvent(new Date())]);
+    const targetRef = refs.get("evt-prep-1");
+    expect(targetRef).toEqual(expect.any(String));
+    await seedLegacyEvent(targetRef!);
+    const firstDefinition = await createDefinition(world.dataContext, world.briefings);
+    const first = await generateScheduled(
+      firstDefinition.id,
+      () => [prepEvent(new Date())],
+      undefined,
+      autoWithLegacy()
+    );
+    const firstTaskId = (await planForToday())?.blocks[0]?.taskId;
+    expect(firstTaskId).toEqual(expect.any(String));
+    const secondDefinition = await createDefinition(world.dataContext, world.briefings);
+    const second = await generateScheduled(
+      secondDefinition.id,
+      () => [prepEvent(new Date())],
+      undefined,
+      autoWithLegacy()
+    );
+    expect(second?.created).toBe(true);
+    const plan = await planForToday();
+    const taskIds = (plan?.blocks ?? [])
+      .map((block) => block.taskId)
+      .filter((taskId): taskId is string => taskId !== null);
+    expect(taskIds.length).toBeGreaterThan(0);
+    for (const taskId of taskIds) expect(taskId).toBe(firstTaskId);
+    expect(first?.run.id).not.toBe(second?.run.id);
   });
 });
