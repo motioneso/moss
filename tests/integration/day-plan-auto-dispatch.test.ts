@@ -43,14 +43,16 @@ function userA(): AccessContext {
   return { actorUserId: ids.userA, requestId: "request:auto-dispatch" };
 }
 
-function prepEvent(now: Date) {
-  const start = new Date(now.getTime() + 2 * 60_60_000);
-  const end = new Date(now.getTime() + 3 * 60_60_000);
+function todayAt(time: string): string {
+  return `${new Date().toISOString().slice(0, 10)}T${time}:00.000Z`;
+}
+
+function prepEvent() {
   return {
     id: "evt-prep-1",
     title: "Client presentation prep",
-    startsAt: start.toISOString(),
-    endsAt: end.toISOString(),
+    startsAt: todayAt("10:00"),
+    endsAt: todayAt("11:00"),
     attendeeCount: 6
   };
 }
@@ -232,7 +234,7 @@ describe("automatic plan generation and dispatch", () => {
   it("auto reserves blocks and dispatches a metadata-only job after commit", async () => {
     Object.assign(world.prefs, autoModes());
     const definition = await createDefinition(world.dataContext, world.briefings);
-    const outcome = await generateScheduled(definition.id, () => [prepEvent(new Date())]);
+    const outcome = await generateScheduled(definition.id, () => [prepEvent()]);
     expect(outcome?.created).toBe(true);
     expect(outcome?.auto).toMatchObject({ planId: expect.any(String) });
     const auto = outcome!.auto!;
@@ -262,7 +264,7 @@ describe("automatic plan generation and dispatch", () => {
     });
     const definition = await createDefinition(world.dataContext, world.briefings);
     const events = () => {
-      const first = prepEvent(new Date());
+      const first = prepEvent();
       const secondStart = new Date(new Date(first.endsAt).getTime() + 10 * 60_000);
       const secondEnd = new Date(secondStart.getTime() + 60 * 60_000);
       return [
@@ -300,7 +302,7 @@ describe("automatic plan generation and dispatch", () => {
       "calendar.time_block_mode": "off"
     });
     const definition = await createDefinition(world.dataContext, world.briefings);
-    const outcome = await generateScheduled(definition.id, () => [prepEvent(new Date())]);
+    const outcome = await generateScheduled(definition.id, () => [prepEvent()]);
     expect(outcome?.created).toBe(true);
     expect(outcome?.auto ?? null).toBeNull();
     expect(world.dispatched).toHaveLength(0);
@@ -315,7 +317,7 @@ describe("automatic plan generation and dispatch", () => {
       }
     } as unknown as TasksRepository;
     await expect(
-      generateScheduled(definition.id, () => [prepEvent(new Date())], failingTasks)
+      generateScheduled(definition.id, () => [prepEvent()], failingTasks)
     ).rejects.toThrow("tasks are down");
     const tasks = await world.dataContext.withDataContext(userA(), (scopedDb) =>
       world.tasks.listVisible(scopedDb)
@@ -333,7 +335,7 @@ describe("automatic plan generation and dispatch", () => {
   it("dispatches the reserved batch after commit through the briefing worker", async () => {
     Object.assign(world.prefs, autoModes());
     const definition = await createDefinition(world.dataContext, world.briefings);
-    const events = () => [prepEvent(new Date())];
+    const events = () => [prepEvent()];
     const handlers = new Map<string, (jobs: unknown[]) => Promise<unknown>>();
     const fakeBoss = {
       work: async (
@@ -395,7 +397,7 @@ describe("automatic plan generation and dispatch", () => {
   it("a duplicate scheduled fire resumes the unfinished batch and appends nothing", async () => {
     Object.assign(world.prefs, autoModes());
     const definition = await createDefinition(world.dataContext, world.briefings);
-    const events = () => [prepEvent(new Date())];
+    const events = () => [prepEvent()];
     const first = await generateScheduled(definition.id, events);
     expect(first?.created).toBe(true);
     const second = await generateScheduled(definition.id, events);
@@ -423,9 +425,9 @@ describe("automatic plan generation and dispatch", () => {
     };
     const outcome = await world.dataContext.withDataContext(userA(), (scopedDb) =>
       world.briefings.generateRun(scopedDb, definition.id, {
-        moduleManifests: fakeManifests(() => [prepEvent(new Date())]),
+        moduleManifests: fakeManifests(() => [prepEvent()]),
         runKind: "scheduled",
-        composeDeps: composeDeps(() => [prepEvent(new Date())]),
+        composeDeps: composeDeps(() => [prepEvent()]),
         dayPlanAuto: racingAuto
       })
     );
@@ -437,7 +439,7 @@ describe("automatic plan generation and dispatch", () => {
   it("an interactive draft save during generation still persists the run with no dispatch", async () => {
     Object.assign(world.prefs, autoModes());
     const definition = await createDefinition(world.dataContext, world.briefings);
-    const events = () => [prepEvent(new Date())];
+    const events = () => [prepEvent()];
     // Seed today's plan so generation reads revision 1.
     const localDay = new Date().toISOString().slice(0, 10);
     const seeded = await world.dataContext.withDataContext(userA(), (scopedDb) =>
@@ -498,7 +500,7 @@ describe("automatic plan generation and dispatch", () => {
     const { buildDayPlanAutoApplyExecutor } = await import("@moss/chat");
     Object.assign(world.prefs, autoModes());
     const definition = await createDefinition(world.dataContext, world.briefings);
-    const outcome = await generateScheduled(definition.id, () => [prepEvent(new Date())]);
+    const outcome = await generateScheduled(definition.id, () => [prepEvent()]);
     const auto = outcome!.auto!;
     const downgradedPrefs = prefsFake({
       "assistant.action_policy.v1.calendar.calendar_writeback": "ask_each_time"
@@ -522,7 +524,7 @@ describe("automatic plan generation and dispatch", () => {
   it("executes a reserved batch through the same execution service", async () => {
     Object.assign(world.prefs, autoModes());
     const definition = await createDefinition(world.dataContext, world.briefings);
-    const outcome = await generateScheduled(definition.id, () => [prepEvent(new Date())]);
+    const outcome = await generateScheduled(definition.id, () => [prepEvent()]);
     const auto = outcome!.auto!;
     const creates: string[] = [];
     const service = new ApplyExecutionService({
@@ -570,7 +572,7 @@ describe("automatic plan generation and dispatch", () => {
   it("denies when the block task was deleted between commit and apply", async () => {
     Object.assign(world.prefs, autoModes());
     const definition = await createDefinition(world.dataContext, world.briefings);
-    const outcome = await generateScheduled(definition.id, () => [prepEvent(new Date())]);
+    const outcome = await generateScheduled(definition.id, () => [prepEvent()]);
     const auto = outcome!.auto!;
     const plan = await world.dataContext.withDataContext(userA(), (scopedDb) =>
       world.plans.getById(scopedDb, auto.planId)
@@ -749,15 +751,15 @@ describe("automatic plan generation and dispatch", () => {
     overrides: { readonly title?: string; readonly externalMetadata?: Record<string, unknown> } = {}
   ) {
     const accountId = await seedGoogleAccountForLegacy();
-    const startsAt = new Date(Date.now() + 2 * 60_60_000);
-    const endsAt = new Date(startsAt.getTime() + 60_60_000);
+    const startsAt = todayAt("10:00");
+    const endsAt = new Date(Date.parse(startsAt) + 60 * 60_000).toISOString();
     return world.dataContext.withDataContext(userA(), (scopedDb) =>
       new CalendarRepository().upsertCachedEvent(scopedDb, {
         connectorAccountId: accountId,
         externalId: `legacy-${randomUUID()}`,
         title: overrides.title ?? "Client presentation prep",
-        startsAt: startsAt.toISOString(),
-        endsAt: endsAt.toISOString(),
+        startsAt,
+        endsAt,
         externalMetadata: overrides.externalMetadata ?? {
           jarvisCreated: true,
           followThroughTargetRef: targetRef
@@ -788,14 +790,14 @@ describe("automatic plan generation and dispatch", () => {
 
   it("one legacy event links the block as placed with no reservation or job", async () => {
     Object.assign(world.prefs, autoModes());
-    const refs = await learnTargetRefs(() => [prepEvent(new Date())]);
+    const refs = await learnTargetRefs(() => [prepEvent()]);
     const targetRef = refs.get("evt-prep-1");
     expect(targetRef).toEqual(expect.any(String));
     const legacy = await seedLegacyEvent(targetRef!);
     const definition = await createDefinition(world.dataContext, world.briefings);
     const outcome = await generateScheduled(
       definition.id,
-      () => [prepEvent(new Date())],
+      () => [prepEvent()],
       undefined,
       autoWithLegacy()
     );
@@ -828,7 +830,7 @@ describe("automatic plan generation and dispatch", () => {
     const definition = await createDefinition(world.dataContext, world.briefings);
     const outcome = await generateScheduled(
       definition.id,
-      () => [prepEvent(new Date())],
+      () => [prepEvent()],
       undefined,
       autoWithLegacy()
     );
@@ -851,7 +853,7 @@ describe("automatic plan generation and dispatch", () => {
     });
     const definition = await createDefinition(world.dataContext, world.briefings);
     const events = () => {
-      const first = prepEvent(new Date());
+      const first = prepEvent();
       const secondStart = new Date(new Date(first.endsAt).getTime() + 10 * 60_000);
       const secondEnd = new Date(secondStart.getTime() + 60 * 60_000);
       return [
@@ -881,11 +883,11 @@ describe("automatic plan generation and dispatch", () => {
     Object.assign(world.prefs, autoModes());
     const log: unknown[] = [];
     const twoEvents = () => {
-      const now = new Date();
-      const secondStart = new Date(now.getTime() + 5 * 60_60_000);
-      const secondEnd = new Date(now.getTime() + 6 * 60_60_000);
+      const first = prepEvent();
+      const secondStart = new Date(new Date(first.endsAt).getTime() + 2 * 60 * 60_000);
+      const secondEnd = new Date(secondStart.getTime() + 60 * 60_000);
       return [
-        prepEvent(now),
+        first,
         {
           id: "evt-prep-2",
           title: "Follow-up prep",
@@ -933,7 +935,7 @@ describe("automatic plan generation and dispatch", () => {
       const definition = await createDefinition(world.dataContext, world.briefings);
       const outcome = await generateScheduled(
         definition.id,
-        () => [prepEvent(new Date())],
+        () => [prepEvent()],
         undefined,
         autoWithLegacy()
       );
@@ -952,14 +954,14 @@ describe("automatic plan generation and dispatch", () => {
 
   it("a second run reuses the existing legacy task id", async () => {
     Object.assign(world.prefs, autoModes());
-    const refs = await learnTargetRefs(() => [prepEvent(new Date())]);
+    const refs = await learnTargetRefs(() => [prepEvent()]);
     const targetRef = refs.get("evt-prep-1");
     expect(targetRef).toEqual(expect.any(String));
     await seedLegacyEvent(targetRef!);
     const firstDefinition = await createDefinition(world.dataContext, world.briefings);
     const first = await generateScheduled(
       firstDefinition.id,
-      () => [prepEvent(new Date())],
+      () => [prepEvent()],
       undefined,
       autoWithLegacy()
     );
@@ -968,7 +970,7 @@ describe("automatic plan generation and dispatch", () => {
     const secondDefinition = await createDefinition(world.dataContext, world.briefings);
     const second = await generateScheduled(
       secondDefinition.id,
-      () => [prepEvent(new Date())],
+      () => [prepEvent()],
       undefined,
       autoWithLegacy()
     );
