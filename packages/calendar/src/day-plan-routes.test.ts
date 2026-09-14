@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AccessContext, DataContextDb } from "@moss/db";
 import type { ApplyExecutionInput } from "@moss/calendar";
-import type {
-  ApplyConfirmationRequiredResponse,
-  ApplyExecutionReport,
-  DayPlanApplyBatchDto
+import {
+  DAY_PLAN_DENIED_CODE,
+  DAY_PLAN_DENIED_REMEDIATION_REF,
+  type ApplyConfirmationRequiredResponse,
+  type ApplyExecutionReport,
+  type DayPlanApplyBatchDto
 } from "@moss/shared";
 import { HttpError } from "@moss/module-sdk";
 
@@ -294,6 +296,43 @@ describe("day plan apply routes", () => {
       url: `/api/calendar/day-plans/${PLAN_ID}/operations/${OPERATION_ID}`
     });
     expect((done.json() as { status: string }).status).toBe("completed");
+
+    const deniedApp = buildApp({
+      dayPlanRepository: fakeRepository({
+        getApplyBatchById: (async () =>
+          batchFixture([
+            {
+              ...itemFixture(ITEM_A, "failed"),
+              result: { status: "failed", reason: "access-denied" }
+            },
+            itemFixture(ITEM_B, "applied")
+          ])) as never
+      })
+    });
+    const denied = await deniedApp.inject({
+      method: "GET",
+      url: `/api/calendar/day-plans/${PLAN_ID}/operations/${OPERATION_ID}`
+    });
+    expect(denied.statusCode).toBe(200);
+    const deniedBody = denied.json() as {
+      status: string;
+      denial?: { code: string; remediationRef: string };
+    };
+    expect(deniedBody.status).toBe("completed");
+    expect(deniedBody.denial?.code).toBe(DAY_PLAN_DENIED_CODE);
+    expect(deniedBody.denial?.remediationRef).toBe(DAY_PLAN_DENIED_REMEDIATION_REF);
+
+    const cleanApp = buildApp({
+      dayPlanRepository: fakeRepository({
+        getApplyBatchById: (async () =>
+          batchFixture([itemFixture(ITEM_A, "applied"), itemFixture(ITEM_B, "failed")])) as never
+      })
+    });
+    const clean = await cleanApp.inject({
+      method: "GET",
+      url: `/api/calendar/day-plans/${PLAN_ID}/operations/${OPERATION_ID}`
+    });
+    expect((clean.json() as { denial?: unknown }).denial).toBeUndefined();
 
     const missingApp = buildApp({
       dayPlanRepository: fakeRepository({ getApplyBatchById: async () => undefined })

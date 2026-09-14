@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import type { MossModuleManifest, ToolRequiresConfirmation } from "@moss/module-sdk";
 import { calendarMonitorProvider } from "./monitor-provider.js";
 import {
+  DAY_PLAN_DENIED_CODE,
+  DAY_PLAN_DENIED_REMEDIATION_REF,
   applyDayPlanRequestSchema,
   applyExecutionReportSchema,
   confirmDayPlanApplyRequestSchema,
@@ -574,11 +576,11 @@ export const calendarModuleManifest = {
           description: "The plan or operation is unavailable to this actor."
         },
         {
-          code: "day_plan_denied",
+          code: DAY_PLAN_DENIED_CODE,
           class: "prerequisite",
           description:
             "An apply item was denied by the access gate; automatic planning is off in settings.",
-          remediationRef: "calendar.automatic_planning_policy"
+          remediationRef: DAY_PLAN_DENIED_REMEDIATION_REF
         }
       ],
       remediations: [
@@ -588,7 +590,7 @@ export const calendarModuleManifest = {
           path: "/calendar"
         },
         {
-          id: "calendar.automatic_planning_policy",
+          id: DAY_PLAN_DENIED_REMEDIATION_REF,
           description: "Turn automatic planning back on in calendar settings, then retry.",
           path: "/settings/modules/calendar"
         }

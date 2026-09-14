@@ -7,6 +7,8 @@ import { isUuid } from "@moss/db";
 import { handleRouteError, HttpError, localDayRange } from "@moss/module-sdk";
 import type { ToolContext } from "@moss/module-sdk";
 import {
+  DAY_PLAN_DENIED_CODE,
+  DAY_PLAN_DENIED_REMEDIATION_REF,
   applyDayPlanRouteSchema,
   createDayPlanRouteSchema,
   dayPlanApplyStatusRouteSchema,
@@ -623,6 +625,13 @@ export function registerDayPlanRoutes(
     )
       ? "pending"
       : "completed";
+    const denied = batch.items.some(
+      (item) =>
+        item.outcome === "failed" &&
+        !!item.result &&
+        "reason" in item.result &&
+        item.result.reason === "access-denied"
+    );
     return {
       operationId: batch.id,
       planId: batch.planId,
@@ -632,7 +641,12 @@ export function registerDayPlanRoutes(
         blockId: item.blockId,
         outcome: item.outcome,
         result: item.result
-      }))
+      })),
+      ...(denied
+        ? {
+            denial: { code: DAY_PLAN_DENIED_CODE, remediationRef: DAY_PLAN_DENIED_REMEDIATION_REF }
+          }
+        : {})
     };
   }
 
