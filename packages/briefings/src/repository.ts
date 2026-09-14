@@ -55,6 +55,76 @@ export interface GenerateBriefingRunInput {
    * inside `compose.ts`, so there is no provider-less variant here.
    */
   readonly composeDeps: ComposeDeps;
+  /**
+   * Automatic plan-effect port (R2.3-T06). When present and composition
+   * succeeded, the plan step reserves day-plan blocks and an apply batch in
+   * this same transaction through public repository methods. Structural on
+   * purpose: briefings never imports the calendar package (module
+   * isolation); the composition root adapts the calendar implementation.
+   */
+  readonly dayPlanAuto?: BriefingDayPlanAutoPort;
+}
+
+// One automatic plan effect per briefing signal, structurally matching the
+// calendar module's AutoPlanSignal (no cross-package import).
+export interface BriefingAutoSignal {
+  readonly type?: string;
+  readonly summary: string;
+  readonly suggestedActions: readonly string[];
+  readonly startsAt?: string;
+  readonly endsAt?: string;
+  readonly followThrough?: {
+    readonly targetRef: string;
+    readonly taskId?: string;
+    readonly intents?: readonly {
+      readonly kind: "create_task" | "block_time";
+      readonly targetRef: string;
+      readonly title: string;
+      readonly window?: {
+        readonly start: string;
+        readonly end: string;
+        readonly durationMinutes: number;
+      };
+    }[];
+  };
+}
+
+export interface BriefingAutoPlanResult {
+  readonly planId: string;
+  readonly autoBlockIds: readonly string[];
+  readonly suggestBlockIds: readonly string[];
+  readonly operationId: string | null;
+  readonly batchKey: string | null;
+  readonly revisionRace: boolean;
+}
+
+export interface BriefingDayPlanAutoPort {
+  reserveAutoPlan(
+    scopedDb: DataContextDb,
+    input: {
+      readonly runId: string;
+      readonly definitionId: string;
+      readonly localDay: string;
+      readonly timeZone: string;
+      readonly signals: readonly BriefingAutoSignal[];
+    }
+  ): Promise<BriefingAutoPlanResult | null>;
+  findUnfinishedBatch(
+    scopedDb: DataContextDb,
+    input: { planId: string; batchKey: string }
+  ): Promise<{ operationId: string } | undefined>;
+}
+
+export interface GenerateBriefingRunOutcome {
+  readonly run: BriefingRun;
+  readonly created: boolean;
+  // Present when the generation plan step reserved an apply batch that still
+  // needs the apply job (fresh auto runs and resumed duplicates).
+  readonly auto?: {
+    readonly planId: string;
+    readonly operationId: string;
+    readonly batchKey: string;
+  } | null;
 }
 
 export class BriefingsRepository {
@@ -194,7 +264,7 @@ export class BriefingsRepository {
     scopedDb: DataContextDb,
     definitionId: string,
     input: GenerateBriefingRunInput
-  ): Promise<{ run: BriefingRun; created: boolean } | undefined> {
+  ): Promise<GenerateBriefingRunOutcome | undefined> {
     assertDataContextDb(scopedDb);
 
     const definition = await this.getOwnedDefinitionById(scopedDb, definitionId);
@@ -205,6 +275,8 @@ export class BriefingsRepository {
     // Capture ONE `now` so the lock-day, the existing-run comparison, and compose's
     // local-day window all agree even across a local-midnight boundary.
     const now = new Date();
+    // Mint ONE run id so the persisted run and the automatic batch key agree.
+    const runId = input.runId ?? randomUUID();
 
     // Scheduled local-day idempotency under a transaction-scoped advisory lock so two
     // concurrent cron fires (multi-replica worker, or a retry overlapping the first)
@@ -223,7 +295,11 @@ export class BriefingsRepository {
       await sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`.execute(scopedDb.db);
       const existing = await this.findScheduledRunForLocalPeriod(scopedDb, definition, now);
       if (existing) {
-        return { run: existing, created: false };
+        return {
+          run: existing,
+          created: false,
+          auto: await this.resumeAutoBatch(scopedDb, input, existing)
+        };
       }
     }
 
@@ -233,13 +309,13 @@ export class BriefingsRepository {
       return !tool || tool.risk !== "read";
     });
     if (blocked) {
-      const run = await this.persistRun(scopedDb, definition, input, {
+      const run = await this.persistRun(scopedDb, definition, input, runId, {
         status: "blocked",
         summaryText: "Briefing blocked because selected tools are not all declared read tools.",
         sourceMetadata: { degraded: false, gaps: [], blockedReason: "non_read_tool" },
         structuredPayload: emptyStructuredPayload()
       });
-      return { run, created: true };
+      return { run, created: true, auto: null };
     }
 
     let sameDayMorningMeta: Record<string, unknown> | null = null;
@@ -258,33 +334,111 @@ export class BriefingsRepository {
       definition,
       {
         runKind: input.runKind,
-        runId: input.runId,
+        runId,
         jobId: input.jobId,
         sameDayMorningMeta,
         now
       },
       input.composeDeps
     );
-    const run = await this.persistRun(scopedDb, definition, input, composed);
-    return { run, created: true };
+    // Plan step (R2.3-T06): after composition, before the run persists, all
+    // inside the caller's transaction through public ports. A task creation
+    // failure already threw above, so the whole run rolls back here.
+    const auto = await this.planAutoBlocks(scopedDb, definition, input, runId, now, composed);
+    const run = await this.persistRun(
+      scopedDb,
+      definition,
+      input,
+      runId,
+      composed,
+      auto?.record ?? null
+    );
+    return { run, created: true, auto: auto?.dispatch ?? null };
+  }
+
+  // Reads one automatic plan effect per composed signal. Returns the
+  // persisted record fragment plus the dispatch identity when a batch was
+  // reserved, or null when composition carried no automatic effect.
+  private async planAutoBlocks(
+    scopedDb: DataContextDb,
+    definition: BriefingDefinition,
+    input: GenerateBriefingRunInput,
+    runId: string,
+    now: Date,
+    composed: {
+      status: BriefingRunStatus;
+      sourceMetadata: Record<string, unknown>;
+    }
+  ): Promise<{
+    readonly record: { planId: string; operationId: string | null; batchKey: string | null };
+    readonly dispatch: GenerateBriefingRunOutcome["auto"];
+  } | null> {
+    if (!input.dayPlanAuto || composed.status !== "succeeded") return null;
+    const signals = readAutoSignals(composed.sourceMetadata);
+    if (signals.length === 0) return null;
+    const timeZone = timezoneFor(definition.schedule_metadata);
+    const result = await input.dayPlanAuto.reserveAutoPlan(scopedDb, {
+      runId,
+      definitionId: definition.id,
+      localDay: localDayString(timeZone, now),
+      timeZone,
+      signals
+    });
+    if (!result) return null;
+    return {
+      record: {
+        planId: result.planId,
+        operationId: result.operationId,
+        batchKey: result.batchKey
+      },
+      dispatch:
+        result.operationId && result.batchKey
+          ? { planId: result.planId, operationId: result.operationId, batchKey: result.batchKey }
+          : null
+    };
+  }
+
+  // Duplicate scheduled fire: reload the unfinished batch of the recorded
+  // plan by its durable key and re-enqueue it. Appends no block and composes
+  // nothing.
+  private async resumeAutoBatch(
+    scopedDb: DataContextDb,
+    input: GenerateBriefingRunInput,
+    existing: BriefingRun
+  ): Promise<GenerateBriefingRunOutcome["auto"]> {
+    if (!input.dayPlanAuto) return null;
+    const recorded = readAutoRecord(existing.source_metadata);
+    if (!recorded) return null;
+    const resumed = await input.dayPlanAuto.findUnfinishedBatch(scopedDb, {
+      planId: recorded.planId,
+      batchKey: recorded.batchKey
+    });
+    if (!resumed) return null;
+    return {
+      planId: recorded.planId,
+      operationId: resumed.operationId,
+      batchKey: recorded.batchKey
+    };
   }
 
   private async persistRun(
     scopedDb: DataContextDb,
     definition: BriefingDefinition,
     input: GenerateBriefingRunInput,
+    runId: string,
     composed: {
       status: BriefingRunStatus;
       summaryText: string;
       sourceMetadata: Record<string, unknown>;
       structuredPayload: BriefingStructuredPayloadV1;
-    }
+    },
+    auto: { planId: string; operationId: string | null; batchKey: string | null } | null = null
   ): Promise<BriefingRun> {
     const createdAt = new Date();
     const run = await scopedDb.db
       .insertInto("app.briefing_runs")
       .values({
-        id: input.runId ?? randomUUID(),
+        id: runId,
         definition_id: definition.id,
         owner_user_id: definition.owner_user_id,
         status: composed.status,
@@ -293,7 +447,8 @@ export class BriefingsRepository {
         summary_text: composed.summaryText,
         source_metadata: {
           ...composed.sourceMetadata,
-          structuredPayload: composed.structuredPayload
+          structuredPayload: composed.structuredPayload,
+          ...(auto ? { dayPlanAuto: auto } : {})
         },
         created_at: createdAt
       })
@@ -364,6 +519,45 @@ export class BriefingsRepository {
       .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
       .executeTakeFirst();
   }
+}
+
+/** Signals carrying automatic plan effects from composed metadata. */
+function readAutoSignals(sourceMetadata: Record<string, unknown>): BriefingAutoSignal[] {
+  const raw = sourceMetadata["calendarSignals"];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (signal): signal is BriefingAutoSignal =>
+      !!signal &&
+      typeof signal === "object" &&
+      typeof (signal as { summary?: unknown }).summary === "string" &&
+      Array.isArray((signal as { suggestedActions?: unknown }).suggestedActions)
+  );
+}
+
+/** The recorded automatic plan fragment of a persisted run, if any. */
+function readAutoRecord(sourceMetadata: unknown): { planId: string; batchKey: string } | null {
+  if (!sourceMetadata || typeof sourceMetadata !== "object" || Array.isArray(sourceMetadata)) {
+    return null;
+  }
+  const raw = (sourceMetadata as Record<string, unknown>)["dayPlanAuto"];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  if (typeof record["planId"] !== "string" || typeof record["batchKey"] !== "string") return null;
+  return { planId: record["planId"] as string, batchKey: record["batchKey"] as string };
+}
+
+/** Daily local day (YYYY-MM-DD) for `now` in the definition's IANA tz. */
+function localDayString(timeZone: string, now: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(now);
+  const year = parts.find((part) => part.type === "year")!.value;
+  const month = parts.find((part) => part.type === "month")!.value;
+  const day = parts.find((part) => part.type === "day")!.value;
+  return `${year}-${month}-${day}`;
 }
 
 /** Local period string for `now` in the definition's IANA tz. */

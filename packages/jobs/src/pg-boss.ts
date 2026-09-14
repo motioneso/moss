@@ -104,6 +104,8 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "resourceId",
   "connectorAccountId",
   "idempotencyKey",
+  "planId",
+  "operationId",
   "sourcePath",
   "filePath",
   "localDate",

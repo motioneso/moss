@@ -545,6 +545,9 @@ async function attachCalendarFollowThrough<
         return signal;
       }
       const targetRef = briefingSignalFeedbackItemId("calendar", signal.type, signal.summary);
+      // Task creation failures propagate: the generation transaction rolls
+      // back, so a failed task can never leave a block with a guessed id.
+      // Intent building itself is pure and cannot throw.
       try {
         const followThrough = await deps.calendarFollowThrough!.executeAutoActions({
           scopedDb,
@@ -563,7 +566,7 @@ async function attachCalendarFollowThrough<
           },
           "calendar follow-through failed"
         );
-        return signal;
+        throw error;
       }
     })
   );
@@ -634,6 +637,8 @@ export type {
   ComposeResult,
   Section,
   BriefingGap,
-  SynthesisFailureReason
+  SynthesisFailureReason,
+  CalendarAutoIntent,
+  CalendarFollowThroughRefs
 } from "./compose-shared.js";
 export { sanitizeExternal, renderExternalBlock, TRUST_BOUNDARY } from "./trust-boundary.js";
