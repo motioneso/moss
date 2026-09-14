@@ -23,6 +23,9 @@ export async function registerMockBriefingsRoutes(
   await page.route(/\/api\/briefings\/definitions\/[^/]+\/runs$/, (route) =>
     handleBriefingRunsRoute(route, state)
   );
+  await page.route(/\/api\/briefings\/definitions\/[^/]+\/runs\/[^/]+$/, (route) =>
+    handleBriefingRunDetailRoute(route, state)
+  );
   await page.route(/\/api\/briefings\/definitions\/[^/]+$/, (route) =>
     handleBriefingDefinitionDetailRoute(route, state)
   );
@@ -198,6 +201,36 @@ async function handleBriefingRunNowRoute(
   );
 
   return fulfillJson(route, 202, { jobId: "briefing-job-1", runId });
+}
+
+async function handleBriefingRunDetailRoute(
+  route: Route,
+  state: MockBriefingsApiState
+): Promise<void> {
+  const request = route.request();
+  const segments = new URL(request.url()).pathname.split("/");
+  const runId = decodeURIComponent(segments.at(-1) ?? "");
+  const definitionId = decodeURIComponent(segments.at(-3) ?? "");
+
+  if (request.method() !== "GET") {
+    return fulfillJson(route, 405, { error: "Method not allowed" });
+  }
+
+  const runs = state.briefingRuns?.[definitionId] ?? [];
+  const run = runs.find((entry) => entry.id === runId);
+  if (!run) {
+    return fulfillJson(route, 404, {
+      error: "Briefing run is missing or owned by someone else",
+      code: "briefing_run_not_available"
+    });
+  }
+
+  return fulfillJson(route, 200, {
+    state: "ready",
+    run,
+    latest: runs[0]?.id === run.id,
+    plan: null
+  });
 }
 
 async function handleBriefingRunsRoute(route: Route, state: MockBriefingsApiState): Promise<void> {

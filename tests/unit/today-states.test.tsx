@@ -391,7 +391,12 @@ vi.mock("virtual:moss-module-web", () => {
       };
     }
   });
-  return { MODULE_WEB_CONTRIBUTIONS: [entry("news"), entry("sports"), entry("workshop")] };
+  // Today reaches route metadata through the briefing shell's palette import;
+  // the reader tests never touch route subtitles, so an empty list suffices.
+  return {
+    MODULE_WEB_CONTRIBUTIONS: [entry("news"), entry("sports"), entry("workshop")],
+    MODULE_WEB_ROUTES: []
+  };
 });
 
 describe("TodayPage widget failure line", () => {

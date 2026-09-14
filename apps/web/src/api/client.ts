@@ -107,6 +107,7 @@ import type {
   ListAiProviderConfigsResponse,
   ListBriefingDefinitionsResponse,
   ListBriefingRunsResponse,
+  GetBriefingRunResponse,
   ListCalendarEventsResponse,
   GetDayPlanQuery,
   GetDayPlanResponse,
@@ -1420,6 +1421,17 @@ export async function updateBriefingDefinition(
 export async function listBriefingRuns(id: string): Promise<ListBriefingRunsResponse> {
   return requestJson<ListBriefingRunsResponse>(
     `/api/briefings/definitions/${encodeURIComponent(id)}/runs`
+  );
+}
+
+export async function getBriefingRun(
+  definitionId: string,
+  runId: string,
+  jobId?: string
+): Promise<GetBriefingRunResponse> {
+  const query = jobId ? `?jobId=${encodeURIComponent(jobId)}` : "";
+  return requestJson<GetBriefingRunResponse>(
+    `/api/briefings/definitions/${encodeURIComponent(definitionId)}/runs/${encodeURIComponent(runId)}${query}`
   );
 }
 
