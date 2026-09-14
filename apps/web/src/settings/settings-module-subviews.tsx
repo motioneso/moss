@@ -29,12 +29,14 @@ import {
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
 import {
+  MORNING_NEWS_TOOL,
+  MORNING_SPORTS_TOOL,
   createDefinitionRequest,
   findDefinition,
   readSourceLabels,
-  readToolNames,
   sourceListDescription,
   targetTimeFor,
+  toggleToolName,
   updateDefinitionRequest
 } from "../briefings/briefing-settings-model";
 import { Badge, Field, Group, NotWired, Note, Row, Segmented, Select, Switch } from "./settings-ui";
@@ -108,7 +110,6 @@ export function BriefingSettings(props: { readonly onBack: () => void }) {
   });
   const localTimezone = localeQuery.data?.locale.timezone;
   const definitions = definitionsQuery.data?.definitions ?? [];
-  const selectedToolNames = readToolNames(toolsQuery.data?.tools ?? []);
   const sourceLabels = readSourceLabels(toolsQuery.data?.tools ?? []);
   const morning = findDefinition(definitions, "morning");
   const evening = findDefinition(definitions, "evening");
@@ -117,6 +118,7 @@ export function BriefingSettings(props: { readonly onBack: () => void }) {
       readonly type: "morning" | "evening";
       readonly enabled?: boolean;
       readonly targetTime?: string;
+      readonly selectedToolNames?: readonly string[];
     }) => {
       const current = findDefinition(definitions, input.type);
       if (current) {
@@ -124,19 +126,19 @@ export function BriefingSettings(props: { readonly onBack: () => void }) {
           current.id,
           updateDefinitionRequest(current, {
             enabled: input.enabled,
-            targetTime: input.targetTime
+            targetTime: input.targetTime,
+            selectedToolNames: input.selectedToolNames
           })
         );
       }
-      if (selectedToolNames.length === 0) {
-        throw new Error("No read tools available for briefings");
-      }
+      // Creation omits the list so the server default applies (invariant 2).
+      // Inclusion switches need a stored list, so they stay disabled until a
+      // definition exists; only they ever send selectedToolNames.
       return createBriefingDefinition(
         createDefinitionRequest({
           briefingType: input.type,
           enabled: input.enabled,
           targetTime: input.targetTime,
-          selectedToolNames,
           timezone: localTimezone
         })
       );
@@ -155,8 +157,7 @@ export function BriefingSettings(props: { readonly onBack: () => void }) {
     toolsQuery.isLoading ||
     sourceBehaviorsQuery.isLoading ||
     mutation.isPending ||
-    sourceBehaviorMutation.isPending ||
-    selectedToolNames.length === 0;
+    sourceBehaviorMutation.isPending;
   const error =
     definitionsQuery.error ??
     toolsQuery.error ??
@@ -217,6 +218,46 @@ export function BriefingSettings(props: { readonly onBack: () => void }) {
 
       <Group title="Sources">
         <Row name="Read tools" desc={sourceListDescription(sourceLabels)} />
+        <Row
+          name="Morning news"
+          desc="Include today's top headlines in the morning briefing."
+          control={
+            <Switch
+              ariaLabel="Morning news"
+              checked={morning?.selectedToolNames.includes(MORNING_NEWS_TOOL) ?? false}
+              disabled={busy || !morning}
+              onChange={() =>
+                mutation.mutate({
+                  type: "morning",
+                  selectedToolNames: toggleToolName(
+                    morning?.selectedToolNames ?? [],
+                    MORNING_NEWS_TOOL
+                  )
+                })
+              }
+            />
+          }
+        />
+        <Row
+          name="Morning sports"
+          desc="Include today's followed-team facts in the morning briefing."
+          control={
+            <Switch
+              ariaLabel="Morning sports"
+              checked={morning?.selectedToolNames.includes(MORNING_SPORTS_TOOL) ?? false}
+              disabled={busy || !morning}
+              onChange={() =>
+                mutation.mutate({
+                  type: "morning",
+                  selectedToolNames: toggleToolName(
+                    morning?.selectedToolNames ?? [],
+                    MORNING_SPORTS_TOOL
+                  )
+                })
+              }
+            />
+          }
+        />
         {BRIEFING_SOURCE_BEHAVIORS.map((behavior) => (
           <Row
             key={behavior.id}

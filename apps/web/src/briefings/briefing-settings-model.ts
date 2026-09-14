@@ -67,11 +67,21 @@ export function sourceListDescription(labels: readonly string[]): string {
   return `${headline}: ${labels.join(", ")}.`;
 }
 
+export const MORNING_NEWS_TOOL = "news.topHeadlinesToday";
+export const MORNING_SPORTS_TOOL = "sports.followedFactsToday";
+
+/** Toggle one tool name in a stored selection, keeping the rest in order. */
+export function toggleToolName(stored: readonly string[], toolName: string): string[] {
+  return stored.includes(toolName)
+    ? stored.filter((name) => name !== toolName)
+    : [...stored, toolName];
+}
+
 export function createDefinitionRequest(input: {
   readonly briefingType: BriefingType;
   readonly enabled?: boolean;
   readonly targetTime?: string;
-  readonly selectedToolNames: readonly string[];
+  readonly selectedToolNames?: readonly string[];
   readonly timezone?: string;
 }): CreateBriefingDefinitionRequest {
   const defaults = defaultScheduleMetadataFor(input.briefingType, input.timezone);
@@ -81,7 +91,8 @@ export function createDefinitionRequest(input: {
     cadence: "daily",
     enabled: input.enabled ?? true,
     scheduleMetadata: { ...defaults, targetTime: input.targetTime ?? defaults.targetTime },
-    selectedToolNames: input.selectedToolNames
+    // Omitted (not undefined-valued) so the server default rule applies.
+    ...(input.selectedToolNames !== undefined ? { selectedToolNames: input.selectedToolNames } : {})
   };
 }
 
@@ -90,6 +101,7 @@ export function updateDefinitionRequest(
   patch: {
     readonly enabled?: boolean;
     readonly targetTime?: string;
+    readonly selectedToolNames?: readonly string[];
   }
 ): UpdateBriefingDefinitionRequest {
   return {
@@ -97,6 +109,9 @@ export function updateDefinitionRequest(
     scheduleMetadata:
       patch.targetTime === undefined
         ? undefined
-        : { ...definition.scheduleMetadata, targetTime: patch.targetTime }
+        : { ...definition.scheduleMetadata, targetTime: patch.targetTime },
+    // Only the inclusion switches pass a list; time and enabled edits omit it
+    // so the stored list is kept.
+    ...(patch.selectedToolNames !== undefined ? { selectedToolNames: patch.selectedToolNames } : {})
   };
 }

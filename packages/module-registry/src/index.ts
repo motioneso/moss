@@ -461,6 +461,8 @@ export * from "./external/types.js";
 export * from "./external/reconcile.js";
 export * from "./external/preferences.js";
 
+import { createActiveModulesResolver } from "./active-modules-resolver.js";
+
 export {
   createActiveModulesResolver,
   type ActiveModulesResolverDeps
@@ -2048,6 +2050,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           featureGrantService: buildFeatureGrantService({
             connectorsRepository: new ConnectorsRepository(),
             preferencesRepository: new PreferencesRepository()
+          }),
+          // The worker dependencies carry no resolver of their own, so build the
+          // real DB-backed one here from the worker data context; manifests are
+          // read fresh per call so late-installed modules are picked up.
+          resolveActiveModules: createActiveModulesResolver({
+            dataContext: dependencies.dataContext,
+            manifests: getBuiltInModuleManifests
           }),
           sourceContextService: buildRuntimeSourceContextService({
             logger: briefingsLogger,

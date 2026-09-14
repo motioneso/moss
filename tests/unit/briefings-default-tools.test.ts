@@ -19,6 +19,12 @@ describe("briefing default tool sets", () => {
     expect(defaultToolNamesFor("weekly_review")).not.toContain("sports.followedFactsToday");
   });
 
+  it("includes news.topHeadlinesToday in the morning default only", () => {
+    expect(defaultToolNamesFor("morning")).toContain("news.topHeadlinesToday");
+    expect(defaultToolNamesFor("evening")).not.toContain("news.topHeadlinesToday");
+    expect(defaultToolNamesFor("weekly_review")).not.toContain("news.topHeadlinesToday");
+  });
+
   it("includes vault in morning and weekly_review, but not evening", () => {
     expect(defaultToolNamesFor("morning")).toContain("vault");
     expect(defaultToolNamesFor("weekly_review")).toContain("vault");

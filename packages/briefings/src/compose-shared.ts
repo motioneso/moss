@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
-import type { AiRepository, AiSecretCipher } from "@moss/ai";
+import type { ActiveModulesResolver, AiRepository, AiSecretCipher } from "@moss/ai";
 import { HttpApiAdapter, parseAiApiKeyCredential } from "@moss/ai";
 import type { ChatTurn, GenerateChatInput, ProviderKind } from "@moss/ai";
 import type { FocusSignalInput } from "@moss/priority";
@@ -50,6 +50,8 @@ export interface ComposeDeps {
   ) => Promise<Date | null>;
   readonly vaultLastWriteAt?: (scopedDb: DataContextDb) => Promise<Date | null>;
   /** Injected by the composition root; gates email/calendar cached reads to accounts with active grants. */
+  /** Injected by the composition root; skips tools whose module is inactive for the actor. */
+  readonly resolveActiveModules?: ActiveModulesResolver;
   readonly featureGrantService?: {
     grantedAccountIds(
       scopedDb: DataContextDb,
@@ -144,7 +146,8 @@ export interface BriefingGap {
     | "truncated"
     | "empty"
     | "unwired"
-    | "source_auth";
+    | "source_auth"
+    | "module_disabled";
 }
 
 export interface ComposeResult {
@@ -369,6 +372,23 @@ export async function gatherToolSection(
 ): Promise<Section> {
   if (!definition.selected_tool_names.includes(args.toolName)) {
     return { key: args.key, label: args.label, lines: [], count: 0, rawItems: [] };
+  }
+
+  // A tool selected by preference but disabled for this actor stays silent: no
+  // section, no execute, one module_disabled gap. The stored list is untouched,
+  // so re-enabling the module needs no settings change. Absent resolver (unit
+  // tests, default worker deps) keeps today's behavior.
+  if (deps.resolveActiveModules) {
+    const owning = deps.moduleManifests.find((manifest) =>
+      (manifest.assistantTools ?? []).some((tool) => tool.name === args.toolName)
+    );
+    if (owning) {
+      const active = await deps.resolveActiveModules(ctxFor(definition, input).actorUserId);
+      if (!active.some((manifest) => manifest.id === owning.id)) {
+        gaps.push({ source: args.key, reason: "module_disabled" });
+        return { key: args.key, label: args.label, lines: [], count: 0, rawItems: [] };
+      }
+    }
   }
 
   const tool = findExecute(deps.moduleManifests, args.toolName);
