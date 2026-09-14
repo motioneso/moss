@@ -91,11 +91,12 @@ import {
   createBriefingsFeedbackTargetVerifier,
   registerBriefingsJobWorkers,
   registerBriefingsRoutes,
-  type ComposeDeps,
   type ExternalBriefingInvoker
 } from "@moss/briefings";
 import {
   CalendarRepository,
+  buildDayPlanAutoPort,
+  DayPlanRepository,
   calendarFollowThroughSourceRef,
   isCalendarFollowThroughEvent,
   isCalendarFollowThroughTask,
@@ -103,7 +104,8 @@ import {
   calendarModuleSqlMigrationDirectory,
   CALENDAR_QUEUE_DEFINITIONS,
   registerCalendarRoutes,
-  registerCalendarJobWorkers
+  registerCalendarJobWorkers,
+  sendDayPlanApplyJob
 } from "@moss/calendar";
 import {
   CHAT_QUEUE_DEFINITIONS,
@@ -114,6 +116,7 @@ import {
   buildEveningInterviewSeed,
   buildCalendarWriteService,
   buildDayPlanApplyComposition,
+  buildDayPlanAutoApplyExecutor,
   chatCommitmentProvider,
   ChatRepository,
   createChatFeedbackTargetVerifier,
@@ -1161,92 +1164,16 @@ function buildNewsStoryFeedbackPort(
   };
 }
 
+import { buildCalendarFollowThroughPort } from "./calendar-follow-through-port.js";
+
+export {
+  buildCalendarFollowThroughPort,
+  calendarFollowThroughWindow
+} from "./calendar-follow-through-port.js";
+
 /** Recurring per-user/per-source scheduled check — at most every 30 minutes (spec §7). */
 const PROACTIVE_CHECK_CRON = "*/30 * * * *";
 export const PEOPLE_NOTES_SUGGEST_UPDATES_BEHAVIOR_ID = "people.notes.suggest-updates";
-
-export function buildCalendarFollowThroughPort(
-  deps: {
-    readonly tasksRepository?: Pick<TasksRepository, "create">;
-    readonly aiRepository?: Pick<AiRepository, "listActionPolicies">;
-    readonly calendarWrite?: {
-      createEvent(
-        scopedDb: DataContextDb,
-        ctx: {
-          readonly actorUserId: string;
-          readonly requestId: string;
-          readonly chatSessionId: string;
-        },
-        window: {
-          readonly start: Date;
-          readonly end: Date;
-          readonly durationMinutes: number;
-          readonly title: string;
-        },
-        options: { readonly requireCacheMirror: true; readonly followThroughTargetRef: string }
-      ): Promise<{ readonly created: boolean; readonly calendarEventId?: string }>;
-    };
-  } = {}
-): NonNullable<ComposeDeps["calendarFollowThrough"]> {
-  const tasksRepository = deps.tasksRepository ?? new TasksRepository();
-  const aiRepository = deps.aiRepository ?? new AiRepository();
-  const connectorsRepository = new ConnectorsRepository();
-  const calendarRepository = new CalendarRepository();
-  const calendarWrite =
-    deps.calendarWrite ??
-    buildCalendarWriteService({
-      googleService: new RuntimeGoogleConnectionService({
-        repository: connectorsRepository,
-        cipher: createConnectorSecretCipher(),
-        oauthClient: new GoogleOAuthClient()
-      }),
-      googleApiClient: new RuntimeGoogleApiClient(),
-      connectorsRepository,
-      calendarRepository
-    });
-
-  return {
-    async executeAutoActions({ scopedDb, actorUserId, requestId, targetRef, signal }) {
-      const refs: { targetRef: string; taskId?: string; calendarEventId?: string } = { targetRef };
-      const sourceRef = calendarFollowThroughSourceRef(targetRef);
-
-      if (signal.suggestedActions.includes("create_task")) {
-        const task = await tasksRepository.create(scopedDb, {
-          title: signal.summary,
-          status: "todo",
-          source: "calendar",
-          sourceRef,
-          externalKey: sourceRef
-        });
-        refs.taskId = task.id;
-      }
-
-      if (signal.suggestedActions.includes("block_time")) {
-        const policies = await aiRepository.listActionPolicies(scopedDb);
-        const writebackPolicy = policies.find(
-          (policy) =>
-            policy.moduleId === "calendar" && policy.actionFamilyId === "calendar_writeback"
-        );
-        if (writebackPolicy?.tier === "trusted_auto") {
-          const window = calendarFollowThroughWindow(signal);
-          if (window) {
-            const result = await calendarWrite.createEvent(
-              scopedDb,
-              { actorUserId, requestId, chatSessionId: "" },
-              window,
-              { requireCacheMirror: true, followThroughTargetRef: targetRef }
-            );
-            if (result.created && result.calendarEventId) {
-              refs.calendarEventId = result.calendarEventId;
-            }
-          }
-        }
-      }
-
-      return refs;
-    }
-  };
-}
 
 export function buildCalendarFollowThroughSideEffects(
   deps: {
@@ -1334,28 +1261,6 @@ function readCalendarFollowThroughRefs(metadata: Record<string, unknown>): {
       : {})
   };
   return refs.taskId || refs.calendarEventId ? refs : null;
-}
-
-function calendarFollowThroughWindow(signal: {
-  readonly type?: string;
-  readonly summary: string;
-  readonly startsAt?: string;
-  readonly endsAt?: string;
-}): { start: Date; end: Date; durationMinutes: number; title: string } | null {
-  const start = signal.startsAt ? new Date(signal.startsAt) : null;
-  if (!start || Number.isNaN(start.getTime())) return null;
-  const end = signal.endsAt ? new Date(signal.endsAt) : null;
-  if (signal.type === "prep_needed") {
-    const prepEnd = start;
-    const prepStart = new Date(prepEnd.getTime() - 60 * 60_000);
-    return { start: prepStart, end: prepEnd, durationMinutes: 60, title: "Prep time" };
-  }
-  if (!end || Number.isNaN(end.getTime()) || end <= start) return null;
-  const durationMinutes = Math.min(
-    120,
-    Math.max(15, Math.floor((end.getTime() - start.getTime()) / 60_000))
-  );
-  return { start, end, durationMinutes, title: "Focus time" };
 }
 
 export function isPeopleNotesSuggestUpdatesEnabled(
@@ -1880,7 +1785,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           : undefined
       });
     },
-    registerWorkers: (boss, deps) => registerCalendarJobWorkers(boss, deps.dataContext)
+    registerWorkers: (boss, deps) =>
+      registerCalendarJobWorkers(boss, deps.dataContext, {
+        applyExecution: buildDayPlanAutoApplyExecutor({
+          dataContext: deps.dataContext,
+          connectorsRepository: new ConnectorsRepository()
+        })
+      })
   },
   {
     manifest: emailModuleManifest,
@@ -2074,7 +1985,19 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const briefingsLogger = dependencies.logger
         ? createModuleLogger(dependencies.logger, "briefings")
         : undefined;
+      // Automatic plan effects (R2.3-T06): the generation transaction
+      // reserves day-plan blocks through this repository, and the
+      // after-commit hook dispatches the batch to the calendar apply queue.
+      const tasksRepositoryForAuto = new TasksRepository();
+      const autoDayPlanRepository = new DayPlanRepository({
+        findTask: async (scopedDb, taskId) => {
+          const task = await tasksRepositoryForAuto.getById(scopedDb, taskId);
+          return task ? { id: task.id, ownerUserId: task.owner_user_id } : undefined;
+        }
+      });
       return registerBriefingsJobWorkers(boss, dependencies.dataContext, {
+        dayPlanAuto: buildDayPlanAutoPort(autoDayPlanRepository),
+        dispatchDayPlanApply: (payload) => sendDayPlanApplyJob(boss, payload),
         moduleManifests: getBuiltInModuleManifests(),
         // A13: inject the full synthesis deps so the production scheduled briefing
         // actually grounds in vault recency/semantics AND fires the "ready"

@@ -433,6 +433,12 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0235",
           name: "0235_day_plan_apply_item_result.sql"
+        },
+        // R2.3-T06 — the scheduled briefing worker reserves automatic apply
+        // batches: worker role INSERT and UPDATE on the four day-plan tables.
+        {
+          version: "0236",
+          name: "0236_day_plan_worker_apply_grants.sql"
         }
       ]);
     } finally {

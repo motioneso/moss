@@ -18,6 +18,16 @@ export interface CalendarBriefingSignal {
     readonly targetRef: string;
     readonly taskId?: string;
     readonly calendarEventId?: string;
+    readonly intents?: readonly {
+      readonly kind: "create_task" | "block_time";
+      readonly targetRef: string;
+      readonly title: string;
+      readonly window?: {
+        readonly start: string;
+        readonly end: string;
+        readonly durationMinutes: number;
+      };
+    }[];
   };
 }
 

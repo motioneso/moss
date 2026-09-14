@@ -25,7 +25,7 @@ import {
 import { parseCalendarAutomationMode } from "@moss/shared";
 import { PreferencesRepository } from "@moss/structured-state";
 
-const WRITEBACK_POLICY_KEY = "assistant.action_policy.v1.calendar.calendar_writeback";
+export const WRITEBACK_POLICY_KEY = "assistant.action_policy.v1.calendar.calendar_writeback";
 
 export interface ApplyAccessGateDeps {
   readonly connectorsRepository: Pick<ConnectorsRepository, "getCalendarWriteScopeState">;

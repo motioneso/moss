@@ -76,11 +76,7 @@ export interface ComposeDeps {
         readonly startsAt?: string;
         readonly endsAt?: string;
       };
-    }): Promise<{
-      readonly targetRef: string;
-      readonly taskId?: string;
-      readonly calendarEventId?: string;
-    }>;
+    }): Promise<CalendarFollowThroughRefs>;
   };
   /** Injectable for tests; defaults to constructing a real HttpApiAdapter. */
   readonly createAdapter?: (
@@ -98,6 +94,27 @@ export interface ComposeDeps {
    *  array's only production supplier is getBuiltInModuleManifests(), which never contains
    *  an external (JSON-manifest) module. */
   readonly externalBriefingManifests?: readonly JsonMossModuleManifest[];
+}
+
+// Typed automatic effect for one briefing signal (R2.3-T06). Composition emits
+// intents only: task creation still resolves through the Tasks port in the
+// generation transaction, but no provider call and no day-plan write happens
+// here. The generation plan step turns block_time intents into plan blocks.
+export interface CalendarAutoIntent {
+  readonly kind: "create_task" | "block_time";
+  readonly targetRef: string;
+  readonly title: string;
+  readonly window?: {
+    readonly start: string;
+    readonly end: string;
+    readonly durationMinutes: number;
+  };
+}
+
+export interface CalendarFollowThroughRefs {
+  readonly targetRef: string;
+  readonly taskId?: string;
+  readonly intents: readonly CalendarAutoIntent[];
 }
 
 export interface ComposeRunInput {

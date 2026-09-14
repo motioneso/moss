@@ -16,6 +16,7 @@ import type { NotificationsRepository } from "@moss/notifications";
 import type { BriefingRunKind, BriefingType } from "@moss/shared";
 
 import type { ComposeDeps } from "./compose.js";
+import type { BriefingDayPlanAutoPort } from "./repository.js";
 import { BRIEFINGS_MODULE_ID, BRIEFINGS_RUN_QUEUE } from "./manifest.js";
 import { BriefingsRepository } from "./repository.js";
 
@@ -35,7 +36,33 @@ export interface BriefingRunResult {
   readonly runId: string;
   readonly status: "succeeded" | "blocked" | "failed" | null;
   readonly created: boolean;
+  // Present when generation reserved an apply batch that still needs the
+  // apply job (fresh auto runs and resumed duplicates).
+  readonly auto?: {
+    readonly planId: string;
+    readonly operationId: string;
+    readonly batchKey: string;
+  } | null;
 }
+
+// Metadata-only apply dispatch for one reserved automatic batch (R2.3-T06).
+// Any other key is rejected by the calendar worker exactly as briefing
+// payloads are rejected here.
+export interface DayPlanApplyDispatchPayload {
+  readonly actorUserId: string;
+  readonly planId: string;
+  readonly operationId: string;
+  readonly idempotencyKey: string;
+  readonly briefingRunId: string;
+}
+
+export const DAY_PLAN_APPLY_DISPATCH_PAYLOAD_KEYS = [
+  "actorUserId",
+  "planId",
+  "operationId",
+  "idempotencyKey",
+  "briefingRunId"
+] as const;
 
 export interface RegisterBriefingsJobWorkersOptions {
   readonly moduleManifests: readonly MossModuleManifest[];
@@ -56,6 +83,19 @@ export interface RegisterBriefingsJobWorkersOptions {
    */
   readonly notificationsRepository?: NotificationsRepository;
   readonly repository?: BriefingsRepository;
+  /**
+   * Automatic plan-effect port (R2.3-T06): reserves day-plan blocks and the
+   * apply batch inside the generation transaction. Absent in tests that do
+   * not exercise the automatic path.
+   */
+  readonly dayPlanAuto?: BriefingDayPlanAutoPort;
+  /**
+   * Sends one reserved automatic batch to the apply queue. Injected by the
+   * composition root (the calendar queue lives in another module); tests
+   * inject a fake. Called only from the after-commit hook, never from inside
+   * the handler transaction.
+   */
+  readonly dispatchDayPlanApply?: (payload: DayPlanApplyDispatchPayload) => Promise<unknown>;
   readonly workOptions?: WorkOptions;
   readonly onResult?: (job: Job<BriefingRunPayload>, result: BriefingRunResult) => void;
   /**
@@ -153,7 +193,8 @@ export async function registerBriefingsJobWorkers(
         runKind: job.data.runKind,
         runId: briefingRunId,
         jobId: job.id,
-        composeDeps
+        composeDeps,
+        ...(options.dayPlanAuto ? { dayPlanAuto: options.dayPlanAuto } : {})
       });
 
       // Notify ONLY for a NEWLY-created scheduled run that succeeded: an idempotent
@@ -193,18 +234,42 @@ export async function registerBriefingsJobWorkers(
         }
       }
 
-      const result = {
+      // `auto` stays absent unless a batch was reserved: existing exact-shape
+      // assertions on the worker result keep passing untouched.
+      const result: BriefingRunResult = {
         definitionId: job.data.definitionId,
         runId: outcome?.run.id ?? briefingRunId,
         status: outcome?.run.status ?? null,
-        created: outcome?.created ?? false
+        created: outcome?.created ?? false,
+        ...(outcome?.auto ? { auto: outcome.auto } : {})
       };
 
       options.onResult?.(job, result);
 
       return result;
     },
-    options.workOptions
+    options.workOptions,
+    {
+      // Dispatch only after the generation transaction committed: the batch
+      // is durable before the apply job can observe it. A throw here fails
+      // the briefing job without rolling back the committed run, and the
+      // retry resumes the same batch by key instead of composing again.
+      afterCommit: async (result, job) => {
+        if (!result.auto) return;
+        if (!options.dispatchDayPlanApply) {
+          throw new Error(
+            `Briefing run ${result.runId} reserved an apply batch with no apply dispatcher`
+          );
+        }
+        await options.dispatchDayPlanApply({
+          actorUserId: job.data.actorUserId,
+          planId: result.auto.planId,
+          operationId: result.auto.operationId,
+          idempotencyKey: result.auto.batchKey,
+          briefingRunId: result.runId
+        });
+      }
+    }
   );
 
   return [workId];

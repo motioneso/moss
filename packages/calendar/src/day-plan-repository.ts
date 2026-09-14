@@ -381,6 +381,83 @@ export class DayPlanRepository {
     return toPlanDto(updated, await this.loadBlocks(scopedDb, updated.id));
   }
 
+  // Appends blocks with caller-chosen ids (R2.3-T06 automatic effects use
+  // deterministic ids so a duplicate fire converges instead of doubling).
+  // Same guards as a draft save: expected revision must match (409), block
+  // tasks must be owned, and the revision bumps once. Ids already present
+  // are skipped, never duplicated.
+  async appendBlocks(
+    scopedDb: DataContextDb,
+    input: DayPlanSaveInput & { planId: string }
+  ): Promise<DayPlanDto> {
+    assertDataContextDb(scopedDb);
+    let localDay: string;
+    let timeZone: string;
+    let blocks: ReturnType<typeof normalizeBlockInput>[];
+    try {
+      localDay = normalizeLocalDay(input.localDay);
+      timeZone = normalizeTimeZone(input.timeZone);
+      if (!Array.isArray(input.blocks)) {
+        throw new DayPlanValidationError("blocks must be a list");
+      }
+      blocks = input.blocks.map(normalizeBlockInput);
+    } catch (error) {
+      if (error instanceof DayPlanValidationError)
+        throw new HttpError(400, (error as Error).message);
+      throw error;
+    }
+    if (!Number.isInteger(input.expectedRevision) || input.expectedRevision < 1) {
+      throw new HttpError(400, "expectedRevision must be a positive integer");
+    }
+    const actorUserId = await this.currentActor(scopedDb);
+    const current = await scopedDb.db
+      .selectFrom("app.day_plans")
+      .selectAll()
+      .select(sql<string>`to_char(local_day, 'YYYY-MM-DD')`.as("local_day"))
+      .where("id", "=", input.planId)
+      .executeTakeFirst();
+    if (!current || current.local_day !== localDay || current.time_zone !== timeZone) {
+      throw new HttpError(404, "day plan is not available");
+    }
+    if (current.revision !== input.expectedRevision) {
+      throw new HttpError(409, "day plan changed since it was read");
+    }
+    await this.requireOwnedTasks(scopedDb, actorUserId, null, blocks);
+    const stored = await this.loadBlocks(scopedDb, input.planId);
+    const present = new Set(stored.map((row) => row.id));
+    const fresh = blocks.filter((block) => block.id === undefined || !present.has(block.id));
+    let position = stored.reduce((max, row) => Math.max(max, row.position), -1) + 1;
+    for (const block of fresh) {
+      await scopedDb.db
+        .insertInto("app.day_plan_blocks")
+        .values({
+          id: block.id ?? randomUUID(),
+          plan_id: input.planId,
+          owner_user_id: sql<string>`app.current_actor_user_id()`,
+          task_id: block.taskId,
+          kind: block.kind,
+          title: block.title,
+          actual_placement: null,
+          pending_change: (block.pendingChange ?? null) as unknown as Record<
+            string,
+            unknown
+          > | null,
+          position: position++
+        })
+        .execute();
+    }
+    const updated = await scopedDb.db
+      .updateTable("app.day_plans")
+      .set({ revision: current.revision + 1, updated_at: new Date() })
+      .where("id", "=", current.id)
+      .where("revision", "=", current.revision)
+      .returningAll()
+      .returning(sql<string>`to_char(local_day, 'YYYY-MM-DD')`.as("local_day"))
+      .executeTakeFirst();
+    if (!updated) throw new HttpError(409, "day plan changed since it was read");
+    return toPlanDto(updated, await this.loadBlocks(scopedDb, updated.id));
+  }
+
   private async replaceBlocks(
     scopedDb: DataContextDb,
     planId: string,

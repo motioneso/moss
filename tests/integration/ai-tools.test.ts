@@ -468,6 +468,7 @@ describe("AI read-only assistant tool execution foundation", () => {
       "notifications.push.deliver",
       "notifications.push.summary",
       "calendar.cache-evict-event",
+      "calendar.day-plan-apply",
       "ai-purge-audit-log",
       "chat.embed-turn",
       "chat.extract-facts",
