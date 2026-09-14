@@ -19,6 +19,7 @@ import { AgendaRow, Card, Masthead, MastheadClock, MastheadDateline, StatTile } 
 
 import {
   createWellnessCheckin,
+  getDayPlan,
   getOnboardingStatus,
   getMedicationSchedule,
   listCalendarEvents,
@@ -56,6 +57,7 @@ import {
 import { BriefingStaleBanner, parseBriefingFreshness } from "./briefing-freshness";
 import { ProactiveCards } from "./proactive-cards";
 import { BriefingActionRowsSection } from "./briefing-action-rows";
+import { DayPlanSection } from "./day-plan";
 import { TaskDetailsDialog } from "../tasks/task-details-dialog";
 import { createEmptyTodayFeed, type TodayFeed } from "./feed-source";
 import { ModuleTodayWidgets } from "./module-today-widgets";
@@ -68,8 +70,6 @@ import {
   datelineLabel,
   driftOf,
   dueTs,
-  durationLabel,
-  eventCaptureText,
   firstName,
   greeting,
   isToday,
@@ -145,6 +145,11 @@ export function TodayPage(props: {
     enabled: morningDefinition?.enabled === true
   });
   const now = new Date(Date.now());
+  const dayPlanQuery = useQuery({
+    queryKey: queryKeys.calendar.dayPlan(localDay(now, locale.timezone), locale.timezone),
+    queryFn: () => getDayPlan({ date: localDay(now, locale.timezone), timeZone: locale.timezone }),
+    retry: false
+  });
   const todayMode = deriveTodayMode(eveningDefinition, locale, now);
   const eveningTimeZone = effectiveEveningTimeZone(eveningDefinition, locale);
   const latestEveningRun = latestEveningRunForToday(
@@ -272,6 +277,10 @@ export function TodayPage(props: {
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || dueTs(a) - dueTs(b))
     .slice(0, 3);
   const looseEnds = atRisk.slice(0, 5);
+  const assessmentShown =
+    todayMode === "evening"
+      ? eveningDefinition?.enabled === true
+      : briefingDefinitionsQuery.isPending || morningDefinition?.enabled === true;
 
   const name = firstName(props.me.user.name, props.me.user.email);
   const lede =
@@ -317,10 +326,17 @@ export function TodayPage(props: {
         }
       />
 
+      <nav aria-label="Sections" className="cmd-sections">
+        {assessmentShown ? <a href="#assessment">Assessment</a> : null}
+        <a href="#start-here">Start</a> <a href="#schedule">Schedule</a>
+        <a href="#needs-you">Needs you</a> <a href="#widgets">Widgets</a> <a href="#goals">Goals</a>
+        {looseEnds.length > 0 ? <a href="#loose-ends">Loose ends</a> : null}
+      </nav>
+
       <div className="cmd-grid">
         <div>
           {todayMode === "evening" && eveningDefinition?.enabled ? (
-            <>
+            <div id="assessment">
               <EveningReviewSection
                 kind="primary"
                 run={latestEveningRun}
@@ -348,7 +364,7 @@ export function TodayPage(props: {
                   />
                 )}
               />
-            </>
+            </div>
           ) : null}
 
           {todayMode === "day" &&
@@ -362,7 +378,7 @@ export function TodayPage(props: {
             />
           ) : null}
 
-          <section className="jds-brief">
+          <section className="jds-brief" id="start-here">
             <div className="jds-brief__head">
               <span className="jds-brief__kicker">Start here</span>
             </div>
@@ -391,58 +407,42 @@ export function TodayPage(props: {
             ) : null}
           </section>
 
-          <BriefingActionRowsSection
-            run={actionRowsRun}
-            loading={actionRowsLoading}
-            tasks={tasks}
+          <DayPlanSection
+            dayPlan={dayPlanQuery.data}
+            events={events}
             locale={locale}
-            chatAvailable={hasConnectedProvider(onboardingStatusQuery.data)}
+            now={now}
+            loading={dayPlanQuery.isPending}
+            error={dayPlanQuery.isError}
             onOpenTask={(id) => setDialog({ id })}
           />
 
+          <div id="needs-you">
+            <BriefingActionRowsSection
+              run={actionRowsRun}
+              loading={actionRowsLoading}
+              tasks={tasks}
+              locale={locale}
+              chatAvailable={hasConnectedProvider(onboardingStatusQuery.data)}
+              onOpenTask={(id) => setDialog({ id })}
+            />
+          </div>
+
           {feed.overnight.length > 0 ? <OvernightSection items={feed.overnight} /> : null}
 
-          <section className="jds-brief">
-            <div className="jds-brief__head">
-              <span className="jds-brief__kicker">Walking the day</span>
-            </div>
-            <div className="jds-brief__title">What's on the calendar</div>
-            {todayEvents.length > 0 ? (
-              <div className="day-list">
-                {todayEvents.map((event) => (
-                  <div
-                    className="day-ev"
-                    key={event.id}
-                    data-jarvis-capture-text={`Today: ${eventCaptureText(event, locale)}`}
-                  >
-                    <div className="day-ev__t">
-                      {timeLabel(event.startsAt, locale)}
-                      <span className="ap"> {ampm(event.startsAt, locale)}</span>
-                    </div>
-                    <div>
-                      <div className="day-ev__title">{event.title}</div>
-                      {event.location ? (
-                        <div className="day-ev__where">{event.location}</div>
-                      ) : null}
-                    </div>
-                    <div className="day-ev__who">{durationLabel(event)}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="cmd-empty">No events today. Enjoy the free time!</p>
-            )}
-          </section>
-
-          <ModuleTodayWidgets disabledModuleIds={disabledModuleIds} />
+          <div id="widgets">
+            <ModuleTodayWidgets disabledModuleIds={disabledModuleIds} />
+          </div>
           {feed.news.length > 0 || feed.interests.length > 0 ? (
             <NewsDesk news={feed.news} interests={feed.interests} />
           ) : null}
 
-          <GoalsSection />
+          <div id="goals">
+            <GoalsSection />
+          </div>
 
           {looseEnds.length > 0 ? (
-            <section className="jds-brief">
+            <section className="jds-brief" id="loose-ends">
               <div className="jds-brief__head">
                 <span className="jds-brief__kicker">Loose ends</span>
               </div>
@@ -732,7 +732,7 @@ function MorningBriefingSection(props: {
   const hasSummary = Boolean(props.run?.summaryText.trim());
 
   return (
-    <section className="jds-brief">
+    <section className="jds-brief" id="assessment">
       <div className="jds-brief__head">
         <span className="jds-brief__kicker">Morning briefing</span>
       </div>

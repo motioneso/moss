@@ -108,6 +108,8 @@ import type {
   ListBriefingDefinitionsResponse,
   ListBriefingRunsResponse,
   ListCalendarEventsResponse,
+  GetDayPlanQuery,
+  GetDayPlanResponse,
   ListCheckinsResponse,
   ListChatThreadMessagesResponse,
   ListChatThreadsResponse,
@@ -864,6 +866,12 @@ export async function listNotifications(): Promise<ListNotificationsResponse> {
 
 export async function listCalendarEvents(): Promise<ListCalendarEventsResponse> {
   return requestJson<ListCalendarEventsResponse>("/api/calendar/events");
+}
+
+export async function getDayPlan(query: GetDayPlanQuery): Promise<GetDayPlanResponse> {
+  const params = new URLSearchParams({ date: query.date });
+  if (query.timeZone !== undefined) params.set("timeZone", query.timeZone);
+  return requestJson<GetDayPlanResponse>(`/api/calendar/day-plan?${params.toString()}`);
 }
 
 export async function listChatThreads(surface?: ChatSurface): Promise<ListChatThreadsResponse> {

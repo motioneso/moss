@@ -56,7 +56,8 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "today",
     label: "Today",
-    description: "See the day's tasks, events, briefings, and priority cues in one place.",
+    description:
+      "Read the saved day plan as a schedule and preparation list with each block's state in words (committed versus proposed), plus task and event details, email action rows, module widgets, and goals.",
     path: "/today",
     scope: "user"
   },

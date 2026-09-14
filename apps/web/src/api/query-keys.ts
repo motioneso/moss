@@ -87,7 +87,9 @@ export const queryKeys = {
   },
   calendar: {
     list: ["calendar", "list"] as const,
-    detail: (id: string) => ["calendar", "detail", id] as const
+    detail: (id: string) => ["calendar", "detail", id] as const,
+    dayPlan: (localDay: string, timeZone: string) =>
+      ["calendar", "day-plan", localDay, timeZone] as const
   },
   chat: {
     settings: ["chat", "settings"] as const,

@@ -12,6 +12,7 @@ import type {
   MeResponse,
   TaskDto
 } from "@moss/shared";
+import { localDay } from "@moss/shared";
 
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { ChatControlsProvider } from "../../apps/web/src/shell/chat-controls-context.js";
@@ -233,6 +234,16 @@ function renderToday(input: {
     client.setQueryData(queryKeys.tasks.list, { tasks: input.tasks });
     client.setQueryData(queryKeys.tasks.lists, { lists: [] });
     client.setQueryData(queryKeys.calendar.list, { events: input.events });
+    client.setQueryData(
+      queryKeys.calendar.dayPlan(localDay(input.now, locale.timezone), locale.timezone),
+      {
+        plan: null,
+        tasks: [],
+        unavailableTaskIds: [],
+        sourceRun: null,
+        sourceRunUnavailable: false
+      }
+    );
     client.setQueryData(queryKeys.briefings.definitions, { definitions: input.definitions });
     for (const definition of input.definitions) {
       client.setQueryData(queryKeys.briefings.runs(definition.id), {
