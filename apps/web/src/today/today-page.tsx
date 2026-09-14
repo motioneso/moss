@@ -1,10 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, CheckCircle2, Clock, Flag, Info, Target } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import { localDay, type BriefingRunDto, type MeResponse, type TaskDto } from "@moss/shared";
-import { AgendaRow, Card, Masthead, MastheadClock, MastheadDateline, StatTile } from "@moss/ui";
+import {
+  AgendaRow,
+  Button,
+  Card,
+  Masthead,
+  MastheadClock,
+  MastheadDateline,
+  StatTile
+} from "@moss/ui";
 
 import {
   getDayPlan,
@@ -42,6 +50,7 @@ import {
 import { BriefingStaleBanner, parseBriefingFreshness } from "./briefing-freshness";
 import { ProactiveCards } from "./proactive-cards";
 import { BriefingActionRowsSection } from "./briefing-action-rows";
+import { MorningBriefingReader } from "./morning-briefing";
 import { DayPlanSection } from "./day-plan";
 import { TodayWeatherRow } from "./header-weather";
 import { TodayQuickActions } from "./today-quick-actions";
@@ -73,6 +82,7 @@ import "../styles/kit-tasks-modal.css";
 import "../styles/kit-today.css";
 import "../styles/kit-today-feeds.css";
 import "../styles/kit-today-misc.css";
+import "../styles/kit-briefing-reader.css";
 import { GoalsSection } from "./goals-section.js";
 
 /** Today — the all-day home: an editorial brief over the user's real tasks + calendar. */
@@ -95,6 +105,11 @@ export function TodayPage(props: {
   const disabledModuleIds = props.disabledModuleIds ?? [];
   const wellnessEnabled = props.wellnessEnabled ?? false;
   const [dialog, setDialog] = useState<{ readonly id: string } | null>(null);
+  const [reader, setReader] = useState<{
+    readonly definitionId: string;
+    readonly runId: string;
+  } | null>(null);
+  const readerOpener = useRef<HTMLElement | null>(null);
   const [, forceTodayModeRefresh] = useState(0);
   // The masthead clock and next-event countdown read `now`; tick a re-render each
   // half-minute so they stay honest while the page sits open.
@@ -458,6 +473,13 @@ export function TodayPage(props: {
                 briefingDefinitionsQuery.isPending ||
                 (morningDefinition?.enabled === true && morningRunsQuery.isPending)
               }
+              definitionId={morningDefinition?.id ?? null}
+              onOpenReader={(anchor) => {
+                const runId = latestMorningRun?.id;
+                if (!morningDefinition || !runId) return;
+                readerOpener.current = anchor;
+                setReader({ definitionId: morningDefinition.id, runId });
+              }}
             />
           ) : null}
 
@@ -574,6 +596,29 @@ export function TodayPage(props: {
           onClose={() => setDialog(null)}
         />
       ) : null}
+      {reader ? (
+        <MorningBriefingReader
+          definitionId={reader.definitionId}
+          initialRunId={reader.runId}
+          runs={morningRunsQuery.data?.runs ?? []}
+          tasks={tasks}
+          locale={locale}
+          dayPlan={dayPlanQuery.data}
+          events={events}
+          now={now}
+          dayPlanLoading={dayPlanQuery.isPending}
+          dayPlanError={dayPlanQuery.isError}
+          calendarError={eventsQuery.isError}
+          opener={readerOpener.current}
+          onClose={() => setReader(null)}
+          onOpenTask={(id) => {
+            // The task dialog lives in the app root, which the reader holds
+            // inert: close the reader first so the dialog can take focus.
+            setReader(null);
+            setDialog({ id });
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -581,9 +626,14 @@ export function TodayPage(props: {
 function MorningBriefingSection(props: {
   readonly run: BriefingRunDto | null;
   readonly loading: boolean;
+  readonly definitionId: string | null;
+  readonly onOpenReader: (anchor: HTMLElement) => void;
 }) {
   const freshness = props.run ? parseBriefingFreshness(props.run.sourceMetadata) : null;
-  const hasSummary = Boolean(props.run?.summaryText.trim());
+  const readable =
+    props.run && props.run.summaryText.trim() && props.definitionId
+      ? { run: props.run, definitionId: props.definitionId }
+      : null;
 
   return (
     <section className="jds-brief" id="assessment">
@@ -596,8 +646,13 @@ function MorningBriefingSection(props: {
         <div className="agenda-clear" role="status">
           Gathering your morning briefing…
         </div>
-      ) : hasSummary ? (
-        <BriefingProse summaryText={props.run?.summaryText ?? ""} />
+      ) : readable ? (
+        <>
+          <BriefingProse summaryText={readable.run.summaryText} />
+          <Button variant="secondary" onClick={(event) => props.onOpenReader(event.currentTarget)}>
+            Read the full morning briefing
+          </Button>
+        </>
       ) : (
         <div className="agenda-clear" role="status">
           Your morning briefing is not ready yet.

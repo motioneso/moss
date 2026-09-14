@@ -80,7 +80,8 @@ export const queryKeys = {
   },
   briefings: {
     definitions: ["briefings", "definitions"] as const,
-    runs: (definitionId: string | null) => ["briefings", "runs", definitionId] as const
+    runs: (definitionId: string | null) => ["briefings", "runs", definitionId] as const,
+    run: (definitionId: string, runId: string) => ["briefings", "run", definitionId, runId] as const
   },
   usefulnessFeedback: {
     list: ["usefulness-feedback"] as const
