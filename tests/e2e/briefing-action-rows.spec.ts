@@ -125,6 +125,19 @@ test("morning and evening prose and action rows render accept dismiss view reply
     }
   };
   await mockApi(page, state);
+  await page.route("**/api/calendar/day-plan*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        plan: null,
+        tasks: [],
+        unavailableTaskIds: [],
+        sourceRun: null,
+        sourceRunUnavailable: false
+      })
+    })
+  );
   await page
     .context()
     .route("https://example.test/**", (route) =>

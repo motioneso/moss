@@ -3,12 +3,14 @@ import type {
   BriefingDefinitionDto,
   BriefingRunDto,
   CreateBriefingDefinitionRequest,
+  GetDayPlanResponse,
   UpdateBriefingDefinitionRequest
 } from "@moss/shared";
 
 export interface MockBriefingsApiState {
   briefingDefinitions?: BriefingDefinitionDto[];
   briefingRuns?: Record<string, BriefingRunDto[]>;
+  dayPlan?: GetDayPlanResponse["plan"];
 }
 
 export async function registerMockBriefingsRoutes(
@@ -27,6 +29,21 @@ export async function registerMockBriefingsRoutes(
   await page.route("**/api/briefings/definitions", (route) =>
     handleBriefingDefinitionsRoute(route, state)
   );
+  await page.route("**/api/calendar/day-plan*", (route) => handleDayPlanRoute(route, state));
+}
+
+async function handleDayPlanRoute(route: Route, state: MockBriefingsApiState): Promise<void> {
+  if (route.request().method() !== "GET") {
+    return fulfillJson(route, 405, { error: "Method not allowed" });
+  }
+
+  return fulfillJson(route, 200, {
+    plan: state.dayPlan ?? null,
+    tasks: [],
+    unavailableTaskIds: [],
+    sourceRun: null,
+    sourceRunUnavailable: false
+  });
 }
 
 export function createMockBriefingDefinition(

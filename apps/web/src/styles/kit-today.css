@@ -159,3 +159,14 @@
   text-align: right;
   padding-top: 3px;
 }
+
+/* ===== Today section index + schedule state (T14) ===== */
+.cmd-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 4px 0 0;
+}
+.jds-task__state {
+  white-space: nowrap;
+}
