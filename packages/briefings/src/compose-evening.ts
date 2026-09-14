@@ -30,6 +30,7 @@ import {
 import { collectExternalBriefingContributions } from "./external-contributions.js";
 import { filterEveningCalendar, partitionEveningTasks } from "./evening-lenses.js";
 import { resolveBriefingFreshness } from "./freshness.js";
+import { resolvePlanContext } from "./plan-context.js";
 import { timezoneFor } from "./schedule.js";
 import { contextTokens, deriveEmailSignals } from "./signals.js";
 import { renderExternalBlock, sanitizeExternal, TRUST_BOUNDARY } from "./trust-boundary.js";
@@ -123,6 +124,7 @@ export async function composeEveningBriefing(
   const now = input.now ?? new Date();
   const timeZone = timezoneFor(definition.schedule_metadata);
   const actionRows = await gatherActionRows(scopedDb, definition, input, deps, gaps);
+  const plan = await resolvePlanContext(scopedDb, definition, now, deps, gaps);
 
   // ── tasks_reconciliation: three lenses over two tasks.list reads ─────────────
   // Scratch gap arrays: two gathers share one section key, so per-gather empty/
@@ -352,7 +354,11 @@ export async function composeEveningBriefing(
         deps.connectorSyncAt
       )
     : null;
-  const structuredPayload = { ...actionRows.payload, catchUp };
+  const structuredPayload = {
+    ...actionRows.payload,
+    catchUp,
+    ...(plan.present ? { planContext: plan.planContext } : {})
+  };
 
   // ── goals / sports / chats: identical to the morning gathers ─────────────────
   const goals = await gatherToolSection(
@@ -470,6 +476,7 @@ export async function composeEveningBriefing(
     chatTurnCount: chats.count,
     morningRunReferenced: morningPlan !== null,
     gaps,
+    ...(plan.planSnapshot !== undefined ? { planSnapshot: plan.planSnapshot } : {}),
     // Live/cache provenance per connected account (#729).
     sourceContext: { email: emailSourceContext, calendar: calendarSourceContext },
     ...(sourceTimestamps !== undefined ? { sourceTimestamps } : {})

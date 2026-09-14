@@ -1,4 +1,8 @@
-import type { BriefingStructuredPayloadV1, SourceFreshnessV1 } from "@moss/shared";
+import type {
+  BriefingPlanContextV1,
+  BriefingStructuredPayloadV1,
+  SourceFreshnessV1
+} from "@moss/shared";
 
 import type { BriefingGap, ComposeResult, Section } from "./compose.js";
 
@@ -19,7 +23,8 @@ export function fallback(
   vaultNotes: Array<{ path: string; id: string; excerpt: string }>,
   structuredPayload: BriefingStructuredPayloadV1,
   sourceTimestamps?: SourceFreshnessV1,
-  editorial?: Record<string, unknown>
+  editorial?: Record<string, unknown>,
+  planSnapshot?: BriefingPlanContextV1
 ): ComposeResult {
   const text = sections
     .map(
@@ -43,6 +48,7 @@ export function fallback(
       aiModel: null,
       gaps,
       ...(editorial !== undefined ? { editorial } : {}),
+      ...(planSnapshot !== undefined ? { planSnapshot } : {}),
       degraded: true,
       degradedReason: reason,
       ...(sourceTimestamps !== undefined ? { sourceTimestamps } : {})
