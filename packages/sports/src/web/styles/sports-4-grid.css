@@ -760,3 +760,54 @@
   letter-spacing: var(--tracking-snug);
   line-height: var(--leading-tight);
 }
+
+/* --------------------------------------------- /today Sports desk: scores + Tonight (T11) */
+
+.sp-scores {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.sp-scores__row {
+  padding: var(--space-2) 0;
+}
+.sp-scores__sides {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sp-scores__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: 2px;
+}
+
+.sp-tonight {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.sp-tonight__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+.sp-tonight__kicker {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+.sp-tonight__matchup {
+  line-height: 1.4;
+}
+.sp-tonight__time {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sp-tonight__quiet {
+  margin: var(--space-2) 0 0;
+  line-height: 1.45;
+}
