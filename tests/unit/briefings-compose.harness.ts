@@ -4,6 +4,7 @@ import type { BriefingDefinition, DataContextDb } from "@moss/db";
 import type { MemoryRetriever } from "@moss/memory";
 import type { MossModuleManifest, ToolExecute, ToolResult } from "@moss/module-sdk";
 import type { FocusSignalInput, PriorityModelPreferenceV1 } from "@moss/priority";
+import type { DayPlanDto } from "@moss/shared";
 
 import {
   type ComposeDeps,
@@ -176,6 +177,15 @@ export interface FakeOptions {
   readonly userName?: string;
   readonly disabledBehaviors?: ReadonlySet<string>;
   readonly preferences?: Readonly<Record<string, unknown>>;
+  /**
+   * Saved day plan for the run's local day. Present (even with plan undefined)
+   * injects the `dayPlanRead` port; absent leaves it out entirely. `throws`
+   * makes the port reject to exercise the gap path.
+   */
+  readonly dayPlan?: {
+    readonly plan?: DayPlanDto;
+    readonly throws?: boolean;
+  };
 }
 
 export function makeFakeManifests(failTool?: string): MossModuleManifest[] {
@@ -325,7 +335,17 @@ export function makeFakeDeps(options: FakeOptions = {}): ComposeDeps {
     createAdapter: () => ({
       generateChat:
         options.generateChat ?? (async () => ({ text: "synth narrative" }) as { text: string })
-    })
+    }),
+    ...(options.dayPlan !== undefined
+      ? {
+          dayPlanRead: {
+            getForDay: async () => {
+              if (options.dayPlan?.throws) throw new Error("day plan down");
+              return options.dayPlan?.plan;
+            }
+          }
+        }
+      : {})
   };
 }
 

@@ -12,7 +12,8 @@ import { isBehaviorEnabled, type SourceBehaviorPolicyDeps } from "@moss/source-b
 import {
   parseCalendarAutomationMode,
   normalizePersonaSettings,
-  renderPersonaText
+  renderPersonaText,
+  type DayPlanDto
 } from "@moss/shared";
 import type { BriefingContribution, ExternalBriefingInvoker } from "./external-contributions.js";
 import type { BriefingStructuredPayloadV1 } from "@moss/shared";
@@ -65,6 +66,17 @@ export interface ComposeDeps {
   readonly sourceContextService?: {
     listEmailContext(scopedDb: DataContextDb, input: Record<string, unknown>): Promise<unknown>;
     listCalendarContext(scopedDb: DataContextDb, input: Record<string, unknown>): Promise<unknown>;
+  };
+  /**
+   * Injected by the composition root; reads the actor's saved day plan for the
+   * run's local day (T12). Structural — briefings never imports calendar; the
+   * calendar repository satisfies this shape.
+   */
+  readonly dayPlanRead?: {
+    getForDay(
+      scopedDb: DataContextDb,
+      input: { readonly localDay: string; readonly timeZone: string }
+    ): Promise<DayPlanDto | undefined>;
   };
   readonly calendarFollowThrough?: {
     executeAutoActions(args: {

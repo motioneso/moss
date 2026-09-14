@@ -31,6 +31,7 @@ import {
   type SportsBriefingEvidenceV1
 } from "@moss/shared";
 import { resolveBriefingFreshness } from "./freshness.js";
+import { resolvePlanContext } from "./plan-context.js";
 import { timezoneFor } from "./schedule.js";
 import { contextTokens, deriveCalendarSignals, deriveEmailSignals } from "./signals.js";
 import {
@@ -88,6 +89,7 @@ export async function composeBriefing(
   // local-day content window agree. No cross-user read: tz comes off this definition.
   const timeZone = timezoneFor(definition.schedule_metadata);
   const actionRows = await gatherActionRows(scopedDb, definition, input, deps, gaps);
+  const plan = await resolvePlanContext(scopedDb, definition, now, deps, gaps);
 
   const commitments = await gatherToolSection(
     scopedDb,
@@ -397,7 +399,11 @@ export async function composeBriefing(
         deps.connectorSyncAt
       )
     : null;
-  const structuredPayload = { ...actionRows.payload, catchUp };
+  const structuredPayload = {
+    ...actionRows.payload,
+    catchUp,
+    ...(plan.present ? { planContext: plan.planContext } : {})
+  };
 
   const goals = await gatherToolSection(
     scopedDb,
@@ -536,7 +542,8 @@ export async function composeBriefing(
       vaultNotes,
       structuredPayload,
       sourceTimestamps,
-      editorial
+      editorial,
+      plan.planSnapshot
     );
   }
   return {
@@ -561,6 +568,7 @@ export async function composeBriefing(
       },
       gaps,
       editorial,
+      ...(plan.planSnapshot !== undefined ? { planSnapshot: plan.planSnapshot } : {}),
       // Live/cache provenance per connected account (#729): degraded means at least one
       // account was served from the fallback cache after a transient live-read failure.
       sourceContext: { email: emailSourceContext, calendar: calendarSourceContext },

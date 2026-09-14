@@ -2096,6 +2096,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             manifests: getBuiltInModuleManifests(),
             preferencesRepository: new PreferencesRepository()
           },
+          dayPlanRead: autoDayPlanRepository,
           resolveUserName: async (scopedDb, actorUserId) => {
             const row = await scopedDb.db
               .selectFrom("app.users")
