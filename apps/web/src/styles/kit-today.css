@@ -170,3 +170,11 @@
 .jds-task__state {
   white-space: nowrap;
 }
+
+/* ===== Today weather row (T15, layout only) ===== */
+.wx-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-top: 6px;
+}

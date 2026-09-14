@@ -1,16 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  CalendarDays,
-  Check,
-  CheckCircle2,
-  ClipboardCheck,
-  Clock,
-  Flag,
-  HeartPulse,
-  Info,
-  Pill,
-  Target
-} from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock, Flag, Info, Target } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 
@@ -18,10 +7,8 @@ import { localDay, type BriefingRunDto, type MeResponse, type TaskDto } from "@m
 import { AgendaRow, Card, Masthead, MastheadClock, MastheadDateline, StatTile } from "@moss/ui";
 
 import {
-  createWellnessCheckin,
   getDayPlan,
   getOnboardingStatus,
-  getMedicationSchedule,
   listCalendarEvents,
   listBriefingDefinitions,
   listBriefingRuns,
@@ -35,9 +22,7 @@ import { useUserLocale } from "../locale/locale-format";
 import { hasConnectedProvider } from "../onboarding/chat-availability";
 import { useChatControls } from "../shell/chat-controls-context";
 import { readColorMode } from "../theme/color-mode";
-import { MedToday } from "../wellness/wellness-today";
-import { ManageMedsModal } from "../wellness/manage-meds-modal";
-import { CheckinModal, type CheckinFormValue } from "../wellness/checkin-modal";
+import { getWeatherToday } from "../api/weather-client";
 import { queryKeys } from "../api/query-keys";
 import {
   addDaysToKey,
@@ -58,6 +43,8 @@ import { BriefingStaleBanner, parseBriefingFreshness } from "./briefing-freshnes
 import { ProactiveCards } from "./proactive-cards";
 import { BriefingActionRowsSection } from "./briefing-action-rows";
 import { DayPlanSection } from "./day-plan";
+import { TodayWeatherRow } from "./header-weather";
+import { TodayQuickActions } from "./today-quick-actions";
 import { TaskDetailsDialog } from "../tasks/task-details-dialog";
 import { createEmptyTodayFeed, type TodayFeed } from "./feed-source";
 import { ModuleTodayWidgets } from "./module-today-widgets";
@@ -203,35 +190,10 @@ export function TodayPage(props: {
     }
   });
   const theme = readColorMode();
-  const [medsModalOpen, setMedsModalOpen] = useState(false);
-  const [manageMedsOpen, setManageMedsOpen] = useState(false);
-  const [checkinModalOpen, setCheckinModalOpen] = useState(false);
-  const medScheduleQuery = useQuery({
-    queryKey: queryKeys.wellness.schedule(localDay(new Date(), locale.timezone)),
-    queryFn: () => getMedicationSchedule(localDay(new Date(), locale.timezone)),
-    enabled: wellnessEnabled
-  });
-  const medScheduledSlots = (medScheduleQuery.data?.slots ?? []).filter((s) => !s.asNeeded);
-  const medTaken = medScheduledSlots.filter((s) => s.status === "taken").length;
-  const medTotal = medScheduledSlots.length;
-  const medsAllTaken = medTotal > 0 && medTaken === medTotal;
-  const medsNoneLogged = medTotal > 0 && medTaken === 0;
-  const createCheckinMutation = useMutation({
-    mutationFn: (val: CheckinFormValue) =>
-      createWellnessCheckin({
-        feelingCore: val.emotion,
-        feelingSecondary: val.feeling,
-        feelingTertiary: null,
-        sensations: val.sensations,
-        intensity: val.intensity,
-        note: val.note || null,
-        identifiedVia: "wheel"
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.wellness.checkins });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.wellness.insights });
-      setCheckinModalOpen(false);
-    }
+  const weatherQuery = useQuery({
+    queryKey: queryKeys.weather.today,
+    queryFn: getWeatherToday,
+    staleTime: 30 * 60 * 1000
   });
 
   const tasks = tasksQuery.data?.tasks ?? [];
@@ -326,10 +288,20 @@ export function TodayPage(props: {
         }
       />
 
+      <div id="weather">
+        <TodayWeatherRow
+          weather={weatherQuery.data?.data}
+          mode={todayMode}
+          isPending={weatherQuery.isPending}
+          isError={weatherQuery.isError}
+        />
+      </div>
+
       <nav aria-label="Sections" className="cmd-sections">
         {assessmentShown ? <a href="#assessment">Assessment</a> : null}
-        <a href="#start-here">Start</a> <a href="#schedule">Schedule</a>
-        <a href="#needs-you">Needs you</a> <a href="#widgets">Widgets</a> <a href="#goals">Goals</a>
+        <a href="#start-here">Start</a> <a href="#weather">Weather</a>
+        <a href="#schedule">Schedule</a> <a href="#needs-you">Needs you</a>
+        <a href="#widgets">Widgets</a> <a href="#goals">Goals</a>
         {looseEnds.length > 0 ? <a href="#loose-ends">Loose ends</a> : null}
       </nav>
 
@@ -431,7 +403,7 @@ export function TodayPage(props: {
           {feed.overnight.length > 0 ? <OvernightSection items={feed.overnight} /> : null}
 
           <div id="widgets">
-            <ModuleTodayWidgets disabledModuleIds={disabledModuleIds} />
+            <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
           </div>
           {feed.news.length > 0 || feed.interests.length > 0 ? (
             <NewsDesk news={feed.news} interests={feed.interests} />
@@ -581,136 +553,15 @@ export function TodayPage(props: {
               />
             ) : null}
 
-            {wellnessEnabled ? (
-              <div className="well">
-                <div className="well__head">
-                  <span className="ic">
-                    <HeartPulse size={15} aria-hidden="true" />
-                  </span>
-                  <span className="well__title">Wellness</span>
-                </div>
-                {medTotal > 0 ? (
-                  <div className="well__line">
-                    {medsAllTaken ? (
-                      <>
-                        <Check size={14} aria-hidden="true" /> <b>All meds taken</b> today.
-                      </>
-                    ) : medsNoneLogged ? (
-                      <>
-                        No meds logged yet today — <b>{medTotal}</b> to go.
-                      </>
-                    ) : (
-                      <>
-                        <b>
-                          {medTaken} of {medTotal}
-                        </b>{" "}
-                        meds logged today.
-                      </>
-                    )}
-                  </div>
-                ) : null}
-                <div className="well__actions">
-                  <button
-                    className="well__btn well__btn--meds"
-                    onClick={() => setMedsModalOpen(true)}
-                  >
-                    <span className="lead">
-                      <span className="ic">
-                        <Pill size={15} aria-hidden="true" />
-                      </span>
-                      Meds
-                    </span>
-                    {medTotal > 0 ? (
-                      <span className={`well__ct${medsAllTaken ? " is-done" : ""}`}>
-                        {medTaken}/{medTotal}
-                      </span>
-                    ) : null}
-                  </button>
-                  <button className="well__btn" onClick={() => setCheckinModalOpen(true)}>
-                    <span className="ic">
-                      <ClipboardCheck size={15} aria-hidden="true" />
-                    </span>
-                    Check in
-                  </button>
-                </div>
-              </div>
-            ) : null}
+            <TodayQuickActions
+              enabled={wellnessEnabled}
+              theme={theme}
+              timeZone={locale.timezone}
+              disabledModuleIds={disabledModuleIds}
+            />
           </div>
         </aside>
       </div>
-      {wellnessEnabled && medsModalOpen ? (
-        <div
-          className="wl-modal-scrim"
-          onMouseDown={(ev) => {
-            if (ev.target === ev.currentTarget) setMedsModalOpen(false);
-          }}
-        >
-          <div
-            className="wl-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="today-meds-title"
-            style={{ maxWidth: 480 }}
-          >
-            <div className="wl-modal__head">
-              <div className="hm">
-                <div className="wl-modal__eyebrow">Today</div>
-                <div className="wl-modal__title" id="today-meds-title">
-                  Medications
-                </div>
-              </div>
-              <button
-                type="button"
-                className="wl-modal__x"
-                aria-label="Close"
-                onClick={() => setMedsModalOpen(false)}
-              >
-                <XIcon />
-              </button>
-            </div>
-            <div className="wl-modal__body" style={{ padding: "0 0 8px" }}>
-              <MedToday
-                theme={theme}
-                onManage={() => {
-                  setMedsModalOpen(false);
-                  setManageMedsOpen(true);
-                }}
-                timeZone={locale.timezone}
-              />
-            </div>
-            <div className="wl-modal__foot">
-              <span className="spacer" />
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => setMedsModalOpen(false)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {wellnessEnabled ? (
-        <ManageMedsModal
-          open={manageMedsOpen}
-          onClose={() => setManageMedsOpen(false)}
-          theme={theme}
-        />
-      ) : null}
-
-      {wellnessEnabled ? (
-        <CheckinModal
-          open={checkinModalOpen}
-          onClose={() => setCheckinModalOpen(false)}
-          onSave={(val) => createCheckinMutation.mutate(val)}
-          initial={null}
-          seedEmotion={null}
-          theme={theme}
-        />
-      ) : null}
-
       {dialog ? (
         <TaskDetailsDialog
           open
@@ -746,21 +597,5 @@ function MorningBriefingSection(props: {
         <div className="agenda-clear">Your morning briefing is not ready yet.</div>
       )}
     </section>
-  );
-}
-
-function XIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-    >
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
   );
 }

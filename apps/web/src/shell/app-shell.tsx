@@ -13,7 +13,6 @@ import { NavLink, useLocation, useNavigate } from "react-router";
 
 import { listNotifications, listThemes, sendChatTurn, signOut } from "../api/client";
 import { useAssistantName } from "../api/use-assistant-name";
-import { getWeatherToday } from "../api/weather-client";
 import { buildShellNavigation, resolvePageHeading, webRoutes } from "../app-route-metadata";
 import { ModuleSettingsButton } from "./module-settings-button";
 import { useUserLocale } from "../locale/locale-format";
@@ -30,7 +29,6 @@ import { useChatStream } from "../chat/use-chat-stream";
 import { usePageContextSync } from "../chat/use-page-context-sync";
 import { BrandMark } from "@moss/ui";
 import { ChatControlsProvider } from "./chat-controls-context";
-import { HeaderWeather } from "../today/header-weather";
 import { applyThemeTokens } from "../theme/theme-runtime";
 import { CommandPalette } from "./command-palette";
 import { NAV_ICON_MAP } from "./nav-icons";
@@ -285,13 +283,6 @@ export function AppShell(props: AppShellProps) {
   // while loading or if an older cached response lacks the field — never renders a badge in
   // that case (NavItem only shows a badge for a strictly-positive count).
   const unreadByModule = notificationsQuery.data?.unreadByModule ?? {};
-  const onTodayPage = location.pathname.startsWith("/today");
-  const weatherQuery = useQuery({
-    queryKey: queryKeys.weather.today,
-    queryFn: getWeatherToday,
-    staleTime: 30 * 60 * 1000,
-    enabled: onTodayPage
-  });
   const signOutMutation = useMutation({
     mutationFn: signOut,
     onSuccess: () => {
@@ -424,12 +415,6 @@ export function AppShell(props: AppShellProps) {
               showSettingsButton={showSettingsButton}
               moduleId={activeModuleId}
             />
-
-            {onTodayPage ? (
-              <div className="topbar-context">
-                <HeaderWeather weather={weatherQuery.data?.data ?? null} />
-              </div>
-            ) : null}
 
             <div className="topbar-actions">
               <TrailMoreButton />
