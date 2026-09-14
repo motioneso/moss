@@ -95,7 +95,7 @@ jobs:
         run: pnpm check:no-dev-password
 
   verify:
-    name: Verify static checks and unit tests
+    name: Verify static checks
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: changes
@@ -122,6 +122,31 @@ jobs:
       - name: Verify static checks
         run: pnpm verify:static
 
+  unit:
+    name: Verify unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       # The brokered Sports renderer unit smoke launches Chromium.
       - name: Install Chromium for unit tests
         run: |
@@ -147,14 +172,14 @@ jobs:
           exit "$status"
 
   integration:
-    name: Verify integration tests (${{ matrix.shard }}/2)
+    name: Verify integration tests (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
     strategy:
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
 
     steps:
       - name: Check out repository
@@ -194,9 +219,9 @@ jobs:
       - name: Run integration shard
         run: |
           status=0
-          timeout --verbose --signal=TERM 30m pnpm test:integration tests/integration --shard=${{ matrix.shard }}/2 || status=$?
+          timeout --verbose --signal=TERM 30m pnpm test:integration tests/integration --shard=${{ matrix.shard }}/4 || status=$?
           if [ "$status" -eq 124 ]; then
-            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=integration-${{ matrix.shard }}-of-2 budget=30m issue=#1534"
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=integration-${{ matrix.shard }}-of-4 budget=30m issue=#1534"
           fi
           exit "$status"
 
@@ -381,7 +406,8 @@ jobs:
     name: CI gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [changes, docs-gate, verify, integration, browser, compose-smoke, prod-compose-smoke]
+    needs:
+      [changes, docs-gate, verify, unit, integration, browser, compose-smoke, prod-compose-smoke]
     if: always()
 
     steps:
@@ -391,7 +417,7 @@ jobs:
         run: |
           set -euo pipefail
           failed=""
-          for job in changes docs-gate verify integration browser compose-smoke prod-compose-smoke; do
+          for job in changes docs-gate verify unit integration browser compose-smoke prod-compose-smoke; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg job "$job" '.[$job].result')
             echo "$job: $result"
             case "$result" in
@@ -409,7 +435,7 @@ jobs:
     name: Build ${{ matrix.arch }} image
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
-    needs: [verify, integration, browser, compose-smoke, prod-compose-smoke]
+    needs: [verify, unit, integration, browser, compose-smoke, prod-compose-smoke]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     strategy:
       fail-fast: true
