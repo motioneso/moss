@@ -361,7 +361,12 @@ import {
   type NewsRoutesDependencies,
   type NewsStoryFeedbackPort
 } from "@moss/news";
-import { assertValidFetchHosts, createDatasetClient, DatasetCache } from "@moss/datasets";
+import {
+  assertValidFetchHosts,
+  createDatasetClient,
+  DatasetCache,
+  type DatasetClient
+} from "@moss/datasets";
 import {
   notesModuleManifest,
   notesCommitmentProvider,
@@ -713,6 +718,12 @@ export interface BuiltInWorkerDependencies {
    */
   readonly logger?: FastifyBaseLogger;
   /**
+   * #2313: fixture fetch for the worker-built News/Sports briefing dataset clients.
+   * Production leaves it undefined and the clients fall back to global fetch, as the
+   * API does today. Tests and the e2e harness pass a fixed stub.
+   */
+  readonly fetchFn?: typeof fetch;
+  /**
    * #1282 Task 2: external (JSON-manifest) module discovery, built by apps/worker (the only
    * place holding both external-module discovery and the external worker runtime) and
    * forwarded to the briefings module. Both fields are optional — a host with zero external
@@ -1019,6 +1030,63 @@ export function buildModelNativeSearchResolver(deps: {
       }
     };
   };
+}
+
+/**
+ * #2313: build the sports briefing dataset client and configure the late-bound
+ * briefing service. Called from BOTH the web server startup (registerRoutes) and the
+ * background worker startup (registerWorkers): they are separate processes, and the
+ * scheduled morning briefing runs in the worker. Without the worker half, the sports
+ * section always ships as a `tool_failed` gap. Returns the client so the route block
+ * keeps using the same instance for routes and chat tools (no second client).
+ */
+export function buildSportsBriefingSource(deps: {
+  readonly fetchFn?: typeof fetch;
+  readonly logger?: FastifyBaseLogger;
+}): DatasetClient {
+  // LOADER-SEAM(sports) 2: DI wiring + construction of the dataset-connector-SDK runtime
+  // client (docs/superpowers/specs/2026-07-04-module-dataset-connector-sdk.md) bound to the
+  // module's manifest-declared `espn` external source, in the composition root (which
+  // concrete adapter/host-pinning config applies lives here, not in the manifest itself).
+  const [espnSource] = sportsModuleManifest.externalSources ?? [];
+  if (!espnSource) {
+    throw new Error("sports module manifest is missing its `espn` externalSources entry");
+  }
+  const datasetClient = createDatasetClient(espnSource, createEspnDatasetAdapter(), {
+    fetchFn: deps.fetchFn,
+    logger: deps.logger ? createModuleLogger(deps.logger, "sports") : undefined
+  });
+  // LOADER-SEAM(sports) 3: the briefing tool (`briefing-tool.ts`) is constructed from
+  // static manifest data at import time, before this wiring runs, so it adopts the client
+  // via a late-bound setter (mirrors `adoptChatRpcConnection` above for the chat RPC path).
+  configureSportsBriefingService(datasetClient);
+  return datasetClient;
+}
+
+/**
+ * #2313: build the news briefing dataset client and configure the late-bound briefing
+ * service. Same both-entries contract as buildSportsBriefingSource above; returns the
+ * client so the route block keeps using the same instance.
+ */
+export function buildNewsBriefingSource(deps: {
+  readonly fetchFn?: typeof fetch;
+  readonly logger?: FastifyBaseLogger;
+}): DatasetClient {
+  // Same dataset-connector-SDK wiring as sports above: the composition root binds the
+  // manifest-declared `newsfeeds` external source to the concrete RSS adapter so host
+  // pinning and TTLs come from the manifest, not the module code.
+  const [feedsSource] = newsModuleManifest.externalSources ?? [];
+  if (!feedsSource) {
+    throw new Error("news module manifest is missing its `newsfeeds` externalSources entry");
+  }
+  const datasetClient = createDatasetClient(feedsSource, createRssDatasetAdapter(), {
+    fetchFn: deps.fetchFn,
+    logger: deps.logger ? createModuleLogger(deps.logger, "news") : undefined
+  });
+  // Briefing tool is constructed at import time; it adopts the client late-bound
+  // (mirrors LOADER-SEAM(sports) 3).
+  configureNewsBriefingService(datasetClient);
+  return datasetClient;
 }
 
 /**
@@ -2205,19 +2273,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [sportsModuleSqlMigrationDirectory],
     queueDefinitions: [],
     registerRoutes: (server, deps) => {
-      // LOADER-SEAM(sports) 2: DI wiring + construction of the dataset-connector-SDK runtime
-      // client (docs/superpowers/specs/2026-07-04-module-dataset-connector-sdk.md) bound to the
-      // module's manifest-declared `espn` external source, in the composition root (which
-      // concrete adapter/host-pinning config applies lives here, not in the manifest itself).
-      // Sports is the sole migration case this slice, so the client is wired inline rather than
-      // via a generic per-module map on `BuiltInModuleRegistration`.
-      const [espnSource] = sportsModuleManifest.externalSources ?? [];
-      if (!espnSource) {
-        throw new Error("sports module manifest is missing its `espn` externalSources entry");
-      }
-      const datasetClient = createDatasetClient(espnSource, createEspnDatasetAdapter(), {
+      // LOADER-SEAM(sports) 2: the dataset-connector-SDK runtime client lives in
+      // buildSportsBriefingSource (shared with the worker entry); the route block keeps
+      // using the returned instance for routes and chat tools. Sports is the sole
+      // migration case this slice, so the client is wired inline rather than via a
+      // generic per-module map on `BuiltInModuleRegistration`.
+      const datasetClient = buildSportsBriefingSource({
         fetchFn: deps.fetchFn,
-        logger: createModuleLogger(server.log, "sports")
+        logger: server.log
       });
       const rendererSocket = process.env.MOSS_SPORTS_RENDERER_SOCKET;
       let browser: SportsBrowserClient | undefined;
@@ -2242,10 +2305,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         });
         server.addHook("onClose", async () => browserBrokerServer.stop());
       }
-      // LOADER-SEAM(sports) 3: the briefing tool (`briefing-tool.ts`) is constructed from
-      // static manifest data at import time, before this wiring runs, so it adopts the client
-      // via a late-bound setter (mirrors `adoptChatRpcConnection` above for the chat RPC path).
-      configureSportsBriefingService(datasetClient);
+      // The briefing service was configured inside buildSportsBriefingSource above; the
+      // late-bound tool adopts that same client, so routes and chat tools share it.
       const discovery = buildSportsDiscoveryPorts(
         createModuleLogger(server.log, "sports"),
         browser
@@ -2343,6 +2404,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         storyRelevance: sportsStoryRelevance,
         storyFeedback: sportsStoryFeedback
       });
+    },
+    registerWorkers: async (_boss, deps) => {
+      // #2313: the worker is a separate process, so the briefing service installed by
+      // registerRoutes never reaches it. The scheduled morning briefing runs here, so the
+      // worker entry builds the same client through the shared builder. Only worker
+      // dependency fields are read (logger, fetchFn); nothing route-only.
+      buildSportsBriefingSource({ fetchFn: deps.fetchFn, logger: deps.logger });
+      return [];
     }
   },
   {
@@ -2350,20 +2419,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [newsModuleSqlMigrationDirectory],
     queueDefinitions: [...NEWS_QUEUE_DEFINITIONS],
     registerRoutes: (server, deps) => {
-      // Same dataset-connector-SDK wiring as sports above: the composition root binds the
-      // manifest-declared `newsfeeds` external source to the concrete RSS adapter so host
-      // pinning and TTLs come from the manifest, not the module code.
-      const [feedsSource] = newsModuleManifest.externalSources ?? [];
-      if (!feedsSource) {
-        throw new Error("news module manifest is missing its `newsfeeds` externalSources entry");
-      }
-      const datasetClient = createDatasetClient(feedsSource, createRssDatasetAdapter(), {
+      // Same shared builder as sports above: one client for routes, chat tools and the
+      // late-bound briefing tool.
+      const datasetClient = buildNewsBriefingSource({
         fetchFn: deps.fetchFn,
-        logger: createModuleLogger(server.log, "news")
+        logger: server.log
       });
-      // Briefing tool is constructed at import time; it adopts the client late-bound
-      // (mirrors LOADER-SEAM(sports) 3).
-      configureNewsBriefingService(datasetClient);
       const discovery = buildNewsDiscoveryPorts(
         createModuleLogger(server.log, "news"),
         deps.createCliStructuredAdapter
@@ -2414,6 +2475,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       });
     },
     registerWorkers: (boss, deps) => {
+      // #2313: same both-entries contract as sports above; the scheduled briefing runs in
+      // this process. Only worker dependency fields are read (logger, fetchFn).
+      buildNewsBriefingSource({ fetchFn: deps.fetchFn, logger: deps.logger });
       const discovery = buildNewsDiscoveryPorts(
         deps.logger ? createModuleLogger(deps.logger, "news") : undefined
       );

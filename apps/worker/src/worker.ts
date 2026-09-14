@@ -76,7 +76,12 @@ import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 import { createModuleWorkerAiBridge } from "./external-module-ai-bridge.js";
 import { buildDiscoveryLookup } from "./external-module-discovery.js";
 import { createExternalBriefingInvoker } from "./external-module-invoke.js";
-import { createExternalModuleJobHandler } from "./external-module-job-handler.js";
+import {
+  resolveE2eFetchOverride,
+  createExternalModuleJobHandler
+} from "./external-module-job-handler.js";
+import { ESPN_FETCH_HOSTS } from "@moss/sports";
+import { NEWS_FETCH_HOSTS } from "@moss/news";
 import { createIsModuleEnabled } from "./worker-module-gate.js";
 import { createModuleBuildLiveAgent } from "./module-build-live-agent.js";
 import {
@@ -417,12 +422,11 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   // queue path, adapted to the narrower shape the briefing composer calls (see
   // external-module-invoke.ts for the shared trust gate both paths run through).
   //
-  // #1306 Task 22: deliberately no `createFetch` here. A briefing contribution renders
-  // from stored records (see external-modules/job-search/src/worker/handlers/briefing.ts) —
-  // there is no fetch on this path for the e2e/UAT fixture override to redirect. If a
-  // briefing handler ever does gain a fetch, this is the call site to pass
-  // resolveE2eFetchOverride() into (see external-module-job-handler.ts for the queue-path
-  // precedent) — don't let the omission read as an oversight.
+  // #1306 Task 22: deliberately no `createFetch` on this invoker. An external-module
+  // briefing contribution renders from stored records
+  // (see external-modules/job-search/src/worker/handlers/briefing.ts) — there is no fetch
+  // on that path for the e2e/UAT fixture override to redirect. (The built-in News/Sports
+  // briefing dataset clients DO fetch; their override is bound below at #2313.)
   const invokeExternalBriefing = createExternalBriefingInvoker({
     workerDb,
     getDiscoveryById,
@@ -435,9 +439,17 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     readAttachmentText: readModuleAttachmentText
   });
 
+  // #2313: the worker-built News/Sports briefing dataset clients fetch over the same
+  // fixture bypass the queue path uses. createFetch is host-scoped, so it is bound here to
+  // the two briefing sources' manifest hosts; without the e2e env there is no key and the
+  // clients fall back to global fetch, exactly as the API does today.
+  const { createFetch: createBriefingFixtureFetch } = resolveE2eFetchOverride();
   await registerBuiltInModuleWorkers(boss, {
     rootDb: workerDb,
     dataContext,
+    ...(createBriefingFixtureFetch
+      ? { fetchFn: createBriefingFixtureFetch([...ESPN_FETCH_HOSTS, ...NEWS_FETCH_HOSTS]) }
+      : {}),
     focusSignals: async (ctx) => {
       const providers = focusSignalProvidersFor(await resolveActiveModules(ctx.actorUserId));
       if (providers.length === 0) return [];
