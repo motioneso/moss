@@ -29,6 +29,22 @@ const { Client } = pg;
 
 const DAY = "2026-09-12";
 const ZONE = "America/Los_Angeles";
+
+// The live source-context reader drops events that already ended, so live-read
+// fixtures must end in the future at any run time. One UTC-midnight anchor, a
+// month ahead of every fixed day in this file, feeds the three live tests below;
+// relative times inside each test stay exactly as they were.
+const LIVE_DAY_OFFSET = 30;
+const UTC_DAY_MS = 86_400_000;
+function liveDayStart(): number {
+  return Math.floor(Date.now() / UTC_DAY_MS) * UTC_DAY_MS + LIVE_DAY_OFFSET * UTC_DAY_MS;
+}
+function liveDay(offsetDays = 0): string {
+  return new Date(liveDayStart() + offsetDays * UTC_DAY_MS).toISOString().slice(0, 10);
+}
+function liveAt(offsetDays: number, time: string): string {
+  return `${liveDay(offsetDays)}T${time}:00.000Z`;
+}
 const userA: AccessContext = { actorUserId: ids.userA, requestId: "preview-a" };
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
 
@@ -361,7 +377,12 @@ describe("saved day-plan preview real API boundary", () => {
         })
     );
 
-    const day = "2026-09-14";
+    const day = liveDay();
+    const blockStart = liveAt(0, "16:00");
+    const ownStart = liveAt(0, "18:00");
+    const ownEnd = liveAt(0, "19:00");
+    const conflictStart = liveAt(0, "16:30");
+    const conflictEnd = liveAt(0, "17:00");
     const created = await server.inject({
       method: "POST",
       url: "/api/calendar/day-plans",
@@ -385,7 +406,7 @@ describe("saved day-plan preview real API boundary", () => {
             title: "Overlaps a real meeting",
             pendingChange: {
               kind: "add",
-              startsAt: "2026-09-14T16:00:00.000Z",
+              startsAt: blockStart,
               durationMinutes: 60
             }
           },
@@ -395,7 +416,7 @@ describe("saved day-plan preview real API boundary", () => {
             title: "Overlaps its own event, which must not count",
             pendingChange: {
               kind: "add",
-              startsAt: "2026-09-14T18:00:00.000Z",
+              startsAt: ownStart,
               durationMinutes: 60
             }
           }
@@ -410,7 +431,7 @@ describe("saved day-plan preview real API boundary", () => {
     // Give the second block an already-scheduled calendar event matching the mocked event
     // below, so the preview must recognize it as the block's own placement, not a conflict.
     await setBlockActualPlacement(ownEventBlockId, {
-      startsAt: "2026-09-14T18:00:00.000Z",
+      startsAt: ownStart,
       durationMinutes: 60,
       calendarEventRef: "evt-own"
     });
@@ -425,14 +446,14 @@ describe("saved day-plan preview real API boundary", () => {
               {
                 id: "evt-real-meeting",
                 summary: "Board sync",
-                start: { dateTime: "2026-09-14T16:30:00.000Z" },
-                end: { dateTime: "2026-09-14T17:00:00.000Z" }
+                start: { dateTime: conflictStart },
+                end: { dateTime: conflictEnd }
               },
               {
                 id: "evt-own",
                 summary: "Overlaps its own event, which must not count",
-                start: { dateTime: "2026-09-14T18:00:00.000Z" },
-                end: { dateTime: "2026-09-14T19:00:00.000Z" }
+                start: { dateTime: ownStart },
+                end: { dateTime: ownEnd }
               }
             ]
           })
@@ -463,8 +484,8 @@ describe("saved day-plan preview real API boundary", () => {
         calendarEvent: {
           eventKey: "evt-real-meeting",
           title: "Board sync",
-          startsAt: "2026-09-14T16:30:00.000Z",
-          endsAt: "2026-09-14T17:00:00.000Z",
+          startsAt: conflictStart,
+          endsAt: conflictEnd,
           accountLabel: "Google"
         }
       }
@@ -472,6 +493,11 @@ describe("saved day-plan preview real API boundary", () => {
   });
 
   it("live acceptance: preview falls back to the last synced calendar state when the live read fails, and still names a stale conflict", async () => {
+    const day = liveDay(1);
+    const blockStart = liveAt(1, "16:00");
+    const cacheStart = liveAt(1, "05:00");
+    const cacheEnd = liveAt(1, "16:30");
+    const finishedAt = new Date(liveAt(0, "12:00"));
     const cipher = createConnectorSecretCipher();
     const connectorsRepo = new ConnectorsRepository();
     const account = await dataContext.withDataContext(
@@ -490,7 +516,6 @@ describe("saved day-plan preview real API boundary", () => {
           })
         })
     );
-    const finishedAt = new Date("2026-09-14T12:00:00.000Z");
     await dataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "seed-google-stale-sync" },
       (scopedDb) =>
@@ -512,12 +537,11 @@ describe("saved day-plan preview real API boundary", () => {
           // The plan day opens at 07:00Z in this zone. Starting before that boundary and
           // ending after it proves the cache query's endsAfter filter (not just the overlap
           // check) catches a conflict that began before the query window opened.
-          startsAt: new Date("2026-09-15T05:00:00.000Z"),
-          endsAt: new Date("2026-09-15T16:30:00.000Z")
+          startsAt: new Date(cacheStart),
+          endsAt: new Date(cacheEnd)
         })
     );
 
-    const day = "2026-09-15";
     const created = await server.inject({
       method: "POST",
       url: "/api/calendar/day-plans",
@@ -540,7 +564,7 @@ describe("saved day-plan preview real API boundary", () => {
             title: "Overlaps the cached meeting",
             pendingChange: {
               kind: "add",
-              startsAt: "2026-09-15T16:00:00.000Z",
+              startsAt: blockStart,
               durationMinutes: 60
             }
           }
@@ -581,8 +605,8 @@ describe("saved day-plan preview real API boundary", () => {
         calendarEvent: {
           eventKey: "evt-cached-stale",
           title: "Cached board sync",
-          startsAt: "2026-09-15T05:00:00.000Z",
-          endsAt: "2026-09-15T16:30:00.000Z",
+          startsAt: cacheStart,
+          endsAt: cacheEnd,
           accountLabel: "Google"
         }
       }
@@ -635,7 +659,10 @@ describe("saved day-plan preview real API boundary", () => {
         })
     );
 
-    const day = "2026-09-18";
+    const day = liveDay(2);
+    const blockStart = liveAt(2, "16:00");
+    const conflictStart = liveAt(2, "16:30");
+    const conflictEnd = liveAt(2, "17:00");
     const created = await server.inject({
       method: "POST",
       url: "/api/calendar/day-plans",
@@ -658,7 +685,7 @@ describe("saved day-plan preview real API boundary", () => {
             title: "Overlaps a real meeting despite the other account's gap",
             pendingChange: {
               kind: "add",
-              startsAt: "2026-09-18T16:00:00.000Z",
+              startsAt: blockStart,
               durationMinutes: 60
             }
           }
@@ -680,8 +707,8 @@ describe("saved day-plan preview real API boundary", () => {
               {
                 id: "evt-gap-meeting",
                 summary: "Still a real meeting",
-                start: { dateTime: "2026-09-18T16:30:00.000Z" },
-                end: { dateTime: "2026-09-18T17:00:00.000Z" }
+                start: { dateTime: conflictStart },
+                end: { dateTime: conflictEnd }
               }
             ]
           })
@@ -714,8 +741,8 @@ describe("saved day-plan preview real API boundary", () => {
         calendarEvent: {
           eventKey: "evt-gap-meeting",
           title: "Still a real meeting",
-          startsAt: "2026-09-18T16:30:00.000Z",
-          endsAt: "2026-09-18T17:00:00.000Z",
+          startsAt: conflictStart,
+          endsAt: conflictEnd,
           accountLabel: "Google"
         }
       }
