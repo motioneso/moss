@@ -96,9 +96,12 @@ describe("TodayQuickActions", () => {
     const client = seedClient();
     const { renderer, root } = renderDock(client);
     try {
+      expect(textOf(root)).toContain("Quick actions");
       expect(textOf(root)).toContain("Wellness");
+      expect(textOf(root)).toContain("Medications");
       expect(textOf(root)).toContain("1 of 2");
       expect(textOf(root)).toContain("Meds");
+      expect(textOf(root)).toContain("Check in with yourself");
       expect(textOf(root)).toContain("Check in");
     } finally {
       renderer.unmount();

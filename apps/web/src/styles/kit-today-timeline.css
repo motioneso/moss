@@ -1,0 +1,221 @@
+/* ===== Today editorial timeline + quick-action rail (V3) =====
+   Today-only. The timeline look applies strictly under .jds-brief--timeline,
+   which only today-page passes; dialogs keep the base schedule untouched.
+   Rail overrides scope under .cmd-aside so the shared feed styles keep
+   owning their look everywhere else. Tokens only, no literals. */
+
+/* --- Section head: number, title, dateline --- */
+.jds-brief--timeline .tl-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.jds-brief--timeline .tl-number {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--forest);
+  border-bottom: 2px solid var(--gold);
+  padding-bottom: 5px;
+}
+.jds-brief--timeline .tl-title {
+  font-family: var(--font-display);
+  font-size: 25px;
+  line-height: 1.18;
+  letter-spacing: -0.7px;
+  margin: 0;
+}
+.jds-brief--timeline .tl-meta {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-align: right;
+}
+
+/* --- Plan note: review control and authored notices share one line --- */
+.jds-brief--timeline .tl-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  background: var(--forest-soft);
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  margin: 14px 0 6px;
+}
+.jds-brief--timeline .tl-note .cmd-empty {
+  margin: 0;
+}
+
+/* --- Legend: filled and outlined markers --- */
+.jds-brief--timeline .tl-legend {
+  display: flex;
+  gap: 19px;
+  flex-wrap: wrap;
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 14px 0 4px;
+}
+.jds-brief--timeline .tl-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.jds-brief--timeline .tl-legend__filled {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--forest);
+}
+.jds-brief--timeline .tl-legend__open {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--forest);
+}
+
+/* --- Rows: time column, rule with marker, block --- */
+.jds-brief--timeline .tl-slot {
+  display: grid;
+  grid-template-columns: 61px minmax(0, 1fr);
+  gap: 15px;
+  padding: 12px 0 12px 12px;
+  border-top: 1px solid var(--line);
+}
+.jds-brief--timeline .tl-slot:first-child {
+  border-top: none;
+}
+/* State reads by shape, never colour alone. The edge sits on the row so the
+   committed/proposed distinction survives without the tinted ground. */
+.jds-brief--timeline .tl-slot--committed {
+  border-left: 2px solid var(--forest);
+}
+.jds-brief--timeline .tl-slot--proposed,
+.jds-brief--timeline .tl-slot--pending {
+  border-left: 1px dashed var(--forest);
+}
+.jds-brief--timeline .tl-time {
+  padding-top: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--forest);
+  font-variant-numeric: tabular-nums;
+}
+.jds-brief--timeline .tl-time small {
+  display: block;
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.jds-brief--timeline .tl-body {
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid var(--line-strong);
+  padding: 4px 0 4px 16px;
+}
+.jds-brief--timeline .tl-body::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 20px;
+  width: 5px;
+  height: 5px;
+  background: var(--line-strong);
+}
+.jds-brief--timeline .tl-slot--committed .tl-body {
+  background: var(--forest-soft-2);
+}
+.jds-brief--timeline .jds-task__main {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.jds-brief--timeline button.jds-task__main {
+  cursor: pointer;
+}
+.jds-brief--timeline .jds-task__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.jds-brief--timeline .jds-task__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+.jds-brief--timeline .tl-done {
+  text-decoration: line-through;
+}
+
+/* --- Rail: block heading, next-meeting time, quick-action rows --- */
+.cmd-aside .rail-block__head {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--forest);
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--forest);
+  margin-bottom: 10px;
+}
+.cmd-aside .cmd-next__v {
+  font-size: 30px;
+  font-weight: 600;
+}
+.cmd-aside .well__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--forest);
+  margin-bottom: 2px;
+}
+.cmd-aside .well__eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--forest);
+}
+.cmd-aside .well__title {
+  font-size: 11px;
+  font-weight: 600;
+}
+.cmd-aside .well__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cmd-aside .well__row:last-child {
+  border-bottom: none;
+}
+.cmd-aside .well__rowtext {
+  min-width: 0;
+}
+.cmd-aside .well__label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.cmd-aside .well__sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.45;
+}
+.cmd-aside .well__btn {
+  flex: none;
+}

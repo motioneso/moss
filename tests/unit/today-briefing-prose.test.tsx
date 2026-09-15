@@ -294,7 +294,7 @@ describe("Today morning briefing prose", () => {
       }
     });
 
-    expect(html).toContain("Schedule and preparation");
+    expect(html).toContain("Your day, laid out");
     expect(html).toContain("Write the draft");
     const startHere = html.indexOf('id="start-here"');
     const schedule = html.indexOf('id="schedule"');

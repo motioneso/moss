@@ -6,7 +6,9 @@ import { Button } from "@moss/ui";
 
 import { getCalendarBriefingSettings } from "../api/client.js";
 import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
-import { buildDayItems, type DayItem } from "./day-plan-view-model.js";
+import { buildDayItems } from "./day-plan-view-model.js";
+import { durationText, TimelineLegend, TimelineRow } from "./today-timeline.js";
+import type { DayItem } from "./day-plan-view-model.js";
 
 export interface DayPlanSectionProps {
   readonly dayPlan: GetDayPlanResponse | undefined;
@@ -18,6 +20,10 @@ export interface DayPlanSectionProps {
   readonly calendarError: boolean;
   readonly onOpenTask: (taskId: string) => void;
   readonly onReview?: (anchor: HTMLElement) => void;
+  /** Today-only editorial timeline look. Off everywhere else, including the
+      morning reader, the review dialog and the evening planner. */
+  readonly editorial?: boolean;
+  readonly dateline?: string;
 }
 
 function ReviewButton(props: { readonly onReview: (anchor: HTMLElement) => void }) {
@@ -37,20 +43,14 @@ function ReviewButton(props: { readonly onReview: (anchor: HTMLElement) => void 
   );
 }
 
-function durationText(minutes: number | null): string {
-  if (minutes === null || minutes <= 0) return "";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest > 0 ? `${hours}h ${rest}m` : `${hours}h`;
-}
-
 function DayItemRow(props: {
   readonly item: DayItem;
   readonly locale: LocaleSettingsDto;
   readonly onOpenTask: (taskId: string) => void;
+  readonly editorial?: boolean;
 }) {
   const { item } = props;
+  if (props.editorial === true) return <TimelineRow {...props} />;
   if (item.eventId !== null) {
     return (
       <div
@@ -126,7 +126,16 @@ function DayItemRow(props: {
   );
 }
 
-function SectionHead() {
+function SectionHead(props: { readonly editorial?: boolean; readonly dateline?: string }) {
+  if (props.editorial === true) {
+    return (
+      <div className="tl-head">
+        <span className="tl-number">01</span>
+        <h2 className="tl-title">Your day, laid out</h2>
+        {props.dateline ? <span className="tl-meta">{props.dateline}</span> : null}
+      </div>
+    );
+  }
   return (
     <>
       <div className="jds-brief__head">
@@ -139,11 +148,13 @@ function SectionHead() {
 
 /** Today schedule: the saved day plan merged with today's calendar events. */
 export function DayPlanSection(props: DayPlanSectionProps) {
+  const editorial = props.editorial === true;
+  const sectionClass = editorial ? "jds-brief jds-brief--timeline" : "jds-brief";
   if (props.loading) {
     if (props.events.length === 0) {
       return (
-        <section className="jds-brief" id="schedule">
-          <SectionHead />
+        <section className={sectionClass} id="schedule">
+          <SectionHead editorial={editorial} dateline={props.dateline} />
           <div className="agenda-clear" role="status">
             Gathering your day plan…
           </div>
@@ -159,8 +170,8 @@ export function DayPlanSection(props: DayPlanSectionProps) {
       now: props.now
     });
     return (
-      <section className="jds-brief" id="schedule">
-        <SectionHead />
+      <section className={sectionClass} id="schedule">
+        <SectionHead editorial={editorial} dateline={props.dateline} />
         <div className="agenda-clear" role="status">
           Gathering your day plan…
         </div>
@@ -171,17 +182,19 @@ export function DayPlanSection(props: DayPlanSectionProps) {
               item={item}
               locale={props.locale}
               onOpenTask={props.onOpenTask}
+              editorial={editorial}
             />
           ))}
         </div>
+        {editorial ? <TimelineLegend /> : null}
       </section>
     );
   }
 
   if (props.calendarError && props.error) {
     return (
-      <section className="jds-brief" id="schedule">
-        <SectionHead />
+      <section className={sectionClass} id="schedule">
+        <SectionHead editorial={editorial} dateline={props.dateline} />
         <p className="cmd-empty" role="status">
           Calendar and saved plan aren&apos;t available right now.
         </p>
@@ -200,23 +213,58 @@ export function DayPlanSection(props: DayPlanSectionProps) {
 
   const taskBlocks = (props.dayPlan?.plan?.blocks ?? []).filter((block) => block.taskId !== null);
 
+  const showReview = props.onReview !== undefined && taskBlocks.length > 0;
+  const notice = props.calendarError ? (
+    <p className="cmd-empty" role="status">
+      Calendar isn&apos;t available right now; showing your saved plan.
+    </p>
+  ) : props.error ? (
+    <p className="cmd-empty" role="status">
+      Saved plan unavailable; showing calendar events only
+    </p>
+  ) : null;
+  if (editorial) {
+    return (
+      <section className={sectionClass} id="schedule">
+        <SectionHead editorial dateline={props.dateline} />
+        {showReview || notice ? (
+          <div className="tl-note">
+            {showReview ? <ReviewButton onReview={props.onReview!} /> : null}
+            {notice}
+          </div>
+        ) : null}
+        {items.length === 0 ? (
+          props.calendarError ? null : (
+            <p className="cmd-empty">Nothing on the schedule yet.</p>
+          )
+        ) : (
+          <>
+            <div className="day-list">
+              {items.map((item) => (
+                <DayItemRow
+                  key={item.key}
+                  item={item}
+                  locale={props.locale}
+                  onOpenTask={props.onOpenTask}
+                  editorial
+                />
+              ))}
+            </div>
+            <TimelineLegend />
+          </>
+        )}
+      </section>
+    );
+  }
   return (
-    <section className="jds-brief" id="schedule">
-      <SectionHead />
-      {props.onReview && taskBlocks.length > 0 ? (
+    <section className={sectionClass} id="schedule">
+      <SectionHead editorial={editorial} dateline={props.dateline} />
+      {showReview ? (
         <div className="day-review-open">
-          <ReviewButton onReview={props.onReview} />
+          <ReviewButton onReview={props.onReview!} />
         </div>
       ) : null}
-      {props.calendarError ? (
-        <p className="cmd-empty" role="status">
-          Calendar isn&apos;t available right now; showing your saved plan.
-        </p>
-      ) : props.error ? (
-        <p className="cmd-empty" role="status">
-          Saved plan unavailable; showing calendar events only
-        </p>
-      ) : null}
+      {notice}
       {items.length === 0 ? (
         props.calendarError ? null : (
           <p className="cmd-empty">Nothing on the schedule yet.</p>
@@ -229,6 +277,7 @@ export function DayPlanSection(props: DayPlanSectionProps) {
               item={item}
               locale={props.locale}
               onOpenTask={props.onOpenTask}
+              editorial={editorial}
             />
           ))}
         </div>
