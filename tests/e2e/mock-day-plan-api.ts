@@ -14,6 +14,8 @@ import type {
 
 export interface MockDayPlanApiState {
   plan: DayPlanDto;
+  /** Tomorrow's plan when the test seeds one; absent means the GET 404s. */
+  tomorrowPlan?: DayPlanDto;
   tasks: DayPlanTaskSummary[];
   unavailableTaskIds?: string[];
   fixedEvents?: CalendarEventDto[];
@@ -64,10 +66,30 @@ export async function registerMockDayPlanRoutes(
     })
   );
 
+  const planForId = (url: string): DayPlanDto | null => {
+    const id = url.split("/api/calendar/day-plans/")[1]?.split("/")[0] ?? null;
+    for (const plan of [state.plan, state.tomorrowPlan]) {
+      if (plan && plan.id === id) return plan;
+    }
+    return null;
+  };
+  const commitPlan = (plan: DayPlanDto): void => {
+    if (state.tomorrowPlan && state.tomorrowPlan.id === plan.id) state.tomorrowPlan = plan;
+    else state.plan = plan;
+  };
+
   await page.route("**/api/calendar/day-plan*", (route) => {
     if (route.request().method() !== "GET") return route.fallback();
+    const date = new URL(route.request().url()).searchParams.get("date");
+    const plan =
+      state.tomorrowPlan && state.tomorrowPlan.localDay === date
+        ? state.tomorrowPlan
+        : state.plan.localDay === date
+          ? state.plan
+          : null;
+    if (!plan) return fulfillJson(route, 404, { error: "day plan is not available" });
     return fulfillJson(route, 200, {
-      plan: state.plan,
+      plan,
       tasks: state.tasks,
       unavailableTaskIds: state.unavailableTaskIds ?? [],
       sourceRun: null,
@@ -75,34 +97,85 @@ export async function registerMockDayPlanRoutes(
     });
   });
 
+  await page.route("**/api/calendar/day-plans", (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    const body = route.request().postDataJSON() as { date: string; timeZone: string };
+    const existing = [state.plan, state.tomorrowPlan].find((plan) => plan?.localDay === body.date);
+    if (existing) return fulfillJson(route, 200, { plan: existing });
+    const created: DayPlanDto = {
+      id: `plan-${body.date}`,
+      localDay: body.date,
+      timeZone: body.timeZone,
+      revision: 1,
+      sourceRunId: null,
+      blocks: [],
+      eveningIntent: null
+    };
+    state.tomorrowPlan = created;
+    return fulfillJson(route, 200, { plan: created });
+  });
+
   await page.route("**/api/calendar/day-plans/*/draft", (route) => {
     if (route.request().method() !== "PATCH") return route.fallback();
     const body = route.request().postDataJSON() as {
       expectedRevision: number;
-      blocks?: { id?: string; pendingChange?: DayPlanPendingChange | null }[];
+      eveningIntent?: DayPlanDto["eveningIntent"];
+      blocks?: {
+        id?: string;
+        kind: DayPlanDto["blocks"][number]["kind"];
+        taskId: string | null;
+        title: string | null;
+        pendingChange?: DayPlanPendingChange | null;
+      }[];
     };
-    if (body.expectedRevision !== state.plan.revision) {
+    const plan = planForId(route.request().url());
+    if (!plan) return fulfillJson(route, 404, { error: "day plan is not available" });
+    if (body.expectedRevision !== plan.revision) {
       return fulfillJson(route, 409, { error: "day plan changed since it was read" });
     }
     // Like the server, a draft replaces the whole block list: rows absent
     // from the submission are deleted (a placed row deleted this way is a
-    // 400), so a partial submission loses untouched rows on the real stack.
+    // 400). Rows without an id are inserted, like first-time proposals.
     const seen = new Set<string>();
+    let inserted = 0;
     for (const row of body.blocks ?? []) {
-      const target = state.plan.blocks.find((entry) => entry.id === row.id);
+      const target =
+        row.id === undefined ? undefined : plan.blocks.find((entry) => entry.id === row.id);
       if (target) {
         seen.add(target.id);
         target.pendingChange = row.pendingChange ?? null;
+        continue;
+      }
+      if (row.id === undefined) {
+        inserted += 1;
+        const id = `mock-new-${inserted}`;
+        seen.add(id);
+        plan.blocks.push({
+          id,
+          kind: row.kind,
+          taskId: row.taskId,
+          title: row.title,
+          position: plan.blocks.length,
+          actualPlacement: null,
+          pendingChange: row.pendingChange ?? null
+        });
       }
     }
-    for (const entry of state.plan.blocks) {
+    for (const entry of plan.blocks) {
       if (!seen.has(entry.id) && entry.actualPlacement) {
         return fulfillJson(route, 400, { error: "recorded placement requires a pending removal" });
       }
     }
-    state.plan.blocks = state.plan.blocks.filter((entry) => seen.has(entry.id));
-    state.plan = { ...state.plan, revision: state.plan.revision + 1 };
-    return fulfillJson(route, 200, { plan: state.plan });
+    plan.blocks = plan.blocks.filter((entry) => seen.has(entry.id));
+    if (body.eveningIntent !== undefined) {
+      plan.eveningIntent = {
+        ...((plan.eveningIntent as object) ?? {}),
+        ...(body.eveningIntent as object)
+      } as DayPlanDto["eveningIntent"];
+    }
+    commitPlan({ ...plan, revision: plan.revision + 1 });
+    const saved = planForId(route.request().url());
+    return fulfillJson(route, 200, { plan: saved });
   });
 
   await page.route("**/api/calendar/day-plans/*/preview", (route) => {
@@ -111,12 +184,14 @@ export async function registerMockDayPlanRoutes(
       expectedRevision: number;
       selectedChangeBlockIds: string[];
     };
-    if (body.expectedRevision !== state.plan.revision) {
+    const previewPlan = planForId(route.request().url());
+    if (!previewPlan) return fulfillJson(route, 404, { error: "day plan is not available" });
+    if (body.expectedRevision !== previewPlan.revision) {
       return fulfillJson(route, 409, { error: "day plan changed since it was read" });
     }
     const availability = state.calendarAvailability ?? "available";
     const response: PreviewDayPlanResponse = {
-      revision: state.plan.revision,
+      revision: previewPlan.revision,
       calendarAvailability: availability,
       calendarAsOf: null,
       blocks: [],
@@ -124,7 +199,7 @@ export async function registerMockDayPlanRoutes(
       conflicts: []
     };
     for (const blockId of body.selectedChangeBlockIds) {
-      const block = state.plan.blocks.find((entry) => entry.id === blockId);
+      const block = previewPlan.blocks.find((entry) => entry.id === blockId);
       const pending = block?.pendingChange;
       if (!block || !pending || pending.kind === "remove") continue;
       const eligible = availability !== "unavailable";
@@ -168,10 +243,10 @@ export async function registerMockDayPlanRoutes(
     return fulfillJson(route, 200, response);
   });
 
-  function executeReport(ids: string[]): ApplyExecutionReport {
+  function executeReport(plan: DayPlanDto, ids: string[]): ApplyExecutionReport {
     operation += 1;
     const items: ApplyExecutionItemReport[] = ids.map((blockId, index) => {
-      const block = state.plan.blocks.find((entry) => entry.id === blockId);
+      const block = plan.blocks.find((entry) => entry.id === blockId);
       const pending = block?.pendingChange;
       if (block && pending && pending.kind === "remove") {
         block.actualPlacement = null;
@@ -211,7 +286,7 @@ export async function registerMockDayPlanRoutes(
     });
     return {
       operationId: `mock-op-${operation}`,
-      planId: state.plan.id,
+      planId: plan.id,
       status: "completed",
       items
     };
@@ -224,20 +299,22 @@ export async function registerMockDayPlanRoutes(
       idempotencyKey: string;
       selectedBlockIds?: string[];
     };
-    if (body.expectedRevision !== state.plan.revision) {
+    const plan = planForId(route.request().url());
+    if (!plan) return fulfillJson(route, 404, { error: "day plan is not available" });
+    if (body.expectedRevision !== plan.revision) {
       return fulfillJson(route, 409, { error: "day plan changed since it was read" });
     }
     const selected = body.selectedBlockIds ?? [];
     // Like the server, one clash denies the whole batch with zero writes.
     for (const blockId of selected) {
-      const pending = state.plan.blocks.find((entry) => entry.id === blockId)?.pendingChange;
+      const pending = plan.blocks.find((entry) => entry.id === blockId)?.pendingChange;
       if (!pending || pending.kind === "remove") continue;
       for (const event of state.fixedEvents ?? []) {
         if (overlaps(pending.startsAt, pending.durationMinutes, event.startsAt, event.endsAt)) {
           operation += 1;
           return fulfillJson(route, 200, {
             operationId: `mock-op-${operation}`,
-            planId: state.plan.id,
+            planId: plan.id,
             status: "denied",
             denialReason: `conflict: reserved additions overlap protected time (${blockId}:calendar_busy)`,
             items: selected.map((id) => ({
@@ -251,7 +328,7 @@ export async function registerMockDayPlanRoutes(
       }
     }
     const moves = selected.filter((blockId) => {
-      const pending = state.plan.blocks.find((entry) => entry.id === blockId)?.pendingChange;
+      const pending = plan.blocks.find((entry) => entry.id === blockId)?.pendingChange;
       return pending?.kind === "move" || pending?.kind === "remove";
     });
     if (moves.length > 0) {
@@ -260,7 +337,7 @@ export async function registerMockDayPlanRoutes(
         approvalId: `mock-approval-${operation}`,
         operationId: `mock-op-${operation}`,
         changes: moves.map((blockId) => {
-          const block = state.plan.blocks.find((entry) => entry.id === blockId)!;
+          const block = plan.blocks.find((entry) => entry.id === blockId)!;
           const pending = block.pendingChange!;
           return {
             blockId,
@@ -278,7 +355,7 @@ export async function registerMockDayPlanRoutes(
         changes: approval.changes
       });
     }
-    return fulfillJson(route, 200, executeReport(selected));
+    return fulfillJson(route, 200, executeReport(plan, selected));
   });
 
   await page.route("**/api/calendar/day-plans/*/operations/*/confirm", (route) => {
@@ -293,14 +370,16 @@ export async function registerMockDayPlanRoutes(
     }
     const ids = approval.changes.map((entry) => entry.blockId);
     approval = null;
-    return fulfillJson(route, 200, executeReport(ids));
+    const plan = planForId(route.request().url()) ?? state.plan;
+    return fulfillJson(route, 200, executeReport(plan, ids));
   });
 
   await page.route("**/api/calendar/day-plans/*/operations/*/retry", (route) => {
     if (route.request().method() !== "POST") return route.fallback();
     const body = route.request().postDataJSON() as { itemIds: string[] };
     void body;
-    return fulfillJson(route, 200, executeReport([]));
+    const plan = planForId(route.request().url()) ?? state.plan;
+    return fulfillJson(route, 200, executeReport(plan, []));
   });
 }
 

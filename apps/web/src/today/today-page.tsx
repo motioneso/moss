@@ -53,7 +53,10 @@ import { BriefingActionRowsSection } from "./briefing-action-rows";
 import { MorningBriefingReader } from "./morning-briefing";
 import { DayPlanSection } from "./day-plan";
 import { DayPlanReview } from "./day-plan-review";
-import { useDayPlanReview } from "./day-plan-review-controller";
+import { useDayPlanReview, type DayPlanReviewController } from "./day-plan-review-controller";
+import { useEveningPlanning } from "./evening-planning-controller";
+import { tomorrowPlanMissing } from "./evening-planning-model";
+import { EveningPlanningDialog } from "./evening-planning";
 import { TodayWeatherRow } from "./header-weather";
 import { TodayQuickActions } from "./today-quick-actions";
 import { TaskDetailsDialog } from "../tasks/task-details-dialog";
@@ -86,6 +89,7 @@ import "../styles/kit-today-feeds.css";
 import "../styles/kit-today-misc.css";
 import "../styles/kit-briefing-reader.css";
 import "../styles/kit-day-plan-review.css";
+import "../styles/kit-evening-planning.css";
 import { GoalsSection } from "./goals-section.js";
 
 /** Today — the all-day home: an editorial brief over the user's real tasks + calendar. */
@@ -115,6 +119,7 @@ export function TodayPage(props: {
   const readerOpener = useRef<HTMLElement | null>(null);
   const [review, setReview] = useState(false);
   const reviewOpener = useRef<HTMLElement | null>(null);
+  const [planningAnchor, setPlanningAnchor] = useState<HTMLElement | null>(null);
   const [, forceTodayModeRefresh] = useState(0);
   // The masthead clock and next-event countdown read `now`; tick a re-render each
   // half-minute so they stay honest while the page sits open.
@@ -247,6 +252,32 @@ export function TodayPage(props: {
     () => events.filter((e) => localDay(e.startsAt, locale.timezone) === tomorrowKey).sort(byStart),
     [events, locale.timezone, tomorrowKey]
   );
+  const tomorrowPlanQuery = useQuery({
+    queryKey: queryKeys.calendar.dayPlan(tomorrowKey, locale.timezone),
+    queryFn: () => getDayPlan({ date: tomorrowKey, timeZone: locale.timezone }),
+    retry: false
+  });
+  const eveningReviewRef = useRef<DayPlanReviewController | null>(null);
+  const evening = useEveningPlanning({
+    active: planningAnchor !== null,
+    tomorrowKey,
+    todayKey,
+    timeZone: locale.timezone,
+    queryPlan: tomorrowPlanQuery.data?.plan ?? null,
+    planMissing: tomorrowPlanMissing(tomorrowPlanQuery.data, tomorrowPlanQuery.error),
+    todayPlan: dayPlanQuery.data?.plan ?? null,
+    tasks,
+    unavailableTaskIds: tomorrowPlanQuery.data?.unavailableTaskIds ?? [],
+    tomorrowEvents,
+    getReview: () => eveningReviewRef.current
+  });
+  const eveningReview = useDayPlanReview({
+    plan: evening.plan,
+    localDay: tomorrowKey,
+    timeZone: locale.timezone,
+    morningDefinitionId: null
+  });
+  eveningReviewRef.current = eveningReview;
   const tomorrowTasks = tasks
     .filter(
       (task) =>
@@ -421,6 +452,7 @@ export function TodayPage(props: {
 
             {eveningDefinition?.enabled && todayMode === "evening" ? (
               <EveningPrepCard
+                onPlan={setPlanningAnchor}
                 interviewPending={eveningInterviewMutation.isPending}
                 onPrep={() => {
                   // #891: open the drawer immediately (like the topbar chat button and
@@ -639,6 +671,27 @@ export function TodayPage(props: {
             reviewOpener.current = readerOpener.current;
             setReader(null);
             setReview(true);
+          }}
+        />
+      ) : null}
+      {planningAnchor ? (
+        <EveningPlanningDialog
+          evening={evening}
+          review={eveningReview}
+          tasks={tasks}
+          taskSummaries={tomorrowPlanQuery.data?.tasks ?? []}
+          unavailableTaskIds={tomorrowPlanQuery.data?.unavailableTaskIds ?? []}
+          tomorrowEvents={tomorrowEvents}
+          completedToday={completedToday}
+          locale={locale}
+          now={now}
+          tomorrowKey={tomorrowKey}
+          eveningRun={latestEveningRun}
+          opener={planningAnchor}
+          onClose={() => setPlanningAnchor(null)}
+          onOpenTask={(id) => {
+            setPlanningAnchor(null);
+            setDialog({ id });
           }}
         />
       ) : null}

@@ -75,7 +75,8 @@ function approvalTitle(
   return block ? rowTitle(block, tasks) : "A block";
 }
 
-function ReviewRow(props: {
+/** Row list shared with the evening planning dialog (T20). */
+export function ReviewRow(props: {
   readonly block: DayPlanBlockDto;
   readonly title: string;
   readonly savedLabel: string;

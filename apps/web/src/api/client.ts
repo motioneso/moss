@@ -118,6 +118,8 @@ import type {
   GetCalendarBriefingSettingsResponse,
   GetDayPlanQuery,
   GetDayPlanResponse,
+  CreateDayPlanRequest,
+  CreateDayPlanResponse,
   ListCheckinsResponse,
   ListChatThreadMessagesResponse,
   ListChatThreadsResponse,
@@ -887,6 +889,13 @@ export async function getDayPlan(query: GetDayPlanQuery): Promise<GetDayPlanResp
 
 export async function getCalendarBriefingSettings(): Promise<GetCalendarBriefingSettingsResponse> {
   return requestJson<GetCalendarBriefingSettingsResponse>("/api/calendar/briefing-settings");
+}
+
+export async function createDayPlan(input: CreateDayPlanRequest): Promise<CreateDayPlanResponse> {
+  return requestJson<CreateDayPlanResponse>("/api/calendar/day-plans", {
+    method: "POST",
+    body: input
+  });
 }
 
 export async function saveDayPlanDraft(
