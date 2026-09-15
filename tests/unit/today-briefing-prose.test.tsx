@@ -60,9 +60,19 @@ describe("Today morning briefing prose", () => {
       ]
     });
 
-    expect(html.indexOf("Morning briefing")).toBeLessThan(html.indexOf("Start here"));
+    // V2 hero: the h1 carries the first sentence, the rest renders as prose,
+    // and the assessment sits in the hero band before the sections nav.
+    expect(html).toContain("today-hero");
     expect(html).toContain("The day opens with a clear priority.");
     expect(html).toContain("Keep the afternoon flexible.");
+    expect(html).toContain("Prepared at");
+    expect(html).toContain("Read the full morning briefing");
+    expect(html.indexOf("The day opens with a clear priority.")).toBeLessThan(
+      html.indexOf("Start here")
+    );
+    expect(html.indexOf("today-hero")).toBeLessThan(html.indexOf('aria-label="Sections"'));
+    expect(html).toContain('id="assessment"');
+    expect(html).toContain('id="weather"');
     expect(html).toContain("Some sources are over a day old");
     expect(html).toContain("Email");
 
@@ -86,6 +96,72 @@ describe("Today morning briefing prose", () => {
       runs: []
     });
     expect(disabledHtml).not.toContain("Morning briefing");
+  });
+
+  it("renders the hero fallback headline and not-ready line without a run", () => {
+    const morning = briefingDefinition({
+      id: "morning-1",
+      title: "Morning briefing",
+      briefingType: "morning"
+    });
+    const html = renderToday({
+      now: new Date("2026-06-30T01:30:00.000Z"),
+      definitions: [morning],
+      runs: []
+    });
+
+    expect(html).toContain("ALL CLEAR");
+    expect(html).toContain("Nothing pressing right now");
+    expect(html).toContain("Your morning briefing is not ready yet.");
+    expect(html).toContain("today-hero");
+  });
+
+  it("renders the evening hero variant from the evening recap", () => {
+    const summaryText = "The team shipped the launch. Tomorrow brings customer calls.";
+    const html = renderToday({
+      now: new Date("2026-07-01T02:30:00.000Z"),
+      definitions: [briefingDefinition({ id: "evening-1" })],
+      runs: [
+        briefingRun({
+          id: "evening-run-1",
+          definitionId: "evening-1",
+          briefingType: "evening",
+          summaryText,
+          createdAt: "2026-07-01T01:15:00.000Z"
+        })
+      ]
+    });
+
+    expect(html).toContain("today-hero--evening");
+    expect(html).toContain("The team shipped the launch.");
+    expect(html).toContain("Tomorrow brings customer calls.");
+    expect(html).toContain("Prepared at");
+    expect(html.indexOf("The team shipped the launch.")).toBeLessThan(html.indexOf("Start here"));
+  });
+
+  it("reads not ready when the run has no summary", () => {
+    const html = renderToday({
+      now: new Date("2026-06-30T01:30:00.000Z"),
+      definitions: [
+        briefingDefinition({ id: "morning-1", title: "Morning briefing", briefingType: "morning" })
+      ],
+      runs: [briefingRun({ id: "run-empty", definitionId: "morning-1", summaryText: "" })]
+    });
+
+    expect(html).toContain("Your morning briefing is not ready yet.");
+    expect(html).not.toContain("Prepared at");
+  });
+
+  it("renders the evening lede without a run", () => {
+    const html = renderToday({
+      now: new Date("2026-07-01T02:30:00.000Z"),
+      definitions: [briefingDefinition({ id: "evening-1" })],
+      runs: []
+    });
+
+    expect(html).toContain("The day is ready to close");
+    expect(html).not.toContain("What happened today");
+    expect(html).not.toContain("Your evening review is not ready yet.");
   });
 
   it("enables Reply only when a provider is ready", () => {
