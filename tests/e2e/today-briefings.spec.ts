@@ -566,3 +566,290 @@ test("day plan review applies adds and a confirmed move from Today and the reade
     await back.click();
   }
 });
+test("accept all applies eligible additions from the reader, then reviews the conflict", async ({
+  page
+}) => {
+  await page.clock.setFixedTime(new Date(NOW));
+  await page.setViewportSize({ width: 320, height: 900 });
+
+  const morningDefinition = createMockBriefingDefinition("briefing-accept", "Morning", {
+    briefingType: "morning",
+    cadence: "daily",
+    scheduleMetadata: { targetTime: "07:00", timezone: "UTC" }
+  });
+  const run = createMockBriefingRun("morning-run-accept", morningDefinition.id, LONG_PROSE, {
+    briefingType: "morning",
+    createdAt: NOW,
+    sourceMetadata: {
+      sourceTimestamps: {
+        version: 1,
+        capturedAt: NOW,
+        sources: [{ source: LONG_SOURCE, freshnessKind: "connector_sync", asOf: NOW }]
+      }
+    },
+    structuredPayload: { version: 1, actionRows: [], catchUp: null }
+  });
+  const standup = {
+    id: "accept-event-standup",
+    connectorAccountId: "account-1",
+    ownerUserId: "user-1",
+    title: "Team standup",
+    startsAt: `${DAY}T12:00:00.000Z`,
+    endsAt: `${DAY}T12:30:00.000Z`,
+    location: null,
+    summary: null,
+    bodyExcerpt: null,
+    externalId: "ext-accept-standup",
+    isMossBlock: false,
+    allDay: false,
+    attendeeCount: 3,
+    status: null,
+    createdAt: "2026-09-09T00:00:00.000Z",
+    updatedAt: "2026-09-09T00:00:00.000Z"
+  };
+  const lunch = {
+    ...standup,
+    id: "accept-event-lunch",
+    title: "Lunch with Sam",
+    startsAt: `${DAY}T15:30:00.000Z`,
+    endsAt: `${DAY}T16:30:00.000Z`,
+    externalId: "ext-accept-lunch"
+  };
+  const state: MockApiState = {
+    authenticated: true,
+    onboardingStatus: {
+      role: "founder",
+      state: "completed",
+      steps: {
+        cliAuth: {
+          done: true,
+          providers: [{ kind: "anthropic", cliPresent: true, installState: "ready" }]
+        },
+        connectors: { done: false }
+      }
+    },
+    chatThreads: [],
+    notifications: [],
+    tasks: [
+      createMockTask("t1", "Write the launch brief"),
+      createMockTask("t2", "Call the vendor"),
+      createMockTask("t3", "Ship the invoice"),
+      createMockTask("t4", "Water the plants"),
+      createMockTask("t5", "File the report", { dueAt: "2026-09-12T00:00:00.000Z" }),
+      createMockTask("t6", "Review the contract")
+    ],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    briefingDefinitions: [morningDefinition],
+    briefingRuns: { [morningDefinition.id]: [run] },
+    calendarEvents: [standup, lunch]
+  };
+  await mockApi(page, state);
+  await page.route("**/api/me/modules", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        modules: [
+          ...myModulesResponse.modules,
+          {
+            id: "wellness",
+            name: "Wellness",
+            version: "0.1.0",
+            lifecycle: "user-toggleable",
+            required: false,
+            supportsUserDisable: true,
+            instanceDisabled: false,
+            userDisabled: false,
+            active: true,
+            hasPreferences: false,
+            hasUserCredentials: false,
+            scope: "everyone"
+          }
+        ]
+      })
+    })
+  );
+  await page.route("**/api/wellness/medications/schedule*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        date: DAY,
+        slots: [
+          {
+            medicationId: "med-accept",
+            name: "Morning Vitamin",
+            scheduledFor: `${DAY}T08:00:00.000Z`,
+            asNeeded: false,
+            status: "pending"
+          }
+        ]
+      })
+    })
+  );
+  await page.route("**/api/weather/today", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: {
+          temp: 72,
+          feelsLike: 71,
+          condition: "Sunny",
+          icon: "sun",
+          location: "San Francisco, CA",
+          unit: "imperial",
+          humidity: 55,
+          dewPoint: 54,
+          windSpeed: 5,
+          lat: 37.7,
+          lon: -122.4,
+          forecast: [0, 1, 2].map((offset) => ({
+            date: `2026-09-${String(10 + offset).padStart(2, "0")}`,
+            icon: "sun",
+            high: 75 - offset,
+            low: 60 - offset
+          }))
+        }
+      })
+    })
+  );
+  await registerMockDayPlanRoutes(page, {
+    plan: {
+      id: "plan-accept",
+      localDay: DAY,
+      timeZone: "UTC",
+      revision: 1,
+      sourceRunId: null,
+      eveningIntent: {
+        priorityTaskIds: [],
+        capacity: null,
+        notes: null,
+        corrections: [],
+        commitments: []
+      },
+      blocks: [
+        mockDayPlanBlock("b1", "t1", 0, {
+          pendingChange: { kind: "add", startsAt: `${DAY}T10:00:00.000Z`, durationMinutes: 30 }
+        }),
+        mockDayPlanBlock("b2", "t2", 1, {
+          pendingChange: { kind: "add", startsAt: `${DAY}T12:00:00.000Z`, durationMinutes: 30 }
+        }),
+        mockDayPlanBlock("b3", "t3", 2, {
+          pendingChange: { kind: "add", startsAt: `${DAY}T15:00:00.000Z`, durationMinutes: 30 }
+        }),
+        mockDayPlanBlock("b4", "t4", 3, {
+          actualPlacement: {
+            startsAt: `${DAY}T14:00:00.000Z`,
+            durationMinutes: 60,
+            calendarEventRef: "ev-cal-4"
+          }
+        }),
+        mockDayPlanBlock("b5", "t5", 4),
+        mockDayPlanBlock("b6", "t6", 5, {
+          actualPlacement: {
+            startsAt: `${DAY}T09:00:00.000Z`,
+            durationMinutes: 30,
+            calendarEventRef: "ev-cal-6"
+          }
+        })
+      ]
+    },
+    tasks: [
+      mockDayPlanTask("t1", "Write the launch brief"),
+      mockDayPlanTask("t2", "Call the vendor"),
+      mockDayPlanTask("t3", "Ship the invoice"),
+      mockDayPlanTask("t4", "Water the plants"),
+      mockDayPlanTask("t5", "File the report", "2026-09-12T00:00:00.000Z"),
+      mockDayPlanTask("t6", "Review the contract")
+    ],
+    fixedEvents: [standup]
+  });
+
+  // Request observers registered last so they see every call, then fall
+  // through to the day-plan mock above.
+  const previewed: { selectedChangeBlockIds: string[]; expectedRevision: number }[] = [];
+  const applied: { selectedBlockIds: string[]; expectedRevision: number }[] = [];
+  let confirms = 0;
+  let retries = 0;
+  await page.route("**/api/calendar/day-plans/*/preview", async (route) => {
+    if (route.request().method() === "POST")
+      previewed.push(route.request().postDataJSON() as never);
+    await route.fallback();
+  });
+  await page.route("**/api/calendar/day-plans/*/apply", async (route) => {
+    if (route.request().method() === "POST") applied.push(route.request().postDataJSON() as never);
+    await route.fallback();
+  });
+  await page.route("**/api/calendar/day-plans/*/operations/*/confirm", async (route) => {
+    if (route.request().method() === "POST") confirms += 1;
+    await route.fallback();
+  });
+  await page.route("**/api/calendar/day-plans/*/operations/*/retry", async (route) => {
+    if (route.request().method() === "POST") retries += 1;
+    await route.fallback();
+  });
+
+  await page.goto("/today");
+  await expect(page.locator(".cmd-wrap")).toBeVisible();
+  // Every widget the page shows is populated, otherwise the gate proves nothing.
+  await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Meds/ }).first()).toBeVisible();
+  await expect(page.getByText("Write the launch brief").first()).toBeVisible();
+  await expect(page.getByText("Team standup").first()).toBeVisible();
+  await expect(page.getByText("Lunch with Sam").first()).toBeVisible();
+
+  // The reader footer offers Accept all first on the populated 320px page.
+  await page.getByRole("button", { name: "Read the full morning briefing" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("Protect the launch window");
+  const footerNames = await dialog.locator(".brief-reader__footer button").allTextContents();
+  expect(footerNames).toEqual(["Accept all time blocks", "Review task blocks", "Back to Today"]);
+
+  // One activation previews the three proposals and applies the two clean ones.
+  await dialog.getByRole("button", { name: "Accept all time blocks" }).click();
+  await expect(dialog).toContainText("Added 2 to the calendar");
+  await expect(dialog.getByRole("button", { name: "Review changes" })).toBeVisible();
+  expect(previewed).toHaveLength(1);
+  expect(previewed[0]!.selectedChangeBlockIds).toEqual(["b1", "b2", "b3"]);
+  expect(applied).toHaveLength(1);
+  expect(applied[0]!.selectedBlockIds).toEqual(["b1", "b3"]);
+  expect(applied[0]!.expectedRevision).toBe(previewed[0]!.expectedRevision);
+  expect(confirms).toBe(0);
+
+  // The reader stays open with its footer inside the narrow viewport.
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    "no sideways scroll at 320px with the status line"
+  ).toBe(true);
+  const back = dialog.getByRole("button", { name: "Back to Today" });
+  const backBox = await back.boundingBox();
+  expect(backBox, "reader footer inside the 320px viewport").not.toBeNull();
+  expect(backBox!.x + backBox!.width).toBeLessThanOrEqual(321);
+
+  // Review changes keeps the rows, names the conflict and shows the outcomes.
+  await dialog.getByRole("button", { name: "Review changes" }).click();
+  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
+  await expect(dialog).toContainText("Overlaps Team standup");
+  await expect(dialog).toContainText("Applied 2; 0 failed; 0 pending.");
+  // Everything resolved, so there is nothing to retry and no retry is sent.
+  await expect(dialog.getByRole("button", { name: "Retry" })).toHaveCount(0);
+  expect(retries).toBe(0);
+
+  // The review footer holds four buttons inside the narrow viewport.
+  const reviewNames = await dialog.locator(".brief-reader__footer button").allTextContents();
+  expect(reviewNames).toEqual([
+    "Back to Today",
+    "Preview changes",
+    "Apply changes",
+    "Accept all time blocks"
+  ]);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    "no sideways scroll at 320px in the review"
+  ).toBe(true);
+  const reviewBackBox = await dialog.getByRole("button", { name: "Back to Today" }).boundingBox();
+  expect(reviewBackBox, "review footer inside the 320px viewport").not.toBeNull();
+  expect(reviewBackBox!.x + reviewBackBox!.width).toBeLessThanOrEqual(321);
+});

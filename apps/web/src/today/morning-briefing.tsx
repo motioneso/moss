@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -22,6 +22,9 @@ import { queryKeys } from "../api/query-keys.js";
 import { formatDate } from "../locale/locale-format.js";
 import { joinActionRowsToTasks, type DisplayedActionRow } from "./briefing-action-rows.js";
 import { BriefingDialog } from "./briefing-dialog.js";
+import type { DayPlanReviewController } from "./day-plan-review-controller.js";
+import { acceptAllSelectionFor, hasOtherPendingEdits } from "./day-plan-review-model.js";
+import * as acceptLabels from "./today-labels.js";
 import { BriefingProse } from "./evening-mode.js";
 import {
   BriefingFreshnessList,
@@ -46,6 +49,7 @@ export interface MorningBriefingReaderProps {
   readonly onClose: () => void;
   readonly onOpenTask: (taskId: string) => void;
   readonly onReview: (anchor: HTMLElement) => void;
+  readonly controller: DayPlanReviewController;
 }
 
 /** Full morning report for one run, from the run response only. Nothing here writes. */
@@ -81,6 +85,35 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
     settingsQuery.data?.settings?.timeBlockMode === "auto"
       ? "Adjust task blocks"
       : "Review task blocks";
+  const { choiceFor, touchedIds } = props.controller;
+  const acceptPlan = props.dayPlan?.plan ?? null;
+  const acceptSelection = acceptPlan
+    ? acceptAllSelectionFor(acceptPlan, choiceFor, touchedIds)
+    : [];
+  const acceptBlocked =
+    acceptPlan !== null && hasOtherPendingEdits(acceptPlan, choiceFor, touchedIds);
+  const acceptStatus = acceptLabels.acceptAllStatus(props.controller);
+  const [acceptPhase, setAcceptPhase] = useState<"idle" | "busy" | "done">("idle");
+  const accepting = acceptPhase === "busy";
+  const acceptRef = useRef<HTMLButtonElement | null>(null);
+  const acceptReviewRef = useRef<HTMLButtonElement | null>(null);
+  const backRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (acceptPhase === "done")
+      (acceptReviewRef.current ?? acceptRef.current ?? backRef.current)?.focus();
+  }, [acceptPhase, acceptSelection.length]);
+  const runAcceptAll = async () => {
+    setAcceptPhase("busy");
+    await props.controller.acceptAllAdditions();
+    setAcceptPhase("done");
+  };
+  const openReaderReview = (event: { currentTarget: HTMLElement }) =>
+    props.onReview(event.currentTarget);
+  const acceptReviewButton = acceptStatus.needsReview ? (
+    <Button variant="quiet" size="sm" ref={acceptReviewRef} onClick={openReaderReview}>
+      {acceptLabels.REVIEW_CHANGES_LABEL}
+    </Button>
+  ) : null;
 
   const detail = detailQuery.data ?? null;
   const failed =
@@ -95,12 +128,31 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
       onClose={props.onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={(event) => props.onReview(event.currentTarget)}>
+          {acceptBlocked || acceptSelection.length > 0 ? (
+            <Button
+              variant="primary"
+              ref={acceptRef}
+              disabled={!acceptBlocked && (accepting || props.controller.busy)}
+              onClick={acceptBlocked ? openReaderReview : () => void runAcceptAll()}
+            >
+              {acceptBlocked
+                ? acceptLabels.REVIEW_CHANGES_LABEL
+                : accepting
+                  ? acceptLabels.ACCEPTING_LABEL
+                  : acceptLabels.ACCEPT_ALL_LABEL}
+            </Button>
+          ) : null}
+          <Button variant="secondary" onClick={openReaderReview}>
             {reviewLabel}
           </Button>
-          <Button variant="primary" onClick={props.onClose}>
+          <Button variant="primary" ref={backRef} onClick={props.onClose}>
             Back to Today
           </Button>
+          {acceptPhase !== "idle" ? (
+            <p className="brief-reader__accept-status" role="status">
+              {acceptStatus.line} {acceptReviewButton}
+            </p>
+          ) : null}
         </>
       }
     >

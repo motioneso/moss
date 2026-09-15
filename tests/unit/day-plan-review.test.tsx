@@ -17,7 +17,8 @@ import type {
 import {
   defaultChoiceFor,
   isoToLocalTime,
-  localTimeToIso
+  localTimeToIso,
+  selectionKey
 } from "../../apps/web/src/today/day-plan-review-model.js";
 import {
   useDayPlanReview,
@@ -103,6 +104,7 @@ let applyMode: "report" | "confirm" | "partial" | "denied" | "pending" | "pendin
   "report";
 let confirmStale = false;
 let availability: PreviewDayPlanResponse["calendarAvailability"] = "available";
+let previewConflictIds: string[] = [];
 
 function json(data: unknown, status = 200) {
   return {
@@ -130,8 +132,14 @@ function previewResponse(): PreviewDayPlanResponse {
         deadlineRisk: false
       }
     ],
-    eligibleBlockIds: ["b1"],
-    conflicts: []
+    eligibleBlockIds: ["b1", ...previewConflictIds],
+    conflicts: previewConflictIds.map((blockId) => ({
+      blockId,
+      kind: "calendar_busy" as const,
+      withBlockId: null,
+      detail: "Overlaps Team sync",
+      calendarEvent: null
+    }))
   };
 }
 
@@ -334,6 +342,7 @@ beforeEach(() => {
   applyMode = "report";
   confirmStale = false;
   availability = "available";
+  previewConflictIds = [];
   installFetch();
   vi.useFakeTimers();
   vi.setSystemTime(new Date(NOW));
@@ -652,6 +661,69 @@ describe("useDayPlanReview writes", () => {
   });
 });
 
+describe("useDayPlanReview acceptAllAdditions", () => {
+  it("sends one preview and one apply with the edited time, never a confirm", async () => {
+    const { current } = await mountHook(plan());
+    await act(async () => {
+      // Edited time rides the draft; b3 has no duration so it stays out.
+      current().setPlacement("b1", "add", "2026-09-10T18:00:00.000Z");
+      current().setPlacement("b3", "add", "2026-09-10T19:00:00.000Z");
+    });
+    await act(async () => {
+      expect(await current().acceptAllAdditions()).toBe(true);
+    });
+    const draft = calls.find((call) => call.url.endsWith("/draft"));
+    const sentB1 = (
+      draft?.body as { blocks: { id: string; pendingChange: unknown }[] }
+    ).blocks.find((row) => row.id === "b1");
+    expect(sentB1?.pendingChange).toEqual({
+      kind: "add",
+      startsAt: "2026-09-10T18:00:00.000Z",
+      durationMinutes: 30
+    });
+    const previews = calls.filter((call) => call.url.endsWith("/preview"));
+    expect(previews).toHaveLength(1);
+    expect(previews[0]!.body).toMatchObject({
+      expectedRevision: 4,
+      selectedChangeBlockIds: ["b1"]
+    });
+    const applies = calls.filter((call) => call.url.endsWith("/apply"));
+    expect(applies).toHaveLength(1);
+    expect(applies[0]!.body).toMatchObject({ expectedRevision: 4, selectedBlockIds: ["b1"] });
+    expect(applies[0]!.body).toHaveProperty("idempotencyKey");
+    expect(calls.some((call) => call.url.endsWith("/confirm"))).toBe(false);
+    expect(current().outcomes["b1"]?.outcome).toBe("applied");
+  });
+
+  it("applies nothing when every eligible block conflicts", async () => {
+    previewConflictIds = ["b1"];
+    const { current } = await mountHook(plan());
+    await act(async () => {
+      expect(await current().acceptAllAdditions()).toBe(false);
+    });
+    expect(calls.filter((call) => call.url.endsWith("/preview"))).toHaveLength(1);
+    expect(calls.some((call) => call.url.endsWith("/apply"))).toBe(false);
+    expect(current().outcomes["b1"]).toBe(undefined);
+  });
+
+  it("dismisses a 202 without confirming and asks for review", async () => {
+    applyMode = "confirm";
+    const { current } = await mountHook(plan());
+    await act(async () => {
+      expect(await current().acceptAllAdditions()).toBe(true);
+    });
+    expect(current().approval).toBe(null);
+    expect(current().notice).toBe("These changes need review.");
+    expect(calls.some((call) => call.url.endsWith("/confirm"))).toBe(false);
+  });
+
+  it("keys one selection and revision to one idempotency key", () => {
+    expect(selectionKey("plan-1", 3, "b1,b2")).toBe(selectionKey("plan-1", 3, "b1,b2"));
+    expect(selectionKey("plan-1", 3, "b1,b2")).not.toBe(selectionKey("plan-1", 3, "b1"));
+    expect(selectionKey("plan-1", 3, "b1,b2")).not.toBe(selectionKey("plan-1", 4, "b1,b2"));
+  });
+});
+
 describe("DayPlanReview view", () => {
   function stubController(
     overrides: Partial<DayPlanReviewController> = {}
@@ -673,6 +745,7 @@ describe("DayPlanReview view", () => {
       dismissApproval: () => undefined,
       setTime: () => undefined,
       runPreview: async () => true,
+      acceptAllAdditions: async () => true,
       apply: async () => true,
       confirm: async () => true,
       retry: async () => true,
@@ -725,15 +798,36 @@ describe("DayPlanReview view", () => {
       .filter((name) => name.length > 0);
   }
 
-  it("renders titled rows with no Accept-all control", async () => {
-    const container = await renderReview(stubController());
+  it("renders titled rows with Accept all beside the existing pair", async () => {
+    const acceptAllAdditions = vi.fn(async () => true);
+    const container = await renderReview(stubController({ acceptAllAdditions }));
     const all = names(container);
-    expect(all.some((name) => /accept all/i.test(name))).toBe(false);
+    expect(all).toContain("Accept all time blocks");
     expect(all).toContain("Write the launch brief: placement");
     expect(all).toContain("Preview changes");
     expect(all).toContain("Apply changes");
     expect(all).toContain("Back to Today");
     expect(container.textContent).toContain("Proposed, not on the calendar yet");
+    const target = [...container.querySelectorAll("button")].find(
+      (node) => node.textContent === "Accept all time blocks"
+    ) as HTMLButtonElement;
+    await act(async () => {
+      target.click();
+    });
+    expect(acceptAllAdditions).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides Accept all when a move is pending and keeps the existing pair", async () => {
+    const container = await renderReview(
+      stubController({
+        choices: { b2: { placement: "move", startsAt: "2026-09-10T22:00:00.000Z" } }
+      })
+    );
+    const all = names(container);
+    expect(all.some((name) => /accept all/i.test(name))).toBe(false);
+    expect(all).toContain("Preview changes");
+    expect(all).toContain("Apply changes");
+    expect(all).toContain("Back to Today");
   });
 
   it("reads unsaved deltas in transient words", async () => {
