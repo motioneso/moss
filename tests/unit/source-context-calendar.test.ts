@@ -174,7 +174,8 @@ describe("listCalendarContext", () => {
           providerLabel: "Google"
         },
         source: "live",
-        degradedReason: null
+        degradedReason: null,
+        asOf: NOW.toISOString()
       }
     ]);
     expect(result.gaps).toEqual([]);
@@ -261,6 +262,53 @@ describe("listCalendarContext", () => {
     expect(listCalendarEvents).not.toHaveBeenCalled();
   });
 
+  it("reports the least-fresh contributing account's time when accounts differ", async () => {
+    const listCalendarEvents = vi
+      .fn()
+      .mockResolvedValueOnce([googleEvent()])
+      .mockRejectedValueOnce(new Error("read ECONNRESET"));
+    const deps = makeDeps({
+      connectorsRepository: {
+        listAccounts: async () => [
+          account({ id: "acc-fresh" }),
+          account({
+            id: "acc-stale",
+            last_sync_finished_at: new Date("2026-07-02T00:00:00.000Z")
+          })
+        ]
+      },
+      googleClient: { listCalendarEvents }
+    });
+    const result = await listCalendarContext(scopedDb, deps, {});
+    expect(result.accounts).toEqual([
+      expect.objectContaining({ source: "live", asOf: NOW.toISOString() }),
+      expect.objectContaining({ source: "cache", asOf: "2026-07-02T00:00:00.000Z" })
+    ]);
+    expect(result.asOf).toBe("2026-07-02T00:00:00.000Z");
+  });
+
+  it("reports asOf as null when any contributing account's freshness is unknown", async () => {
+    const listCalendarEvents = vi
+      .fn()
+      .mockResolvedValueOnce([googleEvent()])
+      .mockRejectedValueOnce(new Error("read ECONNRESET"));
+    const deps = makeDeps({
+      connectorsRepository: {
+        listAccounts: async () => [
+          account({ id: "acc-fresh" }),
+          account({ id: "acc-unknown", last_sync_finished_at: null })
+        ]
+      },
+      googleClient: { listCalendarEvents }
+    });
+    const result = await listCalendarContext(scopedDb, deps, {});
+    expect(result.accounts).toEqual([
+      expect.objectContaining({ source: "live", asOf: NOW.toISOString() }),
+      expect.objectContaining({ source: "cache", asOf: null })
+    ]);
+    expect(result.asOf).toBeNull();
+  });
+
   it("skips non-calendar-capable accounts silently", async () => {
     const deps = makeDeps({
       connectorsRepository: {
@@ -270,6 +318,6 @@ describe("listCalendarContext", () => {
       }
     });
     const result = await listCalendarContext(scopedDb, deps, {});
-    expect(result).toEqual({ items: [], accounts: [], gaps: [] });
+    expect(result).toEqual({ items: [], accounts: [], gaps: [], truncated: false, asOf: null });
   });
 });

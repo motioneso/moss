@@ -140,4 +140,63 @@ describe("News Today widget", () => {
     const tagsAfter = renderer!.root.findAllByProps({ className: "nw-twlist__tag" });
     expect(tagsAfter.filter((tag) => tagText(tag) === "Wire").length).toBe(2);
   });
+
+  it("shows the topic label as the secondary kicker with a one-line dek", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+    const topStories = [
+      story(1),
+      { ...story(2), topicKey: "climate", topicLabel: "Climate" },
+      story(3),
+      story(4)
+    ];
+    const data: NewsOverviewResponse = {
+      topStories,
+      rankedStories: topStories,
+      sourceGroups: [],
+      activeTopics: [],
+      enabledSources: [{ sourceKey: "wire", label: "Wire" }],
+      degraded: false
+    };
+    client.setQueryData(newsQueryKeys.overview, data);
+
+    const html = renderToString(
+      <QueryClientProvider client={client}>
+        <NewsTodayWidget />
+      </QueryClientProvider>
+    );
+
+    expect(html).toContain("Climate");
+    expect(html.match(/class="nw-twlist__dek"/g)).toHaveLength(3);
+    expect(html).toContain("Summary");
+  });
+
+  it("drops a lead photo that fails to load and keeps the story", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+    const topStories = Array.from({ length: 4 }, (_, index) => story(index + 1));
+    const data: NewsOverviewResponse = {
+      topStories,
+      rankedStories: topStories,
+      sourceGroups: [],
+      activeTopics: [],
+      enabledSources: [{ sourceKey: "wire", label: "Wire" }],
+      degraded: false
+    };
+    client.setQueryData(newsQueryKeys.overview, data);
+
+    let renderer: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(QueryClientProvider, { client }, createElement(NewsTodayWidget))
+      );
+    });
+
+    const imagesBefore = renderer!.root.findAllByProps({ src: "/api/news/images/today-1" });
+    expect(imagesBefore.length).toBe(1);
+    await act(async () => {
+      imagesBefore[0]!.props.onError();
+    });
+
+    expect(renderer!.root.findAllByProps({ src: "/api/news/images/today-1" }).length).toBe(0);
+    expect(renderer!.root.findAllByProps({ children: "Today story 1" }).length).toBe(1);
+  });
 });

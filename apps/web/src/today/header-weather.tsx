@@ -1,10 +1,12 @@
 import { Cloud, CloudRain, CloudSnow, CloudSun, Sun, Wind } from "lucide-react";
 import type { ComponentType } from "react";
+import { Link } from "react-router";
 import type { WeatherTodayDto } from "@moss/shared";
 import { WeatherChip, type WeatherDayTileProps } from "@moss/ui";
 
 import { formatDate, useUserLocale } from "../locale/locale-format.js";
 import type { WeatherIcon } from "./feed-source";
+import type { TodayMode } from "./evening-mode.js";
 
 const ICONS: Record<
   WeatherIcon,
@@ -29,12 +31,27 @@ const ICON_COLOR: Record<WeatherIcon, string> = {
 
 const WEEKDAY_OPTS: Intl.DateTimeFormatOptions = { weekday: "short" };
 
-export function HeaderWeather(props: { readonly weather?: WeatherTodayDto | null }) {
+export function TodayWeatherRow(props: {
+  readonly weather: WeatherTodayDto | null | undefined;
+  readonly mode: TodayMode;
+  readonly isPending: boolean;
+  readonly isError: boolean;
+}) {
   const locale = useUserLocale();
+  if (props.isPending) return null;
   const wx = props.weather ?? null;
-  if (!wx) return null;
+  if (!wx || props.isError) {
+    return (
+      <p className="cmd-empty" role="status">
+        Weather isn&apos;t available right now.{" "}
+        <Link to="/settings?section=profile">Weather settings</Link>
+      </p>
+    );
+  }
 
+  const unitSymbol = wx.unit === "metric" ? "C" : "F";
   const NowIcon = ICONS[wx.icon];
+  const first = wx.forecast[0] ?? null;
   const days: WeatherDayTileProps[] = [
     {
       label: "Now",
@@ -70,5 +87,23 @@ export function HeaderWeather(props: { readonly weather?: WeatherTodayDto | null
   const href = `https://www.wunderground.com/weather/${wx.lat},${wx.lon}`;
   const city = wx.location.split(",")[0]?.trim() ?? wx.location;
 
-  return <WeatherChip href={href} location={city} days={days} />;
+  return (
+    <>
+      <div className="wx-row">
+        <NowIcon size={24} color={ICON_COLOR[wx.icon]} aria-hidden="true" />
+        <div>
+          <div className="jds-brief__title">{`${wx.temp}°${unitSymbol}`}</div>
+          <div>{wx.condition}</div>
+          {first !== null ? (
+            <div>
+              {props.mode === "evening"
+                ? `Overnight low ${first.low}°`
+                : `High ${first.high}° / Low ${first.low}°`}
+            </div>
+          ) : null}
+        </div>
+      </div>
+      <WeatherChip href={href} location={city} days={days} />
+    </>
+  );
 }

@@ -80,14 +80,17 @@ export const queryKeys = {
   },
   briefings: {
     definitions: ["briefings", "definitions"] as const,
-    runs: (definitionId: string | null) => ["briefings", "runs", definitionId] as const
+    runs: (definitionId: string | null) => ["briefings", "runs", definitionId] as const,
+    run: (definitionId: string, runId: string) => ["briefings", "run", definitionId, runId] as const
   },
   usefulnessFeedback: {
     list: ["usefulness-feedback"] as const
   },
   calendar: {
     list: ["calendar", "list"] as const,
-    detail: (id: string) => ["calendar", "detail", id] as const
+    detail: (id: string) => ["calendar", "detail", id] as const,
+    dayPlan: (localDay: string, timeZone: string) =>
+      ["calendar", "day-plan", localDay, timeZone] as const
   },
   chat: {
     settings: ["chat", "settings"] as const,

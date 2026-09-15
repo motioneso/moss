@@ -86,8 +86,17 @@
   margin-top: 30px;
 }
 @media (min-width: 1081px) {
+  /* The rail comes first in the DOM so tab order matches the single-column
+     visual order on phones; explicit placement keeps the desktop two-column
+     look unchanged (main left, rail right). */
+  .cmd-main {
+    grid-column: 1;
+    grid-row: 1;
+  }
   /* Keyline between the columns, newspaper-style: the aside carries the rule. */
   .cmd-aside {
+    grid-column: 2;
+    grid-row: 1;
     border-left: 1px solid var(--line-strong);
     padding-left: 32px;
     margin-left: -32px;
@@ -97,13 +106,11 @@
   .cmd-grid {
     grid-template-columns: 1fr;
   }
-}
-@media (max-width: 640px) {
+  /* Let both columns shrink below their content width; wrapped titles and
+     meta lines do the rest instead of pushing the page sideways. */
+  .cmd-main,
   .cmd-aside {
-    order: -1;
-  }
-  .cmd-aside__inner .well {
-    order: -1;
+    min-width: 0;
   }
 }
 
@@ -135,7 +142,7 @@
 }
 .day-ev {
   display: grid;
-  grid-template-columns: 58px 1fr auto;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
   gap: 16px;
   align-items: baseline;
   padding: 13px 0;
@@ -150,6 +157,11 @@
 }
 .day-ev__title {
   line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+/* Long task titles wrap instead of pushing the page sideways on narrow widths. */
+.jds-task__title {
+  overflow-wrap: anywhere;
 }
 .day-ev__where {
   margin-top: 2px;
@@ -158,4 +170,37 @@
   white-space: nowrap;
   text-align: right;
   padding-top: 3px;
+}
+
+/* ===== Today section index + schedule state (T14) ===== */
+.cmd-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 4px 0 0;
+}
+.jds-task__state {
+  /* May wrap on narrow widths; a nowrap state label ("Proposed, not on the
+     calendar yet") forces its schedule row past a 320px viewport. */
+  white-space: normal;
+}
+
+/* ===== Today weather row (T15, layout only) ===== */
+.wx-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-top: 6px;
+}
+/* ===== Today sports cards at phone widths (T16) =====
+   The sports desk's card grid floors tracks at 300px, which holds two columns
+   in the desktop main column but pushes a 320px page sideways (Prover measured
+   the card's right edge exactly at the document's 352px scroll width). Scoped
+   under .cmd-main so the desk's own stylesheet keeps owning its look: below a
+   300px container the floor yields to the container and cards stack one-up. */
+.cmd-main .sp-tkgrid {
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+}
+.cmd-main .sp-tkgrid > * {
+  min-width: 0;
 }

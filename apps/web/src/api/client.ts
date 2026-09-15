@@ -1,6 +1,9 @@
 import type { MossGoal } from "@moss/goals";
 import type {
   AddTaskActivityRequest,
+  ApplyConfirmationRequiredResponse,
+  ApplyDayPlanRequest,
+  ApplyExecutionReport,
   AssignTaskTagRequest,
   AiAssistantActionDto,
   CreateAiConfiguredModelRequest,
@@ -16,6 +19,7 @@ import type {
   AiServiceKey,
   BootstrapStatusResponse,
   ChatSkillResponse,
+  ConfirmDayPlanApplyRequest,
   CreateChatSkillRequest,
   ListChatSkillsResponse,
   SetChatSkillEnabledRequest,
@@ -44,6 +48,8 @@ import type {
   ListMySessionsResponse,
   RevokeMyOtherSessionsResponse,
   RevokeMySessionResponse,
+  SaveDayPlanRequest,
+  SaveDayPlanResponse,
   PreviewPersonaRequest,
   ListAiServiceBindingsResponse,
   PutAiServiceBindingRequest,
@@ -107,7 +113,13 @@ import type {
   ListAiProviderConfigsResponse,
   ListBriefingDefinitionsResponse,
   ListBriefingRunsResponse,
+  GetBriefingRunResponse,
   ListCalendarEventsResponse,
+  GetCalendarBriefingSettingsResponse,
+  GetDayPlanQuery,
+  GetDayPlanResponse,
+  CreateDayPlanRequest,
+  CreateDayPlanResponse,
   ListCheckinsResponse,
   ListChatThreadMessagesResponse,
   ListChatThreadsResponse,
@@ -130,6 +142,8 @@ import type {
   ModuleCredentialStatusDto,
   MyModuleDto,
   ListNotificationsResponse,
+  PreviewDayPlanRequest,
+  PreviewDayPlanResponse,
   ListTaskActivityResponse,
   ListTaskListsResponse,
   ListTaskTagsResponse,
@@ -147,6 +161,7 @@ import type {
   GetTerminalStatusResponse,
   SetTerminalPasswordResponse,
   RequestTerminalTicketResponse,
+  RetryDayPlanApplyRequest,
   RefreshAiProviderModelsResponse,
   TestAiProviderConfigResponse,
   LookupAiCapabilityRouteResponse,
@@ -866,6 +881,75 @@ export async function listCalendarEvents(): Promise<ListCalendarEventsResponse> 
   return requestJson<ListCalendarEventsResponse>("/api/calendar/events");
 }
 
+export async function getDayPlan(query: GetDayPlanQuery): Promise<GetDayPlanResponse> {
+  const params = new URLSearchParams({ date: query.date });
+  if (query.timeZone !== undefined) params.set("timeZone", query.timeZone);
+  return requestJson<GetDayPlanResponse>(`/api/calendar/day-plan?${params.toString()}`);
+}
+
+export async function getCalendarBriefingSettings(): Promise<GetCalendarBriefingSettingsResponse> {
+  return requestJson<GetCalendarBriefingSettingsResponse>("/api/calendar/briefing-settings");
+}
+
+export async function createDayPlan(input: CreateDayPlanRequest): Promise<CreateDayPlanResponse> {
+  return requestJson<CreateDayPlanResponse>("/api/calendar/day-plans", {
+    method: "POST",
+    body: input
+  });
+}
+
+export async function saveDayPlanDraft(
+  planId: string,
+  input: SaveDayPlanRequest
+): Promise<SaveDayPlanResponse> {
+  return requestJson<SaveDayPlanResponse>(
+    `/api/calendar/day-plans/${encodeURIComponent(planId)}/draft`,
+    { method: "PATCH", body: input }
+  );
+}
+
+export async function previewDayPlan(
+  planId: string,
+  input: PreviewDayPlanRequest
+): Promise<PreviewDayPlanResponse> {
+  return requestJson<PreviewDayPlanResponse>(
+    `/api/calendar/day-plans/${encodeURIComponent(planId)}/preview`,
+    { method: "POST", body: input }
+  );
+}
+
+export async function applyDayPlan(
+  planId: string,
+  input: ApplyDayPlanRequest
+): Promise<ApplyExecutionReport | ApplyConfirmationRequiredResponse> {
+  return requestJson<ApplyExecutionReport | ApplyConfirmationRequiredResponse>(
+    `/api/calendar/day-plans/${encodeURIComponent(planId)}/apply`,
+    { method: "POST", body: input }
+  );
+}
+
+export async function confirmDayPlanApply(
+  planId: string,
+  operationId: string,
+  input: ConfirmDayPlanApplyRequest
+): Promise<ApplyExecutionReport> {
+  return requestJson<ApplyExecutionReport>(
+    `/api/calendar/day-plans/${encodeURIComponent(planId)}/operations/${encodeURIComponent(operationId)}/confirm`,
+    { method: "POST", body: input }
+  );
+}
+
+export async function retryDayPlanOperation(
+  planId: string,
+  operationId: string,
+  input: RetryDayPlanApplyRequest
+): Promise<ApplyExecutionReport> {
+  return requestJson<ApplyExecutionReport>(
+    `/api/calendar/day-plans/${encodeURIComponent(planId)}/operations/${encodeURIComponent(operationId)}/retry`,
+    { method: "POST", body: input }
+  );
+}
+
 export async function listChatThreads(surface?: ChatSurface): Promise<ListChatThreadsResponse> {
   const query = surface ? `?surface=${encodeURIComponent(surface)}` : "";
   return requestJson<ListChatThreadsResponse>(`/api/chat/threads${query}`);
@@ -1412,6 +1496,17 @@ export async function updateBriefingDefinition(
 export async function listBriefingRuns(id: string): Promise<ListBriefingRunsResponse> {
   return requestJson<ListBriefingRunsResponse>(
     `/api/briefings/definitions/${encodeURIComponent(id)}/runs`
+  );
+}
+
+export async function getBriefingRun(
+  definitionId: string,
+  runId: string,
+  jobId?: string
+): Promise<GetBriefingRunResponse> {
+  const query = jobId ? `?jobId=${encodeURIComponent(jobId)}` : "";
+  return requestJson<GetBriefingRunResponse>(
+    `/api/briefings/definitions/${encodeURIComponent(definitionId)}/runs/${encodeURIComponent(runId)}${query}`
   );
 }
 

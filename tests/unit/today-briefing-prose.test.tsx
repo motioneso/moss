@@ -8,11 +8,13 @@ import type {
   BriefingDefinitionDto,
   BriefingActionRowDto,
   BriefingRunDto,
+  GetDayPlanResponse,
   LocaleSettingsDto,
   MeResponse,
   OnboardingStatusResponse,
   TaskDto
 } from "@moss/shared";
+import { localDay } from "@moss/shared";
 
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { ChatControlsProvider } from "../../apps/web/src/shell/chat-controls-context.js";
@@ -159,6 +161,81 @@ describe("Today morning briefing prose", () => {
     expect(ready).toMatch(/<button[^>]*>Reply<\/button>/);
     expect(ready).not.toMatch(/<button[^>]*disabled=""[^>]*>Reply<\/button>/);
   });
+
+  it("lists saved plan blocks in the schedule section between Start here and Needs you", () => {
+    const morning = briefingDefinition({
+      id: "morning-1",
+      title: "Morning briefing",
+      briefingType: "morning"
+    });
+    const html = renderToday({
+      now: new Date("2026-06-30T01:30:00.000Z"),
+      definitions: [morning],
+      runs: [],
+      dayPlan: {
+        plan: {
+          id: "plan-1",
+          localDay: "2026-06-29",
+          timeZone: locale.timezone,
+          revision: 1,
+          sourceRunId: null,
+          blocks: [
+            {
+              id: "b1",
+              kind: "focus",
+              taskId: "task-1",
+              title: null,
+              position: 0,
+              actualPlacement: {
+                startsAt: "2026-06-30T02:00:00.000Z",
+                durationMinutes: 60,
+                calendarEventRef: null
+              },
+              pendingChange: null
+            }
+          ],
+          eveningIntent: {
+            priorityTaskIds: [],
+            capacity: null,
+            notes: null,
+            corrections: [],
+            commitments: []
+          }
+        },
+        tasks: [
+          {
+            id: "task-1",
+            title: "Write the draft",
+            status: "todo",
+            dueAt: null,
+            doAt: null,
+            effort: null
+          }
+        ],
+        unavailableTaskIds: [],
+        sourceRun: null,
+        sourceRunUnavailable: false
+      }
+    });
+
+    expect(html).toContain("Schedule and preparation");
+    expect(html).toContain("Write the draft");
+    const startHere = html.indexOf('id="start-here"');
+    const schedule = html.indexOf('id="schedule"');
+    const needsYou = html.indexOf('id="needs-you"');
+    const widgets = html.indexOf('id="widgets"');
+    expect(startHere).toBeGreaterThan(-1);
+    expect(schedule).toBeGreaterThan(startHere);
+    expect(needsYou).toBeGreaterThan(schedule);
+    expect(widgets).toBeGreaterThan(schedule);
+    expect(html.indexOf("Write the draft")).toBeGreaterThan(schedule);
+
+    const nav = html.indexOf('aria-label="Sections"');
+    expect(nav).toBeGreaterThan(-1);
+    expect(nav).toBeLessThan(startHere);
+    expect(html).toContain('href="#schedule"');
+    expect(html).toContain('href="#start-here"');
+  });
 });
 
 function renderToday(input: {
@@ -168,6 +245,7 @@ function renderToday(input: {
   readonly tasks?: readonly TaskDto[];
   readonly onboardingStatus?: OnboardingStatusResponse;
   readonly openChatWith?: (prompt: string) => void;
+  readonly dayPlan?: GetDayPlanResponse;
 }): string {
   const previousDocument = globalThis.document;
   const previousDateNow = Date.now;
@@ -183,6 +261,16 @@ function renderToday(input: {
     client.setQueryData(queryKeys.tasks.list, { tasks: input.tasks ?? [] });
     client.setQueryData(queryKeys.tasks.lists, { lists: [] });
     client.setQueryData(queryKeys.calendar.list, { events: [] });
+    client.setQueryData(
+      queryKeys.calendar.dayPlan(localDay(input.now, locale.timezone), locale.timezone),
+      input.dayPlan ?? {
+        plan: null,
+        tasks: [],
+        unavailableTaskIds: [],
+        sourceRun: null,
+        sourceRunUnavailable: false
+      }
+    );
     client.setQueryData(queryKeys.goals.list, { items: [] });
     if (input.onboardingStatus) {
       client.setQueryData(queryKeys.onboarding.status, input.onboardingStatus);

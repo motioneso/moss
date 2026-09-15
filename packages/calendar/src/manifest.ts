@@ -3,10 +3,20 @@ import { fileURLToPath } from "node:url";
 import type { MossModuleManifest, ToolRequiresConfirmation } from "@moss/module-sdk";
 import { calendarMonitorProvider } from "./monitor-provider.js";
 import {
+  DAY_PLAN_DENIED_CODE,
+  DAY_PLAN_DENIED_REMEDIATION_REF,
+  applyDayPlanRequestSchema,
+  applyExecutionReportSchema,
+  confirmDayPlanApplyRequestSchema,
   createDayPlanRequestSchema,
   createDayPlanResponseSchema,
+  dayPlanApplyStatusResponseSchema,
   getCalendarBriefingSettingsResponseSchema,
   getDayPlanResponseSchema,
+  previewDayPlanRequestSchema,
+  previewDayPlanResponseSchema,
+  recoverDayPlanApplyRequestSchema,
+  retryDayPlanApplyRequestSchema,
   saveDayPlanRequestSchema,
   saveDayPlanResponseSchema,
   getCalendarEventResponseSchema,
@@ -16,6 +26,7 @@ import {
 } from "@moss/shared";
 
 import { requiresCalendarConfirmation } from "./confirmation-policy.js";
+import { dayPlanDraftExecute, summarizeDayPlanDraft } from "./day-plan-chat-tool.js";
 import { resolveCalendarEventRef } from "./event-resolver.js";
 import { CalendarRepository } from "./repository.js";
 import {
@@ -157,8 +168,9 @@ export const calendarModuleManifest = {
         {
           id: "calendar.planning",
           name: "Use for planning",
-          description: "Your assistant schedules its own events around your calendar.",
-          default: "coming-soon"
+          description:
+            "Let scheduled briefings turn your meetings into saved day-plan blocks automatically.",
+          default: "default-on"
         },
         {
           id: "calendar.detect-commitments",
@@ -169,8 +181,9 @@ export const calendarModuleManifest = {
         {
           id: "calendar.writeback",
           name: "Write events back",
-          description: "Let your assistant create and move calendar events for you.",
-          default: "coming-soon"
+          description:
+            "Let saved day-plan additions write to your calendar when applied or scheduled.",
+          default: "default-on"
         }
       ]
     }
@@ -194,6 +207,47 @@ export const calendarModuleManifest = {
       path: "/api/calendar/day-plans/:id/draft",
       requestSchema: saveDayPlanRequestSchema,
       responseSchema: saveDayPlanResponseSchema,
+      permissionId: "calendar.manage"
+    },
+    {
+      method: "POST",
+      path: "/api/calendar/day-plans/:id/preview",
+      requestSchema: previewDayPlanRequestSchema,
+      responseSchema: previewDayPlanResponseSchema,
+      permissionId: "calendar.view"
+    },
+    {
+      method: "POST",
+      path: "/api/calendar/day-plans/:id/apply",
+      requestSchema: applyDayPlanRequestSchema,
+      responseSchema: applyExecutionReportSchema,
+      permissionId: "calendar.manage"
+    },
+    {
+      method: "GET",
+      path: "/api/calendar/day-plans/:id/operations/:operationId",
+      responseSchema: dayPlanApplyStatusResponseSchema,
+      permissionId: "calendar.view"
+    },
+    {
+      method: "POST",
+      path: "/api/calendar/day-plans/:id/operations/:operationId/retry",
+      requestSchema: retryDayPlanApplyRequestSchema,
+      responseSchema: applyExecutionReportSchema,
+      permissionId: "calendar.manage"
+    },
+    {
+      method: "POST",
+      path: "/api/calendar/day-plans/:id/operations/:operationId/recover",
+      requestSchema: recoverDayPlanApplyRequestSchema,
+      responseSchema: applyExecutionReportSchema,
+      permissionId: "calendar.manage"
+    },
+    {
+      method: "POST",
+      path: "/api/calendar/day-plans/:id/operations/:operationId/confirm",
+      requestSchema: confirmDayPlanApplyRequestSchema,
+      responseSchema: applyExecutionReportSchema,
       permissionId: "calendar.manage"
     },
     {
@@ -223,6 +277,15 @@ export const calendarModuleManifest = {
     }
   ],
   assistantActionFamilies: [
+    {
+      id: "calendar_day_plan",
+      label: "Day-plan drafts",
+      description:
+        "Save evening chat edits to the actor's day-plan draft for review. " +
+        "The Plan tomorrow dialog and its review stay the only path to the calendar.",
+      defaultTier: "ask_each_time",
+      allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
+    },
     {
       id: "calendar_writeback",
       label: "Calendar writeback",
@@ -276,13 +339,13 @@ export const calendarModuleManifest = {
       permissionId: "calendar.manage",
       risk: "write",
       executionPolicy: "auto",
-      // Wired for auto-run, but NOT granted at install: the proactive follow-through worker
-      // (buildCalendarFollowThroughPort.executeAutoActions, module-registry/src/index.ts:711) is a
-      // second, un-gated reader of calendar_writeback's tier — on a block_time signal it calls
-      // calendarWrite.createEvent directly, no card, no chat session, no gateway. Granting
-      // trusted_auto at install would arm unattended background calendar writes the moment the
-      // module is enabled. Fable's security review on PR #1268 caught this; the user must promote
-      // calendar_writeback to trusted_auto themselves (#1263).
+      // Wired for auto-run, but NOT granted at install: scheduled briefings compose
+      // block_time intents, the generation transaction reserves an apply batch, and the
+      // calendar apply worker executes it through the gated execution service (same gate
+      // as this tool). Granting trusted_auto at install would arm unattended background
+      // calendar writes the moment the module is enabled. Fable's security review on
+      // PR #1268 caught this; the user must promote calendar_writeback to trusted_auto
+      // themselves (#1263).
       selfOperationGrant: "user_promotable",
       actionFamilyId: "calendar_writeback",
       requiresServices: ["calendarWrite"],
@@ -390,14 +453,50 @@ export const calendarModuleManifest = {
       requiresConfirmation: rescheduleEventRequiresConfirmation,
       execute: calendarRescheduleEventExecute,
       summarize: summarizeRescheduleEvent
+    },
+    {
+      name: "calendar.dayPlanDraft",
+      description:
+        "Save the evening interview's typed intent and untimed task additions to the " +
+        "actor's day-plan draft for tomorrow. Additions land as dateless proposals that " +
+        "only the Plan tomorrow dialog and its review can schedule; this tool never " +
+        "previews, applies, moves or removes anything on the calendar.",
+      permissionId: "calendar.manage",
+      risk: "write",
+      executionPolicy: "auto",
+      selfOperationGrant: "granted_at_install",
+      actionFamilyId: "calendar_day_plan",
+      inputSchema: {
+        type: "object",
+        required: ["planId", "expectedRevision"],
+        properties: {
+          planId: { type: "string", description: "Day-plan id from the interview seed" },
+          expectedRevision: {
+            type: "number",
+            description: "Plan revision the edits apply to"
+          },
+          eveningIntent: {
+            type: "object",
+            description: "Intent patch: priorityTaskIds, capacity, notes, corrections, commitments"
+          },
+          additions: {
+            type: "array",
+            description: "New tasks as { taskId, title? }; dateless proposals only",
+            items: { type: "object" }
+          }
+        }
+      },
+      execute: dayPlanDraftExecute,
+      summarize: summarizeDayPlanDraft
     }
   ],
   features: [
     {
       id: "calendar.saved_day_plan_read",
       description:
-        "Read your saved day plan for a date and timezone, with recorded placements and pending " +
-        "changes. Reading does not change the plan or refresh task and calendar facts. An unsaved day returns no plan.",
+        "Read your saved day plan for a date and timezone, with actor-visible tasks, unavailable " +
+        "references, pending changes, and source-run summary. Reading does not change the plan or " +
+        "refresh calendar facts. An unsaved day returns no plan.",
       errors: [
         {
           code: "day_plan_invalid",
@@ -468,6 +567,209 @@ export const calendarModuleManifest = {
           id: "calendar.saved_day_plan_refresh",
           description: "Read the latest saved day plan before retrying the draft.",
           path: "/calendar"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_apply",
+      description:
+        "Apply reserved blocks: reserves the reviewed selection and writes additions at " +
+        "once. A batch with moves or removals answers 202 for confirmation first, unless " +
+        "automatic calendar changes are turned on.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description:
+            "Use a positive integer revision, non-empty idempotency key, and only block ids that belong to this plan."
+        },
+        {
+          code: "day_plan_conflict",
+          class: "transient",
+          description:
+            "Read the latest plan revision and retry the apply, or reuse the key exactly to replay."
+        },
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan is unavailable to this actor."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest saved day plan before retrying the apply.",
+          path: "/calendar"
+        },
+        {
+          id: "calendar.saved_day_plan_reconnect",
+          description:
+            "Reconnect or fix a calendar account so additions are written against real commitments again.",
+          path: "/settings/connectors"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_apply_status",
+      description:
+        "Read one apply operation with its durable per-item outcomes. Database-only. " +
+        "Pending while any item is pending or unknown, completed once all are settled.",
+      errors: [
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan or operation is unavailable to this actor."
+        },
+        {
+          code: DAY_PLAN_DENIED_CODE,
+          class: "prerequisite",
+          description:
+            "An apply item was denied by the access gate; automatic planning is off in settings.",
+          remediationRef: DAY_PLAN_DENIED_REMEDIATION_REF
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest saved day plan before checking the operation again.",
+          path: "/calendar"
+        },
+        {
+          id: DAY_PLAN_DENIED_REMEDIATION_REF,
+          description: "Turn automatic planning back on in calendar settings, then retry.",
+          path: "/settings/modules/calendar"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_apply_retry",
+      description:
+        "Retry only selected failed or unknown items of one operation, once each. " +
+        "The selection validates atomically first; unselected items keep stored results.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description: "Retry needs a non-empty list of unique item ids."
+        },
+        {
+          code: "day_plan_conflict",
+          class: "transient",
+          description:
+            "Only failed or unknown items can be retried; applied, pending, missing, " +
+            "or stale selections reject the whole retry."
+        },
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan, operation, or item is unavailable to this actor."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest operation status before retrying.",
+          path: "/calendar"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_apply_recover",
+      description:
+        "Resume one interrupted apply by operation id. Pending and unknown items " +
+        "reconcile by provider identity; applied and failed items stay stored.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description: "Recover takes no selection: send no body or an empty object."
+        },
+        {
+          code: "day_plan_conflict",
+          class: "transient",
+          description: "A stale selection is rejected; read the latest operation status first."
+        },
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan or operation is unavailable to this actor."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest operation status before recovering.",
+          path: "/calendar"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_apply_confirm",
+      description:
+        "Confirm one reserved move/removal batch: validates the bound approval once, " +
+        "then runs the same execution. Anything else stops at 409 with no writes.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description: "Confirm needs the pending approval id bound to this operation."
+        },
+        {
+          code: "day_plan_conflict",
+          class: "transient",
+          description:
+            "Only the pending approval bound to this exact operation, revision and " +
+            "change set may confirm; replays and foreign approvals stop at 409."
+        },
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan or operation is unavailable to this actor."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest operation status before confirming.",
+          path: "/calendar"
+        }
+      ]
+    },
+    {
+      id: "calendar.saved_day_plan_preview",
+      description:
+        "Preview selected pending changes: timing, eligibility, conflicts, deadline risk. " +
+        "Read-only. Conflicts use a live calendar read, else the last synced state; if no read " +
+        "is possible, outside conflicts are skipped rather than assumed clear.",
+      errors: [
+        {
+          code: "day_plan_invalid",
+          class: "validation",
+          description:
+            "Use a positive integer revision and only change ids that belong to this plan and have a saved pending change."
+        },
+        {
+          code: "day_plan_conflict",
+          class: "transient",
+          description: "Read the latest plan revision and retry the preview."
+        },
+        {
+          code: "day_plan_not_available",
+          class: "validation",
+          description: "The plan is unavailable to this actor."
+        }
+      ],
+      remediations: [
+        {
+          id: "calendar.saved_day_plan_refresh",
+          description: "Read the latest saved day plan before retrying the preview.",
+          path: "/calendar"
+        },
+        {
+          id: "calendar.saved_day_plan_reconnect",
+          description:
+            "Reconnect or fix a calendar account so conflicts are checked against real commitments again.",
+          path: "/settings/connectors"
         }
       ]
     },

@@ -341,10 +341,25 @@ export interface DayPlanOperationsTable {
   owner_user_id: string;
   operation_key: string | null;
   block_id: string | null;
-  kind: "add" | "move" | "remove";
+  kind: "add" | "move" | "remove" | "apply";
   idempotency_key: string;
   expected_revision: number;
   outcome: "pending" | "applied" | "failed" | "unknown";
+  selection_snapshot: unknown;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface DayPlanOperationItemsTable {
+  id: string;
+  operation_id: string;
+  plan_id: string;
+  owner_user_id: string;
+  block_id: string | null;
+  kind: "add" | "move" | "remove";
+  pending_change: unknown;
+  outcome: "pending" | "applied" | "failed" | "unknown";
+  result: unknown;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
@@ -1596,6 +1611,7 @@ export interface MossDatabase {
   "app.day_plans": DayPlansTable;
   "app.day_plan_blocks": DayPlanBlocksTable;
   "app.day_plan_operations": DayPlanOperationsTable;
+  "app.day_plan_operation_items": DayPlanOperationItemsTable;
   "app.email_messages": EmailMessagesTable;
   "app.email_triage_feedback": EmailTriageFeedbackTable;
   "app.email_action_suppression": EmailActionSuppressionTable;
@@ -1680,6 +1696,7 @@ export type CalendarEvent = Selectable<CalendarEventsTable>;
 export type DayPlan = Selectable<DayPlansTable>;
 export type DayPlanBlock = Selectable<DayPlanBlocksTable>;
 export type DayPlanOperation = Selectable<DayPlanOperationsTable>;
+export type DayPlanOperationItem = Selectable<DayPlanOperationItemsTable>;
 export type EmailMessage = Selectable<EmailMessagesTable>;
 export type AiAssistantActionRequest = Selectable<AiAssistantActionRequestsTable>;
 export type MossActionAuditLog = Selectable<MossActionAuditLogTable>;

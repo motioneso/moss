@@ -1,0 +1,102 @@
+.evening-plan__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.evening-plan__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
+
+.evening-plan__section {
+  min-width: 0;
+  margin-bottom: 20px;
+}
+
+.evening-plan__heading {
+  font-size: 15px;
+  font-weight: 650;
+  margin: 0 0 8px;
+}
+
+.evening-plan__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.evening-plan__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.evening-plan__title {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__state {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__hint {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.evening-plan__controls input,
+.evening-plan__controls select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.evening-plan__prose {
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__status,
+.evening-plan__notice {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.evening-plan__summary {
+  min-width: 0;
+}
+
+.evening-plan__details {
+  min-width: 0;
+}
+
+.evening-plan__details-cap {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+@media (min-width: 1081px) {
+  .evening-plan__grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}

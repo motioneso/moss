@@ -58,6 +58,9 @@ export {
   isPublicFeedDocument,
   parsePublicFeedItems
 } from "./source/rss-source.js";
+// #2313: re-exported so the worker composition root can scope the e2e fixture fetch to
+// the briefing sources' manifest hosts (same precedent as the adapter re-export above).
+export { NEWS_FETCH_HOSTS } from "./source/catalog.js";
 // #1572: declared public seam so Sports' own (URL-only) source discovery can reuse News'
 // reviewed feed-discovery, sanitize, domain-normalization and policy-check primitives instead
 // of importing News internals or re-implementing them.

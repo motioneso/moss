@@ -3,11 +3,15 @@ import { describe, expect, it } from "vitest";
 import type { AiAssistantToolDto, BriefingDefinitionDto } from "@moss/shared";
 
 import {
+  MORNING_NEWS_TOOL,
+  MORNING_SPORTS_TOOL,
   createDefinitionRequest,
   defaultScheduleMetadataFor,
   findDefinition,
   readSourceLabels,
-  sourceListDescription
+  sourceListDescription,
+  toggleToolName,
+  updateDefinitionRequest
 } from "../../apps/web/src/briefings/briefing-settings-model.js";
 
 describe("briefing settings model", () => {
@@ -118,3 +122,39 @@ function definition(input: {
     updatedAt: "2026-06-26T00:00:00.000Z"
   };
 }
+
+describe("toggleToolName", () => {
+  it("removes a selected tool and keeps the rest in order", () => {
+    expect(toggleToolName(["tasks.list", MORNING_SPORTS_TOOL], MORNING_SPORTS_TOOL)).toEqual([
+      "tasks.list"
+    ]);
+  });
+
+  it("appends a deselected tool without touching the rest", () => {
+    expect(toggleToolName(["tasks.list"], MORNING_NEWS_TOOL)).toEqual([
+      "tasks.list",
+      MORNING_NEWS_TOOL
+    ]);
+  });
+});
+
+describe("definition requests carry the selection only from the switches", () => {
+  const stored = definition({ id: "morning-1", briefingType: "morning", targetTime: "07:00" });
+
+  it("omits selectedToolNames on create so the server default applies", () => {
+    const request = createDefinitionRequest({ briefingType: "morning" });
+    expect("selectedToolNames" in request).toBe(false);
+  });
+
+  it("omits selectedToolNames on time or enabled edits", () => {
+    const request = updateDefinitionRequest(stored, { targetTime: "08:00" });
+    expect(request.selectedToolNames).toBeUndefined();
+  });
+
+  it("sends the toggled list on a switch edit", () => {
+    const request = updateDefinitionRequest(stored, {
+      selectedToolNames: toggleToolName(stored.selectedToolNames, MORNING_SPORTS_TOOL)
+    });
+    expect(request.selectedToolNames).toEqual(["tasks.search", MORNING_SPORTS_TOOL]);
+  });
+});

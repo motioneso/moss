@@ -61,6 +61,9 @@ export function NewsTodayWidget(): ReactNode {
     queryKey: newsQueryKeys.overview,
     queryFn: () => getNewsOverview()
   });
+  // A lead photo that fails to load falls back to the text treatment: track the URL that
+  // failed (not a bare flag) so a later lead with a good photo still renders it.
+  const [failedLeadPhoto, setFailedLeadPhoto] = useState<string | null>(null);
   const data = overviewQuery.data;
   if (!data || data.topStories.length === 0) return null;
 
@@ -79,8 +82,14 @@ export function NewsTodayWidget(): ReactNode {
           and a one-line dek clamped so a long summary can't push the brief list off the fold. */}
       <div className="nw-twlead-wrap nw-fbhost">
         <a className="nw-twlead" href={lead.url} target="_blank" rel="noreferrer">
-          {lead.imageUrl ? (
-            <img className="nw-twlead__photo" src={lead.imageUrl} alt="" loading="lazy" />
+          {lead.imageUrl && lead.imageUrl !== failedLeadPhoto ? (
+            <img
+              className="nw-twlead__photo"
+              src={lead.imageUrl}
+              alt=""
+              loading="lazy"
+              onError={() => setFailedLeadPhoto(lead.imageUrl)}
+            />
           ) : null}
           <span className="nw-twlead__tag">{lead.sourceLabel}</span>
           <span className="nw-twlead__title">{lead.title}</span>
@@ -94,10 +103,17 @@ export function NewsTodayWidget(): ReactNode {
             <li className="nw-twlist__item" key={headline.id}>
               <div className="nw-twlist__row nw-fbhost">
                 <a className="nw-twlist__link" href={headline.url} target="_blank" rel="noreferrer">
+                  {/* Kicker keeps the .nw-twlist__tag class: the topic label when the feed gave
+                      one, otherwise the source tag with favicon. One-line dek when present. */}
                   <span className="nw-twlist__tag">
-                    <SourceTag faviconUrl={headline.faviconUrl} label={headline.sourceLabel} />
+                    {headline.topicLabel ?? (
+                      <SourceTag faviconUrl={headline.faviconUrl} label={headline.sourceLabel} />
+                    )}
                   </span>
                   <span className="nw-twlist__title">{headline.title}</span>
+                  {headline.summary ? (
+                    <span className="nw-twlist__dek">{headline.summary}</span>
+                  ) : null}
                 </a>
                 <StoryFeedbackMenu headline={headline} surface="today" />
               </div>

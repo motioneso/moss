@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 import type { BriefingActionRowDto, BriefingRunDto } from "@moss/shared";
 
 import {
@@ -9,6 +9,8 @@ import {
   mockApi,
   type MockApiState
 } from "./mock-api.js";
+import { myModulesResponse } from "./mock-modules.js";
+import { sportsOverviewFixture } from "./mock-sports-api.js";
 
 const NOW = "2026-07-31T12:00:00.000Z";
 const MORNING_SUMMARY =
@@ -125,6 +127,26 @@ test("morning and evening prose and action rows render accept dismiss view reply
     }
   };
   await mockApi(page, state);
+  await page.route("**/api/calendar/day-plan*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        plan: null,
+        tasks: [],
+        unavailableTaskIds: [],
+        sourceRun: null,
+        sourceRunUnavailable: false
+      })
+    })
+  );
+  await page.route("**/api/weather/today", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: null })
+    })
+  );
   await page
     .context()
     .route("https://example.test/**", (route) =>
@@ -355,5 +377,328 @@ test("morning and evening prose and action rows render accept dismiss view reply
         .filter({ hasText: row.title })
         .locator(".loose-row__title")
     ).toBeVisible();
+  }
+});
+
+const COMPLETED_ONBOARDING: MockApiState["onboardingStatus"] = {
+  role: "founder",
+  state: "completed",
+  steps: {
+    cliAuth: {
+      done: true,
+      providers: [{ kind: "anthropic", cliPresent: true, installState: "ready" }]
+    },
+    connectors: { done: false }
+  }
+};
+
+function fulfillJson(route: Route, status: number, body: unknown) {
+  return route.fulfill({
+    status,
+    contentType: "application/json",
+    body: JSON.stringify(body)
+  });
+}
+
+test("calendar failure keeps the saved plan and never claims an empty day", async ({ page }) => {
+  await page.clock.setFixedTime(new Date(NOW));
+  const morningDefinition = createMockBriefingDefinition("briefing-morning", "Morning", {
+    briefingType: "morning",
+    cadence: "daily",
+    scheduleMetadata: { targetTime: "07:00", timezone: "UTC" }
+  });
+  const state: MockApiState = {
+    authenticated: true,
+    onboardingStatus: COMPLETED_ONBOARDING,
+    chatThreads: [],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    notifications: [],
+    tasks: [],
+    briefingDefinitions: [morningDefinition],
+    briefingRuns: {
+      [morningDefinition.id]: [
+        run("morning-run-1", morningDefinition.id, "morning", MORNING_SUMMARY, [])
+      ]
+    }
+  };
+  await mockApi(page, state);
+  await page.route("**/api/weather/today", (route) => fulfillJson(route, 200, { data: null }));
+  await page.route("**/api/calendar/day-plan*", (route) =>
+    fulfillJson(route, 200, {
+      plan: {
+        id: "plan-e2e",
+        localDay: "2026-07-31",
+        timeZone: "UTC",
+        revision: 1,
+        sourceRunId: null,
+        blocks: [
+          {
+            id: "b1",
+            kind: "focus",
+            taskId: null,
+            title: "Morning outline",
+            position: 0,
+            actualPlacement: {
+              startsAt: "2026-07-31T14:00:00.000Z",
+              durationMinutes: 60,
+              calendarEventRef: null
+            },
+            pendingChange: null
+          }
+        ],
+        eveningIntent: {
+          priorityTaskIds: [],
+          capacity: null,
+          notes: null,
+          corrections: [],
+          commitments: [],
+          carryForward: []
+        }
+      },
+      tasks: [],
+      unavailableTaskIds: [],
+      sourceRun: null,
+      sourceRunUnavailable: false
+    })
+  );
+  // Failing events route, registered after mockApi so it wins.
+  await page.route("**/api/calendar/events", (route) =>
+    fulfillJson(route, 503, { error: "Calendar provider is down" })
+  );
+
+  await page.goto("/today");
+  await expect(
+    page.getByText("Calendar isn't available right now; showing your saved plan.")
+  ).toBeVisible();
+  await expect(page.locator("#schedule").getByText("Morning outline")).toBeVisible();
+  await expect(page.locator("#schedule").getByText("Nothing on the schedule yet.")).toHaveCount(0);
+});
+
+test("narrow and zoomed widths keep Today controls in view with dock-first tab order", async ({
+  page
+}) => {
+  await page.clock.setFixedTime(new Date(NOW));
+  const morningDefinition = createMockBriefingDefinition("briefing-morning", "Morning", {
+    briefingType: "morning",
+    cadence: "daily",
+    scheduleMetadata: { targetTime: "07:00", timezone: "UTC" }
+  });
+  const state: MockApiState = {
+    authenticated: true,
+    onboardingStatus: COMPLETED_ONBOARDING,
+    chatThreads: [],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    notifications: [],
+    tasks: [createMockTask("task-draft", "Write the draft")],
+    briefingDefinitions: [morningDefinition],
+    briefingRuns: {
+      [morningDefinition.id]: [
+        run("morning-run-1", morningDefinition.id, "morning", MORNING_SUMMARY, [])
+      ]
+    }
+  };
+  await mockApi(page, state);
+  state.calendarEvents = [0, 1].map((i) => ({
+    id: `e${i}`,
+    connectorAccountId: "account-1",
+    ownerUserId: "user-1",
+    title: "Team sync with a fairly long meeting title",
+    startsAt: `2026-07-31T${15 + i}:00:00.000Z`,
+    endsAt: `2026-07-31T${16 + i}:00:00.000Z`,
+    location: "Conference Room B",
+    summary: null,
+    bodyExcerpt: null,
+    externalId: `ext-e${i}`,
+    isMossBlock: false,
+    allDay: false,
+    attendeeCount: 3,
+    status: null,
+    createdAt: "2026-07-30T00:00:00.000Z",
+    updatedAt: "2026-07-30T00:00:00.000Z"
+  }));
+  await page.route("**/api/me/modules", (route) =>
+    fulfillJson(route, 200, {
+      modules: [
+        ...myModulesResponse.modules,
+        {
+          id: "wellness",
+          name: "Wellness",
+          version: "0.1.0",
+          lifecycle: "user-toggleable",
+          required: false,
+          supportsUserDisable: true,
+          instanceDisabled: false,
+          userDisabled: false,
+          active: true,
+          hasPreferences: false,
+          hasUserCredentials: false,
+          scope: "everyone"
+        }
+      ]
+    })
+  );
+  await page.route("**/api/wellness/medications/schedule*", (route) =>
+    fulfillJson(route, 200, { date: "2026-07-31", slots: [] })
+  );
+  // Populated weather strip plus populated sports desk: the same offenders Prover
+  // measured at 320px on the real page (sp-tkgrid cards, weather day tiles), so the
+  // width checks below cover them instead of an empty page.
+  await page.route("**/api/weather/today", (route) =>
+    fulfillJson(route, 200, {
+      data: {
+        temp: 72,
+        feelsLike: 71,
+        condition: "Sunny",
+        icon: "sun",
+        location: "San Francisco, CA",
+        unit: "imperial",
+        humidity: 55,
+        dewPoint: 54,
+        windSpeed: 5,
+        lat: 37.7,
+        lon: -122.4,
+        forecast: [0, 1, 2, 3, 4].map((offset) => ({
+          date: `2026-08-${String(offset + 1).padStart(2, "0")}`,
+          icon: "sun",
+          high: 75 - offset,
+          low: 60 - offset
+        }))
+      }
+    })
+  );
+  await page.route("**/api/sports/overview", (route) =>
+    fulfillJson(route, 200, sportsOverviewFixture)
+  );
+  await page.route("**/api/calendar/day-plan*", (route) =>
+    fulfillJson(route, 200, {
+      plan: {
+        id: "plan-width",
+        localDay: "2026-07-31",
+        timeZone: "UTC",
+        revision: 1,
+        sourceRunId: null,
+        blocks: [
+          {
+            id: "b1",
+            kind: "focus",
+            taskId: "task-draft",
+            title: null,
+            position: 0,
+            actualPlacement: {
+              startsAt: "2026-07-31T14:00:00.000Z",
+              durationMinutes: 90,
+              calendarEventRef: null
+            },
+            pendingChange: null
+          }
+        ],
+        eveningIntent: {
+          priorityTaskIds: [],
+          capacity: null,
+          notes: null,
+          corrections: [],
+          commitments: []
+        }
+      },
+      tasks: [
+        {
+          id: "task-draft",
+          title: "Write the draft",
+          status: "todo",
+          dueAt: null,
+          doAt: null,
+          effort: null
+        }
+      ],
+      unavailableTaskIds: [],
+      sourceRun: null,
+      sourceRunUnavailable: false
+    })
+  );
+
+  for (const width of [320, 720]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/today");
+    await expect(page.locator(".cmd-wrap")).toBeVisible();
+    // Both overflow offenders are on the page, otherwise the check below proves
+    // nothing about the populated layout.
+    await expect(page.locator(".sp-tkgrid article.sp-tk").first()).toBeVisible();
+    await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      `no sideways scroll at ${width}px`
+    ).toBe(true);
+    for (const name of ["Meds", "Check in"]) {
+      const box = await page.getByRole("button", { name }).boundingBox();
+      expect(box, `${name} visible at ${width}px`).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(-1);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
+    }
+  }
+
+  // The task dialog's confirm button stays inside a 320-wide viewport.
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto("/today");
+  await page
+    .getByRole("button", { name: /Write the draft/ })
+    .first()
+    .click();
+  const confirm = page.getByRole("button", { name: "Save changes" });
+  await expect(confirm).toBeVisible();
+  const confirmBox = await confirm.boundingBox();
+  expect(confirmBox).not.toBeNull();
+  expect(confirmBox!.x + confirmBox!.width).toBeLessThanOrEqual(321);
+  await page.getByRole("button", { name: "Close" }).first().click();
+
+  // Tab order follows the document at phone and desktop widths: the dock comes
+  // before any schedule item, and at desktop the main column follows the rail.
+  for (const width of [375, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/today");
+    await expect(page.locator(".cmd-wrap")).toBeVisible();
+    if (width === 1440) {
+      await expect(page.locator('aside[aria-label="Quick actions and widgets"]')).toBeVisible();
+    }
+    let medsAt = -1;
+    let checkinAt = -1;
+    let firstScheduleAt = -1;
+    let lastRailAt = -1;
+    let firstMainAt = -1;
+    for (let i = 0; i < 60; i++) {
+      await page.keyboard.press("Tab");
+      const stop = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        if (!el || el === document.body) return null;
+        if (el.dataset.walkSeen) return { wrapped: true } as const;
+        el.dataset.walkSeen = "1";
+        return {
+          name: (el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40),
+          inSchedule: el.closest("#schedule") !== null,
+          inRail: el.closest("aside.cmd-aside") !== null,
+          inMain: el.closest(".cmd-main") !== null
+        };
+      });
+      if (!stop || "wrapped" in stop) break;
+      if (medsAt === -1 && stop.name.includes("Meds")) medsAt = i;
+      if (checkinAt === -1 && stop.name.includes("Check in")) checkinAt = i;
+      if (firstScheduleAt === -1 && stop.inSchedule) firstScheduleAt = i;
+      if (stop.inRail) lastRailAt = i;
+      if (firstMainAt === -1 && stop.inMain) firstMainAt = i;
+    }
+    expect(medsAt, `Meds is reachable by keyboard at ${width}px`).toBeGreaterThanOrEqual(0);
+    expect(checkinAt, `Check in is reachable by keyboard at ${width}px`).toBeGreaterThanOrEqual(0);
+    if (firstScheduleAt !== -1) {
+      expect(medsAt, `dock tabs before schedule items at ${width}px`).toBeLessThan(firstScheduleAt);
+      expect(checkinAt, `dock tabs before schedule items at ${width}px`).toBeLessThan(
+        firstScheduleAt
+      );
+    }
+    if (width === 1440) {
+      expect(lastRailAt, "rail has tab stops at 1440px").toBeGreaterThanOrEqual(0);
+      expect(firstMainAt, "main column has tab stops at 1440px").toBeGreaterThanOrEqual(0);
+      expect(lastRailAt, "main column follows the rail at 1440px").toBeLessThan(firstMainAt);
+    }
   }
 });

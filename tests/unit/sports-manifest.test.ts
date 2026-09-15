@@ -258,3 +258,19 @@ describe("sports manifest keeps its subreddit-source promise truthful (review #2
     expect(redditEntryToHeadline(entryXml)).not.toBeNull();
   });
 });
+
+describe("sports briefing tool input (T10)", () => {
+  it("declares an optional bounded timeZone input for local-day phases", () => {
+    const tool = sportsModuleManifest.assistantTools.find(
+      (entry) => entry.name === "sports.followedFactsToday"
+    );
+    const properties = (
+      tool?.inputSchema as {
+        properties?: Record<string, { type?: string; minLength?: number; maxLength?: number }>;
+      }
+    )?.properties;
+    expect(properties?.timeZone?.type).toBe("string");
+    expect(properties?.timeZone?.minLength).toBe(1);
+    expect(properties?.timeZone?.maxLength).toBe(100);
+  });
+});

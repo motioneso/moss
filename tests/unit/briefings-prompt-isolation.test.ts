@@ -57,12 +57,14 @@ describe("briefings prompt-isolation (static)", () => {
       "email",
       "vault",
       "chats",
+      "day_plan",
       "tasks_reconciliation",
       "calendar_tomorrow",
       "email_today",
       "morning_plan",
       "goals",
       "sports",
+      "news",
       "web_research"
     ]) {
       expect(tbSource, `trust boundary must name channel "${channel}"`).toContain(channel);
@@ -115,5 +117,30 @@ describe("evening interview seed prompt-isolation (static)", () => {
   it("sanitizes review text before emitting into external_source", () => {
     expect(promptSafetySource).toMatch(/export function sanitizeExternalData/);
     expect(seedSource).toMatch(/sanitizeExternalData\(reviewText/);
+  });
+});
+
+describe("briefing evidence prompt isolation (T10)", () => {
+  it("never emits an evidence URL or image path into the built messages", async () => {
+    const { composeBriefing } = await import("../../packages/briefings/src/compose.js");
+    const harness = await import("./briefings-compose.harness.js");
+    const captured: unknown[] = [];
+    const deps = harness.makeFakeDeps({
+      generateChat: async (input: { messages: unknown }) => {
+        captured.push(input.messages);
+        return { text: "synth narrative" };
+      }
+    });
+    await composeBriefing(
+      harness.fakeScopedDb,
+      harness.definition({
+        selected_tool_names: ["tasks.list", "sports.followedFactsToday", "news.topHeadlinesToday"]
+      }),
+      harness.runInput,
+      deps
+    );
+    const prompt = (captured[0] as readonly { content: string }[])[0]!.content;
+    expect(prompt).not.toContain("https://example.com/markets");
+    expect(prompt).not.toContain("/api/news/images/");
   });
 });

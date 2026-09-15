@@ -4,6 +4,7 @@ import type { BriefingDefinition, DataContextDb } from "@moss/db";
 import type { MemoryRetriever } from "@moss/memory";
 import type { MossModuleManifest, ToolExecute, ToolResult } from "@moss/module-sdk";
 import type { FocusSignalInput, PriorityModelPreferenceV1 } from "@moss/priority";
+import type { DayPlanDto } from "@moss/shared";
 
 import {
   type ComposeDeps,
@@ -48,6 +49,19 @@ export const runInput: ComposeRunInput = {
 
 // Canned per-tool data keyed by the tool name compose calls. Day-bounded sources
 // (calendar/chats) use FIXED_NOW's UTC date so withinLocalDay keeps them.
+/** Committed day-plan block under the canned evt-1, for overnight-line tests. */
+export function committedDayPlanBlock(startsAt: string): DayPlanDto["blocks"][number] {
+  return {
+    id: "b1",
+    kind: "focus",
+    taskId: null,
+    title: "Focus",
+    position: 0,
+    pendingChange: null,
+    actualPlacement: { startsAt, durationMinutes: 60, calendarEventRef: "evt-1" }
+  };
+}
+
 export const TODAY_ISO = "2026-06-13T09:00:00.000Z";
 
 export function cannedToolData(toolName: string): Record<string, unknown> {
@@ -112,7 +126,52 @@ export function cannedToolData(toolName: string): Record<string, unknown> {
         turns: [{ role: "user", excerpt: "what's up", threadTitle: "T", createdAt: TODAY_ISO }]
       };
     case "sports.followedFactsToday":
-      return { facts: [{ competitionKey: "nfl", text: "Cowboys play tonight 7:20pm" }] };
+      return {
+        facts: [{ competitionKey: "nfl", text: "Cowboys play tonight 7:20pm" }],
+        evidence: {
+          version: 1,
+          capturedAt: FIXED_NOW.toISOString(),
+          degraded: false,
+          state: "tonight",
+          ambiguousFollowCount: 0,
+          games: [
+            {
+              id: "g1",
+              competitionKey: "nfl",
+              startsAt: "2026-06-13T23:20:00.000Z",
+              phase: "tonight",
+              statusDetail: "7:20 PM",
+              headline: "Cowboys play tonight",
+              homeShort: "DAL",
+              awayShort: "MIN",
+              homeScore: null,
+              awayScore: null
+            }
+          ],
+          stories: []
+        }
+      };
+    case "news.topHeadlinesToday":
+      return {
+        facts: [{ competitionKey: "news", text: "Markets rally — Wire" }],
+        evidence: {
+          version: 1,
+          capturedAt: FIXED_NOW.toISOString(),
+          degraded: false,
+          stories: [
+            {
+              id: "s1",
+              title: "Markets rally",
+              sourceLabel: "Wire",
+              sourceKey: "wire",
+              url: "https://example.com/markets",
+              publishedAt: "2026-06-13T10:00:00.000Z",
+              summary: "Markets rose on calm trading.",
+              imageUrl: null
+            }
+          ]
+        }
+      };
     default:
       return {};
   }
@@ -131,6 +190,15 @@ export interface FakeOptions {
   readonly userName?: string;
   readonly disabledBehaviors?: ReadonlySet<string>;
   readonly preferences?: Readonly<Record<string, unknown>>;
+  /**
+   * Saved day plan for the run's local day. Present (even with plan undefined)
+   * injects the `dayPlanRead` port; absent leaves it out entirely. `throws`
+   * makes the port reject to exercise the gap path.
+   */
+  readonly dayPlan?: {
+    readonly plan?: DayPlanDto;
+    readonly throws?: boolean;
+  };
 }
 
 export function makeFakeManifests(failTool?: string): MossModuleManifest[] {
@@ -140,7 +208,8 @@ export function makeFakeManifests(failTool?: string): MossModuleManifest[] {
     "calendar.listVisibleEvents",
     "email.listVisibleMessages",
     "chat.listTodaysTurns",
-    "sports.followedFactsToday"
+    "sports.followedFactsToday",
+    "news.topHeadlinesToday"
   ];
   const assistantTools = toolNames.map((name) => {
     const execute: ToolExecute = async (): Promise<ToolResult> => {
@@ -279,7 +348,17 @@ export function makeFakeDeps(options: FakeOptions = {}): ComposeDeps {
     createAdapter: () => ({
       generateChat:
         options.generateChat ?? (async () => ({ text: "synth narrative" }) as { text: string })
-    })
+    }),
+    ...(options.dayPlan !== undefined
+      ? {
+          dayPlanRead: {
+            getForDay: async () => {
+              if (options.dayPlan?.throws) throw new Error("day plan down");
+              return options.dayPlan?.plan;
+            }
+          }
+        }
+      : {})
   };
 }
 

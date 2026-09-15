@@ -85,17 +85,18 @@ import {
 import { isBehaviorEnabled, type SourceBehaviorPreferencesPort } from "@moss/source-behaviors";
 import {
   BRIEFINGS_QUEUE_DEFINITIONS,
+  projectPlanContext,
   BriefingsRepository,
   briefingsModuleManifest,
   briefingsModuleSqlMigrationDirectory,
   createBriefingsFeedbackTargetVerifier,
   registerBriefingsJobWorkers,
   registerBriefingsRoutes,
-  type ComposeDeps,
   type ExternalBriefingInvoker
 } from "@moss/briefings";
 import {
   CalendarRepository,
+  buildDayPlanAutoPort,
   DayPlanRepository,
   calendarFollowThroughSourceRef,
   isCalendarFollowThroughEvent,
@@ -104,7 +105,9 @@ import {
   calendarModuleSqlMigrationDirectory,
   CALENDAR_QUEUE_DEFINITIONS,
   registerCalendarRoutes,
-  registerCalendarJobWorkers
+  registerCalendarJobWorkers,
+  sendDayPlanApplyJob,
+  setDayPlanDraftRepository
 } from "@moss/calendar";
 import {
   CHAT_QUEUE_DEFINITIONS,
@@ -114,6 +117,8 @@ import {
   CliChatUnavailableError,
   buildEveningInterviewSeed,
   buildCalendarWriteService,
+  buildDayPlanApplyComposition,
+  buildDayPlanAutoApplyExecutor,
   chatCommitmentProvider,
   ChatRepository,
   createChatFeedbackTargetVerifier,
@@ -358,7 +363,12 @@ import {
   type NewsRoutesDependencies,
   type NewsStoryFeedbackPort
 } from "@moss/news";
-import { assertValidFetchHosts, createDatasetClient, DatasetCache } from "@moss/datasets";
+import {
+  assertValidFetchHosts,
+  createDatasetClient,
+  DatasetCache,
+  type DatasetClient
+} from "@moss/datasets";
 import {
   notesModuleManifest,
   notesCommitmentProvider,
@@ -457,6 +467,8 @@ export * from "./external/validate.js";
 export * from "./external/types.js";
 export * from "./external/reconcile.js";
 export * from "./external/preferences.js";
+
+import { createActiveModulesResolver } from "./active-modules-resolver.js";
 
 export {
   createActiveModulesResolver,
@@ -707,6 +719,12 @@ export interface BuiltInWorkerDependencies {
    * no `console.*` lands in production worker logs (observability spec #413).
    */
   readonly logger?: FastifyBaseLogger;
+  /**
+   * #2313: fixture fetch for the worker-built News/Sports briefing dataset clients.
+   * Production leaves it undefined and the clients fall back to global fetch, as the
+   * API does today. Tests and the e2e harness pass a fixed stub.
+   */
+  readonly fetchFn?: typeof fetch;
   /**
    * #1282 Task 2: external (JSON-manifest) module discovery, built by apps/worker (the only
    * place holding both external-module discovery and the external worker runtime) and
@@ -1017,6 +1035,63 @@ export function buildModelNativeSearchResolver(deps: {
 }
 
 /**
+ * #2313: build the sports briefing dataset client and configure the late-bound
+ * briefing service. Called from BOTH the web server startup (registerRoutes) and the
+ * background worker startup (registerWorkers): they are separate processes, and the
+ * scheduled morning briefing runs in the worker. Without the worker half, the sports
+ * section always ships as a `tool_failed` gap. Returns the client so the route block
+ * keeps using the same instance for routes and chat tools (no second client).
+ */
+export function buildSportsBriefingSource(deps: {
+  readonly fetchFn?: typeof fetch;
+  readonly logger?: FastifyBaseLogger;
+}): DatasetClient {
+  // LOADER-SEAM(sports) 2: DI wiring + construction of the dataset-connector-SDK runtime
+  // client (docs/superpowers/specs/2026-07-04-module-dataset-connector-sdk.md) bound to the
+  // module's manifest-declared `espn` external source, in the composition root (which
+  // concrete adapter/host-pinning config applies lives here, not in the manifest itself).
+  const [espnSource] = sportsModuleManifest.externalSources ?? [];
+  if (!espnSource) {
+    throw new Error("sports module manifest is missing its `espn` externalSources entry");
+  }
+  const datasetClient = createDatasetClient(espnSource, createEspnDatasetAdapter(), {
+    fetchFn: deps.fetchFn,
+    logger: deps.logger ? createModuleLogger(deps.logger, "sports") : undefined
+  });
+  // LOADER-SEAM(sports) 3: the briefing tool (`briefing-tool.ts`) is constructed from
+  // static manifest data at import time, before this wiring runs, so it adopts the client
+  // via a late-bound setter (mirrors `adoptChatRpcConnection` above for the chat RPC path).
+  configureSportsBriefingService(datasetClient);
+  return datasetClient;
+}
+
+/**
+ * #2313: build the news briefing dataset client and configure the late-bound briefing
+ * service. Same both-entries contract as buildSportsBriefingSource above; returns the
+ * client so the route block keeps using the same instance.
+ */
+export function buildNewsBriefingSource(deps: {
+  readonly fetchFn?: typeof fetch;
+  readonly logger?: FastifyBaseLogger;
+}): DatasetClient {
+  // Same dataset-connector-SDK wiring as sports above: the composition root binds the
+  // manifest-declared `newsfeeds` external source to the concrete RSS adapter so host
+  // pinning and TTLs come from the manifest, not the module code.
+  const [feedsSource] = newsModuleManifest.externalSources ?? [];
+  if (!feedsSource) {
+    throw new Error("news module manifest is missing its `newsfeeds` externalSources entry");
+  }
+  const datasetClient = createDatasetClient(feedsSource, createRssDatasetAdapter(), {
+    fetchFn: deps.fetchFn,
+    logger: deps.logger ? createModuleLogger(deps.logger, "news") : undefined
+  });
+  // Briefing tool is constructed at import time; it adopts the client late-bound
+  // (mirrors LOADER-SEAM(sports) 3).
+  configureNewsBriefingService(datasetClient);
+  return datasetClient;
+}
+
+/**
  * #2228: connect the web-research module's search engines. The module stays db-free, so this
  * composition root injects two per-request resolvers: the decrypt-at-use Brave key reader, and
  * the model-native (built-in) search resolver that runs against the actor's own chat model.
@@ -1161,92 +1236,16 @@ function buildNewsStoryFeedbackPort(
   };
 }
 
+import { buildCalendarFollowThroughPort } from "./calendar-follow-through-port.js";
+
+export {
+  buildCalendarFollowThroughPort,
+  calendarFollowThroughWindow
+} from "./calendar-follow-through-port.js";
+
 /** Recurring per-user/per-source scheduled check — at most every 30 minutes (spec §7). */
 const PROACTIVE_CHECK_CRON = "*/30 * * * *";
 export const PEOPLE_NOTES_SUGGEST_UPDATES_BEHAVIOR_ID = "people.notes.suggest-updates";
-
-export function buildCalendarFollowThroughPort(
-  deps: {
-    readonly tasksRepository?: Pick<TasksRepository, "create">;
-    readonly aiRepository?: Pick<AiRepository, "listActionPolicies">;
-    readonly calendarWrite?: {
-      createEvent(
-        scopedDb: DataContextDb,
-        ctx: {
-          readonly actorUserId: string;
-          readonly requestId: string;
-          readonly chatSessionId: string;
-        },
-        window: {
-          readonly start: Date;
-          readonly end: Date;
-          readonly durationMinutes: number;
-          readonly title: string;
-        },
-        options: { readonly requireCacheMirror: true; readonly followThroughTargetRef: string }
-      ): Promise<{ readonly created: boolean; readonly calendarEventId?: string }>;
-    };
-  } = {}
-): NonNullable<ComposeDeps["calendarFollowThrough"]> {
-  const tasksRepository = deps.tasksRepository ?? new TasksRepository();
-  const aiRepository = deps.aiRepository ?? new AiRepository();
-  const connectorsRepository = new ConnectorsRepository();
-  const calendarRepository = new CalendarRepository();
-  const calendarWrite =
-    deps.calendarWrite ??
-    buildCalendarWriteService({
-      googleService: new RuntimeGoogleConnectionService({
-        repository: connectorsRepository,
-        cipher: createConnectorSecretCipher(),
-        oauthClient: new GoogleOAuthClient()
-      }),
-      googleApiClient: new RuntimeGoogleApiClient(),
-      connectorsRepository,
-      calendarRepository
-    });
-
-  return {
-    async executeAutoActions({ scopedDb, actorUserId, requestId, targetRef, signal }) {
-      const refs: { targetRef: string; taskId?: string; calendarEventId?: string } = { targetRef };
-      const sourceRef = calendarFollowThroughSourceRef(targetRef);
-
-      if (signal.suggestedActions.includes("create_task")) {
-        const task = await tasksRepository.create(scopedDb, {
-          title: signal.summary,
-          status: "todo",
-          source: "calendar",
-          sourceRef,
-          externalKey: sourceRef
-        });
-        refs.taskId = task.id;
-      }
-
-      if (signal.suggestedActions.includes("block_time")) {
-        const policies = await aiRepository.listActionPolicies(scopedDb);
-        const writebackPolicy = policies.find(
-          (policy) =>
-            policy.moduleId === "calendar" && policy.actionFamilyId === "calendar_writeback"
-        );
-        if (writebackPolicy?.tier === "trusted_auto") {
-          const window = calendarFollowThroughWindow(signal);
-          if (window) {
-            const result = await calendarWrite.createEvent(
-              scopedDb,
-              { actorUserId, requestId, chatSessionId: "" },
-              window,
-              { requireCacheMirror: true, followThroughTargetRef: targetRef }
-            );
-            if (result.created && result.calendarEventId) {
-              refs.calendarEventId = result.calendarEventId;
-            }
-          }
-        }
-      }
-
-      return refs;
-    }
-  };
-}
 
 export function buildCalendarFollowThroughSideEffects(
   deps: {
@@ -1334,28 +1333,6 @@ function readCalendarFollowThroughRefs(metadata: Record<string, unknown>): {
       : {})
   };
   return refs.taskId || refs.calendarEventId ? refs : null;
-}
-
-function calendarFollowThroughWindow(signal: {
-  readonly type?: string;
-  readonly summary: string;
-  readonly startsAt?: string;
-  readonly endsAt?: string;
-}): { start: Date; end: Date; durationMinutes: number; title: string } | null {
-  const start = signal.startsAt ? new Date(signal.startsAt) : null;
-  if (!start || Number.isNaN(start.getTime())) return null;
-  const end = signal.endsAt ? new Date(signal.endsAt) : null;
-  if (signal.type === "prep_needed") {
-    const prepEnd = start;
-    const prepStart = new Date(prepEnd.getTime() - 60 * 60_000);
-    return { start: prepStart, end: prepEnd, durationMinutes: 60, title: "Prep time" };
-  }
-  if (!end || Number.isNaN(end.getTime()) || end <= start) return null;
-  const durationMinutes = Math.min(
-    120,
-    Math.max(15, Math.floor((end.getTime() - start.getTime()) / 60_000))
-  );
-  return { start, end, durationMinutes, title: "Focus time" };
 }
 
 export function isPeopleNotesSuggestUpdatesEnabled(
@@ -1549,6 +1526,17 @@ export function resolveGrantSelfOperationForModule(
         )
       : (genericGrant?.(scopedDb, manifest) ?? Promise.resolve());
 }
+
+// One shared day-plan reader for the briefings module: the run worker's automatic
+// plan effects and the run-read route's plan comparison use the same object, so the
+// route never constructs a second repository.
+const briefingsTasksRepositoryForAuto = new TasksRepository();
+const briefingsAutoDayPlanRepository = new DayPlanRepository({
+  findTask: async (scopedDb, taskId) => {
+    const task = await briefingsTasksRepositoryForAuto.getById(scopedDb, taskId);
+    return task ? { id: task.id, ownerUserId: task.owner_user_id } : undefined;
+  }
+});
 
 const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
@@ -1843,18 +1831,28 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     manifest: calendarModuleManifest,
     sqlMigrationDirectories: [calendarModuleSqlMigrationDirectory],
     queueDefinitions: CALENDAR_QUEUE_DEFINITIONS,
-    registerRoutes: (server, deps) =>
-      registerCalendarRoutes(server, {
+    registerRoutes: (server, deps) => {
+      // One shared day-plan repository for routes and apply execution, plus
+      // the optional execution callback the apply routes call after reserving.
+      const dayPlanApply = buildDayPlanApplyComposition({
+        dataContext: deps.dataContext,
+        connectorsRepository: deps.connectorsRepository,
+        sourceBehaviorPolicy: {
+          manifests: getBuiltInModuleManifests(),
+          preferencesRepository: new PreferencesRepository()
+        }
+      });
+      setDayPlanDraftRepository(dayPlanApply.dayPlanRepository);
+      return registerCalendarRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
-        dayPlanRepository: new DayPlanRepository({
-          findTask: async (scopedDb, taskId) => {
-            const task = await new TasksRepository().getById(scopedDb, taskId);
-            return task ? { id: task.id, ownerUserId: task.owner_user_id } : undefined;
-          }
-        }),
+        dayPlanRepository: dayPlanApply.dayPlanRepository,
+        ...(dayPlanApply.applyExecution ? { applyExecution: dayPlanApply.applyExecution } : {}),
+        changeApproval: dayPlanApply.changeApproval,
         findSourceRun: (scopedDb, runId) =>
           new BriefingsRepository().getOwnedRunById(scopedDb, runId),
+        findTask: (scopedDb, taskId) => new TasksRepository().getById(scopedDb, taskId),
+        findRun: (scopedDb, runId) => new BriefingsRepository().getOwnedRunById(scopedDb, runId),
         resolveTimeZone: (request, accessContext) =>
           resolveRequestTimeZoneForRoute(
             request,
@@ -1865,9 +1863,27 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         calendarWritebackPolicy: {
           set: (scopedDb, moduleId, actionFamilyId, tier) =>
             new AiRepository().setActionPolicy(scopedDb, moduleId, actionFamilyId, tier)
-        }
-      }),
-    registerWorkers: (boss, deps) => registerCalendarJobWorkers(boss, deps.dataContext)
+        },
+        // Absent when there is no connector-backed calendar read available (mirrors the AI
+        // and chat modules' same gate on deps.connectorsRepository).
+        sourceContext: deps.connectorsRepository
+          ? buildRuntimeSourceContextService({
+              createCliStructuredAdapter: deps.createCliStructuredAdapter
+            })
+          : undefined
+      });
+    },
+    registerWorkers: (boss, deps) =>
+      registerCalendarJobWorkers(boss, deps.dataContext, {
+        applyExecution: buildDayPlanAutoApplyExecutor({
+          dataContext: deps.dataContext,
+          connectorsRepository: new ConnectorsRepository(),
+          sourceBehaviorPolicy: {
+            manifests: getBuiltInModuleManifests(),
+            preferencesRepository: new PreferencesRepository()
+          }
+        })
+      })
   },
   {
     manifest: emailModuleManifest,
@@ -2055,13 +2071,25 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         listModuleManifests: deps.listModuleManifests,
         boss: deps.boss,
+        dayPlanRead: briefingsAutoDayPlanRepository,
         feedbackRepository: usefulnessFeedbackRepository
       }),
     registerWorkers: (boss, dependencies) => {
       const briefingsLogger = dependencies.logger
         ? createModuleLogger(dependencies.logger, "briefings")
         : undefined;
+      // Automatic plan effects (R2.3-T06): the generation transaction
+      // reserves day-plan blocks through this repository, and the
+      // after-commit hook dispatches the batch to the calendar apply queue.
+      // The repository itself lives at module scope (briefingsAutoDayPlanRepository)
+      // so the run-read route shares it.
+      const autoDayPlanRepository = briefingsAutoDayPlanRepository;
       return registerBriefingsJobWorkers(boss, dependencies.dataContext, {
+        dayPlanAuto: buildDayPlanAutoPort(autoDayPlanRepository, {
+          calendar: new CalendarRepository(),
+          ...(briefingsLogger ? { logger: briefingsLogger } : {})
+        }),
+        dispatchDayPlanApply: (payload) => sendDayPlanApplyJob(boss, payload),
         moduleManifests: getBuiltInModuleManifests(),
         // A13: inject the full synthesis deps so the production scheduled briefing
         // actually grounds in vault recency/semantics AND fires the "ready"
@@ -2079,6 +2107,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             manifests: getBuiltInModuleManifests(),
             preferencesRepository: new PreferencesRepository()
           },
+          dayPlanRead: autoDayPlanRepository,
           resolveUserName: async (scopedDb, actorUserId) => {
             const row = await scopedDb.db
               .selectFrom("app.users")
@@ -2101,6 +2130,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           featureGrantService: buildFeatureGrantService({
             connectorsRepository: new ConnectorsRepository(),
             preferencesRepository: new PreferencesRepository()
+          }),
+          // The worker dependencies carry no resolver of their own, so build the
+          // real DB-backed one here from the worker data context; manifests are
+          // read fresh per call so late-installed modules are picked up.
+          resolveActiveModules: createActiveModulesResolver({
+            dataContext: dependencies.dataContext,
+            manifests: getBuiltInModuleManifests
           }),
           sourceContextService: buildRuntimeSourceContextService({
             logger: briefingsLogger,
@@ -2249,19 +2285,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [sportsModuleSqlMigrationDirectory],
     queueDefinitions: [],
     registerRoutes: (server, deps) => {
-      // LOADER-SEAM(sports) 2: DI wiring + construction of the dataset-connector-SDK runtime
-      // client (docs/superpowers/specs/2026-07-04-module-dataset-connector-sdk.md) bound to the
-      // module's manifest-declared `espn` external source, in the composition root (which
-      // concrete adapter/host-pinning config applies lives here, not in the manifest itself).
-      // Sports is the sole migration case this slice, so the client is wired inline rather than
-      // via a generic per-module map on `BuiltInModuleRegistration`.
-      const [espnSource] = sportsModuleManifest.externalSources ?? [];
-      if (!espnSource) {
-        throw new Error("sports module manifest is missing its `espn` externalSources entry");
-      }
-      const datasetClient = createDatasetClient(espnSource, createEspnDatasetAdapter(), {
+      // LOADER-SEAM(sports) 2: the dataset-connector-SDK runtime client lives in
+      // buildSportsBriefingSource (shared with the worker entry); the route block keeps
+      // using the returned instance for routes and chat tools. Sports is the sole
+      // migration case this slice, so the client is wired inline rather than via a
+      // generic per-module map on `BuiltInModuleRegistration`.
+      const datasetClient = buildSportsBriefingSource({
         fetchFn: deps.fetchFn,
-        logger: createModuleLogger(server.log, "sports")
+        logger: server.log
       });
       const rendererSocket = process.env.MOSS_SPORTS_RENDERER_SOCKET;
       let browser: SportsBrowserClient | undefined;
@@ -2286,10 +2317,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         });
         server.addHook("onClose", async () => browserBrokerServer.stop());
       }
-      // LOADER-SEAM(sports) 3: the briefing tool (`briefing-tool.ts`) is constructed from
-      // static manifest data at import time, before this wiring runs, so it adopts the client
-      // via a late-bound setter (mirrors `adoptChatRpcConnection` above for the chat RPC path).
-      configureSportsBriefingService(datasetClient);
+      // The briefing service was configured inside buildSportsBriefingSource above; the
+      // late-bound tool adopts that same client, so routes and chat tools share it.
       const discovery = buildSportsDiscoveryPorts(
         createModuleLogger(server.log, "sports"),
         browser
@@ -2387,6 +2416,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         storyRelevance: sportsStoryRelevance,
         storyFeedback: sportsStoryFeedback
       });
+    },
+    registerWorkers: async (_boss, deps) => {
+      // #2313: the worker is a separate process, so the briefing service installed by
+      // registerRoutes never reaches it. The scheduled morning briefing runs here, so the
+      // worker entry builds the same client through the shared builder. Only worker
+      // dependency fields are read (logger, fetchFn); nothing route-only.
+      buildSportsBriefingSource({ fetchFn: deps.fetchFn, logger: deps.logger });
+      return [];
     }
   },
   {
@@ -2394,20 +2431,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     sqlMigrationDirectories: [newsModuleSqlMigrationDirectory],
     queueDefinitions: [...NEWS_QUEUE_DEFINITIONS],
     registerRoutes: (server, deps) => {
-      // Same dataset-connector-SDK wiring as sports above: the composition root binds the
-      // manifest-declared `newsfeeds` external source to the concrete RSS adapter so host
-      // pinning and TTLs come from the manifest, not the module code.
-      const [feedsSource] = newsModuleManifest.externalSources ?? [];
-      if (!feedsSource) {
-        throw new Error("news module manifest is missing its `newsfeeds` externalSources entry");
-      }
-      const datasetClient = createDatasetClient(feedsSource, createRssDatasetAdapter(), {
+      // Same shared builder as sports above: one client for routes, chat tools and the
+      // late-bound briefing tool.
+      const datasetClient = buildNewsBriefingSource({
         fetchFn: deps.fetchFn,
-        logger: createModuleLogger(server.log, "news")
+        logger: server.log
       });
-      // Briefing tool is constructed at import time; it adopts the client late-bound
-      // (mirrors LOADER-SEAM(sports) 3).
-      configureNewsBriefingService(datasetClient);
       const discovery = buildNewsDiscoveryPorts(
         createModuleLogger(server.log, "news"),
         deps.createCliStructuredAdapter
@@ -2458,6 +2487,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       });
     },
     registerWorkers: (boss, deps) => {
+      // #2313: same both-entries contract as sports above; the scheduled briefing runs in
+      // this process. Only worker dependency fields are read (logger, fetchFn).
+      buildNewsBriefingSource({ fetchFn: deps.fetchFn, logger: deps.logger });
       const discovery = buildNewsDiscoveryPorts(
         deps.logger ? createModuleLogger(deps.logger, "news") : undefined
       );
@@ -3005,6 +3037,18 @@ export async function resolveRequestTimeZoneForRoute(
   return resolveTimeZone(undefined, extractStoredTimeZone(stored));
 }
 
+/** Next local day in the zone, via a UTC-noon anchor so no DST edge flips the day. */
+function nextLocalDay(now: Date, timeZone: string): string {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  const [y, m, d] = fmt.format(now).split("-").map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d! + 1, 12)).toISOString().slice(0, 10);
+}
+
 /** The user's stored timezone (locale preference), or the server default (#2274 worker path). */
 async function storedTimeZoneFor(scopedDb: unknown, _actorUserId: string): Promise<string> {
   const stored = await new PreferencesRepository().get(scopedDb as DataContextDb, "locale");
@@ -3305,11 +3349,18 @@ export function registerBuiltInApiRoutes(
     },
     resolveEveningInterviewSeed: async (actorUserId: string, briefingRunId?: string) => {
       const repository = new BriefingsRepository();
-      const run = await dependencies.dataContext.withDataContext(
+      const { run, plan } = await dependencies.dataContext.withDataContext(
         { actorUserId, requestId: "chat:evening-interview-seed" },
-        (scopedDb) => repository.getOwnedEveningRunForInterview(scopedDb, briefingRunId)
+        async (scopedDb) => {
+          const owned = await repository.getOwnedEveningRunForInterview(scopedDb, briefingRunId);
+          const timeZone = await storedTimeZoneFor(scopedDb, actorUserId);
+          const saved = await briefingsAutoDayPlanRepository
+            .getForDay(scopedDb, { localDay: nextLocalDay(new Date(), timeZone), timeZone })
+            .catch(() => undefined);
+          return { run: owned, plan: saved ? projectPlanContext(saved) : null };
+        }
       );
-      return buildEveningInterviewSeed(run?.summary_text ?? null);
+      return buildEveningInterviewSeed(run?.summary_text ?? null, plan);
     }
   };
 

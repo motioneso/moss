@@ -1,0 +1,129 @@
+/* Morning briefing reader: a focused shell that reads as a two-column report
+   on desktop and a full-screen dialog on the phone. Scoped under
+   .brief-reader; canonical tokens only. */
+.brief-reader__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  overflow-y: auto;
+  background: var(--scrim);
+  padding: var(--space-6);
+}
+.brief-reader {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  max-width: 1060px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--space-10));
+}
+.brief-reader__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.brief-reader__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.brief-reader__title:focus {
+  outline: none;
+}
+.brief-reader__body {
+  overflow-y: auto;
+  min-height: 0;
+}
+.brief-reader__footer {
+  flex: none;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface);
+}
+/* T19: three to four footer buttons wrap instead of pushing a 320px page. */
+.brief-reader__footer .jds-btn {
+  margin: 0 var(--space-2) var(--space-2) 0;
+  max-width: 100%;
+}
+.brief-reader__accept-status {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+.brief-reader__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 336px;
+  gap: var(--space-8);
+  align-items: start;
+  padding: var(--space-5);
+}
+.brief-reader__report {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.brief-reader__dated,
+.brief-reader__plan-changed {
+  margin: 0 0 var(--space-2);
+}
+.brief-reader__jump {
+  display: flex;
+  gap: var(--space-3);
+  margin: var(--space-2) 0;
+}
+.brief-reader__plan ul,
+.brief-reader__intent ul,
+.brief-reader__earlier ul {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-5);
+}
+.brief-reader__story {
+  margin: var(--space-3) 0;
+  overflow-wrap: anywhere;
+}
+.brief-reader__photo {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin-bottom: var(--space-2);
+}
+.brief-reader__sources,
+.brief-reader__earlier {
+  margin-top: var(--space-4);
+}
+.brief-reader__gap {
+  margin: var(--space-2) 0;
+}
+@media (min-width: 1081px) {
+  /* Desktop opens with the schedule visible beside the report (the expander
+     starts open there); the cap stays hidden so there is nothing to close. */
+  .brief-reader__schedule-cap {
+    display: none;
+  }
+  .brief-reader__schedule {
+    border-left: 1px solid var(--line-strong);
+    padding-left: var(--space-6);
+    margin-left: calc(-1 * var(--space-4));
+  }
+}
+@media (max-width: 1080px) {
+  .brief-reader__scrim {
+    padding: 0;
+  }
+  .brief-reader {
+    max-width: none;
+    min-height: 100vh;
+    max-height: none;
+    border: none;
+  }
+  .brief-reader__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .brief-reader__footer {
+    position: sticky;
+    bottom: 0;
+  }
+}

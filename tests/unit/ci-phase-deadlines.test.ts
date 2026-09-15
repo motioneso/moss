@@ -56,13 +56,13 @@ describe("CI phase deadlines (#1534, #1724)", () => {
   });
 
   it("keeps publish behind every full main verification lane", () => {
-    expect(source).toContain("shard: [1, 2]");
-    expect(source.match(/if: needs\.changes\.outputs\.docs_only != 'true'/g)).toHaveLength(5);
+    expect(source).toContain("shard: [1, 2, 3, 4]");
+    expect(source.match(/if: needs\.changes\.outputs\.docs_only != 'true'/g)).toHaveLength(6);
     expect(source).not.toContain(
       "if: github.event_name == 'push' && needs.changes.outputs.docs_only"
     );
     expect(source).toContain(
-      "needs: [verify, integration, browser, compose-smoke, prod-compose-smoke]"
+      "needs: [verify, unit, integration, browser, compose-smoke, prod-compose-smoke]"
     );
     expect(source).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
   });
@@ -83,10 +83,7 @@ describe("CI phase deadlines (#1534, #1724)", () => {
   });
 
   it("runs the release-hardening audit after migration in integration shard 1", () => {
-    const verifyJob = source.slice(
-      source.indexOf("\n  verify:"),
-      source.indexOf("\n  integration:")
-    );
+    const verifyJob = source.slice(source.indexOf("\n  verify:"), source.indexOf("\n  unit:"));
     const integrationJob = source.slice(
       source.indexOf("\n  integration:"),
       source.indexOf("\n  browser:")
@@ -102,10 +99,8 @@ describe("CI phase deadlines (#1534, #1724)", () => {
   });
 
   it("leaves enough time for the measured integration suite and every bounded job", () => {
-    const verifyJob = source.slice(
-      source.indexOf("\n  verify:"),
-      source.indexOf("\n  integration:")
-    );
+    const verifyJob = source.slice(source.indexOf("\n  verify:"), source.indexOf("\n  unit:"));
+    const unitJob = source.slice(source.indexOf("\n  unit:"), source.indexOf("\n  integration:"));
     const integrationJob = source.slice(
       source.indexOf("\n  integration:"),
       source.indexOf("\n  browser:")
@@ -116,6 +111,7 @@ describe("CI phase deadlines (#1534, #1724)", () => {
     );
 
     expect(verifyJob).toContain("timeout-minutes: 45");
+    expect(unitJob).toContain("timeout-minutes: 45");
     expect(integrationJob).toContain("timeout-minutes: 45");
     expect(steps.get("Run integration shard")).toContain("timeout --verbose --signal=TERM 30m");
     expect(steps.get("Run integration shard")).toContain("budget=30m");

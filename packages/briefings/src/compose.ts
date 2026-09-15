@@ -24,7 +24,15 @@ import { rankPriorityCandidates, type PriorityResult, type PrioritySource } from
 import type { BriefingDefinition, DataContextDb } from "@moss/db";
 import { composeEveningBriefing } from "./compose-evening.js";
 
+import {
+  isNewsBriefingEvidence,
+  isSportsBriefingEvidence,
+  type NewsBriefingEvidenceV1,
+  type SportsBriefingEvidenceV1
+} from "@moss/shared";
 import { resolveBriefingFreshness } from "./freshness.js";
+import { resolvePlanContext } from "./plan-context.js";
+import { planSection } from "./plan-prose.js";
 import { timezoneFor } from "./schedule.js";
 import { contextTokens, deriveCalendarSignals, deriveEmailSignals } from "./signals.js";
 import {
@@ -82,6 +90,7 @@ export async function composeBriefing(
   // local-day content window agree. No cross-user read: tz comes off this definition.
   const timeZone = timezoneFor(definition.schedule_metadata);
   const actionRows = await gatherActionRows(scopedDb, definition, input, deps, gaps);
+  const plan = await resolvePlanContext(scopedDb, definition, now, deps, gaps);
 
   const commitments = await gatherToolSection(
     scopedDb,
@@ -391,7 +400,11 @@ export async function composeBriefing(
         deps.connectorSyncAt
       )
     : null;
-  const structuredPayload = { ...actionRows.payload, catchUp };
+  const structuredPayload = {
+    ...actionRows.payload,
+    catchUp,
+    ...(plan.present ? { planContext: plan.planContext } : {})
+  };
 
   const goals = await gatherToolSection(
     scopedDb,
@@ -413,6 +426,7 @@ export async function composeBriefing(
 
   // LOADER-SEAM(sports) 3: briefing section wiring + trust-boundary channel. Only the
   // sanitized `text` field crosses into the prompt; the tool's other fields never do.
+  // The typed `evidence` block travels via `meta` into `sourceMetadata.editorial`.
   const sports = await gatherToolSection(
     scopedDb,
     definition,
@@ -423,6 +437,8 @@ export async function composeBriefing(
       label: "SPORTS",
       toolName: "sports.followedFactsToday",
       arrayKey: "facts",
+      toolInput: { timeZone },
+      metaKeys: ["evidence"],
       // Allow-list: emit only the compact fact string. No URLs, no scores-object passthrough.
       format: (row) => sanitizeExternal(row.text)
       // no localDayField — the tool already returns today-only facts
@@ -432,12 +448,36 @@ export async function composeBriefing(
     timeZone
   );
 
+  // News enters composition directly after sports, pushed only when selected,
+  // mirroring the sports push. Prompt lines stay fact-only; evidence rides in meta.
+  const news = await gatherToolSection(
+    scopedDb,
+    definition,
+    input,
+    deps,
+    {
+      key: "news",
+      label: "NEWS",
+      toolName: "news.topHeadlinesToday",
+      arrayKey: "facts",
+      metaKeys: ["evidence"],
+      format: (row) => sanitizeExternal(row.text)
+    },
+    gaps,
+    now,
+    timeZone
+  );
+
   const sections: Section[] = [commitments, prioritizedTasks, calendar, email, vault, chats];
+  sections.push(planSection(plan.planContext, prioritizedTasks.rawItems, rawCalendar.rawItems));
   if (definition.selected_tool_names.includes("goals.list")) {
     sections.push(goals);
   }
   if (definition.selected_tool_names.includes("sports.followedFactsToday")) {
     sections.push(sports);
+  }
+  if (definition.selected_tool_names.includes("news.topHeadlinesToday")) {
+    sections.push(news);
   }
 
   // #1282: external (JSON-manifest) modules cannot register an in-process assistant tool,
@@ -460,15 +500,33 @@ export async function composeBriefing(
     }
   }
 
+  const editorial = captureEditorialEvidence(sports, news, deps);
+  const moduleCapturedAt: Record<string, string | null> = {};
+  for (const section of [sports, news] as const) {
+    if (sections.some((s) => s.key === section.key)) {
+      const block = (editorial as Record<string, unknown>)[section.key];
+      const captured =
+        section.key === "sports"
+          ? (block as SportsBriefingEvidenceV1 | undefined)?.capturedAt
+          : (block as NewsBriefingEvidenceV1 | undefined)?.capturedAt;
+      moduleCapturedAt[section.key] = typeof captured === "string" ? captured : null;
+    }
+  }
+  const needsModuleFreshness = "sports" in moduleCapturedAt || "news" in moduleCapturedAt;
   const hasFreshnessDeps = !!(deps.connectorSyncAt ?? deps.vaultLastWriteAt);
-  const sourceTimestamps = hasFreshnessDeps
-    ? await resolveBriefingFreshness(
-        scopedDb,
-        sections.map((s) => s.key),
-        now,
-        { connectorSyncAt: deps.connectorSyncAt, vaultLastWriteAt: deps.vaultLastWriteAt }
-      )
-    : undefined;
+  const sourceTimestamps =
+    hasFreshnessDeps || needsModuleFreshness
+      ? await resolveBriefingFreshness(
+          scopedDb,
+          sections.map((s) => s.key),
+          now,
+          {
+            connectorSyncAt: deps.connectorSyncAt,
+            vaultLastWriteAt: deps.vaultLastWriteAt,
+            moduleCapturedAt
+          }
+        )
+      : undefined;
 
   const messages = await buildMessages(scopedDb, definition, sections, deps);
   const synth = await synthesizeWithConfiguredModel(scopedDb, deps, messages);
@@ -485,7 +543,9 @@ export async function composeBriefing(
       chats,
       vaultNotes,
       structuredPayload,
-      sourceTimestamps
+      sourceTimestamps,
+      editorial,
+      plan.planSnapshot
     );
   }
   return {
@@ -509,6 +569,8 @@ export async function composeBriefing(
         tier: synth.model.tier
       },
       gaps,
+      editorial,
+      ...(plan.planSnapshot !== undefined ? { planSnapshot: plan.planSnapshot } : {}),
       // Live/cache provenance per connected account (#729): degraded means at least one
       // account was served from the fallback cache after a transient live-read failure.
       sourceContext: { email: emailSourceContext, calendar: calendarSourceContext },
@@ -545,6 +607,9 @@ async function attachCalendarFollowThrough<
         return signal;
       }
       const targetRef = briefingSignalFeedbackItemId("calendar", signal.type, signal.summary);
+      // Task creation failures propagate: the generation transaction rolls
+      // back, so a failed task can never leave a block with a guessed id.
+      // Intent building itself is pure and cannot throw.
       try {
         const followThrough = await deps.calendarFollowThrough!.executeAutoActions({
           scopedDb,
@@ -563,7 +628,7 @@ async function attachCalendarFollowThrough<
           },
           "calendar follow-through failed"
         );
-        return signal;
+        throw error;
       }
     })
   );
@@ -574,8 +639,8 @@ async function attachCalendarFollowThrough<
 // retriever value, so no external content can ever enter the trusted text. Every
 // gathered value is emitted inside a delimited <external_source> block by
 // renderExternalBlock, never here. Channel set: commitments, tasks, calendar, email,
-// vault, chats (the six sections built in composeBriefing) + goals + sports (selection-
-// gated) + web_research (#31, not wired yet — its tag is reserved so the channel is
+// vault, chats (the six sections built in composeBriefing) + day_plan (always) + goals + sports + news
+// (selection-gated) + web_research (#31, not wired yet — its tag is reserved so the channel is
 // already covered the day it lands).
 const SYNTHESIS_INSTRUCTIONS_MORNING =
   "You are a calm morning-briefing writer. Synthesize a concise, scannable morning briefing " +
@@ -583,7 +648,16 @@ const SYNTHESIS_INSTRUCTIONS_MORNING =
   "do not invent. Treat calendar and email blocks as pre-filtered signal, not raw feeds. " +
   "Do not restate every event or message. Where a section is empty, note it briefly. Keep it " +
   "warm and non-judgmental about missed or at-risk items. Discrete action rows are rendered " +
-  "separately; do not invent, count, or restate them in prose.";
+  "separately; do not invent, count, or restate them in prose. When the day_plan source has " +
+  "items, lead with the priorities and capacity it saved last evening. Describe changes since " +
+  "that saved intent from the block states alone. A block counts as scheduled only when its " +
+  "line says committed; proposed or pending lines are not yet on the calendar, and " +
+  "everything is scheduled may be written only when every block line says committed. Zero " +
+  "task blocks is a valid shape. Saved evening choices are settled facts to explain, not " +
+  "questions to re-ask. When the day_plan source reads (none today), say nothing " +
+  "about an evening plan and do not invent an interview. Write News and Sports last and short, " +
+  "followed teams first, scores as given. Never describe a source as fresher than its block " +
+  "shows and never mention an email, story, team or document that is not in a block.";
 
 // The single trusted block for morning. Built ONLY from the literal constants above — no
 // external/section value is interpolated (the static isolation test asserts this).
@@ -593,6 +667,41 @@ ${SYNTHESIS_INSTRUCTIONS_MORNING}
 
 ${TRUST_BOUNDARY}
 </trusted_instructions>`;
+
+/**
+ * Validate tool `evidence` meta and keep only valid blocks. An invalid block is
+ * dropped with one logged event and never fails the run.
+ */
+function captureEditorialEvidence(
+  sports: Section,
+  news: Section,
+  deps: ComposeDeps
+): Record<string, unknown> {
+  const editorial: Record<string, unknown> = {};
+  const sportsEvidence = sports.meta?.["evidence"];
+  if (sportsEvidence !== undefined) {
+    if (isSportsBriefingEvidence(sportsEvidence)) {
+      editorial["sports"] = sportsEvidence;
+    } else {
+      deps.logger?.error(
+        { event: "briefing_evidence_invalid", source: "sports" },
+        "briefing sports evidence invalid; dropped"
+      );
+    }
+  }
+  const newsEvidence = news.meta?.["evidence"];
+  if (newsEvidence !== undefined) {
+    if (isNewsBriefingEvidence(newsEvidence)) {
+      editorial["news"] = newsEvidence;
+    } else {
+      deps.logger?.error(
+        { event: "briefing_evidence_invalid", source: "news" },
+        "briefing news evidence invalid; dropped"
+      );
+    }
+  }
+  return editorial;
+}
 
 async function buildMessages(
   scopedDb: DataContextDb,
@@ -634,6 +743,8 @@ export type {
   ComposeResult,
   Section,
   BriefingGap,
-  SynthesisFailureReason
+  SynthesisFailureReason,
+  CalendarAutoIntent,
+  CalendarFollowThroughRefs
 } from "./compose-shared.js";
 export { sanitizeExternal, renderExternalBlock, TRUST_BOUNDARY } from "./trust-boundary.js";

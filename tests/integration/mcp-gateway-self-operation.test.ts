@@ -476,12 +476,12 @@ describe("AssistantToolGateway self-operation", () => {
   });
 
   it("installing calendar does not arm the background follow-through writer", async () => {
-    // #1263 Fable security review, PR #1268: buildCalendarFollowThroughPort.executeAutoActions
-    // (module-registry/src/index.ts:711) is a second, unattended reader of calendar_writeback's
-    // tier — on a block_time signal it calls calendarWrite.createEvent directly, no card, no
-    // chat session, no gateway. Granting trusted_auto at install would arm unattended background
-    // calendar writes the instant the module is enabled. Task 1 moved createEvent to
-    // user_promotable so install must not write trusted_auto for calendar_writeback at all.
+    // #1263 Fable security review, PR #1268: scheduled briefings compose block_time intents,
+    // the generation transaction reserves an apply batch, and the calendar apply worker
+    // executes it through the gated execution service. Granting trusted_auto at install
+    // would arm unattended background calendar writes the instant the module is enabled.
+    // Task 1 moved createEvent to user_promotable so install must not write trusted_auto
+    // for calendar_writeback at all.
     const grantManifest: SelfOperationManifestInput = {
       id: calendarModuleManifest.id,
       assistantTools: calendarModuleManifest.assistantTools,

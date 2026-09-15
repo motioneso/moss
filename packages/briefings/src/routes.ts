@@ -13,25 +13,39 @@ import {
 } from "@moss/module-sdk";
 import {
   createBriefingDefinitionRouteSchema,
+  getBriefingRunRouteSchema,
   listBriefingDefinitionsRouteSchema,
   listBriefingRunsRouteSchema,
   runBriefingDefinitionRouteSchema,
   updateBriefingDefinitionRouteSchema,
+  localDay,
+  readPlanContext,
   type BriefingCadence,
   type BriefingDefinitionDto,
+  type BriefingPlanContextV1,
   type BriefingRunDto,
+  type BriefingRunPlanStateDto,
   type BriefingStructuredPayloadV1,
   type BriefingType,
+  type GetBriefingRunResponse,
   type RunBriefingDefinitionRequest,
   type UpdateBriefingDefinitionRequest
 } from "@moss/shared";
 
 import { sendJob } from "@moss/jobs";
 
-import { type BriefingRunPayload } from "./jobs.js";
+import { isBriefingRunPayloadMetadataOnly, type BriefingRunPayload } from "./jobs.js";
 import { BRIEFINGS_RUN_QUEUE } from "./manifest.js";
 import { BriefingsRepository, type CreateBriefingDefinitionInput } from "./repository.js";
-import { reconcileOwnedSchedules, reconcileSchedule } from "./schedule.js";
+import {
+  comparePlanState,
+  resolveRunStatus,
+  RUN_IN_FLIGHT_CODE,
+  RUN_NOT_AVAILABLE_CODE,
+  RUN_NOT_AVAILABLE_ERROR
+} from "./run-status.js";
+import { projectPlanContext, type DayPlanReadPort } from "./plan-context.js";
+import { reconcileOwnedSchedules, reconcileSchedule, timezoneFor } from "./schedule.js";
 import { deriveBriefingFeedbackItems } from "./feedback-targets.js";
 
 export interface BriefingsRoutesDependencies {
@@ -39,6 +53,7 @@ export interface BriefingsRoutesDependencies {
   readonly dataContext: DataContextRunner;
   readonly listModuleManifests: () => readonly MossModuleManifest[];
   readonly boss: PgBoss;
+  readonly dayPlanRead?: DayPlanReadPort;
   readonly repository?: BriefingsRepository;
   readonly feedbackRepository?: Pick<
     UsefulnessFeedbackRepository,
@@ -48,6 +63,15 @@ export interface BriefingsRoutesDependencies {
 
 interface DefinitionParams {
   readonly id: string;
+}
+
+interface BriefingRunParams {
+  readonly id: string;
+  readonly runId: string;
+}
+
+interface BriefingRunQuery {
+  readonly jobId?: string;
 }
 
 const BRIEFING_CADENCES = new Set<BriefingCadence>(["manual", "daily", "weekly"]);
@@ -204,10 +228,10 @@ export function registerBriefingsRoutes(
           // unique singletonKey and so can only get null on a genuine enqueue
           // failure → 500.
           if (body.idempotencyKey) {
-            throw new HttpError(
-              409,
-              "A briefing run with this idempotency key is already queued or running"
-            );
+            return reply.code(409).send({
+              error: "A briefing run with this idempotency key is already queued or running",
+              code: RUN_IN_FLIGHT_CODE
+            });
           }
           throw new HttpError(500, "Briefing run could not be queued");
         }
@@ -287,6 +311,154 @@ export function registerBriefingsRoutes(
       }
     }
   );
+
+  server.get<{ Params: BriefingRunParams; Querystring: BriefingRunQuery }>(
+    "/api/briefings/definitions/:id/runs/:runId",
+    { schema: getBriefingRunRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const jobId = request.query.jobId;
+        const snapshot = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            const definition = await repository.getDefinitionById(scopedDb, request.params.id);
+            if (!definition) return undefined;
+            const run = await repository.getOwnedRunById(scopedDb, request.params.runId);
+            const runs = await repository.listRuns(scopedDb, definition.id);
+            const dismissedItems =
+              (await dependencies.feedbackRepository?.listActiveDismissedRefs(
+                scopedDb,
+                accessContext.actorUserId,
+                "briefing_item",
+                "briefing"
+              )) ?? new Set<string>();
+            return { definition, run, firstRunId: runs[0]?.id, dismissedItems };
+          }
+        );
+
+        if (!snapshot) {
+          return reply
+            .code(404)
+            .send({ error: RUN_NOT_AVAILABLE_ERROR, code: RUN_NOT_AVAILABLE_CODE });
+        }
+
+        // pg-boss is not RLS-scoped, so the job lookup runs outside the data context.
+        // It counts only for the caller's own metadata-only job for this run.
+        let job: { state: string; data: Record<string, unknown> | null } | null = null;
+        if (!snapshot.run && jobId) {
+          const stored = await dependencies.boss.getJobById<BriefingRunPayload>(
+            BRIEFINGS_RUN_QUEUE,
+            jobId
+          );
+          if (stored && isBriefingRunPayloadMetadataOnly(stored.data)) {
+            job = {
+              state: stored.state,
+              data: stored.data as unknown as Record<string, unknown>
+            };
+          }
+        }
+
+        const status = resolveRunStatus({
+          run: snapshot.run,
+          runDefinitionId: snapshot.run?.definition_id,
+          definitionId: snapshot.definition.id,
+          firstRunId: snapshot.firstRunId,
+          job,
+          actorUserId: accessContext.actorUserId,
+          runId: request.params.runId
+        });
+
+        if ("notFound" in status) {
+          return reply
+            .code(404)
+            .send({ error: RUN_NOT_AVAILABLE_ERROR, code: RUN_NOT_AVAILABLE_CODE });
+        }
+        if (status.state !== "ready") {
+          const pending: GetBriefingRunResponse = {
+            state: status.state,
+            run: null,
+            latest: false,
+            plan: null
+          };
+          return pending;
+        }
+
+        // Ready implies a same-definition row; narrow for the serializer below.
+        const readyRun = snapshot.run;
+        if (!readyRun || readyRun.definition_id !== snapshot.definition.id) {
+          return reply
+            .code(404)
+            .send({ error: RUN_NOT_AVAILABLE_ERROR, code: RUN_NOT_AVAILABLE_CODE });
+        }
+        const serialized = serializeRun(readyRun, {
+          dismissedItems: snapshot.dismissedItems
+        });
+        const stored = readPlanContext(serialized.structuredPayload);
+        const plan = await readRunPlanState(
+          dependencies,
+          request,
+          accessContext,
+          snapshot.definition.schedule_metadata,
+          readyRun.created_at,
+          stored
+        );
+        const response: GetBriefingRunResponse = {
+          state: "ready",
+          run: serialized,
+          latest: status.latest,
+          plan
+        };
+        return response;
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+}
+
+async function readRunPlanState(
+  dependencies: BriefingsRoutesDependencies,
+  request: FastifyRequest,
+  accessContext: AccessContext,
+  scheduleMetadata: Record<string, unknown>,
+  runCreatedAt: Date | string,
+  stored: BriefingPlanContextV1 | null
+): Promise<BriefingRunPlanStateDto> {
+  const port = dependencies.dayPlanRead;
+  if (!port) {
+    return {
+      ...comparePlanState({ stored, currentAvailable: false, current: null }),
+      current: null
+    };
+  }
+  const timeZone = stored?.timeZone ?? timezoneFor(scheduleMetadata);
+  const day = stored?.localDay ?? localDay(runCreatedAt, timeZone);
+  try {
+    const plan = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+      port.getForDay(scopedDb, { localDay: day, timeZone })
+    );
+    const current = plan ? projectPlanContext(plan) : null;
+    return {
+      ...comparePlanState({ stored, currentAvailable: true, current }),
+      current
+    };
+  } catch (error) {
+    const e = error instanceof Error ? error : new Error(String(error));
+    request.log.error(
+      {
+        event: "briefing_tool_failed",
+        tool: "day_plan.read",
+        error: e.name,
+        message: e.message.slice(0, 200)
+      },
+      "briefing day plan read failed"
+    );
+    return {
+      ...comparePlanState({ stored, currentAvailable: false, current: null }),
+      current: null
+    };
+  }
 }
 
 async function reconcileScheduleSafely(
@@ -406,8 +578,10 @@ function requiredReadToolNames(
   fieldName: string,
   moduleManifests: readonly MossModuleManifest[]
 ): string[] {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new HttpError(400, `${fieldName} must be a non-empty array`);
+  // An explicit empty list selects no tools. Anything that is not an array
+  // (false, null, a lone value that fails membership below) is still 400.
+  if (!Array.isArray(value)) {
+    throw new HttpError(400, `${fieldName} must be an array`);
   }
 
   const toolsByName = new Map(
@@ -536,6 +710,7 @@ export function defaultToolNamesFor(type: BriefingType): string[] {
         "email.listVisibleMessages",
         "vault",
         "goals.list",
+        "news.topHeadlinesToday",
         "sports.followedFactsToday"
       ];
     case "evening":

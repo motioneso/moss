@@ -30,6 +30,8 @@ import {
 import { collectExternalBriefingContributions } from "./external-contributions.js";
 import { filterEveningCalendar, partitionEveningTasks } from "./evening-lenses.js";
 import { resolveBriefingFreshness } from "./freshness.js";
+import { resolvePlanContext } from "./plan-context.js";
+import { planSection } from "./plan-prose.js";
 import { timezoneFor } from "./schedule.js";
 import { contextTokens, deriveEmailSignals } from "./signals.js";
 import { renderExternalBlock, sanitizeExternal, TRUST_BOUNDARY } from "./trust-boundary.js";
@@ -56,7 +58,11 @@ const SYNTHESIS_INSTRUCTIONS_EVENING =
   "as context only — use them to judge what mattered today and what the morning plan expected; " +
   "never summarize them as their own topics. Where a section has no items, keep it to one " +
   "short line. Discrete action rows are rendered separately; do not invent, count, or restate " +
-  "them in prose. Close with exactly two short reflection questions specific to today's items.";
+  "them in prose. Use the day_plan source for open commitments and the actor's own " +
+  "corrections. A meeting that took place is not evidence that a follow-up was sent or that " +
+  "a task finished; completion comes only from the [completed today] tags in " +
+  "tasks_reconciliation, never from plan or calendar words. Close with exactly two short " +
+  "reflection questions specific to today's items.";
 
 // The single evening trusted block. Built ONLY from the two literal constants — no
 // external/section value is interpolated (the static isolation test asserts this).
@@ -123,6 +129,7 @@ export async function composeEveningBriefing(
   const now = input.now ?? new Date();
   const timeZone = timezoneFor(definition.schedule_metadata);
   const actionRows = await gatherActionRows(scopedDb, definition, input, deps, gaps);
+  const plan = await resolvePlanContext(scopedDb, definition, now, deps, gaps);
 
   // ── tasks_reconciliation: three lenses over two tasks.list reads ─────────────
   // Scratch gap arrays: two gathers share one section key, so per-gather empty/
@@ -352,7 +359,11 @@ export async function composeEveningBriefing(
         deps.connectorSyncAt
       )
     : null;
-  const structuredPayload = { ...actionRows.payload, catchUp };
+  const structuredPayload = {
+    ...actionRows.payload,
+    catchUp,
+    ...(plan.present ? { planContext: plan.planContext } : {})
+  };
 
   // ── goals / sports / chats: identical to the morning gathers ─────────────────
   const goals = await gatherToolSection(
@@ -443,6 +454,7 @@ export async function composeEveningBriefing(
   if (morningPlan) {
     sections.push(morningPlan);
   }
+  sections.push(planSection(plan.planContext, tasksReconciliation.rawItems));
 
   const hasFreshnessDeps = !!(deps.connectorSyncAt ?? deps.vaultLastWriteAt);
   const sourceTimestamps = hasFreshnessDeps
@@ -470,6 +482,7 @@ export async function composeEveningBriefing(
     chatTurnCount: chats.count,
     morningRunReferenced: morningPlan !== null,
     gaps,
+    ...(plan.planSnapshot !== undefined ? { planSnapshot: plan.planSnapshot } : {}),
     // Live/cache provenance per connected account (#729).
     sourceContext: { email: emailSourceContext, calendar: calendarSourceContext },
     ...(sourceTimestamps !== undefined ? { sourceTimestamps } : {})

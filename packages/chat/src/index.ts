@@ -4,6 +4,8 @@ export { chatCommitmentProvider } from "./commitment-provider.js";
 // a meal filed under the wrong calendar day with no error anywhere.
 export { extractTimezone } from "./locale-utils.js";
 export * from "./calendar-write-impl.js";
+export * from "./apply-writer-port.js";
+export * from "./apply-execution-adapters.js";
 export * from "./email-write-impl.js";
 export * from "./module-build-start-impl.js";
 export * from "./jobs.js";
@@ -88,6 +90,7 @@ export type {
   RpcSubmitLoginTokenResult
 } from "./live/login-contract.js";
 export * from "./manifest.js";
+export * from "./module-registry/day-plan-apply-composition.js";
 export * from "./feedback-verifier.js";
 export * from "./memory-distillation.js";
 export * from "./memory-settings-repository.js";

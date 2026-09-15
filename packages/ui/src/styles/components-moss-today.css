@@ -328,13 +328,19 @@
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  max-width: 100%;
 }
 .jds-weather-chip__location {
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
   color: var(--ink);
   white-space: nowrap;
-  flex: none;
+  /* A long place name must truncate, never push a 320px page sideways (T16):
+     with room this renders exactly as before. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .jds-weather-chip {
   display: flex;

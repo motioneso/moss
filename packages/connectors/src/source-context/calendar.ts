@@ -7,6 +7,7 @@ import {
   isFeatureGranted,
   resolveEffectiveGrants
 } from "../feature-grants.js";
+import { pickLatestSyncAt } from "../freshness.js";
 import type { SyncLogger } from "../sync-jobs.js";
 import {
   classifyLiveReadFailure,
@@ -22,6 +23,7 @@ import {
 
 export const CALENDAR_DEFAULT_LOOKAHEAD_MS = 48 * 60 * 60 * 1000;
 export const CALENDAR_DEFAULT_LIMIT = 50;
+export const CALENDAR_MAX_LIMIT = 200;
 
 const DEFAULT_TIMEZONE = resolveMossEnv(process.env, "JARVIS_DEFAULT_TZ") ?? "America/New_York";
 const EARLY_LOCAL_HOUR = 9;
@@ -55,7 +57,7 @@ export interface CalendarSourceContextDeps {
   readonly calendarRepository: {
     listVisible(
       scopedDb: DataContextDb,
-      options?: { startsAfter?: Date; startsBefore?: Date }
+      options?: { startsAfter?: Date; startsBefore?: Date; endsAfter?: Date }
     ): Promise<CalendarEvent[]>;
   };
   readonly now?: () => Date;
@@ -239,21 +241,26 @@ export async function listCalendarContext(
     ? new Date(input.windowEnd)
     : new Date(windowStart.getTime() + CALENDAR_DEFAULT_LOOKAHEAD_MS);
   const window: WindowBounds = { windowStart, windowEnd };
-  const limit = Math.max(1, Math.min(input.limit ?? CALENDAR_DEFAULT_LIMIT, 200));
+  const limit = Math.max(1, Math.min(input.limit ?? CALENDAR_DEFAULT_LIMIT, CALENDAR_MAX_LIMIT));
 
   const allAccounts = await deps.connectorsRepository.listAccounts(scopedDb);
   const calendarCapable = allAccounts.filter(
     (account) => resolveEffectiveGrants(account.scopes, null).calendar
   );
-  if (calendarCapable.length === 0) return { items: [], accounts: [], gaps: [] };
+  if (calendarCapable.length === 0) {
+    return { items: [], accounts: [], gaps: [], truncated: false, asOf: null };
+  }
 
   const unflagged: UnflaggedItem[] = [];
   const accounts: SourceContextAccountResult[] = [];
   const gaps: SourceContextGap[] = [];
   let cachedRows: CalendarEvent[] | null = null;
+  // A cached event that started before the window but is still running when the window opens
+  // is still a real commitment inside it — bound by when it ENDS relative to the window start,
+  // not when it started.
   const loadCache = async (): Promise<CalendarEvent[]> => {
     cachedRows ??= await deps.calendarRepository.listVisible(scopedDb, {
-      startsAfter: windowStart,
+      endsAfter: windowStart,
       startsBefore: windowEnd
     });
     return cachedRows;
@@ -318,7 +325,13 @@ export async function listCalendarContext(
         accountItems = await attempt(freshToken);
       }
       unflagged.push(...accountItems);
-      accounts.push({ account: meta, source: "live", degradedReason: null });
+      // Live means this account was just observed, right now — that beats any past sync log.
+      accounts.push({
+        account: meta,
+        source: "live",
+        degradedReason: null,
+        asOf: now.toISOString()
+      });
     } catch (error) {
       const classified = classifyLiveReadFailure(error);
       if (classified.kind === "auth") {
@@ -334,7 +347,15 @@ export async function listCalendarContext(
         .map((row) => cacheItem(row, meta, classified.degradedReason))
         .filter((item) => inWindow(item, now, window));
       unflagged.push(...fallback);
-      accounts.push({ account: meta, source: "cache", degradedReason: classified.degradedReason });
+      // This account's own last completed sync — not another account's, which could be newer
+      // and would wrongly make this account's stale data look current.
+      const accountAsOf = pickLatestSyncAt([account], "calendar")?.toISOString() ?? null;
+      accounts.push({
+        account: meta,
+        source: "cache",
+        degradedReason: classified.degradedReason,
+        asOf: accountAsOf
+      });
     }
   }
 
@@ -345,5 +366,16 @@ export async function listCalendarContext(
     ...item,
     flags: flags[index] ?? []
   }));
-  return { items, accounts, gaps };
+  // The result's overall freshness can only be as good as its least fresh contributing account
+  // (any unknown account freshness makes the whole result's freshness unknown too) — never the
+  // most recent one, which would let one fresh account mask another account's stale data.
+  const accountAsOfs = accounts.map((a) => a.asOf ?? null);
+  const asOf: string | null =
+    accountAsOfs.length === 0 || accountAsOfs.some((value) => value === null)
+      ? null
+      : accountAsOfs.reduce<string>(
+          (min, value) => (value! < min ? value! : min),
+          accountAsOfs[0]!
+        );
+  return { items, accounts, gaps, truncated: capped.length < unflagged.length, asOf };
 }

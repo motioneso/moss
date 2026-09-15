@@ -48,8 +48,7 @@ function TeamMark(props: { side: GameSide }) {
 
 function AroundGame(props: { game: GameSummary; soccer: boolean; locale: LocaleSettingsDto }) {
   const { game, soccer, locale } = props;
-  const first: GameSide = soccer ? game.home : game.away;
-  const second: GameSide = soccer ? game.away : game.home;
+  const [first, second] = orderGameSides(game, soccer);
   const pre = game.state === "pre";
   const mid = pre ? (soccer ? "v" : "at") : `${first.score ?? "–"}–${second.score ?? "–"}`;
   return (
@@ -226,6 +225,12 @@ function BoardSide(props: { side: GameSide; pre: boolean; dim: boolean; followed
   );
 }
 
+// Side order shared with the Today scores rows (T11): soccer reads home-first, every other
+// competition visitor-first. One rule in one place — both surfaces render the same order.
+export function orderGameSides(game: GameSummary, soccer: boolean): readonly [GameSide, GameSide] {
+  return soccer ? [game.home, game.away] : [game.away, game.home];
+}
+
 // One scorebox: status line on top (clock/period for live, "Final", kickoff time for pre),
 // then two stacked team rows. Soccer reads home-first, US leagues visitor-first — same
 // data-driven convention as the strip and the featured-game bar.
@@ -237,8 +242,7 @@ function BoardGame(props: {
   followedPairs: FollowedTeamIndex;
 }) {
   const { game, soccer, locale, competitionKey, followedPairs } = props;
-  const first: GameSide = soccer ? game.home : game.away;
-  const second: GameSide = soccer ? game.away : game.home;
+  const [first, second] = orderGameSides(game, soccer);
   const pre = game.state === "pre";
   const winner = winnerKey(game);
   return (

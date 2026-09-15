@@ -30,9 +30,15 @@ function buildApp(initial: Record<string, unknown> = {}) {
     dayPlanRepository: {
       getForDay: async () => undefined,
       createForDay: async () => undefined as never,
-      saveDraft: async () => undefined as never
+      saveDraft: async () => undefined as never,
+      getById: async () => undefined as never,
+      reserveApplyBatch: async () => undefined as never,
+      getApplyBatch: async () => undefined,
+      getApplyBatchById: async () => undefined
     },
     findSourceRun: async () => undefined,
+    findTask: async () => undefined,
+    findRun: async () => undefined,
     resolveTimeZone: async () => "UTC",
     dataContext: {
       withDataContext: async <T>(_ac: AccessContext, work: (db: DataContextDb) => Promise<T>) =>

@@ -22,7 +22,9 @@ export {
   sportsFollowedFactsTodayExecute
 } from "./briefing-tool.js";
 export { configureSportsChatTools, resetSportsChatToolsForTests } from "./chat-tools.js";
-export { createEspnDatasetAdapter } from "./source/espn-source.js";
+// #2313: re-exported so the worker composition root can scope the e2e fixture fetch to
+// the briefing sources' manifest hosts.
+export { ESPN_FETCH_HOSTS, createEspnDatasetAdapter } from "./source/espn-source.js";
 export { SportsBrowserBroker, SportsBrowserBrokerServer } from "./source/browser-broker.js";
 export { SportsBrowserClient } from "./source/browser-client.js";
 export { SPORTS_BROWSER_SOCKETS } from "./source/browser-protocol.js";

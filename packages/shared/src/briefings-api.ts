@@ -1,6 +1,8 @@
 import { errorResponseSchema, idParamsSchema, jsonObjectSchema } from "./schema-fragments.js";
 import {
+  briefingPlanContextV1Schema,
   briefingStructuredPayloadV1Schema,
+  type BriefingPlanContextV1,
   type BriefingStructuredPayloadV1
 } from "./briefing-action-rows.js";
 
@@ -99,6 +101,24 @@ export interface ListBriefingRunsResponse {
   readonly runs: readonly BriefingRunDto[];
 }
 
+export type BriefingRunReadState = "pending" | "failed" | "ready";
+
+export type BriefingRunPlanStatus = "current" | "changed" | "none" | "unavailable";
+
+export interface BriefingRunPlanStateDto {
+  readonly status: BriefingRunPlanStatus;
+  readonly storedRevision: number | null;
+  readonly currentRevision: number | null;
+  readonly current: BriefingPlanContextV1 | null;
+}
+
+export interface GetBriefingRunResponse {
+  readonly state: BriefingRunReadState;
+  readonly run: BriefingRunDto | null;
+  readonly latest: boolean;
+  readonly plan: BriefingRunPlanStateDto | null;
+}
+
 export interface BriefingRunPayloadDto {
   readonly actorUserId: string;
   readonly definitionId: string;
@@ -130,7 +150,6 @@ export const briefingTypeSchema = {
 
 const selectedToolNamesSchema = {
   type: "array",
-  minItems: 1,
   items: { type: "string" }
 } as const;
 
@@ -311,6 +330,40 @@ export const listBriefingRunsResponseSchema = {
   }
 } as const;
 
+export const briefingRunPlanStateSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["status", "storedRevision", "currentRevision", "current"],
+  properties: {
+    status: { type: "string", enum: ["current", "changed", "none", "unavailable"] },
+    storedRevision: { type: ["integer", "null"] },
+    currentRevision: { type: ["integer", "null"] },
+    current: { anyOf: [briefingPlanContextV1Schema, { type: "null" }] }
+  }
+} as const;
+
+export const getBriefingRunResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["state", "run", "latest", "plan"],
+  properties: {
+    state: { type: "string", enum: ["pending", "failed", "ready"] },
+    run: { anyOf: [briefingRunSchema, { type: "null" }] },
+    latest: { type: "boolean" },
+    plan: { anyOf: [briefingRunPlanStateSchema, { type: "null" }] }
+  }
+} as const;
+
+export const briefingRunParamsSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "runId"],
+  properties: {
+    id: { type: "string" },
+    runId: { type: "string" }
+  }
+} as const;
+
 export const listBriefingDefinitionsRouteSchema = {
   response: {
     200: listBriefingDefinitionsResponseSchema,
@@ -353,6 +406,22 @@ export const listBriefingRunsRouteSchema = {
   params: idParamsSchema,
   response: {
     200: listBriefingRunsResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema
+  }
+} as const;
+
+export const getBriefingRunRouteSchema = {
+  params: briefingRunParamsSchema,
+  querystring: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      jobId: { type: "string", minLength: 1, maxLength: 200 }
+    }
+  },
+  response: {
+    200: getBriefingRunResponseSchema,
     401: errorResponseSchema,
     404: errorResponseSchema
   }

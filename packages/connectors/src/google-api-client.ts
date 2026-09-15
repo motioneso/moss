@@ -75,6 +75,13 @@ export interface GoogleInsertedEvent {
   readonly htmlLink?: string;
 }
 
+export interface GoogleCalendarEventDetail extends GoogleCalendarEvent {
+  readonly extendedProperties?: {
+    readonly private?: Record<string, string>;
+    readonly shared?: Record<string, string>;
+  };
+}
+
 export interface GmailCreatedDraft {
   readonly id: string;
 }
@@ -207,6 +214,18 @@ export class GoogleApiClient {
       nextPageToken?: string;
     }>(url.toString(), input.accessToken, "gmail");
     return { messages: json.messages ?? [], nextPageToken: json.nextPageToken };
+  }
+
+  async getEvent(input: {
+    accessToken: string;
+    calendarId?: string;
+    eventId: string;
+  }): Promise<GoogleCalendarEventDetail> {
+    const calendarId = input.calendarId ?? "primary";
+    const url = new URL(
+      `${CALENDAR_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(input.eventId)}`
+    );
+    return this.getJson<GoogleCalendarEventDetail>(url.toString(), input.accessToken, "calendar");
   }
 
   async getMessage(input: { accessToken: string; id: string }): Promise<GmailMessageFull> {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
-import type { AiRepository, AiSecretCipher } from "@moss/ai";
+import type { ActiveModulesResolver, AiRepository, AiSecretCipher } from "@moss/ai";
 import { HttpApiAdapter, parseAiApiKeyCredential } from "@moss/ai";
 import type { ChatTurn, GenerateChatInput, ProviderKind } from "@moss/ai";
 import type { FocusSignalInput } from "@moss/priority";
@@ -12,7 +12,8 @@ import { isBehaviorEnabled, type SourceBehaviorPolicyDeps } from "@moss/source-b
 import {
   parseCalendarAutomationMode,
   normalizePersonaSettings,
-  renderPersonaText
+  renderPersonaText,
+  type DayPlanDto
 } from "@moss/shared";
 import type { BriefingContribution, ExternalBriefingInvoker } from "./external-contributions.js";
 import type { BriefingStructuredPayloadV1 } from "@moss/shared";
@@ -50,6 +51,8 @@ export interface ComposeDeps {
   ) => Promise<Date | null>;
   readonly vaultLastWriteAt?: (scopedDb: DataContextDb) => Promise<Date | null>;
   /** Injected by the composition root; gates email/calendar cached reads to accounts with active grants. */
+  /** Injected by the composition root; skips tools whose module is inactive for the actor. */
+  readonly resolveActiveModules?: ActiveModulesResolver;
   readonly featureGrantService?: {
     grantedAccountIds(
       scopedDb: DataContextDb,
@@ -64,6 +67,17 @@ export interface ComposeDeps {
     listEmailContext(scopedDb: DataContextDb, input: Record<string, unknown>): Promise<unknown>;
     listCalendarContext(scopedDb: DataContextDb, input: Record<string, unknown>): Promise<unknown>;
   };
+  /**
+   * Injected by the composition root; reads the actor's saved day plan for the
+   * run's local day (T12). Structural — briefings never imports calendar; the
+   * calendar repository satisfies this shape.
+   */
+  readonly dayPlanRead?: {
+    getForDay(
+      scopedDb: DataContextDb,
+      input: { readonly localDay: string; readonly timeZone: string }
+    ): Promise<DayPlanDto | undefined>;
+  };
   readonly calendarFollowThrough?: {
     executeAutoActions(args: {
       readonly scopedDb: DataContextDb;
@@ -76,11 +90,7 @@ export interface ComposeDeps {
         readonly startsAt?: string;
         readonly endsAt?: string;
       };
-    }): Promise<{
-      readonly targetRef: string;
-      readonly taskId?: string;
-      readonly calendarEventId?: string;
-    }>;
+    }): Promise<CalendarFollowThroughRefs>;
   };
   /** Injectable for tests; defaults to constructing a real HttpApiAdapter. */
   readonly createAdapter?: (
@@ -98,6 +108,27 @@ export interface ComposeDeps {
    *  array's only production supplier is getBuiltInModuleManifests(), which never contains
    *  an external (JSON-manifest) module. */
   readonly externalBriefingManifests?: readonly JsonMossModuleManifest[];
+}
+
+// Typed automatic effect for one briefing signal (R2.3-T06). Composition emits
+// intents only: task creation still resolves through the Tasks port in the
+// generation transaction, but no provider call and no day-plan write happens
+// here. The generation plan step turns block_time intents into plan blocks.
+export interface CalendarAutoIntent {
+  readonly kind: "create_task" | "block_time";
+  readonly targetRef: string;
+  readonly title: string;
+  readonly window?: {
+    readonly start: string;
+    readonly end: string;
+    readonly durationMinutes: number;
+  };
+}
+
+export interface CalendarFollowThroughRefs {
+  readonly targetRef: string;
+  readonly taskId?: string;
+  readonly intents: readonly CalendarAutoIntent[];
 }
 
 export interface ComposeRunInput {
@@ -127,7 +158,8 @@ export interface BriefingGap {
     | "truncated"
     | "empty"
     | "unwired"
-    | "source_auth";
+    | "source_auth"
+    | "module_disabled";
 }
 
 export interface ComposeResult {
@@ -352,6 +384,23 @@ export async function gatherToolSection(
 ): Promise<Section> {
   if (!definition.selected_tool_names.includes(args.toolName)) {
     return { key: args.key, label: args.label, lines: [], count: 0, rawItems: [] };
+  }
+
+  // A tool selected by preference but disabled for this actor stays silent: no
+  // section, no execute, one module_disabled gap. The stored list is untouched,
+  // so re-enabling the module needs no settings change. Absent resolver (unit
+  // tests, default worker deps) keeps today's behavior.
+  if (deps.resolveActiveModules) {
+    const owning = deps.moduleManifests.find((manifest) =>
+      (manifest.assistantTools ?? []).some((tool) => tool.name === args.toolName)
+    );
+    if (owning) {
+      const active = await deps.resolveActiveModules(ctxFor(definition, input).actorUserId);
+      if (!active.some((manifest) => manifest.id === owning.id)) {
+        gaps.push({ source: args.key, reason: "module_disabled" });
+        return { key: args.key, label: args.label, lines: [], count: 0, rawItems: [] };
+      }
+    }
   }
 
   const tool = findExecute(deps.moduleManifests, args.toolName);

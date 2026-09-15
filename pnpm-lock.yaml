@@ -479,6 +479,9 @@ importers:
       '@moss/shared':
         specifier: workspace:*
         version: link:../shared
+      '@moss/source-behaviors':
+        specifier: workspace:*
+        version: link:../source-behaviors
       '@moss/structured-state':
         specifier: workspace:*
         version: link:../structured-state

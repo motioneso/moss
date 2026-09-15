@@ -308,6 +308,16 @@
   height: 14px;
   object-fit: contain;
 }
+/* Secondary-story dek: one clamped line under the headline (T11). */
+.nw-twlist__dek {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+  line-height: 1.45;
+}
+
 .nw-twlist__title {
   line-height: 1.4;
 }

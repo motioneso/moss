@@ -416,7 +416,35 @@ describe("MVP foundation schema catalog", () => {
         // idempotent operations, and composite ownership constraints.
         { version: "0230", name: "0230_day_plan_ownership.sql" },
         { version: "0231", name: "0231_day_plan_reconcile_storage.sql" },
-        { version: "0232", name: "0232_day_plan_blank_legacy_notes.sql" }
+        { version: "0232", name: "0232_day_plan_blank_legacy_notes.sql" },
+        // R2.2-T03-R3 — a deleted task must stay distinguishable from "no task" in preview,
+        // so the block keeps the task id as history instead of it being nulled out.
+        {
+          version: "0233",
+          name: "0233_day_plan_block_task_soft_reference.sql"
+        },
+        // R2.2-T04A — one durable apply batch per actor, plan and idempotency key:
+        // batch snapshot column, per-item records, and the batch header kind.
+        {
+          version: "0234",
+          name: "0234_day_plan_apply_batch.sql"
+        },
+        // R2.2-T04B — one typed execution result per reserved apply item.
+        {
+          version: "0235",
+          name: "0235_day_plan_apply_item_result.sql"
+        },
+        // R2.3-T06 — the scheduled briefing worker reserves automatic apply
+        // batches: worker role INSERT and UPDATE on the four day-plan tables.
+        {
+          version: "0236",
+          name: "0236_day_plan_worker_apply_grants.sql"
+        },
+        // R3.1-T08 — briefing definitions allow an explicit empty selected-tool list.
+        {
+          version: "0237",
+          name: "0237_briefing_selected_tool_names_allow_empty.sql"
+        }
       ]);
     } finally {
       await client.end();

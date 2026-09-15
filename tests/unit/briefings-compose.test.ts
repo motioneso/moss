@@ -10,6 +10,7 @@ import {
 } from "../../packages/briefings/src/compose.js";
 import {
   FIXED_NOW,
+  committedDayPlanBlock,
   definition,
   fakeScopedDb,
   makeFakeDeps,
@@ -679,11 +680,12 @@ describe("composeBriefing — prompt boundary-forgery (escaped inert data)", () 
       expect(capturedMessages).toHaveLength(1);
       const prompt = (capturedMessages[0] as readonly { content: string }[])[0]!.content;
 
-      // (a) No forged structural boundary: exactly one trusted pair, six external pairs.
+      // (a) No forged structural boundary: exactly one trusted pair, seven external pairs
+      // (the six base sections plus the always-present day_plan block).
       expect(prompt.match(/<trusted_instructions>/g) ?? []).toHaveLength(1);
       expect(prompt.match(/<\/trusted_instructions>/g) ?? []).toHaveLength(1);
-      expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(6);
-      expect(prompt.match(/<\/external_source>/g) ?? []).toHaveLength(6);
+      expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(7);
+      expect(prompt.match(/<\/external_source>/g) ?? []).toHaveLength(7);
 
       // (b) The canary never reaches the trusted preamble.
       const trustedMatch = prompt.match(/<trusted_instructions>([\s\S]*?)<\/trusted_instructions>/);
@@ -882,5 +884,114 @@ describe("composeBriefing — source freshness", () => {
     const deps = makeFakeDeps();
     const result = await composeBriefing(fakeScopedDb, definition(), runInput, deps);
     expect(result.sourceMetadata.sourceTimestamps).toBeUndefined();
+  });
+});
+
+describe("composeBriefing — disabled-module gate", () => {
+  it("skips a selected tool whose module is inactive and records module_disabled", async () => {
+    let executions = 0;
+    const deps = {
+      ...makeFakeDeps(),
+      resolveActiveModules: async () => []
+    };
+    const result = await composeBriefing(
+      fakeScopedDb,
+      definition({ selected_tool_names: ["tasks.list", "sports.followedFactsToday"] }),
+      runInput,
+      {
+        ...deps,
+        moduleManifests: deps.moduleManifests.map((manifest) => ({
+          ...manifest,
+          assistantTools: (manifest.assistantTools ?? []).map((tool) =>
+            tool.name === "sports.followedFactsToday"
+              ? {
+                  ...tool,
+                  execute: (async (...args: never[]) => {
+                    executions += 1;
+                    return (tool.execute as (...a: never[]) => unknown)(...args);
+                  }) as typeof tool.execute
+                }
+              : tool
+          )
+        }))
+      }
+    );
+    const gaps = (result.sourceMetadata.gaps ?? []) as Array<{
+      source: string;
+      reason: string;
+    }>;
+    expect(gaps.some((g) => g.source === "sports" && g.reason === "module_disabled")).toBe(true);
+    expect(executions).toBe(0);
+    expect(result.status).toBe("succeeded");
+  });
+
+  it("invokes the tool when the resolver reports its module active", async () => {
+    const deps = makeFakeDeps();
+    const activeDeps: ComposeDeps = {
+      ...deps,
+      resolveActiveModules: async () => deps.moduleManifests
+    };
+    const result = await composeBriefing(
+      fakeScopedDb,
+      definition({ selected_tool_names: ["tasks.list", "sports.followedFactsToday"] }),
+      runInput,
+      activeDeps
+    );
+    const gaps = (result.sourceMetadata.gaps ?? []) as Array<{
+      source: string;
+      reason: string;
+    }>;
+    expect(gaps.some((g) => g.source === "sports")).toBe(false);
+  });
+});
+
+describe("composeBriefing — plan prose (T13)", () => {
+  const plan = {
+    id: "plan-1",
+    localDay: "2026-06-13",
+    timeZone: "UTC",
+    revision: 1,
+    sourceRunId: null,
+    eveningIntent: {
+      priorityTaskIds: ["t1"],
+      capacity: "light",
+      notes: null,
+      corrections: [],
+      commitments: []
+    },
+    blocks: []
+  };
+  async function promptFor(def: ReturnType<typeof definition>, opts: object, input = runInput) {
+    const seen: string[] = [];
+    const deps = makeFakeDeps({
+      ...opts,
+      generateChat: async (g: GenerateChatInput) => {
+        seen.push(g.messages.map((m) => m.content).join("\n"));
+        return { text: "synth narrative" };
+      }
+    });
+    const result = await composeBriefing(fakeScopedDb, def, input, deps);
+    return { prompt: seen.join("\n"), result };
+  }
+  it("morning prompt carries the day_plan block after chats and before goals", async () => {
+    const { prompt } = await promptFor(
+      definition({ selected_tool_names: ["tasks.list", "goals.list"] }),
+      { dayPlan: { plan } }
+    );
+    const day = prompt.indexOf('<external_source type="day_plan">');
+    expect(day).toBeGreaterThan(prompt.indexOf('<external_source type="chats">'));
+    expect(day).toBeLessThan(prompt.indexOf('<external_source type="goals">'));
+    expect(prompt).toContain("Capacity (saved last evening): light");
+  });
+
+  it("reports an overnight line only when the committed event moved (T21)", async () => {
+    const render = (startsAt: string) =>
+      promptFor(definition(), {
+        dayPlan: { plan: { ...plan, blocks: [committedDayPlanBlock(startsAt)] } }
+      });
+    expect((await render("2026-06-13T08:00:00.000Z")).prompt).toContain(
+      'Overnight change: the event under "Focus" moved'
+    );
+    expect((await render("2026-06-13T09:00:00.000Z")).prompt).not.toContain("Overnight change:");
   });
 });

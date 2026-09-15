@@ -9,6 +9,10 @@ import { newsModuleManifest } from "../../packages/news/src/manifest.js";
 import { emailModuleManifest } from "../../packages/email/src/manifest.js";
 import { calendarModuleManifest } from "../../packages/calendar/src/manifest.js";
 import { webModuleManifest } from "../../packages/web-research/src/manifest.js";
+import {
+  DAY_PLAN_DENIED_CODE,
+  DAY_PLAN_DENIED_REMEDIATION_REF
+} from "../../packages/shared/src/day-plan-api.js";
 import { sportsModuleManifest } from "../../packages/sports/src/manifest.js";
 import { getBuiltInModuleManifests } from "../../packages/module-registry/src/index.js";
 import { isSelfOperationExcluded } from "../../packages/ai/src/gateway/self-operation.js";
@@ -277,6 +281,55 @@ describe("Calendar self-operation manifest classification", () => {
   });
 });
 
+describe("Calendar automatic planning switches and denial help (R2.3-T06B)", () => {
+  function calendarBehaviors() {
+    return (calendarModuleManifest.sourceBehaviors ?? []).flatMap(
+      (source) => source.behaviors ?? []
+    );
+  }
+
+  it("declares planning and writeback as real default-on switches", () => {
+    const behaviors = calendarBehaviors();
+    for (const id of ["calendar.planning", "calendar.writeback"]) {
+      const behavior = behaviors.find((candidate) => candidate.id === id);
+      expect(behavior, `expected behavior ${id} to exist`).toBeDefined();
+      expect(behavior?.default).toBe("default-on");
+      expect(behavior?.description?.trim().length).toBeGreaterThan(0);
+      expect(behavior?.description?.trim().length).toBeLessThanOrEqual(240);
+    }
+  });
+
+  it("declares the denial from the shared day-plan constants", () => {
+    // T07: the map and the runtime read the same pair, so they cannot drift.
+    const features = calendarModuleManifest.features ?? [];
+    const status = features.find(
+      (feature) => feature.id === "calendar.saved_day_plan_apply_status"
+    );
+    const denied = (status?.errors ?? []).find((error) => error.code === DAY_PLAN_DENIED_CODE);
+    expect(denied, "expected the shared denial code in the map").toBeDefined();
+    expect(denied && "remediationRef" in denied ? denied.remediationRef : undefined).toBe(
+      DAY_PLAN_DENIED_REMEDIATION_REF
+    );
+  });
+
+  it("reports denials with a prerequisite error and a settings remediation", () => {
+    const features = calendarModuleManifest.features ?? [];
+    const status = features.find(
+      (feature) => feature.id === "calendar.saved_day_plan_apply_status"
+    );
+    expect(status, "expected status tool to exist").toBeDefined();
+    const denied = (status?.errors ?? []).find((error) => error.code === "day_plan_denied");
+    expect(denied, "expected day_plan_denied error").toBeDefined();
+    expect(denied?.class).toBe("prerequisite");
+    expect(denied?.description?.trim().length).toBeLessThanOrEqual(240);
+    const remediationRef = denied && "remediationRef" in denied ? denied.remediationRef : undefined;
+    const remediation = (status?.remediations ?? []).find((item) => item.id === remediationRef);
+    expect(remediation, "expected the denial remediation in the same feature").toBeDefined();
+    expect(remediation?.path).toBe("/settings/modules/calendar");
+    expect(remediation?.description?.trim().length).toBeLessThanOrEqual(240);
+  });
+});
+
 describe("Web Research self-operation manifest classification", () => {
   it("classifies web.read as risk read, so it runs without confirmation and cannot be promoted", () => {
     const tools: readonly ModuleAssistantToolManifest[] = webModuleManifest.assistantTools ?? [];
@@ -398,7 +451,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // #2326: -1 confirm_always. Ben ruled that web.read should stop asking for approval on every
     // call; it moved to risk "read", so it is no longer in any of these three buckets at all (the
     // loop above skips read tools before it ever reaches the switch).
-    expect(grantedAtInstall.length).toBe(42);
+    expect(grantedAtInstall.length).toBe(43);
     expect(confirmAlways.length).toBe(9);
     expect(userPromotable.length).toBe(5);
 
@@ -420,8 +473,10 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // = 49 total. #1888 added workshop.buildModule (granted_at_install), and #1909 adds five
     // confirmed Sports source writes plus news.refreshNews — 41 + 10 + 5 = 56, then #2236 added
     // scratchpad.append (granted_at_install) — 42 + 10 + 5 = 57. #2326 then moved web.read out of
-    // confirm_always to risk "read" — 42 + 9 + 5 = 56 total.
-    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(56);
+    // confirm_always to risk "read" — 42 + 9 + 5 = 56 total. T21 adds calendar.dayPlanDraft
+    // (granted_at_install, own day-plan draft only, review-gated before any calendar effect)
+    // — 43 + 9 + 5 = 57 total.
+    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(57);
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
     expect(userPromotable.sort()).toEqual(

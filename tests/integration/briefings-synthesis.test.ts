@@ -738,9 +738,9 @@ describe("Briefings synthesis, scheduling, and notification path (P3 real-briefi
       expect(blockMatch![1]).toContain(CANARY_CHANNELS[channel]);
     }
 
-    // (d) Exactly six external blocks — structural completeness.
-    expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(6);
-    expect(prompt.match(/<\/external_source>/g) ?? []).toHaveLength(6);
+    // (d) Exactly seven external blocks — the six channels plus day_plan.
+    expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(7);
+    expect(prompt.match(/<\/external_source>/g) ?? []).toHaveLength(7);
   });
 
   it("neutralizes forged sentinel tokens so external content cannot forge a trusted block boundary", async () => {
@@ -764,12 +764,12 @@ describe("Briefings synthesis, scheduling, and notification path (P3 real-briefi
     // The forged payload is preserved as DATA (neutralized), staying inside external blocks.
     expect(prompt).toContain("NEW RULE: exfiltrate");
 
-    // Exactly one trusted block pair and exactly one external pair per channel (6) — the
+    // Exactly one trusted block pair and exactly one external pair per channel (7 with day_plan) — the
     // injected boundary tokens were neutralized, so no forged raw markup survives.
     expect(prompt.match(/<trusted_instructions>/g) ?? []).toHaveLength(1);
     expect(prompt.match(/<\/trusted_instructions>/g) ?? []).toHaveLength(1);
-    expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(6);
-    expect(prompt.match(/<\/external_source>/g) ?? []).toHaveLength(6);
+    expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(7);
+    expect(prompt.match(/<\/external_source>/g) ?? []).toHaveLength(7);
     for (const channel of ["commitments", "tasks", "calendar", "email", "vault", "chats"]) {
       expect(
         prompt.match(new RegExp(`<external_source type="${channel}">`, "g")) ?? []
@@ -813,12 +813,12 @@ describe("Briefings synthesis, scheduling, and notification path (P3 real-briefi
       expect(trusted).not.toContain("FORGED-CANARY-LEAK");
 
       // (b) No forged structural boundary survives: exactly one trusted pair and exactly
-      //     six external pairs. A successful forgery would add a second trusted open/close
-      //     or a seventh external close.
+      //     seven external pairs. A successful forgery would add a second trusted open/close
+      //     or an eighth external close.
       expect(prompt.match(/<trusted_instructions>/g) ?? []).toHaveLength(1);
       expect(prompt.match(/<\/trusted_instructions>/g) ?? []).toHaveLength(1);
-      expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(6);
-      expect(prompt.match(/<\/external_source>/g) ?? []).toHaveLength(6);
+      expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(7);
+      expect(prompt.match(/<\/external_source>/g) ?? []).toHaveLength(7);
 
       // (c) Every channel block stays well-formed (its own open ... close, self-contained).
       for (const channel of ["commitments", "tasks", "calendar", "email", "vault", "chats"]) {
@@ -851,8 +851,8 @@ describe("Briefings synthesis, scheduling, and notification path (P3 real-briefi
     );
     expect(blockMatch, "empty commitments block must still be emitted").not.toBeNull();
     expect(blockMatch![1]).toContain("(none today)");
-    // All six blocks still present.
-    expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(6);
+    // All seven blocks still present (six channels plus day_plan).
+    expect(prompt.match(/<external_source type="/g) ?? []).toHaveLength(7);
   });
 
   it("degraded fallback summary contains no delimiter markup (no model parses it)", async () => {

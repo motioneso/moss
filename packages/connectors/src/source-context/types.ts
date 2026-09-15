@@ -102,6 +102,8 @@ export interface SourceContextAccountResult {
   readonly account: SourceAccountMeta;
   readonly source: SourceMode;
   readonly degradedReason: DegradedReason | null;
+  /** This account's own freshness: the observation time when live, its last completed sync when cached. Calendar-only for now. */
+  readonly asOf?: string | null;
 }
 
 export interface SourceContextGap {
@@ -119,6 +121,14 @@ export interface CalendarContextResult {
   readonly items: readonly CalendarContextItem[];
   readonly accounts: readonly SourceContextAccountResult[];
   readonly gaps: readonly SourceContextGap[];
+  /** True when more matching events existed than `items` returned (see `limit`). */
+  readonly truncated: boolean;
+  /**
+   * The least-fresh contributing account's time: for a live account, the read's observation
+   * time; for a cache-fallback account, that account's last completed sync. Null if any
+   * contributing account's freshness is unknown.
+   */
+  readonly asOf: string | null;
 }
 
 export interface ListEmailContextInput {

@@ -1,21 +1,23 @@
-import { Fragment, lazy, Suspense, type ReactNode } from "react";
+import { Component, Fragment, lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 import { MODULE_WEB_CONTRIBUTIONS } from "virtual:moss-module-web";
 
-/**
- * Generic Today-widget docking (#799 module-web-registry Phase A).
- *
- * Replaces the old hardcoded `SportsDesk` render path in `today-page.tsx`: any module that
- * declares a `./web` contribution with `todayWidgets` now renders on Today automatically,
- * without this file needing per-module knowledge. Each module's contribution is lazily loaded
- * once (stable `lazy()` identity, computed at module scope from the static
- * `virtual:moss-module-web` scan) and wrapped in its own `<Suspense fallback={null}>` boundary
- * so one module's load never blocks another's.
- */
-const widgetComponents = MODULE_WEB_CONTRIBUTIONS.map((entry) => ({
-  moduleId: entry.moduleId,
-  Component: lazy(async () => {
+import type { ModuleTodayWidget, ModuleWebContribution } from "@moss/module-web-sdk";
+
+type ContributionEntry = (typeof MODULE_WEB_CONTRIBUTIONS)[number];
+
+function widgetsForSlot(
+  contribution: ModuleWebContribution,
+  slot: string | undefined
+): readonly ModuleTodayWidget[] {
+  const widgets = contribution.todayWidgets ?? [];
+  if (slot === undefined) return widgets;
+  return widgets.filter((widget) => widget.slot === slot);
+}
+
+function makeSlotComponent(entry: ContributionEntry, slot: string | undefined) {
+  return lazy(async () => {
     const contribution = (await entry.load()).default;
-    const widgets = contribution.todayWidgets ?? [];
+    const widgets = widgetsForSlot(contribution, slot);
     return {
       default: () => (
         <>
@@ -25,22 +27,76 @@ const widgetComponents = MODULE_WEB_CONTRIBUTIONS.map((entry) => ({
         </>
       )
     };
-  })
-}));
+  });
+}
 
+interface BoundaryProps {
+  readonly onRetry: () => void;
+  readonly children: ReactNode;
+}
+
+interface BoundaryState {
+  readonly failed: boolean;
+}
+
+/** Per-module fallback: a failed widget shows a retry line, never a page error. */
+class ModuleWidgetBoundary extends Component<BoundaryProps, BoundaryState> {
+  state: BoundaryState = { failed: false };
+  static getDerivedStateFromError(): BoundaryState {
+    return { failed: true };
+  }
+  private handleRetry = () => {
+    this.props.onRetry();
+  };
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="cmd-empty" role="status">
+          Couldn&apos;t load this widget right now.{" "}
+          <button type="button" onClick={this.handleRetry}>
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function ModuleEntryWidgets(props: { entry: ContributionEntry; slot: string | undefined }) {
+  const [attempt, setAttempt] = useState(0);
+  // Recreated on retry so a failed load() runs again; the module loader caches a
+  // successful import, so working modules still load their code exactly once.
+  const Component = useMemo(
+    () => makeSlotComponent(props.entry, props.slot),
+    [props.entry, props.slot, attempt]
+  );
+  return (
+    <ModuleWidgetBoundary key={attempt} onRetry={() => setAttempt((n) => n + 1)}>
+      <Suspense fallback={null}>
+        <Component />
+      </Suspense>
+    </ModuleWidgetBoundary>
+  );
+}
+
+/**
+ * Generic Today-widget docking (#799 module-web-registry Phase A).
+ *
+ * Without `slot` every widget of every enabled module renders, as before. With
+ * `slot` only widgets declaring that slot render. Disabled modules are filtered
+ * before anything mounts, so their `load()` never runs.
+ */
 export function ModuleTodayWidgets(props: {
   readonly disabledModuleIds: readonly string[];
+  readonly slot?: string;
 }): ReactNode {
   const disabled = new Set(props.disabledModuleIds);
   return (
     <>
-      {widgetComponents
-        .filter((widget) => !disabled.has(widget.moduleId))
-        .map(({ moduleId, Component }) => (
-          <Suspense key={moduleId} fallback={null}>
-            <Component />
-          </Suspense>
-        ))}
+      {MODULE_WEB_CONTRIBUTIONS.filter((entry) => !disabled.has(entry.moduleId)).map((entry) => (
+        <ModuleEntryWidgets key={entry.moduleId} entry={entry} slot={props.slot} />
+      ))}
     </>
   );
 }

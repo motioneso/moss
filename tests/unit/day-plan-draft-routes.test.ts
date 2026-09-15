@@ -62,9 +62,15 @@ function buildApp(options: { save?: DayPlanDto; auth?: Error } = {}) {
     dayPlanRepository: {
       getForDay: async () => undefined,
       createForDay: async () => undefined as never,
-      saveDraft
+      saveDraft,
+      getById: async () => undefined as never,
+      reserveApplyBatch: async () => undefined as never,
+      getApplyBatch: async () => undefined,
+      getApplyBatchById: async () => undefined
     },
     findSourceRun: async () => undefined,
+    findTask: async () => undefined,
+    findRun: async () => undefined,
     dataContext: {
       withDataContext: async <T>(
         context: AccessContext,

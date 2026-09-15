@@ -38,7 +38,7 @@ export function configureSportsBriefingService(datasetClient: DatasetClient): vo
 
 export const sportsFollowedFactsTodayExecute: ToolExecute = async (
   scopedDb,
-  _input,
+  input,
   ctx
 ): Promise<ToolResult> => {
   assertDataContextDb(scopedDb);
@@ -47,6 +47,12 @@ export const sportsFollowedFactsTodayExecute: ToolExecute = async (
       "sports briefing tool used before configureSportsBriefingService ran (composition-root bug)"
     );
   }
-  const { facts } = await service.getFollowedFactsForToday(scopedDb, ctx.actorUserId);
-  return { data: { facts } };
+  const timeZone =
+    typeof (input as Record<string, unknown> | null)?.["timeZone"] === "string"
+      ? ((input as Record<string, unknown>)["timeZone"] as string)
+      : undefined;
+  const { facts, evidence } = await service.getFollowedFactsForToday(scopedDb, ctx.actorUserId, {
+    timeZone
+  });
+  return { data: { facts, evidence } };
 };

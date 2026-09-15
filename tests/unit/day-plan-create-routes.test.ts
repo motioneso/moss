@@ -55,9 +55,15 @@ function buildApp(
     dayPlanRepository: {
       getForDay: async () => undefined,
       createForDay: create,
-      saveDraft: async () => undefined as never
+      saveDraft: async () => undefined as never,
+      getById: async () => undefined as never,
+      reserveApplyBatch: async () => undefined as never,
+      getApplyBatch: async () => undefined,
+      getApplyBatchById: async () => undefined
     },
     findSourceRun,
+    findTask: async () => undefined,
+    findRun: async () => undefined,
     dataContext: {
       withDataContext: async <T>(
         context: AccessContext,
@@ -204,7 +210,7 @@ describe("saved day-plan creation route", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("declares the creation route and keeps planning and writeback coming soon", async () => {
+  it("declares the creation route and keeps planning and writeback switched on", async () => {
     const postRoute = calendarModuleManifest.routes.find(
       (route) => route.method === "POST" && route.path === "/api/calendar/day-plans"
     );
@@ -217,10 +223,10 @@ describe("saved day-plan creation route", () => {
       (source) => source.behaviors ?? []
     );
     expect(behaviors.find((behavior) => behavior.id === "calendar.planning")?.default).toBe(
-      "coming-soon"
+      "default-on"
     );
     expect(behaviors.find((behavior) => behavior.id === "calendar.writeback")?.default).toBe(
-      "coming-soon"
+      "default-on"
     );
   });
 

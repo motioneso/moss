@@ -355,6 +355,49 @@ describe("day-plan migration live acceptance", () => {
     await expectForcedRls();
   });
 
+  it("grants the worker role exactly INSERT and UPDATE on the four day-plan tables", async () => {
+    // Earlier tests rewind the day-plan tables, so apply 0236 here on the
+    // 0232 base: this also proves the migration itself runs cleanly.
+    await baseline(files);
+    await bootstrap.query("DELETE FROM app.schema_migrations WHERE version = '0236'");
+    await copyMigrations([...files, "0236_day_plan_worker_apply_grants.sql"]);
+    expect((await migrate()).applied.map((file) => file.version)).toEqual(["0236"]);
+    // The worker can read, reserve and record, but deletes nothing new.
+    const tables = [
+      "app.day_plans",
+      "app.day_plan_blocks",
+      "app.day_plan_operations",
+      "app.day_plan_operation_items"
+    ];
+    for (const table of tables) {
+      const privileges = await bootstrap.query(
+        `SELECT
+           has_table_privilege('jarvis_worker_runtime', $1::regclass, 'SELECT') AS can_select,
+           has_table_privilege('jarvis_worker_runtime', $1::regclass, 'INSERT') AS can_insert,
+           has_table_privilege('jarvis_worker_runtime', $1::regclass, 'UPDATE') AS can_update,
+           has_table_privilege('jarvis_worker_runtime', $1::regclass, 'DELETE') AS can_delete`,
+        [table]
+      );
+      expect(privileges.rows).toEqual([
+        { can_select: true, can_insert: true, can_update: true, can_delete: false }
+      ]);
+    }
+    const policies = await bootstrap.query(
+      `SELECT policyname, roles
+       FROM pg_policies
+       WHERE schemaname = 'app'
+         AND tablename = ANY($1)
+         AND (policyname LIKE '%_select' OR policyname LIKE '%_insert' OR policyname LIKE '%_update')`,
+      [tables.map((table) => table.slice(4))]
+    );
+    expect(policies.rows).not.toHaveLength(0);
+    for (const row of policies.rows) {
+      expect(String(row.roles)).toContain("jarvis_app_runtime");
+      expect(String(row.roles)).toContain("jarvis_worker_runtime");
+    }
+    await expectForcedRls();
+  });
+
   it("repeats both upgrade paths without data changes or checksum drift", async () => {
     for (const startingFiles of [[files[0]!], [files[0]!, files[2]!]]) {
       await baseline(startingFiles);

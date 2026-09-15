@@ -229,7 +229,8 @@ describe("Calendar and Email connector-backed read modules", () => {
     // ingestion source only (assistant tool + cache APIs), so it declares no sidebar nav.
     expect(emailModuleManifest.navigation).toEqual([]);
     expect(calendarRegistration?.queueDefinitions.map((q) => q.name)).toEqual([
-      "calendar.cache-evict-event"
+      "calendar.cache-evict-event",
+      "calendar.day-plan-apply"
     ]);
     expect(emailRegistration?.queueDefinitions).toEqual([]);
     expect(getBuiltInSqlMigrationDirectories()).toContainEqual(

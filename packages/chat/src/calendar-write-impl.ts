@@ -1,11 +1,18 @@
-import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import {
+  assertDataContextDb,
+  type AccessContext,
+  type DataContextDb,
+  type DataContextRunner
+} from "@moss/db";
+import {
+  applyAdditionEventId,
   chooseSlot,
   focusBlockEventId,
   resolveCalendarEventRef,
   isAllDayInterval,
   freeBusyQueryWindow,
   DEFAULT_TIMEZONE,
+  type CalendarEventLookup,
   type CalendarWriteService,
   type FocusBlockWindow,
   type ProposeFocusResult,
@@ -20,14 +27,22 @@ import {
 import {
   GoogleApiError,
   GoogleConnectError,
-  featureGrantsPrefKey,
-  isFeatureGranted,
   type GoogleConnectionService,
   type ConnectorsRepository,
   type GoogleApiClient
 } from "@moss/connectors";
 import type { ToolContext } from "@moss/module-sdk";
-import { PreferencesRepository } from "@moss/structured-state";
+import type { ApplyEventProvenance } from "@moss/shared";
+import type { PreferencesRepository } from "@moss/structured-state";
+
+import {
+  deleteApplyEvent,
+  ensureApplyToken,
+  isCalendarFeatureGranted,
+  readApplyReads,
+  rescheduleApplyEvent,
+  type StagedRunner
+} from "./calendar-apply-staging.js";
 
 export interface CalendarWriteImplDeps {
   readonly googleService: GoogleConnectionService;
@@ -36,6 +51,9 @@ export interface CalendarWriteImplDeps {
   readonly calendarRepository: CalendarRepository;
   readonly preferencesRepository?: Pick<PreferencesRepository, "get">;
   readonly enqueueCacheEvict?: (eventId: string, actorUserId: string) => Promise<string | null>;
+  // Staging handle for the reserved-apply path only. The interactive focus
+  // paths keep using the caller-provided transaction untouched.
+  readonly dataContext?: Pick<DataContextRunner, "withDataContext">;
 }
 
 // The resolved window already carries concrete UTC instants (the tool's resolveWindow mapped
@@ -46,6 +64,146 @@ export interface CalendarWriteImplDeps {
 // though: to tell an all-day freeBusy interval (start/end at local midnight, duration a
 // multiple of 24h) apart from a real timed conflict before it reaches chooseSlot — see step 3.
 
+// Reserved apply addition with staged transactions: reads, then provider work
+// with no transaction open, then a fresh transaction for the cache mirror.
+// Interactive focus blocks never enter this flow.
+async function createApplyAdditionEvent(
+  deps: CalendarWriteImplDeps,
+  dataContext: StagedRunner,
+  access: AccessContext,
+  ctx: ToolContext,
+  window: FocusBlockWindow,
+  provenance: ApplyEventProvenance
+): Promise<ProposeFocusResult> {
+  // The service hands over a window exactly as long as the block; the duration
+  // stays authoritative and the slot is never shifted.
+  const start = window.start;
+  const end = new Date(start.getTime() + window.durationMinutes * 60_000);
+  const denied = (message: string): ProposeFocusResult => ({
+    created: false,
+    resolvedStart: start.toISOString(),
+    resolvedEnd: end.toISOString(),
+    shifted: false,
+    conflict: "none",
+    calendarMirror: "skipped-error",
+    message
+  });
+  const eventId = applyAdditionEventId({
+    actorUserId: ctx.actorUserId,
+    planId: provenance.planId,
+    blockId: provenance.blockId,
+    planRevision: provenance.planRevision,
+    operationId: provenance.operationId
+  });
+
+  const staged = await readApplyReads(deps, dataContext, access);
+  if ("denied" in staged) return denied(staged.denied);
+  const token = await ensureApplyToken(deps, dataContext, access, staged.reads);
+  if ("denied" in token) return denied(token.denied);
+
+  const freeBusy = await deps.googleApiClient.freeBusy({
+    accessToken: token.accessToken,
+    timeMin: start.toISOString(),
+    timeMax: end.toISOString(),
+    calendarId: "primary"
+  });
+  const blocked = (freeBusy.busy ?? []).some(
+    (busy) => start.toISOString() < busy.end && busy.start < end.toISOString()
+  );
+  if (blocked) {
+    return {
+      ...denied("That time just filled on your calendar — the addition was not created."),
+      conflict: "no-clear-slot"
+    };
+  }
+
+  let inserted: { id: string; htmlLink?: string };
+  try {
+    inserted = await deps.googleApiClient.insertEvent({
+      accessToken: token.accessToken,
+      calendarId: "primary",
+      summary: window.title,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      eventId,
+      extendedPrivateProperties: {
+        jarvisCreated: "true",
+        jarvisTool: "applyAddition",
+        ...applyProvenanceProperties(provenance)
+      }
+    });
+  } catch (error) {
+    // 409 = this exact reservation is already on the calendar. Idempotent
+    // success with the known id; the mirror below records it when newly cached.
+    if (!(error instanceof GoogleApiError && error.statusCode === 409)) {
+      return denied("Couldn't create the calendar event — try again.");
+    }
+    // The provider owns this id, but only a lookup against the same account
+    // that ran the insert can verify the mirror. A missing or switched
+    // account, or a failed lookup, throws: the caller records an unknown
+    // outcome instead of a verified miss. The switched account's cache is
+    // never queried.
+    const cached = await dataContext.withDataContext(access, async (scopedDb) => {
+      const active = await deps.connectorsRepository.getActiveGoogleAccountSecret(scopedDb);
+      if (!active || active.id !== staged.reads.accountId) {
+        throw new Error(
+          "Your Google connection changed during the request — reconnect in Settings."
+        );
+      }
+      return deps.calendarRepository.getByExternalId(scopedDb, {
+        connectorAccountId: active.id,
+        externalId: eventId
+      });
+    });
+    if (!cached) {
+      // The cache was checked against the same active account and holds no
+      // row for this event: a verified miss, not an unchecked mirror.
+      return {
+        created: true,
+        resolvedStart: start.toISOString(),
+        resolvedEnd: end.toISOString(),
+        shifted: false,
+        conflict: "none",
+        googleEventId: eventId,
+        calendarMirror: "not-cached",
+        message: "This addition is already on your calendar."
+      };
+    }
+    return {
+      created: true,
+      resolvedStart: start.toISOString(),
+      resolvedEnd: end.toISOString(),
+      shifted: false,
+      conflict: "none",
+      googleEventId: eventId,
+      calendarEventId: cached.id,
+      calendarMirror: "written",
+      message: "This addition is already on your calendar."
+    };
+  }
+
+  const mirrored = await dataContext.withDataContext(access, (scopedDb) =>
+    mirrorEvent(
+      deps,
+      scopedDb,
+      inserted,
+      { start, end },
+      { start, end, durationMinutes: window.durationMinutes, title: window.title },
+      { provenance }
+    )
+  );
+  return {
+    created: true,
+    resolvedStart: start.toISOString(),
+    resolvedEnd: end.toISOString(),
+    shifted: false,
+    conflict: "none",
+    googleEventId: inserted.id,
+    calendarEventId: mirrored.calendarEventId,
+    calendarMirror: mirrored.status
+  };
+}
+
 export function buildCalendarWriteService(deps: CalendarWriteImplDeps): CalendarWriteService {
   return {
     async createEvent(
@@ -54,6 +212,27 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
       window: FocusBlockWindow,
       options: CalendarWriteOptions = {}
     ): Promise<ProposeFocusResult> {
+      // Reserved apply additions never touch the caller's handle: they stage
+      // their own short transactions and run provider I/O with none open.
+      // Interactive focus blocks continue below with the caller's transaction.
+      if (options.provenance) {
+        if (!deps.dataContext) {
+          throw new Error("Apply additions require a dataContext staging handle.");
+        }
+        return createApplyAdditionEvent(
+          deps,
+          deps.dataContext,
+          { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
+          ctx,
+          {
+            start: window.start,
+            end: window.end,
+            durationMinutes: window.durationMinutes,
+            title: window.title
+          },
+          options.provenance
+        );
+      }
       assertDataContextDb(scopedDbRaw);
       const scopedDb = scopedDbRaw as DataContextDb;
       // window.start..window.end is the SEARCH WINDOW (e.g. the morning band); the block
@@ -172,6 +351,8 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
       // block shows as busy, so a retry's freeBusy would shift the slot and a slot-keyed id would
       // miss the 409 and create a second event (Codex HIGH round 2). resolved.start/.end is the
       // requested window (invariant across retries), so the id is stable however the slot shifts.
+      // Reserved apply additions return through the staged flow above with an
+      // operation-derived id; this path only ever sees interactive focus blocks.
       const eventId = focusBlockEventId({
         actorUserId: ctx.actorUserId,
         windowStart: resolved.start,
@@ -189,7 +370,10 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
           start: slot.start.toISOString(),
           end: slot.end.toISOString(),
           eventId,
-          extendedPrivateProperties: { jarvisCreated: "true", jarvisTool: "createEvent" }
+          extendedPrivateProperties: {
+            jarvisCreated: "true",
+            jarvisTool: "createEvent"
+          }
         });
       } catch (error) {
         // 409 Conflict = an event with this deterministic id already exists, i.e. this exact
@@ -237,7 +421,8 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
 
       // 5. Best-effort cache mirror (gated on connector-sync RLS 0066). Never fails the call.
       const mirrored = await mirrorEvent(deps, scopedDb, inserted, slot, resolved, {
-        followThroughTargetRef: options.followThroughTargetRef
+        followThroughTargetRef: options.followThroughTargetRef,
+        provenance: options.provenance
       });
       if (options.requireCacheMirror && mirrored.status !== "written") {
         try {
@@ -278,6 +463,21 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
       ctx: ToolContext,
       input: DeleteEventInput
     ): Promise<DeleteEventResult> {
+      // Reserved apply removals never touch the caller's handle: they stage
+      // their own short transactions and run the provider delete with none
+      // open. Interactive deletes continue below with the caller's handle.
+      if (scopedDbRaw === undefined || scopedDbRaw === null) {
+        if (!deps.dataContext) {
+          throw new Error("Apply removals require a dataContext staging handle.");
+        }
+        return deleteApplyEvent(
+          deps,
+          deps.dataContext,
+          { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
+          ctx,
+          input.eventId
+        );
+      }
       assertDataContextDb(scopedDbRaw);
       const scopedDb = scopedDbRaw as DataContextDb;
 
@@ -395,9 +595,25 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
 
     async rescheduleEvent(
       scopedDbRaw: unknown,
-      _ctx: ToolContext,
+      ctx: ToolContext,
       input: RescheduleEventInput
     ): Promise<RescheduleEventResult> {
+      // Reserved apply moves never touch the caller's handle: they stage
+      // their own short transactions and run the provider patch with none
+      // open. Interactive reschedules continue below with the caller's handle.
+      if (scopedDbRaw === undefined || scopedDbRaw === null) {
+        if (!deps.dataContext) {
+          throw new Error("Apply moves require a dataContext staging handle.");
+        }
+        return rescheduleApplyEvent(
+          deps,
+          deps.dataContext,
+          { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
+          input.eventRef,
+          input.newStart,
+          input.newEnd
+        );
+      }
       assertDataContextDb(scopedDbRaw);
       const scopedDb = scopedDbRaw as DataContextDb;
 
@@ -491,18 +707,66 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
       } catch {
         return { ok: true, calendarEventId: row.id };
       }
+    },
+
+    async lookupEvent(
+      _scopedDbRaw: unknown,
+      ctx: ToolContext,
+      input: { eventId: string }
+    ): Promise<CalendarEventLookup> {
+      // Apply-only readback: the caller's handle stays untouched while staging
+      // opens its own short transactions around database reads alone. The
+      // caller maps every failure below to an unknown outcome, never absence.
+      if (!deps.dataContext) {
+        throw new Error("Event lookup requires a dataContext staging handle.");
+      }
+      const dataContext = deps.dataContext;
+      const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
+      const staged = await readApplyReads(deps, dataContext, access);
+      if ("denied" in staged) {
+        throw new Error(staged.denied);
+      }
+      const token = await ensureApplyToken(deps, dataContext, access, staged.reads);
+      if ("denied" in token) {
+        throw new Error(token.denied);
+      }
+      let event;
+      try {
+        event = await deps.googleApiClient.getEvent({
+          accessToken: token.accessToken,
+          eventId: input.eventId
+        });
+      } catch (error) {
+        if (error instanceof GoogleApiError && error.statusCode === 404) {
+          return { found: false };
+        }
+        throw error;
+      }
+      if (event.status === "cancelled") return { found: false };
+      return {
+        found: true,
+        id: event.id,
+        summary: event.summary ?? null,
+        start: event.start?.dateTime ?? event.start?.date ?? null,
+        end: event.end?.dateTime ?? event.end?.date ?? null,
+        provenance: { ...(event.extendedProperties?.private ?? {}) },
+        attendeeCount: event.attendees?.length ?? 0
+      };
     }
   };
 }
 
-async function isCalendarFeatureGranted(
-  deps: CalendarWriteImplDeps,
-  scopedDb: DataContextDb,
-  accountId: string
-): Promise<boolean> {
-  const preferencesRepository = deps.preferencesRepository ?? new PreferencesRepository();
-  const featureGrants = await preferencesRepository.get(scopedDb, featureGrantsPrefKey(accountId));
-  return isFeatureGranted(featureGrants, "calendar");
+function applyProvenanceProperties(
+  provenance: ApplyEventProvenance | undefined
+): Record<string, string> {
+  if (!provenance) return {};
+  return {
+    jarvisActorUserId: provenance.actorUserId,
+    jarvisPlanId: provenance.planId,
+    jarvisBlockId: provenance.blockId,
+    jarvisPlanRevision: String(provenance.planRevision),
+    jarvisOperationId: provenance.operationId
+  };
 }
 
 async function mirrorEvent(
@@ -511,7 +775,10 @@ async function mirrorEvent(
   inserted: { id: string; htmlLink?: string },
   slot: { start: Date; end: Date },
   resolved: ResolvedWindow,
-  options: { readonly followThroughTargetRef?: string } = {}
+  options: {
+    readonly followThroughTargetRef?: string;
+    readonly provenance?: ApplyEventProvenance;
+  } = {}
 ): Promise<{ status: "written" | "skipped-rls" | "skipped-error"; calendarEventId?: string }> {
   try {
     const active = await deps.connectorsRepository.getActiveGoogleAccountSecret(scopedDb);
@@ -524,7 +791,10 @@ async function mirrorEvent(
       endsAt: slot.end,
       externalMetadata: {
         jarvisCreated: true,
-        source: "createEvent",
+        // Reserved apply additions carry provenance; ordinary interactive
+        // creation does not. The cache source must agree with the provider tag.
+        source: options.provenance ? "applyAddition" : "createEvent",
+        ...(options.provenance ? { provenance: { ...options.provenance } } : {}),
         htmlLink: inserted.htmlLink ?? null,
         ...(options.followThroughTargetRef
           ? { followThroughTargetRef: options.followThroughTargetRef }

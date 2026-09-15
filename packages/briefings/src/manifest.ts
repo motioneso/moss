@@ -5,6 +5,7 @@ import {
   briefingRunPayloadSchema,
   createBriefingDefinitionRequestSchema,
   createBriefingDefinitionResponseSchema,
+  getBriefingRunResponseSchema,
   listBriefingDefinitionsResponseSchema,
   listBriefingRunsResponseSchema,
   runBriefingDefinitionRequestSchema,
@@ -34,7 +35,11 @@ export const briefingsModuleManifest = {
   },
   notifications: { supported: true },
   database: {
-    migrations: ["sql/0015_briefings_module.sql", "sql/0116_briefing_type.sql"],
+    migrations: [
+      "sql/0015_briefings_module.sql",
+      "sql/0116_briefing_type.sql",
+      "sql/0237_briefing_selected_tool_names_allow_empty.sql"
+    ],
     migrationDirectories: ["packages/briefings/sql"],
     ownedTables: ["app.briefing_definitions", "app.briefing_runs"]
   },
@@ -132,6 +137,85 @@ export const briefingsModuleManifest = {
       path: "/api/briefings/definitions/:id/runs",
       responseSchema: listBriefingRunsResponseSchema,
       permissionId: "briefings.view"
+    },
+    {
+      method: "GET",
+      path: "/api/briefings/definitions/:id/runs/:runId",
+      responseSchema: getBriefingRunResponseSchema,
+      permissionId: "briefings.view"
+    }
+  ],
+  features: [
+    {
+      id: "briefings.refresh",
+      description:
+        "Queue a fresh briefing run for a definition and follow it to ready. A repeated " +
+        "idempotency key reuses the run already queued instead of starting a second one.",
+      errors: [
+        {
+          code: "briefing_run_in_flight",
+          class: "transient",
+          description:
+            "A run with this idempotency key is already queued or running. Read the " +
+            "promised run until it is ready instead of submitting again."
+        }
+      ],
+      remediations: [
+        {
+          id: "briefings.refresh.wait",
+          description: "Wait for the queued run, then read it again from the briefing history.",
+          path: "/briefings"
+        }
+      ]
+    },
+    {
+      id: "briefings.history",
+      description:
+        "List past briefing runs newest first, or read one run by id with its pending, " +
+        "failed or ready state. Earlier reports stay dated and read-only.",
+      errors: [
+        {
+          code: "briefing_run_not_available",
+          class: "validation",
+          description:
+            "The named briefing run is missing or owned by someone else; both cases " +
+            "look the same so runs cannot be probed."
+        }
+      ],
+      remediations: [
+        {
+          id: "briefings.history.reread",
+          description: "Pick the newest run in the briefing history and read it instead.",
+          path: "/briefings"
+        }
+      ]
+    },
+    {
+      id: "briefings.source_gaps",
+      description:
+        "A succeeded run that missed a source stays readable and lists each missing " +
+        "source with its reason, so the gap is visible instead of silent.",
+      remediations: [
+        {
+          id: "briefings.source_gaps.review",
+          description: "Open the briefing to see which sources are missing and why.",
+          path: "/briefings"
+        }
+      ]
+    },
+    {
+      id: "briefings.plan_handoff",
+      description:
+        "A report records the plan id and revision it was written from, and a later " +
+        "read says whether the saved plan has changed since. Acting on an old report " +
+        "starts from the current plan, which rejects a stale revision.",
+      remediations: [
+        {
+          id: "briefings.plan_handoff.refresh",
+          description: "Read the current plan, then queue a fresh briefing run from it.",
+          path: "/briefings"
+        }
+      ]
     }
   ],
   jobs: [

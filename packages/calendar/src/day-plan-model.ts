@@ -11,6 +11,7 @@ import {
   DAY_RE,
   type DayPlanActualPlacement,
   type DayPlanBlockInput,
+  type DayPlanBlockKind,
   type DayPlanEveningIntent,
   type DayPlanIntentCorrection,
   type DayPlanOpenCommitment,
@@ -21,6 +22,21 @@ import {
 
 export const MIN_DURATION_MINUTES = 5;
 export const MAX_DURATION_MINUTES = 12 * 60;
+
+// One shared selection rule for preview and apply: a selected id must name a
+// block of this plan, and that block must still carry a pending change.
+export function requireSelectedPlanBlock<
+  T extends { readonly id: string; readonly pendingChange: unknown }
+>(blocksById: ReadonlyMap<string, T>, id: string): T {
+  const block = blocksById.get(id);
+  if (!block) {
+    throw new DayPlanValidationError(`selected change ${id} is not part of this plan`);
+  }
+  if (!block.pendingChange) {
+    throw new DayPlanValidationError(`selected change ${id} has no pending change`);
+  }
+  return block;
+}
 
 export class DayPlanValidationError extends Error {
   readonly code = "day_plan_invalid";
@@ -248,6 +264,17 @@ export function mergeEveningIntent(
 export function normalizeEveningIntent(value: unknown): DayPlanEveningIntent | null {
   if (value === null || value === undefined) return null;
   return mergeEveningIntent(emptyEveningIntent(), value as Partial<DayPlanEveningIntent>);
+}
+
+// An already-placed block for a legacy automatic event (R2.3-T06B): the
+// recorded placement is set at insert with no pending proposal. Draft saves
+// never accept this shape; only the automatic step builds it.
+export interface DayPlanPlacedBlockInput {
+  readonly id: string;
+  readonly kind: DayPlanBlockKind;
+  readonly taskId: string | null;
+  readonly title: string | null;
+  readonly actualPlacement: DayPlanActualPlacement;
 }
 
 export function normalizeBlockInput(

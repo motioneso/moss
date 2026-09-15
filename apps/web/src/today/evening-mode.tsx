@@ -23,7 +23,7 @@ import {
 } from "../locale/locale-format";
 import { BriefingFeedbackMenu } from "./briefing-feedback-menu";
 import { BriefingStaleBanner, parseBriefingFreshness } from "./briefing-freshness";
-import { eventCaptureText, joinClauses } from "./today-labels";
+import { eventCaptureText, joinClauses, PLAN_TOMORROW_LABEL } from "./today-labels";
 
 export type TodayMode = "day" | "evening";
 
@@ -160,7 +160,9 @@ export function EveningReviewSection(props: {
       ) : null}
       {freshness ? <BriefingStaleBanner freshness={freshness} /> : null}
       {props.loading ? (
-        <div className="agenda-clear">Gathering your evening review…</div>
+        <div className="agenda-clear" role="status">
+          Gathering your evening review…
+        </div>
       ) : props.run && hasSummary ? (
         <>
           {props.kind === "primary" ? <BriefingProse summaryText={props.run.summaryText} /> : null}
@@ -205,6 +207,7 @@ export function BriefingProse({ summaryText }: { readonly summaryText: string })
 export function EveningPrepCard(props: {
   readonly interviewPending: boolean;
   readonly onPrep: () => void;
+  readonly onPlan: (anchor: HTMLElement) => void;
 }) {
   // Button opens the evening interview chat, so it's labelled by the assistant
   // (Ben: "Chat with {assistantName}") rather than the generic "Prep for tomorrow".
@@ -215,6 +218,13 @@ export function EveningPrepCard(props: {
       <button
         type="button"
         className="primary-button evening-prep__btn"
+        onClick={(event) => props.onPlan(event.currentTarget)}
+      >
+        {PLAN_TOMORROW_LABEL}
+      </button>
+      <button
+        type="button"
+        className="secondary-button evening-prep__btn"
         disabled={props.interviewPending}
         onClick={props.onPrep}
       >

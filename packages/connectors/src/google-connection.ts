@@ -138,6 +138,68 @@ export class GoogleConnectionService {
     }
   }
 
+  // Reads the active credential for staged provider work: the caller keeps
+  // the transaction short and read-only, then refreshes outside of it.
+  async readActiveCredential(
+    scopedDb: DataContextDb
+  ): Promise<{ accountId: string; bundle: GoogleConnectionSecret } | null> {
+    const stored = await this.deps.repository.getActiveGoogleAccountSecret(scopedDb);
+    if (!stored) return null;
+    return {
+      accountId: stored.id,
+      bundle: decryptGoogleConnectionSecret(this.deps.cipher, stored.encryptedSecret)
+    };
+  }
+
+  // Network-only token refresh: no database access, so staged callers run it
+  // with no transaction open.
+  async refreshCredential(input: {
+    clientId: string;
+    clientSecret: string;
+    refreshToken: string;
+  }): Promise<{ accessToken: string; tokenExpiry: string }> {
+    const refreshed = await this.deps.oauthClient.refreshAccessToken({
+      clientId: input.clientId,
+      clientSecret: input.clientSecret,
+      refreshToken: input.refreshToken
+    });
+    return {
+      accessToken: refreshed.access_token,
+      tokenExpiry: new Date(this.now().getTime() + refreshed.expires_in * 1000).toISOString()
+    };
+  }
+
+  // Persists a refreshed credential only when the same account is still active
+  // with the same refresh token. Returns false when the account changed or
+  // went away underneath the refresh instead of overwriting it.
+  async storeRefreshedCredential(
+    scopedDb: DataContextDb,
+    expected: { accountId: string; refreshToken: string },
+    next: {
+      clientId: string;
+      clientSecret: string;
+      accessToken: string;
+      tokenExpiry: string;
+      grantedScopes: string[];
+    }
+  ): Promise<boolean> {
+    const stored = await this.deps.repository.getActiveGoogleAccountSecret(scopedDb);
+    if (!stored || stored.id !== expected.accountId) return false;
+    const bundle = decryptGoogleConnectionSecret(this.deps.cipher, stored.encryptedSecret);
+    if (bundle.refreshToken !== expected.refreshToken) return false;
+    await this.deps.repository.upsertGoogleAccount(scopedDb, {
+      scopes: next.grantedScopes,
+      encryptedSecret: this.deps.cipher.encryptJson({
+        ...bundle,
+        clientId: next.clientId,
+        clientSecret: next.clientSecret,
+        accessToken: next.accessToken,
+        tokenExpiry: next.tokenExpiry
+      })
+    });
+    return true;
+  }
+
   private async refreshAndStoreAccessToken(
     scopedDb: DataContextDb,
     bundle: GoogleConnectionSecret

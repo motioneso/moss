@@ -210,6 +210,21 @@ describe("migratePgBoss queue convergence (#158)", () => {
     expect(() => assertModuleJobPayload(queue, payload)).toThrow();
   });
 
+  it("accepts the day-plan-apply five-key metadata payload (R2.3-T06 invariant 4)", async () => {
+    const { ALLOWED_PAYLOAD_KEYS, assertMetadataOnlyPayload } = await import("@moss/jobs");
+    expect(ALLOWED_PAYLOAD_KEYS.has("planId")).toBe(true);
+    expect(ALLOWED_PAYLOAD_KEYS.has("operationId")).toBe(true);
+    expect(() =>
+      assertMetadataOnlyPayload({
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        planId: "00000000-0000-4000-8000-000000000002",
+        operationId: "00000000-0000-4000-8000-000000000003",
+        idempotencyKey: "day-plan-auto:run-1",
+        briefingRunId: "00000000-0000-4000-8000-000000000004"
+      })
+    ).not.toThrow();
+  });
+
   it("sends only exact metadata-only module control messages", async () => {
     const { sendModuleControl } = await import("@moss/jobs");
     const boss = new PgBossMock({});
