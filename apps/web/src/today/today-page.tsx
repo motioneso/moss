@@ -1,11 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, CheckCircle2, Clock, Flag, Info, Target } from "lucide-react";
+import { Flag, Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import { localDay, type MeResponse, type TaskDto } from "@moss/shared";
-import { AgendaRow, Card, StatTile } from "@moss/ui";
-
 import {
   getDayPlan,
   getOnboardingStatus,
@@ -30,8 +28,6 @@ import {
   deriveTodayMode,
   effectiveEveningTimeZone,
   effectiveBriefingTimeZone,
-  EveningPrepCard,
-  EveningReviewSection,
   EveningSupportSections,
   latestBriefingRunForToday,
   latestEveningRunForToday,
@@ -44,22 +40,20 @@ import { ProactiveCards } from "./proactive-cards";
 import { BriefingActionRowsSection } from "./briefing-action-rows";
 import { MorningBriefingReader } from "./morning-briefing";
 import { DayPlanSection } from "./day-plan";
+import { TodayRail } from "./today-rail";
 import { DayPlanReview } from "./day-plan-review";
 import { useDayPlanReview, type DayPlanReviewController } from "./day-plan-review-controller";
 import { useEveningPlanning } from "./evening-planning-controller";
 import { tomorrowPlanMissing } from "./evening-planning-model";
 import { EveningPlanningDialog } from "./evening-planning";
 import { TodayWeatherRow } from "./header-weather";
-import { TodayQuickActions } from "./today-quick-actions";
 import { TaskDetailsDialog } from "../tasks/task-details-dialog";
 import { createEmptyTodayFeed, type TodayFeed } from "./feed-source";
 import { ModuleTodayWidgets } from "./module-today-widgets";
 import {
-  ampm,
   buildHeadline,
   buildLede,
   byStart,
-  countdownLabel,
   datelineLabel,
   driftOf,
   dueTs,
@@ -77,6 +71,7 @@ import "../styles/wellness-3.css";
 import "../styles/kit-tasks-modal.css";
 import "../styles/kit-today.css";
 import "../styles/kit-today-hero.css";
+import "../styles/kit-today-timeline.css";
 import "../styles/kit-today-feeds.css";
 import "../styles/kit-today-misc.css";
 import "../styles/kit-briefing-reader.css";
@@ -388,119 +383,52 @@ export function TodayPage(props: {
         </nav>
 
         <div className="cmd-grid">
-          {/* .cmd-aside is the full-height rail carrying the column keyline; the sticky
-            content lives in __inner so the border grows to the main column's bottom while
-            the cards stay pinned at top (Ben 2026-07-07: border stopped mid-scroll). */}
-          <aside className="cmd-aside" aria-label="Quick actions and widgets">
-            <div className="cmd-aside__inner">
-              {nextEvent ? (
-                <div className="cmd-next">
-                  <div className="cmd-next__k">
-                    {nextStarted ? "Now · ends in" : "Next event in"}
-                  </div>
-                  <div className="cmd-next__v">
-                    {countdownLabel(nextStarted ? nextEvent.endsAt : nextEvent.startsAt, now)}
-                  </div>
-                  <div className="cmd-next__what">
-                    {nextEvent.title} · {timeLabel(nextEvent.startsAt, locale)}
-                    {ampm(nextEvent.startsAt, locale)}
-                  </div>
-                </div>
-              ) : null}
-
-              {hasStatSignal ? (
-                <div className="cmd-glance">
-                  <div className="cmd-glance__title">At a glance</div>
-                  <div className="cmd-glance__grid">
-                    <StatTile
-                      label="Priorities"
-                      value={priorities.length}
-                      icon={<Target size={12} aria-hidden="true" />}
-                      onClick={() => navigate("/tasks?focus=priorities")}
-                    />
-                    <StatTile
-                      label="At risk"
-                      value={atRisk.length}
-                      warn={atRisk.length > 0}
-                      icon={<Clock size={12} aria-hidden="true" />}
-                      onClick={() => navigate("/tasks?focus=atrisk")}
-                    />
-                    <StatTile
-                      label="Events"
-                      value={todayEvents.length}
-                      icon={<CalendarDays size={12} aria-hidden="true" />}
-                      onClick={() => navigate("/calendar")}
-                    />
-                    <StatTile
-                      label="Done today"
-                      value={doneToday}
-                      icon={<CheckCircle2 size={12} aria-hidden="true" />}
-                      onClick={() => navigate("/tasks?focus=donetoday")}
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              <Card title="Today's agenda" meta={`${upcoming.length} left`} padding="sm">
-                {upcoming.length > 0 ? (
-                  <div>
-                    {upcoming.map((event, index) => (
-                      <AgendaRow
-                        key={event.id}
-                        time={timeLabel(event.startsAt, locale)}
-                        title={event.title}
-                        location={event.location}
-                        status={index === 0 ? "now" : "default"}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="agenda-clear" role="status">
-                    Nothing left on the calendar today. <b>Enjoy the evening.</b>
-                  </div>
-                )}
-              </Card>
-
-              {eveningDefinition?.enabled && todayMode === "day" ? (
-                <EveningReviewSection
-                  kind="compact"
-                  run={latestEveningRun}
-                  loading={eveningRunsQuery.isPending}
-                  locale={locale}
-                  targetTime={targetTimeFor(eveningDefinition, "evening")}
-                  onFeedbackChanged={() =>
-                    void queryClient.invalidateQueries({
-                      queryKey: queryKeys.briefings.runs(eveningDefinition.id)
-                    })
-                  }
-                />
-              ) : null}
-
-              {eveningDefinition?.enabled && todayMode === "evening" ? (
-                <EveningPrepCard
-                  onPlan={setPlanningAnchor}
-                  interviewPending={eveningInterviewMutation.isPending}
-                  onPrep={() => {
-                    // #891: open the drawer immediately (like the topbar chat button and
-                    // openChatWith) rather than waiting for the seed POST to resolve.
-                    // Previously openChat lived in the mutation's onSuccess, so a slow or
-                    // failing /api/chat/evening-interview left the button doing nothing —
-                    // the drawer never opened. The seeded turn streams into the now-open
-                    // drawer via the global chat SSE stream.
-                    chatControls.openChat();
-                    eveningInterviewMutation.mutate();
-                  }}
-                />
-              ) : null}
-
-              <TodayQuickActions
-                enabled={wellnessEnabled}
-                theme={theme}
-                timeZone={locale.timezone}
-                disabledModuleIds={disabledModuleIds}
-              />
-            </div>
-          </aside>
+          <TodayRail
+            now={now}
+            locale={locale}
+            nextEvent={
+              nextEvent
+                ? { title: nextEvent.title, startsAt: nextEvent.startsAt, endsAt: nextEvent.endsAt }
+                : null
+            }
+            nextStarted={nextStarted}
+            hasStatSignal={hasStatSignal}
+            prioritiesCount={priorities.length}
+            atRiskCount={atRisk.length}
+            eventsCount={todayEvents.length}
+            doneToday={doneToday}
+            agenda={upcoming.map((event) => ({
+              id: event.id,
+              time: timeLabel(event.startsAt, locale),
+              title: event.title,
+              location: event.location
+            }))}
+            onNavigate={(path) => navigate(path)}
+            showEveningReview={eveningDefinition?.enabled === true && todayMode === "day"}
+            showEveningPrep={eveningDefinition?.enabled === true && todayMode === "evening"}
+            latestEveningRun={latestEveningRun}
+            eveningRunsPending={eveningRunsQuery.isPending}
+            eveningTargetTime={eveningTargetTime}
+            onEveningFeedback={() => {
+              if (eveningDefinition) {
+                void queryClient.invalidateQueries({
+                  queryKey: queryKeys.briefings.runs(eveningDefinition.id)
+                });
+              }
+            }}
+            interviewPending={eveningInterviewMutation.isPending}
+            onPrep={() => {
+              // #891: open the drawer immediately rather than waiting for the
+              // seed POST to resolve; the seeded turn streams in via SSE.
+              chatControls.openChat();
+              eveningInterviewMutation.mutate();
+            }}
+            onPlan={setPlanningAnchor}
+            wellnessEnabled={wellnessEnabled}
+            theme={theme}
+            timeZone={locale.timezone}
+            disabledModuleIds={disabledModuleIds}
+          />
 
           <div className="cmd-main">
             {todayMode === "evening" && eveningDefinition?.enabled ? (
@@ -562,6 +490,8 @@ export function TodayPage(props: {
               loading={dayPlanQuery.isPending}
               error={dayPlanQuery.isError}
               calendarError={eventsQuery.isError}
+              editorial
+              dateline={datelineLabel(now, locale)}
               onOpenTask={(id) => setDialog({ id })}
               onReview={(anchor) => {
                 reviewOpener.current = anchor;
