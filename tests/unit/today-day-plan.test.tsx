@@ -114,6 +114,8 @@ function render(input: {
   readonly loading?: boolean;
   readonly error?: boolean;
   readonly calendarError?: boolean;
+  readonly editorial?: boolean;
+  readonly dateline?: string;
 }): string {
   const response = dayPlanResponse(input.plan ?? null);
   response.unavailableTaskIds = [...(input.unavailableTaskIds ?? [])];
@@ -126,18 +128,60 @@ function render(input: {
       loading: input.loading ?? false,
       error: input.error ?? false,
       calendarError: input.calendarError ?? false,
+      editorial: input.editorial ?? false,
+      dateline: input.dateline,
       onOpenTask: () => undefined
     })
   );
 }
 
+/** Base HTML of the plain variant, rendered from the pre-V3 code with the
+    same input as the first test. The dialogs keep this byte-for-byte. */
+const BASE_PLAIN_HTML = `<section class="jds-brief" id="schedule"><div class="jds-brief__head"><span class="jds-brief__kicker">Walking the day</span></div><div class="jds-brief__title">Schedule and preparation</div><div class="day-list"><div class="day-ev" data-jarvis-capture-text="9:30 am — Standup — Room A — 30m"><div class="day-ev__t">9:30<span class="ap"> <!-- -->am</span></div><div><div class="day-ev__title">Standup</div><div class="day-ev__where">Room A</div></div><div class="day-ev__who">30m</div></div><div class="jds-task" data-state="committed"><div class="day-ev__t">10:00<span class="ap"> <!-- -->am</span></div><div><button type="button" class="jds-task__main"><div class="jds-task__title">Write the draft</div><div class="jds-task__meta"><span class="jds-task__state">On the calendar</span></div></button></div><div class="day-ev__who">1h</div></div></div></section>`;
+
 describe("DayPlanSection", () => {
-  it("renders plan rows with state text and data-state", () => {
-    const html = render({ plan: plan([placed("b1", "t1", null, 0)]) });
-    expect(html).toContain("Schedule and preparation");
+  it("renders the editorial timeline head, legend and timeline class", () => {
+    const html = render({
+      plan: plan([placed("b1", "t1", null, 0)]),
+      editorial: true,
+      dateline: "Tuesday, June 30"
+    });
+    expect(html).toContain("jds-brief--timeline");
+    expect(html).toContain("01");
+    expect(html).toContain("Your day, laid out");
+    expect(html).toContain("Tuesday, June 30");
+    expect(html).toContain("Moss-planned task");
+    expect(html).toContain("Calendar commitment");
+    expect(html).not.toContain("Schedule and preparation");
     expect(html).toContain("Write the draft");
     expect(html).toContain("On the calendar");
     expect(html).toContain('data-state="committed"');
+  });
+
+  it("keeps the plain variant byte-identical to the base", () => {
+    expect(render({ plan: plan([placed("b1", "t1", null, 0)]) })).toBe(BASE_PLAIN_HTML);
+  });
+
+  it("marks every task row with its data-state", () => {
+    const html = render({
+      plan: plan([
+        placed("b1", "t1", null, 0),
+        {
+          id: "b2",
+          kind: "focus",
+          taskId: "t1",
+          title: null,
+          position: 1,
+          actualPlacement: null,
+          pendingChange: null
+        }
+      ]),
+      editorial: true
+    });
+    expect(html).toContain('data-state="committed"');
+    expect(html).toContain('data-state="proposed"');
+    expect(html).toContain("On the calendar");
+    expect(html).toContain("Proposed, not on the calendar yet");
   });
 
   it("renders a proposed block without ever saying On the calendar", () => {

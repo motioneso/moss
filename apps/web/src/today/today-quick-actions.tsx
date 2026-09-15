@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ClipboardCheck, HeartPulse, Pill } from "lucide-react";
+import { Check, ClipboardCheck, Pill } from "lucide-react";
 import { useState } from "react";
 
 import { localDay } from "@moss/shared";
@@ -58,32 +58,33 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
       {props.enabled ? (
         <div className="well">
           <div className="well__head">
-            <span className="ic">
-              <HeartPulse size={15} aria-hidden="true" />
-            </span>
+            <span className="well__eyebrow">Quick actions</span>
             <span className="well__title">Wellness</span>
           </div>
-          {medTotal > 0 ? (
-            <div className="well__line">
-              {medsAllTaken ? (
-                <>
-                  <Check size={14} aria-hidden="true" /> <b>All meds taken</b> today.
-                </>
-              ) : medsNoneLogged ? (
-                <>
-                  No meds logged yet today — <b>{medTotal}</b> to go.
-                </>
-              ) : (
-                <>
-                  <b>
-                    {medTaken} of {medTotal}
-                  </b>{" "}
-                  meds logged today.
-                </>
-              )}
+          <div className="well__row">
+            <div className="well__rowtext">
+              <div className="well__label">Medications</div>
+              {medTotal > 0 ? (
+                <div className="well__sub">
+                  {medsAllTaken ? (
+                    <>
+                      <Check size={14} aria-hidden="true" /> <b>All meds taken</b> today.
+                    </>
+                  ) : medsNoneLogged ? (
+                    <>
+                      No meds logged yet today — <b>{medTotal}</b> to go.
+                    </>
+                  ) : (
+                    <>
+                      <b>
+                        {medTaken} of {medTotal}
+                      </b>{" "}
+                      meds logged today.
+                    </>
+                  )}
+                </div>
+              ) : null}
             </div>
-          ) : null}
-          <div className="well__actions">
             <button className="well__btn well__btn--meds" onClick={() => setMedsModalOpen(true)}>
               <span className="lead">
                 <span className="ic">
@@ -97,6 +98,11 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
                 </span>
               ) : null}
             </button>
+          </div>
+          <div className="well__row">
+            <div className="well__rowtext">
+              <div className="well__label">Check in with yourself</div>
+            </div>
             <button className="well__btn" onClick={() => setCheckinModalOpen(true)}>
               <span className="ic">
                 <ClipboardCheck size={15} aria-hidden="true" />

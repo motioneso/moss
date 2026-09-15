@@ -11,6 +11,12 @@ import {
 } from "./mock-api.js";
 import { myModulesResponse } from "./mock-modules.js";
 import { sportsOverviewFixture } from "./mock-sports-api.js";
+import {
+  mockDayPlanBlock,
+  mockDayPlanTask,
+  registerMockDayPlanRoutes
+} from "./mock-day-plan-api.js";
+import { mockCalEvent, seedTodayChrome } from "./today-page-chrome.js";
 
 const NOW = "2026-07-31T12:00:00.000Z";
 const MORNING_SUMMARY =
@@ -721,4 +727,132 @@ test("narrow and zoomed widths keep Today controls in view with dock-first tab o
       expect(lastRailAt, "main column follows the rail at 1440px").toBeLessThan(firstMainAt);
     }
   }
+});
+
+const RAIL_NOW = "2026-09-10T16:00:00.000Z";
+const RAIL_DAY = "2026-09-10";
+
+test("today timeline shows the editorial schedule with quick actions first in the rail", async ({
+  page
+}) => {
+  await page.clock.setFixedTime(new Date(RAIL_NOW));
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const past = mockCalEvent(
+    "rail-event-past",
+    "Morning standup",
+    `${RAIL_DAY}T14:00:00.000Z`,
+    `${RAIL_DAY}T14:30:00.000Z`
+  );
+  const next = mockCalEvent(
+    "rail-event-next",
+    "Dentist appointment",
+    `${RAIL_DAY}T18:30:00.000Z`,
+    `${RAIL_DAY}T19:00:00.000Z`
+  );
+  await mockApi(page, {
+    authenticated: true,
+    chatThreads: [],
+    notifications: [],
+    tasks: [
+      createMockTask("t1", "Write the launch brief"),
+      createMockTask("t2", "Call the vendor")
+    ],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    briefingDefinitions: [],
+    briefingRuns: {},
+    calendarEvents: [past, next]
+  });
+  await seedTodayChrome(page, RAIL_DAY, "med-rail");
+  await registerMockDayPlanRoutes(page, {
+    plan: {
+      id: "plan-rail",
+      localDay: RAIL_DAY,
+      timeZone: "UTC",
+      revision: 1,
+      sourceRunId: null,
+      eveningIntent: {
+        priorityTaskIds: [],
+        capacity: null,
+        notes: null,
+        corrections: [],
+        commitments: []
+      },
+      blocks: [
+        mockDayPlanBlock("b1", "t1", 0, {
+          actualPlacement: {
+            startsAt: `${RAIL_DAY}T14:00:00.000Z`,
+            durationMinutes: 60,
+            calendarEventRef: "ev-cal-1"
+          }
+        }),
+        mockDayPlanBlock("b2", "t2", 1)
+      ]
+    },
+    tasks: [
+      mockDayPlanTask("t1", "Write the launch brief"),
+      mockDayPlanTask("t2", "Call the vendor")
+    ]
+  });
+
+  await page.goto("/today");
+  const timeline = page.locator(".jds-brief--timeline");
+  await expect(timeline).toBeVisible();
+  await expect(timeline).toContainText("Your day, laid out");
+  await expect(timeline).toContainText("Moss-planned task");
+
+  const aside = page.locator("aside.cmd-aside");
+  const quickActions = aside.locator(".well");
+  await expect(quickActions).toContainText("Quick actions");
+  await expect(quickActions).toContainText("Wellness");
+  const nextBlock = aside.locator(".cmd-next");
+  await expect(nextBlock).toContainText("Dentist appointment");
+  const quickBeforeNext = await quickActions.evaluate((node, later) => {
+    const laterNode = document.querySelector(later);
+    if (!laterNode) return false;
+    return Boolean(node.compareDocumentPosition(laterNode) & Node.DOCUMENT_POSITION_FOLLOWING);
+  }, ".cmd-aside .cmd-next");
+  expect(quickBeforeNext).toBe(true);
+
+  const desktop = await page.evaluate(() => {
+    const asideEl = document.querySelector("aside.cmd-aside")!;
+    const mainEl = document.querySelector("div.cmd-main")!;
+    const asideRect = asideEl.getBoundingClientRect();
+    const mainRect = mainEl.getBoundingClientRect();
+    const committed = document.querySelector(
+      '.jds-brief--timeline .jds-task[data-state="committed"]'
+    )!;
+    const proposed = document.querySelector(
+      '.jds-brief--timeline .jds-task[data-state="proposed"]'
+    )!;
+    return {
+      asideLeft: asideRect.left,
+      mainRight: mainRect.right,
+      committedEdge: getComputedStyle(committed).borderLeftStyle,
+      proposedEdge: getComputedStyle(proposed).borderLeftStyle,
+      scrollW: document.documentElement.scrollWidth,
+      innerW: window.innerWidth
+    };
+  });
+  expect(desktop.asideLeft).toBeGreaterThanOrEqual(desktop.mainRight);
+  expect(desktop.committedEdge).toBe("solid");
+  expect(desktop.proposedEdge).toBe("dashed");
+  expect(desktop.scrollW).toBe(desktop.innerW);
+
+  await page.setViewportSize({ width: 375, height: 900 });
+  await page.goto("/today");
+  await expect(page.locator(".jds-brief--timeline")).toBeVisible();
+  const phone = await page.evaluate(() => {
+    const asideEl = document.querySelector("aside.cmd-aside")!;
+    const mainEl = document.querySelector("div.cmd-main")!;
+    return {
+      asideBottom: asideEl.getBoundingClientRect().bottom,
+      mainTop: mainEl.getBoundingClientRect().top,
+      scrollW: document.documentElement.scrollWidth,
+      innerW: window.innerWidth
+    };
+  });
+  expect(phone.asideBottom).toBeLessThanOrEqual(phone.mainTop);
+  expect(phone.scrollW).toBe(phone.innerW);
 });
