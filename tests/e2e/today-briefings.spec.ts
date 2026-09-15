@@ -875,3 +875,87 @@ test("evening planning saves one draft and never applies in suggest mode", async
     expect(box, "footer inside the viewport at " + width + "px").not.toBeNull();
   }
 });
+
+test("today hero band spans the content with an unclipped headline", async ({ page }) => {
+  await page.clock.setFixedTime(new Date(NOW));
+  const morningDefinition = createMockBriefingDefinition("briefing-hero", "Morning", {
+    briefingType: "morning",
+    cadence: "daily",
+    scheduleMetadata: { targetTime: "07:00", timezone: "UTC" }
+  });
+  const run = createMockBriefingRun(
+    "hero-run-1",
+    morningDefinition.id,
+    "Protect the launch window and reply to Alex. The rest of the morning plan follows in order.",
+    { briefingType: "morning", createdAt: NOW }
+  );
+  await mockApi(page, {
+    authenticated: true,
+    chatThreads: [],
+    notifications: [],
+    tasks: [createMockTask("task-hero", "Write the launch brief")],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    briefingDefinitions: [morningDefinition],
+    briefingRuns: { [morningDefinition.id]: [run] },
+    calendarEvents: []
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/today");
+  const hero = page.locator(".today-hero");
+  await expect(hero).toBeVisible();
+  await expect(hero.locator("h1")).toContainText("Protect the launch window and reply to Alex.");
+  await expect(hero).toContainText("Prepared at");
+
+  const desktop = await page.evaluate(() => {
+    const heroEl = document.querySelector(".today-hero")!;
+    const content = document.querySelector("main.content-surface")!;
+    const h1 = heroEl.querySelector("h1")!;
+    const style = getComputedStyle(h1);
+    return {
+      heroW: heroEl.getBoundingClientRect().width,
+      contentW: content.getBoundingClientRect().width,
+      h1Clipped: h1.scrollWidth > h1.clientWidth + 1,
+      fontSize: parseFloat(style.fontSize),
+      fontWeight: style.fontWeight,
+      scrollW: document.documentElement.scrollWidth,
+      innerW: window.innerWidth
+    };
+  });
+  expect(Math.abs(desktop.heroW - desktop.contentW)).toBeLessThanOrEqual(1);
+  expect(desktop.h1Clipped).toBe(false);
+  expect(desktop.fontSize).toBeGreaterThanOrEqual(40);
+  expect(desktop.fontSize).toBeLessThanOrEqual(48);
+  expect(desktop.fontWeight).toBe("900");
+  expect(desktop.scrollW).toBe(desktop.innerW);
+
+  await page.locator('.cmd-sections a[href="#schedule"]').click();
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe("#schedule");
+  const scheduleInView = await page.evaluate(() => {
+    const rect = document.querySelector("#schedule")!.getBoundingClientRect();
+    return rect.top < window.innerHeight && rect.bottom > 0;
+  });
+  expect(scheduleInView).toBe(true);
+
+  await page.setViewportSize({ width: 375, height: 900 });
+  await page.goto("/today");
+  await expect(hero).toBeVisible();
+  const phone = await page.evaluate(() => {
+    const heroEl = document.querySelector(".today-hero")!;
+    const h1 = heroEl.querySelector("h1")!;
+    const style = getComputedStyle(h1);
+    return {
+      heroW: heroEl.getBoundingClientRect().width,
+      innerW: window.innerWidth,
+      h1Clipped: h1.scrollWidth > h1.clientWidth + 1,
+      fontSize: parseFloat(style.fontSize),
+      scrollW: document.documentElement.scrollWidth
+    };
+  });
+  expect(Math.abs(phone.heroW - phone.innerW)).toBeLessThanOrEqual(1);
+  expect(phone.h1Clipped).toBe(false);
+  expect(phone.fontSize).toBeGreaterThanOrEqual(28);
+  expect(phone.fontSize).toBeLessThanOrEqual(34);
+  expect(phone.scrollW).toBe(phone.innerW);
+});

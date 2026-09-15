@@ -218,12 +218,21 @@ test("morning and evening prose and action rows render accept dismiss view reply
   await expect(page.getByText("Checking what needs you…")).toBeVisible();
   releaseMorningRuns();
 
-  const morningProse = page.getByText(MORNING_SUMMARY, { exact: true });
+  // V2 hero split: the first sentence is the h1, the rest is hero prose.
+  const morningHeadline = page.locator(".today-hero h1");
+  await expect(morningHeadline).toHaveText(
+    "Morning focus: protect the launch window, review the contract deadline, and reply to Alex with the final decision."
+  );
+  const morningProse = page
+    .locator(".today-hero")
+    .getByText("This complete authored briefing must remain intact before Start here.", {
+      exact: true
+    });
   await expect(morningProse).toBeVisible();
   const startHere = page.getByText("Start here", { exact: true });
   await expect(startHere).toBeVisible();
   expect(
-    await morningProse.evaluate(
+    await morningHeadline.evaluate(
       (node, startNode) =>
         Boolean(node.compareDocumentPosition(startNode as Node) & Node.DOCUMENT_POSITION_FOLLOWING),
       await startHere.elementHandle()
@@ -366,7 +375,18 @@ test("morning and evening prose and action rows render accept dismiss view reply
     { ...eveningDefinition, scheduleMetadata: { targetTime: "00:00", timezone: "UTC" } }
   ];
   await reloadToday(page);
-  await expect(page.getByText(EVENING_SUMMARY, { exact: true })).toBeVisible();
+  // V2 hero split (evening): the first sentence is the h1, the rest is hero prose.
+  const eveningHeadline = page.locator(".today-hero h1");
+  await expect(eveningHeadline).toHaveText(
+    "Evening recap: the launch plan moved forward, the contract review is ready, and Alex is waiting for the final reply."
+  );
+  const eveningProse = page
+    .locator(".today-hero")
+    .getByText(
+      "This primary recap deliberately continues past the compact tile limit so the browser proof can distinguish the complete authored recap from the shortened day-mode rail copy. The final sentence must remain visible only on the primary evening card.",
+      { exact: true }
+    );
+  await expect(eveningProse).toBeVisible();
   await expect(page.getByText(compactSummary, { exact: true })).toHaveCount(0);
   const eveningNeedsYou = page.locator("section.jds-brief").filter({ hasText: "Needs you" });
   await expect(eveningNeedsYou.getByText("3 need you", { exact: true })).toBeVisible();

@@ -1,0 +1,138 @@
+/* Today hero band + section index (V2). Today-only visual rules live here:
+   kit-today.css is a migrated layout-only section under the D2 guard. */
+
+/* ===== Today hero band (V2) =====
+   Dark ground from the V0 hero tokens only; section links keep existing
+   themed tokens. The hero is a sibling before .cmd-wrap and breaks out of
+   the surface padding to span the content region in both sidebar states. */
+.today-hero {
+  background: var(--hero-bg);
+  color: var(--hero-fg);
+  padding: 29px 34px 30px;
+  margin: 0 calc(-1 * var(--space-6)) 18px;
+}
+
+.today-hero__eyebrow {
+  margin: 0 0 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hero-fg-muted);
+}
+
+.today-hero__title {
+  margin: 0;
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3.1vw, 47px);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  overflow-wrap: break-word;
+  color: var(--hero-fg);
+}
+
+.today-hero__accent {
+  color: var(--hero-accent);
+}
+
+.today-hero__summary {
+  max-width: 690px;
+  margin-top: 12px;
+  line-height: 1.65;
+  color: var(--hero-fg);
+}
+
+.today-hero__prepared {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 14px 0 0;
+  font-size: 0.8125rem;
+  color: var(--hero-fg-muted);
+}
+
+.today-hero__rule {
+  border: none;
+  border-top: 2px solid var(--hero-accent);
+  margin: 20px 0 16px;
+}
+
+.today-hero__weather {
+  color: var(--hero-fg);
+}
+
+/* Hero-scoped weather variant: temperature large, conditions and high/low
+   read on the dark ground. TodayWeatherRow itself is unchanged. */
+.today-hero__weather .wx-row {
+  margin-top: 0;
+}
+
+.today-hero__weather .jds-brief__title {
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+/* Moved card text carries light-paper colors; re-ground it on the band. */
+.today-hero .jds-brief__body {
+  color: var(--hero-fg);
+}
+
+.today-hero .jds-brief__kicker {
+  color: var(--hero-fg-muted);
+}
+
+.today-hero .cmd-empty {
+  color: var(--hero-fg);
+}
+
+.today-hero .bfresh__stale {
+  color: var(--hero-fg-muted);
+}
+
+.today-hero a {
+  color: var(--hero-accent);
+}
+
+.today-hero a:focus-visible,
+.today-hero button:focus-visible {
+  outline: 2px solid var(--hero-accent);
+  outline-offset: 2px;
+}
+
+/* ===== Today section index (V2 restyle in place) ===== */
+.cmd-sections {
+  gap: 6px 26px;
+  margin: 0 0 20px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cmd-sections a {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--forest);
+}
+
+@media (max-width: 880px) {
+  .today-hero {
+    padding: 23px 22px;
+  }
+
+  .cmd-sections {
+    gap: 6px 20px;
+  }
+}
+
+@media (max-width: 560px) {
+  .today-hero {
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+  }
+}
