@@ -29,6 +29,33 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-15
+
+#### Changed
+
+- **Today schedule reads as an editorial timeline.** The Today schedule now shows numbered head, legend and timeline rows with committed and proposed blocks visibly distinct, and the right rail leads with quick actions. No page behavior changes; section links and dialogs behave as before. [PR #2512](https://github.com/motioneso/moss/pull/2512)
+- **Today opens with a hero band.** The Today page now opens with a dark green hero carrying Moss's assessment headline, summary, prepared time and weather, with the section links directly below. No page behavior changes; section links behave as before. [PR #2511](https://github.com/motioneso/moss/pull/2511)
+- **Design-fidelity token foundation.** Adds the two missing Archivo weights and the shared theme-aware palette tokens later design slices build on. Nothing visible moves except semibold text now uses the true face. [PR #2504](https://github.com/motioneso/moss/pull/2504)
+- **A prepared day, from evening to morning.** Today now plans tomorrow in the evening and reports overnight changes in the morning briefing. [PR #2502](https://github.com/motioneso/moss/pull/2502)
+
+#### Added
+
+- **Collapsible desktop navigation rail.** The sidebar now collapses to an icon-only rail on desktop via a Collapse navigation button, and remembers the choice across reloads. Phones keep the existing navigation drawer unchanged. [PR #2509](https://github.com/motioneso/moss/pull/2509)
+
+### 2026-09-12
+
+#### Added
+
+- **Save a day-plan draft.** You can save evening intent and draft blocks on an existing saved day plan with revision protection. [PR #2471](https://github.com/motioneso/moss/pull/2471)
+- **Save a day plan.** You can create an empty saved day plan for a chosen day and timezone. [PR #2469](https://github.com/motioneso/moss/pull/2469)
+
+### 2026-09-11
+
+#### Fixed
+
+- **Shared CLI startup repair.** Moss automatically repairs older shared CLI installations so separate accounts can use the pinned software without reinstalling. [PR #2458](https://github.com/motioneso/moss/pull/2458)
+- **Clarify Codex sign-in recovery.** Moss now distinguishes an account without a usable Codex sign-in from a provider failure and explains the administrator-only recovery path. [PR #2456](https://github.com/motioneso/moss/pull/2456)
+
 ### 2026-09-07
 
 #### Changed
