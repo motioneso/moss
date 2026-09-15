@@ -1,8 +1,13 @@
 # Messaging channels: Moss reaches Ben's phone, and he can reach it back
 
-**Status:** draft, third pass 2026-09-15 after Ben's second read. Not approved. Mockups are an
-open item (section 9); Ben draws them in a separate session.
-**Issue:** none yet. A task issue is opened once Ben approves the design.
+**Status:** draft, third pass 2026-09-15 after Ben's second read. Not approved.
+**Issue:** #2387. This spec is up for review in PR #2505.
+
+**Blocked before any build starts.** Ben draws the mockups for the two settings screens, in his
+own session. Section 9 says what each screen must do. Moss requires agreed mockups before a
+module is built (DEVELOPMENT_STANDARDS, Design System Guardrails), so this is a gate and not
+follow-up work. Do not move issue #2387 to ready-for-agent until the mockups exist, even after
+this spec merges.
 **Author:** Claude, from the 2026-09-13 comparison of Moss with Octop.
 
 ## 1. Context
@@ -706,6 +711,9 @@ privacy left on (the default), so even in a group it would not see ordinary mess
 also refuses any update whose chat type is not private, so the settings are belt and braces.
 
 ## 8. Slices
+
+Neither slice starts until Ben's mockups for the two settings screens exist (section 9).
+Slice 1 builds both screens, so the design gate lands on the first slice, not the second.
 
 Outbound ships alone first. Ben called that ideal on 2026-09-15, and slice 1 is a complete,
 shippable thing with no reply path at all.
