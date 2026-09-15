@@ -257,6 +257,17 @@ describe("proposeTomorrowBlocks", () => {
     expect(out.some((row) => row.taskId === "t2")).toBe(false);
   });
 
+  it("lighter day proposes only the first priority when two tasks are committed (T22, T20 follow-up)", () => {
+    const light = propose([], ["t1", "t2"], ["t1", "t2"], "light", "09:00", []).map(
+      (row) => row.taskId
+    );
+    expect(light).toEqual(["t1"]);
+    const normal = propose([], ["t1", "t2"], ["t1", "t2"], "normal", "09:00", []).map(
+      (row) => row.taskId
+    );
+    expect(normal).toEqual(["t1", "t2"]);
+  });
+
   it("emits placeable rows only, and zero blocks is valid", () => {
     const out = propose([], ["t1"], [], "normal", "09:00", []);
     expect(out.length).toBe(1);

@@ -322,4 +322,146 @@ describe("briefing saved-plan context boundary", () => {
     expect(bMeta.structuredPayload?.planContext).toBeNull();
     expect(JSON.stringify(bOutcome?.run?.source_metadata)).not.toContain(created.id);
   });
+
+  it("morning run names a committed block whose event moved overnight (T22, T21 F1)", async () => {
+    const ownedPlans = new DayPlanRepository({
+      findTask: async (scopedDb, taskId) => {
+        const task = await new TasksRepository().getById(scopedDb, taskId);
+        return task ? { id: task.id, ownerUserId: task.owner_user_id } : undefined;
+      }
+    });
+    const day = localDay(new Date(), ZONE);
+    const task = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      new TasksRepository().create(scopedDb, { title: "T22 moved report" })
+    );
+    const current = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      ownedPlans.getForDay(scopedDb, { localDay: day, timeZone: ZONE })
+    );
+    expect(current, "zone-day plan from the earlier case").toBeDefined();
+    const updated = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      ownedPlans.saveDraft(scopedDb, {
+        planId: current!.id,
+        localDay: day,
+        timeZone: ZONE,
+        expectedRevision: current!.revision,
+        eveningIntent: {
+          priorityTaskIds: [task.id],
+          capacity: "light",
+          notes: "Leave by four",
+          corrections: [],
+          commitments: []
+        }
+      })
+    );
+    // Committed placement goes straight into storage; the calendar row it
+    // cites lives only in the stubbed event feed below, one hour later.
+    const client = new pg.Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    try {
+      await client.query(
+        `INSERT INTO app.day_plan_blocks
+          (id, plan_id, owner_user_id, task_id, kind, title, actual_placement, position)
+         VALUES ($1, $2, $3, $4, 'focus', $5, $6::jsonb, 9)`,
+        [
+          randomUUID(),
+          updated.id,
+          ids.userA,
+          task.id,
+          "T22 moved block",
+          JSON.stringify({
+            startsAt: `${day}T09:00:00.000Z`,
+            durationMinutes: 60,
+            calendarEventRef: "evt-t22-moved"
+          })
+        ]
+      );
+    } finally {
+      await client.end();
+    }
+    const seen: string[] = [];
+    const adapterDeps = makeComposeDeps(async (input) => {
+      seen.push(input.messages.map((m) => m.content).join("\n"));
+      return { text: "synth narrative" };
+    });
+    type AdapterDeps = typeof adapterDeps;
+    const synthesisDeps: AdapterDeps = {
+      ...adapterDeps,
+      aiRepository: {
+        async selectModelForCapability() {
+          return {
+            id: "model-t22",
+            provider_config_id: "pc-t22",
+            provider_kind: "anthropic",
+            provider_model_id: "t22-test",
+            display_name: "T22",
+            tier: "economy"
+          };
+        },
+        async selectProviderWithCredential() {
+          return { id: "pc-t22", base_url: null, encrypted_credential: { v: 1 } };
+        }
+      } as unknown as AdapterDeps["aiRepository"],
+      cipher: {
+        decryptJson() {
+          return { apiKey: "fake-key" };
+        }
+      } as unknown as AdapterDeps["cipher"]
+    };
+    // The calendar provider is outside this boundary; one stubbed event at
+    // 10:00 stands in for the moved meeting the block cites at 09:00.
+    const manifests = getBuiltInModuleManifests().map((manifest) =>
+      manifest.id === "calendar"
+        ? {
+            ...manifest,
+            assistantTools: (manifest.assistantTools ?? []).map((tool) =>
+              tool.name === "calendar.listVisibleEvents"
+                ? {
+                    ...tool,
+                    execute: async () => ({
+                      data: {
+                        events: [
+                          {
+                            id: "evt-t22-moved",
+                            startsAt: `${day}T10:00:00.000Z`,
+                            endsAt: `${day}T11:00:00.000Z`,
+                            title: "T22 moved meeting"
+                          }
+                        ],
+                        accounts: [],
+                        gaps: []
+                      }
+                    })
+                  }
+                : tool
+            )
+          }
+        : manifest
+    );
+    const definition = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.createDefinition(scopedDb, {
+        title: "T22 moved briefing",
+        scheduleMetadata: { targetTime: "07:00", timezone: ZONE },
+        selectedToolNames: ["tasks.list", "calendar.listVisibleEvents"]
+      })
+    );
+    const outcome = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.generateRun(scopedDb, definition.id, {
+        moduleManifests: manifests,
+        runKind: "manual",
+        composeDeps: { ...synthesisDeps, moduleManifests: manifests, dayPlanRead: ownedPlans }
+      })
+    );
+    expect(outcome?.run?.status).toBe("succeeded");
+    const meta = outcome?.run?.source_metadata as {
+      structuredPayload?: { planContext?: { planId: string } | null };
+    };
+    expect(meta.structuredPayload?.planContext?.planId).toBe(updated.id);
+    const block = seen
+      .join("\n")
+      .match(/<external_source type="day_plan">\n([\s\S]*?)\n<\/external_source>/);
+    expect(block, "day_plan block must be present").not.toBeNull();
+    // The line names the task title, which wins over the block title.
+    expect(block![1]).toContain('the event under "T22 moved report" moved');
+    expect(block![1]).toContain("review before accepting");
+  });
 });
