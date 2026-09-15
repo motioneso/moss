@@ -36,6 +36,10 @@ feature that is not present in the image you are running.
 - **Design-fidelity token foundation.** Adds the two missing Archivo weights and the shared theme-aware palette tokens later design slices build on. Nothing visible moves except semibold text now uses the true face. [PR #2504](https://github.com/motioneso/moss/pull/2504)
 - **A prepared day, from evening to morning.** Today now plans tomorrow in the evening and reports overnight changes in the morning briefing. [PR #2502](https://github.com/motioneso/moss/pull/2502)
 
+#### Added
+
+- **Collapsible desktop navigation rail.** The sidebar now collapses to an icon-only rail on desktop via a Collapse navigation button, and remembers the choice across reloads. Phones keep the existing navigation drawer unchanged. [PR #2509](https://github.com/motioneso/moss/pull/2509)
+
 ### 2026-09-12
 
 #### Added
