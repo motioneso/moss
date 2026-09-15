@@ -801,3 +801,82 @@ test.describe("Chat drawer — Approve/Reject card", () => {
     expect(themeFetchCount).toBeGreaterThanOrEqual(2);
   });
 });
+
+test("desktop nav collapses to a remembered rail and phone keeps the drawer", async ({ page }) => {
+  await mockApi(page, {
+    authenticated: true,
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    notifications: [],
+    tasks: []
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/today");
+  await expect(page.locator(".module-nav").getByRole("link", { name: "Today" })).toBeVisible();
+
+  const sidebar = page.locator(".sidebar");
+  const collapse = page.getByRole("button", { name: "Collapse navigation" });
+  await expect(collapse).toBeVisible();
+  const expandedWidth = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
+  expect(expandedWidth).toBeGreaterThan(200);
+
+  await collapse.click();
+  const expand = page.getByRole("button", { name: "Expand navigation" });
+  await expect(expand).toBeVisible();
+  const railWidth = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
+  expect(railWidth).toBeLessThanOrEqual(72);
+  await expect(page.locator(".module-nav").getByRole("link", { name: "Tasks" })).toBeVisible();
+  await expect(expand).toHaveAttribute("aria-expanded", "false");
+
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Expand navigation" })).toBeVisible();
+  const railAfterReload = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
+  expect(railAfterReload).toBeLessThanOrEqual(72);
+
+  await page.getByRole("button", { name: "Expand navigation" }).click();
+  await expect(page.getByRole("button", { name: "Collapse navigation" })).toBeVisible();
+  const restoredWidth = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
+  expect(restoredWidth).toBeGreaterThan(200);
+
+  await page.setViewportSize({ width: 375, height: 800 });
+  await expect(page.getByRole("button", { name: "Open navigation" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Collapse navigation" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Expand navigation" })).toHaveCount(0);
+  const noOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth === window.innerWidth
+  );
+  expect(noOverflow).toBe(true);
+
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await expect(sidebar).toHaveClass(/open/);
+  await page.keyboard.press("Escape");
+  await expect(sidebar).not.toHaveClass(/open/);
+  await expect(page.getByRole("button", { name: "Open navigation" })).toBeFocused();
+});
+
+test("stored rail leaves the phone drawer full", async ({ page }) => {
+  await mockApi(page, {
+    authenticated: true,
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    notifications: [],
+    tasks: []
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/today");
+  await expect(page.locator(".module-nav").getByRole("link", { name: "Today" })).toBeVisible();
+  await page.getByRole("button", { name: "Collapse navigation" }).click();
+  await expect(page.getByRole("button", { name: "Expand navigation" })).toBeVisible();
+
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto("/today");
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  const sidebar = page.locator(".sidebar");
+  await expect(sidebar).toHaveClass(/open/);
+  await expect(sidebar.getByText("Moss", { exact: true })).toBeVisible();
+  await expect(page.locator(".module-nav").getByRole("link", { name: "Tasks" })).toBeVisible();
+  const drawerWidth = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
+  expect(drawerWidth).toBeGreaterThan(200);
+});
