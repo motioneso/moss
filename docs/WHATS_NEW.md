@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Today schedule reads as an editorial timeline.** The Today schedule now shows numbered head, legend and timeline rows with committed and proposed blocks visibly distinct, and the right rail leads with quick actions. No page behavior changes; section links and dialogs behave as before. [PR #2512](https://github.com/motioneso/moss/pull/2512)
 - **Today opens with a hero band.** The Today page now opens with a dark green hero carrying Moss's assessment headline, summary, prepared time and weather, with the section links directly below. No page behavior changes; section links behave as before. [PR #2511](https://github.com/motioneso/moss/pull/2511)
 - **Design-fidelity token foundation.** Adds the two missing Archivo weights and the shared theme-aware palette tokens later design slices build on. Nothing visible moves except semibold text now uses the true face. [PR #2504](https://github.com/motioneso/moss/pull/2504)
 - **A prepared day, from evening to morning.** Today now plans tomorrow in the evening and reports overnight changes in the morning briefing. [PR #2502](https://github.com/motioneso/moss/pull/2502)
