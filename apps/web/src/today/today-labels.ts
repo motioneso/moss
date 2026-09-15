@@ -173,3 +173,10 @@ export function eventCaptureText(event: CalendarEventDto, locale: LocaleSettings
 export function shortDate(iso: string, locale: LocaleSettingsDto): string {
   return formatDate(iso, locale, { month: "short", day: "numeric" });
 }
+
+/** Unsaved review deltas beside the saved schedule's own words (T18). */
+export const REVIEW_TRANSIENT_LABELS = {
+  toSchedule: "To schedule",
+  timeChange: "Time change to save",
+  willRemove: "Will be removed"
+} as const;

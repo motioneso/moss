@@ -204,6 +204,17 @@ function seedClient(entries: readonly (readonly [readonly unknown[], unknown])[]
   for (const [key, data] of entries) {
     client.setQueryData(key as readonly unknown[], data);
   }
+  client.setQueryData(["calendar", "briefing-settings"], {
+    settings: {
+      lookaheadDays: 1,
+      prepTaskMode: "suggest",
+      timeBlockMode: "suggest",
+      suggestTasks: true,
+      createTasks: false,
+      suggestTimeBlocks: true,
+      blockTime: false
+    }
+  });
   return client;
 }
 
@@ -241,7 +252,8 @@ async function renderReader(
           calendarError: false,
           opener: null,
           onClose: () => undefined,
-          onOpenTask: () => undefined
+          onOpenTask: () => undefined,
+          onReview: () => undefined
         })
       )
     );
@@ -452,7 +464,8 @@ describe("MorningBriefingReader retry", () => {
             calendarError: false,
             opener: null,
             onClose: () => undefined,
-            onOpenTask: () => undefined
+            onOpenTask: () => undefined,
+            onReview: () => undefined
           })
         )
       );
@@ -472,5 +485,14 @@ describe("MorningBriefingReader retry", () => {
     });
     expect(posts).toHaveLength(1);
     expect(document.body.innerHTML).toContain("Protect the launch window");
+  });
+});
+
+describe("MorningBriefingReader review footer", () => {
+  it("offers the review beside Back to Today with no Accept-all control", async () => {
+    const html = await renderReader(seedClient([]));
+    expect(html).toContain("Review task blocks");
+    expect(html).toContain("Back to Today");
+    expect(html).not.toMatch(/accept all/i);
   });
 });

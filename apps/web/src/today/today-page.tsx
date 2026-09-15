@@ -52,6 +52,8 @@ import { ProactiveCards } from "./proactive-cards";
 import { BriefingActionRowsSection } from "./briefing-action-rows";
 import { MorningBriefingReader } from "./morning-briefing";
 import { DayPlanSection } from "./day-plan";
+import { DayPlanReview } from "./day-plan-review";
+import { useDayPlanReview } from "./day-plan-review-controller";
 import { TodayWeatherRow } from "./header-weather";
 import { TodayQuickActions } from "./today-quick-actions";
 import { TaskDetailsDialog } from "../tasks/task-details-dialog";
@@ -83,6 +85,7 @@ import "../styles/kit-today.css";
 import "../styles/kit-today-feeds.css";
 import "../styles/kit-today-misc.css";
 import "../styles/kit-briefing-reader.css";
+import "../styles/kit-day-plan-review.css";
 import { GoalsSection } from "./goals-section.js";
 
 /** Today — the all-day home: an editorial brief over the user's real tasks + calendar. */
@@ -110,6 +113,8 @@ export function TodayPage(props: {
     readonly runId: string;
   } | null>(null);
   const readerOpener = useRef<HTMLElement | null>(null);
+  const [review, setReview] = useState(false);
+  const reviewOpener = useRef<HTMLElement | null>(null);
   const [, forceTodayModeRefresh] = useState(0);
   // The masthead clock and next-event countdown read `now`; tick a re-render each
   // half-minute so they stay honest while the page sits open.
@@ -147,10 +152,17 @@ export function TodayPage(props: {
     enabled: morningDefinition?.enabled === true
   });
   const now = new Date(Date.now());
+  const todayKey = localDay(now, locale.timezone);
   const dayPlanQuery = useQuery({
     queryKey: queryKeys.calendar.dayPlan(localDay(now, locale.timezone), locale.timezone),
     queryFn: () => getDayPlan({ date: localDay(now, locale.timezone), timeZone: locale.timezone }),
     retry: false
+  });
+  const reviewController = useDayPlanReview({
+    plan: dayPlanQuery.data?.plan ?? null,
+    localDay: todayKey,
+    timeZone: locale.timezone,
+    morningDefinitionId: morningDefinition?.id ?? null
   });
   const todayMode = deriveTodayMode(eveningDefinition, locale, now);
   const eveningTimeZone = effectiveEveningTimeZone(eveningDefinition, locale);
@@ -523,6 +535,10 @@ export function TodayPage(props: {
             error={dayPlanQuery.isError}
             calendarError={eventsQuery.isError}
             onOpenTask={(id) => setDialog({ id })}
+            onReview={(anchor) => {
+              reviewOpener.current = anchor;
+              setReview(true);
+            }}
           />
 
           <div id="needs-you">
@@ -615,6 +631,30 @@ export function TodayPage(props: {
             // The task dialog lives in the app root, which the reader holds
             // inert: close the reader first so the dialog can take focus.
             setReader(null);
+            setDialog({ id });
+          }}
+          onReview={() => {
+            // The review replaces the reader: one dialog owns inert and focus.
+            reviewOpener.current = readerOpener.current;
+            setReader(null);
+            setReview(true);
+          }}
+        />
+      ) : null}
+      {review && dayPlanQuery.data?.plan ? (
+        <DayPlanReview
+          controller={reviewController}
+          plan={dayPlanQuery.data.plan}
+          tasks={dayPlanQuery.data.tasks}
+          unavailableTaskIds={dayPlanQuery.data.unavailableTaskIds}
+          events={events}
+          locale={locale}
+          now={now}
+          opener={reviewOpener.current}
+          onClose={() => setReview(false)}
+          onOpenTask={(id) => {
+            // Same inert-root rule as the reader: the review closes first.
+            setReview(false);
             setDialog({ id });
           }}
         />
