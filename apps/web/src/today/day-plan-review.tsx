@@ -15,12 +15,14 @@ import { getCalendarBriefingSettings } from "../api/client.js";
 import { DayPlanSection } from "./day-plan.js";
 import { BriefingDialog } from "./briefing-dialog.js";
 import { buildDayItems } from "./day-plan-view-model.js";
-import { shortDate, timeLabel } from "./today-labels.js";
+import { ACCEPT_ALL_LABEL, shortDate, timeLabel } from "./today-labels.js";
 import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import {
+  acceptAllSelectionFor,
   blockDuration,
   conflictText,
   effectivePending,
+  hasOtherPendingEdits,
   ineligibleWord,
   isoToLocalTime,
   localTimeToIso,
@@ -225,6 +227,10 @@ export function DayPlanReview(props: DayPlanReviewProps) {
     controller.choiceFor,
     controller.touchedIds
   ).length;
+  const acceptBlocked = hasOtherPendingEdits(plan, controller.choiceFor, controller.touchedIds);
+  const acceptSelection = acceptBlocked
+    ? []
+    : acceptAllSelectionFor(plan, controller.choiceFor, controller.touchedIds);
   const conflicted = new Set((controller.preview?.conflicts ?? []).map((e) => e.blockId));
   const raw =
     !controller.preview || controller.stalePreview ? [] : controller.preview.eligibleBlockIds;
@@ -267,6 +273,15 @@ export function DayPlanReview(props: DayPlanReviewProps) {
           >
             Apply changes
           </Button>
+          {acceptSelection.length > 0 ? (
+            <Button
+              variant="primary"
+              disabled={controller.busy}
+              onClick={() => void controller.acceptAllAdditions()}
+            >
+              {ACCEPT_ALL_LABEL}
+            </Button>
+          ) : null}
         </>
       }
     >

@@ -19,6 +19,7 @@ import {
 } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import {
+  acceptAllSelectionFor,
   changedBlockIds,
   defaultChoiceFor,
   draftBlocksFor,
@@ -30,6 +31,7 @@ import {
   type PendingApproval,
   type ReviewPlacement
 } from "./day-plan-review-model.js";
+import { ACCEPT_ALL_NEEDS_REVIEW } from "./today-labels.js";
 
 export interface DayPlanReviewInput {
   readonly plan: DayPlanDto | null;
@@ -53,12 +55,16 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
   const [busy, setBusy] = useState(false);
   const snapshotRef = useRef<DayPlanDto | null>(input.plan);
   const quietRef = useRef(false);
+  const previewRef = useRef<PreviewDayPlanResponse | null>(null);
+  const approvalRef = useRef<PendingApproval | null>(null);
+  const revisionRef = useRef(input.plan?.revision ?? 0);
 
   useEffect(() => {
     const next = input.plan;
     if (!next || next.revision === snapshotRef.current?.revision) return;
     const before = snapshotRef.current;
     snapshotRef.current = next;
+    revisionRef.current = next.revision;
     setRevision(next.revision);
     if (before === null || quietRef.current) {
       quietRef.current = false;
@@ -67,7 +73,9 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
     setChangedIds(before ? changedBlockIds(before, next) : []);
     setStalePreview(true);
     setPreview(null);
+    previewRef.current = null;
     setApproval(null);
+    approvalRef.current = null;
     setNotice("The saved plan changed since it was read. Choices kept; preview again.");
   }, [input.plan]);
 
@@ -132,7 +140,10 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
     [touch]
   );
 
-  const dismissApproval = useCallback(() => setApproval(null), []);
+  const dismissApproval = useCallback(() => {
+    approvalRef.current = null;
+    setApproval(null);
+  }, []);
 
   const setTime = useCallback(
     (blockId: string, startsAt: string | null) => {
@@ -168,38 +179,46 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
     });
   }, []);
 
-  const runPreview = useCallback(async (): Promise<boolean> => {
-    const plan = snapshotRef.current;
-    if (!plan) return false;
-    return (
-      (await attempt(async () => {
-        const saved = await saveDayPlanDraft(plan.id, {
-          date: plan.localDay,
-          timeZone: plan.timeZone,
-          expectedRevision: revision,
-          blocks: draftBlocksFor(plan, choiceFor)
-        });
-        snapshotRef.current = saved.plan;
-        setRevision(saved.plan.revision);
-        setChangedIds([]);
-        invalidateAfterWrite();
-        const selected = previewSelectionFor(saved.plan, choiceFor, touchedIds);
-        if (selected.length === 0) {
-          setPreview(null);
-          setNotice("No changes to preview yet.");
-          return false;
-        }
-        const response = await previewDayPlan(plan.id, {
-          expectedRevision: saved.plan.revision,
-          selectedChangeBlockIds: selected
-        });
-        setPreview(response);
-        setStalePreview(false);
-        setRevision(response.revision);
-        return true;
-      }, "Preview failed.")) ?? false
-    );
-  }, [attempt, choiceFor, invalidateAfterWrite, revision, touchedIds]);
+  const runPreview = useCallback(
+    async (explicitSelection?: readonly string[]): Promise<boolean> => {
+      const plan = snapshotRef.current;
+      if (!plan) return false;
+      return (
+        (await attempt(async () => {
+          const saved = await saveDayPlanDraft(plan.id, {
+            date: plan.localDay,
+            timeZone: plan.timeZone,
+            expectedRevision: revision,
+            blocks: draftBlocksFor(plan, choiceFor)
+          });
+          snapshotRef.current = saved.plan;
+          revisionRef.current = saved.plan.revision;
+          setRevision(saved.plan.revision);
+          setChangedIds([]);
+          invalidateAfterWrite();
+          const selected =
+            explicitSelection ?? previewSelectionFor(saved.plan, choiceFor, touchedIds);
+          if (selected.length === 0) {
+            setPreview(null);
+            previewRef.current = null;
+            setNotice("No changes to preview yet.");
+            return false;
+          }
+          const response = await previewDayPlan(plan.id, {
+            expectedRevision: saved.plan.revision,
+            selectedChangeBlockIds: [...selected]
+          });
+          setPreview(response);
+          previewRef.current = response;
+          setStalePreview(false);
+          revisionRef.current = response.revision;
+          setRevision(response.revision);
+          return true;
+        }, "Preview failed.")) ?? false
+      );
+    },
+    [attempt, choiceFor, invalidateAfterWrite, revision, touchedIds]
+  );
 
   const apply = useCallback(
     async (blockIds: readonly string[]): Promise<boolean> => {
@@ -207,23 +226,25 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
       if (!plan || blockIds.length === 0) return false;
       return (
         (await attempt(async () => {
-          const key = selectionKey(plan.id, revision, [...blockIds].sort().join(","));
+          const key = selectionKey(plan.id, revisionRef.current, [...blockIds].sort().join(","));
           const response = await applyDayPlan(plan.id, {
-            expectedRevision: revision,
+            expectedRevision: revisionRef.current,
             idempotencyKey: key,
             selectedBlockIds: [...blockIds]
           });
           if (isConfirmationRequired(response)) {
-            setApproval({
+            approvalRef.current = {
               operationId: response.operationId,
               approvalId: response.approvalId,
               changes: response.changes,
               selection: [...blockIds],
               idempotencyKey: key
-            });
+            };
+            setApproval(approvalRef.current);
             setOperationId(response.operationId);
             return true;
           }
+          approvalRef.current = null;
           setApproval(null);
           storeReport(response, blockIds);
           invalidateAfterWrite();
@@ -231,7 +252,7 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
         }, "Apply failed.")) ?? false
       );
     },
-    [attempt, invalidateAfterWrite, revision, storeReport]
+    [attempt, invalidateAfterWrite, storeReport]
   );
 
   const confirm = useCallback(async (): Promise<boolean> => {
@@ -258,6 +279,25 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
       }, "Confirm failed.")) ?? false
     );
   }, [approval, attempt, invalidateAfterWrite, runPreview, storeReport]);
+
+  const acceptAllAdditions = useCallback(async (): Promise<boolean> => {
+    const plan = snapshotRef.current;
+    if (!plan) return false;
+    const selected = acceptAllSelectionFor(plan, choiceFor, touchedIds);
+    if (selected.length === 0 || !(await runPreview(selected))) return false;
+    const response = previewRef.current;
+    if (!response) return false;
+    const conflicted = new Set(response.conflicts.map((conflict) => conflict.blockId));
+    const list = response.eligibleBlockIds.filter((id) => !conflicted.has(id));
+    const applied = await apply(list);
+    // A 202 stages nothing usable for additions: drop it and ask for review.
+    if (approvalRef.current) {
+      dismissApproval();
+      setNotice(ACCEPT_ALL_NEEDS_REVIEW);
+      return true;
+    }
+    return applied;
+  }, [apply, choiceFor, dismissApproval, runPreview, touchedIds]);
 
   const retry = useCallback(async (): Promise<boolean> => {
     const plan = snapshotRef.current;
@@ -290,6 +330,7 @@ export function useDayPlanReview(input: DayPlanReviewInput) {
     dismissApproval,
     setTime,
     runPreview,
+    acceptAllAdditions,
     apply,
     confirm,
     retry

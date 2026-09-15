@@ -174,6 +174,49 @@ export function shortDate(iso: string, locale: LocaleSettingsDto): string {
   return formatDate(iso, locale, { month: "short", day: "numeric" });
 }
 
+/** Bulk acceptance (T19): one activation for every eligible proposed addition. */
+export const ACCEPT_ALL_LABEL = "Accept all time blocks";
+export const ACCEPTING_LABEL = "Accepting\u2026";
+export const REVIEW_CHANGES_LABEL = "Review changes";
+export const ACCEPT_ALL_NEEDS_REVIEW = "These changes need review.";
+
+/** Reader status from the controller: the outcome line plus whether the
+    "Review changes" hand-off is offered. Unknown counts as pending. */
+export interface AcceptAllStatus {
+  readonly line: string;
+  readonly needsReview: boolean;
+}
+
+export function acceptAllStatus(controller: {
+  readonly outcomes: Readonly<Record<string, { outcome: string }>>;
+  readonly preview: { readonly conflicts: readonly unknown[] } | null;
+  readonly notice: string | null;
+}): AcceptAllStatus {
+  let applied = 0;
+  let failed = 0;
+  let pending = 0;
+  for (const item of Object.values(controller.outcomes)) {
+    if (item.outcome === "applied") applied += 1;
+    else if (item.outcome === "failed") failed += 1;
+    else pending += 1;
+  }
+  const skipped = controller.preview?.conflicts.length ?? 0;
+  return {
+    line: acceptAllOutcomeLine(applied, failed, pending),
+    needsReview: failed + pending + skipped > 0 || controller.notice === ACCEPT_ALL_NEEDS_REVIEW
+  };
+}
+
+/** Reader outcome line from applied/failed/pending counts only; nothing is
+    marked applied optimistically, and zero applied reads as nothing added. */
+export function acceptAllOutcomeLine(applied: number, failed: number, pending: number): string {
+  if (applied === 0) return "Nothing was added";
+  let line = `Added ${applied} to the calendar`;
+  if (failed > 0) line += `, ${failed} failed`;
+  if (pending > 0) line += `, ${pending} pending`;
+  return line;
+}
+
 /** Unsaved review deltas beside the saved schedule's own words (T18). */
 export const REVIEW_TRANSIENT_LABELS = {
   toSchedule: "To schedule",

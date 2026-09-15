@@ -147,6 +147,43 @@ export function previewSelectionFor(
     .map((block) => block.id);
 }
 
+/** Accept All selection: proposed additions only (saved or touched with a time). */
+export function acceptAllSelectionFor(
+  plan: DayPlanDto,
+  choiceFor: (block: DayPlanBlockDto) => BlockChoice,
+  touchedIds: readonly string[]
+): string[] {
+  return plan.blocks
+    .filter((block) => {
+      if (block.taskId === null) return false;
+      if (block.actualPlacement?.startsAt != null) return false;
+      const choice = choiceFor(block);
+      if (choice.placement === "leave") return false;
+      const effective = effectivePending(block, choice);
+      return effective !== undefined && effective !== null && effective.kind === "add";
+    })
+    .map((block) => block.id);
+}
+
+/** Gate for Accept All: saved moves/removals, or touched moves/removals/retimes. */
+export function hasOtherPendingEdits(
+  plan: DayPlanDto,
+  choiceFor: (block: DayPlanBlockDto) => BlockChoice,
+  touchedIds: readonly string[]
+): boolean {
+  const touched = new Set(touchedIds);
+  return plan.blocks.some((block) => {
+    if (block.pendingChange?.kind === "move" || block.pendingChange?.kind === "remove") return true;
+    if (!touched.has(block.id)) return false;
+    const effective = effectivePending(block, choiceFor(block));
+    return (
+      effective !== undefined &&
+      effective !== null &&
+      (effective.kind === "move" || effective.kind === "remove")
+    );
+  });
+}
+
 /** One idempotency key per selection attempt: repeats retry as one batch. */
 export function selectionKey(planId: string, revision: number, selection: string): string {
   let hash = 0x811c9dc5;

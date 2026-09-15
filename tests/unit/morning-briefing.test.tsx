@@ -6,14 +6,25 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  ApplyExecutionItemReport,
   BriefingActionRowDto,
   BriefingRunDto,
+  DayPlanBlockDto,
+  DayPlanDto,
   GetBriefingRunResponse,
+  GetDayPlanResponse,
   LocaleSettingsDto,
   TaskDto
 } from "@moss/shared";
 
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
+import type { DayPlanReviewController } from "../../apps/web/src/today/day-plan-review-controller.js";
+import {
+  acceptAllSelectionFor,
+  defaultChoiceFor,
+  hasOtherPendingEdits,
+  type BlockChoice
+} from "../../apps/web/src/today/day-plan-review-model.js";
 import { MorningBriefingReader } from "../../apps/web/src/today/morning-briefing.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -220,12 +231,115 @@ function seedClient(entries: readonly (readonly [readonly unknown[], unknown])[]
 
 const liveRoots: ReturnType<typeof createRoot>[] = [];
 
+function stubReaderController(
+  overrides: Partial<DayPlanReviewController> = {}
+): DayPlanReviewController {
+  return {
+    choices: {},
+    touchedIds: [],
+    revision: 2,
+    changedIds: [],
+    stalePreview: false,
+    preview: null,
+    approval: null,
+    outcomes: {},
+    notice: null,
+    busy: false,
+    choiceFor: (block: DayPlanBlockDto) => defaultChoiceFor(block),
+    setPlacement: () => undefined,
+    dismissApproval: () => undefined,
+    setTime: () => undefined,
+    runPreview: async () => true,
+    acceptAllAdditions: async () => true,
+    apply: async () => true,
+    confirm: async () => true,
+    retry: async () => true,
+    ...overrides
+  };
+}
+
+function acceptBlock(
+  id: string,
+  taskId: string,
+  position: number,
+  startsAt: string,
+  pendingKind: "add" | "move" = "add"
+): DayPlanBlockDto {
+  return {
+    id,
+    kind: "focus",
+    taskId,
+    title: null,
+    position,
+    actualPlacement: null,
+    pendingChange: { kind: pendingKind, startsAt, durationMinutes: 30 }
+  };
+}
+
+function acceptPlanResponse(): GetDayPlanResponse {
+  return {
+    plan: {
+      id: "plan-1",
+      localDay: "2026-09-10",
+      timeZone: "America/Los_Angeles",
+      revision: 2,
+      sourceRunId: null,
+      eveningIntent: {
+        priorityTaskIds: [],
+        capacity: null,
+        notes: null,
+        corrections: [],
+        commitments: []
+      },
+      blocks: [
+        acceptBlock("b1", "t1", 0, "2026-09-10T16:00:00.000Z"),
+        acceptBlock("b2", "t2", 1, "2026-09-10T18:00:00.000Z"),
+        acceptBlock("b3", "t3", 2, "2026-09-10T20:00:00.000Z")
+      ]
+    },
+    tasks: [],
+    unavailableTaskIds: [],
+    sourceRun: null,
+    sourceRunUnavailable: false
+  };
+}
+
+function moveBlock(response: GetDayPlanResponse, id: string): GetDayPlanResponse {
+  if (!response.plan) throw new Error("plan missing for the move case");
+  return {
+    ...response,
+    plan: {
+      ...response.plan,
+      blocks: response.plan.blocks.map((entry) =>
+        entry.id === id
+          ? {
+              ...entry,
+              pendingChange: {
+                kind: "move",
+                startsAt: "2026-09-10T22:00:00.000Z",
+                durationMinutes: 30
+              }
+            }
+          : entry
+      )
+    }
+  };
+}
+
+function appliedOutcome(blockId: string, outcome: ApplyExecutionItemReport["outcome"]) {
+  return {
+    [blockId]: { itemId: `item-${blockId}`, blockId, outcome, result: null }
+  };
+}
+
 async function renderReader(
   client: QueryClient,
   options: {
     readonly runId?: string;
     readonly runs?: readonly BriefingRunDto[];
     readonly tasks?: readonly TaskDto[];
+    readonly controller?: DayPlanReviewController;
+    readonly dayPlan?: GetDayPlanResponse;
   } = {}
 ): Promise<string> {
   const runId = options.runId ?? "run-full";
@@ -244,7 +358,7 @@ async function renderReader(
           runs: options.runs ?? [],
           tasks: options.tasks ?? [task("task-1", "Book the launch room")],
           locale,
-          dayPlan: undefined,
+          dayPlan: options.dayPlan,
           events: [],
           now: new Date(NOW),
           dayPlanLoading: false,
@@ -253,7 +367,8 @@ async function renderReader(
           opener: null,
           onClose: () => undefined,
           onOpenTask: () => undefined,
-          onReview: () => undefined
+          onReview: () => undefined,
+          controller: options.controller ?? stubReaderController()
         })
       )
     );
@@ -465,7 +580,8 @@ describe("MorningBriefingReader retry", () => {
             opener: null,
             onClose: () => undefined,
             onOpenTask: () => undefined,
-            onReview: () => undefined
+            onReview: () => undefined,
+            controller: stubReaderController()
           })
         )
       );
@@ -489,10 +605,197 @@ describe("MorningBriefingReader retry", () => {
 });
 
 describe("MorningBriefingReader review footer", () => {
-  it("offers the review beside Back to Today with no Accept-all control", async () => {
-    const html = await renderReader(seedClient([]));
-    expect(html).toContain("Review task blocks");
-    expect(html).toContain("Back to Today");
-    expect(html).not.toMatch(/accept all/i);
+  function footerButtons(): string[] {
+    const footer = document.body.querySelector(".brief-reader__footer");
+    if (!footer) throw new Error("reader footer did not render");
+    return [...footer.querySelectorAll("button")].map((node) => node.textContent ?? "");
+  }
+
+  it("offers Accept all first when proposed additions are eligible", async () => {
+    await renderReader(seedClient([]), { dayPlan: acceptPlanResponse() });
+    expect(footerButtons()).toEqual([
+      "Accept all time blocks",
+      "Review task blocks",
+      "Back to Today"
+    ]);
+  });
+
+  it("offers Review changes instead when a move is pending", async () => {
+    await renderReader(seedClient([]), { dayPlan: moveBlock(acceptPlanResponse(), "b2") });
+    expect(footerButtons()).toEqual(["Review changes", "Review task blocks", "Back to Today"]);
+  });
+
+  it("announces the applied count and keeps focus on activation", async () => {
+    const acceptAllAdditions = vi.fn(async () => true);
+    await renderReader(seedClient([]), {
+      dayPlan: acceptPlanResponse(),
+      controller: stubReaderController({
+        acceptAllAdditions,
+        outcomes: appliedOutcome("b1", "applied")
+      })
+    });
+    const accept = footerButtons().indexOf("Accept all time blocks");
+    expect(accept).toBe(0);
+    const target = document.body.querySelector(".brief-reader__footer button") as HTMLButtonElement;
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    await act(async () => {
+      target.click();
+    });
+    expect(acceptAllAdditions).toHaveBeenCalledTimes(1);
+    const footer = document.body.querySelector(".brief-reader__footer");
+    expect(footer?.textContent).toContain("Added 1 to the calendar");
+    expect(footer?.querySelectorAll("button")).toHaveLength(3);
+    expect(document.activeElement?.textContent).toBe("Accept all time blocks");
+  });
+
+  it("names nothing added and hands off to review when an item failed", async () => {
+    const acceptAllAdditions = vi.fn(async () => true);
+    await renderReader(seedClient([]), {
+      dayPlan: acceptPlanResponse(),
+      controller: stubReaderController({
+        acceptAllAdditions,
+        outcomes: appliedOutcome("b1", "failed")
+      })
+    });
+    const target = document.body.querySelector(".brief-reader__footer button") as HTMLButtonElement;
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    await act(async () => {
+      target.click();
+    });
+    const footer = document.body.querySelector(".brief-reader__footer");
+    expect(footer?.textContent).toContain("Nothing was added");
+    const review = [...(footer?.querySelectorAll("button") ?? [])].find(
+      (node) => node.textContent === "Review changes"
+    );
+    expect(review).toBeDefined();
+    expect(document.activeElement?.textContent).toBe("Review changes");
+  });
+});
+describe("day-plan-review accept-all model", () => {
+  function modelBlock(id: string, overrides: Partial<DayPlanBlockDto> = {}): DayPlanBlockDto {
+    return {
+      id,
+      kind: "focus",
+      taskId: null,
+      title: null,
+      position: 0,
+      actualPlacement: null,
+      pendingChange: null,
+      ...overrides
+    };
+  }
+
+  function modelPlan(): DayPlanDto {
+    return {
+      id: "plan-1",
+      localDay: "2026-09-10",
+      timeZone: "America/Los_Angeles",
+      revision: 3,
+      sourceRunId: null,
+      eveningIntent: {
+        priorityTaskIds: [],
+        capacity: null,
+        notes: null,
+        corrections: [],
+        commitments: []
+      },
+      blocks: [
+        modelBlock("b1", {
+          taskId: "t1",
+          pendingChange: {
+            kind: "add",
+            startsAt: "2026-09-10T16:00:00.000Z",
+            durationMinutes: 30
+          }
+        }),
+        modelBlock("b2", {
+          taskId: "t2",
+          position: 1,
+          actualPlacement: {
+            startsAt: "2026-09-10T21:00:00.000Z",
+            durationMinutes: 60,
+            calendarEventRef: "ev-1"
+          }
+        }),
+        modelBlock("b3", { taskId: "t3", position: 2 })
+      ]
+    };
+  }
+
+  function choiceFor(choices: Record<string, BlockChoice>) {
+    return (block: DayPlanBlockDto) => choices[block.id] ?? defaultChoiceFor(block);
+  }
+
+  it("selects untouched saved adds and nothing else", () => {
+    expect(acceptAllSelectionFor(modelPlan(), choiceFor({}), [])).toEqual(["b1"]);
+  });
+
+  it("excludes a local leave, calendar rows and moves or removals", () => {
+    const target = modelPlan();
+    expect(
+      acceptAllSelectionFor(target, choiceFor({ b1: { placement: "leave", startsAt: null } }), [
+        "b1"
+      ])
+    ).toEqual([]);
+    expect(
+      acceptAllSelectionFor(
+        target,
+        choiceFor({ b2: { placement: "add", startsAt: "2026-09-10T22:00:00.000Z" } }),
+        ["b2"]
+      )
+    ).toEqual(["b1"]);
+    expect(
+      acceptAllSelectionFor(target, choiceFor({ b1: { placement: "remove", startsAt: null } }), [
+        "b1"
+      ])
+    ).toEqual([]);
+  });
+
+  it("selects a touched add so the draft carries its edited time", () => {
+    const target = modelPlan();
+    const selected = acceptAllSelectionFor(
+      target,
+      choiceFor({ b1: { placement: "add", startsAt: "2026-09-10T18:00:00.000Z" } }),
+      ["b1"]
+    );
+    expect(selected).toEqual(["b1"]);
+  });
+
+  it("gates on saved or touched moves and removals, never on leave", () => {
+    const target = modelPlan();
+    expect(hasOtherPendingEdits(target, choiceFor({}), [])).toBe(false);
+    expect(
+      hasOtherPendingEdits(target, choiceFor({ b1: { placement: "leave", startsAt: null } }), [
+        "b1"
+      ])
+    ).toBe(false);
+    const moved: DayPlanDto = {
+      ...target,
+      blocks: target.blocks.map((entry) =>
+        entry.id === "b2"
+          ? {
+              ...entry,
+              pendingChange: {
+                kind: "move",
+                startsAt: "2026-09-10T22:00:00.000Z",
+                durationMinutes: 60
+              }
+            }
+          : entry
+      )
+    };
+    expect(hasOtherPendingEdits(moved, choiceFor({}), [])).toBe(true);
+    expect(
+      hasOtherPendingEdits(
+        target,
+        choiceFor({ b2: { placement: "move", startsAt: "2026-09-10T22:00:00.000Z" } }),
+        ["b2"]
+      )
+    ).toBe(true);
+    expect(
+      hasOtherPendingEdits(target, choiceFor({ b1: { placement: "remove", startsAt: null } }), [
+        "b1"
+      ])
+    ).toBe(true);
   });
 });

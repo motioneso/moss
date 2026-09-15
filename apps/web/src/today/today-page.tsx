@@ -627,6 +627,7 @@ export function TodayPage(props: {
           calendarError={eventsQuery.isError}
           opener={readerOpener.current}
           onClose={() => setReader(null)}
+          controller={reviewController}
           onOpenTask={(id) => {
             // The task dialog lives in the app root, which the reader holds
             // inert: close the reader first so the dialog can take focus.
