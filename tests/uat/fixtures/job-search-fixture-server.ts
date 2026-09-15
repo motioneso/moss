@@ -26,6 +26,7 @@
 // drop — every crawl fetch timed out and the board sat empty with `kind: "network"` degradations.
 // Same-network container-to-container traffic crosses no host firewall at all.
 import { readFileSync } from "node:fs";
+import { routeEspnFixture } from "./espn-fixture-routes.js";
 import { createServer, type Server } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -228,6 +229,23 @@ export async function startJobSearchFixtureServer(
         res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
         res.end(body);
       });
+      return;
+    }
+
+    // DF-V4-R4: deterministic ESPN answers for the API-side fixture seam. Checked first so
+    // the ESPN table wins on its own paths; everything else falls through below.
+    // A throwing ESPN route must 500, never crash the origin: this process also
+    // serves the job-search fixtures, and one bad template must not kill those.
+    try {
+      const espnRoute = routeEspnFixture(pathname);
+      if (espnRoute) {
+        res.writeHead(200, { "content-type": espnRoute.contentType });
+        res.end(espnRoute.body);
+        return;
+      }
+    } catch (error) {
+      res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+      res.end(`espn fixture route failed for ${pathname}: ${String(error)}`);
       return;
     }
 

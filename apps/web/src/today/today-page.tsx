@@ -72,6 +72,7 @@ import "../styles/kit-tasks-modal.css";
 import "../styles/kit-today.css";
 import "../styles/kit-today-hero.css";
 import "../styles/kit-today-timeline.css";
+import "../styles/kit-today-desks.css";
 import "../styles/kit-today-feeds.css";
 import "../styles/kit-today-misc.css";
 import "../styles/kit-briefing-reader.css";

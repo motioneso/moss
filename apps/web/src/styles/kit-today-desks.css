@@ -1,0 +1,183 @@
+/* ===== News + Sports editorial desks (V4) =====
+   Today-only modifiers. The module sheets keep styling the rows underneath;
+   these rules carry the desk ground, the editorial heads and the two-column
+   placement. Tokens only, no literals. */
+
+/* The desk ground is a forest-soft wash so the section background differs in
+   every theme (paper alone is identical in light and canyon) and text
+   contrast is judged on the real ground. */
+.jds-brief--news,
+.jds-brief--sports {
+  background: color-mix(in srgb, var(--forest-soft) 25%, var(--paper));
+}
+
+/* --- Desk head (both desks) --- */
+.jds-brief--news .desk-head,
+.jds-brief--sports .desk-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  border-bottom: 1px solid var(--line-strong);
+  padding-bottom: 12px;
+}
+.jds-brief--news .desk-number,
+.jds-brief--sports .desk-number {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--forest);
+  border-bottom: 2px solid var(--gold);
+  padding-bottom: 5px;
+}
+.jds-brief--news .desk-title,
+.jds-brief--sports .desk-title {
+  font-family: var(--font-display);
+  font-size: 25px;
+  line-height: 1.18;
+  letter-spacing: -0.7px;
+  margin: 0;
+}
+.jds-brief--news .desk-meta,
+.jds-brief--sports .desk-meta {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-align: right;
+}
+
+/* --- News two-column desk --- */
+.jds-brief--news .desk-cols {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 32px;
+  margin-top: 4px;
+}
+.jds-brief--news .desk-leadcol,
+.jds-brief--news .desk-listcol {
+  min-width: 0;
+}
+.jds-brief--news .nw-twlead__title {
+  font-family: var(--font-display);
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.jds-brief--news .nw-twlead__dek {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.jds-brief--news .nw-twlist__item {
+  padding: 10px 0;
+}
+.jds-brief--news .nw-twlist__item + .nw-twlist__item {
+  border-top: 1px solid var(--line);
+}
+
+/* --- Sports desk grid: scores left, stories right, Tonight and cards full --- */
+.jds-brief--sports {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 32px;
+}
+.jds-brief--sports .desk-head {
+  grid-column: 1 / -1;
+}
+.jds-brief--sports .desk-scores {
+  grid-column: 1;
+  min-width: 0;
+}
+.jds-brief--sports .desk-stories {
+  grid-column: 2;
+  min-width: 0;
+}
+/* Stories alone take the full width when there are no scores. */
+.jds-brief--sports:not(:has(.desk-scores)) .desk-stories {
+  grid-column: 1 / -1;
+}
+.jds-brief--sports .desk-tonight {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.jds-brief--sports .desk-cards {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+/* --- Score rows: names, scores, status in three columns --- */
+.jds-brief--sports .sp-scores__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: baseline;
+  padding: 10px 0;
+}
+.jds-brief--sports .sp-scores__row + .sp-scores__row {
+  border-top: 1px solid var(--line);
+}
+.jds-brief--sports .sp-scores__sides {
+  display: contents;
+}
+.jds-brief--sports .sp-board__team {
+  font-weight: 700;
+}
+.jds-brief--sports .sp-board__score {
+  text-align: right;
+}
+.jds-brief--sports .sp-scores__status {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* --- Tonight band: up to three cards per row --- */
+.jds-brief--sports .sp-tonight {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.jds-brief--sports .sp-tonight__row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border: 1px solid var(--line);
+  padding: 12px 14px;
+}
+.jds-brief--sports .sp-tonight__time {
+  margin-left: 0;
+}
+
+/* Feed headlines wrap anywhere: a long unbroken run (a team name plus a
+   publisher tag) must clip inside its card instead of pushing it wider. */
+.jds-brief--sports .sp-tk__newstx,
+.jds-brief--sports .sp-tk__storylink {
+  overflow-wrap: anywhere;
+}
+
+/* At phone widths the status column's nowrap text would starve the two sides
+   below crest-plus-score width, so the status takes its own full-width row.
+   DOM order is unchanged, so visual order still matches it. */
+@media (max-width: 400px) {
+  .jds-brief--sports .sp-scores__row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .jds-brief--sports .sp-scores__status {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+}
+
+/* --- Single column at and below the Today rail breakpoint --- */
+@media (max-width: 1080px) {
+  .jds-brief--news .desk-cols {
+    grid-template-columns: 1fr;
+  }
+  .jds-brief--sports {
+    grid-template-columns: 1fr;
+  }
+  .jds-brief--sports .desk-scores,
+  .jds-brief--sports .desk-stories {
+    grid-column: 1 / -1;
+  }
+  .jds-brief--sports .sp-tonight {
+    grid-template-columns: 1fr;
+  }
+}

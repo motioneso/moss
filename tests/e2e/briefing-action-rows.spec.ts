@@ -16,6 +16,8 @@ import {
   mockDayPlanTask,
   registerMockDayPlanRoutes
 } from "./mock-day-plan-api.js";
+import { newsOverviewFixture, registerMockNewsRoutes } from "./mock-news-api.js";
+import { desksOverviewFixture, registerMockSportsRoutes } from "./mock-sports-api.js";
 import { mockCalEvent, seedTodayChrome } from "./today-page-chrome.js";
 
 const NOW = "2026-07-31T12:00:00.000Z";
@@ -855,4 +857,79 @@ test("today timeline shows the editorial schedule with quick actions first in th
   });
   expect(phone.asideBottom).toBeLessThanOrEqual(phone.mainTop);
   expect(phone.scrollW).toBe(phone.innerW);
+});
+
+const DESKS_NOW = "2026-09-10T16:00:00.000Z";
+const DESKS_DAY = "2026-09-10";
+
+test("today news and sports desks read as two-column editorials", async ({ page }) => {
+  await page.clock.setFixedTime(new Date(DESKS_NOW));
+  await mockApi(page, {
+    authenticated: true,
+    chatThreads: [],
+    notifications: [],
+    tasks: [],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    briefingDefinitions: [],
+    briefingRuns: {},
+    calendarEvents: []
+  });
+  await registerMockNewsRoutes(page, newsOverviewFixture());
+  await registerMockSportsRoutes(page, desksOverviewFixture(DESKS_DAY));
+
+  for (const width of [1440, 375] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/today");
+    await expect(page.locator(".jds-brief--news")).toBeVisible();
+    await expect(page.locator(".jds-brief--sports")).toBeVisible();
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() =>
+            [...document.querySelectorAll(".jds-brief--news img, .jds-brief--sports img")].every(
+              (img) => (img as HTMLImageElement).complete
+            )
+          ),
+        { timeout: 15000 }
+      )
+      .toBe(true);
+    const boxes = await page.evaluate(() => {
+      const rect = (selector: string) => {
+        const el = document.querySelector(selector)!;
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+      };
+      const order = ["desk-scores", "desk-stories", "desk-tonight"].map((cls) =>
+        [...document.querySelectorAll(".jds-brief--sports > div")].findIndex((el) =>
+          el.classList.contains(cls)
+        )
+      );
+      return {
+        lead: rect(".jds-brief--news .desk-leadcol"),
+        list: rect(".jds-brief--news .desk-listcol"),
+        scores: rect(".jds-brief--sports .desk-scores"),
+        stories: rect(".jds-brief--sports .desk-stories"),
+        tonight: rect(".jds-brief--sports .desk-tonight"),
+        order,
+        scrollW: document.documentElement.scrollWidth,
+        innerW: window.innerWidth
+      };
+    });
+    if (width === 1440) {
+      expect(boxes.lead.right).toBeLessThanOrEqual(boxes.list.left);
+      expect(boxes.scores.right).toBeLessThanOrEqual(boxes.stories.left);
+      expect(boxes.tonight.top).toBeGreaterThanOrEqual(boxes.scores.bottom);
+      expect(boxes.tonight.top).toBeGreaterThanOrEqual(boxes.stories.bottom);
+    } else {
+      expect(boxes.list.top).toBeGreaterThanOrEqual(boxes.lead.bottom);
+      expect(boxes.stories.top).toBeGreaterThanOrEqual(boxes.scores.bottom);
+      expect(boxes.tonight.top).toBeGreaterThanOrEqual(boxes.stories.bottom);
+    }
+    const [scoresPos = -1, storiesPos = -1, tonightPos = -1] = boxes.order;
+    expect(scoresPos).toBeGreaterThanOrEqual(0);
+    expect(scoresPos).toBeLessThan(storiesPos);
+    expect(storiesPos).toBeLessThan(tonightPos);
+    expect(boxes.scrollW).toBe(width);
+  }
 });

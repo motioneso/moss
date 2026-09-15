@@ -2,11 +2,24 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { parseScoreResult } from "../../../external-modules/job-search/src/domain/score.js";
 
+import type {
+  GameSummary,
+  SportsOverviewResponse
+} from "../../../packages/shared/src/sports-api.js";
+import { createApiE2eFixtureFetch } from "../../../apps/api/src/e2e-fetch-override.js";
+import { createEspnDatasetAdapter } from "../../../packages/sports/src/source/espn-source.js";
+import { followedTeamIndex } from "../../../packages/sports/src/news-ranking.js";
+import {
+  selectScoreRows,
+  selectTonightRows
+} from "../../../packages/sports/src/web/today-scores.js";
+
 import {
   buildChatCompletionsResponse,
   deterministicFixtureScore,
   startJobSearchFixtureServer
 } from "./job-search-fixture-server.js";
+import { routeEspnFixture } from "./espn-fixture-routes.js";
 
 describe("startJobSearchFixtureServer", () => {
   let stop: (() => Promise<void>) | undefined;
@@ -166,6 +179,129 @@ describe("startJobSearchFixtureServer", () => {
       expect(status).toBe(200);
       const parsed = JSON.parse(JSON.parse(body).choices[0].message.content);
       expect(typeof parsed.fit).toBe("number");
+    });
+  });
+
+  // DF-V4-R4: deterministic ESPN answers for the API-side fixture seam. The scoreboard
+  // template is stamped at request time; these tests pin the stamp through the real ESPN
+  // adapter and the real Today selectors, so Prover's Tonight card is proven before the stack.
+  describe("ESPN eng.1 fixture routes (DF-V4-R4)", () => {
+    // Fixed midday UTC: the +3h game lands the same local day in every US timezone and the
+    // -20h final stays a final, so the assertions hold wherever the suite runs.
+    const NOON = new Date("2026-09-15T12:00:00.000Z");
+
+    async function overviewGames(now: Date): Promise<readonly GameSummary[]> {
+      const route = routeEspnFixture("/apis/site/v2/sports/soccer/eng.1/scoreboard", now);
+      expect(route?.contentType).toMatch(/application\/json/);
+      const stubFetch = (async () => new Response(new Uint8Array(route!.body))) as typeof fetch;
+      const adapter = createEspnDatasetAdapter();
+      return (await adapter.fetchDataset(
+        "scoreboard",
+        { competitionKey: "eng.1", day: "20260914", endDay: "20260915" },
+        { fetchFn: stubFetch }
+      )) as readonly GameSummary[];
+    }
+
+    function overviewFor(games: readonly GameSummary[]): SportsOverviewResponse {
+      return {
+        hero: { mode: "story", headline: null },
+        followed: [],
+        scoreboard: [{ competitionKey: "eng.1", competitionLabel: "Premier League", games }],
+        topStories: [],
+        leagueNews: [],
+        standings: [],
+        followedTeams: [{ competitionKey: "eng.1", teamKey: "ars", sourceTeamId: "359" }],
+        followedLeagues: [],
+        followedLeagueCards: [],
+        ambiguousFollows: [],
+        degraded: false
+      };
+    }
+
+    it("stamps two finals with Arsenal in one and exactly one Tonight row", async () => {
+      const games = await overviewGames(NOON);
+      expect(games).toHaveLength(3);
+      const overview = overviewFor(games);
+      const followed = followedTeamIndex(overview.followedTeams);
+      const { followedRows, elsewhereRows } = selectScoreRows(
+        overview,
+        followed,
+        NOON,
+        "America/Los_Angeles"
+      );
+      expect(followedRows).toHaveLength(1);
+      expect(elsewhereRows).toHaveLength(1);
+      const followedSides = [
+        followedRows[0]!.game.home.sourceTeamId,
+        followedRows[0]!.game.away.sourceTeamId
+      ];
+      expect(followedSides).toContain("359");
+      const { tonightRows } = selectTonightRows(overview, followed, NOON, "America/Los_Angeles");
+      expect(tonightRows).toHaveLength(1);
+      expect(tonightRows[0]!.game.id).toBe("uat-eng1-tot-new");
+      expect(new Date(tonightRows[0]!.game.startsAt).getTime()).toBeGreaterThan(NOON.getTime());
+    });
+
+    it("serves teams with the seeded Arsenal identity, standings, schedule and news", async () => {
+      const server = await startJobSearchFixtureServer({ host: "127.0.0.1" });
+      stop = server.stop;
+
+      const teams = await (
+        await fetch(`${server.baseUrl}/apis/site/v2/sports/soccer/eng.1/teams?limit=1000`)
+      ).json();
+      const arsenal = teams.sports[0].leagues[0].teams.find(
+        (entry: { team: { id: string } }) => entry.team.id === "359"
+      );
+      expect(arsenal.team.abbreviation).toBe("ARS");
+
+      const standings = await (
+        await fetch(`${server.baseUrl}/apis/v2/sports/soccer/eng.1/standings?level=3`)
+      ).json();
+      expect(standings.children).toHaveLength(1);
+      expect(standings.children[0].standings.entries.length).toBeGreaterThan(0);
+
+      const schedule = await (
+        await fetch(`${server.baseUrl}/apis/site/v2/sports/soccer/eng.1/teams/359/schedule`)
+      ).json();
+      expect(schedule.events).toEqual([]);
+
+      const news = await (
+        await fetch(`${server.baseUrl}/apis/site/v2/sports/soccer/eng.1/news`)
+      ).json();
+      expect(news.articles.length).toBeGreaterThan(0);
+      expect(news.articles[0].images[0].type).toBe("header");
+    });
+
+    it("serves the PNG as image/png, byte-identical to the news payload's first image", async () => {
+      const server = await startJobSearchFixtureServer({ host: "127.0.0.1" });
+      stop = server.stop;
+
+      const photo = await fetch(`${server.baseUrl}/espn/photo.png`);
+      expect(photo.status).toBe(200);
+      expect(photo.headers.get("content-type")).toBe("image/png");
+      const photoBytes = Buffer.from(await photo.arrayBuffer());
+
+      const news = await (
+        await fetch(`${server.baseUrl}/apis/site/v2/sports/soccer/eng.1/news`)
+      ).json();
+      const dataUrl: string = news.articles[0].images[0].url;
+      expect(dataUrl.startsWith("data:image/png;base64,")).toBe(true);
+      // Same bytes the fixture origin serves: the data URI exists only because the
+      // container-private origin is unreachable from a browser, not as a second image.
+      expect(Buffer.from(dataUrl.split(",", 2)[1]!, "base64").equals(photoBytes)).toBe(true);
+    });
+
+    it("answers the stamped scoreboard over HTTP through the API-side fixture fetch", async () => {
+      const server = await startJobSearchFixtureServer({ host: "127.0.0.1" });
+      stop = server.stop;
+
+      const fetchFn = createApiE2eFixtureFetch(server.baseUrl);
+      const response = await fetchFn(
+        "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=20260915"
+      );
+      expect(response.status).toBe(200);
+      const payload = await response.json();
+      expect(payload.events).toHaveLength(3);
     });
   });
 });
