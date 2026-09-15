@@ -33,6 +33,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { resolveMossEnv, type AccessContext } from "@moss/db";
 import { sessionRateLimitKey } from "@moss/module-sdk/server";
 import {
+  type BriefingPlanContextV1,
   type ChatSurface,
   normalizeChatSurface,
   CHAT_SEED_IDEMPOTENCY_KEY_MAX_LENGTH,
@@ -559,17 +560,53 @@ export function registerChatLiveRoutes(
   });
 }
 
-export function buildEveningInterviewSeed(reviewText: string | null): EveningInterviewSeed {
+function planContextBlock(plan: BriefingPlanContextV1): string {
+  const lines = [
+    `plan ${plan.planId} revision ${plan.revision} for ${plan.localDay} (${plan.timeZone})`
+  ];
+  const intent = plan.eveningIntent;
+  if (intent) {
+    for (const taskId of intent.priorityTaskIds) lines.push(`priority: ${taskId}`);
+    if (intent.capacity) lines.push(`capacity: ${intent.capacity}`);
+    if (intent.notes) lines.push(`notes: ${intent.notes}`);
+    for (const correction of intent.corrections) lines.push(`correction: ${correction.note}`);
+    for (const commitment of intent.commitments)
+      lines.push(`commitment: ${commitment.taskId} ${commitment.decision}`);
+  }
+  for (const block of plan.blocks) {
+    lines.push(
+      `block ${block.taskId ?? block.title ?? block.id}: ${block.pendingChange ?? "proposed"}`
+    );
+  }
+  const safe = lines.map((line) => sanitizeExternalData(line)).filter((line) => line !== "");
+  return `<external_source type="tomorrow_plan">\n${safe.join("\n")}\n</external_source>`;
+}
+
+export function buildEveningInterviewSeed(
+  reviewText: string | null,
+  plan: BriefingPlanContextV1 | null = null
+): EveningInterviewSeed {
   const external = sanitizeExternalData(reviewText?.trim() || "(no evening review was available)");
+  const planBlock = plan
+    ? planContextBlock(plan)
+    : '<external_source type="tomorrow_plan">\nNo plan is saved for tomorrow yet.\n</external_source>';
   return {
     context:
       "<trusted_instructions>\n" +
       "You are running the evening interview. Ask concise reflection and planning " +
-      "questions: what went well, what slipped, and what one thing matters tomorrow. Do " +
-      "not create, move, or delete records directly; use normal chat action-request proposals.\n" +
+      "questions: what went well, what slipped, and what one thing matters tomorrow. " +
+      (plan
+        ? "A saved plan for tomorrow follows below; reflect what it already holds instead of asking about capacity and priority again. "
+        : "") +
+      "Drafts saved through the plan-draft tool are saved for review, never placed on " +
+      "the calendar; calendar changes happen only in the Plan tomorrow dialog and its review. " +
+      "Do not create, move, or delete records directly; use normal chat action-request proposals.\n" +
       "</trusted_instructions>\n\n" +
-      `<external_source type="evening_review">\n${external}\n</external_source>`,
-    openingPrompt: "Prep me for tomorrow."
+      `<external_source type="evening_review">\n${external}\n</external_source>\n` +
+      planBlock,
+    openingPrompt: plan
+      ? "Here is what you saved for tomorrow; talk me through it."
+      : "Prep me for tomorrow."
   };
 }
 

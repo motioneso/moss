@@ -6,6 +6,8 @@ import {
   projectPlanContext,
   resolvePlanContext
 } from "../../packages/briefings/src/plan-context.js";
+import { planOvernightChanges } from "../../packages/briefings/src/plan-reconcile.js";
+import { planSection } from "../../packages/briefings/src/plan-prose.js";
 import { composeBriefing, type BriefingGap } from "../../packages/briefings/src/compose.js";
 import { definition, fakeScopedDb, makeFakeDeps, runInput } from "./briefings-compose.harness.js";
 
@@ -234,6 +236,11 @@ describe("plan schema vocabularies", () => {
     ).items.properties;
     expect(blockProps.kind?.enum).toEqual([...shared.DAY_PLAN_BLOCK_KINDS]);
     expect(blockProps.pendingChange?.enum).toEqual([...shared.DAY_PLAN_PENDING_KINDS, null]);
+    expect(blockProps.pendingStartsAt).toMatchObject({ type: ["string", "null"] });
+    expect(blockProps.pendingDurationMinutes).toMatchObject({
+      type: ["integer", "null"],
+      minimum: 1
+    });
     const intentProps = (
       schema.properties.eveningIntent as unknown as {
         anyOf: [{ properties: Record<string, { enum?: readonly unknown[] }> }, unknown];
@@ -280,6 +287,89 @@ describe("composeBriefing — plan context (T12)", () => {
     const result = await composeBriefing(fakeScopedDb, definition(), runInput, makeFakeDeps());
     expect("planContext" in result.structuredPayload).toBe(false);
     expect("planSnapshot" in result.sourceMetadata).toBe(false);
+  });
+});
+
+describe("planOvernightChanges (T21)", () => {
+  const DAY = "2026-06-13";
+  const at = (hour: string) => `${DAY}T${hour}.000Z`;
+  const context = () =>
+    projectPlanContext(
+      plan({
+        eveningIntent: {
+          priorityTaskIds: ["t1"],
+          capacity: "light",
+          notes: null,
+          corrections: [],
+          commitments: [{ taskId: "t2", decision: "commit" }]
+        },
+        blocks: [
+          {
+            id: "b1",
+            kind: "focus",
+            taskId: "t1",
+            title: "Write the draft",
+            position: 0,
+            actualPlacement: {
+              startsAt: at("09:00:00"),
+              durationMinutes: 60,
+              calendarEventRef: "ev-1"
+            },
+            pendingChange: null
+          },
+          {
+            id: "b2",
+            kind: "focus",
+            taskId: "t2",
+            title: null,
+            position: 1,
+            actualPlacement: null,
+            pendingChange: { kind: "add", startsAt: at("11:00:00"), durationMinutes: 60 }
+          }
+        ]
+      })
+    );
+  const tasks = () => [
+    { id: "t1", title: "Write the draft", status: "todo" },
+    { id: "t2", title: "Call the vendor", status: "todo" }
+  ];
+  const events = () => [
+    { id: "ev-1", title: "Deep work", startsAt: at("09:00:00"), endsAt: at("10:00:00") }
+  ];
+  it("names a committed block whose event is gone or moved", () => {
+    expect(planOvernightChanges(context(), [], tasks())).toEqual([
+      'Overnight change: "Write the draft" lost its calendar event; review before accepting.'
+    ]);
+    const moved = [{ ...events()[0], startsAt: at("09:30:00"), endsAt: at("10:30:00") }];
+    expect(planOvernightChanges(context(), moved, tasks())).toEqual([
+      'Overnight change: the event under "Write the draft" moved; review before accepting.'
+    ]);
+  });
+  it("names a proposed block overlapping a new event", () => {
+    const withClash = [
+      ...events(),
+      { id: "ev-2", title: "Standup", startsAt: at("11:30:00"), endsAt: at("12:00:00") }
+    ];
+    expect(planOvernightChanges(context(), withClash, tasks())).toEqual([
+      'Overnight change: "Call the vendor" now overlaps "Standup"; review before accepting.'
+    ]);
+  });
+  it("names a priority or committed task finished since the save", () => {
+    const done = [{ id: "t1", title: "Write the draft", status: "done" }];
+    expect(planOvernightChanges(context(), events(), done)).toEqual([
+      'Overnight change: "Write the draft" is done; review before accepting.'
+    ]);
+  });
+  it("stays empty when nothing changed overnight", () => {
+    expect(planOvernightChanges(context(), events(), tasks())).toEqual([]);
+  });
+  it("planSection renders overnight lines after the blocks and stays empty without a plan", () => {
+    const section = planSection(context(), tasks(), []);
+    expect(section.lines.some((line) => line.startsWith("Overnight change:"))).toBe(true);
+    expect(section.lines.findIndex((line) => line.startsWith("Overnight change:"))).toBeGreaterThan(
+      0
+    );
+    expect(planSection(null, tasks(), []).lines).toEqual([]);
   });
 });
 

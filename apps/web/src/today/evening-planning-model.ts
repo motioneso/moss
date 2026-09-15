@@ -123,7 +123,8 @@ export function proposeTomorrowBlocks(
   tasks: readonly TaskDto[],
   events: readonly CalendarEventDto[],
   tomorrowKey: string,
-  timeZone: string
+  timeZone: string,
+  touchedIds: readonly string[] = []
 ): DayPlanBlockInput[] {
   const committed = new Set(committedTaskIds);
   const byTask = new Map(tasks.map((task) => [task.id, task]));
@@ -141,8 +142,13 @@ export function proposeTomorrowBlocks(
       pendingChange: block.pendingChange ?? null
     });
   }
+  const touched = new Set(
+    existingBlocks.filter((block) => touchedIds.includes(block.id)).map((block) => block.taskId)
+  );
   const covered = new Set(
-    kept.map((block) => block.taskId).filter((taskId): taskId is string => taskId !== null)
+    [...kept.map((block) => block.taskId), ...touched].filter(
+      (taskId): taskId is string => taskId !== null
+    )
   );
   const ordered =
     capacity === "light"

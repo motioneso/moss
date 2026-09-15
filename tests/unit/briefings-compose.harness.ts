@@ -49,6 +49,19 @@ export const runInput: ComposeRunInput = {
 
 // Canned per-tool data keyed by the tool name compose calls. Day-bounded sources
 // (calendar/chats) use FIXED_NOW's UTC date so withinLocalDay keeps them.
+/** Committed day-plan block under the canned evt-1, for overnight-line tests. */
+export function committedDayPlanBlock(startsAt: string): DayPlanDto["blocks"][number] {
+  return {
+    id: "b1",
+    kind: "focus",
+    taskId: null,
+    title: "Focus",
+    position: 0,
+    pendingChange: null,
+    actualPlacement: { startsAt, durationMinutes: 60, calendarEventRef: "evt-1" }
+  };
+}
+
 export const TODAY_ISO = "2026-06-13T09:00:00.000Z";
 
 export function cannedToolData(toolName: string): Record<string, unknown> {

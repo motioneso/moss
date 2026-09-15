@@ -26,6 +26,7 @@ import {
 } from "@moss/shared";
 
 import { requiresCalendarConfirmation } from "./confirmation-policy.js";
+import { dayPlanDraftExecute, summarizeDayPlanDraft } from "./day-plan-chat-tool.js";
 import { resolveCalendarEventRef } from "./event-resolver.js";
 import { CalendarRepository } from "./repository.js";
 import {
@@ -277,6 +278,15 @@ export const calendarModuleManifest = {
   ],
   assistantActionFamilies: [
     {
+      id: "calendar_day_plan",
+      label: "Day-plan drafts",
+      description:
+        "Save evening chat edits to the actor's day-plan draft for review. " +
+        "The Plan tomorrow dialog and its review stay the only path to the calendar.",
+      defaultTier: "ask_each_time",
+      allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
+    },
+    {
       id: "calendar_writeback",
       label: "Calendar writeback",
       description: "Create and move Moss-owned events on the user's calendar.",
@@ -443,6 +453,41 @@ export const calendarModuleManifest = {
       requiresConfirmation: rescheduleEventRequiresConfirmation,
       execute: calendarRescheduleEventExecute,
       summarize: summarizeRescheduleEvent
+    },
+    {
+      name: "calendar.dayPlanDraft",
+      description:
+        "Save the evening interview's typed intent and untimed task additions to the " +
+        "actor's day-plan draft for tomorrow. Additions land as dateless proposals that " +
+        "only the Plan tomorrow dialog and its review can schedule; this tool never " +
+        "previews, applies, moves or removes anything on the calendar.",
+      permissionId: "calendar.manage",
+      risk: "write",
+      executionPolicy: "auto",
+      selfOperationGrant: "granted_at_install",
+      actionFamilyId: "calendar_day_plan",
+      inputSchema: {
+        type: "object",
+        required: ["planId", "expectedRevision"],
+        properties: {
+          planId: { type: "string", description: "Day-plan id from the interview seed" },
+          expectedRevision: {
+            type: "number",
+            description: "Plan revision the edits apply to"
+          },
+          eveningIntent: {
+            type: "object",
+            description: "Intent patch: priorityTaskIds, capacity, notes, corrections, commitments"
+          },
+          additions: {
+            type: "array",
+            description: "New tasks as { taskId, title? }; dateless proposals only",
+            items: { type: "object" }
+          }
+        }
+      },
+      execute: dayPlanDraftExecute,
+      summarize: summarizeDayPlanDraft
     }
   ],
   features: [

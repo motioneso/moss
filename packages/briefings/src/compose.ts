@@ -469,7 +469,7 @@ export async function composeBriefing(
   );
 
   const sections: Section[] = [commitments, prioritizedTasks, calendar, email, vault, chats];
-  sections.push(planSection(plan.planContext, prioritizedTasks.rawItems));
+  sections.push(planSection(plan.planContext, prioritizedTasks.rawItems, rawCalendar.rawItems));
   if (definition.selected_tool_names.includes("goals.list")) {
     sections.push(goals);
   }
@@ -653,7 +653,8 @@ const SYNTHESIS_INSTRUCTIONS_MORNING =
   "that saved intent from the block states alone. A block counts as scheduled only when its " +
   "line says committed; proposed or pending lines are not yet on the calendar, and " +
   "everything is scheduled may be written only when every block line says committed. Zero " +
-  "task blocks is a valid shape. When the day_plan source reads (none today), say nothing " +
+  "task blocks is a valid shape. Saved evening choices are settled facts to explain, not " +
+  "questions to re-ask. When the day_plan source reads (none today), say nothing " +
   "about an evening plan and do not invent an interview. Write News and Sports last and short, " +
   "followed teams first, scores as given. Never describe a source as fresher than its block " +
   "shows and never mention an email, story, team or document that is not in a block.";

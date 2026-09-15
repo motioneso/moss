@@ -85,6 +85,7 @@ import {
 import { isBehaviorEnabled, type SourceBehaviorPreferencesPort } from "@moss/source-behaviors";
 import {
   BRIEFINGS_QUEUE_DEFINITIONS,
+  projectPlanContext,
   BriefingsRepository,
   briefingsModuleManifest,
   briefingsModuleSqlMigrationDirectory,
@@ -105,7 +106,8 @@ import {
   CALENDAR_QUEUE_DEFINITIONS,
   registerCalendarRoutes,
   registerCalendarJobWorkers,
-  sendDayPlanApplyJob
+  sendDayPlanApplyJob,
+  setDayPlanDraftRepository
 } from "@moss/calendar";
 import {
   CHAT_QUEUE_DEFINITIONS,
@@ -1840,6 +1842,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           preferencesRepository: new PreferencesRepository()
         }
       });
+      setDayPlanDraftRepository(dayPlanApply.dayPlanRepository);
       return registerCalendarRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
@@ -3034,6 +3037,18 @@ export async function resolveRequestTimeZoneForRoute(
   return resolveTimeZone(undefined, extractStoredTimeZone(stored));
 }
 
+/** Next local day in the zone, via a UTC-noon anchor so no DST edge flips the day. */
+function nextLocalDay(now: Date, timeZone: string): string {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  const [y, m, d] = fmt.format(now).split("-").map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d! + 1, 12)).toISOString().slice(0, 10);
+}
+
 /** The user's stored timezone (locale preference), or the server default (#2274 worker path). */
 async function storedTimeZoneFor(scopedDb: unknown, _actorUserId: string): Promise<string> {
   const stored = await new PreferencesRepository().get(scopedDb as DataContextDb, "locale");
@@ -3334,11 +3349,18 @@ export function registerBuiltInApiRoutes(
     },
     resolveEveningInterviewSeed: async (actorUserId: string, briefingRunId?: string) => {
       const repository = new BriefingsRepository();
-      const run = await dependencies.dataContext.withDataContext(
+      const { run, plan } = await dependencies.dataContext.withDataContext(
         { actorUserId, requestId: "chat:evening-interview-seed" },
-        (scopedDb) => repository.getOwnedEveningRunForInterview(scopedDb, briefingRunId)
+        async (scopedDb) => {
+          const owned = await repository.getOwnedEveningRunForInterview(scopedDb, briefingRunId);
+          const timeZone = await storedTimeZoneFor(scopedDb, actorUserId);
+          const saved = await briefingsAutoDayPlanRepository
+            .getForDay(scopedDb, { localDay: nextLocalDay(new Date(), timeZone), timeZone })
+            .catch(() => undefined);
+          return { run: owned, plan: saved ? projectPlanContext(saved) : null };
+        }
       );
-      return buildEveningInterviewSeed(run?.summary_text ?? null);
+      return buildEveningInterviewSeed(run?.summary_text ?? null, plan);
     }
   };
 

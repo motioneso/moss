@@ -38,6 +38,10 @@ function cut(value: string, max: number): string {
 
 function projectBlock(block: DayPlanBlockDto): BriefingPlanBlockV1 {
   const pending = block.pendingChange?.kind;
+  const timed =
+    block.pendingChange?.kind === "add" || block.pendingChange?.kind === "move"
+      ? block.pendingChange
+      : null;
   return {
     id: block.id,
     kind: block.kind,
@@ -51,7 +55,10 @@ function projectBlock(block: DayPlanBlockDto): BriefingPlanBlockV1 {
           calendarEventRef: block.actualPlacement.calendarEventRef
         }
       : null,
-    pendingChange: pending === "add" || pending === "move" || pending === "remove" ? pending : null
+    pendingChange: pending === "add" || pending === "move" || pending === "remove" ? pending : null,
+    ...(timed
+      ? { pendingStartsAt: timed.startsAt, pendingDurationMinutes: timed.durationMinutes }
+      : {})
   };
 }
 
