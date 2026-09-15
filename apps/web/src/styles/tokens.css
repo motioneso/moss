@@ -1,6 +1,6 @@
 /*
  * Webfonts — self-hosted Archivo (OFL licence in the same folder), latin subset,
- * weights 400/500/700/800, served from our own origin under /fonts/archivo/.
+ * weights 400/500/600/700/800/900, served from our own origin under /fonts/archivo/.
  * Allowed by `font-src 'self'` in apps/api/src/static-web.ts, so no policy change
  * was needed. The last remaining remote @import (retired with --font-mono
  * 2026-07-08) was the only off-origin request and logged a `style-src-elem` CSP
@@ -24,6 +24,13 @@
 @font-face {
   font-family: "Archivo";
   font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/archivo/archivo-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
   font-weight: 700;
   font-display: swap;
   src: url("/fonts/archivo/archivo-latin-700-normal.woff2") format("woff2");
@@ -34,6 +41,13 @@
   font-weight: 800;
   font-display: swap;
   src: url("/fonts/archivo/archivo-latin-800-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url("/fonts/archivo/archivo-latin-900-normal.woff2") format("woff2");
 }
 
 /*
@@ -61,7 +75,11 @@
   --surface-2: #f7f3e9;
   --surface-3: #d9cfb5;
   --scrim: rgba(46, 40, 30, 0.42);
+  --dialog-backdrop: var(
+    --scrim
+  ); /* Design-fidelity plan V0: study alias of --scrim, themed (light + dark). */
   --white: #ffffff;
+  --bone: var(--paper); /* Design-fidelity plan V0: study alias of --paper, themed. */
 
   --line-subtle: #e6dfd0;
   --line: #d9d1bf;
@@ -88,6 +106,7 @@
   --gold-soft: #f1e2c2;
   --gold-soft-2: #e8d3a4;
   --gold-ink: #6d4a12;
+  --hero-accent: #e9bd69; /* Design-fidelity plan V0: study gold-light; the one fixed literal, only ever on --hero-bg. */
 
   /* Amber — drift / at-risk / recovery (anti-shame) */
   --amber: #aa6d18;
@@ -95,6 +114,18 @@
   --amber-soft: #f8edd7;
   --amber-soft-2: #f0dfbc;
   --amber-ink: #5c3d0d;
+  --amber-bg: var(--amber-soft-2); /* Design-fidelity plan V0: study alias of --amber-soft-2. */
+  --hero-bg: color-mix(
+    in srgb,
+    var(--forest) 78%,
+    #000
+  ); /* Design-fidelity plan V0: study forest-deep; follows the accent under named, dark and custom themes. */
+  --hero-fg: var(--text-on-accent); /* Design-fidelity plan V0: bone text on the hero, themed. */
+  --hero-fg-muted: color-mix(
+    in srgb,
+    var(--text-on-accent) 78%,
+    var(--hero-bg)
+  ); /* Design-fidelity plan V0: study sage on the hero, themed. */
 
   /* Red — true error / destructive only */
   --red: #b23c2e;
@@ -388,6 +419,11 @@
   --forest-soft: #22392c;
   --forest-soft-2: #2a4636;
   --forest-ink: #a3d1b8;
+  --hero-bg: color-mix(
+    in srgb,
+    var(--forest) 55%,
+    #000
+  ); /* Design-fidelity plan V0: dark-block hero ground; 55% because dark mode brightens the accent. */
 
   --gold: #d9a04b;
   --gold-strong: #e3b268;
