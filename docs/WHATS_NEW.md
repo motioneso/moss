@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Design-fidelity token foundation.** Adds the two missing Archivo weights and the shared theme-aware palette tokens later design slices build on. Nothing visible moves except semibold text now uses the true face. [PR #2504](https://github.com/motioneso/moss/pull/2504)
 - **A prepared day, from evening to morning.** Today now plans tomorrow in the evening and reports overnight changes in the morning briefing. [PR #2502](https://github.com/motioneso/moss/pull/2502)
 
 ### 2026-09-12
