@@ -1,6 +1,6 @@
 # Messaging channels: Moss reaches Ben's phone, and he can reach it back
 
-**Status:** draft, revised 2026-09-15 after Ben's first read. Not approved. Mockups are an
+**Status:** draft, third pass 2026-09-15 after Ben's second read. Not approved. Mockups are an
 open item (section 9); Ben draws them in a separate session.
 **Issue:** none yet. A task issue is opened once Ben approves the design.
 **Author:** Claude, from the 2026-09-13 comparison of Moss with Octop.
@@ -38,6 +38,19 @@ here so they are not argued again.
 - The settings screens are Ben's to design. Section 9 describes what they must do and stays
   flagged as awaiting his mockups.
 
+Three more points were settled later on 2026-09-15, after Ben read the second pass.
+
+- A message sent while the assistant is still working on the last one waits in silence. No
+  acknowledgement is sent. Ben's words: "I don't like the waiting in silence, but in reality you
+  are sort of doing that either way, one just has a read receipt in a sense. I think we can start
+  with just silence and if needed we can make changes." Recorded in 5.4.
+- The instance has one shared bot by default, and a user may later supply their own bot token
+  instead. Version one builds the shared bot only, but the tables are keyed per bot from the
+  start so that adding a user's own bot later needs no change to an applied migration. Recorded
+  in 5.11, with the reasoning and the exposure the shared bot carries.
+- Group chats are an explicit non-goal for version one, not a side effect of the private-chat
+  check. Recorded in section 3.
+
 ## 2. Goals
 
 - Ben links his phone to his Moss account from Settings in under a minute, and the link is
@@ -57,8 +70,18 @@ here so they are not argued again.
 - WhatsApp, Discord, Signal, iMessage, SMS, email. The adapter boundary is shaped for them;
   none is built. Off-the-shelf routes to them (Apprise for sending, Matrix bridges for
   conversations) are recorded in 5.10 and not adopted.
-- Group chats. Only a private chat between Ben and the bot is linked. The bot refuses to join
-  groups (BotFather setting, see 7.1).
+- Group chats. This is a deliberate exclusion, decided 2026-09-15, not a side effect of the
+  private-chat check. Only a private chat between one person and the bot is linked, so Moss
+  cannot sit in a shared family chat and talk to several people at once. The bot refuses to
+  join groups (BotFather setting, see 7.1) and the receiver drops any update whose chat is not
+  private. Ben has not asked for group chats. Adding them later would take a binding per group
+  keyed by the group's chat id, the reserved `telegram-group` surface (5.2), the BotFather
+  group setting reversed, and a rule for whose account the assistant acts as when several
+  linked people share one room. That last rule is the hard part, because tools and memory are
+  owner-only and one reply cannot read two people's data.
+- A user's own bot token. Version one uses the shared instance bot only. The tables are keyed
+  per bot so that a user's own bot can be added later without touching an applied migration
+  (5.11).
 - Photos, files and voice notes in either direction. An inbound attachment gets one sentence
   saying the phone chat is text only.
 - Private (incognito) sessions over the phone. The drawer's private mode stays a drawer feature.
@@ -133,11 +156,27 @@ binding, not the key.
 
 ### 5.3 Data (channels module SQL, new files under `packages/channels/sql/`)
 
+Every table below hangs off a bot row, not off the platform. Version one has exactly one bot
+row, the shared instance bot. The keying is chosen now because an applied migration can never
+be edited, and a user's own bot later (5.11) would otherwise force a primary-key change.
+
 ```sql
+CREATE TABLE app.channel_bots (
+  id uuid PRIMARY KEY,
+  platform text NOT NULL CHECK (platform IN ('telegram')),
+  platform_bot_id text NOT NULL,         -- the bot's own id on the platform (Telegram getMe)
+  username text NOT NULL,                -- shown in Settings and used to build the deep link
+  owner_user_id uuid REFERENCES app.users(id) ON DELETE CASCADE,
+                                         -- null = the shared instance bot; set = a user's own bot (not built in v1)
+  created_at timestamptz NOT NULL DEFAULT now(),
+  disabled_at timestamptz,               -- set on Disconnect; the row stays so bindings can say why they stopped
+  UNIQUE (platform, platform_bot_id)     -- one bot may be registered once; two pollers on one token conflict
+);
+
 CREATE TABLE app.channel_bindings (
   id uuid PRIMARY KEY,
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
-  platform text NOT NULL CHECK (platform IN ('telegram')),
+  bot_id uuid NOT NULL REFERENCES app.channel_bots(id) ON DELETE CASCADE,
   platform_chat_id text NOT NULL,
   platform_sender_id text NOT NULL,
   display_name text NOT NULL,            -- Telegram first name, shown in Settings only
@@ -147,13 +186,14 @@ CREATE TABLE app.channel_bindings (
   last_outbound_at timestamptz,
   failure_count integer NOT NULL DEFAULT 0,
   disabled_at timestamptz,
-  UNIQUE (platform, platform_chat_id)
+  UNIQUE (bot_id, platform_chat_id)      -- a chat id is only meaningful for the bot that sees it
 );
 
 CREATE TABLE app.channel_link_codes (
   id uuid PRIMARY KEY,
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
-  platform text NOT NULL CHECK (platform IN ('telegram')),
+  bot_id uuid NOT NULL REFERENCES app.channel_bots(id) ON DELETE CASCADE,
+                                         -- the bot this code may be redeemed through
   code_hash text NOT NULL UNIQUE,        -- sha256 of the code; the code itself is never stored
   expires_at timestamptz NOT NULL,
   consumed_at timestamptz,
@@ -161,7 +201,7 @@ CREATE TABLE app.channel_link_codes (
 );
 
 CREATE TABLE app.channel_poll_state (
-  platform text PRIMARY KEY,
+  bot_id uuid PRIMARY KEY REFERENCES app.channel_bots(id) ON DELETE CASCADE,
   last_update_id bigint NOT NULL,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -180,10 +220,16 @@ CREATE TABLE app.channel_inbound_messages (
 
 Row-level security.
 
+- `channel_bots` holds no secret. The token lives in the encrypted settings store (5.8), and
+  the row only says which bot exists and who owns it. Rows with a null owner (the shared
+  instance bot) are readable by every app-role user, because Settings needs the username to
+  show "Connected as" and to build the link. Rows with an owner are owner-only. Only an admin
+  writes the instance row; a user would write their own row later. Worker role gets SELECT.
 - `channel_bindings` and `channel_link_codes` are owner-only for the app role. The worker
   role gets SELECT on bindings plus UPDATE of the counters and `disabled_at`, mirroring the
   notification_reads worker grant (0166) and the web push subscriptions plan.
-- `channel_poll_state` holds no user data. App role read and write.
+- `channel_poll_state` holds no user data, only a position in Telegram's update stream. App
+  role read and write.
 - `channel_inbound_messages` is owner-only for the app role, written by the receiver inside
   the resolved owner's data context and read and deleted by the handler inside the same
   context. Rows live for seconds. Anything older than one hour and unhandled is deleted by
@@ -201,14 +247,21 @@ chat package uses for its incognito cleanup function (migration 0174). Everythin
 lookup runs inside the returned actor's normal data context.
 
 ```sql
-app.resolve_channel_binding(p_platform text, p_chat_id text, p_sender_id text) RETURNS uuid
-  -- owner_user_id of the active binding where chat id AND sender id both match, else null
+app.resolve_channel_binding(p_bot_id uuid, p_chat_id text, p_sender_id text) RETURNS uuid
+  -- owner_user_id of the active binding for this bot where chat id AND sender id both
+  -- match, else null
 
-app.redeem_channel_link_code(p_platform text, p_code_hash text, p_chat_id text,
+app.redeem_channel_link_code(p_bot_id uuid, p_code_hash text, p_chat_id text,
                              p_sender_id text, p_display_name text) RETURNS uuid
-  -- atomically: find an unexpired, unconsumed code by hash; mark it consumed; insert the
-  -- binding (or re-activate one for the same chat); return owner_user_id. Null on any miss.
+  -- atomically: find an unexpired, unconsumed code by hash whose bot_id matches; mark it
+  -- consumed; insert the binding (or re-activate one for the same bot and chat); return
+  -- owner_user_id. Null on any miss, including a code issued for a different bot.
 ```
+
+Both take the bot's row id rather than the platform name. The receiver that saw the update
+knows which bot it is polling for, and the platform follows from the bot row. A code issued
+for one bot cannot be redeemed through another, so a user's own bot later cannot be bypassed
+by typing that user's code into the shared bot.
 
 This is the one place on the path that reads across users, and it is limited to answering
 "whose chat is this". It is not an admin bypass and no role gains BYPASSRLS.
@@ -242,13 +295,21 @@ The receiver does as little as possible, so the lock covers as little as possibl
   The message text stays in the holding row. This keeps the metadata-only job payload rule,
   which forbids private content in a queue payload. It is the reason the holding table
   exists. The first draft never queued a message, so the question did not arise.
-- `channel_poll_state.last_update_id` advances once the batch's rows and jobs are written,
-  so a restart neither replays a message nor loses one that was accepted.
-- The receiver takes a Postgres advisory lock at start. A second API process logs "another
-  process holds the Telegram receiver lock" and does not poll. A 409 from Telegram is
-  treated the same way and retried with backoff.
+- The poll state row for the bot advances (`last_update_id`) once the batch's rows and jobs
+  are written, so a restart neither replays a message nor loses one that was accepted.
+  Update ids are Telegram's counter for one bot, so the position is stored per bot row, not
+  per platform. Under the earlier per-platform key, connecting a different bot would have
+  handed the old bot's position to the new one and silently skipped its first messages.
+- The receiver takes a Postgres advisory lock at start, keyed on the bot row id. A second API
+  process logs "another process holds the Telegram receiver lock" and does not poll. A 409
+  from Telegram is treated the same way and retried with backoff.
 - The receiver starts only when a bot token is stored. Removing the token stops it. A missing
   token degrades this module and nothing else.
+- One receiver loop, one lock and one poll state row per active bot row. Version one has one
+  bot row, so one loop. When a user's own bot exists later (5.11), the API process runs a
+  second loop for it with its own lock and its own position, and the two never share a
+  request, because Telegram's single-poller rule is per token. That is the whole shape of
+  the later work on the receiving side. It is not built now.
 
 The inbound handler is separate code, downstream of the queue.
 
@@ -260,6 +321,14 @@ The inbound handler is separate code, downstream of the queue.
   waits in the queue and is retried after the turn completes, instead of being refused. Only
   if it has waited more than two minutes does the bot say "Still working on your last
   message."
+- The queued message gets no acknowledgement. Ben settled this on 2026-09-15: "I don't like
+  the waiting in silence, but in reality you are sort of doing that either way, one just has
+  a read receipt in a sense. I think we can start with just silence and if needed we can make
+  changes." The reasoning is that a "got it, still working" line would not shorten the wait,
+  only confirm it, and the browser drawer gives no such line either. The two-minute line
+  above stays, because it signals a stuck turn rather than a normal wait. If silence turns
+  out to annoy him in use, adding an immediate acknowledgement is one extra send in the
+  handler when it finds a turn in flight, and no table or contract changes.
 - After handling, the holding row is deleted.
 
 What this buys, and what it does not.
@@ -343,7 +412,10 @@ actions always ask. Nothing about arriving by Telegram widens or narrows that.
   hours defer it. Both payloads are ids and a timestamp. No text, no secrets.
 - The channels delivery target runs inside the recipient's data context, reads the
   notification and the recipient's active bindings with `deliver_notifications` on, and sends
-  one message per binding. The message is the title in bold, the full body capped at 3500
+  one message per binding, through the bot that binding belongs to. In version one that is
+  always the instance bot, whose token the worker loads from the instance settings store. A
+  user's own bot later (5.11) would have its token loaded inside that same recipient context,
+  and this loop would not change. The message is the title in bold, the full body capped at 3500
   characters, and, when the instance has a Moss address set (5.8), a link to the
   notification's screen. Telegram carries far more than a push tray, so the body goes whole.
   Ben confirmed the whole body on 2026-09-15 (section 1).
@@ -362,14 +434,26 @@ actions always ask. Nothing about arriving by Telegram widens or narrows that.
 
 ### 5.8 Bot token and the Moss address
 
-- The bot token is an instance secret, key `channels.telegram.bot_token`, marked secret in the
-  instance settings registry so the generic settings routes reject it, and written only by the
-  dedicated encrypted route. It is stored with the same envelope the Brave search key uses and
-  loaded lazily through the master key store pattern (spec 2026-09-05). Missing means this
-  module shows "needs attention" and nothing else breaks. No env var is added.
-- The bot's username is fetched once with `getMe` after the token is saved and cached as a
-  non-secret setting, so Settings can show "Connected as @name" and build the link URL without
-  touching the token.
+- The instance bot token is an instance secret, key `channels.telegram.bot_token`, marked
+  secret in the instance settings registry so the generic settings routes reject it, and
+  written only by the dedicated encrypted route. It is stored with the same envelope the
+  Brave search key uses and loaded lazily through the master key store pattern (spec
+  2026-09-05). Missing means this module shows "needs attention" and nothing else breaks. No
+  env var is added.
+- The token is never written to the `channel_bots` table. The bots row tells the code which
+  store to read the token from (a null owner means the instance settings store; an owner id
+  would later mean that user's own encrypted credential row), and nothing more. A table every
+  user can read must not carry a secret, even an encrypted one.
+- On save, Moss calls `getMe` once and writes the bot's id and username into the
+  `channel_bots` row, so Settings can show "Connected as @name" and build the link URL
+  without touching the token again. Saving the same bot again (same id from `getMe`) clears
+  `disabled_at` on the existing row and keeps every binding. Saving a different bot inserts a
+  new row, and bindings on the old row keep showing "bot disconnected", because Telegram will
+  not let a bot message a person who has never started a chat with it. Those users link
+  again.
+- Disconnect deletes the token from the settings store and sets `disabled_at` on the bot
+  row. The row and its poll position stay, so reconnecting the same bot within Telegram's
+  24-hour update retention loses nothing.
 - The Moss address for links is an optional non-secret instance setting on the same admin
   screen. Blank means messages carry no link. Nothing requires it.
 
@@ -440,10 +524,10 @@ What the code above the adapter must not assume, because it is Telegram-shaped.
   give a room id and a separate user id. The private-chat check in 5.5 belongs to the
   Telegram adapter, which reports `chatType`; the redemption function only requires that the
   adapter said "private".
-- Update ids and polling. `channel_poll_state` is keyed by platform and its column is a
+- Update ids and polling. `channel_poll_state` is keyed by bot row and its column is a
   Telegram-shaped integer. A second adapter that syncs by token gets its own column or its
-  own row shape; the receiver loop is written per adapter and the queue below it does not
-  care.
+  own row shape; the receiver loop is written per adapter and per bot, and the queue below it
+  does not care.
 - Chat ids are opaque strings. Telegram's are integers; Matrix room ids look like
   `!abc:server`. Nothing parses them.
 
@@ -504,6 +588,68 @@ Conversations on many platforms have one real answer, Matrix with the mautrix br
   user, and the room id is not a number. The boundary is written so that none of those reach
   the code above it.
 
+### 5.11 Shared bot by default, a user's own bot token later
+
+Ben asked on 2026-09-15 how several users on one instance are routed. The answer above does
+not change. One instance bot, one binding per chat, chat id and sender id both matched, one
+lookup that returns only an owner id. His instance has no other human users today, but he
+said it could have them today if he wanted, so this is a live question rather than a
+hypothetical one. What he ruled is that the shared bot stays the default and a user may
+optionally supply their own bot token instead. Version one builds the shared bot only.
+
+Why the shared bot is the default.
+
+- Creating a bot means messaging BotFather, running /newbot, inventing a globally unique
+  username ending in "bot" (which usually takes several tries), then copying a long secret
+  into Moss. Moss assumes one technical person runs the instance for people who do not want
+  to think about it. Making every user do that pushes setup onto the people least equipped
+  for it.
+- One bot means one place to check that hygiene settings are right (7.1), one receiver to
+  keep alive, and one thing for the admin to fix when Telegram rejects a token.
+
+What the shared bot costs, stated plainly.
+
+- The bot token is held by the admin and carries every user's private messages, in both
+  directions. Moss is strict that admin power is configuration power only and that row-level
+  security applies to admins too. This is the first thing in the system where an admin-held
+  secret sits in front of other users' private content. The database never lets the admin
+  read another user's messages; the bot token does.
+- It fails worse than a stolen database would. Whoever holds the token can run their own
+  poller from anywhere on the internet, win the race against the instance for each batch of
+  updates, and silently intercept every user's inbound messages from then on, with no further
+  access to the box. A stolen database is a copy of the past. A stolen bot token is an
+  ongoing tap, and the instance's only symptom is a 409 conflict it already expects to see.
+- A user's own bot token removes both exposures for that user. Their messages then pass
+  through a bot only they hold, and the admin cannot read them or tap them.
+
+What version one does to keep that option open, since an applied migration can never be
+edited.
+
+- A `channel_bots` table exists from the first migration, with an owner column that is null
+  for the instance bot. The token is not in it (5.8).
+- Poll position is keyed by bot row, not by platform. This is the change that would otherwise
+  have forced a primary-key migration, and it also fixes the different-bot rotation bug noted
+  in 5.4.
+- Bindings and link codes carry the bot row id. A chat id is only meaningful for the bot that
+  sees it, so the uniqueness rule is per bot and chat, and a code can only be redeemed through
+  the bot it was issued for.
+- The two lookup functions take the bot row id, not the platform name.
+- The receiver is written as one loop per active bot row, with one lock and one poll state
+  row each, and the delivery loop sends through each binding's own bot. With one bot row that
+  is exactly the version-one behaviour.
+
+What the later work would add, and is not built now.
+
+- A user-scope encrypted credential row for the user's own token, in the existing
+  module-credential key family, and a route to save and revoke it.
+- A second receiver loop for that bot in the API process, started and stopped with the token
+  the same way the instance loop is.
+- A "use my own bot" path on the user's Messaging screen (section 9), with the same BotFather
+  hygiene advice the admin screen gives.
+- A rule for a user who has both. The simplest is that the user's own bot replaces the
+  instance bot for that user, so their bindings move to it and the instance bot treats them
+  as a stranger from then on.
+
 ## 6. Security invariants on this path
 
 - **No admin bypass.** The two definer functions answer "whose chat is this" and nothing more.
@@ -525,6 +671,13 @@ Conversations on many platforms have one real answer, Matrix with the mautrix br
   assistant replies and approval previews pass through Telegram's servers in the clear, the
   same way web push text is visible in a device tray. Ben accepted that trade for push. It is
   restated here so it is a decision, not a surprise.
+- **Known exposure of the shared bot.** The instance bot token is an admin-held secret that
+  every user's messages pass through, and a stolen token is an ongoing tap on inbound
+  messages from anywhere, not a copy of past data (5.11). This is the one place on the path
+  where the "admin power is configuration power only" rule does not hold, and it is accepted
+  for version one because the shared bot is what makes setup possible for non-technical
+  users. A user's own bot token, when built, removes the exposure for that user. Until then
+  the admin screen says so in one line.
 - **Logs.** The receiver and the handler log update ids, job ids and binding ids, never
   chat ids, sender ids, or message text. Unknown-sender events log a count, not an id.
 - **Export.** A user's data export includes their binding metadata (platform, display name,
@@ -585,9 +738,13 @@ Admin screen, "Messaging bot" (admin scope).
 - Optional Moss address for links, with one line saying what it is for.
 - The two BotFather hygiene commands with their one-line reasons.
 - Receiver state in plain words, "Listening", "Stopped, no token", "Stopped, another Moss
-  process is listening", "Telegram unreachable since 09:14".
+  process is listening", "Telegram unreachable since 09:14". One line per bot; version one
+  has one.
+- One line saying that everyone's messages pass through this bot and its token, so the token
+  should be treated like a password for every user on the instance (5.11).
 - Disconnect, which deletes the token and stops the receiver. Existing bindings stay and show
-  "bot disconnected" until an admin reconnects.
+  "bot disconnected" until an admin reconnects the same bot. Connecting a different bot
+  means users link again (5.8).
 
 User screen, "Messaging" under the user's own settings (user scope).
 
@@ -598,6 +755,8 @@ User screen, "Messaging" under the user's own settings (user scope).
 - A disabled row reads "Not reachable, unlink and link again".
 - Empty state when no bot is connected reads "An admin needs to connect a messaging bot
   first", and for the single-user case links straight to the admin screen.
+- Not in version one, but the layout should leave room for it: an optional "use my own bot"
+  path where the user pastes their own token instead of using the instance bot (5.11).
 - Loading, empty, error and broken states are named at mockup time, per the standards.
 
 Design system. `jds-*` primitives only, tokens for colour, no module-local colour, run the
@@ -620,6 +779,11 @@ the first draft. Ben settled both on 2026-09-15 (section 1) and they are no long
 - **One sentence to strangers (7).** The alternative is total silence.
 - **Long polling before webhooks (5.4).** It fits a tailnet-only instance and needs no public
   address. An install with a public address gets nothing worse than a few seconds of latency.
+- **A shared bot, with the exposure that carries (5.11).** Settled 2026-09-15. The
+  alternative, every user creating their own bot, was rejected for onboarding cost. The
+  tables are keyed per bot so a user's own token can be added later without a key change.
+- **Silence while a turn is running (5.4).** Settled 2026-09-15. An acknowledgement can be
+  added later with one extra send if silence annoys him in use.
 
 ## 11. Testing
 
@@ -628,7 +792,9 @@ the first draft. Ben settled both on 2026-09-15 (section 1) and they are no long
   buttons; the failure counter rules (403 disables, five failures disable, success resets);
   the unknown-sender window; the 409 backoff.
 - Integration. Redeeming a code binds a private chat and refuses a group chat, a mismatched
-  sender, an expired code and a consumed code. Creating a notification enqueues the fan-out
+  sender, an expired code, a consumed code and a code issued for a different bot row.
+  Reconnecting the same bot keeps bindings and poll position; connecting a different bot
+  leaves the old bindings disconnected. Creating a notification enqueues the fan-out
   job with a metadata-only payload. The delivery target reads bindings only inside the
   recipient's data context. The receiver writes a holding row only inside the resolved
   owner's context and the queued job carries ids only, no text. The handler deletes the
@@ -663,6 +829,8 @@ the first draft. Ben settled both on 2026-09-15 (section 1) and they are no long
 ## 13. Hard invariants honored
 
 No admin bypass and no BYPASSRLS role; the two definer functions return an owner id only.
+The one exposure that rule does not cover, the shared bot token, is named in section 6
+rather than hidden.
 Owner-only rows for bindings, codes, inbound holding rows, threads and action requests. The
 bot token is encrypted at rest and never leaves the server. Job payloads carry ids and a
 timestamp; inbound message text waits in an owner-only row, never in a payload. Module SQL lives
