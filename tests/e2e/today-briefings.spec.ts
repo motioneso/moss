@@ -13,7 +13,8 @@ import {
   mockDayPlanTask,
   registerMockDayPlanRoutes
 } from "./mock-day-plan-api.js";
-import { myModulesResponse } from "./mock-modules.js";
+
+import { mockCalEvent, seedTodayChrome } from "./today-page-chrome.js";
 
 const NOW = "2026-09-10T16:00:00.000Z";
 const DAY = "2026-09-10";
@@ -84,77 +85,7 @@ test("morning briefing reader opens, stays in viewport, and returns focus", asyn
   };
   await mockApi(page, state);
   // Wellness enabled with one scheduled medication for the day.
-  await page.route("**/api/me/modules", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        modules: [
-          ...myModulesResponse.modules,
-          {
-            id: "wellness",
-            name: "Wellness",
-            version: "0.1.0",
-            lifecycle: "user-toggleable",
-            required: false,
-            supportsUserDisable: true,
-            instanceDisabled: false,
-            userDisabled: false,
-            active: true,
-            hasPreferences: false,
-            hasUserCredentials: false,
-            scope: "everyone"
-          }
-        ]
-      })
-    })
-  );
-  await page.route("**/api/wellness/medications/schedule*", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        date: DAY,
-        slots: [
-          {
-            medicationId: "med-reader",
-            name: "Morning Vitamin",
-            scheduledFor: `${DAY}T08:00:00.000Z`,
-            asNeeded: false,
-            status: "pending"
-          }
-        ]
-      })
-    })
-  );
-  // Populated weather strip.
-  await page.route("**/api/weather/today", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: {
-          temp: 72,
-          feelsLike: 71,
-          condition: "Sunny",
-          icon: "sun",
-          location: "San Francisco, CA",
-          unit: "imperial",
-          humidity: 55,
-          dewPoint: 54,
-          windSpeed: 5,
-          lat: 37.7,
-          lon: -122.4,
-          forecast: [0, 1, 2].map((offset) => ({
-            date: `2026-09-${String(10 + offset).padStart(2, "0")}`,
-            icon: "sun",
-            high: 75 - offset,
-            low: 60 - offset
-          }))
-        }
-      })
-    })
-  );
+  await seedTodayChrome(page, DAY, "med-reader");
   // Saved day plan with blocks plus the one task above.
   await page.route("**/api/calendar/day-plan*", (route) =>
     route.fulfill({
@@ -340,76 +271,7 @@ test("day plan review applies adds and a confirmed move from Today and the reade
     calendarEvents: [lunch, dentist]
   };
   await mockApi(page, state);
-  await page.route("**/api/me/modules", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        modules: [
-          ...myModulesResponse.modules,
-          {
-            id: "wellness",
-            name: "Wellness",
-            version: "0.1.0",
-            lifecycle: "user-toggleable",
-            required: false,
-            supportsUserDisable: true,
-            instanceDisabled: false,
-            userDisabled: false,
-            active: true,
-            hasPreferences: false,
-            hasUserCredentials: false,
-            scope: "everyone"
-          }
-        ]
-      })
-    })
-  );
-  await page.route("**/api/wellness/medications/schedule*", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        date: DAY,
-        slots: [
-          {
-            medicationId: "med-review",
-            name: "Morning Vitamin",
-            scheduledFor: `${DAY}T08:00:00.000Z`,
-            asNeeded: false,
-            status: "pending"
-          }
-        ]
-      })
-    })
-  );
-  await page.route("**/api/weather/today", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: {
-          temp: 72,
-          feelsLike: 71,
-          condition: "Sunny",
-          icon: "sun",
-          location: "San Francisco, CA",
-          unit: "imperial",
-          humidity: 55,
-          dewPoint: 54,
-          windSpeed: 5,
-          lat: 37.7,
-          lon: -122.4,
-          forecast: [0, 1, 2].map((offset) => ({
-            date: `2026-09-${String(10 + offset).padStart(2, "0")}`,
-            icon: "sun",
-            high: 75 - offset,
-            low: 60 - offset
-          }))
-        }
-      })
-    })
-  );
+  await seedTodayChrome(page, DAY, "med-review");
   await registerMockDayPlanRoutes(page, {
     plan: {
       id: "plan-review",
@@ -645,76 +507,7 @@ test("accept all applies eligible additions from the reader, then reviews the co
     calendarEvents: [standup, lunch]
   };
   await mockApi(page, state);
-  await page.route("**/api/me/modules", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        modules: [
-          ...myModulesResponse.modules,
-          {
-            id: "wellness",
-            name: "Wellness",
-            version: "0.1.0",
-            lifecycle: "user-toggleable",
-            required: false,
-            supportsUserDisable: true,
-            instanceDisabled: false,
-            userDisabled: false,
-            active: true,
-            hasPreferences: false,
-            hasUserCredentials: false,
-            scope: "everyone"
-          }
-        ]
-      })
-    })
-  );
-  await page.route("**/api/wellness/medications/schedule*", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        date: DAY,
-        slots: [
-          {
-            medicationId: "med-accept",
-            name: "Morning Vitamin",
-            scheduledFor: `${DAY}T08:00:00.000Z`,
-            asNeeded: false,
-            status: "pending"
-          }
-        ]
-      })
-    })
-  );
-  await page.route("**/api/weather/today", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: {
-          temp: 72,
-          feelsLike: 71,
-          condition: "Sunny",
-          icon: "sun",
-          location: "San Francisco, CA",
-          unit: "imperial",
-          humidity: 55,
-          dewPoint: 54,
-          windSpeed: 5,
-          lat: 37.7,
-          lon: -122.4,
-          forecast: [0, 1, 2].map((offset) => ({
-            date: `2026-09-${String(10 + offset).padStart(2, "0")}`,
-            icon: "sun",
-            high: 75 - offset,
-            low: 60 - offset
-          }))
-        }
-      })
-    })
-  );
+  await seedTodayChrome(page, DAY, "med-accept");
   await registerMockDayPlanRoutes(page, {
     plan: {
       id: "plan-accept",
@@ -852,4 +645,233 @@ test("accept all applies eligible additions from the reader, then reviews the co
   const reviewBackBox = await dialog.getByRole("button", { name: "Back to Today" }).boundingBox();
   expect(reviewBackBox, "review footer inside the 320px viewport").not.toBeNull();
   expect(reviewBackBox!.x + reviewBackBox!.width).toBeLessThanOrEqual(321);
+});
+
+test("evening planning saves one draft and never applies in suggest mode", async ({ page }) => {
+  await page.clock.setFixedTime(new Date(NOW));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const TMO = "2026-09-11";
+
+  const morningDefinition = createMockBriefingDefinition("briefing-evening-t20", "Morning", {
+    briefingType: "morning",
+    cadence: "daily",
+    scheduleMetadata: { targetTime: "07:00", timezone: "UTC" }
+  });
+  const eveningDefinition = createMockBriefingDefinition("briefing-evening-run", "Evening", {
+    briefingType: "evening",
+    cadence: "daily",
+    enabled: true,
+    scheduleMetadata: { targetTime: "00:00", timezone: "UTC" }
+  });
+  const morningRun = createMockBriefingRun("morning-run-t20", morningDefinition.id, LONG_PROSE, {
+    briefingType: "morning",
+    createdAt: NOW,
+    sourceMetadata: {
+      sourceTimestamps: {
+        version: 1,
+        capturedAt: NOW,
+        sources: [{ source: LONG_SOURCE, freshnessKind: "connector_sync", asOf: NOW }]
+      }
+    },
+    structuredPayload: { version: 1, actionRows: [], catchUp: null }
+  });
+  const eveningRun = createMockBriefingRun("evening-run-t20", eveningDefinition.id, LONG_PROSE, {
+    briefingType: "evening",
+    createdAt: NOW
+  });
+  const lunch = mockCalEvent(
+    "evening-event-lunch",
+    "Lunch with Sam",
+    DAY + "T12:00:00.000Z",
+    DAY + "T13:00:00.000Z"
+  );
+  const tmStandup = mockCalEvent(
+    "evening-event-standup",
+    "Team standup",
+    TMO + "T09:00:00.000Z",
+    TMO + "T10:00:00.000Z"
+  );
+  const tmDentist = mockCalEvent(
+    "evening-event-dentist",
+    "Dentist",
+    TMO + "T16:00:00.000Z",
+    TMO + "T16:30:00.000Z"
+  );
+  const state: MockApiState = {
+    authenticated: true,
+    onboardingStatus: {
+      role: "founder",
+      state: "completed",
+      steps: {
+        cliAuth: {
+          done: true,
+          providers: [{ kind: "anthropic", cliPresent: true, installState: "ready" }]
+        },
+        connectors: { done: false }
+      }
+    },
+    chatThreads: [],
+    notifications: [],
+    tasks: [
+      createMockTask("t1", "Write the launch brief"),
+      createMockTask("t2", "Call the vendor"),
+      createMockTask("t3", "Ship the invoice"),
+      createMockTask("t4", "Water the plants"),
+      createMockTask("t5", "File the report", { dueAt: TMO + "T12:00:00.000Z" }),
+      createMockTask("t6", "Review the contract", { dueAt: DAY + "T12:00:00.000Z" }),
+      createMockTask("t7", "Paid the rent", { status: "done", completedAt: DAY + "T10:00:00.000Z" })
+    ],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    briefingDefinitions: [morningDefinition, eveningDefinition],
+    briefingRuns: { [morningDefinition.id]: [morningRun], [eveningDefinition.id]: [eveningRun] },
+    calendarEvents: [lunch, tmStandup, tmDentist]
+  };
+  await mockApi(page, state);
+  await seedTodayChrome(page, DAY, "med-evening");
+  await registerMockDayPlanRoutes(page, {
+    plan: {
+      id: "plan-evening-today",
+      localDay: DAY,
+      timeZone: "UTC",
+      revision: 1,
+      sourceRunId: null,
+      eveningIntent: {
+        priorityTaskIds: [],
+        capacity: null,
+        notes: null,
+        corrections: [],
+        commitments: []
+      },
+      blocks: [
+        mockDayPlanBlock("t-b1", "t1", 0, {
+          pendingChange: { kind: "add", startsAt: DAY + "T10:00:00.000Z", durationMinutes: 30 }
+        }),
+        mockDayPlanBlock("t-b2", "t2", 1, {
+          pendingChange: { kind: "add", startsAt: DAY + "T12:00:00.000Z", durationMinutes: 30 }
+        }),
+        mockDayPlanBlock("t-b3", "t3", 2, {
+          actualPlacement: {
+            startsAt: DAY + "T14:00:00.000Z",
+            durationMinutes: 60,
+            calendarEventRef: "ev-cal-3"
+          }
+        }),
+        mockDayPlanBlock("t-b4", "t4", 3, {
+          actualPlacement: {
+            startsAt: DAY + "T16:00:00.000Z",
+            durationMinutes: 30,
+            calendarEventRef: "ev-cal-4"
+          }
+        }),
+        mockDayPlanBlock("t-b5", "t5", 4),
+        mockDayPlanBlock("t-b6", "t6", 5, {
+          actualPlacement: {
+            startsAt: DAY + "T09:00:00.000Z",
+            durationMinutes: 30,
+            calendarEventRef: "ev-cal-6"
+          },
+          pendingChange: { kind: "move", startsAt: DAY + "T15:00:00.000Z", durationMinutes: 30 }
+        })
+      ]
+    },
+    tomorrowPlan: {
+      id: "plan-evening-tomorrow",
+      localDay: TMO,
+      timeZone: "UTC",
+      revision: 1,
+      sourceRunId: null,
+      eveningIntent: {
+        priorityTaskIds: [],
+        capacity: null,
+        notes: null,
+        corrections: [],
+        commitments: []
+      },
+      blocks: [
+        mockDayPlanBlock("tm-b1", "t3", 0, {
+          actualPlacement: {
+            startsAt: TMO + "T14:00:00.000Z",
+            durationMinutes: 60,
+            calendarEventRef: "ev-tm-1"
+          }
+        }),
+        mockDayPlanBlock("tm-b2", "t4", 1, {
+          pendingChange: { kind: "add", startsAt: TMO + "T10:00:00.000Z", durationMinutes: 30 }
+        }),
+        mockDayPlanBlock("tm-b3", "t6", 2, {
+          pendingChange: { kind: "add", startsAt: TMO + "T11:00:00.000Z", durationMinutes: 30 }
+        })
+      ]
+    },
+    tasks: [
+      mockDayPlanTask("t1", "Write the launch brief"),
+      mockDayPlanTask("t2", "Call the vendor"),
+      mockDayPlanTask("t3", "Ship the invoice"),
+      mockDayPlanTask("t4", "Water the plants"),
+      mockDayPlanTask("t5", "File the report", TMO + "T12:00:00.000Z"),
+      mockDayPlanTask("t6", "Review the contract")
+    ],
+    fixedEvents: [lunch]
+  });
+
+  const writes: { method: string; url: string }[] = [];
+  page.on("request", (request) => {
+    writes.push({ method: request.method(), url: request.url() });
+  });
+
+  await page.goto("/today");
+  await expect(page.getByRole("button", { name: "Plan tomorrow" })).toBeVisible();
+  await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
+  await expect(page.getByText("Write the launch brief").first()).toBeVisible();
+  await expect(page.getByText("Lunch with Sam").first()).toBeVisible();
+  await expect(page.getByText("Team standup").first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Plan tomorrow" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plan tomorrow" })).toBeVisible();
+  await expect(dialog).toContainText("Protect the launch window");
+
+  // Correct a task: the note reads back, no task is completed.
+  const correction = dialog.getByLabel("Write the launch brief: correction");
+  await correction.fill("Scope slipped again");
+  await correction.locator("xpath=ancestor::li[1]").getByRole("button", { name: "Add" }).click();
+  await expect(dialog).toContainText("Noted: Scope slipped again");
+  await expect(dialog).toContainText("Done");
+
+  // Commit one task for tomorrow; the due-dated one is already set.
+  await dialog
+    .getByRole("radiogroup", { name: "Call the vendor: plan" })
+    .getByLabel("Tomorrow")
+    .click();
+  await expect(
+    dialog.getByRole("radiogroup", { name: "Call the vendor: plan" }).getByLabel("Tomorrow")
+  ).toBeChecked();
+  await expect(dialog).toContainText("Already set for tomorrow");
+
+  // Lighter day with a main priority, then save in suggest mode.
+  await dialog.getByRole("radiogroup", { name: "Day capacity" }).getByLabel("Lighter day").click();
+  await dialog.getByLabel("Main priority").selectOption("t2");
+  await dialog.getByRole("button", { name: "Save tomorrow's plan" }).click();
+  await expect(dialog).toContainText("Saved. The blocks are proposed for the morning.");
+
+  // Exactly one draft save; suggest mode never previews or applies.
+  const drafts = writes.filter((entry) => entry.method === "PATCH" && entry.url.endsWith("/draft"));
+  expect(drafts.length).toBe(1);
+  expect(writes.filter((entry) => entry.url.endsWith("/preview")).length).toBe(0);
+  expect(writes.filter((entry) => entry.url.endsWith("/apply")).length).toBe(0);
+
+  // Widths on the populated page: no sideways scroll, footer stays visible.
+  for (const width of [1440, 768, 375, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByRole("heading", { name: "Plan tomorrow" })).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      "no sideways scroll at " + width + "px"
+    ).toBe(true);
+    const save = dialog.getByRole("button", { name: "Save tomorrow's plan" });
+    const box = await save.boundingBox();
+    expect(box, "footer inside the viewport at " + width + "px").not.toBeNull();
+  }
 });

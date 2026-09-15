@@ -217,6 +217,12 @@ export function acceptAllOutcomeLine(applied: number, failed: number, pending: n
   return line;
 }
 
+/** Evening planning surface (T20). */
+export const PLAN_TOMORROW_LABEL = "Plan tomorrow";
+export const SAVE_TOMORROW_LABEL = "Save tomorrow's plan";
+export const EVENING_REVIEW_NOT_READY = "Your evening review is not ready yet";
+export const NO_ROOM_FOUND = "No room found";
+
 /** Unsaved review deltas beside the saved schedule's own words (T18). */
 export const REVIEW_TRANSIENT_LABELS = {
   toSchedule: "To schedule",
