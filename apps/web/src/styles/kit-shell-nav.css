@@ -1,0 +1,70 @@
+/* Desktop icon rail for the shell navigation. The rail re-scopes the existing
+   width token, so the grid follows with no new token and no edits to styles.css.
+   Every rail presentation rule lives above 880 pixels: with the rail preference
+   stored, the phone drawer keeps the full base sidebar. */
+
+@media (min-width: 881px) {
+  .app-frame[data-nav="rail"] {
+    --nav-w: 64px;
+  }
+
+  .app-frame[data-nav="rail"] .sidebar {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    align-items: stretch;
+  }
+
+  .app-frame[data-nav="rail"] .brand-lockup {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .app-frame[data-nav="rail"] .brand-wordmark {
+    display: none;
+  }
+
+  .app-frame[data-nav="rail"] .nav-group__label {
+    display: none;
+  }
+
+  .app-frame[data-nav="rail"] .module-link {
+    position: relative;
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .app-frame[data-nav="rail"] .module-link span:not(.jds-badge-count) {
+    display: none;
+  }
+
+  .app-frame[data-nav="rail"] .module-link .jds-badge-count {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+  }
+
+  .app-frame[data-nav="rail"] .nav-collapse {
+    align-self: center;
+  }
+
+  .app-frame[data-nav="rail"] .jds-usermenu__id {
+    display: none;
+  }
+
+  .app-frame[data-nav="rail"] .jds-usermenu__trigger {
+    justify-content: center;
+  }
+}
+
+.nav-collapse {
+  margin-top: 0.25rem;
+  align-self: flex-start;
+}
+
+@media (max-width: 880px) {
+  .nav-collapse {
+    display: none;
+  }
+}
