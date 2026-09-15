@@ -10,6 +10,7 @@ import {
 } from "../../packages/briefings/src/compose.js";
 import {
   FIXED_NOW,
+  committedDayPlanBlock,
   definition,
   fakeScopedDb,
   makeFakeDeps,
@@ -981,5 +982,16 @@ describe("composeBriefing — plan prose (T13)", () => {
     expect(day).toBeGreaterThan(prompt.indexOf('<external_source type="chats">'));
     expect(day).toBeLessThan(prompt.indexOf('<external_source type="goals">'));
     expect(prompt).toContain("Capacity (saved last evening): light");
+  });
+
+  it("reports an overnight line only when the committed event moved (T21)", async () => {
+    const render = (startsAt: string) =>
+      promptFor(definition(), {
+        dayPlan: { plan: { ...plan, blocks: [committedDayPlanBlock(startsAt)] } }
+      });
+    expect((await render("2026-06-13T08:00:00.000Z")).prompt).toContain(
+      'Overnight change: the event under "Focus" moved'
+    );
+    expect((await render("2026-06-13T09:00:00.000Z")).prompt).not.toContain("Overnight change:");
   });
 });

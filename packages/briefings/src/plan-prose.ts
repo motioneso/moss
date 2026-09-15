@@ -1,6 +1,7 @@
 import type { BriefingPlanBlockV1, BriefingPlanContextV1 } from "@moss/shared";
 
 import { capLines, emptySection, type Section } from "./compose-shared.js";
+import { planOvernightChanges } from "./plan-reconcile.js";
 import { sanitizeExternal } from "./trust-boundary.js";
 
 export const DAY_PLAN_SECTION_KEY = "day_plan";
@@ -43,7 +44,8 @@ function blockLine(block: BriefingPlanBlockV1): string {
  */
 export function planSection(
   plan: BriefingPlanContextV1 | null | undefined,
-  taskItems: readonly Record<string, unknown>[] | undefined
+  taskItems: readonly Record<string, unknown>[] | undefined,
+  calendarItems?: readonly Record<string, unknown>[] | undefined
 ): Section {
   if (!plan) return emptySection(DAY_PLAN_SECTION_KEY, DAY_PLAN_SECTION_LABEL);
   const lines: string[] = [];
@@ -63,6 +65,9 @@ export function planSection(
   }
   for (const block of plan.blocks) {
     lines.push(blockLine(block));
+  }
+  for (const change of planOvernightChanges(plan, calendarItems, taskItems)) {
+    lines.push(change);
   }
   if (intent && plan.blocks.length === 0) {
     lines.push(NO_BLOCKS_LINE);

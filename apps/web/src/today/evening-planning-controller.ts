@@ -37,6 +37,7 @@ export interface EveningPlanningInput {
   readonly tasks: readonly TaskDto[];
   readonly unavailableTaskIds: readonly string[];
   readonly tomorrowEvents: readonly CalendarEventDto[];
+  readonly sourceRunId: string | null;
   readonly getReview: () => DayPlanReviewController | null;
 }
 
@@ -96,6 +97,8 @@ export function useEveningPlanning(input: EveningPlanningInput) {
     if (row.marked === null && (decisions[row.task.id]?.decision ?? row.decided) === "tomorrow")
       committed.add(row.task.id);
   }
+  // Touched proposals survive regeneration with their review edits; the rest yield to fresh ones.
+  const touched = input.getReview()?.touchedIds ?? [];
   const regenerated = proposeTomorrowBlocks(
     plan?.blocks ?? [],
     [...committed],
@@ -105,7 +108,8 @@ export function useEveningPlanning(input: EveningPlanningInput) {
     input.tasks,
     input.tomorrowEvents,
     input.tomorrowKey,
-    input.timeZone
+    input.timeZone,
+    touched
   );
   const proposals = regenerated.filter((block) => block.id === undefined);
 
@@ -130,7 +134,13 @@ export function useEveningPlanning(input: EveningPlanningInput) {
     try {
       let current = plan;
       if (!current && !input.planMissing) return false;
-      current ??= (await createDayPlan({ date: input.tomorrowKey, timeZone: input.timeZone })).plan;
+      current ??= (
+        await createDayPlan({
+          date: input.tomorrowKey,
+          timeZone: input.timeZone,
+          sourceRunId: input.sourceRunId
+        })
+      ).plan;
       const mode = await getCalendarBriefingSettings()
         .then((settings) => settings.settings.timeBlockMode)
         .catch(() => policyMode);
@@ -147,7 +157,10 @@ export function useEveningPlanning(input: EveningPlanningInput) {
         notes: notesText === null || notesText.trim() === "" ? null : notesText.trim()
       });
       // Full replacement: saved proposals yield to fresh ones; only placed blocks and saved moves and removals survive.
-      const kept = new Set(regenerated.flatMap((row) => (row.id === undefined ? [] : [row.id])));
+      const kept = new Set([
+        ...regenerated.flatMap((row) => (row.id === undefined ? [] : [row.id])),
+        ...review.touchedIds
+      ]);
       const keptRows = draftBlocksFor(current, review.choiceFor).filter((row) => kept.has(row.id));
       const saved = await saveDayPlanDraft(current.id, {
         date: input.tomorrowKey,

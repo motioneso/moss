@@ -66,6 +66,9 @@ export interface BriefingPlanBlockV1 {
   readonly position: number;
   readonly actualPlacement: DayPlanActualPlacement | null;
   readonly pendingChange: DayPlanPendingKind | null;
+  /** Proposed time for a pending add or move; absent when the proposal has none. */
+  readonly pendingStartsAt?: string | null;
+  readonly pendingDurationMinutes?: number | null;
 }
 
 export interface BriefingPlanIntentCorrectionV1 {
@@ -248,7 +251,9 @@ const briefingPlanBlockV1Schema = {
         { type: "null" }
       ]
     },
-    pendingChange: { type: ["string", "null"], enum: [...PLAN_PENDING_KINDS, null] }
+    pendingChange: { type: ["string", "null"], enum: [...PLAN_PENDING_KINDS, null] },
+    pendingStartsAt: { type: ["string", "null"] },
+    pendingDurationMinutes: { type: ["integer", "null"], minimum: 1 }
   }
 } as const;
 

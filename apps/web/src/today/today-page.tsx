@@ -269,6 +269,7 @@ export function TodayPage(props: {
     tasks,
     unavailableTaskIds: tomorrowPlanQuery.data?.unavailableTaskIds ?? [],
     tomorrowEvents,
+    sourceRunId: latestEveningRun?.id ?? null,
     getReview: () => eveningReviewRef.current
   });
   const eveningReview = useDayPlanReview({

@@ -451,7 +451,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // #2326: -1 confirm_always. Ben ruled that web.read should stop asking for approval on every
     // call; it moved to risk "read", so it is no longer in any of these three buckets at all (the
     // loop above skips read tools before it ever reaches the switch).
-    expect(grantedAtInstall.length).toBe(42);
+    expect(grantedAtInstall.length).toBe(43);
     expect(confirmAlways.length).toBe(9);
     expect(userPromotable.length).toBe(5);
 
@@ -473,8 +473,10 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // = 49 total. #1888 added workshop.buildModule (granted_at_install), and #1909 adds five
     // confirmed Sports source writes plus news.refreshNews — 41 + 10 + 5 = 56, then #2236 added
     // scratchpad.append (granted_at_install) — 42 + 10 + 5 = 57. #2326 then moved web.read out of
-    // confirm_always to risk "read" — 42 + 9 + 5 = 56 total.
-    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(56);
+    // confirm_always to risk "read" — 42 + 9 + 5 = 56 total. T21 adds calendar.dayPlanDraft
+    // (granted_at_install, own day-plan draft only, review-gated before any calendar effect)
+    // — 43 + 9 + 5 = 57 total.
+    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(57);
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
     expect(userPromotable.sort()).toEqual(

@@ -14,7 +14,7 @@ import type {
 
 export interface MockDayPlanApiState {
   plan: DayPlanDto;
-  /** Tomorrow's plan when the test seeds one; absent means the GET 404s. */
+  /** Tomorrow's plan when the test seeds one; absent means the GET answers 200 with a null plan, mirroring the real contract. */
   tomorrowPlan?: DayPlanDto;
   tasks: DayPlanTaskSummary[];
   unavailableTaskIds?: string[];
@@ -87,7 +87,16 @@ export async function registerMockDayPlanRoutes(
         : state.plan.localDay === date
           ? state.plan
           : null;
-    if (!plan) return fulfillJson(route, 404, { error: "day plan is not available" });
+    // Mirrors the real GET /api/calendar/day-plan contract (GetDayPlanResponse in
+    // packages/shared/src/day-plan-api.ts): a missing plan is 200 with plan null, never 404.
+    if (!plan)
+      return fulfillJson(route, 200, {
+        plan: null,
+        tasks: state.tasks,
+        unavailableTaskIds: state.unavailableTaskIds ?? [],
+        sourceRun: null,
+        sourceRunUnavailable: false
+      });
     return fulfillJson(route, 200, {
       plan,
       tasks: state.tasks,

@@ -412,6 +412,7 @@ describe("useEveningPlanning", () => {
     missing: boolean;
     active: boolean;
     stub: DayPlanReviewController | null;
+    sourceRunId: string | null;
     seen: (c: EveningPlanningController, r: DayPlanReviewController) => void;
   }) {
     const review = useDayPlanReview({
@@ -427,6 +428,7 @@ describe("useEveningPlanning", () => {
       timeZone: TZ,
       queryPlan: props.plan,
       planMissing: props.missing,
+      sourceRunId: props.sourceRunId,
       todayPlan: todayPlan(),
       tasks: taskDtos(),
       unavailableTaskIds: [],
@@ -442,6 +444,7 @@ describe("useEveningPlanning", () => {
     missing?: boolean;
     active?: boolean;
     stub?: DayPlanReviewController | null;
+    sourceRunId?: string | null;
   }
   async function mount(queryPlan: DayPlanDto | null, options: MountOptions = {}) {
     let latest: EveningPlanningController | null = null;
@@ -465,6 +468,7 @@ describe("useEveningPlanning", () => {
             missing: options.missing ?? false,
             active,
             stub: options.stub ?? null,
+            sourceRunId: options.sourceRunId ?? null,
             seen
           })
         )
@@ -649,6 +653,37 @@ describe("useEveningPlanning", () => {
     });
     expect(ok).toBe(true);
     expect(m.current().status).toBe("Saved. Applied 0; 1 failed; 0 pending.");
+  });
+  it("keeps a review-edited proposal time through the save", async () => {
+    const m = await mount(tomorrowPlan());
+    await act(async () => {
+      m.review().setPlacement("b-p1", "add", `${TMO}T18:00:00.000Z`);
+    });
+    let ok = false;
+    await act(async () => {
+      ok = await m.current().save();
+    });
+    expect(ok).toBe(true);
+    const rows = draftBody()?.blocks ?? [];
+    const edited = rows.find((row) => row.id === "b-p1")?.pendingChange as {
+      kind?: string;
+      startsAt?: string;
+    } | null;
+    expect(edited?.kind).toBe("add");
+    expect(edited?.startsAt).toBe(`${TMO}T18:00:00.000Z`);
+    expect(rows.filter((row) => row.taskId === "t1").length).toBe(1);
+  });
+  it("passes the evening run id when creating tomorrow's plan", async () => {
+    const m = await mount(null, { missing: true, sourceRunId: "run-evening-1" });
+    let ok = false;
+    await act(async () => {
+      ok = await m.current().save();
+    });
+    expect(ok).toBe(true);
+    const created = calls.find(
+      (c) => c.method === "POST" && c.url.endsWith("/api/calendar/day-plans")
+    );
+    expect((created?.body as { sourceRunId?: string | null })?.sourceRunId).toBe("run-evening-1");
   });
   it("keeps choices visible when the saved plan changed", async () => {
     draftMode = "conflict";

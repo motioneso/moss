@@ -6,6 +6,7 @@ export * from "./feedback-targets.js";
 export * from "./compose-evening.js";
 export * from "./plan-context.js";
 export * from "./plan-prose.js";
+export * from "./plan-reconcile.js";
 export * from "./evening-lenses.js";
 export * from "./jobs.js";
 export * from "./manifest.js";
