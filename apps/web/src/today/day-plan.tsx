@@ -1,5 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
+
 import type { CalendarEventDto, GetDayPlanResponse, LocaleSettingsDto } from "@moss/shared";
 
+import { Button } from "@moss/ui";
+
+import { getCalendarBriefingSettings } from "../api/client.js";
 import { ampm, eventCaptureText, timeLabel } from "./today-labels.js";
 import { buildDayItems, type DayItem } from "./day-plan-view-model.js";
 
@@ -12,6 +17,24 @@ export interface DayPlanSectionProps {
   readonly error: boolean;
   readonly calendarError: boolean;
   readonly onOpenTask: (taskId: string) => void;
+  readonly onReview?: (anchor: HTMLElement) => void;
+}
+
+function ReviewButton(props: { readonly onReview: (anchor: HTMLElement) => void }) {
+  const settingsQuery = useQuery({
+    queryKey: ["calendar", "briefing-settings"],
+    queryFn: getCalendarBriefingSettings,
+    retry: false
+  });
+  const label =
+    settingsQuery.data?.settings?.timeBlockMode === "auto"
+      ? "Adjust task blocks"
+      : "Review task blocks";
+  return (
+    <Button variant="secondary" onClick={(event) => props.onReview(event.currentTarget)}>
+      {label}
+    </Button>
+  );
 }
 
 function durationText(minutes: number | null): string {
@@ -175,9 +198,16 @@ export function DayPlanSection(props: DayPlanSectionProps) {
     now: props.now
   });
 
+  const taskBlocks = (props.dayPlan?.plan?.blocks ?? []).filter((block) => block.taskId !== null);
+
   return (
     <section className="jds-brief" id="schedule">
       <SectionHead />
+      {props.onReview && taskBlocks.length > 0 ? (
+        <div className="day-review-open">
+          <ReviewButton onReview={props.onReview} />
+        </div>
+      ) : null}
       {props.calendarError ? (
         <p className="cmd-empty" role="status">
           Calendar isn&apos;t available right now; showing your saved plan.

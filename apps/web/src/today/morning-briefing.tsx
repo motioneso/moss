@@ -17,7 +17,7 @@ import {
 
 import { Button } from "@moss/ui";
 
-import { getBriefingRun, requestJson } from "../api/client.js";
+import { getBriefingRun, getCalendarBriefingSettings, requestJson } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { formatDate } from "../locale/locale-format.js";
 import { joinActionRowsToTasks, type DisplayedActionRow } from "./briefing-action-rows.js";
@@ -45,6 +45,7 @@ export interface MorningBriefingReaderProps {
   readonly opener: HTMLElement | null;
   readonly onClose: () => void;
   readonly onOpenTask: (taskId: string) => void;
+  readonly onReview: (anchor: HTMLElement) => void;
 }
 
 /** Full morning report for one run, from the run response only. Nothing here writes. */
@@ -71,6 +72,16 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
     }
   });
 
+  const settingsQuery = useQuery({
+    queryKey: ["calendar", "briefing-settings"],
+    queryFn: getCalendarBriefingSettings,
+    retry: false
+  });
+  const reviewLabel =
+    settingsQuery.data?.settings?.timeBlockMode === "auto"
+      ? "Adjust task blocks"
+      : "Review task blocks";
+
   const detail = detailQuery.data ?? null;
   const failed =
     detailQuery.isError ||
@@ -83,9 +94,14 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
       opener={props.opener}
       onClose={props.onClose}
       footer={
-        <Button variant="primary" onClick={props.onClose}>
-          Back to Today
-        </Button>
+        <>
+          <Button variant="secondary" onClick={(event) => props.onReview(event.currentTarget)}>
+            {reviewLabel}
+          </Button>
+          <Button variant="primary" onClick={props.onClose}>
+            Back to Today
+          </Button>
+        </>
       }
     >
       <div className="brief-reader__grid">

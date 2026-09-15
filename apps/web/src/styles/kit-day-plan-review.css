@@ -1,0 +1,132 @@
+.plan-review__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.plan-review__schedule {
+  display: none;
+}
+
+.plan-review__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.plan-review__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.plan-review__title {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.plan-review__titlelink {
+  font-weight: 650;
+  text-align: start;
+  overflow-wrap: anywhere;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.plan-review__state {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.plan-review__changed,
+.plan-review__hint {
+  font-size: 13px;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+
+.plan-review__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.plan-review__controls select {
+  max-width: 100%;
+}
+
+.plan-review__time {
+  max-width: 100%;
+}
+
+.plan-review__changes,
+.plan-review__confirm,
+.plan-review__outcomes {
+  margin-top: 16px;
+  min-width: 0;
+}
+
+.plan-review__changes ul,
+.plan-review__confirm ul {
+  margin: 8px 0;
+  padding-left: 20px;
+  overflow-wrap: anywhere;
+}
+
+.plan-review__changes-title {
+  font-size: 14px;
+  margin: 0;
+}
+
+.plan-review__confirm {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.plan-review__confirm h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.plan-review__confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.day-review-open {
+  margin: 8px 0 4px;
+}
+
+@media (min-width: 1081px) {
+  .plan-review__grid {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .plan-review__schedule {
+    display: block;
+    min-width: 0;
+  }
+
+  .plan-review__row {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
