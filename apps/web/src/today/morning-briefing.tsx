@@ -11,7 +11,6 @@ import {
   type GetBriefingRunResponse,
   type GetDayPlanResponse,
   type LocaleSettingsDto,
-  type SportsBriefingEvidenceGameV1,
   type TaskDto
 } from "@moss/shared";
 
@@ -19,9 +18,15 @@ import { Button } from "@moss/ui";
 
 import { getBriefingRun, getCalendarBriefingSettings, requestJson } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
-import { formatDate } from "../locale/locale-format.js";
+import { formatDate, formatTime } from "../locale/locale-format.js";
 import { joinActionRowsToTasks, type DisplayedActionRow } from "./briefing-action-rows.js";
-import { BriefingDialog } from "./briefing-dialog.js";
+import {
+  EditorialBlock,
+  BriefingReportShell,
+  readEditorial,
+  readGaps
+} from "./briefing-report-shell.js";
+import { splitHeadline } from "./today-hero.js";
 import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import { acceptAllSelectionFor, hasOtherPendingEdits } from "./day-plan-review-model.js";
 import * as acceptLabels from "./today-labels.js";
@@ -121,12 +126,76 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
     detail?.state === "failed" ||
     (detail?.state === "ready" && (detail.run === null || detail.run.status !== "succeeded"));
 
+  const readyRun = detail?.state === "ready" ? detail.run : null;
+  const newsPreview =
+    readyRun && readEditorial(readyRun.sourceMetadata, "news", isNewsBriefingEvidence);
+  const sportsPreview =
+    readyRun && readEditorial(readyRun.sourceMetadata, "sports", isSportsBriefingEvidence);
+
   return (
-    <BriefingDialog
-      title="Morning briefing"
+    <BriefingReportShell
+      eyebrow="Moss / Morning briefing"
+      title="Your day, prepared."
       opener={props.opener}
       onClose={props.onClose}
-      footer={
+      reviewTabLabel={reviewLabel}
+      onSelectReviewTab={openReaderReview}
+      jumpLinks={
+        newsPreview || sportsPreview ? (
+          <nav className="brief-reader__jump" aria-label="Report sections">
+            {newsPreview ? <a href="#brief-reader-news">News</a> : null}
+            {sportsPreview ? <a href="#brief-reader-sports">Sports</a> : null}
+          </nav>
+        ) : null
+      }
+      report={
+        detail?.state === "ready" && detail.run !== null && detail.run.status === "succeeded" ? (
+          <ReportBody
+            detail={detail}
+            run={detail.run}
+            tasks={props.tasks}
+            locale={props.locale}
+            runs={props.runs}
+            selectedRunId={selectedRunId}
+            onSelectRun={setSelectedRunId}
+            onMoreOnToday={props.onClose}
+          />
+        ) : (
+          <div>
+            <p className="cmd-empty" role="status">
+              {failed
+                ? "Your morning briefing isn't available."
+                : "Your morning briefing is being prepared."}
+            </p>
+            {failed ? (
+              <Button
+                variant="secondary"
+                disabled={retryMutation.isPending}
+                onClick={() => retryMutation.mutate()}
+              >
+                Try again
+              </Button>
+            ) : null}
+          </div>
+        )
+      }
+      railDateInput={readyRun?.createdAt ?? props.now}
+      locale={props.locale}
+      railHeading="Your day, in order."
+      rail={
+        <DayPlanSection
+          dayPlan={props.dayPlan}
+          events={props.events}
+          locale={props.locale}
+          now={props.now}
+          loading={props.dayPlanLoading}
+          error={props.dayPlanError}
+          calendarError={props.calendarError}
+          onOpenTask={props.onOpenTask}
+          editorial
+        />
+      }
+      footerActions={
         <>
           {acceptBlocked || acceptSelection.length > 0 ? (
             <Button
@@ -145,9 +214,6 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
           <Button variant="secondary" onClick={openReaderReview}>
             {reviewLabel}
           </Button>
-          <Button variant="primary" ref={backRef} onClick={props.onClose}>
-            Back to Today
-          </Button>
           {acceptPhase !== "idle" ? (
             <p className="brief-reader__accept-status" role="status">
               {acceptStatus.line} {acceptReviewButton}
@@ -155,63 +221,12 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
           ) : null}
         </>
       }
-    >
-      <div className="brief-reader__grid">
-        <div className="brief-reader__report">
-          {detail?.state === "ready" && detail.run !== null && detail.run.status === "succeeded" ? (
-            <ReportBody
-              detail={detail}
-              run={detail.run}
-              tasks={props.tasks}
-              locale={props.locale}
-              runs={props.runs}
-              selectedRunId={selectedRunId}
-              onSelectRun={setSelectedRunId}
-              onMoreOnToday={props.onClose}
-            />
-          ) : (
-            <div>
-              <p className="cmd-empty" role="status">
-                {failed
-                  ? "Your morning briefing isn't available."
-                  : "Your morning briefing is being prepared."}
-              </p>
-              {failed ? (
-                <Button
-                  variant="secondary"
-                  disabled={retryMutation.isPending}
-                  onClick={() => retryMutation.mutate()}
-                >
-                  Try again
-                </Button>
-              ) : null}
-            </div>
-          )}
-        </div>
-        <details
-          className="brief-reader__schedule"
-          ref={(node) => {
-            // Desktop starts open; the phone starts closed.
-            if (!node || node.hasAttribute("data-brief-schedule")) return;
-            node.toggleAttribute("data-brief-schedule", true);
-            if (typeof window !== "undefined" && typeof window.matchMedia === "function")
-              node.open = window.matchMedia("(min-width: 1081px)").matches;
-          }}
-        >
-          <summary className="brief-reader__schedule-cap">Schedule</summary>
-          <DayPlanSection
-            dayPlan={props.dayPlan}
-            events={props.events}
-            locale={props.locale}
-            now={props.now}
-            loading={props.dayPlanLoading}
-            error={props.dayPlanError}
-            calendarError={props.calendarError}
-            onOpenTask={props.onOpenTask}
-          />
-        </details>
-      </div>
-    </BriefingDialog>
+      footerBack={
+        <Button variant="primary" ref={backRef} onClick={props.onClose}>
+          Back to Today
+        </Button>
+      }
+    />
   );
 }
 
@@ -226,6 +241,7 @@ function ReportBody(props: {
   readonly onMoreOnToday: () => void;
 }) {
   const { run } = props;
+  const headline = splitHeadline(run.summaryText);
   const planContext = readPlanContext(run.structuredPayload);
   const freshness = parseBriefingFreshness(run.sourceMetadata);
   const gaps = readGaps(run.sourceMetadata);
@@ -240,17 +256,18 @@ function ReportBody(props: {
           Report from {formatDate(run.createdAt, props.locale, { month: "long", day: "numeric" })}.
         </p>
       ) : null}
+      <p className="brief-reader__prepared">
+        Prepared at {formatTime(run.createdAt, props.locale)}
+      </p>
+      {headline.headline ? <h3 className="brief-reader__headline">{headline.headline}</h3> : null}
+      {headline.rest ? <BriefingProse summaryText={headline.rest} /> : null}
       {props.detail.plan?.status === "changed" || props.detail.plan?.status === "unavailable" ? (
-        <p className="brief-reader__plan-changed">The plan has changed since this report.</p>
+        <div className="brief-reader__callout">
+          <p className="brief-reader__callout-kicker">Changed overnight</p>
+          <p className="brief-reader__plan-changed">The plan has changed since this report.</p>
+        </div>
       ) : null}
-      {run.summaryText.trim() ? <BriefingProse summaryText={run.summaryText} /> : null}
       {freshness ? <BriefingStaleBanner freshness={freshness} /> : null}
-      {news || sports ? (
-        <nav className="brief-reader__jump" aria-label="Report sections">
-          {news ? <a href="#brief-reader-news">News</a> : null}
-          {sports ? <a href="#brief-reader-sports">Sports</a> : null}
-        </nav>
-      ) : null}
       {planContext ? <PlanContextBlock planContext={planContext} tasksById={tasksById} /> : null}
       {run.structuredPayload.actionRows.length > 0 ? (
         <ActionRowsBlock run={run} tasks={props.tasks} />
@@ -399,70 +416,4 @@ function JoinedRow(props: { readonly entry: DisplayedActionRow }) {
       ) : null}
     </div>
   );
-}
-
-function EditorialBlock(props: {
-  readonly id: string;
-  readonly title: string;
-  readonly games?: readonly SportsBriefingEvidenceGameV1[] | null;
-  readonly stories: readonly {
-    readonly title: string;
-    readonly url: string;
-    readonly imageUrl: string | null;
-    readonly meta: string;
-  }[];
-  readonly onMoreOnToday: () => void;
-}) {
-  return (
-    <section className="brief-reader__editorial" id={props.id} aria-label={props.title}>
-      <div className="jds-brief__title">{props.title}</div>
-      {props.games?.map((game) => (
-        <div className="brief-reader__game" key={game.id}>
-          <div className="loose-row__title">{game.headline}</div>
-          <div className="loose-row__meta">
-            {game.awayShort} {game.awayScore ?? ""} · {game.homeShort} {game.homeScore ?? ""} ·{" "}
-            {game.statusDetail}
-          </div>
-        </div>
-      ))}
-      {props.stories.map((story) => (
-        <article className="brief-reader__story" key={story.url}>
-          {story.imageUrl ? (
-            <img src={story.imageUrl} alt="" className="brief-reader__photo" loading="lazy" />
-          ) : null}
-          <a href={story.url} target="_blank" rel="noopener noreferrer">
-            {story.title}
-          </a>
-          <div className="loose-row__meta">{story.meta}</div>
-        </article>
-      ))}
-      <Button variant="quiet" size="sm" onClick={props.onMoreOnToday}>
-        More on Today
-      </Button>
-    </section>
-  );
-}
-
-function readGaps(
-  sourceMetadata: Record<string, unknown>
-): readonly { source: string; reason: string }[] {
-  const gaps = sourceMetadata.gaps;
-  if (!Array.isArray(gaps)) return [];
-  return gaps.flatMap((gap): readonly { source: string; reason: string }[] => {
-    if (!gap || typeof gap !== "object" || Array.isArray(gap)) return [];
-    const record = gap as Record<string, unknown>;
-    if (typeof record.source !== "string" || typeof record.reason !== "string") return [];
-    return [{ source: record.source, reason: record.reason }];
-  });
-}
-
-function readEditorial<T>(
-  sourceMetadata: Record<string, unknown>,
-  key: string,
-  guard: (value: unknown) => value is T
-): T | null {
-  const editorial = sourceMetadata.editorial;
-  if (!editorial || typeof editorial !== "object" || Array.isArray(editorial)) return null;
-  const block = (editorial as Record<string, unknown>)[key];
-  return guard(block) ? block : null;
 }

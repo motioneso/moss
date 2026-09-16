@@ -15,6 +15,12 @@ export interface BriefingDialogProps {
   readonly onClose: () => void;
   readonly footer: ReactNode;
   readonly children: ReactNode;
+  /** Report chrome: an eyebrow line inside the head before the title. */
+  readonly eyebrow?: string;
+  /** Report chrome: a tab strip or toolbar rendered after the head. */
+  readonly nav?: ReactNode;
+  /** Adds the report surface class; absent leaves the plain dialog unchanged. */
+  readonly variant?: "report";
 }
 
 /**
@@ -60,9 +66,14 @@ export function BriefingDialog(props: BriefingDialogProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="brief-reader"
+        className={
+          props.variant === "report" ? "brief-reader brief-reader--report" : "brief-reader"
+        }
       >
         <div className="brief-reader__head">
+          {props.eyebrow === undefined ? null : (
+            <p className="brief-reader__eyebrow">{props.eyebrow}</p>
+          )}
           <h2 id={titleId} data-briefing-title tabIndex={-1} className="brief-reader__title">
             {props.title}
           </h2>
@@ -75,6 +86,7 @@ export function BriefingDialog(props: BriefingDialogProps) {
             Close
           </button>
         </div>
+        {props.nav}
         <div className="brief-reader__body">{props.children}</div>
         <div className="brief-reader__footer">{props.footer}</div>
       </div>
