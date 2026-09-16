@@ -355,3 +355,132 @@ describe("evening step navigation", () => {
     expect(panel.querySelector(".evening-plan__prose")?.textContent).toContain("not ready yet");
   });
 });
+
+describe("evening steps 2 to 4 (V8)", () => {
+  it("renders commitment choice cards with React-selected state", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
+    const second = [...nav.querySelectorAll("button")][1] as HTMLButtonElement;
+    await act(async () => {
+      second.click();
+    });
+    const panel = document.body.querySelector('[role="region"]') as HTMLElement;
+    expect(panel.querySelector(".evening-plan__speaker")?.textContent).toContain("Moss");
+    expect(panel.querySelector(".evening-plan__lede")?.textContent).toContain(
+      "Give this a place, or leave it open."
+    );
+    const group = panel.querySelector(
+      '[role="radiogroup"][aria-label="Write the launch brief: plan"]'
+    ) as HTMLElement;
+    expect(group).not.toBeNull();
+    expect(group.classList.contains("evening-plan__choices")).toBe(true);
+    const cards = [...group.querySelectorAll("label.evening-plan__choice")];
+    expect(cards.length).toBe(3);
+    expect(cards.map((card) => card.querySelector("strong")?.textContent)).toEqual([
+      "Tomorrow",
+      "Another date",
+      "Keep on the list"
+    ]);
+    const radios = [...group.querySelectorAll('input[type="radio"]')] as HTMLInputElement[];
+    expect(radios.length).toBe(3);
+    for (const radio of radios) {
+      expect(radio.hidden).toBe(false);
+      expect(radio.getAttribute("aria-hidden")).not.toBe("true");
+    }
+    await act(async () => {
+      cards[0]!.querySelector("input")!.click();
+    });
+    const checked = [...group.querySelectorAll('input[type="radio"]')] as HTMLInputElement[];
+    expect(checked.filter((radio) => radio.checked).length).toBe(1);
+    expect(group.querySelectorAll('label[data-state="selected"]').length).toBe(1);
+    expect(
+      (group.querySelector('label[data-state="selected"]') as HTMLElement).textContent
+    ).toContain("Tomorrow");
+  });
+
+  it("renders capacity cards and visible priority labels", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
+    const third = [...nav.querySelectorAll("button")][2] as HTMLButtonElement;
+    await act(async () => {
+      third.click();
+    });
+    const panel = document.body.querySelector('[role="region"]') as HTMLElement;
+    expect(panel.querySelector(".evening-plan__lede")?.textContent).toContain(
+      "How much room do you want tomorrow?"
+    );
+    const group = panel.querySelector(
+      '[role="radiogroup"][aria-label="Day capacity"]'
+    ) as HTMLElement;
+    const cards = [...group.querySelectorAll("label.evening-plan__choice")];
+    expect(cards.length).toBe(3);
+    await act(async () => {
+      cards[0]!.querySelector("input")!.click();
+    });
+    expect(group.querySelectorAll('label[data-state="selected"]').length).toBe(1);
+    const priorityLabel = panel.querySelector('label[for="evening-priority"]') as HTMLElement;
+    expect(priorityLabel?.textContent).toBe("Main priority");
+    const startLabel = panel.querySelector('label[for="evening-start"]') as HTMLElement;
+    expect(startLabel?.textContent).toBe("Task time starts at");
+    expect(panel.querySelector("#evening-priority")).not.toBeNull();
+    expect(panel.querySelector("#evening-start")).not.toBeNull();
+    expect(panel.querySelector('select[aria-label="Main priority"]')).toBeNull();
+    expect(panel.querySelector('input[aria-label="Task time starts at"]')).toBeNull();
+  });
+
+  it("groups the review into Changes, Keep and No change in order", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
+    const fourth = [...nav.querySelectorAll("button")][3] as HTMLButtonElement;
+    await act(async () => {
+      fourth.click();
+    });
+    const panel = document.body.querySelector('[role="region"]') as HTMLElement;
+    expect(panel.querySelector(".evening-plan__lede")?.textContent).toContain(
+      "A plan you can leave with."
+    );
+    const groups = [...panel.querySelectorAll("section.evening-plan__group")];
+    const eyebrows = groups.map(
+      (group) => group.querySelector("h4.evening-plan__eyebrow")?.textContent
+    );
+    expect(eyebrows[0]).toBe("Changes");
+    expect(eyebrows).toContain("Keep as they are");
+    expect(eyebrows).toContain("No change");
+    for (let i = 0; i + 1 < groups.length; i += 1) {
+      expect(
+        groups[i]!.compareDocumentPosition(groups[i + 1]!) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    }
+    const changes = groups[0]!;
+    expect(changes.textContent).toContain("Nothing changes tomorrow.");
+    const keep = groups.find(
+      (group) => group.querySelector("h4")?.textContent === "Keep as they are"
+    )!;
+    expect(keep.querySelectorAll(".plan-review__rows > *").length).toBeGreaterThan(0);
+    const noChange = groups.find(
+      (group) => group.querySelector("h4")?.textContent === "No change"
+    )!;
+    expect(noChange.textContent).toContain("Write the launch brief");
+    expect(panel.querySelector(".evening-plan__controls")?.textContent).toContain(
+      "Preview changes"
+    );
+  });
+
+  it("keeps the step heading focus and the footer save on step 4", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
+    const fourth = [...nav.querySelectorAll("button")][3] as HTMLButtonElement;
+    await act(async () => {
+      fourth.click();
+    });
+    const heading = document.getElementById("evening-review-heading") as HTMLElement;
+    expect(document.activeElement).toBe(heading);
+    expect(document.body.querySelector(".brief-reader__footer-actions")?.textContent).toContain(
+      "Save tomorrow's plan"
+    );
+  });
+});

@@ -232,3 +232,85 @@
     top: 24px;
   }
 }
+
+.evening-plan__choices {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  margin: 12px 0;
+}
+
+.evening-plan__choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__choice input {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  accent-color: var(--forest);
+}
+
+.evening-plan__choice strong {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__choice[data-state="selected"] {
+  border-color: var(--forest);
+  box-shadow: inset 3px 0 0 var(--forest);
+}
+
+.evening-plan__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  min-width: 0;
+  margin-top: 12px;
+}
+
+.evening-plan__field-label {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--forest);
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__fields input,
+.evening-plan__fields select,
+.evening-plan__fields .jds-selectwrap {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.evening-plan__group {
+  min-width: 0;
+  margin: 16px 0;
+}
+
+.evening-plan__eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--forest);
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 1081px) {
+  .evening-plan__choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
