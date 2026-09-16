@@ -66,6 +66,7 @@ import {
   resolveModulesDir
 } from "@moss/module-registry/node";
 
+import { resolveApiE2eFetchOverride } from "./e2e-fetch-override.js";
 import { createModuleAiBridge } from "./external-module-ai-bridge.js";
 import { createModuleDistributionPort } from "./module-distribution-port.js";
 import { resolveHerdrInstall } from "./herdr-install-port.js";
@@ -795,7 +796,9 @@ export function createCrashHandler(
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const apiServerConfig = resolveApiServerConfig();
-  const server = createApiServer({ apiServerConfig });
+  // TEST-ONLY e2e fixture bypass (absent without the UAT env): host-scoped to the
+  // briefing sources, everything else keeps global fetch.
+  const server = createApiServer({ apiServerConfig, ...resolveApiE2eFetchOverride() });
   const port = apiServerConfig.port;
   const host = apiServerConfig.host;
 

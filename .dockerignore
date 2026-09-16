@@ -30,6 +30,10 @@ tests/fixtures
 # container on the UAT Compose network, and it serves Task 11's saved job-board captures from
 # here. Must stay AFTER the `tests/fixtures` line — Docker honours the last matching pattern.
 !tests/fixtures/job-search
+# DF-V4-R4: same carve-out for the deterministic ESPN/news answers the API-side
+# fixture seam serves (tests/fixtures/espn/*); without it the origin crashes with
+# ENOENT on the first ESPN request and every dataset degrades (verified live).
+!tests/fixtures/espn
 tests/integration
 tests/scripts
 tests/setup-env.ts

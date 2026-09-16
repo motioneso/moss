@@ -30,6 +30,7 @@ export const WEB_DEFINITION_FILES = [
   "apps/web/src/styles/kit-tasks.css",
   "apps/web/src/styles/kit-tasks-modal.css",
   "apps/web/src/styles/kit-today.css",
+  "apps/web/src/styles/kit-today-desks.css",
   "apps/web/src/styles/kit-today-feeds.css",
   "apps/web/src/styles/kit-today-misc.css",
   "apps/web/src/styles/kit-today-timeline.css",

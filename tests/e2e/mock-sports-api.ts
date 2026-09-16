@@ -1,4 +1,5 @@
 import type { Page, Route } from "@playwright/test";
+import { INLINE_IMG } from "./mock-news-api.js";
 import type {
   FollowedTeamCard,
   GameSummary,
@@ -391,6 +392,126 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
 
 // Partial-provider-outage variant (#765 M1 DegradedBand) — same shape, just the flag flipped, for
 // the one capture case that needs to render the degraded notice.
+/** Compact Today-desk overview for the V4 geometry test: one followed final, one
+    non-followed final, one tonight game after the fixed clock, and a top story
+    with a photo. Day-anchored so Tonight rows resolve in any US timezone. */
+export function desksOverviewFixture(day: string): SportsOverviewResponse {
+  const finalFollowed: GameSummary = {
+    id: "g-desks-followed",
+    competitionKey: "nfl",
+    startsAt: `${day}T15:00:00.000Z`,
+    state: "final",
+    statusDetail: "Final",
+    home: {
+      teamKey: "min",
+      sourceTeamId: "1",
+      name: "Minnesota Vikings",
+      shortName: "MIN",
+      crestUrl: null,
+      score: 21,
+      record: "10-2",
+      winner: true,
+      scorers: null
+    },
+    away: {
+      teamKey: "dal",
+      sourceTeamId: "6",
+      name: "Dallas Cowboys",
+      shortName: "DAL",
+      crestUrl: null,
+      score: 14,
+      record: "8-4",
+      winner: false,
+      scorers: null
+    }
+  };
+  return {
+    hero: { mode: "story", headline: null },
+    followed: [],
+    scoreboard: [
+      {
+        competitionKey: "nfl",
+        competitionLabel: "NFL",
+        games: [
+          finalFollowed,
+          {
+            ...finalFollowed,
+            id: "g-desks-other",
+            startsAt: `${day}T13:00:00.000Z`,
+            home: {
+              ...finalFollowed.home,
+              teamKey: "phi",
+              sourceTeamId: "7",
+              name: "Philadelphia Eagles",
+              shortName: "PHI",
+              score: 24,
+              winner: true
+            },
+            away: {
+              ...finalFollowed.away,
+              teamKey: "nyg",
+              sourceTeamId: "8",
+              name: "New York Giants",
+              shortName: "NYG",
+              score: 17,
+              winner: false
+            }
+          }
+        ]
+      },
+      {
+        competitionKey: "nba",
+        competitionLabel: "NBA",
+        games: [
+          {
+            id: "g-desks-tonight",
+            competitionKey: "nba",
+            startsAt: `${day}T23:30:00.000Z`,
+            state: "pre",
+            statusDetail: "7:30 PM",
+            home: {
+              teamKey: "lal",
+              sourceTeamId: null,
+              name: "Los Angeles Lakers",
+              shortName: "LAL",
+              crestUrl: null,
+              score: null,
+              record: "45-20",
+              winner: false,
+              scorers: null
+            },
+            away: {
+              teamKey: "gsw",
+              sourceTeamId: null,
+              name: "Golden State Warriors",
+              shortName: "GSW",
+              crestUrl: null,
+              score: null,
+              record: "40-25",
+              winner: false,
+              scorers: null
+            }
+          }
+        ]
+      }
+    ],
+    topStories: [
+      {
+        ...headline("h-desks-1", "nfl", "Vikings clinch division on late field goal"),
+        imageUrl: INLINE_IMG
+      },
+      headline("h-desks-2", "nba", "Celtics extend win streak to eight")
+    ],
+    leagueNews: [],
+    standings: [],
+    followedTeams: [{ competitionKey: "nfl", teamKey: "min", sourceTeamId: "1" }],
+    followedLeagues: [],
+    followedLeagueCards: [],
+    ambiguousFollows: [],
+    degraded: false
+  };
+}
+
 export const sportsOverviewDegradedFixture: SportsOverviewResponse = {
   ...sportsOverviewFixture,
   degraded: true
