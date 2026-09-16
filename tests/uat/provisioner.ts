@@ -122,9 +122,11 @@ export async function startJobSearchFixtureContainer(projectName: string): Promi
  * teardown helper that can fail is a teardown helper that leaks.
  */
 export async function removeJobSearchFixtureContainer(projectName: string): Promise<void> {
-  await runCommand("docker", ["rm", "--force", jobSearchFixtureContainerName(projectName)]).catch(
-    () => {}
+  const name = jobSearchFixtureContainerName(projectName);
+  const existing = await runCapture("docker", ["ps", "-aq", "--filter", `name=^/${name}$`]).catch(
+    () => "unknown" // Discovery failure must not prevent the cleanup attempt.
   );
+  if (existing.trim()) await runCommand("docker", ["rm", "--force", name]).catch(() => {});
 }
 
 // #1024/#1000: prod's fixed host port is 1533 (JARVIS_WEB_PORT default). Rather than editing the
@@ -773,7 +775,7 @@ export async function provisionForUat(
     // Compose network blocks `down -v` from removing that network, and the leak assertion that
     // follows would then fail on an otherwise clean run.
     const teardownCompose = async () => {
-      await removeJobSearchFixtureContainer(projectName);
+      if (opts?.withJobSearchFixture) await removeJobSearchFixtureContainer(projectName);
       await runCommand("docker", buildUatComposeArgs(projectName, ["down", "-v"])).catch(
         (error) => {
           console.error(`teardown failed for ${projectName}:`, error);
