@@ -249,6 +249,7 @@ const TODAY_SOURCES = [
   "apps/web/src/today/evening-planning.tsx",
   "apps/web/src/today/evening-planning-frame.tsx",
   "apps/web/src/today/evening-planning-sections.tsx",
+  "apps/web/src/today/evening-planning-review.tsx",
   "apps/web/src/today/briefing-feedback-menu.tsx",
   "apps/web/src/today/brief-task-row.tsx",
   "apps/web/src/today/proactive-cards.tsx"

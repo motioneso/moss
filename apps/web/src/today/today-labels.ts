@@ -242,6 +242,18 @@ export const EVENING_RAIL_HEADING = "Tomorrow, taking shape.";
 export const EVENING_SPEAKER_NAME = "Moss";
 export const EVENING_SPEAKER_NOTE = "Looking back with you";
 
+/** Evening steps 2 to 4 (V8): speaker notes, large messages and review groups. */
+export const EVENING_COMMIT_NOTE = "Only the loose ends that matter";
+export const EVENING_COMMIT_MESSAGE = "Give this a place, or leave it open.";
+export const EVENING_SHAPE_NOTE = "A realistic starting point";
+export const EVENING_SHAPE_MESSAGE = "How much room do you want tomorrow?";
+export const EVENING_REVIEW_NOTE = "Here is what will change";
+export const EVENING_REVIEW_MESSAGE = "A plan you can leave with.";
+export const EVENING_REVIEW_CHANGES_HEADING = "Changes";
+export const EVENING_REVIEW_KEEP_HEADING = "Keep as they are";
+export const EVENING_REVIEW_NO_CHANGE_HEADING = "No change";
+export const EVENING_REVIEW_NO_CHANGES = "Nothing changes tomorrow.";
+
 /** Unsaved review deltas beside the saved schedule's own words (T18). */
 export const REVIEW_TRANSIENT_LABELS = {
   toSchedule: "To schedule",

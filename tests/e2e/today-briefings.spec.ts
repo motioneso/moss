@@ -868,6 +868,9 @@ test("evening planning saves one draft and never applies in suggest mode", async
   await dialog.getByLabel("Main priority").selectOption("t2");
   await dialog.getByRole("button", { name: "Review", exact: true }).click();
   await expect(dialog.getByRole("heading", { name: "Review" })).toBeFocused();
+  await expect(
+    dialog.locator('section[aria-label="Changes"]').getByText("Water the plants")
+  ).toBeVisible();
   await dialog.getByRole("button", { name: "Save tomorrow's plan" }).click();
   await expect(dialog).toContainText("Saved. The blocks are proposed for the morning.");
 
