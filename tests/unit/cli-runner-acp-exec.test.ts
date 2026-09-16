@@ -394,6 +394,8 @@ describe("AcpHost builds", () => {
       expect(process.kill(pid, 0)).toBe(true);
       expect(existsSync(recordPath)).toBe(true);
       await pollUntilPidGone(pid);
+      // Process death precedes stopOrphan's asynchronous record unlink.
+      await pollUntil(() => ({ done: !existsSync(recordPath) }));
       expect(existsSync(recordPath)).toBe(false);
     } finally {
       if (pid > 0) {
