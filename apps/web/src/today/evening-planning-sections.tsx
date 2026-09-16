@@ -6,14 +6,24 @@ import { localDay } from "@moss/shared";
 
 import { Button, Select } from "@moss/ui";
 
-import { NO_ROOM_FOUND, shortDate, timeLabel } from "./today-labels.js";
+import {
+  EVENING_REFLECT_QUESTION,
+  EVENING_REVIEW_NOT_READY,
+  EVENING_SPEAKER_NAME,
+  EVENING_SPEAKER_NOTE,
+  NO_ROOM_FOUND,
+  shortDate,
+  timeLabel
+} from "./today-labels.js";
 import type { EveningPlanningController } from "./evening-planning-controller.js";
 import type { CommitmentRow } from "./evening-planning-model.js";
 
 function PlanSection(props: { id: string; label: string; children: ReactNode }) {
   return (
     <section className="evening-plan__section" id={props.id} aria-label={props.label}>
-      <h3 className="evening-plan__heading">{props.label}</h3>
+      <h3 id={`${props.id}-heading`} tabIndex={-1} className="evening-plan__heading">
+        {props.label}
+      </h3>
       {props.children}
     </section>
   );
@@ -80,6 +90,48 @@ export function ReflectSection(props: {
         ))}
       </ul>
     </PlanSection>
+  );
+}
+
+/** Step 1 conversation: speaker line, large message, prose, question, rows. */
+export function ReflectStep(props: {
+  readonly evening: EveningPlanningController;
+  readonly tasks: readonly TaskDto[];
+  readonly locale: LocaleSettingsDto;
+  readonly headingId: string;
+  readonly ledeHtml: string;
+  readonly summaryText: string | null;
+}) {
+  const { evening } = props;
+  return (
+    <>
+      <div className="evening-plan__speaker">
+        <span className="evening-plan__initial" aria-hidden="true">
+          {EVENING_SPEAKER_NAME.slice(0, 1)}
+        </span>
+        <div>
+          {EVENING_SPEAKER_NAME}
+          <small>{EVENING_SPEAKER_NOTE}</small>
+        </div>
+      </div>
+      {props.summaryText !== null ? (
+        <h3
+          id={props.headingId}
+          tabIndex={-1}
+          className="evening-plan__lede"
+          dangerouslySetInnerHTML={{ __html: props.ledeHtml }}
+        />
+      ) : null}
+      {props.summaryText !== null ? (
+        <p className="evening-plan__prose">{props.summaryText}</p>
+      ) : (
+        <p className="evening-plan__prose" role="status">
+          {EVENING_REVIEW_NOT_READY}
+        </p>
+      )}
+      <p className="evening-plan__question">{EVENING_REFLECT_QUESTION}</p>
+      <ReflectSection evening={evening} tasks={props.tasks} locale={props.locale} />
+    </>
   );
 }
 

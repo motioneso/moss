@@ -850,6 +850,8 @@ test("evening planning saves one draft and never applies in suggest mode", async
   await expect(dialog).toContainText("Done");
 
   // Commit one task for tomorrow; the due-dated one is already set.
+  await dialog.getByRole("button", { name: "Open commitments", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Open commitments" })).toBeFocused();
   await dialog
     .getByRole("radiogroup", { name: "Call the vendor: plan" })
     .getByLabel("Tomorrow")
@@ -860,8 +862,12 @@ test("evening planning saves one draft and never applies in suggest mode", async
   await expect(dialog).toContainText("Already set for tomorrow");
 
   // Lighter day with a main priority, then save in suggest mode.
+  await dialog.getByRole("button", { name: "Shape tomorrow", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Shape tomorrow" })).toBeFocused();
   await dialog.getByRole("radiogroup", { name: "Day capacity" }).getByLabel("Lighter day").click();
   await dialog.getByLabel("Main priority").selectOption("t2");
+  await dialog.getByRole("button", { name: "Review", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Review" })).toBeFocused();
   await dialog.getByRole("button", { name: "Save tomorrow's plan" }).click();
   await expect(dialog).toContainText("Saved. The blocks are proposed for the morning.");
 
