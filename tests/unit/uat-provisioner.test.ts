@@ -23,6 +23,7 @@ import {
   findAvailablePort,
   generateUatRunId,
   provisionForUat,
+  removeJobSearchFixtureContainer,
   UAT_PORT_RANGE_START,
   UAT_PORT_RANGE_SIZE,
   uatComposeInterpolationEnv,
@@ -490,5 +491,34 @@ describe("captureFailureEvidence transcript search path (#2164 r17)", () => {
     // (#1251 hostile-object rule), so the full log is the only place that evidence survives.
     expect(postgresLogArgs).not.toContain("--tail");
     expect(postgresLogArgs).toEqual(buildUatComposeArgs("uat-abc", ["logs", "postgres"]));
+  });
+});
+
+describe("optional fixture cleanup", () => {
+  it.each(["", "fixture-id\n"])("removes only a container that exists: %j", async (ids) => {
+    spawnMock.mockReset();
+    spawnMock.mockImplementation((_command, args) => {
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: EventEmitter;
+        stderr: EventEmitter;
+      };
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      queueMicrotask(() => {
+        if (args[0] === "ps") child.stdout.emit("data", ids);
+        child.emit("exit", 0);
+      });
+      return child;
+    });
+    await removeJobSearchFixtureContainer("uat-audit");
+    expect(spawnMock.mock.calls[0]?.[1]).toEqual([
+      "ps",
+      "-aq",
+      "--filter",
+      "name=^/uat-audit-jsfixture$"
+    ]);
+    const removals = spawnMock.mock.calls.filter(([, args]) => args[0] === "rm");
+    expect(removals).toHaveLength(ids ? 1 : 0);
+    if (ids) expect(removals[0]?.[1]).toEqual(["rm", "--force", "uat-audit-jsfixture"]);
   });
 });
