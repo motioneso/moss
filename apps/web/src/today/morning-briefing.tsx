@@ -212,14 +212,14 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
           <Button variant="secondary" onClick={openReaderReview}>
             {reviewLabel}
           </Button>
-          {acceptPhase !== "idle" ? (
-            <div className="brief-reader__status">
-              <p className="brief-reader__accept-status" role="status">
-                {acceptStatus.line} {acceptReviewButton}
-              </p>
-            </div>
-          ) : null}
         </>
+      }
+      footerStatus={
+        acceptPhase !== "idle" ? (
+          <p className="brief-reader__accept-status" role="status">
+            {acceptStatus.line} {acceptReviewButton}
+          </p>
+        ) : null
       }
       footerBack={
         <Button variant="primary" ref={backRef} onClick={props.onClose}>

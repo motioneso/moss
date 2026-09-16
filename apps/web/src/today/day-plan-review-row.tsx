@@ -118,6 +118,29 @@ export function ReviewRow(props: {
         {outcome ? <div className="plan-review__hint">{outcomeWord(outcome)}</div> : null}
       </div>
       <div className="plan-review__fields">
+        {props.choice.placement === "add" || props.choice.placement === "move" ? (
+          <div className="plan-review__field">
+            <label className="plan-review__label" htmlFor={`${block.id}-time`}>
+              Time
+            </label>
+            <input
+              type="time"
+              id={`${block.id}-time`}
+              aria-label={`${props.title}: start time`}
+              className="plan-review__time"
+              disabled={!schedulable || controller.busy}
+              value={timeValue}
+              onChange={(event) => {
+                const iso = localTimeToIso(
+                  props.plan.localDay,
+                  event.target.value,
+                  props.plan.timeZone
+                );
+                controller.setTime(block.id, iso);
+              }}
+            />
+          </div>
+        ) : null}
         <div className="plan-review__field">
           <label className="plan-review__label" htmlFor={`${block.id}-placement`}>
             Placement
@@ -147,29 +170,6 @@ export function ReviewRow(props: {
             ))}
           </Select>
         </div>
-        {props.choice.placement === "add" || props.choice.placement === "move" ? (
-          <div className="plan-review__field">
-            <label className="plan-review__label" htmlFor={`${block.id}-time`}>
-              Time
-            </label>
-            <input
-              type="time"
-              id={`${block.id}-time`}
-              aria-label={`${props.title}: start time`}
-              className="plan-review__time"
-              disabled={!schedulable || controller.busy}
-              value={timeValue}
-              onChange={(event) => {
-                const iso = localTimeToIso(
-                  props.plan.localDay,
-                  event.target.value,
-                  props.plan.timeZone
-                );
-                controller.setTime(block.id, iso);
-              }}
-            />
-          </div>
-        ) : null}
       </div>
     </li>
   );

@@ -246,11 +246,11 @@
 }
 .brief-reader__footer-back {
   grid-column: 1;
-  grid-row: 1;
+  grid-row: 2;
 }
 .brief-reader__footer-actions {
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 2;
   display: flex;
   flex-wrap: wrap;
   gap: 0;
@@ -286,6 +286,7 @@
   color: var(--text-muted);
 }
 .brief-reader--report .brief-reader__status {
+  grid-area: 1 / 1 / auto / -1;
   margin-top: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-left: 4px solid var(--gold);

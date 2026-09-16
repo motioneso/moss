@@ -694,7 +694,7 @@ describe("MorningBriefingReader review footer", () => {
     const strip = document.body.querySelector(".brief-reader__status") as HTMLElement;
     expect(strip.querySelector('[role="status"]')?.textContent).toContain("Added 1");
     const footer = document.body.querySelector(".brief-reader__footer") as HTMLElement;
-    expect(footer.contains(strip)).toBe(true);
+    expect(strip.parentElement).toBe(footer);
   });
 
   it("names nothing added and hands off to review when an item failed", async () => {

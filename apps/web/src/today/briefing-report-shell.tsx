@@ -32,6 +32,7 @@ export interface BriefingReportShellProps {
   readonly rail: ReactNode;
   readonly footerActions: ReactNode;
   readonly footerBack: ReactNode;
+  readonly footerStatus?: ReactNode;
 }
 
 /** Branded morning-report chrome around caller-owned data: green header, real
@@ -144,6 +145,9 @@ export function BriefingReportShell(props: BriefingReportShellProps) {
       }
       footer={
         <>
+          {props.footerStatus ? (
+            <div className="brief-reader__status">{props.footerStatus}</div>
+          ) : null}
           <div className="brief-reader__footer-actions">{props.footerActions}</div>
           <div className="brief-reader__footer-back">{props.footerBack}</div>
         </>

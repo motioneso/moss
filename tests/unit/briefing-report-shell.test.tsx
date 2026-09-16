@@ -44,6 +44,7 @@ async function renderShell(
     readonly onSelectReviewTab?: (event: { currentTarget: HTMLElement }) => void;
     readonly selectedTab?: "briefing" | "review";
     readonly onSelectBriefingTab?: (event: { currentTarget: HTMLElement }) => void;
+    readonly footerStatus?: unknown;
   } = {}
 ) {
   stubMatchMedia(options.matchesWide ?? true);
@@ -71,7 +72,11 @@ async function renderShell(
         railHeading: "Your day, in order.",
         rail: createElement("p", null, "Rail paragraph"),
         footerActions: createElement("button", { type: "button" }, "Adjust task blocks"),
-        footerBack: createElement("button", { type: "button" }, "Back to Today")
+        footerBack: createElement("button", { type: "button" }, "Back to Today"),
+        footerStatus:
+          options.footerStatus === undefined
+            ? undefined
+            : createElement("p", null, options.footerStatus as string)
       })
     );
   });
@@ -192,6 +197,24 @@ describe("BriefingReportShell schedule disclosure", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(region.hasAttribute("hidden")).toBe(false);
     expect(region.textContent).toContain("Your day, in order.");
+  });
+});
+
+describe("BriefingReportShell footer status", () => {
+  it("renders no status strip when the slot is absent", async () => {
+    await renderShell();
+    const footer = document.body.querySelector(".brief-reader__footer") as HTMLElement;
+    expect(footer.querySelector(".brief-reader__status")).toBeNull();
+  });
+
+  it("renders the strip as the footer's first child, ahead of the actions box", async () => {
+    await renderShell({ footerStatus: "Added 1 to the calendar" });
+    const footer = document.body.querySelector(".brief-reader__footer") as HTMLElement;
+    const strip = footer.querySelector(".brief-reader__status") as HTMLElement;
+    expect(strip.textContent).toContain("Added 1 to the calendar");
+    expect(footer.firstElementChild).toBe(strip);
+    const actions = footer.querySelector(".brief-reader__footer-actions") as HTMLElement;
+    expect(strip.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

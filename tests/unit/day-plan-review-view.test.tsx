@@ -196,6 +196,7 @@ describe("DayPlanReview in the report shell", () => {
     expect(document.body.querySelector('label[for="b1-time"]')?.textContent).toBe("Time");
     expect(placement.getAttribute("aria-label")).toBe("Write the launch brief: placement");
     expect(time.getAttribute("aria-label")).toBe("Write the launch brief: start time");
+    expect(time.compareDocumentPosition(placement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("keeps the outcome line in the panel status strip live region", async () => {
