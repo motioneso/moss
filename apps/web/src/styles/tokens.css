@@ -86,7 +86,7 @@
   --line-strong: #9ba591; /* VP-P0: study value. */
 
   --ink: #282c25; /* VP-P0: study value. */
-  --ink-2: #5b564d;
+  --ink-2: #676c60;
   --ink-3: #8b8678;
   --ink-4: #9a958a;
 
@@ -330,7 +330,7 @@
   --surface-assistant: var(--surface-2);
   --panel: var(--surface);
   --panel-subtle: var(--surface-2);
-  --muted: #676c60; /* VP-P0: study value. */
+  --muted: var(--text-muted);
   --border-default: var(--border);
   --accent-strong: var(--accent-hover);
 

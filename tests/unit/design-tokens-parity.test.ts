@@ -32,11 +32,21 @@ function lightTokens(): Map<string, string> {
   return found;
 }
 
+function resolveToken(tokens: Map<string, string>, name: string, seen = new Set<string>()): string {
+  const value = tokens.get(name);
+  if (value === undefined) throw new Error(`missing token ${name}`);
+  const alias = /^var\((--[\w-]+)\)$/.exec(value);
+  if (!alias) return value;
+  if (seen.has(name)) throw new Error(`cyclic token alias ${name}`);
+  seen.add(name);
+  return resolveToken(tokens, alias[1]!, seen);
+}
+
 describe("design tokens parity", () => {
   it("resolves the study values in the light theme", () => {
     const tokens = lightTokens();
     for (const [name, value] of Object.entries(EXPECTED)) {
-      expect(tokens.get(name), name).toBe(value);
+      expect(resolveToken(tokens, name), name).toBe(value);
     }
   });
 });

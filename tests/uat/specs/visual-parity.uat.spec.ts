@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { captureEntry, guardCapture, reportLine } from "../visual-parity/capture.js";
+import { DECLARED_SIZE_MISMATCHES } from "../visual-parity/declared-size-mismatches.js";
 import { MOCKUPS } from "../visual-parity/mockups.js";
 import {
   addDay,
@@ -286,6 +287,13 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
       `[parity] ${r.file} ${r.size} masked ${(r.maskedShare * 100).toFixed(1)}% diff ${r.diffPercent.toFixed(2)}%`
     );
     expect(r.maskedShare).toBeLessThanOrEqual(0.35);
+    const declared = DECLARED_SIZE_MISMATCHES.find(({ name }) => name === entry.name);
+    if (declared) {
+      expect(r.size, `${entry.name} captured size`).toBe(declared.capturedSize);
+      expect(r.sizeMatch, `${entry.name} declared mismatch`).toBe(false);
+    } else {
+      expect(r.sizeMatch, `${entry.name} unexpected mismatch`).toBe(true);
+    }
     if (OWNED.has(entry.name)) expect(r.diffPercent).toBeLessThanOrEqual(0.5);
     lines.push(reportLine(r));
   }
