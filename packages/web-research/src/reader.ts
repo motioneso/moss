@@ -174,7 +174,8 @@ async function requestCheckedUrl(
   checked: SafeHttpUrl,
   signal: AbortSignal,
   method: WebRequestMethod,
-  headers: Readonly<Record<string, string>>
+  headers: Readonly<Record<string, string>>,
+  fetchImpl?: WebFetch
 ): Promise<Response> {
   if (signal.aborted) throw new Error("Request aborted");
   const hostHeader = checked.url.host;
@@ -191,6 +192,14 @@ async function requestCheckedUrl(
     signal
   };
   if (testHttpTransport) return testHttpTransport(request);
+  if (fetchImpl) {
+    return fetchImpl(checked.url, {
+      redirect: "manual",
+      method,
+      signal,
+      headers: { host: hostHeader, ...headers }
+    });
+  }
   if (testFetch) {
     return testFetch(checked.url, {
       redirect: "manual",
@@ -218,6 +227,7 @@ export interface FetchWebResourceOptions {
   readonly timeoutMs?: number;
   readonly signal?: AbortSignal;
   readonly resolveHost?: HostResolver;
+  readonly fetchImpl?: WebFetch;
 }
 
 export interface FetchWebResourceSuccess<TBody> {
@@ -284,7 +294,13 @@ async function fetchRobotsFileFollowingRedirects(
     if (options.rateLimiter) {
       await abortable(options.rateLimiter.acquire(robotsSafe.url.hostname), controller.signal);
     }
-    const response = await requestCheckedUrl(robotsSafe, controller.signal, "GET", {});
+    const response = await requestCheckedUrl(
+      robotsSafe,
+      controller.signal,
+      "GET",
+      {},
+      options.fetchImpl
+    );
     if (isRedirect(response.status)) {
       await response.body?.cancel().catch(() => {});
       const location = response.headers.get("location");
@@ -386,7 +402,13 @@ async function fetchWebResourceWithBody<TBody>(
         );
         if (allowed === false) return { ok: false, reason: "blocked" };
       }
-      const response = await requestCheckedUrl(safe, controller.signal, method, requestHeaders);
+      const response = await requestCheckedUrl(
+        safe,
+        controller.signal,
+        method,
+        requestHeaders,
+        options.fetchImpl
+      );
       const maxBytes = options.maxBytes ?? DEFAULT_WEB_RESEARCH_CONFIG.maxDownloadBytes;
       if (isRedirect(response.status)) {
         await response.body?.cancel().catch(() => {});

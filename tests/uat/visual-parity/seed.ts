@@ -134,7 +134,46 @@ export async function stabilizeSportsFollowOrder(): Promise<void> {
     WHEN competition_key = 'nfl' THEN '2026-09-02T12:00:00Z'::timestamptz
     WHEN competition_key = 'eng.1' AND team_key IS NULL THEN '2026-09-03T12:00:00Z'::timestamptz
     ELSE created_at END
-    WHERE owner_user_id = '${UAT_ADMIN_ID}';`;
+    WHERE owner_user_id = '${UAT_ADMIN_ID}';
+  UPDATE app.sports_custom_sources SET created_at = CASE label
+    WHEN 'Issue 1909 fixture feed' THEN '2026-09-04T12:00:00Z'::timestamptz
+    WHEN 'FotMob assignment fixture' THEN '2026-09-04T13:00:00Z'::timestamptz
+    WHEN 'BBC legacy feed' THEN '2026-09-04T14:00:00Z'::timestamptz
+    WHEN 'FotMob legacy scrape' THEN '2026-09-04T15:00:00Z'::timestamptz
+    WHEN 'Issue 1909 drift fixture' THEN '2026-09-04T16:00:00Z'::timestamptz
+    ELSE created_at END
+    WHERE owner_user_id = '${UAT_ADMIN_ID}';
+  UPDATE app.sports_source_assignments AS assignment
+  SET created_at = source.created_at + CASE
+    WHEN follow.team_key = 'ars' THEN INTERVAL '1 second'
+    WHEN follow.competition_key = 'nfl' THEN INTERVAL '2 seconds'
+    ELSE INTERVAL '3 seconds' END
+  FROM app.sports_custom_sources AS source, app.sports_follows AS follow
+  WHERE assignment.source_id = source.id
+    AND follow.id = assignment.follow_id
+    AND assignment.owner_user_id = '${UAT_ADMIN_ID}'
+    AND source.owner_user_id = '${UAT_ADMIN_ID}';`;
+  await execFileAsync(
+    "docker",
+    buildUatComposeArgs(uatProject(), [
+      "exec",
+      "-T",
+      "postgres",
+      "psql",
+      "-U",
+      "postgres",
+      "-d",
+      "jarv1s",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      sql
+    ]),
+    { maxBuffer: 1_000_000 }
+  );
+}
+export async function disableSeededCustomSources(): Promise<void> {
+  const sql = `UPDATE app.sports_custom_sources SET enabled = false WHERE owner_user_id = '${UAT_ADMIN_ID}';`;
   await execFileAsync(
     "docker",
     buildUatComposeArgs(uatProject(), [

@@ -19,7 +19,7 @@
     { "title": "Parity lunch", "startsAt": "today-12:00", "endsAt": "today-13:00" },
     { "title": "Parity dentist", "startsAt": "tomorrow-16:00", "endsAt": "tomorrow-16:30" }
   ],
-  "news": { "expectedHeadline": "UAT fixture desk wire", "leadPhoto": "data-uri" },
+  "news": { "expectedHeadline": "UAT rig achieves deterministic Tuesday", "leadPhoto": "data-uri" },
   "sports": { "follows": ["nfl", "nba", "eng.1"], "expectedScore": "Arsenal" },
   "weather": { "location": "San Francisco, CA", "source": "live-open-meteo" }
 }

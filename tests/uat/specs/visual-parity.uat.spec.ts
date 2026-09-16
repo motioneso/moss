@@ -1,16 +1,16 @@
-// tests/uat/specs/visual-parity.uat.spec.ts
-//
-// VP-P0 parity ruler: one shared seed, 32 study-region captures with masked
-// diffs and a report. P0 owns no threshold (PARITY_OWNED empty), so the run
-// is green when every capture, diff and report line exists. PARITY_GUARD_ONLY=1
-// captures only the shared-page guards (base/head comparison runs).
+import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join as joinPath } from "node:path";
+import { dirname, join, join as joinPath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
-import { captureEntry, guardCapture, reportLine } from "../visual-parity/capture.js";
+import {
+  captureEntry,
+  guardCapture,
+  reportLine,
+  waitForStablePopulated
+} from "../visual-parity/capture.js";
 import { DECLARED_SIZE_MISMATCHES } from "../visual-parity/declared-size-mismatches.js";
 import { MOCKUPS } from "../visual-parity/mockups.js";
 import {
@@ -20,6 +20,7 @@ import {
   createBriefingRun,
   createDayPlan,
   createTask,
+  disableSeededCustomSources,
   ensurePlanning,
   ensureReader,
   forceChrome,
@@ -36,7 +37,6 @@ import {
   setPolicy,
   setWeatherLocation
 } from "../visual-parity/seed.js";
-
 export const uatLevel = {
   level: "admin+data",
   without: [],
@@ -44,7 +44,7 @@ export const uatLevel = {
   withSportsPublicSourceFixtures: true
 } as const;
 const OUT =
-  process.env.JARVIS_PARITY_OUT ??
+  process.env.MOSS_PARITY_OUT ??
   "/home/ben/.viberoom/rooms/moss-design-update/workspace/evidence/visual-parity/p0-baseline";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MOCKROOT = joinPath(HERE, "..", "..", "..", "docs", "superpowers", "specs", "assets");
@@ -77,13 +77,13 @@ interface ParityManifest {
   readonly events: readonly ParityEvent[];
   readonly todayPlanTasks: readonly string[];
   readonly tomorrowPlanTasks: readonly string[];
+  readonly news: { readonly expectedHeadline: string };
   readonly weather: { readonly location: string };
 }
 interface ScoreGame {
   readonly home?: { readonly sourceTeamId?: string };
   readonly away?: { readonly sourceTeamId?: string };
 }
-
 async function signIn(page: Page): Promise<void> {
   await page.goto(process.env.JARVIS_UAT_BASE_URL!);
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
@@ -91,14 +91,17 @@ async function signIn(page: Page): Promise<void> {
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
 }
+async function localeTz(page: Page): Promise<string> {
+  const locale = (await json(page, "/api/me/locale")).body as { locale: { timezone: string } };
+  return locale.locale.timezone;
+}
 async function seedAll(
   page: Page
 ): Promise<{ day: string; timeZone: string; ids: Record<string, string> }> {
   const m = manifest() as unknown as ParityManifest;
   const day = localDay();
   await signIn(page);
-  const timeZone = ((await json(page, "/api/me/locale")).body as { locale: { timezone: string } })
-    .locale.timezone;
+  const timeZone = await localeTz(page);
   const accountId = await armCalendar(page);
   await seedCachedEvents(
     page,
@@ -112,6 +115,7 @@ async function seedAll(
   );
   await setPolicy(page, "suggest");
   await stabilizeSportsFollowOrder();
+  await disableSeededCustomSources();
   const ids: Record<string, string> = {};
   for (const t of m.tasks) {
     const due = t.due ? resolveStamp(day, t.due) : null;
@@ -137,13 +141,8 @@ async function seedAll(
     timeZone,
     m.tomorrowPlanTasks.map((k: string) => ids[k] as string)
   );
-  await createBriefingRun(
-    page,
-    "morning",
-    "Parity morning",
-    ["tasks.list", "calendar.listVisibleEvents", "news.topHeadlinesToday"],
-    localIso(day, "08:00")
-  );
+  const morningTools = ["tasks.list", "calendar.listVisibleEvents", "news.topHeadlinesToday"];
+  await createBriefingRun(page, "morning", "Parity morning", morningTools, localIso(day, "08:00"));
   await createBriefingRun(
     page,
     "evening",
@@ -186,13 +185,69 @@ async function populatedMorning(page: Page, m: ParityManifest): Promise<void> {
   const news = await overview(page, "/api/news/overview", "topStories", 180000);
   await expect(page.locator(".jds-brief--news").first()).toBeVisible({ timeout: 60000 });
   await expect(page.locator(".jds-brief--sports").first()).toBeVisible({ timeout: 60000 });
-  await expect(page.getByRole("listitem").filter({ hasText: "Arsenal" }).first()).toBeVisible({
-    timeout: 60000
-  });
+  const arsenalItem = page.getByRole("listitem").filter({ hasText: "Arsenal" }).first();
+  await expect(arsenalItem).toBeVisible({ timeout: 60000 });
   await expect(page.locator("#weather")).toContainText(/\S/, { timeout: 60000 });
   console.log(
     `[parity] populated: timeline, weather, news lead "${((news["topStories"] as Array<{ title: string }>)[0] as { title: string }).title}", sports scores`
   );
+}
+async function assertFixtureSeam(page: Page, m: ParityManifest): Promise<void> {
+  const news = await overview(page, "/api/news/overview", "topStories", 180000);
+  const stories = news["topStories"] as Array<{ readonly title: string; readonly url: string }>;
+  const lead = stories[0];
+  const invalidLinks = stories.filter((story) => {
+    try {
+      return new URL(story.url).hostname !== "fixture.invalid";
+    } catch {
+      return true;
+    }
+  });
+  if (lead?.title !== m.news.expectedHeadline || invalidLinks.length > 0) {
+    throw new Error(
+      `fixture seam inactive: expected lead "${m.news.expectedHeadline}", got "${lead?.title ?? "<none>"}"; ` +
+        `${invalidLinks.length} top story link(s) were not on fixture.invalid`
+    );
+  }
+}
+async function assertSportsSourceSeam(page: Page): Promise<void> {
+  const sports = await overview(page, "/api/sports/overview", "followed", 180000);
+  const stories = sports["topStories"] as Array<{ readonly publisherDomain?: string }>;
+  const cards = sports["followed"] as Array<{
+    readonly name: string;
+    readonly stories: Array<{ readonly title: string; readonly publisherDomain?: string }>;
+  }>;
+  const customDomains = new Set([
+    "www.fotmob.com",
+    "feeds.bbci.co.uk",
+    "raw.githubusercontent.com",
+    "fotmob.com",
+    "raw.githack.com"
+  ]);
+  const customStories = [...stories, ...cards.flatMap((card) => card.stories)].filter((story) =>
+    customDomains.has(story.publisherDomain ?? "")
+  );
+  if (customStories.length > 0) {
+    throw new Error(
+      `sports custom sources active: ${customStories.length} seeded stories across ` +
+        `${stories.length} top stories and ${cards.length} followed cards`
+    );
+  }
+  const arsenal = cards.find((card) => card.name === "Arsenal");
+  const headline = "Arsenal seal late win to stay top of the pile";
+  if (!arsenal?.stories.some((story) => story.title === headline)) {
+    throw new Error("espn fixture inactive: Arsenal card lacks the fixture headline");
+  }
+  assertApiRequestLog();
+}
+function assertApiRequestLog(): void {
+  const project = process.env.JARVIS_UAT_PROJECT_NAME;
+  if (!project?.startsWith("uat-")) throw new Error("espn fixture inactive: invalid UAT project");
+  const args = buildUatComposeArgs(project, ["logs", "--tail", "5000", "jarv1s"]);
+  const logs = execFileSync("docker", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const lines = logs.split("\n").filter((line) => line.includes('"msg":"incoming request"'));
+  if (lines.length === 0) throw new Error("espn fixture inactive: no API request log lines");
+  console.log(`[parity] API request log lines: ${lines.length}`);
 }
 async function driveState(page: Page, state: string, w: number): Promise<void> {
   const dialog = page.getByRole("dialog");
@@ -210,6 +265,40 @@ async function driveState(page: Page, state: string, w: number): Promise<void> {
   } else if (state === "evening-saved") {
     await expect(dialog).toBeVisible();
   }
+}
+// Test-side quiescence: background refresh jobs rewrite overview rows early on, so
+// poll the stable projection (not capture code) until it settles before holding.
+async function apiQuiescent(page: Page): Promise<void> {
+  const project = async () =>
+    page.evaluate(async () => {
+      type Story = { title?: string; url?: string };
+      const read = async (path: string) =>
+        (await fetch(path).then((r) => r.json())) as {
+          topStories?: Story[];
+          followed?: Array<{ name?: string; stories?: Story[] }>;
+        };
+      const [news, sports] = await Promise.all([
+        read("/api/news/overview"),
+        read("/api/sports/overview")
+      ]);
+      return JSON.stringify({
+        news: (news.topStories ?? []).map((story) => [story.title, story.url]),
+        sports: (sports.topStories ?? []).map((story) => [story.title, story.url]),
+        followed: (sports.followed ?? []).map((card) => [
+          card.name,
+          (card.stories ?? []).map((story) => [story.title, story.url])
+        ])
+      });
+    });
+  const deadline = Date.now() + 120_000;
+  let prev = await project();
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(1000);
+    const next = await project();
+    if (next === prev && next !== "") return;
+    prev = next;
+  }
+  throw new Error("parity: overview APIs never reached quiescence");
 }
 test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
   test.setTimeout(900_000);
@@ -231,9 +320,14 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
   }
   await openToday(page, new Date(localIso(localDay(), "08:00")));
   await populatedMorning(page, m);
+  await assertFixtureSeam(page, m);
+  await assertSportsSourceSeam(page);
+  console.log(
+    "[parity] fixture seams accepted: news fixture.invalid, sports ESPN-only, API requests logged"
+  );
   const lines = ["| file | size | masked | diff | size |", "|---|---|---|---|---|"];
-  let lastState = "";
-  let lastWidth = 0;
+  let lastState = "",
+    lastWidth = 0;
   for (const entry of MOCKUPS) {
     if (
       entry.clock === "evening" &&
@@ -251,24 +345,12 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
     }
     if (entry.state !== lastState || entry.viewport.w !== lastWidth) {
       if (entry.state === "reader-partial-review")
-        await mirrorBlock(
-          page,
-          localDay(),
-          ((await json(page, "/api/me/locale")).body as { locale: { timezone: string } }).locale
-            .timezone,
-          0
-        );
+        await mirrorBlock(page, localDay(), await localeTz(page), 0);
       if (entry.state.startsWith("reader-automatic"))
-        await mirrorBlock(
-          page,
-          localDay(),
-          ((await json(page, "/api/me/locale")).body as { locale: { timezone: string } }).locale
-            .timezone,
-          1
-        );
+        await mirrorBlock(page, localDay(), await localeTz(page), 1);
       if (entry.state === "evening-step-2" && lastState === "evening-step-1") {
-        const dialog = page.getByRole("dialog");
-        await dialog
+        await page
+          .getByRole("dialog")
           .getByRole("radiogroup", { name: `${(m.tasks[2] as ParityTask).title}: plan` })
           .getByLabel("Tomorrow")
           .click();
@@ -282,6 +364,8 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
       lastState = entry.state;
       lastWidth = entry.viewport.w;
     }
+    if (entry.state === "today-morning-news" || entry.state === "today-morning-sports")
+      await waitForStablePopulated(page);
     const r = await captureEntry(page, entry, MOCKROOT, OUT);
     console.log(
       `[parity] ${r.file} ${r.size} masked ${(r.maskedShare * 100).toFixed(1)}% diff ${r.diffPercent.toFixed(2)}%`
@@ -305,4 +389,109 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
   }
   writeFileSync(join(OUT, "report.md"), `# visual parity baseline\n\n${lines.join("\n")}\n`);
   expect(lines.length).toBe(34);
+});
+async function readinessRace(page: Page, ms: number): Promise<string> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const run = waitForStablePopulated(page).then(() => "completed", String);
+  const out = await Promise.race([
+    run,
+    new Promise<string>((resolve) => {
+      timer = setTimeout(() => resolve("timeout"), ms);
+    })
+  ]);
+  clearTimeout(timer);
+  return out;
+}
+// Regression second (walk seeded once; this test writes nothing): replay the session
+// into a fresh context and race readiness before first paint, while faces are held.
+test("r10 delayed display font regression", async ({ browser }) => {
+  test.setTimeout(600_000);
+  const base = process.env.JARVIS_UAT_BASE_URL!;
+  const ctxA = await browser.newContext({ baseURL: base });
+  const pageA = await ctxA.newPage();
+  await forceChrome(pageA);
+  await signIn(pageA);
+  await apiQuiescent(pageA);
+  const ctxB = await browser.newContext({ baseURL: base });
+  await ctxB.addCookies(await ctxA.cookies());
+  const page = await ctxB.newPage();
+  await forceChrome(page);
+  const releasers: Array<() => void> = [];
+  const heldUrls: string[] = [];
+  // Context-level: the service worker serves later same-origin requests, which a
+  // page-level route never sees (red4: request events fired, page.route held none).
+  await ctxB.route("**/*.woff2", async (route) => {
+    heldUrls.push(route.request().url());
+    await new Promise<void>((resolve) => {
+      releasers.push(() => resolve());
+    });
+    await route.continue();
+  });
+  // Commit-only navigation: returns before parse/paint, so no face has started
+  // loading when readiness runs below. Any earlier paint would poison fonts.ready.
+  await page.clock.setFixedTime(new Date(localIso(localDay(), "08:00")));
+  await page.goto("/today", { waitUntil: "commit" });
+  const me = await page.evaluate(async () => (await fetch("/api/me/locale")).status);
+  expect(me, "parity: replayed session not authenticated").toBe(200);
+  const before = await readinessRace(page, 60_000);
+  const hole = await page.evaluate(() => {
+    const el = document.querySelector(".nw-twlead__title") as HTMLElement | null;
+    const text = (el?.innerText ?? "").slice(0, 120);
+    let loading = false;
+    document.fonts.forEach((face) => {
+      if (face.status === "loading") loading = true;
+    });
+    const rects: number[][] = [];
+    const walker = document.createTreeWalker(el ?? document.body, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node && rects.length < 4) {
+      if ((node.textContent ?? "").trim()) {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const r of Array.from(range.getClientRects())) {
+          if (rects.length >= 4) break;
+          rects.push([r.x, r.y, r.width, r.height].map((v) => Math.round(v * 10) / 10));
+        }
+      }
+      node = walker.nextNode();
+    }
+    return JSON.stringify({ text: text.length > 0, faceLoading: loading, rects });
+  });
+  console.log(`[parity-regression] held=${heldUrls.length} before=${before} hole=${hole}`);
+  expect(JSON.parse(hole)).toEqual(expect.objectContaining({ text: true, faceLoading: true }));
+  expect(heldUrls.length, "parity: no font held while readiness ran").toBeGreaterThan(0);
+  expect(before, `parity: readiness completed with faces held (hole=${hole})`).toBe("timeout");
+  for (const release of releasers) release();
+  const deadline = Date.now() + 60_000;
+  let loading = true;
+  while (loading && Date.now() < deadline) {
+    await page.waitForTimeout(500);
+    loading = await page.evaluate(() => {
+      let active = false;
+      document.fonts.forEach((face) => {
+        if (face.status === "loading") active = true;
+      });
+      return active;
+    });
+  }
+  expect(loading, "parity: held faces never loaded after release").toBe(false);
+  expect(await readinessRace(page, 90_000), "parity: readiness never completed").toBe("completed");
+  const capture = (await import("../visual-parity/capture.js")) as unknown as {
+    stableSample?: (page: Page) => Promise<string>;
+  };
+  if (!capture.stableSample) {
+    console.log("[parity-regression] no stableSample export; skipping face gate");
+  } else {
+    const after = JSON.parse(await capture.stableSample(page)) as {
+      faces?: Array<{ sel?: string; ready?: boolean; lines?: number[][] }>;
+    };
+    console.log(`[parity-regression] after=${JSON.stringify(after.faces)}`);
+    expect((after.faces ?? []).length).toBeGreaterThan(0);
+    for (const face of after.faces ?? []) {
+      expect(face.ready, `parity: face not ready: ${face.sel}`).toBe(true);
+      expect(face.lines?.length ?? 0, `parity: no line rects: ${face.sel}`).toBeGreaterThan(0);
+    }
+  }
+  await ctxB.close();
+  await ctxA.close();
 });

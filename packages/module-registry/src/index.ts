@@ -779,7 +779,8 @@ function buildNewsDiscoveryPorts(
   // keeps its own default (no live chat engine involved there).
   createCliStructuredAdapter: ReturnType<
     typeof createCliStructuredAdapterFactory
-  > = createCliStructuredAdapterFactory()
+  > = createCliStructuredAdapterFactory(),
+  fetchFn?: typeof fetch
 ) {
   const repository = new AiRepository();
   const cipher = createAiSecretCipher();
@@ -788,7 +789,8 @@ function buildNewsDiscoveryPorts(
       fetchWebResource(url, {
         requireHttps: true,
         robots: newsRobotsGate,
-        rateLimiter: newsHostRateLimiter
+        rateLimiter: newsHostRateLimiter,
+        fetchImpl: fetchFn
       }),
     // #2282 task 1.5: the options-capable sibling, built like Sports' port. Same HTTPS rule and
     // the News host rate limiter on every call; the robots gate stays unless the caller (the
@@ -806,7 +808,8 @@ function buildNewsDiscoveryPorts(
         maxBytes: options?.maxBytes,
         rejectOversizedResponses: options?.rejectOversizedResponses,
         timeoutMs: options?.timeoutMs,
-        signal: options?.signal
+        signal: options?.signal,
+        fetchImpl: fetchFn
       }),
     image: (url: string, maxBytes: number, allowedHosts?: readonly string[]) =>
       fetchWebResourceBytes(url, {
@@ -2439,7 +2442,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       });
       const discovery = buildNewsDiscoveryPorts(
         createModuleLogger(server.log, "news"),
-        deps.createCliStructuredAdapter
+        deps.createCliStructuredAdapter,
+        deps.fetchFn
       );
       const previewOverride = buildUatNewsPreviewOverride();
       registerNewsRoutes(server, {
@@ -2491,7 +2495,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       // this process. Only worker dependency fields are read (logger, fetchFn).
       buildNewsBriefingSource({ fetchFn: deps.fetchFn, logger: deps.logger });
       const discovery = buildNewsDiscoveryPorts(
-        deps.logger ? createModuleLogger(deps.logger, "news") : undefined
+        deps.logger ? createModuleLogger(deps.logger, "news") : undefined,
+        undefined,
+        deps.fetchFn
       );
       const newsLogger = deps.logger ? createModuleLogger(deps.logger, "news") : undefined;
       const connection = publisherConnection(NEWSAPI_CONNECTION_ID);
