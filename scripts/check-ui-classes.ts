@@ -25,6 +25,7 @@ export const WEB_DEFINITION_FILES = [
   "apps/web/src/styles/index.css",
   "apps/web/src/styles/kit-briefing-reader.css",
   "apps/web/src/styles/kit-day-plan-review.css",
+  "apps/web/src/styles/kit-evening-planning.css",
   "apps/web/src/styles/kit-calendar.css",
   "apps/web/src/styles/kit-chat-attach.css",
   "apps/web/src/styles/kit-chat.css",

@@ -227,6 +227,21 @@ export const SAVE_TOMORROW_LABEL = "Save tomorrow's plan";
 export const EVENING_REVIEW_NOT_READY = "Your evening review is not ready yet";
 export const NO_ROOM_FOUND = "No room found";
 
+/** Evening step frame (V7): the strip label, the four step names in order,
+    the reflect question, the rail heading and the speaker note. */
+export const EVENING_PLAN_STEPS_LABEL = "Plan steps";
+export const EVENING_STEP_NAMES = [
+  "Reflect",
+  "Open commitments",
+  "Shape tomorrow",
+  "Review"
+] as const;
+export const EVENING_REFLECT_QUESTION =
+  "What should I understand about today before we plan tomorrow?";
+export const EVENING_RAIL_HEADING = "Tomorrow, taking shape.";
+export const EVENING_SPEAKER_NAME = "Moss";
+export const EVENING_SPEAKER_NOTE = "Looking back with you";
+
 /** Unsaved review deltas beside the saved schedule's own words (T18). */
 export const REVIEW_TRANSIENT_LABELS = {
   toSchedule: "To schedule",

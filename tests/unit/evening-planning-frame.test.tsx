@@ -1,0 +1,357 @@
+// @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createElement, useEffect } from "react";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { BriefingRunDto, DayPlanBlockDto, DayPlanDto, TaskDto } from "@moss/shared";
+
+import {
+  useEveningPlanning,
+  type EveningPlanningController
+} from "../../apps/web/src/today/evening-planning-controller.js";
+import {
+  useDayPlanReview,
+  type DayPlanReviewController
+} from "../../apps/web/src/today/day-plan-review-controller.js";
+import { EveningPlanningDialog } from "../../apps/web/src/today/evening-planning.js";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const TZ = "America/Los_Angeles";
+const TODAY = "2026-09-10";
+const TMO = "2026-09-11";
+
+function taskDto(id: string, title: string, overrides: Partial<TaskDto> = {}): TaskDto {
+  return {
+    id,
+    title,
+    status: "todo",
+    dueAt: null,
+    effort: null,
+    ...overrides
+  } as unknown as TaskDto;
+}
+
+function block(id: string, overrides: Partial<DayPlanBlockDto> = {}): DayPlanBlockDto {
+  return {
+    id,
+    kind: "focus",
+    taskId: null,
+    title: null,
+    position: 0,
+    actualPlacement: null,
+    pendingChange: null,
+    ...overrides
+  };
+}
+
+function taskDtos(): TaskDto[] {
+  return [
+    taskDto("t1", "Write the launch brief"),
+    taskDto("t2", "Call the vendor"),
+    taskDto("t4", "Water the plants", { status: "done", completedAt: `${TODAY}T10:00:00.000Z` })
+  ];
+}
+
+function todayPlan(): DayPlanDto {
+  return {
+    id: "plan-today",
+    localDay: TODAY,
+    timeZone: TZ,
+    revision: 2,
+    sourceRunId: null,
+    eveningIntent: null,
+    blocks: [block("bt1", { taskId: "t1", position: 0 })]
+  };
+}
+
+function tomorrowPlan(): DayPlanDto {
+  return {
+    id: "plan-tmo",
+    localDay: TMO,
+    timeZone: TZ,
+    revision: 4,
+    sourceRunId: null,
+    eveningIntent: {
+      priorityTaskIds: [],
+      capacity: null,
+      notes: null,
+      corrections: [],
+      commitments: []
+    },
+    blocks: [
+      block("b-cal", {
+        taskId: "t1",
+        position: 0,
+        actualPlacement: {
+          startsAt: `${TMO}T14:00:00.000Z`,
+          durationMinutes: 60,
+          calendarEventRef: "ev-0"
+        }
+      })
+    ]
+  };
+}
+
+function eveningRun(): BriefingRunDto {
+  return {
+    summaryText: "The proposal is sent and the team agreed a direction."
+  } as unknown as BriefingRunDto;
+}
+
+function stubFetch() {
+  globalThis.fetch = vi.fn(async (url: unknown) => ({
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    text: async () =>
+      JSON.stringify(
+        String(url).endsWith("/api/calendar/briefing-settings")
+          ? { settings: { timeBlockMode: "suggest" } }
+          : { plan: SHARED_TOMORROW }
+      )
+  })) as unknown as typeof fetch;
+}
+
+const liveRoots: ReturnType<typeof createRoot>[] = [];
+
+function DialogHarness(props: {
+  readonly evening: EveningPlanningController;
+  readonly review: DayPlanReviewController;
+  readonly run: BriefingRunDto | null;
+}) {
+  return createElement(EveningPlanningDialog, {
+    evening: props.evening,
+    review: props.review,
+    tasks: taskDtos(),
+    taskSummaries: [],
+    unavailableTaskIds: [],
+    tomorrowEvents: [],
+    completedToday: taskDtos().filter((task) => task.status === "done"),
+    locale: { timezone: TZ, region: "en-US", dateFormat: "12" },
+    now: new Date(`${TODAY}T12:00:00.000Z`),
+    tomorrowKey: TMO,
+    eveningRun: props.run,
+    opener: null,
+    onClose: () => undefined,
+    onOpenTask: () => undefined
+  });
+}
+
+// Stable across renders: the hooks resync on identity, so fresh objects loop.
+const SHARED_TASKS = taskDtos();
+const SHARED_TODAY = todayPlan();
+const SHARED_TOMORROW = tomorrowPlan();
+
+function ControllersHarness(props: {
+  readonly run: BriefingRunDto | null;
+  readonly seen: (evening: EveningPlanningController, review: DayPlanReviewController) => void;
+}) {
+  const review = useDayPlanReview({
+    plan: SHARED_TOMORROW,
+    localDay: TMO,
+    timeZone: TZ,
+    morningDefinitionId: "def-morning"
+  });
+  const evening = useEveningPlanning({
+    active: true,
+    tomorrowKey: TMO,
+    todayKey: TODAY,
+    timeZone: TZ,
+    queryPlan: SHARED_TOMORROW,
+    planMissing: false,
+    sourceRunId: null,
+    todayPlan: SHARED_TODAY,
+    tasks: SHARED_TASKS,
+    unavailableTaskIds: [],
+    tomorrowEvents: [],
+    getReview: () => review
+  });
+  useEffect(() => {
+    props.seen(evening, review);
+  }, [evening, review, props]);
+  return createElement(DialogHarness, { evening, review, run: props.run });
+}
+
+async function mountDialog(run: BriefingRunDto | null) {
+  let latest: EveningPlanningController | null = null;
+  let liveReview: DayPlanReviewController | null = null;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  liveRoots.push(root);
+  await act(async () => {
+    root.render(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(ControllersHarness, {
+          run,
+          seen: (c, r) => {
+            latest = c;
+            liveReview = r;
+          }
+        })
+      )
+    );
+  });
+  if (!latest || !liveReview) throw new Error("controllers did not render");
+  return {
+    evening: latest as EveningPlanningController,
+    review: liveReview as DayPlanReviewController
+  };
+}
+
+afterEach(async () => {
+  for (const root of liveRoots.splice(0)) {
+    await act(async () => {
+      root.unmount();
+    });
+  }
+  document.body.innerHTML = "";
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe("evening step strip", () => {
+  it("lists four numbered steps with only Reflect current", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
+    const buttons = [...nav.querySelectorAll("button")];
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      "01 Reflect",
+      "02 Open commitments",
+      "03 Shape tomorrow",
+      "04 Review"
+    ]);
+    expect(buttons.map((button) => button.getAttribute("aria-current"))).toEqual([
+      "step",
+      null,
+      null,
+      null
+    ]);
+  });
+
+  it("shows step 1 in DOM order with the footer Next action", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const panel = document.body.querySelector('[role="region"]') as HTMLElement;
+    expect(panel.getAttribute("aria-labelledby")).toBe("evening-step-reflect-heading");
+    const speaker = panel.querySelector(".evening-plan__speaker") as HTMLElement;
+    const lede = panel.querySelector(".evening-plan__lede") as HTMLElement;
+    const prose = panel.querySelector(".evening-plan__prose") as HTMLElement;
+    const question = panel.querySelector(".evening-plan__question") as HTMLElement;
+    const rows = panel.querySelector(".evening-plan__rows") as HTMLElement;
+    for (const [first, second] of [
+      [speaker, lede],
+      [lede, prose],
+      [prose, question],
+      [question, rows]
+    ] as const) {
+      expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(lede.textContent).toContain("carrying forward");
+    expect(document.body.querySelector(".brief-reader__footer-actions")?.textContent).toContain(
+      "Next: Open commitments"
+    );
+    expect(document.body.querySelector(".brief-reader__footer-back")?.textContent).toContain(
+      "Back to Today"
+    );
+  });
+
+  it("renders the tomorrow rail beside the panel", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const rail = document.body.querySelector(".evening-plan__railwrap") as HTMLElement;
+    expect(rail.querySelector(".evening-plan__rail-heading")?.textContent).toBe(
+      "Tomorrow, taking shape."
+    );
+    expect(rail.querySelector(".evening-plan__rail-date")?.textContent).toContain("September 11");
+    expect(rail.querySelector("summary")?.textContent).toBe("Tomorrow's plan");
+    const panel = document.body.querySelector(".evening-plan__panel") as HTMLElement;
+    expect(panel.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe("evening step navigation", () => {
+  it("moves current and focus to step 2 and keeps the frame chrome", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
+    const second = [...nav.querySelectorAll("button")][1] as HTMLButtonElement;
+    await act(async () => {
+      second.click();
+    });
+    expect(second.getAttribute("aria-current")).toBe("step");
+    const heading = document.getElementById("evening-commitments-heading") as HTMLElement;
+    expect(document.activeElement).toBe(heading);
+    expect(document.body.querySelector('[role="region"]')?.textContent).toContain(
+      "Open commitments"
+    );
+    expect(document.body.querySelector(".evening-plan__railwrap")).not.toBeNull();
+    expect(document.body.querySelector(".brief-reader__footer-actions")?.textContent).toContain(
+      "Next: Shape tomorrow"
+    );
+  });
+
+  it("keeps a draft note when leaving and returning to step 1", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const input = document.body.querySelector(
+      'input[aria-label="Write the launch brief: correction"]'
+    ) as HTMLInputElement;
+    await act(async () => {
+      input.focus();
+    });
+    await act(async () => {
+      const native = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      native?.call(input, "Scope slipped again");
+      input.dispatchEvent(new window.Event("input", { bubbles: true }));
+    });
+    const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
+    const buttons = [...nav.querySelectorAll("button")] as HTMLButtonElement[];
+    await act(async () => {
+      buttons[1]!.click();
+    });
+    await act(async () => {
+      buttons[0]!.click();
+    });
+    expect(
+      (
+        document.body.querySelector(
+          'input[aria-label="Write the launch brief: correction"]'
+        ) as HTMLInputElement
+      ).value
+    ).toBe("Scope slipped again");
+  });
+
+  it("offers the save action on step 4", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
+    const fourth = [...nav.querySelectorAll("button")][3] as HTMLButtonElement;
+    await act(async () => {
+      fourth.click();
+    });
+    expect(fourth.getAttribute("aria-current")).toBe("step");
+    expect(document.body.querySelector(".brief-reader__footer-actions")?.textContent).toContain(
+      "Save tomorrow's plan"
+    );
+  });
+
+  it("names the region when no run summary exists", async () => {
+    stubFetch();
+    await mountDialog(null);
+    const panel = document.body.querySelector('[role="region"]') as HTMLElement;
+    expect(panel.getAttribute("aria-label")).toBe("Reflect");
+    expect(panel.querySelector(".evening-plan__lede")).toBeNull();
+    expect(panel.querySelector(".evening-plan__prose")?.textContent).toContain("not ready yet");
+  });
+});
