@@ -44,6 +44,12 @@ interface TemplateEvent {
   readonly away: TemplateSide;
 }
 
+function fixtureNow(): Date {
+  const now = new Date();
+  now.setUTCHours(12, 0, 0, 0);
+  return now;
+}
+
 function readTemplate(): readonly TemplateEvent[] {
   const raw = JSON.parse(readFileSync(join(ESPN_DIR, "eng1-scoreboard.template.json"), "utf8")) as {
     events: readonly TemplateEvent[];
@@ -252,7 +258,7 @@ let templateCache: readonly TemplateEvent[] | undefined;
  */
 export function routeEspnFixture(
   pathname: string,
-  now: Date = new Date()
+  now: Date = fixtureNow()
 ): EspnFixtureRoute | undefined {
   if (NEWS_FEED_PATHS.includes(pathname)) {
     return { contentType: RSS_TYPE, body: Buffer.from(NEWS_RSS) };
