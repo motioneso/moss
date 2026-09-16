@@ -106,6 +106,7 @@ export function TodayPage(props: {
   } | null>(null);
   const readerOpener = useRef<HTMLElement | null>(null);
   const [review, setReview] = useState(false);
+  const readerBeforeReview = useRef<{ definitionId: string; runId: string } | null>(null);
   const reviewOpener = useRef<HTMLElement | null>(null);
   const [planningAnchor, setPlanningAnchor] = useState<HTMLElement | null>(null);
   const [, forceTodayModeRefresh] = useState(0);
@@ -496,6 +497,7 @@ export function TodayPage(props: {
               onOpenTask={(id) => setDialog({ id })}
               onReview={(anchor) => {
                 reviewOpener.current = anchor;
+                readerBeforeReview.current = null;
                 setReview(true);
               }}
             />
@@ -596,6 +598,7 @@ export function TodayPage(props: {
             onReview={() => {
               // The review replaces the reader: one dialog owns inert and focus.
               reviewOpener.current = readerOpener.current;
+              readerBeforeReview.current = reader;
               setReader(null);
               setReview(true);
             }}
@@ -633,6 +636,11 @@ export function TodayPage(props: {
             now={now}
             opener={reviewOpener.current}
             onClose={() => setReview(false)}
+            onSelectBriefingTab={() => {
+              // Back to the remembered run; from Today alone, just close.
+              setReview(false);
+              if (readerBeforeReview.current !== null) setReader(readerBeforeReview.current);
+            }}
             onOpenTask={(id) => {
               // Same inert-root rule as the reader: the review closes first.
               setReview(false);

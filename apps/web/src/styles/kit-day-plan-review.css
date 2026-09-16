@@ -57,16 +57,29 @@
   overflow-wrap: anywhere;
 }
 
-.plan-review__controls {
-  display: flex;
-  flex-wrap: wrap;
+.plan-review__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
-  align-items: center;
   min-width: 0;
 }
 
-.plan-review__controls select {
+.plan-review__field {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  min-width: 0;
+}
+
+.plan-review__label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.plan-review__field select,
+.plan-review__field input {
   max-width: 100%;
+  min-width: 0;
 }
 
 .plan-review__time {
@@ -75,9 +88,16 @@
 
 .plan-review__changes,
 .plan-review__confirm,
-.plan-review__outcomes {
+.plan-review__status {
   margin-top: 16px;
   min-width: 0;
+}
+
+.plan-review__status {
+  padding: 12px;
+  border-left: 4px solid var(--gold);
+  background: var(--forest-soft);
+  border-radius: 0 10px 10px 0;
 }
 
 .plan-review__changes ul,
@@ -115,6 +135,10 @@
 }
 
 @media (min-width: 1081px) {
+  .plan-review__fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
   .plan-review__grid {
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
     align-items: start;

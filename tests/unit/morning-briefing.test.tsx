@@ -648,6 +648,55 @@ describe("MorningBriefingReader review footer", () => {
     expect(document.activeElement?.textContent).toBe("Accept all time blocks");
   });
 
+  it("marks the accept button busy while it runs", async () => {
+    let release: (() => void) | null = null;
+    const gate = new Promise<boolean>((resolve) => {
+      release = () => resolve(true);
+    });
+    const acceptAllAdditions = vi.fn(() => gate);
+    await renderReader(seedClient([]), {
+      dayPlan: acceptPlanResponse(),
+      controller: stubReaderController({ acceptAllAdditions })
+    });
+    const accept = document.body.querySelector(
+      ".brief-reader__footer-actions .jds-btn--primary"
+    ) as HTMLButtonElement;
+    expect(accept.textContent).toBe("Accept all time blocks");
+    const clicked = act(async () => {
+      accept.click();
+    });
+    await act(async () => {});
+    expect(accept.getAttribute("aria-busy")).toBe("true");
+    expect(accept.disabled).toBe(true);
+    expect(accept.className).toContain("jds-btn--primary");
+    await act(async () => {
+      release?.();
+      await gate;
+    });
+    await clicked;
+  });
+
+  it("reads the outcome line from the footer status strip", async () => {
+    const acceptAllAdditions = vi.fn(async () => true);
+    await renderReader(seedClient([]), {
+      dayPlan: acceptPlanResponse(),
+      controller: stubReaderController({
+        acceptAllAdditions,
+        outcomes: appliedOutcome("b1", "applied")
+      })
+    });
+    const accept = document.body.querySelector(
+      ".brief-reader__footer-actions .jds-btn--primary"
+    ) as HTMLButtonElement;
+    await act(async () => {
+      accept.click();
+    });
+    const strip = document.body.querySelector(".brief-reader__status") as HTMLElement;
+    expect(strip.querySelector('[role="status"]')?.textContent).toContain("Added 1");
+    const footer = document.body.querySelector(".brief-reader__footer") as HTMLElement;
+    expect(footer.contains(strip)).toBe(true);
+  });
+
   it("names nothing added and hands off to review when an item failed", async () => {
     const acceptAllAdditions = vi.fn(async () => true);
     await renderReader(seedClient([]), {

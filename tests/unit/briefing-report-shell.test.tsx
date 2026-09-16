@@ -42,6 +42,8 @@ async function renderShell(
     readonly matchesWide?: boolean;
     readonly reviewLabel?: string;
     readonly onSelectReviewTab?: (event: { currentTarget: HTMLElement }) => void;
+    readonly selectedTab?: "briefing" | "review";
+    readonly onSelectBriefingTab?: (event: { currentTarget: HTMLElement }) => void;
   } = {}
 ) {
   stubMatchMedia(options.matchesWide ?? true);
@@ -60,6 +62,8 @@ async function renderShell(
         onClose: () => undefined,
         reviewTabLabel: options.reviewLabel ?? "Review task blocks",
         onSelectReviewTab,
+        selectedTab: options.selectedTab,
+        onSelectBriefingTab: options.onSelectBriefingTab,
         jumpLinks: null,
         report: createElement("p", null, "Report paragraph"),
         railDateInput: "2026-09-10T13:45:00.000Z",
@@ -188,5 +192,37 @@ describe("BriefingReportShell schedule disclosure", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(region.hasAttribute("hidden")).toBe(false);
     expect(region.textContent).toContain("Your day, in order.");
+  });
+});
+
+describe("BriefingReportShell selected tab", () => {
+  it("selects the briefing tab by default with the panel labelled by it", async () => {
+    await renderShell();
+    const briefing = document.body.querySelectorAll('[role="tab"]')[0] as HTMLElement;
+    const review = document.body.querySelectorAll('[role="tab"]')[1] as HTMLElement;
+    const panel = document.body.querySelector('[role="tabpanel"]') as HTMLElement;
+    expect(briefing.getAttribute("aria-selected")).toBe("true");
+    expect(briefing.tabIndex).toBe(0);
+    expect(review.getAttribute("aria-selected")).toBe("false");
+    expect(review.tabIndex).toBe(-1);
+    expect(panel.getAttribute("aria-labelledby")).toBe(briefing.id);
+  });
+
+  it("selects the review tab and hands the briefing tab back to the caller", async () => {
+    const seen: HTMLElement[] = [];
+    await renderShell({
+      selectedTab: "review",
+      onSelectBriefingTab: (event) => seen.push(event.currentTarget)
+    });
+    const briefing = document.body.querySelectorAll('[role="tab"]')[0] as HTMLElement;
+    const review = document.body.querySelectorAll('[role="tab"]')[1] as HTMLElement;
+    const panel = document.body.querySelector('[role="tabpanel"]') as HTMLElement;
+    expect(review.getAttribute("aria-selected")).toBe("true");
+    expect(review.tabIndex).toBe(0);
+    expect(briefing.getAttribute("aria-selected")).toBe("false");
+    expect(briefing.tabIndex).toBe(-1);
+    expect(panel.getAttribute("aria-labelledby")).toBe(review.id);
+    await act(async () => briefing.click());
+    expect(seen).toEqual([briefing]);
   });
 });
