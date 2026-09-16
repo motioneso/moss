@@ -246,15 +246,19 @@
 }
 .brief-reader__footer-back {
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 1;
 }
 .brief-reader__footer-actions {
   grid-column: 2;
-  grid-row: 2;
+  grid-row: 1;
   display: flex;
   flex-wrap: wrap;
   gap: 0;
   justify-content: flex-end;
+}
+.brief-reader__footer--with-status .brief-reader__footer-back,
+.brief-reader__footer--with-status .brief-reader__footer-actions {
+  grid-row: 2;
 }
 @media (max-width: 480px) {
   /* Narrow phones stack the report footer zones instead of squeezing them. */

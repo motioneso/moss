@@ -207,6 +207,18 @@ describe("BriefingReportShell footer status", () => {
     expect(footer.querySelector(".brief-reader__status")).toBeNull();
   });
 
+  it("omits the with-status footer class when the slot is absent", async () => {
+    await renderShell();
+    const footer = document.body.querySelector(".brief-reader__footer") as HTMLElement;
+    expect(footer.classList.contains("brief-reader__footer--with-status")).toBe(false);
+  });
+
+  it("adds the with-status footer class when the slot is filled", async () => {
+    await renderShell({ footerStatus: "Added 1 to the calendar" });
+    const footer = document.body.querySelector(".brief-reader__footer") as HTMLElement;
+    expect(footer.classList.contains("brief-reader__footer--with-status")).toBe(true);
+  });
+
   it("renders the strip as the footer's first child, ahead of the actions box", async () => {
     await renderShell({ footerStatus: "Added 1 to the calendar" });
     const footer = document.body.querySelector(".brief-reader__footer") as HTMLElement;

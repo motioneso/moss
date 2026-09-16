@@ -95,6 +95,7 @@ export function BriefingReportShell(props: BriefingReportShellProps) {
       title={props.title}
       eyebrow={props.eyebrow}
       variant="report"
+      footerClassName={props.footerStatus ? "brief-reader__footer--with-status" : undefined}
       opener={props.opener}
       onClose={props.onClose}
       nav={
