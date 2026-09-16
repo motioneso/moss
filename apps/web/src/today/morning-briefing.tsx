@@ -86,10 +86,8 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
     queryFn: getCalendarBriefingSettings,
     retry: false
   });
-  const reviewLabel =
-    settingsQuery.data?.settings?.timeBlockMode === "auto"
-      ? "Adjust task blocks"
-      : "Review task blocks";
+  const isAutoMode = settingsQuery.data?.settings?.timeBlockMode === "auto";
+  const reviewLabel = isAutoMode ? "Adjust task blocks" : "Review task blocks";
   const { choiceFor, touchedIds } = props.controller;
   const acceptPlan = props.dayPlan?.plan ?? null;
   const acceptSelection = acceptPlan
@@ -119,7 +117,6 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
       {acceptLabels.REVIEW_CHANGES_LABEL}
     </Button>
   ) : null;
-
   const detail = detailQuery.data ?? null;
   const failed =
     detailQuery.isError ||
@@ -201,6 +198,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
             <Button
               variant="primary"
               ref={acceptRef}
+              aria-busy={accepting}
               disabled={!acceptBlocked && (accepting || props.controller.busy)}
               onClick={acceptBlocked ? openReaderReview : () => void runAcceptAll()}
             >
@@ -214,12 +212,14 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
           <Button variant="secondary" onClick={openReaderReview}>
             {reviewLabel}
           </Button>
-          {acceptPhase !== "idle" ? (
-            <p className="brief-reader__accept-status" role="status">
-              {acceptStatus.line} {acceptReviewButton}
-            </p>
-          ) : null}
         </>
+      }
+      footerStatus={
+        acceptPhase !== "idle" ? (
+          <p className="brief-reader__accept-status" role="status">
+            {acceptStatus.line} {acceptReviewButton}
+          </p>
+        ) : null
       }
       footerBack={
         <Button variant="primary" ref={backRef} onClick={props.onClose}>

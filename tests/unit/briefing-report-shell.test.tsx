@@ -42,6 +42,9 @@ async function renderShell(
     readonly matchesWide?: boolean;
     readonly reviewLabel?: string;
     readonly onSelectReviewTab?: (event: { currentTarget: HTMLElement }) => void;
+    readonly selectedTab?: "briefing" | "review";
+    readonly onSelectBriefingTab?: (event: { currentTarget: HTMLElement }) => void;
+    readonly footerStatus?: unknown;
   } = {}
 ) {
   stubMatchMedia(options.matchesWide ?? true);
@@ -60,6 +63,8 @@ async function renderShell(
         onClose: () => undefined,
         reviewTabLabel: options.reviewLabel ?? "Review task blocks",
         onSelectReviewTab,
+        selectedTab: options.selectedTab,
+        onSelectBriefingTab: options.onSelectBriefingTab,
         jumpLinks: null,
         report: createElement("p", null, "Report paragraph"),
         railDateInput: "2026-09-10T13:45:00.000Z",
@@ -67,7 +72,11 @@ async function renderShell(
         railHeading: "Your day, in order.",
         rail: createElement("p", null, "Rail paragraph"),
         footerActions: createElement("button", { type: "button" }, "Adjust task blocks"),
-        footerBack: createElement("button", { type: "button" }, "Back to Today")
+        footerBack: createElement("button", { type: "button" }, "Back to Today"),
+        footerStatus:
+          options.footerStatus === undefined
+            ? undefined
+            : createElement("p", null, options.footerStatus as string)
       })
     );
   });
@@ -188,5 +197,67 @@ describe("BriefingReportShell schedule disclosure", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(region.hasAttribute("hidden")).toBe(false);
     expect(region.textContent).toContain("Your day, in order.");
+  });
+});
+
+describe("BriefingReportShell footer status", () => {
+  it("renders no status strip when the slot is absent", async () => {
+    await renderShell();
+    const footer = document.body.querySelector(".brief-reader__footer") as HTMLElement;
+    expect(footer.querySelector(".brief-reader__status")).toBeNull();
+  });
+
+  it("omits the with-status footer class when the slot is absent", async () => {
+    await renderShell();
+    const footer = document.body.querySelector(".brief-reader__footer") as HTMLElement;
+    expect(footer.classList.contains("brief-reader__footer--with-status")).toBe(false);
+  });
+
+  it("adds the with-status footer class when the slot is filled", async () => {
+    await renderShell({ footerStatus: "Added 1 to the calendar" });
+    const footer = document.body.querySelector(".brief-reader__footer") as HTMLElement;
+    expect(footer.classList.contains("brief-reader__footer--with-status")).toBe(true);
+  });
+
+  it("renders the strip as the footer's first child, ahead of the actions box", async () => {
+    await renderShell({ footerStatus: "Added 1 to the calendar" });
+    const footer = document.body.querySelector(".brief-reader__footer") as HTMLElement;
+    const strip = footer.querySelector(".brief-reader__status") as HTMLElement;
+    expect(strip.textContent).toContain("Added 1 to the calendar");
+    expect(footer.firstElementChild).toBe(strip);
+    const actions = footer.querySelector(".brief-reader__footer-actions") as HTMLElement;
+    expect(strip.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe("BriefingReportShell selected tab", () => {
+  it("selects the briefing tab by default with the panel labelled by it", async () => {
+    await renderShell();
+    const briefing = document.body.querySelectorAll('[role="tab"]')[0] as HTMLElement;
+    const review = document.body.querySelectorAll('[role="tab"]')[1] as HTMLElement;
+    const panel = document.body.querySelector('[role="tabpanel"]') as HTMLElement;
+    expect(briefing.getAttribute("aria-selected")).toBe("true");
+    expect(briefing.tabIndex).toBe(0);
+    expect(review.getAttribute("aria-selected")).toBe("false");
+    expect(review.tabIndex).toBe(-1);
+    expect(panel.getAttribute("aria-labelledby")).toBe(briefing.id);
+  });
+
+  it("selects the review tab and hands the briefing tab back to the caller", async () => {
+    const seen: HTMLElement[] = [];
+    await renderShell({
+      selectedTab: "review",
+      onSelectBriefingTab: (event) => seen.push(event.currentTarget)
+    });
+    const briefing = document.body.querySelectorAll('[role="tab"]')[0] as HTMLElement;
+    const review = document.body.querySelectorAll('[role="tab"]')[1] as HTMLElement;
+    const panel = document.body.querySelector('[role="tabpanel"]') as HTMLElement;
+    expect(review.getAttribute("aria-selected")).toBe("true");
+    expect(review.tabIndex).toBe(0);
+    expect(briefing.getAttribute("aria-selected")).toBe("false");
+    expect(briefing.tabIndex).toBe(-1);
+    expect(panel.getAttribute("aria-labelledby")).toBe(review.id);
+    await act(async () => briefing.click());
+    expect(seen).toEqual([briefing]);
   });
 });

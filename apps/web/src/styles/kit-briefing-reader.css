@@ -256,8 +256,9 @@
   gap: 0;
   justify-content: flex-end;
 }
-.brief-reader--report .brief-reader__footer .brief-reader__accept-status {
-  grid-column: 1 / -1;
+.brief-reader__footer--with-status .brief-reader__footer-back,
+.brief-reader__footer--with-status .brief-reader__footer-actions {
+  grid-row: 2;
 }
 @media (max-width: 480px) {
   /* Narrow phones stack the report footer zones instead of squeezing them. */
@@ -265,7 +266,9 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .brief-reader__footer-back,
-  .brief-reader__footer-actions {
+  .brief-reader__footer-actions,
+  .brief-reader__footer--with-status .brief-reader__footer-back,
+  .brief-reader__footer--with-status .brief-reader__footer-actions {
     grid-column: 1;
     grid-row: auto;
   }
@@ -275,4 +278,29 @@
   .brief-reader__schedule-toggle {
     display: none;
   }
+}
+
+/* V6 reader-side status visuals: proposed marks, footer strip, busy button.
+   Tokens only; scoped under the report chrome so other surfaces are untouched. */
+.brief-reader__rail .jds-task[data-state="proposed"],
+.brief-reader__rail .jds-task[data-state="pending"] {
+  border-left: 3px solid var(--gold);
+  padding-left: var(--space-2);
+}
+.brief-reader__rail .jds-task[data-state="proposed"] .day-ev__t,
+.brief-reader__rail .jds-task[data-state="pending"] .day-ev__t {
+  color: var(--text-muted);
+}
+.brief-reader--report .brief-reader__status {
+  grid-area: 1 / 1 / auto / -1;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-left: 4px solid var(--gold);
+  background: var(--forest-soft);
+}
+.brief-reader--report .brief-reader__status .brief-reader__accept-status {
+  margin: 0;
+}
+.brief-reader--report .jds-btn[aria-busy="true"] {
+  opacity: 1;
 }

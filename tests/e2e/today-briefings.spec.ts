@@ -630,13 +630,13 @@ test("accept all applies eligible additions from the reader, then reviews the co
   await expect(dialog.getByRole("button", { name: "Retry" })).toHaveCount(0);
   expect(retries).toBe(0);
 
-  // The review footer holds four buttons inside the narrow viewport.
+  // Buttons fit the narrow viewport; DOM order follows the shell, grid keeps Back left.
   const reviewNames = await dialog.locator(".brief-reader__footer button").allTextContents();
   expect(reviewNames).toEqual([
-    "Back to Today",
     "Preview changes",
     "Apply changes",
-    "Accept all time blocks"
+    "Accept all time blocks",
+    "Back to Today"
   ]);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -645,6 +645,15 @@ test("accept all applies eligible additions from the reader, then reviews the co
   const reviewBackBox = await dialog.getByRole("button", { name: "Back to Today" }).boundingBox();
   expect(reviewBackBox, "review footer inside the 320px viewport").not.toBeNull();
   expect(reviewBackBox!.x + reviewBackBox!.width).toBeLessThanOrEqual(321);
+
+  // The briefing tab hands back to the open morning reader on the same run.
+  await expect(page.getByRole("tab", { name: "Review task blocks" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  );
+  await page.getByRole("tab", { name: "The briefing" }).click();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeHidden();
 });
 
 test("evening planning saves one draft and never applies in suggest mode", async ({ page }) => {

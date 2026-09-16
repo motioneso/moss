@@ -22,6 +22,8 @@ export interface BriefingReportShellProps {
   readonly onClose: () => void;
   readonly reviewTabLabel: string;
   readonly onSelectReviewTab: (event: { currentTarget: HTMLElement }) => void;
+  readonly selectedTab?: "briefing" | "review";
+  readonly onSelectBriefingTab?: (event: { currentTarget: HTMLElement }) => void;
   readonly jumpLinks: ReactNode;
   readonly report: ReactNode;
   readonly railDateInput: string | Date;
@@ -30,12 +32,13 @@ export interface BriefingReportShellProps {
   readonly rail: ReactNode;
   readonly footerActions: ReactNode;
   readonly footerBack: ReactNode;
+  readonly footerStatus?: ReactNode;
 }
 
 /** Branded morning-report chrome around caller-owned data: green header, real
-    tablist, schedule rail with a phone disclosure, slotted footer. The review
-    tab hands off to the review dialog; its panel arrives in V6. Nothing here
-    fetches. */
+    tablist, schedule rail with a phone disclosure, slotted footer. Either tab
+    can own the panel; without the review props the briefing tab does, exactly
+    as before. Nothing here fetches. */
 export function BriefingReportShell(props: BriefingReportShellProps) {
   const briefingTabId = useId();
   const reviewTabId = useId();
@@ -56,6 +59,7 @@ export function BriefingReportShell(props: BriefingReportShellProps) {
       window.matchMedia("(min-width: 1081px)").matches
   );
   const [scheduleOpen, setScheduleOpen] = useState(wide);
+  const reviewSelected = (props.selectedTab ?? "briefing") === "review";
 
   function onTablistKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
     const toBriefing = document.activeElement !== briefingTabRef.current;
@@ -91,6 +95,7 @@ export function BriefingReportShell(props: BriefingReportShellProps) {
       title={props.title}
       eyebrow={props.eyebrow}
       variant="report"
+      footerClassName={props.footerStatus ? "brief-reader__footer--with-status" : undefined}
       opener={props.opener}
       onClose={props.onClose}
       nav={
@@ -105,11 +110,16 @@ export function BriefingReportShell(props: BriefingReportShellProps) {
               type="button"
               role="tab"
               id={briefingTabId}
-              aria-selected="true"
+              aria-selected={!reviewSelected}
               aria-controls={reportPanelId}
-              tabIndex={0}
+              tabIndex={reviewSelected ? -1 : 0}
               ref={briefingTabRef}
-              className="brief-reader__tab brief-reader__tab--selected"
+              onClick={(event) => props.onSelectBriefingTab?.(event)}
+              className={
+                reviewSelected
+                  ? "brief-reader__tab"
+                  : "brief-reader__tab brief-reader__tab--selected"
+              }
             >
               {BRIEFING_TAB_LABEL}
             </button>
@@ -117,11 +127,16 @@ export function BriefingReportShell(props: BriefingReportShellProps) {
               type="button"
               role="tab"
               id={reviewTabId}
-              aria-selected="false"
-              tabIndex={-1}
+              aria-selected={reviewSelected}
+              aria-controls={reportPanelId}
+              tabIndex={reviewSelected ? 0 : -1}
               ref={reviewTabRef}
               onClick={(event) => props.onSelectReviewTab(event)}
-              className="brief-reader__tab"
+              className={
+                reviewSelected
+                  ? "brief-reader__tab brief-reader__tab--selected"
+                  : "brief-reader__tab"
+              }
             >
               {props.reviewTabLabel}
             </button>
@@ -131,6 +146,9 @@ export function BriefingReportShell(props: BriefingReportShellProps) {
       }
       footer={
         <>
+          {props.footerStatus ? (
+            <div className="brief-reader__status">{props.footerStatus}</div>
+          ) : null}
           <div className="brief-reader__footer-actions">{props.footerActions}</div>
           <div className="brief-reader__footer-back">{props.footerBack}</div>
         </>
@@ -141,7 +159,7 @@ export function BriefingReportShell(props: BriefingReportShellProps) {
         <div
           role="tabpanel"
           id={reportPanelId}
-          aria-labelledby={briefingTabId}
+          aria-labelledby={reviewSelected ? reviewTabId : briefingTabId}
           className="brief-reader__report"
         >
           {props.report}

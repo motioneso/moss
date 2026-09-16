@@ -21,6 +21,8 @@ export interface BriefingDialogProps {
   readonly nav?: ReactNode;
   /** Adds the report surface class; absent leaves the plain dialog unchanged. */
   readonly variant?: "report";
+  /** Extra class on the footer element, e.g. to mark the status strip's presence. */
+  readonly footerClassName?: string;
 }
 
 /**
@@ -88,7 +90,15 @@ export function BriefingDialog(props: BriefingDialogProps) {
         </div>
         {props.nav}
         <div className="brief-reader__body">{props.children}</div>
-        <div className="brief-reader__footer">{props.footer}</div>
+        <div
+          className={
+            props.footerClassName
+              ? `brief-reader__footer ${props.footerClassName}`
+              : "brief-reader__footer"
+          }
+        >
+          {props.footer}
+        </div>
       </div>
     </div>,
     document.body
