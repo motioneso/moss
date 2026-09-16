@@ -266,7 +266,9 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .brief-reader__footer-back,
-  .brief-reader__footer-actions {
+  .brief-reader__footer-actions,
+  .brief-reader__footer--with-status .brief-reader__footer-back,
+  .brief-reader__footer--with-status .brief-reader__footer-actions {
     grid-column: 1;
     grid-row: auto;
   }
