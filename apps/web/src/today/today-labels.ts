@@ -174,6 +174,10 @@ export function shortDate(iso: string, locale: LocaleSettingsDto): string {
   return formatDate(iso, locale, { month: "short", day: "numeric" });
 }
 
+/** Report shell (V5): the briefing tab and the phone schedule disclosure. */
+export const BRIEFING_TAB_LABEL = "The briefing";
+export const SCHEDULE_TOGGLE_LABEL = "Today's schedule";
+
 /** Bulk acceptance (T19): one activation for every eligible proposed addition. */
 export const ACCEPT_ALL_LABEL = "Accept all time blocks";
 export const ACCEPTING_LABEL = "Accepting\u2026";

@@ -150,7 +150,7 @@ test("morning briefing reader opens, stays in viewport, and returns focus", asyn
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Morning briefing" })).toBeFocused();
+    await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeFocused();
     await expect(dialog).toContainText("Protect the launch window");
     await expect(dialog).toContainText(LONG_SOURCE);
     expect(
@@ -188,7 +188,7 @@ test("morning briefing reader opens, stays in viewport, and returns focus", asyn
     .getByRole("button", { name: /Write the launch brief/ })
     .first()
     .click();
-  await expect(page.getByRole("heading", { name: "Morning briefing" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeHidden();
   await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
 });
 
@@ -406,7 +406,7 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await expect(reader).toContainText("Protect the launch window");
   await reader.getByRole("button", { name: "Review task blocks" }).click();
   await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Morning briefing" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeHidden();
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeHidden();

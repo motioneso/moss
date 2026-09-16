@@ -241,6 +241,9 @@ const TODAY_SOURCES = [
   "apps/web/src/today/today-quick-actions.tsx",
   "apps/web/src/today/module-today-widgets.tsx",
   "apps/web/src/today/briefing-action-rows.tsx",
+  "apps/web/src/today/briefing-report-shell.tsx",
+  "apps/web/src/today/morning-briefing.tsx",
+  "apps/web/src/today/briefing-dialog.tsx",
   "apps/web/src/today/briefing-feedback-menu.tsx",
   "apps/web/src/today/brief-task-row.tsx",
   "apps/web/src/today/proactive-cards.tsx"
@@ -267,6 +270,7 @@ describe("Today source rules", () => {
       "apps/web/src/styles/kit-today.css",
       "apps/web/src/styles/kit-today-feeds.css",
       "apps/web/src/styles/kit-today-misc.css",
+      "apps/web/src/styles/kit-briefing-reader.css",
       "packages/ui/src/styles/components-moss-today.css"
     ]) {
       const source = readFileSync(file, "utf8");
