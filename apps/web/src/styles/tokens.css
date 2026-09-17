@@ -296,7 +296,7 @@
   --measure: 66ch;
   --measure-narrow: 48ch;
   --container: 1240px;
-  --nav-w: 252px;
+  --nav-w: 194px;
   --topbar-h: 60px;
 
   /* ============ MOTION ============ */
@@ -519,6 +519,9 @@
   --accent-soft-border-weak: rgb(138 75 43 / 0.32);
   /* Canyon needs the heavier quiet-text wash to clear 4.5:1 on its field. */
   --masthead-fg-muted: rgba(237, 229, 210, 0.9);
+  /* Shared --muted resting nav-link color clears only 4.46:1 on the
+     sage-light sidebar, just under the 4.5:1 normal-text floor. */
+  --nav-link-muted: #55594c;
 }
 
 [data-theme="teal"] {

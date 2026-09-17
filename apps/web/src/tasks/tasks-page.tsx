@@ -500,7 +500,7 @@ function ListFilterMenu(props: {
         onClick={() => (open ? closeMenu() : setOpen(true))}
       >
         <Layers size={14} aria-hidden="true" />
-        {label}
+        <span className="tk-listbtn__label">{label}</span>
         {hidden ? <span className="tk-listbtn__hidden"> · {hidden} hidden</span> : null}
         <span className="tk-listbtn__chev">
           <ChevronDown size={14} aria-hidden="true" />

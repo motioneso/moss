@@ -360,9 +360,9 @@ export async function closeDialogs(page: Page): Promise<void> {
 }
 export async function openToday(page: Page, clock: Date): Promise<void> {
   await page.clock.setFixedTime(clock);
-  await page.goto("/today");
+  await page.goto("/today", { waitUntil: "domcontentloaded", timeout: 30_000 });
+  await expect(page.getByRole("main")).toBeVisible({ timeout: 30_000 });
   await page.evaluate(() => document.fonts.ready);
-  await page.waitForLoadState("networkidle");
 }
 export async function scrollSectionTop(page: Page, selector: string): Promise<void> {
   await page

@@ -47,6 +47,21 @@ describe("shell nav rail rendering", () => {
     expect(html).toContain('title="Tasks"');
   });
 
+  it("places the collapse control beside the logo, before destinations", () => {
+    for (const mode of ["expanded", "rail"] as const) {
+      const html = renderShellNav(mode);
+      const buttonIdx = html.indexOf("nav-collapse");
+      const navIdx = html.indexOf("<nav");
+      expect(buttonIdx).toBeGreaterThan(-1);
+      expect(navIdx).toBeGreaterThan(-1);
+      expect(buttonIdx).toBeLessThan(navIdx);
+    }
+    const expanded = renderShellNav("expanded");
+    expect(expanded).not.toContain("PanelLeft");
+    expect(expanded).toContain("chevrons-left");
+    expect(renderShellNav("rail")).toContain("chevrons-right");
+  });
+
   it("offers collapse with no per-link labels in expanded mode", () => {
     const html = renderShellNav("expanded");
     expect(html).toContain('aria-label="Collapse navigation"');

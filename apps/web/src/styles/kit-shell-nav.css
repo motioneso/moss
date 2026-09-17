@@ -1,9 +1,58 @@
-/* Desktop icon rail for the shell navigation. The rail re-scopes the existing
-   width token, so the grid follows with no new token and no edits to styles.css.
-   Every rail presentation rule lives above 880 pixels: with the rail preference
-   stored, the phone drawer keeps the full base sidebar. */
+/* Pale study sidebar presentation (visual parity P1). Base sidebar/link geometry
+   lives in styles.css; this file owns widths per breakpoint, the icon rail, the
+   drawer cutoff, the logo-adjacent collapse row, dark re-grounding and focus. */
 
-@media (min-width: 881px) {
+/* Study breakpoint: 168px sidebar with 12px horizontal padding at <=1180px.
+   Below 920px the later drawer block takes over. */
+@media (max-width: 1180px) {
+  .app-frame {
+    --nav-w: 168px;
+  }
+
+  .sidebar {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* Logo-adjacent collapse row: brand and control share one row in DOM order, so
+   Tab reaches the control right after the brand and before destinations. */
+.brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.nav-collapse {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.nav-collapse:hover {
+  background: var(--sage);
+  color: var(--ink);
+}
+
+/* Study focus ring on sidebar controls; the product box-shadow ring is off here. */
+.sidebar :focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+  box-shadow: none;
+}
+
+/* Desktop icon rail. Every rail rule lives above 920 pixels: with the rail
+   preference stored, the phone drawer keeps the full base sidebar. */
+@media (min-width: 921px) {
   .app-frame[data-nav="rail"] {
     --nav-w: 64px;
   }
@@ -12,6 +61,10 @@
     padding-left: 0.5rem;
     padding-right: 0.5rem;
     align-items: stretch;
+  }
+
+  .app-frame[data-nav="rail"] .brand-row {
+    justify-content: center;
   }
 
   .app-frame[data-nav="rail"] .brand-lockup {
@@ -45,10 +98,6 @@
     right: 2px;
   }
 
-  .app-frame[data-nav="rail"] .nav-collapse {
-    align-self: center;
-  }
-
   .app-frame[data-nav="rail"] .jds-usermenu__id {
     display: none;
   }
@@ -58,13 +107,61 @@
   }
 }
 
-.nav-collapse {
-  margin-top: 0.25rem;
-  align-self: flex-start;
-}
-
-@media (max-width: 880px) {
+@media (max-width: 920px) {
   .nav-collapse {
     display: none;
   }
+}
+
+/* Dark re-grounding: the pale field stays token-derived. Sidebar ground follows
+   the surface, text follows ink, selected treatment stays forest; the dark
+   color-mode pill takes bone text (see below) so labels remain readable. */
+[data-theme="dark"] .sidebar,
+[data-color-mode="dark"] .sidebar {
+  background: var(--surface);
+  border-right-color: var(--line);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .module-link,
+[data-color-mode="dark"] .module-link {
+  color: var(--muted);
+}
+
+/* Canyon's shared --muted resting nav-link color clears only 4.46:1 on the
+   sage-light sidebar, just under the 4.5:1 normal-text floor (WCAG AA
+   normal text). Nudge canyon's resting link color only; hover and the
+   selected pill keep their own tokens and already clear the floor. */
+[data-theme="canyon"] .module-link:not(:hover):not(.active) {
+  color: var(--nav-link-muted);
+}
+
+[data-theme="dark"] .module-link:hover,
+[data-color-mode="dark"] .module-link:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .module-link.active {
+  background: var(--forest);
+  color: var(--text-on-accent);
+}
+/* Dark color-mode forest is mid-green: accent text on it reads 2.28. The
+   pill keeps its forest ground and takes bone text, which aliases the dark
+   paper in this combo (about 7), so the selected label stays readable. */
+[data-color-mode="dark"] .module-link.active {
+  background: var(--forest);
+  color: var(--bone);
+}
+
+[data-theme="dark"] .brand-lockup,
+[data-theme="dark"] .brand-mark,
+[data-color-mode="dark"] .brand-lockup,
+[data-color-mode="dark"] .brand-mark {
+  color: var(--ink);
+}
+
+[data-theme="dark"] .rail-foot,
+[data-color-mode="dark"] .rail-foot {
+  border-top-color: var(--line);
 }

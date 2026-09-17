@@ -22,6 +22,7 @@ export async function seedScriptedChatProviderChunk(
       displayName: "UAT Scripted Chat Model",
       capabilities: ["chat"]
     });
+    await repo.setInstanceDefaultProvider(scopedDb, provider.id);
     await new SettingsRepository().upsertInstanceSetting(scopedDb, {
       key: "chat.persistent_runtime.enabled",
       value: { value: "false" },

@@ -55,8 +55,10 @@ describe("run-uat CLI (#1027/#1047)", () => {
       excludeChunks: [],
       withoutNewsJsonBinding: false,
       withJobSearchFixture: false,
+      withEspnFixture: false,
       withSportsPublicSourceFixtures: false,
       withWorkflowApprovalFixture: false,
+      withWorkshopStorageFixture: false,
       withActivityOutcomeFixture: false,
       chatScript: undefined
     });
@@ -96,9 +98,11 @@ describe("run-uat CLI (#1027/#1047)", () => {
       excludeChunks: [],
       withoutNewsJsonBinding: false,
       withJobSearchFixture: false,
+      withEspnFixture: false,
       withSportsPublicSourceFixtures: false,
       withWorkflowApprovalFixture: false,
       withActivityOutcomeFixture: false,
+      withWorkshopStorageFixture: false,
       chatScript: "phase1-smoke"
     });
   });
@@ -144,10 +148,40 @@ describe("run-uat CLI (#1027/#1047)", () => {
       excludeChunks: ["sports"],
       withoutNewsJsonBinding: true,
       withJobSearchFixture: false,
+      withEspnFixture: false,
       withSportsPublicSourceFixtures: true,
       withWorkflowApprovalFixture: false,
       withActivityOutcomeFixture: false,
+      withWorkshopStorageFixture: false,
       chatScript: undefined
+    });
+  });
+
+  it("threads the independent ESPN fixture origin flag after chatScript", async () => {
+    mocks.readFile.mockResolvedValue(
+      `export const uatLevel = {
+        level: "admin+data",
+        without: [],
+        withoutNewsJsonBinding: true,
+        withSportsPublicSourceFixtures: true,
+        chatScript: "phase1-smoke",
+        withEspnFixture: true
+      } as const;`
+    );
+    process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
+
+    await import("./run-uat.js");
+
+    expect(mocks.provisionForUat).toHaveBeenCalledWith("admin+data", {
+      excludeChunks: [],
+      withoutNewsJsonBinding: true,
+      withJobSearchFixture: false,
+      withEspnFixture: true,
+      withSportsPublicSourceFixtures: true,
+      withWorkflowApprovalFixture: false,
+      withActivityOutcomeFixture: false,
+      withWorkshopStorageFixture: false,
+      chatScript: "phase1-smoke"
     });
   });
 

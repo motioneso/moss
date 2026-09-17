@@ -9,7 +9,10 @@ import {
   captureEntry,
   guardCapture,
   reportLine,
-  waitForStablePopulated
+  waitForRoutePopulated,
+  waitForStablePopulated,
+  type RouteName,
+  type RouteReadinessEvidence
 } from "../visual-parity/capture.js";
 import { DECLARED_SIZE_MISMATCHES } from "../visual-parity/declared-size-mismatches.js";
 import { MOCKUPS } from "../visual-parity/mockups.js";
@@ -37,15 +40,27 @@ import {
   setPolicy,
   setWeatherLocation
 } from "../visual-parity/seed.js";
+import {
+  blurComposer,
+  check,
+  expectAttr,
+  openChatDrawer,
+  shellGeometry
+} from "../visual-parity/shell-navigation.js";
+import { type MatrixContext } from "../visual-parity/shell-navigation-matrix.js";
 export const uatLevel = {
   level: "admin+data",
   without: [],
+  withoutNewsJsonBinding: true,
   withJobSearchFixture: true,
-  withSportsPublicSourceFixtures: true
+  withSportsPublicSourceFixtures: true,
+  chatScript: "phase1-smoke",
+  withEspnFixture: true
 } as const;
 const OUT =
   process.env.MOSS_PARITY_OUT ??
   "/home/ben/.viberoom/rooms/moss-design-update/workspace/evidence/visual-parity/p0-baseline";
+const LONG_TASK_LIST_NAME = "Parity mobile toolbar list with a deliberately long name";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MOCKROOT = joinPath(HERE, "..", "..", "..", "docs", "superpowers", "specs", "assets");
 const OWNED = new Set(
@@ -116,6 +131,12 @@ async function seedAll(
   await setPolicy(page, "suggest");
   await stabilizeSportsFollowOrder();
   await disableSeededCustomSources();
+  const longList = await json(page, "/api/tasks/lists", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: LONG_TASK_LIST_NAME })
+  });
+  expect(longList.status).toBe(201);
   const ids: Record<string, string> = {};
   for (const t of m.tasks) {
     const due = t.due ? resolveStamp(day, t.due) : null;
@@ -240,6 +261,53 @@ async function assertSportsSourceSeam(page: Page): Promise<void> {
   }
   assertApiRequestLog();
 }
+
+async function seededBriefingSummary(
+  page: Page,
+  briefingType: "morning" | "evening"
+): Promise<string> {
+  const definitions = await json(page, "/api/briefings/definitions");
+  const definition = (
+    definitions.body.definitions as Array<{ id: string; briefingType: string }>
+  ).find((item) => item.briefingType === briefingType);
+  if (!definition) throw new Error(`parity: seeded ${briefingType} briefing definition missing`);
+  const runs = await json(page, `/api/briefings/definitions/${definition.id}/runs`);
+  const run = (runs.body.runs as Array<{ status: string; summaryText: string }>).find(
+    (item) => item.status === "succeeded" && item.summaryText.trim() !== ""
+  );
+  if (!run) throw new Error(`parity: seeded ${briefingType} briefing summary missing`);
+  return run.summaryText.trim();
+}
+
+function matrixContext(m: ParityManifest, eveningSummary: string): MatrixContext {
+  const waitForExpectedRoute = async (
+    page: Page,
+    route: RouteName
+  ): Promise<RouteReadinessEvidence> =>
+    waitForRoutePopulated(page, route, {
+      taskTitle: m.tasks[0]?.title,
+      meetingTitle: m.meetings[0]?.title,
+      eventTitles: [m.meetings[0]?.title, m.events[0]?.title].filter((title): title is string =>
+        Boolean(title)
+      ),
+      settingsPaneTitle: "Account & preferences",
+      eveningSummary,
+      tomorrowTaskTitle: m.tasks.find((task) => task.key === "due-tomorrow")?.title,
+      tomorrowEventTitle: m.events.find((event) => event.title === "Parity dentist")?.title
+    });
+  return {
+    check,
+    shellGeometry,
+    openChatDrawer,
+    blurComposer,
+    expectAttr,
+    localDay,
+    localIso,
+    openToday,
+    waitForRoutePopulated: waitForExpectedRoute,
+    longTaskListName: LONG_TASK_LIST_NAME
+  };
+}
 function assertApiRequestLog(): void {
   const project = process.env.JARVIS_UAT_PROJECT_NAME;
   if (!project?.startsWith("uat-")) throw new Error("espn fixture inactive: invalid UAT project");
@@ -301,7 +369,7 @@ async function apiQuiescent(page: Page): Promise<void> {
   throw new Error("parity: overview APIs never reached quiescence");
 }
 test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
-  test.setTimeout(900_000);
+  test.setTimeout(process.env.PARITY_SHELL === "1" ? 1_500_000 : 900_000);
   mkdirSync(OUT, { recursive: true });
   mkdirSync(join(OUT, "guard"), { recursive: true });
   await forceChrome(page);
@@ -325,6 +393,14 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
   console.log(
     "[parity] fixture seams accepted: news fixture.invalid, sports ESPN-only, API requests logged"
   );
+  const eveningSummary = await seededBriefingSummary(page, "evening");
+  const readiness = matrixContext(m, eveningSummary);
+  if (process.env.PARITY_SHELL === "1") {
+    await import("../visual-parity/shell-navigation.js").then(({ runShellChecks }) =>
+      runShellChecks(page, OUT, readiness)
+    );
+    return;
+  }
   const lines = ["| file | size | masked | diff | size |", "|---|---|---|---|---|"];
   let lastState = "",
     lastWidth = 0;
@@ -364,6 +440,10 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
       lastState = entry.state;
       lastWidth = entry.viewport.w;
     }
+    if (entry.state.startsWith("today-morning"))
+      await readiness.waitForRoutePopulated(page, "today");
+    if (entry.name === "evening-1440-opening.png" || entry.name === "evening-375-opening.png")
+      await readiness.waitForRoutePopulated(page, "evening");
     if (entry.state === "today-morning-news" || entry.state === "today-morning-sports")
       await waitForStablePopulated(page);
     const r = await captureEntry(page, entry, MOCKROOT, OUT);
@@ -384,8 +464,15 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
   await closeDialogs(page);
   for (const [name, path] of GUARDS) {
     await page.goto(path);
-    for (const w of [1440, 375])
+    for (const w of [1440, 375]) {
+      await page.setViewportSize({ width: w, height: 1000 });
+      await readiness.waitForRoutePopulated(page, name as RouteName);
       await guardCapture(page, `guard-${name}-${w}`, w, join(OUT, "guard"));
+    }
+  }
+  if (process.env.PARITY_SHELL === "1") {
+    const { runShellChecks } = await import("../visual-parity/shell-navigation.js");
+    await runShellChecks(page, OUT, readiness);
   }
   writeFileSync(join(OUT, "report.md"), `# visual parity baseline\n\n${lines.join("\n")}\n`);
   expect(lines.length).toBe(34);
@@ -405,6 +492,7 @@ async function readinessRace(page: Page, ms: number): Promise<string> {
 // Regression second (walk seeded once; this test writes nothing): replay the session
 // into a fresh context and race readiness before first paint, while faces are held.
 test("r10 delayed display font regression", async ({ browser }) => {
+  test.skip(process.env.PARITY_BASE_SMOKE === "1", "covered by the smoke-only readiness run");
   test.setTimeout(600_000);
   const base = process.env.JARVIS_UAT_BASE_URL!;
   const ctxA = await browser.newContext({ baseURL: base });
@@ -427,71 +515,83 @@ test("r10 delayed display font regression", async ({ browser }) => {
     });
     await route.continue();
   });
-  // Commit-only navigation: returns before parse/paint, so no face has started
-  // loading when readiness runs below. Any earlier paint would poison fonts.ready.
-  await page.clock.setFixedTime(new Date(localIso(localDay(), "08:00")));
-  await page.goto("/today", { waitUntil: "commit" });
-  const me = await page.evaluate(async () => (await fetch("/api/me/locale")).status);
-  expect(me, "parity: replayed session not authenticated").toBe(200);
-  const before = await readinessRace(page, 60_000);
-  const hole = await page.evaluate(() => {
-    const el = document.querySelector(".nw-twlead__title") as HTMLElement | null;
-    const text = (el?.innerText ?? "").slice(0, 120);
-    let loading = false;
-    document.fonts.forEach((face) => {
-      if (face.status === "loading") loading = true;
-    });
-    const rects: number[][] = [];
-    const walker = document.createTreeWalker(el ?? document.body, NodeFilter.SHOW_TEXT);
-    let node = walker.nextNode();
-    while (node && rects.length < 4) {
-      if ((node.textContent ?? "").trim()) {
-        const range = document.createRange();
-        range.selectNodeContents(node);
-        for (const r of Array.from(range.getClientRects())) {
-          if (rects.length >= 4) break;
-          rects.push([r.x, r.y, r.width, r.height].map((v) => Math.round(v * 10) / 10));
-        }
-      }
-      node = walker.nextNode();
-    }
-    return JSON.stringify({ text: text.length > 0, faceLoading: loading, rects });
-  });
-  console.log(`[parity-regression] held=${heldUrls.length} before=${before} hole=${hole}`);
-  expect(JSON.parse(hole)).toEqual(expect.objectContaining({ text: true, faceLoading: true }));
-  expect(heldUrls.length, "parity: no font held while readiness ran").toBeGreaterThan(0);
-  expect(before, `parity: readiness completed with faces held (hole=${hole})`).toBe("timeout");
-  for (const release of releasers) release();
-  const deadline = Date.now() + 60_000;
-  let loading = true;
-  while (loading && Date.now() < deadline) {
-    await page.waitForTimeout(500);
-    loading = await page.evaluate(() => {
-      let active = false;
+  try {
+    // Commit-only navigation: returns before parse/paint, so no face has started
+    // loading when readiness runs below. Any earlier paint would poison fonts.ready.
+    await page.clock.setFixedTime(new Date(localIso(localDay(), "08:00")));
+    await page.goto("/today", { waitUntil: "commit" });
+    const me = await page.evaluate(async () => (await fetch("/api/me/locale")).status);
+    expect(me, "parity: replayed session not authenticated").toBe(200);
+    const before = await readinessRace(page, 60_000);
+    const hole = await page.evaluate(() => {
+      const el = document.querySelector(".nw-twlead__title") as HTMLElement | null;
+      const text = (el?.innerText ?? "").slice(0, 120);
+      let loading = false;
       document.fonts.forEach((face) => {
-        if (face.status === "loading") active = true;
+        if (face.status === "loading") loading = true;
       });
-      return active;
+      const rects: number[][] = [];
+      const walker = document.createTreeWalker(el ?? document.body, NodeFilter.SHOW_TEXT);
+      let node = walker.nextNode();
+      while (node && rects.length < 4) {
+        if ((node.textContent ?? "").trim()) {
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          for (const r of Array.from(range.getClientRects())) {
+            if (rects.length >= 4) break;
+            rects.push([r.x, r.y, r.width, r.height].map((v) => Math.round(v * 10) / 10));
+          }
+        }
+        node = walker.nextNode();
+      }
+      return JSON.stringify({ text: text.length > 0, faceLoading: loading, rects });
     });
-  }
-  expect(loading, "parity: held faces never loaded after release").toBe(false);
-  expect(await readinessRace(page, 90_000), "parity: readiness never completed").toBe("completed");
-  const capture = (await import("../visual-parity/capture.js")) as unknown as {
-    stableSample?: (page: Page) => Promise<string>;
-  };
-  if (!capture.stableSample) {
-    console.log("[parity-regression] no stableSample export; skipping face gate");
-  } else {
-    const after = JSON.parse(await capture.stableSample(page)) as {
-      faces?: Array<{ sel?: string; ready?: boolean; lines?: number[][] }>;
-    };
-    console.log(`[parity-regression] after=${JSON.stringify(after.faces)}`);
-    expect((after.faces ?? []).length).toBeGreaterThan(0);
-    for (const face of after.faces ?? []) {
-      expect(face.ready, `parity: face not ready: ${face.sel}`).toBe(true);
-      expect(face.lines?.length ?? 0, `parity: no line rects: ${face.sel}`).toBeGreaterThan(0);
+    console.log(`[parity-regression] held=${heldUrls.length} before=${before} hole=${hole}`);
+    expect(JSON.parse(hole)).toEqual(expect.objectContaining({ text: true, faceLoading: true }));
+    expect(heldUrls.length, "parity: no font held while readiness ran").toBeGreaterThan(0);
+    const heldReadinessRejected =
+      before === "timeout" ||
+      before.startsWith("Error: parity: display face or geometry did not stabilize: ");
+    expect(
+      heldReadinessRejected,
+      `parity: readiness completed with faces held (hole=${hole})`
+    ).toBe(true);
+    for (const release of releasers) release();
+    const deadline = Date.now() + 60_000;
+    let loading = true;
+    while (loading && Date.now() < deadline) {
+      await page.waitForTimeout(500);
+      loading = await page.evaluate(() => {
+        let active = false;
+        document.fonts.forEach((face) => {
+          if (face.status === "loading") active = true;
+        });
+        return active;
+      });
     }
+    expect(loading, "parity: held faces never loaded after release").toBe(false);
+    expect(await readinessRace(page, 90_000), "parity: readiness never completed").toBe(
+      "completed"
+    );
+    const capture = (await import("../visual-parity/capture.js")) as unknown as {
+      stableSample?: (page: Page) => Promise<string>;
+    };
+    if (!capture.stableSample) {
+      console.log("[parity-regression] no stableSample export; skipping face gate");
+    } else {
+      const after = JSON.parse(await capture.stableSample(page)) as {
+        faces?: Array<{ sel?: string; ready?: boolean; lines?: number[][] }>;
+      };
+      console.log(`[parity-regression] after=${JSON.stringify(after.faces)}`);
+      expect((after.faces ?? []).length).toBeGreaterThan(0);
+      for (const face of after.faces ?? []) {
+        expect(face.ready, `parity: face not ready: ${face.sel}`).toBe(true);
+        expect(face.lines?.length ?? 0, `parity: no line rects: ${face.sel}`).toBeGreaterThan(0);
+      }
+    }
+  } finally {
+    for (const release of releasers) release();
+    await ctxB.close().catch(() => undefined);
+    await ctxA.close().catch(() => undefined);
   }
-  await ctxB.close();
-  await ctxA.close();
 });

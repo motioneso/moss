@@ -819,7 +819,8 @@ test("desktop nav collapses to a remembered rail and phone keeps the drawer", as
   const collapse = page.getByRole("button", { name: "Collapse navigation" });
   await expect(collapse).toBeVisible();
   const expandedWidth = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
-  expect(expandedWidth).toBeGreaterThan(200);
+  expect(expandedWidth).toBeGreaterThanOrEqual(192);
+  expect(expandedWidth).toBeLessThanOrEqual(196);
 
   await collapse.click();
   const expand = page.getByRole("button", { name: "Expand navigation" });
@@ -837,7 +838,8 @@ test("desktop nav collapses to a remembered rail and phone keeps the drawer", as
   await page.getByRole("button", { name: "Expand navigation" }).click();
   await expect(page.getByRole("button", { name: "Collapse navigation" })).toBeVisible();
   const restoredWidth = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
-  expect(restoredWidth).toBeGreaterThan(200);
+  expect(restoredWidth).toBeGreaterThanOrEqual(192);
+  expect(restoredWidth).toBeLessThanOrEqual(196);
 
   await page.setViewportSize({ width: 375, height: 800 });
   await expect(page.getByRole("button", { name: "Open navigation" })).toBeVisible();
