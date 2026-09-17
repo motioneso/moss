@@ -1,0 +1,25 @@
+{
+  "_comment": "VP-P0 shared seed manifest. The parity seed reads this file to create tasks and calendar rows, and waits for the named news/sports content served deterministically through the existing fixture seam (job-search fixture origin: tests/fixtures/espn).",
+  "tasks": [
+    { "key": "due-today-1", "title": "Parity launch brief", "due": "today-12:00" },
+    { "key": "due-today-2", "title": "Parity vendor call", "due": "today-17:00" },
+    { "key": "carry", "title": "Parity carry-over", "due": null },
+    { "key": "unscheduled-1", "title": "Parity file report", "due": null },
+    { "key": "due-tomorrow", "title": "Parity invoice", "due": "tomorrow-12:00" },
+    { "key": "done", "title": "Parity plants watered", "due": null, "status": "done" }
+  ],
+  "todayPlanTasks": ["due-today-1", "carry"],
+  "tomorrowPlanTasks": ["due-tomorrow"],
+  "meetings": [
+    { "title": "Parity standup", "startsAt": "today-09:00", "endsAt": "today-09:30" },
+    { "title": "Parity planning", "startsAt": "today-14:00", "endsAt": "today-15:00" },
+    { "title": "Parity review", "startsAt": "today-16:00", "endsAt": "today-16:30" }
+  ],
+  "events": [
+    { "title": "Parity lunch", "startsAt": "today-12:00", "endsAt": "today-13:00" },
+    { "title": "Parity dentist", "startsAt": "tomorrow-16:00", "endsAt": "tomorrow-16:30" }
+  ],
+  "news": { "expectedHeadline": "UAT rig achieves deterministic Tuesday", "leadPhoto": "data-uri" },
+  "sports": { "follows": ["nfl", "nba", "eng.1"], "expectedScore": "Arsenal" },
+  "weather": { "location": "San Francisco, CA", "source": "live-open-meteo" }
+}

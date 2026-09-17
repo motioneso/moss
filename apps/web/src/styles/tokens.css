@@ -71,7 +71,7 @@
      Semantic red/amber/steel stay locked so error/caution/info meaning remains stable. */
   /* Neutrals: warm bone paper & ink (Park Press) */
   --paper: #f2eee4;
-  --surface: #fffdf7;
+  --surface: #faf8f1; /* VP-P0: study value. */
   --surface-2: #f7f3e9;
   --surface-3: #d9cfb5;
   --scrim: rgba(46, 40, 30, 0.42);
@@ -82,18 +82,18 @@
   --bone: var(--paper); /* Design-fidelity plan V0: study alias of --paper, themed. */
 
   --line-subtle: #e6dfd0;
-  --line: #d9d1bf;
-  --line-strong: rgba(46, 40, 30, 0.22);
+  --line: #c6cbbc; /* VP-P0: study value. */
+  --line-strong: #9ba591; /* VP-P0: study value. */
 
-  --ink: #292621;
-  --ink-2: #5b564d;
+  --ink: #282c25; /* VP-P0: study value. */
+  --ink-2: #676c60;
   --ink-3: #8b8678;
   --ink-4: #9a958a;
 
   /* Forest — primary brand accent (the active accent-ramp slot; park themes
      override --forest* per [data-theme] block below) */
   --forest: #294b39;
-  --forest-hover: #244232;
+  --forest-hover: #345942; /* VP-P0: study value. */
   --forest-active: #203a2c;
   --forest-soft: #dbe2d3;
   --forest-soft-2: #c9d5c0;
@@ -106,6 +106,12 @@
   --gold-soft: #f1e2c2;
   --gold-soft-2: #e8d3a4;
   --gold-ink: #6d4a12;
+  --gold-light: #e9bd69; /* VP-P0: study alias, same value as --hero-accent. */
+  --sage: #dce3d6; /* VP-P0: study value. */
+  --sage-light: #e7ebdf; /* VP-P0: study value. */
+  --forest-deep: #1d382b; /* VP-P0: study value. */
+  --focus: #805316; /* VP-P0: study value. */
+  --shadow: 0 12px 44px rgb(18 31 24 / 0.18); /* VP-P0: study value. */
   --hero-accent: #e9bd69; /* Design-fidelity plan V0: study gold-light; the one fixed literal, only ever on --hero-bg. */
 
   /* Amber — drift / at-risk / recovery (anti-shame) */
