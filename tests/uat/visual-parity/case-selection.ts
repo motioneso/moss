@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { isAbsolute, normalize, posix, win32 } from "node:path";
+import { isAbsolute, normalize, posix, relative, win32 } from "node:path";
 
 import { PNG } from "pngjs";
 
@@ -10,6 +10,7 @@ import {
   buildTransitionRunRecord,
   parseRegionSet,
   parseSizeTransition,
+  toSemanticReport,
   type RegionSetComparisonReport,
   type RegionSetDeclaration,
   type SizeTransitionComparisonReport,
@@ -120,6 +121,10 @@ export interface CaptureAccounting {
     // Present for element captures: records capture-time geometry sidecar
     readonly geometrySidecar?: ArtifactRecord;
     readonly geometry?: ArtifactRecord;
+    // Present when the case declared regions/sizeTransition: every diff image the
+    // recorded report points at (per-region diffs plus the complement diff), each
+    // checksummed. The representative `diff` above aliases one of these entries.
+    readonly regionDiffs?: readonly ArtifactRecord[];
   };
   readonly elapsedMs: number;
   readonly comparison: {
@@ -368,6 +373,8 @@ function parseCase(value: unknown, index: number): SelectedCase {
   };
   if (selected.role === "measurement" && selected.base !== undefined)
     fail(`cases[${index}] measurement cannot declare a base comparison`);
+  if (selected.role === "measurement" && (selected.regions ?? selected.sizeTransition))
+    fail(`cases[${index}] measurement cannot declare regions/sizeTransition acceptance`);
   if (selected.role === "owned-region/reference" && (!selected.reference || !selected.base))
     fail(`cases[${index}] owned-region/reference requires reference and base artifacts`);
   if (selected.role === "base-guard" && !selected.base)
@@ -562,6 +569,52 @@ export async function runSetupActions(state: string, handlers: SetupActionHandle
   }
 }
 
+// Binds a recorded report to its diff inventory: compared entries name their diff,
+// uncompared entries name none, no diff is shared, and the inventoried set matches
+// exactly. Named files were already verified by checkArtifact.
+function checkReportDiffInventory(
+  capture: CaptureAccounting,
+  report: RegionSetComparisonReport | SizeTransitionComparisonReport,
+  kind: "region" | "transition",
+  artifactRoot: string
+): void {
+  const recorded: string[] = [];
+  for (const entry of report.regions) {
+    if (entry.result) {
+      if (!entry.diffPath)
+        fail(`compared ${kind} ${entry.id} has no diff artifact: ${capture.identity}`);
+      recorded.push(entry.diffPath);
+    } else if (entry.diffPath) {
+      fail(`uncompared ${kind} ${entry.id} carries a diff: ${capture.identity}`);
+    }
+  }
+  if ("complementDiffPath" in report) {
+    if (report.complement && !report.complementDiffPath)
+      fail(`compared complement has no diff artifact: ${capture.identity}`);
+    if (report.complementDiffPath) recorded.push(report.complementDiffPath);
+  }
+  const seen = new Set<string>();
+  for (const absolute of recorded) {
+    if (seen.has(absolute)) fail(`duplicate ${kind} diff artifact: ${absolute}`);
+    seen.add(absolute);
+  }
+  const inventoried = capture.artifacts.regionDiffs;
+  if (!inventoried) fail(`${kind} diffs not inventoried: ${capture.identity}`);
+  const toRel = (absolute: string): string => {
+    if (!isAbsolute(absolute)) fail(`${kind} diff path is not absolute: ${absolute}`);
+    const rel = relative(artifactRoot, absolute);
+    if (rel === "" || rel.startsWith("..") || isAbsolute(rel))
+      fail(`${kind} diff escapes the run root: ${absolute}`);
+    return posix.normalize(rel);
+  };
+  const expected = new Set([...seen].map(toRel));
+  if (!inventoried || inventoried.length !== expected.size)
+    fail(`${kind} diff inventory differs from the recorded report: ${capture.identity}`);
+  for (const record of inventoried)
+    if (!expected.has(posix.normalize(record.path)))
+      fail(`${kind} diff inventory differs from the recorded report: ${capture.identity}`);
+}
+
 export function validateRunManifest(
   selection: CaseSelection,
   manifest: ParityRunManifest,
@@ -607,12 +660,14 @@ export function validateRunManifest(
     fail("run manifest guard inventory differs from declaration");
   if (manifest.guardCaptures.length !== expectedGuards.length)
     fail("run manifest guard capture inventory differs from declaration");
-  const paths = new Set<string>();
+  const paths = new Map<string, string>();
   const checkArtifact = (artifact: ArtifactRecord, label: string): void => {
     safeRelativePath(artifact.path, `${label}.path`);
     if (!/^[0-9a-f]{64}$/i.test(artifact.sha256)) fail(`invalid artifact SHA256 for ${label}`);
-    if (paths.has(artifact.path)) fail(`artifact path collision: ${artifact.path}`);
-    paths.add(artifact.path);
+    const prior = paths.get(artifact.path);
+    if (prior !== undefined && prior !== artifact.sha256)
+      fail(`artifact path collision: ${artifact.path}`);
+    if (prior === undefined) paths.set(artifact.path, artifact.sha256);
     const absolute = `${options.artifactRoot}/${artifact.path}`;
     if (!existsSync(absolute)) fail(`missing artifact: ${artifact.path}`);
     const actual = createHash("sha256").update(readFileSync(absolute)).digest("hex");
@@ -651,6 +706,9 @@ export function validateRunManifest(
       if (key === "controls") {
         for (const [index, control] of (artifact as readonly ArtifactRecord[]).entries())
           checkArtifact(control as ArtifactRecord, `${capture.identity}.controls[${index}]`);
+      } else if (key === "regionDiffs") {
+        for (const [index, regionDiff] of (artifact as readonly ArtifactRecord[]).entries())
+          checkArtifact(regionDiff as ArtifactRecord, `${capture.identity}.regionDiffs[${index}]`);
       } else checkArtifact(artifact as ArtifactRecord, `${capture.identity}.${key}`);
     }
     if (!Number.isFinite(capture.elapsedMs) || capture.elapsedMs < 0)
@@ -747,29 +805,27 @@ export function validateRunManifest(
     }
     if (capture.readiness.length === 0 || capture.populatedWidgets.length === 0)
       fail(`capture evidence is incomplete for ${capture.identity}`);
-    // A case that declares regions or a size transition must prove its
-    // comparison actually ran against the real declared base, not just claim
-    // a report object. We never trust the recorded report as its own proof.
-    // Instead we re-read the declared base file's bytes from disk right now
-    // and re-run the whole comparison, then require the fresh result to
-    // match the recorded one exactly. There is no separate "base manifest"
-    // artifact to check the base against — recomputing hash-for-hash from
-    // the actual declared base file already binds provenance, because a
-    // forged or stale base would either fail to exist, or would exist but
-    // produce a different report than the one that was recorded.
+    // Regions/transitions prove comparison against the real base and reference.
+    // Provenance follows each comparison's purpose, not the outer role; base hashes
+    // bind file plus run commit. Capture-as-base is rejected by path identity:
+    // independently captured base/head bytes may legitimately be identical.
     if (declaration.regions || declaration.sizeTransition) {
+      if (declaration.role === "measurement")
+        fail(`measurement cannot declare regions/sizeTransition acceptance: ${capture.identity}`);
       if (!declaration.base)
         fail(`capture with regions/sizeTransition requires a base: ${capture.identity}`);
       const maskedAbsolute = `${options.artifactRoot}/${capture.artifacts.masked.path}`;
       const baseAbsolute = `${options.artifactRoot}/${declaration.base}`;
       if (!existsSync(baseAbsolute)) fail(`missing declared baseline: ${capture.identity}`);
+      if (posix.normalize(declaration.base) === posix.normalize(capture.artifacts.masked.path))
+        fail(`declared base is the capture file itself (self-comparison): ${capture.identity}`);
       const baseActual = createHash("sha256").update(readFileSync(baseAbsolute)).digest("hex");
-      // A capture can never prove anything by being compared to itself: the
-      // declared base must be different bytes from the capture under test.
-      if (baseActual === capture.artifacts.masked.sha256)
-        fail(
-          `declared base is identical to the capture itself (self-comparison): ${capture.identity}`
-        );
+      if (!capture.comparison.baseSha256 || !/^[0-9a-f]{64}$/i.test(capture.comparison.baseSha256))
+        fail(`capture base bytes unbound: ${capture.identity}`);
+      if (baseActual !== capture.comparison.baseSha256)
+        fail(`declared baseline bytes changed: ${capture.identity}`);
+      if (capture.comparison.expectedBase !== manifest.expectedBase)
+        fail(`capture baseline differs from run baseline: ${capture.identity}`);
       const referenceAbsolute = declaration.reference
         ? `${options.artifactRoot}/${declaration.reference}`
         : undefined;
@@ -789,10 +845,20 @@ export function validateRunManifest(
           referencePaths,
           []
         );
-        if (JSON.stringify(fresh.report) !== JSON.stringify(capture.comparison.regionReport))
+        // Semantic equality only; diff paths are inventoried below.
+        if (
+          JSON.stringify(toSemanticReport(fresh.report)) !==
+          JSON.stringify(toSemanticReport(capture.comparison.regionReport))
+        )
           fail(
             `recorded region comparison does not match a fresh recompute of the actual bytes: ${capture.identity}`
           );
+        checkReportDiffInventory(
+          capture,
+          capture.comparison.regionReport,
+          "region",
+          options.artifactRoot
+        );
       }
       if (declaration.sizeTransition) {
         if (!capture.comparison.transitionReport)
@@ -813,10 +879,49 @@ export function validateRunManifest(
           referencePaths,
           []
         );
-        if (JSON.stringify(fresh.report) !== JSON.stringify(capture.comparison.transitionReport))
+        if (
+          JSON.stringify(toSemanticReport(fresh.report)) !==
+          JSON.stringify(toSemanticReport(capture.comparison.transitionReport))
+        )
           fail(
             `recorded size transition comparison does not match a fresh recompute of the actual bytes: ${capture.identity}`
           );
+        checkReportDiffInventory(
+          capture,
+          capture.comparison.transitionReport,
+          "transition",
+          options.artifactRoot
+        );
+      }
+      // Reference provenance follows actual comparisons, under any outer role.
+      const recordedReport = declaration.regions
+        ? capture.comparison.regionReport!
+        : capture.comparison.transitionReport!;
+      const referenceCompared = recordedReport.regions.filter(
+        (entry) => entry.comparedAgainst === "reference"
+      );
+      if (referenceCompared.length > 0) {
+        if (!declaration.reference || !referenceAbsolute)
+          fail(`reference comparison without a declared reference: ${capture.identity}`);
+        if (!existsSync(referenceAbsolute)) fail(`missing declared reference: ${capture.identity}`);
+        const referenceActual = createHash("sha256")
+          .update(readFileSync(referenceAbsolute))
+          .digest("hex");
+        if (
+          !capture.comparison.referenceSha256 ||
+          !/^[0-9a-f]{64}$/i.test(capture.comparison.referenceSha256)
+        )
+          fail(`capture reference bytes unbound: ${capture.identity}`);
+        if (referenceActual !== capture.comparison.referenceSha256)
+          fail(`declared reference bytes changed: ${capture.identity}`);
+        if (!capture.artifacts.referenceDiff)
+          fail(`reference comparison diff not inventoried: ${capture.identity}`);
+        const referenceDiffPaths = new Set(
+          referenceCompared.flatMap((entry) => (entry.diffPath ? [entry.diffPath] : []))
+        );
+        const inventoried = `${options.artifactRoot}/${capture.artifacts.referenceDiff.path}`;
+        if (!referenceDiffPaths.has(inventoried))
+          fail(`inventoried reference diff matches no recorded comparison: ${capture.identity}`);
       }
     }
     if (declaration.role === "measurement" && capture.comparison.outcome !== "control")

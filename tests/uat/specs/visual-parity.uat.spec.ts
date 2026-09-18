@@ -31,7 +31,7 @@ import {
   type SelectedGuard
 } from "../visual-parity/case-selection.js";
 import { MOCKUPS } from "../visual-parity/mockups.js";
-import { resolveEntryComparison } from "../visual-parity/region-comparison.js";
+import { reportDiffPaths, resolveEntryComparison } from "../visual-parity/region-comparison.js";
 import {
   addDay,
   armCalendar,
@@ -752,6 +752,16 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
                   path: rel(referenceDiffPath),
                   sha256: createHash("sha256").update(readFileSync(referenceDiffPath)).digest("hex")
                 }
+              }
+            : {}),
+          ...(comparison.regionReport || comparison.transitionReport
+            ? {
+                regionDiffs: reportDiffPaths(
+                  comparison.regionReport ?? comparison.transitionReport!
+                ).map((absolute) => ({
+                  path: rel(absolute),
+                  sha256: createHash("sha256").update(readFileSync(absolute)).digest("hex")
+                }))
               }
             : {}),
           ...(r.geometrySidecar

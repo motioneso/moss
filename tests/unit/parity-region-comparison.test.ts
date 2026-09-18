@@ -22,9 +22,12 @@ import {
   compareSizeTransition,
   parseRegionSet,
   parseSizeTransition,
+  reportDiffPaths,
   resolveEntryComparison,
   runDeclaredRegionComparison,
+  runDeclaredSizeTransition,
   sha256File,
+  toSemanticReport,
   validateRegionRunRecord,
   type RegionSetDeclaration,
   type SizeTransitionDeclaration
@@ -668,5 +671,148 @@ describe("changed-control regression: contrasting control at an opaque pixel", (
     expect(result.changedPercent).toBeGreaterThan(0);
     // the source capture on disk is never mutated by writing its control
     expect(createHash("sha256").update(readFileSync(capturePath)).digest("hex")).toBe(before);
+  });
+});
+
+describe("base-guard transition regions", () => {
+  // Old 8x8 grows to 8x10: the 8x8 band shifts down two rows (moved but
+  // unchanged), and the exposed top two rows are explicitly owned new content.
+  const GUARDED_TRANSITION: SizeTransitionDeclaration = parseSizeTransition({
+    oldSize: { width: 8, height: 8 },
+    targetSize: { width: 8, height: 10 },
+    regions: [
+      {
+        id: "moved",
+        kind: "translate",
+        purpose: "base-guard",
+        baseRect: { x: 0, y: 0, width: 8, height: 8 },
+        headRect: { x: 0, y: 2, width: 8, height: 8 }
+      },
+      {
+        id: "exposed",
+        kind: "new-band",
+        purpose: "behavior-changed",
+        behaviorEvidence: "manually verified: exposed top band is intentional",
+        headRect: { x: 0, y: 0, width: 8, height: 2 }
+      }
+    ],
+    expectedGeometry: { x: 0, y: 0 }
+  });
+
+  const shiftedHead = () => {
+    const base = solidPng(8, 8, [1, 2, 3, 255]);
+    const head = solidPng(8, 10, [9, 9, 9, 255]);
+    for (let y = 0; y < 8; y += 1)
+      for (let x = 0; x < 8; x += 1) setPixel(head, x, y + 2, [1, 2, 3, 255]);
+    return { base, head };
+  };
+
+  it("compares a moved-but-unchanged band against base pixels and passes", () => {
+    const { base, head } = shiftedHead();
+    const dir = tempDir();
+    const basePath = writePng(dir, "base.png", base);
+    const headPath = writePng(dir, "head.png", head);
+    const diffPaths = new Map([["moved", join(dir, "moved.diff.png")]]);
+    const report = compareSizeTransition(GUARDED_TRANSITION, base, head, new Map(), [], diffPaths);
+    const moved = report.regions.find((r) => r.id === "moved")!;
+    expect(moved.comparedAgainst).toBe("base");
+    expect(moved.result!.outcome).toBe("pass");
+    expect(moved.diffPath).toBe(join(dir, "moved.diff.png"));
+    const run = runDeclaredSizeTransition(GUARDED_TRANSITION, basePath, headPath, null, diffPaths);
+    expect(run.outcome).toBe("pass");
+  });
+
+  it("fails the aggregate when a pixel inside the moved band regresses", () => {
+    const { base, head } = shiftedHead();
+    setPixel(head, 4, 5, [200, 10, 10, 255]);
+    const dir = tempDir();
+    const run = runDeclaredSizeTransition(
+      GUARDED_TRANSITION,
+      writePng(dir, "base.png", base),
+      writePng(dir, "head.png", head),
+      null,
+      new Map([["moved", join(dir, "moved.diff.png")]])
+    );
+    expect(run.outcome).toBe("fail");
+  });
+
+  it("rejects base-guard bindings that do not describe moved pixels", () => {
+    const band = {
+      id: "moved",
+      kind: "translate",
+      purpose: "base-guard",
+      baseRect: { x: 0, y: 0, width: 8, height: 8 },
+      headRect: { x: 0, y: 2, width: 8, height: 8 }
+    };
+    const transition = (regions: unknown[]) =>
+      parseSizeTransition({
+        oldSize: { width: 8, height: 8 },
+        targetSize: { width: 8, height: 10 },
+        regions,
+        expectedGeometry: { x: 0, y: 0 }
+      });
+    const exposed = {
+      id: "exposed",
+      kind: "new-band",
+      purpose: "behavior-changed",
+      behaviorEvidence: "manual",
+      headRect: { x: 0, y: 0, width: 8, height: 2 }
+    };
+    expect(() =>
+      transition([{ ...band, referenceRect: { x: 0, y: 2, width: 8, height: 8 } }, exposed])
+    ).toThrow("only valid for reference-owned regions");
+    expect(() => transition([{ ...band, behaviorEvidence: "manual" }, exposed])).toThrow(
+      "only valid for behavior-changed regions"
+    );
+    expect(() =>
+      transition([
+        {
+          id: "gone",
+          kind: "removed-band",
+          purpose: "base-guard",
+          baseRect: { x: 0, y: 0, width: 8, height: 8 }
+        }
+      ])
+    ).toThrow("base-guard requires kind translate");
+    expect(() =>
+      transition([
+        {
+          id: "fresh",
+          kind: "new-band",
+          purpose: "base-guard",
+          headRect: { x: 0, y: 0, width: 8, height: 2 }
+        }
+      ])
+    ).toThrow("base-guard requires kind translate");
+    expect(() =>
+      parseRegionSet({
+        imageSize: { width: 4, height: 4 },
+        regions: [{ id: "owned", purpose: "base-guard", rect: { x: 0, y: 0, width: 4, height: 4 } }]
+      })
+    ).toThrow("only valid for size-transition translate regions");
+  });
+
+  it("separates semantic results from diff paths", () => {
+    const { base, head } = shiftedHead();
+    const dir = tempDir();
+    const report = compareSizeTransition(
+      GUARDED_TRANSITION,
+      base,
+      head,
+      new Map(),
+      [],
+      new Map([["moved", join(dir, "moved.diff.png")]])
+    );
+    expect(reportDiffPaths(report)).toEqual([join(dir, "moved.diff.png")]);
+    const semantic = toSemanticReport(report) as {
+      regions: Array<{ diffPath?: string }>;
+      complementDiffPath?: string;
+    };
+    expect(semantic.regions.every((entry) => entry.diffPath === undefined)).toBe(true);
+    expect(semantic.complementDiffPath).toBeUndefined();
+    expect(JSON.stringify(semantic)).not.toContain("moved.diff.png");
+    // The same pixels without diff paths compare semantically identical.
+    const pathless = compareSizeTransition(GUARDED_TRANSITION, base, head, new Map(), []);
+    expect(toSemanticReport(pathless)).toEqual(semantic);
   });
 });

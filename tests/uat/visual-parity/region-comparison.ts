@@ -215,6 +215,9 @@ export interface RegionComparisonResult {
 export interface RegionSetComparisonReport {
   readonly regions: readonly RegionComparisonResult[];
   readonly complement?: ComparisonOutcome; // absent when a fullImage region binds no complement
+  // Present exactly when `complement` is present and a diff path was supplied: the
+  // complement-vs-base diff, so validation can inventory every written diff.
+  readonly complementDiffPath?: string;
 }
 
 // Compares a declared region set on same-size images: each reference-owned region against its
@@ -303,7 +306,11 @@ export function compareRegionSet(
   if (!base) return { regions };
   const owned = declaration.regions.map((r) => r.rect);
   const complement = compareWithinComplement(capture, base, owned, masks, diffPaths?.complement);
-  return { regions, complement };
+  return {
+    regions,
+    complement,
+    ...(diffPaths?.complement ? { complementDiffPath: diffPaths.complement } : {})
+  };
 }
 
 // The exact complement of the owned rects: every uncovered, unmasked pixel vs the base.
@@ -345,9 +352,10 @@ export interface SizeTransitionComparisonReport {
 }
 
 // Compares a declared size transition: base/head must exactly match the declared old/target
-// raster dimensions, translate pairs are compared directly (never scaled), reference-owned
-// translate pairs also compare to their reference, and removed/new bands are recorded as
-// owned but never pixel-compared (nothing exists on the other side to compare them to).
+// raster dimensions, translate pairs are compared directly (never scaled). Reference-owned
+// translate pairs compare to their reference, base-guard translate pairs compare moved
+// pixels base-rect to head-rect, and removed/new bands are recorded as owned but never
+// pixel-compared (nothing exists on the other side to compare them to).
 export function compareSizeTransition(
   declaration: SizeTransitionDeclaration,
   base: PNG,
@@ -401,6 +409,28 @@ export function compareSizeTransition(
     const headRect = region.headRect!;
     if (region.purpose === "behavior-changed")
       return { id: region.id, kind: region.kind, purpose: region.purpose, comparedAgainst: "none" };
+    // A base-guard band moved position but must keep its pixels: compare the old/base
+    // rect directly against the new/target rect and report it as a base comparison,
+    // so a regression inside the moved band fails instead of passing silently.
+    if (region.purpose === "base-guard") {
+      const result = compareCrops(
+        base,
+        region.baseRect!,
+        head,
+        headRect,
+        masks,
+        `transition ${region.id} base-guard`,
+        diffPath
+      );
+      return {
+        id: region.id,
+        kind: region.kind,
+        purpose: region.purpose,
+        comparedAgainst: "base",
+        result,
+        ...(diffPath ? { diffPath } : {})
+      };
+    }
     // parseSizeTransition already rejects a reference-owned translate region with no
     // referenceRect, so every region reaching here has one bound. It compares only to the
     // reference, never to base - the same rule compareRegionSet follows for non-transition
@@ -710,6 +740,32 @@ export function resolveEntryComparison(
     diffPath: baseDiffPath,
     referenceDiffPath
   };
+}
+
+// Every diff image a report entry points at, in declaration order, plus the region-set
+// complement diff when one was written. The spec inventories exactly these paths; the
+// validator requires the inventory to match this set with no missing, swapped or extra diffs.
+export function reportDiffPaths(
+  report: RegionSetComparisonReport | SizeTransitionComparisonReport
+): readonly string[] {
+  const paths: string[] = [];
+  for (const entry of report.regions) if (entry.diffPath) paths.push(entry.diffPath);
+  if ("complementDiffPath" in report && report.complementDiffPath)
+    paths.push(report.complementDiffPath);
+  return paths;
+}
+
+// The semantic form of a report: everything validation recomputes from the actual bytes
+// (IDs, purpose, kind, comparedAgainst, counts, percentages, outcomes), without the
+// diff-image paths, which are validated separately against the artifact inventory.
+export function toSemanticReport(
+  report: RegionSetComparisonReport | SizeTransitionComparisonReport
+): unknown {
+  return JSON.parse(
+    JSON.stringify(report, (key, value: unknown) =>
+      key === "diffPath" || key === "complementDiffPath" ? undefined : value
+    )
+  ) as unknown;
 }
 
 // --- provenance: recompute from actual bytes on disk, never trust a claim ---

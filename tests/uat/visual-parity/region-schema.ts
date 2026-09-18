@@ -7,12 +7,12 @@
 //
 // A capture declares named rectangles ("regions"): reference-owned (compared against an
 // approved reference image) or behavior-changed (allowed to differ from the historical base,
-// never auto-compared). A case may also declare a size transition: expected image dimensions
-// move from an old/base size to a new target size, with an explicit pairwise geometry mapping
-// (translate only, never scale) for guarded pixels and explicit ownership of any newly exposed
-// or removed band of pixels.
+// never auto-compared). A size transition may additionally declare base-guard translate
+// regions: unchanged pixels that moved position, compared base-rect to head-rect so a
+// regression inside the moved band still fails. Newly exposed or removed bands are owned
+// explicitly, never guarded.
 
-export const REGION_PURPOSES = ["reference-owned", "behavior-changed"] as const;
+export const REGION_PURPOSES = ["reference-owned", "behavior-changed", "base-guard"] as const;
 export type RegionPurpose = (typeof REGION_PURPOSES)[number];
 
 export interface PixelRect {
@@ -181,6 +181,8 @@ export function parseRegionSet(value: unknown): RegionSetDeclaration {
       )
         fail(`${label} fullImage requires a reference-owned rect covering the whole image`);
     }
+    if (regionPurpose === "base-guard")
+      fail(`${label}.purpose base-guard is only valid for size-transition translate regions`);
     const referenceRect =
       record.referenceRect === undefined
         ? undefined
@@ -257,6 +259,13 @@ export function parseSizeTransition(value: unknown): SizeTransitionDeclaration {
       if (!headRect || baseRect) fail(`${label} new-band requires only headRect`);
       if (!rectInBounds(headRect, targetSize.width, targetSize.height))
         fail(`${label}.headRect is out of bounds`);
+    }
+    if (regionPurpose === "base-guard") {
+      if (kind !== "translate")
+        fail(`${label} base-guard requires kind translate: moved pixels keep equal-size rects`);
+      if (referenceRect) fail(`${label}.referenceRect is only valid for reference-owned regions`);
+      if (record.behaviorEvidence !== undefined)
+        fail(`${label}.behaviorEvidence is only valid for behavior-changed regions`);
     }
     if (referenceRect && (kind !== "translate" || regionPurpose !== "reference-owned"))
       fail(`${label}.referenceRect is only valid for reference-owned translate regions`);
