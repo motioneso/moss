@@ -1,20 +1,35 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join, join as joinPath } from "node:path";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, join as joinPath, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
 import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import {
   captureEntry,
+  compareCaptureToBase,
+  compareReferenceCapture,
   guardCapture,
   reportLine,
   waitForRoutePopulated,
   waitForStablePopulated,
+  writeComparisonControls,
   type RouteName,
   type RouteReadinessEvidence
 } from "../visual-parity/capture.js";
 import { DECLARED_SIZE_MISMATCHES } from "../visual-parity/declared-size-mismatches.js";
+import {
+  HARNESS_FILES,
+  assertArtifactDirsDistinct,
+  resolveCaseSelection,
+  runSetupActions,
+  statePrerequisites,
+  validateRunManifest,
+  type CaptureAccounting,
+  type GuardAccounting,
+  type SelectedGuard
+} from "../visual-parity/case-selection.js";
 import { MOCKUPS } from "../visual-parity/mockups.js";
 import {
   addDay,
@@ -32,6 +47,7 @@ import {
   localIso,
   manifest,
   mirrorBlock,
+  TZ,
   openToday,
   resolveStamp,
   scrollSectionTop,
@@ -69,12 +85,69 @@ const OWNED = new Set(
     .map((s) => s.trim())
     .filter(Boolean)
 );
-const GUARDS: Array<[string, string]> = [
-  ["tasks", "/tasks"],
-  ["calendar", "/calendar"],
-  ["settings", "/settings"],
-  ["today", "/today"]
+const GUARDS: readonly SelectedGuard[] = [
+  { route: "tasks", path: "/tasks", width: 1440, role: "base-guard" },
+  { route: "tasks", path: "/tasks", width: 375, role: "base-guard" },
+  { route: "calendar", path: "/calendar", width: 1440, role: "base-guard" },
+  { route: "calendar", path: "/calendar", width: 375, role: "base-guard" },
+  { route: "settings", path: "/settings", width: 1440, role: "base-guard" },
+  { route: "settings", path: "/settings", width: 375, role: "base-guard" },
+  { route: "today", path: "/today", width: 1440, role: "base-guard" },
+  { route: "today", path: "/today", width: 375, role: "base-guard" }
 ];
+const CASE_SELECTION = resolveCaseSelection({
+  manifestPath: process.env.PARITY_CASE_MANIFEST,
+  parityOwned: process.env.PARITY_OWNED,
+  parityShell: process.env.PARITY_SHELL === "1",
+  guardOnly: process.env.PARITY_GUARD_ONLY === "1",
+  mockups: MOCKUPS,
+  guards: GUARDS
+});
+const EXPECTED_BASE = (() => {
+  const raw = (process.env.PARITY_EXPECTED_BASE ?? "").trim();
+  if (raw === "") return null;
+  if (!/^[0-9a-f]{40,64}$/i.test(raw))
+    throw new Error("parity case selection: PARITY_EXPECTED_BASE must be a full git SHA");
+  return raw;
+})();
+if (CASE_SELECTION.mode === "selected") {
+  assertArtifactDirsDistinct(CASE_SELECTION.artifacts);
+  const needsBase = CASE_SELECTION.cases.some((candidate) => candidate.base);
+  if (needsBase && EXPECTED_BASE === null)
+    throw new Error("parity case selection: declared base comparison needs PARITY_EXPECTED_BASE");
+  if (!needsBase && EXPECTED_BASE !== null)
+    throw new Error("parity case selection: PARITY_EXPECTED_BASE without a declared base");
+}
+const POPULATED_WIDGETS = [
+  "Today",
+  "Weather",
+  "News",
+  "Sports",
+  "Tasks",
+  "Calendar",
+  "Settings",
+  "Chat"
+] as const;
+test.afterEach(async ({ page }, testInfo) => {
+  if (CASE_SELECTION.mode !== "selected") return;
+  const failureDir = join(OUT, CASE_SELECTION.artifacts.failure);
+  mkdirSync(failureDir, { recursive: true });
+  const slug = testInfo.title.replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80) || "test";
+  const failed = testInfo.status !== "passed";
+  writeFileSync(
+    join(failureDir, `${slug}.status.json`),
+    JSON.stringify({
+      status: testInfo.status,
+      expected: testInfo.expectedStatus,
+      test: testInfo.title
+    })
+  );
+  if (failed) {
+    writeFileSync(join(failureDir, `${slug}.error.txt`), testInfo.error?.stack ?? "unknown");
+    writeFileSync(join(failureDir, `${slug}.failure.html`), await page.content());
+    await page.screenshot({ path: join(failureDir, `${slug}.failure.png`), fullPage: true });
+  }
+});
 interface ParityEvent {
   readonly title: string;
   readonly startsAt: string;
@@ -334,6 +407,58 @@ async function driveState(page: Page, state: string, w: number): Promise<void> {
     await expect(dialog).toBeVisible();
   }
 }
+
+async function prepareSelectedEntry(
+  page: Page,
+  entry: (typeof MOCKUPS)[number],
+  m: ParityManifest
+): Promise<void> {
+  statePrerequisites(entry.state);
+  const morning = new Date(localIso(localDay(), "08:00"));
+  const evening = new Date(localIso(localDay(), "20:00"));
+  const dialog = () => page.getByRole("dialog");
+  // The recipe is performed action by action, in declared order: the recorded
+  // dispatch is what the unit suite observes, so the plan cannot drift from
+  // the browser behavior it describes.
+  await runSetupActions(entry.state, {
+    openTodayMorning: () => openToday(page, morning),
+    openTodayEvening: () => openToday(page, evening),
+    populatedMorning: () => populatedMorning(page, m),
+    planningStep: async (step) => {
+      if (step === 0) {
+        await ensurePlanning(page, entry.viewport.w, 0);
+        return;
+      }
+      const steps = dialog().getByRole("navigation", { name: "Plan steps" });
+      if (step === 1) await steps.getByRole("button", { name: "Open commitments" }).click();
+      else if (step === 2) await steps.getByRole("button", { name: "Shape tomorrow" }).click();
+      else await steps.getByRole("button", { name: "Review" }).click();
+    },
+    choiceTomorrow: () =>
+      dialog()
+        .getByRole("radiogroup", { name: `${(m.tasks[2] as ParityTask).title}: plan` })
+        .getByLabel("Tomorrow")
+        .check()
+        .then(() => undefined),
+    planningSaved: () => dialog().getByRole("button", { name: "Save tomorrow's plan" }).click(),
+    expectSavedText: () =>
+      expect(dialog()).toContainText("Saved. The blocks are proposed for the morning."),
+    closeDialogs: () => closeDialogs(page).then(() => undefined),
+    expectTodayRoute: () => expect(page).toHaveURL(/\/today/),
+    driveState: async () => {
+      if (entry.state === "reader-partial-review")
+        await mirrorBlock(page, localDay(), await localeTz(page), 0);
+      if (entry.state.startsWith("reader-automatic"))
+        await mirrorBlock(page, localDay(), await localeTz(page), 1);
+      await driveState(page, entry.state, entry.viewport.w);
+    }
+  });
+  if (entry.state.startsWith("today-morning")) {
+    if (entry.state === "today-morning-news") await scrollSectionTop(page, ".jds-brief--news");
+    if (entry.state === "today-morning-sports")
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight * 0.7));
+  }
+}
 // Test-side quiescence: background refresh jobs rewrite overview rows early on, so
 // poll the stable projection (not capture code) until it settles before holding.
 async function apiQuiescent(page: Page): Promise<void> {
@@ -372,16 +497,32 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
   test.setTimeout(process.env.PARITY_SHELL === "1" ? 1_500_000 : 900_000);
   mkdirSync(OUT, { recursive: true });
   mkdirSync(join(OUT, "guard"), { recursive: true });
+  if (CASE_SELECTION.mode === "selected") {
+    const sel = {
+      version: 1,
+      cases: CASE_SELECTION.cases,
+      guards: CASE_SELECTION.guards,
+      artifacts: CASE_SELECTION.artifacts
+    };
+    writeFileSync(join(OUT, CASE_SELECTION.artifacts.selection), JSON.stringify(sel, null, 2));
+  }
   await forceChrome(page);
+  const setupStartedAt = Date.now();
   await seedAll(page);
+  const setupMs = Date.now() - setupStartedAt;
   const m = manifest() as unknown as ParityManifest;
   if (process.env.PARITY_GUARD_ONLY === "1") {
     await openToday(page, new Date(localIso(localDay(), "08:00")));
     await populatedMorning(page, m);
-    for (const [name, path] of GUARDS) {
-      await page.goto(path);
-      for (const w of [1440, 375])
-        await guardCapture(page, `guard-${name}-${w}`, w, join(OUT, "guard"));
+    for (const guard of CASE_SELECTION.guards) {
+      await page.goto(guard.path);
+      await page.setViewportSize({ width: guard.width, height: 1000 });
+      await guardCapture(
+        page,
+        `guard-${guard.route}-${guard.width}`,
+        guard.width,
+        join(OUT, "guard")
+      );
     }
     writeFileSync(join(OUT, "guard-report.md"), `# guard captures\n`);
     return;
@@ -395,6 +536,24 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
   );
   const eveningSummary = await seededBriefingSummary(page, "evening");
   const readiness = matrixContext(m, eveningSummary);
+  const preflightStartedAt = Date.now();
+  let preflightMatched: readonly string[] = [];
+  if (CASE_SELECTION.mode === "selected") {
+    const evidence = await readiness.waitForRoutePopulated(page, "today");
+    preflightMatched = evidence.matched;
+    await expectAttr(page, "expanded");
+    const geometry = await shellGeometry(page);
+    check(
+      geometry.sidebarWidth === 194 && geometry.navMode === "expanded",
+      "selected preflight shell"
+    );
+    await openChatDrawer(page);
+    const replyCount = await page.locator(".chatd-msg:not(.chatd-msg--me) .chatd-bubble").count();
+    check(replyCount > 0, "selected preflight Chat reply");
+    preflightMatched = [...preflightMatched, `Chat reply count: ${replyCount}`];
+    await page.getByRole("button", { name: "Close chat" }).click();
+  }
+  const preflightMs = Date.now() - preflightStartedAt;
   if (process.env.PARITY_SHELL === "1") {
     await import("../visual-parity/shell-navigation.js").then(({ runShellChecks }) =>
       runShellChecks(page, OUT, readiness)
@@ -402,10 +561,20 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
     return;
   }
   const lines = ["| file | size | masked | diff | size |", "|---|---|---|---|---|"];
+  const accounting: CaptureAccounting[] = [];
+  const guardAccounting: GuardAccounting[] = [];
+  let compareMs = 0;
+  const captureStartedAt = Date.now();
   let lastState = "",
     lastWidth = 0;
-  for (const entry of MOCKUPS) {
+  for (const entry of CASE_SELECTION.entries) {
+    if (CASE_SELECTION.mode === "selected") {
+      await prepareSelectedEntry(page, entry, m);
+      lastState = entry.state;
+      lastWidth = entry.viewport.w;
+    }
     if (
+      CASE_SELECTION.mode === "default" &&
       entry.clock === "evening" &&
       !lastState.startsWith("evening") &&
       !lastState.startsWith("today-evening") &&
@@ -414,12 +583,16 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
       await openToday(page, new Date(localIso(localDay(), "20:00")));
     }
     if (
+      CASE_SELECTION.mode === "default" &&
       entry.clock === "morning" &&
       (lastState.startsWith("evening") || lastState.startsWith("today-evening"))
     ) {
       await openToday(page, new Date(localIso(localDay(), "08:00")));
     }
-    if (entry.state !== lastState || entry.viewport.w !== lastWidth) {
+    if (
+      CASE_SELECTION.mode === "default" &&
+      (entry.state !== lastState || entry.viewport.w !== lastWidth)
+    ) {
       if (entry.state === "reader-partial-review")
         await mirrorBlock(page, localDay(), await localeTz(page), 0);
       if (entry.state.startsWith("reader-automatic"))
@@ -440,13 +613,41 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
       lastState = entry.state;
       lastWidth = entry.viewport.w;
     }
+    let captureReadiness: RouteReadinessEvidence | undefined;
     if (entry.state.startsWith("today-morning"))
-      await readiness.waitForRoutePopulated(page, "today");
+      captureReadiness = await readiness.waitForRoutePopulated(page, "today");
     if (entry.name === "evening-1440-opening.png" || entry.name === "evening-375-opening.png")
-      await readiness.waitForRoutePopulated(page, "evening");
+      captureReadiness = await readiness.waitForRoutePopulated(page, "evening");
     if (entry.state === "today-morning-news" || entry.state === "today-morning-sports")
       await waitForStablePopulated(page);
-    const r = await captureEntry(page, entry, MOCKROOT, OUT);
+    if (CASE_SELECTION.mode === "selected" && !captureReadiness) {
+      const dialogCount = await page.getByRole("dialog").count();
+      if (
+        entry.state.startsWith("reader-") ||
+        entry.state.startsWith("evening-") ||
+        entry.state === "changed-plan-review"
+      )
+        expect(dialogCount, `${entry.name} dialog readiness`).toBeGreaterThan(0);
+      const fonts = await page.evaluate(() => document.fonts.status);
+      expect(fonts, `${entry.name} font readiness`).toBe("loaded");
+      captureReadiness = {
+        route: entry.clock === "evening" ? "evening" : "today",
+        matched: [`dialog count: ${dialogCount}`, `fonts: ${fonts}`],
+        loadingAbsent: true,
+        fontsReady: true,
+        elapsedMs: 0
+      };
+    }
+    const artifactDirs =
+      CASE_SELECTION.mode === "selected"
+        ? {
+            raw: join(OUT, CASE_SELECTION.artifacts.raw, entry.dir),
+            masked: join(OUT, CASE_SELECTION.artifacts.captures, entry.dir),
+            diffs: join(OUT, CASE_SELECTION.artifacts.diffs, entry.dir)
+          }
+        : undefined;
+    const startedAt = Date.now();
+    const r = await captureEntry(page, entry, MOCKROOT, OUT, artifactDirs);
     console.log(
       `[parity] ${r.file} ${r.size} masked ${(r.maskedShare * 100).toFixed(1)}% diff ${r.diffPercent.toFixed(2)}%`
     );
@@ -458,24 +659,225 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
     } else {
       expect(r.sizeMatch, `${entry.name} unexpected mismatch`).toBe(true);
     }
-    if (OWNED.has(entry.name)) expect(r.diffPercent).toBeLessThanOrEqual(0.5);
+    if (CASE_SELECTION.mode === "default" && OWNED.has(entry.name))
+      expect(r.diffPercent).toBeLessThanOrEqual(0.5);
     lines.push(reportLine(r));
-  }
-  await closeDialogs(page);
-  for (const [name, path] of GUARDS) {
-    await page.goto(path);
-    for (const w of [1440, 375]) {
-      await page.setViewportSize({ width: w, height: 1000 });
-      await readiness.waitForRoutePopulated(page, name as RouteName);
-      await guardCapture(page, `guard-${name}-${w}`, w, join(OUT, "guard"));
+    if (CASE_SELECTION.mode === "selected") {
+      const declaration = CASE_SELECTION.cases.find(
+        (candidate) => candidate.dir === entry.dir && candidate.name === entry.name
+      );
+      if (!declaration)
+        throw new Error(`parity case selection: undeclared capture ${entry.dir}/${entry.name}`);
+      if (declaration.role === "owned-region/reference")
+        expect(r.diffPercent).toBeLessThanOrEqual(0.5);
+      const compareStartedAt = Date.now();
+      const maskedPath = join(OUT, CASE_SELECTION.artifacts.captures, entry.dir, entry.name);
+      const controls = writeComparisonControls(
+        maskedPath,
+        join(OUT, CASE_SELECTION.artifacts.controls, entry.dir),
+        entry.name
+      );
+      const chatEvidence = preflightMatched.filter((line) => line.startsWith("Chat reply"));
+      const readinessLines = captureReadiness
+        ? [
+            ...captureReadiness.matched,
+            ...chatEvidence.filter((line) => !captureReadiness.matched.includes(line))
+          ]
+        : [...preflightMatched];
+      const mockupDiffPath = join(
+        OUT,
+        CASE_SELECTION.artifacts.diffs,
+        entry.dir,
+        entry.name.replace(/\.png$/, ".diff.png")
+      );
+      let diffPath = mockupDiffPath;
+      let referenceDiffPath: string | undefined;
+      let comparison: CaptureAccounting["comparison"];
+      if (declaration.base) {
+        if (EXPECTED_BASE === null)
+          throw new Error(`parity case selection: declared base without PARITY_EXPECTED_BASE`);
+        if (declaration.role === "owned-region/reference" && !declaration.reference)
+          throw new Error(
+            `parity case selection: owned-region/reference needs a reference identity`
+          );
+        const baseAbsolute = join(OUT, declaration.base);
+        if (!existsSync(baseAbsolute))
+          throw new Error(`parity case selection: missing declared baseline ${declaration.base}`);
+        const baseDiffPath = join(
+          OUT,
+          CASE_SELECTION.artifacts.diffs,
+          entry.dir,
+          entry.name.replace(/\.png$/, ".base.diff.png")
+        );
+        const baseDiffPercent = compareCaptureToBase(maskedPath, baseAbsolute, baseDiffPath);
+        const baseSha256 = createHash("sha256").update(readFileSync(baseAbsolute)).digest("hex");
+        diffPath = baseDiffPath;
+        comparison = {
+          outcome: baseDiffPercent <= 0.5 ? "pass" : "fail",
+          expectedBase: EXPECTED_BASE,
+          expectedReference: declaration.reference,
+          baseSha256,
+          zeroControlPercent: controls.zeroPercent,
+          changedControlPercent: controls.changedPercent
+        };
+        if (declaration.reference) {
+          referenceDiffPath = join(
+            OUT,
+            CASE_SELECTION.artifacts.diffs,
+            entry.dir,
+            entry.name.replace(/\.png$/, ".reference.diff.png")
+          );
+          const reference = compareReferenceCapture(
+            maskedPath,
+            join(OUT, declaration.reference),
+            referenceDiffPath
+          );
+          comparison = { ...comparison, referenceSha256: reference.sha256 };
+        }
+      } else {
+        comparison = {
+          outcome: "control",
+          zeroControlPercent: controls.zeroPercent,
+          changedControlPercent: controls.changedPercent
+        };
+      }
+      compareMs += Date.now() - compareStartedAt;
+      const rel = (path: string): string => relative(OUT, path);
+      accounting.push({
+        identity: `${entry.dir}/${entry.name}`,
+        viewport: { width: entry.viewport.w, height: entry.viewport.h },
+        crop: r.crop,
+        masks: ["generated-text"],
+        readiness: readinessLines,
+        populatedWidgets: [...POPULATED_WIDGETS],
+        artifacts: {
+          raw: {
+            path: rel(join(OUT, CASE_SELECTION.artifacts.raw, entry.dir, entry.name)),
+            sha256: r.artifactSha256
+          },
+          masked: {
+            path: rel(join(OUT, CASE_SELECTION.artifacts.captures, entry.dir, entry.name)),
+            sha256: createHash("sha256")
+              .update(
+                readFileSync(join(OUT, CASE_SELECTION.artifacts.captures, entry.dir, entry.name))
+              )
+              .digest("hex")
+          },
+          diff: {
+            path: rel(diffPath),
+            sha256: createHash("sha256").update(readFileSync(diffPath)).digest("hex")
+          },
+          controls: controls.artifacts.map((artifact) => ({
+            path: rel(artifact.path),
+            sha256: artifact.sha256
+          })),
+          ...(referenceDiffPath
+            ? {
+                referenceDiff: {
+                  path: rel(referenceDiffPath),
+                  sha256: createHash("sha256").update(readFileSync(referenceDiffPath)).digest("hex")
+                }
+              }
+            : {}),
+          ...(r.geometrySidecar
+            ? {
+                geometrySidecar: {
+                  path: rel(r.geometrySidecar.path),
+                  sha256: r.geometrySidecar.sha256
+                }
+              }
+            : {})
+        },
+        elapsedMs: Date.now() - startedAt,
+        comparison
+      });
     }
   }
+  for (const guard of CASE_SELECTION.guards) {
+    await page.goto(guard.path);
+    await page.setViewportSize({ width: guard.width, height: 1000 });
+    const guardReadiness = await readiness.waitForRoutePopulated(page, guard.route as RouteName);
+    const guardDirs =
+      CASE_SELECTION.mode === "selected"
+        ? {
+            capture: join(OUT, CASE_SELECTION.artifacts.captures, "guards"),
+            raw: join(OUT, CASE_SELECTION.artifacts.raw, "guards"),
+            controls: join(OUT, CASE_SELECTION.artifacts.controls, "guards")
+          }
+        : undefined;
+    const guardResult = await guardCapture(
+      page,
+      `guard-${guard.route}-${guard.width}`,
+      guard.width,
+      guardDirs?.capture ?? join(OUT, "guard"),
+      guardDirs?.raw,
+      guardDirs?.controls
+    );
+    if (CASE_SELECTION.mode === "selected") {
+      const rel = (path: string): string => relative(OUT, path);
+      const widget = guard.route.charAt(0).toUpperCase() + guard.route.slice(1);
+      const guardWidgets = [
+        widget === "Tasks" || widget === "Calendar" || widget === "Settings" ? widget : "Today",
+        "Chat"
+      ];
+      guardAccounting.push({
+        identity: `guard:${guard.route}@${guard.width}`,
+        route: guard.route,
+        width: guard.width,
+        crop: guardResult.crop,
+        readiness: guardReadiness.matched,
+        populatedWidgets: guardWidgets,
+        artifacts: {
+          raw: { path: rel(guardResult.rawPath), sha256: guardResult.sha256 },
+          capture: { path: rel(guardResult.capturePath), sha256: guardResult.sha256 },
+          controls: [{ path: rel(guardResult.controlPath), sha256: guardResult.sha256 }]
+        },
+        elapsedMs: guardResult.elapsedMs
+      });
+    }
+  }
+  const captureMs = Date.now() - captureStartedAt;
+  const teardownStartedAt = Date.now();
+  await closeDialogs(page);
+  const teardownMs = Date.now() - teardownStartedAt;
   if (process.env.PARITY_SHELL === "1") {
     const { runShellChecks } = await import("../visual-parity/shell-navigation.js");
     await runShellChecks(page, OUT, readiness);
   }
   writeFileSync(join(OUT, "report.md"), `# visual parity baseline\n\n${lines.join("\n")}\n`);
-  expect(lines.length).toBe(34);
+  if (CASE_SELECTION.mode === "selected") {
+    const harnessDigest = createHash("sha256");
+    for (const file of HARNESS_FILES) harnessDigest.update(readFileSync(file));
+    const runManifest = {
+      schema: 1 as const,
+      head: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
+      expectedBase: EXPECTED_BASE,
+      harnessDigest: harnessDigest.digest("hex"),
+      artifactRoot: CASE_SELECTION.artifacts.root,
+      fixture: { seedDate: localDay(), timeZone: await localeTz(page) },
+      timings: { setupMs, preflightMs, captureMs, compareMs, teardownMs },
+      selection: CASE_SELECTION.cases.map((candidate) => `${candidate.dir}/${candidate.name}`),
+      guards: CASE_SELECTION.guards.map((guard) => `guard:${guard.route}@${guard.width}`),
+      captures: accounting,
+      guardCaptures: guardAccounting
+    };
+    writeFileSync(
+      join(OUT, CASE_SELECTION.artifacts.manifest),
+      JSON.stringify(runManifest, null, 2)
+    );
+    writeFileSync(
+      join(OUT, CASE_SELECTION.artifacts.timings),
+      JSON.stringify(runManifest.timings, null, 2)
+    );
+    validateRunManifest(CASE_SELECTION, runManifest, {
+      artifactRoot: OUT,
+      expectedHead: runManifest.head,
+      expectedBase: EXPECTED_BASE,
+      expectedHarnessFiles: HARNESS_FILES,
+      expectedFixture: { seedDate: localDay(), timeZone: TZ }
+    });
+  }
+  expect(lines.length).toBe(CASE_SELECTION.entries.length + 2);
 });
 async function readinessRace(page: Page, ms: number): Promise<string> {
   let timer: ReturnType<typeof setTimeout> | undefined;

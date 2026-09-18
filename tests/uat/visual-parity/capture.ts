@@ -1,10 +1,12 @@
 // tests/uat/visual-parity/capture.ts: region capture, honest masking, pixel diff, report lines.
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { strict as assert } from "node:assert";
 import { expect, type Page } from "@playwright/test";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
+import { assertEveningRenderedContract } from "./evening-readiness.js";
 import { maskRects } from "./masks.js";
 import type { MockupEntry } from "./mockups.js";
 export interface CaptureResult {
@@ -13,6 +15,40 @@ export interface CaptureResult {
   readonly maskedShare: number;
   readonly diffPercent: number;
   readonly sizeMatch: boolean;
+  readonly artifactSha256: string;
+  readonly crop: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
+  readonly geometrySidecar?: {
+    readonly path: string;
+    readonly sha256: string;
+  };
+}
+export interface CaptureArtifactDirs {
+  readonly raw: string;
+  readonly masked: string;
+  readonly diffs: string;
+}
+export interface ComparatorControlResult {
+  readonly zeroPercent: number;
+  readonly changedPercent: number;
+  readonly artifacts: readonly { readonly path: string; readonly sha256: string }[];
+}
+export interface GuardCaptureResult {
+  readonly capturePath: string;
+  readonly rawPath: string;
+  readonly controlPath: string;
+  readonly sha256: string;
+  readonly crop: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
+  readonly elapsedMs: number;
 }
 interface Rect {
   x: number;
@@ -69,7 +105,8 @@ export async function captureEntry(
   page: Page,
   entry: MockupEntry,
   mockupRoot: string,
-  outDir: string
+  outDir: string,
+  artifactDirs?: CaptureArtifactDirs
 ): Promise<CaptureResult> {
   await page.setViewportSize({ width: entry.viewport.w, height: entry.viewport.h });
   await stillPage(page);
@@ -89,12 +126,35 @@ export async function captureEntry(
       oy = y + Math.floor((h - entry.region.crop.h) / 2);
     }
   } else {
-    const box = await page.locator(entry.region.selector).first().boundingBox();
+    const locator = page.locator(entry.region.selector).first();
+    await locator.scrollIntoViewIfNeeded();
+    const box = await locator.boundingBox();
     if (!box) throw new Error(`parity: ${entry.region.selector} has no box for ${entry.name}`);
-    shot = await page.locator(entry.region.selector).first().screenshot();
+    shot = await locator.screenshot();
+    const boxAfter = await locator.boundingBox();
+    if (
+      !boxAfter ||
+      boxAfter.x !== box.x ||
+      boxAfter.y !== box.y ||
+      boxAfter.width !== box.width ||
+      boxAfter.height !== box.height
+    ) {
+      throw new Error(`parity: bounding box moved during capture for ${entry.name}`);
+    }
     ox = box.x;
     oy = box.y;
   }
+  const rawBytes = shot;
+  const rawDir = artifactDirs?.raw ?? outDir;
+  const maskedDir = artifactDirs?.masked ?? outDir;
+  const diffDir = artifactDirs?.diffs ?? outDir;
+  mkdirSync(rawDir, { recursive: true });
+  mkdirSync(maskedDir, { recursive: true });
+  mkdirSync(diffDir, { recursive: true });
+  const rawPath = join(rawDir, entry.name);
+  const maskedPath = join(maskedDir, entry.name);
+  const diffPath = join(diffDir, entry.name.replace(/\.png$/, ".diff.png"));
+  if (artifactDirs) writeFileSync(rawPath, rawBytes);
   const mockup = PNG.sync.read(readFileSync(join(mockupRoot, entry.dir, entry.name)));
   const capture = PNG.sync.read(shot);
   const sizeMatch = capture.width === mockup.width && capture.height === mockup.height;
@@ -104,8 +164,8 @@ export async function captureEntry(
   let diffPercent: number;
   if (!sizeMatch) {
     diffPercent = 100;
-    writeFileSync(join(outDir, entry.name), PNG.sync.write(capture));
-    writeFileSync(join(outDir, entry.name.replace(/\.png$/, ".diff.png")), PNG.sync.write(capture));
+    writeFileSync(maskedPath, PNG.sync.write(capture));
+    writeFileSync(diffPath, PNG.sync.write(capture));
   } else {
     paintMask(mockup, masks);
     const diff = new PNG({ width: mockup.width, height: mockup.height });
@@ -118,15 +178,36 @@ export async function captureEntry(
       { threshold: 0.1 }
     );
     diffPercent = (different / (mockup.width * mockup.height)) * 100;
-    writeFileSync(join(outDir, entry.name), PNG.sync.write(capture));
-    writeFileSync(join(outDir, entry.name.replace(/\.png$/, ".diff.png")), PNG.sync.write(diff));
+    writeFileSync(maskedPath, PNG.sync.write(capture));
+    writeFileSync(diffPath, PNG.sync.write(diff));
+  }
+  let geometrySidecar: { path: string; sha256: string } | undefined;
+  if (entry.region.kind === "element" && artifactDirs) {
+    const sidecarPath = join(rawDir, entry.name.replace(/\.png$/, ".geometry.json"));
+    const rawSha256 = createHash("sha256").update(rawBytes).digest("hex");
+    const geometry = {
+      identity: `${entry.dir}/${entry.name}`,
+      selector: entry.region.selector,
+      viewport: { width: entry.viewport.w, height: entry.viewport.h },
+      crop: { x: ox, y: oy, width: capture.width, height: capture.height },
+      rawSha256
+    };
+    const sidecarContent = JSON.stringify(geometry, null, 2);
+    writeFileSync(sidecarPath, sidecarContent);
+    geometrySidecar = {
+      path: sidecarPath,
+      sha256: createHash("sha256").update(sidecarContent).digest("hex")
+    };
   }
   return {
     file: entry.name,
     size: `${capture.width}x${capture.height}`,
     maskedShare,
     diffPercent,
-    sizeMatch
+    sizeMatch,
+    artifactSha256: createHash("sha256").update(rawBytes).digest("hex"),
+    crop: { x: ox, y: oy, width: capture.width, height: capture.height },
+    ...(geometrySidecar ? { geometrySidecar } : {})
   };
 }
 export async function stableSample(page: Page): Promise<string> {
@@ -606,6 +687,13 @@ export async function waitForRoutePopulated(
         .slice(0, 600);
       matched.push(`${label}: ${text}`);
     }
+    if (expected.eveningSummary) {
+      await assertEveningRenderedContract(expected.eveningSummary, {
+        heading: await page.locator("main h1").first().innerText(),
+        body: await page.locator(".jds-brief__body").first().innerText()
+      });
+      matched.push("Evening heading/body contract: accepted");
+    }
     if (expected.tomorrowTaskTitle)
       await routeText(
         page,
@@ -642,19 +730,87 @@ export async function waitForRoutePopulated(
 export function reportLine(r: CaptureResult): string {
   return `| ${r.file} | ${r.size} | ${(r.maskedShare * 100).toFixed(1)}% | ${r.diffPercent.toFixed(2)}% | ${r.sizeMatch ? "size-ok" : "SIZE-MISMATCH"} |`;
 }
+function artifactSha256(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+export function writeComparisonControls(
+  capturePath: string,
+  controlsDir: string,
+  name: string
+): ComparatorControlResult {
+  mkdirSync(controlsDir, { recursive: true });
+  const control = PNG.sync.read(readFileSync(capturePath));
+  const changedPath = join(controlsDir, `${name}.changed.png`);
+  const zeroDiffPath = join(controlsDir, `${name}.zero.diff.png`);
+  const changedDiffPath = join(controlsDir, `${name}.changed.diff.png`);
+  control.data[0] = control.data[0] === 0 ? 255 : 0;
+  writeFileSync(changedPath, PNG.sync.write(control));
+  const zeroPercent = diffFiles(capturePath, capturePath, zeroDiffPath);
+  const changedPercent = diffFiles(capturePath, changedPath, changedDiffPath);
+  return {
+    zeroPercent,
+    changedPercent,
+    artifacts: [changedPath, zeroDiffPath, changedDiffPath].map((path) => ({
+      path,
+      sha256: artifactSha256(path)
+    }))
+  };
+}
 export async function guardCapture(
   page: Page,
   name: string,
   w: number,
-  outDir: string
-): Promise<void> {
+  outDir: string,
+  rawDir = outDir,
+  controlsDir = outDir
+): Promise<GuardCaptureResult> {
+  const startedAt = Date.now();
   await page.setViewportSize({ width: w, height: 1000 });
   await stillPage(page);
-  await page.screenshot({
-    path: join(outDir, `${name}.png`),
-    clip: { x: 0, y: 0, width: w, height: 850 }
-  });
+  mkdirSync(outDir, { recursive: true });
+  mkdirSync(rawDir, { recursive: true });
+  mkdirSync(controlsDir, { recursive: true });
+  const bytes = await page.screenshot({ clip: { x: 0, y: 0, width: w, height: 850 } });
+  const capturePath = join(outDir, `${name}.png`);
+  const rawPath = join(rawDir, `${name}.png`);
+  const controlPath = join(controlsDir, `${name}.control.png`);
+  writeFileSync(capturePath, bytes);
+  writeFileSync(rawPath, bytes);
+  writeFileSync(controlPath, bytes);
+  return {
+    capturePath,
+    rawPath,
+    controlPath,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    crop: { x: 0, y: 0, width: w, height: 850 },
+    elapsedMs: Date.now() - startedAt
+  };
 }
+export function compareCaptureToBase(
+  maskedCapturePath: string,
+  declaredBasePath: string,
+  baseDiffOutPath: string
+): number {
+  return diffFiles(maskedCapturePath, declaredBasePath, baseDiffOutPath);
+}
+// Declared reference bytes go through the same comparator as the base: a
+// swapped reference fails here instead of passing with only its name bound.
+export function compareReferenceCapture(
+  maskedCapturePath: string,
+  referenceAbsolute: string,
+  referenceDiffOutPath: string
+): { percent: number; sha256: string } {
+  if (!existsSync(referenceAbsolute))
+    throw new Error(`parity case selection: missing declared reference ${referenceAbsolute}`);
+  const percent = compareCaptureToBase(maskedCapturePath, referenceAbsolute, referenceDiffOutPath);
+  if (percent > 0.5)
+    throw new Error(`parity case selection: reference comparison ${percent.toFixed(2)}% > 0.5%`);
+  return {
+    percent,
+    sha256: createHash("sha256").update(readFileSync(referenceAbsolute)).digest("hex")
+  };
+}
+
 export function diffFiles(aPath: string, bPath: string, outPath: string): number {
   const a = PNG.sync.read(readFileSync(aPath));
   const b = PNG.sync.read(readFileSync(bPath));
