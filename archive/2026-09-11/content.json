@@ -1,0 +1,195 @@
+{
+  "issue": 37,
+  "slug": "2026-09-11",
+  "weekOf": "September 7, 2026",
+  "summary": "Workshop projects turn idea drafts into ongoing collaborations, web search is on by default in chat, and browser push notifications land.",
+  "intro": "A lively week with a major step forward for how Moss builds things. The headline is Workshop projects: you can now start named projects, talk through what you want built, and return to an ongoing workspace with your chat history preserved. Web search is now on by default in chat, push notifications arrived in Settings, and headings across the app got a typographic facelift alongside a long list of fixes.",
+  "headline": {
+    "title": "Workshop projects: ongoing workspaces for what you build",
+    "body": [
+      "Building a custom module in Moss is no longer a one-shot prompt. You can now start named Workshop projects, talk through what you want with Moss in an ongoing chat workspace, and return anytime to pick up where you left off.",
+      "The Workshop home page now organizes your work in a tidy list, project conversations render formatted responses instead of raw markup, and you can easily rename or remove projects as they take shape."
+    ],
+    "prs": [
+      2307,
+      2364,
+      2365,
+      2376,
+      2405
+    ]
+  },
+  "sections": [
+    {
+      "title": "New",
+      "items": [
+        {
+          "title": "Web search on by default for chat",
+          "body": "Chat now searches the web automatically using your AI model's built-in search or Brave Search, bringing up-to-date facts and cited sources into everyday conversations.",
+          "prs": [
+            2280
+          ]
+        },
+        {
+          "title": "Browser push notifications",
+          "body": "You can now turn on browser push notifications from Settings → Notifications, so Moss can notify you when actions complete even when the tab isn't open.",
+          "prs": [
+            2234
+          ]
+        },
+        {
+          "title": "Manage encryption keys right in Settings",
+          "body": "Administrators and owners can generate and rotate encryption keys across all three key families directly from Settings, with an initial setup banner that replaces manually edited files.",
+          "prs": [
+            2315,
+            2323
+          ]
+        },
+        {
+          "title": "Photos for custom sports sources",
+          "body": "Stories from sports feeds and sites you add yourself now show photos, and Sports Settings lets you see photo status or turn off automatic photo discovery for any source.",
+          "prs": [
+            2245,
+            2273
+          ]
+        },
+        {
+          "title": "Use browser location for weather",
+          "body": "A new 'Use my location' button in Account & preferences sets your weather location from your browser with a single click.",
+          "prs": [
+            2217
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Improved",
+      "items": [
+        {
+          "title": "New display typeface and lighter page palette",
+          "body": "Headings across the app now use a refreshed display typeface, and pages sit on a lighter, softer background for easier reading.",
+          "prs": [
+            2333
+          ]
+        },
+        {
+          "title": "Seamless web page reading",
+          "body": "When you ask the assistant to read a web page, it now opens and reads it directly without asking you to approve every individual link.",
+          "prs": [
+            2331
+          ]
+        },
+        {
+          "title": "Smarter email task filtering",
+          "body": "Moss now evaluates whether an email actually asks something of you before suggesting tasks, and sign-in or verification codes are never turned into to-dos.",
+          "prs": [
+            2279,
+            2257
+          ]
+        },
+        {
+          "title": "Settings search covers modules",
+          "body": "Searching in Settings now finds module-specific configuration pages—like News or Sports—and jumps straight there.",
+          "prs": [
+            2254
+          ]
+        },
+        {
+          "title": "Organized News settings and subreddit sources",
+          "body": "News settings are organized into topics, sources, and story preferences, with AP News added as a default publication and support for subreddit feeds.",
+          "prs": [
+            2221,
+            2298
+          ]
+        },
+        {
+          "title": "Soccer and hockey scoring cards",
+          "body": "Finished soccer and hockey score cards now display both team logos side by side with the score and list each goal scorer.",
+          "prs": [
+            2253
+          ]
+        },
+        {
+          "title": "Response style in Assistant & AI",
+          "body": "Setting your preferred answer style—concise, balanced, or detailed—now lives in Assistant & AI alongside persona settings.",
+          "prs": [
+            2222,
+            2248
+          ]
+        }
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "text": "Chat tools execute actions reliably and new installations automatically receive a writable tools directory.",
+      "prs": [
+        2318,
+        2354,
+        2358
+      ]
+    },
+    {
+      "text": "Private module drafts you are still creating can run and save data without waiting to be published.",
+      "prs": [
+        2353
+      ]
+    },
+    {
+      "text": "The app no longer gets stuck on its loading screen when a single startup check is slow.",
+      "prs": [
+        2344
+      ]
+    },
+    {
+      "text": "Dismissing a story in the news carousel with 'less like this' immediately refills the slot with another story.",
+      "prs": [
+        2247
+      ]
+    },
+    {
+      "text": "Adding a news source that redirects now follows the forward and clearly explains what happened.",
+      "prs": [
+        2218,
+        2243,
+        2246
+      ]
+    },
+    {
+      "text": "NPR news stories show photos again, and publisher icons on Today have proper spacing and dark mode support.",
+      "prs": [
+        2251,
+        2252,
+        2294,
+        2311
+      ]
+    },
+    {
+      "text": "Signing in to an AI provider in Settings works reliably on the first attempt and notices when a login expires.",
+      "prs": [
+        2233,
+        2242,
+        2263
+      ]
+    },
+    {
+      "text": "Structured email summaries no longer fail silently, and timed-out summaries are dropped cleanly instead of arriving late.",
+      "prs": [
+        2244,
+        2355
+      ]
+    },
+    {
+      "text": "The account menu announces unread notification counts for screen reader users.",
+      "prs": [
+        2259
+      ]
+    },
+    {
+      "text": "College sports teams with identical abbreviations are no longer confused, and search results group by league.",
+      "prs": [
+        2255,
+        2281
+      ]
+    }
+  ]
+}
