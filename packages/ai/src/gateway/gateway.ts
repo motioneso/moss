@@ -36,7 +36,7 @@ import {
   renderAndCap,
   sanitizeAssistantToolResult
 } from "./output-validation.js";
-import { resolvePolicy } from "./policy.js";
+import { familyAllowsAutoRun, resolvePolicy } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
 import {
   APPROVAL_REFUSED_REASON,
@@ -233,7 +233,28 @@ export class AssistantToolGateway {
 
     const prefs = this.deps.agencyPrefs?.(ctx) ?? denyPrefs;
     const lookup = this.deps.actionPolicy?.(ctx) ?? defaultPolicyLookup;
+    const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
+    const effectiveLookup: ActionPolicyLookup = {
+      getFamilyTier: (modId, famId) => lookup.getFamilyTier(modId, famId),
+      getFamilyManifest: async (modId, famId) => {
+        const fromLookup = await lookup.getFamilyManifest(modId, famId);
+        if (fromLookup) return fromLookup;
+        try {
+          const activeModules = await this.deps.resolveActiveModules(ctx.actorUserId);
+          const moduleManifest = activeModules.find((m) => m.id === modId);
+          return moduleManifest?.assistantActionFamilies?.find((f) => f.id === famId) ?? null;
+        } catch {
+          return null;
+        }
+      }
+    };
     if (found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true) {
+      if (
+        confirmOverride ||
+        !(await familyAllowsAutoRun(found.tool, found.dto.moduleId, effectiveLookup))
+      ) {
+        return this.confirmAndRun(found, input, ctx, await this.firstRunNotice(found, prefs));
+      }
       if (!this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
         emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
           actionRequestId: ctx.requestId,
@@ -277,8 +298,10 @@ export class AssistantToolGateway {
       });
       return result;
     }
-    const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
-    if ((await resolvePolicy(found.tool, found.dto.moduleId, confirmOverride, lookup)) === "run") {
+    if (
+      (await resolvePolicy(found.tool, found.dto.moduleId, confirmOverride, effectiveLookup)) ===
+      "run"
+    ) {
       if (
         found.tool.risk !== "read" &&
         !this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)

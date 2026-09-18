@@ -468,7 +468,41 @@ describe("AssistantToolGateway", () => {
     await call;
   });
 
-  it("auto-runs destructive tools under YOLO and records yolo audit mode", async () => {
+  it("keeps destructive tools behind confirmation under YOLO (#2419)", async () => {
+    const yoloGateway = new AssistantToolGateway({
+      resolveActiveModules: async () => [exampleToolModule],
+      repository,
+      runner,
+      tokens,
+      confirmations,
+      notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
+      confirmTimeoutMs: 30_000,
+      yoloMode: async () => true
+    });
+    const token = tokens.mint({
+      actorUserId: ids.userA,
+      chatSessionId: "s-yolo-destructive",
+      allowedToolNames: null
+    });
+
+    const call = yoloGateway.callTool(token, "example.destroy", { value: "boom" });
+    await vi.waitFor(() => {
+      expect(emitted.map((entry) => entry.record.kind)).toEqual(["action_request"]);
+    });
+
+    const request = emitted.find((entry) => entry.record.kind === "action_request")!.record as {
+      actionRequestId: string;
+      toolName: string;
+    };
+    expect(request.toolName).toBe("example.destroy");
+    expect(exampleToolCalls).toHaveLength(0);
+
+    await yoloGateway.resolveActionRequest(ids.userA, request.actionRequestId, "cancelled");
+    const result = await call;
+    expect(result.ok).toBe(false);
+  });
+
+  it("auto-runs eligible write tools under YOLO and records yolo audit mode", async () => {
     const yoloGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [exampleToolModule],
       repository,
@@ -485,18 +519,14 @@ describe("AssistantToolGateway", () => {
       allowedToolNames: null
     });
 
-    const result = await yoloGateway.callTool(token, "example.destroy", { value: "boom" });
-    // #1308: wait on the condition actually being awaited (the action_result card has landed)
-    // instead of a fixed 50ms delay. The gateway's own promise can resolve before its
-    // notifier's emit (which does a DB-backed audit write) settles, so a fixed sleep can read
-    // `emitted` before the emit lands on a loaded CI runner.
+    const result = await yoloGateway.callTool(token, "example.autoWrite", { value: "boom" });
     await vi.waitFor(() => {
       expect(emitted.map((entry) => entry.record.kind)).toEqual(["action_result"]);
     });
 
     expect(result.ok).toBe(true);
     expect(exampleToolCalls).toEqual([
-      { name: "example.destroy", input: { value: "boom" }, actorUserId: ids.userA }
+      { name: "example.autoWrite", input: { value: "boom" }, actorUserId: ids.userA }
     ]);
     expect(emitted.map((entry) => entry.record.kind)).toEqual(["action_result"]);
 
@@ -505,7 +535,7 @@ describe("AssistantToolGateway", () => {
       (scopedDb) => repository.listActionAuditLog(scopedDb, { since: new Date(0), limit: 20 })
     );
     expect(
-      audit.some((row) => row.tool_name === "example.destroy" && row.approval_mode === "yolo")
+      audit.some((row) => row.tool_name === "example.autoWrite" && row.approval_mode === "yolo")
     ).toBe(true);
   });
 
@@ -932,7 +962,7 @@ describe("AssistantToolGateway", () => {
     };
   }
 
-  it("YOLO still runs confirm_always destructive and per-call-confirm tools", async () => {
+  it("YOLO still requires confirmation for confirm_always destructive and per-call-confirm tools (#2419)", async () => {
     const calls: string[] = [];
     const yoloGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [confirmMechanismsModule(calls)],
@@ -950,14 +980,20 @@ describe("AssistantToolGateway", () => {
       allowedToolNames: null
     });
 
-    const results = await Promise.all([
-      yoloGateway.callTool(token, "example-confirm.destructive", {}),
-      yoloGateway.callTool(token, "example-confirm.confirmAlways", {}),
-      yoloGateway.callTool(token, "example-confirm.perCall", {})
-    ]);
+    for (const toolName of [
+      "example-confirm.destructive",
+      "example-confirm.confirmAlways",
+      "example-confirm.perCall"
+    ]) {
+      emitted.length = 0;
+      const call = yoloGateway.callTool(token, toolName, {});
+      const request = await waitForActionRequest();
+      expect(request.toolName).toBe(toolName);
+      await yoloGateway.resolveActionRequest(ids.userA, request.actionRequestId, "cancelled");
+      await call;
+    }
 
-    expect(results.every((result) => result.ok)).toBe(true);
-    expect([...calls].sort()).toEqual(["confirmAlways", "destructive", "perCall"]);
+    expect(calls).toHaveLength(0);
   });
 
   it("YOLO off still confirms confirm_always destructive and per-call-confirm tools", async () => {

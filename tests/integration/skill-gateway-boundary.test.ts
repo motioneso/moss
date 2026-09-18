@@ -170,7 +170,7 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
     expect(emitted.map((entry) => entry.record.kind)).toEqual(["action_request", "action_result"]);
   });
 
-  it("auto-runs a skill-sourced destructive call under YOLO — same audit trail as any other call", async () => {
+  it("auto-runs a skill-sourced autoWrite call under YOLO — same audit trail as any other call", async () => {
     const yoloGateway = new AssistantToolGateway({
       resolveActiveModules: async () => [exampleToolModule],
       repository,
@@ -181,14 +181,14 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
       confirmTimeoutMs: 30_000,
       yoloMode: async () => true
     });
-    const turnText = composeTurnText(skillFixture(), "clean up the stale draft, delete it");
+    const turnText = composeTurnText(skillFixture(), "clean up the stale draft, update it");
     const token = tokens.mint({
       actorUserId: ids.userA,
       chatSessionId: "s-skill-yolo",
       allowedToolNames: null
     });
 
-    const result = await yoloGateway.callTool(token, "example.destroy", { value: turnText });
+    const result = await yoloGateway.callTool(token, "example.autoWrite", { value: turnText });
     // #1308: condition wait, not a fixed delay — same fix as above. The gateway's own promise
     // can resolve before its notifier's emit (a DB-backed audit write) settles.
     await vi.waitFor(() => {
@@ -197,7 +197,7 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
 
     expect(result.ok).toBe(true);
     expect(exampleToolCalls).toEqual([
-      { name: "example.destroy", input: { value: turnText }, actorUserId: ids.userA }
+      { name: "example.autoWrite", input: { value: turnText }, actorUserId: ids.userA }
     ]);
     expect(emitted.map((entry) => entry.record.kind)).toEqual(["action_result"]);
 
@@ -207,7 +207,7 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
     );
     // approval_mode stays plain "yolo" — no separate skill-triggered audit label exists.
     expect(
-      audit.some((row) => row.tool_name === "example.destroy" && row.approval_mode === "yolo")
+      audit.some((row) => row.tool_name === "example.autoWrite" && row.approval_mode === "yolo")
     ).toBe(true);
   });
 
