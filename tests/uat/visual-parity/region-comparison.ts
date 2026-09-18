@@ -90,6 +90,10 @@ export interface ComparisonOutcome {
   readonly denominator: number;
   readonly percent: number;
   readonly outcome: "pass" | "fail";
+  // Present, and always "tiled", only when the declared regions covered every
+  // unmasked pixel: there was no leftover to compare. Distinguishes that explicit
+  // pass from any other zero-pixel outcome without reading the comparator code.
+  readonly reason?: "tiled";
 }
 
 function toOutcome(numerator: number, denominator: number, label: string): ComparisonOutcome {
@@ -334,16 +338,16 @@ function compareWithinComplement(
     // The declared regions tile the image: there is no leftover to guard,
     // so the empty complement is an explicit pass, not a masked-away gap.
     // The diff still runs through the single comparison path so a supplied
-    // diff path is written; sizes are checked above and the always-false
-    // target guarantees a zero denominator, so the only reachable throw is
-    // the empty-comparison one this branch converts.
+    // diff path is written; the always-false target always throws the
+    // empty-comparison error afterward, which this converts. Any other
+    // error (for example a failed diff write) propagates unchanged.
     try {
       compareTargetPixels(capture, base, () => false, "complement", diffOutPath);
-    } catch {
-      // Reachable only via the empty denominator: sizes are checked above
-      // and the always-false target leaves nothing to compare.
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("has no comparable pixels"))
+        throw error;
     }
-    return { numerator: 0, denominator: 0, percent: 0, outcome: "pass" };
+    return { numerator: 0, denominator: 0, percent: 0, outcome: "pass", reason: "tiled" };
   }
   return compareTargetPixels(
     capture,
