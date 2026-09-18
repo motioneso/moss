@@ -7,7 +7,6 @@ import { expect, type Page } from "@playwright/test";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 import { assertEveningRenderedContract } from "./evening-readiness.js";
-import { ensureSectionClearOfTopbar } from "./seed.js";
 import { maskRects } from "./masks.js";
 import type { MockupEntry } from "./mockups.js";
 export interface CaptureResult {
@@ -129,7 +128,6 @@ export async function captureEntry(
   } else {
     const locator = page.locator(entry.region.selector).first();
     await locator.scrollIntoViewIfNeeded();
-    await ensureSectionClearOfTopbar(page, entry.region.selector, entry.name);
     const box = await locator.boundingBox();
     if (!box) throw new Error(`parity: ${entry.region.selector} has no box for ${entry.name}`);
     shot = await locator.screenshot();

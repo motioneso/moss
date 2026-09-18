@@ -364,64 +364,78 @@ export async function openToday(page: Page, clock: Date): Promise<void> {
   await expect(page.getByRole("main")).toBeVisible({ timeout: 30_000 });
   await page.evaluate(() => document.fonts.ready);
 }
-export interface SectionTopbarOverlap {
-  barHeight: number;
-  targetTop: number;
-  overlap: number;
-}
-
-export async function sectionTopbarOverlap(
-  page: Page,
-  selector: string
-): Promise<SectionTopbarOverlap> {
-  const box = await page.locator(selector).first().boundingBox();
-  if (!box) throw new Error(`parity: ${selector} has no box to measure against the topbar`);
-  const barHeight = await page.evaluate(() => {
+// The sticky topbar's bottom edge in viewport pixels at the live viewport.
+// Measured, never a constant: the bar's 60 is a minimum with padding and a
+// border above it, and it grows when the title wraps at narrow widths.
+async function topbarBottom(page: Page): Promise<number> {
+  return page.evaluate(() => {
     const bar = document.querySelector(".topbar");
     return bar ? bar.getBoundingClientRect().bottom : 0;
   });
-  return { barHeight, targetTop: box.y, overlap: barHeight - box.y };
 }
 
-// Scrolls a section into view, then clears the sticky topbar by the bar's
-// measured height at the live viewport — never a constant. Measures where
-// the section actually landed and refuses the capture when the head is
-// still covered, naming the target, viewport, bar height and overlap.
-export async function ensureSectionClearOfTopbar(
-  page: Page,
-  selector: string,
-  label: string
-): Promise<void> {
-  const width = page.viewportSize()?.width ?? 0;
-  let measured = await sectionTopbarOverlap(page, selector);
-  if (measured.overlap > 0) {
-    await page.evaluate((dy) => window.scrollBy(0, dy), -Math.ceil(measured.overlap));
-    await page.waitForTimeout(300);
-    measured = await sectionTopbarOverlap(page, selector);
-  }
-  if (measured.overlap > 0) {
-    throw new Error(
-      `parity: ${label} still under the topbar after offset ` +
-        `at ${width}px viewport (bar ${measured.barHeight}px, overlap ${measured.overlap}px)`
-    );
-  }
+// True when the target (or an ancestor below the scrolling container) is
+// fixed to the viewport: scrolling cannot move it, and overlap with the bar
+// is paint order, which this harness does not judge.
+async function isViewportPinned(page: Page, selector: string): Promise<boolean> {
+  return page
+    .locator(selector)
+    .first()
+    .evaluate((el) => {
+      let node: Element | null = el;
+      while (node) {
+        if (getComputedStyle(node).position === "fixed") return true;
+        node = node.parentElement;
+      }
+      return false;
+    });
 }
 
-export async function scrollSectionClearOfTopbar(
-  page: Page,
-  selector: string,
-  label: string
-): Promise<void> {
+// Scrolls the target's own scrolling ancestor up by px. The page can scroll
+// inside a container (chat docked at 721 wide and up), where a window scroll
+// does nothing, so the nearest ancestor that actually scrolls takes it.
+async function scrollAncestorUp(page: Page, selector: string, px: number): Promise<void> {
   await page
     .locator(selector)
     .first()
-    .evaluate((el) => el.scrollIntoView(true));
-  await page.waitForTimeout(300);
-  await ensureSectionClearOfTopbar(page, selector, label);
+    .evaluate((el, px) => {
+      let node: Element | null = el;
+      while (node) {
+        const parent: Element | null = node.parentElement;
+        if (!parent) break;
+        if (parent.scrollHeight > parent.clientHeight + 1) {
+          parent.scrollTop -= px;
+          return;
+        }
+        node = parent;
+      }
+    }, px);
 }
 
 export async function scrollSectionTop(page: Page, selector: string): Promise<void> {
-  await scrollSectionClearOfTopbar(page, selector, selector);
+  const locator = page.locator(selector).first();
+  await locator.evaluate((el) => el.scrollIntoView(true));
+  await page.waitForTimeout(300);
+  if (await isViewportPinned(page, selector)) return;
+  const width = page.viewportSize()?.width ?? 0;
+  const measure = async () => {
+    const box = await locator.boundingBox();
+    if (!box) throw new Error(`parity: ${selector} has no box to measure against the topbar`);
+    const barBottom = await topbarBottom(page);
+    return { barBottom, targetTop: box.y, overlap: barBottom - box.y };
+  };
+  let measured = await measure();
+  if (measured.overlap > 0) {
+    await scrollAncestorUp(page, selector, Math.ceil(measured.overlap));
+    await page.waitForTimeout(300);
+    measured = await measure();
+  }
+  if (measured.overlap > 0) {
+    throw new Error(
+      `parity: ${selector} still under the topbar after offset ` +
+        `at ${width}px viewport (bar ${measured.barBottom}px, overlap ${measured.overlap}px)`
+    );
+  }
 }
 const STRIP = ["Reflect", "Open commitments", "Shape tomorrow", "Review"];
 export async function ensurePlanning(page: Page, w: number, step: number): Promise<void> {
