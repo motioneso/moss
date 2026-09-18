@@ -5,7 +5,8 @@ import { chromium, type Browser, type BrowserContext, type Page } from "@playwri
 
 import {
   HARNESS_FILES,
-  computeHarnessDigest
+  computeHarnessDigest,
+  selectedSetupActions
 } from "../../tests/uat/visual-parity/case-selection.js";
 import { driveState, prepareSelectedEntry } from "../../tests/uat/visual-parity/seed.js";
 import { type MockupEntry } from "../../tests/uat/visual-parity/mockups.js";
@@ -156,7 +157,12 @@ describe("setup honors the case viewport", () => {
 });
 
 describe("one scroll per setup pass", () => {
-  it("does not scroll the morning news case inside entry setup", async () => {
+  // The scroll must come from the recipe's driveState step, not from a
+  // second scroll after setup. The count alone cannot tell those apart:
+  // the pre-fix code also scrolled exactly once, from the deleted block.
+  // The recipe assertion is what fails on the old code.
+  it("scrolls the morning news case exactly once, via the recipe", async () => {
+    expect(selectedSetupActions("today-morning-news")).toContain("driveState");
     const context = await stubbedContext();
     await context.addInitScript(() => {
       (window as unknown as { __sivCount: number }).__sivCount = 0;
@@ -178,7 +184,7 @@ describe("one scroll per setup pass", () => {
       const count = await page.evaluate(
         () => (window as unknown as { __sivCount: number }).__sivCount
       );
-      expect(count).toBe(0);
+      expect(count).toBe(1);
     } finally {
       await page.close();
       await context.close();
