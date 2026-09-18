@@ -163,6 +163,38 @@ export function hasAuthMaterial(request: FastifyRequest): boolean {
   );
 }
 
+export function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === "127.0.0.1" ||
+    hostname === "localhost" ||
+    hostname === "::1" ||
+    hostname === "[::1]"
+  );
+}
+
+export function resolveMcpServerUrl(
+  env: NodeJS.ProcessEnv = process.env,
+  port: number = Number(env.PORT ?? 3000)
+): string {
+  const configured = env.JARVIS_MCP_SERVER_URL;
+  if (!configured) {
+    return `http://127.0.0.1:${port}/api/mcp`;
+  }
+  try {
+    const url = new URL(configured);
+    // When a loopback URL is passed in the environment (e.g. from a shared dev settings file),
+    // align its port with the server's own port so multi-lane dev servers don't talk to another
+    // lane's instance (#2345). Container service DNS (e.g. http://api:3000/api/mcp) is preserved.
+    if (isLoopbackHost(url.hostname)) {
+      url.port = String(port);
+      return url.toString();
+    }
+    return configured;
+  } catch {
+    return configured;
+  }
+}
+
 export function resolveApiServerConfig(env: NodeJS.ProcessEnv = process.env): ApiServerConfig {
   const port = Number(env.PORT ?? 3000);
   const host = env.HOST ?? "0.0.0.0";
@@ -175,7 +207,7 @@ export function resolveApiServerConfig(env: NodeJS.ProcessEnv = process.env): Ap
     // compose-provided service DNS (JARVIS_MCP_SERVER_URL, e.g. http://api:3000/api/mcp) when
     // set; fall back to the loopback URL for dev/non-container runs. URL source only — this
     // does not change the MCP gateway auth/allowlist/token-mint path.
-    mcpServerUrl: env.JARVIS_MCP_SERVER_URL ?? `http://127.0.0.1:${port}/api/mcp`,
+    mcpServerUrl: resolveMcpServerUrl(env, port),
     externalModulesDir: resolveModulesDir(env)
   };
 }
