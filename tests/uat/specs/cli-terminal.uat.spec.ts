@@ -83,6 +83,12 @@ test("owner opens the CLI terminal, runs a command, sees output, closes clean", 
   const termHost = dialog.locator(".term-modal__host");
   await expect(termHost).toBeVisible();
 
+  // #2417: visibility only means the host div mounted — term.open() plus the WebSocket
+  // handshake still lag behind, and term.onData silently drops keystrokes while the socket
+  // is connecting. Wait for the first PTY bytes (the shell prompt) before typing so the
+  // test cannot start typing into an unattached terminal when the box is under load.
+  await expect(termHost.locator(".xterm-rows")).not.toBeEmpty({ timeout: 15_000 });
+
   // Drive the live PTY: type a shell builtin sentinel, NOT `claude --version` — the pane is a
   // plain bash shell and the provider CLI may not be installed/on-PATH in a provisioned
   // instance, so asserting on a real CLI's version output would be flaky. `echo` + the sentinel
