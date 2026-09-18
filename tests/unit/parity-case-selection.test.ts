@@ -374,8 +374,7 @@ describe("visual parity case selection", () => {
         record.push("driveState");
       }
     };
-    // Dispatch is faithful: the recorded browser actions equal the plan, so a
-    // skipped or reordered recipe step fails the test instead of passing silently.
+    // Dispatch is faithful: a skipped or reordered recipe step fails this instead of passing silently.
     for (const state of [
       "today-morning-news",
       "today-evening",
@@ -398,9 +397,8 @@ describe("visual parity case selection", () => {
     await runSetupActions("today-evening", handlers);
     expect(record).toEqual(["openToday:evening"]);
     await expect(runSetupActions("unknown-state", handlers)).rejects.toThrow("unsupported");
-    // Fixed expectation, not a re-derivation from selectedSetupActions: the
-    // evening-saved recipe must wait for the saved-state confirmation after
-    // clicking Save, or a capture can be taken before the UI shows it saved.
+    // Fixed expectation, not derived from selectedSetupActions: the evening-saved recipe must
+    // wait for the saved-state confirmation after clicking Save, or a capture can beat the UI.
     record.length = 0;
     await runSetupActions("evening-saved", handlers);
     expect(record[record.length - 1]).toBe("expectSavedText");
@@ -569,8 +567,7 @@ describe("visual parity case selection", () => {
   it("binds element crops to the viewport and reference bytes to the declaration", () => {
     const { root, manifest, check, capture, elementCapture } = createValidManifestFixture();
     expect(() => check(manifest)).not.toThrow();
-    // Swapped reference bytes cannot pass: the recorded hash must match the
-    // declared reference file, not just name it.
+    // Swapped reference bytes cannot pass: the recorded hash must match the declared file, not just name it.
     writeFileSync(join(root, "refs/r.png"), "forged\n");
     expect(() => check(manifest)).toThrow("reference bytes changed");
     writeFileSync(join(root, "refs/r.png"), "refs/r.png\n");
@@ -584,8 +581,7 @@ describe("visual parity case selection", () => {
         ]
       })
     ).toThrow("reference bytes changed");
-    // The reference comparison diff must be inventoried and checksummed too,
-    // not silently dropped from a completed run's declared output.
+    // The reference comparison diff must be inventoried and checksummed too, not dropped.
     const { referenceDiff: _referenceDiff, ...artifactsWithoutReferenceDiff } = capture.artifacts;
     expect(() =>
       check({
@@ -611,8 +607,7 @@ describe("visual parity case selection", () => {
         ]
       })
     ).toThrow("artifact checksum changed");
-    // An element crop outside the viewport cannot pass: live boxes stay bound
-    // even though their exact pixels are not predeclared.
+    // An element crop outside the viewport cannot pass: live boxes stay bound even though their exact pixels are not predeclared.
     expect(() =>
       check({
         ...manifest,
@@ -622,9 +617,8 @@ describe("visual parity case selection", () => {
         ]
       })
     ).toThrow("exceeds viewport");
-    // An altered but still in-bounds element crop cannot pass either: the
-    // reported width/height must bind to the pixels actually captured, not
-    // just fit inside the viewport.
+    // An altered but still in-bounds element crop cannot pass either: reported width/height
+    // must bind to the pixels actually captured, not just fit inside the viewport.
     expect(() =>
       check({
         ...manifest,

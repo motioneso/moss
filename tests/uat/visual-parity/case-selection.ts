@@ -1,10 +1,21 @@
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { isAbsolute, normalize, posix, win32 } from "node:path";
+import { isAbsolute, normalize, posix, relative, win32 } from "node:path";
 
 import { PNG } from "pngjs";
 
 import type { MockupEntry } from "./mockups.js";
+import {
+  buildRegionRunRecord,
+  buildTransitionRunRecord,
+  parseRegionSet,
+  parseSizeTransition,
+  toSemanticReport,
+  type RegionSetComparisonReport,
+  type RegionSetDeclaration,
+  type SizeTransitionComparisonReport,
+  type SizeTransitionDeclaration
+} from "./region-comparison.js";
 
 export const CASE_SELECTION_VERSION = 1 as const;
 // Files whose bytes define the harness identity. The writer hashes exactly
@@ -14,7 +25,9 @@ export const CASE_SELECTION_VERSION = 1 as const;
 export const HARNESS_FILES = [
   "tests/uat/visual-parity/case-selection.ts",
   "tests/uat/visual-parity/capture.ts",
-  "tests/uat/specs/visual-parity.uat.spec.ts"
+  "tests/uat/specs/visual-parity.uat.spec.ts",
+  "tests/uat/visual-parity/region-comparison.ts",
+  "tests/uat/visual-parity/region-schema.ts"
 ] as const;
 
 export function computeHarnessDigest(files: readonly string[] = HARNESS_FILES): string {
@@ -31,6 +44,11 @@ export interface SelectedCase {
   readonly role: ComparisonRole;
   readonly reference?: string;
   readonly base?: string;
+  // Optional regional/transition declarations (VP-REGIONS-R1). Predeclared
+  // geometry only; never inferred from an observed diff. Legacy cases that
+  // declare neither keep the pre-existing whole-image behavior unchanged.
+  readonly regions?: RegionSetDeclaration;
+  readonly sizeTransition?: SizeTransitionDeclaration;
 }
 
 export interface SelectedGuard {
@@ -103,6 +121,10 @@ export interface CaptureAccounting {
     // Present for element captures: records capture-time geometry sidecar
     readonly geometrySidecar?: ArtifactRecord;
     readonly geometry?: ArtifactRecord;
+    // Present when the case declared regions/sizeTransition: every diff image the
+    // recorded report points at (per-region diffs plus the complement diff), each
+    // checksummed. The representative `diff` above aliases one of these entries.
+    readonly regionDiffs?: readonly ArtifactRecord[];
   };
   readonly elapsedMs: number;
   readonly comparison: {
@@ -113,6 +135,10 @@ export interface CaptureAccounting {
     readonly referenceSha256?: string;
     readonly zeroControlPercent: number;
     readonly changedControlPercent: number;
+    // Present only when this case declared regions/sizeTransition: the exact
+    // report from the shared comparator, not a re-derived summary.
+    readonly regionReport?: RegionSetComparisonReport;
+    readonly transitionReport?: SizeTransitionComparisonReport;
   };
 }
 
@@ -179,6 +205,31 @@ export function guardIdentity(value: Pick<SelectedGuard, "route" | "width">): st
   return `guard:${value.route}@${value.width}`;
 }
 
+// Looks up the declaration for one capture in selected mode; undefined in
+// default mode. Throws if selected mode has no matching declaration, so an
+// undeclared capture can never silently skip accounting.
+export function resolveSelectedCase(
+  selection: CaseSelection,
+  dir: string,
+  name: string
+): SelectedCase | undefined {
+  if (selection.mode !== "selected") return undefined;
+  const found = selection.cases.find((c) => c.dir === dir && c.name === name);
+  if (!found) fail(`undeclared capture ${dir}/${name}`);
+  return found;
+}
+
+// A whole-image reference-owned case has no complement and keeps the legacy
+// whole-capture diff assertion; regions/sizeTransition cases record their own
+// pass/fail in the comparison report instead.
+export function isWholeImageOwnership(declaration: SelectedCase): boolean {
+  return (
+    declaration.role === "owned-region/reference" &&
+    !declaration.regions &&
+    !declaration.sizeTransition
+  );
+}
+
 export function statePrerequisites(state: string): readonly string[] {
   if (state.startsWith("today-morning")) return ["clock:morning", "today:populated"];
   if (state === "today-evening" || state === "today-evening-saved")
@@ -222,6 +273,16 @@ function object(value: unknown, label: string): Record<string, unknown> {
 function string(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim() === "") fail(`${label} must be nonempty`);
   return value;
+}
+
+// Re-labels a region/transition parse failure with the owning case's field
+// path, so a bad declaration still points at the exact case that made it.
+function wrapFail<T>(run: () => T, label: string): T {
+  try {
+    return run();
+  } catch (error) {
+    fail(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function role(value: unknown, label: string): ComparisonRole {
@@ -293,19 +354,33 @@ function parseCase(value: unknown, index: number): SelectedCase {
     input.base === undefined
       ? undefined
       : safeRelativePath(string(input.base, `cases[${index}].base`), `cases[${index}].base`);
+  const regions =
+    input.regions === undefined
+      ? undefined
+      : wrapFail(() => parseRegionSet(input.regions), `cases[${index}].regions`);
+  const sizeTransition =
+    input.sizeTransition === undefined
+      ? undefined
+      : wrapFail(() => parseSizeTransition(input.sizeTransition), `cases[${index}].sizeTransition`);
   const selected = {
     dir: string(input.dir, `cases[${index}].dir`),
     name: string(input.name, `cases[${index}].name`),
     role: role(input.role, `cases[${index}].role`),
     ...(reference === undefined ? {} : { reference }),
-    ...(base === undefined ? {} : { base })
+    ...(base === undefined ? {} : { base }),
+    ...(regions === undefined ? {} : { regions }),
+    ...(sizeTransition === undefined ? {} : { sizeTransition })
   };
   if (selected.role === "measurement" && selected.base !== undefined)
     fail(`cases[${index}] measurement cannot declare a base comparison`);
+  if (selected.role === "measurement" && (selected.regions ?? selected.sizeTransition))
+    fail(`cases[${index}] measurement cannot declare regions/sizeTransition acceptance`);
   if (selected.role === "owned-region/reference" && (!selected.reference || !selected.base))
     fail(`cases[${index}] owned-region/reference requires reference and base artifacts`);
   if (selected.role === "base-guard" && !selected.base)
     fail(`cases[${index}] base-guard requires a base artifact`);
+  if (selected.regions !== undefined && selected.sizeTransition !== undefined)
+    fail(`cases[${index}] cannot declare both regions and sizeTransition`);
   return selected;
 }
 
@@ -494,6 +569,52 @@ export async function runSetupActions(state: string, handlers: SetupActionHandle
   }
 }
 
+// Binds a recorded report to its diff inventory: compared entries name their diff,
+// uncompared entries name none, no diff is shared, and the inventoried set matches
+// exactly. Named files were already verified by checkArtifact.
+function checkReportDiffInventory(
+  capture: CaptureAccounting,
+  report: RegionSetComparisonReport | SizeTransitionComparisonReport,
+  kind: "region" | "transition",
+  artifactRoot: string
+): void {
+  const recorded: string[] = [];
+  for (const entry of report.regions) {
+    if (entry.result) {
+      if (!entry.diffPath)
+        fail(`compared ${kind} ${entry.id} has no diff artifact: ${capture.identity}`);
+      recorded.push(entry.diffPath);
+    } else if (entry.diffPath) {
+      fail(`uncompared ${kind} ${entry.id} carries a diff: ${capture.identity}`);
+    }
+  }
+  if ("complementDiffPath" in report) {
+    if (report.complement && !report.complementDiffPath)
+      fail(`compared complement has no diff artifact: ${capture.identity}`);
+    if (report.complementDiffPath) recorded.push(report.complementDiffPath);
+  }
+  const seen = new Set<string>();
+  for (const absolute of recorded) {
+    if (seen.has(absolute)) fail(`duplicate ${kind} diff artifact: ${absolute}`);
+    seen.add(absolute);
+  }
+  const inventoried = capture.artifacts.regionDiffs;
+  if (!inventoried) fail(`${kind} diffs not inventoried: ${capture.identity}`);
+  const toRel = (absolute: string): string => {
+    if (!isAbsolute(absolute)) fail(`${kind} diff path is not absolute: ${absolute}`);
+    const rel = relative(artifactRoot, absolute);
+    if (rel === "" || rel.startsWith("..") || isAbsolute(rel))
+      fail(`${kind} diff escapes the run root: ${absolute}`);
+    return posix.normalize(rel);
+  };
+  const expected = new Set([...seen].map(toRel));
+  if (!inventoried || inventoried.length !== expected.size)
+    fail(`${kind} diff inventory differs from the recorded report: ${capture.identity}`);
+  for (const record of inventoried)
+    if (!expected.has(posix.normalize(record.path)))
+      fail(`${kind} diff inventory differs from the recorded report: ${capture.identity}`);
+}
+
 export function validateRunManifest(
   selection: CaseSelection,
   manifest: ParityRunManifest,
@@ -539,12 +660,14 @@ export function validateRunManifest(
     fail("run manifest guard inventory differs from declaration");
   if (manifest.guardCaptures.length !== expectedGuards.length)
     fail("run manifest guard capture inventory differs from declaration");
-  const paths = new Set<string>();
+  const paths = new Map<string, string>();
   const checkArtifact = (artifact: ArtifactRecord, label: string): void => {
     safeRelativePath(artifact.path, `${label}.path`);
     if (!/^[0-9a-f]{64}$/i.test(artifact.sha256)) fail(`invalid artifact SHA256 for ${label}`);
-    if (paths.has(artifact.path)) fail(`artifact path collision: ${artifact.path}`);
-    paths.add(artifact.path);
+    const prior = paths.get(artifact.path);
+    if (prior !== undefined && prior !== artifact.sha256)
+      fail(`artifact path collision: ${artifact.path}`);
+    if (prior === undefined) paths.set(artifact.path, artifact.sha256);
     const absolute = `${options.artifactRoot}/${artifact.path}`;
     if (!existsSync(absolute)) fail(`missing artifact: ${artifact.path}`);
     const actual = createHash("sha256").update(readFileSync(absolute)).digest("hex");
@@ -583,6 +706,9 @@ export function validateRunManifest(
       if (key === "controls") {
         for (const [index, control] of (artifact as readonly ArtifactRecord[]).entries())
           checkArtifact(control as ArtifactRecord, `${capture.identity}.controls[${index}]`);
+      } else if (key === "regionDiffs") {
+        for (const [index, regionDiff] of (artifact as readonly ArtifactRecord[]).entries())
+          checkArtifact(regionDiff as ArtifactRecord, `${capture.identity}.regionDiffs[${index}]`);
       } else checkArtifact(artifact as ArtifactRecord, `${capture.identity}.${key}`);
     }
     if (!Number.isFinite(capture.elapsedMs) || capture.elapsedMs < 0)
@@ -679,6 +805,125 @@ export function validateRunManifest(
     }
     if (capture.readiness.length === 0 || capture.populatedWidgets.length === 0)
       fail(`capture evidence is incomplete for ${capture.identity}`);
+    // Regions/transitions prove comparison against the real base and reference.
+    // Provenance follows each comparison's purpose, not the outer role; base hashes
+    // bind file plus run commit. Capture-as-base is rejected by path identity:
+    // independently captured base/head bytes may legitimately be identical.
+    if (declaration.regions || declaration.sizeTransition) {
+      if (declaration.role === "measurement")
+        fail(`measurement cannot declare regions/sizeTransition acceptance: ${capture.identity}`);
+      if (!declaration.base)
+        fail(`capture with regions/sizeTransition requires a base: ${capture.identity}`);
+      const maskedAbsolute = `${options.artifactRoot}/${capture.artifacts.masked.path}`;
+      const baseAbsolute = `${options.artifactRoot}/${declaration.base}`;
+      if (!existsSync(baseAbsolute)) fail(`missing declared baseline: ${capture.identity}`);
+      if (posix.normalize(declaration.base) === posix.normalize(capture.artifacts.masked.path))
+        fail(`declared base is the capture file itself (self-comparison): ${capture.identity}`);
+      const baseActual = createHash("sha256").update(readFileSync(baseAbsolute)).digest("hex");
+      if (!capture.comparison.baseSha256 || !/^[0-9a-f]{64}$/i.test(capture.comparison.baseSha256))
+        fail(`capture base bytes unbound: ${capture.identity}`);
+      if (baseActual !== capture.comparison.baseSha256)
+        fail(`declared baseline bytes changed: ${capture.identity}`);
+      if (capture.comparison.expectedBase !== manifest.expectedBase)
+        fail(`capture baseline differs from run baseline: ${capture.identity}`);
+      const referenceAbsolute = declaration.reference
+        ? `${options.artifactRoot}/${declaration.reference}`
+        : undefined;
+      if (declaration.regions) {
+        if (!capture.comparison.regionReport)
+          fail(`region comparison report not recorded: ${capture.identity}`);
+        const referencePaths = new Map<string, string>();
+        if (referenceAbsolute)
+          for (const region of declaration.regions.regions)
+            if (region.purpose === "reference-owned")
+              referencePaths.set(region.id, referenceAbsolute);
+        const fresh = buildRegionRunRecord(
+          capture.identity,
+          declaration.regions,
+          maskedAbsolute,
+          baseAbsolute,
+          referencePaths,
+          []
+        );
+        // Semantic equality only; diff paths are inventoried below.
+        if (
+          JSON.stringify(toSemanticReport(fresh.report)) !==
+          JSON.stringify(toSemanticReport(capture.comparison.regionReport))
+        )
+          fail(
+            `recorded region comparison does not match a fresh recompute of the actual bytes: ${capture.identity}`
+          );
+        checkReportDiffInventory(
+          capture,
+          capture.comparison.regionReport,
+          "region",
+          options.artifactRoot
+        );
+      }
+      if (declaration.sizeTransition) {
+        if (!capture.comparison.transitionReport)
+          fail(`size transition comparison report not recorded: ${capture.identity}`);
+        const referencePaths = new Map<string, string>();
+        if (referenceAbsolute)
+          for (const region of declaration.sizeTransition.regions)
+            if (
+              region.referenceRect ||
+              (region.kind === "new-band" && region.purpose === "reference-owned")
+            )
+              referencePaths.set(region.id, referenceAbsolute);
+        const fresh = buildTransitionRunRecord(
+          capture.identity,
+          declaration.sizeTransition,
+          maskedAbsolute,
+          baseAbsolute,
+          referencePaths,
+          []
+        );
+        if (
+          JSON.stringify(toSemanticReport(fresh.report)) !==
+          JSON.stringify(toSemanticReport(capture.comparison.transitionReport))
+        )
+          fail(
+            `recorded size transition comparison does not match a fresh recompute of the actual bytes: ${capture.identity}`
+          );
+        checkReportDiffInventory(
+          capture,
+          capture.comparison.transitionReport,
+          "transition",
+          options.artifactRoot
+        );
+      }
+      // Reference provenance follows actual comparisons, under any outer role.
+      const recordedReport = declaration.regions
+        ? capture.comparison.regionReport!
+        : capture.comparison.transitionReport!;
+      const referenceCompared = recordedReport.regions.filter(
+        (entry) => entry.comparedAgainst === "reference"
+      );
+      if (referenceCompared.length > 0) {
+        if (!declaration.reference || !referenceAbsolute)
+          fail(`reference comparison without a declared reference: ${capture.identity}`);
+        if (!existsSync(referenceAbsolute)) fail(`missing declared reference: ${capture.identity}`);
+        const referenceActual = createHash("sha256")
+          .update(readFileSync(referenceAbsolute))
+          .digest("hex");
+        if (
+          !capture.comparison.referenceSha256 ||
+          !/^[0-9a-f]{64}$/i.test(capture.comparison.referenceSha256)
+        )
+          fail(`capture reference bytes unbound: ${capture.identity}`);
+        if (referenceActual !== capture.comparison.referenceSha256)
+          fail(`declared reference bytes changed: ${capture.identity}`);
+        if (!capture.artifacts.referenceDiff)
+          fail(`reference comparison diff not inventoried: ${capture.identity}`);
+        const referenceDiffPaths = new Set(
+          referenceCompared.flatMap((entry) => (entry.diffPath ? [entry.diffPath] : []))
+        );
+        const inventoried = `${options.artifactRoot}/${capture.artifacts.referenceDiff.path}`;
+        if (!referenceDiffPaths.has(inventoried))
+          fail(`inventoried reference diff matches no recorded comparison: ${capture.identity}`);
+      }
+    }
     if (declaration.role === "measurement" && capture.comparison.outcome !== "control")
       fail(`measurement cannot claim parity: ${capture.identity}`);
     if (declaration.role === "measurement" && capture.comparison.baseSha256)

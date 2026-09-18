@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, join as joinPath, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
@@ -8,8 +8,6 @@ import { buildUatComposeArgs } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import {
   captureEntry,
-  compareCaptureToBase,
-  compareReferenceCapture,
   guardCapture,
   reportLine,
   waitForRoutePopulated,
@@ -22,7 +20,9 @@ import { DECLARED_SIZE_MISMATCHES } from "../visual-parity/declared-size-mismatc
 import {
   HARNESS_FILES,
   assertArtifactDirsDistinct,
+  isWholeImageOwnership,
   resolveCaseSelection,
+  resolveSelectedCase,
   runSetupActions,
   statePrerequisites,
   validateRunManifest,
@@ -31,6 +31,7 @@ import {
   type SelectedGuard
 } from "../visual-parity/case-selection.js";
 import { MOCKUPS } from "../visual-parity/mockups.js";
+import { reportDiffPaths, resolveEntryComparison } from "../visual-parity/region-comparison.js";
 import {
   addDay,
   armCalendar,
@@ -652,24 +653,38 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
       `[parity] ${r.file} ${r.size} masked ${(r.maskedShare * 100).toFixed(1)}% diff ${r.diffPercent.toFixed(2)}%`
     );
     expect(r.maskedShare).toBeLessThanOrEqual(0.35);
-    const declared = DECLARED_SIZE_MISMATCHES.find(({ name }) => name === entry.name);
-    if (declared) {
-      expect(r.size, `${entry.name} captured size`).toBe(declared.capturedSize);
-      expect(r.sizeMatch, `${entry.name} declared mismatch`).toBe(false);
+    const selectedDeclaration = resolveSelectedCase(CASE_SELECTION, entry.dir, entry.name);
+    // A declared size transition replaces this legacy check with its own exact target-size
+    // and capture-position assertion below.
+    if (!selectedDeclaration?.sizeTransition) {
+      const declared = DECLARED_SIZE_MISMATCHES.find(({ name }) => name === entry.name);
+      if (declared) {
+        expect(r.size, `${entry.name} captured size`).toBe(declared.capturedSize);
+        expect(r.sizeMatch, `${entry.name} declared mismatch`).toBe(false);
+      } else {
+        expect(r.sizeMatch, `${entry.name} unexpected mismatch`).toBe(true);
+      }
     } else {
-      expect(r.sizeMatch, `${entry.name} unexpected mismatch`).toBe(true);
+      const { targetSize, expectedGeometry } = selectedDeclaration.sizeTransition;
+      expect(
+        r.size,
+        `${entry.name} captured size must match the declared target size exactly`
+      ).toBe(`${targetSize.width}x${targetSize.height}`);
+      expect(
+        Math.abs(r.crop.x - expectedGeometry.x),
+        `${entry.name} captured crop x (${r.crop.x}) must be within 2px of the declared expected x (${expectedGeometry.x})`
+      ).toBeLessThanOrEqual(2);
+      expect(
+        Math.abs(r.crop.y - expectedGeometry.y),
+        `${entry.name} captured crop y (${r.crop.y}) must be within 2px of the declared expected y (${expectedGeometry.y})`
+      ).toBeLessThanOrEqual(2);
     }
     if (CASE_SELECTION.mode === "default" && OWNED.has(entry.name))
       expect(r.diffPercent).toBeLessThanOrEqual(0.5);
     lines.push(reportLine(r));
     if (CASE_SELECTION.mode === "selected") {
-      const declaration = CASE_SELECTION.cases.find(
-        (candidate) => candidate.dir === entry.dir && candidate.name === entry.name
-      );
-      if (!declaration)
-        throw new Error(`parity case selection: undeclared capture ${entry.dir}/${entry.name}`);
-      if (declaration.role === "owned-region/reference")
-        expect(r.diffPercent).toBeLessThanOrEqual(0.5);
+      const declaration = selectedDeclaration!;
+      if (isWholeImageOwnership(declaration)) expect(r.diffPercent).toBeLessThanOrEqual(0.5);
       const compareStartedAt = Date.now();
       const maskedPath = join(OUT, CASE_SELECTION.artifacts.captures, entry.dir, entry.name);
       const controls = writeComparisonControls(
@@ -690,57 +705,17 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
         entry.dir,
         entry.name.replace(/\.png$/, ".diff.png")
       );
-      let diffPath = mockupDiffPath;
-      let referenceDiffPath: string | undefined;
-      let comparison: CaptureAccounting["comparison"];
-      if (declaration.base) {
-        if (EXPECTED_BASE === null)
-          throw new Error(`parity case selection: declared base without PARITY_EXPECTED_BASE`);
-        if (declaration.role === "owned-region/reference" && !declaration.reference)
-          throw new Error(
-            `parity case selection: owned-region/reference needs a reference identity`
-          );
-        const baseAbsolute = join(OUT, declaration.base);
-        if (!existsSync(baseAbsolute))
-          throw new Error(`parity case selection: missing declared baseline ${declaration.base}`);
-        const baseDiffPath = join(
-          OUT,
-          CASE_SELECTION.artifacts.diffs,
-          entry.dir,
-          entry.name.replace(/\.png$/, ".base.diff.png")
-        );
-        const baseDiffPercent = compareCaptureToBase(maskedPath, baseAbsolute, baseDiffPath);
-        const baseSha256 = createHash("sha256").update(readFileSync(baseAbsolute)).digest("hex");
-        diffPath = baseDiffPath;
-        comparison = {
-          outcome: baseDiffPercent <= 0.5 ? "pass" : "fail",
-          expectedBase: EXPECTED_BASE,
-          expectedReference: declaration.reference,
-          baseSha256,
-          zeroControlPercent: controls.zeroPercent,
-          changedControlPercent: controls.changedPercent
-        };
-        if (declaration.reference) {
-          referenceDiffPath = join(
-            OUT,
-            CASE_SELECTION.artifacts.diffs,
-            entry.dir,
-            entry.name.replace(/\.png$/, ".reference.diff.png")
-          );
-          const reference = compareReferenceCapture(
-            maskedPath,
-            join(OUT, declaration.reference),
-            referenceDiffPath
-          );
-          comparison = { ...comparison, referenceSha256: reference.sha256 };
-        }
-      } else {
-        comparison = {
-          outcome: "control",
-          zeroControlPercent: controls.zeroPercent,
-          changedControlPercent: controls.changedPercent
-        };
-      }
+      const resolved = resolveEntryComparison(
+        declaration,
+        EXPECTED_BASE,
+        OUT,
+        maskedPath,
+        controls,
+        mockupDiffPath
+      );
+      const diffPath = resolved.diffPath;
+      const referenceDiffPath = resolved.referenceDiffPath;
+      const comparison: CaptureAccounting["comparison"] = resolved.comparison;
       compareMs += Date.now() - compareStartedAt;
       const rel = (path: string): string => relative(OUT, path);
       accounting.push({
@@ -777,6 +752,16 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
                   path: rel(referenceDiffPath),
                   sha256: createHash("sha256").update(readFileSync(referenceDiffPath)).digest("hex")
                 }
+              }
+            : {}),
+          ...(comparison.regionReport || comparison.transitionReport
+            ? {
+                regionDiffs: reportDiffPaths(
+                  comparison.regionReport ?? comparison.transitionReport!
+                ).map((absolute) => ({
+                  path: rel(absolute),
+                  sha256: createHash("sha256").update(readFileSync(absolute)).digest("hex")
+                }))
               }
             : {}),
           ...(r.geometrySidecar
