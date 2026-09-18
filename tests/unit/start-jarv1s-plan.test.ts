@@ -114,7 +114,9 @@ describe("start-jarv1s startup plan", () => {
 
     for (const [key, value] of Object.entries(expectedForCli)) {
       if (key === "PATH") {
-        expect(cliRunnerServerEnv.PATH).toBe(`/data/cli-tools/bin:${value}`);
+        expect(cliRunnerServerEnv.PATH).toBe(
+          `/app/tests/uat/fixtures/scripted-provider/bin:/data/cli-tools/bin:/bin`
+        );
         continue;
       }
       expect(cliRunnerServerEnv[key]).toBe(value);
@@ -146,6 +148,18 @@ describe("start-jarv1s startup plan", () => {
     expect(env.JARVIS_UAT_SEED_CHAT_SCRIPT).toBe("1252-audit-truth-livepath");
     expect(env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN).toBe(
       "/app/tests/uat/fixtures/scripted-provider/bin"
+    );
+  });
+
+  it("puts the exact UAT fixture bin ahead of installed providers", () => {
+    const env = buildChildEnv("cli-runner", {
+      PATH: "/usr/bin:/bin",
+      JARVIS_CLI_TOOLS_PREFIX: "/data/cli-tools",
+      JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin"
+    } as NodeJS.ProcessEnv);
+
+    expect(env.PATH).toBe(
+      "/app/tests/uat/fixtures/scripted-provider/bin:/data/cli-tools/bin:/usr/bin:/bin"
     );
   });
 

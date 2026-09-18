@@ -1,7 +1,8 @@
 // tests/uat/visual-parity/capture.ts: region capture, honest masking, pixel diff, report lines.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Page } from "@playwright/test";
+import { strict as assert } from "node:assert";
+import { expect, type Page } from "@playwright/test";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 import { maskRects } from "./masks.js";
@@ -58,7 +59,6 @@ function toImageSpace(rects: readonly Rect[], ox: number, oy: number): Rect[] {
 }
 export async function stillPage(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
-  await page.waitForLoadState("networkidle");
   await page.addStyleTag({
     content:
       "*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}"
@@ -265,6 +265,379 @@ export async function waitForStablePopulated(page: Page): Promise<void> {
   }
   const detail = await stableSample(page);
   throw new Error(`parity: display face or geometry did not stabilize: ${detail.slice(0, 400)}`);
+}
+
+export type RouteName = "tasks" | "calendar" | "settings" | "today" | "evening";
+
+export interface RouteReadinessExpectations {
+  readonly taskTitle?: string;
+  readonly meetingTitle?: string;
+  readonly eventTitles?: readonly string[];
+  readonly settingsPaneTitle?: string;
+  readonly eveningSummary?: string;
+  readonly tomorrowTaskTitle?: string;
+  readonly tomorrowEventTitle?: string;
+}
+
+export interface RouteReadinessEvidence {
+  readonly route: RouteName;
+  readonly matched: readonly string[];
+  readonly loadingAbsent: true;
+  readonly fontsReady: true;
+  readonly elapsedMs: number;
+}
+
+async function routeText(
+  page: Page,
+  selector: string,
+  expected: string | RegExp,
+  label: string,
+  matched: string[]
+): Promise<void> {
+  const locator = page.locator(selector).filter({ hasText: expected }).first();
+  await locator.waitFor({ state: "visible", timeout: 30_000 });
+  const text = (await locator.innerText()).replace(/\s+/g, " ").trim();
+  matched.push(`${label}: ${text.slice(0, 180)}`);
+}
+
+async function routeVisible(
+  page: Page,
+  selector: string,
+  label: string,
+  matched: string[]
+): Promise<void> {
+  await page.locator(selector).first().waitFor({ state: "visible", timeout: 30_000 });
+  matched.push(label);
+}
+
+type WeatherSnapshot = {
+  readonly elementPresent: boolean;
+  readonly locationText: string | null;
+  readonly currentTemperatureText: string | null;
+  readonly conditionText: string | null;
+  readonly tileCount: number;
+  readonly firstTile: { readonly label: string | null; readonly temperature: string | null } | null;
+  readonly unavailableLoadingText: string | null;
+};
+
+async function weatherSnapshot(page: Page): Promise<WeatherSnapshot> {
+  return page.evaluate(() => {
+    const root = document.querySelector("#weather");
+    const text = (selector: string): string | null => {
+      const value = root?.querySelector(selector)?.textContent?.replace(/\s+/g, " ").trim();
+      return value ? value.slice(0, 180) : null;
+    };
+    const tiles = root?.querySelectorAll(".jds-weather-chip__day") ?? [];
+    const unavailable = root?.querySelector(".cmd-empty, .empty-state, .pane__loading");
+    return {
+      elementPresent: root !== null,
+      locationText: text(".jds-weather-chip__location"),
+      currentTemperatureText: text(".wx-row .jds-brief__title"),
+      conditionText: text(".wx-row > div > div:nth-child(2)"),
+      tileCount: tiles.length,
+      firstTile:
+        tiles.length > 0
+          ? {
+              label:
+                tiles[0]?.querySelector(".jds-weather-chip__label")?.textContent?.trim() || null,
+              temperature:
+                tiles[0]?.querySelector(".jds-weather-chip__temp")?.textContent?.trim() || null
+            }
+          : null,
+      unavailableLoadingText:
+        unavailable?.textContent?.replace(/\s+/g, " ").trim().slice(0, 180) ?? null
+    };
+  });
+}
+
+async function logWeatherSnapshot(
+  page: Page,
+  route: RouteName,
+  phase: "before" | "after" | "failure"
+) {
+  console.log(
+    `[parity-weather] route=${route} phase=${phase} ${JSON.stringify(await weatherSnapshot(page))}`
+  );
+}
+
+function isWeatherPopulated(snapshot: WeatherSnapshot): boolean {
+  const nonempty = (value: string | null): boolean => Boolean(value?.trim());
+  return Boolean(
+    snapshot.elementPresent &&
+    nonempty(snapshot.locationText) &&
+    nonempty(snapshot.currentTemperatureText) &&
+    nonempty(snapshot.conditionText) &&
+    Number.isInteger(snapshot.tileCount) &&
+    snapshot.tileCount > 0 &&
+    snapshot.firstTile !== null &&
+    nonempty(snapshot.firstTile.label) &&
+    nonempty(snapshot.firstTile.temperature) &&
+    !nonempty(snapshot.unavailableLoadingText)
+  );
+}
+
+async function visibleWeatherFallback(page: Page, route: RouteName): Promise<void> {
+  const unavailable = await page
+    .locator("#weather .cmd-empty, #weather .empty-state, #weather .pane__loading")
+    .evaluateAll((nodes) =>
+      nodes
+        .filter((node) => {
+          const style = getComputedStyle(node);
+          return style.display !== "none" && style.visibility !== "hidden";
+        })
+        .map((node) => (node.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 180))
+    );
+  if (unavailable.length > 0)
+    throw new Error(`parity: ${route} weather unavailable/loading: ${unavailable.join(" | ")}`);
+}
+
+async function waitForWeather(
+  page: Page,
+  route: RouteName,
+  matched: string[],
+  deadlineAt?: number
+): Promise<void> {
+  await logWeatherSnapshot(page, route, "before");
+  try {
+    await routeVisible(page, "#weather", "Weather region", matched);
+    await visibleWeatherFallback(page, route);
+    const remaining = deadlineAt === undefined ? 30_000 : deadlineAt - Date.now();
+    const timeout = Math.min(30_000, remaining);
+    if (timeout <= 0) throw new Error(`parity-smoke: 180s budget exceeded before ${route} weather`);
+    await expect
+      .poll(async () => isWeatherPopulated(await weatherSnapshot(page)), { timeout })
+      .toBe(true);
+    await visibleWeatherFallback(page, route);
+    const snapshot = await weatherSnapshot(page);
+    if (!isWeatherPopulated(snapshot))
+      throw new Error(
+        `parity: ${route} weather populated predicate changed: ${JSON.stringify(snapshot)}`
+      );
+    matched.push(`weather: ${JSON.stringify(snapshot)}`);
+    try {
+      await logWeatherSnapshot(page, route, "after");
+    } catch {
+      // Diagnostics are best effort and must not replace the readiness result.
+    }
+    matched.push(`weather tiles: ${await page.locator("#weather .jds-weather-chip__day").count()}`);
+  } catch (error) {
+    try {
+      await logWeatherSnapshot(page, route, "failure");
+    } catch {
+      // Preserve the original readiness assertion if diagnostics cannot be collected.
+    }
+    throw error;
+  }
+}
+
+export function runWeatherReadinessChecks(): void {
+  const smoke3: WeatherSnapshot = {
+    elementPresent: true,
+    locationText: "San Francisco",
+    currentTemperatureText: "66°F",
+    conditionText: "Overcast",
+    tileCount: 5,
+    firstTile: { label: "Now", temperature: "66°" },
+    unavailableLoadingText: null
+  };
+  const alternative = { ...smoke3, locationText: "Tokyo", currentTemperatureText: "21°C" };
+  assert.equal(isWeatherPopulated(smoke3), true);
+  assert.equal(isWeatherPopulated(alternative), true);
+  const reject = (label: string, patch: Partial<WeatherSnapshot>): void =>
+    assert.equal(isWeatherPopulated({ ...smoke3, ...patch }), false, label);
+  reject("absent root", { elementPresent: false });
+  reject("missing location", { locationText: null });
+  reject("blank location", { locationText: "   " });
+  reject("missing temperature", { currentTemperatureText: null });
+  reject("blank temperature", { currentTemperatureText: "   " });
+  reject("missing condition", { conditionText: null });
+  reject("blank condition", { conditionText: "   " });
+  reject("zero tiles", { tileCount: 0 });
+  reject("absent first tile", { firstTile: null });
+  reject("missing tile label", { firstTile: { label: null, temperature: "66°" } });
+  reject("blank tile label", { firstTile: { label: "   ", temperature: "66°" } });
+  reject("missing tile temperature", { firstTile: { label: "Now", temperature: null } });
+  reject("blank tile temperature", { firstTile: { label: "Now", temperature: "   " } });
+  reject("unavailable/loading text", { unavailableLoadingText: "Weather isn't available" });
+}
+
+async function routeLoadingAbsent(page: Page, route: RouteName): Promise<void> {
+  const visibleLoading = await page.locator(".empty-state, .pane__loading").evaluateAll((nodes) =>
+    nodes
+      .filter((node) => {
+        const style = getComputedStyle(node);
+        return style.display !== "none" && style.visibility !== "hidden";
+      })
+      .map((node) => (node.textContent ?? "").replace(/\s+/g, " ").trim())
+  );
+  if (visibleLoading.length > 0)
+    throw new Error(
+      `parity: ${route} loading state remained visible: ${visibleLoading.join(" | ")}`
+    );
+}
+
+interface FontState {
+  readonly status: string;
+  readonly faces: readonly {
+    readonly family: string;
+    readonly weight: string;
+    readonly style: string;
+    readonly status: string;
+  }[];
+}
+
+async function readFontState(page: Page): Promise<FontState> {
+  return page.evaluate(() => {
+    const faces: Array<FontState["faces"][number]> = [];
+    document.fonts.forEach((face) =>
+      faces.push({
+        family: face.family,
+        weight: face.weight,
+        style: face.style,
+        status: face.status
+      })
+    );
+    return { status: document.fonts.status, faces };
+  });
+}
+
+function fontStateMessage(state: FontState): string {
+  return JSON.stringify(state.faces);
+}
+
+async function assertFontsReady(page: Page, route: RouteName): Promise<void> {
+  const state = await readFontState(page);
+  const errored = state.faces.filter((face) => face.status === "error");
+  if (state.status !== "loaded" || errored.length > 0)
+    throw new Error(`parity: ${route} fonts not ready: ${fontStateMessage(state)}`);
+}
+
+async function waitForFontsReady(page: Page, route: RouteName, deadlineAt?: number): Promise<void> {
+  const remaining = deadlineAt === undefined ? 30_000 : deadlineAt - Date.now();
+  const timeout = Math.min(30_000, remaining);
+  if (timeout <= 0) throw new Error(`parity-smoke: 180s budget exceeded before ${route} fonts`);
+  try {
+    await page.waitForFunction(() => document.fonts.status === "loaded", { timeout });
+  } catch {
+    const state = await readFontState(page);
+    throw new Error(
+      `parity: ${route} fonts did not reach loaded state within ${timeout}ms: ${fontStateMessage(state)}`
+    );
+  }
+  await assertFontsReady(page, route);
+}
+
+export async function waitForRoutePopulated(
+  page: Page,
+  route: RouteName,
+  expected: RouteReadinessExpectations,
+  deadlineAt?: number
+): Promise<RouteReadinessEvidence> {
+  const started = Date.now();
+  const matched: string[] = [];
+  await stillPage(page);
+  // Font loading is checked after route content mounts; content can trigger new faces.
+
+  if (route === "tasks") {
+    await routeVisible(page, ".tasks-wrap", "Tasks region", matched);
+    await routeVisible(page, '[role="group"][aria-label="View"]', "List/Matrix control", matched);
+    await routeVisible(
+      page,
+      '[role="group"][aria-label="Status filter"]',
+      "Status filter",
+      matched
+    );
+    await routeVisible(page, ".tk-listfilter", "All lists control", matched);
+    await routeVisible(page, '[aria-label="Toggle search"]', "Search control", matched);
+    await routeText(
+      page,
+      ".tk-task__title",
+      expected.taskTitle ?? "Parity",
+      "seeded task",
+      matched
+    );
+  } else if (route === "calendar") {
+    await routeVisible(page, ".cal-wrap", "Calendar region", matched);
+    await routeVisible(page, ".cal-toolbar", "Calendar toolbar", matched);
+    await routeVisible(page, ".cal-body", "Calendar body", matched);
+    for (const title of expected.eventTitles ?? [])
+      await routeText(page, ".cal-body", title, "seeded calendar content", matched);
+  } else if (route === "settings") {
+    await routeVisible(page, ".set2", "Settings region", matched);
+    await routeVisible(
+      page,
+      'nav[aria-label="Settings categories"]',
+      "Settings categories",
+      matched
+    );
+    await routeVisible(page, ".set2__navitem.is-active", "Active settings category", matched);
+    await routeVisible(page, ".set2__pane", "Selected settings pane", matched);
+    await routeText(
+      page,
+      ".set2__pane",
+      expected.settingsPaneTitle ?? "Account & preferences",
+      "selected settings content",
+      matched
+    );
+  } else if (route === "today") {
+    await waitForStablePopulated(page);
+    await routeVisible(page, ".cmd-wrap", "Today content", matched);
+    await routeVisible(page, ".jds-brief--news", "News widget", matched);
+    await routeVisible(page, ".jds-brief--sports", "Sports widget", matched);
+    if (expected.taskTitle)
+      await routeText(page, ".cmd-main", expected.taskTitle, "seeded Today task", matched);
+    if (expected.meetingTitle)
+      await routeText(page, ".cmd-main", expected.meetingTitle, "seeded Today meeting", matched);
+    await waitForWeather(page, route, matched, deadlineAt);
+  } else {
+    await routeVisible(page, ".cmd-wrap", "Evening content", matched);
+    await routeText(page, ".jds-brief", "Evening review", "Evening review", matched);
+    await routeText(page, ".jds-brief", "What happened today", "Evening summary title", matched);
+    await routeVisible(page, ".jds-brief__body", "Rendered evening summary", matched);
+    await routeVisible(page, ".evening-prep__btn", "Prep for tomorrow action", matched);
+    for (const [selector, label] of [
+      ["main h1", "Evening heading"],
+      [".jds-brief__title", "Evening section title"],
+      [".jds-brief__body", "Evening body"]
+    ] as const) {
+      const text = (await page.locator(selector).first().innerText())
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 600);
+      matched.push(`${label}: ${text}`);
+    }
+    if (expected.tomorrowTaskTitle)
+      await routeText(
+        page,
+        ".cmd-main",
+        expected.tomorrowTaskTitle,
+        "seeded tomorrow task",
+        matched
+      );
+    if (expected.tomorrowEventTitle)
+      await routeText(
+        page,
+        ".cmd-main",
+        expected.tomorrowEventTitle,
+        "seeded tomorrow event",
+        matched
+      );
+  }
+  await routeLoadingAbsent(page, route);
+  await waitForFontsReady(page, route, deadlineAt);
+  await routeLoadingAbsent(page, route);
+  await assertFontsReady(page, route);
+  if (route === "evening") {
+    console.log(
+      `[parity-evening-readiness] ${JSON.stringify({
+        route,
+        viewport: await page.evaluate(() => ({ width: innerWidth, height: innerHeight })),
+        url: page.url(),
+        observations: matched.filter((entry) => entry.startsWith("Evening "))
+      })}`
+    );
+  }
+  return { route, matched, loadingAbsent: true, fontsReady: true, elapsedMs: Date.now() - started };
 }
 export function reportLine(r: CaptureResult): string {
   return `| ${r.file} | ${r.size} | ${(r.maskedShare * 100).toFixed(1)}% | ${r.diffPercent.toFixed(2)}% | ${r.sizeMatch ? "size-ok" : "SIZE-MISMATCH"} |`;

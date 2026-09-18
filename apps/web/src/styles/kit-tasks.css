@@ -115,7 +115,15 @@
 }
 .tk-listbtn__chev {
   display: inline-flex;
+  flex: none;
   margin-left: 1px;
+}
+.tk-listbtn__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tk-tagmenu__item .nm {
   flex: 1;

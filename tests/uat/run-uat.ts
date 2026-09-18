@@ -9,7 +9,6 @@ const SPEC_DIR = "tests/uat/specs";
 const LEVELS = new Set<UatSeedLevel>(["bare", "solo-admin", "admin+data", "multi-user"]);
 const CHUNKS = new Set<UatSeedChunk>(["news", "sports", "tasks", "calendar", "notes", "finance"]);
 const CHAT_SCRIPTS = new Set<UatChatScript>(UAT_CHAT_SCRIPTS);
-
 async function resolveSpecPaths(filters: readonly string[]): Promise<string[]> {
   const available = (await readdir(SPEC_DIR))
     .filter((file) => file.endsWith(".uat.spec.ts"))
@@ -61,10 +60,11 @@ async function readUatLevel(specPath: string): Promise<{
   // #1121 Task 4: same trailing-optional-key pattern as withJobSearchFixture above — an id from
   // UAT_CHAT_SCRIPTS, parsed by the same regex rather than a second one.
   chatScript: UatChatScript | undefined;
+  withEspnFixture: boolean;
 }> {
   const source = await readFile(specPath, "utf8");
   const match = source.match(
-    /export\s+const\s+uatLevel\s*=\s*\{\s*level:\s*["']([^"']+)["']\s*,\s*without:\s*\[([^\]]*)\]\s*(?:,\s*withoutNewsJsonBinding:\s*(true|false))?\s*(?:,\s*withJobSearchFixture:\s*(true|false))?\s*(?:,\s*withSportsPublicSourceFixtures:\s*(true|false))?\s*(?:,\s*withWorkflowApprovalFixture:\s*(true|false))?\s*(?:,\s*withActivityOutcomeFixture:\s*(true|false))?\s*(?:,\s*withWorkshopStorageFixture:\s*(true|false))?\s*(?:,\s*chatScript:\s*["']([a-zA-Z0-9_-]+)["'])?\s*\}\s+as const/
+    /export\s+const\s+uatLevel\s*=\s*\{\s*level:\s*["']([^"']+)["']\s*,\s*without:\s*\[([^\]]*)\]\s*(?:,\s*withoutNewsJsonBinding:\s*(true|false))?\s*(?:,\s*withJobSearchFixture:\s*(true|false))?\s*(?:,\s*withSportsPublicSourceFixtures:\s*(true|false))?\s*(?:,\s*withWorkflowApprovalFixture:\s*(true|false))?\s*(?:,\s*withActivityOutcomeFixture:\s*(true|false))?\s*(?:,\s*withWorkshopStorageFixture:\s*(true|false))?\s*(?:,\s*chatScript:\s*["']([a-zA-Z0-9_-]+)["'])?\s*(?:,\s*withEspnFixture:\s*(true|false))?\s*\}\s+as const/
   );
   const level = match?.[1];
   const withoutSource = match?.[2];
@@ -75,6 +75,7 @@ async function readUatLevel(specPath: string): Promise<{
   const withActivityOutcomeFixtureSource = match?.[7];
   const withWorkshopStorageFixtureSource = match?.[8];
   const chatScriptSource = match?.[9];
+  const withEspnFixtureSource = match?.[10];
   if (!level || withoutSource === undefined) {
     throw new Error(`${specPath} must export uatLevel per harness spec §5`);
   }
@@ -99,7 +100,8 @@ async function readUatLevel(specPath: string): Promise<{
     withWorkflowApprovalFixture: withWorkflowApprovalFixtureSource === "true",
     withActivityOutcomeFixture: withActivityOutcomeFixtureSource === "true",
     withWorkshopStorageFixture: withWorkshopStorageFixtureSource === "true",
-    chatScript: chatScriptSource as UatChatScript | undefined
+    chatScript: chatScriptSource as UatChatScript | undefined,
+    withEspnFixture: withEspnFixtureSource === "true"
   };
 }
 
@@ -113,7 +115,8 @@ async function runSpec(specPath: string): Promise<number> {
     withWorkflowApprovalFixture: uatLevel.withWorkflowApprovalFixture,
     withActivityOutcomeFixture: uatLevel.withActivityOutcomeFixture,
     withWorkshopStorageFixture: uatLevel.withWorkshopStorageFixture,
-    chatScript: uatLevel.chatScript
+    chatScript: uatLevel.chatScript,
+    withEspnFixture: uatLevel.withEspnFixture
   });
 
   const onSignal = () => {

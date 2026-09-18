@@ -590,12 +590,10 @@ export interface UatProvisionOptions {
   readonly excludeChunks?: readonly string[];
   readonly withoutNewsJsonBinding?: boolean;
   // #1306 Task 22: opt-in, absent by default — mirrors REAL_CHAT_TOKEN_TRIGGER_ENV's "no-op
-  // unless asked" shape. tests/uat/run-uat.ts threads this from job-search-board.uat.spec.ts's
-  // exported `uatLevel` object. One flag turns on the whole fixture-backed pipeline: the crawl
-  // fetch bypass (jobSearchFixtureBaseUrl -> writeUatEnvFile) AND, per N42/#57, the fake
-  // `openai-compatible` AI provider seeded for scoring (same base URL, threaded into
-  // composeSeedHook below) — both point at the one fixture origin this starts.
+  // unless asked" shape. Job Search enables both the fixture origin and its scoring provider;
+  // ESPN enables only the shared origin for deterministic ESPN responses.
   readonly withJobSearchFixture?: boolean;
+  readonly withEspnFixture?: boolean;
   /** #1909: opt-in recovery fixtures used only by its dedicated live-path spec. */
   readonly withSportsPublicSourceFixtures?: boolean;
   /** #2015: opt-in pending workflow approval used only by its live-path spec. */
@@ -748,9 +746,10 @@ export async function provisionForUat(
     // the new project name. The URL is knowable now — it is just the container's name — which is
     // what lets it be written into the env file the stack starts with, several steps before the
     // container itself exists.
-    const jobSearchFixtureBaseUrl = opts?.withJobSearchFixture
-      ? jobSearchFixtureBaseUrlFor(projectName)
-      : undefined;
+    const jobSearchFixtureBaseUrl =
+      opts?.withJobSearchFixture || opts?.withEspnFixture
+        ? jobSearchFixtureBaseUrlFor(projectName)
+        : undefined;
     let envFile!: UatEnvFile;
     try {
       envFile = writeUatEnvFile({
@@ -832,7 +831,14 @@ export async function provisionForUat(
         console.log(`[uat] starting job-search fixture origin at ${jobSearchFixtureBaseUrl}`);
         await startJobSearchFixtureContainer(projectName);
       }
-      await composeSeedHook(buildSeedHookInput(projectName, level, opts, jobSearchFixtureBaseUrl));
+      await composeSeedHook(
+        buildSeedHookInput(
+          projectName,
+          level,
+          opts,
+          opts?.withJobSearchFixture ? jobSearchFixtureBaseUrl : undefined
+        )
+      );
       const baseURL = `http://127.0.0.1:${webPort}`;
       await waitForReady(`${baseURL}/health/ready`);
       console.log(`[uat] reachable at ${baseURL} after ${Date.now() - overallStart}ms`);
