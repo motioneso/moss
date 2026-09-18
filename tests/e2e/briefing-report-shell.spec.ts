@@ -163,6 +163,55 @@ test("phone disclosure toggles the schedule without sideways scroll", async ({ p
   await expect(page.getByRole("button", { name: "Read the full morning briefing" })).toBeFocused();
 });
 
+test("desktop 200 percent zoom keeps footer reachable without overlap", async ({ page }) => {
+  // A 1440x900 desktop screen at 200 percent browser zoom lays out at
+  // 720x450 CSS px, so emulate with that viewport.
+  await page.clock.setFixedTime(new Date(NOW));
+  await page.setViewportSize({ width: 720, height: 450 });
+  await seed(page, `${PROSE} ${(PROSE + " ").repeat(14)}`);
+  await page.goto("/today");
+  await expect(page.locator(".cmd-wrap")).toBeVisible();
+  await openReader(page);
+
+  const dialog = page.getByRole("dialog");
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    "no sideways scroll at 200 percent zoom"
+  ).toBe(true);
+  const geometry = await page.evaluate(() => {
+    const body = document.querySelector(".brief-reader__body") as HTMLElement;
+    body.scrollTop = body.scrollHeight;
+    const footer = document.querySelector(
+      ".brief-reader--report .brief-reader__footer"
+    ) as HTMLElement;
+    const back = document.querySelector(".brief-reader__footer-back") as HTMLElement;
+    const actions = document.querySelector(".brief-reader__footer-actions") as HTMLElement;
+    const report = document.querySelector(".brief-reader__report") as HTMLElement;
+    const last = report.lastElementChild as HTMLElement;
+    const backRect = back.getBoundingClientRect();
+    const actionsRect = actions.getBoundingClientRect();
+    const footerRect = footer.getBoundingClientRect();
+    return {
+      backVisible: backRect.top >= 0 && backRect.bottom <= window.innerHeight,
+      actionsVisible: actionsRect.top >= 0 && actionsRect.bottom <= window.innerHeight,
+      overlap:
+        backRect.left < actionsRect.right &&
+        actionsRect.left < backRect.right &&
+        backRect.top < actionsRect.bottom &&
+        actionsRect.top < backRect.bottom,
+      lastBottom: last.getBoundingClientRect().bottom,
+      footerTop: footerRect.top
+    };
+  });
+  expect(geometry.backVisible, "Back visible at 200 percent zoom").toBe(true);
+  expect(geometry.actionsVisible, "actions visible at 200 percent zoom").toBe(true);
+  expect(geometry.overlap, "Back and actions do not overlap").toBe(false);
+  expect(geometry.lastBottom).toBeLessThanOrEqual(geometry.footerTop + 1);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});
+
 test("end-scrolled report clears the footer on a short phone screen", async ({ page }) => {
   await page.clock.setFixedTime(new Date(NOW));
   await page.setViewportSize({ width: 375, height: 500 });
