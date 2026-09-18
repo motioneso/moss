@@ -730,8 +730,40 @@ export async function waitForRoutePopulated(
 export function reportLine(r: CaptureResult): string {
   return `| ${r.file} | ${r.size} | ${(r.maskedShare * 100).toFixed(1)}% | ${r.diffPercent.toFixed(2)}% | ${r.sizeMatch ? "size-ok" : "SIZE-MISMATCH"} |`;
 }
-function artifactSha256(path: string): string {
+export function artifactSha256(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+// Finds the first fully-opaque pixel (alpha 255) in raster order. A transparent
+// pixel cannot carry a visible control mutation, so the control must land on
+// opaque bytes to be provable through a real pixel-threshold comparison.
+function firstOpaquePixelOffset(png: PNG): number | null {
+  for (let offset = 3; offset < png.data.length; offset += 4) {
+    if (png.data[offset] === 255) return offset - 3;
+  }
+  return null;
+}
+// Picks the black/white RGB value with the larger contrast against the pixel's
+// own luminance, so the mutation is always visible to a threshold-0.1 compare
+// regardless of the source color.
+function contrastingRgb(r: number, g: number, b: number): number {
+  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  return luminance > 127 ? 0 : 255;
+}
+// Mutates one opaque pixel's RGB to a contrasting black/white value in place,
+// leaving its alpha and every other byte untouched. Throws when the image has
+// no opaque pixel at all, so a control never silently reports a false pass.
+export function applyContrastingControl(png: PNG): void {
+  const offset = firstOpaquePixelOffset(png);
+  if (offset === null)
+    throw new Error("parity case selection: no opaque pixel available for a comparison control");
+  const contrast = contrastingRgb(
+    png.data[offset] ?? 0,
+    png.data[offset + 1] ?? 0,
+    png.data[offset + 2] ?? 0
+  );
+  png.data[offset] = contrast;
+  png.data[offset + 1] = contrast;
+  png.data[offset + 2] = contrast;
 }
 export function writeComparisonControls(
   capturePath: string,
@@ -743,7 +775,7 @@ export function writeComparisonControls(
   const changedPath = join(controlsDir, `${name}.changed.png`);
   const zeroDiffPath = join(controlsDir, `${name}.zero.diff.png`);
   const changedDiffPath = join(controlsDir, `${name}.changed.diff.png`);
-  control.data[0] = control.data[0] === 0 ? 255 : 0;
+  applyContrastingControl(control);
   writeFileSync(changedPath, PNG.sync.write(control));
   const zeroPercent = diffFiles(capturePath, capturePath, zeroDiffPath);
   const changedPercent = diffFiles(capturePath, changedPath, changedDiffPath);

@@ -5,6 +5,14 @@ import { isAbsolute, normalize, posix, win32 } from "node:path";
 import { PNG } from "pngjs";
 
 import type { MockupEntry } from "./mockups.js";
+import {
+  parseRegionSet,
+  parseSizeTransition,
+  type RegionSetComparisonReport,
+  type RegionSetDeclaration,
+  type SizeTransitionComparisonReport,
+  type SizeTransitionDeclaration
+} from "./region-comparison.js";
 
 export const CASE_SELECTION_VERSION = 1 as const;
 // Files whose bytes define the harness identity. The writer hashes exactly
@@ -14,7 +22,8 @@ export const CASE_SELECTION_VERSION = 1 as const;
 export const HARNESS_FILES = [
   "tests/uat/visual-parity/case-selection.ts",
   "tests/uat/visual-parity/capture.ts",
-  "tests/uat/specs/visual-parity.uat.spec.ts"
+  "tests/uat/specs/visual-parity.uat.spec.ts",
+  "tests/uat/visual-parity/region-comparison.ts"
 ] as const;
 
 export function computeHarnessDigest(files: readonly string[] = HARNESS_FILES): string {
@@ -31,6 +40,11 @@ export interface SelectedCase {
   readonly role: ComparisonRole;
   readonly reference?: string;
   readonly base?: string;
+  // Optional regional/transition declarations (VP-REGIONS-R1). Predeclared
+  // geometry only; never inferred from an observed diff. Legacy cases that
+  // declare neither keep the pre-existing whole-image behavior unchanged.
+  readonly regions?: RegionSetDeclaration;
+  readonly sizeTransition?: SizeTransitionDeclaration;
 }
 
 export interface SelectedGuard {
@@ -113,6 +127,10 @@ export interface CaptureAccounting {
     readonly referenceSha256?: string;
     readonly zeroControlPercent: number;
     readonly changedControlPercent: number;
+    // Present only when this case declared regions/sizeTransition: the exact
+    // report from the shared comparator, not a re-derived summary.
+    readonly regionReport?: RegionSetComparisonReport;
+    readonly transitionReport?: SizeTransitionComparisonReport;
   };
 }
 
@@ -179,6 +197,31 @@ export function guardIdentity(value: Pick<SelectedGuard, "route" | "width">): st
   return `guard:${value.route}@${value.width}`;
 }
 
+// Looks up the declaration for one capture in selected mode; undefined in
+// default mode. Throws if selected mode has no matching declaration, so an
+// undeclared capture can never silently skip accounting.
+export function resolveSelectedCase(
+  selection: CaseSelection,
+  dir: string,
+  name: string
+): SelectedCase | undefined {
+  if (selection.mode !== "selected") return undefined;
+  const found = selection.cases.find((c) => c.dir === dir && c.name === name);
+  if (!found) fail(`undeclared capture ${dir}/${name}`);
+  return found;
+}
+
+// A whole-image reference-owned case has no complement and keeps the legacy
+// whole-capture diff assertion; regions/sizeTransition cases record their own
+// pass/fail in the comparison report instead.
+export function isWholeImageOwnership(declaration: SelectedCase): boolean {
+  return (
+    declaration.role === "owned-region/reference" &&
+    !declaration.regions &&
+    !declaration.sizeTransition
+  );
+}
+
 export function statePrerequisites(state: string): readonly string[] {
   if (state.startsWith("today-morning")) return ["clock:morning", "today:populated"];
   if (state === "today-evening" || state === "today-evening-saved")
@@ -222,6 +265,16 @@ function object(value: unknown, label: string): Record<string, unknown> {
 function string(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim() === "") fail(`${label} must be nonempty`);
   return value;
+}
+
+// Re-labels a region/transition parse failure with the owning case's field
+// path, so a bad declaration still points at the exact case that made it.
+function wrapFail<T>(run: () => T, label: string): T {
+  try {
+    return run();
+  } catch (error) {
+    fail(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function role(value: unknown, label: string): ComparisonRole {
@@ -293,12 +346,22 @@ function parseCase(value: unknown, index: number): SelectedCase {
     input.base === undefined
       ? undefined
       : safeRelativePath(string(input.base, `cases[${index}].base`), `cases[${index}].base`);
+  const regions =
+    input.regions === undefined
+      ? undefined
+      : wrapFail(() => parseRegionSet(input.regions), `cases[${index}].regions`);
+  const sizeTransition =
+    input.sizeTransition === undefined
+      ? undefined
+      : wrapFail(() => parseSizeTransition(input.sizeTransition), `cases[${index}].sizeTransition`);
   const selected = {
     dir: string(input.dir, `cases[${index}].dir`),
     name: string(input.name, `cases[${index}].name`),
     role: role(input.role, `cases[${index}].role`),
     ...(reference === undefined ? {} : { reference }),
-    ...(base === undefined ? {} : { base })
+    ...(base === undefined ? {} : { base }),
+    ...(regions === undefined ? {} : { regions }),
+    ...(sizeTransition === undefined ? {} : { sizeTransition })
   };
   if (selected.role === "measurement" && selected.base !== undefined)
     fail(`cases[${index}] measurement cannot declare a base comparison`);
