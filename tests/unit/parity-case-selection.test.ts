@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
@@ -21,6 +21,10 @@ import {
   type SelectedGuard,
   type SetupActionHandlers
 } from "../../tests/uat/visual-parity/case-selection.js";
+import {
+  buildRegionRunRecord,
+  parseRegionSet
+} from "../../tests/uat/visual-parity/region-comparison.js";
 
 const guards: readonly SelectedGuard[] = [
   { route: "tasks", path: "/tasks", width: 1440, role: "base-guard" },
@@ -374,8 +378,7 @@ describe("visual parity case selection", () => {
         record.push("driveState");
       }
     };
-    // Dispatch is faithful: the recorded browser actions equal the plan, so a
-    // skipped or reordered recipe step fails the test instead of passing silently.
+    // Dispatch is faithful: a skipped or reordered recipe step fails this instead of passing silently.
     for (const state of [
       "today-morning-news",
       "today-evening",
@@ -398,9 +401,8 @@ describe("visual parity case selection", () => {
     await runSetupActions("today-evening", handlers);
     expect(record).toEqual(["openToday:evening"]);
     await expect(runSetupActions("unknown-state", handlers)).rejects.toThrow("unsupported");
-    // Fixed expectation, not a re-derivation from selectedSetupActions: the
-    // evening-saved recipe must wait for the saved-state confirmation after
-    // clicking Save, or a capture can be taken before the UI shows it saved.
+    // Fixed expectation, not derived from selectedSetupActions: the evening-saved recipe must
+    // wait for the saved-state confirmation after clicking Save, or a capture can beat the UI.
     record.length = 0;
     await runSetupActions("evening-saved", handlers);
     expect(record[record.length - 1]).toBe("expectSavedText");
@@ -569,8 +571,7 @@ describe("visual parity case selection", () => {
   it("binds element crops to the viewport and reference bytes to the declaration", () => {
     const { root, manifest, check, capture, elementCapture } = createValidManifestFixture();
     expect(() => check(manifest)).not.toThrow();
-    // Swapped reference bytes cannot pass: the recorded hash must match the
-    // declared reference file, not just name it.
+    // Swapped reference bytes cannot pass: the recorded hash must match the declared file, not just name it.
     writeFileSync(join(root, "refs/r.png"), "forged\n");
     expect(() => check(manifest)).toThrow("reference bytes changed");
     writeFileSync(join(root, "refs/r.png"), "refs/r.png\n");
@@ -584,8 +585,7 @@ describe("visual parity case selection", () => {
         ]
       })
     ).toThrow("reference bytes changed");
-    // The reference comparison diff must be inventoried and checksummed too,
-    // not silently dropped from a completed run's declared output.
+    // The reference comparison diff must be inventoried and checksummed too, not dropped.
     const { referenceDiff: _referenceDiff, ...artifactsWithoutReferenceDiff } = capture.artifacts;
     expect(() =>
       check({
@@ -611,8 +611,7 @@ describe("visual parity case selection", () => {
         ]
       })
     ).toThrow("artifact checksum changed");
-    // An element crop outside the viewport cannot pass: live boxes stay bound
-    // even though their exact pixels are not predeclared.
+    // An element crop outside the viewport cannot pass: live boxes stay bound even though their exact pixels are not predeclared.
     expect(() =>
       check({
         ...manifest,
@@ -622,9 +621,8 @@ describe("visual parity case selection", () => {
         ]
       })
     ).toThrow("exceeds viewport");
-    // An altered but still in-bounds element crop cannot pass either: the
-    // reported width/height must bind to the pixels actually captured, not
-    // just fit inside the viewport.
+    // An altered but still in-bounds element crop cannot pass either: reported width/height
+    // must bind to the pixels actually captured, not just fit inside the viewport.
     expect(() =>
       check({
         ...manifest,
@@ -806,5 +804,189 @@ describe("visual parity case selection", () => {
     );
     expect(selected.entries).toHaveLength(2);
     expect(legacy.entries.length).not.toBe(selected.entries.length);
+  });
+
+  function createRegionManifestFixture() {
+    const fixture = createValidManifestFixture();
+    const { root, writeArtifact, selection, manifest, capture, elementCapture } = fixture;
+    const regionDeclaration = parseRegionSet({
+      imageSize: { width: 4, height: 4 },
+      regions: [
+        { id: "owned", purpose: "reference-owned", rect: { x: 0, y: 0, width: 2, height: 2 } }
+      ]
+    });
+    // Complement pixels match everywhere so the base compare passes; the owned region differs
+    // from base (proving base isn't a copy of the capture) but matches the reference instead.
+    const pngWithRegion = (
+      complementRgba: [number, number, number, number],
+      regionRgba: [number, number, number, number]
+    ) => {
+      const png = new PNG({ width: 4, height: 4 });
+      for (let y = 0; y < 4; y += 1)
+        for (let x = 0; x < 4; x += 1) {
+          const i = (4 * y + x) * 4;
+          const inRegion = x < 2 && y < 2;
+          const rgba = inRegion ? regionRgba : complementRgba;
+          png.data[i] = rgba[0];
+          png.data[i + 1] = rgba[1];
+          png.data[i + 2] = rgba[2];
+          png.data[i + 3] = rgba[3];
+        }
+      return PNG.sync.write(png);
+    };
+    const maskedArtifact = writeArtifact(
+      "captures/region-a.png",
+      pngWithRegion([10, 20, 30, 255], [40, 50, 60, 255])
+    );
+    const baseArtifact = writeArtifact(
+      "refs/region-base.png",
+      pngWithRegion([10, 20, 30, 255], [99, 98, 97, 255])
+    );
+    const referenceArtifact = writeArtifact(
+      "refs/region-ref.png",
+      pngWithRegion([1, 1, 1, 255], [40, 50, 60, 255])
+    );
+    const references = new Map([["owned", join(root, "refs/region-ref.png")]]);
+    const freshRecord = buildRegionRunRecord(
+      capture.identity,
+      regionDeclaration,
+      join(root, "captures/region-a.png"),
+      join(root, "refs/region-base.png"),
+      references,
+      []
+    );
+    const caseWithRegions = {
+      ...selection.cases[0]!,
+      regions: regionDeclaration,
+      reference: "refs/region-ref.png",
+      base: "refs/region-base.png"
+    };
+    const selectionWithRegions = { ...selection, cases: [caseWithRegions, selection.cases[1]!] };
+    const captureWithRegions = {
+      ...capture,
+      artifacts: { ...capture.artifacts, masked: maskedArtifact },
+      comparison: {
+        ...capture.comparison,
+        expectedReference: "refs/region-ref.png",
+        baseSha256: baseArtifact.sha256,
+        referenceSha256: referenceArtifact.sha256,
+        regionReport: freshRecord.report
+      }
+    };
+    const manifestWithRegions = { ...manifest, captures: [captureWithRegions, elementCapture] };
+    const check = (value: typeof manifestWithRegions) =>
+      validateRunManifest(selectionWithRegions, value, {
+        ...PINNED_OPTIONS(root),
+        expectedBase: "e".repeat(40)
+      });
+    return {
+      root,
+      writeArtifact,
+      selectionWithRegions,
+      manifestWithRegions,
+      captureWithRegions,
+      elementCapture,
+      regionDeclaration,
+      freshRecord,
+      check
+    };
+  }
+
+  it("recomputes a declared region comparison from the actual base/reference bytes instead of trusting the recorded report", () => {
+    const { manifestWithRegions, captureWithRegions, elementCapture, check, freshRecord } =
+      createRegionManifestFixture();
+    // A correctly recorded report, matching a fresh recompute, passes.
+    expect(() => check(manifestWithRegions)).not.toThrow();
+    // A forged report claiming a different outcome than the real bytes produce must be rejected.
+    const forgedReport = {
+      ...freshRecord.report,
+      regions: [{ ...freshRecord.report.regions[0]!, purpose: "behavior-changed" as const }]
+    };
+    expect(() =>
+      check({
+        ...manifestWithRegions,
+        captures: [
+          {
+            ...captureWithRegions,
+            comparison: { ...captureWithRegions.comparison, regionReport: forgedReport }
+          },
+          elementCapture
+        ]
+      })
+    ).toThrow("does not match a fresh recompute of the actual bytes");
+    // A capture declaring regions but never recording a region report must be rejected.
+    const { regionReport: _dropped, ...comparisonWithoutReport } = captureWithRegions.comparison;
+    expect(() =>
+      check({
+        ...manifestWithRegions,
+        captures: [
+          {
+            ...captureWithRegions,
+            comparison: comparisonWithoutReport as typeof captureWithRegions.comparison
+          },
+          elementCapture
+        ]
+      })
+    ).toThrow("region comparison report not recorded");
+  });
+
+  it("rejects a declared base that is byte-identical to the capture itself", () => {
+    const { root, manifestWithRegions, check, writeArtifact } = createRegionManifestFixture();
+    // Overwrite the declared base file so it is now the exact same bytes as
+    // the masked capture: a case cannot prove anything by comparing itself
+    // to itself.
+    const maskedBytes = readFileSync(join(root, "captures/region-a.png"));
+    writeArtifact("refs/region-base.png", maskedBytes);
+    expect(() => check(manifestWithRegions)).toThrow(/self-comparison/);
+  });
+
+  it("rejects a case that declares both regions and a size transition", () => {
+    expect(() =>
+      parseCaseSelection({
+        version: 1,
+        cases: [
+          {
+            dir: MOCKUPS[0]!.dir,
+            name: MOCKUPS[0]!.name,
+            role: "owned-region/reference",
+            reference: "refs/r.png",
+            base: "refs/b.png",
+            regions: {
+              imageSize: { width: 4, height: 4 },
+              regions: [
+                {
+                  id: "owned",
+                  purpose: "reference-owned",
+                  rect: { x: 0, y: 0, width: 2, height: 2 }
+                }
+              ]
+            },
+            sizeTransition: {
+              oldSize: { width: 4, height: 4 },
+              targetSize: { width: 4, height: 6 },
+              expectedGeometry: { x: 0, y: 0 },
+              regions: [
+                {
+                  id: "t",
+                  kind: "translate",
+                  purpose: "behavior-changed",
+                  behaviorEvidence: "manual",
+                  baseRect: { x: 0, y: 0, width: 4, height: 4 },
+                  headRect: { x: 0, y: 0, width: 4, height: 4 }
+                },
+                {
+                  id: "grown",
+                  kind: "new-band",
+                  purpose: "behavior-changed",
+                  behaviorEvidence: "manual",
+                  headRect: { x: 0, y: 4, width: 4, height: 2 }
+                }
+              ]
+            }
+          }
+        ],
+        guards
+      })
+    ).toThrow("cannot declare both regions and sizeTransition");
   });
 });

@@ -654,7 +654,8 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
     );
     expect(r.maskedShare).toBeLessThanOrEqual(0.35);
     const selectedDeclaration = resolveSelectedCase(CASE_SELECTION, entry.dir, entry.name);
-    // A declared size transition replaces this legacy check with its own exact target-size assertion.
+    // A declared size transition replaces this legacy check with its own exact target-size
+    // and capture-position assertion below.
     if (!selectedDeclaration?.sizeTransition) {
       const declared = DECLARED_SIZE_MISMATCHES.find(({ name }) => name === entry.name);
       if (declared) {
@@ -663,6 +664,20 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
       } else {
         expect(r.sizeMatch, `${entry.name} unexpected mismatch`).toBe(true);
       }
+    } else {
+      const { targetSize, expectedGeometry } = selectedDeclaration.sizeTransition;
+      expect(
+        r.size,
+        `${entry.name} captured size must match the declared target size exactly`
+      ).toBe(`${targetSize.width}x${targetSize.height}`);
+      expect(
+        Math.abs(r.crop.x - expectedGeometry.x),
+        `${entry.name} captured crop x (${r.crop.x}) must be within 2px of the declared expected x (${expectedGeometry.x})`
+      ).toBeLessThanOrEqual(2);
+      expect(
+        Math.abs(r.crop.y - expectedGeometry.y),
+        `${entry.name} captured crop y (${r.crop.y}) must be within 2px of the declared expected y (${expectedGeometry.y})`
+      ).toBeLessThanOrEqual(2);
     }
     if (CASE_SELECTION.mode === "default" && OWNED.has(entry.name))
       expect(r.diffPercent).toBeLessThanOrEqual(0.5);

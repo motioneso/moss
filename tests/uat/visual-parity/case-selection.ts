@@ -6,6 +6,8 @@ import { PNG } from "pngjs";
 
 import type { MockupEntry } from "./mockups.js";
 import {
+  buildRegionRunRecord,
+  buildTransitionRunRecord,
   parseRegionSet,
   parseSizeTransition,
   type RegionSetComparisonReport,
@@ -23,7 +25,8 @@ export const HARNESS_FILES = [
   "tests/uat/visual-parity/case-selection.ts",
   "tests/uat/visual-parity/capture.ts",
   "tests/uat/specs/visual-parity.uat.spec.ts",
-  "tests/uat/visual-parity/region-comparison.ts"
+  "tests/uat/visual-parity/region-comparison.ts",
+  "tests/uat/visual-parity/region-schema.ts"
 ] as const;
 
 export function computeHarnessDigest(files: readonly string[] = HARNESS_FILES): string {
@@ -369,6 +372,8 @@ function parseCase(value: unknown, index: number): SelectedCase {
     fail(`cases[${index}] owned-region/reference requires reference and base artifacts`);
   if (selected.role === "base-guard" && !selected.base)
     fail(`cases[${index}] base-guard requires a base artifact`);
+  if (selected.regions !== undefined && selected.sizeTransition !== undefined)
+    fail(`cases[${index}] cannot declare both regions and sizeTransition`);
   return selected;
 }
 
@@ -742,6 +747,78 @@ export function validateRunManifest(
     }
     if (capture.readiness.length === 0 || capture.populatedWidgets.length === 0)
       fail(`capture evidence is incomplete for ${capture.identity}`);
+    // A case that declares regions or a size transition must prove its
+    // comparison actually ran against the real declared base, not just claim
+    // a report object. We never trust the recorded report as its own proof.
+    // Instead we re-read the declared base file's bytes from disk right now
+    // and re-run the whole comparison, then require the fresh result to
+    // match the recorded one exactly. There is no separate "base manifest"
+    // artifact to check the base against — recomputing hash-for-hash from
+    // the actual declared base file already binds provenance, because a
+    // forged or stale base would either fail to exist, or would exist but
+    // produce a different report than the one that was recorded.
+    if (declaration.regions || declaration.sizeTransition) {
+      if (!declaration.base)
+        fail(`capture with regions/sizeTransition requires a base: ${capture.identity}`);
+      const maskedAbsolute = `${options.artifactRoot}/${capture.artifacts.masked.path}`;
+      const baseAbsolute = `${options.artifactRoot}/${declaration.base}`;
+      if (!existsSync(baseAbsolute)) fail(`missing declared baseline: ${capture.identity}`);
+      const baseActual = createHash("sha256").update(readFileSync(baseAbsolute)).digest("hex");
+      // A capture can never prove anything by being compared to itself: the
+      // declared base must be different bytes from the capture under test.
+      if (baseActual === capture.artifacts.masked.sha256)
+        fail(
+          `declared base is identical to the capture itself (self-comparison): ${capture.identity}`
+        );
+      const referenceAbsolute = declaration.reference
+        ? `${options.artifactRoot}/${declaration.reference}`
+        : undefined;
+      if (declaration.regions) {
+        if (!capture.comparison.regionReport)
+          fail(`region comparison report not recorded: ${capture.identity}`);
+        const referencePaths = new Map<string, string>();
+        if (referenceAbsolute)
+          for (const region of declaration.regions.regions)
+            if (region.purpose === "reference-owned")
+              referencePaths.set(region.id, referenceAbsolute);
+        const fresh = buildRegionRunRecord(
+          capture.identity,
+          declaration.regions,
+          maskedAbsolute,
+          baseAbsolute,
+          referencePaths,
+          []
+        );
+        if (JSON.stringify(fresh.report) !== JSON.stringify(capture.comparison.regionReport))
+          fail(
+            `recorded region comparison does not match a fresh recompute of the actual bytes: ${capture.identity}`
+          );
+      }
+      if (declaration.sizeTransition) {
+        if (!capture.comparison.transitionReport)
+          fail(`size transition comparison report not recorded: ${capture.identity}`);
+        const referencePaths = new Map<string, string>();
+        if (referenceAbsolute)
+          for (const region of declaration.sizeTransition.regions)
+            if (
+              region.referenceRect ||
+              (region.kind === "new-band" && region.purpose === "reference-owned")
+            )
+              referencePaths.set(region.id, referenceAbsolute);
+        const fresh = buildTransitionRunRecord(
+          capture.identity,
+          declaration.sizeTransition,
+          maskedAbsolute,
+          baseAbsolute,
+          referencePaths,
+          []
+        );
+        if (JSON.stringify(fresh.report) !== JSON.stringify(capture.comparison.transitionReport))
+          fail(
+            `recorded size transition comparison does not match a fresh recompute of the actual bytes: ${capture.identity}`
+          );
+      }
+    }
     if (declaration.role === "measurement" && capture.comparison.outcome !== "control")
       fail(`measurement cannot claim parity: ${capture.identity}`);
     if (declaration.role === "measurement" && capture.comparison.baseSha256)
