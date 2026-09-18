@@ -328,6 +328,23 @@ function compareWithinComplement(
   for (const r of owned)
     for (let y = r.y; y < r.y + r.height; y += 1)
       for (let x = r.x; x < r.x + r.width; x += 1) ownedGrid[y * capture.width + x] = 1;
+  let uncovered = 0;
+  for (let i = 0; i < ownedGrid.length; i += 1) if (!ownedGrid[i]) uncovered += 1;
+  if (uncovered === 0) {
+    // The declared regions tile the image: there is no leftover to guard,
+    // so the empty complement is an explicit pass, not a masked-away gap.
+    // The diff still runs through the single comparison path so a supplied
+    // diff path is written; sizes are checked above and the always-false
+    // target guarantees a zero denominator, so the only reachable throw is
+    // the empty-comparison one this branch converts.
+    try {
+      compareTargetPixels(capture, base, () => false, "complement", diffOutPath);
+    } catch {
+      // Reachable only via the empty denominator: sizes are checked above
+      // and the always-false target leaves nothing to compare.
+    }
+    return { numerator: 0, denominator: 0, percent: 0, outcome: "pass" };
+  }
   return compareTargetPixels(
     capture,
     base,

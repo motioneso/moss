@@ -201,6 +201,65 @@ describe("region comparison against real fixtures", () => {
     ).toThrow("no comparable pixels");
   });
 
+  it("passes an empty complement when regions tile the whole image", () => {
+    const declaration: RegionSetDeclaration = {
+      imageSize: { width: WIDTH, height: HEIGHT },
+      regions: [
+        { id: "left", purpose: "reference-owned", rect: { x: 0, y: 0, width: 4, height: HEIGHT } },
+        { id: "right", purpose: "reference-owned", rect: { x: 4, y: 0, width: 4, height: HEIGHT } }
+      ]
+    };
+    const capture = solidPng(WIDTH, HEIGHT, [10, 20, 30, 255]);
+    const reference = solidPng(WIDTH, HEIGHT, [10, 20, 30, 255]);
+    const base = solidPng(WIDTH, HEIGHT, [10, 20, 30, 255]);
+    const references = new Map([
+      ["left", reference],
+      ["right", reference]
+    ]);
+    const dir = tempDir();
+    const complementDiffPath = join(dir, "complement.diff.png");
+    const report = compareRegionSet(declaration, capture, base, references, [], {
+      regions: new Map([
+        ["left", join(dir, "left.diff.png")],
+        ["right", join(dir, "right.diff.png")]
+      ]),
+      complement: complementDiffPath
+    });
+    expect(report.regions[0]!.result!.outcome).toBe("pass");
+    expect(report.regions[1]!.result!.outcome).toBe("pass");
+    expect(report.complement).toEqual({
+      numerator: 0,
+      denominator: 0,
+      percent: 0,
+      outcome: "pass"
+    });
+    const complementDiffPng = PNG.sync.read(readFileSync(complementDiffPath));
+    expect(complementDiffPng.width).toBe(WIDTH);
+    expect(complementDiffPng.height).toBe(HEIGHT);
+  });
+
+  it("still fails when masks swallow the whole leftover gap", () => {
+    const declaration: RegionSetDeclaration = {
+      imageSize: { width: WIDTH, height: HEIGHT },
+      regions: [
+        { id: "left", purpose: "reference-owned", rect: { x: 0, y: 0, width: 4, height: HEIGHT } },
+        { id: "right", purpose: "reference-owned", rect: { x: 6, y: 0, width: 2, height: HEIGHT } }
+      ]
+    };
+    const capture = solidPng(WIDTH, HEIGHT, [10, 20, 30, 255]);
+    const reference = solidPng(WIDTH, HEIGHT, [10, 20, 30, 255]);
+    const base = solidPng(WIDTH, HEIGHT, [10, 20, 30, 255]);
+    const references = new Map([
+      ["left", reference],
+      ["right", reference]
+    ]);
+    expect(() =>
+      compareRegionSet(declaration, capture, base, references, [
+        { x: 4, y: 0, width: 2, height: HEIGHT }
+      ])
+    ).toThrow("no comparable pixels");
+  });
+
   it("compares full-image reference ownership without any complement, even with a base difference", () => {
     const declaration: RegionSetDeclaration = {
       imageSize: { width: WIDTH, height: HEIGHT },
