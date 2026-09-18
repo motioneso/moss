@@ -27,6 +27,9 @@ describe("AssistantToolGateway", () => {
   let confirmations: ConfirmationRegistry;
   let emitted: { chatSessionId: string; record: GatewaySessionRecord }[];
   let gateway: AssistantToolGateway;
+  let createGateway: (
+    overrides?: Partial<ConstructorParameters<typeof AssistantToolGateway>[0]>
+  ) => AssistantToolGateway;
 
   function firstActionRequest(): { actionRequestId: string; toolName: string; summary: string } {
     const entry = emitted[0];
@@ -70,18 +73,21 @@ describe("AssistantToolGateway", () => {
     emitted = sink;
     tokens = new SessionTokenRegistry();
     confirmations = new ConfirmationRegistry();
-    gateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [exampleToolModule],
-      repository,
-      runner,
-      tokens,
-      confirmations,
-      notifier: { emit: (chatSessionId, record) => sink.push({ chatSessionId, record }) },
-      // Generous so the approve always lands before the await times out, even under heavy
-      // full-suite DB load (vitest runs integration files concurrently). The post-timeout
-      // no-op path is covered separately by the 20ms `fastTimeoutGateway` test below.
-      confirmTimeoutMs: 30_000
-    });
+    createGateway = (overrides = {}) =>
+      new AssistantToolGateway({
+        resolveActiveModules: async () => [exampleToolModule],
+        repository,
+        runner,
+        tokens,
+        confirmations,
+        notifier: { emit: (chatSessionId, record) => sink.push({ chatSessionId, record }) },
+        // Generous so the approve always lands before the await times out, even under heavy
+        // full-suite DB load (vitest runs integration files concurrently). The post-timeout
+        // no-op path is covered separately by the 20ms `fastTimeoutGateway` test below.
+        confirmTimeoutMs: 30_000,
+        ...overrides
+      });
+    gateway = createGateway();
   });
 
   afterEach(async () => {
@@ -445,14 +451,8 @@ describe("AssistantToolGateway", () => {
         tool.name === "example.destroy" ? { ...tool, executionPolicy: "auto" as const } : tool
       )
     };
-    const destructiveGateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [destructiveAutoModule],
-      repository,
-      runner,
-      tokens,
-      confirmations,
-      notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
-      confirmTimeoutMs: 30_000
+    const destructiveGateway = createGateway({
+      resolveActiveModules: async () => [destructiveAutoModule]
     });
     const token = tokens.mint({
       actorUserId: ids.userA,
@@ -469,16 +469,7 @@ describe("AssistantToolGateway", () => {
   });
 
   it("keeps destructive tools behind confirmation under YOLO (#2419)", async () => {
-    const yoloGateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [exampleToolModule],
-      repository,
-      runner,
-      tokens,
-      confirmations,
-      notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
-      confirmTimeoutMs: 30_000,
-      yoloMode: async () => true
-    });
+    const yoloGateway = createGateway({ yoloMode: async () => true });
     const token = tokens.mint({
       actorUserId: ids.userA,
       chatSessionId: "s-yolo-destructive",
@@ -503,16 +494,7 @@ describe("AssistantToolGateway", () => {
   });
 
   it("auto-runs eligible write tools under YOLO and records yolo audit mode", async () => {
-    const yoloGateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [exampleToolModule],
-      repository,
-      runner,
-      tokens,
-      confirmations,
-      notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
-      confirmTimeoutMs: 30_000,
-      yoloMode: async () => true
-    });
+    const yoloGateway = createGateway({ yoloMode: async () => true });
     const token = tokens.mint({
       actorUserId: ids.userA,
       chatSessionId: "s-yolo",
@@ -540,16 +522,7 @@ describe("AssistantToolGateway", () => {
   });
 
   it("falls back to confirmation when YOLO resolver is false", async () => {
-    const gatedGateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [exampleToolModule],
-      repository,
-      runner,
-      tokens,
-      confirmations,
-      notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
-      confirmTimeoutMs: 30_000,
-      yoloMode: async () => false
-    });
+    const gatedGateway = createGateway({ yoloMode: async () => false });
     const token = tokens.mint({
       actorUserId: ids.userA,
       chatSessionId: "s-yolo-off",
@@ -889,14 +862,8 @@ describe("AssistantToolGateway", () => {
         }
       ]
     };
-    const excludedGateway = new AssistantToolGateway({
+    const excludedGateway = createGateway({
       resolveActiveModules: async () => [excludedModule],
-      repository,
-      runner,
-      tokens,
-      confirmations,
-      notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
-      confirmTimeoutMs: 30_000,
       yoloMode: async () => true
     });
 
@@ -964,14 +931,8 @@ describe("AssistantToolGateway", () => {
 
   it("YOLO still requires confirmation for confirm_always destructive and per-call-confirm tools (#2419)", async () => {
     const calls: string[] = [];
-    const yoloGateway = new AssistantToolGateway({
+    const yoloGateway = createGateway({
       resolveActiveModules: async () => [confirmMechanismsModule(calls)],
-      repository,
-      runner,
-      tokens,
-      confirmations,
-      notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
-      confirmTimeoutMs: 30_000,
       yoloMode: async () => true
     });
     const token = tokens.mint({
@@ -998,14 +959,8 @@ describe("AssistantToolGateway", () => {
 
   it("YOLO off still confirms confirm_always destructive and per-call-confirm tools", async () => {
     const calls: string[] = [];
-    const gatedGateway = new AssistantToolGateway({
+    const gatedGateway = createGateway({
       resolveActiveModules: async () => [confirmMechanismsModule(calls)],
-      repository,
-      runner,
-      tokens,
-      confirmations,
-      notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
-      confirmTimeoutMs: 30_000,
       yoloMode: async () => false
     });
     const token = tokens.mint({
