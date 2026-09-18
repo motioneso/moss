@@ -1,0 +1,146 @@
+{
+  "issue": 38,
+  "slug": "2026-09-18",
+  "weekOf": "September 14, 2026",
+  "summary": "Today transforms into a prepared day from evening to morning, featuring a new editorial schedule, morning briefings, and a collapsible navigation rail.",
+  "intro": "Today received its biggest evolution yet. Rather than just showing a list of disconnected cards, Today now guides your day from evening planning to morning briefing. A rich green hero banner welcomes you with Moss's daily assessment, weather, and schedule timeline, backed by an evening reflection flow and one-click morning briefing review. Desktop users also get a collapsible navigation rail for more focus.",
+  "headline": {
+    "title": "A prepared day, from evening to morning",
+    "body": [
+      "Today is now a complete day-planning companion. Each evening, a guided four-step flow helps you reflect on the day, gauge your energy, choose tomorrow's focus, and draft a schedule. Overnight changes are tracked automatically.",
+      "In the morning, a dedicated briefing report presents Moss's assessment, summarizes your commitments, and lets you review proposed changes with a single 'Accept all' or adjust them block by block. The main Today page features a bold dark green hero band, an editorial timeline with distinct committed and proposed blocks, a quick-action rail, and dedicated desks for News and Sports."
+    ],
+    "prs": [
+      2464,
+      2469,
+      2471,
+      2492,
+      2494,
+      2497,
+      2498,
+      2499,
+      2500,
+      2501,
+      2502,
+      2511,
+      2512,
+      2513,
+      2514,
+      2517,
+      2519,
+      2520
+    ]
+  },
+  "sections": [
+    {
+      "title": "New",
+      "items": [
+        {
+          "title": "Collapsible desktop navigation rail",
+          "body": "A collapse button beside the Moss logo folds the desktop sidebar into a slim icon-only rail and remembers your preference across reloads, giving more breathing room to your daily workspace.",
+          "prs": [
+            2509,
+            2525
+          ]
+        },
+        {
+          "title": "Evening planning flow",
+          "body": "Plan tomorrow with a guided evening flow that steps through reflection, capacity, priority commitments, and schedule review before saving your plan draft.",
+          "prs": [
+            2500,
+            2501,
+            2519,
+            2520
+          ]
+        },
+        {
+          "title": "Morning briefing reader and quick plan acceptance",
+          "body": "Start your morning with a dedicated briefing report that highlights overnight changes and lets you accept proposed plan additions with one click or fine-tune them individually.",
+          "prs": [
+            2497,
+            2498,
+            2499,
+            2514
+          ]
+        },
+        {
+          "title": "Revision-protected day plans",
+          "body": "Moss now saves day plans in calendar storage with full revision tracking, allowing draft schedules to be prepared and reconciled without risking accidental overwrites.",
+          "prs": [
+            2464,
+            2469,
+            2471
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Improved",
+      "items": [
+        {
+          "title": "Editorial timeline and Today hero band",
+          "body": "The Today page opens with an assessment hero band showing prepared status, summary, and weather, leading into a numbered timeline distinguishing committed events from proposed blocks.",
+          "prs": [
+            2511,
+            2512
+          ]
+        },
+        {
+          "title": "News and sports editorial desks on Today",
+          "body": "News and sports on Today now read as curated editorial desks ('The wider world' and 'From the sidelines') with side-by-side desktop layouts and compact score recaps.",
+          "prs": [
+            2488,
+            2513
+          ]
+        },
+        {
+          "title": "Grounded briefings with clear sources",
+          "body": "Morning and evening briefings pull directly from your selected news and sports sources, providing verified context, compact scores, and clear provenance.",
+          "prs": [
+            2485,
+            2486,
+            2487,
+            2490
+          ]
+        },
+        {
+          "title": "Design-fidelity typography",
+          "body": "Moss now bundles self-hosted Archivo font weights for clean, authentic semibold headings and consistent theme palette tokens.",
+          "prs": [
+            2504
+          ]
+        }
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "text": "Moss automatically repairs older shared CLI installations during startup so multiple accounts share tools seamlessly.",
+      "prs": [
+        2458
+      ]
+    },
+    {
+      "text": "Codex sign-in issues are clearly distinguished from network provider failures, with actionable administrator recovery steps.",
+      "prs": [
+        2456
+      ]
+    },
+    {
+      "text": "Calendar plan updates reserve changes in durable batches before syncing, with automatic recovery if a connection is interrupted.",
+      "prs": [
+        2475,
+        2477,
+        2478,
+        2479
+      ]
+    },
+    {
+      "text": "Briefing reports and schedule wrappers stack cleanly on mobile screens with full keyboard and screen reader accessibility parity.",
+      "prs": [
+        2496,
+        2514
+      ]
+    }
+  ]
+}
