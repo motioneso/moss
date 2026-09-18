@@ -4,6 +4,7 @@ import { buildSanitizedCliEnv } from "../../packages/cli-runner/src/sanitized-en
 import {
   buildChildEnv,
   buildStartupPlan,
+  resolveMcpServerUrl,
   runtimeUidGid,
   type ChildRole
 } from "../../scripts/start-jarv1s.js";
@@ -203,5 +204,57 @@ describe("start-jarv1s startup plan", () => {
 
     expect(env.JARVIS_APP_DATABASE_URL).toBe("postgres://app");
     expect(env.BETTER_AUTH_SECRET).toBe("auth-secret");
+  });
+
+  it.each<ChildRole>(["api", "worker", "cli-runner"])(
+    "%s aligns loopback JARVIS_MCP_SERVER_URL port to PORT (#2345)",
+    (role) => {
+      const env = buildChildEnv(role, {
+        PORT: "4100",
+        JARVIS_MCP_SERVER_URL: "http://127.0.0.1:3000/api/mcp"
+      } as NodeJS.ProcessEnv);
+
+      expect(env.JARVIS_MCP_SERVER_URL).toBe("http://127.0.0.1:4100/api/mcp");
+    }
+  );
+
+  it.each<ChildRole>(["api", "worker", "cli-runner"])(
+    "%s falls back to loopback URL with configured PORT when JARVIS_MCP_SERVER_URL is unset",
+    (role) => {
+      const env = buildChildEnv(role, {
+        PORT: "4200"
+      } as NodeJS.ProcessEnv);
+
+      expect(env.JARVIS_MCP_SERVER_URL).toBe("http://127.0.0.1:4200/api/mcp");
+    }
+  );
+
+  it.each<ChildRole>(["api", "worker", "cli-runner"])(
+    "%s preserves container/non-loopback JARVIS_MCP_SERVER_URL ignoring PORT",
+    (role) => {
+      const env = buildChildEnv(role, {
+        PORT: "4300",
+        JARVIS_MCP_SERVER_URL: "http://api:3000/api/mcp"
+      } as NodeJS.ProcessEnv);
+
+      expect(env.JARVIS_MCP_SERVER_URL).toBe("http://api:3000/api/mcp");
+    }
+  );
+});
+
+describe("resolveMcpServerUrl", () => {
+  it("aligns loopback URLs to the target port", () => {
+    expect(
+      resolveMcpServerUrl(
+        { JARVIS_MCP_SERVER_URL: "http://127.0.0.1:3000/api/mcp" } as NodeJS.ProcessEnv,
+        "4100"
+      )
+    ).toBe("http://127.0.0.1:4100/api/mcp");
+  });
+
+  it("handles non-URL strings gracefully", () => {
+    expect(
+      resolveMcpServerUrl({ JARVIS_MCP_SERVER_URL: "not-a-valid-url" } as NodeJS.ProcessEnv, "4100")
+    ).toBe("not-a-valid-url");
   });
 });
