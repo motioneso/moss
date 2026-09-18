@@ -260,7 +260,7 @@ export async function runThemeContrastChecks(
     await openToday(page, new Date(localIso(themeDay, "20:00")));
     await stillPage(page);
     await forceTheme(theme);
-    await ensurePlanning(page, 1440, 2);
+    await ensurePlanning(page, { w: 1440, h: page.viewportSize()?.height ?? 1000 }, 2);
     await page.getByRole("dialog").waitFor({ timeout: 30000 });
     await forceTheme(theme);
     await stillPage(page);

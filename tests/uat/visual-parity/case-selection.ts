@@ -28,7 +28,8 @@ export const HARNESS_FILES = [
   "tests/uat/specs/visual-parity.uat.spec.ts",
   "tests/uat/visual-parity/region-comparison.ts",
   "tests/uat/visual-parity/region-schema.ts",
-  "tests/uat/visual-parity/seed.ts"
+  "tests/uat/visual-parity/seed.ts",
+  "tests/uat/visual-parity/mockups.ts"
 ] as const;
 
 export function computeHarnessDigest(files: readonly string[] = HARNESS_FILES): string {
