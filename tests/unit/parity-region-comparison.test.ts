@@ -201,7 +201,7 @@ describe("region comparison against real fixtures", () => {
     ).toThrow("no comparable pixels");
   });
 
-  it("passes an empty complement when regions tile the whole image", () => {
+  it("passes an empty complement when regions tile the whole image, marking why it was empty", () => {
     const declaration: RegionSetDeclaration = {
       imageSize: { width: WIDTH, height: HEIGHT },
       regions: [
@@ -227,15 +227,90 @@ describe("region comparison against real fixtures", () => {
     });
     expect(report.regions[0]!.result!.outcome).toBe("pass");
     expect(report.regions[1]!.result!.outcome).toBe("pass");
+    // Regression: on the code before this fix, this zero-pixel pass carried no
+    // "reason" field at all, the same shape a masked-away gap would record if
+    // its own throw guard (invariant 3, covered below) ever slipped. This
+    // field is what lets a reader tell the two apart without reading code.
     expect(report.complement).toEqual({
       numerator: 0,
       denominator: 0,
       percent: 0,
-      outcome: "pass"
+      outcome: "pass",
+      reason: "tiled"
     });
     const complementDiffPng = PNG.sync.read(readFileSync(complementDiffPath));
     expect(complementDiffPng.width).toBe(WIDTH);
     expect(complementDiffPng.height).toBe(HEIGHT);
+  });
+
+  it("records a genuine leftover's compared-pixel count, distinct in size from a tiny leftover", () => {
+    const oneRowDeclaration: RegionSetDeclaration = {
+      imageSize: { width: WIDTH, height: HEIGHT },
+      regions: [
+        {
+          id: "owned",
+          purpose: "reference-owned",
+          rect: { x: 0, y: 0, width: WIDTH, height: HEIGHT - 1 }
+        }
+      ]
+    };
+    const halfDeclaration: RegionSetDeclaration = {
+      imageSize: { width: WIDTH, height: HEIGHT },
+      regions: [
+        {
+          id: "owned",
+          purpose: "reference-owned",
+          rect: { x: 0, y: 0, width: WIDTH, height: HEIGHT / 2 }
+        }
+      ]
+    };
+    const capture = solidPng(WIDTH, HEIGHT, [10, 20, 30, 255]);
+    const reference = solidPng(WIDTH, HEIGHT, [10, 20, 30, 255]);
+    const base = solidPng(WIDTH, HEIGHT, [10, 20, 30, 255]);
+    const references = new Map([["owned", reference]]);
+    const oneRowReport = compareRegionSet(oneRowDeclaration, capture, base, references, []);
+    const halfReport = compareRegionSet(halfDeclaration, capture, base, references, []);
+    // Neither leftover is empty, so neither carries the "tiled" reason; a reader
+    // distinguishes them by the recorded compared-pixel count instead, which a
+    // check too small to prove anything cannot hide behind a bare "pass".
+    expect(oneRowReport.complement!.reason).toBeUndefined();
+    expect(halfReport.complement!.reason).toBeUndefined();
+    expect(oneRowReport.complement!.denominator).toBe(WIDTH);
+    expect(halfReport.complement!.denominator).toBe(WIDTH * (HEIGHT / 2));
+    expect(oneRowReport.complement!.denominator).not.toBe(halfReport.complement!.denominator);
+  });
+
+  it("propagates a diff-write failure instead of swallowing it as the tiled branch's expected throw", () => {
+    const declaration: RegionSetDeclaration = {
+      imageSize: { width: WIDTH, height: HEIGHT },
+      regions: [
+        { id: "left", purpose: "reference-owned", rect: { x: 0, y: 0, width: 4, height: HEIGHT } },
+        { id: "right", purpose: "reference-owned", rect: { x: 4, y: 0, width: 4, height: HEIGHT } }
+      ]
+    };
+    const capture = solidPng(WIDTH, HEIGHT, [10, 20, 30, 255]);
+    const reference = solidPng(WIDTH, HEIGHT, [10, 20, 30, 255]);
+    const base = solidPng(WIDTH, HEIGHT, [10, 20, 30, 255]);
+    const references = new Map([
+      ["left", reference],
+      ["right", reference]
+    ]);
+    const dir = tempDir();
+    // A regular file where the diff path needs a directory: mkdirSync on its
+    // parent throws, standing in for any real diff-write failure (disk full,
+    // permissions). Regression: on the code before this fix, the tiled
+    // branch's bare catch swallowed this too and still reported "pass".
+    writeFileSync(join(dir, "blocker"), "not a directory");
+    const complementDiffPath = join(dir, "blocker", "complement.diff.png");
+    expect(() =>
+      compareRegionSet(declaration, capture, base, references, [], {
+        regions: new Map([
+          ["left", join(dir, "left.diff.png")],
+          ["right", join(dir, "right.diff.png")]
+        ]),
+        complement: complementDiffPath
+      })
+    ).toThrow();
   });
 
   it("still fails when masks swallow the whole leftover gap", () => {
