@@ -116,13 +116,15 @@ function render(input: {
   readonly calendarError?: boolean;
   readonly editorial?: boolean;
   readonly dateline?: string;
+  readonly events?: readonly CalendarEventDto[];
+  readonly targetDayKey?: string;
 }): string {
   const response = dayPlanResponse(input.plan ?? null);
   response.unavailableTaskIds = [...(input.unavailableTaskIds ?? [])];
   return renderToString(
     createElement(DayPlanSection, {
       dayPlan: response,
-      events: events(),
+      events: input.events ?? events(),
       locale,
       now: NOW,
       loading: input.loading ?? false,
@@ -130,6 +132,7 @@ function render(input: {
       calendarError: input.calendarError ?? false,
       editorial: input.editorial ?? false,
       dateline: input.dateline,
+      targetDayKey: input.targetDayKey,
       onOpenTask: () => undefined
     })
   );
@@ -250,5 +253,55 @@ describe("DayPlanSection", () => {
     expect(html).not.toContain("account-1");
     expect(html).not.toContain("ext-e1");
     expect(html).not.toContain("calendarEventRef");
+  });
+
+  it("forwards targetDayKey in loading state and loaded state (VP-TOMORROW-R2)", () => {
+    const mixedEvents: CalendarEventDto[] = [
+      {
+        ...events()[0]!,
+        id: "today-evt",
+        title: "Today Standup",
+        startsAt: "2026-06-30T16:30:00.000Z",
+        endsAt: "2026-06-30T17:00:00.000Z"
+      },
+      {
+        ...events()[0]!,
+        id: "tmo-evt",
+        title: "Tomorrow Planning",
+        startsAt: "2026-07-01T16:30:00.000Z",
+        endsAt: "2026-07-01T17:00:00.000Z"
+      }
+    ];
+
+    const loadingTmo = render({
+      loading: true,
+      events: mixedEvents,
+      targetDayKey: "2026-07-01"
+    });
+    expect(loadingTmo).toContain("Tomorrow Planning");
+    expect(loadingTmo).not.toContain("Today Standup");
+
+    const loadingToday = render({
+      loading: true,
+      events: mixedEvents
+    });
+    expect(loadingToday).toContain("Today Standup");
+    expect(loadingToday).not.toContain("Tomorrow Planning");
+
+    const loadedTmo = render({
+      plan: plan([placed("b1", "t1", null, 0)]),
+      events: mixedEvents,
+      targetDayKey: "2026-07-01"
+    });
+    expect(loadedTmo).toContain("Tomorrow Planning");
+    expect(loadedTmo).not.toContain("Today Standup");
+    expect(loadedTmo).toContain("Write the draft");
+
+    const loadedToday = render({
+      plan: plan([placed("b1", "t1", null, 0)]),
+      events: mixedEvents
+    });
+    expect(loadedToday).toContain("Today Standup");
+    expect(loadedToday).not.toContain("Tomorrow Planning");
   });
 });

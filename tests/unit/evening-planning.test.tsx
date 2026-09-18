@@ -23,6 +23,7 @@ import {
   useDayPlanReview,
   type DayPlanReviewController
 } from "../../apps/web/src/today/day-plan-review-controller.js";
+import { EveningPlanningDialog } from "../../apps/web/src/today/evening-planning.js";
 import {
   defaultChoiceFor,
   localTimeToIso
@@ -830,5 +831,68 @@ describe("useEveningPlanning", () => {
     expect(m.current().activeCapacity).toBe("light");
     expect(m.current().activeNotes).toBe("hello");
     expect(m.current().activePriority).toEqual(["t1"]);
+  });
+
+  it("EveningPlanningDialog passes tomorrowKey to DayPlanSection so tomorrowEvents appear in rail (VP-TOMORROW-R2)", async () => {
+    const m = await mount(tomorrowPlan());
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    liveRoots.push(root);
+
+    const tomorrowEvt = {
+      id: "tmo-evt-1",
+      connectorAccountId: "acc-1",
+      ownerUserId: "u-1",
+      title: "Tomorrow Strategy Sync",
+      startsAt: `${TMO}T17:00:00.000Z`,
+      endsAt: `${TMO}T18:00:00.000Z`,
+      allDay: false,
+      isMossBlock: false,
+      attendeeCount: 0
+    } as unknown as CalendarEventDto;
+
+    const todayEvt = {
+      id: "today-evt-1",
+      connectorAccountId: "acc-1",
+      ownerUserId: "u-1",
+      title: "Today Retro",
+      startsAt: `${TODAY}T17:00:00.000Z`,
+      endsAt: `${TODAY}T18:00:00.000Z`,
+      allDay: false,
+      isMossBlock: false,
+      attendeeCount: 0
+    } as unknown as CalendarEventDto;
+
+    await act(async () => {
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(EveningPlanningDialog, {
+            evening: m.current(),
+            review: {} as DayPlanReviewController,
+            tasks: taskDtos(),
+            taskSummaries: [],
+            unavailableTaskIds: [],
+            tomorrowEvents: [todayEvt, tomorrowEvt],
+            completedToday: [],
+            locale: { timezone: TZ, region: "en-US", dateFormat: "12" },
+            now: new Date(`${TODAY}T12:00:00.000Z`),
+            tomorrowKey: TMO,
+            eveningRun: null,
+            opener: null,
+            onClose: () => undefined,
+            onOpenTask: () => undefined
+          })
+        )
+      );
+    });
+
+    const rail = document.body.querySelector(".evening-plan__railwrap");
+    expect(rail).not.toBeNull();
+    expect(rail?.textContent).toContain("Tomorrow Strategy Sync");
+    expect(rail?.textContent).not.toContain("Today Retro");
   });
 });

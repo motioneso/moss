@@ -230,6 +230,7 @@ export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
               error={false}
               calendarError={false}
               onOpenTask={props.onOpenTask}
+              targetDayKey={props.tomorrowKey}
             />
           ) : (
             <p className="cmd-empty">Nothing saved for tomorrow yet.</p>

@@ -1,9 +1,10 @@
-import type {
-  CalendarEventDto,
-  DayPlanBlockKind,
-  DayPlanDto,
-  DayPlanTaskSummary,
-  LocaleSettingsDto
+import {
+  type CalendarEventDto,
+  type DayPlanBlockKind,
+  type DayPlanDto,
+  type DayPlanTaskSummary,
+  type LocaleSettingsDto,
+  localDay
 } from "@moss/shared";
 
 import { byStart, isToday } from "./today-labels.js";
@@ -53,6 +54,7 @@ export interface BuildDayItemsInput {
   readonly events: readonly CalendarEventDto[];
   readonly locale: LocaleSettingsDto;
   readonly now: Date;
+  readonly targetDayKey?: string;
 }
 
 function stateForBlock(input: {
@@ -73,7 +75,11 @@ function stateForBlock(input: {
 
 export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
   const events = input.events
-    .filter((event) => isToday(event, input.locale.timezone))
+    .filter((event) =>
+      input.targetDayKey !== undefined
+        ? localDay(event.startsAt, input.locale.timezone) === input.targetDayKey
+        : isToday(event, input.locale.timezone)
+    )
     .sort(byStart)
     .map(
       (event): DayItem => ({

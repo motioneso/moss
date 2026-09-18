@@ -316,4 +316,92 @@ describe("buildDayItems joins and ordering", () => {
     expect(items).toHaveLength(1);
     expect(items[0]?.state).toBe("event");
   });
+
+  describe("targetDayKey explicit day selector (VP-TOMORROW-R2)", () => {
+    it("omitted targetDayKey defaults to today: includes today, excludes tomorrow", () => {
+      const todayEvt = event({
+        id: "today-evt",
+        startsAt: "2026-06-30T17:00:00.000Z",
+        endsAt: "2026-06-30T18:00:00.000Z"
+      });
+      const tomorrowEvt = event({
+        id: "tmo-evt",
+        startsAt: "2026-07-01T17:00:00.000Z",
+        endsAt: "2026-07-01T18:00:00.000Z"
+      });
+      const items = buildDayItems({
+        ...base,
+        plan: null,
+        events: [todayEvt, tomorrowEvt]
+      });
+      expect(items).toHaveLength(1);
+      expect(items[0]?.eventId).toBe("today-evt");
+    });
+
+    it("explicit targetDayKey includes tomorrow event and excludes today event", () => {
+      const todayEvt = event({
+        id: "today-evt",
+        startsAt: "2026-06-30T17:00:00.000Z",
+        endsAt: "2026-06-30T18:00:00.000Z"
+      });
+      const tomorrowEvt = event({
+        id: "tmo-evt",
+        startsAt: "2026-07-01T17:00:00.000Z",
+        endsAt: "2026-07-01T18:00:00.000Z"
+      });
+      const items = buildDayItems({
+        ...base,
+        plan: null,
+        events: [todayEvt, tomorrowEvt],
+        targetDayKey: "2026-07-01"
+      });
+      expect(items).toHaveLength(1);
+      expect(items[0]?.eventId).toBe("tmo-evt");
+    });
+
+    it("respects timezone local-day boundary across UTC offset", () => {
+      // In America/Los_Angeles (UTC-7):
+      // 2026-07-01T06:59:59.000Z is 2026-06-30 23:59:59 (Today)
+      // 2026-07-01T07:00:00.000Z is 2026-07-01 00:00:00 (Tomorrow)
+      // 2026-07-02T06:59:59.000Z is 2026-07-01 23:59:59 (Tomorrow)
+      // 2026-07-02T07:00:00.000Z is 2026-07-02 00:00:00 (Day after tomorrow)
+      const evtTodayEdge = event({
+        id: "today-edge",
+        startsAt: "2026-07-01T06:59:59.000Z",
+        endsAt: "2026-07-01T07:30:00.000Z"
+      });
+      const evtTmoStart = event({
+        id: "tmo-start",
+        startsAt: "2026-07-01T07:00:00.000Z",
+        endsAt: "2026-07-01T08:00:00.000Z"
+      });
+      const evtTmoEnd = event({
+        id: "tmo-end",
+        startsAt: "2026-07-02T06:59:59.000Z",
+        endsAt: "2026-07-02T07:30:00.000Z"
+      });
+      const evtNextEdge = event({
+        id: "next-edge",
+        startsAt: "2026-07-02T07:00:00.000Z",
+        endsAt: "2026-07-02T08:00:00.000Z"
+      });
+
+      const allEvents = [evtTodayEdge, evtTmoStart, evtTmoEnd, evtNextEdge];
+
+      const tmoItems = buildDayItems({
+        ...base,
+        plan: null,
+        events: allEvents,
+        targetDayKey: "2026-07-01"
+      });
+      expect(tmoItems.map((i) => i.eventId)).toEqual(["tmo-start", "tmo-end"]);
+
+      const todayItems = buildDayItems({
+        ...base,
+        plan: null,
+        events: allEvents
+      });
+      expect(todayItems.map((i) => i.eventId)).toEqual(["today-edge"]);
+    });
+  });
 });
