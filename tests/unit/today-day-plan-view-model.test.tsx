@@ -338,6 +338,36 @@ describe("buildDayItems joins and ordering", () => {
       expect(items[0]?.eventId).toBe("today-evt");
     });
 
+    it("empty or blank targetDayKey falls back to today behavior", () => {
+      const todayEvt = event({
+        id: "today-evt",
+        startsAt: "2026-06-30T17:00:00.000Z",
+        endsAt: "2026-06-30T18:00:00.000Z"
+      });
+      const tomorrowEvt = event({
+        id: "tmo-evt",
+        startsAt: "2026-07-01T17:00:00.000Z",
+        endsAt: "2026-07-01T18:00:00.000Z"
+      });
+      const itemsEmpty = buildDayItems({
+        ...base,
+        plan: null,
+        events: [todayEvt, tomorrowEvt],
+        targetDayKey: ""
+      });
+      expect(itemsEmpty).toHaveLength(1);
+      expect(itemsEmpty[0]?.eventId).toBe("today-evt");
+
+      const itemsBlank = buildDayItems({
+        ...base,
+        plan: null,
+        events: [todayEvt, tomorrowEvt],
+        targetDayKey: "   "
+      });
+      expect(itemsBlank).toHaveLength(1);
+      expect(itemsBlank[0]?.eventId).toBe("today-evt");
+    });
+
     it("explicit targetDayKey includes tomorrow event and excludes today event", () => {
       const todayEvt = event({
         id: "today-evt",

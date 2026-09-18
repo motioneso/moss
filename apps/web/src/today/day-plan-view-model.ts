@@ -74,10 +74,14 @@ function stateForBlock(input: {
 }
 
 export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
+  const targetDayKey =
+    typeof input.targetDayKey === "string" && input.targetDayKey.trim().length > 0
+      ? input.targetDayKey.trim()
+      : undefined;
   const events = input.events
     .filter((event) =>
-      input.targetDayKey !== undefined
-        ? localDay(event.startsAt, input.locale.timezone) === input.targetDayKey
+      targetDayKey !== undefined
+        ? localDay(event.startsAt, input.locale.timezone) === targetDayKey
         : isToday(event, input.locale.timezone)
     )
     .sort(byStart)
