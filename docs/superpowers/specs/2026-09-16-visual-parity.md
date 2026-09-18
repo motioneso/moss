@@ -1,7 +1,7 @@
 # Visual parity spec: Today and the daily briefings match the approved mockups 1:1
 
-Revision: VP-SPEC-R2 (2026-09-16; R1 corrected the mockup count to 32; R2 adds the collapsible desktop sidebar, section 9.2, per Ben's approval). Feature: #2521. Predecessor: #2453 (closed; behaviour complete).
-Status: approved by Ben on 2026-09-16. Plan required before code.
+Revision: VP-SPEC-R3 (2026-09-17; R1 corrected the mockup count to 32; R2 added the collapsible desktop sidebar; R3 records the approved session-sized regional acceptance amendment). Feature: #2521. Plan: `../plans/2026-09-16-visual-parity.md` (VP-PLAN-R2). Predecessor: #2453 (closed; behaviour complete).
+Status: approved by Ben on 2026-09-16; the R3 staging amendment was approved on 2026-09-17. Plan required before code.
 
 ## 1. Governing rule
 
@@ -16,6 +16,12 @@ lines a block occupies; it may not change anything else.
 1.4 Product behaviour, data ownership, authorisation, accessible names, keyboard reach and the
 saved-plan flows stay as they are unless the mockup requires a presentation change. The
 T01 to T22 unit, e2e and UAT suites stay green throughout.
+1.5 During the approved intermediate stage, a product task may be accepted only against its
+named owned region while it retains a populated full capture and the unchanged base/head guards
+for every affected mockup. Regional acceptance is not full-image acceptance: the named
+full-image owner is the only task that may accept that image's completed parity.
+1.6 The final state still obeys 1.1–1.4 for all 32 mockups. Previously accepted regions must not
+regress, and unfinished sibling regions remain explicit guards rather than mockup passes.
 
 ## 2. Sources of truth, in precedence order
 
@@ -89,11 +95,24 @@ Evening planning (`assets/2026-09-10-evening-planning/`, 11 files):
 | changed-plan-saved.png         | Saved state with status strip                                                          |
 | changed-plan-handoff-phone.png | Phone saved state before the morning handoff                                           |
 
-4.1 Each file above is one acceptance item. Every one must have a populated capture and a
-Reviewer verdict. A slice that ships without a capture for a file it touches is not done.
+4.1 Each file above is one final acceptance item. Every one must have a populated capture and a
+Reviewer verdict, with exactly one named full-image completion owner in 4.3. An intermediate
+task that touches a file retains its full capture and guards but may report only its owned region.
+A slice that ships without a capture for a file it touches is not done.
 4.2 Element-level states that appear inside these images are part of the same item and are
 checked in the same capture: hover is not captured; focus ring, selected card, checked row,
 disabled or busy button, and status strip are captured where the mockup shows them.
+
+4.3 Full-image completion ownership is explicit and unique: Today opening/weather images belong
+to `p2-action-rail`; Today evening opening images to `p3-tomorrow-entry`; Today news images to
+`p4-news`; Today sports images to `p4-sports-recap`. Morning automatic-read images belong to
+`p5-automatic-read`; proposed-read to `p5-proposed-read`; 1440-news to `p5-reader-news`;
+375-sports to `p5-reader-sports`; automatic-review to `p6-automatic-review`;
+proposed-review to `p6-proposed-review`; and partial-review to `p6-partial-review`. Evening
+step 0 images belong to `p7-reflection`; step 1 to `p8-commitments`; step 2 to `p8-capacity`;
+step 3 to `p8-review`; changed-plan-review to `p8-changed-review`; changed-plan-saved to
+`p8-saved`; and changed-plan-handoff-phone to `p8-phone-handoff`. These owners cover exactly
+10 Today, 11 morning and 11 evening images, all 32 files once.
 
 ## 5. Populated seed
 
@@ -143,13 +162,15 @@ screenshot of each other page it serves at 1440 and 375 and shows no unintended 
 
 ## 8. Acceptance and proof
 
-8.1 Reviewer opens each mockup and its capture side by side and the diff image, and walks this
-checklist per capture: typography (family, size, weight, line height, letter spacing),
+8.1 Reviewer opens each mockup and its populated capture side by side and the diff image, and
+walks this checklist per final capture: typography (family, size, weight, line height, letter spacing),
 spacing and rhythm, dimensions, alignment, colour, borders and radii, shadows, imagery,
-control appearance, responsive stacking, visible state. Any visible difference outside
+control appearance, responsive stacking, visible state. For an intermediate task, the same
+review is limited to its declared owned region and the remaining image is a base/head guard;
+only the 4.3 owner can issue the final full-image verdict. Any visible difference outside
 section 6 is blocking. Follow-up is reserved for defects invisible in the capture.
 8.2 Prover produces the captures and diffs from the real disposable stack with the section 5 seed,
-reports the diff pixel percentage per file with the masked regions named, and reruns the
+reports the diff pixel percentage per file and owned region with the masked regions named, and reruns the
 T20/T21 UAT legs and the existing Chromium boundary probes unchanged.
 8.3 Measured tolerances, in pixels at scale 1: element positions and sizes within 2 px of the
 mockup; font sizes and line heights exact; colours exact after token resolution; diff
@@ -161,6 +182,11 @@ of body and lede text at least 4.5 against its ground.
 186), extended per slice with the new visual test file.
 8.6 Proof follows `workspace/workflow.md`: current proof per slice with review, CI, static,
 Chromium, UAT and the new visual-parity leg on the same head.
+8.7 The staging amendment changes ownership and intermediate reporting only. It does not relax
+the <=0.5% comparable-pixel threshold, <=2px geometry, exact typography/colour requirements,
+generated-text mask limits, populated-data requirement, contrast checks, actor/data safety,
+fresh-pair identity, current-head proof or any required static/CI/review/Chromium/UAT/visual
+leg. Regional tasks never claim final full-image or whole-feature completion.
 
 ## 9. Approved navigation decision
 
