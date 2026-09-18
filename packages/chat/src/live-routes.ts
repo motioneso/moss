@@ -742,6 +742,16 @@ function handleLiveRouteError(error: unknown, reply: FastifyReply) {
     return reply.code(503).send({ error: "Live chat is currently unavailable on this host." });
   }
 
+  if (error instanceof Error && /per-user identity|refusing the shared home/i.test(error.message)) {
+    // The runner refuses to launch without per-user mode: a host-setup problem with a
+    // known fix, so name it instead of falling through to the generic 500.
+    reply.log?.warn?.({ err: error }, "live chat needs per-user mode");
+    return reply.code(503).send({
+      error:
+        "Chat needs per-user mode on this host: set JARVIS_CLI_PER_USER_UID=1 and recreate the app container, then try again."
+    });
+  }
+
   // Unexpected error: do not leak the raw message/stack.
   reply.log?.error?.({ err: error }, "live chat route failed");
   return reply.code(500).send({ error: "Live chat is temporarily unavailable." });

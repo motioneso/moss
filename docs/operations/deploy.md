@@ -80,9 +80,16 @@ Use the same two `-f` flags for updates and maintenance. Back up the host notes 
 
 ## Updates and module changes
 
-Back up before updating, then pull and recreate:
+Back up before updating, then refresh the Compose file, pull, and recreate. The
+Compose file is versioned with the image: updating the image without it can leave
+new required settings at stale defaults and break features (for example, chat
+failing until the per-user settings arrive). Keep your project name and
+`env.production.local`; only the Compose file is replaced:
 
 ```sh
+cp docker-compose.prod.yml docker-compose.prod.yml.bak
+curl -fL https://raw.githubusercontent.com/motioneso/moss/main/infra/docker-compose.prod.yml \
+  -o docker-compose.prod.yml
 docker compose -p moss -f docker-compose.prod.yml --env-file env.production.local pull
 docker compose -p moss -f docker-compose.prod.yml --env-file env.production.local \
   up -d --no-build
