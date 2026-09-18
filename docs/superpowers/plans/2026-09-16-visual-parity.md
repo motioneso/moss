@@ -1,184 +1,275 @@
-# Visual parity plan: Today and the daily briefings, 1:1 with the approved mockups
+# VP-PLAN-R2 — approved session-sized remainder
 
-Revision: VP-PLAN-R1 (2026-09-16; approved by Ben with the collapsible-sidebar amendment, now in P1). Feature: #2521. Spec: `../specs/2026-09-16-visual-parity.md` (VP-SPEC-R2).
-Status: approved by Ben on 2026-09-16. P0 merged via PR #2522; P1 is next.
+Status: APPROVED by Ben on 2026-09-17 ("approve", confirmed by PM).
+Approval covers the ordered decomposition and regional intermediate acceptance
+with designated full-image completion owners. Finalized by Architect for PM's
+timeline update. The existing filename is retained to preserve shared links.
+No live timeline, P1 record, product file or existing proof contract changed.
+This approved plan does not replace the required per-task dispatch records.
+Source: merged VP-PLAN-R1 sections 1–3, P2–P8 and completion, and VP-SPEC-R2
+sections 4, 5, 7 and 8, read on primary commit
+37aded6086278be4046b10f2f6d7f110b3715eb9.
+P0, P0.5 and P1 are completed prerequisites. The remaining work begins with
+`proof-case-selection`; this plan does not claim whole-feature completion.
 
-Correction carried into the spec (R1): the assets folders hold 32 mockup PNGs, not 34 (the
-other two files are the study's `checks.json` manifests). All 32 are assigned exactly once below.
+## Approved sizing and acceptance change
 
-## 1. Shape of the work
+Replace seven broad product slices with 26 product tasks below. First perform
+one bounded proof-readiness task: 27 tasks total, ordered and individually merged.
+Desktop/phone views of the SAME state stay together; automatic/proposed,
+News/Sports, successive steps and save/handoff states do not.
 
-1.1 Nine sequential slices P0 to P8. P0 builds the measuring tools; P1 to P8 each own one visual
-surface and every mockup that shows it. A slice merges only when its captures pass the spec's
-pixel-diff acceptance (section 8 of the spec) and the shared-page guards show no drift.
-1.2 Order follows shared ownership. The nav frames every Today capture, so it lands first. The
-Today page frames the two dialogs' entry points. The morning reader shell frames the review
-tab. The evening frame frames its steps.
-1.3 One record per slice, one PR per record, same gates as before (review, CI, static, Chromium,
-UAT) plus the new visual leg from P0 onward.
+The approved plan/spec amendment is: intermediate tasks accept only
+their predeclared owned region against the mockup, while retaining full populated
+captures and base/head guards for every affected image. The named completion
+owner below accepts each FULL image once its constituent regions are complete.
+Regional acceptance is never reported as full-image acceptance. Without this
+change, the existing whole-image rule would force unfinished sibling surfaces
+back into the same task and defeat the requested resize.
 
-## 2. Slices
+Keep <=0.5% comparable-pixel differences, <=2px geometry, exact typography and
+colours, generated-text mask limits, contrast, actor/data safety and the full
+static gate. No new identity masks or relaxed thresholds. Preserve strict fresh
+pair identity and current-head proof. Previously accepted regions must not regress.
 
-| Slice | Surface                                                                        | Mockups owned                                                                                                             | Count |
-| ----- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----- |
-| P0    | Parity tooling and shared fixture                                              | none (baseline diff report of all 32)                                                                                     | 0     |
-| P1    | App-wide shell navigation                                                      | none in full; the nav strip region of morning-1440-news and the top bar region of every 375 Today capture                 | 0     |
-| P2    | Today morning frame: hero, weather, section links, timeline, quick-action rail | today: morning-1440-opening, morning-375-opening, morning-1440-opening-weather, morning-375-opening-weather               | 4     |
-| P3    | Today evening state                                                            | today: evening-1440-opening, evening-375-opening                                                                          | 2     |
-| P4    | News and Sports sections                                                       | today: morning-1440-news, morning-375-news, morning-1440-sports, morning-375-sports                                       | 4     |
-| P5    | Morning reader shell and Read tab                                              | morning: 1440-automatic-read, 375-automatic-read, 1440-proposed-read, 375-proposed-read, 1440-news, 375-sports            | 6     |
-| P6    | Morning Review tab                                                             | morning: 1440-automatic-review, 375-automatic-review, 1440-proposed-review, 375-proposed-review, partial-review           | 5     |
-| P7    | Evening planning frame and step 1                                              | evening: 1440-0, 375-0                                                                                                    | 2     |
-| P8    | Evening steps 2 to 4 and saved states                                          | evening: 1440-1, 1440-2, 1440-3, 375-1, 375-2, 375-3, changed-plan-review, changed-plan-saved, changed-plan-handoff-phone | 9     |
+Each task has ONE independently runnable product boundary plus the established
+common checks. This does not mean one screenshot or exemption from required
+cross-surface guards. No product task also builds capture/matrix infrastructure.
+If a necessary proof capability is missing, stop before dispatch and propose a
+separate bounded infrastructure task; update the approved timeline first.
 
-Total 32.
+## Historical completed prerequisites
 
-## 3. Common to every slice P1 to P8
+These prerequisite records remain part of the authoritative plan history and
+are not replaced by the 27-task remainder below.
 
-3.1 Captures: every owned mockup gets a populated capture and diff at
-`workspace/evidence/visual-parity/<slice>/<mockup-name>.png` and `.diff.png`, taken by the
-P0 probe with the P0 fixture, in the light theme, and the PR body lists each pair by path.
-3.2 Acceptance: Reviewer walks the spec's eleven-point checklist per pair; Prover reports the
-diff percentage per file (at most 0.5 percent outside masked text, positions within 2 px).
-Any visible difference outside spec section 6 is blocking.
-3.3 Guard captures: one populated capture of each shared page the slice's files serve, at 1440
-and 375, compared with the same capture on the slice's base. Pages: Tasks, Calendar,
-Settings, Chat for shell files; every other Today state for Today files; the other tab for
-dialog files. A guard diff above 0.5 percent that the PR body does not explain is blocking.
-3.4 Dark and canyon: Today opening and each dialog at 1440, contrast of body and lede text at
-least 4.5, one capture each.
-3.5 Behaviour regressions: the T01 to T22 unit and e2e suites in the V8 static command stay
-green; the T20/T21 UAT copies rerun unchanged for any slice touching a dialog; every
-accessible name, role and keyboard path named in the V1 to V8 records survives, and the
-slice's record lists them.
-3.6 Legacy removal: rules and markup that the mockup contradicts are deleted in the slice, the
-ui-classes scan list is updated, and the PR body names each deleted class.
-3.7 Static command: the V8 one (`moss-v8-task-record.md` lines 172 to 186) plus the slice's
-new unit test and `tests/e2e/visual-parity.spec.ts`.
-3.8 Proof legs: review, ci, static, chromium, uat (where 3.5 applies) and visual. The visual leg
-is the P0 probe run by Prover with receipts under `proofs/<slice>/`.
+### P0 — `p0-parity-tooling`
 
-## 4. Slice detail
+P0 delivered the real-stack parity runner, shared populated fixture, 32 mockup
+capture/diff/report path, light-theme token alignment and declared baseline
+dimension debt. Its historical targets were exact mockup capture regions from
+spec section 3.1, all 32 report entries, deterministic repeated captures,
+real disposable-stack data, generated-text-only masks, and Tasks, Calendar,
+Settings and Today populated guards at 1440 and 375. Its files included the
+parity UAT spec/helpers, fixture seams, tokens and the bounded design-token
+check; regressions were the existing unit/e2e suites and the host-scoped seam
+test. P0 was accepted through PR #2522, merged as
+`cd2411dc62a4fbbf236db0985c496d38960fce98`, with final head
+`4fec08fbae729199ed22b60b1503e3c3a1a95744`; its baseline visual RED was
+measurement evidence, not a claim of product parity.
 
-P0 Parity tooling and shared fixture
+### P0.5 — `p0.5-plan-docs`
 
-- Delivers: (a) `tests/e2e/visual-parity.spec.ts` plus a helper that reproduces the study's
-  capture regions exactly (spec section 3.1), masks generated-text regions by data attribute,
-  writes the capture and the diff, and fails above the tolerance; (b) one fixture seed for all
-  surfaces (spec section 5), built on the existing e2e fixture fetch seam
-  (`resolveE2eFetchOverride`, `createE2eFixtureFetch` in
-  `apps/worker/src/external-module-job-handler.ts`) and the API-side `fetchFn` added in V4 R4,
-  with fixed clocks 08:00 and 20:00 local; (c) light-theme token corrections in
-  `apps/web/src/styles/tokens.css` where the V0 mapping table and the study's `tokens.css`
-  disagree, with the table corrected in the record; (d) Archivo Black if the study's display
-  weight is not covered by the self-hosted 900 weight.
-- Evidence: a baseline diff report of all 32 mockups on the P0 head, expected red, proving the
-  probe measures. Guard: Tasks, Calendar, Settings at 1440 and 375 unchanged.
-- Files: the new spec and helper under `tests/e2e/`, fixture files under `tests/fixtures/`,
-  `tokens.css`, `apps/web/public/fonts/archivo/` if (d) applies, `scripts/check-design-tokens.ts`
-  only if a new token needs registering.
-- Regressions: all suites green; the V4 seam unit test still proves the seam is opt-in and
-  host-scoped.
+P0.5 published exactly these two repository documents from the approved
+workspace sources, with repository-relative links and the approved metadata:
+`docs/superpowers/specs/2026-09-16-visual-parity.md` and
+`docs/superpowers/plans/2026-09-16-visual-parity.md`. It changed no product,
+test, fixture, image or proof implementation. P0.5 was accepted through PR
+#2524, merged as `37aded6086278be4046b10f2f6d7f110b3715eb9`, with pushed head
+`f59d29c5e97a94c4db4a6d98c4db98ed19361ebb`; its docs/static checks and bounded
+changed-path check were green.
 
-P1 App-wide shell navigation
+### P1 — `p1-shell-navigation`
 
-- Target: study `.app-nav` (194 px, pale sage, 1 px right line, 31/17 padding, item list with
-  5 px gap, selected item forest on bone with 3 px radius, 168 px below 1180, hidden below 920
-  behind the phone top bar). Keep the V1 phone top bar behaviour. The sidebar stays collapsible
-  (spec 9.2): a `<<` control beside the logo area collapses it to the V1 icon rail restyled in
-  the same pale palette, the control becomes `>>`, names stay "Collapse navigation" and
-  "Expand navigation", the preference is remembered. P1 owns the collapsed look, derived from
-  the study nav (same colours and selected treatment at rail width), since no mockup shows it.
-- Mockup regions: x 0 to 194 of morning-1440-news; y 0 to 64 of every 375 Today capture.
-- Files: `apps/web/src/shell/shell-nav.tsx` (290), `app-shell.tsx` (515), `kit-shell-nav.css`
-  (70), nav storage, `tokens.css` for `--nav-w`. Also fixes the Tasks toolbar 5 px overflow at
-  375 in the Tasks kit stylesheet (named extra file).
-- Guard: Tasks, Calendar, Settings, Chat, Today at 1440 expanded, 1440 collapsed, 1180, 920, 375. Regressions: V1 nav unit and e2e tests; keyboard order through the nav unchanged;
-  collapse, reload, expand round trip.
+P1 delivered the app-wide pale shell navigation and assigned populated Tasks
+toolbar overflow correction. Its owned regions were x=0..194 of
+`morning-1440-news.png` and y=0..64 of every 375 Today capture; its files
+included the shell navigation/app-shell markup, shell CSS, nav storage/tokens,
+and the named Tasks toolbar styles plus the shared parity harness checks. Its
+guards covered Today, Tasks, Calendar, Settings and Chat at 1440 expanded and
+rail, 1180, 920 and 375; regressions covered navigation names/order,
+collapse/reload/expand persistence, phone drawer/focus behavior, Chat and
+populated Tasks controls. P1 was accepted through PR #2525, merged as
+`c0e86d51348968e68eae7fe0fb1dad116ca2a5c8`, with final pushed head
+`3414eb6e8e40db39bdcb46e023bd047b8996dab2`. Its accepted R4 evidence remains
+historical; it does not accept any later P2–P8 image or whole feature.
 
-P2 Today morning frame
+## Ordered task list
 
-- Target: hero band, headline and summary, prepared-time line, weather row, section jump row,
-  preparation timeline rows, quick-action rail, in the study's `.hero`, `.briefing-grid`,
-  timeline and rail rules. Includes the Meds dialog Escape-close and focus return (opened from
-  the rail) and the extra section headings the mockup lacks.
-- Files: `today-page.tsx` (654, split allowed), `today-hero.tsx`, `today-rail.tsx`,
-  `module-today-widgets.tsx`, `day-plan.tsx` (timeline rows), `kit-today.css`,
-  `kit-today-hero.css`, `kit-today-timeline.css`, `kit-today-misc.css`,
-  `packages/ui/src/styles/components-moss-today.css` (757; delete superseded rules).
-- Guard: the evening Today state, News and Sports at 1440 and 375 (P3 and P4 not yet done, so
-  compared with base). Regressions: V2 and V3 unit and e2e tests, T22 surfaces after reload.
+Keys below are the approved stable timeline keys. Counts refer to owned reference
+images, not total guard/theme/evidence artifacts. Prefixes today/, morning/ and
+evening/ mean the three asset directories in spec section 4; names omit .png.
 
-P3 Today evening state
+| Order / key              | One owned surface or behavior                                                    | Independently runnable boundary / full-image owner                                                                                                                                                                                                                               |
+| ------------------------ | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 `proof-case-selection` | Existing parity runner: explicit case manifest and selection, no product changes | Select one existing populated desktop/phone case pair plus declared guards; missing/duplicate case or base artifact fails; unselected cases cannot be claimed. Retain one timed disposable-stack proof. Reuse P0/P1 machinery; implement only missing selection/manifest checks. |
+| 2 `p2-morning-hero`      | Morning hero, headline/summary and prepared time                                 | Hero region at 1440/375 in both opening variants; morning entry/reload. Other Today content is a base guard.                                                                                                                                                                     |
+| 3 `p2-weather-links`     | Weather row and section-jump row                                                 | Weather/links regions in both morning opening variants at 1440/375; jump targets and populated weather.                                                                                                                                                                          |
+| 4 `p2-timeline`          | Preparation timeline                                                             | Populated meeting/task/preparation rows at 1440/375; row actions and reload.                                                                                                                                                                                                     |
+| 5 `p2-action-rail`       | Quick-action rail and its Meds dialog interaction                                | Rail layout at 1440/375, Meds Escape/focus return, no missing/extra owned headings. Full completion owner of all FOUR today/morning-{1440,375}-opening and -opening-weather images.                                                                                              |
+| 6 `p3-evening-summary`   | Evening recap and unresolved commitments                                         | Owned summary regions at 1440/375 using evening seed; morning guards.                                                                                                                                                                                                            |
+| 7 `p3-tomorrow-entry`    | Tomorrow summary and Plan tomorrow entry                                         | Entry opens the existing dialog and preserves focus behavior; full owner of TWO today/evening-{1440,375}-opening images.                                                                                                                                                         |
+| 8 `p4-news`              | News lead and secondary stories                                                  | Populated photo/headline/secondary items, link action and news opt-out; full owner of TWO today/morning-{1440,375}-news images.                                                                                                                                                  |
+| 9 `p4-sports-scores`     | Four-score block and followed-team imagery                                       | Four populated scores, followed teams first, fixture images load without 404, sports opt-out; score region at 1440/375.                                                                                                                                                          |
+| 10 `p4-sports-recap`     | Sports photo recap and Tonight block                                             | Populated photo/recap/Tonight; full owner of TWO today/morning-{1440,375}-sports images.                                                                                                                                                                                         |
+| 11 `p5-reader-frame`     | Shared morning reader frame                                                      | Header/title/tabs/footer, open/close/focus, phone viewport cap and footer back slot at 200% zoom. Frame region in Read/Review cases; evening dialog guards. No narrative/review-row work.                                                                                        |
+| 12 `p5-automatic-read`   | Automatic Read content and schedule rail                                         | Prepared line, narrative/callout, schedule and phone disclosure, rail heading; full owner of TWO morning/{1440,375}-automatic-read images.                                                                                                                                       |
+| 13 `p5-proposed-read`    | Proposed Read state                                                              | Proposed content/status with accepted reader frame; full owner of TWO morning/{1440,375}-proposed-read images.                                                                                                                                                                   |
+| 14 `p5-reader-news`      | Reader News link treatment                                                       | Populated news link and destination behavior; full owner of morning/1440-news.                                                                                                                                                                                                   |
+| 15 `p5-reader-sports`    | Reader Sports link treatment                                                     | Populated sports link and destination behavior; full owner of morning/375-sports.                                                                                                                                                                                                |
+| 16 `p6-automatic-review` | Automatic Review state                                                           | Review rows/status at desktop/phone; Read tab guards; full owner of TWO morning/{1440,375}-automatic-review images.                                                                                                                                                              |
+| 17 `p6-proposed-review`  | Proposed Review rows and accept controls                                         | Proposed rows, individual/bulk accept path, checked/pending semantics; full owner of TWO morning/{1440,375}-proposed-review images.                                                                                                                                              |
+| 18 `p6-partial-review`   | Partially accepted Review state                                                  | Seed mixed accepted/pending rows, preserve accepted data and status, reload; full owner of morning/partial-review.                                                                                                                                                               |
+| 19 `p7-tomorrow-data`    | Tomorrow day selection in existing evening rail                                  | Real seeded today/tomorrow distinction; behavioral regression must fail on base and pass on head. No rail/frame redesign; retain populated visual guards.                                                                                                                        |
+| 20 `p7-evening-frame`    | Shared evening dialog frame                                                      | Header, numbered steps, persistent footer and tomorrow rail; phone bounds and step navigation. Frame regions across steps 1–4; morning dialog guards.                                                                                                                            |
+| 21 `p7-reflection`       | Step 1 prompt/reflection choices                                                 | Reflection selection and next/back preserve state; remove only this step's unapproved headings; full owner of TWO evening/{1440,375}-0 images.                                                                                                                                   |
+| 22 `p8-commitments`      | Step 2 commitment choices                                                        | Populated choice cards, choose/undo/back/next preserve state; full owner of TWO evening/{1440,375}-1 images.                                                                                                                                                                     |
+| 23 `p8-capacity`         | Step 3 capacity and primary task                                                 | Capacity/task controls and tomorrow rail, state preservation; full owner of TWO evening/{1440,375}-2 images.                                                                                                                                                                     |
+| 24 `p8-review`           | Step 4 review groups and save entry                                              | Changes / Keep as they are / No change groups, save control and back navigation; full owner of TWO evening/{1440,375}-3 images.                                                                                                                                                  |
+| 25 `p8-changed-review`   | Step 4 changed-plan state                                                        | Seed changed choices and verify exact review grouping and values; full owner of evening/changed-plan-review.                                                                                                                                                                     |
+| 26 `p8-saved`            | Saved confirmation state                                                         | Save once, no duplicate/lost changes, persisted status/reload; full owner of evening/changed-plan-saved.                                                                                                                                                                         |
+| 27 `p8-phone-handoff`    | Phone saved handoff                                                              | Populated saved phone state through morning handoff, T21 boundary; full owner of evening/changed-plan-handoff-phone.                                                                                                                                                             |
 
-- Target: recap, unresolved commitments, tomorrow's shape, Plan tomorrow entry, as in the
-  study's evening mode of the same frame.
-- Files: `evening-mode.tsx` (376), `today-page.tsx`, `kit-today-misc.css`, `today-labels.ts`.
-- Guard: morning Today state unchanged from P2's accepted captures. Regressions:
-  `today-evening-mode.test.tsx`, `evening-prep.spec.ts`.
+Full-image accounting: Today 4+2+2+2=10; morning 2+2+1+1+2+2+1=11;
+evening 2+2+2+2+1+1+1=11. All 32 existing mockups retained, no additional
+product feature. Earlier tasks still capture every affected image as required.
 
-P4 News and Sports sections
+## Delivery timeline
 
-- Target: lead photo and story, secondary stories, four compact scores with followed teams
-  first, photo recap, Tonight, section rules and eyebrows, per study revision 2 rules
-  (`study.css` line 307 onward). Fixes the followed-team card image 404.
-- Files: the two module `today-widget.tsx` files, `news-desk.tsx` (68, delete if dead),
-  `kit-today-feeds.css`, `kit-today-desks.css`, `packages/sports/src/web/today-scores.tsx`.
-- Guard: P2 and P3 captures unchanged. Regressions: V4 tests, seam unit test, `sports` and
-  `news` opt-out e2e cases.
+Exact ordered rows for PM to place after the existing completed P1 row on #2521.
+Preserve completed P0/P0.5/P1 rows and their keys/status; replace the old future
+P2–P8 delivery rows with these, rather than maintaining duplicate task lists.
 
-P5 Morning reader shell and Read tab
+- [ ] [task:proof-case-selection] Proof readiness: explicit case selection and required evidence
+- [ ] [task:p2-morning-hero] Morning hero, summary and prepared time
+- [ ] [task:p2-weather-links] Weather row and section links
+- [ ] [task:p2-timeline] Preparation timeline
+- [ ] [task:p2-action-rail] Quick-action rail and Meds interaction; complete morning opening images
+- [ ] [task:p3-evening-summary] Evening recap and unresolved commitments
+- [ ] [task:p3-tomorrow-entry] Tomorrow summary and planning entry; complete evening opening images
+- [ ] [task:p4-news] News lead and secondary stories
+- [ ] [task:p4-sports-scores] Sports scores and followed-team imagery
+- [ ] [task:p4-sports-recap] Sports recap and Tonight; complete Sports images
+- [ ] [task:p5-reader-frame] Morning reader frame and responsive footer
+- [ ] [task:p5-automatic-read] Automatic Read content and schedule
+- [ ] [task:p5-proposed-read] Proposed Read state
+- [ ] [task:p5-reader-news] Reader News links
+- [ ] [task:p5-reader-sports] Reader Sports links
+- [ ] [task:p6-automatic-review] Automatic Review state
+- [ ] [task:p6-proposed-review] Proposed Review and accept controls
+- [ ] [task:p6-partial-review] Partially accepted Review state
+- [ ] [task:p7-tomorrow-data] Tomorrow selection in the evening rail
+- [ ] [task:p7-evening-frame] Evening dialog frame and navigation
+- [ ] [task:p7-reflection] Reflection choices; complete step 1 images
+- [ ] [task:p8-commitments] Step 2 commitment choices
+- [ ] [task:p8-capacity] Step 3 capacity and primary task
+- [ ] [task:p8-review] Step 4 review groups and save entry
+- [ ] [task:p8-changed-review] Changed-plan review state
+- [ ] [task:p8-saved] Saved confirmation and persistence
+- [ ] [task:p8-phone-handoff] Phone saved state and morning handoff
 
-- Target: green branded header, title, tabs, prepared-at line, narrative lead, overnight
-  callout, two-column report with schedule rail, phone disclosure, footer with status strip,
-  news and sports link treatment, per `morning-briefing.css` and the shared dialog rules in
-  `evening-plan.css`. Fixes the reader footer back slot at 200 percent zoom, the V5 rail
-  heading follow-up and the shared phone viewport cap.
-- Files: `morning-briefing.tsx` (419), `briefing-report-shell.tsx` (237),
-  `kit-briefing-reader.css` (306), `today-page.tsx` for the open path only.
-- Guard: Review tab at 1440 and 375 compared with base; evening dialog unchanged. Regressions:
-  `briefing-report-shell` unit and e2e, `morning-briefing.test.tsx`, T22 UAT surfaces.
+Mandatory prerequisite: with P1 already merged, `proof-case-selection` runs before
+`p2-morning-hero` or any other dependent product task. Its proof demonstrates
+explicit selected-case/guard accounting, required baseline failure checks and
+one timed populated desktop/phone run. Reuse existing capabilities; no product
+changes. Its measured timings determine admission of the first product record.
+After it merges, PM and Architect may dispatch up to five ready product lanes
+when their dependencies, files and mutable resources do not overlap. Serialize
+only real dependencies, shared files or shared mutable resources; the canonical
+task-list order is not a blanket dependency chain. Each lane still has its own
+branch, worktree, evidence path, review, CI and proof boundary, and a failed lane
+stops only that lane and its dependents.
 
-P6 Morning Review tab
+PM operating decision (Ben, 2026-09-17): PM may adapt task execution when
+repeated friction or failures expose a workflow weakness, provided the approved
+spec/plan order and review/proof/merge gates remain intact. The
+`proof-case-selection` prerequisite must consolidate the P1 lessons: one
+branch-owned authoritative harness, a fast populated-data/Chat/responsive
+preflight, visible-content readiness instead of network-idle, fixture request
+logging, a deliberate comparison-system control, automatic baseline checksums
+and failure artifacts, and one short smoke case before the full matrix.
 
-- Target: proposed rows, accept controls, checked and pending states, partial status strip,
-  bulk accept, per the review mockups.
-- Files: `day-plan-review.tsx` (285), `day-plan-review-row.tsx` (176),
-  `kit-day-plan-review.css` (156), `briefing-action-rows.tsx`.
-- Guard: Read tab unchanged from P5. Regressions: `day-plan-review.test.tsx`,
-  `briefing-action-rows.spec.ts`, T20/T21 UAT.
+## Session-size admission check
 
-P7 Evening planning frame and step 1
+Recorded P1 harness debt (smoke4): replace raw Evening API-summary-to-body matching
+with a tested understanding of the rendered heading/body contract. The populated
+page separates the h1 from the body; the first 120 API-summary characters cannot
+be required inside .jds-brief\_\_body. Evidence: workspace/evidence/visual-parity/p1/
+r3-base-smoke-4/run.log; preserve its failure DOM/trace. Deferred to the existing
+proof-case-selection task, not another P1 smoke/matcher iteration. P1 retains
+Evening heading/body observations and all other populated/font/capture checks.
 
-- Target: header with eyebrow and message, numbered step navigation, Moss prompt line,
-  reflection choices, tomorrow rail, persistent footer, per `evening-plan.css`. Removes the
-  section headings the mockup lacks (the V7 and V8 F3 question, settled by the spec: no
-  heading). Adds the day selector so the rail shows tomorrow's events, with a regression test
-  that fails on base.
-- Files: `evening-planning.tsx` (241), `evening-planning-sections.tsx` (356, split allowed),
-  `kit-evening-planning.css` (316, split allowed), `day-plan-view-model.ts` for the day
-  selector, `today-labels.ts`.
-- Guard: steps 2 to 4 at 1440 and 375 compared with base; morning dialog unchanged.
-  Regressions: `evening-planning.test.tsx`, `evening-planning-frame.test.tsx`, T20/T21 UAT.
+Before EACH dispatch, Architect traces the current implementation and names exact
+helpers/files. PM confirms the task has one owned surface/state, a runnable probe
+already available, explicit artifact paths/case count, ready exact-base artifacts
+or a bounded baseline command, and no unresolved setup question. Records include
+every room-required field and the full literal static command; this plan is
+not a substitute for those records. Base is the previous task's merge commit.
 
-P8 Evening steps 2 to 4 and saved states
+PM's later sizing amendment applies to EVERY subsequent task record: one
+dispatch must fit one context window and produce one concrete deliverable.
+The former combined 60-minute implementation plus 30-minute verification budget
+is retired; it allowed an oversized assignment. Use measured setup/run/static
+timings and expected reading/editing load to admit each work package separately.
+No planned compaction, reset relay or evidence-through-push dispatch.
 
-- Target: choice cards, capacity and primary task controls, Changes / Keep as they are /
-  No change groups, save action, saved status strip, phone handoff state.
-- Files: `evening-planning-sections.tsx`, `evening-planning-review.tsx` (225),
-  `kit-evening-planning.css`, `today-labels.ts`. Closes the remaining V7 F1 to F5 and V8 F1
-  to F5 ledger follow-ups or records each as fixed or out of scope in the PR body.
-- Guard: step 1 unchanged from P7; morning dialog unchanged. Regressions: same as P7 plus
-  the morning handoff (T21).
+Each future record explicitly separates remaining specific implementation plus
+targeted checks then stop BEFORE static/browser acceptance; cleanup/full static/
+amend/push then stop; and parallel independent Reviewer/Prover verification of
+the pushed head. Prover owns the populated browser acceptance run; do not also
+assign the same complete acceptance run to Builder. Keep the task's
+one commit and timeline key; these are internal handoffs, not extra tasks.
+Each dispatch names entry readiness, exact bounded files/command or probe,
+deliverable and stop condition. A missing runnable probe is separate preparation,
+not permission to expand an evidence run into harness development. A failed run
+ends that handoff after teardown; PM scopes any correction before redispatch.
+No automatic continuation to the next phase or repeat until green.
 
-## 5. Completion
+Before returning, save handoff ID, exact head/dirty files, command/exit,
+probe/evidence paths, cleanup, unresolved findings and one next action in state.
+PM reads that checkpoint before the next dispatch. If a package cannot fit,
+split BEFORE starting; no promise that a reset/successor will finish it.
+Reviewer and Prover each receive one independently executable boundary. Reuse
+valid receipts as workflow.md permits, without duplicating entire acceptance
+runs or weakening required gates. Waiting for CI opens no new build slot.
 
-5.1 The feature is complete when all 32 mockups have an accepted capture on origin/main, the
-guard captures of every shared page match their pre-P1 baseline except for the nav, and
-every checkbox in #2521 is checked with a merge commit beside it. Architect posts the
-statement after reading the ledger for all nine merges.
+Two desktop/phone views can remain one task only while they exercise the same
+state and implementation. Shared-frame edits must list every affected case and
+all required guards up front. If that fan-out breaks the session budget, split
+the frame task further before approval/dispatch, not after an oversized build.
 
-## 6. Decisions already made, no question for Ben
+## Proof and scope discipline
 
-6.1 App-wide pale nav (spec 9.1, approved). Extra section headings go (spec 6.7). Light theme
-is the parity theme; dark and canyon are contrast-checked only (spec 6.3).
+Each record declares: populated widgets; exact owned regions; expected base,
+head, reference, diff, geometry and pair artifacts; counts derived from that case
+list; deterministic seed and state; common checks plus targeted behavior.
+The probe fails absent cases and never equates a recorded screenshot with an
+executed comparison. Full captures remain available for independent inspection.
+
+Reuse unchanged P0 fixture/capture helpers and the corrected P1 fail-closed
+baseline discipline. New proof infrastructure has its own task. No duplicated
+runner, no expanding shared helper beyond the file-size cap, no ad hoc mask added
+to pass a product task. Frozen records and fresh-head proof remain mandatory.
+
+Full static/CI/review remain per task. Required dark/canyon Today/dialog captures
+and contrast remain common checks; T20/T21 follow the approved applicability and
+documented exact-base equivalence decision. Do not silently remove these legs
+under the phrase 'one proof boundary.' Any proposed gate change needs separate
+approval and a recorded contract change. Receipt reuse is only what workflow.md
+actually permits on the declared head/revision, never borrowed GREEN prose.
+
+Previously accepted regions are guarded against the immediate base and retained
+accepted reference; unowned unfinished regions are base guards, not mockup passes.
+If a later region exposes a defect in an accepted one, classify and handle it via
+the bounded correction rules; never make the final image owner a hidden cleanup
+task. Unrelated findings remain ledger follow-ups. Existing V7/V8 findings are
+mapped to these task records before dispatch; closure is evidenced or explicitly
+deferred, never dropped during resizing.
+
+## Approval and completion
+
+Ben approved this ordered decomposition and the explicit regional intermediate-
+acceptance amendment; no repeat approval is needed for this finalized list.
+PM updates #2521 from the exact rows above before any post-P1 dispatch. Carry the
+approved amendment into the repository's source plan/spec and merge it before
+dependent product work; until then this file is the approved handoff, not a claim
+that primary already contains VP-PLAN-R2. Required task records still precede
+dispatch. Completed P0/P0.5/P1 retain their existing keys, scope and verified
+merge history; P1 is merged, not active or continuing.
+
+Before feature closure, Architect reads the merged revised plan by section and
+the acceptance ledger: all 32 full images accepted on primary with no later
+regression; pre-P1 shared-page guards preserved except approved changes; every
+approved task merged and timeline row checked. If final reconciliation finds a
+gap, the feature stays open and PM records a bounded correction before dispatch.
+No implicit 'final polish' task or slice-only completion claim.
