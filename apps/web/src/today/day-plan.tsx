@@ -24,6 +24,7 @@ export interface DayPlanSectionProps {
       morning reader, the review dialog and the evening planner. */
   readonly editorial?: boolean;
   readonly dateline?: string;
+  readonly targetDayKey?: string;
 }
 
 function ReviewButton(props: { readonly onReview: (anchor: HTMLElement) => void }) {
@@ -167,7 +168,8 @@ export function DayPlanSection(props: DayPlanSectionProps) {
       unavailableTaskIds: [],
       events: props.events,
       locale: props.locale,
-      now: props.now
+      now: props.now,
+      targetDayKey: props.targetDayKey
     });
     return (
       <section className={sectionClass} id="schedule">
@@ -208,7 +210,8 @@ export function DayPlanSection(props: DayPlanSectionProps) {
     unavailableTaskIds: props.dayPlan?.unavailableTaskIds ?? [],
     events: props.calendarError ? [] : props.events,
     locale: props.locale,
-    now: props.now
+    now: props.now,
+    targetDayKey: props.targetDayKey
   });
 
   const taskBlocks = (props.dayPlan?.plan?.blocks ?? []).filter((block) => block.taskId !== null);

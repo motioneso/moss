@@ -435,12 +435,17 @@ async function prepareSelectedEntry(
       else if (step === 2) await steps.getByRole("button", { name: "Shape tomorrow" }).click();
       else await steps.getByRole("button", { name: "Review" }).click();
     },
-    choiceTomorrow: () =>
-      dialog()
-        .getByRole("radiogroup", { name: `${(m.tasks[2] as ParityTask).title}: plan` })
-        .getByLabel("Tomorrow")
-        .check()
-        .then(() => undefined),
+    // A save with no new intent change is rejected (400), and this walk saves
+    // twice against one backend: re-picking an already-saved Tomorrow changes
+    // nothing, so fall back to another real commitment decision instead.
+    choiceTomorrow: async () => {
+      const group = dialog().getByRole("radiogroup", {
+        name: `${(m.tasks[2] as ParityTask).title}: plan`
+      });
+      const tomorrow = group.getByLabel("Tomorrow");
+      if (await tomorrow.isChecked()) await group.getByLabel("Keep on the list").check();
+      else await tomorrow.check();
+    },
     planningSaved: () => dialog().getByRole("button", { name: "Save tomorrow's plan" }).click(),
     expectSavedText: () =>
       expect(dialog()).toContainText("Saved. The blocks are proposed for the morning."),
