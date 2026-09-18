@@ -399,16 +399,41 @@ async function scrollAncestorUp(page: Page, selector: string, px: number): Promi
     .locator(selector)
     .first()
     .evaluate((el, px) => {
+      // A container counts only if it actually scrolls: content taller than
+      // the box is not enough (an overflow:visible wrapper never moves).
+      // Probe each candidate by nudging it and checking the position stuck,
+      // then put it back before scrolling for real.
+      const scrolls = (box: Element): boolean => {
+        const target = box as HTMLElement;
+        const priorBehavior = target.style.scrollBehavior;
+        target.style.scrollBehavior = "auto";
+        try {
+          const before = target.scrollTop;
+          target.scrollTop = before + 1;
+          if (target.scrollTop !== before) {
+            target.scrollTop = before;
+            return true;
+          }
+          target.scrollTop = before - 1;
+          const moved = target.scrollTop !== before;
+          target.scrollTop = before;
+          return moved;
+        } finally {
+          target.style.scrollBehavior = priorBehavior;
+        }
+      };
       let node: Element | null = el;
       while (node) {
         const parent: Element | null = node.parentElement;
         if (!parent) break;
-        if (parent.scrollHeight > parent.clientHeight + 1) {
+        if (parent.scrollHeight > parent.clientHeight + 1 && scrolls(parent)) {
           parent.scrollTop -= px;
           return;
         }
         node = parent;
       }
+      const doc = document.scrollingElement;
+      if (doc) doc.scrollTop -= px;
     }, px);
 }
 
@@ -458,4 +483,155 @@ export async function ensureReader(page: Page, w: number, tab: 0 | 1): Promise<v
   await expect(dialog).toBeVisible();
   await dialog.getByRole("tab").nth(tab).click();
   await page.waitForTimeout(300);
+}
+
+// Walk entry setup, moved here from the parity spec so entry ordering is
+// directly testable: every case lays out and scrolls at its own viewport.
+import { runSetupActions, statePrerequisites } from "./case-selection.js";
+import { type MockupEntry } from "./mockups.js";
+
+export interface ParityEvent {
+  readonly title: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+}
+export interface ParityTask {
+  readonly key: string;
+  readonly title: string;
+  readonly due: string | null;
+  readonly status?: string;
+}
+export interface ParityManifest {
+  readonly tasks: readonly ParityTask[];
+  readonly meetings: readonly ParityEvent[];
+  readonly events: readonly ParityEvent[];
+  readonly todayPlanTasks: readonly string[];
+  readonly tomorrowPlanTasks: readonly string[];
+  readonly news: { readonly expectedHeadline: string };
+  readonly weather: { readonly location: string };
+}
+export interface ScoreGame {
+  readonly home?: { readonly sourceTeamId?: string };
+  readonly away?: { readonly sourceTeamId?: string };
+}
+export async function localeTz(page: Page): Promise<string> {
+  const locale = (await json(page, "/api/me/locale")).body as { locale: { timezone: string } };
+  return locale.locale.timezone;
+}
+export async function overview(
+  page: Page,
+  path: string,
+  key: string,
+  ms: number
+): Promise<Record<string, unknown>> {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    const r = await json(page, path);
+    if (r.status === 200 && Array.isArray((r.body as Record<string, unknown>)[key])) {
+      const rows = (r.body as Record<string, unknown>)[key] as readonly unknown[];
+      if (rows.length > 0) return r.body as Record<string, unknown>;
+    }
+    await page.waitForTimeout(5000);
+  }
+  throw new Error(`parity: ${path} carried no ${key}`);
+}
+export async function populatedMorning(page: Page, m: ParityManifest): Promise<void> {
+  const task0 = m.tasks[0];
+  const meeting0 = m.meetings[0];
+  if (!task0 || !meeting0) throw new Error("parity: manifest tasks/meetings empty");
+  await expect(page.getByText(task0.title).first()).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText(meeting0.title).first()).toBeVisible({ timeout: 30000 });
+  const sports = await overview(page, "/api/sports/overview", "scoreboard", 120000);
+  const groups = sports["scoreboard"] as Array<{ readonly games: readonly ScoreGame[] }>;
+  const games = groups.flatMap((g) => g.games);
+  expect(games.some((g) => [g.home?.sourceTeamId, g.away?.sourceTeamId].includes("359"))).toBe(
+    true
+  );
+  const news = await overview(page, "/api/news/overview", "topStories", 180000);
+  await expect(page.locator(".jds-brief--news").first()).toBeVisible({ timeout: 60000 });
+  await expect(page.locator(".jds-brief--sports").first()).toBeVisible({ timeout: 60000 });
+  const arsenalItem = page.getByRole("listitem").filter({ hasText: "Arsenal" }).first();
+  await expect(arsenalItem).toBeVisible({ timeout: 60000 });
+  await expect(page.locator("#weather")).toContainText(/\S/, { timeout: 60000 });
+  console.log(
+    `[parity] populated: timeline, weather, news lead "${((news["topStories"] as Array<{ title: string }>)[0] as { title: string }).title}", sports scores`
+  );
+}
+export async function driveState(page: Page, state: string, w: number): Promise<void> {
+  const dialog = page.getByRole("dialog");
+  if (state.startsWith("today-")) {
+    await closeDialogs(page).catch(() => undefined);
+    await page.setViewportSize({ width: w, height: 1000 });
+    if (state === "today-morning-news") await scrollSectionTop(page, ".jds-brief--news");
+    if (state === "today-morning-sports")
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight * 0.7));
+  } else if (state.startsWith("reader-")) {
+    const tab = state.includes("-review") || state.includes("partial") ? 1 : 0;
+    await ensureReader(page, w, tab as 0 | 1);
+  } else if (state.startsWith("evening-step-")) {
+    await ensurePlanning(page, w, Number(state.slice("evening-step-".length)));
+  } else if (state === "evening-saved") {
+    await expect(dialog).toBeVisible();
+  }
+}
+export async function prepareSelectedEntry(
+  page: Page,
+  entry: MockupEntry,
+  m: ParityManifest
+): Promise<void> {
+  // Size the viewport before any setup runs: every step below lays out and
+  // scrolls, and doing that at the previous case's width leaves the case
+  // photographed at a width it was never set up for. One unconditional call
+  // covers both widths with no viewport-specific branch.
+  await page.setViewportSize({ width: entry.viewport.w, height: entry.viewport.h });
+  statePrerequisites(entry.state);
+  const morning = new Date(localIso(localDay(), "08:00"));
+  const evening = new Date(localIso(localDay(), "20:00"));
+  const dialog = () => page.getByRole("dialog");
+  // The recipe is performed action by action, in declared order: the recorded
+  // dispatch is what the unit suite observes, so the plan cannot drift from
+  // the browser behavior it describes.
+  await runSetupActions(entry.state, {
+    openTodayMorning: () => openToday(page, morning),
+    openTodayEvening: () => openToday(page, evening),
+    populatedMorning: () => populatedMorning(page, m),
+    planningStep: async (step) => {
+      if (step === 0) {
+        await ensurePlanning(page, entry.viewport.w, 0);
+        return;
+      }
+      const steps = dialog().getByRole("navigation", { name: "Plan steps" });
+      if (step === 1) await steps.getByRole("button", { name: "Open commitments" }).click();
+      else if (step === 2) await steps.getByRole("button", { name: "Shape tomorrow" }).click();
+      else await steps.getByRole("button", { name: "Review" }).click();
+    },
+    // A save with no new intent change is rejected (400), and this walk saves
+    // twice against one backend: re-picking an already-saved Tomorrow changes
+    // nothing, so fall back to another real commitment decision instead.
+    choiceTomorrow: async () => {
+      const group = dialog().getByRole("radiogroup", {
+        name: `${(m.tasks[2] as ParityTask).title}: plan`
+      });
+      const tomorrow = group.getByLabel("Tomorrow");
+      if (await tomorrow.isChecked()) await group.getByLabel("Keep on the list").check();
+      else await tomorrow.check();
+    },
+    planningSaved: () => dialog().getByRole("button", { name: "Save tomorrow's plan" }).click(),
+    expectSavedText: () =>
+      expect(dialog()).toContainText("Saved. The blocks are proposed for the morning."),
+    closeDialogs: () => closeDialogs(page).then(() => undefined),
+    expectTodayRoute: () => expect(page).toHaveURL(/\/today/),
+    driveState: async () => {
+      if (entry.state === "reader-partial-review")
+        await mirrorBlock(page, localDay(), await localeTz(page), 0);
+      if (entry.state.startsWith("reader-automatic"))
+        await mirrorBlock(page, localDay(), await localeTz(page), 1);
+      await driveState(page, entry.state, entry.viewport.w);
+    }
+  });
+  if (entry.state.startsWith("today-morning")) {
+    if (entry.state === "today-morning-news") await scrollSectionTop(page, ".jds-brief--news");
+    if (entry.state === "today-morning-sports")
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight * 0.7));
+  }
 }

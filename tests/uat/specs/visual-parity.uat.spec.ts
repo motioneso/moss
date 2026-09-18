@@ -23,8 +23,6 @@ import {
   isWholeImageOwnership,
   resolveCaseSelection,
   resolveSelectedCase,
-  runSetupActions,
-  statePrerequisites,
   validateRunManifest,
   type CaptureAccounting,
   type GuardAccounting,
@@ -40,23 +38,27 @@ import {
   createDayPlan,
   createTask,
   disableSeededCustomSources,
-  ensurePlanning,
-  ensureReader,
+  driveState,
   forceChrome,
   json,
   localDay,
+  localeTz,
   localIso,
   manifest,
   mirrorBlock,
-  TZ,
   openToday,
+  overview,
+  populatedMorning,
+  prepareSelectedEntry,
   resolveStamp,
-  scrollSectionTop,
   seedCachedEvents,
-  stabilizeSportsFollowOrder,
   setPolicy,
-  setWeatherLocation
+  setWeatherLocation,
+  stabilizeSportsFollowOrder,
+  TZ
 } from "../visual-parity/seed.js";
+import { type ParityEvent, type ParityManifest, type ParityTask } from "../visual-parity/seed.js";
+
 import {
   blurComposer,
   check,
@@ -149,40 +151,12 @@ test.afterEach(async ({ page }, testInfo) => {
     await page.screenshot({ path: join(failureDir, `${slug}.failure.png`), fullPage: true });
   }
 });
-interface ParityEvent {
-  readonly title: string;
-  readonly startsAt: string;
-  readonly endsAt: string;
-}
-interface ParityTask {
-  readonly key: string;
-  readonly title: string;
-  readonly due: string | null;
-  readonly status?: string;
-}
-interface ParityManifest {
-  readonly tasks: readonly ParityTask[];
-  readonly meetings: readonly ParityEvent[];
-  readonly events: readonly ParityEvent[];
-  readonly todayPlanTasks: readonly string[];
-  readonly tomorrowPlanTasks: readonly string[];
-  readonly news: { readonly expectedHeadline: string };
-  readonly weather: { readonly location: string };
-}
-interface ScoreGame {
-  readonly home?: { readonly sourceTeamId?: string };
-  readonly away?: { readonly sourceTeamId?: string };
-}
 async function signIn(page: Page): Promise<void> {
   await page.goto(process.env.JARVIS_UAT_BASE_URL!);
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
-}
-async function localeTz(page: Page): Promise<string> {
-  const locale = (await json(page, "/api/me/locale")).body as { locale: { timezone: string } };
-  return locale.locale.timezone;
 }
 async function seedAll(
   page: Page
@@ -247,45 +221,6 @@ async function seedAll(
   );
   await setWeatherLocation(page, m.weather.location);
   return { day, timeZone, ids };
-}
-async function overview(
-  page: Page,
-  path: string,
-  key: string,
-  ms: number
-): Promise<Record<string, unknown>> {
-  const deadline = Date.now() + ms;
-  while (Date.now() < deadline) {
-    const r = await json(page, path);
-    if (r.status === 200 && Array.isArray((r.body as Record<string, unknown>)[key])) {
-      const rows = (r.body as Record<string, unknown>)[key] as readonly unknown[];
-      if (rows.length > 0) return r.body as Record<string, unknown>;
-    }
-    await page.waitForTimeout(5000);
-  }
-  throw new Error(`parity: ${path} carried no ${key}`);
-}
-async function populatedMorning(page: Page, m: ParityManifest): Promise<void> {
-  const task0 = m.tasks[0];
-  const meeting0 = m.meetings[0];
-  if (!task0 || !meeting0) throw new Error("parity: manifest tasks/meetings empty");
-  await expect(page.getByText(task0.title).first()).toBeVisible({ timeout: 30000 });
-  await expect(page.getByText(meeting0.title).first()).toBeVisible({ timeout: 30000 });
-  const sports = await overview(page, "/api/sports/overview", "scoreboard", 120000);
-  const groups = sports["scoreboard"] as Array<{ readonly games: readonly ScoreGame[] }>;
-  const games = groups.flatMap((g) => g.games);
-  expect(games.some((g) => [g.home?.sourceTeamId, g.away?.sourceTeamId].includes("359"))).toBe(
-    true
-  );
-  const news = await overview(page, "/api/news/overview", "topStories", 180000);
-  await expect(page.locator(".jds-brief--news").first()).toBeVisible({ timeout: 60000 });
-  await expect(page.locator(".jds-brief--sports").first()).toBeVisible({ timeout: 60000 });
-  const arsenalItem = page.getByRole("listitem").filter({ hasText: "Arsenal" }).first();
-  await expect(arsenalItem).toBeVisible({ timeout: 60000 });
-  await expect(page.locator("#weather")).toContainText(/\S/, { timeout: 60000 });
-  console.log(
-    `[parity] populated: timeline, weather, news lead "${((news["topStories"] as Array<{ title: string }>)[0] as { title: string }).title}", sports scores`
-  );
 }
 async function assertFixtureSeam(page: Page, m: ParityManifest): Promise<void> {
   const news = await overview(page, "/api/news/overview", "topStories", 180000);
@@ -391,80 +326,7 @@ function assertApiRequestLog(): void {
   if (lines.length === 0) throw new Error("espn fixture inactive: no API request log lines");
   console.log(`[parity] API request log lines: ${lines.length}`);
 }
-async function driveState(page: Page, state: string, w: number): Promise<void> {
-  const dialog = page.getByRole("dialog");
-  if (state.startsWith("today-")) {
-    await closeDialogs(page).catch(() => undefined);
-    await page.setViewportSize({ width: w, height: 1000 });
-    if (state === "today-morning-news") await scrollSectionTop(page, ".jds-brief--news");
-    if (state === "today-morning-sports")
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight * 0.7));
-  } else if (state.startsWith("reader-")) {
-    const tab = state.includes("-review") || state.includes("partial") ? 1 : 0;
-    await ensureReader(page, w, tab as 0 | 1);
-  } else if (state.startsWith("evening-step-")) {
-    await ensurePlanning(page, w, Number(state.slice("evening-step-".length)));
-  } else if (state === "evening-saved") {
-    await expect(dialog).toBeVisible();
-  }
-}
 
-async function prepareSelectedEntry(
-  page: Page,
-  entry: (typeof MOCKUPS)[number],
-  m: ParityManifest
-): Promise<void> {
-  statePrerequisites(entry.state);
-  const morning = new Date(localIso(localDay(), "08:00"));
-  const evening = new Date(localIso(localDay(), "20:00"));
-  const dialog = () => page.getByRole("dialog");
-  // The recipe is performed action by action, in declared order: the recorded
-  // dispatch is what the unit suite observes, so the plan cannot drift from
-  // the browser behavior it describes.
-  await runSetupActions(entry.state, {
-    openTodayMorning: () => openToday(page, morning),
-    openTodayEvening: () => openToday(page, evening),
-    populatedMorning: () => populatedMorning(page, m),
-    planningStep: async (step) => {
-      if (step === 0) {
-        await ensurePlanning(page, entry.viewport.w, 0);
-        return;
-      }
-      const steps = dialog().getByRole("navigation", { name: "Plan steps" });
-      if (step === 1) await steps.getByRole("button", { name: "Open commitments" }).click();
-      else if (step === 2) await steps.getByRole("button", { name: "Shape tomorrow" }).click();
-      else await steps.getByRole("button", { name: "Review" }).click();
-    },
-    // A save with no new intent change is rejected (400), and this walk saves
-    // twice against one backend: re-picking an already-saved Tomorrow changes
-    // nothing, so fall back to another real commitment decision instead.
-    choiceTomorrow: async () => {
-      const group = dialog().getByRole("radiogroup", {
-        name: `${(m.tasks[2] as ParityTask).title}: plan`
-      });
-      const tomorrow = group.getByLabel("Tomorrow");
-      if (await tomorrow.isChecked()) await group.getByLabel("Keep on the list").check();
-      else await tomorrow.check();
-    },
-    planningSaved: () => dialog().getByRole("button", { name: "Save tomorrow's plan" }).click(),
-    expectSavedText: () =>
-      expect(dialog()).toContainText("Saved. The blocks are proposed for the morning."),
-    closeDialogs: () => closeDialogs(page).then(() => undefined),
-    expectTodayRoute: () => expect(page).toHaveURL(/\/today/),
-    driveState: async () => {
-      if (entry.state === "reader-partial-review")
-        await mirrorBlock(page, localDay(), await localeTz(page), 0);
-      if (entry.state.startsWith("reader-automatic"))
-        await mirrorBlock(page, localDay(), await localeTz(page), 1);
-      await driveState(page, entry.state, entry.viewport.w);
-    }
-  });
-  if (entry.state.startsWith("today-morning")) {
-    if (entry.state === "today-morning-news") await scrollSectionTop(page, ".jds-brief--news");
-    if (entry.state === "today-morning-sports")
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight * 0.7));
-  }
-}
 // Test-side quiescence: background refresh jobs rewrite overview rows early on, so
 // poll the stable projection (not capture code) until it settles before holding.
 async function apiQuiescent(page: Page): Promise<void> {
