@@ -318,6 +318,42 @@ describe("Sports Today Tonight", () => {
     expect(html).toContain(QUIET_NIGHT_LINE);
   });
 
+  it("uses an existing followed-card story for the recap when top stories are empty", () => {
+    const data = overview({
+      followed: [
+        {
+          teamKey: "ars",
+          competitionKey: "eng.1",
+          competitionLabel: "Premier League",
+          name: "Arsenal",
+          crestUrl: null,
+          status: "news",
+          primary: "Arsenal story",
+          stories: [
+            {
+              title: "Arsenal seal late win to stay top of the pile",
+              url: "https://example.com/arsenal-story",
+              publishedAt: "2026-07-07T12:00:00.000Z",
+              imageUrl: "https://example.com/lead.jpg",
+              publisherLabel: "ESPN",
+              publisherDomain: "espn.com",
+              storyRef: "sports:arsenal-story"
+            }
+          ],
+          form: [],
+          standing: null,
+          nextMatch: null,
+          lastMatchAt: null,
+          rationale: ""
+        }
+      ]
+    });
+    const html = render(seed(data));
+
+    expect(html).toContain('class="sp-lead__photo"');
+    expect(html).toContain("Arsenal seal late win to stay top of the pile");
+  });
+
   it("renders nothing when scores, tonight, stories and cards are all empty", () => {
     expect(render(seed(overview()))).toBe("");
   });

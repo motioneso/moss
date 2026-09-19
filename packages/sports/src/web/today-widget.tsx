@@ -16,6 +16,16 @@ import {
   selectTonightRows
 } from "./today-scores.js";
 
+type RecapStory = {
+  readonly storyRef?: string;
+  readonly url: string;
+  readonly imageUrl: string | null;
+  readonly competitionLabel: string;
+  readonly publisherLabel: string;
+  readonly title: string;
+  readonly summary: string | null;
+};
+
 /**
  * Today "Sports desk" widget (#799 module-web-registry Phase A).
  *
@@ -79,8 +89,25 @@ export function SportsTodayWidget(): ReactNode {
   const topStories = (data?.topStories ?? []).filter(
     (story) => !hiddenStoryRefs.has(story.storyRef ?? "")
   );
-  const lead = topStories[0] ?? null;
-  const briefs = topStories.slice(1, 4);
+  const cardStories: RecapStory[] = (data?.followed ?? []).flatMap((card) =>
+    card.stories
+      .filter((story) => !hiddenStoryRefs.has(story.storyRef ?? ""))
+      .map((story) => ({
+        storyRef: story.storyRef,
+        url: story.url,
+        imageUrl: story.imageUrl,
+        competitionLabel: card.competitionLabel,
+        publisherLabel: story.publisherLabel,
+        title: story.title,
+        summary: null
+      }))
+  );
+  const recapStories = [...topStories, ...cardStories].filter(
+    (story, index, stories) =>
+      stories.findIndex((candidate) => candidate.url === story.url) === index
+  ) as RecapStory[];
+  const lead = recapStories.find((story) => story.imageUrl !== null) ?? recapStories[0] ?? null;
+  const briefs = recapStories.filter((story) => story !== lead).slice(0, 3);
   // Scores and Tonight come from the same response through the pure T11 selectors: finals and
   // live games split followed-first, tonight by the actor's local day. Phase helpers never see
   // teamKey — followed marking is always the provider's permanent id via isFollowed.
