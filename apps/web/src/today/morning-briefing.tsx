@@ -88,6 +88,11 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
   });
   const isAutoMode = settingsQuery.data?.settings?.timeBlockMode === "auto";
   const reviewLabel = isAutoMode ? "Adjust task blocks" : "Review task blocks";
+  // The wide frame belongs to automatically placed briefings only. Proposed
+  // and news states share this component, so they stay on the narrow frame.
+  const hasAutomaticPlacement = (props.dayPlan?.plan?.blocks ?? []).some(
+    (block) => block.pendingChange === null && block.actualPlacement?.startsAt != null
+  );
   const { choiceFor, touchedIds } = props.controller;
   const acceptPlan = props.dayPlan?.plan ?? null;
   const acceptSelection = acceptPlan
@@ -146,7 +151,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
         ) : null
       }
       report={
-        <div data-briefing-surface="automatic-read">
+        <div data-briefing-surface={hasAutomaticPlacement ? "automatic-read" : undefined}>
           {detail?.state === "ready" && detail.run !== null && detail.run.status === "succeeded" ? (
             <ReportBody
               detail={detail}
