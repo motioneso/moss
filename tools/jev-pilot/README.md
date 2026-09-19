@@ -86,6 +86,9 @@ request containing two Choice questions. Calls are at least 60 seconds apart. Ex
 ```
 
 These are model judgments, not facts. Check whether they match what you are actually doing.
+Activity choices include research/reading, writing/editing, coding, communication, planning/admin,
+shopping, entertainment, other and unknown. Browsing product listings counts as shopping; a purchase
+or declared goal is not required. Whether shopping supports your goal is a separate judgment.
 Especially try relevant research, unrelated browsing, writing, and a necessary detour. The API
 returns confidence too; neither confidence nor probability proves accuracy. No nudges are sent.
 

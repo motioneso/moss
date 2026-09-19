@@ -27,6 +27,18 @@ def response():
 
 
 class PilotCheck(unittest.TestCase):
+    def test_shopping_contract_and_response_without_goal(self):
+        request = pilot.payload({"app": "Safari", "title": "Club Homeware Store",
+                                 "text": "Fleece blanket $21.00. Woven blanket sale price $20.25."},
+                                "", [], 15)
+        self.assertIn("shopping", request["questions"]["activity"]["criteria"])
+        data = response()
+        data["answers"]["activity"].update(
+            choice="shopping", probabilities={key: float(key == "shopping") for key in pilot.ACTIVITIES})
+        result = pilot.parse_answers(data, False)
+        self.assertEqual(result["activity"], "shopping")
+        self.assertEqual(result["alignment"], "insufficient_evidence")
+
     def test_text_is_opt_in_redacted_bounded_and_sent(self):
         raw = {"status": "ok", "bundle_id": "example.editor", "app": "Browser",
                "title": "Liverpool FC", "text": "Club news me@example.com " + "Match report " * 100}
