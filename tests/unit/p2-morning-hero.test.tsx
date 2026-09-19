@@ -78,6 +78,12 @@ describe("buildTodayHeroContent — morning (day) mode", () => {
     expect(markup).toContain("There is room for a break and lunch before the review.");
     // The bulleted fallback must never appear once a readable run exists.
     expect(markup).not.toContain("Fallback lede");
+    expect(markup.indexOf('class="today-hero__summary"')).toBeLessThan(
+      markup.indexOf('class="today-hero__weather"')
+    );
+    expect(markup.indexOf('class="today-hero__weather"')).toBeLessThan(
+      markup.indexOf('class="today-hero__prepared"')
+    );
   });
 
   it("not ready: no run means the prepared line names the not-ready state and there is no reader control", () => {
@@ -167,7 +173,7 @@ describe("morning hero vertical rhythm (day mode only)", () => {
       '.today-hero[data-mode="day"] .today-hero__eyebrow { margin-bottom: 24px; }'
     );
     expect(block).toContain(
-      '.today-hero[data-mode="day"] .today-hero__prepared { margin-top: 35px; }'
+      '.today-hero[data-mode="day"] .today-hero__prepared { margin-top: 35px; justify-content: space-between; }'
     );
   });
 
@@ -238,6 +244,7 @@ describe("morning hero vertical rhythm (day mode only)", () => {
     const seen = new Set<string>();
     for (const rule of rules) {
       if (!rule.selector.includes("today-hero")) continue;
+      if (rule.selector.includes("today-hero__sections")) continue;
       if (rule.selector.includes('[data-mode="day"]')) continue;
       const decls: string[] = [];
       for (const m of rule.body.matchAll(/(margin|padding|gap)(-[a-z]+)?\s*:\s*([^;]+);/g)) {
@@ -249,5 +256,12 @@ describe("morning hero vertical rhythm (day mode only)", () => {
       seen.add(key);
     }
     expect([...seen].sort()).toEqual(Object.keys(snapshot).sort());
+  });
+
+  it("keeps the day section index cascade after the generic section rules", async () => {
+    const css = await heroCss();
+    expect(css.lastIndexOf(".today-hero__sections {")).toBeGreaterThan(
+      css.indexOf(".cmd-sections {")
+    );
   });
 });
