@@ -190,6 +190,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
           calendarError={props.calendarError}
           onOpenTask={props.onOpenTask}
           editorial
+          showEditorialHeading={false}
         />
       }
       footerActions={
