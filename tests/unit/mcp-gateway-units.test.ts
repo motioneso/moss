@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AssistantToolGateway,
   ConfirmationRegistry,
+  familyAllowsAutoRun,
   InvalidSessionTokenError,
   renderAndCap,
   resolvePolicy,
@@ -24,9 +25,9 @@ describe("module-sdk tool contract", () => {
   it("lets a module declare a tool with an execute handler", async () => {
     const ctx: ToolContext = { actorUserId: "u1", requestId: "r1", chatSessionId: "s1" };
     const tool: ModuleAssistantToolManifest = {
-      name: "example.read",
-      description: "Echo back a value.",
-      permissionId: "example.view",
+      name: "example.echo",
+      description: "Echoes input.",
+      permissionId: "example.echo",
       risk: "read",
       inputSchema: { type: "object", properties: { value: { type: "string" } } },
       execute: async (_scopedDb, input): Promise<ToolResult> => ({ data: { echo: input.value } })
@@ -61,6 +62,31 @@ describe("gateway policy", () => {
         dummyLookup
       )
     ).resolves.toBe("confirm");
+  });
+
+  it("denies auto-run under unattended mode for destructive tools (#2419)", async () => {
+    await expect(
+      familyAllowsAutoRun(
+        { ...tool("destructive"), actionFamilyId: "f1", executionPolicy: "auto" },
+        "example",
+        {
+          getFamilyTier: async () => null,
+          getFamilyManifest: async () => ({
+            id: "f1",
+            label: "F1",
+            description: "F1",
+            defaultTier: "ask_each_time",
+            allowedTiers: ["ask_each_time", "trusted_auto"]
+          })
+        }
+      )
+    ).resolves.toBe(false);
+  });
+
+  it("denies auto-run under unattended mode when tool has no actionFamilyId (#2419)", async () => {
+    await expect(
+      familyAllowsAutoRun({ ...tool("write"), executionPolicy: "auto" }, "example", dummyLookup)
+    ).resolves.toBe(false);
   });
 });
 
@@ -613,11 +639,22 @@ describe("gateway audit outcome truth (#1252)", () => {
       publisher: "Acme",
       lifecycle: "optional",
       compatibility: { jarv1s: ">=0.0.0" },
+      assistantActionFamilies: [
+        {
+          id: "acme_family",
+          label: "Acme",
+          description: "Acme",
+          defaultTier: "ask_each_time",
+          allowedTiers: ["ask_each_time", "trusted_auto"]
+        }
+      ],
       assistantTools: [
         {
           name: "acme.write",
           description: "Write",
           permissionId: "acme.write",
+          actionFamilyId: "acme_family",
+          executionPolicy: "auto",
           risk: "write",
           ...toolOverrides
         }
@@ -781,5 +818,134 @@ describe("gateway audit outcome truth (#1252)", () => {
       }
     });
     expect(audit).toEqual({ outcome: "failed", errorClass: "handler_error" });
+  });
+});
+
+describe("unattended mode security gate in callTool (#2419)", () => {
+  it("forces destructive tools through confirmation under YOLO", async () => {
+    const tokens = new SessionTokenRegistry();
+    const confirmations = new ConfirmationRegistry();
+    let actionRequested = false;
+    const gateway = new AssistantToolGateway({
+      resolveActiveModules: async () => [
+        {
+          id: "danger_module",
+          name: "Danger Module",
+          version: "1.0.0",
+          publisher: "Acme",
+          lifecycle: "optional",
+          compatibility: { jarv1s: ">=0.0.0" },
+          assistantActionFamilies: [
+            {
+              id: "danger_family",
+              label: "Danger",
+              description: "Danger",
+              defaultTier: "ask_each_time",
+              allowedTiers: ["ask_each_time", "trusted_auto"]
+            }
+          ],
+          assistantTools: [
+            {
+              name: "danger.nuke",
+              description: "Nuke",
+              permissionId: "danger.nuke",
+              actionFamilyId: "danger_family",
+              executionPolicy: "auto",
+              risk: "destructive",
+              execute: async () => ({ data: { nuked: true } })
+            }
+          ]
+        }
+      ],
+      repository: {
+        createPendingAssistantAction: async () => ({ id: "act_1" }),
+        resolveAssistantAction: async () => ({ id: "act_1", status: "confirmed" }),
+        insertActionAuditLog: async () => {}
+      } as never,
+      runner: {
+        withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
+          work({})
+      } as never,
+      tokens,
+      confirmations,
+      notifier: {
+        emit: (_chatSessionId, record: unknown) => {
+          if ((record as { kind?: string }).kind === "action_request") {
+            actionRequested = true;
+          }
+        }
+      },
+      confirmTimeoutMs: 10,
+      yoloMode: async () => true
+    });
+
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const response = await gateway.callTool(token, "danger.nuke", {});
+
+    expect(actionRequested).toBe(true);
+    expect(response).toEqual({
+      ok: false,
+      denied: true,
+      reason:
+        "This action was not approved, so it was not done. Do not try it again; let the user know."
+    });
+  });
+
+  it("forces family-less write tools through confirmation under YOLO", async () => {
+    const tokens = new SessionTokenRegistry();
+    const confirmations = new ConfirmationRegistry();
+    let actionRequested = false;
+    const gateway = new AssistantToolGateway({
+      resolveActiveModules: async () => [
+        {
+          id: "plain_module",
+          name: "Plain Module",
+          version: "1.0.0",
+          publisher: "Acme",
+          lifecycle: "optional",
+          compatibility: { jarv1s: ">=0.0.0" },
+          assistantTools: [
+            {
+              name: "plain.write",
+              description: "Write without family",
+              permissionId: "plain.write",
+              risk: "write",
+              execute: async () => ({ data: { written: true } })
+            }
+          ]
+        }
+      ],
+      repository: {
+        createPendingAssistantAction: async () => ({ id: "act_2" }),
+        resolveAssistantAction: async () => ({ id: "act_2", status: "confirmed" }),
+        insertActionAuditLog: async () => {}
+      } as never,
+      runner: {
+        withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
+          work({})
+      } as never,
+      tokens,
+      confirmations,
+      notifier: {
+        emit: (_chatSessionId, record: unknown) => {
+          if ((record as { kind?: string }).kind === "action_request") {
+            actionRequested = true;
+          }
+        }
+      },
+      confirmTimeoutMs: 10,
+      yoloMode: async () => true
+    });
+
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const response = await gateway.callTool(token, "plain.write", {});
+
+    expect(actionRequested).toBe(true);
+    expect(response).toEqual({
+      ok: false,
+      denied: true,
+      reason:
+        "This action was not approved, so it was not done. Do not try it again; let the user know."
+    });
   });
 });

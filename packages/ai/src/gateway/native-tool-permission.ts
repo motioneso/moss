@@ -1,6 +1,11 @@
 import { actionResultRecord } from "./action-result-record.js";
 import type { SessionNotifier } from "./types.js";
 
+export const NATIVE_TOOL_MODULE_ID = "claude-native";
+export const NATIVE_TOOL_MODULE_NAME = "Claude Native Tools";
+// #1158: read-only native META-tools that must never require a user confirmation.
+export const NATIVE_READONLY_AUTO_ALLOW = new Set(["ToolSearch"]);
+
 export interface NativeToolPermissionRequest {
   readonly toolName: string;
   readonly toolInput: Record<string, unknown>;

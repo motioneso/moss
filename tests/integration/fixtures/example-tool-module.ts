@@ -84,6 +84,21 @@ export const exampleToolModule: MossModuleManifest = {
       execute: (db, input, ctx) => record("example.autoWrite", db as DataContextDb, input, ctx)
     },
     {
+      name: "example.anotherAutoWrite",
+      description: "Another auto write fixture.",
+      permissionId: "example.update",
+      risk: "write",
+      executionPolicy: "auto",
+      actionFamilyId: "dummy",
+      inputSchema: {
+        type: "object",
+        required: ["value"],
+        properties: { value: { type: "string" } }
+      },
+      execute: (db, input, ctx) =>
+        record("example.anotherAutoWrite", db as DataContextDb, input, ctx)
+    },
+    {
       name: "example.destroy",
       description: "Destroy fixture.",
       permissionId: "example.delete",
