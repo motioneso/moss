@@ -186,18 +186,68 @@ describe("morning hero vertical rhythm (day mode only)", () => {
     );
   });
 
-  it("new rhythm block is day-scoped: no bare (unscoped) overrides in it", async () => {
-    const block = dayBlock(await heroCss());
-    // Every margin/padding declaration added by this round must sit under a
-    // [data-mode="day"] selector. That keeps the new rules out of the
-    // evening hero's cascade; evening pixel-parity itself is Prover's
-    // guard captures, not this test.
-    const declarations = block.match(/[a-z-]+:\s*\d+px;/g) ?? [];
-    expect(declarations.length).toBeGreaterThan(0);
-    const selectors = block.match(/[^{}]+(?=\{)/g) ?? [];
-    for (const selector of selectors) {
-      if (selector.includes("@media")) continue;
-      expect(selector).toContain('[data-mode="day"]');
+  it("whole file: bare hero spacing anywhere equals the shared baseline snapshot", async () => {
+    // Evening pixel-parity itself is Prover's guard captures, not this
+    // test. This test scans the entire stylesheet so an unscoped spacing
+    // rule anywhere in the file gets caught: every margin, padding or gap
+    // declaration on a today-hero selector must either sit under
+    // [data-mode="day"] or match the shared-baseline snapshot below that
+    // both modes already render. Changing a baseline value means evening
+    // moves too, so the snapshot forces that edit to update this test.
+    const css = await heroCss();
+    const clean = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    const flat = (s: string) => s.trim().replace(/\s+/g, " ");
+    const squeeze = (s: string) => s.replace(/\s+/g, "");
+    type Rule = { media: string; selector: string; body: string };
+    const rules: Rule[] = [];
+    let i = 0;
+    while (i < clean.length) {
+      while (i < clean.length && /\s/.test(clean[i] ?? "")) i++;
+      if (i >= clean.length) break;
+      const brace = clean.indexOf("{", i);
+      if (brace === -1) break;
+      const prelude = flat(clean.slice(i, brace));
+      let depth = 1;
+      let j = brace + 1;
+      while (j < clean.length && depth > 0) {
+        if (clean[j] === "{") depth++;
+        else if (clean[j] === "}") depth--;
+        j++;
+      }
+      const body = clean.slice(brace + 1, j - 1);
+      if (prelude.startsWith("@media")) {
+        for (const m of body.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+          rules.push({ media: prelude, selector: flat(m[1] ?? ""), body: m[2] ?? "" });
+        }
+      } else {
+        rules.push({ media: "", selector: prelude, body });
+      }
+      i = j;
     }
+    const snapshot: Record<string, string[]> = {
+      "|.today-hero": ["margin:0calc(-1*var(--space-6))18px", "padding:29px34px30px"],
+      "@media (max-width: 880px)|.today-hero": ["padding:23px22px"],
+      "@media (max-width: 560px)|.today-hero": ["margin-left:-0.75rem", "margin-right:-0.75rem"],
+      "|.today-hero__eyebrow": ["margin:0010px"],
+      "|.today-hero__title": ["margin:0"],
+      "|.today-hero__summary": ["margin-top:19px"],
+      "|.today-hero__prepared": ["gap:8px16px", "margin:21px00"],
+      "|.today-hero__rule": ["margin:20px016px"],
+      "|.today-hero__weather .wx-row": ["margin-top:0"]
+    };
+    const seen = new Set<string>();
+    for (const rule of rules) {
+      if (!rule.selector.includes("today-hero")) continue;
+      if (rule.selector.includes('[data-mode="day"]')) continue;
+      const decls: string[] = [];
+      for (const m of rule.body.matchAll(/(margin|padding|gap)(-[a-z]+)?\s*:\s*([^;]+);/g)) {
+        decls.push(squeeze(`${m[1] ?? ""}${m[2] ?? ""}:${m[3] ?? ""}`));
+      }
+      if (decls.length === 0) continue;
+      const key = `${rule.media}|${rule.selector}`;
+      expect(snapshot[key]).toEqual(decls.sort());
+      seen.add(key);
+    }
+    expect([...seen].sort()).toEqual(Object.keys(snapshot).sort());
   });
 });
