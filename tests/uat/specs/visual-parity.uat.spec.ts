@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, join as joinPath, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
@@ -16,7 +16,11 @@ import {
   type RouteName,
   type RouteReadinessEvidence
 } from "../visual-parity/capture.js";
-import { DECLARED_SIZE_MISMATCHES } from "../visual-parity/declared-size-mismatches.js";
+import {
+  DECLARED_SIZE_MISMATCHES,
+  compareContentTwin,
+  findContentTwin
+} from "../visual-parity/declared-size-mismatches.js";
 import {
   HARNESS_FILES,
   assertArtifactDirsDistinct,
@@ -521,9 +525,41 @@ test("visual parity walk: 32 captures, diffs and report", async ({ page }) => {
     );
     expect(r.maskedShare).toBeLessThanOrEqual(0.35);
     const selectedDeclaration = resolveSelectedCase(CASE_SELECTION, entry.dir, entry.name);
+    const contentTwin = findContentTwin(entry.name);
+    // A declared content twin replaces the legacy height-only check for a case whose
+    // job is to keep looking different from a named sibling, not to hold a fixed size.
+    // Every mode writes out a masked copy of each picture (captureEntry does this
+    // unconditionally; only the separate raw copy is limited to a selected-list run),
+    // so this reads the masked copy and runs in every mode, including the full walk.
+    // The sibling picture must already have been captured earlier in this same run;
+    // if it hasn't, that is a genuine setup problem and the run fails loudly rather
+    // than silently skipping the check.
+    if (contentTwin) {
+      const maskedDir =
+        CASE_SELECTION.mode === "selected"
+          ? join(OUT, CASE_SELECTION.artifacts.captures, entry.dir)
+          : OUT;
+      const ownMaskedPath = join(maskedDir, entry.name);
+      const twinMaskedPath = join(maskedDir, contentTwin.differsFrom);
+      if (!existsSync(twinMaskedPath))
+        throw new Error(
+          `parity: ${entry.name} declares a content twin ${contentTwin.differsFrom} that has no captured picture yet — check capture order`
+        );
+      const twinDiffDir =
+        CASE_SELECTION.mode === "selected"
+          ? join(OUT, CASE_SELECTION.artifacts.diffs, entry.dir)
+          : OUT;
+      mkdirSync(twinDiffDir, { recursive: true });
+      const twinDiffPath = join(twinDiffDir, entry.name.replace(/\.png$/, ".twin-diff.png"));
+      const twinDiffPercent = compareContentTwin(ownMaskedPath, twinMaskedPath, twinDiffPath);
+      expect(
+        twinDiffPercent,
+        `${entry.name} must differ from ${contentTwin.differsFrom} by at least ${contentTwin.minDiffPercent}%`
+      ).toBeGreaterThanOrEqual(contentTwin.minDiffPercent);
+    }
     // A declared size transition replaces this legacy check with its own exact target-size
     // and capture-position assertion below.
-    if (!selectedDeclaration?.sizeTransition) {
+    else if (!selectedDeclaration?.sizeTransition) {
       const declared = DECLARED_SIZE_MISMATCHES.find(({ name }) => name === entry.name);
       if (declared) {
         expect(r.size, `${entry.name} captured size`).toBe(declared.capturedSize);
