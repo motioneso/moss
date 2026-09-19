@@ -27,6 +27,15 @@ def response():
 
 
 class PilotCheck(unittest.TestCase):
+    def test_idle_timeout_is_forwarded_to_native_sampler(self):
+        with patch("pilot.subprocess.run") as run:
+            run.return_value.stdout = b'{"status":"idle"}'
+            self.assertEqual(pilot.capture(Path("capture"), {"com.apple.Safari"}, True, True, 900),
+                             {"status": "idle"})
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("--idle-seconds") + 1], "900")
+        self.assertIn("--text", command)
+
     def test_shopping_contract_and_response_without_goal(self):
         request = pilot.payload({"app": "Safari", "title": "Club Homeware Store",
                                  "text": "Fleece blanket $21.00. Woven blanket sale price $20.25."},
@@ -131,7 +140,7 @@ class PilotCheck(unittest.TestCase):
     def test_stale_result_dropped_and_budget_still_enforced(self):
         args = argparse.Namespace(minutes=1, demo=False, allow={"example.editor"}, titles=True, text=False,
                                   once=False, interval=60, live=True, goal="Write", max_calls=1,
-                                  flag_after_minutes=5, distraction_probability=0.8, cooldown_minutes=30)
+                                  flag_after_minutes=5, distraction_probability=0.8, cooldown_minutes=30, idle_minutes=10)
         raw = {"status": "ok", "app": "Editor", "bundle_id": "example.editor", "title": "Estimate"}
         log = io.StringIO()
         # The app changes between request and response; even a dropped call spends budget.
@@ -157,7 +166,7 @@ class PilotCheck(unittest.TestCase):
     def test_live_loop_flags_after_supported_minutes_without_saving_text(self):
         args = argparse.Namespace(minutes=7, demo=False, allow={"example.editor"}, titles=True, text=True,
                                   once=False, interval=60, live=True, goal="Write", max_calls=6,
-                                  flag_after_minutes=5, distraction_probability=0.8, cooldown_minutes=30)
+                                  flag_after_minutes=5, distraction_probability=0.8, cooldown_minutes=30, idle_minutes=10)
         raw = {"status": "ok", "app": "Editor", "bundle_id": "example.editor", "title": "Store",
                "text": "Private product excerpt", "text_source": "page", "text_scan_limited": True}
         clock = [0]

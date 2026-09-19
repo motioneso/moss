@@ -178,8 +178,9 @@ def evaluate(request, key):
     return result
 
 
-def capture(binary, allow, titles, text=False):
-    args = [str(binary), *sorted(allow)] + (["--titles"] if titles else []) + (["--text"] if text else [])
+def capture(binary, allow, titles, text=False, idle_seconds=600):
+    args = [str(binary), *sorted(allow), "--idle-seconds", str(idle_seconds)]
+    args += (["--titles"] if titles else []) + (["--text"] if text else [])
     try:
         proc = subprocess.run(args, capture_output=True, timeout=4, check=True)
         if len(proc.stdout) > 8192:
@@ -244,7 +245,7 @@ def run(args, binary, key, log):
         last_tick = now
         raw = ({"status": "ok", "app": "Example Editor", "bundle_id": "example.editor",
                 "title": "Project estimate", "text": "Draft estimate: design, build, test and review."}
-               if args.demo else capture(binary, args.allow, args.titles, args.text))
+               if args.demo else capture(binary, args.allow, args.titles, args.text, args.idle_minutes * 60))
         obs = observation(raw, args.allow, args.titles, args.text)
         context = (obs["bundle_id"], obs["title"] or obs.get("text", "")) if obs else None
         tracker.observe(now, context, idle=raw.get("status") in ("idle", "permission_denied", "unavailable"))
@@ -276,7 +277,7 @@ def run(args, binary, key, log):
                         result = evaluate(request, key)
                         # A result describes the sampled context, not the next app the user opens.
                         if not args.demo:
-                            fresh = observation(capture(binary, args.allow, args.titles, args.text),
+                            fresh = observation(capture(binary, args.allow, args.titles, args.text, args.idle_minutes * 60),
                                                 args.allow, args.titles, args.text)
                             if not same_context(fresh, obs) or time.monotonic() - now > 12:
                                 print("Dropped stale result.", flush=True)
@@ -328,6 +329,7 @@ def main(argv=None):
     parser.add_argument("--flag-after-minutes", type=float, default=5, help="Supported distraction minutes before a terminal flag")
     parser.add_argument("--distraction-probability", type=float, default=0.8, help="Minimum chosen alignment probability to count or reset")
     parser.add_argument("--cooldown-minutes", type=float, default=30, help="Minimum time between terminal flags")
+    parser.add_argument("--idle-minutes", type=float, default=10, help="No-input timeout before capture stops and timing resets (0.5–60)")
     parser.add_argument("--once", action="store_true", help="Sample immediately, then exit")
     parser.add_argument("--save", action="store_true", help="Save categorical results locally (no titles/goal)")
     parser.add_argument("--summary", type=Path, help="Summarize a saved JSONL file without any network call")
@@ -341,6 +343,8 @@ def main(argv=None):
     if not (0.5 <= args.flag_after_minutes <= 120 and 0.5 <= args.distraction_probability <= 1
             and 0 <= args.cooldown_minutes <= 480):
         parser.error("Use 0.5–120 flag minutes, 0.5–1 probability and 0–480 cooldown minutes.")
+    if not 0.5 <= args.idle_minutes <= 60:
+        parser.error("Use 0.5–60 idle minutes.")
     if args.demo:
         args.allow = ["example.editor"]
     if not args.allow and not args.list_apps:
@@ -372,6 +376,8 @@ def main(argv=None):
         print("PREVIEW ONLY: no network calls. Ctrl-C stops. --live enables TypeSafe requests.")
     if args.demo:
         print("SYNTHETIC DEMO — not an observation of this computer.")
+    elif args.live:
+        print(f"Idle timeout: {args.idle_minutes:g} minutes without input; detected lock/sleep still stops capture.")
     log = None
     try:
         if args.save and args.live and not args.demo:

@@ -102,7 +102,7 @@ probability proves accuracy. No OS notifications are sent.
 ```bash
 python3 -B pilot.py --live --allow com.apple.Safari --text --save \
   --goal "Research accommodation for a Liverpool trip" \
-  --flag-after-minutes 5 --distraction-probability 0.8
+  --flag-after-minutes 5 --distraction-probability 0.8 --idle-minutes 10
 ```
 
 The runner calculates time locally. Jev only judges the current evidence. Each result includes
@@ -111,18 +111,25 @@ The duration is a conservative estimate from samples, not continuous proof of at
 
 - Default: 5 accumulated minutes, with chosen alignment probability at least 0.8. These are
   pilot thresholds to tune against your judgments, not calibrated guarantees.
-- Credit only intervals bracketed by two qualifying `distracted` results, with the same page/app
-  observed throughout the 5-second capture checks. No credit before the first confident result.
+- Credit intervals bracketed by two qualifying `distracted` results, while capture remains
+  active in allowed apps throughout the 5-second checks. Different distracting pages/apps can
+  contribute to the same episode. No credit before the first confident result.
   With a 60-second interval, five minutes normally needs six qualifying results.
-- Changed pages, excluded apps, failed calls and uncertain results break the pending interval;
-  they never add or backfill time. Already credited time survives a brief gap. Frequent tab changes
-  can therefore undercount distraction; start with this conservative behavior before loosening it.
+- Page changes no longer discard an interval solely because the title changed. This estimate can
+  include unclassified intermediate visits between two distracting samples; it is not proof that
+  every page visited was distracting. Rapid switching that prevents a stable sample can still
+  undercount activity. Excluded apps, failed calls and uncertain results break the pending interval
+  and never backfill it. Already credited time survives a brief gap.
 - A confident `focused` or `necessary_detour` result clears the episode. A weaker result pauses it.
   Idle, revoked/unavailable capture, a gap of more than 15 seconds between capture checks, or no
   qualifying distraction result for `max(135, 2 * interval + 15)` seconds clears it too.
 - One flag per episode, with `--cooldown-minutes 30` between flags by default. A new episode must
   accumulate its own qualifying time. Restarting the program clears timing and cooldown state.
 - No goal means no timing or flagging. Preview mode does not call Jev or accumulate classifications.
+- `--idle-minutes 10` is the new default (previously 2), adjustable from 0.5 to 60. It means no
+  keyboard/mouse input, not proven absence. A longer timeout permits passive reading/watching to
+  count, but also permits capture longer after you walk away. Detected lock/sleep still stops capture
+  regardless of this timeout; Ctrl-C remains the explicit stop control.
 
 The full distributions help distinguish a close focused/detour decision from a clear distraction.
 Capture still observes only the apps you explicitly allow. Other activity is a gap, not distraction.
@@ -153,7 +160,7 @@ classified. Manually delete a session file when finished; TypeSafe's retention i
 - A goal plus up to three prior app segments provides a small amount of context. There is no
   persistent model memory. A changed title can restart the dwell timer; low coverage is a useful
   pilot finding rather than evidence that the user was idle.
-- Idle >=2 minutes and detectable lock/inactive sessions suspend sampling. Lock detection is
+- Idle beyond `--idle-minutes` and detectable lock/inactive sessions suspend sampling. Lock detection is
   best effort across macOS versions; use Ctrl-C when privacy matters. Sleep/scheduling gaps clear
   context, and results are discarded if the foreground context changed during the request.
 - Default cap is 120 attempted requests **per run**, including failures; restarting resets it.

@@ -36,14 +36,28 @@ class FocusCheck(unittest.TestCase):
         self.sample(tracker, 125, 180, "necessary_detour", 0.95)
         self.assertEqual(tracker.seconds, 0)
 
-    def test_page_switch_or_exclusion_does_not_credit_interval(self):
-        for context in ("new page", None):
-            tracker = FocusTracker()
-            self.sample(tracker, 0, 0)
-            self.sample(tracker, 5, 60)
-            tracker.observe(65, context)
-            self.sample(tracker, 70, 120)
-            self.assertEqual(tracker.seconds, 60)
+    def test_distracting_pages_accumulate_across_switches(self):
+        tracker = FocusTracker(threshold=120)
+        self.sample(tracker, 0, 0)
+        self.sample(tracker, 5, 60)
+        tracker.observe(65, "new page")
+        self.assertTrue(self.sample(tracker, 70, 120, context="new page"))
+        self.assertEqual(tracker.seconds, 120)
+
+    def test_excluded_app_still_breaks_interval(self):
+        tracker = FocusTracker()
+        self.sample(tracker, 0, 0)
+        self.sample(tracker, 5, 60)
+        tracker.observe(65, None)
+        self.sample(tracker, 70, 120)
+        self.assertEqual(tracker.seconds, 60)
+
+    def test_page_switch_to_detour_does_not_credit_pending_interval(self):
+        tracker = FocusTracker(threshold=120)
+        self.sample(tracker, 0, 0)
+        self.sample(tracker, 5, 60)
+        self.assertFalse(self.sample(tracker, 65, 120, "necessary_detour", context="new page"))
+        self.assertEqual(tracker.seconds, 0)
 
     def test_idle_sleep_long_uncertainty_and_network_failure(self):
         tracker = FocusTracker()

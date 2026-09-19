@@ -23,8 +23,8 @@ class FocusTracker:
         if (idle or (self.last_tick is not None and now - self.last_tick > 15)
                 or (self.last_support is not None and now - self.last_support > self.grace)):
             self.reset()
-        if context is None or context != self.context:
-            self.last_vote = None  # Never count an unclassified switch or excluded app.
+        if context is None:
+            self.last_vote = None  # Excluded apps remain gaps; allowed page changes can bridge.
         self.context = context
         self.last_tick = now
 
@@ -43,7 +43,8 @@ class FocusTracker:
         if alignment != "distracted" or self.context is None:
             self.uncertain()
             return False
-        # Only both-endpoint-confirmed intervals with uninterrupted context are credited.
+        # ponytail: endpoint estimate may include an unclassified intermediate page;
+        # classify every transition if this measurably overcounts. Capture must remain continuous.
         if self.last_vote is not None:
             self.seconds += max(0, now - self.last_vote)
         self.last_vote = now

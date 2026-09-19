@@ -96,10 +96,19 @@ let idle = CGEventSource.secondsSinceLastEventType(
     .combinedSessionState, eventType: CGEventType(rawValue: UInt32.max)!
 )
 let session = CGSessionCopyCurrentDictionary() as? [String: Any]
+var idleLimit = 600.0
+if let index = args.firstIndex(of: "--idle-seconds") {
+    guard args.indices.contains(index + 1), let value = Double(args[index + 1]),
+          value.isFinite, (30.0...3600.0).contains(value) else {
+        emit(["status": "invalid_idle_timeout"])
+        exit(2)
+    }
+    idleLimit = value
+}
 // Lock detection is best effort; explicit stop and idle cutoff remain necessary.
 let locked = session?["CGSSessionScreenIsLocked"] as? Bool ?? false
 let onConsole = session?[kCGSessionOnConsoleKey as String] as? Bool ?? true
-if locked || !onConsole || idle >= 120 {
+if locked || !onConsole || idle >= idleLimit {
     emit(["status": "idle"])
     exit(0)
 }
