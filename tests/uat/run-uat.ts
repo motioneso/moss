@@ -61,10 +61,13 @@ async function readUatLevel(specPath: string): Promise<{
   // UAT_CHAT_SCRIPTS, parsed by the same regex rather than a second one.
   chatScript: UatChatScript | undefined;
   withEspnFixture: boolean;
+  // [task:p8-briefing-writer-unreachable]: same trailing-optional-key pattern — lets a spec
+  // opt into the briefing-writer fixture through a real run.
+  withBriefingWriterFixture: boolean;
 }> {
   const source = await readFile(specPath, "utf8");
   const match = source.match(
-    /export\s+const\s+uatLevel\s*=\s*\{\s*level:\s*["']([^"']+)["']\s*,\s*without:\s*\[([^\]]*)\]\s*(?:,\s*withoutNewsJsonBinding:\s*(true|false))?\s*(?:,\s*withJobSearchFixture:\s*(true|false))?\s*(?:,\s*withSportsPublicSourceFixtures:\s*(true|false))?\s*(?:,\s*withWorkflowApprovalFixture:\s*(true|false))?\s*(?:,\s*withActivityOutcomeFixture:\s*(true|false))?\s*(?:,\s*withWorkshopStorageFixture:\s*(true|false))?\s*(?:,\s*chatScript:\s*["']([a-zA-Z0-9_-]+)["'])?\s*(?:,\s*withEspnFixture:\s*(true|false))?\s*\}\s+as const/
+    /export\s+const\s+uatLevel\s*=\s*\{\s*level:\s*["']([^"']+)["']\s*,\s*without:\s*\[([^\]]*)\]\s*(?:,\s*withoutNewsJsonBinding:\s*(true|false))?\s*(?:,\s*withJobSearchFixture:\s*(true|false))?\s*(?:,\s*withSportsPublicSourceFixtures:\s*(true|false))?\s*(?:,\s*withWorkflowApprovalFixture:\s*(true|false))?\s*(?:,\s*withActivityOutcomeFixture:\s*(true|false))?\s*(?:,\s*withWorkshopStorageFixture:\s*(true|false))?\s*(?:,\s*chatScript:\s*["']([a-zA-Z0-9_-]+)["'])?\s*(?:,\s*withEspnFixture:\s*(true|false))?\s*(?:,\s*withBriefingWriterFixture:\s*(true|false))?\s*\}\s+as const/
   );
   const level = match?.[1];
   const withoutSource = match?.[2];
@@ -76,6 +79,7 @@ async function readUatLevel(specPath: string): Promise<{
   const withWorkshopStorageFixtureSource = match?.[8];
   const chatScriptSource = match?.[9];
   const withEspnFixtureSource = match?.[10];
+  const withBriefingWriterFixtureSource = match?.[11];
   if (!level || withoutSource === undefined) {
     throw new Error(`${specPath} must export uatLevel per harness spec §5`);
   }
@@ -101,7 +105,8 @@ async function readUatLevel(specPath: string): Promise<{
     withActivityOutcomeFixture: withActivityOutcomeFixtureSource === "true",
     withWorkshopStorageFixture: withWorkshopStorageFixtureSource === "true",
     chatScript: chatScriptSource as UatChatScript | undefined,
-    withEspnFixture: withEspnFixtureSource === "true"
+    withEspnFixture: withEspnFixtureSource === "true",
+    withBriefingWriterFixture: withBriefingWriterFixtureSource === "true"
   };
 }
 
@@ -116,7 +121,8 @@ async function runSpec(specPath: string): Promise<number> {
     withActivityOutcomeFixture: uatLevel.withActivityOutcomeFixture,
     withWorkshopStorageFixture: uatLevel.withWorkshopStorageFixture,
     chatScript: uatLevel.chatScript,
-    withEspnFixture: uatLevel.withEspnFixture
+    withEspnFixture: uatLevel.withEspnFixture,
+    withBriefingWriterFixture: uatLevel.withBriefingWriterFixture
   });
 
   const onSignal = () => {
