@@ -164,12 +164,19 @@
   }
 }
 
-/* Morning-only vertical rhythm (day mode). The approved study spaces the
-   hero rows looser than the shared defaults above; scoped to
-   data-mode="day" so the evening hero and its guards do not move. Deltas
-   come from the ink-top comparison at head fbbc40ca (desktop headline 22px
-   high, desktop prepared time 36px high, mobile headline 11px high, mobile
-   summary 9px high, mobile prepared time already within 1px). */
+/* Morning-only vertical rhythm (day mode). These numbers compensate for a
+   structural difference: the seeded product text wraps to different line
+   counts than the study's fixed mockup text, so rows below the wrap point
+   need explicit offsets to land on the study's tops. Deltas come from the
+   ink-top comparison at head fbbc40ca (desktop headline 22px high,
+   desktop prepared time 36px high, mobile headline 11px high, mobile
+   summary 9px high, mobile prepared time already within 1px). Scoped to
+   data-mode="day" so the evening hero and its guards do not move.
+   Warnings for the next touch: the prepared-time offset absorbs the
+   deferred row-layout gap, so the later slice that moves that control into
+   the design's row will break these margins. And the desktop offset holds
+   only while the seeded summary wraps to three lines, a property of the
+   stand-in writer's fixed prose, not of the design. */
 .today-hero[data-mode="day"] {
   padding-top: 37px;
 }
@@ -199,3 +206,5 @@
     margin-top: 11px;
   }
 }
+
+/* End morning-only vertical rhythm. */

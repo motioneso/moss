@@ -154,8 +154,10 @@ describe("morning hero vertical rhythm (day mode only)", () => {
   function dayBlock(css: string): string {
     const flat = css.replace(/\s+/g, " ");
     const start = flat.indexOf("/* Morning-only vertical rhythm");
+    const end = flat.indexOf("/* End morning-only vertical rhythm. */");
     expect(start).toBeGreaterThan(-1);
-    return flat.slice(start);
+    expect(end).toBeGreaterThan(start);
+    return flat.slice(start, end);
   }
 
   it("wide: day-scoped padding, eyebrow gap and prepared gap match the study rhythm", async () => {
@@ -184,10 +186,12 @@ describe("morning hero vertical rhythm (day mode only)", () => {
     );
   });
 
-  it("evening hero is untouched: no bare (unscoped) rhythm overrides", async () => {
+  it("new rhythm block is day-scoped: no bare (unscoped) overrides in it", async () => {
     const block = dayBlock(await heroCss());
-    // Every margin/padding declaration in the rhythm block must sit under a
-    // [data-mode="day"] selector, so the evening guards cannot move.
+    // Every margin/padding declaration added by this round must sit under a
+    // [data-mode="day"] selector. That keeps the new rules out of the
+    // evening hero's cascade; evening pixel-parity itself is Prover's
+    // guard captures, not this test.
     const declarations = block.match(/[a-z-]+:\s*\d+px;/g) ?? [];
     expect(declarations.length).toBeGreaterThan(0);
     const selectors = block.match(/[^{}]+(?=\{)/g) ?? [];
