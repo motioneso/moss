@@ -45,6 +45,15 @@
   color: var(--hero-fg);
 }
 
+/* The fallback path renders text directly and inherits the size above. The
+   BriefingProse path renders a jds-brief__body child that sets its own
+   font-size from the shared component stylesheet, which an inherited value
+   can't reach, so it needs its own override here. */
+.today-hero__summary .jds-brief__body {
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
 .today-hero__prepared {
   display: flex;
   flex-wrap: wrap;
@@ -135,5 +144,22 @@
   .today-hero {
     margin-left: -0.75rem;
     margin-right: -0.75rem;
+  }
+}
+
+/* Narrow-screen sizing from the design study, which the wide-screen values
+   above don't cover: the clamp() floor undershoots the study's own numbers
+   below 680px, and the summary drops a size too. */
+@media (max-width: 680px) {
+  .today-hero__title {
+    font-size: 32px;
+    letter-spacing: -1px;
+    line-height: 1.09;
+  }
+
+  .today-hero__summary,
+  .today-hero__summary .jds-brief__body {
+    font-size: 13px;
+    line-height: 1.6;
   }
 }
