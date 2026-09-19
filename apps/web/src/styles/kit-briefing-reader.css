@@ -97,6 +97,12 @@
 .brief-reader__gap {
   margin: var(--space-2) 0;
 }
+@media (min-width: 1081px) {
+  .brief-reader:has([data-briefing-surface="automatic-read"]) {
+    max-width: 1120px;
+    max-height: 910px;
+  }
+}
 @media (max-width: 1080px) {
   .brief-reader__scrim {
     padding: 0;
