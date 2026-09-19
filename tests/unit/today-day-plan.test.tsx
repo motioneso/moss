@@ -173,6 +173,17 @@ describe("DayPlanSection", () => {
     expect(html).toContain("Write the draft");
   });
 
+  it("keeps the editorial heading omitted when calendar and saved plan are unavailable", () => {
+    const html = render({
+      editorial: true,
+      showEditorialHeading: false,
+      error: true,
+      calendarError: true
+    });
+    expect(html).not.toContain("Your day, laid out");
+    expect(html).toContain("Calendar and saved plan aren&#x27;t available right now.");
+  });
+
   it("keeps the plain variant byte-identical to the base", () => {
     expect(render({ plan: plan([placed("b1", "t1", null, 0)]) })).toBe(BASE_PLAIN_HTML);
   });

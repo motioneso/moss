@@ -211,7 +211,11 @@ export function DayPlanSection(props: DayPlanSectionProps) {
   if (props.calendarError && props.error) {
     return (
       <section className={sectionClass} id="schedule">
-        <SectionHead editorial={editorial} dateline={props.dateline} />
+        <SectionHead
+          editorial={editorial}
+          showEditorialHeading={props.showEditorialHeading}
+          dateline={props.dateline}
+        />
         <p className="cmd-empty" role="status">
           Calendar and saved plan aren&apos;t available right now.
         </p>
