@@ -560,4 +560,166 @@ describe("TodayPage background refetch", () => {
       renderer?.unmount();
     }
   });
+
+  it("classifies the morning reader from a freshly refetched day plan, not the cached pending one", async () => {
+    const { act } = await import("react");
+    const { createRoot } = await import("react-dom/client");
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const previousFetch = globalThis.fetch;
+    const morningDefinition: BriefingDefinitionDto = {
+      id: "morning-1",
+      ownerUserId: "user-1",
+      title: "Morning briefing",
+      briefingType: "morning",
+      cadence: "daily",
+      scheduleMetadata: {
+        version: 1,
+        targetTime: "07:00",
+        timezone: locale.timezone,
+        quietHoursBehavior: "defer_notification"
+      },
+      enabled: true,
+      selectedToolNames: [],
+      lastRunAt: null,
+      createdAt: "2026-06-29T00:00:00.000Z",
+      updatedAt: "2026-06-29T00:00:00.000Z"
+    };
+    const morningRun: BriefingRunDto = {
+      id: "run-morning-1",
+      definitionId: "morning-1",
+      ownerUserId: "user-1",
+      status: "succeeded",
+      runKind: "scheduled",
+      briefingType: "morning",
+      summaryText: "Your morning briefing",
+      sourceMetadata: {},
+      feedbackItems: [],
+      structuredPayload: { version: 1, actionRows: [], catchUp: null },
+      createdAt: "2026-06-30T15:00:00.000Z"
+    };
+    // Cached before the click: the block is still a pending move, not yet
+    // committed. This is what `mirrorBlock` leaves behind in the real flow
+    // before the reader is opened.
+    const pendingBlock: DayPlanBlockDto = {
+      id: "block-1",
+      kind: "focus",
+      taskId: null,
+      title: "Draft the proposal",
+      position: 0,
+      actualPlacement: null,
+      pendingChange: { kind: "move", startsAt: clocked(2), durationMinutes: 30 }
+    };
+    const cachedPendingPlan: GetDayPlanResponse = {
+      plan: {
+        id: "plan-1",
+        localDay: localDay(NOW, locale.timezone),
+        timeZone: locale.timezone,
+        revision: 1,
+        sourceRunId: null,
+        blocks: [pendingBlock],
+        eveningIntent: null
+      },
+      tasks: [],
+      unavailableTaskIds: [],
+      sourceRun: null,
+      sourceRunUnavailable: false
+    };
+    // What the server returns on refetch: the same block, now committed.
+    const committedPlan: GetDayPlanResponse = {
+      ...cachedPendingPlan,
+      plan: {
+        ...cachedPendingPlan.plan!,
+        revision: 2,
+        blocks: [
+          {
+            ...pendingBlock,
+            pendingChange: null,
+            actualPlacement: {
+              startsAt: clocked(2),
+              durationMinutes: 30,
+              calendarEventRef: null
+            }
+          }
+        ]
+      }
+    };
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/api/calendar/day-plan")) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          text: async () => JSON.stringify(committedPlan)
+        } as Response;
+      }
+      throw new Error(`unexpected fetch in reader-freshness test: ${url}`);
+    }) as unknown as typeof fetch;
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+    });
+    client.setQueryData(queryKeys.settings.locale, { locale });
+    client.setQueryData(queryKeys.tasks.list, { tasks: [] });
+    client.setQueryData(queryKeys.tasks.lists, { lists: [] });
+    client.setQueryData(queryKeys.calendar.list, { events: [] });
+    client.setQueryData(queryKeys.goals.list, { items: [] });
+    client.setQueryData(queryKeys.briefings.definitions, { definitions: [morningDefinition] });
+    client.setQueryData(queryKeys.briefings.runs(morningDefinition.id), { runs: [morningRun] });
+    const dayPlanKey = queryKeys.calendar.dayPlan(localDay(NOW, locale.timezone), locale.timezone);
+    client.setQueryData(dayPlanKey, cachedPendingPlan);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => {
+        root.render(
+          createElement(
+            QueryClientProvider,
+            { client },
+            createElement(
+              ChatControlsProvider,
+              {
+                value: {
+                  openChat: () => undefined,
+                  openChatWith: () => undefined,
+                  openAssistantWithDraft: () => undefined
+                }
+              },
+              createElement(
+                MemoryRouter,
+                null,
+                createElement(TodayPage, {
+                  me,
+                  wellnessEnabled: false,
+                  disabledModuleIds: ["news", "sports", "workshop"]
+                })
+              )
+            )
+          )
+        );
+      });
+      const opener = Array.from(container.querySelectorAll("button")).find(
+        (button) => button.textContent === "Read the full morning briefing"
+      );
+      if (!opener) throw new Error("morning reader open button not found");
+      await act(async () => {
+        opener.click();
+      });
+      // The reader dialog renders through a portal onto document.body, not
+      // under container, so it must be queried there.
+      const dialogTitle = document.body.querySelector("[data-briefing-title]");
+      expect(dialogTitle, "the briefing reader dialog must open on click").not.toBeNull();
+      const surface = document.body.querySelector("[data-briefing-surface]");
+      expect(
+        surface?.getAttribute("data-briefing-surface"),
+        "reader must classify the freshly refetched, committed plan as automatic, not the cached pending one it was opened with"
+      ).toBe("automatic-read");
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+      container.remove();
+      globalThis.fetch = previousFetch;
+    }
+  });
 });
