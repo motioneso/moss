@@ -142,3 +142,58 @@ describe("buildTodayHeroContent — morning (day) mode", () => {
     expect(markup).toContain("There is room for a break and lunch before the review.");
   });
 });
+
+describe("morning hero vertical rhythm (day mode only)", () => {
+  async function heroCss(): Promise<string> {
+    const { readFile } = await import("node:fs/promises");
+    const { fileURLToPath } = await import("node:url");
+    const cssUrl = new URL("../../apps/web/src/styles/kit-today-hero.css", import.meta.url);
+    return readFile(fileURLToPath(cssUrl), "utf8");
+  }
+
+  function dayBlock(css: string): string {
+    const flat = css.replace(/\s+/g, " ");
+    const start = flat.indexOf("/* Morning-only vertical rhythm");
+    expect(start).toBeGreaterThan(-1);
+    return flat.slice(start);
+  }
+
+  it("wide: day-scoped padding, eyebrow gap and prepared gap match the study rhythm", async () => {
+    const block = dayBlock(await heroCss());
+    expect(block).toContain('.today-hero[data-mode="day"] { padding-top: 37px; }');
+    expect(block).toContain(
+      '.today-hero[data-mode="day"] .today-hero__eyebrow { margin-bottom: 24px; }'
+    );
+    expect(block).toContain(
+      '.today-hero[data-mode="day"] .today-hero__prepared { margin-top: 35px; }'
+    );
+  });
+
+  it("narrow: day-scoped rhythm keeps mobile tops on the study (summary 18px per study)", async () => {
+    const block = dayBlock(await heroCss());
+    expect(block).toContain("@media (max-width: 680px)");
+    expect(block).toContain('.today-hero[data-mode="day"] { padding-top: 25px; }');
+    expect(block).toContain(
+      '.today-hero[data-mode="day"] .today-hero__eyebrow { margin-bottom: 19px; }'
+    );
+    expect(block).toContain(
+      '.today-hero[data-mode="day"] .today-hero__summary { margin-top: 18px; }'
+    );
+    expect(block).toContain(
+      '.today-hero[data-mode="day"] .today-hero__prepared { margin-top: 11px; }'
+    );
+  });
+
+  it("evening hero is untouched: no bare (unscoped) rhythm overrides", async () => {
+    const block = dayBlock(await heroCss());
+    // Every margin/padding declaration in the rhythm block must sit under a
+    // [data-mode="day"] selector, so the evening guards cannot move.
+    const declarations = block.match(/[a-z-]+:\s*\d+px;/g) ?? [];
+    expect(declarations.length).toBeGreaterThan(0);
+    const selectors = block.match(/[^{}]+(?=\{)/g) ?? [];
+    for (const selector of selectors) {
+      if (selector.includes("@media")) continue;
+      expect(selector).toContain('[data-mode="day"]');
+    }
+  });
+});

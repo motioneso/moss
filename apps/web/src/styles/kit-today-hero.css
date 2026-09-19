@@ -163,3 +163,39 @@
     line-height: 1.6;
   }
 }
+
+/* Morning-only vertical rhythm (day mode). The approved study spaces the
+   hero rows looser than the shared defaults above; scoped to
+   data-mode="day" so the evening hero and its guards do not move. Deltas
+   come from the ink-top comparison at head fbbc40ca (desktop headline 22px
+   high, desktop prepared time 36px high, mobile headline 11px high, mobile
+   summary 9px high, mobile prepared time already within 1px). */
+.today-hero[data-mode="day"] {
+  padding-top: 37px;
+}
+
+.today-hero[data-mode="day"] .today-hero__eyebrow {
+  margin-bottom: 24px;
+}
+
+.today-hero[data-mode="day"] .today-hero__prepared {
+  margin-top: 35px;
+}
+
+@media (max-width: 680px) {
+  .today-hero[data-mode="day"] {
+    padding-top: 25px;
+  }
+
+  .today-hero[data-mode="day"] .today-hero__eyebrow {
+    margin-bottom: 19px;
+  }
+
+  .today-hero[data-mode="day"] .today-hero__summary {
+    margin-top: 18px;
+  }
+
+  .today-hero[data-mode="day"] .today-hero__prepared {
+    margin-top: 11px;
+  }
+}
