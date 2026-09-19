@@ -498,6 +498,10 @@ export function TickerTeam(props: {
     card.status === "news" ||
     card.status === "live" ||
     (card.status === "today" && card.todayGameState !== "final");
+  // A failed lead image is dropped by URL so the text column runs full width (the designed
+  // artless state) instead of showing a broken icon. Keyed by URL so a later good image
+  // for another story still renders.
+  const [failedImage, setFailedImage] = useState<string | null>(null);
   const stories = card.stories.filter((story) => !props.hiddenStoryRefs?.has(story.storyRef ?? ""));
   const lead = stories[0] ?? null;
   // Same slicing rule as FeaturedTeamCard: a news card spent stories[0] on its headline so
@@ -530,8 +534,14 @@ export function TickerTeam(props: {
           full width (no artless placeholder plate — minimalist card, nothing to fake). alt="" on
           the art: the linked headline beside it already names the story. */}
       <div className="sp-tk__body">
-        {showNews && lead?.imageUrl ? (
-          <img className="sp-tk__media" src={lead.imageUrl} alt="" loading="lazy" />
+        {showNews && lead?.imageUrl && lead.imageUrl !== failedImage ? (
+          <img
+            className="sp-tk__media"
+            src={lead.imageUrl}
+            alt=""
+            loading="lazy"
+            onError={() => setFailedImage(lead.imageUrl)}
+          />
         ) : null}
         <div className="sp-tk__col">
           {showNews ? (
@@ -667,6 +677,10 @@ export function TickerLeague(props: {
   surface?: "sports" | "today";
 }) {
   const { card, surface = "sports" } = props;
+  // A failed lead image is dropped by URL so the text column runs full width (the designed
+  // artless state) instead of showing a broken icon. Keyed by URL so a later good image
+  // for another story still renders.
+  const [failedImage, setFailedImage] = useState<string | null>(null);
   const stories = card.stories.filter((story) => !props.hiddenStoryRefs?.has(story.storyRef ?? ""));
   const lead = stories[0] ?? null;
   // Lead story owns the headline slot; bullets start at the next story. Two max — same air-not-wall
@@ -692,8 +706,14 @@ export function TickerLeague(props: {
         </div>
       </header>
       <div className="sp-tk__body">
-        {lead?.imageUrl ? (
-          <img className="sp-tk__media" src={lead.imageUrl} alt="" loading="lazy" />
+        {lead?.imageUrl && lead.imageUrl !== failedImage ? (
+          <img
+            className="sp-tk__media"
+            src={lead.imageUrl}
+            alt=""
+            loading="lazy"
+            onError={() => setFailedImage(lead.imageUrl)}
+          />
         ) : null}
         <div className="sp-tk__col">
           {lead ? (
