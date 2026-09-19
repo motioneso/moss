@@ -1,7 +1,8 @@
 # Jev terminal pilot (macOS)
 
 A standalone experiment: classify your foreground activity and its relevance to an optional goal.
-No Moss server, Python packages, browser extension, screenshots, or background service.
+No Moss server, Python packages, browser extension, or background service.
+The activity runner uses Accessibility; a separate opt-in probe tests a manually selected screenshot.
 This is not a shipped Moss feature; it does not send messages or change tasks.
 
 Requires macOS, Python 3.9+, and Apple's Command Line Tools (`xcode-select --install` if needed).
@@ -172,7 +173,59 @@ classified. Manually delete a session file when finished; TypeSafe's retention i
   Observation text remains untrusted even when passed as JSON. The model has no tools/actions.
   Review TypeSafe's data handling before sending sensitive work.
 
-## Checks without observing your screen
+## Single-screenshot vision experiment
+
+`vision.py` tests perception separately from the live Jev runner. It never captures
+the screen or calls Jev. Choose a non-sensitive screenshot yourself (Shift-Command-4
+on Mac), inspect/crop it, and supply that PNG or JPEG. The whole supplied image is
+uploaded with `--live`; Accessibility's filtering does not apply to pixels.
+
+```bash
+# Preview: validates file size/type, shows instructions; no network or key needed.
+python3 -B vision.py ~/Desktop/example.png
+
+# One paid request. Reads OPENROUTER_API_KEY or prompts for it without echoing.
+python3 -B vision.py ~/Desktop/example.png --live
+
+# Compare the same image with the other budget model (another paid request).
+python3 -B vision.py ~/Desktop/example.png --live --model google/gemini-2.5-flash-lite
+```
+
+Default: `qwen/qwen3.7-flash`. Maximum image file size 8 MiB; maximum output 256
+tokens; reasoning disabled; no retries or model fallback. The file-size cap is
+not an image-token or monetary cap. Set a spending limit on your OpenRouter key
+if you need a hard budget. No resizing or redaction of image pixels is performed.
+
+Results show the short visual observation, elapsed seconds, provider-reported
+token usage, and `cost_credits` (OpenRouter's reported charge; null if absent).
+Invalid/truncated model descriptions are rejected while retaining reported usage.
+Only the selected image is sent to OpenRouter and its model provider; the program
+does not save images, descriptions, or keys. Descriptions appear in your terminal
+and may contain sensitive text. The screenshot you created remains until deleted.
+
+For persistent key storage in the Mac's default zsh, use this hidden prompt:
+
+```zsh
+mkdir -p "$HOME/.config/jev-pilot"
+(
+  umask 077
+  read -rs 'jev_key?OpenRouter API key: '
+  printf '\n'
+  printf '%s' "$jev_key" > "$HOME/.config/jev-pilot/openrouter-key"
+)
+chmod 600 "$HOME/.config/jev-pilot/openrouter-key"
+export OPENROUTER_API_KEY="$(cat "$HOME/.config/jev-pilot/openrouter-key")"
+```
+
+This stores plaintext with file mode 600. In a new terminal run only the export
+line. The script does not automatically load `.env` files. Do not put keys in the
+repo or paste them into chat. Alternatively, skip storage and use its hidden prompt.
+
+Compare observations against what each screenshot actually shows, especially
+destinations, maps, games, and video. Live model quality, billing, and latency still
+need verification using your OpenRouter account; offline tests do not establish them.
+
+## Offline and synthetic checks
 
 ```bash
 # No key, no network, no Mac required: synthetic request preview.
