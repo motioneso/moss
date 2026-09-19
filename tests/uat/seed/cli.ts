@@ -83,6 +83,10 @@ async function main(): Promise<void> {
   // as every other optional docker -e value here.
   const jobSearchAiProviderBaseUrl =
     resolveMossEnv(process.env, "JARVIS_UAT_JOB_SEARCH_AI_BASE_URL") || undefined;
+  // [task:p8-briefing-writer-unreachable]: empty string (unset — composeSeedHook always passes
+  // the var) reads as absent, same as every other optional docker -e value here.
+  const briefingWriterAiProviderBaseUrl =
+    resolveMossEnv(process.env, "JARVIS_UAT_BRIEFING_WRITER_AI_BASE_URL") || undefined;
   const sportsPublicSourceFixtures =
     resolveMossEnv(process.env, "JARVIS_UAT_SPORTS_PUBLIC_SOURCE_FIXTURES") === "1";
   const workflowApprovalFixture =
@@ -100,6 +104,7 @@ async function main(): Promise<void> {
     excludeChunks,
     withoutNewsJsonBinding,
     jobSearchAiProviderBaseUrl,
+    briefingWriterAiProviderBaseUrl,
     sportsPublicSourceFixtures,
     workflowApprovalFixture,
     activityOutcomeFixture,
