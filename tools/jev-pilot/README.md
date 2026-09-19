@@ -189,7 +189,22 @@ python3 -B vision.py ~/Desktop/example.png --live
 
 # Compare the same image with the other budget model (another paid request).
 python3 -B vision.py ~/Desktop/example.png --live --model google/gemini-2.5-flash-lite
+
+# Watch Desktop, then take screenshots normally. Ctrl-C stops.
+python3 -B vision.py --watch "$HOME/Desktop" --live
 ```
+
+Watch mode skips files already present when it announces "Watching" and checks
+every two seconds for new PNG/JPEG filenames (no subfolders or symlinks). It waits
+for a non-empty file's size and modification time to remain unchanged across two
+checks before processing it. This is a best-effort write-completion check; a copy
+that pauses longer can still be incomplete. Each filename is attempted once per
+run, even on failure or later edits. Restarting skips all files already present.
+It sends **all new PNG/JPEG files**, including downloads, so avoid saving private
+images there while watching. Omit `--live` for a no-upload preview.
+Watch mode stops after 20 new files by default (`--max-images 10` changes this).
+Authentication, credit, or rate-limit errors stop the watcher; other file/request
+errors skip that image. Results include the filename to match each screenshot.
 
 Default: `qwen/qwen3.7-flash`. Maximum image file size 8 MiB; maximum output 256
 tokens; reasoning disabled; no retries or model fallback. The file-size cap is

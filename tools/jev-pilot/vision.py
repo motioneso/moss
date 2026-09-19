@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One manually selected screenshot, one optional OpenRouter request. Stdlib only."""
+"""Test selected screenshots or watch a folder for new images. Stdlib only."""
 
 import argparse
 import base64
@@ -106,28 +106,83 @@ def evaluate(body, key):
     return parse_result(data)
 
 
+def new_images(folder):
+    # Existing filenames are excluded for this entire run, even if overwritten.
+    seen = set(folder.iterdir())
+    pending = {}
+    print("Watching for NEW PNG/JPEG files only. Existing files skipped. Ctrl-C stops.", flush=True)
+    while True:
+        time.sleep(2)
+        for path in sorted(folder.iterdir()):
+            if path in seen or path.suffix.lower() not in (".png", ".jpg", ".jpeg"):
+                continue
+            if path.is_symlink() or not path.is_file():
+                continue
+            try:
+                stat = path.stat()
+            except FileNotFoundError:
+                continue
+            signature = (stat.st_size, stat.st_mtime_ns)
+            if stat.st_size and pending.get(path) == signature:
+                seen.add(path)
+                pending.pop(path, None)
+                yield path
+            else:
+                pending[path] = signature
+
+
+def process_image(path, model, key):
+    raw, mime = image_data(path)
+    if key is None:
+        print(json.dumps({"preview_only": True, "file": path.name, "model": model,
+                          "image_bytes": len(raw), "mime": mime, "instructions": PROMPT}), flush=True)
+        return 0
+    started = time.monotonic()
+    result = evaluate(request_body(raw, mime, model), key)
+    print(json.dumps({"file": path.name, "requested_model": model,
+                      "elapsed_seconds": round(time.monotonic() - started, 2),
+                      **result}, ensure_ascii=True), flush=True)
+    return 1 if "error" in result else 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("image", type=Path, help="A manually reviewed PNG/JPEG screenshot (max 8 MiB)")
+    parser.add_argument("image", nargs="?", type=Path, help="A manually reviewed PNG/JPEG screenshot (max 8 MiB)")
+    parser.add_argument("--watch", type=Path, help="Watch a folder for new PNG/JPEG files (not subfolders)")
+    parser.add_argument("--max-images", type=int, default=20, help="Stop watching after this many new files (default 20)")
     parser.add_argument("--model", choices=MODELS, default=MODELS[0])
     parser.add_argument("--live", action="store_true", help="Upload this entire image to OpenRouter and its provider")
     args = parser.parse_args()
+    if (args.image is None) == (args.watch is None):
+        parser.error("supply an image OR --watch FOLDER")
+    if not 1 <= args.max_images <= 1000:
+        parser.error("--max-images must be between 1 and 1000")
     try:
-        raw, mime = image_data(args.image)
-        if not args.live:
-            print(json.dumps({"preview_only": True, "model": args.model,
-                              "image_bytes": len(raw), "mime": mime, "instructions": PROMPT}))
-            print("No upload. Review/crop the image, then add --live to send it.")
-            return 0
-        print("LIVE: uploading this entire image to OpenRouter and its model provider. One request; no retries.")
-        key = os.environ.get("OPENROUTER_API_KEY") or getpass.getpass("OpenRouter API key (hidden): ")
-        if not key.strip() or any(c.isspace() for c in key):
-            raise ValueError("invalid_API_key")
-        started = time.monotonic()
-        result = evaluate(request_body(raw, mime, args.model), key)
-        print(json.dumps({"requested_model": args.model, "elapsed_seconds": round(time.monotonic() - started, 2),
-                          **result}, ensure_ascii=True))
-        return 1 if "error" in result else 0
+        if args.watch and not args.watch.is_dir():
+            raise ValueError("watch_folder_not_found")
+        key = None
+        if args.live:
+            print("LIVE: entire selected images will be uploaded to OpenRouter and its model provider. No retries.")
+            if args.watch:
+                print("ALL new PNG/JPEG files in this folder will be sent, not just screenshots.")
+            key = os.environ.get("OPENROUTER_API_KEY") or getpass.getpass("OpenRouter API key (hidden): ")
+            if not key.strip() or any(c.isspace() for c in key):
+                raise ValueError("invalid_API_key")
+        else:
+            print("PREVIEW ONLY: no uploads. Add --live to send images.")
+        if not args.watch:
+            return process_image(args.image, args.model, key)
+        for count, path in enumerate(new_images(args.watch), 1):
+            try:
+                process_image(path, args.model, key)
+            except (ValueError, OSError) as exc:
+                error = str(exc) if isinstance(exc, ValueError) else "unable_to_read_image"
+                print(json.dumps({"file": path.name, "error": error}), flush=True)
+                if error in ("http_401", "http_402", "http_403", "http_429"):
+                    return 1
+            if count >= args.max_images:
+                print("Image limit reached. Stopped.")
+                return 0
     except (ValueError, OSError, EOFError) as exc:
         # Paths, credentials, image data, and raw provider errors do not belong in diagnostics.
         print("Error: " + (str(exc) if isinstance(exc, ValueError) else "unable_to_read_image_or_key"))
