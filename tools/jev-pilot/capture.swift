@@ -29,38 +29,50 @@ func frame(_ element: AXUIElement) -> CGRect? {
     return CGRect(origin: point, size: dimensions)
 }
 
-func windowText(_ window: AXUIElement) -> String {
+func windowText(_ window: AXUIElement) -> [String: Any] {
     AXUIElementSetMessagingTimeout(window, 0.05)
-    guard let bounds = frame(window) else { return "" }
+    guard let bounds = frame(window) else { return ["text": "", "text_source": "none"] }
     let deadline = Date().addingTimeInterval(1.5)
-    var pending: [(AXUIElement, Int)] = [(window, 0)]
+    var pending: [(AXUIElement, Int, Bool)] = [(window, 0, false)]
     var parts: [String] = []
+    var pageParts: [String] = []
     var seen = Set<String>()
     var visited = 0
     var characters = 0
+    var pageCharacters = 0
     // Bounded foreground-window walk; never read values from editable/secure controls.
-    while let (element, depth) = pending.popLast(), visited < 250,
-          characters < 1200, Date() < deadline {
+    while !pending.isEmpty, visited < 250, pageCharacters < 1200, Date() < deadline {
+        let (element, depth, parentIsPage) = pending.removeLast()
         visited += 1
         AXUIElementSetMessagingTimeout(element, 0.05)
         let role = attribute(element, kAXRoleAttribute) as? String ?? ""
+        let isPage = parentIsPage || role == "AXWebArea"
         if ["AXTextField", "AXTextArea", "AXSecureTextField", "AXComboBox"].contains(role) { continue }
-        if let rect = frame(element), !bounds.intersects(rect) { continue }
-        if role == "AXStaticText", let rect = frame(element), bounds.intersects(rect),
+        let rect = frame(element)
+        if let rect = rect, !bounds.intersects(rect) { continue }
+        if role == "AXStaticText", let rect = rect, bounds.intersects(rect),
            let value = attribute(element, kAXValueAttribute) as? String {
-            let text = String(value.prefix(1200 - characters)).trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty, seen.insert(text).inserted {
-                parts.append(text)
-                characters += text.count + 1
+            let remaining = max(0, 1200 - (isPage ? pageCharacters : characters))
+            let text = String(value.prefix(remaining)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty, seen.insert((isPage ? "page:" : "window:") + text).inserted {
+                if isPage {
+                    pageParts.append(text)
+                    pageCharacters += text.count + 1
+                } else {
+                    parts.append(text)
+                    characters += text.count + 1
+                }
             }
         }
         if depth < 20 {
             var children = (attribute(element, "AXVisibleChildren") as? [AXUIElement]) ?? []
             if children.isEmpty { children = (attribute(element, kAXChildrenAttribute) as? [AXUIElement]) ?? [] }
-            for child in children.prefix(250 - visited).reversed() { pending.append((child, depth + 1)) }
+            for child in children.prefix(250 - visited).reversed() { pending.append((child, depth + 1, isPage)) }
         }
     }
-    return String(parts.joined(separator: " ").prefix(1200))
+    let text = String((pageParts.isEmpty ? parts : pageParts).joined(separator: " ").prefix(1200))
+    return ["text": text, "text_source": text.isEmpty ? "none" : (pageParts.isEmpty ? "window" : "page"),
+            "text_scan_limited": !pending.isEmpty]
 }
 
 if args.contains("--list-apps") {
@@ -114,7 +126,9 @@ if args.contains("--titles") || args.contains("--text") {
             if AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &title) == .success {
                 result["title"] = String((title as? String ?? "").prefix(512))
             }
-            if args.contains("--text") { result["text"] = windowText(window) }
+            if args.contains("--text") {
+                result.merge(windowText(window)) { _, new in new }
+            }
         }
     }
 }

@@ -46,6 +46,10 @@ Clipping/visibility depends on the app's Accessibility tree, so inspect the prev
 content. Private text elsewhere in a page can still be exposed as static text. No DOM scripting
 or screenshots are used. Some apps/editors expose no usable static text.
 
+Capture prefers text inside a webpage's Accessibility area over browser controls when it finds
+both within its scan budget. `text_source` reports `page`, `window`, or `none`;
+`text_scan_limited` means pending nodes remained when a bound was reached, not that capture failed.
+
 Results now include `evidence`, `title_chars` and `text_chars`. If `text_chars` is zero, Jev did
 not receive window text; an `unknown` classification is not proof that Jev failed to understand it.
 Changing scores or scrolling won't keep resetting the dwell timer when the app/title stays the
@@ -90,11 +94,42 @@ Activity choices include research/reading, writing/editing, coding, communicatio
 shopping, entertainment, other and unknown. Browsing product listings counts as shopping; a purchase
 or declared goal is not required. Whether shopping supports your goal is a separate judgment.
 Especially try relevant research, unrelated browsing, writing, and a necessary detour. The API
-returns confidence too; neither confidence nor probability proves accuracy. No nudges are sent.
+returns confidence and the full option probability distributions too; neither confidence nor
+probability proves accuracy. No OS notifications are sent.
+
+## Flag sustained distraction
+
+```bash
+python3 -B pilot.py --live --allow com.apple.Safari --text --save \
+  --goal "Research accommodation for a Liverpool trip" \
+  --flag-after-minutes 5 --distraction-probability 0.8
+```
+
+The runner calculates time locally. Jev only judges the current evidence. Each result includes
+`distraction_seconds` and `focus_flag`; crossing the threshold prints `FOCUS FLAG` in the terminal.
+The duration is a conservative estimate from samples, not continuous proof of attention.
+
+- Default: 5 accumulated minutes, with chosen alignment probability at least 0.8. These are
+  pilot thresholds to tune against your judgments, not calibrated guarantees.
+- Credit only intervals bracketed by two qualifying `distracted` results, with the same page/app
+  observed throughout the 5-second capture checks. No credit before the first confident result.
+  With a 60-second interval, five minutes normally needs six qualifying results.
+- Changed pages, excluded apps, failed calls and uncertain results break the pending interval;
+  they never add or backfill time. Already credited time survives a brief gap. Frequent tab changes
+  can therefore undercount distraction; start with this conservative behavior before loosening it.
+- A confident `focused` or `necessary_detour` result clears the episode. A weaker result pauses it.
+  Idle, revoked/unavailable capture, a gap of more than 15 seconds between capture checks, or no
+  qualifying distraction result for `max(135, 2 * interval + 15)` seconds clears it too.
+- One flag per episode, with `--cooldown-minutes 30` between flags by default. A new episode must
+  accumulate its own qualifying time. Restarting the program clears timing and cooldown state.
+- No goal means no timing or flagging. Preview mode does not call Jev or accumulate classifications.
+
+The full distributions help distinguish a close focused/detour decision from a clear distraction.
+Capture still observes only the apps you explicitly allow. Other activity is a gap, not distraction.
 
 `--save` writes categorical results, UTC timestamps, app bundle IDs and token counts to a new
 owner-only JSONL file under `~/Library/Application Support/JevPilot/`. It also records evidence
-level and character counts. It does not write window text, titles,
+level, character counts, capture source, probabilities and timing/flags. It does not write window text, titles,
 your goal, request bodies or the API key to that file. By default nothing is saved. Saved files
 remain until you delete them; this tiny pilot has no retention service.
 

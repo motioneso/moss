@@ -130,7 +130,8 @@ class PilotCheck(unittest.TestCase):
 
     def test_stale_result_dropped_and_budget_still_enforced(self):
         args = argparse.Namespace(minutes=1, demo=False, allow={"example.editor"}, titles=True, text=False,
-                                  once=False, interval=60, live=True, goal="Write", max_calls=1)
+                                  once=False, interval=60, live=True, goal="Write", max_calls=1,
+                                  flag_after_minutes=5, distraction_probability=0.8, cooldown_minutes=30)
         raw = {"status": "ok", "app": "Editor", "bundle_id": "example.editor", "title": "Estimate"}
         log = io.StringIO()
         # The app changes between request and response; even a dropped call spends budget.
@@ -152,6 +153,29 @@ class PilotCheck(unittest.TestCase):
                 pilot.summary(file)
         self.assertIn('"coding": 1', output.getvalue())
         self.assertIn("not measured time", output.getvalue())
+
+    def test_live_loop_flags_after_supported_minutes_without_saving_text(self):
+        args = argparse.Namespace(minutes=7, demo=False, allow={"example.editor"}, titles=True, text=True,
+                                  once=False, interval=60, live=True, goal="Write", max_calls=6,
+                                  flag_after_minutes=5, distraction_probability=0.8, cooldown_minutes=30)
+        raw = {"status": "ok", "app": "Editor", "bundle_id": "example.editor", "title": "Store",
+               "text": "Private product excerpt", "text_source": "page", "text_scan_limited": True}
+        clock = [0]
+        def sleep(seconds):
+            clock[0] += seconds
+        log = io.StringIO()
+        result = {"activity": "shopping", "alignment": "distracted", "alignment_probability": 0.95}
+        with patch("pilot.capture", return_value=raw), patch("pilot.evaluate", return_value=result), \
+                patch("pilot.time.monotonic", side_effect=lambda: clock[0]), \
+                patch("pilot.time.sleep", side_effect=sleep), redirect_stdout(io.StringIO()) as output:
+            pilot.run(args, Path("unused"), "test-key", log)
+        rows = [json.loads(line) for line in log.getvalue().splitlines()]
+        self.assertEqual([r["distraction_seconds"] for r in rows], [0, 60, 120, 180, 240, 300])
+        self.assertEqual(sum(r["focus_flag"] for r in rows), 1)
+        self.assertIn("FOCUS FLAG", output.getvalue())
+        self.assertNotIn("Private product excerpt", log.getvalue())
+        self.assertNotIn("test-key", log.getvalue())
+        self.assertEqual(rows[-1]["text_source"], "page")
 
 
 if __name__ == "__main__":
