@@ -62,7 +62,7 @@ def clean(text, limit=120):
     return "".join(c for c in text if c.isprintable())[:limit]
 
 
-def observation(raw, allow, titles):
+def observation(raw, allow, titles, text=False):
     if not isinstance(raw, dict):
         raise ValueError("invalid_capture")
     if raw.get("status") != "ok":
@@ -70,11 +70,20 @@ def observation(raw, allow, titles):
     bundle = raw.get("bundle_id")
     if not isinstance(bundle, str) or bundle not in allow:
         return None
-    return {
+    result = {
         "app": clean(raw.get("app", "Unknown"), 60),
         "bundle_id": bundle,
         "title": clean(raw.get("title", "")) if titles else "",
     }
+    if text:
+        result["text"] = clean(raw.get("text", ""), 800)
+    return result
+
+
+def same_context(a, b):
+    # Live text (scores, ads, scrolling) must not perpetually reset the dwell timer.
+    return bool(a and b and all(a.get(k) == b.get(k) for k in ("bundle_id", "title"))
+                and (a.get("title") or a.get("text") == b.get("text")))
 
 
 def payload(current, goal, recent, dwell):
@@ -84,7 +93,8 @@ def payload(current, goal, recent, dwell):
             "goal": clean(goal, 240) or None,
             "current": {**current, "dwell_seconds": int(dwell)},
             "recent": list(recent)[-3:],
-            "evidence": "window_title" if current["title"] else "app_only",
+            "evidence": ("window_text" if current.get("text") else
+                         "window_title" if current["title"] else "app_only"),
         },
         "questions": QUESTIONS,
     }
@@ -154,8 +164,8 @@ def evaluate(request, key):
     return result
 
 
-def capture(binary, allow, titles):
-    args = [str(binary), *sorted(allow)] + (["--titles"] if titles else [])
+def capture(binary, allow, titles, text=False):
+    args = [str(binary), *sorted(allow)] + (["--titles"] if titles else []) + (["--text"] if text else [])
     try:
         proc = subprocess.run(args, capture_output=True, timeout=4, check=True)
         if len(proc.stdout) > 8192:
@@ -214,8 +224,9 @@ def run(args, binary, key, log):
             recent.clear()
         last_tick = now
         raw = ({"status": "ok", "app": "Example Editor", "bundle_id": "example.editor",
-                "title": "Project estimate"} if args.demo else capture(binary, args.allow, args.titles))
-        obs = observation(raw, args.allow, args.titles)
+                "title": "Project estimate", "text": "Draft estimate: design, build, test and review."}
+               if args.demo else capture(binary, args.allow, args.titles, args.text))
+        obs = observation(raw, args.allow, args.titles, args.text)
         if obs is None:
             current = None
             recent.clear()
@@ -226,10 +237,11 @@ def run(args, binary, key, log):
             last_status = status
         else:
             last_status = None
-            if obs != current:
+            if not same_context(obs, current):
                 if current is not None:
                     recent.append({"app": current["app"], "duration_seconds": int(now - changed)})
-                current, changed = obs, now
+                changed = now
+            current = obs
             if now - changed > 300:
                 recent.clear()
             if (args.once or args.demo or now - changed >= 15) and now - last_call >= args.interval:
@@ -243,15 +255,18 @@ def run(args, binary, key, log):
                         result = evaluate(request, key)
                         # A result describes the sampled context, not the next app the user opens.
                         if not args.demo:
-                            fresh = observation(capture(binary, args.allow, args.titles), args.allow, args.titles)
-                            if fresh != obs or time.monotonic() - now > 12:
+                            fresh = observation(capture(binary, args.allow, args.titles, args.text),
+                                                args.allow, args.titles, args.text)
+                            if not same_context(fresh, obs) or time.monotonic() - now > 12:
                                 print("Dropped stale result.", flush=True)
                                 current = None
                                 recent.clear()
                                 result = None
                         if result is not None:
                             row = {"at": datetime.now(timezone.utc).isoformat(),
-                                   "app": obs["bundle_id"], **result}
+                                   "app": obs["bundle_id"], "evidence": request["state"]["evidence"],
+                                   "title_chars": len(obs["title"]), "text_chars": len(obs.get("text", "")),
+                                   **result}
                             print(json.dumps(row), flush=True)
                             if log:
                                 log.write(json.dumps(row) + "\n")
@@ -275,6 +290,7 @@ def main(argv=None):
     parser.add_argument("--list-apps", action="store_true", help="List running app bundle IDs locally")
     parser.add_argument("--allow", action="append", default=[], metavar="BUNDLE_ID")
     parser.add_argument("--titles", action="store_true", help="Read allowed apps' foreground window titles")
+    parser.add_argument("--text", action="store_true", help="Include up to 800 characters of window text (implies --titles)")
     parser.add_argument("--goal", default="", help="Optional intended outcome; omit for activity only")
     parser.add_argument("--minutes", type=int, default=25)
     parser.add_argument("--interval", type=int, default=60, help="Seconds between calls, minimum 60")
@@ -283,6 +299,7 @@ def main(argv=None):
     parser.add_argument("--save", action="store_true", help="Save categorical results locally (no titles/goal)")
     parser.add_argument("--summary", type=Path, help="Summarize a saved JSONL file without any network call")
     args = parser.parse_args(argv)
+    args.titles = args.titles or args.text
     if args.summary:
         summary(args.summary)
         return
@@ -306,6 +323,7 @@ def main(argv=None):
     key = ""
     if args.live:
         print("LIVE: approved app metadata" + (" and minimized window titles" if args.titles else "")
+              + (" and up to 800 characters of window text" if args.text else "")
               + " plus your goal will be sent to TypeSafe. Ctrl-C stops capture and calls.")
         key = os.environ.get("TYPESAFE_API_KEY", "")
         if not key:

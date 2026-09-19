@@ -27,6 +27,23 @@ def response():
 
 
 class PilotCheck(unittest.TestCase):
+    def test_text_is_opt_in_redacted_bounded_and_sent(self):
+        raw = {"status": "ok", "bundle_id": "example.editor", "app": "Browser",
+               "title": "Liverpool FC", "text": "Club news me@example.com " + "Match report " * 100}
+        self.assertNotIn("text", pilot.observation(raw, {"example.editor"}, True))
+        obs = pilot.observation(raw, {"example.editor"}, True, True)
+        request = pilot.payload(obs, "", [], 15)
+        self.assertEqual(request["state"]["evidence"], "window_text")
+        self.assertIn("Club news", request["state"]["current"]["text"])
+        self.assertNotIn("me@example.com", obs["text"])
+        self.assertLessEqual(len(obs["text"]), 800)
+
+    def test_dynamic_text_keeps_context_but_new_page_does_not(self):
+        a = {"bundle_id": "browser", "title": "Club news", "text": "Latest score 1"}
+        self.assertTrue(pilot.same_context(a, {**a, "text": "Latest score 2"}))
+        self.assertFalse(pilot.same_context(a, {**a, "title": "Other page"}))
+        self.assertFalse(pilot.same_context(a, None))
+
     def test_allowlist_and_permission_fail_closed(self):
         raw = {"status": "ok", "bundle_id": "example.editor", "app": "Editor", "title": "Private"}
         self.assertIsNone(pilot.observation(raw, {"another.app"}, True))
@@ -91,14 +108,16 @@ class PilotCheck(unittest.TestCase):
 
     def test_preview_never_calls_network(self):
         with patch("pilot.evaluate") as evaluate, redirect_stdout(io.StringIO()) as output:
-            pilot.main(["--demo", "--titles", "--goal", "Write estimate"])
+            pilot.main(["--demo", "--text", "--goal", "Write estimate"])
         evaluate.assert_not_called()
         self.assertIn("PREVIEW ONLY", output.getvalue())
         request = json.loads(output.getvalue().splitlines()[-1])
         self.assertEqual(request["state"]["current"]["title"], "Project estimate")
+        self.assertEqual(request["state"]["evidence"], "window_text")
+        self.assertIn("Draft estimate", request["state"]["current"]["text"])
 
     def test_stale_result_dropped_and_budget_still_enforced(self):
-        args = argparse.Namespace(minutes=1, demo=False, allow={"example.editor"}, titles=True,
+        args = argparse.Namespace(minutes=1, demo=False, allow={"example.editor"}, titles=True, text=False,
                                   once=False, interval=60, live=True, goal="Write", max_calls=1)
         raw = {"status": "ok", "app": "Editor", "bundle_id": "example.editor", "title": "Estimate"}
         log = io.StringIO()

@@ -29,8 +29,30 @@ If capture stays `permission_denied`, quit and reopen the terminal after grantin
 Without `--titles`, only the app name/ID is collected and Accessibility is unnecessary.
 No Screen Recording or Automation permission is requested.
 
+If a title is insufficient, opt in to **window text** with `--text` (also enables titles):
+
+```bash
+# Preview first; switch to Safari and leave it foreground for at least 15 seconds.
+python3 -B pilot.py --allow com.apple.Safari --text --minutes 1
+
+# Send app, title and the bounded text excerpt to Jev.
+python3 -B pilot.py --allow com.apple.Safari --text --live --save
+```
+
+This uses the same Accessibility permission. It reads static text exposed within the focused
+window's bounds, skips editable/secure controls, and sends at most 800 redacted characters.
+The native walk stops at 250 elements or roughly 1.5 seconds; it does not read every page element.
+Clipping/visibility depends on the app's Accessibility tree, so inspect the preview for unwanted
+content. Private text elsewhere in a page can still be exposed as static text. No DOM scripting
+or screenshots are used. Some apps/editors expose no usable static text.
+
+Results now include `evidence`, `title_chars` and `text_chars`. If `text_chars` is zero, Jev did
+not receive window text; an `unknown` classification is not proof that Jev failed to understand it.
+Changing scores or scrolling won't keep resetting the dwell timer when the app/title stays the
+same. Results describe the captured excerpt, which may differ from text displayed moments later.
+
 The preview shows the **exact JSON request**, including fixed questions. Review it before
-running live. Titles may contain sensitive information despite basic redaction. Do not allow
+running live. Titles and window text may contain sensitive information despite basic redaction. Do not allow
 password managers, messaging, banking apps or a browser used for private browsing. Private
 tabs cannot reliably be detected; use a dedicated work browser or stop capture.
 
@@ -68,7 +90,8 @@ Especially try relevant research, unrelated browsing, writing, and a necessary d
 returns confidence too; neither confidence nor probability proves accuracy. No nudges are sent.
 
 `--save` writes categorical results, UTC timestamps, app bundle IDs and token counts to a new
-owner-only JSONL file under `~/Library/Application Support/JevPilot/`. It does not write titles,
+owner-only JSONL file under `~/Library/Application Support/JevPilot/`. It also records evidence
+level and character counts. It does not write window text, titles,
 your goal, request bodies or the API key to that file. By default nothing is saved. Saved files
 remain until you delete them; this tiny pilot has no retention service.
 
@@ -86,8 +109,9 @@ classified. Manually delete a session file when finished; TypeSafe's retention i
 
 - Samples every 5 seconds using a short-lived native process; no keystroke or clipboard capture.
   This deliberately replaces the planned event observers for the first terminal trial.
-- Only explicitly allowed apps are read. Titles are opt-in and capped/redacted before a request;
-  there is no page body, DOM, URL/domain extraction or OCR. Missing AX titles mean app-only evidence.
+- Only explicitly allowed apps are read. Titles and static window text are separately opt-in,
+  capped/redacted before a request. No DOM, URL/domain extraction or OCR is used. Missing text
+  falls back to title evidence, then app-only evidence.
 - A goal plus up to three prior app segments provides a small amount of context. There is no
   persistent model memory. A changed title can restart the dwell timer; low coverage is a useful
   pilot finding rather than evidence that the user was idle.
@@ -99,7 +123,7 @@ classified. Manually delete a session file when finished; TypeSafe's retention i
 - Provider timeout is 5 seconds. Invalid output produces no classification. Authentication errors
   and rate limits stop the run; other failures wait for the next normal interval. No retry queue,
   automatic provider switch or raw provider-error logging. Redirects are refused.
-- `--live` sends approved app metadata, optional minimized titles and the goal to TypeSafe.
+- `--live` sends approved app metadata, optional minimized titles/text and the goal to TypeSafe.
   Observation text remains untrusted even when passed as JSON. The model has no tools/actions.
   Review TypeSafe's data handling before sending sensitive work.
 
