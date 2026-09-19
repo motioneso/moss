@@ -146,35 +146,37 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
         ) : null
       }
       report={
-        detail?.state === "ready" && detail.run !== null && detail.run.status === "succeeded" ? (
-          <ReportBody
-            detail={detail}
-            run={detail.run}
-            tasks={props.tasks}
-            locale={props.locale}
-            runs={props.runs}
-            selectedRunId={selectedRunId}
-            onSelectRun={setSelectedRunId}
-            onMoreOnToday={props.onClose}
-          />
-        ) : (
-          <div>
-            <p className="cmd-empty" role="status">
-              {failed
-                ? "Your morning briefing isn't available."
-                : "Your morning briefing is being prepared."}
-            </p>
-            {failed ? (
-              <Button
-                variant="secondary"
-                disabled={retryMutation.isPending}
-                onClick={() => retryMutation.mutate()}
-              >
-                Try again
-              </Button>
-            ) : null}
-          </div>
-        )
+        <div data-briefing-surface="automatic-read">
+          {detail?.state === "ready" && detail.run !== null && detail.run.status === "succeeded" ? (
+            <ReportBody
+              detail={detail}
+              run={detail.run}
+              tasks={props.tasks}
+              locale={props.locale}
+              runs={props.runs}
+              selectedRunId={selectedRunId}
+              onSelectRun={setSelectedRunId}
+              onMoreOnToday={props.onClose}
+            />
+          ) : (
+            <div>
+              <p className="cmd-empty" role="status">
+                {failed
+                  ? "Your morning briefing isn't available."
+                  : "Your morning briefing is being prepared."}
+              </p>
+              {failed ? (
+                <Button
+                  variant="secondary"
+                  disabled={retryMutation.isPending}
+                  onClick={() => retryMutation.mutate()}
+                >
+                  Try again
+                </Button>
+              ) : null}
+            </div>
+          )}
+        </div>
       }
       railDateInput={readyRun?.createdAt ?? props.now}
       locale={props.locale}
