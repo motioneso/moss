@@ -26,7 +26,7 @@ export function EveningStepStrip(props: {
               aria-current={index === props.active ? "step" : undefined}
               onClick={() => props.onSelect(index)}
             >
-              <span aria-hidden="true">{`0${index + 1}`}</span> {name}
+              <span>{`0${index + 1}`}</span> {name}
             </button>
           </li>
         ))}

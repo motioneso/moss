@@ -177,8 +177,14 @@
 
 .evening-plan__status,
 .evening-plan__notice {
+  grid-column: 1 / -1;
   overflow-wrap: anywhere;
   min-width: 0;
+}
+
+.evening-plan__status:empty,
+.evening-plan__notice:empty {
+  display: none;
 }
 
 .evening-plan__railwrap {
@@ -205,10 +211,6 @@
   overflow-wrap: anywhere;
 }
 
-.evening-plan__summary {
-  min-width: 0;
-}
-
 .evening-plan__details {
   min-width: 0;
 }
@@ -219,17 +221,160 @@
 }
 
 @media (min-width: 1081px) {
+  .brief-reader:has(.evening-plan__grid) {
+    box-sizing: border-box;
+    width: 1080px;
+    max-width: 1080px;
+    height: 846px;
+    max-height: 846px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__head {
+    box-sizing: border-box;
+    position: relative;
+    height: 119px;
+    padding: 24px 32px 20px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__eyebrow {
+    flex: 1 1 100%;
+    margin: 0;
+    padding-right: 48px;
+    box-sizing: border-box;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__title {
+    flex: 1 1 100%;
+    margin: 0;
+    padding-right: 48px;
+    box-sizing: border-box;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn {
+    position: absolute;
+    top: 24px;
+    right: 32px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__body {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .evening-plan__strip {
+    box-sizing: border-box;
+    height: 54px;
+    padding: 0 32px;
+  }
+
   .evening-plan__grid {
-    grid-template-columns: minmax(0, 1fr) 300px;
-    gap: 32px;
-    align-items: start;
+    grid-template-columns: 749px 331px;
+    gap: 0;
+    align-items: stretch;
+    height: 100%;
+  }
+
+  .evening-plan__panel {
+    box-sizing: border-box;
+    padding: 32px;
+    overflow-y: auto;
+    height: 100%;
   }
 
   .evening-plan__railwrap {
+    box-sizing: border-box;
     border-left: 1px solid var(--line);
-    padding-left: 24px;
-    position: sticky;
-    top: 24px;
+    padding: 32px 32px 32px 24px;
+    overflow-y: auto;
+    height: 100%;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer {
+    box-sizing: border-box;
+    padding: 16px 32px;
+  }
+}
+
+@media (max-width: 1080px) {
+  .brief-reader:has(.evening-plan__grid) .brief-reader__head {
+    box-sizing: border-box;
+    position: relative;
+    height: 130px;
+    padding: 20px 20px 16px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__eyebrow {
+    flex: 1 1 100%;
+    margin: 0;
+    padding-right: 48px;
+    box-sizing: border-box;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__title {
+    flex: 1 1 100%;
+    margin: 0;
+    padding-right: 48px;
+    box-sizing: border-box;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+  }
+
+  .evening-plan__strip {
+    box-sizing: border-box;
+    height: 58px;
+    padding: 0 20px;
+  }
+
+  .evening-plan__strip ol {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .evening-plan__strip li {
+    display: flex;
+    min-width: 0;
+    height: 100%;
+  }
+
+  .evening-plan__strip button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    flex: 0 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    height: 100%;
+    min-height: 0;
+    padding: 12px 2px 8px;
+    gap: 2px;
+    font-size: 13px;
+    line-height: 1.2;
+    box-sizing: border-box;
+  }
+
+  .evening-plan__strip button > span {
+    display: block;
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer {
+    box-sizing: border-box;
+    padding: 8px 20px;
+    min-height: 60px;
   }
 }
 
