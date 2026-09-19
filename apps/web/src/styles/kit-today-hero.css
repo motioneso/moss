@@ -74,6 +74,14 @@
   color: var(--hero-fg);
 }
 
+.today-hero[data-mode="day"] .today-hero__weather {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: 16px 24px;
+  min-width: 0;
+}
+
 /* Hero-scoped weather variant: temperature large, conditions and high/low
    read on the dark ground. TodayWeatherRow itself is unchanged. */
 .today-hero__weather .wx-row {
@@ -111,6 +119,28 @@
 .today-hero button:focus-visible {
   outline: 2px solid var(--hero-accent);
   outline-offset: 2px;
+}
+
+.today-hero__sections {
+  align-items: center;
+  gap: 6px 20px;
+  margin: 16px 0 -30px;
+  padding: 14px 30px 12px;
+  background: var(--surface);
+  border-bottom: none;
+}
+
+.today-hero__sections a {
+  color: var(--forest);
+}
+
+.today-hero__sections-label {
+  flex: none;
+  color: var(--ink-4);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 /* ===== Today section index (V2 restyle in place) ===== */
@@ -187,6 +217,18 @@
 
 .today-hero[data-mode="day"] .today-hero__prepared {
   margin-top: 35px;
+  justify-content: space-between;
+}
+
+.today-hero[data-mode="day"] .today-hero__prepared-time {
+  flex: none;
+}
+
+@media (max-width: 680px) {
+  .today-hero[data-mode="day"] .today-hero__weather {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
 }
 
 @media (max-width: 680px) {

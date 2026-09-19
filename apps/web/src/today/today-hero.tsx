@@ -28,6 +28,7 @@ export interface TodayHeroProps {
   readonly preparedAt: string | null;
   readonly readerControl: ReactNode | null;
   readonly weather: ReactNode;
+  readonly sectionLinks?: ReactNode;
 }
 
 export interface TodayHeroContentInput {
@@ -158,15 +159,31 @@ export function TodayHero(props: TodayHeroProps) {
       <div className="today-hero__summary" id="assessment">
         {props.summary}
       </div>
-      {props.preparedAt !== null ? (
+      {props.mode === "day" ? (
+        <>
+          <div className="today-hero__weather" id="weather">
+            {props.weather}
+          </div>
+          {props.preparedAt !== null ? (
+            <div className="today-hero__prepared">
+              {props.readerControl}
+              <span className="today-hero__prepared-time">{props.preparedAt}</span>
+            </div>
+          ) : null}
+        </>
+      ) : props.preparedAt !== null ? (
         <p className="today-hero__prepared">
           {props.preparedAt} {props.readerControl}
         </p>
       ) : null}
       <hr className="today-hero__rule" />
-      <div className="today-hero__weather" id="weather">
-        {props.weather}
-      </div>
+      {props.mode === "evening" ? (
+        <div className="today-hero__weather" id="weather">
+          {props.weather}
+        </div>
+      ) : (
+        (props.sectionLinks ?? null)
+      )}
     </section>
   );
 }
