@@ -801,4 +801,24 @@ describe("visual parity case selection", () => {
     expect(selected.entries).toHaveLength(2);
     expect(legacy.entries.length).not.toBe(selected.entries.length);
   });
+
+  it("captures proposed/News/Sports readers before any mirrorBlock-triggering state", () => {
+    // Mirrors the walk setup: seed.ts prepareSelectedEntry driveState and the default
+    // walk in visual-parity.uat.spec.ts call mirrorBlock only for reader-partial-review
+    // and reader-automatic-* states, permanently committing a plan block. Proposed and
+    // News/Sports readers must run before that commit or they inherit committed state.
+    const triggersMirror = (state: string) =>
+      state === "reader-partial-review" || state.startsWith("reader-automatic");
+    const needsPendingPlan = (state: string) =>
+      state === "reader-proposed-read" ||
+      state === "reader-proposed-review" ||
+      state === "reader-news-links" ||
+      state === "reader-sports-links";
+    const firstMirror = MOCKUPS.findIndex((entry) => triggersMirror(entry.state));
+    expect(firstMirror).toBeGreaterThan(-1);
+    expect(MOCKUPS.some((entry) => needsPendingPlan(entry.state))).toBe(true);
+    MOCKUPS.forEach((entry, index) => {
+      if (needsPendingPlan(entry.state)) expect(index).toBeLessThan(firstMirror);
+    });
+  });
 });
