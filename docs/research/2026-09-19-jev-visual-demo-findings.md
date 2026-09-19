@@ -103,3 +103,47 @@ during inference so stale observations cannot count toward the distraction timer
 
 This research adds no capture implementation. Native APIs and local visual-model
 performance have not been exercised on the pilot Mac.
+
+## Low-cost model shortlist (2026-09-19)
+
+Cost is a primary constraint for continuous monitoring. Start screenshot quality
+tests with Qwen 3.7 Flash and compare Gemini 2.5 Flash-Lite on the same images.
+These are candidates, not validated screenshot readers for this pilot.
+
+| Candidate | USD per million input / output tokens | Illustrative cost per 1,000 screenshots |
+| --- | --- | --- |
+| Qwen 3.7 Flash, Alibaba via OpenRouter | $0.03 / $0.13 | $0.043 |
+| Gemini 2.5 Flash-Lite, paid API | $0.10 / $0.40 | $0.14 |
+| SmolVLM-500M, local | No API charge | Device compute and power |
+
+Sources: OpenRouter's live [model catalog](https://openrouter.ai/api/v1/models)
+and [Qwen provider endpoint](https://openrouter.ai/api/v1/models/qwen/qwen3.7-flash/endpoints)
+confirm image input, Alibaba availability, and the listed short-context rates.
+Google's [pricing](https://ai.google.dev/gemini-api/docs/pricing) and
+[model page](https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite)
+confirm image input and paid rates. These are synchronous prices; batch discounts
+are deliberately excluded for live monitoring.
+
+Arithmetic assumes **1,000 total input tokens including the image and 100 total
+billable output tokens per request**, with no cache discounts. At eight hours per
+day for 30 days, one request per minute costs approximately $0.62 for Qwen or
+$2.02 for Gemini; one per 15 seconds costs $2.48 or $8.06 respectively. These
+exclude Jev, retries, provider/platform fees, taxes, and any extra reasoning
+tokens. Image tokenization differs by model and resolution: measure response
+usage on actual screenshots before setting a budget. This is an illustrative
+workload, not a fixed per-image quote or a guarantee of the cheapest service.
+
+The [SmolVLM-500M model card](https://huggingface.co/HuggingFaceTB/SmolVLM-500M-Instruct)
+reports 1.23 GB GPU RAM for single-image inference; the
+[release article](https://huggingface.co/blog/smolervlm) documents MLX support.
+That is not a measurement on this Mac or a total application memory estimate.
+Test it if eliminating API charges matters more than keeping installation and
+device compute small; dense-screen recognition quality remains unverified.
+
+For the comparison, request a short factual description with uncertainty, avoid
+long reasoning, retain Accessibility/OCR for exact text, and measure billable
+usage, latency, and correctness. Later, skip unchanged screens and cap inference
+frequency. Cost-saving downscaling must not erase the evidence needed to
+distinguish, for example, two different travel destinations. Use the paid Gemini
+tier for private-screen experiments: Google's pricing page marks free-tier data
+as used to improve products and paid-tier data as not used for that purpose.
