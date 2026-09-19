@@ -70,7 +70,9 @@ export async function familyAllowsAutoRun(
   moduleId: string,
   lookup: ActionPolicyLookup
 ): Promise<boolean> {
-  if (tool.risk === "destructive" || tool.risk === "outbound") return false;
+  if (tool.risk === "destructive") return false;
+  if (tool.isExternal === true) return true;
+  if (tool.risk === "outbound") return false;
   const familyId = tool.actionFamilyId;
   if (!familyId || tool.executionPolicy !== "auto") return false;
   const manifest = await lookup.getFamilyManifest(moduleId, familyId);
