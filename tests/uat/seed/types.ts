@@ -76,6 +76,14 @@ export interface SeedOptions {
    * ADMIN_DATA_CHUNKS entry — see ./chunks/job-search-ai.ts's header and N33.
    */
   readonly jobSearchAiProviderBaseUrl?: string;
+  /**
+   * [task:p8-briefing-writer-unreachable]: absent by default (no-op — see
+   * seedBriefingWriterAiProviderChunk). When set, seeds a fake `openai-compatible`
+   * provider/model with the `summarization` capability pointed at this base URL (the
+   * briefing-writer fixture server's docker-reachable address). Deliberately NOT a
+   * UatSeedChunk/ADMIN_DATA_CHUNKS entry — see ./chunks/briefing-writer-ai.ts's header.
+   */
+  readonly briefingWriterAiProviderBaseUrl?: string;
   /** #1909: opt-in legacy public-source recovery fixtures for its dedicated live-path spec. */
   readonly sportsPublicSourceFixtures?: boolean;
   /** #2015: seed one owner-scoped pending approval for the live card path. */

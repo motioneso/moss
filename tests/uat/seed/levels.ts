@@ -6,6 +6,7 @@ import { seedOnboardingChunk } from "./chunks/onboarding.js";
 import { seedActivityOutcomeFixture, seedAiProviderChunk } from "./chunks/ai.js";
 import { seedScriptedChatProviderChunk } from "./chunks/chat-script.js";
 import { seedJobSearchAiProviderChunk } from "./chunks/job-search-ai.js";
+import { seedBriefingWriterAiProviderChunk } from "./chunks/briefing-writer-ai.js";
 import { seedNewsChunk } from "./chunks/news.js";
 import { seedSportsChunk, seedSportsPublicSourceFixtures } from "./chunks/sports.js";
 import { seedTasksChunk } from "./chunks/tasks.js";
@@ -142,6 +143,17 @@ export async function seedLevel(options: SeedOptions): Promise<void> {
     // service binding should exist before anything that might check it).
     if (options.jobSearchAiProviderBaseUrl) {
       await seedJobSearchAiProviderChunk(runner, adminUserId, options.jobSearchAiProviderBaseUrl);
+    }
+    // [task:p8-briefing-writer-unreachable]: opt-in, absent by default — see SeedOptions.
+    // briefingWriterAiProviderBaseUrl's doc comment and ./chunks/briefing-writer-ai.ts's header.
+    // Ordered with the other AI-binding calls above: the writer provider must exist before
+    // anything synthesizes against it.
+    if (options.briefingWriterAiProviderBaseUrl) {
+      await seedBriefingWriterAiProviderChunk(
+        runner,
+        adminUserId,
+        options.briefingWriterAiProviderBaseUrl
+      );
     }
     await seedDataChunks(runner, adminUserId, exclude);
     if (options.withWorkshopStorageFixture) {
