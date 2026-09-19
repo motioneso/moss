@@ -130,3 +130,37 @@ Ben's decision is whether to run this **silent, metadata-first trial with select
 Defer OCR/screenshots, continuous page text, browser extensions, cross-platform support, distribution/notarization, automatic startup, task mutation, autonomous messaging, surveillance dashboards, long-term activity storage, calendar inference, generalized memory ingestion and production companion auth. The unrelated broad desktop-install plan remains separate. If promoted into a Moss feature, follow the approved-spec/issue, UI design and live-proof gates and update the app map in that implementation PR. No issue or product metadata change belongs in this planning task.
 
 Sources: `docs/research/2026-09-19-jev-screen-focus-feasibility.md` for Jev capabilities, pricing and provider privacy caveats; the code seams above; `docs/superpowers/plans/2026-09-05-moss-desktop-install.md` for the separate packaging scope. macOS behavior and performance still require proof on the actual laptop.
+
+## Authorized pilot extension: automatic window screenshots
+
+After the metadata/text pilot and manually captured screenshot trials, the user
+requested automatic capture, temporary image storage, deletion after processing,
+and reuse of the distraction timer. This extends the standalone experiment; it
+does not add a shipped Moss feature or backend integration.
+
+- Identify the focused window of an explicitly allowed foreground app, then use
+  macOS window capture. Never fall back to capturing the entire display when
+  window identification fails. Accessibility and Screen Recording permission are
+  both needed. Native permission and window matching require an actual Mac test.
+- Store generated images only in a private per-run directory under
+  `~/Library/Caches/JevPilot/screenshots`. Read pixels into memory and remove the
+  file immediately; clean up failures and normal exit. Never delete files from
+  the user's Desktop or other manually supplied screenshots. Forced termination
+  during a write can leave a file; file deletion is not secure disk erasure.
+- Keep capture at roughly one eligible window per minute after stable dwell.
+  Poll foreground metadata while vision/Jev run, reject changed or stale context,
+  and avoid further downstream requests after cancellation. Existing idle,
+  allowlist, interval, run duration, and call-budget controls remain necessary.
+- Reuse Qwen screenshot descriptions and Jev activity/alignment questions. Only
+  accepted current results may feed the existing local focus timer. Terminal
+  results should contain categories and usage rather than raw screenshot text.
+- Full window pixels include text fields and other content that Accessibility
+  filtering previously omitted. Use a dedicated approved browser; private tabs
+  are not reliably detected. No automatic startup, recording history, or model
+  access to tools is added.
+
+Acceptance: offline tests for file cleanup, excluded/idle capture refusal,
+stale-result rejection, cancellation, and duration accounting; then user-run Mac
+proof of compilation, single-window capture, immediate file deletion, correct
+classification, and a sustained-distraction flag. Linux checks alone cannot
+establish that native path.

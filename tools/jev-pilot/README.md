@@ -281,3 +281,42 @@ The API contract follows [TypeSafe's reference](https://docs.typesafe.ai/api):
 `criteria` maps, and `choice`/`probabilities`/`confidence` answers. Verified against the documentation
 on 2026-09-19. Native compilation, actual Accessibility behavior, and real classification quality
 must still be checked on a Mac with a TypeSafe key.
+
+## Automatic single-window vision pilot
+
+`auto_vision.py` captures the currently focused window from an explicitly allowed app,
+sends one screenshot to OpenRouter, sends the bounded visual description to Jev, and
+applies the existing local distraction timer. It does not start automatically; stop it
+with Ctrl-C.
+
+```bash
+# Preview: captures locally, sends nothing, and deletes each generated image.
+python3 -B auto_vision.py --allow com.apple.Safari --once
+
+# Live: one visual sample per minute for up to 25 minutes.
+python3 -B auto_vision.py --live --allow com.apple.Safari \
+  --goal "Research accommodation for a Liverpool trip"
+```
+
+The Mac must grant Accessibility and Screen Recording access. Add another app by
+repeating `--allow`. `OPENROUTER_API_KEY` and `TYPESAFE_API_KEY` may be supplied in the
+environment; otherwise both are requested without echoing. The default limit is 20
+visual calls per run, with `--interval`, `--minutes`, `--max-calls`, and the existing
+focus-threshold options available for tuning. After starting, bring an allowed window
+to the foreground; the first capture waits for 15 seconds of stable context. The default
+distraction probability threshold is 0.7.
+
+If macOS opens a permission prompt, grant access in System Settings, then restart or
+re-run the pilot so the native sampler sees the new permission state. Ctrl-C waits for
+an in-flight provider request to finish before cleanup. A hard process kill can leave a
+temporary generated PNG under the run directory; remove only that generated run
+directory after confirming the pilot is stopped.
+
+Generated PNGs live briefly in a mode-700 per-run directory under
+`~/Library/Caches/JevPilot/screenshots/`. Each image is unlinked immediately after its
+bytes are read, including provider errors; a cleanup failure stops the runner. The
+directory is not a general screenshot archive and the program never falls back to a
+whole-display capture. Full pixels from the allowlisted window are uploaded in live
+mode, so do not allow password managers, private messaging, banking, or other sensitive
+windows. The terminal output contains categorical results and usage, not the raw visual
+description by default.

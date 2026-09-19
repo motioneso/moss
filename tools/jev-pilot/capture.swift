@@ -29,6 +29,36 @@ func frame(_ element: AXUIElement) -> CGRect? {
     return CGRect(origin: point, size: dimensions)
 }
 
+func cgRect(_ value: Any) -> CGRect? {
+    guard let bounds = value as? [String: Any] else { return nil }
+    return CGRect(dictionaryRepresentation: bounds as CFDictionary)
+}
+
+// Match the focused AX window to exactly one visible, normal-level CG window.
+// A tolerance absorbs the small rounding differences between the two APIs;
+// ambiguity fails closed so the caller cannot capture an arbitrary app window.
+func focusedWindowID(pid: pid_t, bounds: CGRect) -> CGWindowID? {
+    guard let windows = CGWindowListCopyWindowInfo(
+        [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
+    ) as? [[String: Any]] else { return nil }
+
+    let tolerance = 1.0
+    let matches = windows.compactMap { info -> CGWindowID? in
+        guard (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid,
+              (info[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
+              (info[kCGWindowIsOnscreen as String] as? NSNumber)?.boolValue == true,
+              let rectValue = info[kCGWindowBounds as String],
+              let rect = cgRect(rectValue), rect.width > 0, rect.height > 0,
+              abs(rect.minX - bounds.minX) <= tolerance,
+              abs(rect.minY - bounds.minY) <= tolerance,
+              abs(rect.width - bounds.width) <= tolerance,
+              abs(rect.height - bounds.height) <= tolerance,
+              let number = info[kCGWindowNumber as String] as? NSNumber else { return nil }
+        return CGWindowID(number.uint32Value)
+    }
+    return matches.count == 1 ? matches[0] : nil
+}
+
 func windowText(_ window: AXUIElement) -> [String: Any] {
     AXUIElementSetMessagingTimeout(window, 0.05)
     guard let bounds = frame(window) else { return ["text": "", "text_source": "none"] }
@@ -88,6 +118,12 @@ if args.contains("--request-access") {
     exit(0)
 }
 
+if args.contains("--request-screen-access") {
+    let screenRecording = CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess()
+    emit(["screen_recording": screenRecording])
+    exit(0)
+}
+
 guard let app = workspace.frontmostApplication, let bundleID = app.bundleIdentifier else {
     emit(["status": "unavailable"])
     exit(0)
@@ -117,26 +153,41 @@ guard args.contains(bundleID) else {
     exit(0)
 }
 
+let needsWindowID = args.contains("--window-id")
+let screenRecording = !needsWindowID || CGPreflightScreenCaptureAccess()
 var result: [String: Any] = [
     "status": "ok", "app": app.localizedName ?? "Unknown", "bundle_id": bundleID,
     "title": "", "accessibility": AXIsProcessTrusted()
 ]
-if args.contains("--titles") || args.contains("--text") {
+if needsWindowID { result["screen_recording"] = screenRecording }
+if !screenRecording {
+    result["status"] = "permission_denied"
+} else if args.contains("--titles") || args.contains("--text") || needsWindowID {
     if !AXIsProcessTrusted() {
         result["status"] = "permission_denied"
     } else {
         let element = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetMessagingTimeout(element, 1.0)
         var focused: CFTypeRef?
+        var focusedWindow: AXUIElement?
         if AXUIElementCopyAttributeValue(element, kAXFocusedWindowAttribute as CFString, &focused) == .success,
            let focused = focused, CFGetTypeID(focused) == AXUIElementGetTypeID() {
             let window = unsafeBitCast(focused, to: AXUIElement.self)
+            focusedWindow = window
             var title: CFTypeRef?
             if AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &title) == .success {
                 result["title"] = String((title as? String ?? "").prefix(512))
             }
             if args.contains("--text") {
                 result.merge(windowText(window)) { _, new in new }
+            }
+        }
+        if needsWindowID {
+            if let window = focusedWindow, let bounds = frame(window),
+               let windowID = focusedWindowID(pid: app.processIdentifier, bounds: bounds) {
+                result["window_id"] = Int(windowID)
+            } else {
+                result["status"] = "unavailable"
             }
         }
     }
