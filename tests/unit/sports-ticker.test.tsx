@@ -1,11 +1,15 @@
-import { createElement } from "react";
+// @vitest-environment jsdom
+import { act, createElement } from "react";
 import { renderToString } from "react-dom/server";
+import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import type { FollowedTeamCard, FollowedTeamNews } from "@moss/shared";
 
 import { SportsTicker, TickerTeam } from "../../packages/sports/src/web/sports-ticker.js";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Stories arrive fully-formed on the card now (mrb0pk1n) — no client-side headline matching.
 function story(overrides: Partial<FollowedTeamNews> = {}): FollowedTeamNews {
@@ -401,5 +405,72 @@ describe("TickerTeam", () => {
     expect(html).toContain("sp-tk__scorers--home");
     expect(html).toContain("A. Isak (2)");
     expect(html).toContain("sp-tk__scorers--away");
+  });
+});
+
+describe("TickerTeam failed lead image", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("removes a failed lead image while keeping the headline and later good images", async () => {
+    const bad = "https://example.com/broken-photo.jpg";
+    const good = "https://example.com/ok-photo.jpg";
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const client = new QueryClient();
+    const badCard = card({
+      status: "news",
+      primary: "",
+      stories: [
+        story({
+          title: "Bad image story",
+          url: "https://example.com/bad",
+          imageUrl: bad
+        })
+      ]
+    });
+    const goodCard = card({
+      teamKey: "dal",
+      name: "Dallas FC",
+      status: "news",
+      primary: "",
+      stories: [
+        story({
+          title: "Good image story",
+          url: "https://example.com/good",
+          imageUrl: good
+        })
+      ]
+    });
+    await act(async () => {
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(
+            "div",
+            null,
+            createElement(TickerTeam, { card: badCard }),
+            createElement(TickerTeam, { card: goodCard })
+          )
+        )
+      );
+    });
+    expect(container.querySelectorAll("img.sp-tk__media")).toHaveLength(2);
+    const broken = container.querySelector(`img[src="${bad}"]`);
+    expect(broken).not.toBeNull();
+    await act(async () => {
+      broken?.dispatchEvent(new Event("error"));
+    });
+    const remaining = container.querySelectorAll("img.sp-tk__media");
+    expect(remaining).toHaveLength(1);
+    expect(remaining.item(0)?.getAttribute("src")).toBe(good);
+    expect(container.textContent).toContain("Bad image story");
+    expect(container.textContent).toContain("Good image story");
+    await act(async () => {
+      root.unmount();
+    });
   });
 });
