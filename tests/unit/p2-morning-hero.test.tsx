@@ -257,4 +257,11 @@ describe("morning hero vertical rhythm (day mode only)", () => {
     }
     expect([...seen].sort()).toEqual(Object.keys(snapshot).sort());
   });
+
+  it("keeps the day section index cascade after the generic section rules", async () => {
+    const css = await heroCss();
+    expect(css.lastIndexOf(".today-hero__sections {")).toBeGreaterThan(
+      css.indexOf(".cmd-sections {")
+    );
+  });
 });

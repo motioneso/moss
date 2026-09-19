@@ -121,6 +121,23 @@
   outline-offset: 2px;
 }
 
+/* ===== Today section index (V2 restyle in place) ===== */
+.cmd-sections {
+  gap: 6px 26px;
+  margin: 0 0 20px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cmd-sections a {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--forest);
+}
+
 .today-hero__sections {
   align-items: center;
   gap: 6px 20px;
@@ -141,23 +158,6 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-/* ===== Today section index (V2 restyle in place) ===== */
-.cmd-sections {
-  gap: 6px 26px;
-  margin: 0 0 20px;
-  padding: 0 0 10px;
-  border-bottom: 1px solid var(--line);
-}
-
-.cmd-sections a {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: var(--forest);
 }
 
 @media (max-width: 880px) {
