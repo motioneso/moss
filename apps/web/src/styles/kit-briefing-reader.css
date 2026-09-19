@@ -100,7 +100,10 @@
 @media (min-width: 1081px) {
   .brief-reader:has([data-briefing-surface="automatic-read"]) {
     max-width: 1120px;
-    max-height: 910px;
+    height: 910px;
+  }
+  .brief-reader:has([data-briefing-surface="automatic-read"]) .brief-reader__body {
+    flex: 1 1 auto;
   }
 }
 @media (max-width: 1080px) {
