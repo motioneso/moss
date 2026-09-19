@@ -147,3 +147,25 @@ frequency. Cost-saving downscaling must not erase the evidence needed to
 distinguish, for example, two different travel destinations. Use the paid Gemini
 tier for private-screen experiments: Google's pricing page marks free-tier data
 as used to improve products and paid-tier data as not used for that purpose.
+
+## User-run screenshot evidence and next experiment
+
+Eight user-reported Qwen screenshot calls on 2026-09-19 took 6.15–9.64 seconds
+and reported 0.00009488–0.00010112 OpenRouter credits each. Input usage was
+2,634–2,686 tokens, higher than the illustrative 1,000-token budget above.
+At approximately $0.00010 per screenshot, one per minute for eight hours daily
+over 30 days is about $1.44 for vision inference, excluding Jev and fees.
+
+Descriptions distinguished a coding-agent interface, terminal logs, an inbox,
+football news, a discussion site, a Liverpool hotel search, a San Francisco
+destination page, and flights to Liverpool (some categories shared a screenshot).
+These are plausible descriptions from user-supplied logs, not independently
+scored image accuracy or a calibrated benchmark.
+
+The next authorized standalone experiment chains each screenshot description into
+Jev's existing activity/alignment questions with an optional declared goal. It
+uses only bounded descriptions as Jev evidence, preserves the visual model's
+uncertainty, and distinguishes quoted activity logs from current visible activity.
+Manually timed screenshots provide no continuous dwell evidence: no distraction
+timer or automatic screen capture is added by this experiment. Existing folder
+watching remains a convenience for submitting newly saved screenshots.

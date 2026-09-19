@@ -175,9 +175,9 @@ classified. Manually delete a session file when finished; TypeSafe's retention i
 
 ## Single-screenshot vision experiment
 
-`vision.py` tests perception separately from the live Jev runner. It never captures
-the screen or calls Jev. Choose a non-sensitive screenshot yourself (Shift-Command-4
-on Mac), inspect/crop it, and supply that PNG or JPEG. The whole supplied image is
+`vision.py` tests perception separately from the live Mac capture. It never captures
+the screen itself. Choose a non-sensitive screenshot yourself (Shift-Command-4 on
+Mac), inspect/crop it, and supply that PNG or JPEG. The whole supplied image is
 uploaded with `--live`; Accessibility's filtering does not apply to pixels.
 
 ```bash
@@ -192,7 +192,20 @@ python3 -B vision.py ~/Desktop/example.png --live --model google/gemini-2.5-flas
 
 # Watch Desktop, then take screenshots normally. Ctrl-C stops.
 python3 -B vision.py --watch "$HOME/Desktop" --live
+
+# Watch and send each visual description to Jev for activity and goal alignment.
+python3 -B vision.py --watch "$HOME/Desktop" --live --jev \
+  --goal "Research accommodation for a Liverpool trip"
 ```
+
+`--jev` makes a second request after each successful vision request. It reads
+`TYPESAFE_API_KEY` or prompts for it without echoing; the OpenRouter key is read
+separately from `OPENROUTER_API_KEY`. `--goal` requires `--jev`, and omitting the
+goal keeps Jev's alignment answer at `insufficient_evidence`. Each output line
+contains the vision observation and cost plus a nested `jev` judgment and its
+separate usage. A Jev authentication, credit, or rate-limit error preserves the
+vision result and stops the watcher; other Jev failures preserve the vision result
+and skip only that image's judgment.
 
 Watch mode skips files already present when it announces "Watching" and checks
 every two seconds for new PNG/JPEG filenames (no subfolders or symlinks). It waits
@@ -217,6 +230,16 @@ Invalid/truncated model descriptions are rejected while retaining reported usage
 Only the selected image is sent to OpenRouter and its model provider; the program
 does not save images, descriptions, or keys. Descriptions appear in your terminal
 and may contain sensitive text. The screenshot you created remains until deleted.
+
+The Jev request sends only a bounded, sanitized description with
+`evidence: "screenshot_description"`. It does not invent an app or bundle ID, and
+its instructions use ordinary page content, headings and listings as evidence of
+what is visible. Clearly quoted logs, chat, email, terminal output and document
+content are treated as displayed content rather than proof of current activity: a
+log saying shopping is not shopping, while a hotel-results page can support
+research or shopping. This watcher has no duration accumulation or focus flagging;
+use the main pilot for Accessibility-based timing while this tests screenshot
+perception.
 
 For persistent key storage in the Mac's default zsh, use this hidden prompt:
 
