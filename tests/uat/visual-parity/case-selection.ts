@@ -18,17 +18,17 @@ import {
 } from "./region-comparison.js";
 
 export const CASE_SELECTION_VERSION = 1 as const;
-// Files whose bytes define the harness identity. The writer hashes exactly
-// these files; validation recomputes over the same list, so a manifest digest
-// only passes when it describes the tree that actually ran (pinned to the
-// reviewed commit through manifest.head).
+// Files whose bytes define the harness identity: the writer hashes exactly these files,
+// and validation recomputes over the same list, so a manifest digest only passes when it
+// describes the tree that actually ran (pinned to the reviewed commit through manifest.head).
 export const HARNESS_FILES = [
   "tests/uat/visual-parity/case-selection.ts",
   "tests/uat/visual-parity/capture.ts",
   "tests/uat/specs/visual-parity.uat.spec.ts",
   "tests/uat/visual-parity/region-comparison.ts",
   "tests/uat/visual-parity/region-schema.ts",
-  "tests/uat/visual-parity/seed.ts"
+  "tests/uat/visual-parity/seed.ts",
+  "tests/uat/visual-parity/mockups.ts"
 ] as const;
 
 export function computeHarnessDigest(files: readonly string[] = HARNESS_FILES): string {
@@ -484,7 +484,8 @@ export function resolveCaseSelectionManifest(
 }
 
 export function selectedSetupActions(state: string): readonly string[] {
-  if (state.startsWith("today-morning")) return ["openToday:morning", "populatedMorning"];
+  if (state.startsWith("today-morning"))
+    return ["openToday:morning", "populatedMorning", "driveState"];
   if (state === "today-evening") return ["openToday:evening"];
   if (state === "today-evening-saved")
     return [

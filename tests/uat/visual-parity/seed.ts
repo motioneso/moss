@@ -463,9 +463,9 @@ export async function scrollSectionTop(page: Page, selector: string): Promise<vo
   }
 }
 const STRIP = ["Reflect", "Open commitments", "Shape tomorrow", "Review"];
-export async function ensurePlanning(page: Page, w: number, step: number): Promise<void> {
+export async function ensurePlanning(page: Page, viewport: Viewport, step: number): Promise<void> {
   await closeDialogs(page);
-  await page.setViewportSize({ width: w, height: 1000 });
+  await page.setViewportSize({ width: viewport.w, height: viewport.h });
   await page.getByRole("button", { name: "Plan tomorrow" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
@@ -475,9 +475,9 @@ export async function ensurePlanning(page: Page, w: number, step: number): Promi
     .click();
   await page.waitForTimeout(300);
 }
-export async function ensureReader(page: Page, w: number, tab: 0 | 1): Promise<void> {
+export async function ensureReader(page: Page, viewport: Viewport, tab: 0 | 1): Promise<void> {
   await closeDialogs(page);
-  await page.setViewportSize({ width: w, height: 1000 });
+  await page.setViewportSize({ width: viewport.w, height: viewport.h });
   await page.getByRole("button", { name: "Read the full morning briefing" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
@@ -488,7 +488,7 @@ export async function ensureReader(page: Page, w: number, tab: 0 | 1): Promise<v
 // Walk entry setup, moved here from the parity spec so entry ordering is
 // directly testable: every case lays out and scrolls at its own viewport.
 import { runSetupActions, statePrerequisites } from "./case-selection.js";
-import { type MockupEntry } from "./mockups.js";
+import { type MockupEntry, type Viewport } from "./mockups.js";
 
 export interface ParityEvent {
   readonly title: string;
@@ -557,19 +557,19 @@ export async function populatedMorning(page: Page, m: ParityManifest): Promise<v
     `[parity] populated: timeline, weather, news lead "${((news["topStories"] as Array<{ title: string }>)[0] as { title: string }).title}", sports scores`
   );
 }
-export async function driveState(page: Page, state: string, w: number): Promise<void> {
+export async function driveState(page: Page, state: string, viewport: Viewport): Promise<void> {
   const dialog = page.getByRole("dialog");
   if (state.startsWith("today-")) {
     await closeDialogs(page).catch(() => undefined);
-    await page.setViewportSize({ width: w, height: 1000 });
+    await page.setViewportSize({ width: viewport.w, height: viewport.h });
     if (state === "today-morning-news") await scrollSectionTop(page, ".jds-brief--news");
     if (state === "today-morning-sports")
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight * 0.7));
   } else if (state.startsWith("reader-")) {
     const tab = state.includes("-review") || state.includes("partial") ? 1 : 0;
-    await ensureReader(page, w, tab as 0 | 1);
+    await ensureReader(page, viewport, tab as 0 | 1);
   } else if (state.startsWith("evening-step-")) {
-    await ensurePlanning(page, w, Number(state.slice("evening-step-".length)));
+    await ensurePlanning(page, viewport, Number(state.slice("evening-step-".length)));
   } else if (state === "evening-saved") {
     await expect(dialog).toBeVisible();
   }
@@ -597,7 +597,7 @@ export async function prepareSelectedEntry(
     populatedMorning: () => populatedMorning(page, m),
     planningStep: async (step) => {
       if (step === 0) {
-        await ensurePlanning(page, entry.viewport.w, 0);
+        await ensurePlanning(page, entry.viewport, 0);
         return;
       }
       const steps = dialog().getByRole("navigation", { name: "Plan steps" });
@@ -626,12 +626,7 @@ export async function prepareSelectedEntry(
         await mirrorBlock(page, localDay(), await localeTz(page), 0);
       if (entry.state.startsWith("reader-automatic"))
         await mirrorBlock(page, localDay(), await localeTz(page), 1);
-      await driveState(page, entry.state, entry.viewport.w);
+      await driveState(page, entry.state, entry.viewport);
     }
   });
-  if (entry.state.startsWith("today-morning")) {
-    if (entry.state === "today-morning-news") await scrollSectionTop(page, ".jds-brief--news");
-    if (entry.state === "today-morning-sports")
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight * 0.7));
-  }
 }
