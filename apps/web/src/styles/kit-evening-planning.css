@@ -347,9 +347,7 @@
 
   .brief-reader:has(.evening-plan__grid) .brief-reader__footer {
     box-sizing: border-box;
-    height: 76px;
     min-height: 76px;
-    max-height: 76px;
     padding: 15px 32px 16px;
     display: grid;
     grid-template-columns: auto 1fr auto;
