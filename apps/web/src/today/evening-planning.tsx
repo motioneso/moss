@@ -69,12 +69,16 @@ function headingIdFor(step: number): string {
 export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
   const { evening, review } = props;
   const [step, setStep] = useState(0);
-  const firstRender = useRef(true);
+  const prevStepRef = useRef<number | null>(null);
   useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
+    if (prevStepRef.current === null) {
+      prevStepRef.current = step;
       return;
     }
+    if (prevStepRef.current === step) {
+      return;
+    }
+    prevStepRef.current = step;
     const heading = document.getElementById(headingIdFor(step));
     (heading ?? document.getElementById(`evening-panel-${STEP_IDS[step]}`))?.focus();
   }, [step]);
@@ -143,6 +147,17 @@ export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
               Back to Today
             </Button>
           </div>
+          <span
+            className={`evening-plan__status${evening.status !== "Not saved yet." ? " evening-plan__status--saved" : ""}`}
+            role="status"
+          >
+            {evening.status}
+          </span>
+          {evening.reviewNotice ? (
+            <span className="evening-plan__notice" role="status">
+              {evening.reviewNotice}
+            </span>
+          ) : null}
           <div className="brief-reader__footer-actions">
             {step < 3 ? (
               <Button variant="primary" onClick={() => setStep(step + 1)}>
@@ -153,14 +168,6 @@ export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
                 {SAVE_TOMORROW_LABEL}
               </Button>
             )}
-            <span className="evening-plan__status" role="status">
-              {evening.status}
-            </span>
-            {evening.reviewNotice ? (
-              <span className="evening-plan__notice" role="status">
-                {evening.reviewNotice}
-              </span>
-            ) : null}
           </div>
         </>
       }
