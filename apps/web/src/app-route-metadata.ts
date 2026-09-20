@@ -17,7 +17,14 @@ const SECTION_OF: Record<string, string> = {
   sports: "You",
   news: "You"
 };
-const HIDDEN_NAV_IDS = new Set(["chat", "briefings", "settings", "notifications"]);
+const HIDDEN_NAV_IDS = new Set([
+  "chat",
+  "briefings",
+  "settings",
+  "notifications",
+  // Reached only from the link a Mac sends you to, never from the rail.
+  "link-trail-marker"
+]);
 
 export interface WebRouteMeta {
   // Widened from a literal union (#799): module-contributed routes are discovered at build time
@@ -101,6 +108,13 @@ export const webRoutes: readonly WebRouteMeta[] = [
     title: "Settings & permissions",
     subtitle: () => "",
     match: (pathname) => pathname.startsWith("/settings")
+  },
+  {
+    id: "link-trail-marker",
+    path: "/link/trail-marker",
+    title: "Link a Mac",
+    subtitle: () => "",
+    match: (pathname) => pathname.startsWith("/link/trail-marker")
   }
 ];
 

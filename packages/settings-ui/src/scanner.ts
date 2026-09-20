@@ -144,7 +144,8 @@ export const SHELL_RESERVED_WEB_PATHS: readonly string[] = [
   "/notifications",
   "/calendar",
   "/wellness",
-  "/settings"
+  "/settings",
+  "/link/trail-marker"
 ];
 
 export function scanModuleWeb(options: ScanOptions): WebScanResult {

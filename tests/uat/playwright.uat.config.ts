@@ -18,6 +18,7 @@ export default defineConfig({
   retries: 0,
   use: {
     baseURL,
+    actionTimeout: 30_000,
     trace: "retain-on-failure"
   },
   projects: [

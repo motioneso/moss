@@ -5,7 +5,12 @@ import type pg from "pg";
 
 import { isUuid } from "@moss/db";
 import type { MeSessionsService } from "@moss/settings";
-import type { MeSessionDeviceKind, MeSessionDto } from "@moss/shared";
+import {
+  COMPANION_PRODUCT_NAME,
+  type MeSessionDeviceKind,
+  type MeSessionDto,
+  type MeSessionSource
+} from "@moss/shared";
 
 import { readBearerToken, toWebHeaders } from "./headers.js";
 
@@ -45,7 +50,11 @@ interface SessionRow {
   readonly expires_at: Date | string;
   readonly ip_address: string | null;
   readonly user_agent: string | null;
-  readonly source: "cookie" | "bearer";
+  readonly source: "cookie" | "bearer" | "companion";
+  /** Companion rows only; null on every other source. */
+  readonly display_name: string | null;
+  readonly app_version: string | null;
+  readonly os_version: string | null;
 }
 
 /**
@@ -83,14 +92,22 @@ export function createMeSessionsService(deps: {
       const currentSessionId = await resolveCurrentSessionId(headers);
       // Token column is deliberately excluded from the projection — never selected.
       const result = await pool.query<SessionRow>(
-        `SELECT id, created_at, updated_at, expires_at, ip_address, user_agent, 'cookie' AS source
+        `SELECT id, created_at, updated_at, expires_at, ip_address, user_agent, 'cookie' AS source,
+                NULL::text AS display_name, NULL::text AS app_version, NULL::text AS os_version
            FROM app.better_auth_sessions
           WHERE user_id = $1 AND expires_at > now()
          UNION ALL
          SELECT id, created_at, NULL::timestamptz AS updated_at, expires_at,
-                NULL::text AS ip_address, NULL::text AS user_agent, 'bearer' AS source
+                NULL::text AS ip_address, NULL::text AS user_agent, 'bearer' AS source,
+                NULL::text AS display_name, NULL::text AS app_version, NULL::text AS os_version
            FROM app.auth_sessions
-          WHERE user_id = $1 AND expires_at > now()`,
+          WHERE user_id = $1 AND expires_at > now()
+         UNION ALL
+         SELECT id, created_at, last_contact_at AS updated_at, expires_at,
+                NULL::text AS ip_address, NULL::text AS user_agent, 'companion' AS source,
+                display_name, app_version, os_version
+           FROM app.companion_devices
+          WHERE user_id = $1 AND expires_at > now() AND absolute_expires_at > now()`,
         [actorUserId]
       );
 
@@ -119,7 +136,15 @@ export function createMeSessionsService(deps: {
           "DELETE FROM app.better_auth_sessions WHERE id = $1 AND user_id = $2",
           [sessionId, actorUserId]
         );
-        return { revoked: (cookie.rowCount ?? 0) > 0, wasCurrent: false };
+        if ((cookie.rowCount ?? 0) > 0) return { revoked: true, wasCurrent: false };
+
+        // A companion device is also addressed by its non-secret row id (#2560). Deleting
+        // the row is the whole revocation: the credential only exists as a hash in it.
+        const companion = await pool.query(
+          "DELETE FROM app.companion_devices WHERE id = $1 AND user_id = $2",
+          [sessionId, actorUserId]
+        );
+        return { revoked: (companion.rowCount ?? 0) > 0, wasCurrent: false };
       }
 
       // Bearer handle path: resolve sha256(id) back to the real id among THIS actor's own,
@@ -156,7 +181,13 @@ export function createMeSessionsService(deps: {
         "DELETE FROM app.auth_sessions WHERE user_id = $1 AND id <> $2 AND expires_at > now()",
         [actorUserId, currentSessionId]
       );
-      return (cookie.rowCount ?? 0) + (bearer.rowCount ?? 0);
+      // A companion device is never the current session, so "sign out everywhere else"
+      // always unlinks every Mac.
+      const companion = await pool.query(
+        "DELETE FROM app.companion_devices WHERE user_id = $1 AND expires_at > now() AND absolute_expires_at > now()",
+        [actorUserId]
+      );
+      return (cookie.rowCount ?? 0) + (bearer.rowCount ?? 0) + (companion.rowCount ?? 0);
     }
   };
 }
@@ -164,15 +195,7 @@ export function createMeSessionsService(deps: {
 function toDto(row: SessionRow, currentSessionId: string | null): MeSessionDto {
   const createdAt = toIso(row.created_at);
   const lastSeenAt = row.updated_at ? toIso(row.updated_at) : createdAt;
-  const device =
-    row.source === "bearer"
-      ? {
-          deviceLabel: "CLI / API session",
-          browser: null,
-          os: null,
-          deviceKind: "desktop" as const
-        }
-      : parseUserAgent(row.user_agent);
+  const device = describeDevice(row);
 
   // Bearer rows: emit the one-way handle, never the raw id (which IS the secret). Cookie rows:
   // the row id is non-secret and safe to emit. `isCurrent` compares REAL ids internally.
@@ -189,8 +212,46 @@ function toDto(row: SessionRow, currentSessionId: string | null): MeSessionDto {
     deviceLabel: device.deviceLabel,
     browser: device.browser,
     os: device.os,
-    deviceKind: device.deviceKind
+    deviceKind: device.deviceKind,
+    source: SOURCE_BY_ROW[row.source],
+    companion:
+      row.source === "companion"
+        ? {
+            product: COMPANION_PRODUCT_NAME,
+            displayName: row.display_name ?? "Mac",
+            appVersion: row.app_version,
+            osVersion: row.os_version,
+            lastContactAt: row.updated_at ? toIso(row.updated_at) : null
+          }
+        : null
   };
+}
+
+const SOURCE_BY_ROW: Record<SessionRow["source"], MeSessionSource> = {
+  cookie: "browser",
+  bearer: "cli",
+  companion: "companion"
+};
+
+function describeDevice(row: SessionRow): {
+  deviceLabel: string;
+  browser: string | null;
+  os: string | null;
+  deviceKind: MeSessionDeviceKind;
+} {
+  if (row.source === "bearer") {
+    return { deviceLabel: "CLI / API session", browser: null, os: null, deviceKind: "desktop" };
+  }
+  if (row.source === "companion") {
+    // A linked Mac names itself, so the user recognises the row without a user agent.
+    return {
+      deviceLabel: row.display_name ?? "Mac",
+      browser: null,
+      os: "macOS",
+      deviceKind: "laptop"
+    };
+  }
+  return parseUserAgent(row.user_agent);
 }
 
 function toIso(value: Date | string): string {

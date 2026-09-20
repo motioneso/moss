@@ -471,7 +471,7 @@ export async function ensurePlanning(page: Page, viewport: Viewport, step: numbe
   await expect(dialog).toBeVisible();
   await dialog
     .getByRole("navigation", { name: "Plan steps" })
-    .getByRole("button", { name: STRIP[step]!, exact: true })
+    .getByRole("button", { name: new RegExp(`^(0[1-4] )?${STRIP[step]!}$`) })
     .click();
   await page.waitForTimeout(300);
 }

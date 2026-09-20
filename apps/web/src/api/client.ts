@@ -45,7 +45,10 @@ import type {
   ListNotificationPreferencesResponse,
   GetQuietHoursSettingsResponse,
   GetAiSummaryResponse,
+  DecidePairAttemptRequest,
+  DecidePairAttemptResponse,
   ListMySessionsResponse,
+  PairAttemptSummaryResponse,
   RevokeMyOtherSessionsResponse,
   RevokeMySessionResponse,
   SaveDayPlanRequest,
@@ -273,6 +276,26 @@ export async function revokeMySession(id: string): Promise<RevokeMySessionRespon
 export async function revokeMyOtherSessions(): Promise<RevokeMyOtherSessionsResponse> {
   return requestJson<RevokeMyOtherSessionsResponse>("/api/me/sessions/others", {
     method: "DELETE"
+  });
+}
+
+/**
+ * Reads what a waiting Mac is asking to link (#2560). A post for a read, so the approval
+ * code travels in the body and never reaches a URL or a server log.
+ */
+export async function getCompanionPairAttempt(code: string): Promise<PairAttemptSummaryResponse> {
+  return requestJson<PairAttemptSummaryResponse>("/api/companion/pair/attempt", {
+    method: "POST",
+    body: { code }
+  });
+}
+
+export async function decideCompanionPairAttempt(
+  body: DecidePairAttemptRequest
+): Promise<DecidePairAttemptResponse> {
+  return requestJson<DecidePairAttemptResponse>("/api/companion/pair/decide", {
+    method: "POST",
+    body
   });
 }
 

@@ -21,6 +21,7 @@ export * from "./chat-api.js";
 export * from "./chat-archive-api.js";
 export * from "./chat-settings-api.js";
 export * from "./chat-skills-api.js";
+export * from "./companion-api.js";
 export * from "./connectors-api.js";
 export * from "./connector-sync-explain.js";
 export * from "./imap-providers.js";

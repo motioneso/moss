@@ -24,6 +24,14 @@ import {
 } from "@moss/settings";
 import type { AuthProviderStatusDto } from "@moss/shared";
 
+import {
+  createCompanionDevicesService,
+  type CompanionDevicesService
+} from "./companion-devices.js";
+import {
+  createCompanionPairingService,
+  type CompanionPairingService
+} from "./companion-pairing.js";
 import { readBearerToken, toWebHeaders } from "./headers.js";
 import { resolveAuthOriginConfig } from "./runtime-config.js";
 import { createMeSessionsService, type MeSessionsRuntimeService } from "./session-service.js";
@@ -35,6 +43,27 @@ const { Pool } = pg;
 // strict node_modules means only packages that declare the dependency (this one)
 // can resolve "better-auth/crypto" directly (#1025).
 export { hashPassword };
+
+export {
+  createCompanionPairingService,
+  type CreatedPairAttempt,
+  type DecidePairAttemptResult,
+  type RedeemResult
+} from "./companion-pairing.js";
+export type { CompanionPairingService } from "./companion-pairing.js";
+export {
+  CompanionAuthError,
+  createCompanionDevicesService,
+  type CompanionContext,
+  type CompanionDeviceSummary
+} from "./companion-devices.js";
+export type { CompanionDevicesService } from "./companion-devices.js";
+export {
+  digestsMatch,
+  mintCompanionCredential,
+  randomBase64url,
+  sha256Base64url
+} from "./companion-crypto.js";
 
 export interface AuthenticatedPrincipal {
   readonly userId: string;
@@ -88,6 +117,15 @@ export interface MossAuthRuntime {
    * Returns a boolean only; NEVER selects the password hash (#239).
    */
   readonly hasPasswordCredential: (actorUserId: string) => Promise<boolean>;
+  /**
+   * Origins allowed to make a cookie-authenticated cross-site state change. Exposed so
+   * route layers check the same list Better Auth does instead of re-reading env (#2560).
+   */
+  readonly trustedOrigins: readonly string[];
+  /** Browser-approved Trail Marker pairing (#2560). Runs on the auth pool. */
+  readonly companionPairing: CompanionPairingService;
+  /** Companion credential resolution and own-device operations (#2560). */
+  readonly companionDevices: CompanionDevicesService;
   readonly close: () => Promise<void>;
 }
 
@@ -164,12 +202,23 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
       }),
     listConfiguredProviders: () => listConfiguredAuthProviders(env),
     revokeUserSessions: async (userId: string) => {
-      const result = await pool.query("DELETE FROM app.better_auth_sessions WHERE user_id = $1", [
+      const browser = await pool.query("DELETE FROM app.better_auth_sessions WHERE user_id = $1", [
         userId
       ]);
-      return result.rowCount ?? 0;
+      // A linked Mac is a way into the account, so cutting someone off has to take it
+      // too. It also shows in the same Active sessions list, which would otherwise keep
+      // listing a Mac an admin was told they had just signed out.
+      const companion = await pool.query("DELETE FROM app.companion_devices WHERE user_id = $1", [
+        userId
+      ]);
+      return (browser.rowCount ?? 0) + (companion.rowCount ?? 0);
     },
     meSessions: createMeSessionsService({ pool, auth }),
+    trustedOrigins: resolveAuthOriginConfig(env).trustedOrigins,
+    // Both companion services run on the auth pool, because migration 0238 grants the
+    // companion tables to jarvis_auth_runtime alone.
+    companionPairing: createCompanionPairingService({ pool }),
+    companionDevices: createCompanionDevicesService({ pool }),
     verifySelfPassword: async ({ actorUserId, password }) => {
       // Scope strictly to the actor's own credential row. provider_id='credential'
       // AND a non-null password define "this account owns a password credential"

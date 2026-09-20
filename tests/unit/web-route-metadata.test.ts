@@ -89,7 +89,8 @@ describe("web route metadata", () => {
       "/news",
       "/sports",
       "/workshop",
-      "/settings"
+      "/settings",
+      "/link/trail-marker"
     ]);
   });
 

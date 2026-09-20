@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createElement, useEffect } from "react";
+import { StrictMode, createElement, useEffect } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -175,6 +175,49 @@ function ControllersHarness(props: {
   return createElement(DialogHarness, { evening, review, run: props.run });
 }
 
+async function mountDialogInStrictMode(run: BriefingRunDto | null) {
+  let latest: EveningPlanningController | null = null;
+  let liveReview: DayPlanReviewController | null = null;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  liveRoots.push(root);
+  await act(async () => {
+    root.render(
+      createElement(
+        StrictMode,
+        null,
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(ControllersHarness, {
+            run,
+            seen: (c, r) => {
+              latest = c;
+              liveReview = r;
+            }
+          })
+        )
+      )
+    );
+  });
+  return {
+    get evening() {
+      return latest!;
+    },
+    get review() {
+      return liveReview!;
+    },
+    unmount: () => {
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    }
+  };
+}
+
 async function mountDialog(run: BriefingRunDto | null) {
   let latest: EveningPlanningController | null = null;
   let liveReview: DayPlanReviewController | null = null;
@@ -278,6 +321,76 @@ describe("evening step strip", () => {
 });
 
 describe("evening step navigation", () => {
+  it("keeps dialog title focus on initial render under StrictMode", async () => {
+    stubFetch();
+    await mountDialogInStrictMode(eveningRun());
+    const title = document.body.querySelector("[data-briefing-title]") as HTMLElement;
+    expect(document.activeElement).toBe(title);
+  });
+
+  it("does not hide visible step numbers from accessible names", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
+    const buttons = [...nav.querySelectorAll("button")];
+    for (const button of buttons) {
+      const span = button.querySelector("span");
+      expect(span).not.toBeNull();
+      expect(span?.getAttribute("aria-hidden")).toBeNull();
+    }
+  });
+
+  it("keeps status outside the footer actions container", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const status = document.body.querySelector(".evening-plan__status");
+    expect(status).not.toBeNull();
+    expect(document.body.querySelector(".brief-reader__footer-actions")?.contains(status)).toBe(
+      false
+    );
+  });
+
+  it("applies evening-plan__status--saved modifier only when saved", async () => {
+    stubFetch();
+    const harness = await mountDialog(eveningRun());
+    const status = document.body.querySelector(".evening-plan__status");
+    expect(status?.textContent).toBe("Not saved yet.");
+    expect(status?.classList.contains("evening-plan__status--saved")).toBe(false);
+
+    await act(async () => {
+      await harness.evening.save();
+    });
+
+    const statusAfter = document.body.querySelector(".evening-plan__status");
+    expect(statusAfter?.textContent).toBe("Saved. The blocks are proposed for the morning.");
+    expect(statusAfter?.classList.contains("evening-plan__status--saved")).toBe(true);
+  });
+
+  it("focuses the named heading when advancing to steps 3 and 4 via Next", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const nextButton = () =>
+      document.body.querySelector(".brief-reader__footer-actions button") as HTMLButtonElement;
+
+    // Step 1 -> Step 2
+    await act(async () => {
+      nextButton().click();
+    });
+    expect(document.activeElement).toBe(document.getElementById("evening-commitments-heading"));
+
+    // Step 2 -> Step 3
+    await act(async () => {
+      nextButton().click();
+    });
+    expect(document.activeElement).toBe(document.getElementById("evening-shape-heading"));
+
+    // Step 3 -> Step 4
+    await act(async () => {
+      nextButton().click();
+    });
+    expect(document.activeElement).toBe(document.getElementById("evening-review-heading"));
+  });
+
   it("moves current and focus to step 2 and keeps the frame chrome", async () => {
     stubFetch();
     await mountDialog(eveningRun());

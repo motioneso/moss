@@ -23,11 +23,28 @@ export interface PatchMeProfileRequest {
 }
 
 export type MeSessionDeviceKind = "laptop" | "desktop" | "phone" | "tablet";
+
+/** Which kind of credential holds this session open. */
+export type MeSessionSource = "browser" | "cli" | "companion";
+
+/**
+ * What a linked companion app adds to a session row. Present only when source is
+ * "companion" (#2560). Carries no credential and no fingerprint of one.
+ */
+export interface MeSessionCompanionDto {
+  readonly product: string;
+  readonly displayName: string;
+  readonly appVersion: string | null;
+  readonly osVersion: string | null;
+  readonly lastContactAt: string | null;
+}
+
 /**
  * Safe metadata for one of the current user's active sessions. NEVER carries the
  * session token, cookie value, bearer secret, or any token fingerprint (#237).
- * Covers both cookie sessions (rich UA/IP metadata) and legacy bearer/CLI sessions
- * (minimal metadata — UA/IP null, generic device label).
+ * Covers cookie sessions (rich UA/IP metadata), legacy bearer/CLI sessions
+ * (minimal metadata — UA/IP null, generic device label), and linked companion
+ * devices (#2560).
  */
 export interface MeSessionDto {
   readonly id: string;
@@ -42,6 +59,9 @@ export interface MeSessionDto {
   readonly browser: string | null;
   readonly os: string | null;
   readonly deviceKind: MeSessionDeviceKind;
+  readonly source: MeSessionSource;
+  /** Non-null only for a linked companion device (#2560). */
+  readonly companion: MeSessionCompanionDto | null;
 }
 
 export interface ListMySessionsResponse {
@@ -149,7 +169,9 @@ const meSessionSchema = {
     "deviceLabel",
     "browser",
     "os",
-    "deviceKind"
+    "deviceKind",
+    "source",
+    "companion"
   ],
   properties: {
     id: { type: "string" },
@@ -162,7 +184,20 @@ const meSessionSchema = {
     deviceLabel: { type: "string" },
     browser: { type: ["string", "null"] },
     os: { type: ["string", "null"] },
-    deviceKind: { type: "string", enum: ["laptop", "desktop", "phone", "tablet"] }
+    deviceKind: { type: "string", enum: ["laptop", "desktop", "phone", "tablet"] },
+    source: { type: "string", enum: ["browser", "cli", "companion"] },
+    companion: {
+      type: ["object", "null"],
+      additionalProperties: false,
+      required: ["product", "displayName", "appVersion", "osVersion", "lastContactAt"],
+      properties: {
+        product: { type: "string" },
+        displayName: { type: "string" },
+        appVersion: { type: ["string", "null"] },
+        osVersion: { type: ["string", "null"] },
+        lastContactAt: { type: ["string", "null"] }
+      }
+    }
   }
 } as const;
 

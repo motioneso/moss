@@ -1,6 +1,7 @@
 .evening-plan__strip {
   flex: none;
   border-bottom: 1px solid var(--line);
+  background: var(--paper);
 }
 
 .evening-plan__strip ol {
@@ -8,34 +9,41 @@
   margin: 0;
   padding: 0;
   display: flex;
-  flex-wrap: wrap;
-  column-gap: 24px;
+  flex-wrap: nowrap;
+  column-gap: 25px;
   min-width: 0;
+  height: 100%;
 }
 
 .evening-plan__strip li {
   min-width: 0;
+  height: 100%;
+  display: flex;
 }
 
 .evening-plan__strip button {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  min-height: 44px;
-  padding: 12px 2px 10px;
+  height: 100%;
+  min-height: 0;
+  padding: 2px 0 0;
   background: none;
   border: 0;
   border-bottom: 3px solid transparent;
   color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 11px;
+  line-height: 1;
   cursor: pointer;
   overflow-wrap: anywhere;
+  box-sizing: border-box;
 }
 
 .evening-plan__strip button > span {
-  font-size: 10px;
+  font-size: 9px;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .evening-plan__strip button[aria-current="step"] {
@@ -181,12 +189,17 @@
   min-width: 0;
 }
 
+.evening-plan__status:empty,
+.evening-plan__notice:empty {
+  display: none;
+}
+
 .evening-plan__railwrap {
   min-width: 0;
 }
 
 .evening-plan__rail-date {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -200,13 +213,9 @@
   line-height: 1.2;
   letter-spacing: -0.5px;
   margin: 0 0 12px;
-  padding-bottom: 12px;
+  padding-bottom: 6px;
   border-bottom: 2px solid var(--forest);
   overflow-wrap: anywhere;
-}
-
-.evening-plan__summary {
-  min-width: 0;
 }
 
 .evening-plan__details {
@@ -218,18 +227,412 @@
   font-weight: 650;
 }
 
+.brief-reader:has(.evening-plan__grid) .brief-reader__head {
+  background: var(--forest);
+}
+
+.brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn {
+  font-size: 0;
+  color: transparent;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  min-height: 0;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn:focus-visible {
+  outline: 2px solid var(--paper);
+  outline-offset: 2px;
+}
+
+.brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn::before {
+  content: "\00d7";
+  color: var(--paper);
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 400;
+  font-family: var(--font-sans);
+}
+
+.brief-reader:has(.evening-plan__grid) .brief-reader__footer {
+  background: var(--paper);
+}
+
+.brief-reader:has(.evening-plan__grid) .brief-reader__footer .jds-btn {
+  margin: 0;
+}
+
 @media (min-width: 1081px) {
+  .brief-reader:has(.evening-plan__grid) {
+    box-sizing: border-box;
+    width: 1080px;
+    max-width: 1080px;
+    height: 846px;
+    max-height: 846px;
+    border-top-color: var(--line-strong);
+    border-left-color: var(--line-strong);
+    border-right-color: var(--line-strong);
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__head {
+    box-sizing: border-box;
+    position: relative;
+    height: 118px;
+    min-height: 118px;
+    max-height: 118px;
+    padding: 24px 32px 20px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__eyebrow {
+    flex: 1 1 100%;
+    margin: 0;
+    padding-right: 48px;
+    box-sizing: border-box;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__title {
+    flex: 1 1 100%;
+    margin: 0;
+    padding-right: 48px;
+    box-sizing: border-box;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn {
+    position: absolute;
+    top: 30px;
+    right: 32px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn::before {
+    font-size: 24px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__body {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .evening-plan__strip {
+    box-sizing: border-box;
+    height: 54px;
+    padding: 0 32px 0 31px;
+  }
+
+  .evening-plan__strip button > span {
+    position: relative;
+    top: -1px;
+  }
+
   .evening-plan__grid {
-    grid-template-columns: minmax(0, 1fr) 300px;
-    gap: 32px;
-    align-items: start;
+    grid-template-columns: 749px 331px;
+    gap: 0;
+    align-items: stretch;
+    height: 100%;
+  }
+
+  .evening-plan__panel {
+    box-sizing: border-box;
+    position: relative;
+    padding: 32px;
+    overflow-y: auto;
+    height: 100%;
+  }
+
+  .evening-plan__panel::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 28px;
+    width: 1px;
+    height: 503px;
+    background: var(--line);
   }
 
   .evening-plan__railwrap {
-    border-left: 1px solid var(--line);
-    padding-left: 24px;
-    position: sticky;
+    box-sizing: border-box;
+    border-left: none;
+    padding: 35px 32px 32px 24px;
+    overflow-y: auto;
+    height: 100%;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer {
+    box-sizing: border-box;
+    min-height: 75px;
+    padding: 15px 32px 15px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    column-gap: 16px;
+    row-gap: 8px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    display: flex;
+    align-items: center;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .evening-plan__status {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: right;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .evening-plan__notice {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+    margin: 0;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-actions {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer .jds-btn {
+    height: 44px;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-actions .jds-btn {
+    border-radius: 3px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back .jds-btn {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    height: auto;
+    min-height: 0;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.3;
+    white-space: nowrap;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back .jds-btn:focus-visible {
+    outline: 2px solid var(--forest);
+    outline-offset: 2px;
+  }
+}
+
+@media (max-width: 1080px) {
+  .brief-reader:has(.evening-plan__grid) .brief-reader__head {
+    box-sizing: border-box;
+    position: relative;
+    height: 130px;
+    padding: 20px 20px 16px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__eyebrow {
+    flex: 1 1 100%;
+    margin: 0;
+    padding-right: 48px;
+    box-sizing: border-box;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__title {
+    flex: 1 1 100%;
+    margin: 0;
+    padding-right: 48px;
+    box-sizing: border-box;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__head .jds-btn {
+    position: absolute;
     top: 24px;
+    right: 16px;
+  }
+
+  .evening-plan__strip {
+    box-sizing: border-box;
+    height: 58px;
+    padding: 0 19px;
+    background: var(--paper);
+  }
+
+  .evening-plan__strip ol {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .evening-plan__strip li {
+    display: flex;
+    min-width: 0;
+    height: 100%;
+  }
+
+  .evening-plan__strip button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    flex: 0 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+    gap: 5px;
+    font-size: 10px;
+    letter-spacing: normal;
+    position: static;
+    bottom: auto;
+    line-height: 1.1;
+    box-sizing: border-box;
+    border-bottom: 3px solid transparent;
+  }
+
+  .evening-plan__strip button > span {
+    display: block;
+    font-size: 8px;
+    color: var(--text-muted);
+    line-height: 1;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__body {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer {
+    box-sizing: border-box;
+    min-height: 69px;
+    padding: 12px 19px 13px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    column-gap: 4px;
+    row-gap: 8px;
+    width: 100%;
+    margin-top: auto;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .evening-plan__status {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 12px;
+    line-height: 1.3;
+    text-align: center;
+    color: var(--text-muted);
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-actions {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    display: flex;
+    align-items: center;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-actions .jds-btn {
+    padding: 0 8px;
+    font-size: 12px;
+    white-space: nowrap;
+    height: 44px;
+    min-height: 44px;
+    box-sizing: border-box;
+    border-radius: 3px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back .jds-btn {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    height: auto;
+    min-height: 0;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.3;
+    white-space: nowrap;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back .jds-btn:focus-visible {
+    outline: 2px solid var(--forest);
+    outline-offset: 2px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .evening-plan__status--saved {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    text-align: left;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .evening-plan__notice {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+    margin: 0;
+  }
+
+  .brief-reader:has(.evening-plan__grid)
+    .brief-reader__footer:has(.evening-plan__notice)
+    .evening-plan__status {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    text-align: left;
+  }
+
+  .brief-reader:has(.evening-plan__grid)
+    .brief-reader__footer:has(.evening-plan__notice)
+    .evening-plan__notice {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    text-align: left;
   }
 }
 

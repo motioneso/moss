@@ -290,7 +290,7 @@ export const MOCKUPS: readonly MockupEntry[] = [
     dir: E,
     viewport: V375,
     region: OPEN375,
-    state: "today-evening-saved",
+    state: "evening-saved",
     clock: "evening"
   }
 ];

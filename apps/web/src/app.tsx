@@ -56,6 +56,11 @@ const NotificationsPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import("./settings/settings-page").then((module) => ({ default: module.SettingsPage }))
 );
+const LinkTrailMarkerPage = lazy(() =>
+  import("./companion/link-trail-marker-page").then((module) => ({
+    default: module.LinkTrailMarkerPage
+  }))
+);
 const TodayPage = lazy(() =>
   import("./today/today-page").then((module) => ({ default: module.TodayPage }))
 );
@@ -336,6 +341,7 @@ export function App() {
               />
             ))}
             <Route path={webRoutePath("settings")} element={<SettingsPage me={meQuery.data} />} />
+            <Route path={webRoutePath("link-trail-marker")} element={<LinkTrailMarkerPage />} />
             <Route
               path="*"
               element={<NotFoundRedirect modulesLoading={modulesQuery.isLoading} />}
