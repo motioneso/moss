@@ -110,11 +110,11 @@ Cost is a primary constraint for continuous monitoring. Start screenshot quality
 tests with Qwen 3.7 Flash and compare Gemini 2.5 Flash-Lite on the same images.
 These are candidates, not validated screenshot readers for this pilot.
 
-| Candidate | USD per million input / output tokens | Illustrative cost per 1,000 screenshots |
-| --- | --- | --- |
-| Qwen 3.7 Flash, Alibaba via OpenRouter | $0.03 / $0.13 | $0.043 |
-| Gemini 2.5 Flash-Lite, paid API | $0.10 / $0.40 | $0.14 |
-| SmolVLM-500M, local | No API charge | Device compute and power |
+| Candidate                              | USD per million input / output tokens | Illustrative cost per 1,000 screenshots |
+| -------------------------------------- | ------------------------------------- | --------------------------------------- |
+| Qwen 3.7 Flash, Alibaba via OpenRouter | $0.03 / $0.13                         | $0.043                                  |
+| Gemini 2.5 Flash-Lite, paid API        | $0.10 / $0.40                         | $0.14                                   |
+| SmolVLM-500M, local                    | No API charge                         | Device compute and power                |
 
 Sources: OpenRouter's live [model catalog](https://openrouter.ai/api/v1/models)
 and [Qwen provider endpoint](https://openrouter.ai/api/v1/models/qwen/qwen3.7-flash/endpoints)
