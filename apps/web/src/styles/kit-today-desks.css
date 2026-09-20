@@ -32,6 +32,7 @@
 .jds-brief--sports .desk-title {
   font-family: var(--font-display);
   font-size: 25px;
+  font-weight: 700;
   line-height: 1.18;
   letter-spacing: -0.7px;
   margin: 0;
