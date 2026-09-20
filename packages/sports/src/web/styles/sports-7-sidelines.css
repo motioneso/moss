@@ -1,6 +1,6 @@
 /* Today Sports section — the compact broadsheet frame from the approved sidelines mockup. */
 .jds-brief--sports {
-  border-top: 1px solid var(--line-strong);
+  border-top: 1px solid var(--forest);
   gap: 0 34px;
   padding-top: 28px;
 }
@@ -25,8 +25,12 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  border-bottom: 2px solid var(--forest);
-  padding-bottom: 14px;
+  border-bottom: 1px solid var(--forest);
+  padding-bottom: 18px;
+}
+
+.jds-brief--sports .desk-scores__head > .jds-brief__title {
+  font-size: 21px;
 }
 
 .jds-brief--sports .desk-scores__head > span,
@@ -49,11 +53,27 @@
   margin-top: 10px;
 }
 
-.jds-brief--sports .sp-scores__row {
+.jds-brief--sports .desk-scores .sp-scores__row {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) 108px;
   gap: 16px;
   align-items: center;
-  padding: 14px 0;
+  padding: 10px 0;
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.jds-brief--sports .desk-scores .sp-scores__row + .sp-scores__row {
+  border-top: 0;
+}
+
+.jds-brief--sports .desk-scores .sp-tksub {
+  border-top: 0;
+  margin-top: 17px;
+}
+
+.jds-brief--sports .desk-scores .sp-scores {
+  margin-top: 0;
 }
 
 .jds-brief--sports .sp-scores__sides {
@@ -158,7 +178,7 @@
 .jds-brief--sports .desk-tonight {
   grid-row: 3;
   display: block;
-  border-top: 1px solid var(--line-strong);
+  border-top: 1px solid var(--forest);
   margin-top: 28px;
   padding-top: 22px;
 }
@@ -261,6 +281,9 @@
   .jds-brief--sports .desk-scores {
     padding-top: 18px;
   }
+  .jds-brief--sports .desk-scores .sp-tksub {
+    margin-top: 16px;
+  }
   .jds-brief--sports .desk-stories {
     padding-top: 22px;
   }
@@ -286,6 +309,15 @@
   .jds-brief--sports .sp-scores__row {
     grid-template-columns: minmax(0, 1fr) 86px;
     gap: 10px;
+  }
+  .jds-brief--sports .desk-scores .sp-scores__row {
+    grid-template-columns: minmax(0, 1fr) 86px;
+    gap: 8px;
+    padding: 11px 0;
+  }
+  .jds-brief--sports .desk-scores .sp-scores__status {
+    grid-column: 2;
+    grid-row: 1;
   }
   .jds-brief--sports .sp-scores__status {
     padding-left: 10px;
