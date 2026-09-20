@@ -313,8 +313,36 @@ export function getBaseBranchMigrationFiles(
 /**
  * Queries the GitHub CLI to retrieve all open PRs and the migration files they introduce.
  */
+/**
+ * Drops the pull request opened from the checked-out branch. That branch is already counted
+ * as the local working copy, so leaving its own pull request in the list makes every branch
+ * collide with itself the moment it opens one.
+ */
+export function excludeOwnPullRequest<T extends { readonly headRefName: string }>(
+  pullRequests: readonly T[],
+  currentBranch: string | undefined
+): T[] {
+  if (!currentBranch) return [...pullRequests];
+  return pullRequests.filter((pr) => pr.headRefName !== currentBranch);
+}
+
+/** The checked-out branch name, or undefined on a detached HEAD or outside a repository. */
+export function getCurrentBranchName(cwd: string = process.cwd()): string | undefined {
+  try {
+    const name = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    return name && name !== "HEAD" ? name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function getOpenPrMigrationClaims(
-  cwd: string = process.cwd()
+  cwd: string = process.cwd(),
+  excludeHeadRef?: string
 ): Promise<PrMigrationClaim[] | null> {
   try {
     const prListRaw = execFileSync(
@@ -329,7 +357,7 @@ export async function getOpenPrMigrationClaims(
     const claims: PrMigrationClaim[] = [];
 
     await Promise.all(
-      openPrs.map(async (pr) => {
+      excludeOwnPullRequest(openPrs, excludeHeadRef).map(async (pr) => {
         try {
           const diffFilesRaw = execFileSync(
             "gh",
@@ -403,7 +431,7 @@ export async function checkMigrationCollisions(
   const prViolations: CollisionViolation[] = [];
 
   if (!options.skipPrCheck) {
-    const prClaims = await getOpenPrMigrationClaims(root);
+    const prClaims = await getOpenPrMigrationClaims(root, getCurrentBranchName(root));
     if (prClaims) {
       prClaimsCount = prClaims.length;
 

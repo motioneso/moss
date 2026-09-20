@@ -8,6 +8,7 @@ import {
   checkBaseBranchCollisions,
   checkCrossPrCollisions,
   checkLocalDuplicates,
+  excludeOwnPullRequest,
   findLocalMigrationFiles,
   parseMigrationPath,
   type ClaimSource,
@@ -189,6 +190,29 @@ describe("check-migration-collisions (Issue #2371)", () => {
       expect(violations[0]?.kind).toBe("main_collision");
       expect(violations[0]?.version).toBe("0220");
       expect(violations[0]?.message).toContain("was edited after being applied/committed");
+    });
+  });
+
+  describe("excludeOwnPullRequest", () => {
+    const pullRequests = [
+      { headRefName: "feature-a" },
+      { headRefName: "feature-b" },
+      { headRefName: "feature-c" }
+    ];
+
+    it("drops the pull request opened from the checked-out branch", () => {
+      expect(excludeOwnPullRequest(pullRequests, "feature-b")).toEqual([
+        { headRefName: "feature-a" },
+        { headRefName: "feature-c" }
+      ]);
+    });
+
+    it("keeps every pull request on a detached HEAD", () => {
+      expect(excludeOwnPullRequest(pullRequests, undefined)).toEqual(pullRequests);
+    });
+
+    it("keeps every pull request when the branch has none open", () => {
+      expect(excludeOwnPullRequest(pullRequests, "feature-d")).toEqual(pullRequests);
     });
   });
 
