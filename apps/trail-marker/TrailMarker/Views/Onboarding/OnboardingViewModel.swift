@@ -31,6 +31,8 @@ final class OnboardingViewModel: ObservableObject {
     private var attemptId: String?
     private var approvalPath: String?
     private var pollIntervalSeconds = 3
+    private var attemptExpiresAt: Date?
+    private var isFinishing = false
     private var linkedIdentity: LinkedIdentity?
     private var pendingCredential: String?
     private var serverAssignedDeviceName = ""
@@ -97,6 +99,7 @@ final class OnboardingViewModel: ObservableObject {
                 self.attemptId = response.attemptId
                 self.approvalPath = response.approvalPath
                 self.pollIntervalSeconds = response.pollIntervalSeconds
+                self.attemptExpiresAt = ServerTime.parse(response.expiresAt)
                 self.deviceName = name
                 self.step = .waitingForApproval
                 self.openApprovalPage()
@@ -129,6 +132,10 @@ final class OnboardingViewModel: ObservableObject {
                 else {
                     return
                 }
+                if let expiresAt = self.attemptExpiresAt, Date() > expiresAt {
+                    self.returnToWelcome(message: "This link request expired. Try again.")
+                    return
+                }
                 do {
                     let outcome = try await client.redeem(attemptId: attemptId, verifier: attempt.verifier)
                     guard token == self.sessionToken else { return }
@@ -147,9 +154,18 @@ final class OnboardingViewModel: ObservableObject {
                     }
                 } catch CompanionError.rateLimited {
                     interval *= 2
+                } catch let error as CompanionError {
+                    switch error {
+                    case .unreachable, .server:
+                        // Transient while the person is at the browser: keep waiting.
+                        continue
+                    default:
+                        // A bad certificate, a redirect, an incompatible or garbled reply will
+                        // not fix itself; say so rather than spin on "Waiting" forever.
+                        self.returnToWelcome(message: OnboardingError.from(error).message)
+                        return
+                    }
                 } catch {
-                    // A transient failure while waiting is not fatal — keep polling at the
-                    // same interval rather than aborting a link the person is actively watching.
                     continue
                 }
             }
@@ -164,6 +180,9 @@ final class OnboardingViewModel: ObservableObject {
         )
         linkedIdentity = identity
         pendingCredential = response.credential
+        // Store the credential now. Waiting until Continue meant quitting during device setup
+        // left a device linked on the server that this Mac had no credential for.
+        onLinkCompleted(identity, response.credential)
         deviceName = response.device.displayName
         serverAssignedDeviceName = response.device.displayName
         accountName = response.account.name
@@ -194,7 +213,8 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     func finishDeviceSetup() {
-        guard let identity = linkedIdentity, let credential = pendingCredential, let instance else { return }
+        guard !isFinishing, let credential = pendingCredential, let instance else { return }
+        isFinishing = true
         if startAtLogin {
             try? loginItem.setEnabled(true)
         }
@@ -205,9 +225,12 @@ final class OnboardingViewModel: ObservableObject {
         Task {
             if renamed {
                 let client = CompanionClient(instance: instance, transport: URLSessionTransport())
-                try? await client.rename(credential: credential, displayName: trimmedName)
+                do {
+                    try await client.rename(credential: credential, displayName: trimmedName)
+                } catch {
+                    self.bannerMessage = "Linked, but the new name couldn't be saved. Rename it in Settings."
+                }
             }
-            self.onLinkCompleted(identity, credential)
             self.step = .success
         }
     }

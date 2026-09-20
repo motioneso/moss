@@ -107,7 +107,12 @@ final class ConnectionRuntime: ObservableObject {
 
     private func startHeartbeatTask(generation: Int, after delay: TimeInterval) {
         tasks[generation]?.cancel()
-        guard let identity, let client, let credential = keychain.read(for: identity) else { return }
+        guard let identity, let client, let credential = keychain.read(for: identity) else {
+            // No usable credential (Keychain locked, denied or emptied): without this the app
+            // would sit on Reconnecting forever with nothing left to retry.
+            Task { await self.handle(.heartbeatFailed(.credentialInvalid, generation: generation)) }
+            return
+        }
         let appVersion = appVersion
         let osVersion = osVersion
 
@@ -141,6 +146,8 @@ final class ConnectionRuntime: ObservableObject {
                 try await client.logout(credential: credential)
             } catch let error as CompanionError {
                 if Task.isCancelled { return }
+                // Already revoked on the server, so there is nothing left to confirm.
+                if error == .credentialInvalid { return }
                 await self?.handle(.heartbeatFailed(error, generation: generation))
             } catch {
                 if Task.isCancelled || (error as? URLError)?.code == .cancelled { return }
