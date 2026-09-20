@@ -32,21 +32,25 @@
   border: 0;
   border-bottom: 3px solid transparent;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 11px;
+  letter-spacing: -0.2px;
   line-height: 1;
   cursor: pointer;
   overflow-wrap: anywhere;
   box-sizing: border-box;
+  position: relative;
+  bottom: 1px;
 }
 
 .evening-plan__strip button > span {
-  font-size: 11px;
+  font-size: 9px;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
 .evening-plan__strip button[aria-current="step"] {
-  color: var(--forest);
+  color: var(--text);
   font-weight: 700;
   border-bottom-color: var(--forest);
 }
@@ -212,7 +216,7 @@
   line-height: 1.2;
   letter-spacing: -0.5px;
   margin: 0 0 12px;
-  padding-bottom: 12px;
+  padding-bottom: 6px;
   border-bottom: 2px solid var(--forest);
   overflow-wrap: anywhere;
 }
@@ -281,6 +285,8 @@
     box-sizing: border-box;
     position: relative;
     height: 119px;
+    min-height: 119px;
+    max-height: 119px;
     padding: 24px 32px 20px;
   }
 
@@ -333,7 +339,7 @@
   .evening-plan__railwrap {
     box-sizing: border-box;
     border-left: 1px solid var(--line);
-    padding: 26px 32px 32px 24px;
+    padding: 32px 32px 32px 24px;
     overflow-y: auto;
     height: 100%;
   }
@@ -385,6 +391,12 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer .jds-btn {
+    height: 44px;
+    min-height: 44px;
+    box-sizing: border-box;
   }
 }
 
@@ -453,7 +465,10 @@
     min-height: 0;
     padding: 0 2px;
     gap: 3px;
-    font-size: 13px;
+    font-size: 11px;
+    letter-spacing: normal;
+    position: static;
+    bottom: auto;
     line-height: 1.1;
     box-sizing: border-box;
     border-bottom: 3px solid transparent;
@@ -461,8 +476,14 @@
 
   .evening-plan__strip button > span {
     display: block;
-    font-size: 11px;
+    font-size: 9px;
+    color: var(--text-muted);
     line-height: 1;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__body {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .brief-reader:has(.evening-plan__grid) .brief-reader__footer {
@@ -475,6 +496,7 @@
     column-gap: 4px;
     row-gap: 8px;
     width: 100%;
+    margin-top: auto;
   }
 
   .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back {
@@ -524,8 +546,7 @@
 
   .brief-reader:has(.evening-plan__grid)
     .brief-reader__footer:has(.evening-plan__notice)
-    .evening-plan__status,
-  .brief-reader:has(#evening-review .evening-plan__controls) .evening-plan__status {
+    .evening-plan__status {
     grid-column: 1 / -1;
     grid-row: 2;
     text-align: left;
