@@ -76,6 +76,14 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
       "Personal and admin settings. A search box on the top bar matches section names, descriptions and common setting words, and also matches every installed module that has its own settings to open (for example News) by that module's name, description, and the name of each individual setting or credential it declares (for example, searching a credential's own name like \"Plaid\" finds the module that uses it). A module with nothing to configure is left out of the results. Picking a result jumps straight to that module's settings.",
     path: "/settings",
     scope: "user"
+  },
+  {
+    id: "link-trail-marker",
+    label: "Link a Mac",
+    description:
+      "Approve or decline a Mac asking to connect to this account. The Mac opens this screen with a request code in the address; the page names the Mac that is waiting and explains that a linked Mac can check in and rename itself but cannot read data and never receives the account password or browser session. Approving links it and it then appears under Active sessions in Account & preferences, where it can be signed out. A request expires after ten minutes, and an expired, already-answered or unknown request says so and asks the person to start again from the Mac.",
+    path: "/link/trail-marker",
+    scope: "user"
   }
 ];
 

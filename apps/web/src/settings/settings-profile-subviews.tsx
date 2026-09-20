@@ -240,6 +240,11 @@ const KIND_ICON: Record<MeSessionDeviceKind, LucideIcon> = {
 };
 
 function metaLine(s: MeSessionDto): string {
+  if (s.companion) {
+    return [s.companion.product, s.companion.appVersion && `v${s.companion.appVersion}`]
+      .filter(Boolean)
+      .join(" · ");
+  }
   return [s.browser, s.os].filter(Boolean).join(" · ") || "Unknown browser";
 }
 
@@ -276,7 +281,12 @@ export function groupSessions(sessions: readonly MeSessionDto[]): SessionGroup[]
   const order: string[] = [];
   const groups = new Map<string, MeSessionDto[]>();
   for (const s of sessions) {
-    const key = `${s.deviceLabel}|${s.browser ?? ""}|${s.os ?? ""}|${s.ipAddress ?? ""}`;
+    // A linked Mac is a real, named device, so it keys on its own id and never merges with
+    // another Mac that happens to share a name.
+    const key =
+      s.source === "companion"
+        ? `companion|${s.id}`
+        : `${s.deviceLabel}|${s.browser ?? ""}|${s.os ?? ""}|${s.ipAddress ?? ""}`;
     const existing = groups.get(key);
     if (existing) {
       existing.push(s);
