@@ -5,6 +5,12 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Pull request number for change detection"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -29,13 +35,13 @@ jobs:
           # attacker-controllable on fork PRs.
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" != "pull_request" ]; then
+          if [ "$EVENT_NAME" != "pull_request" ] && [ -z "${PR_NUMBER:-}" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
-            echo "Not a pull request — running the full gate."
+            echo "Not a pull request and no PR number provided — running the full gate."
             exit 0
           fi
           # The API file list avoids fetch-depth games and merge-base guesswork.
@@ -120,6 +126,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Verify static checks
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pnpm verify:static
 
   unit:

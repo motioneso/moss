@@ -708,11 +708,11 @@ describe("AssistantToolGateway self-operation", () => {
 
       const { maxCalls } = GATEWAY_AUTO_RUN_RATE_LIMIT_DEFAULTS;
       for (let i = 0; i < maxCalls; i++) {
-        const res = await gateway.callTool(tokenA, "example.write", { value: `ok-${i}` });
+        const res = await gateway.callTool(tokenA, "example.autoWrite", { value: `ok-${i}` });
         expect(res.ok).toBe(true);
       }
 
-      const tripped = await gateway.callTool(tokenA, "example.write", { value: "throttled" });
+      const tripped = await gateway.callTool(tokenA, "example.autoWrite", { value: "throttled" });
       if (tripped.ok || !("denied" in tripped)) {
         throw new Error("expected a rate-limit denial, got: " + JSON.stringify(tripped));
       }
@@ -723,7 +723,7 @@ describe("AssistantToolGateway self-operation", () => {
         expect(
           rows.some(
             (row) =>
-              row.tool_name === "example.write" &&
+              row.tool_name === "example.autoWrite" &&
               row.approval_mode === "yolo" &&
               row.outcome === "denied" &&
               row.error_class === "rate_limited"
@@ -732,11 +732,13 @@ describe("AssistantToolGateway self-operation", () => {
       });
 
       // Per-tool isolation: same actor, a different tool's bucket is untouched.
-      const otherTool = await gateway.callTool(tokenA, "example.autoWrite", { value: "fresh" });
+      const otherTool = await gateway.callTool(tokenA, "example.anotherAutoWrite", {
+        value: "fresh"
+      });
       expect(otherTool.ok).toBe(true);
 
       // Per-actor isolation: a different actor's bucket for the SAME tool is untouched.
-      const otherActor = await gateway.callTool(tokenB, "example.write", { value: "fresh" });
+      const otherActor = await gateway.callTool(tokenB, "example.autoWrite", { value: "fresh" });
       expect(otherActor.ok).toBe(true);
     });
 

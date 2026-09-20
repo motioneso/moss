@@ -1,4 +1,5 @@
 export {
+  familyAllowsAutoRun,
   resolvePolicy,
   type AgencyPrefLookup,
   type ActionPolicyLookup,

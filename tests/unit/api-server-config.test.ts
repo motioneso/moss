@@ -55,7 +55,7 @@ describe("resolveTrustProxy", () => {
 describe("resolveApiServerConfig MCP server URL", () => {
   it("honors JARVIS_MCP_SERVER_URL when set (container deploy), ignoring PORT", () => {
     const config = resolveApiServerConfig({
-      PORT: "3000",
+      PORT: "4100",
       JARVIS_MCP_SERVER_URL: "http://api:3000/api/mcp"
     } as NodeJS.ProcessEnv);
 
@@ -66,6 +66,26 @@ describe("resolveApiServerConfig MCP server URL", () => {
     const config = resolveApiServerConfig({ PORT: "4100" } as NodeJS.ProcessEnv);
 
     expect(config.mcpServerUrl).toBe("http://127.0.0.1:4100/api/mcp");
+  });
+
+  it("aligns loopback JARVIS_MCP_SERVER_URL port with PORT when set (#2345)", () => {
+    const configIpv4 = resolveApiServerConfig({
+      PORT: "4100",
+      JARVIS_MCP_SERVER_URL: "http://127.0.0.1:3000/api/mcp"
+    } as NodeJS.ProcessEnv);
+    expect(configIpv4.mcpServerUrl).toBe("http://127.0.0.1:4100/api/mcp");
+
+    const configLocalhost = resolveApiServerConfig({
+      PORT: "4200",
+      JARVIS_MCP_SERVER_URL: "http://localhost:3000/api/mcp"
+    } as NodeJS.ProcessEnv);
+    expect(configLocalhost.mcpServerUrl).toBe("http://localhost:4200/api/mcp");
+
+    const configIpv6 = resolveApiServerConfig({
+      PORT: "4300",
+      JARVIS_MCP_SERVER_URL: "http://[::1]:3000/api/mcp"
+    } as NodeJS.ProcessEnv);
+    expect(configIpv6.mcpServerUrl).toBe("http://[::1]:4300/api/mcp");
   });
 });
 

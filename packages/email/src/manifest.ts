@@ -273,12 +273,11 @@ export const emailModuleManifest = {
       permissionId: "email.manage",
       risk: "destructive",
       // No actionFamilyId / executionPolicy → the gateway's destructive floor always confirms
-      // (policy.ts unchanged). There is no tier that can promote this to auto-send.
+      // in both attended and unattended runs (#2419). There is no tier that can promote this to auto-send.
       // Ben's ruling, 2026-07-26 (#1263 Task 11): "Jarvis should approve for email" — this
       // REPLACES an earlier granted_at_install classification for this tool, which is withdrawn.
       // selfOperationGrant below declares confirm_always to make that guarantee visible to the
-      // Task 2 assertion; it changes no runtime behavior. The only escape hatch is global YOLO
-      // mode, never a per-family email auto-send path.
+      // Task 2 assertion; it changes no runtime behavior.
       selfOperationGrant: "confirm_always",
       requiresServices: ["emailWrite"],
       inputSchema: {

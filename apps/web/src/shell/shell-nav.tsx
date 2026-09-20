@@ -1,10 +1,10 @@
 import {
   Bell,
   ChevronUp,
+  ChevronsLeft,
+  ChevronsRight,
   Layers3,
   LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
   Settings
 } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
@@ -54,11 +54,28 @@ export function ShellNav(props: ShellNavProps) {
   return (
     <>
       <aside className={`sidebar ${props.mobileNavOpen ? "open" : ""}`}>
-        <div className="brand-lockup">
-          <span className="brand-mark">
-            <BrandMark />
-          </span>
-          <span className="brand-wordmark">Moss</span>
+        <div className="brand-row">
+          <div className="brand-lockup">
+            <span className="brand-mark">
+              <BrandMark />
+            </span>
+            <span className="brand-wordmark">Moss</span>
+          </div>
+
+          <button
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+            className="nav-collapse"
+            title={collapsed ? "Expand navigation" : "Collapse navigation"}
+            type="button"
+            onClick={props.onToggleNav}
+          >
+            {collapsed ? (
+              <ChevronsRight size={20} aria-hidden="true" />
+            ) : (
+              <ChevronsLeft size={20} aria-hidden="true" />
+            )}
+          </button>
         </div>
 
         {/* #1734: the accessible name is what a screen reader announces on entering this
@@ -82,21 +99,6 @@ export function ShellNav(props: ShellNavProps) {
           {/* #1734: "Loading modules" named our packaging; the user is just waiting for the list. */}
           {props.modulesLoading ? <span className="nav-loading">Loading</span> : null}
         </nav>
-
-        <button
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-          className="icon-button nav-collapse"
-          title={collapsed ? "Expand navigation" : "Collapse navigation"}
-          type="button"
-          onClick={props.onToggleNav}
-        >
-          {collapsed ? (
-            <PanelLeftOpen size={20} aria-hidden="true" />
-          ) : (
-            <PanelLeftClose size={20} aria-hidden="true" />
-          )}
-        </button>
 
         <div className="rail-foot">
           <RailUserMenu

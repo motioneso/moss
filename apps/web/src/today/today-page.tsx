@@ -72,6 +72,7 @@ import "../styles/kit-tasks-modal.css";
 import "../styles/kit-today.css";
 import "../styles/kit-today-hero.css";
 import "../styles/kit-today-timeline.css";
+import "../styles/kit-today-desks.css";
 import "../styles/kit-today-feeds.css";
 import "../styles/kit-today-misc.css";
 import "../styles/kit-briefing-reader.css";
@@ -105,6 +106,7 @@ export function TodayPage(props: {
   } | null>(null);
   const readerOpener = useRef<HTMLElement | null>(null);
   const [review, setReview] = useState(false);
+  const readerBeforeReview = useRef<{ definitionId: string; runId: string } | null>(null);
   const reviewOpener = useRef<HTMLElement | null>(null);
   const [planningAnchor, setPlanningAnchor] = useState<HTMLElement | null>(null);
   const [, forceTodayModeRefresh] = useState(0);
@@ -350,6 +352,21 @@ export function TodayPage(props: {
       }),
     onOpenReader: openMorningReader
   });
+  const sectionLinks = (
+    <nav
+      aria-label="Sections"
+      className={todayMode === "day" ? "cmd-sections today-hero__sections" : "cmd-sections"}
+    >
+      {todayMode === "day" ? (
+        <span className="today-hero__sections-label">In this briefing</span>
+      ) : null}
+      {assessmentShown ? <a href="#assessment">Assessment</a> : null}
+      <a href="#start-here">Start</a> <a href="#weather">Weather</a>
+      <a href="#schedule">Schedule</a> <a href="#needs-you">Needs you</a>
+      <a href="#widgets">Widgets</a> <a href="#goals">Goals</a>
+      {looseEnds.length > 0 ? <a href="#loose-ends">Loose ends</a> : null}
+    </nav>
+  );
 
   // The hero stands outside .cmd-wrap: it breaks out of the surface padding
   // to span the content region in both sidebar states, while the wrap below
@@ -371,16 +388,11 @@ export function TodayPage(props: {
             isError={weatherQuery.isError}
           />
         }
+        sectionLinks={sectionLinks}
       />
 
       <div className="cmd-wrap">
-        <nav aria-label="Sections" className="cmd-sections">
-          {assessmentShown ? <a href="#assessment">Assessment</a> : null}
-          <a href="#start-here">Start</a> <a href="#weather">Weather</a>
-          <a href="#schedule">Schedule</a> <a href="#needs-you">Needs you</a>
-          <a href="#widgets">Widgets</a> <a href="#goals">Goals</a>
-          {looseEnds.length > 0 ? <a href="#loose-ends">Loose ends</a> : null}
-        </nav>
+        {todayMode === "evening" ? sectionLinks : null}
 
         <div className="cmd-grid">
           <TodayRail
@@ -495,6 +507,7 @@ export function TodayPage(props: {
               onOpenTask={(id) => setDialog({ id })}
               onReview={(anchor) => {
                 reviewOpener.current = anchor;
+                readerBeforeReview.current = null;
                 setReview(true);
               }}
             />
@@ -595,6 +608,7 @@ export function TodayPage(props: {
             onReview={() => {
               // The review replaces the reader: one dialog owns inert and focus.
               reviewOpener.current = readerOpener.current;
+              readerBeforeReview.current = reader;
               setReader(null);
               setReview(true);
             }}
@@ -632,6 +646,11 @@ export function TodayPage(props: {
             now={now}
             opener={reviewOpener.current}
             onClose={() => setReview(false)}
+            onSelectBriefingTab={() => {
+              // Back to the remembered run; from Today alone, just close.
+              setReview(false);
+              if (readerBeforeReview.current !== null) setReader(readerBeforeReview.current);
+            }}
             onOpenTask={(id) => {
               // Same inert-root rule as the reader: the review closes first.
               setReview(false);

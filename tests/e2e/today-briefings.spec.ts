@@ -150,7 +150,7 @@ test("morning briefing reader opens, stays in viewport, and returns focus", asyn
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Morning briefing" })).toBeFocused();
+    await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeFocused();
     await expect(dialog).toContainText("Protect the launch window");
     await expect(dialog).toContainText(LONG_SOURCE);
     expect(
@@ -188,7 +188,7 @@ test("morning briefing reader opens, stays in viewport, and returns focus", asyn
     .getByRole("button", { name: /Write the launch brief/ })
     .first()
     .click();
-  await expect(page.getByRole("heading", { name: "Morning briefing" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeHidden();
   await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
 });
 
@@ -406,7 +406,7 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await expect(reader).toContainText("Protect the launch window");
   await reader.getByRole("button", { name: "Review task blocks" }).click();
   await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Morning briefing" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeHidden();
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeHidden();
@@ -630,13 +630,13 @@ test("accept all applies eligible additions from the reader, then reviews the co
   await expect(dialog.getByRole("button", { name: "Retry" })).toHaveCount(0);
   expect(retries).toBe(0);
 
-  // The review footer holds four buttons inside the narrow viewport.
+  // Buttons fit the narrow viewport; DOM order follows the shell, grid keeps Back left.
   const reviewNames = await dialog.locator(".brief-reader__footer button").allTextContents();
   expect(reviewNames).toEqual([
-    "Back to Today",
     "Preview changes",
     "Apply changes",
-    "Accept all time blocks"
+    "Accept all time blocks",
+    "Back to Today"
   ]);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -645,6 +645,15 @@ test("accept all applies eligible additions from the reader, then reviews the co
   const reviewBackBox = await dialog.getByRole("button", { name: "Back to Today" }).boundingBox();
   expect(reviewBackBox, "review footer inside the 320px viewport").not.toBeNull();
   expect(reviewBackBox!.x + reviewBackBox!.width).toBeLessThanOrEqual(321);
+
+  // The briefing tab hands back to the open morning reader on the same run.
+  await expect(page.getByRole("tab", { name: "Review task blocks" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  );
+  await page.getByRole("tab", { name: "The briefing" }).click();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeHidden();
 });
 
 test("evening planning saves one draft and never applies in suggest mode", async ({ page }) => {
@@ -841,6 +850,8 @@ test("evening planning saves one draft and never applies in suggest mode", async
   await expect(dialog).toContainText("Done");
 
   // Commit one task for tomorrow; the due-dated one is already set.
+  await dialog.getByRole("button", { name: "02 Open commitments", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Open commitments" })).toBeFocused();
   await dialog
     .getByRole("radiogroup", { name: "Call the vendor: plan" })
     .getByLabel("Tomorrow")
@@ -851,8 +862,15 @@ test("evening planning saves one draft and never applies in suggest mode", async
   await expect(dialog).toContainText("Already set for tomorrow");
 
   // Lighter day with a main priority, then save in suggest mode.
+  await dialog.getByRole("button", { name: "03 Shape tomorrow", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Shape tomorrow" })).toBeFocused();
   await dialog.getByRole("radiogroup", { name: "Day capacity" }).getByLabel("Lighter day").click();
   await dialog.getByLabel("Main priority").selectOption("t2");
+  await dialog.getByRole("button", { name: "04 Review", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Review" })).toBeFocused();
+  await expect(
+    dialog.locator('section[aria-label="Changes"]').getByText("Water the plants")
+  ).toBeVisible();
   await dialog.getByRole("button", { name: "Save tomorrow's plan" }).click();
   await expect(dialog).toContainText("Saved. The blocks are proposed for the morning.");
 

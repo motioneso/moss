@@ -61,6 +61,7 @@ const ALLOWED_PREFIXES: readonly string[] = ["LC_"];
 // built through buildSanitizedCliEnv (chat/cli-runner children, and the worker's module-build
 // children). Any future subprocess root must adopt this policy explicitly, or it is unprotected.
 const UAT_SCRIPTED_PROVIDER_BIN = "/app/tests/uat/fixtures/scripted-provider/bin";
+const UAT_SCRIPTED_PROVIDER_EXECUTABLE = `${UAT_SCRIPTED_PROVIDER_BIN}/claude`;
 
 /**
  * Build the allowlisted CLI-subprocess env from a source env (defaults to
@@ -86,6 +87,7 @@ export function buildSanitizedCliEnv(source: NodeJS.ProcessEnv = process.env): N
   // genuine, recognized fixture-bin value for the same reason.
   if (source.JARVIS_UAT_SCRIPTED_PROVIDER_BIN === UAT_SCRIPTED_PROVIDER_BIN) {
     out.JARVIS_UAT_SCRIPTED_PROVIDER_BIN = UAT_SCRIPTED_PROVIDER_BIN;
+    out.CLAUDE_CODE_EXECUTABLE = UAT_SCRIPTED_PROVIDER_EXECUTABLE;
     if (source.JARVIS_UAT_SEED_CHAT_SCRIPT !== undefined) {
       out.JARVIS_UAT_SEED_CHAT_SCRIPT = source.JARVIS_UAT_SEED_CHAT_SCRIPT;
     }

@@ -1,0 +1,41 @@
+{
+  "_comment": "UAT ESPN news payload for eng.1. First story image is the fixture PNG as a data URI: the fixture origin is container-private so no browser can load an http(s) fixture URL; the bytes are byte-identical to tests/fixtures/espn/photo.png (asserted in job-search-fixture-server.test.ts).",
+  "articles": [
+    {
+      "id": 9001,
+      "headline": "Arsenal seal late win to stay top of the pile",
+      "description": "A stoppage-time strike settled a five-goal thriller at the Emirates.",
+      "published": "2026-09-14T21:30:00Z",
+      "links": {
+        "web": {
+          "href": "https://www.espn.com/soccer/report?id=9001"
+        }
+      },
+      "images": [
+        {
+          "type": "header",
+          "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAAC0CAIAAABqhmJGAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAEuUlEQVR4nO3VUQ0DARAC0fMxXk5K/cuoh/6QZl+CgM0Ay9PnJQQQ6D+L8MwvIAQQSIGFAIHu7YEF3ntACKTAQoBA976hBd57QAikwEKAQPe+oQXee0AIpMBCgED3vqEF3ntACKTAQoBA976hBd57QAikwEKAQPe+oQXee0AIpMBCgED3vqEF3ntACKTAQoBA976hBd57QAikwEKAQPe+oQXee0AIpMBCgED3vqEF3ntACKTAQoBA976hBd57QAikwEKAQPe+oQXee0AIpMBCgED3vqEF3ntACKTAQoBA976hBd57QAikwEKAQPe+oQXee0AIpMBCgED3vqEF3ntACKTAQoBA976hBd57QAikwEKAQPe+oQXee0AIpMBCgED3vqEF3ntACKTAQoBA976hBd57QAikwEKAQPe+oQXee0AIpMBCgED3vqEF3ntACKTAQoBA976hBd57QAikwEKAQPe+oQXee0AIpMBCgED3vqEF3ntACKTAQoBA976hBd57QAikwEKAQPe+oQXee0AIpMBCgED3vqEF3ntACKTAQoBA976hBd57QAikwEKAQPe+oQXee0AIpMBCgED3vqEF3ntACKTAQoBA976hBd57QAikwEKAQPe+oQXee0AIKLAQIPAefAQWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASGQAgsBAt37hhZ47wEhkAILAQLd+4YWeO8BIZACCwEC3fuGFnjvASHQrzH4AquC4GEdGafEAAAAAElFTkSuQmCC"
+        }
+      ],
+      "categories": [
+        {
+          "type": "team",
+          "teamId": 359
+        }
+      ]
+    },
+    {
+      "id": 9002,
+      "headline": "City held at home as title race tightens",
+      "description": "Manchester City dropped points after a late equaliser.",
+      "published": "2026-09-14T19:10:00Z",
+      "links": {
+        "web": {
+          "href": "https://www.espn.com/soccer/report?id=9002"
+        }
+      },
+      "images": [],
+      "categories": []
+    }
+  ]
+}

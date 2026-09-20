@@ -118,12 +118,14 @@ export function SportsTodayWidget(): ReactNode {
         : "Your teams";
 
   return (
-    <section className="jds-brief" aria-label="Sports desk">
-      <div className="jds-brief__head">
-        <span className="jds-brief__kicker">Sports desk</span>
+    <section className="jds-brief jds-brief--sports" aria-label="Sports desk">
+      <div className="desk-head">
+        <span className="desk-number">03</span>
+        <h2 className="desk-title">From the sidelines</h2>
+        <span className="desk-meta">Sports desk</span>
       </div>
       {hasScores ? (
-        <>
+        <div className="desk-scores">
           <div className="jds-brief__title">Scores</div>
           {followedRows.length > 0 ? (
             <>
@@ -153,31 +155,15 @@ export function SportsTodayWidget(): ReactNode {
               </ul>
             </>
           ) : null}
-        </>
+        </div>
       ) : null}
-      {/* The band always renders once the desk is up: rows when there are games tonight, the
-          quiet line when the band is empty. The null gate above is what keeps an empty desk
-          from rendering at all. */}
-      <div className="sp-tksub">Tonight</div>
-      {hasTonight ? (
-        <ul className="sp-tonight">
-          {tonightRows.map((row) => (
-            <TonightRow key={row.game.id} row={row} locale={locale} />
-          ))}
-          {postponedRows.map((row) => (
-            <TonightRow key={row.game.id} row={row} locale={locale} />
-          ))}
-        </ul>
-      ) : (
-        <p className="sp-tonight__quiet">{QUIET_NIGHT_LINE}</p>
-      )}
       {/* Main story + brief list, mirroring the News desk layout (Ben: "we should have a main story
           and then some other top stories from the world of sport before we see the your teams
           section"). Sports-local .sp-lead/.sp-brief classes match the news lead visually while
           keeping module isolation — sports never reaches into news's .nw-* CSS. The competition
           label ("NFL", "Premier League") is the source tag; never the raw key (#765 M4). */}
       {lead ? (
-        <>
+        <div className="desk-stories">
           <div className="jds-brief__title">Top stories</div>
           {/* Feedback dots sit in the story's top-right corner (over the photo when there is one)
               and only appear while the story is hovered or focused — same placement as the News
@@ -228,13 +214,31 @@ export function SportsTodayWidget(): ReactNode {
               ))}
             </ul>
           ) : null}
-        </>
+        </div>
       ) : null}
+      {/* The band always renders once the desk is up: rows when there are games tonight, the
+          quiet line when the band is empty. It sits below scores and stories so DOM order
+          matches the visual order at every width. */}
+      <div className="desk-tonight">
+        <div className="sp-tksub">Tonight</div>
+        {hasTonight ? (
+          <ul className="sp-tonight">
+            {tonightRows.map((row) => (
+              <TonightRow key={row.game.id} row={row} locale={locale} />
+            ))}
+            {postponedRows.map((row) => (
+              <TonightRow key={row.game.id} row={row} locale={locale} />
+            ))}
+          </ul>
+        ) : (
+          <p className="sp-tonight__quiet">{QUIET_NIGHT_LINE}</p>
+        )}
+      </div>
       {/* Followed-team/league cards below the world-of-sport stories, under their own subhead so
           the two zones read as distinct desk sections (Ben: "before we see the your teams card
           section"). Subhead is dropped when there are no cards (top-stories-only desk). */}
       {teamCards.length > 0 || leagueCards.length > 0 ? (
-        <>
+        <div className="desk-cards">
           <div className="sp-tksub">{cardsLabel}</div>
           <div className="sp-tkgrid">
             {teamCards.map((card) => (
@@ -258,7 +262,7 @@ export function SportsTodayWidget(): ReactNode {
               />
             ))}
           </div>
-        </>
+        </div>
       ) : null}
     </section>
   );

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { resolvePolicy, type ActionPolicyLookup } from "../../packages/ai/src/gateway/policy.js";
+import {
+  familyAllowsAutoRun,
+  resolvePolicy,
+  type ActionPolicyLookup
+} from "../../packages/ai/src/gateway/policy.js";
 import type {
   ModuleAssistantToolManifest,
   ModuleAssistantActionFamilyManifest,
@@ -171,5 +175,172 @@ describe("gateway policy resolver", () => {
     await expect(
       resolvePolicy(tool, "mock_module", false, createMockLookup("trusted_auto", manifest))
     ).resolves.toBe("confirm");
+  });
+});
+
+describe("familyAllowsAutoRun (#2418, #2419)", () => {
+  const createMockLookup = (
+    manifest: ModuleAssistantActionFamilyManifest | null
+  ): ActionPolicyLookup => ({
+    getFamilyTier: async () => null,
+    getFamilyManifest: async () => manifest
+  });
+
+  const promotableManifest: ModuleAssistantActionFamilyManifest = {
+    id: "promotable_family",
+    label: "Promotable Family",
+    description: "Allowed tiers includes trusted_auto",
+    defaultTier: "ask_each_time",
+    allowedTiers: ["ask_each_time", "trusted_auto"]
+  };
+
+  const nonPromotableManifest: ModuleAssistantActionFamilyManifest = {
+    id: "strict_family",
+    label: "Strict Family",
+    description: "Allowed tiers does not include trusted_auto",
+    defaultTier: "ask_each_time",
+    allowedTiers: ["ask_each_time", "always_confirm"]
+  };
+
+  it("fails closed (returns false) when actionFamilyId is missing (#2419)", async () => {
+    const tool: ModuleAssistantToolManifest = {
+      name: "mock.write",
+      description: "Write tool without family",
+      permissionId: "mock.write",
+      risk: "write",
+      executionPolicy: "auto",
+      inputSchema: {},
+      outputSchema: {},
+      execute: async () => ({ data: {} })
+    };
+
+    const allowed = await familyAllowsAutoRun(
+      tool,
+      "mock_mod",
+      createMockLookup(promotableManifest)
+    );
+    expect(allowed).toBe(false);
+  });
+
+  it("fails closed (returns false) for destructive tools regardless of family (#2419)", async () => {
+    const tool: ModuleAssistantToolManifest = {
+      name: "mock.destroy",
+      description: "Destructive tool",
+      permissionId: "mock.destroy",
+      actionFamilyId: "promotable_family",
+      risk: "destructive",
+      executionPolicy: "auto",
+      inputSchema: {},
+      outputSchema: {},
+      execute: async () => ({ data: {} })
+    };
+
+    const allowed = await familyAllowsAutoRun(
+      tool,
+      "mock_mod",
+      createMockLookup(promotableManifest)
+    );
+    expect(allowed).toBe(false);
+  });
+
+  it("fails closed (returns false) for outbound tools regardless of family", async () => {
+    const tool: ModuleAssistantToolManifest = {
+      name: "mock.outbound",
+      description: "Outbound tool",
+      permissionId: "mock.outbound",
+      actionFamilyId: "promotable_family",
+      risk: "outbound",
+      executionPolicy: "auto",
+      inputSchema: {},
+      outputSchema: {},
+      execute: async () => ({ data: {} })
+    };
+
+    const allowed = await familyAllowsAutoRun(
+      tool,
+      "mock_mod",
+      createMockLookup(promotableManifest)
+    );
+    expect(allowed).toBe(false);
+  });
+
+  it("fails closed when tool executionPolicy is not auto", async () => {
+    const tool: ModuleAssistantToolManifest = {
+      name: "mock.write",
+      description: "Write tool",
+      permissionId: "mock.write",
+      actionFamilyId: "promotable_family",
+      risk: "write",
+      executionPolicy: "confirm",
+      inputSchema: {},
+      outputSchema: {},
+      execute: async () => ({ data: {} })
+    };
+
+    const allowed = await familyAllowsAutoRun(
+      tool,
+      "mock_mod",
+      createMockLookup(promotableManifest)
+    );
+    expect(allowed).toBe(false);
+  });
+
+  it("fails closed when family manifest cannot be found", async () => {
+    const tool: ModuleAssistantToolManifest = {
+      name: "mock.write",
+      description: "Write tool",
+      permissionId: "mock.write",
+      actionFamilyId: "missing_family",
+      risk: "write",
+      executionPolicy: "auto",
+      inputSchema: {},
+      outputSchema: {},
+      execute: async () => ({ data: {} })
+    };
+
+    const allowed = await familyAllowsAutoRun(tool, "mock_mod", createMockLookup(null));
+    expect(allowed).toBe(false);
+  });
+
+  it("fails closed when family does not allow trusted_auto (e.g. workshop builds)", async () => {
+    const tool: ModuleAssistantToolManifest = {
+      name: "workshop.runCommand",
+      description: "Build command",
+      permissionId: "workshop.build",
+      actionFamilyId: "strict_family",
+      risk: "write",
+      executionPolicy: "auto",
+      inputSchema: {},
+      outputSchema: {},
+      execute: async () => ({ data: {} })
+    };
+
+    const allowed = await familyAllowsAutoRun(
+      tool,
+      "mock_mod",
+      createMockLookup(nonPromotableManifest)
+    );
+    expect(allowed).toBe(false);
+  });
+
+  it("allows auto run when tool is auto and family allows trusted_auto", async () => {
+    const tool: ModuleAssistantToolManifest = {
+      name: "calendar.create",
+      description: "Create event",
+      permissionId: "calendar.write",
+      actionFamilyId: "promotable_family",
+      risk: "write",
+      executionPolicy: "auto",
+      inputSchema: {},
+      outputSchema: {},
+      execute: async () => ({ data: {} })
+    };
+
+    const allowed = await familyAllowsAutoRun(
+      tool,
+      "mock_mod",
+      createMockLookup(promotableManifest)
+    );
+    expect(allowed).toBe(true);
   });
 });

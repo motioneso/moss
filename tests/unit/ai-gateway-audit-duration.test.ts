@@ -17,11 +17,22 @@ function manifestWithTool(
     publisher: "Acme",
     lifecycle: "optional",
     compatibility: { jarv1s: ">=0.0.0" },
+    assistantActionFamilies: [
+      {
+        id: "acme_family",
+        label: "Acme",
+        description: "Acme",
+        defaultTier: "ask_each_time",
+        allowedTiers: ["ask_each_time", "trusted_auto"]
+      }
+    ],
     assistantTools: [
       {
         name: "acme.write",
         description: "Write",
         permissionId: "acme.write",
+        actionFamilyId: "acme_family",
+        executionPolicy: "auto",
         risk: "write",
         ...toolOverrides
       }

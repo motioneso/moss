@@ -174,6 +174,10 @@ export function shortDate(iso: string, locale: LocaleSettingsDto): string {
   return formatDate(iso, locale, { month: "short", day: "numeric" });
 }
 
+/** Report shell (V5): the briefing tab and the phone schedule disclosure. */
+export const BRIEFING_TAB_LABEL = "The briefing";
+export const SCHEDULE_TOGGLE_LABEL = "Today's schedule";
+
 /** Bulk acceptance (T19): one activation for every eligible proposed addition. */
 export const ACCEPT_ALL_LABEL = "Accept all time blocks";
 export const ACCEPTING_LABEL = "Accepting\u2026";
@@ -222,6 +226,33 @@ export const PLAN_TOMORROW_LABEL = "Plan tomorrow";
 export const SAVE_TOMORROW_LABEL = "Save tomorrow's plan";
 export const EVENING_REVIEW_NOT_READY = "Your evening review is not ready yet";
 export const NO_ROOM_FOUND = "No room found";
+
+/** Evening step frame (V7): the strip label, the four step names in order,
+    the reflect question, the rail heading and the speaker note. */
+export const EVENING_PLAN_STEPS_LABEL = "Plan steps";
+export const EVENING_STEP_NAMES = [
+  "Reflect",
+  "Open commitments",
+  "Shape tomorrow",
+  "Review"
+] as const;
+export const EVENING_REFLECT_QUESTION =
+  "What should I understand about today before we plan tomorrow?";
+export const EVENING_RAIL_HEADING = "Tomorrow, taking shape.";
+export const EVENING_SPEAKER_NAME = "Moss";
+export const EVENING_SPEAKER_NOTE = "Looking back with you";
+
+/** Evening steps 2 to 4 (V8): speaker notes, large messages and review groups. */
+export const EVENING_COMMIT_NOTE = "Only the loose ends that matter";
+export const EVENING_COMMIT_MESSAGE = "Give this a place, or leave it open.";
+export const EVENING_SHAPE_NOTE = "A realistic starting point";
+export const EVENING_SHAPE_MESSAGE = "How much room do you want tomorrow?";
+export const EVENING_REVIEW_NOTE = "Here is what will change";
+export const EVENING_REVIEW_MESSAGE = "A plan you can leave with.";
+export const EVENING_REVIEW_CHANGES_HEADING = "Changes";
+export const EVENING_REVIEW_KEEP_HEADING = "Keep as they are";
+export const EVENING_REVIEW_NO_CHANGE_HEADING = "No change";
+export const EVENING_REVIEW_NO_CHANGES = "Nothing changes tomorrow.";
 
 /** Unsaved review deltas beside the saved schedule's own words (T18). */
 export const REVIEW_TRANSIENT_LABELS = {

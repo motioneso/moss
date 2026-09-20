@@ -64,6 +64,7 @@ const CLI_ENV_KEYS = new Set([
 // The one folder tests/uat/provisioner.ts ever writes into JARVIS_UAT_SCRIPTED_PROVIDER_BIN. See
 // buildChildEnv below for why this is a value pin rather than a mode flag.
 const UAT_SCRIPTED_PROVIDER_BIN = "/app/tests/uat/fixtures/scripted-provider/bin";
+const UAT_SCRIPTED_PROVIDER_EXECUTABLE = `${UAT_SCRIPTED_PROVIDER_BIN}/claude`;
 
 const CLI_ENV_PREFIXES = ["LC_"];
 
@@ -79,19 +80,50 @@ export function runtimeUidGid(env: NodeJS.ProcessEnv = process.env): { uid: numb
   return { uid, gid };
 }
 
+export function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === "127.0.0.1" ||
+    hostname === "localhost" ||
+    hostname === "::1" ||
+    hostname === "[::1]"
+  );
+}
+
+export function resolveMcpServerUrl(
+  env: NodeJS.ProcessEnv = process.env,
+  port: string = env.PORT ?? "3000"
+): string {
+  const configured = env.JARVIS_MCP_SERVER_URL;
+  if (!configured) {
+    return `http://127.0.0.1:${port}/api/mcp`;
+  }
+  try {
+    const url = new URL(configured);
+    if (isLoopbackHost(url.hostname)) {
+      url.port = port;
+      return url.toString();
+    }
+    return configured;
+  } catch {
+    return configured;
+  }
+}
+
 export function buildChildEnv(
   role: ChildRole,
   env: NodeJS.ProcessEnv = process.env
 ): NodeJS.ProcessEnv {
+  const port = env.PORT ?? "3000";
+  const mcpServerUrl = resolveMcpServerUrl(env, port);
   if (role !== "cli-runner") {
     return {
       ...env,
       PATH: `${env.JARVIS_CLI_TOOLS_PREFIX ?? "/data/cli-tools"}/bin:${env.PATH ?? "/usr/local/bin:/usr/bin:/bin"}`,
-      PORT: env.PORT ?? "3000",
+      PORT: port,
       HOST: env.HOST ?? "0.0.0.0",
       HF_HOME: env.HF_HOME ?? "/app/.cache/huggingface",
       JARVIS_CLI_RUNNER_SOCKET: env.JARVIS_CLI_RUNNER_SOCKET ?? "/run/jarv1s/cli-runner.sock",
-      JARVIS_MCP_SERVER_URL: env.JARVIS_MCP_SERVER_URL ?? "http://127.0.0.1:3000/api/mcp"
+      JARVIS_MCP_SERVER_URL: mcpServerUrl
     };
   }
 
@@ -104,7 +136,11 @@ export function buildChildEnv(
   }
 
   next.JARVIS_CLI_TOOLS_PREFIX = env.JARVIS_CLI_TOOLS_PREFIX ?? "/data/cli-tools";
-  next.PATH = `${next.JARVIS_CLI_TOOLS_PREFIX}/bin:${env.PATH ?? "/usr/local/bin:/usr/bin:/bin"}`;
+  const uatBin =
+    env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN === UAT_SCRIPTED_PROVIDER_BIN
+      ? `${UAT_SCRIPTED_PROVIDER_BIN}:`
+      : "";
+  next.PATH = `${uatBin}${next.JARVIS_CLI_TOOLS_PREFIX}/bin:${env.PATH ?? "/usr/local/bin:/usr/bin:/bin"}`;
   next.HOME = resolveMossEnv(env, "JARVIS_CLI_HOME") ?? "/data/cli-auth";
   next.JARVIS_CLI_HOME = next.HOME;
   next.JARVIS_CLI_HOME_BASE = resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? next.HOME;
@@ -116,7 +152,7 @@ export function buildChildEnv(
   next.JARVIS_CLI_RUNNER_SINGLE_USER = env.JARVIS_CLI_RUNNER_SINGLE_USER ?? "0";
   next.JARVIS_CLI_PER_USER_UID = env.JARVIS_CLI_PER_USER_UID ?? "0";
   next.JARVIS_MULTIPLEXER = resolveMossEnv(env, "JARVIS_MULTIPLEXER") ?? "tmux";
-  next.JARVIS_MCP_SERVER_URL = env.JARVIS_MCP_SERVER_URL ?? "http://127.0.0.1:3000/api/mcp";
+  next.JARVIS_MCP_SERVER_URL = mcpServerUrl;
 
   // JARVIS_UAT_SEED_CHAT_SCRIPT / JARVIS_UAT_SCRIPTED_PROVIDER_BIN select and PATH-inject a fake
   // "claude" CLI binary for the UAT live-test fixture. JARVIS_UAT_SCRIPTED_PROVIDER_BIN in
@@ -130,6 +166,7 @@ export function buildChildEnv(
   // its own composition root (apps/worker/src/worker.ts's createModuleBuildIo).
   if (env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN === UAT_SCRIPTED_PROVIDER_BIN) {
     next.JARVIS_UAT_SCRIPTED_PROVIDER_BIN = UAT_SCRIPTED_PROVIDER_BIN;
+    next.CLAUDE_CODE_EXECUTABLE = UAT_SCRIPTED_PROVIDER_EXECUTABLE;
     if (env.JARVIS_UAT_SEED_CHAT_SCRIPT !== undefined) {
       next.JARVIS_UAT_SEED_CHAT_SCRIPT = env.JARVIS_UAT_SEED_CHAT_SCRIPT;
     }

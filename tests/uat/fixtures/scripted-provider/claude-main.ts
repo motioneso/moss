@@ -22,6 +22,7 @@
 // content.
 import { mkdirSync, readFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
+import { createInterface } from "node:readline";
 import { transcriptGlobDir } from "@moss/ai";
 import { parseClaudeLaunchArgs } from "./launch-args.js";
 import { readCursor, writeCursor, type ScriptCursor } from "./session-state.js";
@@ -97,6 +98,22 @@ function readMcpEndpoint(configPath: string): McpEndpoint {
     fail(undefined, undefined, "mcp-config-malformed");
   }
   return { url: jarvis.url, authorization: jarvis.headers.Authorization };
+}
+
+function readAcpMcpEndpoint(config: string, scriptId: string): McpEndpoint {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(config);
+  } catch {
+    fail(scriptId, 0, "acp-mcp-config-invalid-json");
+  }
+  const moss = (parsed as { mcpServers?: { moss?: unknown } }).mcpServers?.moss as
+    | { url?: unknown; headers?: { Authorization?: unknown } }
+    | undefined;
+  if (!moss || typeof moss.url !== "string" || typeof moss.headers?.Authorization !== "string") {
+    fail(scriptId, 0, "acp-mcp-config-malformed");
+  }
+  return { url: moss.url, authorization: moss.headers.Authorization };
 }
 
 async function callMcp(
@@ -295,8 +312,173 @@ export async function runScriptedClaude(): Promise<void> {
   }
 }
 
+function emitNativeMessage(message: Record<string, unknown>): void {
+  process.stdout.write(`${JSON.stringify(message)}\n`);
+}
+
+function nativeArgValue(args: readonly string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  if (index >= 0) return args[index + 1];
+  const prefix = `${name}=`;
+  return args.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
+}
+
+/** Minimal stream-json Claude CLI used only when the real chat path is ACP-backed. */
+export async function runScriptedClaudeAcp(): Promise<void> {
+  const args = process.argv.slice(2);
+  const sessionId = nativeArgValue(args, "--session-id") ?? "uat-scripted-session";
+  const model = "claude-sonnet-4-5";
+  emitNativeMessage({
+    type: "system",
+    subtype: "init",
+    session_id: sessionId,
+    cwd: process.cwd(),
+    tools: [],
+    mcp_servers: [],
+    model,
+    models: [{ value: "default", displayName: "Default", description: "UAT scripted model" }],
+    permissionMode: "dontAsk",
+    apiKeySource: "none",
+    claude_code_version: "uat-scripted"
+  });
+
+  const scriptId = process.env.JARVIS_UAT_SEED_CHAT_SCRIPT ?? "";
+  if (!isUatChatScript(scriptId)) fail(undefined, undefined, "missing-or-unknown-script-id");
+  const mcpConfig = nativeArgValue(args, "--mcp-config");
+  if (mcpConfig === undefined) fail(scriptId, 0, "acp-mcp-config-absent");
+  const endpoint = readAcpMcpEndpoint(mcpConfig, scriptId);
+  const initialized = await callMcp(
+    endpoint,
+    "initialize",
+    {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "claude", version: model }
+    },
+    TOOLS_LIST_TIMEOUT_MS,
+    scriptId,
+    0,
+    "acp-mcp-initialize"
+  );
+  if (initialized.error) fail(scriptId, 0, "acp-mcp-initialize-error");
+  const listed = await callMcp(
+    endpoint,
+    "tools/list",
+    {},
+    TOOLS_LIST_TIMEOUT_MS,
+    scriptId,
+    0,
+    "acp-mcp-tools-list"
+  );
+  if (listed.error) fail(scriptId, 0, "acp-mcp-tools-list-error");
+  const fixture = loadChatScriptFixture(scriptId);
+  const input = createInterface({ input: process.stdin });
+  for await (const line of input) {
+    let message: unknown;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!message || typeof message !== "object") continue;
+    const frame = message as { type?: string; message?: { content?: unknown } };
+    if (frame.type === "control_request") {
+      const request = message as { request_id?: string; request?: { subtype?: string } };
+      if (typeof request.request_id === "string") {
+        const subtype = request.request?.subtype;
+        emitNativeMessage({
+          type: "control_response",
+          response: {
+            subtype: "success",
+            request_id: request.request_id,
+            response:
+              subtype === "initialize"
+                ? {
+                    commands: [],
+                    agents: [],
+                    output_style: "",
+                    available_output_styles: [],
+                    models: [
+                      {
+                        value: "default",
+                        displayName: "Default",
+                        description: "UAT scripted model"
+                      }
+                    ]
+                  }
+                : subtype === "supported_commands"
+                  ? { commands: [] }
+                  : {}
+          }
+        });
+      }
+      continue;
+    }
+    if (frame.type !== "user") continue;
+    const content = frame.message?.content;
+    const promptText = Array.isArray(content)
+      ? content
+          .filter((part): part is { type: "text"; text: string } =>
+            Boolean(
+              part &&
+              typeof part === "object" &&
+              part.type === "text" &&
+              typeof part.text === "string"
+            )
+          )
+          .map((part) => part.text)
+          .join(" ")
+      : "";
+    const turn = fixture.turns.find((candidate) =>
+      candidate.expectIncludes.every((expected) => promptText.includes(expected))
+    );
+    if (!turn) fail(scriptId, undefined, "ambiguous-or-zero-eligible-turns");
+    const reply = turn.reply;
+    emitNativeMessage({
+      type: "assistant",
+      message: {
+        id: `${sessionId}-assistant`,
+        type: "message",
+        role: "assistant",
+        model,
+        content: [{ type: "text", text: reply }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 0, output_tokens: 0 }
+      },
+      session_id: sessionId
+    });
+    emitNativeMessage({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      result: reply,
+      session_id: sessionId,
+      stop_reason: "end_turn",
+      num_turns: 1,
+      duration_ms: 1,
+      duration_api_ms: 1,
+      total_cost_usd: 0,
+      usage: { input_tokens: 0, output_tokens: 0 }
+    });
+    emitNativeMessage({
+      type: "system",
+      subtype: "session_state_changed",
+      state: "idle",
+      session_id: sessionId
+    });
+  }
+}
+
 export function main(): void {
-  runScriptedClaude().then(
+  const run =
+    process.argv.includes("--output-format") && process.argv.includes("stream-json")
+      ? runScriptedClaudeAcp
+      : process.argv[2] === "auth" && process.argv[3] === "status"
+        ? async () => {
+            process.stdout.write(JSON.stringify({ loggedIn: true, authMethod: "uat-scripted" }));
+          }
+        : runScriptedClaude;
+  run().then(
     () => process.exit(0),
     (error: unknown) => {
       const failure =

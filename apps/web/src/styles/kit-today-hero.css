@@ -23,12 +23,12 @@
 
 .today-hero__title {
   margin: 0;
-  max-width: 100%;
+  max-width: 900px;
   font-family: var(--font-display);
   font-size: clamp(30px, 3.1vw, 47px);
   font-weight: 900;
-  line-height: 1.05;
-  letter-spacing: -0.01em;
+  line-height: 1.06;
+  letter-spacing: -1.5px;
   overflow-wrap: break-word;
   color: var(--hero-fg);
 }
@@ -39,9 +39,19 @@
 
 .today-hero__summary {
   max-width: 690px;
-  margin-top: 12px;
+  margin-top: 19px;
+  font-size: 0.875rem;
   line-height: 1.65;
   color: var(--hero-fg);
+}
+
+/* The fallback path renders text directly and inherits the size above. The
+   BriefingProse path renders a jds-brief__body child that sets its own
+   font-size from the shared component stylesheet, which an inherited value
+   can't reach, so it needs its own override here. */
+.today-hero__summary .jds-brief__body {
+  font-size: 0.875rem;
+  line-height: 1.65;
 }
 
 .today-hero__prepared {
@@ -49,8 +59,8 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 16px;
-  margin: 14px 0 0;
-  font-size: 0.8125rem;
+  margin: 21px 0 0;
+  font-size: 0.625rem;
   color: var(--hero-fg-muted);
 }
 
@@ -62,6 +72,14 @@
 
 .today-hero__weather {
   color: var(--hero-fg);
+}
+
+.today-hero[data-mode="day"] .today-hero__weather {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: 16px 24px;
+  min-width: 0;
 }
 
 /* Hero-scoped weather variant: temperature large, conditions and high/low
@@ -120,6 +138,28 @@
   color: var(--forest);
 }
 
+.today-hero__sections {
+  align-items: center;
+  gap: 6px 20px;
+  margin: 16px 0 -30px;
+  padding: 14px 30px 12px;
+  background: var(--surface);
+  border-bottom: none;
+}
+
+.today-hero__sections a {
+  color: var(--forest);
+}
+
+.today-hero__sections-label {
+  flex: none;
+  color: var(--ink-4);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 @media (max-width: 880px) {
   .today-hero {
     padding: 23px 22px;
@@ -136,3 +176,107 @@
     margin-right: -0.75rem;
   }
 }
+
+/* Narrow-screen sizing from the design study, which the wide-screen values
+   above don't cover: the clamp() floor undershoots the study's own numbers
+   below 680px, and the summary drops a size too. */
+@media (max-width: 680px) {
+  .today-hero__title {
+    font-size: 32px;
+    letter-spacing: -1px;
+    line-height: 1.09;
+  }
+
+  .today-hero__summary,
+  .today-hero__summary .jds-brief__body {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+
+/* Morning-only vertical rhythm (day mode). These numbers compensate for a
+   structural difference: the seeded product text wraps to different line
+   counts than the study's fixed mockup text, so rows below the wrap point
+   need explicit offsets to land on the study's tops. Deltas come from the
+   ink-top comparison at head fbbc40ca (desktop headline 22px high,
+   desktop prepared time 36px high, mobile headline 11px high, mobile
+   summary 9px high, mobile prepared time already within 1px). Scoped to
+   data-mode="day" so the evening hero and its guards do not move.
+   Warnings for the next touch: the prepared-time offset absorbs the
+   deferred row-layout gap, so the later slice that moves that control into
+   the design's row will break these margins. And the desktop offset holds
+   only while the seeded summary wraps to three lines, a property of the
+   stand-in writer's fixed prose, not of the design. The prepared-time number depends on the summary wrapping to three lines specifically, not on the summary in general: re-wrap the summary and the prepared line lands elsewhere. */
+.today-hero[data-mode="day"] {
+  padding-top: 37px;
+}
+
+.today-hero[data-mode="day"] .today-hero__eyebrow {
+  margin-bottom: 24px;
+}
+
+.today-hero[data-mode="day"] .today-hero__prepared {
+  margin-top: 35px;
+  justify-content: space-between;
+}
+
+.today-hero[data-mode="day"] .today-hero__prepared-time {
+  flex: none;
+}
+
+@media (max-width: 680px) {
+  .today-hero[data-mode="day"] .today-hero__weather {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  /* The populated summary gains a line at the narrowest probe width. Keep
+     the compact weather block in the same frozen band at both phone widths;
+     the prepared row gives back that extra offset at 320px. */
+  .today-hero[data-mode="day"] .today-hero__weather {
+    margin-top: clamp(12px, calc(100vw - 308px), 67px);
+  }
+
+  .today-hero__sections {
+    display: grid;
+    grid-template-columns: max-content max-content max-content;
+    gap: 2px 4px;
+    margin-left: 30px;
+    margin-right: 30px;
+    padding: 6px 0;
+  }
+
+  .today-hero__sections a {
+    font-size: 10px;
+    line-height: 1.1;
+  }
+
+  .today-hero__sections-label {
+    font-size: 9px;
+    line-height: 1.1;
+  }
+}
+
+@media (max-width: 680px) {
+  .today-hero[data-mode="day"] {
+    padding-top: 25px;
+  }
+
+  .today-hero[data-mode="day"] .today-hero__eyebrow {
+    margin-bottom: 19px;
+  }
+
+  .today-hero[data-mode="day"] .today-hero__summary {
+    margin-top: 18px;
+  }
+
+  .today-hero[data-mode="day"] .today-hero__prepared {
+    margin-top: 11px;
+  }
+
+  .today-hero[data-mode="day"] .today-hero__prepared {
+    margin-top: clamp(0px, calc(100vw - 320px), 11px);
+  }
+}
+
+/* End morning-only vertical rhythm. */

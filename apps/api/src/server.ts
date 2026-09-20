@@ -66,6 +66,8 @@ import {
   resolveModulesDir
 } from "@moss/module-registry/node";
 
+import { registerCompanionRoutes } from "./companion-routes.js";
+import { resolveApiE2eFetchOverride } from "./e2e-fetch-override.js";
 import { createModuleAiBridge } from "./external-module-ai-bridge.js";
 import { createModuleDistributionPort } from "./module-distribution-port.js";
 import { resolveHerdrInstall } from "./herdr-install-port.js";
@@ -162,6 +164,38 @@ export function hasAuthMaterial(request: FastifyRequest): boolean {
   );
 }
 
+export function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === "127.0.0.1" ||
+    hostname === "localhost" ||
+    hostname === "::1" ||
+    hostname === "[::1]"
+  );
+}
+
+export function resolveMcpServerUrl(
+  env: NodeJS.ProcessEnv = process.env,
+  port: number = Number(env.PORT ?? 3000)
+): string {
+  const configured = env.JARVIS_MCP_SERVER_URL;
+  if (!configured) {
+    return `http://127.0.0.1:${port}/api/mcp`;
+  }
+  try {
+    const url = new URL(configured);
+    // When a loopback URL is passed in the environment (e.g. from a shared dev settings file),
+    // align its port with the server's own port so multi-lane dev servers don't talk to another
+    // lane's instance (#2345). Container service DNS (e.g. http://api:3000/api/mcp) is preserved.
+    if (isLoopbackHost(url.hostname)) {
+      url.port = String(port);
+      return url.toString();
+    }
+    return configured;
+  } catch {
+    return configured;
+  }
+}
+
 export function resolveApiServerConfig(env: NodeJS.ProcessEnv = process.env): ApiServerConfig {
   const port = Number(env.PORT ?? 3000);
   const host = env.HOST ?? "0.0.0.0";
@@ -174,7 +208,7 @@ export function resolveApiServerConfig(env: NodeJS.ProcessEnv = process.env): Ap
     // compose-provided service DNS (JARVIS_MCP_SERVER_URL, e.g. http://api:3000/api/mcp) when
     // set; fall back to the loopback URL for dev/non-container runs. URL source only — this
     // does not change the MCP gateway auth/allowlist/token-mint path.
-    mcpServerUrl: env.JARVIS_MCP_SERVER_URL ?? `http://127.0.0.1:${port}/api/mcp`,
+    mcpServerUrl: resolveMcpServerUrl(env, port),
     externalModulesDir: resolveModulesDir(env)
   };
 }
@@ -340,6 +374,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     });
 
     registerBetterAuthRoutes(server, authRuntime, AUTH_MAX);
+    // #2560: Trail Marker pairing and linked-Mac routes. Platform-owned, next to auth —
+    // linking a Mac to an account is not any module's business.
+    registerCompanionRoutes(server, { authRuntime });
 
     // #1752: a live cell, not a one-time snapshot — rescan() lets an admin-triggered
     // rescan surface a module dropped onto the mount after this process booted.
@@ -795,7 +832,9 @@ export function createCrashHandler(
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const apiServerConfig = resolveApiServerConfig();
-  const server = createApiServer({ apiServerConfig });
+  // TEST-ONLY e2e fixture bypass (absent without the UAT env): host-scoped to the
+  // briefing sources, everything else keeps global fetch.
+  const server = createApiServer({ apiServerConfig, ...resolveApiE2eFetchOverride() });
   const port = apiServerConfig.port;
   const host = apiServerConfig.host;
 

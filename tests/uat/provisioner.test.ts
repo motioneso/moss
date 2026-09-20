@@ -59,6 +59,23 @@ describe("#1121 Task 4: chatScript arg-building", () => {
     const args = mocks.spawn.mock.calls[0]?.[1] as string[];
     expect(args).toContain("JARVIS_UAT_SPORTS_PUBLIC_SOURCE_FIXTURES=1");
   });
+
+  it("starts ESPN-only provisioning without seeding a Job Search provider", async () => {
+    const input = buildSeedHookInput(
+      "proj",
+      "admin+data",
+      { withEspnFixture: true, chatScript: "phase1-smoke" },
+      undefined
+    );
+    expect(input.jobSearchAiProviderBaseUrl).toBeUndefined();
+    expect(input.chatScript).toBe("phase1-smoke");
+
+    await composeSeedHook(input);
+
+    const args = mocks.spawn.mock.calls[0]?.[1] as string[];
+    expect(args).toContain("MOSS_UAT_JOB_SEARCH_AI_BASE_URL=");
+    expect(args).toContain("JARVIS_UAT_SEED_CHAT_SCRIPT=phase1-smoke");
+  });
 });
 
 describe("#2164 r19: captureFailureEvidence transcript capture is not tail-truncated", () => {

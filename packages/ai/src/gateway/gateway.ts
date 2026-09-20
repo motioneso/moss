@@ -36,7 +36,13 @@ import {
   renderAndCap,
   sanitizeAssistantToolResult
 } from "./output-validation.js";
-import { resolvePolicy } from "./policy.js";
+import {
+  createEffectivePolicyLookup,
+  familyAllowsAutoRun,
+  resolveFirstRunNotice,
+  resolvePolicy,
+  summarizeToolAction
+} from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
 import {
   APPROVAL_REFUSED_REASON,
@@ -48,6 +54,9 @@ import {
 } from "./native-tool-guard.js";
 import {
   emitNativePermissionResult,
+  NATIVE_READONLY_AUTO_ALLOW,
+  NATIVE_TOOL_MODULE_ID,
+  NATIVE_TOOL_MODULE_NAME,
   type NativeToolPermissionRequest,
   type NativeToolPermissionResponse
 } from "./native-tool-permission.js";
@@ -150,27 +159,12 @@ const defaultPolicyLookup: ActionPolicyLookup = {
   getFamilyTier: async () => null,
   getFamilyManifest: async () => null
 };
-const TASKS_FIRST_RUN_NOTICE_KEY = "tasks.agency_auto_execute.first_prompt_seen";
-const TASKS_FIRST_RUN_NOTICE =
-  'Your assistant now asks before creating tasks. Enable "create without asking" in Task settings to auto-run task changes.';
 
 interface ExecutableTool {
   readonly tool: ModuleAssistantToolManifest;
   readonly execute: ToolExecute;
   readonly dto: AiAssistantToolDto;
 }
-
-const NATIVE_TOOL_MODULE_ID = "claude-native";
-const NATIVE_TOOL_MODULE_NAME = "Claude Native Tools";
-// #1158: read-only native META-tools that must never require a user confirmation.
-// Claude Code loads its MCP tool schemas lazily via the native ToolSearch tool; gating it
-// behind the confirm flow deadlocks the permission hook (150s confirm wait == 150s hook
-// deadline), the hook fails closed, claude retries in silence, and the #456 idle watchdog
-// kills the live engine (prod outage 2026-07-18, issue #1157). Allow immediately with no
-// pending action row — ToolSearch fires many times per conversation and cannot mutate
-// anything, so a row per call is audit spam. Keep this set minimal: anything unlisted
-// (including read-only tools like Grep/Read) stays on the confirm path.
-const NATIVE_READONLY_AUTO_ALLOW = new Set(["ToolSearch"]);
 
 /**
  * The single chokepoint between Jarvis and every module's real operations. Lists
@@ -233,7 +227,24 @@ export class AssistantToolGateway {
 
     const prefs = this.deps.agencyPrefs?.(ctx) ?? denyPrefs;
     const lookup = this.deps.actionPolicy?.(ctx) ?? defaultPolicyLookup;
+    const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
+    const effectiveLookup = createEffectivePolicyLookup(
+      lookup,
+      this.deps.resolveActiveModules,
+      ctx.actorUserId
+    );
     if (found.tool.risk !== "read" && (await this.deps.yoloMode?.(ctx)) === true) {
+      if (
+        confirmOverride ||
+        !(await familyAllowsAutoRun(found.tool, found.dto.moduleId, effectiveLookup))
+      ) {
+        return this.confirmAndRun(
+          found,
+          input,
+          ctx,
+          await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs)
+        );
+      }
       if (!this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)) {
         emitActionResultRecord(this.deps.notifier, ctx.chatSessionId, {
           actionRequestId: ctx.requestId,
@@ -277,8 +288,10 @@ export class AssistantToolGateway {
       });
       return result;
     }
-    const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
-    if ((await resolvePolicy(found.tool, found.dto.moduleId, confirmOverride, lookup)) === "run") {
+    if (
+      (await resolvePolicy(found.tool, found.dto.moduleId, confirmOverride, effectiveLookup)) ===
+      "run"
+    ) {
       if (
         found.tool.risk !== "read" &&
         !this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)
@@ -320,7 +333,12 @@ export class AssistantToolGateway {
       }
       return result;
     }
-    return this.confirmAndRun(found, input, ctx, await this.firstRunNotice(found, prefs));
+    return this.confirmAndRun(
+      found,
+      input,
+      ctx,
+      await resolveFirstRunNotice(found.dto.moduleId, found.tool, prefs)
+    );
   }
 
   async requestNativeToolPermission(
@@ -749,7 +767,7 @@ export class AssistantToolGateway {
       this.deps.confirmTimeoutMs
     );
 
-    const summary = [notice, this.summaryFor(found.tool, input, ctx)].filter(Boolean).join(" ");
+    const summary = [notice, summarizeToolAction(found.tool, input, ctx)].filter(Boolean).join(" ");
 
     // Optional rich, server-derived card preview (e.g. email reply recipient/subject/body),
     // computed under the actor's DataContextDb. It rides the live stream ONLY — the persisted
@@ -835,38 +853,6 @@ export class AssistantToolGateway {
       return result;
     } finally {
       this.deps.confirmations.markDone(action.id);
-    }
-  }
-
-  private summaryFor(
-    tool: ModuleAssistantToolManifest,
-    input: Record<string, unknown>,
-    ctx: ToolContext
-  ): string {
-    if (typeof tool.summarize === "function") {
-      return tool.summarize(input, ctx);
-    }
-    return tool.actionLabel ?? tool.name;
-  }
-
-  private async firstRunNotice(
-    found: ExecutableTool,
-    prefs: AgencyPrefLookup
-  ): Promise<string | undefined> {
-    if (
-      found.dto.moduleId !== "tasks" ||
-      found.tool.risk !== "write" ||
-      found.tool.executionPolicy !== "auto" ||
-      !prefs.upsert
-    ) {
-      return undefined;
-    }
-    try {
-      if ((await prefs.get(TASKS_FIRST_RUN_NOTICE_KEY)) === true) return undefined;
-      await prefs.upsert(TASKS_FIRST_RUN_NOTICE_KEY, true);
-      return TASKS_FIRST_RUN_NOTICE;
-    } catch {
-      return undefined;
     }
   }
 

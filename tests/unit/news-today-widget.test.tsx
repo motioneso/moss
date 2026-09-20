@@ -170,6 +170,32 @@ describe("News Today widget", () => {
     expect(html).toContain("Summary");
   });
 
+  it("renders the editorial desk head with the lead before the list", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+    const topStories = Array.from({ length: 4 }, (_, index) => story(index + 1));
+    const data: NewsOverviewResponse = {
+      topStories,
+      rankedStories: topStories,
+      sourceGroups: [],
+      activeTopics: [],
+      enabledSources: [{ sourceKey: "wire", label: "Wire" }],
+      degraded: false
+    };
+    client.setQueryData(newsQueryKeys.overview, data);
+
+    const html = renderToString(
+      <QueryClientProvider client={client}>
+        <NewsTodayWidget />
+      </QueryClientProvider>
+    );
+
+    expect(html).toContain("jds-brief--news");
+    expect(html).toContain("02");
+    expect(html).toContain("The wider world");
+    expect(html).not.toContain("Top stories");
+    expect(html.indexOf("nw-twlead")).toBeLessThan(html.indexOf("nw-twlist"));
+  });
+
   it("drops a lead photo that fails to load and keeps the story", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
     const topStories = Array.from({ length: 4 }, (_, index) => story(index + 1));

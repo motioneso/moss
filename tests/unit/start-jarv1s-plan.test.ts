@@ -4,6 +4,7 @@ import { buildSanitizedCliEnv } from "../../packages/cli-runner/src/sanitized-en
 import {
   buildChildEnv,
   buildStartupPlan,
+  resolveMcpServerUrl,
   runtimeUidGid,
   type ChildRole
 } from "../../scripts/start-jarv1s.js";
@@ -114,7 +115,9 @@ describe("start-jarv1s startup plan", () => {
 
     for (const [key, value] of Object.entries(expectedForCli)) {
       if (key === "PATH") {
-        expect(cliRunnerServerEnv.PATH).toBe(`/data/cli-tools/bin:${value}`);
+        expect(cliRunnerServerEnv.PATH).toBe(
+          `/app/tests/uat/fixtures/scripted-provider/bin:/data/cli-tools/bin:/bin`
+        );
         continue;
       }
       expect(cliRunnerServerEnv[key]).toBe(value);
@@ -146,6 +149,18 @@ describe("start-jarv1s startup plan", () => {
     expect(env.JARVIS_UAT_SEED_CHAT_SCRIPT).toBe("1252-audit-truth-livepath");
     expect(env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN).toBe(
       "/app/tests/uat/fixtures/scripted-provider/bin"
+    );
+  });
+
+  it("puts the exact UAT fixture bin ahead of installed providers", () => {
+    const env = buildChildEnv("cli-runner", {
+      PATH: "/usr/bin:/bin",
+      JARVIS_CLI_TOOLS_PREFIX: "/data/cli-tools",
+      JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin"
+    } as NodeJS.ProcessEnv);
+
+    expect(env.PATH).toBe(
+      "/app/tests/uat/fixtures/scripted-provider/bin:/data/cli-tools/bin:/usr/bin:/bin"
     );
   });
 
@@ -189,5 +204,57 @@ describe("start-jarv1s startup plan", () => {
 
     expect(env.JARVIS_APP_DATABASE_URL).toBe("postgres://app");
     expect(env.BETTER_AUTH_SECRET).toBe("auth-secret");
+  });
+
+  it.each<ChildRole>(["api", "worker", "cli-runner"])(
+    "%s aligns loopback JARVIS_MCP_SERVER_URL port to PORT (#2345)",
+    (role) => {
+      const env = buildChildEnv(role, {
+        PORT: "4100",
+        JARVIS_MCP_SERVER_URL: "http://127.0.0.1:3000/api/mcp"
+      } as NodeJS.ProcessEnv);
+
+      expect(env.JARVIS_MCP_SERVER_URL).toBe("http://127.0.0.1:4100/api/mcp");
+    }
+  );
+
+  it.each<ChildRole>(["api", "worker", "cli-runner"])(
+    "%s falls back to loopback URL with configured PORT when JARVIS_MCP_SERVER_URL is unset",
+    (role) => {
+      const env = buildChildEnv(role, {
+        PORT: "4200"
+      } as NodeJS.ProcessEnv);
+
+      expect(env.JARVIS_MCP_SERVER_URL).toBe("http://127.0.0.1:4200/api/mcp");
+    }
+  );
+
+  it.each<ChildRole>(["api", "worker", "cli-runner"])(
+    "%s preserves container/non-loopback JARVIS_MCP_SERVER_URL ignoring PORT",
+    (role) => {
+      const env = buildChildEnv(role, {
+        PORT: "4300",
+        JARVIS_MCP_SERVER_URL: "http://api:3000/api/mcp"
+      } as NodeJS.ProcessEnv);
+
+      expect(env.JARVIS_MCP_SERVER_URL).toBe("http://api:3000/api/mcp");
+    }
+  );
+});
+
+describe("resolveMcpServerUrl", () => {
+  it("aligns loopback URLs to the target port", () => {
+    expect(
+      resolveMcpServerUrl(
+        { JARVIS_MCP_SERVER_URL: "http://127.0.0.1:3000/api/mcp" } as NodeJS.ProcessEnv,
+        "4100"
+      )
+    ).toBe("http://127.0.0.1:4100/api/mcp");
+  });
+
+  it("handles non-URL strings gracefully", () => {
+    expect(
+      resolveMcpServerUrl({ JARVIS_MCP_SERVER_URL: "not-a-valid-url" } as NodeJS.ProcessEnv, "4100")
+    ).toBe("not-a-valid-url");
   });
 });

@@ -323,6 +323,36 @@ describe("Sports Today Tonight", () => {
   });
 });
 
+describe("Sports Today editorial desk", () => {
+  it("renders the desk head with blocks in scores, stories, Tonight, cards order", () => {
+    const final = game({ id: "desk-final", startsAt: "2026-07-06T17:00:00.000Z" });
+    const tonight = game({
+      id: "desk-tonight",
+      state: "pre",
+      statusDetail: "7:30 PM",
+      startsAt: "2026-07-07T23:30:00.000Z",
+      home: vikingSide(null),
+      away: cowboySide(null)
+    });
+    const data = overview({
+      scoreboard: [{ competitionKey: "nfl", competitionLabel: "NFL", games: [final, tonight] }],
+      followedTeams: [{ competitionKey: "nfl", teamKey: "min", sourceTeamId: "1" }],
+      topStories: [story(1), story(2)]
+    });
+    const html = render(seed(data));
+
+    expect(html).toContain("jds-brief--sports");
+    expect(html).toContain("03");
+    expect(html).toContain("From the sidelines");
+    const scoresAt = html.indexOf("Scores");
+    const storiesAt = html.indexOf("Top stories");
+    const tonightAt = html.indexOf(">Tonight<");
+    expect(scoresAt).toBeGreaterThan(-1);
+    expect(storiesAt).toBeGreaterThan(scoresAt);
+    expect(tonightAt).toBeGreaterThan(storiesAt);
+  });
+});
+
 describe("Sports Today desk behaviour", () => {
   it("uses the shared overview query", () => {
     const data = overview({ topStories: [story(1)] });

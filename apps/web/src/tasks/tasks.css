@@ -84,9 +84,22 @@
     display: flex;
     order: -1;
     flex: 1 1 100%;
+    min-width: 0;
+  }
+  .tk-bar__left {
+    min-width: 0;
   }
   .tk-bar__r1 .tk-listfilter {
     flex: 1;
+    min-width: 0;
+  }
+  .tk-listbtn {
+    min-width: 0;
+  }
+  /* Status chips wrap to a second line instead of forcing page overflow. */
+  .tk-bar__left > .jds-segmented {
+    min-width: 0;
+    flex-wrap: wrap;
   }
   .tk-bar__r1 .tk-listbtn {
     width: 100%;

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { resolveMossEnv } from "@moss/db";
 
 import { JOB_SEARCH_FIXTURE_CONTAINER_PORT } from "./fixtures/job-search-fixture-server.js";
+import { BRIEFING_WRITER_FIXTURE_CONTAINER_PORT } from "./fixtures/briefing-writer-fixture-server.js";
 import { REAL_CHAT_ENV_FILE_RESULT_ENV, writeUatRealChatEnvFile } from "./real-chat-env.js";
 import { UAT_ADMIN_EMAIL } from "./seed/admin.js";
 import { parseUatSeedLevel } from "./seed/level-validation.js";
@@ -127,6 +128,65 @@ export async function removeJobSearchFixtureContainer(projectName: string): Prom
   );
 }
 
+/**
+ * [task:p8-briefing-writer-unreachable]: same in-network container shape as the job-search
+ * fixture above, on its own name and port. The worker's synthesis call reaches it by name.
+ */
+export function briefingWriterFixtureContainerName(projectName: string): string {
+  return `${projectName}-bwfixture`;
+}
+
+/** The URL the `jarv1s` worker container uses to reach the briefing-writer origin. */
+export function briefingWriterFixtureBaseUrlFor(projectName: string): string {
+  return `http://${briefingWriterFixtureContainerName(projectName)}:${BRIEFING_WRITER_FIXTURE_CONTAINER_PORT}`;
+}
+
+/** The line briefing-writer-fixture-cli.ts prints once its listen() has resolved. */
+const BRIEFING_WRITER_FIXTURE_READY_LOG = "[briefing-writer-fixture] listening on";
+const BRIEFING_WRITER_FIXTURE_READY_TIMEOUT_MS = 30_000;
+
+/**
+ * [task:p8-briefing-writer-unreachable]: starts the briefing-writer fixture origin and waits
+ * for its readiness line. A fixture that dies at startup surfaces here as a named timeout,
+ * not later as a fallback dump with no obvious cause.
+ */
+export async function startBriefingWriterFixtureContainer(projectName: string): Promise<void> {
+  const name = briefingWriterFixtureContainerName(projectName);
+  await runCommand("docker", [
+    "run",
+    "--detach",
+    "--name",
+    name,
+    "--network",
+    `${projectName}_jarv1s`,
+    `ghcr.io/motioneso/moss:${process.env.JARVIS_IMAGE_TAG ?? "uat-smoke"}`,
+    "node_modules/.bin/tsx",
+    "tests/uat/fixtures/briefing-writer-fixture-cli.ts"
+  ]);
+
+  const deadline = Date.now() + BRIEFING_WRITER_FIXTURE_READY_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const logs = await runCapture("docker", ["logs", name]).catch(() => "");
+    if (logs.includes(BRIEFING_WRITER_FIXTURE_READY_LOG)) {
+      return;
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+  }
+  throw new Error(
+    `briefing-writer fixture container ${name} never reported ready; ` +
+      `check \`docker logs ${name}\` before it is removed`
+  );
+}
+
+/** Removes the briefing-writer fixture container. MUST run before `docker compose down -v`. Idempotent and never throws. */
+export async function removeBriefingWriterFixtureContainer(projectName: string): Promise<void> {
+  await runCommand("docker", [
+    "rm",
+    "--force",
+    briefingWriterFixtureContainerName(projectName)
+  ]).catch(() => {});
+}
+
 // #1024/#1000: prod's fixed host port is 1533 (JARVIS_WEB_PORT default). Rather than editing the
 // prod-shaped compose file to support a Docker-assigned ephemeral port (spec §3.4 option 2), Phase
 // 1 reserves a narrow high port range and bind-probes it (Task 2) — zero compose-file changes,
@@ -211,6 +271,8 @@ export type SeedHook = (ctx: {
   /** N42/#57: the job-search fixture's docker-reachable base URL — see provisionForUat's
    *  jobSearchFixtureBaseUrl computation. Absent unless withJobSearchFixture is set. */
   readonly jobSearchAiProviderBaseUrl?: string;
+  /** [task:p8-briefing-writer-unreachable]: docker-reachable writer-fixture base URL. Absent unless withBriefingWriterFixture is set. */
+  readonly briefingWriterAiProviderBaseUrl?: string;
   readonly sportsPublicSourceFixtures?: boolean;
   readonly workflowApprovalFixture?: boolean;
   /** #2175: three seeded audit-log rows (suppressed / refused / success+duration). */
@@ -241,6 +303,7 @@ export const composeSeedHook: SeedHook = async ({
   excludeChunks,
   withoutNewsJsonBinding,
   jobSearchAiProviderBaseUrl,
+  briefingWriterAiProviderBaseUrl,
   sportsPublicSourceFixtures,
   workflowApprovalFixture,
   activityOutcomeFixture,
@@ -265,6 +328,10 @@ export const composeSeedHook: SeedHook = async ({
       // empty means off" shape as the other -e values here, rather than omitting the flag
       // entirely.
       `MOSS_UAT_JOB_SEARCH_AI_BASE_URL=${jobSearchAiProviderBaseUrl ?? ""}`,
+      "-e",
+      // [task:p8-briefing-writer-unreachable]: empty string reads as absent in cli.ts
+      // (`|| undefined`) — same "always pass, empty means off" shape as the job-search var.
+      `MOSS_UAT_BRIEFING_WRITER_AI_BASE_URL=${briefingWriterAiProviderBaseUrl ?? ""}`,
       "-e",
       `JARVIS_UAT_SPORTS_PUBLIC_SOURCE_FIXTURES=${sportsPublicSourceFixtures === true ? "1" : "0"}`,
       "-e",
@@ -590,12 +657,13 @@ export interface UatProvisionOptions {
   readonly excludeChunks?: readonly string[];
   readonly withoutNewsJsonBinding?: boolean;
   // #1306 Task 22: opt-in, absent by default — mirrors REAL_CHAT_TOKEN_TRIGGER_ENV's "no-op
-  // unless asked" shape. tests/uat/run-uat.ts threads this from job-search-board.uat.spec.ts's
-  // exported `uatLevel` object. One flag turns on the whole fixture-backed pipeline: the crawl
-  // fetch bypass (jobSearchFixtureBaseUrl -> writeUatEnvFile) AND, per N42/#57, the fake
-  // `openai-compatible` AI provider seeded for scoring (same base URL, threaded into
-  // composeSeedHook below) — both point at the one fixture origin this starts.
+  // unless asked" shape. Job Search enables both the fixture origin and its scoring provider;
+  // ESPN enables only the shared origin for deterministic ESPN responses.
   readonly withJobSearchFixture?: boolean;
+  readonly withEspnFixture?: boolean;
+  // [task:p8-briefing-writer-unreachable]: opt-in, absent by default. Enables the writer
+  // fixture origin and its synthesis provider, so briefing cards render fixed prose.
+  readonly withBriefingWriterFixture?: boolean;
   /** #1909: opt-in recovery fixtures used only by its dedicated live-path spec. */
   readonly withSportsPublicSourceFixtures?: boolean;
   /** #2015: opt-in pending workflow approval used only by its live-path spec. */
@@ -620,13 +688,15 @@ export function buildSeedHookInput(
   // server's docker-reachable base URL) and passes it through explicitly, the same way it already
   // threads jobSearchFixtureBaseUrl into writeUatEnvFile below, rather than asking every caller of
   // UatProvisionOptions to compute a Docker bridge gateway address by hand.
-  jobSearchAiProviderBaseUrl?: string
+  jobSearchAiProviderBaseUrl?: string,
+  briefingWriterAiProviderBaseUrl?: string
 ): {
   projectName: string;
   level: UatSeedLevel;
   excludeChunks?: readonly string[];
   withoutNewsJsonBinding?: boolean;
   jobSearchAiProviderBaseUrl?: string;
+  briefingWriterAiProviderBaseUrl?: string;
   sportsPublicSourceFixtures?: boolean;
   workflowApprovalFixture?: boolean;
   activityOutcomeFixture?: boolean;
@@ -639,6 +709,7 @@ export function buildSeedHookInput(
     excludeChunks: opts?.excludeChunks,
     withoutNewsJsonBinding: opts?.withoutNewsJsonBinding,
     jobSearchAiProviderBaseUrl,
+    briefingWriterAiProviderBaseUrl,
     sportsPublicSourceFixtures: opts?.withSportsPublicSourceFixtures,
     workflowApprovalFixture: opts?.withWorkflowApprovalFixture,
     activityOutcomeFixture: opts?.withActivityOutcomeFixture,
@@ -748,8 +819,13 @@ export async function provisionForUat(
     // the new project name. The URL is knowable now — it is just the container's name — which is
     // what lets it be written into the env file the stack starts with, several steps before the
     // container itself exists.
-    const jobSearchFixtureBaseUrl = opts?.withJobSearchFixture
-      ? jobSearchFixtureBaseUrlFor(projectName)
+    const jobSearchFixtureBaseUrl =
+      opts?.withJobSearchFixture || opts?.withEspnFixture
+        ? jobSearchFixtureBaseUrlFor(projectName)
+        : undefined;
+    // [task:p8-briefing-writer-unreachable]: per-attempt container on THIS attempt's network.
+    const briefingWriterFixtureBaseUrl = opts?.withBriefingWriterFixture
+      ? briefingWriterFixtureBaseUrlFor(projectName)
       : undefined;
     let envFile!: UatEnvFile;
     try {
@@ -773,6 +849,7 @@ export async function provisionForUat(
     // Compose network blocks `down -v` from removing that network, and the leak assertion that
     // follows would then fail on an otherwise clean run.
     const teardownCompose = async () => {
+      await removeBriefingWriterFixtureContainer(projectName);
       await removeJobSearchFixtureContainer(projectName);
       await runCommand("docker", buildUatComposeArgs(projectName, ["down", "-v"])).catch(
         (error) => {
@@ -832,7 +909,21 @@ export async function provisionForUat(
         console.log(`[uat] starting job-search fixture origin at ${jobSearchFixtureBaseUrl}`);
         await startJobSearchFixtureContainer(projectName);
       }
-      await composeSeedHook(buildSeedHookInput(projectName, level, opts, jobSearchFixtureBaseUrl));
+      if (briefingWriterFixtureBaseUrl !== undefined) {
+        console.log(
+          `[uat] starting briefing-writer fixture origin at ${briefingWriterFixtureBaseUrl}`
+        );
+        await startBriefingWriterFixtureContainer(projectName);
+      }
+      await composeSeedHook(
+        buildSeedHookInput(
+          projectName,
+          level,
+          opts,
+          opts?.withJobSearchFixture ? jobSearchFixtureBaseUrl : undefined,
+          opts?.withBriefingWriterFixture ? briefingWriterFixtureBaseUrl : undefined
+        )
+      );
       const baseURL = `http://127.0.0.1:${webPort}`;
       await waitForReady(`${baseURL}/health/ready`);
       console.log(`[uat] reachable at ${baseURL} after ${Date.now() - overallStart}ms`);
