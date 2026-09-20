@@ -96,7 +96,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "profile",
     label: "Account & preferences",
     description:
-      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location (use the browser's location or search for a place; the hint under the location notes which of those two was used this session), quiet hours, sessions, data export and account deletion.",
+      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location (use the browser's location or search for a place; the hint under the location notes which of those two was used this session), quiet hours, sessions, data export and account deletion. A Trail Marker for Mac group explains the menu-bar Mac companion, says the app is not available to download yet, describes how browser approval links a Mac, and points at Active sessions as the place a linked Mac appears and can be signed out. Active sessions lists a linked Mac by the name it gave, with its app version.",
     path: "/settings?section=profile",
     scope: "user"
   },

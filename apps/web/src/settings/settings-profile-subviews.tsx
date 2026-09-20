@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import {
+  COMPANION_PRODUCT_NAME,
   type LocaleSettingsDto,
   type ListMySessionsResponse,
   type MeSessionDeviceKind,
@@ -226,6 +227,36 @@ export function DataExport() {
           </div>
         </div>
       ) : null}
+    </Group>
+  );
+}
+
+/* ----------------------------------------------------------- Mac companion */
+
+/**
+ * Explains the Mac companion and where a linked Mac shows up. It deliberately does not
+ * list linked Macs, because they already appear under Active sessions below and one list
+ * that is always right beats two that can disagree.
+ */
+export function MacCompanion() {
+  return (
+    <Group
+      title={COMPANION_PRODUCT_NAME}
+      desc="A small app that lives in the Mac menu bar and connects that Mac to your account."
+    >
+      <Row
+        name="Get the app"
+        desc="The Mac app is still being built, so there is nothing to download yet."
+        comingIssue={2560}
+      />
+      <Row
+        name="How linking works"
+        desc="The Mac opens a page in your browser and asks for your approval. Approve it and the Mac gets a key of its own — never your password and never your browser session."
+      />
+      <Row
+        name="Where a linked Mac appears"
+        desc="Under Active sessions below, by the name the Mac gave itself. Sign it out there to break the link."
+      />
     </Group>
   );
 }
