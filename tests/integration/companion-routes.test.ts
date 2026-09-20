@@ -171,13 +171,24 @@ describe("linking a Mac", () => {
 
   it("shows the browser what it is being asked to approve", async () => {
     const { code } = await startAttempt("Named Mac");
+    // No Origin header, because a browser omits it on a same-origin GET. The read must
+    // still work; only the approve call demands a trusted origin.
     const res = await server.inject({
       method: "GET",
       url: `/api/companion/pair/attempt?code=${encodeURIComponent(code)}`,
-      headers: asOwner({ origin: TRUSTED_ORIGIN })
+      headers: asOwner()
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ deviceName: "Named Mac", status: "pending" });
+  });
+
+  it("refuses the summary to a caller who is not signed in", async () => {
+    const { code } = await startAttempt("Peeked Mac");
+    const res = await server.inject({
+      method: "GET",
+      url: `/api/companion/pair/attempt?code=${encodeURIComponent(code)}`
+    });
+    expect(res.statusCode).toBe(401);
   });
 
   it("lets the app abandon its own attempt", async () => {

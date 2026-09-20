@@ -57,10 +57,15 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
   const pairing = authRuntime.companionPairing;
   const devices = authRuntime.companionDevices;
 
-  /** Resolves the signed-in browser, and requires the request to come from a trusted origin. */
+  /**
+   * Resolves the signed-in browser. `requireTrustedOrigin` adds a same-origin check, which
+   * belongs on the state-changing decide call and not on the read. A browser omits Origin on
+   * a same-origin GET, so demanding it there would refuse the product's own page.
+   */
   async function requireBrowserActor(
     request: FastifyRequest,
-    reply: FastifyReply
+    reply: FastifyReply,
+    requireTrustedOrigin: boolean
   ): Promise<string | null> {
     let actorUserId: string;
     try {
@@ -70,13 +75,15 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
       return null;
     }
 
-    // Approving a device is a state change made with a cookie, so it needs a same-origin
-    // check of its own. A missing Origin is refused rather than trusted: a browser sends
-    // one on every cross-site POST, so its absence is never a signal of safety.
-    const origin = request.headers.origin;
-    if (typeof origin !== "string" || !authRuntime.trustedOrigins.includes(origin)) {
-      reply.code(403).send({ error: "Request origin is not trusted", code: "invalid_origin" });
-      return null;
+    if (requireTrustedOrigin) {
+      // Approving a device is a state change made with a cookie, so it needs a same-origin
+      // check of its own. A missing Origin is refused rather than trusted, because a browser
+      // sends one on every cross-site POST.
+      const origin = request.headers.origin;
+      if (typeof origin !== "string" || !authRuntime.trustedOrigins.includes(origin)) {
+        reply.code(403).send({ error: "Request origin is not trusted", code: "invalid_origin" });
+        return null;
+      }
     }
 
     return actorUserId;
@@ -124,7 +131,7 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
     "/api/companion/pair/attempt",
     { schema: getPairAttemptRouteSchema },
     async (request, reply) => {
-      const actorUserId = await requireBrowserActor(request, reply);
+      const actorUserId = await requireBrowserActor(request, reply, false);
       if (!actorUserId) return reply;
 
       const summary = await pairing.summarize({ approvalCode: request.query.code });
@@ -139,7 +146,7 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
     "/api/companion/pair/decide",
     { schema: decidePairAttemptRouteSchema },
     async (request, reply) => {
-      const actorUserId = await requireBrowserActor(request, reply);
+      const actorUserId = await requireBrowserActor(request, reply, true);
       if (!actorUserId) return reply;
 
       // The approving account comes from the session, never from the body.
