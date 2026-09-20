@@ -68,7 +68,8 @@ python3 -B pilot.py --allow com.apple.Safari --titles \
 ```
 
 Enter your TypeSafe API key at the hidden prompt. It is not saved by the program. Alternatively,
-the runner reads `TYPESAFE_API_KEY` from the environment; don't paste a key into command history.
+the runner reads `TYPESAFE_API_KEY` from the environment, then
+`~/.config/jev-pilot/typesafe-key` if present; don't paste a key into command history.
 Omit `--goal` to test general activity classification; alignment then always becomes
 `insufficient_evidence`. Repeat `--allow` to include other apps. Use a non-sensitive goal alias:
 the command-line goal is visible in process listings and shell history.
@@ -255,9 +256,14 @@ chmod 600 "$HOME/.config/jev-pilot/openrouter-key"
 export OPENROUTER_API_KEY="$(cat "$HOME/.config/jev-pilot/openrouter-key")"
 ```
 
-This stores plaintext with file mode 600. In a new terminal run only the export
-line. The script does not automatically load `.env` files. Do not put keys in the
-repo or paste them into chat. Alternatively, skip storage and use its hidden prompt.
+This stores plaintext with file mode 600. All three runners now read saved keys
+from `~/.config/jev-pilot/openrouter-key` and `~/.config/jev-pilot/typesafe-key`
+automatically; exporting them again in a new terminal is unnecessary. Exported
+`OPENROUTER_API_KEY` / `TYPESAFE_API_KEY` take precedence. The hidden prompt is used
+only when neither source has a key, and prompt entries are not saved automatically.
+To save TypeSafe the same way, repeat the hidden-prompt block with `typesafe-key`
+as the filename. The scripts do not source shell profiles or `.env` files.
+Do not put keys in the repo or paste them into chat.
 
 Compare observations against what each screenshot actually shows, especially
 destinations, maps, games, and video. Live model quality, billing, and latency still
@@ -298,9 +304,34 @@ python3 -B auto_vision.py --live --allow com.apple.Safari \
   --goal "Research accommodation for a Liverpool trip"
 ```
 
+For a short test, request samples every 15 seconds and flag after 30 supported
+seconds of distraction:
+
+```bash
+python3 -B auto_vision.py --live --allow com.apple.Safari \
+  --goal "Research accommodation for a Liverpool trip" \
+  --interval 15 --flag-after-minutes 0.5 --minutes 2
+```
+
+Keep unrelated content foreground in Safari. The first capture still waits for
+15 seconds of stable context. Requests run sequentially, so provider latency can
+make updates slower than 15 seconds. Three confident distracting samples spanning
+30 seconds can trigger the flag; allow roughly 1–2 minutes including startup and
+processing. Uncertain or stale samples may take longer. The default interval is
+still 60 seconds and the default flag threshold is still five minutes.
+
+When the automatic runner emits `FOCUS FLAG`, it also requests a macOS notification
+with the Glass sound: “Distraction threshold reached. Time to return to your goal.”
+For the test, that is your cue to switch to goal-related research within Safari.
+It uses built-in `osascript`, does not activate another app, and includes no goal,
+page title or screenshot text. The same one-flag-per-episode and cooldown rules apply.
+macOS notification settings and Focus can suppress the banner or sound; allow
+notifications for Script Editor (or the sender macOS lists). Command failures leave
+the pilot running with the terminal flag. Actual notification delivery needs a Mac test.
+
 The Mac must grant Accessibility and Screen Recording access. Add another app by
 repeating `--allow`. `OPENROUTER_API_KEY` and `TYPESAFE_API_KEY` may be supplied in the
-environment; otherwise both are requested without echoing. The default limit is 20
+environment; otherwise saved key files are tried before hidden prompts. The default limit is 20
 visual calls per run, with `--interval`, `--minutes`, `--max-calls`, and the existing
 focus-threshold options available for tuning. After starting, bring an allowed window
 to the foreground; the first capture waits for 15 seconds of stable context. The default
@@ -320,3 +351,18 @@ whole-display capture. Full pixels from the allowlisted window are uploaded in l
 mode, so do not allow password managers, private messaging, banking, or other sensitive
 windows. The terminal output contains categorical results and usage, not the raw visual
 description by default.
+
+Authentication errors from automatic capture identify the failing provider:
+`openrouter_http_401` or `typesafe_http_401`. A 401 means that provider rejected
+the credential; check the corresponding exported variable or saved key. If an old
+export overrides a corrected file, `unset OPENROUTER_API_KEY` or
+`unset TYPESAFE_API_KEY` makes the next run use the saved file. Provider response
+bodies are not included in these diagnostics.
+
+Discarded automatic-capture results include a categorical reason, without raw
+window titles: `title_changed`, `window_changed`, `app_changed`, `excluded`,
+`idle`, `permission_denied`, `capture_unavailable`, `sampling_gap`, or
+`capture_cancelled`. `invalid_vision_observation` means vision returned no usable
+validated description. `result_too_old` includes elapsed seconds and the 30-second
+limit. These diagnostics distinguish context changes from model-output or latency
+problems; discarded results still contribute no distraction time.

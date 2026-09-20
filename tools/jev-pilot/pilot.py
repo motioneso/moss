@@ -150,6 +150,24 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None  # Never forward the key or observation to a redirect destination.
 
 
+def saved_api_key(env_name):
+    """Prefer the current environment, then the pilot's explicitly saved key file."""
+    key = os.environ.get(env_name, "")
+    if key:
+        return key
+    filename = {"OPENROUTER_API_KEY": "openrouter-key", "TYPESAFE_API_KEY": "typesafe-key"}[env_name]
+    try:
+        with (Path.home() / ".config/jev-pilot" / filename).open(encoding="ascii") as saved:
+            key = saved.read(4097).strip()
+    except FileNotFoundError:
+        return ""
+    except (OSError, UnicodeError):
+        raise ValueError("saved_API_key_unreadable") from None
+    if len(key) > 4096:
+        raise ValueError("invalid_API_key")
+    return key
+
+
 def evaluate(request, key):
     body = json.dumps(request).encode()
     if len(body) > 12000:
@@ -365,7 +383,7 @@ def main(argv=None):
         print("LIVE: approved app metadata" + (" and minimized window titles" if args.titles else "")
               + (" and up to 800 characters of window text" if args.text else "")
               + " plus your goal will be sent to TypeSafe. Ctrl-C stops capture and calls.")
-        key = os.environ.get("TYPESAFE_API_KEY", "")
+        key = saved_api_key("TYPESAFE_API_KEY")
         if not key:
             if not sys.stdin.isatty():
                 parser.error("Run in an interactive terminal for hidden key entry, or set TYPESAFE_API_KEY.")

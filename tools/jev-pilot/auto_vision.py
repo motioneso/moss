@@ -17,7 +17,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from focus import FocusTracker
-from pilot import observation, sampler
+from pilot import observation, sampler, saved_api_key
 from pilot import evaluate as evaluate_jev
 from vision import (FATAL_PROVIDER_ERRORS, MODELS, evaluate as evaluate_vision,
                     image_data, request_body, screenshot_payload)
@@ -67,6 +67,20 @@ def context_key(raw):
             not isinstance(title, str)):
         return None
     return bundle, int(window_id), title
+
+
+def context_change_reason(raw, expected):
+    current = context_key(raw)
+    if current is None:
+        status = raw.get("status")
+        return status if status in {"excluded", "idle", "permission_denied"} else "capture_unavailable"
+    if current[0] != expected[0]:
+        return "app_changed"
+    if current[1] != expected[1]:
+        return "window_changed"
+    if current[2] != expected[2]:
+        return "title_changed"
+    return ""
 
 
 def same_context(raw, expected):
@@ -126,40 +140,53 @@ def classify_window(binary, allow, expected, idle_seconds, directory, model,
     """Worker body. It owns no observation/timer state and never prints raw model text."""
     captured = screenshot_bytes(binary, allow, expected, idle_seconds, directory, cancel)
     if captured is None:
-        return {"stale": True}
+        return {"stale": True, "reason": "capture_cancelled"}
     raw_image, mime, captured_at, captured_at_utc = captured
     if cancel.is_set():
-        return {"stale": True}
+        return {"stale": True, "reason": "capture_cancelled"}
     try:
         before_upload = capture_metadata(binary, allow, idle_seconds)
     except ValueError:
         raise
     if not same_context(before_upload, expected):
         cancel.set()
-        return {"stale": True}
+        return {"stale": True, "reason": context_change_reason(before_upload, expected)}
     if cancel.is_set():
-        return {"stale": True}
+        return {"stale": True, "reason": "capture_cancelled"}
     if not openrouter_key:
         return {"preview_only": True, "captured_at": captured_at,
                 "captured_at_utc": captured_at_utc}
     started = time.monotonic()
-    visual = evaluate_vision(request_body(raw_image, mime, model), openrouter_key)
-    vision_elapsed = round(time.monotonic() - started, 2)
-    if cancel.is_set() or "observation" not in visual:
-        return {"stale": True, "visual": visual}
-    # A context check after vision prevents a late visual answer starting a Jev call.
-    if not same_context(capture_metadata(binary, allow, idle_seconds), expected):
-        cancel.set()
-        return {"stale": True, "visual": visual}
-    if cancel.is_set():
-        return {"stale": True, "visual": visual}
-    jev = evaluate_jev(screenshot_payload(visual["observation"], goal), typesafe_key)
-    stale = cancel.is_set()
     try:
-        stale = stale or not same_context(capture_metadata(binary, allow, idle_seconds), expected)
+        visual = evaluate_vision(request_body(raw_image, mime, model), openrouter_key)
+    except ValueError as exc:
+        if str(exc) in FATAL_PROVIDER_ERRORS:
+            raise ValueError("openrouter_" + str(exc)) from None
+        raise
+    vision_elapsed = round(time.monotonic() - started, 2)
+    if "observation" not in visual:
+        return {"stale": True, "reason": "invalid_vision_observation", "visual": visual}
+    if cancel.is_set():
+        return {"stale": True, "reason": "capture_cancelled", "visual": visual}
+    # A context check after vision prevents a late visual answer starting a Jev call.
+    reason = context_change_reason(capture_metadata(binary, allow, idle_seconds), expected)
+    if reason:
+        cancel.set()
+        return {"stale": True, "reason": reason, "visual": visual}
+    if cancel.is_set():
+        return {"stale": True, "reason": "capture_cancelled", "visual": visual}
+    try:
+        jev = evaluate_jev(screenshot_payload(visual["observation"], goal), typesafe_key)
+    except ValueError as exc:
+        if str(exc) in FATAL_PROVIDER_ERRORS:
+            raise ValueError("typesafe_" + str(exc)) from None
+        raise
+    reason = "capture_cancelled" if cancel.is_set() else ""
+    try:
+        reason = reason or context_change_reason(capture_metadata(binary, allow, idle_seconds), expected)
     except ValueError:
-        stale = True
-    return {"stale": stale, "visual": visual, "jev": jev,
+        reason = "capture_unavailable"
+    return {"stale": bool(reason), "reason": reason, "visual": visual, "jev": jev,
             "captured_at": captured_at, "captured_at_utc": captured_at_utc,
             "vision_elapsed_seconds": vision_elapsed}
 
@@ -175,7 +202,11 @@ def prepare_directory():
 
 def _sanitize_error(exc):
     value = str(exc)
+    provider, _, error = value.partition("_")
+    if provider in {"openrouter", "typesafe"} and error in FATAL_PROVIDER_ERRORS:
+        return value
     return value if value in FATAL_PROVIDER_ERRORS or value in {
+        "saved_API_key_unreadable", "invalid_API_key",
         "network_error", "response_too_large", "invalid_response", "invalid_or_truncated_observation",
         "request_too_large", "capture_failed", "invalid_capture", "screen_capture_failed",
         "screenshot_cleanup_failed", "screen_recording_permission_denied",
@@ -188,6 +219,17 @@ def _print_wait(status, last_status):
     if status != last_status:
         print("Waiting: " + status, flush=True)
     return status
+
+
+def notify_focus():
+    try:
+        subprocess.run(
+            ["/usr/bin/osascript", "-e",
+             'display notification "Distraction threshold reached. Time to return to your goal." '
+             'with title "Jev focus pilot" sound name "Glass"'],
+            capture_output=True, timeout=3, check=True)
+    except (OSError, subprocess.SubprocessError):
+        print("Notification unavailable; the focus flag is still shown in this terminal.", flush=True)
 
 
 def run(args, binary, openrouter_key, typesafe_key):
@@ -205,7 +247,7 @@ def run(args, binary, openrouter_key, typesafe_key):
     future = None
     cancel = None
     inflight_context = None
-    invalidated = False
+    invalidated = ""
     run_directory = tempfile.TemporaryDirectory(prefix="run-", dir=str(args.screenshot_dir))
     args.screenshot_dir = Path(run_directory.name)
     try:
@@ -216,7 +258,7 @@ def run(args, binary, openrouter_key, typesafe_key):
                 current_context = None
                 tracker.uncertain()
                 if future is not None:
-                    invalidated = True
+                    invalidated = invalidated or "sampling_gap"
                     cancel.set()
             last_tick = now
             raw = capture_metadata(binary, args.allow, args.idle_minutes * 60)
@@ -229,14 +271,14 @@ def run(args, binary, openrouter_key, typesafe_key):
                 current = None
                 current_context = None
                 if future is not None:
-                    invalidated = True
+                    invalidated = invalidated or context_change_reason(raw, inflight_context) or "capture_unavailable"
                     cancel.set()
                     tracker.uncertain()
                 last_status = _print_wait(raw.get("status", "unavailable"), last_status)
             else:
                 last_status = None
                 if context != inflight_context and future is not None:
-                    invalidated = True
+                    invalidated = invalidated or context_change_reason(raw, inflight_context)
                     cancel.set()
                     tracker.uncertain()
                 if context != current_context:
@@ -249,11 +291,12 @@ def run(args, binary, openrouter_key, typesafe_key):
                 future = None
                 inflight_context = None
                 was_invalid = invalidated
-                invalidated = False
+                invalidated = ""
                 cancel = None
                 if was_invalid or result.get("stale"):
                     tracker.uncertain()
-                    print("Dropped stale result.", flush=True)
+                    reason = was_invalid or result.get("reason", "capture_cancelled")
+                    print("Dropped stale result. Reason: " + reason, flush=True)
                 elif result.get("preview_only"):
                     print(json.dumps({"preview_only": True, "app": current["bundle_id"] if current else "",
                                       "title_chars": len(current.get("title", "")) if current else 0,
@@ -261,7 +304,8 @@ def run(args, binary, openrouter_key, typesafe_key):
                                      ensure_ascii=True), flush=True)
                 elif now - result["captured_at"] > MAX_RESULT_AGE:
                     tracker.uncertain()
-                    print("Dropped stale result.", flush=True)
+                    print(f"Dropped stale result. Reason: result_too_old "
+                          f"({now - result['captured_at']:.1f}s; limit {MAX_RESULT_AGE:g}s)", flush=True)
                 else:
                     jev = result.get("jev")
                     flag = tracker.vote(result["captured_at"], jev["alignment"],
@@ -278,6 +322,7 @@ def run(args, binary, openrouter_key, typesafe_key):
                     if flag:
                         print(f"FOCUS FLAG: {tracker.seconds / 60:.1f} supported minutes of distraction. "
                               "Return to your goal, or stop the pilot for a break?", flush=True)
+                        notify_focus()
                 calls += 1
                 if calls >= args.max_calls:
                     print("Session call budget reached.", flush=True)
@@ -288,7 +333,7 @@ def run(args, binary, openrouter_key, typesafe_key):
             if future is None and obs is not None and now - changed >= 15 and now - last_start >= args.interval:
                 cancel = threading.Event()
                 inflight_context = context
-                invalidated = False
+                invalidated = ""
                 future = executor.submit(classify_window, binary, args.allow, context,
                                           args.idle_minutes * 60, args.screenshot_dir, args.model,
                                           openrouter_key, typesafe_key, args.goal, cancel)
@@ -312,7 +357,7 @@ def main(argv=None):
     parser.add_argument("--allow", action="append", default=[], metavar="BUNDLE_ID")
     parser.add_argument("--goal", default="")
     parser.add_argument("--minutes", type=int, default=25)
-    parser.add_argument("--interval", type=int, default=60)
+    parser.add_argument("--interval", type=int, default=60, help="Seconds between capture starts (15–3600; default 60)")
     parser.add_argument("--max-calls", type=int, default=20)
     parser.add_argument("--model", choices=MODELS, default=MODELS[0])
     parser.add_argument("--flag-after-minutes", type=float, default=5)
@@ -325,8 +370,8 @@ def main(argv=None):
         parser.error("Repeat --allow BUNDLE_ID for each permitted app.")
     if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{0,149}", value) for value in args.allow):
         parser.error("Invalid bundle ID.")
-    if not 1 <= args.minutes <= 480 or not 60 <= args.interval <= 3600 or not 1 <= args.max_calls <= 20:
-        parser.error("Use 1–480 minutes, 60–3600 seconds interval and 1–20 max calls.")
+    if not 1 <= args.minutes <= 480 or not 15 <= args.interval <= 3600 or not 1 <= args.max_calls <= 20:
+        parser.error("Use 1–480 minutes, 15–3600 seconds interval and 1–20 max calls.")
     if not 0.5 <= args.idle_minutes <= 60 or not 0.5 <= args.flag_after_minutes <= 120:
         parser.error("Use 0.5–60 idle minutes and 0.5–120 flag minutes.")
     if not 0.5 <= args.distraction_probability <= 1 or not 0 <= args.cooldown_minutes <= 480:
@@ -339,8 +384,8 @@ def main(argv=None):
         openrouter_key = typesafe_key = ""
         if args.live:
             print("LIVE: single foreground-window screenshots and bounded observations will be uploaded. Ctrl-C stops capture.", flush=True)
-            openrouter_key = os.environ.get("OPENROUTER_API_KEY") or getpass.getpass("OpenRouter API key (hidden): ")
-            typesafe_key = os.environ.get("TYPESAFE_API_KEY") or getpass.getpass("TypeSafe API key (hidden): ")
+            openrouter_key = saved_api_key("OPENROUTER_API_KEY") or getpass.getpass("OpenRouter API key (hidden): ")
+            typesafe_key = saved_api_key("TYPESAFE_API_KEY") or getpass.getpass("TypeSafe API key (hidden): ")
             if (not openrouter_key or not openrouter_key.isascii() or not openrouter_key.isprintable()
                     or any(c.isspace() for c in openrouter_key)
                     or not typesafe_key or not typesafe_key.isascii() or not typesafe_key.isprintable()

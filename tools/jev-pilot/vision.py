@@ -7,13 +7,12 @@ from copy import deepcopy
 import getpass
 import json
 import math
-import os
 from pathlib import Path
 import time
 import urllib.error
 import urllib.request
 
-from pilot import QUESTIONS, NoRedirect, clean, evaluate as evaluate_jev
+from pilot import QUESTIONS, NoRedirect, clean, saved_api_key, evaluate as evaluate_jev
 
 ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 MODELS = ("qwen/qwen3.7-flash", "google/gemini-2.5-flash-lite")
@@ -227,11 +226,11 @@ def main():
                 print("ALL new PNG/JPEG files in this folder will be sent, not just screenshots.")
             if args.jev:
                 print("LIVE: each bounded visual description and supplied goal will also be sent to TypeSafe.")
-            key = os.environ.get("OPENROUTER_API_KEY") or getpass.getpass("OpenRouter API key (hidden): ")
+            key = saved_api_key("OPENROUTER_API_KEY") or getpass.getpass("OpenRouter API key (hidden): ")
             if not key.strip() or any(c.isspace() for c in key):
                 raise ValueError("invalid_API_key")
             if args.jev:
-                jev_key = os.environ.get("TYPESAFE_API_KEY") or getpass.getpass("TypeSafe API key (hidden): ")
+                jev_key = saved_api_key("TYPESAFE_API_KEY") or getpass.getpass("TypeSafe API key (hidden): ")
                 if not jev_key.strip() or any(c.isspace() for c in jev_key):
                     raise ValueError("invalid_API_key")
         else:

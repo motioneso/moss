@@ -22,6 +22,82 @@ def write_then_fail(command, **_kwargs):
 
 
 class AutoVisionCheck(unittest.TestCase):
+    def test_notification_failure_does_not_stop_capture(self):
+        for failure in (OSError("unavailable"), auto_vision.subprocess.TimeoutExpired("osascript", 3)):
+            with self.subTest(failure=type(failure).__name__), \
+                 patch("auto_vision.subprocess.run", side_effect=failure), \
+                 patch("builtins.print") as printed:
+                auto_vision.notify_focus()
+                self.assertIn("Notification unavailable", printed.call_args.args[0])
+
+    def test_stale_worker_reports_title_change_or_invalid_vision(self):
+        for raw, visual, reason in (
+            ({**MATCH, "title": "changed private title"}, {"observation": {}}, "title_changed"),
+            (MATCH, {"error": "invalid_or_truncated_observation"}, "invalid_vision_observation"),
+        ):
+            with self.subTest(reason=reason), \
+                 patch("auto_vision.screenshot_bytes", return_value=(PNG, "image/png", 1, "now")), \
+                 patch("auto_vision.capture_metadata", side_effect=[MATCH, raw]), \
+                 patch("auto_vision.evaluate_vision", return_value=visual), \
+                 patch("auto_vision.evaluate_jev") as jev:
+                result = auto_vision.classify_window("capture", {"com.apple.Safari"},
+                    auto_vision.context_key(MATCH), 600, Path("unused"), auto_vision.MODELS[0],
+                    "openrouter", "typesafe", "goal", auto_vision.threading.Event())
+                self.assertEqual(result.get("reason"), reason)
+                jev.assert_not_called()
+
+    def test_fast_testing_interval_and_flag(self):
+        with patch("auto_vision.prepare_directory"), patch("auto_vision.sampler"), \
+             patch("auto_vision.request_permission"), patch("auto_vision.run") as run, \
+             patch("builtins.print"):
+            auto_vision.main(["--allow", "com.apple.Safari", "--interval", "15",
+                              "--flag-after-minutes", "0.5", "--minutes", "2"])
+        args = run.call_args.args[0]
+        self.assertEqual(args.interval, 15)
+        tracker = auto_vision.FocusTracker(args.flag_after_minutes * 60, args.distraction_probability)
+        flags = []
+        for now in range(0, 31, 5):
+            tracker.observe(now, auto_vision.context_key(MATCH))
+            if now % args.interval == 0:
+                flags.append(tracker.vote(now, "distracted", 0.9))
+        self.assertEqual(flags, [False, False, True])
+        self.assertEqual(tracker.seconds, 30)
+        with patch("auto_vision.prepare_directory") as prepare, \
+             patch("sys.stderr"), self.assertRaises(SystemExit):
+            auto_vision.main(["--allow", "com.apple.Safari", "--interval", "14"])
+        prepare.assert_not_called()
+
+    def test_live_reuses_saved_keys_without_prompting(self):
+        with tempfile.TemporaryDirectory() as folder:
+            config = Path(folder) / ".config/jev-pilot"
+            config.mkdir(parents=True)
+            (config / "openrouter-key").write_text("saved-openrouter\n")
+            (config / "typesafe-key").write_text("saved-typesafe\n")
+            with patch("pathlib.Path.home", return_value=Path(folder)), \
+                 patch.dict("os.environ", {}, clear=True), \
+                 patch("auto_vision.prepare_directory", return_value=Path(folder)), \
+                 patch("auto_vision.sampler"), patch("auto_vision.request_permission"), \
+                 patch("auto_vision.getpass.getpass", side_effect=AssertionError("unexpected prompt")), \
+                 patch("auto_vision.run") as run:
+                auto_vision.main(["--live", "--allow", "com.apple.Safari", "--once"])
+                self.assertEqual(run.call_args.args[2:], ("saved-openrouter", "saved-typesafe"))
+
+    def test_auth_failure_identifies_provider(self):
+        visual = {"observation": {"scene": "hotel", "relevant_text": "Liverpool",
+                                   "uncertainties": "none"}}
+        for provider in ("openrouter", "typesafe"):
+            with self.subTest(provider=provider), \
+                 patch("auto_vision.screenshot_bytes", return_value=(PNG, "image/png", 1, "now")), \
+                 patch("auto_vision.capture_metadata", return_value=MATCH), \
+                 patch("auto_vision.evaluate_vision", return_value=visual,
+                       side_effect=ValueError("http_401") if provider == "openrouter" else None), \
+                 patch("auto_vision.evaluate_jev", side_effect=ValueError("http_401")):
+                with self.assertRaisesRegex(ValueError, "^" + provider + "_http_401$") as raised:
+                    auto_vision.classify_window("capture", {"com.apple.Safari"},
+                        auto_vision.context_key(MATCH), 600, Path("unused"), auto_vision.MODELS[0],
+                        "openrouter", "typesafe", "goal", auto_vision.threading.Event())
+                self.assertEqual(auto_vision._sanitize_error(raised.exception), provider + "_http_401")
+
     def test_metadata_invocation_requests_window_id_and_titles(self):
         completed = type("Completed", (), {"stdout": json.dumps(MATCH).encode()})()
         with patch("auto_vision.subprocess.run", return_value=completed) as run:
@@ -195,10 +271,17 @@ class AutoVisionCheck(unittest.TestCase):
              patch("auto_vision.time.sleep"), \
              patch("auto_vision.ThreadPoolExecutor", return_value=executor), \
              patch("auto_vision.capture_metadata", return_value=MATCH), \
-             patch("builtins.print") as printed:
+             patch("builtins.print") as printed, \
+             patch("auto_vision.subprocess.run") as notify:
             auto_vision.run(args, "capture", "openrouter", "typesafe")
         self.assertEqual(executor.submits, 2)
         self.assertTrue(any("FOCUS FLAG" in str(call) for call in printed.call_args_list))
+
+        notify.assert_called_once_with(
+            ["/usr/bin/osascript", "-e",
+             'display notification "Distraction threshold reached. Time to return to your goal." '
+             'with title "Jev focus pilot" sound name "Glass"'],
+            capture_output=True, timeout=3, check=True)
 
     def test_once_waits_through_excluded_foreground_then_captures_allowed_window(self):
         class Clock:
@@ -290,7 +373,7 @@ class AutoVisionCheck(unittest.TestCase):
              patch("auto_vision.capture_metadata", side_effect=[MATCH, MATCH, MATCH, excluded] + [MATCH] * 10), \
              patch("builtins.print") as printed:
             auto_vision.run(args, "capture", "", "")
-        self.assertTrue(any("Dropped stale result." in str(call) for call in printed.call_args_list))
+        self.assertTrue(any("Dropped stale result. Reason: excluded" in str(call) for call in printed.call_args_list))
 
 
 if __name__ == "__main__":

@@ -27,6 +27,23 @@ def response():
 
 
 class PilotCheck(unittest.TestCase):
+    def test_saved_key_precedence_and_missing_file(self):
+        with tempfile.TemporaryDirectory() as folder, \
+             patch("pathlib.Path.home", return_value=Path(folder)), \
+             patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(pilot.saved_api_key("TYPESAFE_API_KEY"), "")
+            config = Path(folder) / ".config/jev-pilot"
+            config.mkdir(parents=True)
+            saved = config / "typesafe-key"
+            saved.write_text("stored-key\n")
+            self.assertEqual(pilot.saved_api_key("TYPESAFE_API_KEY"), "stored-key")
+            with patch.dict("os.environ", {"TYPESAFE_API_KEY": "exported-key"}), \
+                 patch.object(Path, "open", side_effect=AssertionError("should not read file")):
+                self.assertEqual(pilot.saved_api_key("TYPESAFE_API_KEY"), "exported-key")
+            saved.write_bytes(b"\xff")
+            with self.assertRaisesRegex(ValueError, "^saved_API_key_unreadable$"):
+                pilot.saved_api_key("TYPESAFE_API_KEY")
+
     def test_idle_timeout_is_forwarded_to_native_sampler(self):
         with patch("pilot.subprocess.run") as run:
             run.return_value.stdout = b'{"status":"idle"}'

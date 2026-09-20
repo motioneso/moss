@@ -5,8 +5,10 @@ Date: 2026-09-19. Status: proposed experiment, not an approved feature spec.
 Implementation update: Ben requested the lightest terminal pilot. The standalone experiment in
 `tools/jev-pilot/README.md` replaces the menu-bar UI with a Python runner and native Swift sampler.
 It uses 5-second snapshots, a per-run budget, optional categorical logs with manual deletion,
-and Ctrl-C to stop. It now supports configurable, terminal-only sustained-distraction flags;
-no OS notifications, Moss integration, Keychain storage or app distribution.
+and Ctrl-C to stop. It supports configurable sustained-distraction flags. At Ben's request during
+live testing, the automatic screenshot runner also requests a macOS notification
+and sound when a flag fires, using built-in `osascript`. The metadata runner remains
+terminal-only. No Moss integration, Keychain storage or app distribution.
 The sections below remain the broader pilot proposal, not claims about the terminal tool.
 
 ## Decision
