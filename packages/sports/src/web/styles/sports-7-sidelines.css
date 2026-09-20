@@ -6,7 +6,8 @@
 }
 
 .jds-brief--sports .desk-head {
-  padding-bottom: 18px;
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 
 .jds-brief--sports .desk-meta {
@@ -16,7 +17,7 @@
 .jds-brief--sports .desk-scores,
 .jds-brief--sports .desk-stories {
   grid-row: 2;
-  padding-top: 26px;
+  padding-top: 16px;
 }
 
 .jds-brief--sports .desk-scores__head {
@@ -162,7 +163,14 @@
   padding-top: 22px;
 }
 
-.jds-brief--sports .desk-tonight > .sp-tksub {
+.jds-brief--sports .desk-tonight__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.jds-brief--sports .desk-tonight__head > .sp-tksub {
   display: inline-block;
   margin-top: 0;
   color: var(--ink);
@@ -238,10 +246,10 @@
   .jds-brief--sports .desk-head {
     order: 0;
   }
-  .jds-brief--sports .desk-stories {
+  .jds-brief--sports .desk-scores {
     order: 1;
   }
-  .jds-brief--sports .desk-scores {
+  .jds-brief--sports .desk-stories {
     order: 2;
   }
   .jds-brief--sports .desk-tonight {

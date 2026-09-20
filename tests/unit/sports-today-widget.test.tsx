@@ -10,6 +10,7 @@ import { SportsTodayWidget } from "../../packages/sports/src/web/today-widget.js
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 import { hasLiveGame } from "../../packages/sports/src/web/sports-page.js";
 import { QUIET_NIGHT_LINE } from "../../packages/sports/src/web/today-scores.js";
+import { formatDate } from "../../packages/sports/src/web/locale.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -436,8 +437,33 @@ describe("Sports Today editorial desk", () => {
     const tonightAt = html.indexOf(">Tonight<");
     expect(scoresAt).toBeGreaterThan(-1);
     expect(storiesAt).toBeGreaterThan(-1);
-    expect(storiesAt).toBeLessThan(scoresAt);
+    expect(scoresAt).toBeLessThan(storiesAt);
     expect(tonightAt).toBeGreaterThan(storiesAt);
+  });
+
+  it("renders the Tonight date label beside the band heading", () => {
+    const tonight = game({
+      id: "tonight-label",
+      state: "pre",
+      statusDetail: "7:30 PM",
+      startsAt: "2026-07-07T23:30:00.000Z",
+      home: vikingSide(null),
+      away: cowboySide(null)
+    });
+    const html = render(
+      seed(
+        overview({
+          scoreboard: [{ competitionKey: "nfl", competitionLabel: "NFL", games: [tonight] }]
+        })
+      )
+    );
+    const testLocale = { timezone: ZONE, region: "en-US", dateFormat: "12" as const };
+    expect(html).toContain("desk-tonight__head");
+    expect(html).toContain(
+      formatDate(new Date(NOW), testLocale, { weekday: "long", month: "long", day: "numeric" })
+    );
+    // July in America/New_York is EDT; the label carries the short zone name, not a date repeat.
+    expect(html).toContain("EDT");
   });
 });
 

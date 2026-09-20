@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { EMPTY_FOLLOWED_TEAMS, followedTeamIndex } from "../news-ranking.js";
-import { formatDate, useUserLocale } from "./locale.js";
+import { formatDate, formatTimeZoneShort, useUserLocale } from "./locale.js";
 import { getSportsOverview } from "./sports-client.js";
 import { sportsQueryKeys } from "./query-keys.js";
 import { hasLiveGame, LIVE_REFETCH_INTERVAL_MS } from "./sports-page.js";
@@ -152,6 +152,44 @@ export function SportsTodayWidget(): ReactNode {
         <h2 className="desk-title">From the sidelines</h2>
         <span className="desk-meta">Sports desk</span>
       </div>
+      {hasScores ? (
+        <div className="desk-scores" aria-label="Scores">
+          <div className="desk-scores__head">
+            <div className="jds-brief__title">Last night</div>
+            <span>
+              {formatDate(now, locale, { weekday: "long", month: "long", day: "numeric" })}
+            </span>
+          </div>
+          {followedRows.length > 0 ? (
+            <>
+              <div className="sp-tksub">Your followed teams</div>
+              <ul className="sp-scores">
+                {followedRows.map((row) => (
+                  <ScoreRow
+                    key={row.game.id}
+                    row={row}
+                    followed={followedPairs ?? EMPTY_FOLLOWED_TEAMS}
+                  />
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {elsewhereRows.length > 0 ? (
+            <>
+              <div className="sp-tksub">Elsewhere worth a look</div>
+              <ul className="sp-scores">
+                {elsewhereRows.map((row) => (
+                  <ScoreRow
+                    key={row.game.id}
+                    row={row}
+                    followed={followedPairs ?? EMPTY_FOLLOWED_TEAMS}
+                  />
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </div>
+      ) : null}
       {/* Main story + brief list, mirroring the News desk layout (Ben: "we should have a main story
           and then some other top stories from the world of sport before we see the your teams
           section"). Sports-local .sp-lead/.sp-brief classes match the news lead visually while
@@ -209,44 +247,7 @@ export function SportsTodayWidget(): ReactNode {
           ) : null}
         </div>
       ) : null}
-      {hasScores ? (
-        <div className="desk-scores" aria-label="Scores">
-          <div className="desk-scores__head">
-            <div className="jds-brief__title">Last night</div>
-            <span>
-              {formatDate(now, locale, { weekday: "long", month: "long", day: "numeric" })}
-            </span>
-          </div>
-          {followedRows.length > 0 ? (
-            <>
-              <div className="sp-tksub">Your followed teams</div>
-              <ul className="sp-scores">
-                {followedRows.map((row) => (
-                  <ScoreRow
-                    key={row.game.id}
-                    row={row}
-                    followed={followedPairs ?? EMPTY_FOLLOWED_TEAMS}
-                  />
-                ))}
-              </ul>
-            </>
-          ) : null}
-          {elsewhereRows.length > 0 ? (
-            <>
-              <div className="sp-tksub">Elsewhere worth a look</div>
-              <ul className="sp-scores">
-                {elsewhereRows.map((row) => (
-                  <ScoreRow
-                    key={row.game.id}
-                    row={row}
-                    followed={followedPairs ?? EMPTY_FOLLOWED_TEAMS}
-                  />
-                ))}
-              </ul>
-            </>
-          ) : null}
-        </div>
-      ) : null}
+
       {/* Followed-team/league cards below the world-of-sport stories, under their own subhead so
           the two zones read as distinct desk sections (Ben: "before we see the your teams card
           section"). Subhead is dropped when there are no cards (top-stories-only desk). */}
@@ -277,10 +278,16 @@ export function SportsTodayWidget(): ReactNode {
           </div>
         </div>
       ) : null}
-      {/* The band stays last in DOM order so keyboard readers reach lead, briefs, scores, cards,
-          then Tonight, while the desktop grid places it immediately below the score/story row. */}
+      {/* The band stays last in DOM order so keyboard readers reach scores, lead, briefs,
+          cards, then Tonight, while the desktop grid places it immediately below the
+          score/story row. */}
       <div className="desk-tonight">
-        <div className="sp-tksub">Tonight</div>
+        <div className="desk-tonight__head">
+          <div className="sp-tksub">Tonight</div>
+          <span>
+            {`${formatDate(now, locale, { weekday: "long", month: "long", day: "numeric" })} · ${formatTimeZoneShort(now, locale)}`}
+          </span>
+        </div>
         {hasTonight ? (
           <ul className="sp-tonight">
             {tonightRows.map((row) => (
