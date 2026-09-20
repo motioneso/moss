@@ -563,8 +563,7 @@ export async function driveState(page: Page, state: string, viewport: Viewport):
     await closeDialogs(page).catch(() => undefined);
     await page.setViewportSize({ width: viewport.w, height: viewport.h });
     if (state === "today-morning-news") await scrollSectionTop(page, ".jds-brief--news");
-    if (state === "today-morning-sports")
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight * 0.7));
+    if (state === "today-morning-sports") await scrollSectionTop(page, ".jds-brief--sports");
   } else if (state.startsWith("reader-")) {
     const tab = state.includes("-review") || state.includes("partial") ? 1 : 0;
     await ensureReader(page, viewport, tab as 0 | 1);

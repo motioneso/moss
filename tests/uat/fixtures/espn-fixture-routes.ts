@@ -2,9 +2,8 @@
 //
 // Deterministic ESPN answers for the API-side e2e fixture seam (DF-V4-R4). The
 // fixture server stamps the eng.1 scoreboard template at request time from its
-// injected clock (default now): one Arsenal final ~20h back, one other final the
-// same day, one pre game ~3h ahead so it is always a Tonight row outside a
-// local-midnight edge. Matched on pathname only, like the job-search table:
+// injected fixed parity morning clock (default now at 08:00 Los Angeles): four
+// finished games and three Tonight fixtures. Matched on pathname only, like the job-search table:
 // the adapter varies query strings per date window.
 //
 // Teams/standings/schedule are the smallest payloads the adapter's readers

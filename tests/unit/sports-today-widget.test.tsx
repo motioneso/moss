@@ -127,6 +127,23 @@ afterEach(() => {
 });
 
 describe("Sports Today scores", () => {
+  it("renders the score status above its one-line recap", () => {
+    const data = overview({
+      scoreboard: [
+        {
+          competitionKey: "nfl",
+          competitionLabel: "NFL",
+          games: [game({ statusDetail: "Final / A seventh-inning comeback" })]
+        }
+      ]
+    });
+    const html = render(seed(data));
+
+    expect(html).toContain("Final");
+    expect(html).toContain("A seventh-inning comeback");
+    expect(html.indexOf("Final")).toBeLessThan(html.indexOf("A seventh-inning comeback"));
+  });
+
   it("renders score rows with the followed team's game first", () => {
     const followedFinal = game({
       id: "followed-final",
@@ -251,6 +268,29 @@ describe("Sports Today scores", () => {
 });
 
 describe("Sports Today Tonight", () => {
+  it("renders three fixture cards with their notes", () => {
+    const fixtures = ["Home", "Away", "Series opener"].map((note, index) =>
+      game({
+        id: `tonight-${index}`,
+        state: "pre",
+        statusDetail: `Scheduled / ${note}`,
+        startsAt: `2026-07-07T23:${30 + index * 10}:00.000Z`,
+        home: vikingSide(null),
+        away: cowboySide(null)
+      })
+    );
+    const data = overview({
+      scoreboard: [{ competitionKey: "nfl", competitionLabel: "NFL", games: fixtures }],
+      followedTeams: [{ competitionKey: "nfl", teamKey: "min", sourceTeamId: "1" }]
+    });
+    const html = render(seed(data));
+
+    expect(html.match(/sp-tonight__row/g)).toHaveLength(3);
+    expect(html).toContain("Home");
+    expect(html).toContain("Away");
+    expect(html).toContain("Series opener");
+  });
+
   it("renders a Tonight row with the local start time", () => {
     const tonight = game({
       id: "tonight-game",
@@ -360,7 +400,17 @@ describe("Sports Today Tonight", () => {
 });
 
 describe("Sports Today editorial desk", () => {
-  it("renders the desk head with blocks in scores, stories, Tonight, cards order", () => {
+  it("renders the lead kicker, dek and story-behind-the-score link", () => {
+    const html = render(seed(overview({ topStories: [story(1)] })));
+
+    expect(html).toContain("★ FOLLOWING /");
+    expect(html).toContain("NFL");
+    expect(html).toContain("A sports summary.");
+    expect(html).toContain("The story behind the score ↗");
+    expect(html).toContain('href="https://example.com/sports/1"');
+  });
+
+  it("renders the desk head with lead, scores, Tonight, cards blocks", () => {
     const final = game({ id: "desk-final", startsAt: "2026-07-06T17:00:00.000Z" });
     const tonight = game({
       id: "desk-tonight",
@@ -384,7 +434,8 @@ describe("Sports Today editorial desk", () => {
     const storiesAt = html.indexOf("Top stories");
     const tonightAt = html.indexOf(">Tonight<");
     expect(scoresAt).toBeGreaterThan(-1);
-    expect(storiesAt).toBeGreaterThan(scoresAt);
+    expect(storiesAt).toBeGreaterThan(-1);
+    expect(storiesAt).toBeLessThan(scoresAt);
     expect(tonightAt).toBeGreaterThan(storiesAt);
   });
 });

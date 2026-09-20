@@ -29,6 +29,12 @@ export const TONIGHT_ROWS_MAX = 6;
 export const QUIET_NIGHT_LINE =
   "A quiet night. No games for your followed teams or other featured matchups tonight.";
 
+export function scoreDetail(statusDetail: string): { status: string; recap: string | null } {
+  const [status, ...rest] = statusDetail.split(" / ");
+  const recap = rest.join(" / ").trim();
+  return { status: status?.trim() ?? "", recap: recap || null };
+}
+
 export interface ScoreRowData {
   readonly game: GameSummary;
   /** Human label from the scoreboard group or hero entry — the raw key is never rendered. */
@@ -178,6 +184,7 @@ export function ScoreRow(props: { row: ScoreRowData; followed: FollowedTeamIndex
   const live = row.game.state === "live";
   const firstFollowed = isFollowed(props.followed, row.game.competitionKey, first.sourceTeamId);
   const secondFollowed = isFollowed(props.followed, row.game.competitionKey, second.sourceTeamId);
+  const detail = scoreDetail(row.game.statusDetail);
   return (
     <li className="sp-scores__row">
       <div className="sp-scores__sides">
@@ -186,7 +193,10 @@ export function ScoreRow(props: { row: ScoreRowData; followed: FollowedTeamIndex
       </div>
       <div className="sp-scores__status">
         {live ? <LiveDot /> : null}
-        {row.competitionLabel} · {row.game.statusDetail}
+        <span className="sp-scores__statusline" aria-label={row.competitionLabel}>
+          {detail.status}
+        </span>
+        {detail.recap ? <span className="sp-scores__recap">{detail.recap}</span> : null}
       </div>
     </li>
   );
@@ -195,9 +205,10 @@ export function ScoreRow(props: { row: ScoreRowData; followed: FollowedTeamIndex
 /** One Tonight row: kicker, matchup and the local start time — or "Postponed". */
 export function TonightRow(props: { row: TonightRowData; locale: LocaleSettingsDto }): ReactNode {
   const { row } = props;
+  const detail = scoreDetail(row.game.statusDetail);
   const soccer = SOCCER_COMPETITIONS.has(row.game.competitionKey);
   const matchup = soccer
-    ? `${row.game.home.shortName} v ${row.game.away.shortName}`
+    ? `${row.game.home.shortName} vs. ${row.game.away.shortName}`
     : `${row.game.away.shortName} at ${row.game.home.shortName}`;
   const postponed =
     row.game.statusDetail != null && /postpon|ppd|cancel/i.test(row.game.statusDetail);
@@ -210,6 +221,7 @@ export function TonightRow(props: { row: TonightRowData; locale: LocaleSettingsD
       <span className="sp-tonight__time">
         {postponed ? "Postponed" : formatTime(row.game.startsAt, props.locale)}
       </span>
+      {detail.recap ? <span className="sp-tonight__note">{detail.recap}</span> : null}
     </li>
   );
 }
