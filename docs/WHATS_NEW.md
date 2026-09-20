@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-20
+
+#### Added
+
+- **Link a Mac to your account.** You can now approve a Mac companion app from your browser and see or sign out each linked Mac from Active sessions. [PR #2564](https://github.com/motioneso/moss/pull/2564)
+
 ### 2026-09-15
 
 #### Changed
