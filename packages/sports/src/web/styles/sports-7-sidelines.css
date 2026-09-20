@@ -258,7 +258,9 @@
   .jds-brief--sports .desk-cards {
     order: 4;
   }
-  .jds-brief--sports .desk-scores,
+  .jds-brief--sports .desk-scores {
+    padding-top: 18px;
+  }
   .jds-brief--sports .desk-stories {
     padding-top: 22px;
   }

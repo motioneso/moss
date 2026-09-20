@@ -285,7 +285,8 @@ export function SportsTodayWidget(): ReactNode {
         <div className="desk-tonight__head">
           <div className="sp-tksub">Tonight</div>
           <span>
-            {`${formatDate(now, locale, { weekday: "long", month: "long", day: "numeric" })} · ${formatTimeZoneShort(now, locale)}`}
+            {formatDate(now, locale, { weekday: "long", month: "long", day: "numeric" })}
+            {formatTimeZoneShort(now, locale) ? ` · ${formatTimeZoneShort(now, locale)}` : ""}
           </span>
         </div>
         {hasTonight ? (

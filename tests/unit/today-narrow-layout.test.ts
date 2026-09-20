@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const styles = readFileSync("packages/ui/src/styles/components-moss-today.css", "utf8");
 const kit = readFileSync("apps/web/src/styles/kit-today.css", "utf8");
 const desks = readFileSync("apps/web/src/styles/kit-today-desks.css", "utf8");
+const sidelines = readFileSync("packages/sports/src/web/styles/sports-7-sidelines.css", "utf8");
 
 describe("Today narrow masthead", () => {
   it("stacks masthead content instead of squeezing lead copy beside the folio", () => {
@@ -98,5 +99,16 @@ describe("Today sports section row pin", () => {
     const plain = [...top.matchAll(/\.cmd-grid\s*>\s*\.jds-brief--sports\s*\{([^}]*)\}/g)];
     expect(plain.length).toBeGreaterThan(0);
     for (const rm of plain) expect(rm[1]).not.toMatch(/grid-row/);
+  });
+});
+
+describe("Today sports phone rule gap", () => {
+  it("holds the phone scores row 4px closer for the 148px Last-night rule target", () => {
+    expect(sidelines).toMatch(
+      /@media \(max-width: 600px\)[\s\S]*?\.jds-brief--sports \.desk-scores\s*\{[^}]*padding-top:\s*18px/
+    );
+    expect(sidelines).toMatch(
+      /@media \(max-width: 600px\)[\s\S]*?\.jds-brief--sports \.desk-stories\s*\{[^}]*padding-top:\s*22px/
+    );
   });
 });
