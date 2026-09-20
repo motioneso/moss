@@ -111,6 +111,13 @@ describe("Today sports section row pin", () => {
   });
 });
 
+describe("Today sports score names", () => {
+  it("gives the team name a nonzero track while the crest stays hidden", () => {
+    const side = /\.jds-brief--sports\s+\.sp-board__side\s*\{([^}]*)\}/.exec(sidelines);
+    expect(side?.[1] ?? "").not.toMatch(/grid-template-columns:\s*0[\s;]/);
+  });
+});
+
 describe("Today sports phone rule gap", () => {
   it("holds the phone scores row 4px closer for the 148px Last-night rule target", () => {
     expect(sidelines).toMatch(
