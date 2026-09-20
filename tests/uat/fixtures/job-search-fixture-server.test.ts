@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { parseScoreResult } from "../../../external-modules/job-search/src/domain/score.js";
 
@@ -218,9 +218,9 @@ describe("startJobSearchFixtureServer", () => {
       };
     }
 
-    it("stamps two finals with Arsenal in one and exactly one Tonight row", async () => {
+    it("stamps four finals with Arsenal in one and three Tonight rows", async () => {
       const games = await overviewGames(NOON);
-      expect(games).toHaveLength(3);
+      expect(games).toHaveLength(7);
       const overview = overviewFor(games);
       const followed = followedTeamIndex(overview.followedTeams);
       const { followedRows, elsewhereRows } = selectScoreRows(
@@ -230,16 +230,39 @@ describe("startJobSearchFixtureServer", () => {
         "America/Los_Angeles"
       );
       expect(followedRows).toHaveLength(1);
-      expect(elsewhereRows).toHaveLength(1);
+      expect(elsewhereRows).toHaveLength(3);
+      expect(followedRows[0]!.game.recap).toBe("A seventh-inning comeback");
       const followedSides = [
         followedRows[0]!.game.home.sourceTeamId,
         followedRows[0]!.game.away.sourceTeamId
       ];
       expect(followedSides).toContain("359");
       const { tonightRows } = selectTonightRows(overview, followed, NOON, "America/Los_Angeles");
-      expect(tonightRows).toHaveLength(1);
-      expect(tonightRows[0]!.game.id).toBe("uat-eng1-tot-new");
-      expect(new Date(tonightRows[0]!.game.startsAt).getTime()).toBeGreaterThan(NOON.getTime());
+      expect(tonightRows).toHaveLength(3);
+      expect(tonightRows.map((row) => row.game.id)).toEqual([
+        "uat-eng1-tot-new",
+        "uat-eng1-new-che",
+        "uat-eng1-che-liv"
+      ]);
+      expect(tonightRows[0]!.game.recap).toBe("Home");
+      expect(tonightRows[1]!.game.recap).toBe("Away");
+      expect(
+        tonightRows.every((row) => new Date(row.game.startsAt).getTime() > NOON.getTime())
+      ).toBe(true);
+    });
+
+    it("stamps the default pregame from the fixed parity morning clock", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-15T21:00:00.000Z"));
+      try {
+        const route = routeEspnFixture("/apis/site/v2/sports/soccer/eng.1/scoreboard");
+        const payload = JSON.parse(route!.body.toString()) as {
+          events: Array<{ date: string }>;
+        };
+        expect(payload.events[4]?.date).toBe("2026-09-15T18:00:00.000Z");
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("serves teams with the seeded Arsenal identity, standings, schedule and news", async () => {
@@ -301,7 +324,7 @@ describe("startJobSearchFixtureServer", () => {
       );
       expect(response.status).toBe(200);
       const payload = await response.json();
-      expect(payload.events).toHaveLength(3);
+      expect(payload.events).toHaveLength(7);
     });
   });
 });

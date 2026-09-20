@@ -57,6 +57,22 @@ export function formatDate(
   return format(input, locale, options ?? DATE_OPTS);
 }
 
+/** Short zone name ("PDT") for labels; empty when the zone is unknown. */
+export function formatTimeZoneShort(input: DateInput, locale: LocaleSettingsDto): string {
+  try {
+    const part = new Intl.DateTimeFormat(localeTag(locale.region) ?? "en-US", {
+      timeZone: locale.timezone,
+      timeZoneName: "short"
+    })
+      .formatToParts(typeof input === "string" ? new Date(input) : input)
+      .find((candidate) => candidate.type === "timeZoneName");
+    if (part) return part.value;
+  } catch {
+    // Below: empty string.
+  }
+  return "";
+}
+
 export function formatTime(
   input: DateInput,
   locale: LocaleSettingsDto,

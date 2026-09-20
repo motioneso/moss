@@ -39,6 +39,8 @@ export interface GameSummary {
   readonly startsAt: string; // ISO instant
   readonly state: "pre" | "live" | "final";
   readonly statusDetail: string; // "7:20 PM", "Q3 4:12", "FT"
+  /** ESPN's finished-game recap headline or scheduled-game series note, when supplied. */
+  readonly recap?: string | null;
   readonly home: GameSide;
   readonly away: GameSide;
 }
