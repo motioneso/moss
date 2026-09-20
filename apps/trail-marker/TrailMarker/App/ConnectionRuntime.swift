@@ -97,8 +97,8 @@ final class ConnectionRuntime: ObservableObject {
             case .revokeRemotely(let generation):
                 startRevokeTask(generation: generation)
             case .showLogoutUnconfirmed:
-                lastDiagnostic =
-                    "Logged out on this Mac. Server-side revocation couldn't be confirmed while offline."
+                lastDiagnostic = "Server-side revocation couldn't be confirmed while offline. "
+                    + "This Mac may still be listed in Moss under Active sessions; you can sign it out there."
             }
         }
     }

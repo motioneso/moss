@@ -26,6 +26,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        connection.$lastDiagnostic
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { message in
+                let alert = NSAlert()
+                alert.messageText = "Logged out on this Mac"
+                alert.informativeText = message
+                alert.addButton(withTitle: "Dismiss")
+                NSApp.activate(ignoringOtherApps: true)
+                alert.runModal()
+            }
+            .store(in: &cancellables)
+
         menuBarController = MenuBarController(
             connection: connection,
             onOpenSettings: { [weak self] in self?.showSettings() },
