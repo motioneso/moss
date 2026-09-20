@@ -35,7 +35,16 @@
   font-weight: 700;
   line-height: 1.18;
   letter-spacing: -0.7px;
-  margin: 0;
+  margin: -3px 0 3px;
+}
+/* Phone titles wrap to two lines and sit 2 rows lower than desktop against
+   the mockup, so the same raise is 5 rows here; top and bottom cancel, so the
+   heading block keeps its height on both viewports. */
+@media (max-width: 1080px) {
+  .jds-brief--news .desk-title,
+  .jds-brief--sports .desk-title {
+    margin: -5px 0 5px;
+  }
 }
 .jds-brief--news .desk-meta,
 .jds-brief--sports .desk-meta {
