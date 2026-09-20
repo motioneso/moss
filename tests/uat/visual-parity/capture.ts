@@ -733,14 +733,40 @@ export function reportLine(r: CaptureResult): string {
 export function artifactSha256(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
-// Finds the first fully-opaque pixel (alpha 255) in raster order. A transparent
-// pixel cannot carry a visible control mutation, so the control must land on
-// opaque bytes to be provable through a real pixel-threshold comparison.
+// Finds the first fully-opaque pixel (alpha 255) in raster order whose
+// in-bounds neighbours all equal it. A lone changed pixel on a slope reads
+// as anti-aliasing to the comparer and diffs to zero, so the control must
+// land on flat bytes to be provable through a real pixel-threshold
+// comparison. Falls back to the first opaque pixel when nothing is flat.
 function firstOpaquePixelOffset(png: PNG): number | null {
-  for (let offset = 3; offset < png.data.length; offset += 4) {
-    if (png.data[offset] === 255) return offset - 3;
+  let fallback: number | null = null;
+  for (let y = 0; y < png.height; y += 1) {
+    for (let x = 0; x < png.width; x += 1) {
+      const offset = (png.width * y + x) * 4;
+      if (png.data[offset + 3] !== 255) continue;
+      if (fallback === null) fallback = offset;
+      if (isFlatPixel(png, x, y, offset)) return offset;
+    }
   }
-  return null;
+  return fallback;
+}
+// True when every in-bounds 8-neighbour equals the pixel's own bytes. A
+// pixel with no in-bounds neighbours counts as flat.
+function isFlatPixel(png: PNG, x: number, y: number, offset: number): boolean {
+  for (let ny = Math.max(y - 1, 0); ny <= Math.min(y + 1, png.height - 1); ny += 1) {
+    for (let nx = Math.max(x - 1, 0); nx <= Math.min(x + 1, png.width - 1); nx += 1) {
+      if (nx === x && ny === y) continue;
+      const neighbour = (png.width * ny + nx) * 4;
+      if (
+        png.data[neighbour] !== png.data[offset] ||
+        png.data[neighbour + 1] !== png.data[offset + 1] ||
+        png.data[neighbour + 2] !== png.data[offset + 2] ||
+        png.data[neighbour + 3] !== png.data[offset + 3]
+      )
+        return false;
+    }
+  }
+  return true;
 }
 // Picks the black/white RGB value with the larger contrast against the pixel's
 // own luminance, so the mutation is always visible to a threshold-0.1 compare

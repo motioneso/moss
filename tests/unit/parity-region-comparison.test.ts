@@ -806,6 +806,22 @@ describe("changed-control regression: contrasting control at an opaque pixel", (
     // the source capture on disk is never mutated by writing its control
     expect(createHash("sha256").update(readFileSync(capturePath)).digest("hex")).toBe(before);
   });
+
+  it("counts the control on an anti-aliased corner capture from a flat pixel", () => {
+    // R7.5 fail-first: pixel (0,0) is an anti-aliased rounded corner, a
+    // mid-tone blend with both darker dialog and brighter page siblings,
+    // over a flat interior. The old picker mutated (0,0), which the comparer
+    // drops as anti-aliasing, so the control diffed to zero on desktop.
+    const dir = tempDir();
+    const png = solidPng(8, 8, [90, 140, 90, 255]);
+    for (let x = 1; x < 8; x += 1) setPixel(png, x, 0, [220, 225, 215, 255]);
+    for (let y = 1; y < 8; y += 1) setPixel(png, 0, y, [220, 225, 215, 255]);
+    setPixel(png, 0, 0, [174, 183, 165, 255]);
+    const capturePath = writePng(dir, "corner.png", png);
+    const result = writeComparisonControls(capturePath, dir, "corner");
+    expect(result.zeroPercent).toBe(0);
+    expect(result.changedPercent).toBeGreaterThan(0);
+  });
 });
 
 describe("base-guard transition regions", () => {
