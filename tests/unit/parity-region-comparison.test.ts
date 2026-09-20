@@ -772,14 +772,15 @@ describe("legacy debt behavior without any transition declared", () => {
 });
 
 describe("changed-control regression: contrasting control at an opaque pixel", () => {
-  it("skips a transparent leading pixel and mutates the first opaque one instead", () => {
+  it("throws instead of mutating a lone opaque pixel with no flat neighbour", () => {
+    // R7.5 flat-only contract: a lone opaque pixel on differing bytes would
+    // read as anti-aliasing, so the control refuses rather than silently
+    // reporting a false pass.
     const png = solidPng(4, 4, [0, 0, 0, 0]);
     setPixel(png, 3, 3, [200, 10, 10, 255]);
-    applyContrastingControl(png);
-    const i = (4 * 3 + 3) * 4;
-    expect(png.data[i + 3]).toBe(255); // alpha preserved
-    expect([png.data[i], png.data[i + 1], png.data[i + 2]]).toEqual([255, 255, 255]);
-    // the transparent leading pixel is untouched
+    expect(() => applyContrastingControl(png)).toThrow("no opaque pixel");
+    // nothing was mutated
+    expect(png.data[(4 * 3 + 3) * 4]).toBe(200);
     expect(png.data[0]).toBe(0);
     expect(png.data[3]).toBe(0);
   });
@@ -797,7 +798,12 @@ describe("changed-control regression: contrasting control at an opaque pixel", (
     // evidence/product-proof-regions/weather-regression-failing-before.log.
     const dir = tempDir();
     const png = solidPng(4, 4, [0, 0, 0, 0]);
-    setPixel(png, 2, 2, [32, 59, 44, 255]); // real weather-icon opaque pixel color
+    // a 2x2 block of the real weather-icon opaque pixel color, so the
+    // flat-only control has a provable pixel (R7.5)
+    setPixel(png, 2, 2, [32, 59, 44, 255]);
+    setPixel(png, 3, 2, [32, 59, 44, 255]);
+    setPixel(png, 2, 3, [32, 59, 44, 255]);
+    setPixel(png, 3, 3, [32, 59, 44, 255]);
     const capturePath = writePng(dir, "weather.png", png);
     const before = createHash("sha256").update(readFileSync(capturePath)).digest("hex");
     const result = writeComparisonControls(capturePath, dir, "weather");

@@ -735,20 +735,18 @@ export function artifactSha256(path: string): string {
 }
 // Finds the first fully-opaque pixel (alpha 255) in raster order whose
 // in-bounds neighbours all equal it. A lone changed pixel on a slope reads
-// as anti-aliasing to the comparer and diffs to zero, so the control must
-// land on flat bytes to be provable through a real pixel-threshold
-// comparison. Falls back to the first opaque pixel when nothing is flat.
+// as anti-aliasing to the comparer and diffs to zero, so the control lands
+// on flat bytes to be provable through a real pixel-threshold comparison,
+// or throws when the image holds no flat pixel at all.
 function firstOpaquePixelOffset(png: PNG): number | null {
-  let fallback: number | null = null;
   for (let y = 0; y < png.height; y += 1) {
     for (let x = 0; x < png.width; x += 1) {
       const offset = (png.width * y + x) * 4;
       if (png.data[offset + 3] !== 255) continue;
-      if (fallback === null) fallback = offset;
       if (isFlatPixel(png, x, y, offset)) return offset;
     }
   }
-  return fallback;
+  return null;
 }
 // True when every in-bounds 8-neighbour equals the pixel's own bytes. A
 // pixel with no in-bounds neighbours counts as flat.
