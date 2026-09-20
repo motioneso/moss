@@ -39,3 +39,14 @@ Offer Accessibility and Screen Recording during optional setup; denial never blo
 Review the spec and write the implementation plan for #2560: concrete pairing exchange, credential expiry/renewal, server-side scope/revocation, shared contracts/migrations, updater and release integration. No companion app implementation has started. Do not package the pilot or reuse a general Moss session token as a restricted device credential.
 
 Keep the current approved design guide authoritative over exploratory mockups. Preserve the distinction between local build acceptance and signed public distribution. The user's shorthand “yr” means acceptance of the preceding recommendation. When delivering runnable Mac pilot changes during continued testing, Taildrop them instead of leaving the transfer to the user.
+
+## Close-out correction
+
+Ben clarified that wrap-up is environment cleanup and preservation, not a requirement
+to run or wait for full verification. The wrap-up skill now reflects that rule;
+its installed copy was updated as well. The unnecessary local gate was stopped at
+Ben's direction (rc=143), after static checks, 8,521 unit tests and 29 seed tests
+passed. The integration suite was interrupted, so the local full gate is not green.
+Its isolated database was removed; the diagnostic log remains available locally.
+GitHub checks for the pilot/spec revision passed. Draft PR #2561 records verification
+and the incomplete companion work; issue #2560 remains open in Backlog.
