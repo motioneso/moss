@@ -8,7 +8,9 @@ import {
   checkBaseBranchCollisions,
   checkCrossPrCollisions,
   checkLocalDuplicates,
+  excludeOwnPullRequest,
   findLocalMigrationFiles,
+  getCurrentBranchName,
   parseMigrationPath,
   type ClaimSource,
   type MigrationFile
@@ -189,6 +191,42 @@ describe("check-migration-collisions (Issue #2371)", () => {
       expect(violations[0]?.kind).toBe("main_collision");
       expect(violations[0]?.version).toBe("0220");
       expect(violations[0]?.message).toContain("was edited after being applied/committed");
+    });
+  });
+
+  describe("excludeOwnPullRequest", () => {
+    const pullRequests = [
+      { headRefName: "feature-a" },
+      { headRefName: "feature-b" },
+      { headRefName: "feature-c" }
+    ];
+
+    it("drops the pull request opened from the checked-out branch", () => {
+      expect(excludeOwnPullRequest(pullRequests, "feature-b")).toEqual([
+        { headRefName: "feature-a" },
+        { headRefName: "feature-c" }
+      ]);
+    });
+
+    it("keeps every pull request on a detached HEAD", () => {
+      expect(excludeOwnPullRequest(pullRequests, undefined)).toEqual(pullRequests);
+    });
+
+    it("keeps every pull request when the branch has none open", () => {
+      expect(excludeOwnPullRequest(pullRequests, "feature-d")).toEqual(pullRequests);
+    });
+  });
+
+  describe("getCurrentBranchName", () => {
+    it("uses the workflow branch name when the checkout is detached", () => {
+      expect(getCurrentBranchName(process.cwd(), { GITHUB_HEAD_REF: "feature-a" })).toBe(
+        "feature-a"
+      );
+    });
+
+    it("ignores an empty workflow branch name and asks git", () => {
+      const fromGit = getCurrentBranchName(process.cwd(), {});
+      expect(getCurrentBranchName(process.cwd(), { GITHUB_HEAD_REF: "  " })).toBe(fromGit);
     });
   });
 

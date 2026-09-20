@@ -6,6 +6,7 @@ export const queryKeys = {
   onboarding: {
     status: ["onboarding", "status"] as const
   },
+  companionPairAttempt: (code: string) => ["companion", "pair-attempt", code] as const,
   modules: ["modules"] as const,
   myModules: ["me", "modules"] as const,
   modulePreferences: (moduleId: string) => ["modules", moduleId, "preferences"] as const,

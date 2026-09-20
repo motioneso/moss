@@ -31,7 +31,7 @@ import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
 import { DeleteAccount } from "./delete-account";
 import { useFeedback } from "./settings-feedback";
-import { DataExport, Sessions } from "./settings-profile-subviews";
+import { DataExport, MacCompanion, Sessions } from "./settings-profile-subviews";
 import { readError, type PaneProps } from "./settings-types";
 import {
   Avatar,
@@ -524,6 +524,8 @@ export function ProfilePane({ me }: PaneProps) {
           </div>
         </div>
       </Group>
+
+      <MacCompanion />
 
       <Sessions />
 

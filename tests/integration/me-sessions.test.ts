@@ -34,6 +34,10 @@ describe("#237 current-user active sessions", () => {
   const cookieB1 = "50000000-0000-4000-8000-0000000000b1";
   // Extra NON-current bearer session for user A (auth_sessions.id is itself the secret).
   const bearerA2 = "40000000-0000-4000-8000-0000000000a2";
+  // Linked Macs (#2560). The row id is non-secret; the credential exists only as a hash.
+  const macA1 = "52000000-0000-4000-8000-0000000000a1";
+  const macAExpired = "52000000-0000-4000-8000-0000000000a2";
+  const macB1 = "52000000-0000-4000-8000-0000000000b1";
   // Token secrets — these must NEVER appear in any API response.
   const tokens = {
     a1: "tok-a1-SECRET-must-not-leak",
@@ -100,6 +104,31 @@ describe("#237 current-user active sessions", () => {
         "INSERT INTO app.auth_sessions (id, user_id, expires_at) VALUES ($1, $2, now() + interval '1 day')",
         [bearerA2, ids.userA]
       );
+
+      // Linked Macs: one live for A, one whose inactivity window has closed, one for B.
+      await client.query("DELETE FROM app.companion_devices");
+      await client.query(
+        `INSERT INTO app.companion_devices
+           (id, user_id, credential_hash, display_name, platform, app_version, os_version,
+            created_at, last_contact_at, expires_at, absolute_expires_at)
+         VALUES
+           ($1, $2, 'hash-a1', 'Studio Mac', 'macos', '1.0.0', '14.5',
+            now() - interval '3 days', now() - interval '10 minutes',
+            now() + interval '90 days', now() + interval '365 days'),
+           ($3, $2, 'hash-a2', 'Old Mac', 'macos', '1.0.0', '14.5',
+            now() - interval '200 days', now() - interval '120 days',
+            now() - interval '30 days', now() + interval '165 days'),
+           ($4, $5, 'hash-b1', 'Other Mac', 'macos', '1.0.0', '14.5',
+            now(), now(), now() + interval '90 days', now() + interval '365 days')`,
+        [macA1, ids.userA, macAExpired, macB1, ids.userB]
+      );
+    });
+  }
+
+  async function companionDeviceExists(id: string): Promise<boolean> {
+    return withBootstrap(async (client) => {
+      const result = await client.query("SELECT 1 FROM app.companion_devices WHERE id = $1", [id]);
+      return (result.rowCount ?? 0) > 0;
     });
   }
 
@@ -149,7 +178,7 @@ describe("#237 current-user active sessions", () => {
     // Bearer rows are exposed as handles; cookie rows by their non-secret id. Own, non-expired
     // only: current bearer + extra bearer + two cookie sessions. NOT the expired cookie, NOT B.
     expect(new Set(returnedIds)).toEqual(
-      new Set([handleSessionA, handleBearerA2, cookieA1, cookieA2])
+      new Set([handleSessionA, handleBearerA2, cookieA1, cookieA2, macA1])
     );
 
     // HARD INVARIANT (the #315 blocker): the raw bearer secret (auth_sessions.id) must NEVER
@@ -246,8 +275,8 @@ describe("#237 current-user active sessions", () => {
     expect(del.statusCode).toBe(200);
     const payload = del.json<{ success: boolean; count: number }>();
     expect(payload.success).toBe(true);
-    // User A's other sessions: the extra bearer + both cookie sessions.
-    expect(payload.count).toBe(3);
+    // User A's other sessions: the extra bearer, both cookie sessions, and the linked Mac.
+    expect(payload.count).toBe(4);
 
     const list = (await asUserA("GET", "/api/me/sessions")).json<ListMySessionsResponse>();
     expect(list.sessions.map((s) => s.id)).toEqual([handleSessionA]);
@@ -256,6 +285,51 @@ describe("#237 current-user active sessions", () => {
     // Other users' sessions are never touched by user A's bulk revoke.
     expect(await cookieSessionExists(cookieB1)).toBe(true);
     expect(await bearerSessionExists(ids.sessionB)).toBe(true);
+    expect(await companionDeviceExists(macB1)).toBe(true);
+  });
+
+  // #2560 — a linked Mac is listed and signed out through the same screen as a browser.
+  it("lists a linked Mac as a companion session and never shows its credential hash", async () => {
+    const body = (await asUserA("GET", "/api/me/sessions")).json<ListMySessionsResponse>();
+    const mac = body.sessions.find((s) => s.id === macA1);
+
+    expect(mac?.source).toBe("companion");
+    expect(mac?.deviceLabel).toBe("Studio Mac");
+    expect(mac?.deviceKind).toBe("laptop");
+    expect(mac?.os).toBe("macOS");
+    expect(mac?.isCurrent).toBe(false);
+    expect(mac?.companion).toMatchObject({
+      product: "Trail Marker for Mac",
+      displayName: "Studio Mac",
+      appVersion: "1.0.0",
+      osVersion: "14.5"
+    });
+    expect(mac?.companion?.lastContactAt).toBeTruthy();
+
+    // A browser row carries no companion block at all.
+    expect(body.sessions.find((s) => s.id === cookieA1)?.companion).toBeNull();
+  });
+
+  it("leaves an expired Mac and another user's Mac out of the list", async () => {
+    const body = (await asUserA("GET", "/api/me/sessions")).json<ListMySessionsResponse>();
+    const listed = body.sessions.map((s) => s.id);
+    expect(listed).not.toContain(macAExpired);
+    expect(listed).not.toContain(macB1);
+  });
+
+  it("signs out one linked Mac by its row id", async () => {
+    const del = await asUserA("DELETE", `/api/me/sessions/${macA1}`);
+    expect(del.statusCode).toBe(200);
+    expect(await companionDeviceExists(macA1)).toBe(false);
+
+    const list = (await asUserA("GET", "/api/me/sessions")).json<ListMySessionsResponse>();
+    expect(list.sessions.map((s) => s.id)).not.toContain(macA1);
+  });
+
+  it("does not let one user sign out another user's Mac", async () => {
+    const del = await asUserA("DELETE", `/api/me/sessions/${macB1}`);
+    expect(del.statusCode).toBe(404);
+    expect(await companionDeviceExists(macB1)).toBe(true);
   });
 });
 
