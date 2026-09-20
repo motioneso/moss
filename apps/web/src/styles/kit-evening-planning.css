@@ -335,28 +335,28 @@
 
   .evening-plan__panel {
     box-sizing: border-box;
+    position: relative;
     padding: 32px;
     overflow-y: auto;
     height: 100%;
   }
 
+  .evening-plan__panel::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 28px;
+    width: 1px;
+    height: 503px;
+    background: var(--line);
+  }
+
   .evening-plan__railwrap {
     box-sizing: border-box;
-    position: relative;
     border-left: none;
     padding: 35px 32px 32px 24px;
     overflow-y: auto;
     height: 100%;
-  }
-
-  .evening-plan__railwrap::before {
-    content: "";
-    position: absolute;
-    left: -1px;
-    top: 28px;
-    width: 1px;
-    height: 502px;
-    background: var(--line);
   }
 
   .brief-reader:has(.evening-plan__grid) .brief-reader__footer {
