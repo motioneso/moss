@@ -33,6 +33,15 @@ describe("Today grid order", () => {
 });
 
 describe("Today populated 320px offenders", () => {
+  it("holds the sports card grid inside narrow Today columns", () => {
+    expect(desks).toMatch(
+      /\.cmd-grid\s*>\s*\.jds-brief--sports\s+\.sp-tkgrid\s*\{[^}]*minmax\(min\(300px,\s*100%\),\s*1fr\)/
+    );
+    expect(desks).toMatch(
+      /\.cmd-grid\s*>\s*\.jds-brief--sports\s+\.sp-tkgrid\s*>\s*\*\s*\{[^}]*min-width:\s*0/
+    );
+  });
+
   it("lets the sports card grid yield its 300px floor inside narrow Today columns", () => {
     expect(kit).toMatch(/\.cmd-main\s+\.sp-tkgrid\s*\{[^}]*minmax\(min\(300px,\s*100%\),\s*1fr\)/);
     expect(kit).toMatch(/\.cmd-main\s+\.sp-tkgrid\s*>\s*\*\s*\{[^}]*min-width:\s*0/);
