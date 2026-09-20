@@ -326,6 +326,11 @@
     padding: 0 32px 0 31px;
   }
 
+  .evening-plan__strip button > span {
+    position: relative;
+    top: -1px;
+  }
+
   .evening-plan__grid {
     grid-template-columns: 749px 331px;
     gap: 0;
@@ -414,6 +419,10 @@
     height: 44px;
     min-height: 44px;
     box-sizing: border-box;
+  }
+
+  .brief-reader:has(.evening-plan__grid) .brief-reader__footer-actions .jds-btn {
+    border-radius: 3px;
   }
 
   .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back .jds-btn {
@@ -570,6 +579,7 @@
     height: 44px;
     min-height: 44px;
     box-sizing: border-box;
+    border-radius: 3px;
   }
 
   .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back .jds-btn {
@@ -585,7 +595,7 @@
     white-space: nowrap;
     cursor: pointer;
     text-decoration: underline;
-    text-underline-offset: 2px;
+    text-underline-offset: 3px;
   }
 
   .brief-reader:has(.evening-plan__grid) .brief-reader__footer-back .jds-btn:focus-visible {
