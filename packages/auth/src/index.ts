@@ -24,6 +24,14 @@ import {
 } from "@moss/settings";
 import type { AuthProviderStatusDto } from "@moss/shared";
 
+import {
+  createCompanionDevicesService,
+  type CompanionDevicesService
+} from "./companion-devices.js";
+import {
+  createCompanionPairingService,
+  type CompanionPairingService
+} from "./companion-pairing.js";
 import { readBearerToken, toWebHeaders } from "./headers.js";
 import { resolveAuthOriginConfig } from "./runtime-config.js";
 import { createMeSessionsService, type MeSessionsRuntimeService } from "./session-service.js";
@@ -38,18 +46,18 @@ export { hashPassword };
 
 export {
   createCompanionPairingService,
-  type CompanionPairingService,
   type CreatedPairAttempt,
   type DecidePairAttemptResult,
   type RedeemResult
 } from "./companion-pairing.js";
+export type { CompanionPairingService } from "./companion-pairing.js";
 export {
   CompanionAuthError,
   createCompanionDevicesService,
   type CompanionContext,
-  type CompanionDeviceSummary,
-  type CompanionDevicesService
+  type CompanionDeviceSummary
 } from "./companion-devices.js";
+export type { CompanionDevicesService } from "./companion-devices.js";
 export {
   digestsMatch,
   mintCompanionCredential,
@@ -109,6 +117,15 @@ export interface MossAuthRuntime {
    * Returns a boolean only; NEVER selects the password hash (#239).
    */
   readonly hasPasswordCredential: (actorUserId: string) => Promise<boolean>;
+  /**
+   * Origins allowed to make a cookie-authenticated cross-site state change. Exposed so
+   * route layers check the same list Better Auth does instead of re-reading env (#2560).
+   */
+  readonly trustedOrigins: readonly string[];
+  /** Browser-approved Trail Marker pairing (#2560). Runs on the auth pool. */
+  readonly companionPairing: CompanionPairingService;
+  /** Companion credential resolution and own-device operations (#2560). */
+  readonly companionDevices: CompanionDevicesService;
   readonly close: () => Promise<void>;
 }
 
@@ -191,6 +208,11 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
       return result.rowCount ?? 0;
     },
     meSessions: createMeSessionsService({ pool, auth }),
+    trustedOrigins: resolveAuthOriginConfig(env).trustedOrigins,
+    // Both companion services run on the auth pool, because migration 0238 grants the
+    // companion tables to jarvis_auth_runtime alone.
+    companionPairing: createCompanionPairingService({ pool }),
+    companionDevices: createCompanionDevicesService({ pool }),
     verifySelfPassword: async ({ actorUserId, password }) => {
       // Scope strictly to the actor's own credential row. provider_id='credential'
       // AND a non-null password define "this account owns a password credential"

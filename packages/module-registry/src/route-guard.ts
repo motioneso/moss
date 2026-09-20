@@ -46,6 +46,20 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   routeKey("PATCH", "/api/auth/*"),
   routeKey("PUT", "/api/auth/*"),
   routeKey("DELETE", "/api/auth/*"),
+  // #2560 Trail Marker: linking a Mac to an account is platform auth, owned by no module.
+  // Gating these on a module's enablement would make an installed Mac stop reaching the
+  // server when an unrelated module is switched off. Each route carries its own guard —
+  // the pairing ones are IP rate-limited, the decide ones need a cookie session plus a
+  // trusted Origin, and the device ones need a companion credential.
+  routeKey("POST", "/api/companion/protocol"),
+  routeKey("POST", "/api/companion/pair"),
+  routeKey("GET", "/api/companion/pair/attempt"),
+  routeKey("POST", "/api/companion/pair/decide"),
+  routeKey("POST", "/api/companion/pair/redeem"),
+  routeKey("POST", "/api/companion/pair/cancel"),
+  routeKey("POST", "/api/companion/heartbeat"),
+  routeKey("PATCH", "/api/companion/device"),
+  routeKey("POST", "/api/companion/logout"),
   // settings: pre-auth bootstrap + own profile
   routeKey("GET", "/api/bootstrap/status"),
   routeKey("GET", "/api/me"),

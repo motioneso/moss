@@ -66,6 +66,7 @@ import {
   resolveModulesDir
 } from "@moss/module-registry/node";
 
+import { registerCompanionRoutes } from "./companion-routes.js";
 import { resolveApiE2eFetchOverride } from "./e2e-fetch-override.js";
 import { createModuleAiBridge } from "./external-module-ai-bridge.js";
 import { createModuleDistributionPort } from "./module-distribution-port.js";
@@ -373,6 +374,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     });
 
     registerBetterAuthRoutes(server, authRuntime, AUTH_MAX);
+    // #2560: Trail Marker pairing and linked-Mac routes. Platform-owned, next to auth —
+    // linking a Mac to an account is not any module's business.
+    registerCompanionRoutes(server, { authRuntime });
 
     // #1752: a live cell, not a one-time snapshot — rescan() lets an admin-triggered
     // rescan surface a module dropped onto the mount after this process booted.
