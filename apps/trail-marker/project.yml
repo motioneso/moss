@@ -5,6 +5,11 @@ options:
     macOS: "14.0"
   createIntermediateGroups: true
 
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
+
 settings:
   base:
     MARKETING_VERSION: "0.1.0"
@@ -12,6 +17,9 @@ settings:
     SWIFT_VERSION: "5.10"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     TRAIL_MARKER_DISTRIBUTION: "0"
+    # Real key goes in for release builds only (Task 15); a blank key here means
+    # Sparkle has nothing to verify against, which is fine for unsigned local/dev builds.
+    TRAIL_MARKER_SPARKLE_PUBLIC_KEY: ""
   configs:
     Release:
       ONLY_ACTIVE_ARCH: NO
@@ -37,8 +45,8 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
         ENABLE_HARDENED_RUNTIME: YES
-    # Sparkle (Swift Package Manager) is wired in during Task 13.
-    # packages: [Sparkle]
+    dependencies:
+      - package: Sparkle
 
   TrailMarkerTests:
     type: bundle.unit-test

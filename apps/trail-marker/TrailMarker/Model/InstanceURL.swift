@@ -66,6 +66,20 @@ struct InstanceURL: Equatable, Codable {
         components.path = basePath + suffix
         return components.url!
     }
+
+    /// For a server-supplied browser page path that may carry a `#fragment` — the pairing
+    /// approval link, whose code lives after the `#` on purpose: a fragment is the one part of
+    /// an address a browser never sends to a server, so a query parameter there would write a
+    /// live secret into the server's own request log. Appends the string exactly as given
+    /// instead of decomposing and reassembling it through `URLComponents`, so nothing here can
+    /// re-encode or otherwise alter what follows the `#`.
+    func browserURL(_ pathWithFragment: String) -> URL {
+        let suffix = pathWithFragment.hasPrefix("/") ? pathWithFragment : "/\(pathWithFragment)"
+        guard let url = URL(string: origin.absoluteString + basePath + suffix) else {
+            preconditionFailure("server-supplied approval path was not a valid URL: \(pathWithFragment)")
+        }
+        return url
+    }
 }
 
 enum InstanceURLError: Error, Equatable {

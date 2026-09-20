@@ -28,5 +28,13 @@
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/motioneso/moss/releases/latest/download/trail-marker-appcast.xml</string>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
+	<key>SUPublicEDKey</key>
+	<string>$(TRAIL_MARKER_SPARKLE_PUBLIC_KEY)</string>
+	<key>TrailMarkerDistribution</key>
+	<string>$(TRAIL_MARKER_DISTRIBUTION)</string>
 </dict>
 </plist>

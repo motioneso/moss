@@ -1,11 +1,18 @@
 import AppKit
 
-/// Owns the menu-bar status item. Task 10 scope: show the monochrome mark and a Quit item only.
-/// The state-driven menu (Views/Menu/StatusMenu.swift) replaces the menu contents in Task 13.
+/// Owns the menu-bar status item and hands its menu's content to `StatusMenu`, which keeps it
+/// in sync with `ConnectionRuntime`.
+@MainActor
 final class MenuBarController {
     private let statusItem: NSStatusItem
+    private let statusMenu: StatusMenu
 
-    init() {
+    init(
+        connection: ConnectionRuntime,
+        onOpenSettings: @escaping () -> Void,
+        onOpenOnboarding: @escaping () -> Void,
+        onCheckForUpdates: @escaping () -> Void
+    ) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem.button {
@@ -15,14 +22,10 @@ final class MenuBarController {
             button.setAccessibilityLabel("Trail Marker")
         }
 
-        let menu = NSMenu()
-        menu.addItem(
-            NSMenuItem(
-                title: "Quit Trail Marker",
-                action: #selector(NSApplication.terminate(_:)),
-                keyEquivalent: "q"
-            )
+        statusMenu = StatusMenu(
+            connection: connection, onOpenSettings: onOpenSettings, onOpenOnboarding: onOpenOnboarding,
+            onCheckForUpdates: onCheckForUpdates
         )
-        statusItem.menu = menu
+        statusItem.menu = statusMenu.menu
     }
 }

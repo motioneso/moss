@@ -5,6 +5,11 @@ import Foundation
 // Mirrors packages/shared/src/companion-api.ts field-for-field. JSON keys are already
 // camelCase, so default Codable synthesis needs no CodingKeys.
 
+/// The protocol version this build of Trail Marker speaks. `protocolVersion()` reports what an
+/// instance answers; comparing it to this is the caller's job (onboarding refuses to link when
+/// they don't match).
+let COMPANION_PROTOCOL_VERSION_SUPPORTED = 1
+
 struct CreatePairAttemptRequest: Encodable {
     let deviceName: String
     let platform: String

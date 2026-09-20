@@ -9,6 +9,7 @@ import Network
 @MainActor
 final class ConnectionRuntime: ObservableObject {
     @Published private(set) var state: ConnectionState = .notLinked
+    @Published private(set) var identity: LinkedIdentity?
     @Published private(set) var lastDiagnostic: String?
 
     private var machine = ConnectionMachine()
@@ -18,7 +19,6 @@ final class ConnectionRuntime: ObservableObject {
     private let appVersion: String
     private let osVersion: String
 
-    private var identity: LinkedIdentity?
     private var client: CompanionClient?
     private var tasks: [Int: Task<Void, Never>] = [:]
     private var pathMonitor: NWPathMonitor?
@@ -115,6 +115,7 @@ final class ConnectionRuntime: ObservableObject {
             }
             do {
                 let response = try await client.heartbeat(credential: credential, app: appVersion, os: osVersion)
+                self?.recordDisplayName(response.device.displayName)
                 guard let serverTime = ISO8601DateFormatter().date(from: response.serverTime) else { return }
                 await self?.handle(.heartbeatSucceeded(at: serverTime, generation: generation))
             } catch let error as CompanionError {
@@ -148,6 +149,32 @@ final class ConnectionRuntime: ObservableObject {
 
     private func handle(_ event: ConnectionEvent) async {
         apply(machine.handle(event, now: Date()))
+    }
+
+    private func recordDisplayName(_ displayName: String) {
+        preferences.displayName = displayName
+    }
+
+    // MARK: - Settings-pane actions
+
+    var displayName: String? { preferences.displayName }
+
+    func openInstanceInBrowser() {
+        guard let identity else { return }
+        NSWorkspace.shared.open(identity.instance.origin)
+    }
+
+    func rename(displayName: String) {
+        guard let identity, let client, let credential = keychain.read(for: identity) else { return }
+        Task {
+            do {
+                try await client.rename(credential: credential, displayName: displayName)
+                self.preferences.displayName = displayName
+            } catch {
+                // Best effort: the next successful heartbeat will re-read the server's name,
+                // but there is no queued retry for a rename made while offline.
+            }
+        }
     }
 
     // MARK: - System signals

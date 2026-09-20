@@ -57,6 +57,24 @@ final class InstanceURLTests: XCTestCase {
         XCTAssertEqual(parsed("moss"), .failure(.invalid))
     }
 
+    func testBrowserURLPreservesTheFragmentVerbatim() {
+        guard case .success(let instance) = parsed("https://moss.example.com") else {
+            return XCTFail("expected a parsed instance")
+        }
+        let url = instance.browserURL("/link/trail-marker#code=AbC123_-xyz")
+        XCTAssertEqual(url.absoluteString, "https://moss.example.com/link/trail-marker#code=AbC123_-xyz")
+        // The fragment must never become part of what a server sees in the request line.
+        XCTAssertFalse(url.path.contains("code="))
+    }
+
+    func testBrowserURLWithBasePath() {
+        guard case .success(let instance) = parsed("https://moss.example.com:8443/moss/") else {
+            return XCTFail("expected a parsed instance")
+        }
+        let url = instance.browserURL("/link/trail-marker#code=xyz")
+        XCTAssertEqual(url.absoluteString, "https://moss.example.com:8443/moss/link/trail-marker#code=xyz")
+    }
+
     func testEndpointCombinesBasePathAndOrigin() {
         guard case .success(let instance) = parsed("https://moss.example.com:8443/moss/") else {
             return XCTFail("expected a parsed instance")
