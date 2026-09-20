@@ -390,6 +390,55 @@ describe("Sports Today editorial desk", () => {
 });
 
 describe("Sports Today desk behaviour", () => {
+  it("keeps league-card story anchors free of undefined publisher text", () => {
+    const sharedStory = {
+      title: "Arsenal seal late win to stay top of the pile",
+      url: "https://example.com/story-9001",
+      publishedAt: "2026-07-07T12:00:00.000Z",
+      imageUrl: null,
+      storyRef: "sports:story-9001"
+    };
+    const data = overview({
+      followed: [
+        {
+          teamKey: "ars",
+          competitionKey: "eng.1",
+          competitionLabel: "Premier League",
+          name: "Arsenal",
+          crestUrl: null,
+          status: "news",
+          primary: "Arsenal story",
+          stories: [{ ...sharedStory, publisherLabel: "", publisherDomain: "" }],
+          form: [],
+          standing: null,
+          nextMatch: null,
+          lastMatchAt: null,
+          rationale: ""
+        }
+      ],
+      followedLeagueCards: [
+        {
+          competitionKey: "eng.1",
+          competitionLabel: "Premier League",
+          kind: "league",
+          status: "news",
+          logoUrl: null,
+          // This is the pre-schema-fix R2 wire shape: absent publisher fields must not leak into UI.
+          stories: [sharedStory],
+          results: []
+        }
+      ] as unknown as SportsOverviewResponse["followedLeagueCards"]
+    });
+    const html = render(seed(data));
+    const links = [
+      ...html.matchAll(/<a class="sp-tk__(?:newstx|storylink)"[^>]*>([^<]*)<\/a>/g)
+    ].map((match) => match[1]);
+
+    expect(links).toHaveLength(2);
+    expect(new Set(links)).toEqual(new Set([sharedStory.title]));
+    expect(html).not.toContain("undefined");
+  });
+
   it("uses the shared overview query", () => {
     const data = overview({ topStories: [story(1)] });
     const client = seed(data);

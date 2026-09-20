@@ -354,7 +354,9 @@ function FeaturedTeamCard(props: {
             <div className="sp-feat__leadwrap sp-fbhost">
               <a className="sp-feat__lead" href={lead.url} target="_blank" rel="noreferrer">
                 {lead.title}
-                {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
+                {lead.publisherDomain === "espn.com" || !lead.publisherLabel
+                  ? null
+                  : ` · ${lead.publisherLabel}`}
               </a>
               {surface !== "sports" ? (
                 <StoryFeedbackMenu
@@ -441,7 +443,9 @@ function FeaturedTeamCard(props: {
               <li className="sp-fbhost" key={story.storyRef}>
                 <a className="sp-feat__storylink" href={story.url} target="_blank" rel="noreferrer">
                   {story.title}
-                  {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
+                  {story.publisherDomain === "espn.com" || !story.publisherLabel
+                    ? null
+                    : ` · ${story.publisherLabel}`}
                 </a>
                 {surface !== "sports" ? (
                   <StoryFeedbackMenu
@@ -549,7 +553,9 @@ export function TickerTeam(props: {
               <div className="sp-tk__lead sp-fbhost">
                 <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
                   {lead.title}
-                  {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
+                  {lead.publisherDomain === "espn.com" || !lead.publisherLabel
+                    ? null
+                    : ` · ${lead.publisherLabel}`}
                 </a>
                 <StoryFeedbackMenu
                   storyRef={lead.storyRef}
@@ -633,7 +639,9 @@ export function TickerTeam(props: {
                 <li className="sp-fbhost" key={story.storyRef}>
                   <a className="sp-tk__storylink" href={story.url} target="_blank" rel="noreferrer">
                     {story.title}
-                    {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
+                    {story.publisherDomain === "espn.com" || !story.publisherLabel
+                      ? null
+                      : ` · ${story.publisherLabel}`}
                   </a>
                   <StoryFeedbackMenu
                     storyRef={story.storyRef}
@@ -720,7 +728,9 @@ export function TickerLeague(props: {
             <div className="sp-tk__lead sp-fbhost">
               <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
                 {lead.title}
-                {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
+                {lead.publisherDomain === "espn.com" || !lead.publisherLabel
+                  ? null
+                  : ` · ${lead.publisherLabel}`}
               </a>
               <StoryFeedbackMenu
                 storyRef={lead.storyRef}
@@ -737,7 +747,9 @@ export function TickerLeague(props: {
                 <li className="sp-fbhost" key={story.storyRef}>
                   <a className="sp-tk__storylink" href={story.url} target="_blank" rel="noreferrer">
                     {story.title}
-                    {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
+                    {story.publisherDomain === "espn.com" || !story.publisherLabel
+                      ? null
+                      : ` · ${story.publisherLabel}`}
                   </a>
                   <StoryFeedbackMenu
                     storyRef={story.storyRef}

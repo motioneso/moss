@@ -493,6 +493,53 @@ describe("sports routes", () => {
     await app.close();
   });
 
+  it("preserves publisher fields on followed league stories through the wire", async () => {
+    const { app } = buildApp({
+      datasetClient: makeDatasetClient({
+        getHeadlines: async () => [
+          {
+            id: "9001",
+            sportKey: "soccer",
+            competitionKey: "eng.1",
+            competitionLabel: "Premier League",
+            title: "Arsenal seal late win to stay top of the pile",
+            url: "https://example.com/story-9001",
+            publishedAt: "2026-07-07T12:00:00.000Z",
+            imageUrl: null,
+            summary: "A stoppage-time strike settled the match.",
+            teamKeys: [],
+            origin: "espn",
+            publisherLabel: "The Athletic",
+            publisherDomain: "theathletic.com",
+            sourceTeamIds: []
+          }
+        ]
+      }),
+      repo: makeRepo([
+        {
+          id: "league-follow",
+          competitionKey: "eng.1",
+          teamKey: null,
+          sourceTeamId: null,
+          createdAt: "2026-07-01T00:00:00.000Z"
+        }
+      ])
+    });
+    await app.ready();
+    const res = await app.inject({ method: "GET", url: "/api/sports/overview" });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as {
+      followedLeagueCards: Array<{
+        stories: Array<{ publisherLabel?: string; publisherDomain?: string }>;
+      }>;
+    };
+    expect(body.followedLeagueCards[0]?.stories[0]).toMatchObject({
+      publisherLabel: "The Athletic",
+      publisherDomain: "theathletic.com"
+    });
+    await app.close();
+  });
+
   it("carries standings qualification note + color through the overview (#841)", async () => {
     const { app } = buildApp({
       datasetClient: makeDatasetClient({
