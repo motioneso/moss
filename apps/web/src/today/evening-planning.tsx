@@ -147,7 +147,10 @@ export function EveningPlanningDialog(props: EveningPlanningDialogProps) {
               Back to Today
             </Button>
           </div>
-          <span className="evening-plan__status" role="status">
+          <span
+            className={`evening-plan__status${evening.status !== "Not saved yet." ? " evening-plan__status--saved" : ""}`}
+            role="status"
+          >
             {evening.status}
           </span>
           {evening.reviewNotice ? (

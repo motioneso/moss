@@ -350,6 +350,22 @@ describe("evening step navigation", () => {
     );
   });
 
+  it("applies evening-plan__status--saved modifier only when saved", async () => {
+    stubFetch();
+    const harness = await mountDialog(eveningRun());
+    const status = document.body.querySelector(".evening-plan__status");
+    expect(status?.textContent).toBe("Not saved yet.");
+    expect(status?.classList.contains("evening-plan__status--saved")).toBe(false);
+
+    await act(async () => {
+      await harness.evening.save();
+    });
+
+    const statusAfter = document.body.querySelector(".evening-plan__status");
+    expect(statusAfter?.textContent).toBe("Saved. The blocks are proposed for the morning.");
+    expect(statusAfter?.classList.contains("evening-plan__status--saved")).toBe(true);
+  });
+
   it("focuses the named heading when advancing to steps 3 and 4 via Next", async () => {
     stubFetch();
     await mountDialog(eveningRun());

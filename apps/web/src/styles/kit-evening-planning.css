@@ -534,6 +534,12 @@
     box-sizing: border-box;
   }
 
+  .brief-reader:has(.evening-plan__grid) .evening-plan__status--saved {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    text-align: left;
+  }
+
   .brief-reader:has(.evening-plan__grid) .evening-plan__notice {
     grid-column: 1 / -1;
     grid-row: 2;
