@@ -27,7 +27,7 @@
   gap: 8px;
   height: 100%;
   min-height: 0;
-  padding: 0;
+  padding: 2px 0 0;
   background: none;
   border: 0;
   border-bottom: 3px solid transparent;
@@ -276,6 +276,7 @@
     max-width: 1080px;
     height: 846px;
     max-height: 846px;
+    border-top-color: var(--line-strong);
   }
 
   .brief-reader:has(.evening-plan__grid) .brief-reader__head {
@@ -348,7 +349,7 @@
   .brief-reader:has(.evening-plan__grid) .brief-reader__footer {
     box-sizing: border-box;
     min-height: 76px;
-    padding: 15px 32px 16px;
+    padding: 15px 32px 15px;
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: center;
@@ -432,7 +433,7 @@
   .evening-plan__strip {
     box-sizing: border-box;
     height: 58px;
-    padding: 0 20px;
+    padding: 0 19px;
     background: var(--paper);
   }
 
@@ -464,9 +465,9 @@
     white-space: nowrap;
     height: 100%;
     min-height: 0;
-    padding: 0 2px;
+    padding: 0;
     gap: 3px;
-    font-size: 11px;
+    font-size: 10px;
     letter-spacing: normal;
     position: static;
     bottom: auto;
@@ -477,7 +478,7 @@
 
   .evening-plan__strip button > span {
     display: block;
-    font-size: 9px;
+    font-size: 8px;
     color: var(--text-muted);
     line-height: 1;
   }
@@ -490,7 +491,7 @@
   .brief-reader:has(.evening-plan__grid) .brief-reader__footer {
     box-sizing: border-box;
     min-height: 69px;
-    padding: 13px 12px;
+    padding: 13px 17px;
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: center;
