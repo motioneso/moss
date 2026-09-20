@@ -444,6 +444,11 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0237",
           name: "0237_briefing_selected_tool_names_allow_empty.sql"
+        },
+        // #2560 — companion pair attempts and linked Mac devices.
+        {
+          version: "0238",
+          name: "0238_companion_devices.sql"
         }
       ]);
     } finally {
