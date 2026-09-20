@@ -18,13 +18,21 @@ struct PermissionsPane: View {
                     symbol: "accessibility", name: "Accessibility",
                     scope: "Needed for future shortcuts and automation.",
                     state: permissions.accessibility,
-                    openSystemSettings: SystemSettingsLinks.openAccessibility
+                    openSystemSettings: {
+                        // Asking once registers Trail Marker in the list; macOS shows no
+                        // entry to switch on until an app has asked.
+                        if permissions.accessibility != .granted { permissions.requestAccessibility() }
+                        SystemSettingsLinks.openAccessibility()
+                    }
                 )
                 PermissionSettingsRow(
                     symbol: "rectangle.inset.filled.and.person.filled", name: "Screen Recording",
                     scope: "Needed for future screen-aware features.",
                     state: permissions.screenRecording,
-                    openSystemSettings: SystemSettingsLinks.openScreenRecording
+                    openSystemSettings: {
+                        if permissions.screenRecording != .granted { permissions.requestScreenRecording() }
+                        SystemSettingsLinks.openScreenRecording()
+                    }
                 )
             }
         }
