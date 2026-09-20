@@ -29,12 +29,6 @@ export const TONIGHT_ROWS_MAX = 6;
 export const QUIET_NIGHT_LINE =
   "A quiet night. No games for your followed teams or other featured matchups tonight.";
 
-export function scoreDetail(statusDetail: string): { status: string; recap: string | null } {
-  const [status, ...rest] = statusDetail.split(" / ");
-  const recap = rest.join(" / ").trim();
-  return { status: status?.trim() ?? "", recap: recap || null };
-}
-
 export interface ScoreRowData {
   readonly game: GameSummary;
   /** Human label from the scoreboard group or hero entry — the raw key is never rendered. */
@@ -46,6 +40,7 @@ export interface TonightRowData {
   readonly game: GameSummary;
   readonly competitionLabel: string;
   readonly followed: boolean;
+  readonly followedSide: "home" | "away" | null;
 }
 
 function isFollowedSide(
@@ -57,6 +52,16 @@ function isFollowedSide(
     isFollowed(followed, competitionKey, game.home.sourceTeamId) ||
     isFollowed(followed, competitionKey, game.away.sourceTeamId)
   );
+}
+
+function followedSide(
+  followed: FollowedTeamIndex,
+  competitionKey: string,
+  game: GameSummary
+): "home" | "away" | null {
+  if (isFollowed(followed, competitionKey, game.home.sourceTeamId)) return "home";
+  if (isFollowed(followed, competitionKey, game.away.sourceTeamId)) return "away";
+  return null;
 }
 
 function startMs(game: GameSummary): number {
@@ -139,7 +144,8 @@ export function selectTonightRows(
     const row = {
       game,
       competitionLabel,
-      followed: isFollowedSide(followed, game.competitionKey, game)
+      followed: isFollowedSide(followed, game.competitionKey, game),
+      followedSide: followedSide(followed, game.competitionKey, game)
     };
     if (phase === "tonight") {
       tonightRows.push(row);
@@ -184,7 +190,6 @@ export function ScoreRow(props: { row: ScoreRowData; followed: FollowedTeamIndex
   const live = row.game.state === "live";
   const firstFollowed = isFollowed(props.followed, row.game.competitionKey, first.sourceTeamId);
   const secondFollowed = isFollowed(props.followed, row.game.competitionKey, second.sourceTeamId);
-  const detail = scoreDetail(row.game.statusDetail);
   return (
     <li className="sp-scores__row">
       <div className="sp-scores__sides">
@@ -194,9 +199,9 @@ export function ScoreRow(props: { row: ScoreRowData; followed: FollowedTeamIndex
       <div className="sp-scores__status">
         {live ? <LiveDot /> : null}
         <span className="sp-scores__statusline" aria-label={row.competitionLabel}>
-          {detail.status}
+          {row.game.statusDetail}
         </span>
-        {detail.recap ? <span className="sp-scores__recap">{detail.recap}</span> : null}
+        <span className="sp-scores__recap">{row.game.recap ?? ""}</span>
       </div>
     </li>
   );
@@ -205,7 +210,6 @@ export function ScoreRow(props: { row: ScoreRowData; followed: FollowedTeamIndex
 /** One Tonight row: kicker, matchup and the local start time — or "Postponed". */
 export function TonightRow(props: { row: TonightRowData; locale: LocaleSettingsDto }): ReactNode {
   const { row } = props;
-  const detail = scoreDetail(row.game.statusDetail);
   const soccer = SOCCER_COMPETITIONS.has(row.game.competitionKey);
   const matchup = soccer
     ? `${row.game.home.shortName} vs. ${row.game.away.shortName}`
@@ -221,7 +225,13 @@ export function TonightRow(props: { row: TonightRowData; locale: LocaleSettingsD
       <span className="sp-tonight__time">
         {postponed ? "Postponed" : formatTime(row.game.startsAt, props.locale)}
       </span>
-      {detail.recap ? <span className="sp-tonight__note">{detail.recap}</span> : null}
+      <span className="sp-tonight__note">
+        {row.followed && row.followedSide
+          ? row.followedSide === "home"
+            ? "Home"
+            : "Away"
+          : (row.game.recap ?? "")}
+      </span>
     </li>
   );
 }

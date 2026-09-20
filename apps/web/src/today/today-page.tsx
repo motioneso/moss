@@ -573,6 +573,7 @@ export function TodayPage(props: {
 
             <ProactiveCards />
           </div>
+          <ModuleTodayWidgets slot="sports" disabledModuleIds={disabledModuleIds} />
         </div>
         {dialog ? (
           <TaskDetailsDialog

@@ -133,7 +133,7 @@ describe("Sports Today scores", () => {
         {
           competitionKey: "nfl",
           competitionLabel: "NFL",
-          games: [game({ statusDetail: "Final / A seventh-inning comeback" })]
+          games: [game({ recap: "A seventh-inning comeback" })]
         }
       ]
     });
@@ -273,9 +273,10 @@ describe("Sports Today Tonight", () => {
       game({
         id: `tonight-${index}`,
         state: "pre",
-        statusDetail: `Scheduled / ${note}`,
+        statusDetail: "Scheduled",
+        recap: index === 0 ? null : note,
         startsAt: `2026-07-07T23:${30 + index * 10}:00.000Z`,
-        home: vikingSide(null),
+        home: index === 0 ? vikingSide(null) : cowboySide(null),
         away: cowboySide(null)
       })
     );

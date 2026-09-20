@@ -39,6 +39,8 @@ interface TemplateEvent {
   readonly startsAtOffsetHours: number;
   readonly state: string;
   readonly statusDetail: string;
+  readonly recap?: string;
+  readonly note?: string;
   readonly home: TemplateSide;
   readonly away: TemplateSide;
 }
@@ -100,6 +102,8 @@ export function stampEng1Scoreboard(
       competitions: [
         {
           status: { type: { state: event.state, detail: event.statusDetail } },
+          ...(event.recap ? { headlines: [{ shortLinkText: event.recap }] } : {}),
+          ...(event.note ? { notes: [{ headline: event.note }] } : {}),
           competitors: [stampSide(event.home, "home"), stampSide(event.away, "away")]
         }
       ]

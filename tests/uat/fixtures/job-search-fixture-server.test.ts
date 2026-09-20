@@ -231,6 +231,7 @@ describe("startJobSearchFixtureServer", () => {
       );
       expect(followedRows).toHaveLength(1);
       expect(elsewhereRows).toHaveLength(3);
+      expect(followedRows[0]!.game.recap).toBe("A seventh-inning comeback");
       const followedSides = [
         followedRows[0]!.game.home.sourceTeamId,
         followedRows[0]!.game.away.sourceTeamId
@@ -243,6 +244,8 @@ describe("startJobSearchFixtureServer", () => {
         "uat-eng1-new-che",
         "uat-eng1-che-liv"
       ]);
+      expect(tonightRows[0]!.game.recap).toBe("Home");
+      expect(tonightRows[1]!.game.recap).toBe("Away");
       expect(
         tonightRows.every((row) => new Date(row.game.startsAt).getTime() > NOON.getTime())
       ).toBe(true);

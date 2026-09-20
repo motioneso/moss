@@ -54,6 +54,7 @@ const gameSummarySchema = {
     startsAt: { type: "string" },
     state: { type: "string", enum: ["pre", "live", "final"] },
     statusDetail: { type: "string" },
+    recap: { type: ["string", "null"] },
     home: gameSideSchema,
     away: gameSideSchema
   }

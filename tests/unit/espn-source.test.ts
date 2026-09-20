@@ -27,6 +27,43 @@ function fetchDataset(datasetKey: string, params: Record<string, unknown>, fetch
 }
 
 describe("EspnDatasetAdapter", () => {
+  it("maps ESPN recap headlines and series notes without changing statusDetail", async () => {
+    const games = (await fetchDataset(
+      "scoreboard",
+      { competitionKey: "nfl", day: "2026-01-04" },
+      okFetch({
+        events: [
+          {
+            id: "with-headline",
+            date: "2026-01-04T00:00:00Z",
+            competitions: [
+              {
+                status: { type: { state: "post", detail: "Final / 10" } },
+                headlines: [{ shortLinkText: "A late comeback" }],
+                notes: [{ headline: "Series opener" }],
+                competitors: []
+              }
+            ]
+          },
+          {
+            id: "with-note",
+            date: "2026-01-04T01:00:00Z",
+            competitions: [
+              {
+                status: { type: { state: "pre", detail: "Scheduled" } },
+                notes: [{ headline: "Series opener" }],
+                competitors: []
+              }
+            ]
+          }
+        ]
+      })
+    )) as { statusDetail: string; recap?: string | null }[];
+
+    expect(games[0]).toMatchObject({ statusDetail: "Final / 10", recap: "A late comeback" });
+    expect(games[1]).toMatchObject({ statusDetail: "Scheduled", recap: "Series opener" });
+  });
+
   it("parses a scoreboard into GameSummary[]", async () => {
     const games = (await fetchDataset(
       "scoreboard",

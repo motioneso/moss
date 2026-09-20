@@ -102,6 +102,13 @@
   min-width: 0;
 }
 
+/* Sports owns a full-width row after the main content and rail share their top row. */
+.cmd-grid > .jds-brief--sports {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+}
+
 /* --- Score rows: names, scores, status in three columns --- */
 .jds-brief--sports .sp-scores__row {
   display: grid;

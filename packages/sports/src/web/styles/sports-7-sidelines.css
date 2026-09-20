@@ -223,14 +223,6 @@
   grid-row: 4;
 }
 
-/* The widget is promoted out of the main column so the rail ends above this full-width desk. */
-.cmd-grid:has(.jds-brief--sports) #widgets {
-  display: contents;
-}
-.cmd-grid:has(.jds-brief--sports) .jds-brief--sports {
-  grid-column: 1 / -1;
-}
-
 @media (max-width: 1080px) {
   .jds-brief--sports .desk-stories {
     border-left: 0;

@@ -122,6 +122,7 @@ const dalLiveGame: GameSummary = {
   startsAt: "2026-07-01T20:00:00.000Z",
   state: "live",
   statusDetail: "Q3 4:12",
+  recap: "A late comeback",
   home: side({
     teamKey: "dal",
     shortName: "DAL",
@@ -303,6 +304,7 @@ describe("sports routes", () => {
     // name. A response schema that omits it drops it silently, which is exactly what happened.
     expect(body.followedTeams[0]).toHaveProperty("sourceTeamId", "6");
     expect(body.scoreboard[0].games[0].home).toHaveProperty("sourceTeamId", "6");
+    expect(body.scoreboard[0].games[0]).toHaveProperty("recap", "A late comeback");
     expect(body.hero.games[0].game.home).toHaveProperty("sourceTeamId", "6");
     expect(body).toHaveProperty("ambiguousFollows");
     await app.close();
