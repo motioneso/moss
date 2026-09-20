@@ -11,6 +11,20 @@ import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
 
 /**
+ * The heading for the state the screen is in. The shell already labels the page, so this
+ * says what the moment asks of you instead of repeating that label.
+ */
+function pickHeading(
+  decided: "approved" | "denied" | null,
+  status: PairAttemptSummaryResponse["status"] | undefined
+): string {
+  if (decided === "approved") return "That Mac is connected";
+  if (decided === "denied") return "Nothing was connected";
+  if (status === "pending") return "Do you recognise this Mac?";
+  return "Connect a Mac to your account";
+}
+
+/**
  * The screen a Mac sends someone to when it wants to link (#2560).
  *
  * The Mac never sees this page and never learns who is signed in here. It holds a secret
@@ -38,10 +52,14 @@ export function LinkTrailMarkerPage() {
 
   const deviceName = attemptQuery.data?.deviceName;
 
+  // The shell already labels the page, so the heading says what this moment asks of you
+  // rather than repeating that label.
+  const heading = pickHeading(decided, attemptQuery.data?.status);
+
   return (
     <section className="page-stack" aria-label={`Link ${COMPANION_PRODUCT_NAME}`}>
       <Card padding="lg">
-        <h1>Link a Mac</h1>
+        <h1>{heading}</h1>
 
         {code.length === 0 ? (
           <p>
