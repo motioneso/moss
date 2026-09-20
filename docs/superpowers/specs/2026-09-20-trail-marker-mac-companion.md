@@ -2,7 +2,7 @@
 
 Date: 2026-09-20
 Status: specification for review; product decisions agreed in the design interview, visual direction supplied by Ben. No product implementation is included in this change.
-Tracking: create the implementation task and link it here before beginning the build. This spec is separate from the Moss desktop-server packaging project.
+Tracking: [#2560 — Build Trail Marker: native Mac companion connection foundation](https://github.com/motioneso/moss/issues/2560). This spec is separate from the Moss desktop-server packaging project.
 
 ## 1. Outcome and scope
 
