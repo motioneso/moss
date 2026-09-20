@@ -23,7 +23,7 @@ final class ConnectionRuntime: ObservableObject {
     private var tasks: [Int: Task<Void, Never>] = [:]
     private var pathMonitor: NWPathMonitor?
     private var wakeObserver: NSObjectProtocol?
-    private var lastPathSatisfied = false
+    private var lastPathSatisfied: Bool?
 
     init(
         keychain: KeychainStore = KeychainStore(),
@@ -116,11 +116,15 @@ final class ConnectionRuntime: ObservableObject {
             do {
                 let response = try await client.heartbeat(credential: credential, app: appVersion, os: osVersion)
                 self?.recordDisplayName(response.device.displayName)
-                guard let serverTime = ISO8601DateFormatter().date(from: response.serverTime) else { return }
-                await self?.handle(.heartbeatSucceeded(at: serverTime, generation: generation))
+                let contactTime = ServerTime.parse(response.serverTime) ?? Date()
+                await self?.handle(.heartbeatSucceeded(at: contactTime, generation: generation))
             } catch let error as CompanionError {
+                if Task.isCancelled { return }
                 await self?.handle(.heartbeatFailed(error, generation: generation))
             } catch {
+                // A cancelled attempt was superseded by a newer one — it says nothing about the
+                // network, so it must not count as a failure or advance the backoff.
+                if Task.isCancelled || (error as? URLError)?.code == .cancelled { return }
                 await self?.handle(.heartbeatFailed(.unreachable, generation: generation))
             }
         }
@@ -133,8 +137,10 @@ final class ConnectionRuntime: ObservableObject {
             do {
                 try await client.logout(credential: credential)
             } catch let error as CompanionError {
+                if Task.isCancelled { return }
                 await self?.handle(.heartbeatFailed(error, generation: generation))
             } catch {
+                if Task.isCancelled || (error as? URLError)?.code == .cancelled { return }
                 await self?.handle(.heartbeatFailed(.unreachable, generation: generation))
             }
         }
@@ -192,8 +198,9 @@ final class ConnectionRuntime: ObservableObject {
         monitor.pathUpdateHandler = { path in
             let satisfied = path.status == .satisfied
             Task { @MainActor in
+                // The first callback only reports the current path; it is a baseline, not a change.
                 defer { self.lastPathSatisfied = satisfied }
-                if satisfied, !self.lastPathSatisfied {
+                if satisfied, self.lastPathSatisfied == false {
                     self.send(.networkChanged)
                 }
             }
@@ -244,5 +251,16 @@ enum Diagnostics {
         }
         lines.append("Time: \(ISO8601DateFormatter().string(from: date))")
         return lines.joined(separator: "\n")
+    }
+}
+
+/// The server sends fractional seconds (`2026-09-20T21:26:40.572Z`), which a default
+/// `ISO8601DateFormatter` rejects.
+enum ServerTime {
+    static func parse(_ text: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: text) { return date }
+        return ISO8601DateFormatter().date(from: text)
     }
 }
