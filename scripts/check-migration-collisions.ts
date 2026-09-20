@@ -326,8 +326,19 @@ export function excludeOwnPullRequest<T extends { readonly headRefName: string }
   return pullRequests.filter((pr) => pr.headRefName !== currentBranch);
 }
 
-/** The checked-out branch name, or undefined on a detached HEAD or outside a repository. */
-export function getCurrentBranchName(cwd: string = process.cwd()): string | undefined {
+/**
+ * The branch this run belongs to. Falls back to undefined on a detached HEAD with no
+ * workflow environment, or outside a repository.
+ */
+export function getCurrentBranchName(
+  cwd: string = process.cwd(),
+  env: NodeJS.ProcessEnv = process.env
+): string | undefined {
+  // A pull request build checks out a detached commit, so git knows no branch name. The
+  // workflow environment still names the branch the pull request came from.
+  const headRef = env.GITHUB_HEAD_REF?.trim();
+  if (headRef) return headRef;
+
   try {
     const name = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
       cwd,

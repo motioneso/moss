@@ -10,6 +10,7 @@ import {
   checkLocalDuplicates,
   excludeOwnPullRequest,
   findLocalMigrationFiles,
+  getCurrentBranchName,
   parseMigrationPath,
   type ClaimSource,
   type MigrationFile
@@ -213,6 +214,19 @@ describe("check-migration-collisions (Issue #2371)", () => {
 
     it("keeps every pull request when the branch has none open", () => {
       expect(excludeOwnPullRequest(pullRequests, "feature-d")).toEqual(pullRequests);
+    });
+  });
+
+  describe("getCurrentBranchName", () => {
+    it("uses the workflow branch name when the checkout is detached", () => {
+      expect(getCurrentBranchName(process.cwd(), { GITHUB_HEAD_REF: "feature-a" })).toBe(
+        "feature-a"
+      );
+    });
+
+    it("ignores an empty workflow branch name and asks git", () => {
+      const fromGit = getCurrentBranchName(process.cwd(), {});
+      expect(getCurrentBranchName(process.cwd(), { GITHUB_HEAD_REF: "  " })).toBe(fromGit);
     });
   });
 
