@@ -279,12 +279,14 @@ export async function revokeMyOtherSessions(): Promise<RevokeMyOtherSessionsResp
   });
 }
 
-/** Reads what a waiting Mac is asking to link, by the code it put in the browser's URL (#2560). */
-/** Posts to read, so the approval code never reaches a URL and never reaches a log. */
+/**
+ * Reads what a waiting Mac is asking to link (#2560). A post for a read, so the approval
+ * code travels in the body and never reaches a URL or a server log.
+ */
 export async function getCompanionPairAttempt(code: string): Promise<PairAttemptSummaryResponse> {
   return requestJson<PairAttemptSummaryResponse>("/api/companion/pair/attempt", {
     method: "POST",
-    body: JSON.stringify({ code })
+    body: { code }
   });
 }
 
