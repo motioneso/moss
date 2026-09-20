@@ -202,10 +202,16 @@ export function createMossAuthRuntime(options: CreateMossAuthRuntimeOptions): Mo
       }),
     listConfiguredProviders: () => listConfiguredAuthProviders(env),
     revokeUserSessions: async (userId: string) => {
-      const result = await pool.query("DELETE FROM app.better_auth_sessions WHERE user_id = $1", [
+      const browser = await pool.query("DELETE FROM app.better_auth_sessions WHERE user_id = $1", [
         userId
       ]);
-      return result.rowCount ?? 0;
+      // A linked Mac is a way into the account, so cutting someone off has to take it
+      // too. It also shows in the same Active sessions list, which would otherwise keep
+      // listing a Mac an admin was told they had just signed out.
+      const companion = await pool.query("DELETE FROM app.companion_devices WHERE user_id = $1", [
+        userId
+      ]);
+      return (browser.rowCount ?? 0) + (companion.rowCount ?? 0);
     },
     meSessions: createMeSessionsService({ pool, auth }),
     trustedOrigins: resolveAuthOriginConfig(env).trustedOrigins,

@@ -40,7 +40,8 @@ async function startAttempt(deviceName = "Studio Mac") {
   });
   expect(res.statusCode).toBe(200);
   const body = res.json() as { attemptId: string; approvalPath: string };
-  const code = new URL(body.approvalPath, "http://x").searchParams.get("code");
+  const hash = new URL(body.approvalPath, "http://x").hash.replace(/^#/, "");
+  const code = new URLSearchParams(hash).get("code");
   if (!code) throw new Error("approval path carried no code");
   return { attemptId: body.attemptId, code };
 }
@@ -91,7 +92,7 @@ describe("companion route surface", () => {
     const routes = [
       { method: "POST" as const, url: "/api/companion/protocol" },
       { method: "POST" as const, url: "/api/companion/pair" },
-      { method: "GET" as const, url: "/api/companion/pair/attempt?code=nope-nope-nope-nope" },
+      { method: "POST" as const, url: "/api/companion/pair/attempt" },
       { method: "POST" as const, url: "/api/companion/pair/decide" },
       { method: "POST" as const, url: "/api/companion/pair/redeem" },
       { method: "POST" as const, url: "/api/companion/pair/cancel" },
@@ -171,12 +172,13 @@ describe("linking a Mac", () => {
 
   it("shows the browser what it is being asked to approve", async () => {
     const { code } = await startAttempt("Named Mac");
-    // No Origin header, because a browser omits it on a same-origin GET. The read must
-    // still work; only the approve call demands a trusted origin.
+    // The code travels in the body. Fastify logs every request URL, so a query parameter
+    // would write a live approval secret into ordinary server logs.
     const res = await server.inject({
-      method: "GET",
-      url: `/api/companion/pair/attempt?code=${encodeURIComponent(code)}`,
-      headers: asOwner()
+      method: "POST",
+      url: "/api/companion/pair/attempt",
+      headers: asOwner({ origin: TRUSTED_ORIGIN }),
+      payload: { code }
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ deviceName: "Named Mac", status: "pending" });
@@ -185,10 +187,88 @@ describe("linking a Mac", () => {
   it("refuses the summary to a caller who is not signed in", async () => {
     const { code } = await startAttempt("Peeked Mac");
     const res = await server.inject({
-      method: "GET",
-      url: `/api/companion/pair/attempt?code=${encodeURIComponent(code)}`
+      method: "POST",
+      url: "/api/companion/pair/attempt",
+      headers: { origin: TRUSTED_ORIGIN },
+      payload: { code }
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  it("refuses the summary to a signed-in caller from a foreign origin", async () => {
+    const { code } = await startAttempt("Foreign Peek Mac");
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/companion/pair/attempt",
+      headers: asOwner({ origin: "https://evil.example" }),
+      payload: { code }
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("an admin signing someone out unlinks their Macs too", async () => {
+    const credential = await linkMac("Admin Revoked Mac");
+    const bearer = { authorization: `Bearer ${credential}` };
+
+    const revoked = await server.inject({
+      method: "POST",
+      url: `/api/admin/users/${ids.userA}/revoke-sessions`,
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` }
+    });
+    expect(revoked.statusCode).toBe(200);
+
+    // A linked Mac is a way into the account. Leaving it alive would keep it listed under
+    // Active sessions after an admin was told the person had been signed out.
+    const afterRevoke = await server.inject({
+      method: "POST",
+      url: "/api/companion/heartbeat",
+      headers: bearer,
+      payload: { appVersion: "1.0.0", osVersion: "14.5" }
+    });
+    expect(afterRevoke.statusCode).toBe(401);
+  });
+
+  it("cancelling after a redeem takes the credential with it", async () => {
+    // A redeem can land in the moment between someone deciding to cancel on the Mac and
+    // the request reaching the server. The credential must not outlive the cancel.
+    const { attemptId, code } = await startAttempt("Raced Mac");
+    await server.inject({
+      method: "POST",
+      url: "/api/companion/pair/decide",
+      headers: asOwner({ origin: TRUSTED_ORIGIN }),
+      payload: { code, decision: "approve" }
+    });
+    const redeemed = await server.inject({
+      method: "POST",
+      url: "/api/companion/pair/redeem",
+      payload: { attemptId, verifier: VERIFIER }
+    });
+    expect(redeemed.statusCode).toBe(200);
+    const credential = (redeemed.json() as { credential: string }).credential;
+    const bearer = { authorization: `Bearer ${credential}` };
+
+    const beat = await server.inject({
+      method: "POST",
+      url: "/api/companion/heartbeat",
+      headers: bearer,
+      payload: { appVersion: "1.0.0", osVersion: "14.5" }
+    });
+    expect(beat.statusCode).toBe(200);
+
+    const cancelled = await server.inject({
+      method: "POST",
+      url: "/api/companion/pair/cancel",
+      payload: { attemptId, verifier: VERIFIER }
+    });
+    expect(cancelled.statusCode).toBe(204);
+
+    const afterCancel = await server.inject({
+      method: "POST",
+      url: "/api/companion/heartbeat",
+      headers: bearer,
+      payload: { appVersion: "1.0.0", osVersion: "14.5" }
+    });
+    expect(afterCancel.statusCode).toBe(401);
   });
 
   it("lets the app abandon its own attempt", async () => {

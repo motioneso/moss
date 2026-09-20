@@ -81,11 +81,14 @@ describe("creating a pairing attempt", () => {
     expect(row?.verifier_hash).not.toBe(VERIFIER);
   });
 
-  it("puts the approval code in the browser path and nothing else", async () => {
+  it("puts the approval code in the link fragment and nothing else", async () => {
     const created = await pairing.create(attemptInput());
+    // A fragment never reaches a server, so the code stays out of request logs and out of
+    // any Referer header the approval page would otherwise send.
     expect(created.approvalPath).toBe(
-      `/link/trail-marker?code=${encodeURIComponent(created.approvalCode)}`
+      `/link/trail-marker#code=${encodeURIComponent(created.approvalCode)}`
     );
+    expect(created.approvalPath).not.toContain("?");
     expect(created.approvalPath).not.toContain(VERIFIER);
   });
 

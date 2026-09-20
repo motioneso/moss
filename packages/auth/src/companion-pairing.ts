@@ -116,7 +116,10 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
       return {
         attemptId,
         approvalCode,
-        approvalPath: `${COMPANION_APPROVAL_PATH}?code=${encodeURIComponent(approvalCode)}`,
+        // The code sits in the fragment, which a browser never puts in a request and never
+        // sends in a Referer header. The same server serves this page and logs every URL
+        // it is asked for, so a query parameter would log a live approval secret.
+        approvalPath: `${COMPANION_APPROVAL_PATH}#code=${encodeURIComponent(approvalCode)}`,
         expiresAt
       };
     },
@@ -202,8 +205,8 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
         const device = await client.query<{ id: string; display_name: string }>(
           `INSERT INTO app.companion_devices
              (user_id, credential_hash, display_name, platform, app_version, os_version,
-              created_at, expires_at, absolute_expires_at)
-           SELECT $1, $2, $3, a.platform, a.app_version, a.os_version, $4, $5, $6
+              created_at, expires_at, absolute_expires_at, pair_attempt_id)
+           SELECT $1, $2, $3, a.platform, a.app_version, a.os_version, $4, $5, $6, a.id
              FROM app.companion_pair_attempts a
             WHERE a.id = $7
            RETURNING id, display_name`,
@@ -256,10 +259,35 @@ export function createCompanionPairingService(deps: PairingDeps): CompanionPairi
     async cancel({ attemptId, verifier }) {
       // Possession of the verifier is the whole authorization. A cancel wins against a
       // late browser approval because the row is gone before the approval can land.
-      await pool.query(
-        "DELETE FROM app.companion_pair_attempts WHERE id = $1 AND verifier_hash = $2",
-        [attemptId, sha256Base64url(verifier)]
-      );
+      //
+      // Cancelling also undoes a link that already happened. A redeem can land in the
+      // moment between the person deciding to cancel and the request arriving, and a
+      // cancel that left that credential alive would leave a working Mac nobody meant to
+      // connect. Both deletes are one transaction, so neither can survive the other.
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        // The device goes first. Deleting the attempt clears the link column, so the
+        // other order would leave the credential with nothing pointing at it.
+        await client.query(
+          `DELETE FROM app.companion_devices
+            WHERE pair_attempt_id IN (
+              SELECT id FROM app.companion_pair_attempts
+               WHERE id = $1 AND verifier_hash = $2
+            )`,
+          [attemptId, sha256Base64url(verifier)]
+        );
+        await client.query(
+          "DELETE FROM app.companion_pair_attempts WHERE id = $1 AND verifier_hash = $2",
+          [attemptId, sha256Base64url(verifier)]
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
     }
   };
 }

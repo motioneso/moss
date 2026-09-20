@@ -53,7 +53,7 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   // trusted Origin, and the device ones need a companion credential.
   routeKey("POST", "/api/companion/protocol"),
   routeKey("POST", "/api/companion/pair"),
-  routeKey("GET", "/api/companion/pair/attempt"),
+  routeKey("POST", "/api/companion/pair/attempt"),
   routeKey("POST", "/api/companion/pair/decide"),
   routeKey("POST", "/api/companion/pair/redeem"),
   routeKey("POST", "/api/companion/pair/cancel"),

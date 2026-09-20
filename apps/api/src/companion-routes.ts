@@ -32,7 +32,15 @@ import {
  * other route in the product.
  */
 
+/** Starting, abandoning or probing. A person does these by hand, a few times at most. */
 const PAIR_RATE_MAX = 20;
+
+/**
+ * Polling redeem. The server tells each Mac to ask every 3 seconds, which is 20 a minute,
+ * and several Macs behind one home router share an address, so a 20 bucket would reject
+ * ordinary use. 120 leaves room for six Macs linking at once.
+ */
+const REDEEM_RATE_MAX = 120;
 
 /**
  * Unauthenticated pairing endpoints are pre-credential, so Authorization and Cookie are
@@ -40,13 +48,15 @@ const PAIR_RATE_MAX = 20;
  * explicitly: a per-route rateLimit without a keyGenerator inherits the global principal
  * key, which an attacker mints a fresh bucket in by varying a junk bearer token.
  */
-const ipRateLimit = {
-  rateLimit: {
-    max: PAIR_RATE_MAX,
-    timeWindow: "1 minute",
-    keyGenerator: (req: FastifyRequest) => `ip:${req.ip}`
-  }
-};
+function ipRateLimit(max: number) {
+  return {
+    rateLimit: {
+      max,
+      timeWindow: "1 minute",
+      keyGenerator: (req: FastifyRequest) => `ip:${req.ip}`
+    }
+  };
+}
 
 export interface CompanionRouteDeps {
   readonly authRuntime: MossAuthRuntime;
@@ -58,9 +68,9 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
   const devices = authRuntime.companionDevices;
 
   /**
-   * Resolves the signed-in browser. `requireTrustedOrigin` adds a same-origin check, which
-   * belongs on the state-changing decide call and not on the read. A browser omits Origin on
-   * a same-origin GET, so demanding it there would refuse the product's own page.
+   * Resolves the signed-in browser. `requireTrustedOrigin` adds a same-origin check. Both
+   * browser routes are POSTs carrying the approval code in the body, and a browser sends an
+   * Origin header on every POST, so both can demand one.
    */
   async function requireBrowserActor(
     request: FastifyRequest,
@@ -109,13 +119,13 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
   // shows the user a pairing screen. Carries no account information at all.
   server.post(
     "/api/companion/protocol",
-    { schema: companionProtocolRouteSchema, config: ipRateLimit },
+    { schema: companionProtocolRouteSchema, config: ipRateLimit(PAIR_RATE_MAX) },
     async () => ({ product: "moss" as const, companionProtocol: COMPANION_PROTOCOL_VERSION })
   );
 
   server.post<{ Body: CreatePairAttemptRequest }>(
     "/api/companion/pair",
-    { schema: createPairAttemptRouteSchema, config: ipRateLimit },
+    { schema: createPairAttemptRouteSchema, config: ipRateLimit(PAIR_RATE_MAX) },
     async (request) => {
       const attempt = await pairing.create(request.body);
       return {
@@ -127,14 +137,17 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
     }
   );
 
-  server.get<{ Querystring: { code: string } }>(
+  // A POST for a read, so the approval code sits in the body. Fastify logs every request
+  // URL, and a code in the query string would land in ordinary server logs while it is
+  // still live.
+  server.post<{ Body: { code: string } }>(
     "/api/companion/pair/attempt",
     { schema: getPairAttemptRouteSchema },
     async (request, reply) => {
-      const actorUserId = await requireBrowserActor(request, reply, false);
+      const actorUserId = await requireBrowserActor(request, reply, true);
       if (!actorUserId) return reply;
 
-      const summary = await pairing.summarize({ approvalCode: request.query.code });
+      const summary = await pairing.summarize({ approvalCode: request.body.code });
       // Unknown, expired and already-finished all answer 404, so a guessed code tells
       // the guesser nothing about whether it ever existed.
       if (!summary) return reply.code(404).send({ error: "That link request is no longer open" });
@@ -166,7 +179,7 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
 
   server.post<{ Body: RedeemPairAttemptRequest }>(
     "/api/companion/pair/redeem",
-    { schema: redeemPairAttemptRouteSchema, config: ipRateLimit },
+    { schema: redeemPairAttemptRouteSchema, config: ipRateLimit(REDEEM_RATE_MAX) },
     async (request, reply) => {
       const result = await pairing.redeem(request.body);
       if (result.status === "issued") return result.response;
@@ -189,7 +202,7 @@ export function registerCompanionRoutes(server: FastifyInstance, deps: Companion
 
   server.post<{ Body: RedeemPairAttemptRequest }>(
     "/api/companion/pair/cancel",
-    { schema: cancelPairAttemptRouteSchema, config: ipRateLimit },
+    { schema: cancelPairAttemptRouteSchema, config: ipRateLimit(PAIR_RATE_MAX) },
     async (request, reply) => {
       // Possession of the verifier is the whole authorization, and the answer is 204
       // either way: whether a row was there is not something a caller should learn.

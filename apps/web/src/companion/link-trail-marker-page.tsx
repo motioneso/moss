@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router";
+import { useLocation } from "react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Laptop, ShieldCheck } from "lucide-react";
 
@@ -28,13 +28,15 @@ function pickHeading(
  * The screen a Mac sends someone to when it wants to link (#2560).
  *
  * The Mac never sees this page and never learns who is signed in here. It holds a secret
- * the server has only a digest of, and the code in this URL is what lets the browser name
+ * the server has only a digest of, and the code in this link is what lets the browser name
  * the waiting Mac. Approving binds the signed-in account to that attempt; the Mac then
  * trades its secret for a credential of its own.
  */
 export function LinkTrailMarkerPage() {
-  const [params] = useSearchParams();
-  const code = params.get("code") ?? "";
+  // The code arrives in the fragment, which the browser keeps to itself. Reading it from
+  // the query string instead would mean the server logged it on every page load.
+  const { hash } = useLocation();
+  const code = new URLSearchParams(hash.replace(/^#/, "")).get("code") ?? "";
   const assistantName = useAssistantName();
   const [decided, setDecided] = useState<"approved" | "denied" | null>(null);
 

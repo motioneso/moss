@@ -43,8 +43,9 @@ App     POST /api/companion/protocol            -> { companionProtocol: 1 }     
 App     POST /api/companion/pair                -> { attemptId, approvalPath,      (no auth, IP rate-limited)
           { deviceName, platform, appVersion,        pollIntervalSeconds, expiresAt }
             osVersion, verifierHash }
-App     opens  <instance>/link/trail-marker?code=<approvalCode>   in default browser
-Browser GET   /api/companion/pair/attempt?code= -> { deviceName, status }          (cookie session)
+App     opens  <instance>/link/trail-marker#code=<approvalCode>   in default browser
+Browser POST  /api/companion/pair/attempt       -> { deviceName, status }          (cookie session, same-origin)
+          { code }
 Browser POST  /api/companion/pair/decide        -> { status }                      (cookie session, same-origin)
           { code, decision: "approve" | "deny" }
 App     POST /api/companion/pair/redeem         -> 200 { credential, device, account, expiresAt }
@@ -61,18 +62,19 @@ Secrets and who holds them:
 | ------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------- |
 | `verifier` (32 random bytes, base64url)           | App only, in memory for the attempt              | Proof of possession at redeem/cancel. Server stores `sha256(verifier)`.         |
 | `attemptId` (uuid)                                | App, server                                      | Public handle for the attempt. Useless without the verifier.                    |
-| `approvalCode` (24 random bytes, base64url)       | Browser URL, server as `sha256(code)`            | Lets the signed-in browser find and decide the attempt. Cannot redeem anything. |
+| `approvalCode` (24 random bytes, base64url)       | Browser link fragment, server as `sha256(code)`  | Lets the signed-in browser find and decide the attempt. Cannot redeem anything. |
 | `credential` (`tm1_` + 32 random bytes base64url) | App Keychain; server stores `sha256(credential)` | The companion bearer credential. Issued once, at redeem.                        |
 
 Rules enforced server-side:
 
 - An attempt expires 10 minutes after creation. Expired rows are deleted lazily on every `pair` create (`DELETE ... WHERE expires_at < now()`); no scheduler.
 - `decide` binds `user_id` to the attempt and moves `pending → approved | denied`. A second `decide` on a non-pending attempt returns 409. The signed-in user is taken from the cookie session, never from the body.
-- `decide` requires a same-origin request: `Origin` header must match a trusted origin from the auth runtime's origin config, and the body must be JSON (Fastify rejects form posts by content type). This is the CSRF protection §9.3 asks for.
+- The approval code never appears in a URL. It travels in the link fragment to the browser, which no browser sends to a server, and in the request body on both browser calls. The same Fastify server serves the approval page and logs every URL it is asked for, so a query parameter would write a live code into ordinary logs.
+- `attempt` and `decide` both require a same-origin request: `Origin` header must match a trusted origin from the auth runtime's origin config, and the body must be JSON (Fastify rejects form posts by content type). This is the CSRF protection §9.3 asks for.
 - `redeem` succeeds only when `status = 'approved'` AND `verifier_hash = sha256(body.verifier)`, executed as one `UPDATE ... SET status='redeemed' WHERE id=$1 AND status='approved' AND verifier_hash=$2 RETURNING user_id, device_name` so two racing redeems cannot both win. The credential row is inserted in the same transaction.
 - A wrong verifier on an approved attempt returns 404 `{ status: "unknown" }`, identical to a nonexistent attempt, so the public id leaks nothing.
 - `cancel` with the correct verifier deletes the attempt in any state. If the browser approved after the app cancelled, the attempt is already gone and `decide` returns 404; no credential ever existed (§3.5).
-- Rate limits: `pair`, `redeem`, `cancel`, `protocol` keyed by peer IP (pre-auth, same reasoning as `/api/auth/*`); `pair` at 10/min per IP, `redeem` at 60/min per IP (polling every 3 s is 20/min). `attempt`/`decide` inherit the global authenticated limit.
+- Rate limits: `pair`, `redeem`, `cancel`, `protocol` keyed by peer IP (pre-auth, same reasoning as `/api/auth/*`); `pair`, `cancel` and `protocol` at 20/min per IP each; `redeem` in its own bucket at 120/min per IP, because polling every 3 s is 20/min per Mac and several Macs share one home address. `attempt`/`decide` inherit the global authenticated limit.
 
 ### 1.2 Credential lifetime and renewal
 

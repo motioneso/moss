@@ -449,6 +449,12 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0238",
           name: "0238_companion_devices.sql"
+        },
+        // #2560 — a linked Mac remembers the pairing request that minted it, so a cancel
+        // can take the credential with it.
+        {
+          version: "0239",
+          name: "0239_companion_device_pair_attempt.sql"
         }
       ]);
     } finally {

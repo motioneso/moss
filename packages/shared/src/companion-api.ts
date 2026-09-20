@@ -189,7 +189,9 @@ export const createPairAttemptRouteSchema = {
 } as const;
 
 export const getPairAttemptRouteSchema = {
-  querystring: {
+  // The code travels in the body, never the URL. Fastify logs every request URL, so a
+  // query parameter would write a live approval secret into ordinary server logs.
+  body: {
     type: "object",
     additionalProperties: false,
     required: ["code"],
