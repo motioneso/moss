@@ -16,6 +16,8 @@ function session(overrides: Partial<MeSessionDto>): MeSessionDto {
     browser: "Chrome",
     os: "macOS",
     deviceKind: "laptop",
+    source: "browser",
+    companion: null,
     ...overrides
   };
 }
