@@ -78,6 +78,9 @@ final class ConnectionRuntime: ObservableObject {
             case .cancelAll:
                 cancelAllTasks()
             case .storeCredential(let credential, let newIdentity):
+                if let previous = identity, previous != newIdentity {
+                    keychain.delete(for: previous)
+                }
                 identity = newIdentity
                 preferences.linkedIdentity = newIdentity
                 client = CompanionClient(

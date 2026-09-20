@@ -147,4 +147,24 @@ final class ConnectionMachineTests: XCTestCase {
         XCTAssertFalse(effects.contains(.persistEnabled(true)))
         XCTAssertFalse(effects.contains(.persistEnabled(false)))
     }
+
+    func testRevokedCredentialWhileConnectedRequiresSignIn() {
+        var machine = ConnectionMachine(state: .connected(lastContact: now), generation: 2)
+        let effects = machine.handle(.heartbeatFailed(.credentialInvalid, generation: 2), now: now)
+
+        XCTAssertEqual(machine.state, .signInRequired(reason: .revoked))
+        XCTAssertEqual(effects, [.cancelAll])
+    }
+
+    func testNetworkFailureWhileConnectedStartsReconnectingAndKeepsLastContact() {
+        var machine = ConnectionMachine(state: .connected(lastContact: now), generation: 2)
+        let effects = machine.handle(.heartbeatFailed(.unreachable, generation: 2), now: now)
+
+        XCTAssertEqual(machine.state, .reconnecting(attempt: 1, lastContact: now))
+        guard case .scheduleHeartbeat(let after, let generation) = effects.first else {
+            return XCTFail("expected a retry to be scheduled, got \(effects)")
+        }
+        XCTAssertLessThanOrEqual(after, 300)
+        XCTAssertEqual(generation, 2)
+    }
 }

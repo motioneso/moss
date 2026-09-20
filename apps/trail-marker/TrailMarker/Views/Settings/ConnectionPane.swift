@@ -66,9 +66,9 @@ struct ConnectionPane: View {
             connection.send(.userDisconnect)
         case .disconnected:
             connection.send(.userConnect)
-        case .reconnecting, .signInRequired:
+        case .reconnecting:
             connection.send(.userRetry)
-        case .notLinked:
+        case .signInRequired, .notLinked:
             onSetUp()
         }
     }

@@ -85,9 +85,10 @@ final class StatusMenu: NSObject {
             connection.send(.userDisconnect)
         case .disconnected:
             connection.send(.userConnect)
-        case .reconnecting, .signInRequired:
+        case .reconnecting:
             connection.send(.userRetry)
-        case .notLinked:
+        case .signInRequired, .notLinked:
+            // The old credential is gone; signing in means linking again through the browser.
             onOpenOnboarding()
         }
     }

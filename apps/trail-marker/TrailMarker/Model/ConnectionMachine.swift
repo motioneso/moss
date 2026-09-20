@@ -175,18 +175,27 @@ struct ConnectionMachine {
 
         guard eventGeneration == generation else { return [] }
 
+        let attempt: Int
+        let lastContact: Date?
         switch state {
-        case .reconnecting(let attempt, let lastContact):
-            if let reason = signInReason(for: error) {
-                state = .signInRequired(reason: reason)
-                return [.cancelAll]
-            }
-            let backoff = min(Self.maxBackoff, Self.baseBackoff * pow(2, Double(attempt)) * Double.random(in: 0.8...1.2))
-            state = .reconnecting(attempt: attempt + 1, lastContact: lastContact)
-            return [.scheduleHeartbeat(after: backoff, generation: generation)]
-        case .connected, .disconnected, .signInRequired, .notLinked:
+        case .reconnecting(let current, let contact):
+            attempt = current
+            lastContact = contact
+        case .connected(let contact):
+            // A failed check while Connected is the moment it stops being Connected.
+            attempt = 0
+            lastContact = contact
+        case .disconnected, .signInRequired, .notLinked:
             return []
         }
+
+        if let reason = signInReason(for: error) {
+            state = .signInRequired(reason: reason)
+            return [.cancelAll]
+        }
+        let backoff = min(Self.maxBackoff, Self.baseBackoff * pow(2, Double(attempt)) * Double.random(in: 0.8...1.2))
+        state = .reconnecting(attempt: attempt + 1, lastContact: lastContact)
+        return [.scheduleHeartbeat(after: backoff, generation: generation)]
     }
 
     private func signInReason(for error: CompanionError) -> SignInReason? {
