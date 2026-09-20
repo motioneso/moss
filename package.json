@@ -81,7 +81,7 @@
     "test:focus-time": "tsx scripts/test-integration.ts tests/integration/focus-time.test.ts tests/integration/focus-time-seam.test.ts",
     "test:calendar-delete": "tsx scripts/test-integration.ts tests/integration/calendar-delete.test.ts",
     "test:today-briefings": "pnpm db:migrate && pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/day-plan-read-api.test.ts tests/integration/day-plan-preview-api.test.ts tests/integration/day-plan-apply-batch.test.ts tests/integration/day-plan-apply-execute.test.ts tests/integration/day-plan-apply-replay.test.ts tests/integration/apply-writer-transaction.test.ts tests/integration/apply-production-adapters.test.ts -t \"live acceptance:.*(day-plan read|preview)|apply batch reservation boundary|apply addition execution boundary|apply writer transaction probe|apply production adapters\"",
-    "test:companion": "pnpm db:migrate && tsx scripts/test-integration.ts tests/integration/companion-devices-rls.test.ts",
+    "test:companion": "pnpm db:migrate && tsx scripts/test-integration.ts tests/integration/companion-devices-rls.test.ts tests/integration/companion-pairing.test.ts tests/integration/companion-devices.test.ts",
     "test:release-hardening": "tsx scripts/test-integration.ts tests/integration/release-hardening.test.ts",
     "test:shares": "tsx scripts/test-integration.ts tests/integration/shares.test.ts",
     "test:notifications": "tsx scripts/test-integration.ts tests/integration/notifications.test.ts tests/integration/notifications-hardening.test.ts tests/integration/notifications-keyed-upsert.test.ts tests/integration/push-subscriptions.test.ts",

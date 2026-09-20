@@ -36,6 +36,27 @@ const { Pool } = pg;
 // can resolve "better-auth/crypto" directly (#1025).
 export { hashPassword };
 
+export {
+  createCompanionPairingService,
+  type CompanionPairingService,
+  type CreatedPairAttempt,
+  type DecidePairAttemptResult,
+  type RedeemResult
+} from "./companion-pairing.js";
+export {
+  CompanionAuthError,
+  createCompanionDevicesService,
+  type CompanionContext,
+  type CompanionDeviceSummary,
+  type CompanionDevicesService
+} from "./companion-devices.js";
+export {
+  digestsMatch,
+  mintCompanionCredential,
+  randomBase64url,
+  sha256Base64url
+} from "./companion-crypto.js";
+
 export interface AuthenticatedPrincipal {
   readonly userId: string;
 }
