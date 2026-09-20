@@ -10,6 +10,7 @@ import { SportsTodayWidget } from "../../packages/sports/src/web/today-widget.js
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 import { hasLiveGame } from "../../packages/sports/src/web/sports-page.js";
 import { QUIET_NIGHT_LINE } from "../../packages/sports/src/web/today-scores.js";
+import { formatDate } from "../../packages/sports/src/web/locale.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -127,6 +128,23 @@ afterEach(() => {
 });
 
 describe("Sports Today scores", () => {
+  it("renders the score status above its one-line recap", () => {
+    const data = overview({
+      scoreboard: [
+        {
+          competitionKey: "nfl",
+          competitionLabel: "NFL",
+          games: [game({ recap: "A seventh-inning comeback" })]
+        }
+      ]
+    });
+    const html = render(seed(data));
+
+    expect(html).toContain("Final");
+    expect(html).toContain("A seventh-inning comeback");
+    expect(html.indexOf("Final")).toBeLessThan(html.indexOf("A seventh-inning comeback"));
+  });
+
   it("renders score rows with the followed team's game first", () => {
     const followedFinal = game({
       id: "followed-final",
@@ -251,6 +269,30 @@ describe("Sports Today scores", () => {
 });
 
 describe("Sports Today Tonight", () => {
+  it("renders three fixture cards with their notes", () => {
+    const fixtures = ["Home", "Away", "Series opener"].map((note, index) =>
+      game({
+        id: `tonight-${index}`,
+        state: "pre",
+        statusDetail: "Scheduled",
+        recap: index === 0 ? null : note,
+        startsAt: `2026-07-07T23:${30 + index * 10}:00.000Z`,
+        home: index === 0 ? vikingSide(null) : cowboySide(null),
+        away: cowboySide(null)
+      })
+    );
+    const data = overview({
+      scoreboard: [{ competitionKey: "nfl", competitionLabel: "NFL", games: fixtures }],
+      followedTeams: [{ competitionKey: "nfl", teamKey: "min", sourceTeamId: "1" }]
+    });
+    const html = render(seed(data));
+
+    expect(html.match(/sp-tonight__row/g)).toHaveLength(3);
+    expect(html).toContain("Home");
+    expect(html).toContain("Away");
+    expect(html).toContain("Series opener");
+  });
+
   it("renders a Tonight row with the local start time", () => {
     const tonight = game({
       id: "tonight-game",
@@ -318,13 +360,59 @@ describe("Sports Today Tonight", () => {
     expect(html).toContain(QUIET_NIGHT_LINE);
   });
 
+  it("uses an existing followed-card story for the recap when top stories are empty", () => {
+    const data = overview({
+      followed: [
+        {
+          teamKey: "ars",
+          competitionKey: "eng.1",
+          competitionLabel: "Premier League",
+          name: "Arsenal",
+          crestUrl: null,
+          status: "news",
+          primary: "Arsenal story",
+          stories: [
+            {
+              title: "Arsenal seal late win to stay top of the pile",
+              url: "https://example.com/arsenal-story",
+              publishedAt: "2026-07-07T12:00:00.000Z",
+              imageUrl: "https://example.com/lead.jpg",
+              publisherLabel: "ESPN",
+              publisherDomain: "espn.com",
+              storyRef: "sports:arsenal-story"
+            }
+          ],
+          form: [],
+          standing: null,
+          nextMatch: null,
+          lastMatchAt: null,
+          rationale: ""
+        }
+      ]
+    });
+    const html = render(seed(data));
+
+    expect(html).toContain('class="sp-lead__photo"');
+    expect(html).toContain("Arsenal seal late win to stay top of the pile");
+  });
+
   it("renders nothing when scores, tonight, stories and cards are all empty", () => {
     expect(render(seed(overview()))).toBe("");
   });
 });
 
 describe("Sports Today editorial desk", () => {
-  it("renders the desk head with blocks in scores, stories, Tonight, cards order", () => {
+  it("renders the lead kicker, dek and story-behind-the-score link", () => {
+    const html = render(seed(overview({ topStories: [story(1)] })));
+
+    expect(html).toContain("★ FOLLOWING /");
+    expect(html).toContain("NFL");
+    expect(html).toContain("A sports summary.");
+    expect(html).toContain("The story behind the score ↗");
+    expect(html).toContain('href="https://example.com/sports/1"');
+  });
+
+  it("renders the desk head with lead, scores, Tonight, cards blocks", () => {
     const final = game({ id: "desk-final", startsAt: "2026-07-06T17:00:00.000Z" });
     const tonight = game({
       id: "desk-tonight",
@@ -348,12 +436,87 @@ describe("Sports Today editorial desk", () => {
     const storiesAt = html.indexOf("Top stories");
     const tonightAt = html.indexOf(">Tonight<");
     expect(scoresAt).toBeGreaterThan(-1);
-    expect(storiesAt).toBeGreaterThan(scoresAt);
+    expect(storiesAt).toBeGreaterThan(-1);
+    expect(scoresAt).toBeLessThan(storiesAt);
     expect(tonightAt).toBeGreaterThan(storiesAt);
+  });
+
+  it("renders the Tonight date label beside the band heading", () => {
+    const tonight = game({
+      id: "tonight-label",
+      state: "pre",
+      statusDetail: "7:30 PM",
+      startsAt: "2026-07-07T23:30:00.000Z",
+      home: vikingSide(null),
+      away: cowboySide(null)
+    });
+    const html = render(
+      seed(
+        overview({
+          scoreboard: [{ competitionKey: "nfl", competitionLabel: "NFL", games: [tonight] }]
+        })
+      )
+    );
+    const testLocale = { timezone: ZONE, region: "en-US", dateFormat: "12" as const };
+    expect(html).toContain("desk-tonight__head");
+    expect(html).toContain(
+      formatDate(new Date(NOW), testLocale, { weekday: "long", month: "long", day: "numeric" })
+    );
+    // July in America/New_York is EDT; the label carries the short zone name, not a date repeat.
+    expect(html).toContain("EDT");
   });
 });
 
 describe("Sports Today desk behaviour", () => {
+  it("keeps league-card story anchors free of undefined publisher text", () => {
+    const sharedStory = {
+      title: "Arsenal seal late win to stay top of the pile",
+      url: "https://example.com/story-9001",
+      publishedAt: "2026-07-07T12:00:00.000Z",
+      imageUrl: null,
+      storyRef: "sports:story-9001"
+    };
+    const data = overview({
+      followed: [
+        {
+          teamKey: "ars",
+          competitionKey: "eng.1",
+          competitionLabel: "Premier League",
+          name: "Arsenal",
+          crestUrl: null,
+          status: "news",
+          primary: "Arsenal story",
+          stories: [{ ...sharedStory, publisherLabel: "", publisherDomain: "" }],
+          form: [],
+          standing: null,
+          nextMatch: null,
+          lastMatchAt: null,
+          rationale: ""
+        }
+      ],
+      followedLeagueCards: [
+        {
+          competitionKey: "eng.1",
+          competitionLabel: "Premier League",
+          kind: "league",
+          status: "news",
+          logoUrl: null,
+          // This is the pre-schema-fix R2 wire shape: absent publisher fields must not leak into UI.
+          stories: [sharedStory],
+          results: []
+        }
+      ] as unknown as SportsOverviewResponse["followedLeagueCards"]
+    });
+    const html = render(seed(data));
+    const links = [
+      ...html.matchAll(/<a class="sp-tk__(?:newstx|storylink)"[^>]*>([^<]*)<\/a>/g)
+    ].map((match) => match[1]);
+
+    expect(links).toHaveLength(2);
+    expect(new Set(links)).toEqual(new Set([sharedStory.title]));
+    expect(html).not.toContain("undefined");
+  });
+
   it("uses the shared overview query", () => {
     const data = overview({ topStories: [story(1)] });
     const client = seed(data);

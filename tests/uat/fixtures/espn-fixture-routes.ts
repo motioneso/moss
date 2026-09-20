@@ -2,9 +2,8 @@
 //
 // Deterministic ESPN answers for the API-side e2e fixture seam (DF-V4-R4). The
 // fixture server stamps the eng.1 scoreboard template at request time from its
-// injected clock (default now): one Arsenal final ~20h back, one other final the
-// same day, one pre game ~3h ahead so it is always a Tonight row outside a
-// local-midnight edge. Matched on pathname only, like the job-search table:
+// injected fixed parity morning clock (default now at 08:00 Los Angeles): four
+// finished games and three Tonight fixtures. Matched on pathname only, like the job-search table:
 // the adapter varies query strings per date window.
 //
 // Teams/standings/schedule are the smallest payloads the adapter's readers
@@ -40,14 +39,33 @@ interface TemplateEvent {
   readonly startsAtOffsetHours: number;
   readonly state: string;
   readonly statusDetail: string;
+  readonly recap?: string;
+  readonly note?: string;
   readonly home: TemplateSide;
   readonly away: TemplateSide;
 }
 
 function fixtureNow(): Date {
   const now = new Date();
-  now.setUTCHours(12, 0, 0, 0);
-  return now;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    })
+      .formatToParts(now)
+      .map(({ type, value }) => [type, value])
+  );
+  const offset =
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      timeZoneName: "longOffset"
+    })
+      .formatToParts(now)
+      .find((part) => part.type === "timeZoneName")
+      ?.value?.replace("GMT", "") ?? "Z";
+  return new Date(`${parts.year}-${parts.month}-${parts.day}T08:00:00${offset}`);
 }
 
 function readTemplate(): readonly TemplateEvent[] {
@@ -84,6 +102,8 @@ export function stampEng1Scoreboard(
       competitions: [
         {
           status: { type: { state: event.state, detail: event.statusDetail } },
+          ...(event.recap ? { headlines: [{ shortLinkText: event.recap }] } : {}),
+          ...(event.note ? { notes: [{ headline: event.note }] } : {}),
           competitors: [stampSide(event.home, "home"), stampSide(event.away, "away")]
         }
       ]
@@ -197,6 +217,16 @@ function standingsPayload(): unknown {
 
 const JSON_TYPE = "application/json; charset=utf-8";
 
+function newsPayload(): Buffer {
+  const payload = JSON.parse(readFileSync(join(ESPN_DIR, "eng1-news.json"), "utf8")) as {
+    articles: Array<{ images?: Array<{ url?: string }> }>;
+  };
+  const photo = readFileSync(join(ESPN_DIR, "photo.png")).toString("base64");
+  const leadImage = payload.articles[0]?.images?.[0];
+  if (leadImage) leadImage.url = `data:image/png;base64,${photo}`;
+  return Buffer.from(JSON.stringify(payload));
+}
+
 /**
  * Minimal RSS 2.0 for the news desk under the seam. The catalog feed hosts rewrite
  * onto this origin when the bypass is on, and real RSS would 404; one working feed
@@ -271,7 +301,7 @@ export function routeEspnFixture(
         body: Buffer.from(JSON.stringify(stampEng1Scoreboard(templateCache, now)))
       };
     case "/apis/site/v2/sports/soccer/eng.1/news":
-      return { contentType: JSON_TYPE, body: readFileSync(join(ESPN_DIR, "eng1-news.json")) };
+      return { contentType: JSON_TYPE, body: newsPayload() };
     case "/apis/site/v2/sports/soccer/eng.1/teams":
       return { contentType: JSON_TYPE, body: Buffer.from(JSON.stringify(teamsPayload())) };
     case "/apis/site/v2/sports/soccer/eng.1/teams/359/schedule":

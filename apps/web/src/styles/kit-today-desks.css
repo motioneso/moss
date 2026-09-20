@@ -102,6 +102,31 @@
   min-width: 0;
 }
 
+/* Sports owns a full-width row after the main content and rail share their top row. */
+.cmd-grid > .jds-brief--sports {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+/* The section left .cmd-main in R4.1, leaving the main column's narrow-width card-grid
+   override behind: below a 300px container the 300px track floor yields to the container
+   and cards stack one-up instead of pushing a 320px page sideways. */
+.cmd-grid > .jds-brief--sports .sp-tkgrid {
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+}
+.cmd-grid > .jds-brief--sports .sp-tkgrid > * {
+  min-width: 0;
+}
+
+@media (min-width: 1081px) {
+  /* Desktop only: pin the section below the main/rail row. On phones the
+     grid is one column with the rail first in the DOM, so auto placement
+     keeps visual order equal to DOM/tab order. */
+  .cmd-grid > .jds-brief--sports {
+    grid-row: 2;
+  }
+}
+
 /* --- Score rows: names, scores, status in three columns --- */
 .jds-brief--sports .sp-scores__row {
   display: grid;

@@ -23,7 +23,7 @@ const sportsWebContribution: ModuleWebContribution = {
       element: <SportsPage />
     }
   ],
-  todayWidgets: [{ slot: "brief", element: <SportsTodayWidget /> }]
+  todayWidgets: [{ slot: "sports", element: <SportsTodayWidget /> }]
 };
 
 export default sportsWebContribution;

@@ -40,6 +40,7 @@ export interface TonightRowData {
   readonly game: GameSummary;
   readonly competitionLabel: string;
   readonly followed: boolean;
+  readonly followedSide: "home" | "away" | null;
 }
 
 function isFollowedSide(
@@ -51,6 +52,16 @@ function isFollowedSide(
     isFollowed(followed, competitionKey, game.home.sourceTeamId) ||
     isFollowed(followed, competitionKey, game.away.sourceTeamId)
   );
+}
+
+function followedSide(
+  followed: FollowedTeamIndex,
+  competitionKey: string,
+  game: GameSummary
+): "home" | "away" | null {
+  if (isFollowed(followed, competitionKey, game.home.sourceTeamId)) return "home";
+  if (isFollowed(followed, competitionKey, game.away.sourceTeamId)) return "away";
+  return null;
 }
 
 function startMs(game: GameSummary): number {
@@ -133,7 +144,8 @@ export function selectTonightRows(
     const row = {
       game,
       competitionLabel,
-      followed: isFollowedSide(followed, game.competitionKey, game)
+      followed: isFollowedSide(followed, game.competitionKey, game),
+      followedSide: followedSide(followed, game.competitionKey, game)
     };
     if (phase === "tonight") {
       tonightRows.push(row);
@@ -186,7 +198,10 @@ export function ScoreRow(props: { row: ScoreRowData; followed: FollowedTeamIndex
       </div>
       <div className="sp-scores__status">
         {live ? <LiveDot /> : null}
-        {row.competitionLabel} · {row.game.statusDetail}
+        <span className="sp-scores__statusline" aria-label={row.competitionLabel}>
+          {row.game.statusDetail}
+        </span>
+        <span className="sp-scores__recap">{row.game.recap ?? ""}</span>
       </div>
     </li>
   );
@@ -197,7 +212,7 @@ export function TonightRow(props: { row: TonightRowData; locale: LocaleSettingsD
   const { row } = props;
   const soccer = SOCCER_COMPETITIONS.has(row.game.competitionKey);
   const matchup = soccer
-    ? `${row.game.home.shortName} v ${row.game.away.shortName}`
+    ? `${row.game.home.shortName} vs. ${row.game.away.shortName}`
     : `${row.game.away.shortName} at ${row.game.home.shortName}`;
   const postponed =
     row.game.statusDetail != null && /postpon|ppd|cancel/i.test(row.game.statusDetail);
@@ -209,6 +224,13 @@ export function TonightRow(props: { row: TonightRowData; locale: LocaleSettingsD
       <span className="sp-tonight__matchup">{matchup}</span>
       <span className="sp-tonight__time">
         {postponed ? "Postponed" : formatTime(row.game.startsAt, props.locale)}
+      </span>
+      <span className="sp-tonight__note">
+        {row.followed && row.followedSide
+          ? row.followedSide === "home"
+            ? "Home"
+            : "Away"
+          : (row.game.recap ?? "")}
       </span>
     </li>
   );

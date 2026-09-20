@@ -1,11 +1,12 @@
 {
-  "_comment": "UAT template, stamped at request time: each event's date is now + startsAtOffsetHours. Arsenal (ESPN id 359, abbreviation ARS) takes the first final so the seeded Arsenal follow matches; the pre game ~3h out is always a Tonight row outside a local-midnight edge.",
+  "_comment": "UAT template, stamped at the fixed parity morning clock: each event's date is now + startsAtOffsetHours. Recaps and series notes use ESPN's own competition headline/note fields; statusDetail stays provider-verbatim.",
   "events": [
     {
       "id": "uat-eng1-ars-che",
       "startsAtOffsetHours": -20,
       "state": "post",
       "statusDetail": "Full Time",
+      "recap": "A seventh-inning comeback",
       "home": {
         "id": "359",
         "abbreviation": "ARS",
@@ -30,6 +31,7 @@
       "startsAtOffsetHours": -5,
       "state": "post",
       "statusDetail": "Full Time",
+      "recap": "A strong finish at home",
       "home": {
         "id": "364",
         "abbreviation": "LIV",
@@ -50,10 +52,61 @@
       }
     },
     {
+      "id": "uat-eng1-nyy-bos",
+      "startsAtOffsetHours": -3,
+      "state": "post",
+      "statusDetail": "Full Time",
+      "recap": "A walk-off in extra innings",
+      "home": {
+        "id": "361",
+        "abbreviation": "NEW",
+        "displayName": "Newcastle United",
+        "shortDisplayName": "Newcastle",
+        "score": "2",
+        "winner": true,
+        "record": "13-8-7"
+      },
+      "away": {
+        "id": "367",
+        "abbreviation": "TOT",
+        "displayName": "Tottenham Hotspur",
+        "shortDisplayName": "Spurs",
+        "score": "1",
+        "winner": false,
+        "record": "12-7-9"
+      }
+    },
+    {
+      "id": "uat-eng1-mci-liv",
+      "startsAtOffsetHours": -1,
+      "state": "post",
+      "statusDetail": "Full Time",
+      "recap": "A one-run division battle",
+      "home": {
+        "id": "382",
+        "abbreviation": "MCI",
+        "displayName": "Manchester City",
+        "shortDisplayName": "Man City",
+        "score": "3",
+        "winner": true,
+        "record": "17-5-6"
+      },
+      "away": {
+        "id": "364",
+        "abbreviation": "LIV",
+        "displayName": "Liverpool",
+        "shortDisplayName": "Liverpool",
+        "score": "2",
+        "winner": false,
+        "record": "16-6-6"
+      }
+    },
+    {
       "id": "uat-eng1-tot-new",
       "startsAtOffsetHours": 3,
       "state": "pre",
       "statusDetail": "Scheduled",
+      "note": "Home",
       "home": {
         "id": "367",
         "abbreviation": "TOT",
@@ -71,6 +124,56 @@
         "score": "",
         "winner": false,
         "record": "13-8-7"
+      }
+    },
+    {
+      "id": "uat-eng1-new-che",
+      "startsAtOffsetHours": 4,
+      "state": "pre",
+      "statusDetail": "Scheduled",
+      "note": "Away",
+      "home": {
+        "id": "363",
+        "abbreviation": "CHE",
+        "displayName": "Chelsea",
+        "shortDisplayName": "Chelsea",
+        "score": "",
+        "winner": false,
+        "record": "14-8-6"
+      },
+      "away": {
+        "id": "361",
+        "abbreviation": "NEW",
+        "displayName": "Newcastle United",
+        "shortDisplayName": "Newcastle",
+        "score": "",
+        "winner": false,
+        "record": "13-8-7"
+      }
+    },
+    {
+      "id": "uat-eng1-che-liv",
+      "startsAtOffsetHours": 5,
+      "state": "pre",
+      "statusDetail": "Scheduled",
+      "note": "Series opener",
+      "home": {
+        "id": "382",
+        "abbreviation": "MCI",
+        "displayName": "Manchester City",
+        "shortDisplayName": "Man City",
+        "score": "",
+        "winner": false,
+        "record": "17-5-6"
+      },
+      "away": {
+        "id": "364",
+        "abbreviation": "LIV",
+        "displayName": "Liverpool",
+        "shortDisplayName": "Liverpool",
+        "score": "",
+        "winner": false,
+        "record": "16-6-6"
       }
     }
   ]

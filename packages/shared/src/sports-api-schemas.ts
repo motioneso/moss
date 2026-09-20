@@ -54,6 +54,7 @@ const gameSummarySchema = {
     startsAt: { type: "string" },
     state: { type: "string", enum: ["pre", "live", "final"] },
     statusDetail: { type: "string" },
+    recap: { type: ["string", "null"] },
     home: gameSideSchema,
     away: gameSideSchema
   }
@@ -362,12 +363,14 @@ const followedLeagueCardSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["title", "url", "publishedAt", "imageUrl"],
+        required: ["title", "url", "publishedAt", "imageUrl", "publisherLabel", "publisherDomain"],
         properties: {
           title: { type: "string" },
           url: { type: "string" },
           publishedAt: { type: "string" },
           imageUrl: { type: ["string", "null"] },
+          publisherLabel: { type: "string" },
+          publisherDomain: { type: "string" },
           // Optional, declared: an undeclared key is silently dropped here (#2019).
           storyRef: { type: "string" }
         }

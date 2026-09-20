@@ -122,6 +122,7 @@ const dalLiveGame: GameSummary = {
   startsAt: "2026-07-01T20:00:00.000Z",
   state: "live",
   statusDetail: "Q3 4:12",
+  recap: "A late comeback",
   home: side({
     teamKey: "dal",
     shortName: "DAL",
@@ -303,6 +304,7 @@ describe("sports routes", () => {
     // name. A response schema that omits it drops it silently, which is exactly what happened.
     expect(body.followedTeams[0]).toHaveProperty("sourceTeamId", "6");
     expect(body.scoreboard[0].games[0].home).toHaveProperty("sourceTeamId", "6");
+    expect(body.scoreboard[0].games[0]).toHaveProperty("recap", "A late comeback");
     expect(body.hero.games[0].game.home).toHaveProperty("sourceTeamId", "6");
     expect(body).toHaveProperty("ambiguousFollows");
     await app.close();
@@ -490,6 +492,53 @@ describe("sports routes", () => {
     const res = await app.inject({ method: "GET", url: "/api/sports/overview" });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain("A late field goal sealed the NFC North.");
+    await app.close();
+  });
+
+  it("preserves publisher fields on followed league stories through the wire", async () => {
+    const { app } = buildApp({
+      datasetClient: makeDatasetClient({
+        getHeadlines: async () => [
+          {
+            id: "9001",
+            sportKey: "soccer",
+            competitionKey: "eng.1",
+            competitionLabel: "Premier League",
+            title: "Arsenal seal late win to stay top of the pile",
+            url: "https://example.com/story-9001",
+            publishedAt: "2026-07-07T12:00:00.000Z",
+            imageUrl: null,
+            summary: "A stoppage-time strike settled the match.",
+            teamKeys: [],
+            origin: "espn",
+            publisherLabel: "The Athletic",
+            publisherDomain: "theathletic.com",
+            sourceTeamIds: []
+          }
+        ]
+      }),
+      repo: makeRepo([
+        {
+          id: "league-follow",
+          competitionKey: "eng.1",
+          teamKey: null,
+          sourceTeamId: null,
+          createdAt: "2026-07-01T00:00:00.000Z"
+        }
+      ])
+    });
+    await app.ready();
+    const res = await app.inject({ method: "GET", url: "/api/sports/overview" });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as {
+      followedLeagueCards: Array<{
+        stories: Array<{ publisherLabel?: string; publisherDomain?: string }>;
+      }>;
+    };
+    expect(body.followedLeagueCards[0]?.stories[0]).toMatchObject({
+      publisherLabel: "The Athletic",
+      publisherDomain: "theathletic.com"
+    });
     await app.close();
   });
 

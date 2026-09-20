@@ -73,6 +73,8 @@ interface EspnEvent {
   readonly competitions?: readonly {
     readonly competitors?: readonly EspnCompetitor[];
     readonly status?: { readonly type?: { readonly state?: string; readonly detail?: string } };
+    readonly headlines?: readonly { readonly shortLinkText?: string }[];
+    readonly notes?: readonly { readonly headline?: string }[];
     // Soccer scoreboard events carry every scoring play here (one entry per goal) — see
     // soccerScorers below.
     readonly details?: readonly {
@@ -267,6 +269,7 @@ function toGame(event: EspnEvent, competitionKey: string): GameSummary {
     startsAt: event.date ?? "",
     state: mapState(type?.state),
     statusDetail: type?.detail ?? "",
+    recap: competition?.headlines?.[0]?.shortLinkText ?? competition?.notes?.[0]?.headline ?? null,
     home: toSide(home, scorersFor(home)),
     away: toSide(away, scorersFor(away))
   };
