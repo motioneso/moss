@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { parseScoreResult } from "../../../external-modules/job-search/src/domain/score.js";
 
@@ -240,6 +240,20 @@ describe("startJobSearchFixtureServer", () => {
       expect(tonightRows).toHaveLength(1);
       expect(tonightRows[0]!.game.id).toBe("uat-eng1-tot-new");
       expect(new Date(tonightRows[0]!.game.startsAt).getTime()).toBeGreaterThan(NOON.getTime());
+    });
+
+    it("stamps the default pregame from the fixed parity morning clock", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-15T21:00:00.000Z"));
+      try {
+        const route = routeEspnFixture("/apis/site/v2/sports/soccer/eng.1/scoreboard");
+        const payload = JSON.parse(route!.body.toString()) as {
+          events: Array<{ date: string }>;
+        };
+        expect(payload.events[2]?.date).toBe("2026-09-15T18:00:00.000Z");
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("serves teams with the seeded Arsenal identity, standings, schedule and news", async () => {

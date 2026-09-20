@@ -46,8 +46,25 @@ interface TemplateEvent {
 
 function fixtureNow(): Date {
   const now = new Date();
-  now.setUTCHours(12, 0, 0, 0);
-  return now;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    })
+      .formatToParts(now)
+      .map(({ type, value }) => [type, value])
+  );
+  const offset =
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      timeZoneName: "longOffset"
+    })
+      .formatToParts(now)
+      .find((part) => part.type === "timeZoneName")
+      ?.value?.replace("GMT", "") ?? "Z";
+  return new Date(`${parts.year}-${parts.month}-${parts.day}T08:00:00${offset}`);
 }
 
 function readTemplate(): readonly TemplateEvent[] {
@@ -197,6 +214,16 @@ function standingsPayload(): unknown {
 
 const JSON_TYPE = "application/json; charset=utf-8";
 
+function newsPayload(): Buffer {
+  const payload = JSON.parse(readFileSync(join(ESPN_DIR, "eng1-news.json"), "utf8")) as {
+    articles: Array<{ images?: Array<{ url?: string }> }>;
+  };
+  const photo = readFileSync(join(ESPN_DIR, "photo.png")).toString("base64");
+  const leadImage = payload.articles[0]?.images?.[0];
+  if (leadImage) leadImage.url = `data:image/png;base64,${photo}`;
+  return Buffer.from(JSON.stringify(payload));
+}
+
 /**
  * Minimal RSS 2.0 for the news desk under the seam. The catalog feed hosts rewrite
  * onto this origin when the bypass is on, and real RSS would 404; one working feed
@@ -271,7 +298,7 @@ export function routeEspnFixture(
         body: Buffer.from(JSON.stringify(stampEng1Scoreboard(templateCache, now)))
       };
     case "/apis/site/v2/sports/soccer/eng.1/news":
-      return { contentType: JSON_TYPE, body: readFileSync(join(ESPN_DIR, "eng1-news.json")) };
+      return { contentType: JSON_TYPE, body: newsPayload() };
     case "/apis/site/v2/sports/soccer/eng.1/teams":
       return { contentType: JSON_TYPE, body: Buffer.from(JSON.stringify(teamsPayload())) };
     case "/apis/site/v2/sports/soccer/eng.1/teams/359/schedule":
