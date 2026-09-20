@@ -105,8 +105,16 @@
 /* Sports owns a full-width row after the main content and rail share their top row. */
 .cmd-grid > .jds-brief--sports {
   grid-column: 1 / -1;
-  grid-row: 2;
   min-width: 0;
+}
+
+@media (min-width: 1081px) {
+  /* Desktop only: pin the section below the main/rail row. On phones the
+     grid is one column with the rail first in the DOM, so auto placement
+     keeps visual order equal to DOM/tab order. */
+  .cmd-grid > .jds-brief--sports {
+    grid-row: 2;
+  }
 }
 
 /* --- Score rows: names, scores, status in three columns --- */
