@@ -222,6 +222,8 @@ Open, for Ben:
   read. What a person sees on the server is only the Trail Marker information in Settings (download
   link, how to connect) and the model choice for judgment as its own row in Settings → AI. The
   image model stays in the Mac's own Focus pane.
+  **Never defaulted:** the row starts empty, no model is pre-selected or inherited from any other
+  setting, and nothing is processed until an admin defines the Trail Marker reasoning model.
 
 ## 11. Amendments this requires to the companion spec
 

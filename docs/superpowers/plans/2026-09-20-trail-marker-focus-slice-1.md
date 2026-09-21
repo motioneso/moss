@@ -383,6 +383,15 @@ Why a change is needed: today the check at `capability-route-routes.ts:107-113` 
 not a module, so the check gets a small named list of **platform-owned namespaces**, initially just
 `trail-marker`, treated as installed. Nothing else about the check changes.
 
+**No default, ever (Ben, 2026-09-20).** The row starts empty and reads "Not set". It never
+pre-selects a model and never falls back to the general background model or any other default. The
+admin must choose the Trail Marker reasoning model here, and until they do, no observation is
+processed: the judge route makes no model call at all, and the Mac shows "Judgment isn't set up on
+your Moss (ask the admin)". Extra tests: with a default json model present and nothing bound to this
+key, `context` says `judgmentReady: false` and `judge` answers `focus_not_ready` **with the fake
+model's call count still zero** (fails if any fallback reads another binding); the pane shows "Not
+set" and no selected model on first load (fails if a default is pre-filled).
+
 Tests: binding `module.trail-marker.judge` to an active json-capable model succeeds with no module
 of that name installed; binding `module.nonexistent` is still refused with the same 400 (fails if
 the allowance is a blanket pass); a non-admin is still refused (S4, admin-only); the pane lists
@@ -755,3 +764,5 @@ true`), so `judgmentReady` is false until an admin binds a model, and the generi
 - **Fact:** the API app does not depend on module packages; the module registry composes them
   (`apps/api/package.json`, `module-registry/src/index.ts`). That is why the wiring is in the
   registry and not in the API app.
+- **Decision (Ben, 2026-09-20):** the Trail Marker reasoning model is never populated by default;
+  an admin must define it in Settings → AI before anything is processed.
