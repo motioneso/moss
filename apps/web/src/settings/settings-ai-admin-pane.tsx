@@ -73,7 +73,7 @@ const CREDENTIAL_EXAMPLES: Readonly<
   google: { baseUrl: "https://generativelanguage.googleapis.com", apiKey: "AIza…" },
   ollama: { baseUrl: "http://localhost:11434", apiKey: "Any value" },
   custom: { baseUrl: "https://your-endpoint.example.com", apiKey: "Your API key" },
-  "system-one": { baseUrl: "https://api.typesafe.ai", apiKey: "Your TypeSafe API key" }
+  "system-one": { baseUrl: "https://api.typesafe.ai", apiKey: "apikey_…" }
 };
 
 const PROVIDER_CATALOG: readonly {

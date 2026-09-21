@@ -341,7 +341,7 @@ describe("AiProvidersPane Trail Marker focus judgment row (#2570)", () => {
       "https://api.typesafe.ai"
     );
     expect(renderer.root.findByProps({ "aria-label": "API key" }).props.placeholder).toBe(
-      "Your TypeSafe API key"
+      "apikey_…"
     );
 
     await act(async () => {
