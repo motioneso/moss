@@ -12,7 +12,6 @@ import {
   AiRepository,
   assertBuiltInSelfOperationManifests,
   grantSelfOperationForModule,
-  type generateStructured,
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
 } from "@moss/ai";
@@ -39,7 +38,6 @@ import { createPgBossClient, sendModuleControl } from "@moss/jobs";
 import {
   aggregateFocusSignals,
   createActiveModulesResolver,
-  createFocusJudgmentService,
   focusSignalProvidersFor,
   getAllQueueDefinitions,
   getBuiltInModuleManifests,
@@ -69,6 +67,7 @@ import {
 } from "@moss/module-registry/node";
 
 import { registerCompanionRoutes } from "./companion-routes.js";
+import { focusService, type FocusGenerate } from "./focus-service.js";
 import { resolveApiE2eFetchOverride } from "./e2e-fetch-override.js";
 import { createModuleAiBridge } from "./external-module-ai-bridge.js";
 import { createModuleDistributionPort } from "./module-distribution-port.js";
@@ -110,8 +109,7 @@ export interface CreateApiServerOptions {
   /** Override the live-chat engine factory (tests inject a fake); defaults to real tmux. */
   readonly chatEngineFactory?: ChatEngineFactory;
   readonly connectTerminalRpc?: (options: TerminalRpcConnectOptions) => Promise<TerminalRpcHandle>;
-  /** TEST-ONLY. Replaces the structured model call behind the Trail Marker focus judgment. */
-  readonly focusGenerate?: typeof generateStructured;
+  readonly focusGenerate?: FocusGenerate;
   readonly personaPreview?: (input: {
     readonly actorUserId: string;
     readonly userName: string;
@@ -380,15 +378,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     registerBetterAuthRoutes(server, authRuntime, AUTH_MAX);
     // #2560: Trail Marker pairing and linked-Mac routes. Platform-owned, next to auth —
     // linking a Mac to an account is not any module's business.
-    registerCompanionRoutes(server, {
-      authRuntime,
-      dataContext,
-      focus: createFocusJudgmentService({
-        logger: server.log,
-        createCliStructuredAdapter: createCliStructuredAdapterFactory(options.chatEngineFactory),
-        generate: options.focusGenerate
-      })
-    });
+    const focus = focusService(server.log, options);
+    registerCompanionRoutes(server, { authRuntime, dataContext, focus });
 
     // #1752: a live cell, not a one-time snapshot — rescan() lets an admin-triggered
     // rescan surface a module dropped onto the mount after this process booted.
