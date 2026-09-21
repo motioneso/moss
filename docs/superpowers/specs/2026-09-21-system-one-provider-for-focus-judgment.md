@@ -1,6 +1,6 @@
 # System One provider for Trail Marker focus judgment
 
-Status: draft, needs Ben's approval before any build. Part of #2570 (focus judgment). Extends
+Status: approved by Ben on 2026-09-21 ("we need to allow the API to just work"), with the recommended defaults in section 7 taken because he did not choose otherwise; any of them can be changed later. Part of #2570 (focus judgment). Extends
 `2026-09-20-trail-marker-focus-judgment.md`, which names Jev as the judging model the person may
 choose.
 
@@ -36,10 +36,10 @@ It is a general "answer named questions about some content" API, not a Jev-only 
   probability), `choice` (pick one of the listed criteria) or `score` (a rating).
 - Response: `{ model, answers, usage }`. `answers` is keyed by the question names and each answer
   matches its question's type. `usage` reports input and output tokens.
-- For `choice` the pilot (`tools/jev-pilot/pilot.py`) relies on `choice`, per-option
-  `probabilities` and `confidence`. The published excerpt names the answer types but this spec has
-  not yet read the full `ChoiceAnswer` schema; doing so is the first task and the validation rules
-  in section 5 follow it.
+- A `choice` question is `{ type: "choice", instructions?, criteria: { name: description } }`. Its
+  answer is `{ type: "choice", choice, confidence, probabilities }`: `choice` is the option with the
+  highest probability, `confidence` is 0 to 1, and `probabilities` covers every criteria name and
+  sums to about 1. The pilot relies on the same fields.
 - A `choice` question with the criteria `focused`, `necessary_detour`, `distracted` and
   `insufficient_evidence` maps directly onto Moss's four judgment labels.
 - It returns no free text, so there is no model-written reason.
@@ -103,7 +103,7 @@ highest. Errors log a category only.
   path, and both return the same shape.
 - Live proof: one real judgment through the Mac app against the dev instance, recorded on the PR.
 
-## 7. Decisions needed from Ben
+## 7. Decisions (defaults taken, changeable)
 
 1. **Kind name.** `system-one` (the API's own name) or `typesafe`. Recommended: `system-one`.
 2. **Confidence floor.** Whether a `distracted` answer whose probability is below a threshold
