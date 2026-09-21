@@ -61,7 +61,7 @@ struct DeviceSetupView: View {
             .tint(TrailMarkerTokens.Color.forest)
         }
         .padding(TrailMarkerTokens.Spacing.major)
-        .frame(width: TrailMarkerTokens.Layout.firstRunWidth, alignment: .leading)
+        .frame(width: OnboardingFlow.contentWidth, alignment: .leading)
         .onAppear { permissions.refresh() }
     }
 }

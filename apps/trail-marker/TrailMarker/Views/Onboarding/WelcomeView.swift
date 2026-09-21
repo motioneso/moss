@@ -49,7 +49,7 @@ struct WelcomeView: View {
             .disabled(viewModel.urlText.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(TrailMarkerTokens.Spacing.major)
-        .frame(width: TrailMarkerTokens.Layout.firstRunWidth, alignment: .leading)
+        .frame(width: OnboardingFlow.contentWidth, alignment: .leading)
         .onAppear { urlFieldFocused = true }
     }
 }

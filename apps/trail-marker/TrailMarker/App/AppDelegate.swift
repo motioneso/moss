@@ -79,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // semantic — DesignTokens.swift has no dark-mode variants for it on purpose, so the
         // window must not follow system Dark Mode or default label colors turn illegible.
         window.appearance = NSAppearance(named: .aqua)
-        window.center()
+        place(window, hosting: hosting)
 
         let controller = NSWindowController(window: window)
         onboardingWindowController = controller
@@ -108,11 +108,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "Trail Marker Settings"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
-        window.center()
+        place(window, hosting: hosting)
 
         let controller = NSWindowController(window: window)
         settingsWindowController = controller
         controller.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Sizes the window to its content first, then centres it inside the visible screen area
+    /// (below the menu bar). Centring before SwiftUI has sized the content left tall windows with
+    /// their title bar off the top of the screen.
+    private func place(_ window: NSWindow, hosting: NSHostingController<some View>) {
+        hosting.view.layoutSubtreeIfNeeded()
+        window.setContentSize(hosting.view.fittingSize)
+
+        let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? .zero
+        var frame = window.frame
+        frame.size.height = min(frame.size.height, visible.height)
+        frame.origin.x = visible.midX - frame.width / 2
+        frame.origin.y = visible.midY - frame.height / 2
+        window.setFrame(frame, display: false)
     }
 }
