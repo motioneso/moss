@@ -8,6 +8,7 @@ struct FocusPane: View {
 
     @State private var apps: [InstalledApp] = []
     @State private var search = ""
+    @State private var testNudgeNote: String?
 
     var body: some View {
         Form {
@@ -35,6 +36,7 @@ struct FocusPane: View {
                             SystemSettingsLinks.openAccessibility()
                         }
                     }
+                    notificationsStatus
                     Button(focus.paused ? "Resume Focus" : "Pause Focus") {
                         if focus.paused { focus.resume() } else { focus.pause() }
                     }
@@ -62,10 +64,16 @@ struct FocusPane: View {
                 }
 
                 Section("Check that it works") {
-                    Button("Send a test nudge") { focus.testNudge() }
+                    Button("Send a test nudge") { Task { await sendTestNudge() } }
                     Text("Shows a sample notification, so you can see nudges will reach you.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if let testNudgeNote {
+                        Text(testNudgeNote)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
@@ -73,6 +81,43 @@ struct FocusPane: View {
         .onAppear {
             permissions.refresh()
             apps = InstalledApps.list()
+            Task { await permissions.refreshNotifications() }
+        }
+        // Coming back from System Settings after changing the answer.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await permissions.refreshNotifications() }
+        }
+    }
+
+    @ViewBuilder private var notificationsStatus: some View {
+        switch permissions.notifications {
+        case .allowed:
+            EmptyView()
+        case .notAsked:
+            Text("Trail Marker hasn't asked to show notifications yet, so nudges can't show.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Allow Notifications…") { Task { await permissions.requestNotifications() } }
+        case .denied:
+            Text("Notifications are off for Trail Marker, so nudges won't show.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Open Notification Settings…") { SystemSettingsLinks.openNotifications() }
+        }
+    }
+
+    /// Checks the answer first: a nudge macOS will not show would otherwise vanish without a word.
+    private func sendTestNudge() async {
+        await permissions.refreshNotifications()
+        if permissions.notifications == .notAsked { await permissions.requestNotifications() }
+        if permissions.notifications == .allowed {
+            testNudgeNote = nil
+            focus.testNudge()
+        } else {
+            testNudgeNote = "Notifications are off for Trail Marker, so this test can't show. "
+                + "Turn them on in System Settings, then try again."
         }
     }
 

@@ -70,6 +70,10 @@ final class FocusRuntime: ObservableObject {
     }
 
     func start() {
+        // macOS shows the prompt only while the answer is still "never asked", so this does nothing
+        // once the person has answered. Without it a build that never got the first answer (a new
+        // signing identity, an install made after Focus was already on) would never ask at all.
+        if consent { nudges.requestAuthorization() }
         apply(machine.handle(.launched(consent: consent, paused: paused), now: Date()))
         send(.accessibilityChanged(granted: permissions.accessibility == .granted))
 
