@@ -842,12 +842,18 @@ test("evening planning saves one draft and never applies in suggest mode", async
   await expect(page.getByRole("heading", { name: "Plan tomorrow" })).toBeVisible();
   await expect(dialog).toContainText("Protect the launch window");
 
-  // Correct a task: the note reads back, no task is completed.
-  const correction = dialog.getByLabel("Write the launch brief: correction");
-  await correction.fill("Scope slipped again");
-  await correction.locator("xpath=ancestor::li[1]").getByRole("button", { name: "Add" }).click();
+  // Reflect: pick a reply and add a note; the note reads back, no task is written.
+  await dialog
+    .getByRole("radiogroup", { name: "Reflection" })
+    .getByLabel("The follow-up isn't sent")
+    .click();
+  await expect(
+    dialog.getByRole("radiogroup", { name: "Reflection" }).getByLabel("The follow-up isn't sent")
+  ).toBeChecked();
+  const note = dialog.getByLabel("Or tell Moss in your own words");
+  await note.fill("Scope slipped again");
+  await dialog.getByRole("button", { name: "Add note" }).click();
   await expect(dialog).toContainText("Noted: Scope slipped again");
-  await expect(dialog).toContainText("Done");
 
   // Commit one task for tomorrow; the due-dated one is already set.
   await dialog.getByRole("button", { name: "02 Open commitments", exact: true }).click();
