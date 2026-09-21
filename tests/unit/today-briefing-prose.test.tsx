@@ -309,7 +309,7 @@ describe("Today morning briefing prose", () => {
     const nav = html.indexOf('aria-label="Sections"');
     expect(nav).toBeGreaterThan(-1);
     expect(nav).toBeLessThan(startHere);
-    expect(html).toContain('href="#schedule"');
+    expect(html).not.toContain('href="#schedule"');
     expect(html).toContain('href="#start-here"');
   });
 });

@@ -948,13 +948,13 @@ test("today hero band spans the content with an unclipped headline", async ({ pa
   expect(desktop.fontWeight).toBe("900");
   expect(desktop.scrollW).toBe(desktop.innerW);
 
-  await page.locator('.cmd-sections a[href="#schedule"]').click();
-  await expect.poll(() => page.evaluate(() => location.hash)).toBe("#schedule");
-  const scheduleInView = await page.evaluate(() => {
-    const rect = document.querySelector("#schedule")!.getBoundingClientRect();
+  await page.locator('.cmd-sections a[href="#start-here"]').click();
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe("#start-here");
+  const startHereInView = await page.evaluate(() => {
+    const rect = document.querySelector("#start-here")!.getBoundingClientRect();
     return rect.top < window.innerHeight && rect.bottom > 0;
   });
-  expect(scheduleInView).toBe(true);
+  expect(startHereInView).toBe(true);
 
   await page.setViewportSize({ width: 375, height: 900 });
   await page.goto("/today");

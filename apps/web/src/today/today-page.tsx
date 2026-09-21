@@ -472,9 +472,6 @@ export function TodayPage(props: {
             <section className="jds-brief" id="start-here">
               <div className="jds-brief__head">
                 <span className="jds-brief__kicker">Start here</span>
-                <a href="#schedule" className="cmd-sr-only">
-                  Schedule
-                </a>
               </div>
               <div className="jds-brief__title">The few things that matter most</div>
               <div className="top3" style={{ marginTop: 4 }}>
