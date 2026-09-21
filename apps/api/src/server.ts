@@ -12,6 +12,7 @@ import {
   AiRepository,
   assertBuiltInSelfOperationManifests,
   grantSelfOperationForModule,
+  type generateStructured,
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
 } from "@moss/ai";
@@ -38,6 +39,7 @@ import { createPgBossClient, sendModuleControl } from "@moss/jobs";
 import {
   aggregateFocusSignals,
   createActiveModulesResolver,
+  createFocusJudgmentService,
   focusSignalProvidersFor,
   getAllQueueDefinitions,
   getBuiltInModuleManifests,
@@ -108,6 +110,8 @@ export interface CreateApiServerOptions {
   /** Override the live-chat engine factory (tests inject a fake); defaults to real tmux. */
   readonly chatEngineFactory?: ChatEngineFactory;
   readonly connectTerminalRpc?: (options: TerminalRpcConnectOptions) => Promise<TerminalRpcHandle>;
+  /** TEST-ONLY. Replaces the structured model call behind the Trail Marker focus judgment. */
+  readonly focusGenerate?: typeof generateStructured;
   readonly personaPreview?: (input: {
     readonly actorUserId: string;
     readonly userName: string;
@@ -376,7 +380,15 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     registerBetterAuthRoutes(server, authRuntime, AUTH_MAX);
     // #2560: Trail Marker pairing and linked-Mac routes. Platform-owned, next to auth —
     // linking a Mac to an account is not any module's business.
-    registerCompanionRoutes(server, { authRuntime });
+    registerCompanionRoutes(server, {
+      authRuntime,
+      dataContext,
+      focus: createFocusJudgmentService({
+        logger: server.log,
+        createCliStructuredAdapter: createCliStructuredAdapterFactory(options.chatEngineFactory),
+        generate: options.focusGenerate
+      })
+    });
 
     // #1752: a live cell, not a one-time snapshot — rescan() lets an admin-triggered
     // rescan surface a module dropped onto the mount after this process booted.

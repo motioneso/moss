@@ -98,7 +98,10 @@ describe("companion route surface", () => {
       { method: "POST" as const, url: "/api/companion/pair/cancel" },
       { method: "POST" as const, url: "/api/companion/heartbeat" },
       { method: "PATCH" as const, url: "/api/companion/device" },
-      { method: "POST" as const, url: "/api/companion/logout" }
+      { method: "POST" as const, url: "/api/companion/logout" },
+      { method: "POST" as const, url: "/api/companion/focus/context" },
+      { method: "POST" as const, url: "/api/companion/focus/judge" },
+      { method: "POST" as const, url: "/api/companion/focus/correct" }
     ];
 
     for (const route of routes) {

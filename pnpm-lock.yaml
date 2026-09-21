@@ -832,6 +832,9 @@ importers:
       '@moss/email':
         specifier: workspace:*
         version: link:../email
+      '@moss/focus-judgment':
+        specifier: workspace:*
+        version: link:../focus-judgment
       '@moss/goals':
         specifier: workspace:*
         version: link:../goals
