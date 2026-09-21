@@ -366,7 +366,7 @@ export interface FocusContextResponse {
     readonly startsAt: string;
     readonly endsAt: string;
   } | null;
-  /** The focus module is on for this person AND a judgment model is explicitly bound. */
+  /** An admin has explicitly bound the Trail Marker judgment model. Never defaulted. */
   readonly judgmentReady: boolean;
 }
 
@@ -462,7 +462,7 @@ export const focusJudgeRouteSchema = {
     400: errorResponseSchema,
     401: errorResponseSchema,
     403: errorResponseSchema,
-    // 409: focus_not_ready (module off or no model bound) or focus_no_block (not the person's
+    // 409: focus_not_ready (no judgment model bound) or focus_no_block (not the person's
     // current Moss block). Nothing is stored in either case.
     409: errorResponseSchema,
     429: errorResponseSchema
