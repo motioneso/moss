@@ -140,7 +140,7 @@ The person must be able to see the chain working without waiting for a real drif
   from the payload.
 - Moss stores: the judgment label, a short reason (capped at about 140 characters), the block
   reference, and the person's correction. **Not stored:** window titles, selected text, image
-  descriptions, or screenshots. They exist in memory for the duration of one model call.
+  descriptions, or screenshots. They exist in Moss's memory for the duration of one model call. (If the bound judgment model is served through a command-line tool, that tool also keeps the conversation in its own files on the server host; this is disclosed once in the model setup info, and allowed.)
 - **The reason is the one piece of free text that is kept**, so it is treated as private data: the
   judgment prompt tells the model to give a category-level reason ("reading an unrelated news
   site") and not to quote or paraphrase what is on screen, the text is capped, and it is only

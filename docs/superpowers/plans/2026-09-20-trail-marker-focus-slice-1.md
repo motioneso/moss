@@ -11,26 +11,23 @@ Mac whether to nudge. No screenshots, no image model (slice 2).
 **Write in plain English** in status and in every spawn prompt: name things by what they do, one
 backtick per sentence at most. Every agent brief must carry this paragraph.
 
-## Needs Ben
+## Decided by Ben (2026-09-20)
 
-Places where the approved spec disagrees with itself or with the tree. The plan takes the default
-named under each; Ben can overrule before the build starts.
+Two places where the approved spec disagreed with itself or the tree, now settled:
 
-1. **Where the web-side focus settings live.** Spec §9 says "Moss web: no new screen", and puts
-   the test nudge on the Mac's Focus pane. Spec D9 says the module's Settings section "holds the
-   judgment-model binding notes, nudge cap and the test nudge trigger". The tree makes a module
-   settings link a dead end unless the module ships a web pane or declares preferences
-   (`apps/web/src/settings/settings-personal-data-panes.tsx:541-555`). Default taken: slice 1 ships
-   no web pane; the module's one settings entry points at the existing admin AI section where the
-   model is bound; the nudge cap is a fixed 45 minutes; the test nudge is on the Mac. A web section
-   would need mockups first (design gate), so it is slice 3 work if wanted.
-2. **Prompts are kept when the judgment model is CLI-backed.** Spec §8 says window text "exists in
-   memory for the duration of one model call". Moss's own database keeps no prompt, but a model
-   served through a command-line tool keeps the whole conversation in that tool's own files on the
-   server host (`packages/ai/src/adapters/transcript-reader.ts:7`). Default taken: the judge
-   service requires an explicit binding (no silent fall-through to the generic worker model), and
-   the PR states plainly that a CLI-backed binding retains window text on the host. Ben decides
-   whether this service should refuse CLI-backed models outright.
+1. **Moss web settings: no new screen.** Only a couple of items in the existing Moss Settings: the
+   download link and the connect info for Trail Marker (the "Mac companions" area in Active sessions
+   already has a download-link slot that is empty today). No nudge-cap control, no review page. The
+   cap is a fixed 45 minutes and the test nudge lives on the Mac. The focus module's one settings
+   entry points at the existing admin AI section where the model is bound. A real web section would
+   need mockups first and is not slice 1.
+2. **Command-line judgment models are allowed.** A model served through a command-line tool keeps
+   the whole conversation, window titles included, in that tool's own files on the server host
+   (`packages/ai/src/adapters/transcript-reader.ts:7`). Ben's call: allow it, and say so once in the
+   setup info next to the model binding; no persistent warning. The judge service still requires an
+   explicit binding (no silent fall-through to the generic worker model). The spec §8 sentence
+   "held in memory for one call" is amended to say "held in Moss's memory for one call; a
+   command-line model binding also retains it in that tool's own files on the host".
 
 ## 0. Gates
 
@@ -725,3 +722,6 @@ true`), so `judgmentReady` is false until an admin binds a model, and the generi
   link the person asked for is the intent. Not a defect.
 - **Finding, adopted:** a prompt-injected title that persists across two samples can satisfy the
   two-in-a-row rule; the claim is "unlikely", the worst case one nudge, limited by the cap.
+- **Decision (Ben):** no dedicated Moss web screen in slice 1; only the download link and connect
+  info in existing Settings. The nudge cap is fixed at 45 minutes.
+- **Decision (Ben):** command-line judgment models are allowed, disclosed once in the setup info.
