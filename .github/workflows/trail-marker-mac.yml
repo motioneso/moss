@@ -1,0 +1,39 @@
+name: Trail Marker (macOS)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/trail-marker/**"
+      - ".github/workflows/trail-marker-mac.yml"
+  pull_request:
+    paths:
+      - "apps/trail-marker/**"
+      - ".github/workflows/trail-marker-mac.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: apps/trail-marker
+        run: xcodegen generate
+
+      - name: Build and test
+        working-directory: apps/trail-marker
+        run: |
+          xcodebuild test \
+            -scheme TrailMarker \
+            -destination 'platform=macOS'

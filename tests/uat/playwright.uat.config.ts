@@ -19,7 +19,8 @@ export default defineConfig({
   use: {
     baseURL,
     actionTimeout: 30_000,
-    trace: "retain-on-failure"
+    trace: "retain-on-failure",
+    serviceWorkers: "block"
   },
   projects: [
     {
