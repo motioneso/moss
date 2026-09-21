@@ -5,7 +5,7 @@ import type { BriefingRunDto, LocaleSettingsDto, SourceFreshnessV1 } from "@moss
 
 import { BriefingProse, EveningReviewSection, type TodayMode } from "./evening-mode.js";
 import { BriefingStaleBanner } from "./briefing-freshness.js";
-import { timeLabel } from "./today-labels.js";
+import { BRIEFING_NOT_READY_LABEL, timeLabel } from "./today-labels.js";
 
 /** Split briefing prose into a headline (first sentence) and the rest. Some
     generated summaries carry no sentence punctuation, so a first line without
@@ -133,7 +133,7 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
       ? null
       : morningReadable
         ? `Prepared at ${timeLabel(morningReadable.createdAt, input.locale)}`
-        : "Your morning briefing is not ready yet.";
+        : BRIEFING_NOT_READY_LABEL;
   return {
     headline: input.morningSplit ? input.morningSplit.headline : fallbackHeadline,
     summary,
@@ -149,41 +149,47 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
 /** Today-only hero band: eyebrow, display headline, assessment summary,
     prepared-at line with the reader control, rule, then the weather row. */
 export function TodayHero(props: TodayHeroProps) {
+  const isNotReadyString = props.preparedAt === BRIEFING_NOT_READY_LABEL;
+  const preparedTime = isNotReadyString ? null : props.preparedAt;
+
   return (
-    <section
-      className={`today-hero${props.mode === "evening" ? " today-hero--evening" : ""}`}
-      data-mode={props.mode}
-    >
-      <p className="today-hero__eyebrow">{props.eyebrow}</p>
-      <h1 className="today-hero__title">{props.headline}</h1>
-      <div className="today-hero__summary" id="assessment">
-        {props.summary}
-      </div>
-      {props.mode === "day" ? (
-        <>
+    <>
+      <section
+        className={`today-hero${props.mode === "evening" ? " today-hero--evening" : ""}`}
+        data-mode={props.mode}
+      >
+        <p className="today-hero__eyebrow">{props.eyebrow}</p>
+        <h1 className="today-hero__title">{props.headline}</h1>
+        <div className="today-hero__summary" id="assessment">
+          {props.summary}
+        </div>
+        {props.mode === "day" ? (
+          <>
+            <div className="today-hero__weather" id="weather">
+              {props.weather}
+            </div>
+            <div className="today-hero__prepared">
+              {props.readerControl ?? (
+                <span className="today-hero__not-ready">{BRIEFING_NOT_READY_LABEL}</span>
+              )}
+              {preparedTime !== null ? (
+                <span className="today-hero__prepared-time">{preparedTime}</span>
+              ) : null}
+            </div>
+          </>
+        ) : props.preparedAt !== null ? (
+          <p className="today-hero__prepared">
+            {props.preparedAt} {props.readerControl}
+          </p>
+        ) : null}
+        <hr className="today-hero__rule" />
+        {props.mode === "evening" ? (
           <div className="today-hero__weather" id="weather">
             {props.weather}
           </div>
-          {props.preparedAt !== null ? (
-            <div className="today-hero__prepared">
-              {props.readerControl}
-              <span className="today-hero__prepared-time">{props.preparedAt}</span>
-            </div>
-          ) : null}
-        </>
-      ) : props.preparedAt !== null ? (
-        <p className="today-hero__prepared">
-          {props.preparedAt} {props.readerControl}
-        </p>
-      ) : null}
-      <hr className="today-hero__rule" />
-      {props.mode === "evening" ? (
-        <div className="today-hero__weather" id="weather">
-          {props.weather}
-        </div>
-      ) : (
-        (props.sectionLinks ?? null)
-      )}
-    </section>
+        ) : null}
+      </section>
+      {props.mode === "day" ? (props.sectionLinks ?? null) : null}
+    </>
   );
 }
