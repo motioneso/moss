@@ -18,6 +18,9 @@ final class PreferencesStore {
         static let startAtLogin = "startAtLogin"
         static let autoCheckUpdates = "autoCheckUpdates"
         static let permissionsPromptShown = "permissionsPromptShown"
+        static let focusConsent = "focusConsent"
+        static let focusPaused = "focusPaused"
+        static let focusAllowedBundleIds = "focusAllowedBundleIds"
     }
 
     var linkedIdentity: LinkedIdentity? {
@@ -66,11 +69,30 @@ final class PreferencesStore {
         set { defaults.set(newValue, forKey: Key.permissionsPromptShown) }
     }
 
+    /// Focus observation is off until the person turns it on (plan: default off, spec §6).
+    var focusConsent: Bool {
+        get { defaults.bool(forKey: Key.focusConsent) }
+        set { defaults.set(newValue, forKey: Key.focusConsent) }
+    }
+
+    /// A Pause survives quitting and restarting, like Disconnect.
+    var focusPaused: Bool {
+        get { defaults.bool(forKey: Key.focusPaused) }
+        set { defaults.set(newValue, forKey: Key.focusPaused) }
+    }
+
+    /// Apps the person allowed. Empty means nothing is ever observed.
+    var focusAllowedBundleIds: Set<String> {
+        get { Set(defaults.stringArray(forKey: Key.focusAllowedBundleIds) ?? []) }
+        set { defaults.set(newValue.sorted(), forKey: Key.focusAllowedBundleIds) }
+    }
+
     /// Used by Log Out and by the "clear state between test runs" README step.
     func clearAll() {
         for key in [
             Key.linkedIdentity, Key.connectionEnabled, Key.displayName, Key.pendingDisplayName,
-            Key.startAtLogin, Key.autoCheckUpdates, Key.permissionsPromptShown
+            Key.startAtLogin, Key.autoCheckUpdates, Key.permissionsPromptShown,
+            Key.focusConsent, Key.focusPaused, Key.focusAllowedBundleIds
         ] {
             defaults.removeObject(forKey: key)
         }

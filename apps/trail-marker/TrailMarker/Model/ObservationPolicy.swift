@@ -11,7 +11,7 @@ struct Observation: Equatable {
 /// Decides whether an observation may leave this Mac at all. The person's allowlist starts empty,
 /// so nothing is observed until they choose an app; the denylist is fixed and always wins, so
 /// allowing a password manager by mistake still sends nothing.
-struct ObservationPolicy {
+struct ObservationPolicy: Equatable {
     var allowedBundleIds: Set<String>
 
     /// Password managers and the system keychain. Not exhaustive and not a promise about every
