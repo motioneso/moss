@@ -8,7 +8,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 
 const createAiProvider = vi.fn(async (_input: unknown) => ({
   provider: {
@@ -75,6 +75,7 @@ vi.mock("../../apps/web/src/api/client-admin.js", () => ({
   putAdminUserAiPin: vi.fn()
 }));
 
+import * as apiClient from "../../apps/web/src/api/client.js";
 import { AiProvidersPane } from "../../apps/web/src/settings/settings-ai-admin-pane.js";
 import { FeedbackProvider } from "../../apps/web/src/settings/settings-feedback.js";
 
@@ -215,5 +216,118 @@ describe("AiProvidersPane", () => {
     expect(html).not.toContain('aria-label="Embedding model"');
     expect(html).not.toContain("Embedding provider saved");
     expect(html).not.toContain("Embedding model saved");
+  });
+});
+
+// #2570: the Trail Marker focus judgment gets its own row. It starts empty, offers specific models
+// only (no Mode option that would borrow the default provider's model), and is admin-set. The
+// Services group only renders once a provider exists, so each test seeds one.
+describe("AiProvidersPane Trail Marker focus judgment row (#2570)", () => {
+  const ROW_LABEL = "Binding for Trail Marker focus judgment";
+
+  function seedProviderAndModel(): void {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
+      providers: [
+        {
+          id: "prov1",
+          providerKind: "openai-compatible",
+          displayName: "Hosted",
+          authMethod: "api_key",
+          executionMode: "interactive",
+          status: "active",
+          hasCredential: true,
+          isInstanceDefault: false
+        }
+      ]
+    } as never);
+    vi.mocked(apiClient.listAiModels).mockResolvedValue({
+      models: [
+        {
+          id: "model1",
+          providerConfigId: "prov1",
+          providerModelId: "jev-1",
+          displayName: "Jev",
+          status: "active",
+          providerStatus: "active",
+          capabilities: ["json"],
+          tier: "economy"
+        }
+      ]
+    } as never);
+  }
+
+  afterEach(() => {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({ providers: [] } as never);
+    vi.mocked(apiClient.listAiModels).mockResolvedValue({ models: [] } as never);
+    vi.mocked(apiClient.putAiServiceBinding).mockClear();
+  });
+
+  function selects(renderer: ReactTestRenderer, label: string) {
+    return renderer.root.findAll(
+      (node) => node.type === "select" && node.props["aria-label"] === label
+    );
+  }
+
+  it("lists the row, starts empty with 'Not set', and offers no Mode option (fails if a default is pre-filled)", async () => {
+    seedProviderAndModel();
+    const renderer = await renderPane();
+
+    const [trailMarker] = selects(renderer, ROW_LABEL);
+    expect(trailMarker).toBeTruthy();
+    expect(trailMarker?.props.value).toBe("");
+
+    const optionTexts = trailMarker!
+      .findAllByType("option")
+      .map((option) => option.children.join(""));
+    expect(optionTexts).toContain("Not set: choose a model");
+    expect(optionTexts).toContain("Jev");
+    expect(trailMarker!.findAllByType("optgroup")).toHaveLength(1);
+    expect(trailMarker!.findAllByType("optgroup")[0]?.props.label).toBe("Specific model");
+
+    // The existing strict row still offers Mode, so the difference is specific to this row.
+    const [emailExtraction] = selects(renderer, "Binding for Email extraction");
+    const emailGroups = emailExtraction!
+      .findAllByType("optgroup")
+      .map((group) => group.props.label as string);
+    expect(emailGroups).toContain("Mode (uses the default provider)");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("says only an admin can set it and that nothing runs until a model is chosen", async () => {
+    seedProviderAndModel();
+    const renderer = await renderPane();
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain("Trail Marker focus judgment");
+    expect(text).toContain("Only an admin can set it");
+    expect(text).toContain("nothing is processed until you choose one");
+    expect(text).toContain("command-line tool");
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("binds the platform key to the chosen model", async () => {
+    seedProviderAndModel();
+    vi.mocked(apiClient.putAiServiceBinding).mockResolvedValue({} as never);
+
+    const renderer = await renderPane();
+    const [row] = selects(renderer, ROW_LABEL);
+    await act(async () => {
+      (row!.props.onChange as (event: { target: { value: string } }) => void)({
+        target: { value: "model:model1" }
+      });
+    });
+    await flush();
+
+    expect(apiClient.putAiServiceBinding).toHaveBeenCalledWith("module.trail-marker.judge", {
+      binding: { kind: "model", modelId: "model1" }
+    });
+
+    await act(async () => {
+      renderer.unmount();
+    });
   });
 });

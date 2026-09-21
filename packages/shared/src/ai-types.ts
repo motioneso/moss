@@ -117,6 +117,21 @@ export function isModuleServiceKey(value: string): value is ModuleServiceKey {
   return moduleServiceKeyRegex.test(value);
 }
 
+/**
+ * Namespaces a `module.<name>` service key may use when the work belongs to platform code rather
+ * than an installed module (#2570: the Trail Marker focus judgment). The model-binding check treats
+ * these as installed. Keep this list to platform-owned names only; adding a module's name here
+ * would let anyone bind a key for a module that is not installed.
+ */
+export const PLATFORM_SERVICE_NAMESPACES = ["trail-marker"] as const;
+
+export function isPlatformServiceKey(service: ModuleServiceKey): boolean {
+  const namespace = service.slice("module.".length);
+  return PLATFORM_SERVICE_NAMESPACES.some(
+    (id) => namespace === id || namespace.startsWith(`${id}.`)
+  );
+}
+
 export type ModuleServiceBindingMap = Partial<Record<ModuleServiceKey, AiServiceBinding>>;
 
 export type AiServiceBindingMapDto = Partial<Record<AiServiceKey, AiServiceBinding>>;

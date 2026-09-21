@@ -7,6 +7,7 @@ import {
   MODULE_WORKER_SERVICE_KEY,
   deleteAiServiceBindingRouteSchema,
   isModuleServiceKey,
+  isPlatformServiceKey,
   listAiServiceBindingsRouteSchema,
   lookupAiCapabilityRouteRouteSchema,
   putAiServiceBindingRouteSchema,
@@ -109,16 +110,26 @@ export function registerAiServiceRoutes(
             await assertInstanceAdmin(repository, scopedDb, accessContext.actorUserId);
 
             // #915 D6: module-specific keys name installed modules. module.worker is generic.
+            // #2570: a small list of platform-owned namespaces (the Trail Marker focus judgment)
+            // counts as installed. Nothing else about this check changes.
+            const platformOwned = isModuleServiceKey(service) && isPlatformServiceKey(service);
             if (isModuleServiceKey(service) && service !== MODULE_WORKER_SERVICE_KEY) {
               const installedIds = dependencies.listInstalledModuleIds?.() ?? [];
               const namespace = service.slice("module.".length);
               if (
+                !platformOwned &&
                 !installedIds.some(
                   (moduleId) => namespace === moduleId || namespace.startsWith(`${moduleId}.`)
                 )
               ) {
                 throw new HttpError(400, "service does not reference an installed module");
               }
+            }
+
+            // A platform-owned service is never left to a default: it must be bound to one
+            // specific model, not to a mode that borrows the default provider's model.
+            if (platformOwned && binding.kind !== "model") {
+              throw new HttpError(400, "this service must be bound to a specific model");
             }
 
             // Module structured work always requires json; chat keeps its own capability.

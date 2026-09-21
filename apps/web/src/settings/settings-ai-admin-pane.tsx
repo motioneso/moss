@@ -83,6 +83,8 @@ const SERVICE_ROWS: readonly {
   name: string;
   desc: string;
   requireExplicitBinding?: boolean;
+  /** Offer specific models only: no Mode option that would borrow the default provider's model. */
+  modelOnly?: boolean;
 }[] = [
   {
     k: "chat",
@@ -96,6 +98,18 @@ const SERVICE_ROWS: readonly {
     name: "Email extraction",
     desc: "Turns connected email into summaries and suggested actions.",
     requireExplicitBinding: true
+  },
+  {
+    k: "module.trail-marker.judge",
+    capability: "json",
+    name: "Trail Marker focus judgment",
+    desc:
+      "The model that decides whether what a Mac is doing fits the person's current calendar " +
+      "block. Only an admin can set it, and nothing is processed until you choose one. A model " +
+      "served through a command-line tool also keeps the conversation, window titles included, " +
+      "in that tool's own files on this server.",
+    requireExplicitBinding: true,
+    modelOnly: true
   }
 ];
 
@@ -470,16 +484,18 @@ function ServiceRow(props: {
         >
           {props.service.requireExplicitBinding && !binding ? (
             <option value="" disabled>
-              Choose a model or mode
+              {props.service.modelOnly ? "Not set: choose a model" : "Choose a model or mode"}
             </option>
           ) : null}
-          <optgroup label="Mode (uses the default provider)">
-            {MODEL_TIERS.map((tier) => (
-              <option key={tier} value={`mode:${tier}`}>
-                {TIERS[tier].label}
-              </option>
-            ))}
-          </optgroup>
+          {props.service.modelOnly ? null : (
+            <optgroup label="Mode (uses the default provider)">
+              {MODEL_TIERS.map((tier) => (
+                <option key={tier} value={`mode:${tier}`}>
+                  {TIERS[tier].label}
+                </option>
+              ))}
+            </optgroup>
+          )}
           {capableModels.length ? (
             <optgroup label="Specific model">
               {capableModels.map((model) => (
