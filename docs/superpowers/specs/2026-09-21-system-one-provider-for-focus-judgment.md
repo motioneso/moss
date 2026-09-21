@@ -6,7 +6,7 @@ choose.
 
 ## 1. The problem
 
-Jev, TypeSafe's "System One" model, is the model Ben intends to use for focus judgment. It cannot
+Jev, a model on TypeSafe's "System One" API, is the model Ben intends to use for focus judgment. It cannot
 be used today. Moss's "custom" and "openai-compatible" providers send chat-completions requests
 (`{base}/v1/chat/completions`). TypeSafe does not serve that route. Probed on 2026-09-21 with empty
 bodies, so nothing was generated:
@@ -17,28 +17,39 @@ bodies, so nothing was generated:
 | `POST https://api.typesafe.ai/v1/systemone`       | 422 naming the required fields `model` and `questions` |
 | `POST .../v1/chat/completions` (three base forms) | 404                                                    |
 
-Model names available: `jev-latest`, `jev-preview`. With Jev configured as a "custom" provider,
+Model names available: `jev-latest`, `jev-preview`. The published route list (section 2) confirms the two routes above are the only ones. With Jev configured as a "custom" provider,
 every judgment fails to reach the model and is stored as `insufficient_evidence`, so nothing is
 ever nudged. The failure is safe, but the feature does nothing.
 
-## 2. What Jev accepts and returns
+## 2. What the API accepts and returns
 
-Established by the pilot (`tools/jev-pilot/pilot.py`), not yet by a published contract from
-TypeSafe. Confirming it against TypeSafe's own documentation is a first task.
+TypeSafe publishes its contract at `https://api.typesafe.ai/openapi.json` (read on 2026-09-21). It
+has exactly two routes: `GET /v1/models` and `POST /v1/systemone`. There is no chat-completions
+route, so no change to a base URL or a key can make Moss's existing providers work with it. The key
+is not the problem: it authenticates on `/v1/models`.
 
-- Request: `{ model, state, questions }`. `state` holds the declared goal, the current
-  observation (app, window title, dwell time), up to three recent observations, and an evidence
-  level. `questions` maps a name to `{ type: "choice", instructions, criteria }`, where `criteria`
-  maps each allowed choice to a description.
-- Response: `answers[name] = { type: "choice", choice, probabilities, confidence }`. Probabilities
-  cover exactly the allowed choices, sum to about 1, and the chosen choice has the highest one.
-- Its `alignment` question has exactly Moss's four labels: `focused`, `necessary_detour`,
-  `distracted`, `insufficient_evidence`. The mapping to a Moss judgment label is direct.
-- It returns no free text, so there is no "reason" sentence from the model.
+It is a general "answer named questions about some content" API, not a Jev-only one:
+
+- Request: `{ model, state, questions }`. `model` is any name from `/v1/models` (today `jev-latest`
+  and `jev-preview`). `state` is the content the questions refer to: a string, an object or an
+  array. `questions` maps a name you choose to a question of type `noul` (yes/no, answered as a
+  probability), `choice` (pick one of the listed criteria) or `score` (a rating).
+- Response: `{ model, answers, usage }`. `answers` is keyed by the question names and each answer
+  matches its question's type. `usage` reports input and output tokens.
+- For `choice` the pilot (`tools/jev-pilot/pilot.py`) relies on `choice`, per-option
+  `probabilities` and `confidence`. The published excerpt names the answer types but this spec has
+  not yet read the full `ChoiceAnswer` schema; doing so is the first task and the validation rules
+  in section 5 follow it.
+- A `choice` question with the criteria `focused`, `necessary_detour`, `distracted` and
+  `insufficient_evidence` maps directly onto Moss's four judgment labels.
+- It returns no free text, so there is no model-written reason.
+
+Nothing in this spec hardcodes a model: the person picks any model the API lists, and the code
+refers only to the capability.
 
 ## 3. Design
 
-**A. A provider type for System One.** A new provider kind, `system-one`, alongside the existing
+**A. A provider type for the System One API.** A new provider kind, `system-one`, alongside the existing
 kinds. Base URL defaults to `https://api.typesafe.ai`. The key is stored like every other provider
 secret (AES-256-GCM at rest, never returned to the browser, never logged). Model discovery and the
 Test button call `GET {base}/v1/models` and read `models[].name` and `release_date`. This is a
@@ -51,7 +62,7 @@ model the person bound to that service, as for every other capability. The calle
 provider or model.
 
 - If the bound model's provider is `system-one`, the request goes to `POST {base}/v1/systemone` in
-  Jev's own shape and the answer is validated exactly as the pilot does.
+  the System One shape and the answer is validated exactly as the pilot does.
 - For any other provider, the same questions are rendered into a prompt and asked through the
   existing structured-answer call. The result has the same shape, with probabilities absent.
 
