@@ -18,8 +18,8 @@ Two places where the approved spec disagreed with itself or the tree, now settle
 1. **Moss web settings: no new screen.** Only a couple of items in the existing Moss Settings: the
    download link and the connect info for Trail Marker (the "Mac companions" area in Active sessions
    already has a download-link slot that is empty today). No nudge-cap control, no review page. The
-   cap is a fixed 45 minutes and the test nudge lives on the Mac. The focus module's one settings
-   entry points at the existing admin AI section where the model is bound. A real web section would
+   cap is a fixed 45 minutes and the test nudge lives on the Mac. The judgment model is chosen in the
+   existing admin AI section. A real web section would
    need mockups first and is not slice 1.
 2. **Command-line judgment models are allowed.** A model served through a command-line tool keeps
    the whole conversation, window titles included, in that tool's own files on the server host
@@ -28,6 +28,16 @@ Two places where the approved spec disagreed with itself or the tree, now settle
    explicit binding (no silent fall-through to the generic worker model). The spec §8 sentence
    "held in memory for one call" is amended to say "held in Moss's memory for one call; a
    command-line model binding also retains it in that tool's own files on the host".
+
+3. **No module. Focus is platform code, like the companion pairing.** It is not registered as a
+   module, not downloadable, has no manifest, no permissions, no Settings → Modules entry and no
+   sidebar entry. The only server-side things a person sees are the Trail Marker information in
+   Settings (download link, how to connect) and the model choice below. Earlier drafts of the spec
+   and this plan called it a "focus module with no sidebar entry"; that drifted from what Ben asked
+   for and is withdrawn. The judgment logic is an **internal code library** (`@moss/focus-judgment`,
+   nothing users see or install, like `host-fetch` or `cli-runner`), its table comes from a
+   platform migration, it is wired in the registry's composition code, and the judgment model gets
+   its own row in Settings → AI through a small allowance in the model-binding check (Task 4).
 
 ## 0. Gates
 
@@ -101,7 +111,7 @@ the same quiet-hours setting through the port, and the Mac shows an ordinary mac
 routes are gated by the module guard, which resolves the actor with the general resolver and so
 rejects the companion credential (S10), and would 404 the Mac when the module is off instead of
 answering "not ready". Chosen: three platform routes on the allowlist, which only authenticate the
-Mac and call the focus module's public service.
+Mac and call the focus service (platform code).
 
 ## 3. Determinism boundary
 
@@ -201,33 +211,30 @@ Behaviour and why each test would fail against a broken version:
 - Fixture: insert rows the way the create path's mirror does (`calendar-write-impl.ts:782-793`,
   metadata `jarvisCreated: true`), so the fixture and the real path agree.
 
-### Task 3. Focus module skeleton, table and rules
+### Task 3. Focus judgment library, table and rules (platform code, not a module)
 
-Files: `packages/focus/` (`package.json` named `@moss/focus`, with a `typecheck` script like
-`packages/goals/package.json`; `src/manifest.ts`, `src/index.ts`, `src/nudge-rules.ts`,
-`src/judgment-service.ts`, `src/repository.ts`, `sql/0240_focus_judgments.sql`), registration in
-`packages/module-registry/src/index.ts` (import, an entry in `BUILT_IN_MODULES` with
-`sqlMigrationDirectories`, no routes, no workers), tests beside each.
+Files: new internal package `packages/focus-judgment/` (`package.json` named
+`@moss/focus-judgment` with a `typecheck` script like `packages/goals/package.json`;
+`src/constants.ts`, `src/nudge-rules.ts`, `src/judgment-service.ts`, `src/repository.ts`,
+`src/judgment-prompt.ts`, `src/index.ts`), platform migration
+`infra/postgres/migrations/0240_focus_judgments.sql` (the companion tables set the precedent: auth
+and this are platform, not a module; take the next free number at build time), tests beside each
+file. There is **no** manifest, no `BUILT_IN_MODULES` entry, no permission ids, no feature flag, no
+Settings → Modules entry and no sidebar entry. The package is an internal library only.
 
-Manifest (all of it is a decision; the app map is built from it):
+Wiring lives in `packages/module-registry/src/focus-wiring.ts` (`buildFocusJudgmentService`),
+exported from that package's index. The module registry is the composition root that already
+imports calendar, notifications and AI (S1); the API app does not import module packages itself
+(`apps/api/package.json`), so it receives the built service from here.
 
-- id `focus`, name "Focus", version `0.1.0`, publisher "Moss", lifecycle `user-toggleable` (the
-  value news, sports and wellness use, `packages/news/src/manifest.ts:73`), availability
-  `{ defaultEnabled: true, supportsUserDisable: true }`.
-- `database.migrations: ["sql/0240_focus_judgments.sql"]`, `migrationDirectories:
-["packages/focus/sql"]`, `ownedTables: ["app.focus_judgments"]`.
-- `navigation: []`. One `settings` entry: id `focus.judgment-model`, label "Focus judgment model",
-  path `/settings?section=aiproviders`, scope `system`, description in plain English that the
-  judgment model is bound there by an admin and that observation is switched on from the Mac's own
-  Focus settings. (Not `module=focus`: that link is a dead end, S12.)
-- `permissions`: `focus.view` (user, view), `focus.judge` (user, create), `focus.manage` (system,
-  manage). `featureFlags`: `focus.module` (system, default on).
-- `features`: one feature `focus.judgment` describing what is observed and stored, with
-  `errors`: `focus_not_ready` (class `prerequisite`, remediation: bind a model in Settings → AI, or
-  turn the Focus module back on under Settings → Modules), `focus_no_block` (class `validation`,
-  shown on the Mac as "No block right now"), `focus_model_unavailable` (class `transient`, the
-  judgment answers "not enough evidence" and never nudges).
-- `routes: []` in slice 1 (the Mac-facing routes are platform routes, Section 2).
+Because there is no manifest, the app map is declared directly in
+`packages/shared/src/app-map-core.ts` (where the companion approval screen already is): a feature
+entry `focus-judgment` describing what is observed and stored; its errors (`focus_not_ready`, class
+`prerequisite`, remediation: an admin binds a model in Settings → AI; `focus_no_block`, class
+`validation`, shown on the Mac as "No block right now"; `focus_model_unavailable`, class
+`transient`, the judgment answers "not enough evidence" and never nudges); and the Settings
+information in Task 7. The boot check that every route is claimed (S7) is satisfied by the route
+allowlist, Task 6.
 
 DDL (owner-only, copy S3's enable, force, policy and grants; app runtime role only, no worker
 grant in slice 1):
@@ -252,8 +259,7 @@ CREATE INDEX focus_judgments_owner_created_idx ON app.focus_judgments (owner_use
 ```
 
 `device_id` has no foreign key on purpose: the devices table is readable by the auth runtime role
-only (`infra/postgres/migrations/0238_companion_devices.sql:60-75`), and a module migration must not
-couple to an auth-owned table's shape. Deleting a device leaves its judgments with a dangling id,
+only (`infra/postgres/migrations/0238_companion_devices.sql:60-75`), and this migration must not couple to an auth-owned table's shape. Deleting a device leaves its judgments with a dangling id,
 which is harmless because nothing joins on it.
 
 There is deliberately **no column for window title, description, or block title**. That is what
@@ -263,7 +269,7 @@ Public interface and ports (contracts):
 
 ```ts
 export const FOCUS_MODULE_ID = "focus";
-export const FOCUS_JUDGE_SERVICE_KEY = "module.focus.judge"; // a constant; there is no manifest field (S4)
+export const FOCUS_JUDGE_SERVICE_KEY = "module.trail-marker.judge"; // a constant; Task 4 explains why the binding check accepts it with no module
 export const FOCUS_NUDGE_CAP_MINUTES = 45; // fixed in slice 1 (Needs Ben 1)
 export const FOCUS_JUDGE_TIMEOUT_MS = 20_000;
 
@@ -305,7 +311,6 @@ export interface FocusPorts {
   // all injected by the composition root (module-registry), never imported across modules
   currentBlock: (db: DataContextDb, now: Date) => Promise<CurrentMossBlock | null>; // Task 2
   inQuietHours: (db: DataContextDb, now: Date) => Promise<boolean>; // plain boolean; never a deferral
-  isEnabled: (ownerUserId: string) => Promise<boolean>; // S11
   hasJudgeModel: (db: DataContextDb) => Promise<boolean>; // explicit binding for the key exists
   generate: typeof generateStructured;
   generateDeps: GenerateStructuredDeps; // S5 pattern
@@ -328,7 +333,7 @@ row changed. All owner-scoped by RLS; no owner parameter.
 Quiet hours port: add one exported function to the notifications module's public API,
 `isActorInQuietHours(scopedDb, port: QuietHoursPort, now: Date): Promise<boolean>`, built from the
 parsing and check already in `packages/notifications/src/repository.ts:106-141` (S8). The
-composition root wires it with `quietHoursPortImpl`. The focus module never imports notifications.
+composition root wires it with `quietHoursPortImpl`. The judgment library never imports notifications; every port is built in `focus-wiring.ts`.
 
 Nudge rule, as decided from spec §7: a nudge needs the two newest judgments for this block to be
 `distracted` with nothing else between; the cap is one nudge per `capMinutes` per person across
@@ -362,22 +367,32 @@ Tests (behaviour, and why they fail against a broken build):
   nudge or as an unstored call).
 - Q4: run lint and `check:package-deps` on the new package and record the result.
 
-### Task 4. Service key and the admin AI pane row
+### Task 4. The judgment model gets its own row in Settings → AI
 
-Files: `packages/focus/src/index.ts` (exports `FOCUS_JUDGE_SERVICE_KEY`),
-`apps/web/src/settings/settings-ai-admin-pane.tsx` (add one `SERVICE_ROWS` entry: key
-`module.focus.judge`, capability `json`, name "Focus judgment", description in plain English,
-`requireExplicitBinding: true`, like the email extraction row), test
-`tests/unit/settings-ai-admin-pane.test.tsx` (extend, same mocking pattern).
+Files: `packages/ai/src/capability-route-routes.ts` (the binding check),
+`apps/web/src/settings/settings-ai-admin-pane.tsx` (one `SERVICE_ROWS` entry: key
+`module.trail-marker.judge`, capability `json`, name "Trail Marker focus judgment", description in
+plain English, `requireExplicitBinding: true` like the email extraction row, plus one line of setup
+text saying a model served through a command-line tool also keeps the conversation, window titles
+included, in that tool's own files on the server host; shown once here, not as a warning
+elsewhere), tests `tests/unit/settings-ai-admin-pane.test.tsx` (extend) and an integration test for
+the binding route.
 
-The binding route accepts the key because module id `focus` is installed and is the key's prefix
-(S4). Test: the pane lists "Focus judgment" and binding it calls the existing bind route with
-`module.focus.judge` (fails if the row is missing or mislabelled). Binding is admin-only (S4); the
-row's description says so.
+Why a change is needed: today the check at `capability-route-routes.ts:107-113` accepts a
+`module.<id>` key only when a module with that id is installed (`module.worker` is exempt). Focus is
+not a module, so the check gets a small named list of **platform-owned namespaces**, initially just
+`trail-marker`, treated as installed. Nothing else about the check changes.
+
+Tests: binding `module.trail-marker.judge` to an active json-capable model succeeds with no module
+of that name installed; binding `module.nonexistent` is still refused with the same 400 (fails if
+the allowance is a blanket pass); a non-admin is still refused (S4, admin-only); the pane lists
+"Trail Marker focus judgment" and binding it calls the existing route with that key (fails if the
+row is missing or mislabelled). The integration tests need the database; they are listed for the
+Linux run.
 
 ### Task 5. The judgment prompt and the "prompts are not kept" question
 
-Files: `packages/focus/src/judgment-prompt.ts`, test beside it.
+Files: `packages/focus-judgment/src/judgment-prompt.ts`, test beside it.
 
 Contract: `buildJudgmentPrompt(input: { blockTitle: string; appName: string; windowTitle: string })
 -> { prompt: string; schema: Record<string, unknown> }`. The prompt is built from the block title
@@ -406,9 +421,9 @@ The PR text states what is retained and where; it never says "not retained" with
 Files: `apps/api/src/companion-routes.ts` (three routes: `POST /api/companion/focus/context`,
 `POST /api/companion/focus/judge`, `POST /api/companion/focus/correct`),
 `packages/module-registry/src/route-guard.ts` (add the three to `PLATFORM_UNGUARDED_ROUTES`, with a
-comment like the existing companion block), `packages/module-registry/src/index.ts` (export
-`buildFocusJudgmentPorts`, which wires the calendar read, the quiet-hours function, the active-modules
-resolver, the AI repository's binding lookup, and the structured-call deps), `apps/api/src/server.ts`
+comment like the existing companion block), `packages/module-registry/src/focus-wiring.ts` (`buildFocusJudgmentService`, which wires the
+calendar read, the quiet-hours function, the AI repository's binding lookup and the structured-call
+deps from those packages' public exports), `apps/api/src/server.ts`
 (build the service and pass `dataContext` and `focus` into `registerCompanionRoutes`; a
 `focusGenerate` option next to `personaPreview` lets tests inject a fake model, S19), test
 `tests/integration/companion-focus-routes.test.ts`.
@@ -426,9 +441,9 @@ Rules:
 - The person and the device come from `requireCompanion` only, never the body; the route builds
   the access context from the companion context (S7) and runs the service inside
   `dataContext.withDataContext`.
-- `context` answers `{ block: null, judgmentReady: false }` when the module is off for this person
-  or no model is explicitly bound; it never 404s (a disabled module must not strand a Mac).
-- `judge` with the module off answers 409 `focus_not_ready` and stores nothing; with a `blockId`
+- `context` answers `{ block: null, judgmentReady: false }` when no model is explicitly bound; it
+  never 404s (an unconfigured server must not strand a Mac).
+- `judge` with no model bound answers 409 `focus_not_ready` and stores nothing; with a `blockId`
   that is not the person's current Moss block answers 409 `focus_no_block` and stores nothing.
 - `judge` builds a 20 second abort signal and passes it through; the route's own answer on timeout
   is the stored `insufficient_evidence` row, status 200.
@@ -451,8 +466,6 @@ Tests (against the real server, a fake model through `focusGenerate`):
   the body).
 - A cookie session sent to each new route gets 401 with `companion_credential_invalid` (fails if the
   resolver falls back).
-- With the module disabled for the person, `context` says `judgmentReady: false` and `judge`
-  answers `focus_not_ready` and writes nothing.
 - With no explicit binding, `context` says `judgmentReady: false` (fails if `hasJudgeModel` reads
   the generic worker binding).
 - The server boots with the three routes listed (the coverage assertion at boot, S7).
@@ -470,6 +483,15 @@ longer says the Mac "cannot read your data" (S9). The app-map description for `l
 (`app-map-core.ts:81-87`) changes to match, and so does the Trail Marker sentence in the profile
 section description (`:94-99`). The companion spec's amended clauses (focus spec §11) are edited in
 the same pull request. Decision D8: existing linked Macs are not re-approved.
+
+**Trail Marker information in Settings.** The "Mac companions" area of Settings → Profile & account
+(`apps/web/src/settings/settings-profile-subviews.tsx`) already has a download-link slot that is
+empty today (`TRAIL_MARKER_DOWNLOAD_URL` in `packages/shared/src/companion-api.ts`, null until the
+release pipeline exists). Add a short **how to connect** line there: what to type into Trail Marker
+(this Moss's address) and that the Mac then appears in the list below. Nothing else is added to
+Moss's web app. Test: with the constant null the connect line and the "not yet available" text show,
+with a URL set the link shows (fails if either is missing); the app map entry for this Settings
+area changes with it.
 
 Test: the page shows the four items and not the old sentence (fails if the copy is left); the
 e2e opens the real page against the mock API with a pending request code, approves, and sees the
@@ -617,8 +639,8 @@ Server, through the `verify-gate` skill (never a bare gate or a piped run), then
 
 ```bash
 # full gate via the verify-gate skill; expected exit 0
-pnpm -F @moss/focus typecheck > /tmp/focus-typecheck.log 2>&1; echo "EXIT=$?"   # expect 0
-pnpm exec prettier --check packages/focus apps/api apps/web docs > /tmp/prettier.log 2>&1; echo "EXIT=$?"   # expect 0
+pnpm -F @moss/focus-judgment typecheck > /tmp/focus-typecheck.log 2>&1; echo "EXIT=$?"   # expect 0
+pnpm exec prettier --check packages/focus-judgment apps/api apps/web docs > /tmp/prettier.log 2>&1; echo "EXIT=$?"   # expect 0
 pnpm build:app-map > /tmp/app-map.log 2>&1; echo "EXIT=$?"   # expect 0
 pnpm exec playwright test tests/e2e/companion-link.spec.ts > /tmp/e2e-link.log 2>&1; echo "EXIT=$?"   # expect 0
 ```
@@ -647,8 +669,8 @@ Real Mac against the dev instance (each a note and a cropped screenshot on the p
    during step 2: no match. Record the bound provider kind and, if CLI-backed, that its transcript
    files do hold the title (Needs Ben 2).
 8. New setup shows the new approval list; an already-linked Mac still works untouched (D8).
-9. With the Focus module turned off under Settings → Modules, the menu says judgment isn't set up
-   and Judge now sends nothing; turning it back on recovers without relinking.
+9. With no model bound in Settings → AI, the menu says judgment isn't set up and Judge now sends
+   nothing; binding one recovers without relinking.
 
 Watch-fail checks recorded on the PR: the row-level-security test with the policy dropped; the
 "no window text stored" test with a column added and with a log line added; the pause test with a
@@ -725,3 +747,11 @@ true`), so `judgmentReady` is false until an admin binds a model, and the generi
 - **Decision (Ben):** no dedicated Moss web screen in slice 1; only the download link and connect
   info in existing Settings. The nudge cap is fixed at 45 minutes.
 - **Decision (Ben):** command-line judgment models are allowed, disclosed once in the setup info.
+- **Decision (Ben, 2026-09-20): no module.** A "focus module" (even with no sidebar entry) is not
+  what he asked for; only the Trail Marker information and quick settings appear server-side.
+  Implemented as an internal library, a platform migration, registry composition wiring, and one
+  allowance in the model-binding check. The manifest, permissions, feature flag and module toggle
+  from the first draft of Task 3 are withdrawn.
+- **Fact:** the API app does not depend on module packages; the module registry composes them
+  (`apps/api/package.json`, `module-registry/src/index.ts`). That is why the wiring is in the
+  registry and not in the API app.
