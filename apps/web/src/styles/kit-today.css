@@ -47,7 +47,7 @@
      today-exclusive) so the grid + aside keyline run flush to the surface bottom without
      changing any other route (Ben 2026-07-08: still a gap keeping it off the bottom). */
   margin: 0 auto calc(-1 * var(--space-7));
-  padding: 30px 40px 0;
+  padding: 30px 16px 0;
 }
 .cmd-next {
   padding: 18px 18px 16px;
@@ -80,8 +80,8 @@
 }
 .cmd-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 336px;
-  gap: 44px;
+  grid-template-columns: minmax(0, 1fr) 237px;
+  gap: 66px;
   align-items: start;
   margin-top: 30px;
 }
@@ -103,6 +103,9 @@
   }
 }
 @media (max-width: 1080px) {
+  .cmd-wrap {
+    padding: 30px 18px 0;
+  }
   .cmd-grid {
     grid-template-columns: 1fr;
   }
