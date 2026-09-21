@@ -64,6 +64,7 @@ export function createApiE2eFixtureFetch(
 
 export function resolveApiE2eFetchOverride(env: NodeJS.ProcessEnv = process.env): {
   readonly fetchFn?: typeof fetch;
+  readonly e2eErrorDetail?: boolean;
 } {
   const e2eMode = resolveMossEnv(env, "JARVIS_RUNTIME_MODE") === "e2e";
   const fixtureBase = resolveMossEnv(env, "JARVIS_E2E_MODULE_FETCH_BASE");
@@ -76,5 +77,5 @@ export function resolveApiE2eFetchOverride(env: NodeJS.ProcessEnv = process.env)
     return {};
   }
 
-  return { fetchFn: createApiE2eFixtureFetch(fixtureBase) };
+  return { fetchFn: createApiE2eFixtureFetch(fixtureBase), e2eErrorDetail: true };
 }

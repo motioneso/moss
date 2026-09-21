@@ -450,6 +450,10 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     ...(createBriefingFixtureFetch
       ? { fetchFn: createBriefingFixtureFetch([...ESPN_FETCH_HOSTS, ...NEWS_FETCH_HOSTS]) }
       : {}),
+    // [task:uat-espn-fetch-error-log] R1.2: e2e-only fetch-error detail rides with
+    // the fixture fetch. Both exist only when the override is active, so a
+    // production worker always passes false and the API passes nothing.
+    e2eErrorDetail: createBriefingFixtureFetch !== undefined,
     focusSignals: async (ctx) => {
       const providers = focusSignalProvidersFor(await resolveActiveModules(ctx.actorUserId));
       if (providers.length === 0) return [];

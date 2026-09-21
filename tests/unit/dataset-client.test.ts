@@ -343,6 +343,52 @@ describe("createDatasetClient", () => {
     expect(elapsed).toBeLessThan(150); // well under the 200ms hang → the 20ms timeout fired
   });
 
+  describe("e2e fetch-error detail ([task:uat-espn-fetch-error-log])", () => {
+    it("adds errorMessage and targetHost in e2e mode", async () => {
+      const { logger, warnings } = fakeLogger();
+      const client = createDatasetClient(
+        source({ fetchHosts: ["example.com"] }),
+        adapterFrom(async () => {
+          throw new Error(`upstream refused ${"x".repeat(400)}`);
+        }),
+        { logger, e2eErrorDetail: true }
+      );
+      const envelope = await client.getDataset("widgets", {}, { fallback: null });
+      expect(envelope).toMatchObject({ data: null, degraded: true });
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]?.[1]).toBe("dataset fetch failed: serving degraded response");
+      expect(warnings[0]?.[0]).toMatchObject({
+        sourceId: "fixture",
+        datasetKey: "widgets",
+        outcome: "empty-fallback",
+        errorName: "Error",
+        targetHost: "example.com"
+      });
+      expect(warnings[0]?.[0]).toMatchObject({
+        errorMessage: `upstream refused ${"x".repeat(283)}`
+      });
+    });
+
+    it("keeps the sanitized line without the new keys outside e2e mode", async () => {
+      const { logger, warnings } = fakeLogger();
+      const client = createDatasetClient(
+        source(),
+        adapterFrom(async () => {
+          throw new Error("upstream refused");
+        }),
+        { logger }
+      );
+      await client.getDataset("widgets", {}, { fallback: null });
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]?.[0]).toEqual({
+        sourceId: "fixture",
+        datasetKey: "widgets",
+        outcome: "empty-fallback",
+        errorName: "Error"
+      });
+    });
+  });
+
   describe("cacheOnly peek (#907)", () => {
     it("returns cacheMiss without calling the adapter on a cold cache", async () => {
       let calls = 0;
