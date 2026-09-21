@@ -3,6 +3,7 @@ import SwiftUI
 enum SettingsSection: String, CaseIterable, Identifiable {
     case connection = "Connection"
     case thisMac = "This Mac"
+    case focus = "Focus"
     case permissions = "Permissions"
     case updates = "Updates"
 
@@ -12,6 +13,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .connection: return "network"
         case .thisMac: return "laptopcomputer"
+        case .focus: return "scope"
         case .permissions: return "hand.raised"
         case .updates: return "arrow.triangle.2.circlepath"
         }
@@ -22,6 +24,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 struct SettingsWindow: View {
     @ObservedObject var connection: ConnectionRuntime
     @ObservedObject var permissions: PermissionsService
+    @ObservedObject var focus: FocusRuntime
     @ObservedObject var updater: UpdaterService
     let loginItem: LoginItemService
     let onSetUp: () -> Void
@@ -44,6 +47,8 @@ struct SettingsWindow: View {
                 ConnectionPane(connection: connection, onSetUp: onSetUp)
             case .thisMac:
                 ThisMacPane(connection: connection, loginItem: loginItem)
+            case .focus:
+                FocusPane(focus: focus, permissions: permissions)
             case .permissions:
                 PermissionsPane(permissions: permissions)
             case .updates:

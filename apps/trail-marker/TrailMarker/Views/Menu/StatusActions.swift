@@ -5,17 +5,23 @@ import AppKit
 @MainActor
 final class StatusActions {
     private let connection: ConnectionRuntime
+    private let focus: FocusRuntime
+    private let onShowLastJudgment: () -> Void
     private let onOpenSettings: () -> Void
     private let onOpenOnboarding: () -> Void
     private let onCheckForUpdates: () -> Void
 
     init(
         connection: ConnectionRuntime,
+        focus: FocusRuntime,
+        onShowLastJudgment: @escaping () -> Void,
         onOpenSettings: @escaping () -> Void,
         onOpenOnboarding: @escaping () -> Void,
         onCheckForUpdates: @escaping () -> Void
     ) {
         self.connection = connection
+        self.focus = focus
+        self.onShowLastJudgment = onShowLastJudgment
         self.onOpenSettings = onOpenSettings
         self.onOpenOnboarding = onOpenOnboarding
         self.onCheckForUpdates = onCheckForUpdates
@@ -23,8 +29,14 @@ final class StatusActions {
 
     func perform(_ role: MenuItemDescriptor.Role) {
         switch role {
-        case .status, .instanceInfo:
+        case .status, .focusStatus, .instanceInfo:
             break
+        case .pauseResume:
+            if focus.paused { focus.resume() } else { focus.pause() }
+        case .judgeNow:
+            focus.judgeNow()
+        case .lastJudgment:
+            onShowLastJudgment()
         case .primaryAction:
             performPrimaryAction()
         case .openMoss:
