@@ -133,7 +133,7 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
       ? null
       : morningReadable
         ? `Prepared at ${timeLabel(morningReadable.createdAt, input.locale)}`
-        : "Your morning briefing is not ready yet.";
+        : BRIEFING_NOT_READY_LABEL;
   return {
     headline: input.morningSplit ? input.morningSplit.headline : fallbackHeadline,
     summary,
@@ -149,7 +149,7 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
 /** Today-only hero band: eyebrow, display headline, assessment summary,
     prepared-at line with the reader control, rule, then the weather row. */
 export function TodayHero(props: TodayHeroProps) {
-  const isNotReadyString = props.preparedAt === "Your morning briefing is not ready yet.";
+  const isNotReadyString = props.preparedAt === BRIEFING_NOT_READY_LABEL;
   const preparedTime = isNotReadyString ? null : props.preparedAt;
 
   return (
@@ -170,12 +170,7 @@ export function TodayHero(props: TodayHeroProps) {
             </div>
             <div className="today-hero__prepared">
               {props.readerControl ?? (
-                <span
-                  className="today-hero__not-ready"
-                  aria-label="Your morning briefing is not ready yet."
-                >
-                  {BRIEFING_NOT_READY_LABEL}
-                </span>
+                <span className="today-hero__not-ready">{BRIEFING_NOT_READY_LABEL}</span>
               )}
               {preparedTime !== null ? (
                 <span className="today-hero__prepared-time">{preparedTime}</span>

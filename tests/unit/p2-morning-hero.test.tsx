@@ -95,7 +95,7 @@ describe("buildTodayHeroContent — morning (day) mode", () => {
       morningFreshness: null
     });
 
-    expect(content.preparedAt).toBe("Your morning briefing is not ready yet.");
+    expect(content.preparedAt).toBe(labels.BRIEFING_NOT_READY_LABEL);
     expect(content.readerControl).toBeNull();
   });
 

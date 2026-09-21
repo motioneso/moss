@@ -362,7 +362,7 @@ test("morning and evening prose and action rows render accept dismiss view reply
     run("morning-run-empty", morningDefinition.id, "morning", "", [])
   ];
   await reloadToday(page);
-  await expect(page.getByText("Your morning briefing is not ready yet.")).toBeVisible();
+  await expect(page.getByText("Briefing not ready yet")).toBeVisible();
   await expect(page.getByText("You're caught up — nothing is waiting on you.")).toBeVisible();
 
   const staleRow = actionRow("task-stale", "Review the stale connector result", "needs_action", {
