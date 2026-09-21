@@ -81,7 +81,7 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     id: "link-trail-marker",
     label: "Link a Mac",
     description:
-      "Approve or decline a Mac asking to connect to this account. The Mac opens this screen with a request code in the address; the page names the Mac that is waiting and explains that a linked Mac can check in and rename itself but cannot read data and never receives the account password or browser session. Approving links it and it then appears under Active sessions in Account & preferences, where it can be signed out. A request expires after ten minutes, and an expired, already-answered or unknown request says so and asks the person to start again from the Mac.",
+      "Approve or decline a Mac asking to connect to this account. The Mac opens this screen with a request code in the address; the page names the Mac that is waiting and lists what a linked Mac will be able to do (check in and rename itself, read which focus block is on now, report which app is in front while one is on, and receive a nudge decision) and says it never receives the account password or browser session. Approving links it and it then appears under Active sessions in Account & preferences, where it can be signed out. A request expires after ten minutes, and an expired, already-answered or unknown request says so and asks the person to start again from the Mac.",
     path: "/link/trail-marker",
     scope: "user"
   }
@@ -96,7 +96,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "profile",
     label: "Account & preferences",
     description:
-      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location (use the browser's location or search for a place; the hint under the location notes which of those two was used this session), quiet hours, sessions, data export and account deletion. A Trail Marker for Mac group explains the menu-bar Mac companion, says the app is not available to download yet, describes how browser approval links a Mac, and points at Active sessions as the place a linked Mac appears and can be signed out. Active sessions lists a linked Mac by the name it gave, with its app version.",
+      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location (use the browser's location or search for a place; the hint under the location notes which of those two was used this session), quiet hours, sessions, data export and account deletion. A Trail Marker for Mac group explains the menu-bar Mac companion, says the app is not available to download yet, says what to enter in Trail Marker to connect (this site's address), describes how browser approval links a Mac and what the linked Mac may do, and points at Active sessions as the place a linked Mac appears and can be signed out. Active sessions lists a linked Mac by the name it gave, with its app version.",
     path: "/settings?section=profile",
     scope: "user"
   },

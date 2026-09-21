@@ -42,6 +42,16 @@ export interface MockApiState
     MockNotesPeopleApiState {
   authenticated: boolean;
   /**
+   * A Mac waiting to be linked (#2560). Set it to serve the two approval endpoints; the status
+   * moves to approved or denied when the page posts a decision, and the last decision is kept
+   * so a spec can assert what the browser actually sent.
+   */
+  companionPairAttempt?: {
+    deviceName: string;
+    status: "pending" | "approved" | "denied";
+    lastDecision?: { code: string; decision: "approve" | "deny" };
+  };
+  /**
    * Whether the authenticated user is an instance admin. Defaults to true so
    * existing specs keep their admin surfaces; set false to exercise the
    * non-admin path (admin sections hidden, admin routes 403) — see #171.
@@ -170,6 +180,22 @@ export async function mockApi(page: Page, state: MockApiState): Promise<void> {
     (route) => fulfillJson(route, 404, { error: "Not mocked" })
   );
 
+  await page.route("**/api/companion/pair/attempt", (route) =>
+    state.authenticated && state.companionPairAttempt
+      ? fulfillJson(route, 200, {
+          deviceName: state.companionPairAttempt.deviceName,
+          status: state.companionPairAttempt.status
+        })
+      : fulfillJson(route, 404, { error: "Not found" })
+  );
+  await page.route("**/api/companion/pair/decide", (route) => {
+    const attempt = state.companionPairAttempt;
+    if (!state.authenticated || !attempt) return fulfillJson(route, 404, { error: "Not found" });
+    const body = route.request().postDataJSON() as { code: string; decision: "approve" | "deny" };
+    attempt.lastDecision = body;
+    attempt.status = body.decision === "approve" ? "approved" : "denied";
+    return fulfillJson(route, 200, { status: attempt.status });
+  });
   await page.route("**/api/bootstrap/status", (route) =>
     fulfillJson(route, 200, { needsBootstrap: false })
   );
