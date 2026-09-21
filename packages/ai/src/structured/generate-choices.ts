@@ -83,9 +83,7 @@ export async function generateChoices(
   );
   if (!provider) return { ok: false, error: "needs_config" };
 
-  // Parallel work adds "system-one" to AiProviderKind; until it lands this compares the raw value
-  // as a string so the router does not depend on the union being widened first.
-  if ((model.provider_kind as string) !== SYSTEM_ONE_PROVIDER_KIND) {
+  if (model.provider_kind !== SYSTEM_ONE_PROVIDER_KIND) {
     return { ok: false, error: "not_supported" };
   }
 
@@ -164,6 +162,8 @@ export async function generateChoices(
   try {
     payload = await response.json();
   } catch {
+    // The caller's signal firing mid-read is an abort, not a malformed body.
+    if (input.signal?.aborted) return { ok: false, error: "aborted" };
     deps.logger?.warn(
       { service: input.service, code: "invalid_response_body" },
       "ai.generateChoices invalid response"

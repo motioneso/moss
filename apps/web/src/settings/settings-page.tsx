@@ -371,8 +371,7 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
     "model",
     "provider",
     "typesafe",
-    "system one",
-    "jev"
+    "system one"
   ],
   instmods: ["install", "modules", "uninstall", "update"],
   audit: ["log", "history", "who did what"],

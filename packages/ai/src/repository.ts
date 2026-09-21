@@ -1340,6 +1340,7 @@ export class AiRepository {
         // #874 CRIT-1: this helper only ever searches assistant providers (pinned provider / instance
         // default). Locking it to assistant is defense-in-depth against a voice id ever leaking in.
         .where("providers.purpose", "=", "assistant")
+        .where("providers.provider_kind", "!=", "system-one")
         .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
         .where("models.tier", "=", t)
         // #982/#869 D1: active CLI statics must serve json without outranking the #367 sentinel
@@ -1362,6 +1363,7 @@ export class AiRepository {
         .where("models.status", "=", "active")
         .where("providers.status", "=", "active")
         .where("providers.purpose", "=", "assistant")
+        .where("providers.provider_kind", "!=", "system-one")
         .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
         // #982/#869 D1: preserve sentinel-first chat behavior in the single-model fallback too.
         .clearOrderBy()
@@ -1410,6 +1412,9 @@ export class AiRepository {
     }
   }
 
+  // A System One model answers named choice questions, not prompts, so only an explicit model
+  // binding may select it. Every ladder below excludes it, or an added System One provider could win
+  // automatic `json` routing and fail every other structured feature (#2586).
   private async selectAutomaticModelForCapability(
     scopedDb: DataContextDb,
     capability: AiModelCapability,
@@ -1427,6 +1432,7 @@ export class AiRepository {
         // must never be auto-picked for summarization/json/etc. Transcription never reaches here (its
         // dedicated branch returns first), so this guard also asserts that invariant.
         .where("providers.purpose", "=", "assistant")
+        .where("providers.provider_kind", "!=", "system-one")
         .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
         .where("models.tier", "=", t)
         // safeModelQuery already orders by created_at desc; clear that before applying the 0214
@@ -1446,6 +1452,7 @@ export class AiRepository {
       .where("models.status", "=", "active")
       .where("providers.status", "=", "active")
       .where("providers.purpose", "=", "assistant")
+      .where("providers.provider_kind", "!=", "system-one")
       .where(sql<boolean>`${capability} = any(${sql.ref("models.capabilities")})`)
       .clearOrderBy()
       .orderBy(sql`models.released_at desc nulls last`)

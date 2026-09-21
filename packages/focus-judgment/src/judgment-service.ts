@@ -208,8 +208,10 @@ export function buildFocusJudgmentService(
             requireExplicitBinding: true,
             signal
           });
-          if (chosen.ok) answer = judgmentFromChoiceAnswers(chosen.answers);
-          else if (chosen.error === "not_supported") usePromptPath = true;
+          if (chosen.ok) {
+            answer = judgmentFromChoiceAnswers(chosen.answers);
+            if (!answer) ports.logger.warn({ event: "focus.judge_failed", error: "no_alignment" });
+          } else if (chosen.error === "not_supported") usePromptPath = true;
           else ports.logger.warn({ event: "focus.judge_failed", error: chosen.error });
         } catch {
           // Nothing from the error is logged: it can carry the observation.

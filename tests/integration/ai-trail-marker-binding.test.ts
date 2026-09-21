@@ -150,6 +150,52 @@ describe("Trail Marker focus judgment model binding", () => {
     expect(response.statusCode).toBe(403);
   });
 
+  // A System One model answers named choice questions, not prompts, so only an explicit binding may
+  // select it (#2586). If automatic routing could pick it, adding one would break every other
+  // structured feature on the instance.
+  it("never auto-selects a System One model for other json work, and never makes it the default (fails if the routing exclusion is removed)", async () => {
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/ai/providers",
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+      payload: {
+        providerKind: "system-one",
+        displayName: "System One test provider",
+        credentialPayload: { apiKey: "system-one-test-secret" }
+      }
+    });
+    expect(created.statusCode).toBe(201);
+    const systemOne = created.json<{ provider: { id: string; isInstanceDefault: boolean } }>()
+      .provider;
+    expect(systemOne.isInstanceDefault).toBe(false);
+
+    const added = await server.inject({
+      method: "POST",
+      url: "/api/ai/models",
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+      payload: {
+        providerConfigId: systemOne.id,
+        providerModelId: "jev-latest",
+        displayName: "Jev",
+        capabilities: ["json"],
+        tier: "economy"
+      }
+    });
+    expect(added.statusCode).toBe(201);
+    const systemOneModelId = added.json<{ model: { id: string } }>().model.id;
+
+    const resolved = await dataContext.withDataContext(
+      { actorUserId: ids.adminUser, requestId: "system-one-auto-route" },
+      (scopedDb) =>
+        repository.resolveModelForService(scopedDb, "module.connectors.email-extract", {
+          capability: "json"
+        })
+    );
+    expect(resolved.model).not.toBeNull();
+    expect(resolved.model?.id).not.toBe(systemOneModelId);
+    expect(resolved.model?.provider_kind).not.toBe("system-one");
+  });
+
   it("returns to never resolving once the binding is removed", async () => {
     const removed = await server.inject({
       method: "DELETE",

@@ -233,7 +233,8 @@ export function registerAiRoutes(
             // #870/H1: if this is the sole active admin-owned provider and none is flagged yet, adopt
             // it as the instance-default so a single-provider instance "just works" without an extra
             // click; a second provider added later leaves this flag untouched (admin chooses).
-            if (created.status === "active") {
+            // A System One provider only answers named choice questions, so it can never be the chat default.
+            if (created.status === "active" && created.provider_kind !== "system-one") {
               const providers = await repository.listProviders(scopedDb);
               const activeCount = providers.filter((p) => p.status === "active").length;
               // #2207: only an active flagged row counts; a revoked row still carrying the flag
