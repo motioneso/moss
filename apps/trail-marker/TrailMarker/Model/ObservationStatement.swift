@@ -12,8 +12,9 @@ enum ObservationStatement {
             return "Focus is paused, so nothing is being sent to Moss until you resume."
         }
         return "While a Moss calendar block is on, Trail Marker tells Moss the name of the app in front "
-            + "and a shortened window title, for the apps you have allowed. It sends no screenshots, "
-            + "no typing and no page contents."
+            + "and a shortened window title, for the apps you have allowed. Moss passes them on to the "
+            + "AI model your administrator chose, which may be run by another company, to judge them. "
+            + "It sends no screenshots, no typing and no page contents."
     }
 
     /// The Accessibility row's one line. It is no longer about future shortcuts.

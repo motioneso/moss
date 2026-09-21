@@ -14,6 +14,7 @@ final class ObservationStatementTests: XCTestCase {
         let text = ObservationStatement.current(focusEnabled: true, paused: false)
         XCTAssertTrue(text.contains("name of the app in front"))
         XCTAssertTrue(text.contains("shortened window title"))
+        XCTAssertTrue(text.contains("another company"))
         XCTAssertTrue(text.contains("Moss calendar block"))
         // If the old sentence stayed on screen while observing, the screen would be untrue.
         XCTAssertFalse(text.contains("is not observing your activity"))
