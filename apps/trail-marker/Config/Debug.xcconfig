@@ -1,0 +1,3 @@
+// Optional, machine-local overrides (signing identity for development). The file is not
+// committed; without it the build signs ad hoc, exactly as before.
+#include? "../Local.xcconfig"
