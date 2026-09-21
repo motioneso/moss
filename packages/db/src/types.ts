@@ -538,6 +538,23 @@ export interface CalendarEventsTable {
   updated_at: TimestampColumn;
 }
 
+/**
+ * One Trail Marker focus judgment (#2570). Deliberately has no column for a window title, an app
+ * name, an image description or the calendar block's title: what the person was looking at is never
+ * stored. `reason` is the model's short category-level note, the one free-text field kept.
+ */
+export interface FocusJudgmentsTable {
+  id: string;
+  owner_user_id: string;
+  device_id: string | null;
+  block_ref: string;
+  label: string;
+  reason: string;
+  nudged: ColumnType<boolean, boolean | undefined, boolean>;
+  correction: ColumnType<string | null, string | null | undefined, string | null>;
+  created_at: TimestampColumn;
+}
+
 export interface EmailMessagesTable {
   id: string;
   connector_account_id: string;
@@ -1608,6 +1625,7 @@ export interface MossDatabase {
   "app.connector_accounts": ConnectorAccountsTable;
   "app.connector_oauth_pending": ConnectorOauthPendingTable;
   "app.calendar_events": CalendarEventsTable;
+  "app.focus_judgments": FocusJudgmentsTable;
   "app.day_plans": DayPlansTable;
   "app.day_plan_blocks": DayPlanBlocksTable;
   "app.day_plan_operations": DayPlanOperationsTable;
@@ -1693,6 +1711,7 @@ export type PushSubscription = Selectable<PushSubscriptionsTable>;
 export type PushSigningKeyRow = Selectable<PushSigningKeyTable>;
 export type ConnectorProvider = Selectable<ConnectorDefinitionsTable>;
 export type CalendarEvent = Selectable<CalendarEventsTable>;
+export type FocusJudgment = Selectable<FocusJudgmentsTable>;
 export type DayPlan = Selectable<DayPlansTable>;
 export type DayPlanBlock = Selectable<DayPlanBlocksTable>;
 export type DayPlanOperation = Selectable<DayPlanOperationsTable>;
