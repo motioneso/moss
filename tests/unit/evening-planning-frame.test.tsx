@@ -288,12 +288,12 @@ describe("evening step strip", () => {
     const lede = panel.querySelector(".evening-plan__lede") as HTMLElement;
     const prose = panel.querySelector(".evening-plan__prose") as HTMLElement;
     const question = panel.querySelector(".evening-plan__question") as HTMLElement;
-    const rows = panel.querySelector(".evening-plan__rows") as HTMLElement;
+    const choices = panel.querySelector(".evening-plan__choices") as HTMLElement;
     for (const [first, second] of [
       [speaker, lede],
       [lede, prose],
       [prose, question],
-      [question, rows]
+      [question, choices]
     ] as const) {
       expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
@@ -411,23 +411,66 @@ describe("evening step navigation", () => {
     );
   });
 
-  it("keeps a draft note when leaving and returning to step 1", async () => {
+  it("renders three reflection cards and no h3 Reflect heading in step 1", async () => {
     stubFetch();
     await mountDialog(eveningRun());
-    const input = document.body.querySelector(
-      'input[aria-label="Write the launch brief: correction"]'
-    ) as HTMLInputElement;
+    const panel = document.getElementById("evening-reflect") as HTMLElement;
+    expect(panel.getAttribute("aria-label")).toBe("Reflect");
+    const group = panel.querySelector(
+      '[role="radiogroup"][aria-label="Reflection"]'
+    ) as HTMLElement | null;
+    expect(group, "reflection radiogroup").not.toBeNull();
+    expect(document.getElementById("evening-reflect-heading")).toBeNull();
+    const cards = [...(group?.querySelectorAll("label.evening-plan__choice") ?? [])];
+    expect(cards.length).toBe(3);
+    expect(cards.map((card) => card.querySelector("strong")?.textContent)).toEqual([
+      "That captures it",
+      "The follow-up isn't sent",
+      "It took more out of me than expected"
+    ]);
+    expect(cards.map((card) => card.querySelector("small")?.textContent)).toEqual([
+      "I'm ready to look ahead.",
+      "I still need to send the message.",
+      "Make some room in tomorrow's plan."
+    ]);
+  });
+
+  it("preserves card selection and added note when leaving and returning to step 1", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const panel = document.body.querySelector('[role="region"]') as HTMLElement;
+    const group = panel.querySelector(
+      '[role="radiogroup"][aria-label="Reflection"]'
+    ) as HTMLElement | null;
+    expect(group, "reflection radiogroup").not.toBeNull();
+    const cards = [...(group?.querySelectorAll("label.evening-plan__choice") ?? [])];
     await act(async () => {
-      input.focus();
+      cards[1]?.querySelector("input")?.click();
     });
+    expect(cards[1]?.getAttribute("data-state")).toBe("selected");
+
+    const noteInput = document.body.querySelector(
+      'textarea[aria-label="Or tell Moss in your own words"]'
+    ) as HTMLTextAreaElement;
     await act(async () => {
+      noteInput.focus();
       const native = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
+        window.HTMLTextAreaElement.prototype,
         "value"
       )?.set;
-      native?.call(input, "Scope slipped again");
-      input.dispatchEvent(new window.Event("input", { bubbles: true }));
+      native?.call(noteInput, "Need the figures");
+      noteInput.dispatchEvent(new window.Event("input", { bubbles: true }));
     });
+    const addNoteBtn = [...document.body.querySelectorAll("button")].find(
+      (b) => b.textContent?.trim() === "Add note"
+    );
+    await act(async () => {
+      addNoteBtn?.click();
+    });
+
+    const hints = [...panel.querySelectorAll(".evening-plan__hint")];
+    expect(hints.some((h) => h.textContent?.includes("Noted: Need the figures"))).toBe(true);
+
     const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
     const buttons = [...nav.querySelectorAll("button")] as HTMLButtonElement[];
     await act(async () => {
@@ -436,13 +479,16 @@ describe("evening step navigation", () => {
     await act(async () => {
       buttons[0]!.click();
     });
-    expect(
-      (
-        document.body.querySelector(
-          'input[aria-label="Write the launch brief: correction"]'
-        ) as HTMLInputElement
-      ).value
-    ).toBe("Scope slipped again");
+
+    const refreshedGroup = document.body.querySelector(
+      '[role="radiogroup"][aria-label="Reflection"]'
+    ) as HTMLElement;
+    const refreshedCards = [...refreshedGroup.querySelectorAll("label.evening-plan__choice")];
+    expect(refreshedCards[1]?.getAttribute("data-state")).toBe("selected");
+    const refreshedHints = [...document.body.querySelectorAll(".evening-plan__hint")];
+    expect(refreshedHints.some((h) => h.textContent?.includes("Noted: Need the figures"))).toBe(
+      true
+    );
   });
 
   it("offers the save action on step 4", async () => {
