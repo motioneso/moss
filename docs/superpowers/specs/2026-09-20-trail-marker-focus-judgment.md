@@ -1,7 +1,7 @@
 # Trail Marker focus judgment against the calendar
 
-Status: **Draft.** The screens in §9 are minimal and follow the approved board; confirm them with
-Ben and change this status line before building. Builds on
+Status: **Approved by Ben, 2026-09-20**, with the fixes from an independent review folded in.
+The screens in §9 are minimal and follow the approved board. Builds on
 `2026-09-20-trail-marker-mac-companion.md` (the linked Mac) and replaces the direct Mac-to-model
 call assumed in `docs/superpowers/plans/2026-09-19-jev-focus-mac-pilot.md`.
 
@@ -196,6 +196,9 @@ Resolved:
 - **Nudges from the start:** yes, with Judge now, Last judgment and a test nudge to verify it.
 - **The image model is set on the Mac and called by the companion; Moss stays text-only.** No
   router image input is needed.
+- **Existing linked Macs are not re-approved; new setups show the approval info** (D8).
+- **Focus lives in Settings, not the sidebar** (D9).
+- **Slice order:** text-only end to end first, then screenshots (§12).
 
 Open, for Ben:
 
@@ -203,24 +206,20 @@ Open, for Ben:
   model to a service key is an **admin** setting, not per person, and the admin AI pane lists its
   bindable services by hand, so a row for this one must be added there. Fine on a one-person
   instance; stated so nobody expects per-person choice.
-- **D8 Existing linked Macs.** A Mac linked before this ships was approved in the browser for
-  "identity and this device's connection" only. This feature lets the credential read the
-  person's current block, submit observations and receive nudge decisions, which is more. Proposed:
-  after the update, the Mac shows the new capability, and Moss requires the person to approve it
-  again in the browser before any observation is accepted from that Mac. Until then the Mac works
-  exactly as before.
-- **D9 Where the code lives.** Companion routes are platform code with no module, but stored
-  judgments need an owning module's SQL, row-level security and app-map entries. Proposed: a new
-  **focus module** owns the judgment table (owner-only), the service key and the rules; the
-  companion route only authenticates the Mac and calls the focus module's public interface; the
-  calendar module gains the small "current block" public read.
-- **D7 Image-model API shape.** Which request formats the Mac supports (for example an
-  OpenAI-compatible chat endpoint with an image input) and how a person tests one. Proposed:
-  OpenAI-compatible first, with a Test button that describes a built-in sample image, and a
-  fallback to window title only (rung 1) when the image model is unavailable or slow.
-- **D4 Local judgment models.** A local judgment model is reached by whatever the person binds in
-  Moss; it is not called from the Mac. The image step is the only model the Mac calls itself.
-- **D6 Retention.** Proposed 30 days for judgments and corrections. Images never retained.
+- **D8 Existing linked Macs (decided).** No re-approval. A Mac linked before this ships keeps
+  working and is not asked to approve again; only **new setups** show the added capabilities on the
+  browser approval page. Two things are still true and stated so nobody is surprised: the device
+  credential of an already-linked Mac can now read that person's current block and submit
+  observations, and nothing is observed until the person turns it on in the Mac's own Focus pane and
+  grants the macOS permission, so the Mac itself is where consent for existing setups happens.
+  This is acceptable on a one-person instance; a shared instance would need the re-approval.
+- **D9 Where the code lives (decided).** A new **focus module** owns the judgment table
+  (owner-only), the service key and the nudge rules. It has **no sidebar entry**: its manifest
+  declares no navigation and only a Settings section, the same way the notifications module does.
+  The companion route only authenticates the Mac and calls the focus module's public interface;
+  the calendar module gains the small "current block" public read. Its Settings section holds the
+  judgment-model binding notes, nudge cap and the test nudge trigger; the image model stays in the
+  Mac's own Focus pane.
 
 ## 11. Amendments this requires to the companion spec
 
