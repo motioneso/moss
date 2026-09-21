@@ -330,4 +330,38 @@ describe("AiProvidersPane Trail Marker focus judgment row (#2570)", () => {
       renderer.unmount();
     });
   });
+  it("shows each provider its own example address and key, not another company's", async () => {
+    const renderer = await renderPane();
+    clickButtonByText(renderer, "Add provider");
+    await flush();
+    clickButtonByText(renderer, "System One (TypeSafe)");
+    await flush();
+
+    expect(renderer.root.findByProps({ "aria-label": "Base URL" }).props.placeholder).toBe(
+      "https://api.typesafe.ai"
+    );
+    expect(renderer.root.findByProps({ "aria-label": "API key" }).props.placeholder).toBe(
+      "Your TypeSafe API key"
+    );
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("does not show Anthropic's address or an sk- key style to a Mistral (OpenAI-compatible) provider", async () => {
+    const renderer = await renderPane();
+    clickButtonByText(renderer, "Add provider");
+    await flush();
+    clickButtonByText(renderer, "Mistral");
+    await flush();
+
+    const base = renderer.root.findByProps({ "aria-label": "Base URL" }).props.placeholder;
+    expect(base).not.toContain("anthropic");
+    expect(base).toBe("https://api.openai.com");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
 });

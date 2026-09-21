@@ -61,6 +61,21 @@ import {
   type AiServiceKey
 } from "@moss/shared";
 
+/**
+ * The example shown in a provider's endpoint and key fields. Each kind shows its own: an example that
+ * names another company's address or key style sends the person hunting for the wrong thing.
+ */
+const CREDENTIAL_EXAMPLES: Readonly<
+  Record<AiProviderKind, { readonly baseUrl: string; readonly apiKey: string }>
+> = {
+  anthropic: { baseUrl: "https://api.anthropic.com", apiKey: "sk-ant-…" },
+  "openai-compatible": { baseUrl: "https://api.openai.com", apiKey: "sk-…" },
+  google: { baseUrl: "https://generativelanguage.googleapis.com", apiKey: "AIza…" },
+  ollama: { baseUrl: "http://localhost:11434", apiKey: "Any value" },
+  custom: { baseUrl: "https://your-endpoint.example.com", apiKey: "Your API key" },
+  "system-one": { baseUrl: "https://api.typesafe.ai", apiKey: "Your TypeSafe API key" }
+};
+
 const PROVIDER_CATALOG: readonly {
   readonly label: string;
   readonly kind: AiProviderKind;
@@ -291,7 +306,7 @@ function ProviderCard(props: {
                   className="jds-input"
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://api.anthropic.com"
+                  placeholder={CREDENTIAL_EXAMPLES[provider.providerKind].baseUrl}
                   aria-label="Base URL"
                 />
               </Field>
@@ -301,7 +316,11 @@ function ProviderCard(props: {
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={provider.hasCredential ? "•••••••• (stored)" : "sk-…"}
+                  placeholder={
+                    provider.hasCredential
+                      ? "•••••••• (stored)"
+                      : CREDENTIAL_EXAMPLES[provider.providerKind].apiKey
+                  }
                   aria-label="API key"
                 />
                 <Button
@@ -799,7 +818,7 @@ export function AiProvidersPane() {
                     className="jds-input"
                     value={pickBaseUrl}
                     onChange={(e) => setPickBaseUrl(e.target.value)}
-                    placeholder="https://api.anthropic.com"
+                    placeholder={CREDENTIAL_EXAMPLES[credentialFor.kind].baseUrl}
                     aria-label="Base URL"
                   />
                 </Field>
@@ -809,7 +828,7 @@ export function AiProvidersPane() {
                     type="password"
                     value={pickApiKey}
                     onChange={(e) => setPickApiKey(e.target.value)}
-                    placeholder="sk-…"
+                    placeholder={CREDENTIAL_EXAMPLES[credentialFor.kind].apiKey}
                     aria-label="API key"
                   />
                 </Field>
