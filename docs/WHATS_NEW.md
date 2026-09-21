@@ -36,6 +36,10 @@ feature that is not present in the image you are running.
 - **Trail Marker for Mac (early build).** A Mac menu-bar app can now link to your account and show up under Active sessions; it does not observe your activity. [PR #2568](https://github.com/motioneso/moss/pull/2568)
 - **Link a Mac to your account.** You can now approve a Mac companion app from your browser and see or sign out each linked Mac from Active sessions. [PR #2564](https://github.com/motioneso/moss/pull/2564)
 
+#### Changed
+
+- **Trail Marker menu and setup window redesign.** The Trail Marker menu-bar card and setup window now follow the approved design. [PR #2573](https://github.com/motioneso/moss/pull/2573)
+
 ### 2026-09-15
 
 #### Changed
