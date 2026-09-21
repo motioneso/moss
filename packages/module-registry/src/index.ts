@@ -699,6 +699,12 @@ export interface BuiltInRouteDependencies {
   /** TEST-ONLY. Inject a fake fetch for weather (and any other external HTTP) without real network. */
   readonly fetchFn?: typeof fetch;
   /**
+   * [task:uat-espn-fetch-error-log] R1.3 pass-through: e2e-only fetch-error detail
+   * for the route-built briefing dataset clients. Carried, never defaulted or
+   * branched on here; the datasets client owns the behavior.
+   */
+  readonly e2eErrorDetail?: boolean;
+  /**
    * #1263 Task 15: install-time self-operation grant port, built by the API composition root
    * over its one AiRepository instance and forwarded to the settings module (module isolation —
    * settings never imports @moss/ai). Threaded straight through to registerSettingsRoutes.
@@ -2305,7 +2311,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       // generic per-module map on `BuiltInModuleRegistration`.
       const datasetClient = buildSportsBriefingSource({
         fetchFn: deps.fetchFn,
-        logger: server.log
+        logger: server.log,
+        e2eErrorDetail: deps.e2eErrorDetail
       });
       const rendererSocket = process.env.MOSS_SPORTS_RENDERER_SOCKET;
       let browser: SportsBrowserClient | undefined;
@@ -2452,7 +2459,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       // late-bound briefing tool.
       const datasetClient = buildNewsBriefingSource({
         fetchFn: deps.fetchFn,
-        logger: server.log
+        logger: server.log,
+        e2eErrorDetail: deps.e2eErrorDetail
       });
       const discovery = buildNewsDiscoveryPorts(
         createModuleLogger(server.log, "news"),
