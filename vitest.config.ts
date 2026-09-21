@@ -385,6 +385,12 @@ export default defineConfig({
         find: "@moss/scratchpad",
         replacement: fileURLToPath(new URL("./packages/scratchpad/src/index.ts", import.meta.url))
       },
+      {
+        find: "@moss/focus-judgment",
+        replacement: fileURLToPath(
+          new URL("./packages/focus-judgment/src/index.ts", import.meta.url)
+        )
+      },
       // Subpath export first, same pairing requirement as the other subpath/bare pairs above.
       {
         find: "@moss/workflows/routes",
@@ -408,6 +414,7 @@ export default defineConfig({
       "packages/chat/src/live/*.test.ts",
       "packages/chat/src/*.test.ts",
       "packages/calendar/src/*.test.ts",
+      "packages/focus-judgment/src/*.test.ts",
       "packages/ai/src/structured/*.test.ts"
     ],
     setupFiles: ["tests/setup-env.ts"],
