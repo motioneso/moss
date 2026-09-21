@@ -56,18 +56,16 @@ Test button call `GET {base}/v1/models` and read `models[].name` and `release_da
 schema change (a new value on the provider kind enum, a new migration in the owning module's `sql/`)
 and adds one entry to the provider picker in Settings, with its app-map entry.
 
-**B. One router function that any model can serve.** `generateChoices` in `@moss/ai`: the caller
-supplies the state and the named choice questions and a service key, and the router resolves the
-model the person bound to that service, as for every other capability. The caller never names a
-provider or model.
+**B. A router function for choice questions, with the fallback in the caller.** `generateChoices`
+in `@moss/ai`: the caller supplies the state and the named choice questions and a service key, and
+the router resolves the model the person bound to that service, as for every other capability. The
+caller never names a provider or model.
 
 - If the bound model's provider is `system-one`, the request goes to `POST {base}/v1/systemone` in
-  the System One shape and the answer is validated exactly as the pilot does.
-- For any other provider, the same questions are rendered into a prompt and asked through the
-  existing structured-answer call. The result has the same shape, with probabilities absent.
-
-This is what keeps Moss provider-agnostic: focus asks for a capability, and Jev is one way of
-answering it.
+  the System One shape and the answer is validated strictly (section 5).
+- For any other provider it returns `not_supported`, and the caller uses its existing prompt-based
+  path (`generateStructured`). Focus judgment does exactly that, so any model the person binds
+  still works, with a model-written reason; Jev is one way of answering, not the only way.
 
 **C. Focus judgment uses it.** The judgment service calls `generateChoices` with the alignment
 question, and the activity question alongside it (one call answers both). The alignment choice is
@@ -109,8 +107,9 @@ highest. Errors log a category only.
 2. **Confidence floor.** Whether a `distracted` answer whose probability is below a threshold
    counts as `insufficient_evidence`. Recommended: yes, at 0.6, held as a named constant that the
    correction data can tune. The two-in-a-row rule already exists as a second guard.
-3. **Recent context.** Jev accepts up to three recent observations. Sending them lets it judge a
-   trend but sends more window text to TypeSafe. Recommended: send the previous one only.
+3. **Recent context.** Jev accepts up to three recent observations, but Moss never stores window
+   text, so the server has no earlier observation to send. Decided: send the current observation
+   only. Trend comes from the existing two-in-a-row rule.
 
 ## 8. Not in this spec
 
