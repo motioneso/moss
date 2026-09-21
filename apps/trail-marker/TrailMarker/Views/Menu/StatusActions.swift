@@ -1,18 +1,13 @@
 import AppKit
-import Combine
 
-/// Builds and keeps the status-bar `NSMenu` in sync with `ConnectionRuntime`, from the pure
-/// ordering `MenuModel` derives. Rebuilds the whole menu on every state or identity change
-/// rather than diffing — a menu this short makes that the simpler correct choice.
+/// What each item in the status card does. Kept apart from the card so the card stays a plain
+/// view of `MenuModel` and the actions stay in one place.
 @MainActor
-final class StatusMenu: NSObject {
-    let menu = NSMenu()
-
+final class StatusActions {
     private let connection: ConnectionRuntime
     private let onOpenSettings: () -> Void
     private let onOpenOnboarding: () -> Void
     private let onCheckForUpdates: () -> Void
-    private var cancellables = Set<AnyCancellable>()
 
     init(
         connection: ConnectionRuntime,
@@ -24,42 +19,9 @@ final class StatusMenu: NSObject {
         self.onOpenSettings = onOpenSettings
         self.onOpenOnboarding = onOpenOnboarding
         self.onCheckForUpdates = onCheckForUpdates
-        super.init()
-
-        // AppKit auto-enables any item with a valid target/action pair unless this is off,
-        // which would silently override the disabled status/info rows and a disabled Open Moss.
-        menu.autoenablesItems = false
-
-        Publishers.CombineLatest(connection.$state, connection.$identity)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state, identity in
-                self?.rebuild(state: state, identity: identity)
-            }
-            .store(in: &cancellables)
-
-        rebuild(state: connection.state, identity: connection.identity)
     }
 
-    private func rebuild(state: ConnectionState, identity: LinkedIdentity?) {
-        menu.removeAllItems()
-        for descriptor in MenuModel.items(state: state, identity: identity) {
-            switch descriptor.kind {
-            case .separator:
-                menu.addItem(.separator())
-            case .text:
-                let item = NSMenuItem(
-                    title: descriptor.title, action: #selector(handleItem(_:)), keyEquivalent: ""
-                )
-                item.target = self
-                item.isEnabled = descriptor.isEnabled
-                item.representedObject = descriptor.role
-                menu.addItem(item)
-            }
-        }
-    }
-
-    @objc private func handleItem(_ sender: NSMenuItem) {
-        guard let role = sender.representedObject as? MenuItemDescriptor.Role else { return }
+    func perform(_ role: MenuItemDescriptor.Role) {
         switch role {
         case .status, .instanceInfo:
             break

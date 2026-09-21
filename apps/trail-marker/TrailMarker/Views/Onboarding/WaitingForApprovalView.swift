@@ -40,6 +40,6 @@ struct WaitingForApprovalView: View {
             }
         }
         .padding(TrailMarkerTokens.Spacing.major)
-        .frame(width: TrailMarkerTokens.Layout.firstRunWidth)
+        .frame(width: OnboardingFlow.contentWidth)
     }
 }

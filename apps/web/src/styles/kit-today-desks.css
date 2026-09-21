@@ -30,11 +30,23 @@
 }
 .jds-brief--news .desk-title,
 .jds-brief--sports .desk-title {
+  position: relative;
+  top: -3px;
   font-family: var(--font-display);
   font-size: 25px;
+  font-weight: 700;
   line-height: 1.18;
   letter-spacing: -0.7px;
   margin: 0;
+}
+/* Phone titles wrap to two lines and sit 2 rows lower than desktop against
+   the mockup, so the same raise is 5 rows here. The offset moves only the
+   title's paint: box, baseline, number, and row height stay as on bf70b90a. */
+@media (max-width: 1080px) {
+  .jds-brief--news .desk-title,
+  .jds-brief--sports .desk-title {
+    top: -5px;
+  }
 }
 .jds-brief--news .desk-meta,
 .jds-brief--sports .desk-meta {
