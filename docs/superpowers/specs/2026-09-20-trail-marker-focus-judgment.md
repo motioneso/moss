@@ -20,13 +20,16 @@ nudge?
 ## 2. Decisions already made
 
 - **The goal is the current calendar block.** No separate goal to maintain. No block, no judging.
-- **Models are chosen in Moss, not in the app.** The Mac sends a small bounded observation to
-  Moss. Moss's AI router picks the user's configured model. No provider name or key exists on the
-  Mac.
-- **Two models, split on purpose.** A vision model turns a window capture into a short text
-  description; a separate judgment model reads that description plus the calendar block. Testing
-  with Qwen (describes the image) feeding Jev (judges) worked, so the two steps are configured
-  independently: any vision model can describe, any text model can judge.
+- **The judgment model is chosen in Moss.** The Mac sends a small bounded text summary to Moss.
+  Moss's AI router picks the user's configured model. No provider name or key for the judgment
+  step exists on the Mac.
+- **Two models, split on purpose, and the image stays on the companion.** The Mac captures the
+  window and sends it to an **image model the user configures on the Mac** (any compatible API:
+  a local runtime or a hosted service, with its own key kept in the Keychain). That model returns a
+  short text description; the image is discarded. Only the text goes to Moss, where a separate
+  judgment model decides. Testing with Qwen describing and Jev judging worked, and neither name
+  appears in the contract. Doing the image step on the Mac avoids uploading images to Moss and
+  keeps the round trip short.
 - **Only Moss-created calendar blocks trigger, to start.**
 - **Nudges are on from the start**, still conservative, with an easy way to check the whole chain
   is working (§7).
@@ -36,7 +39,7 @@ nudge?
 
 - Continuous screenshot upload, screen recording, or keeping images. A capture is taken only at a
   judgment moment, held in memory for one description call, and never written to disk or stored
-  (see §6, rung 3, and §8).
+  (see §6, rung 3, and §8). Images never go to Moss.
 - Judging when there is no calendar block.
 - Productivity scores, history dashboards, or reports about the person.
 - Any other computer, Windows, Linux, or a cross-platform framework.
@@ -50,9 +53,10 @@ nudge?
    they change (§6). Everything is filtered and shortened on the Mac before anything leaves.
 3. **Mac sends a bounded summary** to Moss on a slow cadence (every few minutes, or when the
    frontmost app settles), never raw activity streams.
-4. **Moss describes, then judges.** If a capture was sent, the configured vision model turns it
-   into a short text description and the image is discarded. The configured judgment model then
-   receives the block and the text summary and returns a typed answer: `focused`, `necessary_detour`, `distracted` or `insufficient_evidence`,
+4. **Describe on the Mac, judge in Moss.** If rung 3 is on, the Mac sends the capture to the
+   image model the user configured, gets back a short text description, and discards the image.
+   The summary sent to Moss is text only. Moss's configured judgment model receives the block and
+   that text and returns a typed answer: `focused`, `necessary_detour`, `distracted` or `insufficient_evidence`,
    with a short reason.
 5. **Moss decides whether to nudge.** Conservative rules (§7). Default is to say nothing.
 6. **Pause and stop are always one click on the Mac** and stop all observation immediately.
@@ -71,7 +75,7 @@ decision.
 
 ## 6. What the Mac observes
 
-Cheapest rung that answers the question, escalating only with the person's explicit choice. Rung 3 is in the first build because the Qwen-to-Jev pipeline is the thing being tested:
+Cheapest rung that answers the question, escalating only with the person's explicit choice. Rung 3 is in the first build because the describe-then-judge pipeline is the thing being tested:
 
 | Rung | What                                                                         | macOS permission | Default        |
 | ---- | ---------------------------------------------------------------------------- | ---------------- | -------------- |
@@ -117,12 +121,14 @@ The person must be able to see the chain working without waiting for a real drif
 - Moss stores: the judgment, a one-line reason, the block reference, and the person's correction.
   **Not stored:** window titles, selected text, or screenshots. They exist in memory for the
   duration of one model call.
-- **A rung-3 capture is sent to Moss** so the user's configured vision model can describe it. That
-  is a real change from "images never leave the Mac", and it is why rung 3 needs its own explicit
-  consent screen. The image is held in memory for that one call, is never written to disk, never
-  logged, and never put in a job payload. If the configured vision model is a third-party
-  service, the image goes there too; the consent screen must say so, naming the model the person
-  chose.
+- **Images never reach Moss.** A rung-3 capture goes only to the image model the person
+  configured on the Mac. If that endpoint is on the same Mac, the image does not leave it. If it is
+  a hosted service, the image is sent there directly by the companion, so the consent screen must
+  show the endpoint and say plainly that the image will be sent to it. The image is held in memory
+  for that one call and is never written to disk, logged, or retried from storage.
+- **The image-model key lives only in the Mac Keychain.** It is never sent to Moss, never logged,
+  never put in a prompt, an export, or a crash report (same rule and test as the companion
+  credential). Redaction and the denylist run before the capture leaves the process.
 - The prompt is built from the summary only. Connector and AI credentials, tokens and session data
   are never included. Logs are content-free. Job payloads carry IDs only.
 - Every claim above needs a test watched failing with the protection removed before it is written
@@ -143,9 +149,10 @@ To be drawn and agreed with Ben, one at a time:
 
 **Moss web:**
 
-6. Settings → Trail Marker (Moss web): two separate model pickers, **Describe the screen** (vision
-   capable) and **Judge focus** (text), plus the rung and nudge settings. The Mac's Focus pane
-   shows which two models are in use, read-only, with a link back to this screen.
+6. Settings → Trail Marker (Moss web): **Judge focus** model picker (text), plus the rung and
+   nudge settings. The **Describe the screen** model is set on the Mac in the Focus pane
+   (endpoint, model name, key, a Test button); Moss shows only that a description model is
+   configured on this Mac, never its key or address.
 7. Settings → Trail Marker, focus section: nudge cap, quiet hours link, send a test nudge.
 8. Focus review: today's judgments with wrong / right, no scores.
 
@@ -159,16 +166,17 @@ Resolved:
 - **Which blocks trigger:** Moss-created blocks only, to start.
 - **Two-stage models:** vision describes, a separate model judges, configured independently.
 - **Nudges from the start:** yes, with Judge now, Last judgment and a test nudge to verify it.
+- **The image model is set on the Mac and called by the companion; Moss stays text-only.** No
+  router image input is needed.
 
 Open, for Ben:
 
-- **D3 Where the image goes.** The router is text-only today, so the vision step needs image
-  input added to it. That means the capture travels from the Mac to Moss (and to the vision
-  provider, if hosted) transiently. The alternative is describing the image on the Mac with a
-  local model and sending only text, which keeps images off the network but ties the description
-  step to the Mac. Proposed: through Moss, per section 8, with explicit consent.
-- **D1 Model binding.** Two new module service keys, user-bindable like other AI services. How a
-  user assigns a model to a new key in the current UI is not yet verified.
+- **D1 Model binding.** One new module service key for the judgment step, user-bindable like
+  other AI services. How a user assigns a model to a new key in the current UI is not yet verified.
+- **D7 Image-model API shape.** Which request formats the Mac supports (for example an
+  OpenAI-compatible chat endpoint with an image input) and how a person tests one. Proposed:
+  OpenAI-compatible first, with a Test button that describes a built-in sample image, and a
+  fallback to window title only (rung 1) when the image model is unavailable or slow.
 - **D4 Local models.** Through Moss by default; the Mac calling a local model directly when Moss
   is unreachable is not in the first slice.
 - **D6 Retention.** Proposed 30 days for judgments and corrections. Images never retained.
@@ -183,6 +191,8 @@ work must amend them in the same pull request that builds the first slice:
 - §6: the required copy "Trail Marker is not observing your activity."
 - §11: no window titles or activity are collected.
 - §13: model routing, screen observation and nudges are listed as non-goals.
+- §5: the Mac now stores an image-model endpoint and key (Keychain only); the earlier "no key
+  settings" line must say the Mac holds exactly this one.
 
 The permission copy, menu and settings inventory change with them. The in-app statement of what is
 observed must always be true for the build the person is running.
@@ -193,8 +203,8 @@ observed must always be true for the build the person is running.
    endpoints under the companion credential, service key, structured judgment with a fake model.
 2. **Mac observation, rungs 1 and 3.** Consent, allowlist, pause, indicator; sends summaries and,
    on opt-in, one capture per judgment. Judge now and Last judgment.
-3. **Router image input and the two-stage pipeline** (describe, then judge), both bound in
-   Moss settings.
+3. **The two-stage pipeline:** the Mac describes with the user's image model, Moss judges with the
+   bound model. Timeouts and the fall-back to rung 1 when the image model is unavailable.
 4. **Nudges, review and corrections.** Nudge delivery with the gating in section 7, test nudge,
    web review screen, corrections recorded.
 
