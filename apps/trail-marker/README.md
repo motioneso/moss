@@ -42,3 +42,21 @@ reset them:
   `defaults delete com.moss.trailmarker`.
 
 Run both before re-testing first-run linking from a clean state.
+
+## Stable signing on your own Mac (optional, avoids repeated password prompts)
+
+Without a signing certificate every rebuild is signed ad hoc with a new identity. macOS then treats
+each build as a different app: it asks for your password again to read the Keychain credential, and
+it forgets Accessibility and Screen Recording. To avoid that on a development Mac:
+
+1. Create a self-signed code-signing certificate named `Trail Marker Dev` in your login keychain
+   (Keychain Access: Certificate Assistant, Create a Certificate, type Code Signing), and trust it
+   for code signing.
+2. Create `apps/trail-marker/Local.xcconfig` (it is ignored by git) containing
+   `CODE_SIGN_IDENTITY = Trail Marker Dev` and `CODE_SIGN_STYLE = Manual`.
+3. Run `xcodegen generate`, rebuild, click Always Allow once when macOS asks about the Keychain,
+   and grant the privacy permissions once.
+
+Builds without that file behave exactly as before. Release builds keep hardened runtime on;
+development builds turn it off because it refuses to load the debug library and Sparkle when they
+are signed with a different identity.

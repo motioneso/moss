@@ -3,3 +3,6 @@
 DerivedData/
 xcuserdata/
 .build/
+
+# Machine-local build overrides (see Config/Debug.xcconfig)
+Local.xcconfig
