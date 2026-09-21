@@ -726,6 +726,12 @@ export interface BuiltInWorkerDependencies {
    */
   readonly fetchFn?: typeof fetch;
   /**
+   * [task:uat-espn-fetch-error-log] R1.2 pass-through: e2e-only fetch-error detail
+   * for the worker-built briefing dataset clients. Carried, never defaulted or
+   * branched on here; the datasets client owns the behavior.
+   */
+  readonly e2eErrorDetail?: boolean;
+  /**
    * #1282 Task 2: external (JSON-manifest) module discovery, built by apps/worker (the only
    * place holding both external-module discovery and the external worker runtime) and
    * forwarded to the briefings module. Both fields are optional — a host with zero external
@@ -1048,6 +1054,7 @@ export function buildModelNativeSearchResolver(deps: {
 export function buildSportsBriefingSource(deps: {
   readonly fetchFn?: typeof fetch;
   readonly logger?: FastifyBaseLogger;
+  readonly e2eErrorDetail?: boolean;
 }): DatasetClient {
   // LOADER-SEAM(sports) 2: DI wiring + construction of the dataset-connector-SDK runtime
   // client (docs/superpowers/specs/2026-07-04-module-dataset-connector-sdk.md) bound to the
@@ -1059,7 +1066,8 @@ export function buildSportsBriefingSource(deps: {
   }
   const datasetClient = createDatasetClient(espnSource, createEspnDatasetAdapter(), {
     fetchFn: deps.fetchFn,
-    logger: deps.logger ? createModuleLogger(deps.logger, "sports") : undefined
+    logger: deps.logger ? createModuleLogger(deps.logger, "sports") : undefined,
+    e2eErrorDetail: deps.e2eErrorDetail
   });
   // LOADER-SEAM(sports) 3: the briefing tool (`briefing-tool.ts`) is constructed from
   // static manifest data at import time, before this wiring runs, so it adopts the client
@@ -1076,6 +1084,7 @@ export function buildSportsBriefingSource(deps: {
 export function buildNewsBriefingSource(deps: {
   readonly fetchFn?: typeof fetch;
   readonly logger?: FastifyBaseLogger;
+  readonly e2eErrorDetail?: boolean;
 }): DatasetClient {
   // Same dataset-connector-SDK wiring as sports above: the composition root binds the
   // manifest-declared `newsfeeds` external source to the concrete RSS adapter so host
@@ -1086,7 +1095,8 @@ export function buildNewsBriefingSource(deps: {
   }
   const datasetClient = createDatasetClient(feedsSource, createRssDatasetAdapter(), {
     fetchFn: deps.fetchFn,
-    logger: deps.logger ? createModuleLogger(deps.logger, "news") : undefined
+    logger: deps.logger ? createModuleLogger(deps.logger, "news") : undefined,
+    e2eErrorDetail: deps.e2eErrorDetail
   });
   // Briefing tool is constructed at import time; it adopts the client late-bound
   // (mirrors LOADER-SEAM(sports) 3).
@@ -2425,7 +2435,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       // registerRoutes never reaches it. The scheduled morning briefing runs here, so the
       // worker entry builds the same client through the shared builder. Only worker
       // dependency fields are read (logger, fetchFn); nothing route-only.
-      buildSportsBriefingSource({ fetchFn: deps.fetchFn, logger: deps.logger });
+      buildSportsBriefingSource({
+        fetchFn: deps.fetchFn,
+        logger: deps.logger,
+        e2eErrorDetail: deps.e2eErrorDetail
+      });
       return [];
     }
   },
@@ -2493,7 +2507,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     registerWorkers: (boss, deps) => {
       // #2313: same both-entries contract as sports above; the scheduled briefing runs in
       // this process. Only worker dependency fields are read (logger, fetchFn).
-      buildNewsBriefingSource({ fetchFn: deps.fetchFn, logger: deps.logger });
+      buildNewsBriefingSource({
+        fetchFn: deps.fetchFn,
+        logger: deps.logger,
+        e2eErrorDetail: deps.e2eErrorDetail
+      });
       const discovery = buildNewsDiscoveryPorts(
         deps.logger ? createModuleLogger(deps.logger, "news") : undefined,
         undefined,
