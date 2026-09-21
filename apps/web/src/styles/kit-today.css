@@ -104,7 +104,7 @@
 }
 @media (max-width: 1080px) {
   .cmd-wrap {
-    padding: 30px 18px 0;
+    padding: 30px 6px 0;
   }
   .cmd-grid {
     grid-template-columns: 1fr;
