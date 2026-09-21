@@ -1,7 +1,7 @@
 # Trail Marker focus judgment against the calendar
 
-Status: **Draft, front-end mockups not yet agreed.** Do not build from this until the screens in
-§9 are agreed with Ben and this status line is changed. Builds on
+Status: **Draft.** The screens in §9 are minimal and follow the approved board; confirm them with
+Ben and change this status line before building. Builds on
 `2026-09-20-trail-marker-mac-companion.md` (the linked Mac) and replaces the direct Mac-to-model
 call assumed in `docs/superpowers/plans/2026-09-19-jev-focus-mac-pilot.md`.
 
@@ -104,8 +104,8 @@ length caps, no clipboard, no keystrokes, no page bodies beyond the cap. Text fr
 
 The person must be able to see the chain working without waiting for a real drift:
 
-- **Judge now** in the Mac menu runs one observation and judgment immediately and shows the result.
-- **Last judgment** view on the Mac: when it ran, the calendar block, what was seen (the text
+- **Judge now** in the menu card runs one observation and judgment immediately and shows the result.
+- **Last judgment**, shown from the Judge now result: when it ran, the calendar block, what was seen (the text
   description, not the image), which two models answered, the label and the reason, and Wrong /
   Right buttons. Kept in memory on the Mac for the session only.
 - **Send a test nudge** in settings, so the delivery path and quiet-hours behaviour can be checked
@@ -134,30 +134,31 @@ The person must be able to see the chain working without waiting for a real drif
 - Every claim above needs a test watched failing with the protection removed before it is written
   in a PR (CLAUDE.md, Claims About Security Properties).
 
-## 9. Screens to agree before building
+## 9. Screens
 
-To be drawn and agreed with Ben, one at a time:
+Deliberately almost no new screens. Everything uses the styling of the approved board in
+`docs/specs/Trail Marker/trail-marker-design-guide/` (the menu-bar card, the settings sidebar).
 
-**Mac (native, design guide is the authority):**
+**Mac:**
 
-1. Menu: the active block and its end time, Pause / Resume, **Judge now**, and Last judgment.
-2. First-time consent for observation, per rung, in plain words, with the exact macOS permission
-   named and a way to decline that still leaves the app working.
-3. Settings, new **Focus** pane: allowlist, denylist, rung, pause schedule.
-4. The nudge itself (what it says, how to mark it wrong, how to dismiss for the block).
-5. The visible indicator that observation is on. Never hidden.
+1. **Menu card:** shows the current goal, meaning the active Moss calendar block and when it
+   ends (or "No block right now"), on click, with the block name also available on hover of the
+   menu-bar icon. **Pause / Resume** and **Judge now** sit in the same card. The last judgment
+   (what was seen, the label, the reason, Wrong / Right) opens from **Judge now**'s result rather
+   than a separate window.
+2. **Focus settings (one new pane in the existing Settings sidebar):** the image model API
+   (endpoint, model name, key, a Test button, and one plain sentence stating where the image will
+   be sent). That sentence is the consent: no separate consent screen. Also the app allowlist and
+   a **Send a test nudge** button.
 
-**Moss web:**
+**Moss web:** no new screen. The judgment model is bound in the existing Settings → AI, the same
+way other services are. The person can review judgments and corrections wherever the existing
+notification history already shows them.
 
-6. Settings → Trail Marker (Moss web): **Judge focus** model picker (text), plus the rung and
-   nudge settings. The **Describe the screen** model is set on the Mac in the Focus pane
-   (endpoint, model name, key, a Test button); Moss shows only that a description model is
-   configured on this Mac, never its key or address.
-7. Settings → Trail Marker, focus section: nudge cap, quiet hours link, send a test nudge.
-8. Focus review: today's judgments with wrong / right, no scores.
-
-Every screen needs its empty, loading and error state drawn. Copy avoids surveillance language;
-it says what is seen, not "monitoring".
+Not new screens, but still needed and drawn in the existing style: the empty, loading and error
+states of the above (no block, image model unreachable, Moss unreachable). Nudges are ordinary
+macOS notifications, not a designed window. Copy avoids surveillance language; it says what is
+seen, not "monitoring".
 
 ## 10. Decisions
 
