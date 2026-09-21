@@ -83,10 +83,18 @@ Cheapest rung that answers the question, escalating only with the person's expli
 | 2    | Selected text or page title from an allowlisted app or browser               | Accessibility    | Off            |
 | 3    | One foreground-window capture, described by the vision model, then discarded | Screen Recording | Off, on opt-in |
 
-Every rung: allowlist of apps the person opts in, a denylist that always wins (password managers,
-banking, private windows), redaction of anything that looks like a secret or a long token, hard
-length caps, no clipboard, no keystrokes, no page bodies beyond the cap. Text from web pages is
-**untrusted input**: it is quoted as data in the prompt and can never instruct the model.
+Every rung: an allowlist of apps the person opts in, a denylist that always wins (password
+managers, banking, private windows), no clipboard, no keystrokes, hard length caps. Text from web
+pages and window titles is **untrusted input**: it is quoted as data in the prompt and told never
+to act as instructions. That makes an injected instruction unlikely to work; it does not make it
+impossible (see §13).
+
+**What protects a capture, honestly.** Rungs 1 and 2 are text, so the Mac can strip anything that
+looks like a secret or a long token before sending. A screenshot cannot be redacted that way: the
+pixels would have to be read first. For rung 3 the protection is the allowlist and denylist (the
+capture happens only in an allowed app, never in a denied one) and the person's consent. Anything
+visible in that window, including text typed into a form, is sent to the image model. The consent
+sentence must say this in plain words.
 
 ## 7. Judging and nudging
 
@@ -96,7 +104,19 @@ length caps, no clipboard, no keystrokes, no page bodies beyond the cap. Text fr
   between them, outside quiet hours, and a per-block cap (default one nudge per 45 minutes).
 - `insufficient_evidence` never nudges.
 - The person can mark a judgment wrong; those corrections are the trial's main measure.
-- Delivery uses the existing notifications module so preferences and quiet hours apply.
+- **Judging happens inside the Mac's own request.** The Mac sends a summary and waits (timeout
+  about 20 seconds) for the judgment. It is not queued as a background job, because window text
+  cannot be stored or carried in a job payload. If the model is slow or fails, the Mac gets
+  `insufficient_evidence` and nothing is nudged.
+- **The server holds the nudge rules** (two consecutive `distracted`, cap, quiet hours) so they
+  cannot be bypassed by a client, and returns a yes/no `nudge` flag with the judgment. The cap is
+  **per person**, across all their linked Macs, so a second Mac cannot double the nudges.
+- **The Mac posts the nudge itself** as an ordinary macOS notification when told to. The Moss
+  notifications module reaches the web and browser push but the Mac's credential cannot read it,
+  so it is not the delivery route. Quiet hours are read from the person's Moss settings and a
+  nudge in quiet hours is **dropped, not deferred** (a deferred nudge would arrive after the
+  moment it was about). This needs the macOS notification permission, which the companion spec
+  currently excludes (see §11).
 - **Nudges are on from the first build.** The gating above is what keeps them rare; it is not a
   reason to hold them back.
 
@@ -118,9 +138,15 @@ The person must be able to see the chain working without waiting for a real drif
 - The Mac sends: block title (echoed back), app name, shortened window title or selected text,
   timestamps, and the device's own credential. Moss derives the person from the credential, never
   from the payload.
-- Moss stores: the judgment, a one-line reason, the block reference, and the person's correction.
-  **Not stored:** window titles, selected text, or screenshots. They exist in memory for the
-  duration of one model call.
+- Moss stores: the judgment label, a short reason (capped at about 140 characters), the block
+  reference, and the person's correction. **Not stored:** window titles, selected text, image
+  descriptions, or screenshots. They exist in memory for the duration of one model call.
+- **The reason is the one piece of free text that is kept**, so it is treated as private data: the
+  judgment prompt tells the model to give a category-level reason ("reading an unrelated news
+  site") and not to quote or paraphrase what is on screen, the text is capped, and it is only
+  ever shown to the owner. It can still be imperfect, which is why the cap and the 30-day
+  retention exist. The image description is redacted for secrets on the Mac before it is sent
+  and is held only for the one call.
 - **Images never reach Moss.** A rung-3 capture goes only to the image model the person
   configured on the Mac. If that endpoint is on the same Mac, the image does not leave it. If it is
   a hosted service, the image is sent there directly by the companion, so the consent screen must
@@ -128,7 +154,8 @@ The person must be able to see the chain working without waiting for a real drif
   for that one call and is never written to disk, logged, or retried from storage.
 - **The image-model key lives only in the Mac Keychain.** It is never sent to Moss, never logged,
   never put in a prompt, an export, or a crash report (same rule and test as the companion
-  credential). Redaction and the denylist run before the capture leaves the process.
+  credential). The allowlist and denylist decide whether a capture happens at all; they are the
+  protection for pixels, as §6 explains.
 - The prompt is built from the summary only. Connector and AI credentials, tokens and session data
   are never included. Logs are content-free. Job payloads carry IDs only.
 - Every claim above needs a test watched failing with the protection removed before it is written
@@ -152,8 +179,8 @@ Deliberately almost no new screens. Everything uses the styling of the approved 
    a **Send a test nudge** button.
 
 **Moss web:** no new screen. The judgment model is bound in the existing Settings → AI, the same
-way other services are. The person can review judgments and corrections wherever the existing
-notification history already shows them.
+way other services are (an admin setting; see D1). There is no review screen: the person checks
+and corrects judgments from Last judgment on the Mac, and Moss records the correction.
 
 Not new screens, but still needed and drawn in the existing style: the empty, loading and error
 states of the above (no block, image model unreachable, Moss unreachable). Nudges are ordinary
@@ -172,14 +199,27 @@ Resolved:
 
 Open, for Ben:
 
-- **D1 Model binding.** One new module service key for the judgment step, user-bindable like
-  other AI services. How a user assigns a model to a new key in the current UI is not yet verified.
+- **D1 Model binding.** One new service key for the judgment step. In today's code, binding a
+  model to a service key is an **admin** setting, not per person, and the admin AI pane lists its
+  bindable services by hand, so a row for this one must be added there. Fine on a one-person
+  instance; stated so nobody expects per-person choice.
+- **D8 Existing linked Macs.** A Mac linked before this ships was approved in the browser for
+  "identity and this device's connection" only. This feature lets the credential read the
+  person's current block, submit observations and receive nudge decisions, which is more. Proposed:
+  after the update, the Mac shows the new capability, and Moss requires the person to approve it
+  again in the browser before any observation is accepted from that Mac. Until then the Mac works
+  exactly as before.
+- **D9 Where the code lives.** Companion routes are platform code with no module, but stored
+  judgments need an owning module's SQL, row-level security and app-map entries. Proposed: a new
+  **focus module** owns the judgment table (owner-only), the service key and the rules; the
+  companion route only authenticates the Mac and calls the focus module's public interface; the
+  calendar module gains the small "current block" public read.
 - **D7 Image-model API shape.** Which request formats the Mac supports (for example an
   OpenAI-compatible chat endpoint with an image input) and how a person tests one. Proposed:
   OpenAI-compatible first, with a Test button that describes a built-in sample image, and a
   fallback to window title only (rung 1) when the image model is unavailable or slow.
-- **D4 Local models.** Through Moss by default; the Mac calling a local model directly when Moss
-  is unreachable is not in the first slice.
+- **D4 Local judgment models.** A local judgment model is reached by whatever the person binds in
+  Moss; it is not called from the Mac. The image step is the only model the Mac calls itself.
 - **D6 Retention.** Proposed 30 days for judgments and corrections. Images never retained.
 
 ## 11. Amendments this requires to the companion spec
@@ -195,19 +235,31 @@ work must amend them in the same pull request that builds the first slice:
 - §5: the Mac now stores an image-model endpoint and key (Keychain only); the earlier "no key
   settings" line must say the Mac holds exactly this one.
 
+- §9.7, §9.8 and §12 (credential scope): the companion credential also reads the person's current
+  Moss block, submits observations and receives nudge decisions. Still refused on every other
+  route; the existing boundary test stays.
+- §6 (permissions): the macOS notification permission becomes required for nudges.
+- The browser approval page must list the new capabilities for any Mac approving them.
+
 The permission copy, menu and settings inventory change with them. The in-app statement of what is
 observed must always be true for the build the person is running.
 
 ## 12. Slices and kill criteria
 
-1. **Server contract and calendar read.** Public "current block" read, observation and judgment
-   endpoints under the companion credential, service key, structured judgment with a fake model.
-2. **Mac observation, rungs 1 and 3.** Consent, allowlist, pause, indicator; sends summaries and,
-   on opt-in, one capture per judgment. Judge now and Last judgment.
-3. **The two-stage pipeline:** the Mac describes with the user's image model, Moss judges with the
-   bound model. Timeouts and the fall-back to rung 1 when the image model is unavailable.
-4. **Nudges, review and corrections.** Nudge delivery with the gating in section 7, test nudge,
-   web review screen, corrections recorded.
+Build one thin working line first, with text only, so the product question is tested before any
+screenshot is involved:
+
+1. **Text-only judgment, end to end.** Calendar "current Moss block" read; one companion
+   endpoint that takes a rung-1 summary (app name and a capped window title), judges inside the
+   request with a real bound model, applies the nudge rules, and returns label, reason and the
+   nudge flag. On the Mac: the goal shown in the menu card, Pause, Judge now, Last judgment
+   (Wrong / Right), and a local macOS notification when told to nudge. Amend the companion spec
+   and the in-app "not observing" copy in the same pull request; the browser re-approval from D8.
+2. **Rung 3.** The Focus settings pane with the image model (endpoint, model, key, Test), the
+   one-sentence consent, the capture, description on the Mac, and the fall-back to titles when the
+   image model is slow.
+3. **Hardening and the second Mac.** Per-person cap across Macs, retention job, test nudge,
+   anything the trial shows is missing.
 
 Stop the trial if, after a week of use, the person marks more than about a third of
 `distracted` calls wrong or the nudges are being switched off, or if any observation is found leaving the Mac outside the documented
@@ -218,4 +270,7 @@ boundary.
 Companion credential still opens nothing outside `/api/companion/*`; observation cannot be posted
 for another person; window titles never appear in logs, job payloads or stored rows; pause stops
 network requests immediately (extends the existing Disconnect test); prompt-injection text inside a
-window title cannot change the schema of the answer or trigger a nudge on its own.
+window title cannot change the schema of the answer, and one sample of injected text does not
+produce a nudge. (Text that persists across two samples can satisfy the two-in-a-row rule, so the
+worst case is one nudge, limited by the cap.) A stolen credential cannot post for another person;
+a search of the logs finds no window title, description or reason text.
