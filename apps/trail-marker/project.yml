@@ -5,6 +5,9 @@ options:
     macOS: "14.0"
   createIntermediateGroups: true
 
+configFiles:
+  Debug: Config/Debug.xcconfig
+
 packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
@@ -44,7 +47,11 @@ targets:
         CODE_SIGN_ENTITLEMENTS: TrailMarker/Resources/TrailMarker.entitlements
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
-        ENABLE_HARDENED_RUNTIME: YES
+      configs:
+        # Notarization (release) needs it; development builds do not, and with a local signing
+        # certificate it would refuse to load the debug library and Sparkle.
+        Release:
+          ENABLE_HARDENED_RUNTIME: YES
     dependencies:
       - package: Sparkle
 

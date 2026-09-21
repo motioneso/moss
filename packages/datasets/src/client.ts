@@ -51,6 +51,13 @@ export interface DatasetClientDeps {
   readonly maxEntriesPerSource?: number;
   readonly logger?: DatasetLogger;
   readonly fetchTimeoutMs?: number;
+  /**
+   * E2E/UAT harness only: attach the failure's message (bounded) and target host
+   * to the fetch-failed line so a failed fixture fetch can be diagnosed from the
+   * receipt. Never set outside the e2e harness; without it the sanitized line is
+   * byte-for-byte unchanged (#1433).
+   */
+  readonly e2eErrorDetail?: boolean;
 }
 
 /**
@@ -82,6 +89,19 @@ function buildCacheKey(
  * `credential: "api-key"` is rejected here defensively; registration-time validation
  * (`assertModuleRegistryConsistency`) is the primary gate and should make this unreachable.
  */
+/**
+ * The host an adapter error already carries, if any (for example a pinning-style
+ * error naming the host it refused). Otherwise undefined and the caller falls back
+ * to the source's declared fetch host. Host only — never a path or URL.
+ */
+function errorHost(error: unknown): string | undefined {
+  if (error instanceof Error) {
+    const host: unknown = (error as { host?: unknown }).host;
+    if (typeof host === "string") return host;
+  }
+  return undefined;
+}
+
 export function createDatasetClient(
   source: ModuleExternalSourceManifest,
   adapter: ExternalSourceAdapter,
@@ -177,7 +197,16 @@ export function createDatasetClient(
               datasetKey,
               outcome: hit ? "stale-cache" : "empty-fallback",
               errorName: error instanceof Error ? error.name : typeof error,
-              ...(error instanceof HostPinnedFetchError ? { errorCode: error.code } : {})
+              ...(error instanceof HostPinnedFetchError ? { errorCode: error.code } : {}),
+              ...(deps.e2eErrorDetail
+                ? {
+                    errorMessage: (error instanceof Error ? error.message : String(error)).slice(
+                      0,
+                      300
+                    ),
+                    targetHost: errorHost(error) ?? source.fetchHosts[0] ?? "unknown"
+                  }
+                : {})
             },
             "dataset fetch failed: serving degraded response"
           );

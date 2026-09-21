@@ -37,6 +37,7 @@ describe("resolveApiE2eFetchOverride", () => {
     delete process.env.JARVIS_E2E_MODULE_FETCH_BASE;
     const result = resolveApiE2eFetchOverride();
     expect("fetchFn" in result).toBe(false);
+    expect("e2eErrorDetail" in result).toBe(false);
   });
 
   it("throws the worker's message when the fixture var is set without e2e mode", () => {
@@ -52,6 +53,7 @@ describe("resolveApiE2eFetchOverride", () => {
     const result = resolveApiE2eFetchOverride();
     expect("fetchFn" in result).toBe(true);
     expect(typeof result.fetchFn).toBe("function");
+    expect(result.e2eErrorDetail).toBe(true);
   });
 });
 
