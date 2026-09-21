@@ -327,7 +327,12 @@ export function TodayPage(props: {
     const runId = latestMorningRun?.id;
     if (!morningDefinition || !runId) return;
     readerOpener.current = anchor;
-    setReader({ definitionId: morningDefinition.id, runId });
+    // Settle the day plan refetch first so the reader classifies the block
+    // placement it actually opens with, not a stale pending one still in
+    // cache. Still opens on refresh failure, from whatever data is cached.
+    void dayPlanQuery.refetch().finally(() => {
+      setReader({ definitionId: morningDefinition.id, runId });
+    });
   };
   const eveningTargetTime = eveningDefinition ? targetTimeFor(eveningDefinition, "evening") : "";
   const heroContent = buildTodayHeroContent({
