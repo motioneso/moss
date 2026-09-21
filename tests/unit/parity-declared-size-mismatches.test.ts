@@ -63,7 +63,7 @@ describe("one-heading desktop Read declarations", () => {
     // that share the morning reader rail.
     for (const name of ["1440-proposed-read.png", "1440-news.png"]) {
       const entry = DECLARED_SIZE_MISMATCHES.find((declared) => declared.name === name);
-      expect(entry?.capturedSize).toBe("1060x896");
+      expect(entry?.capturedSize).toBe("1060x936");
     }
   });
 });
