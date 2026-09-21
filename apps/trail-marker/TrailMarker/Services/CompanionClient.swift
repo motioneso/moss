@@ -72,6 +72,51 @@ struct RenameCompanionDeviceRequest: Encodable {
     let displayName: String
 }
 
+// MARK: - Focus wire contracts (mirror packages/shared/src/companion-api.ts, plan Task 1)
+
+enum FocusLabel: String, Codable, Equatable {
+    case focused
+    case necessaryDetour = "necessary_detour"
+    case distracted
+    case insufficientEvidence = "insufficient_evidence"
+}
+
+enum FocusVerdict: String, Codable, Equatable {
+    case right
+    case wrong
+}
+
+struct FocusBlock: Decodable, Equatable {
+    let id: String
+    let title: String
+    let startsAt: String
+    let endsAt: String
+}
+
+struct FocusContext: Decodable, Equatable {
+    let block: FocusBlock?
+    let judgmentReady: Bool
+}
+
+struct FocusJudgeRequest: Encodable, Equatable {
+    let blockId: String
+    let appName: String
+    let windowTitle: String
+    let observedAt: String
+}
+
+struct FocusJudgment: Decodable, Equatable {
+    let judgmentId: String
+    let label: FocusLabel
+    let reason: String
+    let nudge: Bool
+}
+
+private struct FocusCorrectRequest: Encodable {
+    let judgmentId: String
+    let verdict: FocusVerdict
+}
+
 private struct CompanionErrorBody: Decodable {
     let error: String
     let code: String?
@@ -89,6 +134,10 @@ enum CompanionError: Error, Equatable {
     case server(status: Int)
     case redirectedOffOrigin
     case decoding
+    /// The focus module is off for this person, or no judgment model is bound (409).
+    case focusNotReady
+    /// The block named in an observation is not the person's current Moss block (409).
+    case noBlock
 }
 
 // MARK: - Transport
@@ -202,6 +251,35 @@ struct CompanionClient {
         _ = try await sendChecked(request, okStatuses: [204])
     }
 
+    // MARK: Focus
+
+    /// The server answers a judgment inside the request, up to its own 20 second limit; the
+    /// extra five seconds are slack so a slow answer is not mistaken for a dead network.
+    static let focusJudgeTimeout: TimeInterval = 25
+
+    func focusContext(credential: String) async throws -> FocusContext {
+        let request = plainRequest(path: "/api/companion/focus/context", method: "POST", credential: credential)
+        let (data, _) = try await sendChecked(request)
+        return try decode(FocusContext.self, from: data)
+    }
+
+    func focusJudge(credential: String, _ body: FocusJudgeRequest) async throws -> FocusJudgment {
+        var request = try jsonRequest(
+            path: "/api/companion/focus/judge", method: "POST", body: body, credential: credential
+        )
+        request.timeoutInterval = Self.focusJudgeTimeout
+        let (data, _) = try await sendChecked(request)
+        return try decode(FocusJudgment.self, from: data)
+    }
+
+    func focusCorrect(credential: String, judgmentId: String, verdict: FocusVerdict) async throws {
+        let body = FocusCorrectRequest(judgmentId: judgmentId, verdict: verdict)
+        let request = try jsonRequest(
+            path: "/api/companion/focus/correct", method: "POST", body: body, credential: credential
+        )
+        _ = try await sendChecked(request, okStatuses: [204])
+    }
+
     // MARK: Request building
 
     private func plainRequest(path: String, method: String, credential: String? = nil) -> URLRequest {
@@ -264,6 +342,12 @@ struct CompanionClient {
                 return .accountBlocked(code: code)
             }
             return .server(status: status)
+        case 409:
+            switch body?.code {
+            case "focus_not_ready": return .focusNotReady
+            case "focus_no_block": return .noBlock
+            default: return .server(status: status)
+            }
         case 429:
             return .rateLimited
         default:

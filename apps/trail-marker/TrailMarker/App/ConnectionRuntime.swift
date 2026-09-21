@@ -247,6 +247,10 @@ enum Diagnostics {
             return "The instance redirected to a different address."
         case .decoding:
             return "Received an unexpected response from the server."
+        case .focusNotReady:
+            return "Focus judgment isn't set up on your Moss."
+        case .noBlock:
+            return "There is no Moss calendar block right now."
         }
     }
 
