@@ -8,7 +8,11 @@ struct PermissionsPane: View {
     var body: some View {
         Form {
             Section {
-                Text("These permissions prepare future capabilities. Trail Marker is not observing your activity.")
+                Text(
+                    ObservationStatement.current(
+                        focusEnabled: PreferencesStore().focusConsent, paused: PreferencesStore().focusPaused
+                    )
+                )
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -16,7 +20,7 @@ struct PermissionsPane: View {
             Section("Permissions") {
                 PermissionSettingsRow(
                     symbol: "accessibility", name: "Accessibility",
-                    scope: "Needed for future shortcuts and automation.",
+                    scope: ObservationStatement.accessibilityScope,
                     state: permissions.accessibility,
                     openSystemSettings: {
                         // Asking once registers Trail Marker in the list; macOS shows no
