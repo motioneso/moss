@@ -5,6 +5,11 @@ import { assertModuleJobPayload, type ExternalModuleJobPayload } from "@moss/job
 
 import type { ExternalModuleDiscovery } from "./types.js";
 
+// Prefix the job library reserves for its own internal queues (for example the
+// timekeeper's `__pgboss__send-it` maintenance queue). Those names never belong
+// to a module, so the orphan purge below must leave them alone.
+const PG_BOSS_INTERNAL_PREFIX = "__pgboss__";
+
 export class ExternalModuleJobReconciler {
   private readonly registrations = new Map<string, Map<string, string>>();
   private readonly ownedQueues = new Map<string, readonly ExternalModuleQueueDeclaration[]>();
@@ -52,6 +57,7 @@ export class ExternalModuleJobReconciler {
           moduleId &&
           !discoveredIds.has(moduleId) &&
           !this.deps.reservedQueueNames.has(schedule.name) &&
+          !schedule.name.startsWith(PG_BOSS_INTERNAL_PREFIX) &&
           schedule.name.startsWith(`${moduleId}.`)
         ) {
           await this.deps.boss.unschedule(schedule.name, schedule.key);
@@ -62,7 +68,8 @@ export class ExternalModuleJobReconciler {
         if (
           moduleId &&
           !discoveredIds.has(moduleId) &&
-          !this.deps.reservedQueueNames.has(queue.name)
+          !this.deps.reservedQueueNames.has(queue.name) &&
+          !queue.name.startsWith(PG_BOSS_INTERNAL_PREFIX)
         ) {
           await this.deps.boss.deleteQueue(queue.name);
         }

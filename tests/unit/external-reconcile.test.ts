@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { PgBoss } from "pg-boss";
 
 import { DRIFT_DISABLED_REASON, reconcileExternalModules } from "@moss/module-registry";
 import type { ExternalModuleDiscovery } from "@moss/module-registry";
+import { ExternalModuleJobReconciler } from "@moss/module-registry/node";
 
 const discovery = (id: string, packageHash: string): ExternalModuleDiscovery => ({
   id,
@@ -171,5 +173,35 @@ describe("reconcileExternalModules (#917)", () => {
   it("defaults navigation to an empty array when the manifest declares none", () => {
     const { modules } = reconcileExternalModules([discovery("a", "sha256:1")], []);
     expect(modules[0]?.navigation).toEqual([]);
+  });
+});
+
+describe("ExternalModuleJobReconciler library-queue guard ([task:uat-pgboss-delete-grant])", () => {
+  it("purges an orphan module queue but never deletes the job library's own queue", async () => {
+    const calls: string[] = [];
+    const boss = {
+      getSchedules: async () => [
+        { name: "__pgboss__send-it", key: "__pgboss__send-it/cron" },
+        { name: "ghostmod.main", key: "ghostmod/daily" }
+      ],
+      getQueues: async () => [{ name: "__pgboss__send-it" }, { name: "ghostmod.jobs" }],
+      unschedule: async (name: string, key: string) => {
+        calls.push(`unschedule:${name}:${key}`);
+      },
+      deleteQueue: async (name: string) => {
+        calls.push(`delete:${name}`);
+      }
+    } as unknown as PgBoss;
+    const reconciler = new ExternalModuleJobReconciler({
+      boss,
+      discoveries: () => [],
+      reservedQueueNames: new Set<string>(["api.inbox"]),
+      isModuleEnabled: async () => true,
+      listActiveUserIds: async () => []
+    });
+
+    await reconciler.reconcileAll();
+
+    expect(calls).toEqual(["unschedule:ghostmod.main:ghostmod/daily", "delete:ghostmod.jobs"]);
   });
 });
