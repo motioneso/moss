@@ -100,6 +100,42 @@
   line-height: 1.1;
 }
 
+/* Morning weather on the band: chip text takes the hero colors and the
+   condition and high/low lines take the mockup sizes. Day-scoped so the
+   evening hero renders exactly as before. */
+.today-hero[data-mode="day"] .today-hero__weather .jds-brief__title {
+  font-family: var(--font-sans);
+}
+.today-hero[data-mode="day"] .today-hero__weather .wx-row > div > div:nth-child(2) {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--hero-fg);
+}
+.today-hero[data-mode="day"] .today-hero__weather .wx-row > div > div:nth-child(3) {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--hero-fg-muted);
+}
+.today-hero[data-mode="day"] .jds-weather-chip__location {
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--hero-fg);
+}
+.today-hero[data-mode="day"] .jds-weather-chip__label {
+  line-height: 1.3;
+  color: var(--hero-fg-muted);
+}
+.today-hero[data-mode="day"] .jds-weather-chip__temp {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--hero-fg);
+}
+
 /* Moved card text carries light-paper colors; re-ground it on the band. */
 .today-hero .jds-brief__body {
   color: var(--hero-fg);
