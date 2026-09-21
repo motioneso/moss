@@ -9,7 +9,7 @@ export * from "./ai-types.js";
 
 export const aiProviderKindSchema = {
   type: "string",
-  enum: ["openai-compatible", "anthropic", "google", "ollama", "custom"]
+  enum: ["openai-compatible", "anthropic", "google", "ollama", "custom", "system-one"]
 } as const;
 
 export const aiProviderStatusSchema = {

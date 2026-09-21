@@ -72,6 +72,7 @@ const PROVIDER_CATALOG: readonly {
   { label: "Mistral", kind: "openai-compatible", authMethod: "api_key" },
   { label: "Local (Ollama)", kind: "ollama", authMethod: "api_key" },
   { label: "OpenAI-compatible", kind: "openai-compatible", authMethod: "api_key" },
+  { label: "System One (TypeSafe)", kind: "system-one", authMethod: "api_key" },
   { label: "Custom", kind: "custom", authMethod: "api_key" }
 ];
 

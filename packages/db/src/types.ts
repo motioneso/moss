@@ -286,7 +286,13 @@ export type ConnectorProviderType = "calendar" | "email" | "google" | "imap";
 export type ConnectorProviderStatus = "available" | "disabled";
 export type ConnectorAccountStatus = "active" | "error" | "revoked";
 export type ConnectorSyncStatus = "success" | "partial" | "failed";
-export type AiProviderKind = "openai-compatible" | "anthropic" | "google" | "ollama" | "custom";
+export type AiProviderKind =
+  | "openai-compatible"
+  | "anthropic"
+  | "google"
+  | "ollama"
+  | "custom"
+  | "system-one";
 export type AiProviderStatus = "active" | "error" | "disabled" | "revoked";
 export type AiModelStatus = "active" | "disabled";
 export type AiModelTier = "reasoning" | "interactive" | "economy";

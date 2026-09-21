@@ -363,7 +363,17 @@ const SECTION_KEYWORDS: Record<string, readonly string[]> = {
   appearance: ["theme", "dark mode", "light mode", "colours", "colors", "palette"],
   assistant: ["model", "ai", "provider", "assistant name", "personality", "voice"],
   people: ["users", "invite", "roles", "admin", "members"],
-  aiproviders: ["api key", "openai", "anthropic", "ollama", "model", "provider"],
+  aiproviders: [
+    "api key",
+    "openai",
+    "anthropic",
+    "ollama",
+    "model",
+    "provider",
+    "typesafe",
+    "system one",
+    "jev"
+  ],
   instmods: ["install", "modules", "uninstall", "update"],
   audit: ["log", "history", "who did what"],
   host: ["server", "domain", "url", "backup", "advanced"],

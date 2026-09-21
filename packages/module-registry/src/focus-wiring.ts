@@ -3,6 +3,7 @@ import type { FastifyBaseLogger } from "fastify";
 import {
   AiRepository,
   createAiSecretCipher,
+  generateChoices,
   generateStructured,
   type ProviderKind,
   type StructuredProviderAdapter
@@ -29,6 +30,8 @@ export interface FocusWiringDeps {
   readonly createCliStructuredAdapter?: (kind: ProviderKind) => StructuredProviderAdapter;
   /** TEST-ONLY. Replaces the real structured model call so tests never reach a provider. */
   readonly generate?: typeof generateStructured;
+  /** TEST-ONLY. Replaces the real choice call so tests never reach a provider. */
+  readonly choose?: typeof generateChoices;
 }
 
 /**
@@ -45,6 +48,7 @@ export function createFocusJudgmentService(deps: FocusWiringDeps): FocusJudgment
   const repository = new AiRepository();
   const cipher = createAiSecretCipher();
   const generate = deps.generate ?? generateStructured;
+  const choose = deps.choose ?? generateChoices;
 
   const ports: FocusPorts = {
     currentBlock: (scopedDb, now) => getCurrentMossBlock(scopedDb, now),
@@ -78,6 +82,8 @@ export function createFocusJudgmentService(deps: FocusWiringDeps): FocusJudgment
       );
       return result.ok ? { ok: true, object: result.object } : { ok: false, error: result.error };
     },
+    choose: (scopedDb, input) =>
+      choose(scopedDb, input, { repository, cipher, logger: deps.logger }),
     logger: deps.logger
   };
 

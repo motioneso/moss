@@ -87,7 +87,9 @@ export const aiModuleManifest = {
       // #2208 — `origin` ('discovered'|'manual') so discovery prunes only its own rows and never a
       // model an admin added by hand.
       "sql/0212_ai_configured_models_origin.sql",
-      "sql/0214_ai_configured_models_released_at.sql"
+      "sql/0214_ai_configured_models_released_at.sql",
+      // System One (TypeSafe) — a provider kind whose API answers fixed named questions, not chat.
+      "sql/0241_ai_provider_kind_system_one.sql"
     ],
     migrationDirectories: ["packages/ai/sql"],
     ownedTables: [

@@ -1,4 +1,10 @@
-export type AiProviderKind = "openai-compatible" | "anthropic" | "google" | "ollama" | "custom";
+export type AiProviderKind =
+  | "openai-compatible"
+  | "anthropic"
+  | "google"
+  | "ollama"
+  | "custom"
+  | "system-one";
 // #874 — discriminator on app.ai_provider_configs (migration 0149). 'assistant' rows are the chat
 // LLM providers shown in the LLM Providers list and eligible for chat routing / instance-default /
 // per-user pin. 'voice' is the single instance-wide STT endpoint, kept off every assistant surface

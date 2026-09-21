@@ -159,7 +159,8 @@ const AI_PROVIDER_KINDS = new Set<AiProviderKind>([
   "anthropic",
   "google",
   "ollama",
-  "custom"
+  "custom",
+  "system-one"
 ]);
 const WRITABLE_PROVIDER_STATUSES = new Set<Exclude<AiProviderStatus, "revoked">>([
   "active",

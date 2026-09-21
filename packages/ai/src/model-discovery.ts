@@ -169,6 +169,12 @@ function doFetch(input: ModelDiscoveryInput, apiKey: string): Promise<Response> 
         headers: { "x-goog-api-key": apiKey },
         signal
       });
+    case "system-one": {
+      // TypeSafe's System One API serves only `GET /v1/models` and `POST /v1/systemone`; the latter
+      // takes fixed named questions, so this kind can never ride the chat-completions path.
+      const base = (input.baseUrl ?? "https://api.typesafe.ai").replace(/\/+$/, "");
+      return f(`${base}/v1/models`, { headers: { authorization: `Bearer ${apiKey}` }, signal });
+    }
     case "openai-compatible":
     case "ollama":
     case "custom": {
@@ -277,7 +283,8 @@ const CLI_PROVIDER_SEARCH: Readonly<Record<AiProviderKind, { builtInSearch: bool
   "openai-compatible": { builtInSearch: true },
   google: { builtInSearch: false },
   ollama: { builtInSearch: false },
-  custom: { builtInSearch: false }
+  custom: { builtInSearch: false },
+  "system-one": { builtInSearch: false }
 };
 
 export function cliProviderHasBuiltInSearch(providerKind: AiProviderKind): boolean {
@@ -294,7 +301,9 @@ export function inferWebSearchCapability(
   isCli = false
 ): boolean {
   if (isCli) return cliProviderHasBuiltInSearch(providerKind);
-  if (providerKind === "ollama" || providerKind === "custom") return false;
+  if (providerKind === "ollama" || providerKind === "custom" || providerKind === "system-one") {
+    return false;
+  }
   const id = providerModelId.toLowerCase();
 
   if (providerKind === "anthropic") {
@@ -341,6 +350,18 @@ function inferModel(
   const isPureTranscription = lower.includes("whisper") || lower.includes("transcribe");
   if (isPureTranscription) {
     return null;
+  }
+
+  if (providerKind === "system-one") {
+    // System One answers named questions, not chat; json is the only capability it can serve and
+    // its models are cheap economy picks for the focus judgment.
+    return {
+      providerModelId,
+      displayName: providerModelId,
+      capabilities: ["json"],
+      tier: "economy",
+      releasedAt
+    };
   }
 
   // Multimodal audio chat models (e.g. gpt-4o-audio) keep their chat/tool capabilities but are NOT
