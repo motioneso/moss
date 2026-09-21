@@ -460,7 +460,10 @@ export const aiDiscoverModelsResponseSchema = {
     fromFallback: { type: "boolean" },
     cacheExpiresAt: { type: "string", nullable: true },
     // #2208: why a CLI provider listed nothing (absent when the list is authoritative).
-    reason: { type: "string", enum: ["unsupported", "not_logged_in", "error", "unavailable"] },
+    reason: {
+      type: "string",
+      enum: ["unsupported", "not_logged_in", "error", "unavailable", "rejected_key"]
+    },
     message: { type: "string" }
   }
 } as const;
@@ -474,7 +477,10 @@ export const refreshAiProviderModelsResponseSchema = {
   required: ["models"],
   properties: {
     models: { type: "array", items: aiConfiguredModelSchema },
-    reason: { type: "string", enum: ["unsupported", "not_logged_in", "error", "unavailable"] },
+    reason: {
+      type: "string",
+      enum: ["unsupported", "not_logged_in", "error", "unavailable", "rejected_key"]
+    },
     message: { type: "string" }
   }
 } as const;

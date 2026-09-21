@@ -95,6 +95,18 @@ describe("AI provider model refresh (#2208)", () => {
     });
   }
 
+  async function createSystemOneProvider(): Promise<string> {
+    return dataContext.withDataContext(userContext(ids.userA), async (db) => {
+      const provider = await repository.createProvider(db, {
+        providerKind: "system-one",
+        displayName: "System One (TypeSafe)",
+        authMethod: "api_key",
+        encryptedCredential: cipher.encryptJson({ apiKey: "apikey_test" })
+      });
+      return provider.id;
+    });
+  }
+
   async function refresh(providerId: string, session: string = ids.sessionA) {
     return server.inject({
       method: "POST",
@@ -331,6 +343,31 @@ describe("AI provider model refresh (#2208)", () => {
       expect(await storedModelIds(providerId)).toEqual(["claude-hand-added", "default"]);
       expect((await remove("00000000-0000-0000-0000-000000000000")).statusCode).toBe(404);
     });
+  });
+  it("tells an API-key provider's admin the key was rejected, then lists models once it is right", async () => {
+    const providerId = await createSystemOneProvider();
+    const realFetch = globalThis.fetch;
+    let rejecting = true;
+    globalThis.fetch = (async () =>
+      rejecting
+        ? new Response("{}", { status: 401 })
+        : new Response(JSON.stringify({ models: [{ name: "jev-latest" }] }), {
+            status: 200
+          })) as unknown as typeof globalThis.fetch;
+    try {
+      const rejected = await refresh(providerId);
+      expect(rejected.statusCode).toBe(200);
+      expect(rejected.json()).toMatchObject({ reason: "rejected_key", message: "HTTP 401" });
+      expect(await storedModelIds(providerId)).toEqual([]);
+
+      rejecting = false;
+      const accepted = await refresh(providerId);
+      expect(accepted.statusCode).toBe(200);
+      expect(accepted.json()).not.toHaveProperty("reason");
+      expect(await storedModelIds(providerId)).toEqual(["jev-latest"]);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });
 

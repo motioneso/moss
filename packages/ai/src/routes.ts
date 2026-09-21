@@ -819,6 +819,13 @@ export function registerAiRoutes(
   );
 }
 
+/** A pasted key often carries a trailing space or newline; store it clean so no provider refuses it. */
+function cleanCredentialPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return typeof payload.apiKey === "string"
+    ? { ...payload, apiKey: payload.apiKey.trim() }
+    : payload;
+}
+
 function parseCreateProviderBody(body: unknown): CreateAiProviderConfigRequest {
   const value = requireObject(body);
   const authMethod = optionalAuthMethod(value.authMethod);
@@ -837,7 +844,7 @@ function parseCreateProviderBody(body: unknown): CreateAiProviderConfigRequest {
     credentialPayload:
       value.credentialPayload === undefined
         ? undefined
-        : requiredJsonObject(value.credentialPayload, "credentialPayload")
+        : cleanCredentialPayload(requiredJsonObject(value.credentialPayload, "credentialPayload"))
   };
 }
 
@@ -854,7 +861,7 @@ function parseUpdateProviderBody(body: unknown): UpdateAiProviderConfigRequest {
     credentialPayload:
       value.credentialPayload === undefined
         ? undefined
-        : requiredJsonObject(value.credentialPayload, "credentialPayload")
+        : cleanCredentialPayload(requiredJsonObject(value.credentialPayload, "credentialPayload"))
   };
 }
 

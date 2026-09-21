@@ -27,7 +27,7 @@ interface CacheEntry {
 export type CliModelLister = (provider: AiProviderKind) => Promise<AiCliModelListResult>;
 
 /** Why CLI discovery returned no models. `unavailable` ⇒ no runner connection on this build. */
-export type ModelDiscoveryReason = AiCliModelListFailure | "unavailable";
+export type ModelDiscoveryReason = AiCliModelListFailure | "unavailable" | "rejected_key";
 
 export interface ModelDiscoveryInput {
   readonly providerKind: AiProviderKind;
@@ -83,7 +83,7 @@ export class ModelDiscoveryService {
     const fetched =
       input.authMethod === "cli"
         ? await this.fetchCliModels(input.providerKind)
-        : { models: await fetchApiKeyModels(input) };
+        : await fetchApiKeyModels(input);
     if (fetched.reason !== undefined) {
       return {
         models: [],
@@ -129,30 +129,46 @@ export class ModelDiscoveryService {
   }
 }
 
-/** API-key providers: a failed or credential-less discovery returns [] (no invented ids, #2208). */
-async function fetchApiKeyModels(
-  input: ModelDiscoveryInput
-): Promise<AiProviderDiscoveredModelDto[]> {
+/**
+ * API-key providers: no invented ids (#2208). A failed list changes nothing and says why, so a
+ * rejected key reads as a rejected key and not as an empty list; a list that came back empty is
+ * still a list, and is reported as "Refreshed: 0 models". Only a status code is ever recorded.
+ */
+async function fetchApiKeyModels(input: ModelDiscoveryInput): Promise<{
+  models: AiProviderDiscoveredModelDto[];
+  reason?: ModelDiscoveryReason;
+  message?: string;
+}> {
   const apiKey = readApiKey(input.credential);
-  if (!apiKey) return [];
+  if (!apiKey) return { models: [] };
+
+  let response: Response;
+  try {
+    response = await doFetch(input, apiKey);
+  } catch {
+    return { models: [], reason: "error", message: "network" };
+  }
+  if (response.status === 401 || response.status === 403) {
+    return { models: [], reason: "rejected_key", message: `HTTP ${response.status}` };
+  }
+  if (!response.ok) return { models: [], reason: "error", message: `HTTP ${response.status}` };
 
   try {
-    const response = await doFetch(input, apiKey);
-    if (!response.ok) return [];
     // #874 HIGH-2: inferModel returns null for pure speech-to-text models (dropped from assistant
     // discovery); filter them out so only assistant-bindable models reach the admin UI.
-    return extractModelEntries(input.providerKind, await response.json())
+    const models = extractModelEntries(input.providerKind, await response.json())
       .map((entry) => inferModel(entry.id, input.providerKind, entry.releasedAt))
       .filter((model): model is AiProviderDiscoveredModelDto => model !== null);
+    return { models };
   } catch {
-    return [];
+    return { models: [], reason: "error", message: "invalid_response" };
   }
 }
 
 function readApiKey(credential: unknown): string | null {
   if (!credential || typeof credential !== "object") return null;
   const value = (credential as { apiKey?: unknown }).apiKey;
-  return typeof value === "string" && value.trim() ? value : null;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function doFetch(input: ModelDiscoveryInput, apiKey: string): Promise<Response> {

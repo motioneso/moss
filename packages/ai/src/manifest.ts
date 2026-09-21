@@ -126,6 +126,13 @@ export const aiModuleManifest = {
           path: "/settings?section=aiproviders"
         },
         {
+          id: "ai.refresh_provider_models.re_enter_key",
+          description:
+            "Edit the provider card, enter the API key again exactly as the provider issued it, " +
+            "then refresh again.",
+          path: "/settings?section=aiproviders"
+        },
+        {
           id: "ai.refresh_provider_models.add_by_hand",
           description: "Use Add model on the provider card to type in the model you need.",
           path: "/settings?section=aiproviders"
@@ -154,6 +161,14 @@ export const aiModuleManifest = {
           description:
             "Shown as 'The sign-in helper is not running': the service that holds provider " +
             "logins is not connected; start it or contact an administrator."
+        },
+        {
+          code: "ai.refresh_provider_models.rejected_key",
+          class: "prerequisite",
+          remediationRef: "ai.refresh_provider_models.re_enter_key",
+          description:
+            "Shown as 'The provider rejected the API key': the provider answered 401 or 403; " +
+            "enter the key again."
         },
         {
           code: "ai.refresh_provider_models.error",

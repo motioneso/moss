@@ -70,7 +70,7 @@ function fail(providerKind: AiProviderKind, message: string): AiProviderTestResu
 function readApiKey(credential: unknown): string | null {
   if (!credential || typeof credential !== "object") return null;
   const value = (credential as { apiKey?: unknown }).apiKey;
-  return typeof value === "string" && value.trim() ? value : null;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function fetchModels(input: ProviderValidationInput, apiKey: string): Promise<Response> {

@@ -184,7 +184,7 @@ export interface RefreshAiProviderModelsResponse {
   /** The provider's stored model rows after the refresh (unchanged when `reason` is set). */
   readonly models: readonly AiConfiguredModelDto[];
   /** Present only when a CLI provider's live list could not be fetched; nothing was changed. */
-  readonly reason?: AiCliModelListFailure | "unavailable";
+  readonly reason?: AiCliModelListFailure | "unavailable" | "rejected_key";
   readonly message?: string;
 }
 
@@ -196,7 +196,7 @@ export interface AiDiscoverModelsResponse {
    * #2208: present ONLY when a CLI provider's live list could not be fetched — why there are no
    * models (`not_logged_in`, `unsupported`, `error`, or `unavailable` when no runner is wired).
    */
-  readonly reason?: AiCliModelListFailure | "unavailable";
+  readonly reason?: AiCliModelListFailure | "unavailable" | "rejected_key";
   /** Plain-English detail for `reason`; never carries a secret. */
   readonly message?: string;
 }
