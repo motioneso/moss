@@ -260,3 +260,13 @@ export const REVIEW_TRANSIENT_LABELS = {
   timeChange: "Time change to save",
   willRemove: "Will be removed"
 } as const;
+
+/** Section index and hero utility row labels. */
+export const BRIEFING_NOT_READY_LABEL = "Briefing not ready yet";
+export const TODAY_SECTION_INDEX_LABEL = "In this briefing";
+export const TODAY_SECTION_LINKS = [
+  { href: "#start-here", label: "Your day & preparation" },
+  { href: "#needs-you", label: "Quick actions" },
+  { href: "#news", label: "News" },
+  { href: "#sports", label: "Sports" }
+] as const;

@@ -1,3 +1,4 @@
+import { TODAY_SECTION_INDEX_LABEL, TODAY_SECTION_LINKS } from "./today-labels.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Flag, Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -363,13 +364,13 @@ export function TodayPage(props: {
       className={todayMode === "day" ? "cmd-sections today-hero__sections" : "cmd-sections"}
     >
       {todayMode === "day" ? (
-        <span className="today-hero__sections-label">In this briefing</span>
+        <span className="today-hero__sections-label">{TODAY_SECTION_INDEX_LABEL}</span>
       ) : null}
-      {assessmentShown ? <a href="#assessment">Assessment</a> : null}
-      <a href="#start-here">Start</a> <a href="#weather">Weather</a>
-      <a href="#schedule">Schedule</a> <a href="#needs-you">Needs you</a>
-      <a href="#widgets">Widgets</a> <a href="#goals">Goals</a>
-      {looseEnds.length > 0 ? <a href="#loose-ends">Loose ends</a> : null}
+      {TODAY_SECTION_LINKS.map((link) => (
+        <a key={link.href} href={link.href}>
+          {link.label}
+        </a>
+      ))}
     </nav>
   );
 
@@ -471,6 +472,9 @@ export function TodayPage(props: {
             <section className="jds-brief" id="start-here">
               <div className="jds-brief__head">
                 <span className="jds-brief__kicker">Start here</span>
+                <a href="#schedule" className="cmd-sr-only">
+                  Schedule
+                </a>
               </div>
               <div className="jds-brief__title">The few things that matter most</div>
               <div className="top3" style={{ marginTop: 4 }}>
@@ -533,9 +537,11 @@ export function TodayPage(props: {
             <div id="widgets">
               <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
             </div>
-            {feed.news.length > 0 || feed.interests.length > 0 ? (
-              <NewsDesk news={feed.news} interests={feed.interests} />
-            ) : null}
+            <div id="news">
+              {feed.news.length > 0 || feed.interests.length > 0 ? (
+                <NewsDesk news={feed.news} interests={feed.interests} />
+              ) : null}
+            </div>
 
             <div id="goals">
               <GoalsSection />
@@ -578,7 +584,9 @@ export function TodayPage(props: {
 
             <ProactiveCards />
           </div>
-          <ModuleTodayWidgets slot="sports" disabledModuleIds={disabledModuleIds} />
+          <div id="sports">
+            <ModuleTodayWidgets slot="sports" disabledModuleIds={disabledModuleIds} />
+          </div>
         </div>
         {dialog ? (
           <TaskDetailsDialog

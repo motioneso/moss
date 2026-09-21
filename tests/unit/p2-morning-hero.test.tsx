@@ -1,3 +1,4 @@
+import * as labels from "../../apps/web/src/today/today-labels.js";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -263,5 +264,53 @@ describe("morning hero vertical rhythm (day mode only)", () => {
     expect(css.lastIndexOf(".today-hero__sections {")).toBeGreaterThan(
       css.indexOf(".cmd-sections {")
     );
+  });
+
+  it("asserts the four-link inventory in order and the utility row present with the not-ready line when the run is not readable", () => {
+    expect((labels as Record<string, unknown>).TODAY_SECTION_LINKS).toEqual([
+      { href: "#start-here", label: "Your day & preparation" },
+      { href: "#needs-you", label: "Quick actions" },
+      { href: "#news", label: "News" },
+      { href: "#sports", label: "Sports" }
+    ]);
+
+    const markup = renderToStaticMarkup(
+      <TodayHero
+        mode="day"
+        eyebrow="Good morning"
+        headline="Morning headline"
+        summary="Morning summary"
+        preparedAt={null}
+        readerControl={null}
+        weather={null}
+      />
+    );
+
+    expect(markup).toContain('class="today-hero__prepared"');
+    expect(markup).toContain('class="today-hero__not-ready"');
+    expect(markup).toContain("Briefing not ready yet");
+  });
+
+  it("renders the section index outside the hero band below the gold rule", () => {
+    const markup = renderToStaticMarkup(
+      <TodayHero
+        mode="day"
+        eyebrow="Good morning"
+        headline="Morning headline"
+        summary="Morning summary"
+        preparedAt={null}
+        readerControl={null}
+        weather={null}
+        sectionLinks={<nav id="section-nav">Links</nav>}
+      />
+    );
+
+    const ruleIndex = markup.indexOf('class="today-hero__rule"');
+    const closingSectionIndex = markup.indexOf("</section>");
+    const navIndex = markup.indexOf('id="section-nav"');
+
+    expect(ruleIndex).toBeGreaterThan(-1);
+    expect(closingSectionIndex).toBeGreaterThan(ruleIndex);
+    expect(navIndex).toBeGreaterThan(closingSectionIndex);
   });
 });
