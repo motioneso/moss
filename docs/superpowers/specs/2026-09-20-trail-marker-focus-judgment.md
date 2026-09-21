@@ -197,7 +197,7 @@ Resolved:
 - **The image model is set on the Mac and called by the companion; Moss stays text-only.** No
   router image input is needed.
 - **Existing linked Macs are not re-approved; new setups show the approval info** (D8).
-- **Focus lives in Settings, not the sidebar** (D9).
+- **Focus is not a module; server-side it is only Trail Marker info and one model row in Settings** (D9).
 - **Slice order:** text-only end to end first, then screenshots (§12).
 
 Open, for Ben:
@@ -213,13 +213,17 @@ Open, for Ben:
   observations, and nothing is observed until the person turns it on in the Mac's own Focus pane and
   grants the macOS permission, so the Mac itself is where consent for existing setups happens.
   This is acceptable on a one-person instance; a shared instance would need the re-approval.
-- **D9 Where the code lives (decided).** A new **focus module** owns the judgment table
-  (owner-only), the service key and the nudge rules. It has **no sidebar entry**: its manifest
-  declares no navigation and only a Settings section, the same way the notifications module does.
-  The companion route only authenticates the Mac and calls the focus module's public interface;
-  the calendar module gains the small "current block" public read. Its Settings section holds the
-  judgment-model binding notes, nudge cap and the test nudge trigger; the image model stays in the
-  Mac's own Focus pane.
+- **D9 Where the code lives (decided, corrected 2026-09-20).** **Not a module.** Focus is platform
+  code, like the companion pairing: not in the module registry, not downloadable, no manifest, no
+  permissions, no Settings → Modules entry, no sidebar entry. An earlier draft called it a module
+  with no sidebar entry; that was wrong. Internally: an internal code library for the judgment
+  logic, a platform database migration for the judgments table (owner-only), wiring in the
+  registry's composition code, and the calendar module gains the small "current block" public
+  read. What a person sees on the server is only the Trail Marker information in Settings (download
+  link, how to connect) and the model choice for judgment as its own row in Settings → AI. The
+  image model stays in the Mac's own Focus pane.
+  **Never defaulted:** the row starts empty, no model is pre-selected or inherited from any other
+  setting, and nothing is processed until an admin defines the Trail Marker reasoning model.
 
 ## 11. Amendments this requires to the companion spec
 
