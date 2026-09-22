@@ -171,6 +171,25 @@ describe("TodayQuickActions", () => {
     }
   });
 
+  it("closes the Meds dialog on a scrim click and returns focus to the opener", async () => {
+    const { act: domAct } = await import("react");
+    const { opener, dialog, unmount } = await mountDom(pendingSlots);
+    try {
+      await domAct(async () => {
+        opener().click();
+      });
+      const scrim = dialog()?.parentElement;
+      expect(scrim?.className).toContain("wl-modal-scrim");
+      await domAct(async () => {
+        scrim!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+      });
+      expect(dialog()).toBeNull();
+      expect(document.activeElement).toBe(opener());
+    } finally {
+      await unmount();
+    }
+  });
+
   it("returns focus to the opener after Done and after X", async () => {
     const { act: domAct } = await import("react");
     for (const closer of ["Done", "Close"] as const) {

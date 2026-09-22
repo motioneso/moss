@@ -405,4 +405,12 @@ test("Meds dialog opens from the rail, closes on Escape, and returns focus", asy
   await dialog.getByRole("button", { name: "Done" }).click();
   await expect(dialog).toBeHidden();
   await expect(opener).toBeFocused();
+
+  // Scrim close keeps focus on the opener too (invariant 4).
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeVisible();
+  await page.locator(".wl-modal-scrim").click({ position: { x: 10, y: 10 } });
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
 });

@@ -126,7 +126,11 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
         <div
           className="wl-modal-scrim"
           onMouseDown={(ev) => {
-            if (ev.target === ev.currentTarget) closeMedsModal();
+            if (ev.target !== ev.currentTarget) return;
+            // Cancel the mousedown default so it cannot pull focus off the
+            // opener the close function just focused (the scrim is not focusable).
+            ev.preventDefault();
+            closeMedsModal();
           }}
         >
           <div
