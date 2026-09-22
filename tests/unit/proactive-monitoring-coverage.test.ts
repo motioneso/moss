@@ -454,6 +454,9 @@ describe("spam filter", () => {
   });
 
   it("defers a card raised during quiet hours", async () => {
+    // Weak on purpose: the exact deferral time depends on the host time zone
+    // (#2608), so this only pins that a deferral happens. Do not assert the
+    // exact time here: it passes on UTC hosts and fails anywhere else.
     const { policy } = spamHarness();
     const verdict = await policy.check(
       fakeScopedDb(),

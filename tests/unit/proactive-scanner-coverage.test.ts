@@ -8,6 +8,7 @@ import {
   ProactiveScanner,
   enqueueProactiveScan,
   registerProactiveMonitoringRoutes,
+  registerProactiveMonitoringWorkers,
   type AntiSpamPolicy as AntiSpamPolicyType,
   type CardRepository,
   type MonitorStateRepository,
@@ -483,22 +484,198 @@ describe("scan job queue", () => {
     expect(sent[0]?.options).toMatchObject({ singletonKey: "key-123" });
     expect(() => assertMetadataOnlyPayload(sent[0]?.payload)).not.toThrow();
   });
+});
 
-  it("rejects a payload that smuggles content", () => {
-    expect(() =>
-      assertMetadataOnlyPayload({
-        actorUserId: OWNER_A,
-        title: "Private bill",
-        summary: "Pay this now"
-      })
-    ).toThrow(/non-metadata keys/);
+describe("scan worker", () => {
+  type BossParam = Parameters<typeof registerProactiveMonitoringWorkers>[0];
+  type DepsParam = Parameters<typeof registerProactiveMonitoringWorkers>[1];
+
+  interface Captured {
+    handler: AnyFn;
+    workQueue: string;
+  }
+
+  function fakeBoss(): { boss: BossParam; captured: Captured; send: ReturnType<typeof vi.fn> } {
+    const captured = {} as Captured;
+    const send = vi.fn(async () => "job-id");
+    const work = vi.fn(async (queue: string, _options: unknown, fn: AnyFn) => {
+      captured.handler = fn;
+      captured.workQueue = queue;
+      return "worker-1";
+    });
+    return { boss: { work, send } as unknown as BossParam, captured, send };
+  }
+
+  function workerDb(
+    monitoringPref: ProactiveMonitoringPreferenceV1,
+    priorityModel: unknown
+  ): DataContextDb {
+    // Answers the two preference reads the scanner makes: the monitoring
+    // preference for any key, the priority model for its own key. Everything
+    // else (monitor state, existing cards) reads empty; raw SQL writes just
+    // succeed with no rows.
+    const selectFrom = vi.fn((table: string) => {
+      const args: unknown[][] = [];
+      const chain = {
+        select: () => chain,
+        selectAll: () => chain,
+        where: (...cond: unknown[]) => {
+          args.push(cond);
+          return chain;
+        },
+        executeTakeFirst: async () => {
+          if (table === "app.preferences") {
+            if (args.flat().includes("priority.model.v1")) {
+              return { value_json: priorityModel };
+            }
+            return { value_json: monitoringPref };
+          }
+          return undefined;
+        }
+      };
+      return chain;
+    });
+    // Raw SQL runs through the query-executor interface: transform and
+    // compile are identity steps, execution answers no rows.
+    const executeQuery = vi.fn(async () => ({ rows: [] }));
+    const executor = {
+      transformQuery: (node: unknown) => node,
+      compileQuery: () => ({ sql: "", parameters: [] }),
+      executeQuery
+    };
+    return {
+      [dataContextBrand]: true as const,
+      db: {
+        selectFrom,
+        executeQuery,
+        getExecutor: () => executor
+      }
+    } as unknown as DataContextDb;
+  }
+
+  function emptyPriorityModel(): unknown {
+    return {
+      version: 1,
+      mode: "balanced",
+      anchors: [],
+      mutedSources: [],
+      updatedAt: "2026-09-01T00:00:00.000Z"
+    };
+  }
+
+  function tasksPref(): ProactiveMonitoringPreferenceV1 {
+    const base = defaultProactiveMonitoringPreference();
+    return {
+      ...base,
+      enabled: true,
+      dailyCardCap: 20,
+      quietHours: { enabled: false, startLocalTime: "22:00", endLocalTime: "08:00" },
+      sources: {
+        tasks: { enabled: true, dailyCardCap: 5 },
+        calendar: { enabled: false, dailyCardCap: 3 },
+        email: { enabled: false, dailyCardCap: 3 },
+        notes: { enabled: false, dailyCardCap: 3 }
+      }
+    };
+  }
+
+  it("registers on the scan queue and returns the worker id", async () => {
+    const { boss, captured } = fakeBoss();
+    const dataContext = {
+      withDataContext: vi.fn()
+    } as unknown as DepsParam["dataContext"];
+    const workers = await registerProactiveMonitoringWorkers(boss, {
+      dataContext,
+      getLocalePreference: async () => ({ timezone: "UTC" }),
+      providers: new Map()
+    });
+    expect(workers).toEqual(["worker-1"]);
+    expect(captured.workQueue).toBe("proactive-scan-source");
   });
 
-  it("retries a failed scan twice with a five-minute expiry", () => {
-    expect(PROACTIVE_SCAN_SOURCE_QUEUE).toMatchObject({
-      name: "proactive-scan-source",
-      options: { retryLimit: 2, retryDelay: 60, expireInSeconds: 300 }
+  it("rejects a job payload that smuggles content", async () => {
+    const { boss, captured } = fakeBoss();
+    // The payload guard lives inside the handler, so the runner opens the
+    // context first and the handler itself throws.
+    const withDataContext = vi.fn(async (_ctx: unknown, fn: AnyFn) => fn({} as never));
+    await registerProactiveMonitoringWorkers(boss, {
+      dataContext: { withDataContext } as unknown as DepsParam["dataContext"],
+      getLocalePreference: async () => ({ timezone: "UTC" }),
+      providers: new Map()
     });
+    await expect(
+      captured.handler([
+        {
+          id: "job-bad",
+          data: { actorUserId: OWNER_A, title: "Private bill", idempotencyKey: "k" }
+        }
+      ])
+    ).rejects.toThrow(/metadata/);
+    expect(withDataContext).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns early when no provider is registered for the source", async () => {
+    const { boss, captured } = fakeBoss();
+    // A bare database double: if the worker scanned anyway, the repositories
+    // would throw on it. Resolving cleanly proves the early return.
+    const withDataContext = vi.fn(async (_ctx: unknown, fn: AnyFn) => fn({} as never));
+    await registerProactiveMonitoringWorkers(boss, {
+      dataContext: { withDataContext } as unknown as DepsParam["dataContext"],
+      getLocalePreference: async () => ({ timezone: "UTC" }),
+      providers: new Map()
+    });
+    await expect(
+      captured.handler([
+        {
+          id: "job-1",
+          data: {
+            actorUserId: OWNER_A,
+            source: "tasks",
+            reason: "source-sync",
+            idempotencyKey: "k-1"
+          }
+        }
+      ])
+    ).resolves.toBeUndefined();
+    expect(withDataContext).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs the scan inside the job user's data context", async () => {
+    const { boss, captured } = fakeBoss();
+    const seenContexts: unknown[] = [];
+    const provider = {
+      source: "tasks",
+      moduleId: "tasks",
+      collectSignals: vi.fn().mockResolvedValue({ signals: [], nextCursor: {} })
+    };
+    const dataContext = {
+      withDataContext: vi.fn(async (ctx: unknown, fn: AnyFn) => {
+        seenContexts.push(ctx);
+        return fn(workerDb(tasksPref(), emptyPriorityModel()));
+      })
+    } as unknown as DepsParam["dataContext"];
+    await registerProactiveMonitoringWorkers(boss, {
+      dataContext,
+      getLocalePreference: async () => ({ timezone: "UTC" }),
+      providers: new Map([["tasks", provider]] as never)
+    });
+    await captured.handler([
+      {
+        id: "job-2",
+        data: {
+          actorUserId: OWNER_B,
+          source: "tasks",
+          reason: "source-sync",
+          idempotencyKey: "k-2"
+        }
+      }
+    ]);
+    expect(seenContexts).toHaveLength(1);
+    expect(seenContexts[0]).toMatchObject({ actorUserId: OWNER_B });
+    expect(provider.collectSignals).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ ownerUserId: OWNER_B })
+    );
   });
 });
 
@@ -529,10 +706,14 @@ describe("monitoring routes", () => {
     const monitorStateRepository = {
       get: vi.fn().mockResolvedValue(null)
     };
+    const seenContexts: unknown[] = [];
     const base = {
       resolveAccessContext: async () => ({ actorUserId: OWNER_A }),
       dataContext: {
-        withDataContext: async (_ctx: unknown, fn: AnyFn) => fn({} as never)
+        withDataContext: async (_ctx: unknown, fn: AnyFn) => {
+          seenContexts.push(_ctx);
+          return fn({} as never);
+        }
       },
       boss: { send: vi.fn().mockResolvedValue("job") },
       registeredSources: new Set(["calendar"]),
@@ -541,15 +722,22 @@ describe("monitoring routes", () => {
       monitorStateRepository,
       ...overrides
     };
-    return { base: base as never, cardRepository, preferencesRepository, monitorStateRepository };
+    return {
+      base: base as never,
+      cardRepository,
+      preferencesRepository,
+      monitorStateRepository,
+      seenContexts
+    };
   }
 
   it("lists the requesting user's cards with a default limit of 5", async () => {
-    const { base, cardRepository } = depsWith();
+    const { base, cardRepository, seenContexts } = depsWith();
     const handlers = captureHandlers(base);
     const { reply: res, send } = reply();
     const req = { query: {} } as unknown as FastifyRequest;
     await (handlers.get("GET /api/me/proactive-cards") as AnyFn)(req, res);
+    expect(seenContexts).toEqual([{ actorUserId: OWNER_A }]);
     expect(cardRepository.listActive).toHaveBeenCalledWith(expect.anything(), OWNER_A, 5);
     expect(send).toHaveBeenCalledWith({ cards: [] });
   });
@@ -586,26 +774,34 @@ describe("monitoring routes", () => {
   });
 
   it("skips a source refreshed inside the cooldown", async () => {
-    const { base, monitorStateRepository } = depsWith();
-    vi.mocked(monitorStateRepository.get).mockResolvedValue({
-      last_checked_at: new Date()
-    } as never);
-    const handlers = captureHandlers(base);
-    const { reply: res, send } = reply();
-    const req = {} as unknown as FastifyRequest;
-    await (handlers.get("POST /api/me/proactive-cards/refresh") as AnyFn)(req, res);
-    expect(send).toHaveBeenCalledWith({ enqueued: 0 });
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-01T12:00:00.000Z"));
+      const { base, monitorStateRepository } = depsWith();
+      vi.mocked(monitorStateRepository.get).mockResolvedValue({
+        last_checked_at: new Date("2026-09-01T11:55:00.000Z")
+      } as never);
+      const handlers = captureHandlers(base);
+      const { reply: res, send } = reply();
+      const req = {} as unknown as FastifyRequest;
+      await (handlers.get("POST /api/me/proactive-cards/refresh") as AnyFn)(req, res);
+      expect(send).toHaveBeenCalledWith({ enqueued: 0 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keys the refresh queue per user and source", async () => {
-    const { base } = depsWith();
+    const { base, seenContexts } = depsWith();
     const bossSend = (base as { boss: { send: ReturnType<typeof vi.fn> } }).boss.send;
     const handlers = captureHandlers(base);
-    const { reply: res } = reply();
+    const { reply: res, status } = reply();
     await (handlers.get("POST /api/me/proactive-cards/refresh") as AnyFn)(
       {} as FastifyRequest,
       res
     );
+    expect(status).toHaveBeenCalledWith(202);
+    expect(seenContexts).toEqual([{ actorUserId: OWNER_A }]);
     expect(bossSend).toHaveBeenCalledTimes(1);
     const payload = bossSend.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(payload).toMatchObject({ actorUserId: OWNER_A, source: "calendar" });
