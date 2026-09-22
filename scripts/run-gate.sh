@@ -33,7 +33,8 @@
 #   scripts/run-gate.sh start [--gate <pnpm-script>] [--exclusive] [--keep-db]
 #       DROP/CREATEs a fresh isolated gate database, exports JARVIS_PGDATABASE,
 #       launches the gate fully detached, prints the log path, and returns at
-#       once. Never blocks.
+#       once. Never blocks. The log records the tested commit (### COMMIT)
+#       and dirty-tree state (### DIRTY), repeated by status/wait.
 #
 #   scripts/run-gate.sh status [--log <path>]
 #       One-shot verdict. Reads the sentinel and the log mtime — nothing else.
@@ -158,20 +159,20 @@ cmd_start() {
   # so the log identifies exactly what code this run tested. Dirty state
   # includes untracked files (-uall); ignored files are excluded. Failures
   # here never block a gate start — they record as unknown.
-  local gate_commit gate_dirty gate_status_list
+  local gate_commit gate_dirty gate_status_list gate_dirty_total
   gate_commit="$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)"
   gate_dirty="unknown (status failed)"
   gate_status_list=""
-  if ! git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    gate_dirty="unknown (not a git work tree)"
-  else
-    gate_status_list="$(git -C "$root" status --porcelain=v1 -uall 2>/dev/null || true)"
+  gate_dirty_total=0
+  # Branch on the exit code: a failed status stays unknown and must never read
+  # as clean. --no-optional-locks never takes the index lock, so this is safe
+  # in the shared checkout while another session runs git.
+  if gate_status_list="$(git --no-optional-locks -C "$root" status --porcelain=v1 -uall 2>/dev/null)"; then
     if [ -z "$gate_status_list" ]; then
       gate_dirty="clean"
     else
-      local dirty_count
-      dirty_count="$(printf '%s\n' "$gate_status_list" | wc -l | tr -d ' ')"
-      gate_dirty="dirty (${dirty_count} files)"
+      gate_dirty_total="$(printf '%s\n' "$gate_status_list" | wc -l | tr -d ' ')"
+      gate_dirty="dirty (${gate_dirty_total} files)"
     fi
   fi
 
@@ -209,7 +210,13 @@ cmd_start() {
     echo "### COMMIT $gate_commit"
     echo "### DIRTY  $gate_dirty"
     if [ -n "$gate_status_list" ]; then
-      printf '%s\n' "$gate_status_list" | head -n 50 | sed 's/^/### + /'
+      # sed reads all of its input, so a long dirty list cannot SIGPIPE this
+      # block the way head does under pipefail/set -e (exit 141, silent abort
+      # before the runner launches and before the pointer is updated).
+      printf '%s\n' "$gate_status_list" | sed -n '1,50s/^/### + /p'
+      if [ "$gate_dirty_total" -gt 50 ]; then
+        echo "### + ... and $((gate_dirty_total - 50)) more"
+      fi
     fi
     echo "### DB     $gatedb (container $CONTAINER)"
     echo "### START  $(date -Is)"
@@ -299,8 +306,8 @@ cmd___run() {
 # neither line and report as unknown.
 receipt_summary() {
   local log="$1" commit dirty
-  commit="$(grep '^### COMMIT ' "$log" | tail -1 | awk '{print $3}' || true)"
-  dirty="$(grep '^### DIRTY ' "$log" | tail -1 | sed 's/^### DIRTY  //' || true)"
+  commit="$(grep -m 1 '^### COMMIT ' "$log" | awk '{print $3}' || true)"
+  dirty="$(grep -m 1 '^### DIRTY ' "$log" | sed 's/^### DIRTY  //' || true)"
   [ -n "$commit" ] || commit="unknown (predates commit recording)"
   [ -n "$dirty" ] || dirty="unknown (predates commit recording)"
   echo "commit $commit, tree $dirty"
