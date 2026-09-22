@@ -321,3 +321,43 @@ export const EVENING_RECAP_HEADING = "What happened today";
 export const EVENING_OPEN_LOOPS_KICKER = "02";
 export const EVENING_OPEN_LOOPS_HEADING = "Close the open loops";
 export const EVENING_OPEN_LOOPS_EMPTY = "Nothing urgent is carrying forward.";
+
+/** Evening step 2 commitment choices and note composer (VP-COMMITMENTS-R1). */
+export const EVENING_COMMIT_CHOICE_TOMORROW_TITLE = "Tomorrow";
+export const EVENING_COMMIT_CHOICE_TOMORROW_HINT = "Suggest a 15-minute block.";
+export const EVENING_COMMIT_CHOICE_ANOTHER_DAY_TITLE = "Another day";
+export const EVENING_COMMIT_CHOICE_ANOTHER_DAY_HINT = "Choose a day that fits better.";
+export const EVENING_COMMIT_CHOICE_KEEP_LIST_TITLE = "Keep it on my list";
+export const EVENING_COMMIT_CHOICE_KEEP_LIST_HINT = "Leave it unscheduled. Nothing deleted.";
+export const EVENING_COMMIT_CHOICE_LEAVE_NOW_TITLE = "Leave this for now";
+export const EVENING_COMMIT_CHOICE_LEAVE_NOW_HINT = "Keep today's task exactly as it is.";
+
+export const EVENING_COMMIT_CHOICES = [
+  {
+    id: "tomorrow",
+    title: EVENING_COMMIT_CHOICE_TOMORROW_TITLE,
+    hint: EVENING_COMMIT_CHOICE_TOMORROW_HINT
+  },
+  {
+    id: "another-date",
+    title: EVENING_COMMIT_CHOICE_ANOTHER_DAY_TITLE,
+    hint: EVENING_COMMIT_CHOICE_ANOTHER_DAY_HINT
+  },
+  {
+    id: "unscheduled",
+    title: EVENING_COMMIT_CHOICE_KEEP_LIST_TITLE,
+    hint: EVENING_COMMIT_CHOICE_KEEP_LIST_HINT
+  },
+  {
+    id: "leave",
+    title: EVENING_COMMIT_CHOICE_LEAVE_NOW_TITLE,
+    hint: EVENING_COMMIT_CHOICE_LEAVE_NOW_HINT
+  }
+] as const;
+
+export const EVENING_COMMIT_EYEBROW_SUFFIX = "OPEN TASK";
+export const EVENING_COMMIT_TASK_HINT = "It was on today's list without a time block.";
+export const EVENING_COMMIT_NOTE_LABEL = "Or tell Moss in your own words";
+export const EVENING_COMMIT_NOTE_PLACEHOLDER =
+  "A correction, a constraint, or something to remember…";
+export const EVENING_COMMIT_ADD_NOTE_LABEL = "Add note";

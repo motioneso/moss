@@ -49,7 +49,7 @@ export function useEveningPlanning(input: EveningPlanningInput) {
   const [corrections, setCorrections] = useState<{ taskId: string; note: string }[]>([]);
   const [noteDrafts, setNoteDrafts] = useState<Readonly<Record<string, string>>>({});
   const [decisions, setDecisions] = useState<
-    Readonly<Record<string, { decision: Exclude<CommitmentDecision, null>; date: string }>>
+    Readonly<Record<string, { decision: CommitmentDecision; date: string }>>
   >({});
   const [dueWritten, setDueWritten] = useState<readonly string[]>([]);
   const [capacity, setCapacity] = useState<DayPlanIntentCapacity | null>(null);
@@ -95,8 +95,9 @@ export function useEveningPlanning(input: EveningPlanningInput) {
 
   const committed = new Set<string>();
   for (const row of rows) {
-    if (row.marked === null && (decisions[row.task.id]?.decision ?? row.decided) === "tomorrow")
-      committed.add(row.task.id);
+    const decision =
+      row.task.id in decisions ? (decisions[row.task.id]?.decision ?? null) : row.decided;
+    if (row.marked === null && decision === "tomorrow") committed.add(row.task.id);
   }
   // Touched proposals survive regeneration with their review edits; the rest yield to fresh ones.
   const touched = input.getReview()?.touchedIds ?? [];
@@ -149,7 +150,11 @@ export function useEveningPlanning(input: EveningPlanningInput) {
       const patch = eveningIntentPatchFor(current.eveningIntent ?? null, {
         corrections,
         commitments: Object.entries(decisions)
-          .map(([taskId, entry]) => ({ taskId, decision: entry.decision }))
+          .filter(([, entry]) => entry.decision !== null)
+          .map(([taskId, entry]) => ({
+            taskId,
+            decision: entry.decision as Exclude<CommitmentDecision, null>
+          }))
           .filter(
             (entry) => entry.decision !== "another-date" || dueWritten.includes(entry.taskId)
           ),
@@ -292,9 +297,7 @@ export function useEveningPlanning(input: EveningPlanningInput) {
     setDecision: (taskId: string, decision: Exclude<CommitmentDecision, null>) =>
       setDecisions((prev) => ({ ...prev, [taskId]: { decision, date: prev[taskId]?.date ?? "" } })),
     clearDecision: (taskId: string) =>
-      setDecisions((prev) =>
-        Object.fromEntries(Object.entries(prev).filter(([id]) => id !== taskId))
-      ),
+      setDecisions((prev) => ({ ...prev, [taskId]: { decision: null, date: "" } })),
     setDateFor: (taskId: string, date: string) =>
       setDecisions((prev) => ({
         ...prev,

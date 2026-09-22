@@ -402,7 +402,8 @@ describe("evening step navigation", () => {
     expect(second.getAttribute("aria-current")).toBe("step");
     const heading = document.getElementById("evening-commitments-heading") as HTMLElement;
     expect(document.activeElement).toBe(heading);
-    expect(document.body.querySelector('[role="region"]')?.textContent).toContain(
+    expect(heading.textContent).toBe("Give this a place, or leave it open.");
+    expect(document.getElementById("evening-commitments")?.getAttribute("aria-label")).toBe(
       "Open commitments"
     );
     expect(document.body.querySelector(".evening-plan__railwrap")).not.toBeNull();
@@ -525,6 +526,29 @@ describe("evening step navigation", () => {
 });
 
 describe("evening steps 2 to 4 (V8)", () => {
+  it("renders four commitment choice cards with mockup titles and no h3 heading in step 2", async () => {
+    stubFetch();
+    await mountDialog(eveningRun());
+    const nav = document.body.querySelector('nav[aria-label="Plan steps"]') as HTMLElement;
+    const second = [...nav.querySelectorAll("button")][1] as HTMLButtonElement;
+    await act(async () => {
+      second.click();
+    });
+    const panel = document.body.querySelector('[role="region"]') as HTMLElement;
+    expect(panel.querySelector("h3#evening-commitments-heading")).toBeNull();
+    const group = panel.querySelector(
+      '[role="radiogroup"][aria-label="Write the launch brief: plan"]'
+    ) as HTMLElement;
+    expect(group).not.toBeNull();
+    const cards = [...group.querySelectorAll("label.evening-plan__choice")];
+    expect(cards.map((card) => card.querySelector("strong")?.textContent)).toEqual([
+      "Tomorrow",
+      "Another day",
+      "Keep it on my list",
+      "Leave this for now"
+    ]);
+  });
+
   it("renders commitment choice cards with React-selected state", async () => {
     stubFetch();
     await mountDialog(eveningRun());
@@ -544,14 +568,17 @@ describe("evening steps 2 to 4 (V8)", () => {
     expect(group).not.toBeNull();
     expect(group.classList.contains("evening-plan__choices")).toBe(true);
     const cards = [...group.querySelectorAll("label.evening-plan__choice")];
-    expect(cards.length).toBe(3);
+    expect(cards.length).toBe(4);
     expect(cards.map((card) => card.querySelector("strong")?.textContent)).toEqual([
       "Tomorrow",
-      "Another date",
-      "Keep on the list"
+      "Another day",
+      "Keep it on my list",
+      "Leave this for now"
     ]);
     const radios = [...group.querySelectorAll('input[type="radio"]')] as HTMLInputElement[];
-    expect(radios.length).toBe(3);
+    expect(radios.length).toBe(4);
+    expect(radios[3]?.checked).toBe(true);
+    expect(cards[3]?.getAttribute("data-state")).toBe("selected");
     for (const radio of radios) {
       expect(radio.hidden).toBe(false);
       expect(radio.getAttribute("aria-hidden")).not.toBe("true");
@@ -565,6 +592,17 @@ describe("evening steps 2 to 4 (V8)", () => {
     expect(
       (group.querySelector('label[data-state="selected"]') as HTMLElement).textContent
     ).toContain("Tomorrow");
+    await act(async () => {
+      cards[3]!.querySelector("input")!.click();
+    });
+    const checkedAfterLeave = [
+      ...group.querySelectorAll('input[type="radio"]')
+    ] as HTMLInputElement[];
+    expect(checkedAfterLeave.filter((radio) => radio.checked).length).toBe(1);
+    expect(group.querySelectorAll('label[data-state="selected"]').length).toBe(1);
+    expect(
+      (group.querySelector('label[data-state="selected"]') as HTMLElement).textContent
+    ).toContain("Leave this for now");
   });
 
   it("renders capacity cards and visible priority labels", async () => {

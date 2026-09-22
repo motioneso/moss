@@ -928,4 +928,33 @@ describe("useEveningPlanning", () => {
     };
     expect(body.eveningIntent?.notes).toBe("First note to keep\nSecond note to remember");
   });
+
+  it("preserves commitment decision across a rerender and card 4 clears the decision", async () => {
+    const m = await mount(tomorrowPlan());
+    await act(async () => {
+      m.current().setDecision("t2", "tomorrow");
+    });
+    expect(m.current().decisions["t2"]?.decision).toBe("tomorrow");
+    await m.rerender();
+    expect(m.current().decisions["t2"]?.decision).toBe("tomorrow");
+
+    // Card 4 clears the decision
+    await act(async () => {
+      m.current().clearDecision("t2");
+    });
+    expect(m.current().decisions["t2"]?.decision).toBeNull();
+    await m.rerender();
+    expect(m.current().decisions["t2"]?.decision).toBeNull();
+
+    // Saving draft sends no commitment for cleared decision
+    let ok = false;
+    await act(async () => {
+      ok = await m.current().save();
+    });
+    expect(ok).toBe(true);
+    const body = calls.find((c) => c.method === "PATCH" && c.url.endsWith("/draft"))?.body as {
+      eveningIntent?: { commitments?: { taskId: string; decision: string }[] };
+    };
+    expect(body.eveningIntent?.commitments ?? []).toEqual([]);
+  });
 });

@@ -681,7 +681,20 @@
   gap: 10px;
 }
 
-.evening-plan__choices--stacked .evening-plan__choice {
+.evening-plan__choices--commitments {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 360px) {
+  .evening-plan__choices--commitments {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.evening-plan__choices--stacked .evening-plan__choice,
+.evening-plan__choices--commitments .evening-plan__choice {
   position: relative;
   display: flex;
   align-items: flex-start;
@@ -691,7 +704,9 @@
 }
 
 .evening-plan__choices--stacked .evening-plan__choice[data-state="selected"],
-.evening-plan__choices--stacked .evening-plan__choice:has(input[type="radio"]:checked) {
+.evening-plan__choices--stacked .evening-plan__choice:has(input[type="radio"]:checked),
+.evening-plan__choices--commitments .evening-plan__choice[data-state="selected"],
+.evening-plan__choices--commitments .evening-plan__choice:has(input[type="radio"]:checked) {
   border-color: var(--forest);
   background: var(--sage);
   box-shadow: inset 3px 0 0 var(--forest);
@@ -703,18 +718,37 @@
 [data-color-mode="dark"]
   .evening-plan__choices--stacked
   .evening-plan__choice:has(input[type="radio"]:checked),
+[data-color-mode="dark"]
+  .evening-plan__choices--commitments
+  .evening-plan__choice[data-state="selected"],
+[data-color-mode="dark"]
+  .evening-plan__choices--commitments
+  .evening-plan__choice:has(input[type="radio"]:checked),
 [data-theme="dark"] .evening-plan__choices--stacked .evening-plan__choice[data-state="selected"],
 [data-theme="dark"]
   .evening-plan__choices--stacked
   .evening-plan__choice:has(input[type="radio"]:checked),
+[data-theme="dark"]
+  .evening-plan__choices--commitments
+  .evening-plan__choice[data-state="selected"],
+[data-theme="dark"]
+  .evening-plan__choices--commitments
+  .evening-plan__choice:has(input[type="radio"]:checked),
 [data-theme="canyon"] .evening-plan__choices--stacked .evening-plan__choice[data-state="selected"],
 [data-theme="canyon"]
   .evening-plan__choices--stacked
+  .evening-plan__choice:has(input[type="radio"]:checked),
+[data-theme="canyon"]
+  .evening-plan__choices--commitments
+  .evening-plan__choice[data-state="selected"],
+[data-theme="canyon"]
+  .evening-plan__choices--commitments
   .evening-plan__choice:has(input[type="radio"]:checked) {
   background: var(--forest-soft);
 }
 
 .evening-plan__choices--stacked .evening-plan__choice input[type="radio"],
+.evening-plan__choices--commitments .evening-plan__choice input[type="radio"],
 .evening-plan__choice-radio {
   position: absolute;
   inset: 0;
@@ -726,7 +760,8 @@
   cursor: pointer;
 }
 
-.evening-plan__choices--stacked .evening-plan__choice:has(input[type="radio"]:focus-visible) {
+.evening-plan__choices--stacked .evening-plan__choice:has(input[type="radio"]:focus-visible),
+.evening-plan__choices--commitments .evening-plan__choice:has(input[type="radio"]:focus-visible) {
   outline: 2px solid var(--forest);
   outline-offset: 2px;
 }
@@ -758,6 +793,14 @@
   .evening-plan__choice-text
   small,
 .evening-plan__choices--stacked
+  .evening-plan__choice:has(input[type="radio"]:checked)
+  .evening-plan__choice-text
+  small,
+.evening-plan__choices--commitments
+  .evening-plan__choice[data-state="selected"]
+  .evening-plan__choice-text
+  small,
+.evening-plan__choices--commitments
   .evening-plan__choice:has(input[type="radio"]:checked)
   .evening-plan__choice-text
   small {

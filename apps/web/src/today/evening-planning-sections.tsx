@@ -7,12 +7,18 @@ import { localDay } from "@moss/shared";
 import { Button, Select } from "@moss/ui";
 
 import {
+  EVENING_COMMIT_ADD_NOTE_LABEL,
+  EVENING_COMMIT_CHOICES,
+  EVENING_COMMIT_EYEBROW_SUFFIX,
   EVENING_COMMIT_MESSAGE,
+  EVENING_COMMIT_NOTE,
+  EVENING_COMMIT_NOTE_LABEL,
+  EVENING_COMMIT_NOTE_PLACEHOLDER,
+  EVENING_COMMIT_TASK_HINT,
   EVENING_REFLECT_ADD_NOTE_LABEL,
   EVENING_REFLECT_CHOICES,
   EVENING_REFLECT_NOTE_LABEL,
   EVENING_REFLECT_NOTE_PLACEHOLDER,
-  EVENING_COMMIT_NOTE,
   EVENING_REFLECT_QUESTION,
   EVENING_REVIEW_NOT_READY,
   EVENING_SHAPE_MESSAGE,
@@ -35,12 +41,6 @@ function PlanSection(props: { id: string; label: string; children: ReactNode }) 
     </section>
   );
 }
-
-const COMMIT_OPTIONS = [
-  ["tomorrow", "Tomorrow"],
-  ["another-date", "Another date"],
-  ["unscheduled", "Keep on the list"]
-] as const;
 
 const CAPACITY_OPTIONS = [
   ["light", "Lighter day"],
@@ -203,23 +203,157 @@ export function CommitSection(props: {
   readonly timeZone: string;
 }) {
   const { evening } = props;
+  const [draftNote, setDraftNote] = useState("");
+
+  const handleAddNote = () => {
+    const trimmed = draftNote.trim();
+    if (trimmed === "") return;
+    evening.addNote(trimmed);
+    setDraftNote("");
+  };
+
+  const notes = evening.activeNotes
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  const actionableRows = props.rows.filter((row) => {
+    const word =
+      row.marked === "done"
+        ? "Done"
+        : row.marked === "archived"
+          ? "Archived"
+          : row.marked === "unavailable"
+            ? "No longer available"
+            : row.task.dueAt !== null &&
+                localDay(row.task.dueAt, props.timeZone) === props.tomorrowKey
+              ? "Already set for tomorrow"
+              : null;
+    return word === null;
+  });
+
+  const nonActionableRows = props.rows.filter((row) => {
+    const word =
+      row.marked === "done"
+        ? "Done"
+        : row.marked === "archived"
+          ? "Archived"
+          : row.marked === "unavailable"
+            ? "No longer available"
+            : row.task.dueAt !== null &&
+                localDay(row.task.dueAt, props.timeZone) === props.tomorrowKey
+              ? "Already set for tomorrow"
+              : null;
+    return word !== null;
+  });
+
   return (
-    <PlanSection id="evening-commitments" label="Open commitments">
-      <StepIntro note={EVENING_COMMIT_NOTE} message={EVENING_COMMIT_MESSAGE} />
-      <ul className="evening-plan__rows">
-        {props.rows.map((row) => {
-          const word =
-            row.marked === "done"
-              ? "Done"
-              : row.marked === "archived"
-                ? "Archived"
-                : row.marked === "unavailable"
-                  ? "No longer available"
-                  : row.task.dueAt !== null &&
-                      localDay(row.task.dueAt, props.timeZone) === props.tomorrowKey
-                    ? "Already set for tomorrow"
-                    : null;
-          if (word !== null) {
+    <section
+      className="evening-plan__section"
+      id="evening-commitments"
+      aria-label="Open commitments"
+    >
+      <div className="evening-plan__speaker">
+        <span className="evening-plan__initial" aria-hidden="true">
+          {EVENING_SPEAKER_NAME.slice(0, 1)}
+        </span>
+        <div>
+          {EVENING_SPEAKER_NAME}
+          <small>{EVENING_COMMIT_NOTE}</small>
+        </div>
+      </div>
+      <p id="evening-commitments-heading" tabIndex={-1} className="evening-plan__lede">
+        {EVENING_COMMIT_MESSAGE}
+      </p>
+
+      {actionableRows.map((row) => {
+        const current =
+          row.task.id in evening.decisions
+            ? (evening.decisions[row.task.id]?.decision ?? null)
+            : row.decided;
+        const date = evening.decisions[row.task.id]?.date ?? "";
+        const category = (row.task.tags?.[0]?.name ?? "PERSONAL").toUpperCase();
+        return (
+          <div key={row.task.id} className="evening-plan__group">
+            <hr className="evening-plan__rule" />
+            <p className="evening-plan__eyebrow">
+              {category} / {EVENING_COMMIT_EYEBROW_SUFFIX}
+            </p>
+            <div className="evening-plan__title">
+              <strong>{row.task.title}</strong>
+            </div>
+            <div className="evening-plan__hint">{EVENING_COMMIT_TASK_HINT}</div>
+            <div
+              className="evening-plan__choices evening-plan__choices--commitments"
+              role="radiogroup"
+              aria-label={`${row.task.title}: plan`}
+            >
+              {EVENING_COMMIT_CHOICES.map((choice) => {
+                const selected = choice.id === "leave" ? current === null : current === choice.id;
+                return (
+                  <label
+                    key={choice.id}
+                    className="evening-plan__choice"
+                    data-state={selected ? "selected" : undefined}
+                  >
+                    <input
+                      type="radio"
+                      name={`${row.task.id}-commit`}
+                      className="evening-plan__choice-radio"
+                      checked={selected}
+                      disabled={evening.busy}
+                      onChange={() => {
+                        if (choice.id === "leave") {
+                          evening.clearDecision(row.task.id);
+                        } else {
+                          evening.setDecision(row.task.id, choice.id);
+                        }
+                      }}
+                    />
+                    <span className="evening-plan__choice-text">
+                      <strong>{choice.title}</strong>
+                      <small>{choice.hint}</small>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {current === "another-date" ? (
+              <div className="evening-plan__controls">
+                <input
+                  type="date"
+                  aria-label={`${row.task.title}: new date`}
+                  value={date}
+                  disabled={evening.busy}
+                  onChange={(event) => evening.setDateFor(row.task.id, event.target.value)}
+                />
+                <Button
+                  variant="secondary"
+                  disabled={evening.busy || date === ""}
+                  onClick={() => void evening.changeDueDate(row.task.id)}
+                >
+                  Change due date
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+
+      {nonActionableRows.length > 0 ? (
+        <ul className="evening-plan__rows">
+          {nonActionableRows.map((row) => {
+            const word =
+              row.marked === "done"
+                ? "Done"
+                : row.marked === "archived"
+                  ? "Archived"
+                  : row.marked === "unavailable"
+                    ? "No longer available"
+                    : row.task.dueAt !== null &&
+                        localDay(row.task.dueAt, props.timeZone) === props.tomorrowKey
+                      ? "Already set for tomorrow"
+                      : null;
             return (
               <li className="evening-plan__row" key={row.task.id}>
                 <div>
@@ -228,68 +362,42 @@ export function CommitSection(props: {
                 </div>
               </li>
             );
-          }
-          const current = evening.decisions[row.task.id]?.decision ?? row.decided;
-          const date = evening.decisions[row.task.id]?.date ?? "";
-          return (
-            <li className="evening-plan__row" key={row.task.id}>
-              <div>
-                <div className="evening-plan__title">{row.task.title}</div>
-                <div
-                  className="evening-plan__choices"
-                  role="radiogroup"
-                  aria-label={`${row.task.title}: plan`}
-                >
-                  {COMMIT_OPTIONS.map(([value, label]) => (
-                    <label
-                      key={value}
-                      className="evening-plan__choice"
-                      data-state={current === value ? "selected" : undefined}
-                    >
-                      <input
-                        type="radio"
-                        name={`${row.task.id}-commit`}
-                        checked={current === value}
-                        disabled={evening.busy}
-                        onChange={() => evening.setDecision(row.task.id, value)}
-                      />
-                      <strong>{label}</strong>
-                    </label>
-                  ))}
-                </div>
-                <div className="evening-plan__controls">
-                  <Button
-                    variant="secondary"
-                    disabled={evening.busy || current === null}
-                    onClick={() => evening.clearDecision(row.task.id)}
-                  >
-                    Undecided
-                  </Button>
-                </div>
-                {current === "another-date" ? (
-                  <div className="evening-plan__controls">
-                    <input
-                      type="date"
-                      aria-label={`${row.task.title}: new date`}
-                      value={date}
-                      disabled={evening.busy}
-                      onChange={(event) => evening.setDateFor(row.task.id, event.target.value)}
-                    />
-                    <Button
-                      variant="secondary"
-                      disabled={evening.busy || date === ""}
-                      onClick={() => void evening.changeDueDate(row.task.id)}
-                    >
-                      Change due date
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </PlanSection>
+          })}
+        </ul>
+      ) : null}
+
+      <hr className="evening-plan__rule" />
+
+      <div className="evening-plan__note-form">
+        <label className="evening-plan__field-label" htmlFor="evening-commit-note">
+          {EVENING_COMMIT_NOTE_LABEL}
+        </label>
+        <div className="evening-plan__note-composer">
+          <textarea
+            id="evening-commit-note"
+            aria-label={EVENING_COMMIT_NOTE_LABEL}
+            rows={2}
+            maxLength={500}
+            placeholder={EVENING_COMMIT_NOTE_PLACEHOLDER}
+            value={draftNote}
+            disabled={evening.busy}
+            onChange={(event) => setDraftNote(event.target.value)}
+          />
+          <Button
+            variant="secondary"
+            disabled={evening.busy || draftNote.trim() === ""}
+            onClick={handleAddNote}
+          >
+            {EVENING_COMMIT_ADD_NOTE_LABEL}
+          </Button>
+        </div>
+        {notes.map((note, index) => (
+          <div className="evening-plan__hint" key={index}>
+            Noted: {note}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
