@@ -12,7 +12,7 @@ import { createElement, type ReactElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // No jsdom — ChatModelPill's dismissable-menu effect registers real `document` listeners once
 // its menu opens, and ChatDrawer's private-mode effect touches `window`.
@@ -166,8 +166,35 @@ async function renderPill(
   // component settles out of its `isLoading` (chatd-model--muted) render and the real trigger
   // button mounts. Same pattern as settings-ai-pane.test.tsx's `flush()`.
   await flush();
+  return trackRenderer(renderer);
+}
+
+// #2539 — every renderer in this file stays mounted with a live QueryClient
+// unless it is unmounted, and the ChatModelPill mock below is shared by all
+// tests in the file. A renderer left mounted by an earlier test can re-render
+// late (a query resolution landing under load) on a different surface and
+// append a newer mock call after a later test's own render, so a later test
+// that reads calls[calls.length - 1] observes the wrong surface. Track every
+// renderer and unmount them all after each test.
+const mountedRenderers = new Set<ReactTestRenderer>();
+
+function trackRenderer(renderer: ReactTestRenderer): ReactTestRenderer {
+  mountedRenderers.add(renderer);
   return renderer;
 }
+
+function unmountMountedRenderers(): void {
+  for (const renderer of mountedRenderers) {
+    act(() => {
+      renderer.unmount();
+    });
+  }
+  mountedRenderers.clear();
+}
+
+// #2539 regression support: holds a renderer across two tests so the later
+// test can prove the fixture unmounted it.
+let stashedRenderer: ReactTestRenderer | null = null;
 
 function menuButtons(renderer: ReactTestRenderer) {
   const menu = renderer.root.findAll((node) => node.props.className === "chatd-model__menu");
@@ -209,7 +236,7 @@ async function renderDrawer(surface: ChatSurface): Promise<ReactTestRenderer> {
     await Promise.resolve();
     await Promise.resolve();
   });
-  return renderer;
+  return trackRenderer(renderer);
 }
 
 describe("ChatModelPill mutation surface routing (#1533)", () => {
@@ -227,6 +254,7 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
     vi.mocked(putChatModelOverride).mockReset();
     vi.mocked(putChatSettings).mockReset();
     vi.mocked(switchChatProvider).mockReset();
+    unmountMountedRenderers();
   });
 
   it("calls switchChatProvider and invalidates threads for the surface it was invoked on", async () => {
@@ -350,10 +378,19 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
 });
 
 describe("ChatDrawer forwards its surface into ChatModelPill (#1533)", () => {
+  // #2539 — the ChatModelPill mock is shared with the routing tests above,
+  // which render on other surfaces. Clear its calls before each drawer render
+  // so the last-call read below can only observe this test's own drawer.
+  beforeEach(() => {
+    vi.mocked(ChatModelPill).mockClear();
+    vi.mocked(clearChat).mockClear();
+  });
+
   afterEach(() => {
     vi.mocked(ChatModelPill).mockClear();
     vi.mocked(clearChat).mockClear();
     vi.mocked(getChatModelOverrideSettings).mockReset();
+    unmountMountedRenderers();
   });
 
   it("passes its exact props.surface into the pill, and the cross-provider callback resolves against that same surface", async () => {
@@ -398,5 +435,32 @@ describe("ChatDrawer forwards its surface into ChatModelPill (#1533)", () => {
     expect(calls.length).toBeGreaterThan(0);
     const pillProps = calls[calls.length - 1]![0];
     expect(pillProps.surface).toBe(DEFAULT_CHAT_SURFACE);
+  });
+
+  // #2539 — the next two tests run in order: this one leaves a mounted pill
+  // renderer on the other surface behind, and the following test proves the
+  // fixture unmounted it, so it can never append a late pill call. The check
+  // fails without the afterEach unmount above.
+  it("leaves a mounted pill renderer behind for the unmount check", async () => {
+    // Same settings the routing tests above render with, so this leftover
+    // looks exactly like the renderers those tests used to leave mounted.
+    vi.mocked(getChatModelOverrideSettings).mockResolvedValue({ settings: settingsFixture() });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    stashedRenderer = await renderPill(client, moduleSurfaceB);
+    const triggers = stashedRenderer.root.findAll(
+      (node) => node.props.className === "chatd-model__trigger"
+    );
+    expect(triggers.length).toBeGreaterThan(0);
+  });
+
+  // Runs after every test in this block in any order, so no shuffling can
+  // strand the check before the renderer above exists.
+  afterAll(() => {
+    // #2539 — every renderer mounted above was unmounted by the fixture, so
+    // no leftover renderer can append a late pill call on another surface.
+    // Fails if the afterEach unmount above is removed.
+    expect(mountedRenderers.size).toBe(0);
+    expect(stashedRenderer).not.toBeNull();
+    expect(() => stashedRenderer!.root).toThrow();
   });
 });
