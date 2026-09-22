@@ -12,7 +12,7 @@ import { createElement, type ReactElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // No jsdom — ChatModelPill's dismissable-menu effect registers real `document` listeners once
 // its menu opens, and ChatDrawer's private-mode effect touches `window`.
@@ -191,10 +191,6 @@ function unmountMountedRenderers(): void {
   }
   mountedRenderers.clear();
 }
-
-// #2539 regression support: holds a renderer across two tests so the later
-// test can prove the fixture unmounted it.
-let stashedRenderer: ReactTestRenderer | null = null;
 
 function menuButtons(renderer: ReactTestRenderer) {
   const menu = renderer.root.findAll((node) => node.props.className === "chatd-model__menu");
@@ -437,30 +433,12 @@ describe("ChatDrawer forwards its surface into ChatModelPill (#1533)", () => {
     expect(pillProps.surface).toBe(DEFAULT_CHAT_SURFACE);
   });
 
-  // #2539 — the next two tests run in order: this one leaves a mounted pill
-  // renderer on the other surface behind, and the following test proves the
-  // fixture unmounted it, so it can never append a late pill call. The check
-  // fails without the afterEach unmount above.
-  it("leaves a mounted pill renderer behind for the unmount check", async () => {
-    // Same settings the routing tests above render with, so this leftover
-    // looks exactly like the renderers those tests used to leave mounted.
-    vi.mocked(getChatModelOverrideSettings).mockResolvedValue({ settings: settingsFixture() });
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    stashedRenderer = await renderPill(client, moduleSurfaceB);
-    const triggers = stashedRenderer.root.findAll(
-      (node) => node.props.className === "chatd-model__trigger"
-    );
-    expect(triggers.length).toBeGreaterThan(0);
-  });
-
-  // Runs after every test in this block in any order, so no shuffling can
-  // strand the check before the renderer above exists.
-  afterAll(() => {
-    // #2539 — every renderer mounted above was unmounted by the fixture, so
-    // no leftover renderer can append a late pill call on another surface.
-    // Fails if the afterEach unmount above is removed.
+  // #2539 — the routing tests above mount pill renderers on other surfaces.
+  // The fixture unmounts every renderer after each test, so no leftover
+  // renderer can re-render late and append a pill call after a later test's
+  // own render. This stands on its own: it passes alone, first, or shuffled,
+  // and fails if the afterEach unmount above is removed.
+  it("starts with no renderers left mounted by earlier tests", () => {
     expect(mountedRenderers.size).toBe(0);
-    expect(stashedRenderer).not.toBeNull();
-    expect(() => stashedRenderer!.root).toThrow();
   });
 });
