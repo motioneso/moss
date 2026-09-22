@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { LocaleSettingsDto, TaskDto } from "@moss/shared";
 
@@ -8,6 +8,10 @@ import { Button, Select } from "@moss/ui";
 
 import {
   EVENING_COMMIT_MESSAGE,
+  EVENING_REFLECT_ADD_NOTE_LABEL,
+  EVENING_REFLECT_CHOICES,
+  EVENING_REFLECT_NOTE_LABEL,
+  EVENING_REFLECT_NOTE_PLACEHOLDER,
   EVENING_COMMIT_NOTE,
   EVENING_REFLECT_QUESTION,
   EVENING_REVIEW_NOT_READY,
@@ -16,7 +20,6 @@ import {
   EVENING_SPEAKER_NAME,
   EVENING_SPEAKER_NOTE,
   NO_ROOM_FOUND,
-  shortDate,
   timeLabel
 } from "./today-labels.js";
 import type { EveningPlanningController } from "./evening-planning-controller.js";
@@ -45,55 +48,88 @@ const CAPACITY_OPTIONS = [
   ["full", "Full day"]
 ] as const;
 
-/** Today's recap with per-task actor corrections; nothing here writes tasks. */
+/** Evening step 1 reflection choices and note composer (VP-REFLECTION-R1); nothing here writes tasks. */
 export function ReflectSection(props: {
   readonly evening: EveningPlanningController;
   readonly tasks: readonly TaskDto[];
   readonly locale: LocaleSettingsDto;
 }) {
   const { evening } = props;
+  const [draftNote, setDraftNote] = useState("");
+
+  const handleAddNote = () => {
+    const trimmed = draftNote.trim();
+    if (trimmed === "") return;
+    evening.addNote(trimmed);
+    setDraftNote("");
+  };
+
+  const notes = evening.activeNotes
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
   return (
-    <PlanSection id="evening-reflect" label="Reflect">
-      <ul className="evening-plan__rows">
-        {props.tasks.map((task) => (
-          <li className="evening-plan__row" key={task.id}>
-            <div>
-              <div className="evening-plan__title">{task.title}</div>
-              <div className="evening-plan__state">
-                {task.status === "todo"
-                  ? task.dueAt !== null
-                    ? `Due ${shortDate(task.dueAt, props.locale)}`
-                    : "Open"
-                  : "Done"}
-              </div>
-              {evening.corrections
-                .filter((entry) => entry.taskId === task.id)
-                .map((entry, index) => (
-                  <div className="evening-plan__hint" key={index}>
-                    Noted: {entry.note}
-                  </div>
-                ))}
-            </div>
-            <div className="evening-plan__controls">
-              <input
-                type="text"
-                aria-label={`${task.title}: correction`}
-                value={evening.noteDrafts[task.id] ?? ""}
-                placeholder="Add a correction"
-                onChange={(event) => evening.setNote(task.id, event.target.value)}
-              />
-              <Button
-                variant="secondary"
-                disabled={evening.busy}
-                onClick={() => evening.addCorrectionFor(task.id)}
-              >
-                Add
-              </Button>
-            </div>
-          </li>
+    <section className="evening-plan__section" id="evening-reflect" aria-label="Reflect">
+      <div
+        className="evening-plan__choices evening-plan__choices--stacked"
+        role="radiogroup"
+        aria-label="Reflection"
+      >
+        {EVENING_REFLECT_CHOICES.map((choice) => (
+          <label
+            key={choice.id}
+            className="evening-plan__choice"
+            data-state={evening.reflection === choice.id ? "selected" : undefined}
+          >
+            <input
+              type="radio"
+              name="evening-reflection"
+              className="evening-plan__choice-radio"
+              checked={evening.reflection === choice.id}
+              disabled={evening.busy}
+              onChange={() => evening.setReflection(choice.id)}
+            />
+            <span className="evening-plan__choice-text">
+              <strong>{choice.title}</strong>
+              <small>{choice.hint}</small>
+            </span>
+          </label>
         ))}
-      </ul>
-    </PlanSection>
+      </div>
+
+      <hr className="evening-plan__rule" />
+
+      <div className="evening-plan__note-form">
+        <label className="evening-plan__field-label" htmlFor="evening-reflect-note">
+          {EVENING_REFLECT_NOTE_LABEL}
+        </label>
+        <div className="evening-plan__note-composer">
+          <textarea
+            id="evening-reflect-note"
+            aria-label={EVENING_REFLECT_NOTE_LABEL}
+            rows={2}
+            maxLength={500}
+            placeholder={EVENING_REFLECT_NOTE_PLACEHOLDER}
+            value={draftNote}
+            disabled={evening.busy}
+            onChange={(event) => setDraftNote(event.target.value)}
+          />
+          <Button
+            variant="secondary"
+            disabled={evening.busy || draftNote.trim() === ""}
+            onClick={handleAddNote}
+          >
+            {EVENING_REFLECT_ADD_NOTE_LABEL}
+          </Button>
+        </div>
+        {notes.map((note, index) => (
+          <div className="evening-plan__hint" key={index}>
+            Noted: {note}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

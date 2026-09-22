@@ -55,6 +55,7 @@ export function useEveningPlanning(input: EveningPlanningInput) {
   const [capacity, setCapacity] = useState<DayPlanIntentCapacity | null>(null);
   const [priority, setPriority] = useState<readonly string[] | null>(null);
   const [startTime, setStartTime] = useState("09:00");
+  const [reflection, setReflection] = useState<"captures" | "unsent" | "took-more" | null>(null);
   const [notesText, setNotesText] = useState<string | null>(null);
   const [policyMode, setPolicyMode] = useState<"off" | "suggest" | "auto">("suggest");
   const [saved, setSaved] = useState(false);
@@ -303,6 +304,16 @@ export function useEveningPlanning(input: EveningPlanningInput) {
     setCapacity,
     setPriority,
     setStartTime,
+    reflection,
+    setReflection,
+    addNote: (text: string) => {
+      const trimmed = text.trim();
+      if (trimmed === "") return;
+      setNotesText((prev) => {
+        const current = prev ?? plan?.eveningIntent?.notes ?? "";
+        return current.trim() === "" ? trimmed : `${current}\n${trimmed}`;
+      });
+    },
     setNotesText,
     save,
     confirmSave,

@@ -676,6 +676,137 @@
   box-shadow: inset 3px 0 0 var(--forest);
 }
 
+.evening-plan__choices--stacked {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.evening-plan__choices--stacked .evening-plan__choice {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  min-height: 64px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+}
+
+.evening-plan__choices--stacked .evening-plan__choice[data-state="selected"],
+.evening-plan__choices--stacked .evening-plan__choice:has(input[type="radio"]:checked) {
+  border-color: var(--forest);
+  background: var(--sage);
+  box-shadow: inset 3px 0 0 var(--forest);
+}
+
+[data-color-mode="dark"]
+  .evening-plan__choices--stacked
+  .evening-plan__choice[data-state="selected"],
+[data-color-mode="dark"]
+  .evening-plan__choices--stacked
+  .evening-plan__choice:has(input[type="radio"]:checked),
+[data-theme="dark"] .evening-plan__choices--stacked .evening-plan__choice[data-state="selected"],
+[data-theme="dark"]
+  .evening-plan__choices--stacked
+  .evening-plan__choice:has(input[type="radio"]:checked),
+[data-theme="canyon"] .evening-plan__choices--stacked .evening-plan__choice[data-state="selected"],
+[data-theme="canyon"]
+  .evening-plan__choices--stacked
+  .evening-plan__choice:has(input[type="radio"]:checked) {
+  background: var(--forest-soft);
+}
+
+.evening-plan__choices--stacked .evening-plan__choice input[type="radio"],
+.evening-plan__choice-radio {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.evening-plan__choices--stacked .evening-plan__choice:has(input[type="radio"]:focus-visible) {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+
+.evening-plan__choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.evening-plan__choice-text strong {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__choice-text small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.evening-plan__choices--stacked
+  .evening-plan__choice[data-state="selected"]
+  .evening-plan__choice-text
+  small,
+.evening-plan__choices--stacked
+  .evening-plan__choice:has(input[type="radio"]:checked)
+  .evening-plan__choice-text
+  small {
+  color: var(--forest-ink);
+}
+
+.evening-plan__rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 18px 0 14px;
+}
+
+.evening-plan__note-form {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.evening-plan__note-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.evening-plan__note-composer textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.evening-plan__note-composer textarea:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 1px;
+}
+
+.evening-plan__note-composer button {
+  flex: none;
+  min-height: 38px;
+}
+
 .evening-plan__fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -715,5 +846,9 @@
 @media (min-width: 1081px) {
   .evening-plan__choices {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .evening-plan__choices--stacked {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
