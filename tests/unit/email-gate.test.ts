@@ -69,7 +69,9 @@ describe("email gate", () => {
     expect(r.signals.pendingJudgement).toBeUndefined();
     expect(r.signals.actionability?.category).toBe("noise");
   });
-  it("a no-failure sign-in notice the model flagged anyway is dropped quietly (#2341)", async () => {
+  it("a sign-in notice the model flagged anyway still reaches the closer look (#2341)", async () => {
+    // The security half of the shortcut was removed after review: recognizing a "no-failure"
+    // notice from wording drops real account-takeover alerts, so these always keep maybe_owed.
     const r = await extractEmailSignals(
       parsed({
         subject: "Verify Discord Login from New Location",
@@ -82,11 +84,10 @@ describe("email gate", () => {
         reason: "A sign-in notice."
       })
     );
-    expect(r.gate).toBe("nothing");
-    expect(r.signals.pendingJudgement).toBeUndefined();
-    expect(r.signals.actionability?.category).toBe("noise");
+    expect(r.gate).toBe("maybe_owed");
+    expect(r.signals.pendingJudgement).toBe(true);
   });
-  it("an obligation answer is never overridden by the notice rule (#2341)", async () => {
+  it("an obligation answer is never overridden (#2341)", async () => {
     const r = await extractEmailSignals(
       parsed({
         subject: "Verify Discord Login from New Location",
