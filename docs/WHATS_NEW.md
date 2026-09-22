@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-22
+
+#### Fixed
+
+- **Host details show the app version and commit.** The Environment, Version, Commit and Deploy mode fields under Settings > Host > Technical details now show real values instead of being blank, and on a pinned release Moss tells you when a newer version is available. [PR #2601](https://github.com/motioneso/moss/pull/2601)
+
 ### 2026-09-20
 
 #### Added
