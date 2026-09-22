@@ -28,18 +28,35 @@ export interface BuildAppMapInput {
 }
 
 export function buildAppMap(input: BuildAppMapInput) {
+  // Core declarations are the authority for shared surfaces. A module that declares its own
+  // setting or screen pointing at the same page (by id or path) is dropped, so the built map
+  // does not list the same page twice under two owners (#app map truthfulness: duplicates read
+  // as two different things to Moss).
+  const coreScreenIds = new Set(input.coreScreens.map((surface) => surface.id));
+  const coreScreenPaths = new Set(input.coreScreens.map((surface) => surface.path));
+  const coreSettingIds = new Set(input.coreSettings.map((surface) => surface.id));
+  const coreSettingPaths = new Set(input.coreSettings.map((surface) => surface.path));
+
   const screens = input.manifests.flatMap((manifest) =>
-    (manifest.navigation ?? []).map((surface) => ({
-      moduleId: manifest.id,
-      ...surface,
-      scope: "user" as const
-    }))
+    (manifest.navigation ?? [])
+      .filter(
+        (surface) => !coreScreenIds.has(surface.id) && !coreScreenPaths.has(surface.path)
+      )
+      .map((surface) => ({
+        moduleId: manifest.id,
+        ...surface,
+        scope: "user" as const
+      }))
   );
   const settings = input.manifests.flatMap((manifest) =>
-    (manifest.settings ?? []).map((surface) => ({
-      moduleId: manifest.id,
-      ...surface
-    }))
+    (manifest.settings ?? [])
+      .filter(
+        (surface) => !coreSettingIds.has(surface.id) && !coreSettingPaths.has(surface.path)
+      )
+      .map((surface) => ({
+        moduleId: manifest.id,
+        ...surface
+      }))
   );
   const features = input.manifests.flatMap((manifest) =>
     (manifest.features ?? []).map((feature) => ({

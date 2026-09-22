@@ -118,7 +118,7 @@ export const calendarModuleManifest = {
       id: "calendar.module-settings",
       label: "Calendar",
       description: "Choose calendar briefing and scheduling preferences.",
-      path: "/settings/modules/calendar",
+      path: "/settings?section=modules&module=calendar",
       scope: "user",
       order: 35,
       permissionId: "calendar.manage",
@@ -605,7 +605,7 @@ export const calendarModuleManifest = {
           id: "calendar.saved_day_plan_reconnect",
           description:
             "Reconnect or fix a calendar account so additions are written against real commitments again.",
-          path: "/settings/connectors"
+          path: "/settings?section=connected"
         }
       ]
     },
@@ -637,7 +637,7 @@ export const calendarModuleManifest = {
         {
           id: DAY_PLAN_DENIED_REMEDIATION_REF,
           description: "Turn automatic planning back on in calendar settings, then retry.",
-          path: "/settings/modules/calendar"
+          path: "/settings?section=modules&module=calendar"
         }
       ]
     },
@@ -769,7 +769,7 @@ export const calendarModuleManifest = {
           id: "calendar.saved_day_plan_reconnect",
           description:
             "Reconnect or fix a calendar account so conflicts are checked against real commitments again.",
-          path: "/settings/connectors"
+          path: "/settings?section=connected"
         }
       ]
     },

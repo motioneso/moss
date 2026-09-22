@@ -72,7 +72,7 @@ export const connectorsModuleManifest = {
       id: "connectors.user-settings",
       label: "Connectors",
       description: "Connect and manage external accounts used by Moss.",
-      path: "/settings/connectors",
+      path: "/settings?section=connected",
       scope: "user",
       order: 30,
       permissionId: "connectors.manage"
@@ -81,7 +81,7 @@ export const connectorsModuleManifest = {
       id: "connectors.admin-settings",
       label: "Connector Accounts",
       description: "View safe connector account metadata across the instance.",
-      path: "/settings/admin/connectors",
+      path: "/settings?section=oversight",
       scope: "admin",
       order: 30,
       permissionId: "connectors.admin"
@@ -258,6 +258,58 @@ export const connectorsModuleManifest = {
       outputSchema: calendarListLiveEventsResponseSchema,
       externalContent: true,
       execute: calendarListLiveEventsExecute
+    }
+  ],
+  features: [
+    {
+      id: "connectors.google_sync",
+      description:
+        "A connected Google Mailbox brings its calendar events and email into Moss on its own so " +
+        "they can show up on Today and in briefings. Sync runs on a schedule and can also be " +
+        "started by hand from Connected accounts.",
+      errors: [
+        {
+          code: "connectors.google.auth_failed",
+          class: "prerequisite",
+          remediationRef: "connectors.reconnect_account",
+          description:
+            "Access to the Google account expired or was taken away, so sync stopped for now. " +
+            "Moss marks the run failed rather than retrying blindly."
+        }
+      ],
+      remediations: [
+        {
+          id: "connectors.reconnect_account",
+          description: "Reconnect the account under Connected accounts in Settings.",
+          path: "/settings?section=connected"
+        }
+      ]
+    },
+    {
+      id: "connectors.imap_sync",
+      description:
+        "An email account connected directly (IMAP) is checked on a schedule and its newer " +
+        "messages are brought into Moss, where the same next actions are drawn from them as " +
+        "from Google mail.",
+      errors: [
+        {
+          code: "connectors.imap.connect_failed",
+          class: "prerequisite",
+          remediationRef: "connectors.recheck_imap_details",
+          description:
+            "The mail server rejected the connection: wrong name, server, port, or password. " +
+            "Nothing is synced until the details work again."
+        }
+      ],
+      remediations: [
+        {
+          id: "connectors.recheck_imap_details",
+          description:
+            "Check the account's server, port and password under Connected accounts in Settings, " +
+            "then test the connection.",
+          path: "/settings?section=connected"
+        }
+      ]
     }
   ]
 } satisfies MossModuleManifest;

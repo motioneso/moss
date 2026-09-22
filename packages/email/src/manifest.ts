@@ -58,7 +58,7 @@ export const emailModuleManifest = {
       description:
         "Choose which email signals show up in briefings, how email turns into tasks, and " +
         "whether your assistant drafts or auto-sends replies.",
-      path: "/settings/modules/email",
+      path: "/settings?section=modules&module=email",
       scope: "user",
       order: 40,
       permissionId: "email.manage",

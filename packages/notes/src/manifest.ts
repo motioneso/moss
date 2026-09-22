@@ -163,5 +163,32 @@ export const notesModuleManifest = {
       summarize: (input) => `Delete note ${String(input.path)}.`
     }
   ],
+  features: [
+    {
+      id: "notes.vault_sync",
+      description:
+        "Sync Markdown notes from the folder you link in Settings, Data sources: new and changed " +
+        "files are read into Moss on a schedule, and notes stay on disk where they are.",
+      remediations: [
+        {
+          id: "notes.configure_folder",
+          description: "Choose a notes folder under Data sources in Settings.",
+          path: "/settings?section=sources"
+        }
+      ]
+    },
+    {
+      id: "notes.semantic_search",
+      description:
+        "Search your notes by meaning, not just exact words, using embeddings, so closely related " +
+        "wording still matches."
+    },
+    {
+      id: "notes.assistant_authoring",
+      description:
+        "Ask the assistant to create, edit, or delete Markdown notes in your linked notes folder. " +
+        "Deleting is immediate and permanent; there is no trash."
+    }
+  ],
   proactiveMonitor: notesMonitorProvider
 } satisfies MossModuleManifest;

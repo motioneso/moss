@@ -55,6 +55,81 @@ describe("buildAppMap", () => {
     });
   });
 
+  it("drops module screens and settings that duplicate a core entry by id or path", () => {
+    const artifact = buildAppMap({
+      manifests: [
+        {
+          id: "fixture",
+          name: "Fixture",
+          version: "1.0.0",
+          publisher: "jarv1s",
+          lifecycle: "required",
+          compatibility: { jarv1s: ">=0.0.0" },
+          navigation: [
+            { id: "fixture", label: "Fixture", description: "Fixture screen.", path: "/fixture" },
+            {
+              id: "today",
+              label: "Today",
+              description: "Duplicate of the core Today screen.",
+              path: "/today"
+            },
+            {
+              id: "fixture-other",
+              label: "Other",
+              description: "Duplicate of a core screen's path.",
+              path: "/notifications"
+            }
+          ],
+          settings: [
+            {
+              id: "fixture.prefs",
+              label: "Fixture",
+              description: "Fixture settings.",
+              path: "/settings?section=fixture",
+              scope: "user" as const
+            },
+            {
+              id: "connected",
+              label: "Connected",
+              description: "Duplicate of the core connected setting by id.",
+              path: "/settings?section=connected",
+              scope: "user" as const
+            }
+          ]
+        }
+      ],
+      coreScreens: [
+        { id: "today", label: "Today", description: "Core Today screen.", path: "/today", scope: "user" },
+        {
+          id: "notifications",
+          label: "Notifications",
+          description: "Core notifications screen.",
+          path: "/notifications",
+          scope: "user"
+        }
+      ],
+      coreSettings: [
+        {
+          id: "connected",
+          label: "Connected accounts",
+          description: "Core connected accounts setting.",
+          path: "/settings?section=connected",
+          scope: "user"
+        }
+      ],
+      version: "development",
+      buildId: "development",
+      narrative: ""
+    });
+    expect(artifact.screens.map((screen) => screen.id)).toEqual([
+      "today",
+      "notifications",
+      "fixture"
+    ]);
+    expect(artifact.settings).toHaveLength(2);
+    expect(artifact.settings[1]).toMatchObject({ moduleId: "fixture", id: "fixture.prefs" });
+  });
+
   it("writes data outside the source tree", () => {
     const dir = mkdtempSync(join(tmpdir(), "jarvis-map-"));
     dirs.push(dir);

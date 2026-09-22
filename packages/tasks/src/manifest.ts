@@ -282,7 +282,7 @@ export const tasksModuleManifest = {
       label: "Tasks",
       description:
         "Choose whether your assistant can create, update, schedule, and complete tasks from chat without asking first.",
-      path: "/settings/modules/tasks",
+      path: "/settings?section=modules&module=tasks",
       scope: "user",
       order: 10,
       permissionId: "tasks.manage",
@@ -808,6 +808,37 @@ export const tasksModuleManifest = {
         `Delete task tag ${String(input.tagId)} from list ${String(
           input.listId
         )}; assignments to that tag will be removed.`
+    }
+  ],
+  features: [
+    {
+      id: "tasks.lists_and_tags",
+      description:
+        "Organize tasks into lists with filterable tags; rename, reassign, or delete lists and " +
+        "tags without losing the tasks in them."
+    },
+    {
+      id: "tasks.priority_matrix",
+      description:
+        "Rank tasks across the do / schedule / delegate / eliminate matrix, plus a focus list of " +
+        "overdue and at-risk tasks for today."
+    },
+    {
+      id: "tasks.breakdown",
+      description:
+        "Turn a big task into ordered subtasks, so one task becomes a list of next steps."
+    },
+    {
+      id: "tasks.due_and_recurrence",
+      description:
+        "Set due dates, effort estimates and recurrence; recurring tasks roll forward each day, " +
+        "deferred tasks come back later, and incomplete ones show in the overdue list."
+    },
+    {
+      id: "tasks.natural_language_search",
+      description:
+        "Describe what you are looking for in your own words; Tasks interprets it into a filtered " +
+        "search of your tasks."
     }
   ],
   proactiveMonitor: tasksMonitorProvider
