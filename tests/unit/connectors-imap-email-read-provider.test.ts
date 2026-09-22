@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { ImapEmailReadProvider } from "../../packages/connectors/src/imap-email-read-provider.js";
+import {
+  ImapEmailReadProvider,
+  imapPreviewText
+} from "../../packages/connectors/src/imap-email-read-provider.js";
 import type { ImapConnectionSecret } from "../../packages/connectors/src/imap-secret.js";
 
 const SECRET: ImapConnectionSecret = {
@@ -100,27 +103,12 @@ describe("ImapEmailReadProvider", () => {
     expect(parsed.snippet).toBe(`line one line two ${longLine}`.slice(0, 500));
   });
 
-  it("derives the preview from an HTML-only body when no plain part exists (#2314)", async () => {
-    const raw = [
-      "From: Alice <alice@example.com>",
-      "To: user@proton.local",
-      "Subject: HTML only",
-      "Date: Mon, 01 Jun 2026 12:00:00 +0000",
-      "MIME-Version: 1.0",
-      'Content-Type: text/html; charset="utf-8"',
-      "",
-      "<html><body><p>Your parcel</p><p>arrived</p></body></html>"
-    ].join("\r\n");
-    const provider = new ImapEmailReadProvider(
-      () =>
-        makeFakeClient({ fetchOne: async () => ({ uid: 1, source: Buffer.from(raw) }) }) as never
-    );
-    const parsed = await provider.getMessage(SECRET, {
-      folder: "INBOX",
-      id: "imap:INBOX:1719700000:1"
-    });
-    expect(parsed.snippet).toContain("Your parcel");
-    expect(parsed.snippet).not.toContain("<p>");
+  it("returns null when the parser produced no plain text (no HTML re-parsing) (#2314)", () => {
+    // The preview comes straight from the parser's plain-text output. Nothing re-reads the raw
+    // HTML, so a hostile part full of unclosed tags is never pattern-matched here.
+    expect(imapPreviewText({ text: "" })).toBeNull();
+    expect(imapPreviewText({ text: "   \n  " })).toBeNull();
+    expect(imapPreviewText({})).toBeNull();
   });
 
   it("throws on a malformed key rather than silently fetching the wrong message", async () => {

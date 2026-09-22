@@ -18,30 +18,14 @@ export const IMAP_DEFAULT_FOLDER = "INBOX";
  */
 export const IMAP_PREVIEW_CHARS = 500;
 
-/** Plain-text view of an HTML-only body: drop scripts/styles, tags and runs of whitespace. */
-function htmlToPreviewText(html: string): string {
-  return html
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 /**
  * The preview the rest of the pipeline reads when a fuller excerpt is not stored: a single
- * bounded line taken from the body already fetched. Never the whole body — these columns reach
- * the email list and the thread judgement, so they stay a preview by construction.
+ * bounded line taken from the plain text the mail parser already produced. Never the whole
+ * body, and never re-parsed from HTML — the parser's own text output is used as-is, so no
+ * pattern is ever run over a hostile message part. Null when the parser produced no text.
  */
-export function imapPreviewText(mail: {
-  readonly text?: string | null;
-  readonly html?: string | false | null;
-}): string | null {
-  const plain = (mail.text ?? "").trim();
-  const source =
-    plain.length > 0 ? plain : htmlToPreviewText(typeof mail.html === "string" ? mail.html : "");
-  const normalized = source.replace(/\s+/g, " ").trim();
+export function imapPreviewText(mail: { readonly text?: string | null }): string | null {
+  const normalized = (mail.text ?? "").replace(/\s+/g, " ").trim();
   return normalized.length > 0 ? normalized.slice(0, IMAP_PREVIEW_CHARS) : null;
 }
 
