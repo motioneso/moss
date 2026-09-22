@@ -180,18 +180,19 @@
   border-radius: 0;
   padding-left: 0;
   padding-right: 0;
+  margin-left: -7px;
 }
 .cmd-aside .well__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line-strong);
-  margin-bottom: 2px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--forest);
+  margin-bottom: 4px;
 }
 .cmd-aside .well__eyebrow {
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -208,11 +209,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px 0;
+  padding: 12px 0 16px;
   border-bottom: 1px solid var(--line);
 }
+.cmd-aside .well__row + .well__row {
+  padding-top: 17px;
+  padding-bottom: 24px;
+}
 .cmd-aside .well__row:last-child {
-  border-bottom: none;
+  border-bottom: 1px solid var(--line);
 }
 .cmd-aside .well__rowtext {
   min-width: 0;
@@ -257,8 +262,8 @@
   border-radius: 8px;
   color: var(--paper);
   font-size: 12px;
-  line-height: 1.25;
-  padding: 12px 8px;
+  line-height: 1.2;
+  padding: 12px 6px;
 }
 .cmd-aside .well__btn--primary:hover {
   background: var(--forest-hover);
