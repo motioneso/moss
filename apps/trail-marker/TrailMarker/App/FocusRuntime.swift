@@ -53,6 +53,10 @@ final class FocusRuntime: ObservableObject {
     @Published private(set) var visionModel: String
     /// The last "Test vision" result, shown in the Focus pane. Cleared on the next attempt.
     @Published private(set) var visionTestResult: Result<String, VisionError>?
+    /// What Test actually captured — kept only for this in-memory debugging view, never sent
+    /// anywhere but the vision source, so the person can see whether the wrong window was
+    /// captured instead of only trusting the description.
+    @Published private(set) var visionTestCapture: (appName: String, image: Data)?
     /// Whether a key is stored, so the Focus pane can say so. A plain keychain read would not
     /// republish the view on its own; this is updated everywhere the key can change.
     @Published private(set) var hasVisionAPIKey: Bool
@@ -213,6 +217,7 @@ final class FocusRuntime: ObservableObject {
         if !enteredAPIKey.isEmpty { setVisionAPIKey(enteredAPIKey) }
         // `observer.current` reads nil while Trail Marker's own Settings window is frontmost,
         // which it is right now — `lastKnownApp` is the real app that was in front just before.
+        visionTestCapture = nil
         guard let app = lastKnownApp ?? observer.current else {
             visionTestResult = .failure(.noAppToCapture)
             return
@@ -222,8 +227,31 @@ final class FocusRuntime: ObservableObject {
         )
         track { [weak self] in
             guard let self else { return }
+            let image: Data
             do {
-                let image = try await self.windowCapture.captureFrontmostWindow(bundleId: app.bundleId)
+                image = try await self.windowCapture.captureFrontmostWindow(bundleId: app.bundleId)
+            } catch let error as ScreenCaptureError {
+                // Distinct from describe() failing below: this never reached the vision source at
+                // all, so it must never be reported as "couldn't reach the vision source".
+                switch error {
+                case .windowNotFound:
+                    self.visionTestResult = .failure(
+                        .captureFailed(detail: "\(app.appName) has no window on screen right now")
+                    )
+                case .captureFailed:
+                    self.visionTestResult = .failure(
+                        .captureFailed(detail: "the screenshot itself failed — check Screen Recording is granted")
+                    )
+                }
+                return
+            } catch {
+                self.visionTestResult = .failure(.captureFailed(detail: "\(error)"))
+                return
+            }
+            // Recorded before describe() runs, so a describe failure still shows what was
+            // actually captured — the two are separate questions and separate places to be wrong.
+            self.visionTestCapture = (appName: app.appName, image: image)
+            do {
                 let description = try await describer.describe(image)
                 self.visionTestResult = .success(description)
             } catch let error as VisionError {

@@ -118,6 +118,19 @@ struct FocusPane: View {
                         // A key still sitting in the field, not yet saved, is tested too — the
                         // person should never see "no key" fail Test right after typing one in.
                         Button("Test") { focus.testVision(enteredAPIKey: visionKeyEntry) }
+                        // What was actually captured, shown so the description can be checked
+                        // against it rather than trusted on its own — this view only, never sent
+                        // or saved anywhere but the vision source itself.
+                        if let capture = focus.visionTestCapture, let nsImage = NSImage(data: capture.image) {
+                            Text("Captured from \(capture.appName):")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Image(nsImage: nsImage)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: 360)
+                                .border(Color.secondary.opacity(0.3))
+                        }
                         if let visionTestResult = focus.visionTestResult {
                             switch visionTestResult {
                             case .success(let description):
@@ -226,6 +239,8 @@ struct FocusPane: View {
             return "The vision source didn't answer with a usable description (\(detail))."
         case .noAppToCapture:
             return "Trail Marker hasn't seen another app in front yet. Switch to one, then come back and test."
+        case .captureFailed(let detail):
+            return "Couldn't take the picture (\(detail))."
         }
     }
 

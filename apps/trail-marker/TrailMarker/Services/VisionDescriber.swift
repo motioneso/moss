@@ -28,6 +28,11 @@ enum VisionError: Error, Equatable {
     /// nothing is connected), so there is nothing to capture. Distinct from `notConfigured` — the
     /// source may be set up perfectly and still have nothing to describe yet.
     case noAppToCapture
+    /// The screenshot itself failed — Screen Recording was refused, or the target window closed
+    /// between being found and captured. This never reached the vision source at all, so it must
+    /// never be reported as `unreachable`: that reads as a network problem and sends debugging
+    /// the wrong way (#2570 — this exact confusion cost a real round trip).
+    case captureFailed(detail: String)
 }
 
 /// One description of one captured window. A source is free to fail; callers treat every case the
