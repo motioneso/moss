@@ -85,6 +85,7 @@ export function ReflectSection(props: {
             <input
               type="radio"
               name="evening-reflection"
+              className="evening-plan__choice-radio"
               checked={evening.reflection === choice.id}
               disabled={evening.busy}
               onChange={() => evening.setReflection(choice.id)}

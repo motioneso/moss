@@ -433,6 +433,15 @@ describe("evening step navigation", () => {
       "I still need to send the message.",
       "Make some room in tomorrow's plan."
     ]);
+    for (const card of cards) {
+      const radio = card.querySelector('input[type="radio"]') as HTMLInputElement | null;
+      expect(radio, "native radio input is present").not.toBeNull();
+      expect(radio?.name).toBe("evening-reflection");
+      expect(card.contains(radio!)).toBe(true);
+      expect(radio?.classList.contains("evening-plan__choice-radio")).toBe(true);
+      expect(radio?.hidden).toBe(false);
+      expect(radio?.getAttribute("aria-hidden")).toBeNull();
+    }
   });
 
   it("preserves card selection and added note when leaving and returning to step 1", async () => {
