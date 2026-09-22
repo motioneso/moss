@@ -17,8 +17,9 @@ The description is text; nothing about how it is judged changes from slice 1.
 **Only to resolve `insufficient_evidence` from rung 1's own judgment**, not on every judgment and
 not only on manual request. Concretely: `judgeNow()` and the automatic rung-1 timer both call the
 Mac's judge endpoint first with rung 1 evidence; if the label comes back `insufficient_evidence`,
-rung 3 is on, the frontmost app is on the person's allowlist, and Screen Recording is granted, the
-Mac captures that window, describes it, and calls judge a second time with the description added.
+rung 3 is on, the frontmost app is being observed (on the person's allowlist, or any app if they
+chose to watch the entire desktop — base spec §6 amendment below), and Screen Recording is granted,
+the Mac captures that window, describes it, and calls judge a second time with the description added.
 The person sees one Last Judgment: the second call's result if a capture happened, the first call's
 otherwise. Two consecutive `insufficient_evidence` answers (rung 1, then rung 1 + description) is
 still `insufficient_evidence` — no third attempt.
@@ -52,16 +53,17 @@ re-entering the other's settings if they were set before.
 ## 4. Capture mechanics
 
 - `ScreenCaptureKit`, not the deprecated `CGWindowListCreateImage` path. One capture of the single
-  frontmost window matching a bundle id on the person's allowlist, taken at the moment rung 1
-  returned `insufficient_evidence` (a window that changed between rung 1 and the capture is
-  accepted — the capture is best-effort context, not a guarantee of what rung 1 saw).
-  Downscaled before sending (longest side 1024px) to bound both request size and what a vision
-  model needs to answer a plain "what is this" question.
+  frontmost window for whichever app is being observed — a bundle id on the person's allowlist, or
+  (base spec §6 amendment below) any app when the person chose to watch the entire desktop instead
+  — taken at the moment rung 1 returned `insufficient_evidence` (a window that changed between
+  rung 1 and the capture is accepted — the capture is best-effort context, not a guarantee of what
+  rung 1 saw). Downscaled before sending (longest side 1024px) to bound both request size and what
+  a vision model needs to answer a plain "what is this" question.
 - The image lives in memory only: passed to the chosen describer, never written to disk, and the
   `Data` is dropped as soon as the describer returns (success or failure). No caching, no history.
 - The denylist from the existing spec (password managers, banking, private windows) still applies
-  and still wins over the allowlist; a denylisted frontmost window skips the capture and the
-  judgment stays whatever rung 1 said.
+  and still wins, whether the person is watching specific apps or the entire desktop; a denylisted
+  frontmost window skips the capture and the judgment stays whatever rung 1 said.
 
 ## 5. Failure and consent
 
@@ -73,10 +75,12 @@ re-entering the other's settings if they were set before.
   the base spec's §11.
 - Consent sentence (replaces the placeholder in §9's Focus settings pane) states, in the person's
   chosen source's own terms: "When Trail Marker can't tell from the window title alone, it will
-  take one picture of \<the allowed apps\> and send it to \<the OpenAI-compatible endpoint at
-  {base}|Claude Code, signed in on this Mac\> to describe. The picture is never saved and never
-  sent anywhere else." This sentence must be literally true for the build running, per the base
-  spec's closing rule.
+  take one picture of \<an allowed app|the app in front\> and send it to \<the OpenAI-compatible
+  endpoint at {base}|Claude Code, signed in on this Mac\> to describe. The picture is never saved
+  and never sent anywhere else." The first blank names an allowed app when the person picked
+  specific apps, or says "the app in front" when they chose to watch the entire desktop instead —
+  never a generic phrase that would be false either way. This sentence must be literally true for
+  the build running, per the base spec's closing rule.
 
 ## 6. Server side
 
@@ -87,9 +91,30 @@ threaded into the judgment prompt and the System One choice-question `state` alo
 rules, the stored row (still no image, no description column — the field is judged, not kept
 beyond that), and the credential boundary are unchanged.
 
-## 7. Not in this slice
+## 7. Amendment to the base spec: watching the entire desktop
+
+Ben's direction, 2026-09-22: rather than only a per-app allowlist, the Focus pane also offers
+**"Watch the entire desktop"** as a whole-desktop alternative to picking apps one at a time —
+getting distracted rarely stays inside one app, so watching everything is a real choice, not a
+lesser version of choosing apps.
+
+- Amends the base spec's §6 table ("Every rung: an allowlist of apps the person opts in") and §9
+  ("the app allowlist"): the person picks either specific apps or the entire desktop, never both
+  at once, in the same Focus settings section. Choosing apps stores an allowlist as before, kept
+  even while entire-desktop watching is on, so switching back does not lose it.
+- The fixed denylist (password managers, the keychain app, private-browsing windows, §6) still
+  always wins, unchanged, whichever mode is chosen — watching the entire desktop never means
+  watching a denied app or window.
+- Rung 1 observation, and rung 3 capture (§2, §4 above), gate on the same "is this app being
+  observed" check either way; nothing about *how* a judgment happens changes, only *which* apps
+  can produce one.
+- The consent copy in the Focus pane (both the always-shown observation sentence and the rung-3
+  sentence in §5 above) names its actual scope — "the apps you have allowed" or "the entire
+  desktop" — never a sentence that is only true for one of the two choices.
+
+## 8. Not in this slice
 
 Codex/Gemini as a second and third CLI source (same shape, added later); capturing anything other
-than the single frontmost allowed window; a capture triggered by anything other than an
+than the single frontmost observed window; a capture triggered by anything other than an
 `insufficient_evidence` rung-1 answer; retention or caching of a description text on the Mac beyond
 the one in-flight request.
