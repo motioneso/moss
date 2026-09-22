@@ -356,3 +356,53 @@ test("wellness route fails closed when the module is absent from the state respo
   await expect(page).toHaveURL(/\/tasks$/);
   await expect(page.getByRole("heading", { name: "How you're really doing." })).toHaveCount(0);
 });
+
+test("Meds dialog opens from the rail, closes on Escape, and returns focus", async ({ page }) => {
+  // Two scheduled meds, none logged: the rail reads "0 of 2 logged".
+  // Registered here so it wins over the empty-schedule stub in beforeEach.
+  await page.route("**/api/wellness/medications/schedule**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        date: "2026-06-14",
+        slots: [
+          {
+            medicationId: "m1",
+            name: "Morning pill",
+            scheduledFor: "2026-06-14T08:00:00.000Z",
+            asNeeded: false,
+            status: "pending"
+          },
+          {
+            medicationId: "m2",
+            name: "Evening pill",
+            scheduledFor: "2026-06-14T20:00:00.000Z",
+            asNeeded: false,
+            status: "pending"
+          }
+        ]
+      })
+    })
+  );
+
+  await page.goto("/today");
+  const opener = page.getByRole("button", { name: "Log medication" });
+  await expect(opener).toBeVisible();
+  await expect(page.getByText("0 of 2 logged")).toBeVisible();
+
+  await opener.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+
+  await opener.click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+});

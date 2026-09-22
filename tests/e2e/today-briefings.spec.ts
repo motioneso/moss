@@ -144,7 +144,7 @@ test("morning briefing reader opens, stays in viewport, and returns focus", asyn
     await expect(page.locator(".cmd-wrap")).toBeVisible();
     // Every widget the page shows is populated, otherwise the width check proves nothing.
     await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
-    await expect(page.getByRole("button", { name: /Meds/ }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Log medication" }).first()).toBeVisible();
     await expect(page.getByText("Write the launch brief").first()).toBeVisible();
     await page.getByRole("button", { name: "Read the full morning briefing" }).click();
 
@@ -333,7 +333,7 @@ test("day plan review applies adds and a confirmed move from Today and the reade
   await expect(page.locator(".cmd-wrap")).toBeVisible();
   // Every widget the page shows is populated, otherwise the gate proves nothing.
   await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /Meds/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log medication" }).first()).toBeVisible();
   await expect(page.getByText("Write the launch brief").first()).toBeVisible();
   await expect(page.getByText("Lunch with Sam").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Review task blocks" }).first()).toBeVisible();
@@ -588,7 +588,7 @@ test("accept all applies eligible additions from the reader, then reviews the co
   await expect(page.locator(".cmd-wrap")).toBeVisible();
   // Every widget the page shows is populated, otherwise the gate proves nothing.
   await expect(page.locator(".jds-weather-chip__day").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /Meds/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log medication" }).first()).toBeVisible();
   await expect(page.getByText("Write the launch brief").first()).toBeVisible();
   await expect(page.getByText("Team standup").first()).toBeVisible();
   await expect(page.getByText("Lunch with Sam").first()).toBeVisible();

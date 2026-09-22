@@ -219,3 +219,40 @@
 .cmd-aside .well__btn {
   flex: none;
 }
+.cmd-aside .well__count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+.cmd-aside .well__plus {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--forest);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.cmd-aside .well__plus:hover {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: var(--paper);
+}
+.cmd-aside .well__btn--primary {
+  background: var(--forest);
+  border: 1px solid var(--forest);
+  border-radius: 8px;
+  color: var(--paper);
+}
+.cmd-aside .well__btn--primary:hover {
+  background: var(--forest-hover);
+  border-color: var(--forest-hover);
+}
