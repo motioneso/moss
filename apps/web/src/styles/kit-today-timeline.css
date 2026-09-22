@@ -172,13 +172,22 @@
   font-size: 30px;
   font-weight: 600;
 }
+/* Flat on the page like the mockup: neutralize the shared tinted/bordered/rounded
+   card (components-moss-today.css) and span the full rail column. */
+.cmd-aside .well {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
 .cmd-aside .well__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
   padding-bottom: 10px;
-  border-bottom: 2px solid var(--forest);
+  border-bottom: 1px solid var(--line-strong);
   margin-bottom: 2px;
 }
 .cmd-aside .well__eyebrow {
@@ -248,7 +257,8 @@
   border-radius: 8px;
   color: var(--paper);
   font-size: 12px;
-  padding: 7px 10px;
+  line-height: 1.25;
+  padding: 12px 8px;
 }
 .cmd-aside .well__btn--primary:hover {
   background: var(--forest-hover);
