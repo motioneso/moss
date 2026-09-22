@@ -16,6 +16,31 @@ const composeProd = read("infra/docker-compose.prod.yml");
 const stackService = read("infra/systemd/jarv1s-stack.service");
 const envExample = read("infra/env.production.example");
 
+describe("prod deploy config — host diagnostics build provenance (#1936)", () => {
+  it("bakes the commit and version into the image with empty-safe defaults", () => {
+    const dockerfile = read("Dockerfile");
+    // Both args are optional; a plain `docker build` (and the dev stack, which does not use this
+    // image) must still work, so nothing here may become a required setting.
+    expect(dockerfile).toMatch(/^ARG JARVIS_APP_VERSION=""/m);
+    expect(dockerfile).toMatch(/^ARG JARVIS_GIT_COMMIT=""/m);
+    expect(dockerfile).toMatch(/^ENV JARVIS_APP_VERSION=\$JARVIS_APP_VERSION$/m);
+    expect(dockerfile).toMatch(/^ENV JARVIS_GIT_COMMIT=\$JARVIS_GIT_COMMIT$/m);
+    // CI passes the tested commit to the image build.
+    expect(read(".github/workflows/ci.yml")).toContain("JARVIS_GIT_COMMIT=${{ github.sha }}");
+  });
+
+  it("reports the deploy mode and image tag from the prod stack", () => {
+    expect(composeProd).toMatch(/^\s+JARVIS_DEPLOY_MODE: compose$/m);
+    expect(composeProd).toMatch(/^\s+JARVIS_APP_VERSION: \$\{JARVIS_IMAGE_TAG:-\}$/m);
+  });
+
+  it("reports the environment and deploy mode from the dev stack", () => {
+    const composeDev = read("infra/docker-compose.yml");
+    expect(composeDev).toMatch(/^\s+NODE_ENV: development$/m);
+    expect(composeDev).toMatch(/^\s+JARVIS_DEPLOY_MODE: dev$/m);
+  });
+});
+
 describe("prod deploy config — host CLI bridge removed for in-container CLI chat (#342 / ADR 0010)", () => {
   it("the host tmux-socket + CLI-home bridge mounts/env are fully gone", () => {
     // #342 reverses the host-native CLI topology (ADR 0010): api/worker no longer mount

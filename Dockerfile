@@ -58,6 +58,16 @@ RUN pnpm build:api \
 # startup.
 FROM build AS runtime
 WORKDIR /app
+# #1936: build provenance for Settings > Host > Technical details. The API already reads
+# JARVIS_APP_VERSION / JARVIS_GIT_COMMIT at startup (apps/api/src/server.ts) but nothing set them,
+# so Version and Commit were blank in every deployment. Both args are optional with empty defaults,
+# so a plain `docker build` still works and no setting becomes required. CI passes the commit; the
+# release tag is chosen when the built edge image is promoted, so Compose supplies it as
+# JARVIS_APP_VERSION at deploy time.
+ARG JARVIS_APP_VERSION=""
+ARG JARVIS_GIT_COMMIT=""
+ENV JARVIS_APP_VERSION=$JARVIS_APP_VERSION
+ENV JARVIS_GIT_COMMIT=$JARVIS_GIT_COMMIT
 ENV NODE_ENV=production
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 # Default cache location for the embedding model weights (§3); the prod Compose
