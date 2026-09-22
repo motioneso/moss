@@ -37,16 +37,21 @@ interface StoredRow extends NewJudgmentRow {
 /** In-memory store standing in for the owner-only table. `at` follows the judgment's own clock. */
 function fakeStore(clock: { now: Date }) {
   const rows: StoredRow[] = [];
+  const calls: string[] = [];
   const store: FocusJudgmentStore = {
     async insert(_db, row) {
       rows.push({ ...row, at: clock.now });
     },
     async listRecentForBlock(_db, blockRef, limit): Promise<RecentJudgment[]> {
+      calls.push("read");
       return rows
         .filter((row) => row.blockRef === blockRef)
         .sort((a, b) => b.at.getTime() - a.at.getTime())
         .slice(0, limit)
         .map((row) => ({ label: row.label, at: row.at }));
+    },
+    async lockNudgeDecision() {
+      calls.push("lock");
     },
     async lastNudgeAt() {
       const nudged = rows
@@ -58,12 +63,14 @@ function fakeStore(clock: { now: Date }) {
       return true;
     }
   };
-  return { store, rows };
+  return { store, rows, calls };
 }
 
 interface Harness {
   service: ReturnType<typeof buildFocusJudgmentService>;
   rows: StoredRow[];
+  /** Store and model calls in order: "model", "lock", "read". */
+  calls: string[];
   generateCalls: FocusGenerateInput[];
   logged: unknown[];
   clock: { now: Date };
@@ -75,7 +82,7 @@ interface Harness {
 
 function harness(): Harness {
   const clock = { now: T0 };
-  const { store, rows } = fakeStore(clock);
+  const { store, rows, calls } = fakeStore(clock);
   const state = {
     bound: true,
     block: BLOCK as FocusCurrentBlock | null,
@@ -93,6 +100,7 @@ function harness(): Harness {
     inQuietHours: async () => state.quiet,
     hasJudgeModel: async () => state.bound,
     generate: async (_db, input) => {
+      calls.push("model");
       generateCalls.push(input);
       return state.generate(input);
     },
@@ -105,6 +113,7 @@ function harness(): Harness {
   return {
     service: buildFocusJudgmentService(ports, store),
     rows,
+    calls,
     generateCalls,
     logged,
     clock,
@@ -204,6 +213,12 @@ describe("judging and nudging", () => {
       observation({ deviceId: "00000000-0000-4000-8000-0000000000d2" })
     );
     expect(other.nudge).toBe(false);
+  });
+
+  it("decides the nudge under the person's lock, taken after the model call and before any read (fails if the lock is dropped or moved)", async () => {
+    const h = harness();
+    await judgeAt(h, 0);
+    expect(h.calls).toEqual(["model", "lock", "read"]);
   });
 
   it("never nudges in quiet hours (fails if a deferral is wired in)", async () => {

@@ -251,6 +251,9 @@ export function buildFocusJudgmentService(
       const label: FocusLabel = answer?.label ?? "insufficient_evidence";
       const reason = answer?.reason ?? "";
 
+      // Read, decide and insert under the person's lock, so an overlapping judgment waits and then
+      // sees this one's nudge. Taken only now, so the slow model call above never holds it.
+      await store.lockNudgeDecision(scopedDb);
       const previous: RecentJudgment[] = await store.listRecentForBlock(scopedDb, block.id, 1);
       const nudge = decideNudge(
         [{ label, at: now }, ...previous],

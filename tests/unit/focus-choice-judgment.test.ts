@@ -284,6 +284,7 @@ function harness(choose?: (input: FocusChooseInput) => Promise<FocusChoiceResult
     async listRecentForBlock() {
       return [];
     },
+    async lockNudgeDecision() {},
     async lastNudgeAt() {
       return null;
     },

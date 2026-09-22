@@ -181,3 +181,45 @@ describe("what the person was looking at is never stored", () => {
     expect(logged.join("\n")).not.toContain(marker);
   });
 });
+
+describe("overlapping judgments cannot both nudge", () => {
+  it("a second judgment waits for the first's decision and then sees its nudge (fails without the lock)", async () => {
+    // A second pool, so the two transactions really run at once.
+    const otherDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
+    const other = new DataContextRunner(otherDb);
+    try {
+      let firstHasLock!: () => void;
+      const locked = new Promise<void>((resolve) => (firstHasLock = resolve));
+
+      const first = asUser(ids.userC, async (scopedDb) => {
+        await repository.lockNudgeDecision(scopedDb);
+        firstHasLock();
+        await repository.insert(scopedDb, {
+          id: randomUUID(),
+          ownerUserId: ids.userC,
+          deviceId: randomUUID(),
+          blockRef: "block-race",
+          label: "distracted",
+          reason: "",
+          nudged: true
+        });
+        // Still deciding: without the lock the second transaction reads now and sees nothing.
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      });
+
+      await locked;
+      const seenBySecond = await other.withDataContext(
+        { actorUserId: ids.userC, requestId: "focus-race" },
+        async (scopedDb) => {
+          await repository.lockNudgeDecision(scopedDb);
+          return repository.lastNudgeAt(scopedDb);
+        }
+      );
+      await first;
+
+      expect(seenBySecond).toBeInstanceOf(Date);
+    } finally {
+      await otherDb.destroy();
+    }
+  });
+});

@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import type { FocusLabel } from "@moss/shared";
 
@@ -26,6 +27,12 @@ export interface FocusJudgmentStore {
     blockRef: string,
     limit: number
   ): Promise<RecentJudgment[]>;
+  /**
+   * Holds the person's nudge decision until the caller's transaction ends, so two judgments that
+   * overlap (two Macs, or Judge now during a scheduled one) cannot both read "no recent nudge" and
+   * both nudge. Take it after the model call and before reading the previous judgment.
+   */
+  lockNudgeDecision(scopedDb: DataContextDb): Promise<void>;
   /** The person's newest nudge, whichever block or Mac produced it. */
   lastNudgeAt(scopedDb: DataContextDb): Promise<Date | null>;
   /** True when a row changed. Absent and another person's row are indistinguishable. */
@@ -67,6 +74,13 @@ export class FocusJudgmentRepository implements FocusJudgmentStore {
       .limit(limit)
       .execute();
     return rows.map((row) => ({ label: row.label as FocusLabel, at: new Date(row.created_at) }));
+  }
+
+  async lockNudgeDecision(scopedDb: DataContextDb): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await sql`select pg_advisory_xact_lock(hashtext('focus:nudge:' || app.current_actor_user_id()))`.execute(
+      scopedDb.db
+    );
   }
 
   async lastNudgeAt(scopedDb: DataContextDb): Promise<Date | null> {
