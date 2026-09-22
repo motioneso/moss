@@ -3,9 +3,15 @@ import type { ReactNode } from "react";
 import { Button } from "@moss/ui";
 import type { BriefingRunDto, LocaleSettingsDto, SourceFreshnessV1 } from "@moss/shared";
 
-import { BriefingProse, EveningReviewSection, type TodayMode } from "./evening-mode.js";
+import { BriefingProse, type TodayMode } from "./evening-mode.js";
 import { BriefingStaleBanner } from "./briefing-freshness.js";
-import { BRIEFING_NOT_READY_LABEL, timeLabel } from "./today-labels.js";
+import {
+  BRIEFING_NOT_READY_LABEL,
+  EVENING_BRIEFING_TITLE,
+  EVENING_READ_FULL_LABEL,
+  EVENING_SOURCES_LABEL,
+  timeLabel
+} from "./today-labels.js";
 
 /** Split briefing prose into a headline (first sentence) and the rest. Some
     generated summaries carry no sentence punctuation, so a first line without
@@ -74,9 +80,9 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
   );
   if (isEvening) {
     // Without a run, or when the assessment is hidden, the summary is the
-    // evening lede, as on the base. While runs load, the section skeleton
-    // shows; with a recap, the section renders the rest only, since the h1
-    // already carries the first sentence.
+    // evening lede, as on the base. With a recap the h1 carries the first
+    // sentence and the dek the remainder; the recap section itself moved to
+    // the body, so the hero keeps headline, dek, links and prepared line only.
     if (!input.assessmentShown || (!input.eveningLoading && !input.eveningSplit)) {
       return {
         headline: input.eveningSplit ? input.eveningSplit.headline : fallbackHeadline,
@@ -85,28 +91,19 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
         readerControl: null
       };
     }
-    const restRun =
-      input.eveningRun && input.eveningSplit && input.eveningSplit.rest
-        ? { ...input.eveningRun, summaryText: input.eveningSplit.rest }
-        : input.eveningRun;
+    const rest = input.eveningSplit?.rest.trim() ?? "";
     return {
       headline: input.eveningSplit ? input.eveningSplit.headline : fallbackHeadline,
-      summary: (
-        <EveningReviewSection
-          kind="primary"
-          run={restRun}
-          loading={input.eveningLoading}
-          locale={input.locale}
-          targetTime={input.eveningTargetTime}
-          onFeedbackChanged={input.onFeedbackChanged}
-        />
-      ),
-      // The section keeps its own not-ready text, so the prepared line only
-      // names a real recap time.
+      summary:
+        rest !== "" ? (
+          <BriefingProse summaryText={rest} />
+        ) : (
+          <span dangerouslySetInnerHTML={{ __html: input.ledeHtml }} />
+        ),
       preparedAt: input.eveningRun
         ? `Prepared at ${timeLabel(input.eveningRun.createdAt, input.locale)}`
         : null,
-      readerControl: null
+      readerControl: input.eveningRun ? <EveningHeroLinks /> : null
     };
   }
   // The stale banner shows whenever freshness data exists, including with a
@@ -146,6 +143,22 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
   };
 }
 
+/** Evening hero report links. No evening briefing reader or sources view exists
+    yet, so these render named but unwired; the wiring is a recorded finding for
+    Architect and must not be invented here. */
+export function EveningHeroLinks() {
+  return (
+    <>
+      <button type="button" className="today-hero__link">
+        {EVENING_READ_FULL_LABEL}
+      </button>
+      <button type="button" className="today-hero__link">
+        {EVENING_SOURCES_LABEL}
+      </button>
+    </>
+  );
+}
+
 /** Today-only hero band: eyebrow, display headline, assessment summary,
     prepared-at line with the reader control, rule, then the weather row. */
 export function TodayHero(props: TodayHeroProps) {
@@ -158,7 +171,14 @@ export function TodayHero(props: TodayHeroProps) {
         className={`today-hero${props.mode === "evening" ? " today-hero--evening" : ""}`}
         data-mode={props.mode}
       >
-        <p className="today-hero__eyebrow">{props.eyebrow}</p>
+        {props.mode === "evening" ? (
+          <p className="today-hero__eyebrow">
+            <span className="today-hero__kicker">{props.eyebrow}</span>
+            <span className="today-hero__evening-title">{EVENING_BRIEFING_TITLE}</span>
+          </p>
+        ) : (
+          <p className="today-hero__eyebrow">{props.eyebrow}</p>
+        )}
         <h1 className="today-hero__title">{props.headline}</h1>
         <div className="today-hero__summary" id="assessment">
           {props.summary}
@@ -177,11 +197,16 @@ export function TodayHero(props: TodayHeroProps) {
               ) : null}
             </div>
           </>
-        ) : props.preparedAt !== null ? (
-          <p className="today-hero__prepared">
-            {props.preparedAt} {props.readerControl}
-          </p>
-        ) : null}
+        ) : (
+          <>
+            {props.readerControl ? (
+              <div className="today-hero__links">{props.readerControl}</div>
+            ) : null}
+            {props.preparedAt !== null ? (
+              <p className="today-hero__prepared today-hero__prepared--evening">{preparedTime}</p>
+            ) : null}
+          </>
+        )}
         <hr className="today-hero__rule" />
         {props.mode === "evening" ? (
           <div className="today-hero__weather" id="weather">

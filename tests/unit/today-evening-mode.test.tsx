@@ -127,11 +127,11 @@ describe("TodayPage evening mode", () => {
     expect(html).not.toContain("Checking what needs you");
   });
 
-  it("leads with the readable evening review after the time gate", () => {
+  it("splits the evening summary between hero and recap", () => {
     const definition = briefingDefinition({ targetTime: "19:00", timezone: locale.timezone });
     const run = briefingRun({
       createdAt: "2026-06-30T02:15:00.000Z",
-      summaryText: "Wrapped the launch notes.\n\n- Sent follow-ups\n- Cleared blockers"
+      summaryText: "Wrapped the launch notes. The team cleared the blockers."
     });
     const html = renderToday({
       now: new Date("2026-06-30T02:30:00.000Z"),
@@ -142,12 +142,43 @@ describe("TodayPage evening mode", () => {
           id: "task-done",
           title: "Ship release note",
           status: "done",
-          completedAt: "2026-06-30T01:00:00.000Z"
+          completedAt: new Date().toISOString()
+        })
+      ],
+      events: []
+    });
+    const wrapAt = html.indexOf('<div class="cmd-wrap">');
+    expect(wrapAt).toBeGreaterThan(0);
+    const hero = html.slice(0, wrapAt);
+    const body = html.slice(wrapAt);
+
+    expect(hero).toContain("Wrapped the launch notes.");
+    expect(hero).toContain("The team cleared the blockers.");
+    expect(hero).not.toContain("What happened today");
+    expect(body).toContain("What happened today");
+  });
+
+  it("leads the evening body with the recap section after the time gate", () => {
+    const definition = briefingDefinition({ targetTime: "19:00", timezone: locale.timezone });
+    const run = briefingRun({
+      createdAt: "2026-06-30T02:15:00.000Z",
+      summaryText: "Wrapped the launch notes.\\n\\n- Sent follow-ups\\n- Cleared blockers"
+    });
+    const html = renderToday({
+      now: new Date("2026-06-30T02:30:00.000Z"),
+      definitions: [definition],
+      runs: [run],
+      tasks: [
+        task({
+          id: "task-done",
+          title: "Ship release note",
+          status: "done",
+          completedAt: new Date().toISOString()
         }),
         task({
           id: "task-open",
           title: "Reply to Alex",
-          dueAt: "2026-06-30T20:00:00.000Z"
+          dueAt: new Date().toISOString()
         })
       ],
       events: [
@@ -159,15 +190,144 @@ describe("TodayPage evening mode", () => {
         })
       ]
     });
+    const wrapAt = html.indexOf('<div class="cmd-wrap">');
+    const body = html.slice(wrapAt);
 
-    expect(html.indexOf("Evening review")).toBeLessThan(html.indexOf("Start here"));
+    expect(body.indexOf("What happened today")).toBeLessThan(body.indexOf("Start here"));
     expect(html).toContain("What happened today");
     expect(html).toContain("Wrapped the launch notes.");
-    expect(html).toContain("Sent follow-ups");
-    expect(html).toContain("Accomplished today");
-    expect(html).toContain("Carrying forward");
+    expect(html).toContain("Close the open loops");
     expect(html).toContain("Tomorrow");
-    expect(html.match(/Evening review/g)?.length).toBe(1);
+    expect(html).not.toContain("Accomplished today");
+    expect(html).not.toContain("Carrying forward");
+    expect(html).not.toContain("Evening review");
+  });
+
+  it("greets by first name and links the evening report from the hero", () => {
+    const definition = briefingDefinition({ targetTime: "19:00", timezone: locale.timezone });
+    const html = renderToday({
+      now: new Date("2026-06-30T02:30:00.000Z"),
+      definitions: [definition],
+      runs: [
+        briefingRun({
+          createdAt: "2026-06-30T02:15:00.000Z",
+          summaryText: "Wrapped the launch notes. The team cleared the blockers."
+        })
+      ],
+      tasks: [],
+      events: []
+    });
+    const hero = html.slice(0, html.indexOf('<div class="cmd-wrap">'));
+
+    expect(hero).toContain("GOOD EVENING, BEN");
+    expect(hero).toContain("EVENING BRIEFING");
+    expect(hero).toContain("Read the full evening briefing");
+    expect(hero).toContain("What informed this?");
+    expect(hero).toContain("Prepared at");
+  });
+
+  it("lists completed tasks with title and sub-line in the recap", () => {
+    const definition = briefingDefinition({ targetTime: "19:00", timezone: locale.timezone });
+    const html = renderToday({
+      now: new Date("2026-06-30T02:30:00.000Z"),
+      definitions: [definition],
+      runs: [
+        briefingRun({
+          createdAt: "2026-06-30T02:15:00.000Z",
+          summaryText: "Wrapped the launch notes. The team cleared the blockers."
+        })
+      ],
+      tasks: [
+        task({
+          id: "task-done-1",
+          title: "Ship release note",
+          status: "done",
+          completedAt: new Date().toISOString(),
+          description: "Shipped to the changelog"
+        }),
+        task({
+          id: "task-done-2",
+          title: "Merge the hotfix",
+          status: "done",
+          completedAt: new Date().toISOString()
+        })
+      ],
+      events: []
+    });
+    const body = html.slice(html.indexOf('<div class="cmd-wrap">'));
+
+    expect(body).toContain("Ship release note");
+    expect(body).toContain("Shipped to the changelog");
+    expect(body).toContain("Merge the hotfix");
+  });
+
+  it("feeds the open loops from the evening run remainder", () => {
+    const definition = briefingDefinition({ targetTime: "19:00", timezone: locale.timezone });
+    const html = renderToday({
+      now: new Date("2026-06-30T02:30:00.000Z"),
+      definitions: [definition],
+      runs: [
+        briefingRun({
+          createdAt: "2026-06-30T02:15:00.000Z",
+          summaryText: "Wrapped the launch notes. One decision is still open."
+        })
+      ],
+      tasks: [
+        task({
+          id: "task-open",
+          title: "Reply to Alex",
+          dueAt: new Date().toISOString()
+        })
+      ],
+      events: []
+    });
+    const body = html.slice(html.indexOf('<div class="cmd-wrap">'));
+
+    expect(body).toContain("Close the open loops");
+    expect(body).toContain("One decision is still open.");
+    expect(body).toContain("Reply to Alex");
+  });
+
+  it("falls back to the carrying-forward copy without run text", () => {
+    const definition = briefingDefinition({ targetTime: "19:00", timezone: locale.timezone });
+    const html = renderToday({
+      now: new Date("2026-06-30T02:30:00.000Z"),
+      definitions: [definition],
+      runs: [],
+      tasks: [],
+      events: []
+    });
+    const body = html.slice(html.indexOf('<div class="cmd-wrap">'));
+
+    expect(body).toContain("Close the open loops");
+    expect(body).toContain("Nothing urgent is carrying forward.");
+  });
+
+  it("leaves the morning hero without evening links", () => {
+    const definition = briefingDefinition({
+      id: "morning-1",
+      briefingType: "morning",
+      targetTime: "07:00",
+      timezone: locale.timezone
+    });
+    const html = renderToday({
+      now: new Date("2026-06-30T01:30:00.000Z"),
+      definitions: [definition],
+      runs: [
+        briefingRun({
+          id: "morning-run-1",
+          definitionId: "morning-1",
+          briefingType: "morning",
+          createdAt: "2026-06-29T14:15:00.000Z",
+          summaryText: "Planned the launch day. Three priorities stand out."
+        })
+      ],
+      tasks: [],
+      events: []
+    });
+
+    expect(html).not.toContain("Read the full evening briefing");
+    expect(html).not.toContain("GOOD EVENING");
   });
 
   it("keeps the 220-character cut only on the compact day-mode tile", () => {

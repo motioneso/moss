@@ -301,3 +301,19 @@ export const EVENING_REFLECT_NOTE_LABEL = "Or tell Moss in your own words";
 export const EVENING_REFLECT_NOTE_PLACEHOLDER =
   "A correction, a constraint, or something to remember…";
 export const EVENING_REFLECT_ADD_NOTE_LABEL = "Add note";
+
+/** Evening hero, recap and open-loops copy (VP-EVENING-SUMMARY-R1). The hero
+    kicker names the signed-in user's first name; without one it stands alone. */
+export const EVENING_KICKER = "GOOD EVENING";
+export const EVENING_BRIEFING_TITLE = "EVENING BRIEFING";
+export function eveningHeroKicker(firstName: string | null): string {
+  const name = (firstName ?? "").trim();
+  return name ? `${EVENING_KICKER}, ${name.toUpperCase()}` : EVENING_KICKER;
+}
+export const EVENING_READ_FULL_LABEL = "Read the full evening briefing";
+export const EVENING_SOURCES_LABEL = "What informed this?";
+export const EVENING_RECAP_KICKER = "01";
+export const EVENING_RECAP_HEADING = "What happened today";
+export const EVENING_OPEN_LOOPS_KICKER = "02";
+export const EVENING_OPEN_LOOPS_HEADING = "Close the open loops";
+export const EVENING_OPEN_LOOPS_EMPTY = "Nothing urgent is carrying forward.";

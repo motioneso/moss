@@ -6,7 +6,7 @@ import {
   type LocaleSettingsDto,
   type TaskDto
 } from "@moss/shared";
-import { MessageSquareText } from "lucide-react";
+import { Check, MessageSquareText } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Card } from "@moss/ui";
@@ -23,7 +23,16 @@ import {
 } from "../locale/locale-format";
 import { BriefingFeedbackMenu } from "./briefing-feedback-menu";
 import { BriefingStaleBanner, parseBriefingFreshness } from "./briefing-freshness";
-import { eventCaptureText, joinClauses, PLAN_TOMORROW_LABEL } from "./today-labels";
+import {
+  EVENING_OPEN_LOOPS_EMPTY,
+  EVENING_OPEN_LOOPS_HEADING,
+  EVENING_OPEN_LOOPS_KICKER,
+  EVENING_RECAP_HEADING,
+  EVENING_RECAP_KICKER,
+  eventCaptureText,
+  joinClauses,
+  PLAN_TOMORROW_LABEL
+} from "./today-labels";
 
 export type TodayMode = "day" | "evening";
 
@@ -141,7 +150,23 @@ export function EveningReviewSection(props: {
   readonly locale: LocaleSettingsDto;
   readonly targetTime: string;
   readonly onFeedbackChanged: () => void;
+  readonly completedToday?: readonly TaskDto[];
+  readonly recapProse?: string;
+  readonly recapDateLabel?: string;
+  readonly onOpenTask?: (taskId: string) => void;
 }) {
+  if (props.kind === "primary") {
+    return (
+      <EveningRecapSection
+        run={props.run}
+        loading={props.loading}
+        completedToday={props.completedToday ?? []}
+        proseText={props.recapProse ?? ""}
+        dateLabel={props.recapDateLabel ?? ""}
+        onOpenTask={props.onOpenTask}
+      />
+    );
+  }
   const freshness = props.run ? parseBriefingFreshness(props.run.sourceMetadata) : null;
   const hasSummary = Boolean(props.run?.summaryText.trim());
   const metaText = props.run
@@ -149,15 +174,6 @@ export function EveningReviewSection(props: {
     : `Ready at ${targetTimeLabel(props.targetTime)}`;
   const content = (
     <>
-      {props.kind === "primary" ? (
-        <div className="jds-brief__head">
-          <span className="jds-brief__kicker">Evening review</span>
-          <span className="jds-brief__kicker">{metaText}</span>
-        </div>
-      ) : null}
-      {props.kind === "primary" ? (
-        <div className="jds-brief__title">What happened today</div>
-      ) : null}
       {freshness ? <BriefingStaleBanner freshness={freshness} /> : null}
       {props.loading ? (
         <div className="agenda-clear" role="status">
@@ -165,34 +181,99 @@ export function EveningReviewSection(props: {
         </div>
       ) : props.run && hasSummary ? (
         <>
-          {props.kind === "primary" ? <BriefingProse summaryText={props.run.summaryText} /> : null}
-          {props.kind === "compact" ? (
-            <p className="cmd-empty">{compactSummary(props.run.summaryText)}</p>
-          ) : null}
+          <p className="cmd-empty">{compactSummary(props.run.summaryText)}</p>
           {/* Compact tiles keep the terse "…" feedback menu inline; the primary
               recap is read-only prose. The "Prep for tomorrow" CTA now lives in
               the right rail as its own evening-only card (Ben: the button wasn't
               in the right spot on the recap card). */}
-          {props.kind === "compact" ? (
-            <BriefingFeedbackMenu targetRef={props.run.id} onChanged={props.onFeedbackChanged} />
-          ) : null}
+          <BriefingFeedbackMenu targetRef={props.run.id} onChanged={props.onFeedbackChanged} />
         </>
       ) : (
-        <div className="agenda-clear">
-          {props.kind === "primary"
-            ? "Your evening review is not ready yet."
-            : "No evening review yet."}
-        </div>
+        <div className="agenda-clear">No evening review yet.</div>
       )}
     </>
   );
 
-  return props.kind === "primary" ? (
-    <section className="jds-brief">{content}</section>
-  ) : (
+  return (
     <Card title="Evening review" meta={metaText} padding="sm">
       {content}
     </Card>
+  );
+}
+
+/** Body recap section: the run's first section under the evening hero, fed by
+    the completed-today tasks. Loading and not-ready copy match the old hero
+    section word for word. */
+function EveningRecapSection(props: {
+  readonly run: BriefingRunDto | null;
+  readonly loading?: boolean;
+  readonly completedToday: readonly TaskDto[];
+  readonly proseText: string;
+  readonly dateLabel: string;
+  readonly onOpenTask?: (taskId: string) => void;
+}) {
+  const hasSummary = Boolean(props.run?.summaryText.trim());
+  const prose = props.proseText.trim();
+  // Without a readable run the evening page shows the hero lede and no recap
+  // section at all; the loading skeleton above covers the pending state.
+  if (!props.loading && !hasSummary) return null;
+  return (
+    <section className="jds-brief ev-recap" id="evening-recap">
+      <div className="jds-brief__head">
+        <span className="jds-brief__kicker ev-recap__kicker">{EVENING_RECAP_KICKER}</span>
+        {props.dateLabel !== "" ? (
+          <span className="jds-brief__kicker ev-recap__meta">{props.dateLabel}</span>
+        ) : null}
+      </div>
+      <div className="jds-brief__title">{EVENING_RECAP_HEADING}</div>
+      {props.loading ? (
+        <div className="agenda-clear" role="status">
+          Gathering your evening review…
+        </div>
+      ) : (
+        <>
+          {prose !== "" ? <BriefingProse summaryText={prose} /> : null}
+          <EveningRecapRows tasks={props.completedToday} onOpenTask={props.onOpenTask} />
+        </>
+      )}
+    </section>
+  );
+}
+
+/** Completed-today rows: checkmark, bold title and the task's own description
+    as a one-line sub-line. A task without one keeps an empty sub-line of the
+    same height so the row geometry holds. */
+function EveningRecapRows(props: {
+  readonly tasks: readonly TaskDto[];
+  readonly onOpenTask?: (taskId: string) => void;
+}) {
+  if (props.tasks.length === 0) {
+    return <p className="cmd-empty">No completed tasks logged today.</p>;
+  }
+  return (
+    <div className="top3 ev-recap__list">
+      {props.tasks.map((task) => (
+        <div
+          className="jds-task ev-recap__row"
+          key={task.id}
+          data-jarvis-capture-text={`Task: ${task.title} — done`}
+        >
+          <span className="jds-task__check ev-recap__check" aria-hidden="true">
+            <Check size={15} />
+          </span>
+          <button
+            type="button"
+            className="jds-task__main"
+            onClick={() => props.onOpenTask?.(task.id)}
+          >
+            <div className="jds-task__title">
+              <strong>{task.title}</strong>
+            </div>
+            <div className="jds-task__source ev-recap__sub">{task.description ?? ""}</div>
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -236,7 +317,7 @@ export function EveningPrepCard(props: {
 }
 
 export function EveningSupportSections(props: {
-  readonly completedToday: readonly TaskDto[];
+  readonly openLoopsDek: string | null;
   readonly carryingForward: readonly TaskDto[];
   readonly tomorrowEvents: readonly CalendarEventDto[];
   readonly tomorrowTasks: readonly TaskDto[];
@@ -245,29 +326,20 @@ export function EveningSupportSections(props: {
 }) {
   return (
     <>
-      <section className="jds-brief">
+      <section className="jds-brief ev-loops" id="evening-open-loops">
         <div className="jds-brief__head">
-          <span className="jds-brief__kicker">Accomplished today</span>
+          <span className="jds-brief__kicker ev-loops__kicker">{EVENING_OPEN_LOOPS_KICKER}</span>
         </div>
-        {props.completedToday.length > 0 ? (
-          <div className="top3" style={{ marginTop: 4 }}>
-            {props.completedToday.slice(0, 3).map(props.renderTask)}
-          </div>
-        ) : (
-          <p className="cmd-empty">No completed tasks logged today.</p>
-        )}
-      </section>
-
-      <section className="jds-brief">
-        <div className="jds-brief__head">
-          <span className="jds-brief__kicker">Carrying forward</span>
-        </div>
+        <div className="jds-brief__title">{EVENING_OPEN_LOOPS_HEADING}</div>
+        {props.openLoopsDek !== null ? (
+          <p className="jds-brief__body">{props.openLoopsDek}</p>
+        ) : null}
         {props.carryingForward.length > 0 ? (
           <div className="top3" style={{ marginTop: 4 }}>
             {props.carryingForward.slice(0, 3).map(props.renderTask)}
           </div>
         ) : (
-          <p className="cmd-empty">Nothing urgent is carrying forward.</p>
+          <p className="cmd-empty">{EVENING_OPEN_LOOPS_EMPTY}</p>
         )}
       </section>
 
