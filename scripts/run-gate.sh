@@ -33,7 +33,8 @@
 #   scripts/run-gate.sh start [--gate <pnpm-script>] [--exclusive] [--keep-db]
 #       DROP/CREATEs a fresh isolated gate database, exports JARVIS_PGDATABASE,
 #       launches the gate fully detached, prints the log path, and returns at
-#       once. Never blocks.
+#       once. Never blocks. The log records the tested commit (### COMMIT)
+#       and dirty-tree state (### DIRTY), repeated by status/wait.
 #
 #   scripts/run-gate.sh status [--log <path>]
 #       One-shot verdict. Reads the sentinel and the log mtime — nothing else.
@@ -154,6 +155,27 @@ cmd_start() {
   [ -n "$slug" ] || die "could not derive a slug from $root"
   gatedb="jarvis_gate_${slug}"
 
+  # Tested-commit receipt (#2462). Captured here, before the runner launches,
+  # so the log identifies exactly what code this run tested. Dirty state
+  # includes untracked files (-uall); ignored files are excluded. Failures
+  # here never block a gate start — they record as unknown.
+  local gate_commit gate_dirty gate_status_list gate_dirty_total
+  gate_commit="$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)"
+  gate_dirty="unknown (status failed)"
+  gate_status_list=""
+  gate_dirty_total=0
+  # Branch on the exit code: a failed status stays unknown and must never read
+  # as clean. --no-optional-locks never takes the index lock, so this is safe
+  # in the shared checkout while another session runs git.
+  if gate_status_list="$(git --no-optional-locks -C "$root" status --porcelain=v1 -uall 2>/dev/null)"; then
+    if [ -z "$gate_status_list" ]; then
+      gate_dirty="clean"
+    else
+      gate_dirty_total="$(printf '%s\n' "$gate_status_list" | wc -l | tr -d ' ')"
+      gate_dirty="dirty (${gate_dirty_total} files)"
+    fi
+  fi
+
   # Refuse to point at production under any circumstance. There is a
   # jarv1s-prod-postgres-1 container sitting beside the dev one on this box.
   case "$CONTAINER" in
@@ -185,6 +207,17 @@ cmd_start() {
   {
     echo "### GATE   pnpm $gate"
     echo "### CWD    $root"
+    echo "### COMMIT $gate_commit"
+    echo "### DIRTY  $gate_dirty"
+    if [ -n "$gate_status_list" ]; then
+      # sed reads all of its input, so a long dirty list cannot SIGPIPE this
+      # block the way head does under pipefail/set -e (exit 141, silent abort
+      # before the runner launches and before the pointer is updated).
+      printf '%s\n' "$gate_status_list" | sed -n '1,50s/^/### + /p'
+      if [ "$gate_dirty_total" -gt 50 ]; then
+        echo "### + ... and $((gate_dirty_total - 50)) more"
+      fi
+    fi
     echo "### DB     $gatedb (container $CONTAINER)"
     echo "### START  $(date -Is)"
     echo
@@ -268,16 +301,29 @@ cmd___run() {
 # status / wait
 # ---------------------------------------------------------------------------
 
+# One-line receipt for status output (#2462): which commit was tested and
+# whether the tree was dirty. Logs written before commit recording have
+# neither line and report as unknown.
+receipt_summary() {
+  local log="$1" commit dirty
+  commit="$(grep -m 1 '^### COMMIT ' "$log" | awk '{print $3}' || true)"
+  dirty="$(grep -m 1 '^### DIRTY ' "$log" | sed 's/^### DIRTY  //' || true)"
+  [ -n "$commit" ] || commit="unknown (predates commit recording)"
+  [ -n "$dirty" ] || dirty="unknown (predates commit recording)"
+  echo "commit $commit, tree $dirty"
+}
+
 # Prints a human line; returns one of the shared exit codes.
 verdict() {
   local log="$1" quiet="${2:-0}"
   [ -f "$log" ] || die "no such log: $log"
 
-  local sentinel rc
+  local sentinel rc receipt
+  receipt="$(receipt_summary "$log")"
   sentinel="$(grep -F "$SENTINEL_PREFIX" "$log" | tail -1 || true)"
   if [ -n "$sentinel" ]; then
     rc="${sentinel##"$SENTINEL_PREFIX"}"
-    [ "$quiet" = "1" ] || echo "DONE rc=$rc  ($log)"
+    [ "$quiet" = "1" ] || echo "DONE rc=$rc  ($log)  [$receipt]"
     [ "$rc" = "0" ] && return 0
     return 1
   fi
@@ -311,7 +357,7 @@ verdict() {
     # Quiet ≠ dead. `test:integration` routinely runs many minutes without
     # writing a line, which is why mtime alone gave a false DEAD here once.
     [ "$quiet" = "1" ] || {
-      echo "RUNNING  pid $pid alive, last write ${age}s ago  ($log)"
+      echo "RUNNING  pid $pid alive, last write ${age}s ago  ($log)  [$receipt]"
       echo "at: $(grep -v '^[[:space:]]*$' "$log" | tail -1 | cut -c1-160)"
     }
     return 3
@@ -321,7 +367,7 @@ verdict() {
     # Process gone and no sentinel: killed hard enough to skip the trap
     # (SIGKILL, OOM, host reboot). Terminal, regardless of mtime.
     [ "$quiet" = "1" ] || {
-      echo "DEAD  pid $pid gone with no sentinel (log idle ${age}s)  ($log)"
+      echo "DEAD  pid $pid gone with no sentinel (log idle ${age}s)  ($log)  [$receipt]"
       echo "last: $(grep -v '^[[:space:]]*$' "$log" | tail -1 | cut -c1-160)"
     }
     return 2
@@ -330,14 +376,14 @@ verdict() {
   # No recorded PID — a hand-rolled or foreign log. Fall back to mtime alone.
   if [ "$age" -gt "$STALE_SECS" ]; then
     [ "$quiet" = "1" ] || {
-      echo "DEAD  no sentinel, no recorded pid, log idle ${age}s (bound ${STALE_SECS}s)  ($log)"
+      echo "DEAD  no sentinel, no recorded pid, log idle ${age}s (bound ${STALE_SECS}s)  ($log)  [$receipt]"
       echo "last: $(grep -v '^[[:space:]]*$' "$log" | tail -1 | cut -c1-160)"
     }
     return 2
   fi
 
   [ "$quiet" = "1" ] || {
-    echo "RUNNING  last write ${age}s ago  ($log)"
+    echo "RUNNING  last write ${age}s ago  ($log)  [$receipt]"
     echo "at: $(grep -v '^[[:space:]]*$' "$log" | tail -1 | cut -c1-160)"
   }
   return 3
