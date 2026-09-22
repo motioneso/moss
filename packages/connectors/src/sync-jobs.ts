@@ -194,6 +194,11 @@ export interface GoogleSyncDeps {
     scopedDb: DataContextDb,
     actorUserId: string
   ) => Promise<ReadonlySet<string>>;
+  /**
+   * Test seam for the transient-retry backoff in withTokenRetry. Production leaves this unset
+   * and the small default applies; a test can set 0 to exercise a retry without waiting.
+   */
+  readonly googleRetryDelayMs?: number;
 }
 
 /** Sanitized structured logging for partial-failure observability (never secrets/body). */

@@ -25,11 +25,35 @@ export class GoogleApiError extends Error {
     readonly statusCode: number,
     /** Google's own structured error code (e.g. "PERMISSION_DENIED", "RATE_LIMIT_EXCEEDED").
      *  Non-secret — safe to log and to branch on. Undefined when the body couldn't be parsed. */
-    readonly reason?: string
+    readonly reason?: string,
+    /** Which call was refused, e.g. "gmail.messages.list". Non-secret, so callers can name the
+     *  step in a log instead of leaving the reader to guess. */
+    readonly operation?: string
   ) {
     super(message);
     this.name = "GoogleApiError";
   }
+}
+
+/**
+ * Google reasons that mean "try again", not "you may not". Only the per-second and per-user
+ * rate limits qualify: a daily quota or a project quota will not recover inside a short retry,
+ * so it is reported rather than retried. Names are matched case-insensitively because the
+ * classic `errors[].reason` and the newer `details[].reason` / `status` spellings differ in case.
+ */
+const RETRYABLE_GOOGLE_REASONS = new Set([
+  "ratelimitexceeded",
+  "userratelimitexceeded",
+  "rate_limit_exceeded",
+  "resourceexhausted",
+  "resource_exhausted"
+]);
+
+/** True when a Google API failure is worth retrying rather than reporting as a refusal. */
+export function isRetryableGoogleError(error: unknown): boolean {
+  if (!(error instanceof GoogleApiError)) return false;
+  if (error.statusCode === 408 || error.statusCode === 429 || error.statusCode >= 500) return true;
+  return error.reason !== undefined && RETRYABLE_GOOGLE_REASONS.has(error.reason.toLowerCase());
 }
 
 /**
@@ -41,9 +65,21 @@ export class GoogleApiError extends Error {
 async function extractGoogleErrorReason(response: Response): Promise<string | undefined> {
   try {
     const body = (await response.json()) as {
-      error?: { status?: string; errors?: ReadonlyArray<{ reason?: string }> };
+      error?: {
+        status?: string;
+        errors?: ReadonlyArray<{ reason?: string }>;
+        details?: ReadonlyArray<{ reason?: string }>;
+      };
     };
-    return body.error?.status ?? body.error?.errors?.[0]?.reason;
+    // Most specific first. `status` is Google's broad gRPC code, and a 403 there says only
+    // "PERMISSION_DENIED" whether the true cause is a missing scope, a rate limit or a domain
+    // policy. The service `reason` (and the newer ErrorInfo `details.reason`) name what actually
+    // happened, so they win. All are status tokens — never message content.
+    return (
+      body.error?.errors?.find((entry) => entry.reason)?.reason ??
+      body.error?.details?.find((entry) => entry.reason)?.reason ??
+      body.error?.status
+    );
   } catch {
     return undefined;
   }
@@ -177,7 +213,7 @@ export class GoogleApiClient {
     const json = await this.getJson<{
       items?: GoogleCalendarEvent[];
       nextPageToken?: string;
-    }>(url.toString(), input.accessToken, "calendar");
+    }>(url.toString(), input.accessToken, "calendar", "calendar.events.list");
     return { items: json.items ?? [], nextPageToken: json.nextPageToken };
   }
 
@@ -212,7 +248,7 @@ export class GoogleApiClient {
     const json = await this.getJson<{
       messages?: GmailMessageStub[];
       nextPageToken?: string;
-    }>(url.toString(), input.accessToken, "gmail");
+    }>(url.toString(), input.accessToken, "gmail", "gmail.messages.list");
     return { messages: json.messages ?? [], nextPageToken: json.nextPageToken };
   }
 
@@ -225,13 +261,23 @@ export class GoogleApiClient {
     const url = new URL(
       `${CALENDAR_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(input.eventId)}`
     );
-    return this.getJson<GoogleCalendarEventDetail>(url.toString(), input.accessToken, "calendar");
+    return this.getJson<GoogleCalendarEventDetail>(
+      url.toString(),
+      input.accessToken,
+      "calendar",
+      "calendar.events.get"
+    );
   }
 
   async getMessage(input: { accessToken: string; id: string }): Promise<GmailMessageFull> {
     const url = new URL(`${GMAIL_BASE}/users/me/messages/${encodeURIComponent(input.id)}`);
     url.searchParams.set("format", "full");
-    return this.getJson<GmailMessageFull>(url.toString(), input.accessToken, "gmail");
+    return this.getJson<GmailMessageFull>(
+      url.toString(),
+      input.accessToken,
+      "gmail",
+      "gmail.messages.get"
+    );
   }
 
   async freeBusy(input: {
@@ -260,7 +306,8 @@ export class GoogleApiClient {
         timeMax: input.timeMax,
         items: [{ id: calendarId }]
       },
-      "calendar"
+      "calendar",
+      "calendar.freeBusy"
     );
     // FAIL-CLOSED: if the requested calendar key is absent OR Google reported a per-calendar
     // error for it, we CANNOT trust an empty busy list as "free". Throw so createEvent's
@@ -327,7 +374,8 @@ export class GoogleApiClient {
       `${CALENDAR_BASE}/calendars/${encodeURIComponent(calendarId)}/events`,
       input.accessToken,
       body,
-      "calendar"
+      "calendar",
+      "calendar.events.insert"
     );
     return { id: json.id, htmlLink: json.htmlLink };
   }
@@ -346,7 +394,8 @@ export class GoogleApiClient {
       `${GMAIL_BASE}/users/me/drafts`,
       input.accessToken,
       { message: { raw: input.raw, threadId: input.threadId } },
-      "gmail"
+      "gmail",
+      "gmail.drafts.create"
     );
     return { id: json.id };
   }
@@ -365,7 +414,8 @@ export class GoogleApiClient {
       `${GMAIL_BASE}/users/me/messages/send`,
       input.accessToken,
       body,
-      "gmail"
+      "gmail",
+      "gmail.messages.send"
     );
     return { id: json.id, threadId: json.threadId };
   }
@@ -378,7 +428,7 @@ export class GoogleApiClient {
     const calendarId = input.calendarId ?? "primary";
     const url = `${CALENDAR_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(input.eventId)}`;
     try {
-      await this.deleteVoid(url, input.accessToken, "calendar");
+      await this.deleteVoid(url, input.accessToken, "calendar", "calendar.events.delete");
       return { deleted: "deleted" };
     } catch (error) {
       if (
@@ -391,7 +441,12 @@ export class GoogleApiClient {
     }
   }
 
-  private async deleteVoid(url: string, accessToken: string, api: string): Promise<void> {
+  private async deleteVoid(
+    url: string,
+    accessToken: string,
+    api: string,
+    operation: string
+  ): Promise<void> {
     const response = await this.fetchFn(url, {
       method: "DELETE",
       headers: { authorization: `Bearer ${accessToken}` },
@@ -401,11 +456,24 @@ export class GoogleApiClient {
     // Log status only; NEVER embed the response body in Error.message —
     // handleRouteError propagates Error.message to HTTP responses.
     const reason = await extractGoogleErrorReason(response);
-    this.logger.error({ statusCode: response.status, api, reason }, "Google API call failed");
-    throw new GoogleApiError(`Google ${api} returned ${response.status}`, response.status, reason);
+    this.logger.error(
+      { statusCode: response.status, api, operation, reason },
+      "Google API call failed"
+    );
+    throw new GoogleApiError(
+      `Google ${api} returned ${response.status}`,
+      response.status,
+      reason,
+      operation
+    );
   }
 
-  private async getJson<T>(url: string, accessToken: string, api: string): Promise<T> {
+  private async getJson<T>(
+    url: string,
+    accessToken: string,
+    api: string,
+    operation: string
+  ): Promise<T> {
     const response = await this.fetchFn(url, {
       method: "GET",
       headers: { authorization: `Bearer ${accessToken}` },
@@ -415,11 +483,15 @@ export class GoogleApiClient {
       // Log status server-side only; NEVER embed the response body in Error.message —
       // handleRouteError propagates Error.message to HTTP responses (oauth.ts:122).
       const reason = await extractGoogleErrorReason(response);
-      this.logger.error({ statusCode: response.status, api, reason }, "Google API call failed");
+      this.logger.error(
+        { statusCode: response.status, api, operation, reason },
+        "Google API call failed"
+      );
       throw new GoogleApiError(
         `Google ${api} returned ${response.status}`,
         response.status,
-        reason
+        reason,
+        operation
       );
     }
     return (await response.json()) as T;
@@ -429,7 +501,8 @@ export class GoogleApiClient {
     url: string,
     accessToken: string,
     body: unknown,
-    api: string
+    api: string,
+    operation: string
   ): Promise<T> {
     const response = await this.fetchFn(url, {
       method: "POST",
@@ -444,11 +517,15 @@ export class GoogleApiClient {
       // Log status server-side only; NEVER embed the response body in Error.message —
       // handleRouteError propagates Error.message to HTTP responses (oauth.ts:122).
       const reason = await extractGoogleErrorReason(response);
-      this.logger.error({ statusCode: response.status, api, reason }, "Google API call failed");
+      this.logger.error(
+        { statusCode: response.status, api, operation, reason },
+        "Google API call failed"
+      );
       throw new GoogleApiError(
         `Google ${api} returned ${response.status}`,
         response.status,
-        reason
+        reason,
+        operation
       );
     }
     return (await response.json()) as T;
@@ -458,7 +535,8 @@ export class GoogleApiClient {
     url: string,
     accessToken: string,
     body: unknown,
-    api: string
+    api: string,
+    operation: string
   ): Promise<T> {
     const response = await this.fetchFn(url, {
       method: "PATCH",
@@ -473,11 +551,15 @@ export class GoogleApiClient {
       // Log status server-side only; NEVER embed the response body in Error.message —
       // handleRouteError propagates Error.message to HTTP responses (oauth.ts:122).
       const reason = await extractGoogleErrorReason(response);
-      this.logger.error({ statusCode: response.status, api, reason }, "Google API call failed");
+      this.logger.error(
+        { statusCode: response.status, api, operation, reason },
+        "Google API call failed"
+      );
       throw new GoogleApiError(
         `Google ${api} returned ${response.status}`,
         response.status,
-        reason
+        reason,
+        operation
       );
     }
     return (await response.json()) as T;
@@ -501,7 +583,8 @@ export class GoogleApiClient {
       `${CALENDAR_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(externalEventId)}`,
       accessToken,
       patch,
-      "calendar"
+      "calendar",
+      "calendar.events.patch"
     );
   }
 }
