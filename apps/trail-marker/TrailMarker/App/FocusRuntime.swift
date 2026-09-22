@@ -20,6 +20,20 @@ struct RememberedJudgment: Equatable {
     let blockTitle: String
     let appName: String
     let windowTitle: String
+    /// Rung 3's text description, when a capture happened. Never the image (rung3 spec §7:
+    /// nothing is written to disk or kept beyond one request); this is the same text that was
+    /// sent to Moss for the second judge call.
+    let screenDescription: String?
+}
+
+/// Whether a rung-1 answer is worth escalating to a capture (rung3 spec §2). Pure and separate
+/// from the async capture/describe/re-judge mechanics in `FocusRuntime`, so this one decision —
+/// only to resolve insufficient_evidence, only with consent, only with the permission granted —
+/// has a direct test.
+enum Rung3Decision {
+    static func shouldCapture(label: FocusLabel, rung3Enabled: Bool, screenRecordingGranted: Bool) -> Bool {
+        label == .insufficientEvidence && rung3Enabled && screenRecordingGranted
+    }
 }
 
 /// Executes what a `FocusMachine` returns: the requests, the timers, the saved settings and the
@@ -31,6 +45,14 @@ final class FocusRuntime: ObservableObject {
     @Published private(set) var consent: Bool
     @Published private(set) var paused: Bool
     @Published private(set) var allowedBundleIds: Set<String>
+    /// Rung 3 (#2570 slice 2). Off by default; the Focus pane refuses to turn it on without
+    /// Screen Recording already granted.
+    @Published private(set) var rung3Enabled: Bool
+    @Published private(set) var visionSource: VisionSource
+    @Published private(set) var visionBaseURL: String
+    @Published private(set) var visionModel: String
+    /// The last "Test vision" result, shown in the Focus pane. Cleared on the next attempt.
+    @Published private(set) var visionTestResult: Result<String, VisionError>?
 
     private var machine: FocusMachine
     private let connection: ConnectionRuntime
@@ -40,9 +62,11 @@ final class FocusRuntime: ObservableObject {
     private let observer: FrontmostObserver
     private let nudges: NudgeDelivering
     private let transportFactory: (InstanceURL) -> CompanionTransport
+    private let windowCapture: WindowCapturing
+    private let visionDescriberFactory: (VisionSource, String, String, String) -> VisionDescribing
 
     private var tasks: [UUID: Task<Void, Never>] = [:]
-    private var lastSent: (appName: String, windowTitle: String, blockTitle: String)?
+    private var lastSent: (appName: String, windowTitle: String, blockTitle: String, description: String?)?
     private var cancellables = Set<AnyCancellable>()
     private var wakeObserver: NSObjectProtocol?
     private var observing = false
@@ -54,7 +78,20 @@ final class FocusRuntime: ObservableObject {
         preferences: PreferencesStore = PreferencesStore(),
         keychain: KeychainStore = KeychainStore(),
         observer: FrontmostObserver? = nil,
-        transportFactory: @escaping (InstanceURL) -> CompanionTransport = { _ in URLSessionTransport() }
+        transportFactory: @escaping (InstanceURL) -> CompanionTransport = { _ in URLSessionTransport() },
+        windowCapture: WindowCapturing = ScreenCaptureKitCapture(),
+        visionDescriberFactory: @escaping (VisionSource, String, String, String) -> VisionDescribing = {
+            source, baseURL, model, apiKey in
+            switch source {
+            case .cli:
+                return CLIVisionDescriber()
+            case .apiKey:
+                guard let url = URL(string: baseURL), !baseURL.isEmpty else {
+                    return HTTPVisionDescriber(baseURL: URL(string: "about:blank")!, model: model, apiKey: "")
+                }
+                return HTTPVisionDescriber(baseURL: url, model: model, apiKey: apiKey)
+            }
+        }
     ) {
         self.connection = connection
         self.permissions = permissions
@@ -63,9 +100,15 @@ final class FocusRuntime: ObservableObject {
         self.keychain = keychain
         self.observer = observer ?? FrontmostObserver()
         self.transportFactory = transportFactory
+        self.windowCapture = windowCapture
+        self.visionDescriberFactory = visionDescriberFactory
         self.consent = preferences.focusConsent
         self.paused = preferences.focusPaused
         self.allowedBundleIds = preferences.focusAllowedBundleIds
+        self.rung3Enabled = preferences.focusRung3Enabled
+        self.visionSource = preferences.focusVisionSource
+        self.visionBaseURL = preferences.focusVisionBaseURL
+        self.visionModel = preferences.focusVisionModel
         self.machine = FocusMachine(policy: ObservationPolicy(allowedBundleIds: preferences.focusAllowedBundleIds))
     }
 
@@ -117,6 +160,65 @@ final class FocusRuntime: ObservableObject {
         allowedBundleIds = updated
         preferences.focusAllowedBundleIds = updated
         send(.policyChanged(ObservationPolicy(allowedBundleIds: updated)))
+    }
+
+    /// Refused (left unchanged) without Screen Recording already granted, so the toggle can never
+    /// silently do nothing (rung3 spec §5).
+    func setRung3Enabled(_ value: Bool) {
+        guard !value || permissions.screenRecording == .granted else { return }
+        rung3Enabled = value
+        preferences.focusRung3Enabled = value
+    }
+
+    func setVisionSource(_ value: VisionSource) {
+        visionSource = value
+        preferences.focusVisionSource = value
+    }
+
+    func setVisionBaseURL(_ value: String) {
+        visionBaseURL = value
+        preferences.focusVisionBaseURL = value
+    }
+
+    func setVisionModel(_ value: String) {
+        visionModel = value
+        preferences.focusVisionModel = value
+    }
+
+    /// `nil` clears the stored key without setting a new one (an empty "Test" field, say).
+    func setVisionAPIKey(_ value: String?) {
+        if let value, !value.isEmpty {
+            try? keychain.storeVisionKey(value)
+        } else {
+            keychain.deleteVisionKey()
+        }
+    }
+
+    var hasVisionAPIKey: Bool { keychain.readVisionKey() != nil }
+
+    /// Captures and describes right now, independent of any judgment, so the person can see the
+    /// chosen source actually works before relying on it (rung3 spec §9's "Send a test nudge"
+    /// pattern, applied to vision).
+    func testVision() {
+        guard let app = observer.current else {
+            visionTestResult = .failure(.notConfigured)
+            return
+        }
+        let describer = visionDescriberFactory(
+            visionSource, visionBaseURL, visionModel, keychain.readVisionKey() ?? ""
+        )
+        track { [weak self] in
+            guard let self else { return }
+            do {
+                let image = try await self.windowCapture.captureFrontmostWindow(bundleId: app.bundleId)
+                let description = try await describer.describe(image)
+                self.visionTestResult = .success(description)
+            } catch let error as VisionError {
+                self.visionTestResult = .failure(error)
+            } catch {
+                self.visionTestResult = .failure(.unreachable)
+            }
+        }
     }
 
     func correct(_ verdict: FocusVerdict) {
@@ -223,16 +325,66 @@ final class FocusRuntime: ObservableObject {
             blockId: blockId, appName: appName.isEmpty ? "App" : appName, windowTitle: title,
             observedAt: ServerTime.format(Date())
         )
-        lastSent = (request.appName, request.windowTitle, currentBlockTitle ?? "")
 
         track { [weak self] in
+            guard let self else { return }
             do {
                 let judgment = try await client.focusJudge(credential: credential, request)
                 if Task.isCancelled { return }
-                self?.send(.judged(judgment, generation: generation))
+
+                // A capture failure or an unreachable/rejected/unconfigured vision source is soft:
+                // rung 1's own answer stands, exactly as if rung 3 were off.
+                guard
+                    Rung3Decision.shouldCapture(
+                        label: judgment.label, rung3Enabled: self.rung3Enabled,
+                        screenRecordingGranted: self.permissions.screenRecording == .granted
+                    )
+                else {
+                    self.lastSent = (request.appName, request.windowTitle, self.currentBlockTitle ?? "", nil)
+                    self.send(.judged(judgment, generation: generation))
+                    return
+                }
+
+                let describer = self.visionDescriberFactory(
+                    self.visionSource, self.visionBaseURL, self.visionModel,
+                    self.keychain.readVisionKey() ?? ""
+                )
+                let description: String?
+                do {
+                    let image = try await self.windowCapture.captureFrontmostWindow(
+                        bundleId: observation.bundleId
+                    )
+                    description = try await describer.describe(image)
+                } catch {
+                    description = nil
+                }
+
+                guard let description, !Task.isCancelled else {
+                    self.lastSent = (request.appName, request.windowTitle, self.currentBlockTitle ?? "", nil)
+                    self.send(.judged(judgment, generation: generation))
+                    return
+                }
+
+                let cleanedDescription = TextRedactor.clean(description, limit: 280)
+                let secondRequest = FocusJudgeRequest(
+                    blockId: blockId, appName: request.appName, windowTitle: request.windowTitle,
+                    description: cleanedDescription, observedAt: ServerTime.format(Date())
+                )
+                self.lastSent = (
+                    secondRequest.appName, secondRequest.windowTitle, self.currentBlockTitle ?? "",
+                    cleanedDescription
+                )
+                do {
+                    let secondJudgment = try await client.focusJudge(credential: credential, secondRequest)
+                    if Task.isCancelled { return }
+                    self.send(.judged(secondJudgment, generation: generation))
+                } catch {
+                    if Task.isCancelled || (error as? URLError)?.code == .cancelled { return }
+                    self.send(.judgeFailed(error as? CompanionError ?? .unreachable, generation: generation))
+                }
             } catch {
                 if Task.isCancelled || (error as? URLError)?.code == .cancelled { return }
-                self?.send(.judgeFailed(error as? CompanionError ?? .unreachable, generation: generation))
+                self.send(.judgeFailed(error as? CompanionError ?? .unreachable, generation: generation))
             }
         }
     }
@@ -246,7 +398,7 @@ final class FocusRuntime: ObservableObject {
         guard let sent = lastSent else { return }
         lastJudgment = RememberedJudgment(
             judgment: judgment, at: Date(), blockTitle: sent.blockTitle, appName: sent.appName,
-            windowTitle: sent.windowTitle
+            windowTitle: sent.windowTitle, screenDescription: sent.description
         )
     }
 

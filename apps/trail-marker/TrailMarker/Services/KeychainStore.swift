@@ -57,3 +57,47 @@ struct KeychainStore {
 enum KeychainError: Error, Equatable {
     case osStatus(OSStatus)
 }
+
+extension KeychainStore {
+    private static let visionKeyAccount = "vision-api-key"
+
+    /// The rung 3 vision endpoint's API key. Not tied to a linked identity: it is a Mac-local
+    /// setting the person enters once, kept only while an API-key vision source is chosen.
+    func storeVisionKey(_ key: String) throws {
+        deleteVisionKey()
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: Self.visionKeyAccount,
+            kSecValueData as String: Data(key.utf8),
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else { throw KeychainError.osStatus(status) }
+    }
+
+    func readVisionKey() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: Self.visionKeyAccount,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @discardableResult
+    func deleteVisionKey() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: Self.visionKeyAccount
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
+    }
+}

@@ -102,7 +102,24 @@ struct FocusJudgeRequest: Encodable, Equatable {
     let blockId: String
     let appName: String
     let windowTitle: String
+    /// Rung 3 (#2570 slice 2): a vision description, sent only when rung 1 alone answered
+    /// insufficient_evidence and a capture was allowed and taken. Omitted, not null, when absent —
+    /// the server schema types this field as a plain string, so a JSON `null` would fail it.
+    var description: String? = nil
     let observedAt: String
+
+    private enum CodingKeys: String, CodingKey {
+        case blockId, appName, windowTitle, description, observedAt
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(blockId, forKey: .blockId)
+        try container.encode(appName, forKey: .appName)
+        try container.encode(windowTitle, forKey: .windowTitle)
+        try container.encodeIfPresent(description, forKey: .description)
+        try container.encode(observedAt, forKey: .observedAt)
+    }
 }
 
 struct FocusJudgment: Decodable, Equatable {

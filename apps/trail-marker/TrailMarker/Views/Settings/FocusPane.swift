@@ -9,6 +9,7 @@ struct FocusPane: View {
     @State private var apps: [InstalledApp] = []
     @State private var search = ""
     @State private var testNudgeNote: String?
+    @State private var visionKeyEntry = ""
 
     var body: some View {
         Form {
@@ -60,6 +61,67 @@ struct FocusPane: View {
                                 set: { focus.setAllowed(app.bundleId, allowed: $0) }
                             )
                         )
+                    }
+                }
+
+                Section("When a title alone isn't enough") {
+                    Toggle(
+                        "Take one picture of the screen and describe it",
+                        isOn: Binding(get: { focus.rung3Enabled }, set: { focus.setRung3Enabled($0) })
+                    )
+                    if permissions.screenRecording != .granted {
+                        Text("Screen Recording isn't granted, so this can't turn on.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        Button("Open System Settings…") {
+                            permissions.requestScreenRecording()
+                            SystemSettingsLinks.openScreenRecording()
+                        }
+                    } else if focus.rung3Enabled {
+                        Text(rung3ConsentSentence)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Picker(
+                            "Describe with",
+                            selection: Binding(get: { focus.visionSource }, set: { focus.setVisionSource($0) })
+                        ) {
+                            Text("An API key").tag(VisionSource.apiKey)
+                            Text("Claude Code, signed in on this Mac").tag(VisionSource.cli)
+                        }
+                        .pickerStyle(.radioGroup)
+
+                        if focus.visionSource == .apiKey {
+                            TextField(
+                                "Base URL", text: Binding(get: { focus.visionBaseURL }, set: { focus.setVisionBaseURL($0) })
+                            )
+                            TextField(
+                                "Model", text: Binding(get: { focus.visionModel }, set: { focus.setVisionModel($0) })
+                            )
+                            SecureField("API key", text: $visionKeyEntry)
+                                .onSubmit { focus.setVisionAPIKey(visionKeyEntry); visionKeyEntry = "" }
+                            Text(focus.hasVisionAPIKey ? "A key is stored." : "No key stored yet.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Uses whatever session Claude Code is signed into on this Mac. No key is stored here.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Button("Test") { focus.testVision() }
+                        if let visionTestResult = focus.visionTestResult {
+                            switch visionTestResult {
+                            case .success(let description):
+                                Text(description).font(.callout).fixedSize(horizontal: false, vertical: true)
+                            case .failure(let error):
+                                Text(visionErrorMessage(error))
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
                     }
                 }
 
@@ -118,6 +180,37 @@ struct FocusPane: View {
         } else {
             testNudgeNote = "Notifications are off for Trail Marker, so this test can't show. "
                 + "Turn them on in System Settings, then try again."
+        }
+    }
+
+    /// Rung 3 spec §5: must be literally true for the build running, in the person's chosen
+    /// source's own terms — never a generic "an AI model" sentence.
+    private var rung3ConsentSentence: String {
+        let destination: String
+        switch focus.visionSource {
+        case .apiKey:
+            let host = focus.visionBaseURL.isEmpty ? "the endpoint you set below" : focus.visionBaseURL
+            destination = host
+        case .cli:
+            destination = "Claude Code, signed in on this Mac"
+        }
+        return "When Trail Marker can't tell from the window title alone, it will take one picture "
+            + "of an allowed app and send it to \(destination) to describe. The picture is never "
+            + "saved and never sent anywhere else."
+    }
+
+    private func visionErrorMessage(_ error: VisionError) -> String {
+        switch error {
+        case .notConfigured:
+            return focus.visionSource == .cli
+                ? "Claude Code wasn't found or isn't signed in on this Mac."
+                : "Enter a base URL, model and API key first."
+        case .unreachable:
+            return "Couldn't reach the vision source. Try again."
+        case .rejected:
+            return "The vision source rejected the API key."
+        case .invalidResponse:
+            return "The vision source didn't answer with a usable description."
         }
     }
 

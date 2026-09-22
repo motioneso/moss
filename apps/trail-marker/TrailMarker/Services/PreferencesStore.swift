@@ -21,6 +21,10 @@ final class PreferencesStore {
         static let focusConsent = "focusConsent"
         static let focusPaused = "focusPaused"
         static let focusAllowedBundleIds = "focusAllowedBundleIds"
+        static let focusRung3Enabled = "focusRung3Enabled"
+        static let focusVisionSource = "focusVisionSource"
+        static let focusVisionBaseURL = "focusVisionBaseURL"
+        static let focusVisionModel = "focusVisionModel"
     }
 
     var linkedIdentity: LinkedIdentity? {
@@ -87,12 +91,37 @@ final class PreferencesStore {
         set { defaults.set(newValue.sorted(), forKey: Key.focusAllowedBundleIds) }
     }
 
+    /// Rung 3 (#2570 slice 2): off until Screen Recording is granted and the person turns it on.
+    var focusRung3Enabled: Bool {
+        get { defaults.bool(forKey: Key.focusRung3Enabled) }
+        set { defaults.set(newValue, forKey: Key.focusRung3Enabled) }
+    }
+
+    /// Which vision source describes a capture. The API key itself lives in the Keychain, not here.
+    var focusVisionSource: VisionSource {
+        get {
+            defaults.string(forKey: Key.focusVisionSource).flatMap { VisionSource(rawValue: $0) } ?? .apiKey
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.focusVisionSource) }
+    }
+
+    var focusVisionBaseURL: String {
+        get { defaults.string(forKey: Key.focusVisionBaseURL) ?? "" }
+        set { defaults.set(newValue, forKey: Key.focusVisionBaseURL) }
+    }
+
+    var focusVisionModel: String {
+        get { defaults.string(forKey: Key.focusVisionModel) ?? "" }
+        set { defaults.set(newValue, forKey: Key.focusVisionModel) }
+    }
+
     /// Used by Log Out and by the "clear state between test runs" README step.
     func clearAll() {
         for key in [
             Key.linkedIdentity, Key.connectionEnabled, Key.displayName, Key.pendingDisplayName,
             Key.startAtLogin, Key.autoCheckUpdates, Key.permissionsPromptShown,
-            Key.focusConsent, Key.focusPaused, Key.focusAllowedBundleIds
+            Key.focusConsent, Key.focusPaused, Key.focusAllowedBundleIds,
+            Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionBaseURL, Key.focusVisionModel
         ] {
             defaults.removeObject(forKey: key)
         }
