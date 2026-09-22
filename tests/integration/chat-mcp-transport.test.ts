@@ -525,8 +525,11 @@ describe("HTTP resolve endpoint", () => {
       }
     });
 
-    await new Promise((r) => setTimeout(r, 100));
-    expect(emitted).toHaveLength(1);
+    // Flaked on main Sept 5 and Sept 14: the fixed 100ms sleep raced the
+    // action_request emit on a loaded box, so a slow emit failed the test before
+    // the guard was ever exercised. Poll instead; the guard assertions below are
+    // unchanged.
+    await vi.waitFor(() => expect(emitted).toHaveLength(1), { timeout: 5_000 });
     const req = emitted[0]!.record;
     if (req.kind !== "action_request") throw new Error("expected action_request");
 
