@@ -40,4 +40,29 @@ final class ObservationPolicyTests: XCTestCase {
         XCTAssertTrue(ObservationPolicy.deniedBundleIds.contains("com.1password.1password"))
         XCTAssertTrue(ObservationPolicy.deniedBundleIds.contains("com.apple.keychainaccess"))
     }
+
+    func testWatchingTheEntireDesktopObservesAnAppNeverAddedToTheAllowlist() {
+        let policy = ObservationPolicy(allowedBundleIds: [], watchEntireDesktop: true)
+        XCTAssertTrue(policy.allows(observation(bundle: "com.example.SomeApp")))
+    }
+
+    func testWatchingTheEntireDesktopStillRefusesTheDenylist() throws {
+        // The whole point of a fixed denylist: turning on "everything" must not turn on this too.
+        let denied = try XCTUnwrap(ObservationPolicy.deniedBundleIds.first)
+        let policy = ObservationPolicy(allowedBundleIds: [], watchEntireDesktop: true)
+        XCTAssertFalse(policy.allows(observation(bundle: denied)))
+    }
+
+    func testWatchingTheEntireDesktopStillRefusesPrivateBrowsingTitles() {
+        let policy = ObservationPolicy(allowedBundleIds: [], watchEntireDesktop: true)
+        XCTAssertFalse(policy.allows(observation(title: "New Incognito Tab")))
+    }
+
+    func testTurningOffEntireDesktopFallsBackToTheAllowlist() {
+        var policy = ObservationPolicy(allowedBundleIds: ["com.apple.Safari"], watchEntireDesktop: true)
+        XCTAssertTrue(policy.allows(observation(bundle: "com.apple.mail")))
+        policy.watchEntireDesktop = false
+        XCTAssertFalse(policy.allows(observation(bundle: "com.apple.mail")))
+        XCTAssertTrue(policy.allows(observation(bundle: "com.apple.Safari")))
+    }
 }

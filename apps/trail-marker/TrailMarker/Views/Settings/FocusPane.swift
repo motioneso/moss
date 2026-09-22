@@ -8,6 +8,7 @@ struct FocusPane: View {
 
     @State private var apps: [InstalledApp] = []
     @State private var search = ""
+    @State private var isAddingApp = false
     @State private var testNudgeNote: String?
     @State private var visionKeyEntry = ""
 
@@ -18,7 +19,11 @@ struct FocusPane: View {
                     "Watch which app is in front while a Moss block is on",
                     isOn: Binding(get: { focus.consent }, set: { focus.setConsent($0) })
                 )
-                Text(ObservationStatement.current(focusEnabled: true, paused: focus.paused))
+                Text(
+                    ObservationStatement.current(
+                        focusEnabled: true, paused: focus.paused, watchEntireDesktop: focus.watchEntireDesktop
+                    )
+                )
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -44,23 +49,58 @@ struct FocusPane: View {
                 }
 
                 Section("Apps to watch") {
-                    if focus.allowedBundleIds.isEmpty {
-                        Text("Choose at least one app. Nothing is watched until you do.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                    TextField("Search apps", text: $search)
-                    if visibleApps.isEmpty {
-                        Text("No apps found.").foregroundStyle(.secondary)
-                    }
-                    ForEach(visibleApps) { app in
-                        Toggle(
-                            app.name,
-                            isOn: Binding(
-                                get: { focus.allowedBundleIds.contains(app.bundleId) },
-                                set: { focus.setAllowed(app.bundleId, allowed: $0) }
-                            )
-                        )
+                    Toggle(
+                        "Watch the entire desktop",
+                        isOn: Binding(get: { focus.watchEntireDesktop }, set: { focus.setWatchEntireDesktop($0) })
+                    )
+                    Text(
+                        focus.watchEntireDesktop
+                            ? "Every app is watched — getting distracted rarely stays inside one app. "
+                                + "The apps Trail Marker always excludes (password managers, private-browsing "
+                                + "windows) are still never watched."
+                            : "Off watches only the apps you choose below."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    if !focus.watchEntireDesktop {
+                        if chosenApps.isEmpty && !isAddingApp {
+                            Text("Choose at least one app, or watch the entire desktop above. Nothing is watched until you do.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(chosenApps) { app in
+                            HStack {
+                                Text(app.name)
+                                Spacer()
+                                Button {
+                                    focus.setAllowed(app.bundleId, allowed: false)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Stop watching \(app.name)")
+                            }
+                        }
+
+                        if isAddingApp {
+                            TextField("Search apps", text: $search)
+                            if addableApps.isEmpty {
+                                Text(search.isEmpty ? "No more apps to add." : "No apps found.")
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                            }
+                            ForEach(addableApps) { app in
+                                Button(app.name) { focus.setAllowed(app.bundleId, allowed: true) }
+                            }
+                            Button("Done") {
+                                isAddingApp = false
+                                search = ""
+                            }
+                        } else {
+                            Button("Add app…") { isAddingApp = true }
+                        }
                     }
                 }
 
@@ -220,8 +260,9 @@ struct FocusPane: View {
         case .cli:
             destination = "Claude Code, signed in on this Mac"
         }
+        let scope = focus.watchEntireDesktop ? "the app in front" : "an allowed app"
         return "When Trail Marker can't tell from the window title alone, it will take one picture "
-            + "of an allowed app and send it to \(destination) to describe. The picture is never "
+            + "of \(scope) and send it to \(destination) to describe. The picture is never "
             + "saved and never sent anywhere else."
     }
 
@@ -244,10 +285,22 @@ struct FocusPane: View {
         }
     }
 
-    private var visibleApps: [InstalledApp] {
+    /// The apps the person has chosen, in the order they'll recognize them (by name). A bundle id
+    /// no longer found on disk (the app was removed) still shows, by its id, rather than silently
+    /// vanishing from a list that is supposed to say what's watched.
+    private var chosenApps: [InstalledApp] {
+        focus.allowedBundleIds
+            .map { id in apps.first { $0.bundleId == id } ?? InstalledApp(bundleId: id, name: id) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// Installed apps not already chosen, narrowed by the add-app search field. Capped so this
+    /// never becomes the big always-visible list it replaced; typing narrows it further.
+    private var addableApps: [InstalledApp] {
         let query = search.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return apps }
-        return apps.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        let candidates = apps.filter { !focus.allowedBundleIds.contains($0.bundleId) }
+        let matching = query.isEmpty ? candidates : candidates.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        return Array(matching.prefix(8))
     }
 
     private var statusText: String {

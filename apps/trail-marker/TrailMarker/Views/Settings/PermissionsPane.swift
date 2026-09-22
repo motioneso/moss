@@ -10,7 +10,8 @@ struct PermissionsPane: View {
             Section {
                 Text(
                     ObservationStatement.current(
-                        focusEnabled: PreferencesStore().focusConsent, paused: PreferencesStore().focusPaused
+                        focusEnabled: PreferencesStore().focusConsent, paused: PreferencesStore().focusPaused,
+                        watchEntireDesktop: PreferencesStore().focusWatchEntireDesktop
                     )
                 )
                     .font(.callout)

@@ -21,6 +21,7 @@ final class PreferencesStore {
         static let focusConsent = "focusConsent"
         static let focusPaused = "focusPaused"
         static let focusAllowedBundleIds = "focusAllowedBundleIds"
+        static let focusWatchEntireDesktop = "focusWatchEntireDesktop"
         static let focusRung3Enabled = "focusRung3Enabled"
         static let focusVisionSource = "focusVisionSource"
         static let focusVisionBaseURL = "focusVisionBaseURL"
@@ -85,10 +86,19 @@ final class PreferencesStore {
         set { defaults.set(newValue, forKey: Key.focusPaused) }
     }
 
-    /// Apps the person allowed. Empty means nothing is ever observed.
+    /// Apps the person allowed. Empty means nothing is ever observed, unless
+    /// `focusWatchEntireDesktop` is on. Kept even while entire-desktop watching is on, so the
+    /// person's app choices are still there if they switch back.
     var focusAllowedBundleIds: Set<String> {
         get { Set(defaults.stringArray(forKey: Key.focusAllowedBundleIds) ?? []) }
         set { defaults.set(newValue.sorted(), forKey: Key.focusAllowedBundleIds) }
+    }
+
+    /// Watch every app (still subject to the denylist) instead of only the chosen apps above.
+    /// Off by default: an empty allowlist means nothing is observed, not everything.
+    var focusWatchEntireDesktop: Bool {
+        get { defaults.bool(forKey: Key.focusWatchEntireDesktop) }
+        set { defaults.set(newValue, forKey: Key.focusWatchEntireDesktop) }
     }
 
     /// Rung 3 (#2570 slice 2): off until Screen Recording is granted and the person turns it on.
@@ -120,7 +130,7 @@ final class PreferencesStore {
         for key in [
             Key.linkedIdentity, Key.connectionEnabled, Key.displayName, Key.pendingDisplayName,
             Key.startAtLogin, Key.autoCheckUpdates, Key.permissionsPromptShown,
-            Key.focusConsent, Key.focusPaused, Key.focusAllowedBundleIds,
+            Key.focusConsent, Key.focusPaused, Key.focusAllowedBundleIds, Key.focusWatchEntireDesktop,
             Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionBaseURL, Key.focusVisionModel
         ] {
             defaults.removeObject(forKey: key)

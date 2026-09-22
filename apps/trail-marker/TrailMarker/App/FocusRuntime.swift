@@ -45,6 +45,8 @@ final class FocusRuntime: ObservableObject {
     @Published private(set) var consent: Bool
     @Published private(set) var paused: Bool
     @Published private(set) var allowedBundleIds: Set<String>
+    /// Watch every app instead of only the chosen ones (still subject to the denylist).
+    @Published private(set) var watchEntireDesktop: Bool
     /// Rung 3 (#2570 slice 2). Off by default; the Focus pane refuses to turn it on without
     /// Screen Recording already granted.
     @Published private(set) var rung3Enabled: Bool
@@ -118,12 +120,16 @@ final class FocusRuntime: ObservableObject {
         self.consent = preferences.focusConsent
         self.paused = preferences.focusPaused
         self.allowedBundleIds = preferences.focusAllowedBundleIds
+        self.watchEntireDesktop = preferences.focusWatchEntireDesktop
         self.rung3Enabled = preferences.focusRung3Enabled
         self.visionSource = preferences.focusVisionSource
         self.visionBaseURL = preferences.focusVisionBaseURL
         self.visionModel = preferences.focusVisionModel
         self.hasVisionAPIKey = keychain.readVisionKey() != nil
-        self.machine = FocusMachine(policy: ObservationPolicy(allowedBundleIds: preferences.focusAllowedBundleIds))
+        self.machine = FocusMachine(policy: ObservationPolicy(
+            allowedBundleIds: preferences.focusAllowedBundleIds,
+            watchEntireDesktop: preferences.focusWatchEntireDesktop
+        ))
     }
 
     func start() {
@@ -173,7 +179,15 @@ final class FocusRuntime: ObservableObject {
         if allowed { updated.insert(bundleId) } else { updated.remove(bundleId) }
         allowedBundleIds = updated
         preferences.focusAllowedBundleIds = updated
-        send(.policyChanged(ObservationPolicy(allowedBundleIds: updated)))
+        send(.policyChanged(ObservationPolicy(allowedBundleIds: updated, watchEntireDesktop: watchEntireDesktop)))
+    }
+
+    /// Watching the whole desktop instead of chosen apps. The chosen apps are kept, not cleared,
+    /// so turning this back off restores exactly what was picked before.
+    func setWatchEntireDesktop(_ value: Bool) {
+        watchEntireDesktop = value
+        preferences.focusWatchEntireDesktop = value
+        send(.policyChanged(ObservationPolicy(allowedBundleIds: allowedBundleIds, watchEntireDesktop: value)))
     }
 
     /// Refused (left unchanged) without Screen Recording already granted, so the toggle can never

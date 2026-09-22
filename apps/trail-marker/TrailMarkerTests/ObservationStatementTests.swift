@@ -27,6 +27,13 @@ final class ObservationStatementTests: XCTestCase {
         XCTAssertFalse(text.contains("name of the app in front"))
     }
 
+    func testWatchingTheEntireDesktopSaysSoInsteadOfClaimingAnAllowlist() {
+        let text = ObservationStatement.current(focusEnabled: true, paused: false, watchEntireDesktop: true)
+        XCTAssertTrue(text.contains("entire desktop"))
+        // Must not still claim a per-app allowlist scope while watching everything.
+        XCTAssertFalse(text.contains("apps you have allowed"))
+    }
+
     func testAccessibilityIsDescribedByWhatItIsNowFor() {
         XCTAssertFalse(ObservationStatement.accessibilityScope.contains("future shortcuts"))
         XCTAssertTrue(ObservationStatement.accessibilityScope.contains("window in front"))
