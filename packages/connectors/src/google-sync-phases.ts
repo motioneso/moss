@@ -115,31 +115,38 @@ export async function withTokenRetry<T>(
 ): Promise<T> {
   const retryDelayMs = deps.googleRetryDelayMs ?? DEFAULT_GOOGLE_RETRY_DELAY_MS;
   let attempt = 0;
+  let refreshed = false;
   for (;;) {
     const attemptedToken = holder.token;
     try {
       return await op(attemptedToken);
     } catch (error) {
-      if ((error as { statusCode?: number }).statusCode !== 401) {
-        // A rate limit or a Google server hiccup is transient, not a refusal: back off and try
-        // the same call again rather than failing the whole sync step. A genuine permission
-        // error is not retried and keeps its named operation for the log.
-        if (isRetryableGoogleError(error) && attempt + 1 < GOOGLE_READ_RETRY_ATTEMPTS) {
-          attempt += 1;
-          await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
-          continue;
+      if ((error as { statusCode?: number }).statusCode === 401 && !refreshed) {
+        refreshed = true;
+        if (holder.token === attemptedToken) {
+          holder.refreshing ??= deps.getFreshAccessToken(scopedDb, { force: true });
+          try {
+            holder.token = await holder.refreshing;
+          } finally {
+            holder.refreshing = undefined;
+          }
         }
-        throw error;
+        // Loop rather than return: the retried call goes through the same transient handling,
+        // and a second 401 with the refreshed token falls through to the throw below.
+        continue;
       }
-      if (holder.token === attemptedToken) {
-        holder.refreshing ??= deps.getFreshAccessToken(scopedDb, { force: true });
-        try {
-          holder.token = await holder.refreshing;
-        } finally {
-          holder.refreshing = undefined;
-        }
+      // A rate limit or a Google server hiccup is transient, not a refusal: back off and try
+      // the same call again rather than failing the whole sync step. A genuine permission
+      // error is not retried and keeps its named operation for the log. Jitter spreads the
+      // retries of the parallel message fetches so they do not all return at the same instant.
+      if (isRetryableGoogleError(error) && attempt + 1 < GOOGLE_READ_RETRY_ATTEMPTS) {
+        attempt += 1;
+        const backoff = retryDelayMs * attempt;
+        const jitter = Math.floor(Math.random() * retryDelayMs);
+        await new Promise((resolve) => setTimeout(resolve, backoff + jitter));
+        continue;
       }
-      return op(holder.token);
+      throw error;
     }
   }
 }

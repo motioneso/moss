@@ -36,27 +36,17 @@ export class GoogleApiError extends Error {
 }
 
 /**
- * Google reasons that mean "try again", not "you may not". Kept as an explicit set so a genuine
- * permission refusal (forbidden, domainPolicy, insufficientPermissions,
- * ACCESS_TOKEN_SCOPE_INSUFFICIENT) is never retried, and a quota or server hiccup is. Names are
- * matched case-insensitively because the classic `errors[].reason` and the newer
- * `details[].reason` / `status` spellings differ in case.
+ * Google reasons that mean "try again", not "you may not". Only the per-second and per-user
+ * rate limits qualify: a daily quota or a project quota will not recover inside a short retry,
+ * so it is reported rather than retried. Names are matched case-insensitively because the
+ * classic `errors[].reason` and the newer `details[].reason` / `status` spellings differ in case.
  */
 const RETRYABLE_GOOGLE_REASONS = new Set([
   "ratelimitexceeded",
   "userratelimitexceeded",
   "rate_limit_exceeded",
-  "quotaexceeded",
-  "quota_exceeded",
-  "dailylimitexceeded",
-  "daily_limit_exceeded",
-  "resource_exhausted",
   "resourceexhausted",
-  "backenderror",
-  "backend_error",
-  "internalerror",
-  "internal_error",
-  "unavailable"
+  "resource_exhausted"
 ]);
 
 /** True when a Google API failure is worth retrying rather than reporting as a refusal. */

@@ -86,12 +86,16 @@ describe("Google API error detail (#2300)", () => {
     );
   });
 
-  it("classifies rate limits and 5xx as retryable but a permission refusal as not", () => {
+  it("classifies per-user rate limits and 5xx as retryable but a permission refusal or a daily quota as not", () => {
     expect(isRetryableGoogleError(new GoogleApiError("x", 403, "userRateLimitExceeded"))).toBe(
       true
     );
+    expect(isRetryableGoogleError(new GoogleApiError("x", 403, "RESOURCE_EXHAUSTED"))).toBe(true);
     expect(isRetryableGoogleError(new GoogleApiError("x", 429))).toBe(true);
     expect(isRetryableGoogleError(new GoogleApiError("x", 503))).toBe(true);
+    // A daily or project quota will not recover inside a short retry.
+    expect(isRetryableGoogleError(new GoogleApiError("x", 403, "dailyLimitExceeded"))).toBe(false);
+    expect(isRetryableGoogleError(new GoogleApiError("x", 403, "quotaExceeded"))).toBe(false);
     expect(isRetryableGoogleError(new GoogleApiError("x", 403, "PERMISSION_DENIED"))).toBe(false);
     expect(isRetryableGoogleError(new GoogleApiError("x", 403, "domainPolicy"))).toBe(false);
     expect(isRetryableGoogleError(new Error("not google"))).toBe(false);
@@ -145,5 +149,54 @@ describe("Google read retry (#2300)", () => {
       })
     ).rejects.toBe(refused);
     expect(calls).toBe(1);
+  });
+
+  it("still applies the transient retry to the call made after a token refresh", async () => {
+    const unauthorized = new GoogleApiError("Google gmail returned 401", 401);
+    const rateLimited = new GoogleApiError(
+      "Google gmail returned 403",
+      403,
+      "userRateLimitExceeded"
+    );
+    const holder = { token: "stale" };
+    let calls = 0;
+    const result = await withTokenRetry(
+      {} as never,
+      { googleRetryDelayMs: 0, getFreshAccessToken: async () => "fresh" } as never,
+      holder,
+      async (token) => {
+        calls += 1;
+        if (calls === 1) {
+          expect(token).toBe("stale");
+          throw unauthorized;
+        }
+        if (calls === 2) {
+          expect(token).toBe("fresh");
+          throw rateLimited;
+        }
+        return "page";
+      }
+    );
+    expect(result).toBe("page");
+    expect(holder.token).toBe("fresh");
+    expect(calls).toBe(3);
+  });
+
+  it("does not refresh a second time when the refreshed token is still refused", async () => {
+    const unauthorized = new GoogleApiError("Google gmail returned 401", 401);
+    const holder = { token: "stale" };
+    let calls = 0;
+    await expect(
+      withTokenRetry(
+        {} as never,
+        { googleRetryDelayMs: 0, getFreshAccessToken: async () => "fresh" } as never,
+        holder,
+        async () => {
+          calls += 1;
+          throw unauthorized;
+        }
+      )
+    ).rejects.toBe(unauthorized);
+    expect(calls).toBe(2);
   });
 });

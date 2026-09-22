@@ -577,12 +577,7 @@ export async function registerConnectorsJobWorkers(
     cipher: connectorCipher,
     oauthClient: new GoogleOAuthClient()
   });
-  // The composition root owns the structured logger: inject it so a refused Google call is
-  // recorded with its operation, status and specific reason. Without it the client's silent
-  // default drops that detail and a permission error cannot be traced to a call (#2300).
-  const googleClient = new GoogleApiClient(
-    deps.logger ? { logger: { error: (data, message) => deps.logger!.warn(data, message) } } : {}
-  );
+  const googleClient = new GoogleApiClient();
   const preferencesRepository = new PreferencesRepository();
   const suppressionRepository = new EmailActionSuppressionRepository();
 
