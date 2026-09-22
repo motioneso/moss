@@ -99,7 +99,13 @@ describe("buildAppMap", () => {
         }
       ],
       coreScreens: [
-        { id: "today", label: "Today", description: "Core Today screen.", path: "/today", scope: "user" },
+        {
+          id: "today",
+          label: "Today",
+          description: "Core Today screen.",
+          path: "/today",
+          scope: "user"
+        },
         {
           id: "notifications",
           label: "Notifications",

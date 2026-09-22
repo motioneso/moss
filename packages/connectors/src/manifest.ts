@@ -264,9 +264,9 @@ export const connectorsModuleManifest = {
     {
       id: "connectors.google_sync",
       description:
-        "A connected Google Mailbox brings its calendar events and email into Moss on its own so " +
-        "they can show up on Today and in briefings. Sync runs on a schedule and can also be " +
-        "started by hand from Connected accounts.",
+        "A connected Google account keeps its calendar events and email in Moss without you " +
+        "asking: a background sync brings in what is new so it can show up on Today and in " +
+        "briefings.",
       errors: [
         {
           code: "connectors.google.auth_failed",

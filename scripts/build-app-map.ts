@@ -39,9 +39,7 @@ export function buildAppMap(input: BuildAppMapInput) {
 
   const screens = input.manifests.flatMap((manifest) =>
     (manifest.navigation ?? [])
-      .filter(
-        (surface) => !coreScreenIds.has(surface.id) && !coreScreenPaths.has(surface.path)
-      )
+      .filter((surface) => !coreScreenIds.has(surface.id) && !coreScreenPaths.has(surface.path))
       .map((surface) => ({
         moduleId: manifest.id,
         ...surface,
@@ -50,9 +48,7 @@ export function buildAppMap(input: BuildAppMapInput) {
   );
   const settings = input.manifests.flatMap((manifest) =>
     (manifest.settings ?? [])
-      .filter(
-        (surface) => !coreSettingIds.has(surface.id) && !coreSettingPaths.has(surface.path)
-      )
+      .filter((surface) => !coreSettingIds.has(surface.id) && !coreSettingPaths.has(surface.path))
       .map((surface) => ({
         moduleId: manifest.id,
         ...surface
