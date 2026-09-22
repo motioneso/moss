@@ -15,12 +15,18 @@ import { resolveMaybeOwedGate } from "./email-security-notice-rule.js";
  */
 export function applyGate(
   result: EmailExtractResult,
-  message: Pick<ParsedEmail, "subject" | "body">
+  message: Pick<ParsedEmail, "subject" | "body">,
+  knownSender: boolean
 ): EmailExtractResult {
   const { gate, signals } = result;
   if (gate === undefined) return result;
   const resolved =
-    gate === "maybe_owed" ? resolveMaybeOwedGate(message, signals.actionability?.category) : gate;
+    gate === "maybe_owed"
+      ? resolveMaybeOwedGate(message, signals.actionability?.category, {
+          bulk: signals.bulk === true,
+          knownSender
+        })
+      : gate;
   if (resolved === "nothing") return asNothing(result, signals, resolved);
   if (resolved === "worth_knowing") return asWorthKnowing(result, signals, resolved);
   const { actionability: _drop, ...rest } = signals;

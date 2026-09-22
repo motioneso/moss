@@ -69,7 +69,24 @@ describe("email gate", () => {
     expect(r.signals.pendingJudgement).toBeUndefined();
     expect(r.signals.actionability?.category).toBe("noise");
   });
-  it("a no-failure sign-in notice the model flagged anyway never reaches the second pass (#2341)", async () => {
+  it("a no-failure sign-in notice the model flagged anyway is dropped quietly (#2341)", async () => {
+    const r = await extractEmailSignals(
+      parsed({
+        subject: "Verify Discord Login from New Location",
+        body: "If this was you, no action is needed."
+      }),
+      answer({
+        gate: "maybe_owed",
+        category: "fyi",
+        confidence: 0.7,
+        reason: "A sign-in notice."
+      })
+    );
+    expect(r.gate).toBe("nothing");
+    expect(r.signals.pendingJudgement).toBeUndefined();
+    expect(r.signals.actionability?.category).toBe("noise");
+  });
+  it("an obligation answer is never overridden by the notice rule (#2341)", async () => {
     const r = await extractEmailSignals(
       parsed({
         subject: "Verify Discord Login from New Location",
@@ -82,9 +99,38 @@ describe("email gate", () => {
         reason: "A sign-in needs review."
       })
     );
-    expect(r.gate).toBe("worth_knowing");
-    expect(r.signals.pendingJudgement).toBeUndefined();
-    expect(r.signals.actionability?.category).toBe("fyi");
+    expect(r.gate).toBe("maybe_owed");
+    expect(r.signals.pendingJudgement).toBe(true);
+  });
+  it("does not shortcut a known sender's mail to worth_knowing (#2341)", async () => {
+    const r = await extractEmailSignals(
+      parsed({
+        subject: "Lunch next week?",
+        body: "Are you free on Tuesday?",
+        from: "Alice <alice@example.com>"
+      }),
+      answer({ gate: "maybe_owed", category: "fyi", confidence: 0.6, reason: "Unsure." }),
+      { knownSender: true }
+    );
+    expect(r.gate).toBe("maybe_owed");
+    expect(r.signals.pendingJudgement).toBe(true);
+  });
+  it("keeps a bulk bill the model named an obligation (#2341)", async () => {
+    const r = await extractEmailSignals(
+      parsed({
+        subject: "Electric bill due Friday",
+        body: "Your bill is due Friday. Unsubscribe from paperless notices.",
+        hasListUnsubscribe: true
+      }),
+      answer({
+        gate: "maybe_owed",
+        category: "needs_action",
+        confidence: 0.8,
+        reason: "A payment is due."
+      })
+    );
+    expect(r.gate).toBe("maybe_owed");
+    expect(r.signals.pendingJudgement).toBe(true);
   });
   it("a real obligation still reaches the second pass (#2341)", async () => {
     const r = await extractEmailSignals(

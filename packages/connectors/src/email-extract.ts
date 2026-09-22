@@ -695,7 +695,8 @@ function stripIfBodyReconstructed(signals: EmailSignals, normalizedBody: string)
 
 function sanitizeExtractResult(
   parsed: ParsedEmail,
-  initial: EmailExtractResult
+  initial: EmailExtractResult,
+  knownSender: boolean
 ): EmailExtractResult {
   let result = initial;
   if (result.summary === null && (result.signals.confidence ?? 0) > 0) {
@@ -741,7 +742,7 @@ function sanitizeExtractResult(
     signals: parsed.bodyTruncated ? { ...signals, truncated: true } : signals,
     escalated: false
   };
-  return applyGate(gated, parsed);
+  return applyGate(gated, parsed, knownSender);
 }
 
 function buildBatchPrompt(
@@ -880,7 +881,11 @@ export async function extractEmailSignalsBatch(
         extracted.push(
           modelSaysItHandsOverACode(reply.text, message)
             ? otpSkippedResult()
-            : sanitizeExtractResult(message, parsedReply)
+            : sanitizeExtractResult(
+                message,
+                parsedReply,
+                options.knownSenders?.has(senderAddress(message.from)) ?? false
+              )
         );
         continue;
       }
@@ -926,7 +931,11 @@ export async function extractEmailSignalsBatch(
         extracted.push(
           modelSaysItHandsOverACode(answer, message)
             ? otpSkippedResult()
-            : sanitizeExtractResult(message, parsedReply)
+            : sanitizeExtractResult(
+                message,
+                parsedReply,
+                options.knownSenders?.has(senderAddress(message.from)) ?? false
+              )
         );
       }
     } catch (error) {
@@ -966,5 +975,5 @@ export async function extractEmailSignals(
     result = { summary: null, signals: { confidence: 0 } };
   }
 
-  return sanitizeExtractResult(parsed, result);
+  return sanitizeExtractResult(parsed, result, options.knownSender ?? false);
 }
