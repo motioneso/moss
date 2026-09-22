@@ -142,7 +142,7 @@ final class HTTPVisionDescriberTests: XCTestCase {
         }
     }
 
-    func testAMalformedSuccessBodyIsAnInvalidResponse() async {
+    func testAMalformedSuccessBodyIsAnInvalidResponseNamingWhatWasMissing() async {
         StubURLProtocol.handler = { _, _ in (200, #"{"unexpected":true}"#.data(using: .utf8)!) }
         let describer = HTTPVisionDescriber(
             baseURL: URL(string: "https://vision.example.com")!, model: "m", apiKey: "k",
@@ -151,8 +151,65 @@ final class HTTPVisionDescriberTests: XCTestCase {
         do {
             _ = try await describer.describe(image)
             XCTFail("expected invalidResponse")
+        } catch VisionError.invalidResponse(let detail) {
+            XCTAssertEqual(detail, "no choices in the response")
         } catch {
-            XCTAssertEqual(error as? VisionError, .invalidResponse)
+            XCTFail("expected invalidResponse, got \(error)")
+        }
+    }
+
+    func testANonJSONSuccessBodyIsAnInvalidResponse() async {
+        StubURLProtocol.handler = { _, _ in (200, "not json at all".data(using: .utf8)!) }
+        let describer = HTTPVisionDescriber(
+            baseURL: URL(string: "https://vision.example.com")!, model: "m", apiKey: "k",
+            session: stubbedSession()
+        )
+        do {
+            _ = try await describer.describe(image)
+            XCTFail("expected invalidResponse")
+        } catch VisionError.invalidResponse(let detail) {
+            XCTAssertEqual(detail, "not JSON")
+        } catch {
+            XCTFail("expected invalidResponse, got \(error)")
+        }
+    }
+
+    func testEmptyModelContentIsAnInvalidResponse() async {
+        StubURLProtocol.handler = { _, _ in
+            (200, #"{"choices":[{"message":{"content":""}}]}"#.data(using: .utf8)!)
+        }
+        let describer = HTTPVisionDescriber(
+            baseURL: URL(string: "https://vision.example.com")!, model: "m", apiKey: "k",
+            session: stubbedSession()
+        )
+        do {
+            _ = try await describer.describe(image)
+            XCTFail("expected invalidResponse")
+        } catch VisionError.invalidResponse(let detail) {
+            XCTAssertEqual(detail, "the model returned no text")
+        } catch {
+            XCTFail("expected invalidResponse, got \(error)")
+        }
+    }
+
+    func testAnEmbeddedErrorOnA200SurfacesTheProvidersOwnMessage() async {
+        // OpenRouter answers 200 with an embedded error when the chosen model itself refuses or
+        // fails, rather than an HTTP error status — this is the case that motivated a real detail
+        // string instead of one flat "didn't work" message.
+        StubURLProtocol.handler = { _, _ in
+            (200, #"{"error":{"message":"model qwen/qwen3.7-flash is temporarily overloaded"}}"#.data(using: .utf8)!)
+        }
+        let describer = HTTPVisionDescriber(
+            baseURL: URL(string: "https://vision.example.com")!, model: "m", apiKey: "k",
+            session: stubbedSession()
+        )
+        do {
+            _ = try await describer.describe(image)
+            XCTFail("expected invalidResponse")
+        } catch VisionError.invalidResponse(let detail) {
+            XCTAssertEqual(detail, "model qwen/qwen3.7-flash is temporarily overloaded")
+        } catch {
+            XCTFail("expected invalidResponse, got \(error)")
         }
     }
 

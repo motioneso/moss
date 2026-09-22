@@ -97,9 +97,6 @@ struct FocusPane: View {
                                 "Base URL",
                                 text: Binding(get: { focus.visionBaseURL }, set: { focus.setVisionBaseURL($0) })
                             )
-                            Text("As the provider's own docs give it, such as https://openrouter.ai/api/v1. Trail Marker adds the chat-completions path onto it.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
                             TextField(
                                 "Model", text: Binding(get: { focus.visionModel }, set: { focus.setVisionModel($0) })
                             )
@@ -225,8 +222,8 @@ struct FocusPane: View {
             return "Couldn't reach the vision source. Try again."
         case .rejected:
             return "The vision source rejected the API key."
-        case .invalidResponse:
-            return "The vision source didn't answer with a usable description."
+        case .invalidResponse(let detail):
+            return "The vision source didn't answer with a usable description (\(detail))."
         case .noAppToCapture:
             return "Trail Marker hasn't seen another app in front yet. Switch to one, then come back and test."
         }

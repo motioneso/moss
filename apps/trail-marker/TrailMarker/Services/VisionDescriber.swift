@@ -21,7 +21,9 @@ enum VisionError: Error, Equatable {
     case notConfigured
     case unreachable
     case rejected
-    case invalidResponse
+    /// `detail` is diagnostic only — the provider's own error message, or a short note on what
+    /// shape the response had — never anything captured from the screen.
+    case invalidResponse(detail: String)
     /// Test only: no app has been seen in front of Trail Marker yet (Focus just turned on, or
     /// nothing is connected), so there is nothing to capture. Distinct from `notConfigured` — the
     /// source may be set up perfectly and still have nothing to describe yet.
@@ -106,14 +108,26 @@ struct HTTPVisionDescriber: VisionDescribing {
         if http.statusCode == 401 || http.statusCode == 403 { throw VisionError.rejected }
         guard (200..<300).contains(http.statusCode) else { throw VisionError.unreachable }
 
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw VisionError.invalidResponse(detail: "not JSON")
+        }
+        // A 2xx status does not rule out an embedded error: several OpenAI-compatible proxies,
+        // OpenRouter included, answer 200 with `{"error": {...}}` when the chosen model itself
+        // refused or failed. Surfacing that message (theirs, not ours) turns a bare "didn't answer
+        // with a usable description" into something the person can actually act on.
+        if let error = json["error"] as? [String: Any], let message = error["message"] as? String {
+            throw VisionError.invalidResponse(detail: message)
+        }
         guard
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let choices = json["choices"] as? [[String: Any]],
-            let message = choices.first?["message"] as? [String: Any],
-            let content = message["content"] as? String,
+            let message = choices.first?["message"] as? [String: Any]
+        else {
+            throw VisionError.invalidResponse(detail: "no choices in the response")
+        }
+        guard let content = message["content"] as? String,
             !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else {
-            throw VisionError.invalidResponse
+            throw VisionError.invalidResponse(detail: "the model returned no text")
         }
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -163,7 +177,11 @@ struct SystemProcessRunner: ProcessRunning {
                 if finished.terminationStatus == 0, !text.isEmpty {
                     continuation.resume(returning: text)
                 } else {
-                    continuation.resume(throwing: VisionError.invalidResponse)
+                    continuation.resume(
+                        throwing: VisionError.invalidResponse(
+                            detail: "the tool exited with status \(finished.terminationStatus)"
+                        )
+                    )
                 }
             }
             do {
@@ -209,8 +227,8 @@ struct CLIVisionDescriber: VisionDescribing {
                 stdin: nil
             )
             return output
-        } catch VisionError.invalidResponse {
-            throw VisionError.invalidResponse
+        } catch let error as VisionError {
+            throw error
         } catch {
             throw VisionError.unreachable
         }
