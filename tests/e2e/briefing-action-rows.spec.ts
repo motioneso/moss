@@ -658,7 +658,7 @@ test("narrow and zoomed widths keep Today controls in view with dock-first tab o
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       `no sideways scroll at ${width}px`
     ).toBe(true);
-    for (const name of ["Meds", "Check in"]) {
+    for (const name of ["Log medication", "Check in"]) {
       const box = await page.getByRole("button", { name }).boundingBox();
       expect(box, `${name} visible at ${width}px`).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(-1);
@@ -709,13 +709,15 @@ test("narrow and zoomed widths keep Today controls in view with dock-first tab o
         };
       });
       if (!stop || "wrapped" in stop) break;
-      if (medsAt === -1 && stop.name.includes("Meds")) medsAt = i;
+      if (medsAt === -1 && stop.name.includes("Log medication")) medsAt = i;
       if (checkinAt === -1 && stop.name.includes("Check in")) checkinAt = i;
       if (firstScheduleAt === -1 && stop.inSchedule) firstScheduleAt = i;
       if (stop.inRail) lastRailAt = i;
       if (firstMainAt === -1 && stop.inMain) firstMainAt = i;
     }
-    expect(medsAt, `Meds is reachable by keyboard at ${width}px`).toBeGreaterThanOrEqual(0);
+    expect(medsAt, `Log medication is reachable by keyboard at ${width}px`).toBeGreaterThanOrEqual(
+      0
+    );
     expect(checkinAt, `Check in is reachable by keyboard at ${width}px`).toBeGreaterThanOrEqual(0);
     if (firstScheduleAt !== -1) {
       expect(medsAt, `dock tabs before schedule items at ${width}px`).toBeLessThan(firstScheduleAt);

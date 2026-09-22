@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ClipboardCheck, Pill } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { localDay } from "@moss/shared";
 
@@ -25,6 +24,8 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
   const [medsModalOpen, setMedsModalOpen] = useState(false);
   const [manageMedsOpen, setManageMedsOpen] = useState(false);
   const [checkinModalOpen, setCheckinModalOpen] = useState(false);
+  const medsOpener = useRef<HTMLButtonElement | null>(null);
+  const medsClose = useRef<HTMLButtonElement | null>(null);
   const medScheduleQuery = useQuery({
     queryKey: queryKeys.wellness.schedule(localDay(new Date(), props.timeZone)),
     queryFn: () => getMedicationSchedule(localDay(new Date(), props.timeZone)),
@@ -34,7 +35,35 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
   const medTaken = medScheduledSlots.filter((s) => s.status === "taken").length;
   const medTotal = medScheduledSlots.length;
   const medsAllTaken = medTotal > 0 && medTaken === medTotal;
-  const medsNoneLogged = medTotal > 0 && medTaken === 0;
+  const medCountLine =
+    medTotal === 0
+      ? null
+      : medsAllTaken
+        ? `All ${medTotal} logged`
+        : `${medTaken} of ${medTotal} logged`;
+
+  function openMedsModal(opener: HTMLButtonElement | null) {
+    medsOpener.current = opener;
+    setMedsModalOpen(true);
+  }
+
+  function closeMedsModal() {
+    setMedsModalOpen(false);
+    medsOpener.current?.focus();
+  }
+
+  useEffect(() => {
+    if (!medsModalOpen) return;
+    medsClose.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMedsModal();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [medsModalOpen]);
   const createCheckinMutation = useMutation({
     mutationFn: (val: CheckinFormValue) =>
       createWellnessCheckin({
@@ -63,50 +92,30 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
           </div>
           <div className="well__row">
             <div className="well__rowtext">
-              <div className="well__label">Medications</div>
-              {medTotal > 0 ? (
-                <div className="well__sub">
-                  {medsAllTaken ? (
-                    <>
-                      <Check size={14} aria-hidden="true" /> <b>All meds taken</b> today.
-                    </>
-                  ) : medsNoneLogged ? (
-                    <>
-                      No meds logged yet today — <b>{medTotal}</b> to go.
-                    </>
-                  ) : (
-                    <>
-                      <b>
-                        {medTaken} of {medTotal}
-                      </b>{" "}
-                      meds logged today.
-                    </>
-                  )}
-                </div>
-              ) : null}
+              <div className="well__label">
+                Medications
+                {medCountLine ? <span className="well__count">{medCountLine}</span> : null}
+              </div>
             </div>
-            <button className="well__btn well__btn--meds" onClick={() => setMedsModalOpen(true)}>
-              <span className="lead">
-                <span className="ic">
-                  <Pill size={15} aria-hidden="true" />
-                </span>
-                Meds
-              </span>
-              {medTotal > 0 ? (
-                <span className={`well__ct${medsAllTaken ? " is-done" : ""}`}>
-                  {medTaken}/{medTotal}
-                </span>
-              ) : null}
+            <button
+              type="button"
+              ref={medsOpener}
+              className="well__plus"
+              aria-label="Log medication"
+              onClick={(event) => openMedsModal(event.currentTarget)}
+            >
+              +
             </button>
           </div>
           <div className="well__row">
             <div className="well__rowtext">
               <div className="well__label">Check in with yourself</div>
+              <div className="well__sub">A moment to notice how you are.</div>
             </div>
-            <button className="well__btn" onClick={() => setCheckinModalOpen(true)}>
-              <span className="ic">
-                <ClipboardCheck size={15} aria-hidden="true" />
-              </span>
+            <button
+              className="well__btn well__btn--primary"
+              onClick={() => setCheckinModalOpen(true)}
+            >
               Check in
             </button>
           </div>
@@ -117,7 +126,11 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
         <div
           className="wl-modal-scrim"
           onMouseDown={(ev) => {
-            if (ev.target === ev.currentTarget) setMedsModalOpen(false);
+            if (ev.target !== ev.currentTarget) return;
+            // Cancel the mousedown default so it cannot pull focus off the
+            // opener the close function just focused (the scrim is not focusable).
+            ev.preventDefault();
+            closeMedsModal();
           }}
         >
           <div
@@ -136,9 +149,10 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
               </div>
               <button
                 type="button"
+                ref={medsClose}
                 className="wl-modal__x"
                 aria-label="Close"
-                onClick={() => setMedsModalOpen(false)}
+                onClick={() => closeMedsModal()}
               >
                 <XIcon />
               </button>
@@ -147,7 +161,7 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
               <MedToday
                 theme={props.theme}
                 onManage={() => {
-                  setMedsModalOpen(false);
+                  closeMedsModal();
                   setManageMedsOpen(true);
                 }}
                 timeZone={props.timeZone}
@@ -155,11 +169,7 @@ export function TodayQuickActions(props: TodayQuickActionsProps) {
             </div>
             <div className="wl-modal__foot">
               <span className="spacer" />
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => setMedsModalOpen(false)}
-              >
+              <button type="button" className="primary-button" onClick={() => closeMedsModal()}>
                 Done
               </button>
             </div>

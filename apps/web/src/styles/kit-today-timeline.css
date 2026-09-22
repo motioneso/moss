@@ -172,14 +172,24 @@
   font-size: 30px;
   font-weight: 600;
 }
+/* Flat on the page like the mockup: neutralize the shared tinted/bordered/rounded
+   card (components-moss-today.css) and span the full rail column. */
+.cmd-aside .well {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding-left: 0;
+  padding-right: 0;
+  margin-left: -7px;
+}
 .cmd-aside .well__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  padding-bottom: 10px;
+  padding-bottom: 16px;
   border-bottom: 2px solid var(--forest);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 .cmd-aside .well__eyebrow {
   font-size: 9px;
@@ -191,17 +201,26 @@
 .cmd-aside .well__title {
   font-size: 11px;
   font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--forest);
+  position: relative;
+  top: 3px;
 }
 .cmd-aside .well__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 0;
+  gap: 8px;
+  padding: 12px 0 16px;
   border-bottom: 1px solid var(--line);
 }
+.cmd-aside .well__row + .well__row {
+  padding-top: 17px;
+  padding-bottom: 24px;
+}
 .cmd-aside .well__row:last-child {
-  border-bottom: none;
+  border-bottom: 1px solid var(--line);
 }
 .cmd-aside .well__rowtext {
   min-width: 0;
@@ -209,6 +228,7 @@
 .cmd-aside .well__label {
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
 }
 .cmd-aside .well__sub {
   font-size: 10px;
@@ -218,4 +238,41 @@
 }
 .cmd-aside .well__btn {
   flex: none;
+}
+.cmd-aside .well__count {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+.cmd-aside .well__plus {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 0 0 4px;
+  border: none;
+  background: transparent;
+  color: var(--forest);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.cmd-aside .well__plus:hover {
+  color: var(--forest-hover);
+}
+.cmd-aside .well__btn--primary {
+  background: var(--forest);
+  border: 1px solid var(--forest);
+  border-radius: 8px;
+  color: var(--paper);
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 12px 6px;
+}
+.cmd-aside .well__btn--primary:hover {
+  background: var(--forest-hover);
+  border-color: var(--forest-hover);
 }

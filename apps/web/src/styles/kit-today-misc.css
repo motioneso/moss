@@ -135,20 +135,8 @@
   padding: 2px 0 12px;
 }
 
-/* ===== Wellness card (progress meds) ===== */
-.well__btn--meds {
-  justify-content: space-between;
-  padding-left: 13px;
-  padding-right: 11px;
-}
-.well__btn--meds .lead {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-.well__ct {
-  font-variant-numeric: tabular-nums;
-}
+/* P2 action rail owns the Medications row now: the wide Meds button and its
+   count badge are gone, replaced by the rail-scoped plus control. */
 
 /* Soft, dismissible med reminder (client-only; reappears on reload — no server flag). */
 .well__nudge {
