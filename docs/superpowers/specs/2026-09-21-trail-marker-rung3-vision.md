@@ -106,7 +106,7 @@ lesser version of choosing apps.
   always wins, unchanged, whichever mode is chosen — watching the entire desktop never means
   watching a denied app or window.
 - Rung 1 observation, and rung 3 capture (§2, §4 above), gate on the same "is this app being
-  observed" check either way; nothing about *how* a judgment happens changes, only *which* apps
+  observed" check either way; nothing about _how_ a judgment happens changes, only _which_ apps
   can produce one.
 - The consent copy in the Focus pane (both the always-shown observation sentence and the rung-3
   sentence in §5 above) names its actual scope — "the apps you have allowed" or "the entire
