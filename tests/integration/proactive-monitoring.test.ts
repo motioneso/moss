@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Kysely } from "kysely";
 import pg from "pg";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
+import type { ProactiveMonitorProvider } from "@moss/module-sdk";
 import { CardRepository } from "@moss/proactive-monitoring";
 import { defaultProactiveMonitoringPreference } from "@moss/shared";
 import { connectionStrings, ids, resetEmptyFoundationDatabase } from "./test-database.js";
@@ -284,6 +285,184 @@ describe("Proactive Monitoring — integration", () => {
         cardRepo.findById(scopedDb, ids.userB, card.id)
       );
       expect(found).toBeUndefined();
+    });
+  });
+
+  describe("Scanner cross-user isolation", () => {
+    const NOW = new Date("2026-09-15T12:00:00.000Z");
+    const PAST = "2026-09-01T10:00:00.000Z";
+
+    function notesSignal(stableKey: string, title: string) {
+      return {
+        source: "notes",
+        stableKey,
+        sourceRefHash: `hash-${stableKey}`,
+        signalType: "decision_changed",
+        title,
+        summary: `${title} summary`,
+        occurredAt: PAST,
+        priorityCandidate: { explicitPriority: 5, dueAt: PAST, effort: "large" }
+      };
+    }
+
+    function capturingProvider(signals: ReturnType<typeof notesSignal>[]) {
+      const seen: { ownerUserId: string; priorityAnchors: unknown }[] = [];
+      const provider = {
+        source: "notes",
+        moduleId: "notes",
+        collectSignals: vi.fn(async (_db: unknown, input: never) => {
+          const typed = input as unknown as {
+            ownerUserId: string;
+            priorityAnchors: unknown;
+          };
+          seen.push({ ownerUserId: typed.ownerUserId, priorityAnchors: typed.priorityAnchors });
+          return { signals, nextCursor: {} };
+        })
+      } as unknown as ProactiveMonitorProvider;
+      return { provider, seen };
+    }
+
+    function priorityModel(label: string) {
+      return {
+        version: 1,
+        mode: "balanced",
+        anchors: [
+          {
+            id: `anchor-${label}`,
+            kind: "project",
+            label,
+            aliases: [],
+            weight: 2,
+            enabled: true,
+            createdAt: PAST,
+            updatedAt: PAST
+          }
+        ],
+        mutedSources: [],
+        updatedAt: PAST
+      };
+    }
+
+    it("one user's scan never writes or leaks to another user", async () => {
+      const {
+        ProactiveScanner,
+        ProactiveMonitoringPreferencesRepository,
+        MonitorStateRepository,
+        AntiSpamPolicy
+      } = await import("@moss/proactive-monitoring");
+      const { PriorityPreferencesRepository } = await import("@moss/priority");
+
+      const ctxA = { actorUserId: ids.userA, requestId: "test:scanner-isolation-a" };
+      const ctxB = { actorUserId: ids.userB, requestId: "test:scanner-isolation-b" };
+
+      // Each user enables only notes, with quiet hours off for determinism.
+      const prefsRepo = new ProactiveMonitoringPreferencesRepository();
+      for (const ctx of [ctxA, ctxB]) {
+        const base = defaultProactiveMonitoringPreference();
+        await dataContext.withDataContext(ctx, (scopedDb) =>
+          prefsRepo.upsert(scopedDb, {
+            ...base,
+            enabled: true,
+            dailyCardCap: 20,
+            sources: {
+              tasks: { enabled: false, dailyCardCap: 3 },
+              calendar: { enabled: false, dailyCardCap: 3 },
+              email: { enabled: false, dailyCardCap: 3 },
+              notes: { enabled: true, dailyCardCap: 5 }
+            },
+            quietHours: { enabled: false, startLocalTime: "22:00", endLocalTime: "08:00" },
+            updatedAt: new Date().toISOString()
+          })
+        );
+      }
+
+      // Each user gets a different priority model. The scanner reads the model
+      // with no owner filter, so row-level security is the only thing keeping
+      // one user's anchors out of the other user's scan.
+      const bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
+      await bootstrap.connect();
+      try {
+        for (const [userId, model] of [
+          [ids.userA, priorityModel("HarborLight")],
+          [ids.userB, priorityModel("CinderPeak")]
+        ] as const) {
+          await bootstrap.query(
+            `INSERT INTO app.preferences (owner_user_id, key, value_json, updated_at)
+             VALUES ($1, 'priority.model.v1', $2::jsonb, now())
+             ON CONFLICT (owner_user_id, key) DO UPDATE
+             SET value_json = EXCLUDED.value_json, updated_at = now()`,
+            [userId, JSON.stringify(model)]
+          );
+        }
+      } finally {
+        await bootstrap.end();
+      }
+
+      const scanner = new ProactiveScanner({
+        preferencesRepository: prefsRepo,
+        priorityPreferencesRepository: new PriorityPreferencesRepository(),
+        monitorStateRepository: new MonitorStateRepository(),
+        cardRepository: cardRepo,
+        antiSpamPolicy: new AntiSpamPolicy(cardRepo),
+        getLocalePreference: async () => ({ timezone: "UTC" })
+      });
+
+      const { provider: providerA, seen: seenA } = capturingProvider([
+        notesSignal("iso-scan:a:1", "Harbor bill")
+      ]);
+      const { provider: providerB, seen: seenB } = capturingProvider([
+        notesSignal("iso-scan:b:1", "Cinder bill")
+      ]);
+
+      const resultA = await dataContext.withDataContext(ctxA, (scopedDb) =>
+        scanner.scan(scopedDb, ids.userA, "notes", providerA, "source-sync", NOW)
+      );
+      const resultB = await dataContext.withDataContext(ctxB, (scopedDb) =>
+        scanner.scan(scopedDb, ids.userB, "notes", providerB, "source-sync", NOW)
+      );
+      expect(resultA.cardsCreated).toBe(1);
+      expect(resultB.cardsCreated).toBe(1);
+
+      // Each provider receives its own user's anchors, never the other's.
+      expect(seenA).toHaveLength(1);
+      expect(seenA[0]).toMatchObject({
+        ownerUserId: ids.userA,
+        priorityAnchors: [{ label: "HarborLight", aliases: [] }]
+      });
+      expect(seenB).toHaveLength(1);
+      expect(seenB[0]).toMatchObject({
+        ownerUserId: ids.userB,
+        priorityAnchors: [{ label: "CinderPeak", aliases: [] }]
+      });
+
+      // Each user's active list holds only their own card.
+      const cardsA = await dataContext.withDataContext(ctxA, (scopedDb) =>
+        cardRepo.listActive(scopedDb, ids.userA, 50)
+      );
+      const cardsB = await dataContext.withDataContext(ctxB, (scopedDb) =>
+        cardRepo.listActive(scopedDb, ids.userB, 50)
+      );
+      const titlesA = cardsA.map((c) => c.title);
+      const titlesB = cardsB.map((c) => c.title);
+      expect(titlesA).toContain("Harbor bill");
+      expect(titlesA).not.toContain("Cinder bill");
+      expect(titlesB).toContain("Cinder bill");
+      expect(titlesB).not.toContain("Harbor bill");
+
+      // A scan run inside B's context but handed A's id must not write for A:
+      // the card write violates the owner policy, so the scan fails loudly.
+      const { provider: providerCross } = capturingProvider([
+        notesSignal("iso-cross:1", "Cross bill")
+      ]);
+      await expect(
+        dataContext.withDataContext(ctxB, (scopedDb) =>
+          scanner.scan(scopedDb, ids.userA, "notes", providerCross, "source-sync", NOW)
+        )
+      ).rejects.toThrow();
+      const cross = await dataContext.withDataContext(ctxA, (scopedDb) =>
+        cardRepo.findByStableKey(scopedDb, ids.userA, "notes", "iso-cross:1")
+      );
+      expect(cross).toBeUndefined();
     });
   });
 });
