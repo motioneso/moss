@@ -94,10 +94,10 @@ struct FocusPane: View {
 
                         if focus.visionSource == .apiKey {
                             TextField(
-                                "Endpoint URL",
-                                text: Binding(get: { focus.visionEndpointURL }, set: { focus.setVisionEndpointURL($0) })
+                                "Base URL",
+                                text: Binding(get: { focus.visionBaseURL }, set: { focus.setVisionBaseURL($0) })
                             )
-                            Text("The exact URL to send the request to, such as https://openrouter.ai/api/v1/chat/completions. Nothing is appended to it.")
+                            Text("As the provider's own docs give it, such as https://openrouter.ai/api/v1. Trail Marker adds the chat-completions path onto it.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             TextField(
@@ -205,7 +205,7 @@ struct FocusPane: View {
         let destination: String
         switch focus.visionSource {
         case .apiKey:
-            let host = focus.visionEndpointURL.isEmpty ? "the endpoint you set below" : focus.visionEndpointURL
+            let host = focus.visionBaseURL.isEmpty ? "the endpoint you set below" : focus.visionBaseURL
             destination = host
         case .cli:
             destination = "Claude Code, signed in on this Mac"

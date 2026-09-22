@@ -23,7 +23,7 @@ final class PreferencesStore {
         static let focusAllowedBundleIds = "focusAllowedBundleIds"
         static let focusRung3Enabled = "focusRung3Enabled"
         static let focusVisionSource = "focusVisionSource"
-        static let focusVisionEndpointURL = "focusVisionEndpointURL"
+        static let focusVisionBaseURL = "focusVisionBaseURL"
         static let focusVisionModel = "focusVisionModel"
     }
 
@@ -105,9 +105,9 @@ final class PreferencesStore {
         set { defaults.set(newValue.rawValue, forKey: Key.focusVisionSource) }
     }
 
-    var focusVisionEndpointURL: String {
-        get { defaults.string(forKey: Key.focusVisionEndpointURL) ?? "" }
-        set { defaults.set(newValue, forKey: Key.focusVisionEndpointURL) }
+    var focusVisionBaseURL: String {
+        get { defaults.string(forKey: Key.focusVisionBaseURL) ?? "" }
+        set { defaults.set(newValue, forKey: Key.focusVisionBaseURL) }
     }
 
     var focusVisionModel: String {
@@ -121,7 +121,7 @@ final class PreferencesStore {
             Key.linkedIdentity, Key.connectionEnabled, Key.displayName, Key.pendingDisplayName,
             Key.startAtLogin, Key.autoCheckUpdates, Key.permissionsPromptShown,
             Key.focusConsent, Key.focusPaused, Key.focusAllowedBundleIds,
-            Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionEndpointURL, Key.focusVisionModel
+            Key.focusRung3Enabled, Key.focusVisionSource, Key.focusVisionBaseURL, Key.focusVisionModel
         ] {
             defaults.removeObject(forKey: key)
         }

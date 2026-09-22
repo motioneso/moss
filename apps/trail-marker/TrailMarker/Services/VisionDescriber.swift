@@ -34,31 +34,46 @@ protocol VisionDescribing {
     func describe(_ image: Data) async throws -> String
 }
 
-/// An OpenAI-compatible vision endpoint the person configured (rung3 spec §3, first source): the
-/// full URL to POST to, a model name, a key. One request, no streaming, no retry on anything but a
-/// transport failure (matches the server's own judge timeout so the two ends behave alike).
+/// An OpenAI-compatible vision endpoint the person configured (rung3 spec §3, first source): a
+/// base URL, a model name, a key. One request, no streaming, no retry on anything but a transport
+/// failure (matches the server's own judge timeout so the two ends behave alike).
 ///
-/// The URL is used exactly as entered — nothing is appended. Every provider words "the URL" for
-/// its chat-completions endpoint differently (OpenAI-compatible hosts vary on whether `/v1` is
-/// already in it), so guessing a suffix either doubles a path someone already gave in full or
-/// leaves a path off; the person's own URL, verbatim, is the only version that's never wrong.
+/// The base URL is as each provider's own docs give it — routed the same way the rest of Moss
+/// routes an OpenAI-compatible provider (`packages/ai/src/adapters/http-api.ts`): OpenAI's is a
+/// bare host (`https://api.openai.com`) and this adds `/v1/chat/completions`; OpenRouter's already
+/// ends in `/v1` (`https://openrouter.ai/api/v1`) and this adds only `/chat/completions`, or it
+/// would double the `v1`.
 struct HTTPVisionDescriber: VisionDescribing {
-    let endpointURL: URL
+    let baseURL: URL
     let model: String
     let apiKey: String
     private let session: URLSession
     static let timeout: TimeInterval = 20
 
-    init(endpointURL: URL, model: String, apiKey: String, session: URLSession = .shared) {
-        self.endpointURL = endpointURL
+    init(baseURL: URL, model: String, apiKey: String, session: URLSession = .shared) {
+        self.baseURL = baseURL
         self.model = model
         self.apiKey = apiKey
         self.session = session
     }
 
+    /// A base URL ending in `/v1` (with or without a trailing slash) already carries the segment
+    /// every OpenAI-compatible host's chat-completions path starts with, so only the rest is
+    /// added; any other base gets the whole versioned path the way OpenAI's and Anthropic's own
+    /// bare-host bases do elsewhere in this codebase.
+    static func chatCompletionsURL(from baseURL: URL) -> URL {
+        let trimmedPath = baseURL.path.hasSuffix("/") ? String(baseURL.path.dropLast()) : baseURL.path
+        if trimmedPath.hasSuffix("/v1") || trimmedPath == "v1" {
+            return baseURL.appendingPathComponent("chat/completions")
+        }
+        return baseURL.appendingPathComponent("v1/chat/completions")
+    }
+
     func describe(_ image: Data) async throws -> String {
         guard !apiKey.isEmpty, !model.isEmpty else { throw VisionError.notConfigured }
-        var request = URLRequest(url: endpointURL, timeoutInterval: Self.timeout)
+        var request = URLRequest(
+            url: Self.chatCompletionsURL(from: baseURL), timeoutInterval: Self.timeout
+        )
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")

@@ -49,7 +49,7 @@ final class FocusRuntime: ObservableObject {
     /// Screen Recording already granted.
     @Published private(set) var rung3Enabled: Bool
     @Published private(set) var visionSource: VisionSource
-    @Published private(set) var visionEndpointURL: String
+    @Published private(set) var visionBaseURL: String
     @Published private(set) var visionModel: String
     /// The last "Test vision" result, shown in the Focus pane. Cleared on the next attempt.
     @Published private(set) var visionTestResult: Result<String, VisionError>?
@@ -90,15 +90,15 @@ final class FocusRuntime: ObservableObject {
         transportFactory: @escaping (InstanceURL) -> CompanionTransport = { _ in URLSessionTransport() },
         windowCapture: WindowCapturing = ScreenCaptureKitCapture(),
         visionDescriberFactory: @escaping (VisionSource, String, String, String) -> VisionDescribing = {
-            source, endpointURL, model, apiKey in
+            source, baseURL, model, apiKey in
             switch source {
             case .cli:
                 return CLIVisionDescriber()
             case .apiKey:
-                guard let url = URL(string: endpointURL), !endpointURL.isEmpty else {
-                    return HTTPVisionDescriber(endpointURL: URL(string: "about:blank")!, model: model, apiKey: "")
+                guard let url = URL(string: baseURL), !baseURL.isEmpty else {
+                    return HTTPVisionDescriber(baseURL: URL(string: "about:blank")!, model: model, apiKey: "")
                 }
-                return HTTPVisionDescriber(endpointURL: url, model: model, apiKey: apiKey)
+                return HTTPVisionDescriber(baseURL: url, model: model, apiKey: apiKey)
             }
         }
     ) {
@@ -116,7 +116,7 @@ final class FocusRuntime: ObservableObject {
         self.allowedBundleIds = preferences.focusAllowedBundleIds
         self.rung3Enabled = preferences.focusRung3Enabled
         self.visionSource = preferences.focusVisionSource
-        self.visionEndpointURL = preferences.focusVisionEndpointURL
+        self.visionBaseURL = preferences.focusVisionBaseURL
         self.visionModel = preferences.focusVisionModel
         self.hasVisionAPIKey = keychain.readVisionKey() != nil
         self.machine = FocusMachine(policy: ObservationPolicy(allowedBundleIds: preferences.focusAllowedBundleIds))
@@ -185,9 +185,9 @@ final class FocusRuntime: ObservableObject {
         preferences.focusVisionSource = value
     }
 
-    func setVisionEndpointURL(_ value: String) {
-        visionEndpointURL = value
-        preferences.focusVisionEndpointURL = value
+    func setVisionBaseURL(_ value: String) {
+        visionBaseURL = value
+        preferences.focusVisionBaseURL = value
     }
 
     func setVisionModel(_ value: String) {
@@ -218,7 +218,7 @@ final class FocusRuntime: ObservableObject {
             return
         }
         let describer = visionDescriberFactory(
-            visionSource, visionEndpointURL, visionModel, keychain.readVisionKey() ?? ""
+            visionSource, visionBaseURL, visionModel, keychain.readVisionKey() ?? ""
         )
         track { [weak self] in
             guard let self else { return }
@@ -364,7 +364,7 @@ final class FocusRuntime: ObservableObject {
                 }
 
                 let describer = self.visionDescriberFactory(
-                    self.visionSource, self.visionEndpointURL, self.visionModel,
+                    self.visionSource, self.visionBaseURL, self.visionModel,
                     self.keychain.readVisionKey() ?? ""
                 )
                 let description: String?

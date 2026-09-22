@@ -58,22 +58,28 @@ final class HTTPVisionDescriberTests: XCTestCase {
         super.tearDown()
     }
 
-    func testUsesTheEnteredURLExactlyWithNothingAppended() async throws {
-        var requestedURL: URL?
-        StubURLProtocol.handler = { request, _ in
-            requestedURL = request.url
-            return (200, #"{"choices":[{"message":{"content":"x"}}]}"#.data(using: .utf8)!)
-        }
-        // A URL that already carries a path a naive "append /v1/chat/completions" would have
-        // doubled (the exact shape of the OpenRouter mistake this test guards against).
-        let entered = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
-        let describer = HTTPVisionDescriber(
-            endpointURL: entered, model: "m", apiKey: "k", session: stubbedSession()
+    func testRoutesABareHostLikeOpenAIWithTheFullVersionedPath() {
+        XCTAssertEqual(
+            HTTPVisionDescriber.chatCompletionsURL(from: URL(string: "https://api.openai.com")!)
+                .absoluteString,
+            "https://api.openai.com/v1/chat/completions"
         )
+    }
 
-        _ = try await describer.describe(image)
-
-        XCTAssertEqual(requestedURL, entered)
+    func testRoutesABaseThatAlreadyEndsInV1WithoutDoublingIt() {
+        // OpenRouter's own docs give this exact base URL; the earlier bug appended "v1/..." onto
+        // it regardless and produced .../api/v1/v1/chat/completions, a 404.
+        XCTAssertEqual(
+            HTTPVisionDescriber.chatCompletionsURL(from: URL(string: "https://openrouter.ai/api/v1")!)
+                .absoluteString,
+            "https://openrouter.ai/api/v1/chat/completions"
+        )
+        // Same, with a trailing slash someone might paste in.
+        XCTAssertEqual(
+            HTTPVisionDescriber.chatCompletionsURL(from: URL(string: "https://openrouter.ai/api/v1/")!)
+                .absoluteString,
+            "https://openrouter.ai/api/v1/chat/completions"
+        )
     }
 
     func testSendsTheFixedInstructionAndTheImageAsDataURL() async throws {
@@ -86,8 +92,8 @@ final class HTTPVisionDescriberTests: XCTestCase {
             return (200, body)
         }
         let describer = HTTPVisionDescriber(
-            endpointURL: URL(string: "https://vision.example.com/v1/chat/completions")!, model: "vision-1",
-            apiKey: "key-123", session: stubbedSession()
+            baseURL: URL(string: "https://vision.example.com")!, model: "vision-1", apiKey: "key-123",
+            session: stubbedSession()
         )
 
         let result = try await describer.describe(image)
@@ -109,7 +115,7 @@ final class HTTPVisionDescriberTests: XCTestCase {
             return (200, Data())
         }
         let describer = HTTPVisionDescriber(
-            endpointURL: URL(string: "https://vision.example.com/v1/chat/completions")!, model: "", apiKey: "", session: stubbedSession()
+            baseURL: URL(string: "https://vision.example.com")!, model: "", apiKey: "", session: stubbedSession()
         )
         do {
             _ = try await describer.describe(image)
@@ -124,7 +130,7 @@ final class HTTPVisionDescriberTests: XCTestCase {
         for status in [401, 403] {
             StubURLProtocol.handler = { _, _ in (status, Data()) }
             let describer = HTTPVisionDescriber(
-                endpointURL: URL(string: "https://vision.example.com/v1/chat/completions")!, model: "m", apiKey: "k",
+                baseURL: URL(string: "https://vision.example.com")!, model: "m", apiKey: "k",
                 session: stubbedSession()
             )
             do {
@@ -139,7 +145,7 @@ final class HTTPVisionDescriberTests: XCTestCase {
     func testAMalformedSuccessBodyIsAnInvalidResponse() async {
         StubURLProtocol.handler = { _, _ in (200, #"{"unexpected":true}"#.data(using: .utf8)!) }
         let describer = HTTPVisionDescriber(
-            endpointURL: URL(string: "https://vision.example.com/v1/chat/completions")!, model: "m", apiKey: "k",
+            baseURL: URL(string: "https://vision.example.com")!, model: "m", apiKey: "k",
             session: stubbedSession()
         )
         do {
@@ -157,7 +163,7 @@ final class HTTPVisionDescriberTests: XCTestCase {
             return (503, Data())
         }
         let describer = HTTPVisionDescriber(
-            endpointURL: URL(string: "https://vision.example.com/v1/chat/completions")!, model: "m", apiKey: "k",
+            baseURL: URL(string: "https://vision.example.com")!, model: "m", apiKey: "k",
             session: stubbedSession()
         )
         do {
