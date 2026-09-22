@@ -25,6 +25,9 @@ describe("Trail Marker focus judgment model binding", () => {
   let originalFetch: typeof globalThis.fetch;
   let providerId: string;
   let modelId: string;
+  // Set by the routing test below; the later System One tests reuse them.
+  let systemOneProviderId: string;
+  let systemOneModelId: string;
 
   beforeAll(async () => {
     originalSecretKey = process.env.JARVIS_AI_SECRET_KEY;
@@ -182,7 +185,8 @@ describe("Trail Marker focus judgment model binding", () => {
       }
     });
     expect(added.statusCode).toBe(201);
-    const systemOneModelId = added.json<{ model: { id: string } }>().model.id;
+    systemOneProviderId = systemOne.id;
+    systemOneModelId = added.json<{ model: { id: string } }>().model.id;
 
     const resolved = await dataContext.withDataContext(
       { actorUserId: ids.adminUser, requestId: "system-one-auto-route" },
@@ -194,6 +198,38 @@ describe("Trail Marker focus judgment model binding", () => {
     expect(resolved.model).not.toBeNull();
     expect(resolved.model?.id).not.toBe(systemOneModelId);
     expect(resolved.model?.provider_kind).not.toBe("system-one");
+  });
+
+  // Review of #2584: an explicit binding or the default flag reached the same breakage the routing
+  // exclusion above prevents.
+  it("binds a System One model only to the platform-owned judgment, never to other json work (fails without the provider-kind check)", async () => {
+    const other = await bind("module.worker", {
+      binding: { kind: "model", modelId: systemOneModelId }
+    });
+    expect(other.statusCode).toBe(400);
+    expect(other.json<{ error: string }>().error).toContain("compatible model");
+
+    const judge = await bind(SERVICE, { binding: { kind: "model", modelId: systemOneModelId } });
+    expect(judge.statusCode).toBe(200);
+    // Leave the key bound to the ordinary model, as the later tests expect.
+    expect((await bind(SERVICE, { binding: { kind: "model", modelId } })).statusCode).toBe(200);
+  });
+
+  it("never makes a System One provider the instance default (fails without the refusal)", async () => {
+    const response = await server.inject({
+      method: "PUT",
+      url: `/api/ai/providers/${systemOneProviderId}/default`,
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` }
+    });
+    expect(response.statusCode).toBe(404);
+    const flagged = await dataContext.withDataContext(
+      { actorUserId: ids.adminUser, requestId: "system-one-default" },
+      async (scopedDb) =>
+        (await repository.listProviders(scopedDb)).filter(
+          (provider) => provider.is_instance_default
+        )
+    );
+    expect(flagged.map((provider) => provider.id)).toEqual([providerId]);
   });
 
   it("returns to never resolving once the binding is removed", async () => {

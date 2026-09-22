@@ -58,7 +58,9 @@ import {
   type AiProviderExecutionMode,
   type AiProviderKind,
   type AiServiceBinding,
-  type AiServiceKey
+  type AiServiceKey,
+  isModuleServiceKey,
+  isPlatformServiceKey
 } from "@moss/shared";
 
 /**
@@ -189,7 +191,8 @@ function ProviderCard(props: {
               <Badge tone="amber" dot>
                 Default
               </Badge>
-            ) : (
+            ) : provider.providerKind === "system-one" ? null : (
+              // A System One provider only answers choice questions; it can never be the default.
               <Button variant="quiet" size="sm" onClick={props.onSetInstanceDefault}>
                 Set as default
               </Button>
@@ -446,6 +449,9 @@ function ServiceRow(props: {
   });
 
   // Active models that can actually serve this service (a "model" binding must be capability-valid).
+  // System One models serve only the platform-owned Trail Marker judgment, as the server enforces.
+  const platformOwned =
+    isModuleServiceKey(props.service.k) && isPlatformServiceKey(props.service.k);
   const capableModels = props.models.filter((model) => {
     const provider = props.providers.find((candidate) => candidate.id === model.providerConfigId);
     const providerReady =
@@ -455,6 +461,7 @@ function ServiceRow(props: {
       model.status === "active" &&
       model.providerStatus === "active" &&
       providerReady &&
+      (platformOwned || provider.providerKind !== "system-one") &&
       model.capabilities.includes(props.service.capability)
     );
   });

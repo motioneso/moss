@@ -143,7 +143,10 @@ export function registerAiServiceRoutes(
                   model.id === binding.modelId &&
                   model.status === "active" &&
                   model.provider_status === "active" &&
-                  model.capabilities.includes(requiredCapability)
+                  model.capabilities.includes(requiredCapability) &&
+                  // System One answers only choice questions, which only the platform-owned
+                  // Trail Marker judgment asks; any other service would fail on every call.
+                  (platformOwned || model.provider_kind !== "system-one")
               );
               if (!valid) {
                 throw new HttpError(400, "modelId must reference an active compatible model");

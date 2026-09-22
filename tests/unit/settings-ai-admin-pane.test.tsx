@@ -330,6 +330,41 @@ describe("AiProvidersPane Trail Marker focus judgment row (#2570)", () => {
       renderer.unmount();
     });
   });
+
+  it("offers a System One model only to this row and never as the default provider (fails without the provider-kind filter)", async () => {
+    seedProviderAndModel();
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
+      providers: [
+        {
+          id: "prov1",
+          providerKind: "system-one",
+          displayName: "System One",
+          authMethod: "api_key",
+          executionMode: "interactive",
+          status: "active",
+          hasCredential: true,
+          isInstanceDefault: false
+        }
+      ]
+    } as never);
+    const renderer = await renderPane();
+
+    const optionTexts = (label: string) =>
+      selects(renderer, label)[0]!
+        .findAllByType("option")
+        .map((option) => option.children.join(""));
+    expect(optionTexts(ROW_LABEL)).toContain("Jev");
+    expect(optionTexts("Binding for Email extraction")).not.toContain("Jev");
+    const setDefault = renderer.root
+      .findAllByType("button")
+      .filter((button) => button.children.includes("Set as default"));
+    expect(setDefault).toHaveLength(0);
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
   it("shows each provider its own example address and key, not another company's", async () => {
     const renderer = await renderPane();
     clickButtonByText(renderer, "Add provider");

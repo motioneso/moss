@@ -925,6 +925,9 @@ export class AiRepository {
     // PUT /api/ai/providers/{voiceId}/default would flag the voice row and chat "mode" bindings would
     // resolve INSIDE the voice provider. Returning undefined maps to a 404 at the route.
     if (target.purpose === "voice") return undefined;
+    // #2586: a System One provider answers only named choice questions, so chat and mode bindings
+    // resolved inside it would fail. Refused the same way as voice.
+    if (target.provider_kind === "system-one") return undefined;
 
     await scopedDb.db
       .updateTable("app.ai_provider_configs")
