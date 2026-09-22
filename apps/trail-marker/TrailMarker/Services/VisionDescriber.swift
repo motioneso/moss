@@ -34,18 +34,23 @@ protocol VisionDescribing {
     func describe(_ image: Data) async throws -> String
 }
 
-/// An OpenAI-compatible vision endpoint the person configured (rung3 spec §3, first source):
-/// base URL, model name, key. One request, no streaming, no retry on anything but a transport
-/// failure (matches the server's own judge timeout so the two ends behave alike).
+/// An OpenAI-compatible vision endpoint the person configured (rung3 spec §3, first source): the
+/// full URL to POST to, a model name, a key. One request, no streaming, no retry on anything but a
+/// transport failure (matches the server's own judge timeout so the two ends behave alike).
+///
+/// The URL is used exactly as entered — nothing is appended. Every provider words "the URL" for
+/// its chat-completions endpoint differently (OpenAI-compatible hosts vary on whether `/v1` is
+/// already in it), so guessing a suffix either doubles a path someone already gave in full or
+/// leaves a path off; the person's own URL, verbatim, is the only version that's never wrong.
 struct HTTPVisionDescriber: VisionDescribing {
-    let baseURL: URL
+    let endpointURL: URL
     let model: String
     let apiKey: String
     private let session: URLSession
     static let timeout: TimeInterval = 20
 
-    init(baseURL: URL, model: String, apiKey: String, session: URLSession = .shared) {
-        self.baseURL = baseURL
+    init(endpointURL: URL, model: String, apiKey: String, session: URLSession = .shared) {
+        self.endpointURL = endpointURL
         self.model = model
         self.apiKey = apiKey
         self.session = session
@@ -53,10 +58,7 @@ struct HTTPVisionDescriber: VisionDescribing {
 
     func describe(_ image: Data) async throws -> String {
         guard !apiKey.isEmpty, !model.isEmpty else { throw VisionError.notConfigured }
-        var request = URLRequest(
-            url: baseURL.appendingPathComponent("v1/chat/completions"),
-            timeoutInterval: Self.timeout
-        )
+        var request = URLRequest(url: endpointURL, timeoutInterval: Self.timeout)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -110,6 +112,7 @@ struct HTTPVisionDescriber: VisionDescribing {
             return try await session.data(for: request)
         }
     }
+
 }
 
 /// Runs a process and reports what it printed. A protocol so tests never launch a real process
