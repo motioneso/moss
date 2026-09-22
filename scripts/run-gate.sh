@@ -41,7 +41,8 @@
 #       status/wait.
 #
 #   scripts/run-gate.sh status [--log <path>]
-#       One-shot verdict. Reads the sentinel and the log mtime — nothing else.
+#       One-shot verdict. Reads the sentinel, the launch-failure marker, and
+#       the log mtime — nothing else.
 #
 #   scripts/run-gate.sh wait [--log <path>] [--timeout <seconds>]
 #       Blocks until the gate reaches a terminal state, or until the timeout
@@ -129,6 +130,24 @@ die() {
   exit 4
 }
 
+# Armed by cmd_start only. Globals because an EXIT trap fires outside the
+# function's frame (the same reason cmd___run uses globals).
+LAUNCH_LOG=""
+LAUNCH_OK=0
+
+# EXIT trap for cmd_start (#2473): if the shell leaves before the runner's
+# PID is confirmed, the log gets a launch-failure marker so no later wait can
+# mistake the previous run's result for this one. Covers die, set -e aborts,
+# SIGPIPE, TERM and INT. SIGKILL cannot run any trap; the verdict backstop
+# below keys on the first header line for that case. Always succeeds.
+start_abort() {
+  [ "${LAUNCH_OK:-0}" = "1" ] && return 0
+  [ -n "${LAUNCH_LOG:-}" ] || return 0
+  grep -qF "$LAUNCH_FAILED_PREFIX" "$LAUNCH_LOG" 2>/dev/null && return 0
+  echo "${LAUNCH_FAILED_PREFIX}start exited before the runner launched" >>"$LAUNCH_LOG" 2>/dev/null || true
+  return 0
+}
+
 # Worktree identity. Every lane gets its own log and its own gate database, so
 # two lanes never share either.
 repo_root() {
@@ -213,6 +232,16 @@ cmd_start() {
   mkdir -p "$STATE_DIR"
   log="$STATE_DIR/${slug}-$(date +%Y%m%d-%H%M%S).log"
 
+  # Early pointer (#2473). The pointer names the latest log before anything
+  # else that can fail, so a start that dies mid-setup can never leave
+  # wait/status reading the previous run's result. The EXIT trap marks the
+  # log unless the runner's PID is confirmed.
+  echo "### GATE   pnpm $gate" >"$log"
+  echo "$log" >"$(pointer_file "$slug")"
+  LAUNCH_LOG="$log"
+  LAUNCH_OK=0
+  trap start_abort EXIT
+
   # Serialize the DROP/CREATE. These touch shared catalogs (pg_database), which
   # per-database isolation does not cover — concurrent create/drop across lanes
   # is one way to produce `tuple concurrently updated`. Cheap: held for a second
@@ -231,7 +260,6 @@ cmd_start() {
   ) 200>"$lock" || die "could not provision gate database $gatedb"
 
   {
-    echo "### GATE   pnpm $gate"
     echo "### CWD    $root"
     echo "### COMMIT $gate_commit"
     echo "### DIRTY  $gate_dirty"
@@ -247,25 +275,26 @@ cmd_start() {
     echo "### DB     $gatedb (container $CONTAINER)"
     echo "### START  $(date -Is)"
     echo
-  } >"$log"
+  } >>"$log"
 
   # Exported, not inline — see the header note.
   export JARVIS_PGDATABASE="$gatedb"
 
   # setsid+nohup so the run outlives this shell. The Bash tool's shell exits the
   # moment the call returns; without full detachment the gate can die with it.
+  # The launcher's stderr goes to a sidecar so a real failure becomes the DEAD
+  # reason instead of a generic message.
   setsid nohup "$0" __run "$log" "$gate" "$keep_db" "$gatedb" "$exclusive" "$root" \
-    >/dev/null 2>&1 &
+    >/dev/null 2>"$log.launch-err" &
+  local launcher_pid=$!
   disown 2>/dev/null || true
-
-  echo "$log" >"$(pointer_file "$slug")"
 
   # Launch confirmation (#2473). The runner records `### PID` as its first log
   # action, within about a second of a healthy launch. If no PID lands within
-  # the bound, the launch itself failed (previously this printed STARTED and
-  # left a log that read RUNNING until the 900s idle bound — a silent hang).
-  # Mark the log so every later status/wait reports DEAD with the reason, and
-  # fail this start loudly instead of returning success.
+  # the bound, the launch itself failed: stop the orphan before it can hold
+  # the gate database (or the shared lock under --exclusive), mark the log so
+  # every later status/wait reports DEAD with the reason, and fail this start
+  # loudly instead of returning success.
   local waited=0
   while [ "$waited" -lt "$LAUNCH_WAIT_SECS" ]; do
     if grep -q '^### PID ' "$log" 2>/dev/null; then
@@ -275,9 +304,29 @@ cmd_start() {
     waited=$((waited + 1))
   done
   if ! grep -q '^### PID ' "$log" 2>/dev/null; then
-    echo "${LAUNCH_FAILED_PREFIX}runner never recorded its PID within ${LAUNCH_WAIT_SECS}s of launch ($(date -Is))" >>"$log"
-    die "runner failed to start — no PID recorded in $log (DEAD, see status)"
+    # Group-kill only when the launcher leads its own session (what real
+    # setsid creates); otherwise kill just the launcher itself.
+    if [ "$(ps -o sid= -p "$launcher_pid" 2>/dev/null | tr -d ' ')" = "$launcher_pid" ]; then
+      kill -TERM -- -"$launcher_pid" 2>/dev/null || kill -TERM "$launcher_pid" 2>/dev/null || true
+    else
+      kill -TERM "$launcher_pid" 2>/dev/null || true
+    fi
+    local launch_err=""
+    IFS= read -r launch_err <"$log.launch-err" 2>/dev/null || true
+    launch_err="${launch_err:0:200}"
+    [ -n "$launch_err" ] || launch_err="runner never recorded its PID within ${LAUNCH_WAIT_SECS}s of launch"
+    echo "${LAUNCH_FAILED_PREFIX}${launch_err} ($(date -Is))" >>"$log"
+    if [ "$keep_db" != "1" ]; then
+      docker exec -e PGOPTIONS='-c client_min_messages=warning' "$CONTAINER" \
+        psql -U postgres -q -c "DROP DATABASE IF EXISTS $gatedb WITH (FORCE);" >/dev/null 2>&1 || true
+      echo "### CLEANUP dropped $gatedb (launch failed)" >>"$log"
+    fi
+    LAUNCH_OK=1
+    die "runner failed to start: $launch_err ($log reads DEAD, see status)"
   fi
+
+  LAUNCH_OK=1
+  trap - EXIT
 
   echo "STARTED  gate=pnpm $gate  db=$gatedb"
   echo "LOG=$log"
@@ -365,25 +414,27 @@ verdict() {
 
   local sentinel rc receipt
   receipt="$(receipt_summary "$log")"
-
-  # Failed launch (#2473). `start` marks the log when the runner never
-  # recorded its PID, so a launch failure is terminal at once — never a
-  # silent RUNNING until the idle bound.
-  local launch_failure
-  launch_failure="$(grep -F "$LAUNCH_FAILED_PREFIX" "$log" | tail -1 || true)"
-  if [ -n "$launch_failure" ]; then
-    [ "$quiet" = "1" ] || {
-      echo "DEAD  ${launch_failure#"${LAUNCH_FAILED_PREFIX}"}  ($log)"
-      echo "last: $(grep -v '^[[:space:]]*$' "$log" | tail -1 | cut -c1-160)"
-    }
-    return 2
-  fi
   sentinel="$(grep -F "$SENTINEL_PREFIX" "$log" | tail -1 || true)"
   if [ -n "$sentinel" ]; then
     rc="${sentinel##"$SENTINEL_PREFIX"}"
     [ "$quiet" = "1" ] || echo "DONE rc=$rc  ($log)  [$receipt]"
     [ "$rc" = "0" ] && return 0
     return 1
+  fi
+
+  # Failed launch (#2473). Terminal only when the runner never recorded a
+  # PID: a late runner that kept going must still read by liveness below, and
+  # a finished run already returned above — a stale marker must never override
+  # either. A launch failure with no runner behind it is DEAD at once, never
+  # a silent RUNNING until the idle bound.
+  local launch_failure
+  launch_failure="$(grep -F "$LAUNCH_FAILED_PREFIX" "$log" | tail -1 || true)"
+  if [ -n "$launch_failure" ] && ! grep -q '^### PID ' "$log" 2>/dev/null; then
+    [ "$quiet" = "1" ] || {
+      echo "DEAD  ${launch_failure#"${LAUNCH_FAILED_PREFIX}"}  ($log)  [$receipt]"
+      echo "last: $(grep -v '^[[:space:]]*$' "$log" | tail -1 | cut -c1-160)"
+    }
+    return 2
   fi
 
   local now mtime age
@@ -431,16 +482,17 @@ verdict() {
     return 2
   fi
 
-  # No recorded PID. If the log carries our start header, the runner should
-  # have recorded its PID within seconds of launch — an older header-only log
-  # means the start died before the runner existed (#2473), so report DEAD
-  # after the short launch grace instead of the foreign-log idle bound. Only
-  # a log with no header at all is a hand-rolled or foreign log, judged by
-  # mtime alone.
-  if grep -q '^### START ' "$log" 2>/dev/null; then
+  # No recorded PID. If the log carries our first header line, the runner
+  # should have recorded its PID within seconds of launch — an older
+  # header-only log means the start died before the runner existed (#2473),
+  # so report DEAD after the short launch grace instead of the foreign-log
+  # idle bound. Key on the FIRST line: ### START is written last, and a start
+  # killed mid-setup may never reach it. Only a log with no header at all is
+  # a hand-rolled or foreign log, judged by mtime alone.
+  if grep -q '^### GATE ' "$log" 2>/dev/null; then
     if [ "$age" -gt "$LAUNCH_GRACE_SECS" ]; then
       [ "$quiet" = "1" ] || {
-        echo "DEAD  start header present but the runner never recorded a pid (log idle ${age}s, launch grace ${LAUNCH_GRACE_SECS}s) — the start failed before the runner launched  ($log)"
+        echo "DEAD  start header present but the runner never recorded a pid (log idle ${age}s, launch grace ${LAUNCH_GRACE_SECS}s) — the start failed before the runner launched  ($log)  [$receipt]"
         echo "last: $(grep -v '^[[:space:]]*$' "$log" | tail -1 | cut -c1-160)"
       }
       return 2
@@ -483,6 +535,13 @@ cmd_stop() {
   log="$(resolve_log)"
 
   if grep -qF "$SENTINEL_PREFIX" "$log"; then
+    verdict "$log" || true
+    return 0
+  fi
+
+  # Nothing to stop when the runner never launched (a launch-failed log):
+  # report the verdict instead of erroring, mirroring the finished-run path.
+  if ! grep -q '^### PID ' "$log" 2>/dev/null; then
     verdict "$log" || true
     return 0
   fi

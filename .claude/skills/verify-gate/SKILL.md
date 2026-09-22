@@ -16,7 +16,8 @@ Do not DROP/CREATE databases, export variables, background subshells, or write w
 hand. The script does all of it correctly.
 
 ```bash
-# 1. Launch — creates a fresh isolated gate DB, detaches, prints the log path, returns at once.
+# 1. Launch — creates a fresh isolated gate DB, detaches, confirms the runner
+#    started (about a second), prints the log path, and returns.
 scripts/run-gate.sh start            # add --gate <pnpm-script> for a narrower gate
 
 # 2. Wait — launch this as ONE Bash call with run_in_background: true. It never gives up
@@ -43,7 +44,9 @@ so an old result can only be trusted when its commit matches and its tree was cl
 - **Never decide liveness with `pgrep`/`ps`.** The Bash tool's wrapper shells match your pattern
   long after the real process died (the 19-hour stall). The script's sentinel is the only truth.
 - **A failed launch is loud, not a hang.** If `start` cannot get the runner going, it exits
-  non-zero and marks the log, and `status`/`wait` report dead (exit `2`) with the reason.
+  non-zero (exit `4`, which now includes a failed launch) and marks the log, and `status`/`wait`
+  report dead (exit `2`) with the reason. When `start` exits non-zero, fix the reported cause
+  and start again — never read an earlier result as this run's verdict.
 - **Stagger with other sessions.** Concurrent gate runs crash the shared dev Postgres. Check
   `herdr pane list` before starting one; if another gate is running, wait for it.
 - **Green local is not green CI.** The gate does **not** include `test:e2e`; CI runs the browser
