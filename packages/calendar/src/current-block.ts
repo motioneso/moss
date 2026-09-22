@@ -55,9 +55,9 @@ export function pickCurrentMossBlock(
 }
 
 /**
- * Reads the caller's own events through the scoped connection, so the calendar's owner-only row
- * policy decides whose events these are. No owner parameter on purpose: a second filter here would
- * only hide a regression in that policy.
+ * Reads the caller's own events through the scoped connection. The calendar's row policy also lets
+ * through events other people shared with the caller, and someone else's focus block is never the
+ * caller's goal, so the read also keeps only rows the actor owns.
  */
 export async function getCurrentMossBlock(
   scopedDb: DataContextDb,
@@ -66,6 +66,7 @@ export async function getCurrentMossBlock(
   assertDataContextDb(scopedDb);
   const events = await new CalendarRepository().listVisible(scopedDb, {
     endsAfter: now,
+    ownedByActor: true,
     // The repository compares starts with "<", so one millisecond past `now` includes an event
     // that starts exactly at `now`.
     startsBefore: new Date(now.getTime() + 1)

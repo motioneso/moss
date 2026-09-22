@@ -48,17 +48,19 @@ describe("getCurrentMossBlock through a scoped connection", () => {
     ownerId: string,
     accountId: string,
     externalId: string,
-    title: string
+    title: string,
+    startsAt = new Date("2026-09-21T09:00:00.000Z"),
+    endsAt = new Date("2026-09-21T11:00:00.000Z")
   ) {
-    await dataContext.withDataContext(
+    return dataContext.withDataContext(
       { actorUserId: ownerId, requestId: "seed-event" },
       (scopedDb) =>
         new CalendarRepository().upsertCachedEvent(scopedDb, {
           connectorAccountId: accountId,
           externalId,
           title,
-          startsAt: new Date("2026-09-21T09:00:00.000Z"),
-          endsAt: new Date("2026-09-21T11:00:00.000Z"),
+          startsAt,
+          endsAt,
           externalMetadata: { jarvisCreated: true, source: "createEvent" }
         })
     );
@@ -83,6 +85,48 @@ describe("getCurrentMossBlock through a scoped connection", () => {
 
     expect(seenByA?.title).toBe("A's block");
     expect(seenByB?.title).toBe("B's block");
+  });
+
+  it("never returns a block someone else shared with the caller (fails without the owner filter)", async () => {
+    const accountB = await seedAccount(ids.userB);
+    const shared = await insertBlock(
+      ids.userB,
+      accountB,
+      "focus-evt-b-shared",
+      "B's shared block",
+      new Date("2026-09-21T13:00:00.000Z"),
+      new Date("2026-09-21T14:00:00.000Z")
+    );
+    await dataContext.withDataContext({ actorUserId: ids.userB, requestId: "share" }, (scopedDb) =>
+      scopedDb.db
+        .insertInto("app.shares")
+        .values({
+          resource_type: "calendar_event",
+          resource_id: shared.id,
+          owner_user_id: ids.userB,
+          grantee_user_id: ids.userA,
+          level: "view"
+        })
+        .execute()
+    );
+    const at = new Date("2026-09-21T13:30:00.000Z");
+
+    const [visibleToA, seenByA, seenByB] = await Promise.all([
+      dataContext.withDataContext({ actorUserId: ids.userA, requestId: "list-a" }, (scopedDb) =>
+        new CalendarRepository().listVisible(scopedDb, { endsAfter: at })
+      ),
+      dataContext.withDataContext({ actorUserId: ids.userA, requestId: "shared-a" }, (scopedDb) =>
+        getCurrentMossBlock(scopedDb, at)
+      ),
+      dataContext.withDataContext({ actorUserId: ids.userB, requestId: "shared-b" }, (scopedDb) =>
+        getCurrentMossBlock(scopedDb, at)
+      )
+    ]);
+
+    // The share really is visible to A, so the null below comes from the owner filter.
+    expect(visibleToA.map((event) => event.id)).toContain(shared.id);
+    expect(seenByA).toBeNull();
+    expect(seenByB?.title).toBe("B's shared block");
   });
 
   it("returns null when the caller has no block at that moment", async () => {
