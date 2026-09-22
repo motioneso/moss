@@ -87,6 +87,25 @@ describe("email gate", () => {
     expect(r.gate).toBe("maybe_owed");
     expect(r.signals.pendingJudgement).toBe(true);
   });
+  it("a sign-in notice with an unsubscribe mark still reaches the closer look (#2341)", async () => {
+    for (const category of ["fyi", "noise"]) {
+      const r = await extractEmailSignals(
+        parsed({
+          subject: "Verify Discord Login from New Location",
+          body: "If this was you, no action is needed. Unsubscribe any time.",
+          hasListUnsubscribe: true
+        }),
+        answer({
+          gate: "maybe_owed",
+          category,
+          confidence: 0.7,
+          reason: "A sign-in notice."
+        })
+      );
+      expect(r.gate).toBe("maybe_owed");
+      expect(r.signals.pendingJudgement).toBe(true);
+    }
+  });
   it("an obligation answer is never overridden (#2341)", async () => {
     const r = await extractEmailSignals(
       parsed({

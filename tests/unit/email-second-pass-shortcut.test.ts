@@ -37,9 +37,27 @@ const BULK_KNOWN: MaybeOwedGateContext = { bulk: true, knownSender: true };
 const PLAIN_UNKNOWN: MaybeOwedGateContext = { bulk: false, knownSender: false };
 
 describe("second-pass shortcut (bulk mail only)", () => {
-  it("resolves a bulk advert from an unknown sender by the model's own verdict", () => {
-    expect(resolveMaybeOwedGate("noise", BULK_UNKNOWN)).toBe("nothing");
-    expect(resolveMaybeOwedGate("fyi", BULK_UNKNOWN)).toBe("worth_knowing");
+  it("resolves a bulk advert from an unknown sender only when the first pass called it noise", () => {
+    const advert: MaybeOwedGateContext = {
+      ...BULK_UNKNOWN,
+      subject: "UP TO 60% OFF BEST SELLERS",
+      body: "Shop the sale now."
+    };
+    expect(resolveMaybeOwedGate("noise", advert)).toBe("nothing");
+    expect(resolveMaybeOwedGate("fyi", advert)).toBe("maybe_owed");
+    expect(resolveMaybeOwedGate("unknown", advert)).toBe("maybe_owed");
+    expect(resolveMaybeOwedGate(undefined, advert)).toBe("maybe_owed");
+  });
+
+  it("keeps a bulk security alert on the closer look even when the first pass called it noise", () => {
+    const alert: MaybeOwedGateContext = {
+      ...BULK_UNKNOWN,
+      subject: "Security alert",
+      body: "A new device was added. Unsubscribe any time."
+    };
+    for (const category of ["fyi", "noise", "unknown", undefined]) {
+      expect(resolveMaybeOwedGate(category, alert)).toBe("maybe_owed");
+    }
   });
 
   it("never takes the shortcut for a known sender, even bulk mail", () => {
@@ -145,18 +163,35 @@ const MUST_REACH_THE_CLOSER_LOOK: ReadonlyArray<readonly [string, string]> = [
 ];
 
 describe("security and sign-in alerts always reach the closer look", () => {
-  it.each(MUST_REACH_THE_CLOSER_LOOK)("%s always stays maybe_owed", async (subject, body) => {
-    for (const category of ["fyi", "noise", "unknown"]) {
-      const r = await extractEmailSignals(
-        parsed({ subject, body }),
-        answer({ gate: "maybe_owed", category, confidence: 0.6, reason: "Unsure." })
-      );
-      expect({ subject, category, gate: r.gate }).toEqual({
-        subject,
-        category,
-        gate: "maybe_owed"
-      });
-      expect(r.signals.pendingJudgement).toBe(true);
+  const UNSUBSCRIBE_MARKS = [
+    { name: "no mark", hasListUnsubscribe: false, footer: "" },
+    { name: "header", hasListUnsubscribe: true, footer: "" },
+    { name: "footer word", hasListUnsubscribe: false, footer: "\nUnsubscribe any time." },
+    { name: "both", hasListUnsubscribe: true, footer: "\nUnsubscribe any time." }
+  ] as const;
+
+  it.each(MUST_REACH_THE_CLOSER_LOOK)(
+    "%s always stays maybe_owed, with or without an unsubscribe mark",
+    async (subject, body) => {
+      for (const mark of UNSUBSCRIBE_MARKS) {
+        for (const category of ["fyi", "noise", "unknown"]) {
+          const r = await extractEmailSignals(
+            parsed({
+              subject,
+              body: `${body}${mark.footer}`,
+              hasListUnsubscribe: mark.hasListUnsubscribe
+            }),
+            answer({ gate: "maybe_owed", category, confidence: 0.6, reason: "Unsure." })
+          );
+          expect({ subject, mark: mark.name, category, gate: r.gate }).toEqual({
+            subject,
+            mark: mark.name,
+            category,
+            gate: "maybe_owed"
+          });
+          expect(r.signals.pendingJudgement).toBe(true);
+        }
+      }
     }
-  });
+  );
 });

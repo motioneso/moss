@@ -742,7 +742,7 @@ function sanitizeExtractResult(
     signals: parsed.bodyTruncated ? { ...signals, truncated: true } : signals,
     escalated: false
   };
-  return applyGate(gated, knownSender);
+  return applyGate(gated, knownSender, parsed);
 }
 
 function buildBatchPrompt(
