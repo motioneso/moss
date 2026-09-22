@@ -697,6 +697,23 @@
   box-shadow: inset 3px 0 0 var(--forest);
 }
 
+[data-color-mode="dark"]
+  .evening-plan__choices--stacked
+  .evening-plan__choice[data-state="selected"],
+[data-color-mode="dark"]
+  .evening-plan__choices--stacked
+  .evening-plan__choice:has(input[type="radio"]:checked),
+[data-theme="dark"] .evening-plan__choices--stacked .evening-plan__choice[data-state="selected"],
+[data-theme="dark"]
+  .evening-plan__choices--stacked
+  .evening-plan__choice:has(input[type="radio"]:checked),
+[data-theme="canyon"] .evening-plan__choices--stacked .evening-plan__choice[data-state="selected"],
+[data-theme="canyon"]
+  .evening-plan__choices--stacked
+  .evening-plan__choice:has(input[type="radio"]:checked) {
+  background: var(--forest-soft);
+}
+
 .evening-plan__choices--stacked .evening-plan__choice input[type="radio"],
 .evening-plan__choice-radio {
   position: absolute;
