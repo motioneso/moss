@@ -29,6 +29,20 @@ describe("prod deploy config — host diagnostics build provenance (#1936)", () 
     expect(read(".github/workflows/ci.yml")).toContain("JARVIS_GIT_COMMIT=${{ github.sha }}");
   });
 
+  it("keeps the build args below the browser install so a new commit cannot rebuild that layer", () => {
+    const dockerfile = read("Dockerfile");
+    // A changed build arg invalidates the cache for every RUN after it, and CI passes a new commit
+    // on every build. Below the browser install, a new commit only rebuilds the two tiny trailing
+    // instructions, not the ~GB Chromium layer.
+    const browserInstall = dockerfile.indexOf("playwright install --with-deps chromium");
+    const commitArg = dockerfile.indexOf("ARG JARVIS_GIT_COMMIT");
+    expect(browserInstall).toBeGreaterThan(-1);
+    expect(commitArg).toBeGreaterThan(browserInstall);
+    // And it must stay after the last runtime RUN, just above EXPOSE.
+    expect(commitArg).toBeGreaterThan(dockerfile.indexOf("chmod 2770 /run/moss-sports-browser"));
+    expect(commitArg).toBeLessThan(dockerfile.indexOf("EXPOSE 3000"));
+  });
+
   it("reports the deploy mode and image tag from the prod stack", () => {
     expect(composeProd).toMatch(/^\s+JARVIS_DEPLOY_MODE: compose$/m);
     expect(composeProd).toMatch(/^\s+JARVIS_APP_VERSION: \$\{JARVIS_IMAGE_TAG:-\}$/m);
