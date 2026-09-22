@@ -1,5 +1,5 @@
 import pg from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Kysely } from "kysely";
 
 import { DataContextRunner, createDatabase, type AccessContext, type MossDatabase } from "@moss/db";
@@ -132,12 +132,27 @@ describe("ChatSkillsRepository", () => {
         body: "original body",
         source: "authored"
       });
-      const updated = await repo.update(scopedDb, created.id, { body: "new body" });
-      expect(updated?.body).toBe("new body");
-      expect(updated?.name).toBe("Editable");
-      expect(updated?.description).toBe("original description");
-      expect(updated?.frontmatter).toEqual({ a: 1 });
-      expect(updated?.updated_at).not.toEqual(created.updated_at);
+
+      // `create` takes its `updated_at` from the database's `now()`, but `update` stamps it from
+      // the app clock (`new Date()` in ChatSkillsRepository.update). On a fast machine the two
+      // writes land in the same millisecond and the strict inequality below flaked (#2537). Pin
+      // the app clock strictly after the created row's timestamp so the bump is deterministic
+      // instead of dependent on a lucky clock tick. Only `Date` is faked, so pg's connections and
+      // timers are untouched.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        const createdMs = created.updated_at.getTime();
+        vi.setSystemTime(new Date(createdMs + 1_000));
+
+        const updated = await repo.update(scopedDb, created.id, { body: "new body" });
+        expect(updated?.body).toBe("new body");
+        expect(updated?.name).toBe("Editable");
+        expect(updated?.description).toBe("original description");
+        expect(updated?.frontmatter).toEqual({ a: 1 });
+        expect(updated?.updated_at.getTime()).toBeGreaterThan(createdMs);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
