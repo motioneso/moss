@@ -98,11 +98,13 @@
   margin: var(--space-2) 0;
 }
 @media (min-width: 1081px) {
-  .brief-reader:has([data-briefing-surface="automatic-read"]) {
+  .brief-reader:has([data-briefing-surface="automatic-read"]),
+  .brief-reader:has([data-briefing-surface="proposed-read"]) {
     max-width: 1120px;
     height: 910px;
   }
-  .brief-reader:has([data-briefing-surface="automatic-read"]) .brief-reader__body {
+  .brief-reader:has([data-briefing-surface="automatic-read"]) .brief-reader__body,
+  .brief-reader:has([data-briefing-surface="proposed-read"]) .brief-reader__body {
     flex: 1 1 auto;
   }
 }
@@ -312,4 +314,11 @@
 }
 .brief-reader--report .jds-btn[aria-busy="true"] {
   opacity: 1;
+}
+/* Proposed Read footer (P5): the review hand-off reads as an underlined
+   link ahead of the primary action, not a secondary button. */
+.brief-reader__review-link .jds-btn {
+  text-decoration: underline;
+  padding-left: 0;
+  padding-right: 0;
 }

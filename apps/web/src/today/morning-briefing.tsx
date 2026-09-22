@@ -88,11 +88,12 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
   });
   const isAutoMode = settingsQuery.data?.settings?.timeBlockMode === "auto";
   const reviewLabel = isAutoMode ? "Adjust task blocks" : "Review task blocks";
-  // The wide frame belongs to automatically placed briefings only. Proposed
-  // and news states share this component, so they stay on the narrow frame.
+  // Every Read-tab state (proposed or automatic) takes the same wide frame;
+  // the attribute just names which one this report is.
   const hasAutomaticPlacement = (props.dayPlan?.plan?.blocks ?? []).some(
     (block) => block.pendingChange === null && block.actualPlacement?.startsAt != null
   );
+  const briefingSurface = hasAutomaticPlacement ? "automatic-read" : "proposed-read";
   const { choiceFor, touchedIds } = props.controller;
   const acceptPlan = props.dayPlan?.plan ?? null;
   const acceptSelection = acceptPlan
@@ -122,6 +123,22 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
       {acceptLabels.REVIEW_CHANGES_LABEL}
     </Button>
   ) : null;
+  const acceptPrimaryButton =
+    acceptBlocked || acceptSelection.length > 0 ? (
+      <Button
+        variant="primary"
+        ref={acceptRef}
+        aria-busy={accepting}
+        disabled={!acceptBlocked && (accepting || props.controller.busy)}
+        onClick={acceptBlocked ? openReaderReview : () => void runAcceptAll()}
+      >
+        {acceptBlocked
+          ? acceptLabels.REVIEW_CHANGES_LABEL
+          : accepting
+            ? acceptLabels.ACCEPTING_LABEL
+            : acceptLabels.ACCEPT_ALL_LABEL}
+      </Button>
+    ) : null;
   const detail = detailQuery.data ?? null;
   const failed =
     detailQuery.isError ||
@@ -151,7 +168,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
         ) : null
       }
       report={
-        <div data-briefing-surface={hasAutomaticPlacement ? "automatic-read" : undefined}>
+        <div data-briefing-surface={briefingSurface}>
           {detail?.state === "ready" && detail.run !== null && detail.run.status === "succeeded" ? (
             <ReportBody
               detail={detail}
@@ -201,26 +218,23 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
         />
       }
       footerActions={
-        <>
-          {acceptBlocked || acceptSelection.length > 0 ? (
-            <Button
-              variant="primary"
-              ref={acceptRef}
-              aria-busy={accepting}
-              disabled={!acceptBlocked && (accepting || props.controller.busy)}
-              onClick={acceptBlocked ? openReaderReview : () => void runAcceptAll()}
-            >
-              {acceptBlocked
-                ? acceptLabels.REVIEW_CHANGES_LABEL
-                : accepting
-                  ? acceptLabels.ACCEPTING_LABEL
-                  : acceptLabels.ACCEPT_ALL_LABEL}
+        briefingSurface === "proposed-read" ? (
+          <>
+            <span className="brief-reader__review-link">
+              <Button variant="quiet" onClick={openReaderReview}>
+                {acceptLabels.REVIEW_PROPOSED_BLOCKS_LABEL}
+              </Button>
+            </span>
+            {acceptPrimaryButton}
+          </>
+        ) : (
+          <>
+            {acceptPrimaryButton}
+            <Button variant="secondary" onClick={openReaderReview}>
+              {reviewLabel}
             </Button>
-          ) : null}
-          <Button variant="secondary" onClick={openReaderReview}>
-            {reviewLabel}
-          </Button>
-        </>
+          </>
+        )
       }
       footerStatus={
         acceptPhase !== "idle" ? (

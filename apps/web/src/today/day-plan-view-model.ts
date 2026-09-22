@@ -26,6 +26,11 @@ export const DAY_ITEM_STATE_LABELS: Record<DayItemState, string> = {
   event: ""
 };
 
+/** A proposed block that already carries a time (Moss's own suggestion,
+    never committed) reads as the short "Proposed" beside that time; a
+    proposed block with no time yet keeps the long label above. */
+const PROPOSED_WITH_TIME_LABEL = "Proposed";
+
 const KIND_LABELS: Partial<Record<DayPlanBlockKind | "travel" | "task", string>> = {
   prep: "Preparation",
   travel: "Travel"
@@ -61,12 +66,16 @@ function stateForBlock(input: {
   readonly summary: DayPlanTaskSummary | undefined;
   readonly startsAt: string | null;
   readonly hasPendingChange: boolean;
+  readonly hasActualPlacement: boolean;
   readonly hasTaskId: boolean;
   readonly planHasEveningIntent: boolean;
   readonly planHasCommittedBlock: boolean;
 }): DayItemState {
   if (input.summary?.status === "done") return "completed";
-  if (input.hasPendingChange) return "pending";
+  // A pending change to a block that was already on the calendar is an
+  // edit ("pending"); a pending change with nothing on the calendar yet
+  // is Moss's own first proposal ("proposed"), not an edit.
+  if (input.hasPendingChange) return input.hasActualPlacement ? "pending" : "proposed";
   if (input.startsAt !== null) return "committed";
   if (input.hasTaskId && (input.planHasEveningIntent || input.planHasCommittedBlock))
     return "proposed";
@@ -128,15 +137,21 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
         block.pendingChange !== null && block.pendingChange.kind !== "remove"
           ? block.pendingChange.durationMinutes
           : (block.actualPlacement?.durationMinutes ?? null);
+      const hasActualPlacement = block.actualPlacement?.startsAt != null;
       const state = stateForBlock({
         summary,
         startsAt,
         hasPendingChange: block.pendingChange !== null,
+        hasActualPlacement,
         hasTaskId: block.taskId !== null,
         planHasEveningIntent,
         planHasCommittedBlock
       });
       const title = summary !== undefined ? summary.title : (block.title ?? "Untitled block");
+      const label =
+        state === "proposed" && startsAt !== null
+          ? PROPOSED_WITH_TIME_LABEL
+          : DAY_ITEM_STATE_LABELS[state];
       return {
         order: index,
         item: {
@@ -144,7 +159,7 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
           kind: block.kind,
           kindLabel: KIND_LABELS[block.kind] ?? null,
           state,
-          label: DAY_ITEM_STATE_LABELS[state],
+          label,
           title,
           startsAt,
           endsAt: null,

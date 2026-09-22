@@ -194,6 +194,56 @@ describe("buildDayItems state rules", () => {
     expect(items[0]?.label).not.toContain("On the calendar");
   });
 
+  it("marks a pending change with no prior placement proposed, not pending", () => {
+    const items = buildDayItems({
+      ...base,
+      plan: plan([
+        block({
+          id: "b1",
+          taskId: "t1",
+          position: 0,
+          pendingChange: {
+            kind: "add",
+            startsAt: "2026-06-30T19:00:00.000Z",
+            durationMinutes: 30
+          }
+        })
+      ]),
+      tasks: [summary({ id: "t1" })]
+    });
+    expect(items[0]?.state).toBe("proposed");
+  });
+
+  it("gives a proposed block with a time the short Proposed label", () => {
+    const items = buildDayItems({
+      ...base,
+      plan: plan([
+        block({
+          id: "b1",
+          taskId: "t1",
+          position: 0,
+          pendingChange: {
+            kind: "add",
+            startsAt: "2026-06-30T19:00:00.000Z",
+            durationMinutes: 30
+          }
+        })
+      ]),
+      tasks: [summary({ id: "t1" })]
+    });
+    expect(items[0]?.label).toBe("Proposed");
+  });
+
+  it("keeps the long Proposed label when a proposed block has no time yet", () => {
+    const items = buildDayItems({
+      ...base,
+      plan: plan([block({ id: "b1", taskId: "t1", title: "Draft", position: 0 })]),
+      tasks: [summary({ id: "t1", title: "Draft" })]
+    });
+    expect(items[0]?.state).toBe("proposed");
+    expect(items[0]?.label).toBe("Proposed, not on the calendar yet");
+  });
+
   it("marks a done task completed and never On the calendar for proposed or pending", () => {
     const items = buildDayItems({
       ...base,
