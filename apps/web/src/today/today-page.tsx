@@ -17,7 +17,7 @@ import {
   updateTask
 } from "../api/client";
 import { findDefinition, targetTimeFor } from "../briefings/briefing-settings-model";
-import { useUserLocale } from "../locale/locale-format";
+import { formatDate, useUserLocale } from "../locale/locale-format";
 import { hasConnectedProvider } from "../onboarding/chat-availability";
 import { useChatControls } from "../shell/chat-controls-context";
 import { readColorMode } from "../theme/color-mode";
@@ -29,6 +29,7 @@ import {
   deriveTodayMode,
   effectiveEveningTimeZone,
   effectiveBriefingTimeZone,
+  EveningReviewSection,
   EveningSupportSections,
   latestBriefingRunForToday,
   latestEveningRunForToday,
@@ -58,6 +59,8 @@ import {
   datelineLabel,
   driftOf,
   dueTs,
+  eveningHeroKicker,
+  firstName,
   greeting,
   isToday,
   timeLabel
@@ -363,9 +366,7 @@ export function TodayPage(props: {
       aria-label="Sections"
       className={todayMode === "day" ? "cmd-sections today-hero__sections" : "cmd-sections"}
     >
-      {todayMode === "day" ? (
-        <span className="today-hero__sections-label">{TODAY_SECTION_INDEX_LABEL}</span>
-      ) : null}
+      <span className="today-hero__sections-label">{TODAY_SECTION_INDEX_LABEL}</span>
       {TODAY_SECTION_LINKS.map((link) => (
         <a key={link.href} href={link.href}>
           {link.label}
@@ -381,7 +382,15 @@ export function TodayPage(props: {
     <>
       <TodayHero
         mode={todayMode}
-        eyebrow={`${greeting()} · ${datelineLabel(now, locale)}`}
+        eyebrow={
+          todayMode === "evening"
+            ? eveningHeroKicker(
+                props.me.user.name.trim()
+                  ? firstName(props.me.user.name, props.me.user.email)
+                  : null
+              )
+            : `${greeting()} · ${datelineLabel(now, locale)}`
+        }
         headline={heroContent.headline}
         summary={heroContent.summary}
         preparedAt={heroContent.preparedAt}
@@ -451,8 +460,32 @@ export function TodayPage(props: {
           <div className="cmd-main">
             {todayMode === "evening" && eveningDefinition?.enabled ? (
               <>
-                <EveningSupportSections
+                <EveningReviewSection
+                  kind="primary"
+                  run={latestEveningRun}
+                  loading={eveningRunsQuery.isPending}
+                  locale={locale}
+                  targetTime={eveningTargetTime}
+                  onFeedbackChanged={() => {
+                    if (eveningDefinition) {
+                      void queryClient.invalidateQueries({
+                        queryKey: queryKeys.briefings.runs(eveningDefinition.id)
+                      });
+                    }
+                  }}
                   completedToday={completedToday}
+                  recapProse={eveningSplit?.rest ?? ""}
+                  recapDateLabel={formatDate(now.toISOString(), locale, {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric"
+                  })}
+                  onOpenTask={(id) => setDialog({ id })}
+                />
+                <EveningSupportSections
+                  openLoopsDek={
+                    eveningSplit && eveningSplit.rest.trim() !== "" ? eveningSplit.rest : null
+                  }
                   carryingForward={looseEnds}
                   tomorrowEvents={tomorrowEvents}
                   tomorrowTasks={tomorrowTasks}
