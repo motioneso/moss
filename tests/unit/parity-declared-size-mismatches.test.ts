@@ -56,6 +56,18 @@ describe("findContentTwin", () => {
   });
 });
 
+describe("one-heading desktop Read declarations", () => {
+  it("declares the authorized 1060x896 captured size for proposed Read and News", () => {
+    // R6: the reordered walk exposes the clean one-heading reader geometry, 40px
+    // shorter than the stale 1060x936 declaration, for both desktop Read cases
+    // that share the morning reader rail.
+    for (const name of ["1440-proposed-read.png", "1440-news.png"]) {
+      const entry = DECLARED_SIZE_MISMATCHES.find((declared) => declared.name === name);
+      expect(entry?.capturedSize).toBe("1060x896");
+    }
+  });
+});
+
 describe("compareContentTwin", () => {
   // A generic file-diff tool can call two pictures of different sizes "100
   // percent different" without looking at a single pixel. That shortcut

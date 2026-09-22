@@ -118,38 +118,6 @@ export const MOCKUPS: readonly MockupEntry[] = [
     clock: "evening"
   },
   {
-    name: "1440-automatic-read.png",
-    dir: M,
-    viewport: V1440,
-    region: { kind: "element", selector: D },
-    state: "reader-automatic-read",
-    clock: "morning"
-  },
-  {
-    name: "375-automatic-read.png",
-    dir: M,
-    viewport: V375,
-    region: { kind: "element", selector: D },
-    state: "reader-automatic-read",
-    clock: "morning"
-  },
-  {
-    name: "1440-automatic-review.png",
-    dir: M,
-    viewport: V1440,
-    region: { kind: "element", selector: D },
-    state: "reader-automatic-review",
-    clock: "morning"
-  },
-  {
-    name: "375-automatic-review.png",
-    dir: M,
-    viewport: V375,
-    region: { kind: "element", selector: D },
-    state: "reader-automatic-review",
-    clock: "morning"
-  },
-  {
     name: "1440-proposed-read.png",
     dir: M,
     viewport: V1440,
@@ -182,14 +150,6 @@ export const MOCKUPS: readonly MockupEntry[] = [
     clock: "morning"
   },
   {
-    name: "partial-review.png",
-    dir: M,
-    viewport: V1440,
-    region: { kind: "element", selector: D },
-    state: "reader-partial-review",
-    clock: "morning"
-  },
-  {
     name: "1440-news.png",
     dir: M,
     viewport: V1440,
@@ -203,6 +163,46 @@ export const MOCKUPS: readonly MockupEntry[] = [
     viewport: V375,
     region: { kind: "element", selector: D },
     state: "reader-sports-links",
+    clock: "morning"
+  },
+  {
+    name: "partial-review.png",
+    dir: M,
+    viewport: V1440,
+    region: { kind: "element", selector: D },
+    state: "reader-partial-review",
+    clock: "morning"
+  },
+  {
+    name: "1440-automatic-read.png",
+    dir: M,
+    viewport: V1440,
+    region: { kind: "element", selector: D },
+    state: "reader-automatic-read",
+    clock: "morning"
+  },
+  {
+    name: "375-automatic-read.png",
+    dir: M,
+    viewport: V375,
+    region: { kind: "element", selector: D },
+    state: "reader-automatic-read",
+    clock: "morning"
+  },
+  {
+    name: "1440-automatic-review.png",
+    dir: M,
+    viewport: V1440,
+    region: { kind: "element", selector: D },
+    state: "reader-automatic-review",
+    clock: "morning"
+  },
+  {
+    name: "375-automatic-review.png",
+    dir: M,
+    viewport: V375,
+    region: { kind: "element", selector: D },
+    state: "reader-automatic-review",
     clock: "morning"
   },
   {

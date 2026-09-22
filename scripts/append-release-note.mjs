@@ -24,17 +24,50 @@ function argument(name) {
   return index === -1 ? undefined : process.argv[index + 1];
 }
 
+const FIELD_NAMES = ["Category", "Title", "Description"];
+
+/**
+ * Reads a `Key: value` field whose value may wrap onto continuation lines.
+ *
+ * A description written by hand in the pull-request template often wraps onto the next line. The
+ * previous implementation matched only the first line, so a wrapped description was silently
+ * truncated mid-sentence and that is what shipped to readers (issue #2347). Continuation lines run
+ * until a blank line, the next markdown heading, or the next known field label, and are joined with
+ * a single space. Returns undefined when the field is absent or its value is empty.
+ */
+function readField(text, name) {
+  const lines = text.split(/\r?\n/);
+  const fieldPattern = new RegExp(`^${name}:\\s*(\\S.*)$`, "i");
+  const nextFieldPattern = new RegExp(`^(?:${FIELD_NAMES.join("|")}):`, "i");
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const match = lines[i].match(fieldPattern);
+    if (!match) continue;
+
+    const parts = [match[1].trim()];
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const line = lines[j];
+      if (line.trim() === "") break;
+      if (/^#{1,6}\s/.test(line)) break;
+      if (nextFieldPattern.test(line)) break;
+      parts.push(line.trim());
+    }
+    return parts.join(" ");
+  }
+  return undefined;
+}
+
 /** Returns null when the pull request body has no usable release note (the normal case). */
 export function parseReleaseNote(body) {
   if (!body) return null;
   const section = body.match(/^##\s*Release note\s*$([\s\S]*?)(?:^##\s|$(?![\s\S]))/im);
   const text = section ? section[1] : body;
 
-  const category = text.match(/^Category:\s*(\S.*)$/im)?.[1]?.trim();
+  const category = readField(text, "Category");
   if (!category || !CATEGORIES.includes(category)) return null;
 
-  const title = text.match(/^Title:\s*(\S.*)$/im)?.[1]?.trim();
-  const description = text.match(/^Description:\s*(\S.*)$/im)?.[1]?.trim();
+  const title = readField(text, "Title");
+  const description = readField(text, "Description");
   if (!title || !description) return null;
 
   return { category, title: title.replace(/\.+$/, ""), description };
@@ -121,6 +154,47 @@ function selfTest() {
     "## Summary\nstuff\n\n## Release note\nCategory: Fixed\nTitle: Thing broke.\nDescription: It works now.\n"
   );
   assert.deepEqual(note, { category: "Fixed", title: "Thing broke", description: "It works now." });
+
+  // A description that wraps onto a following line is joined, not cut at the first line (#2347).
+  const wrappedNote = parseReleaseNote(
+    [
+      "## Summary",
+      "stuff",
+      "",
+      "## Release note",
+      "Category: Added",
+      "Title: Workshop projects",
+      "Description: You can now start a Workshop project, give it a name and a first request,",
+      "  and come back to it later with everything you have written saved.",
+      ""
+    ].join("\n")
+  );
+  assert.deepEqual(wrappedNote, {
+    category: "Added",
+    title: "Workshop projects",
+    description:
+      "You can now start a Workshop project, give it a name and a first request, and come back to it later with everything you have written saved."
+  });
+
+  // The join stops at the first blank line, so prose after the note is not swallowed.
+  const stopsAtBlankLine = parseReleaseNote(
+    "## Release note\nCategory: Fixed\nTitle: X\nDescription: First line.\nsecond line.\n\nleftover prose.\n"
+  );
+  assert.deepEqual(stopsAtBlankLine, {
+    category: "Fixed",
+    title: "X",
+    description: "First line. second line."
+  });
+
+  // The join also stops at a heading that stays inside the release-note section.
+  const stopsAtHeading = parseReleaseNote(
+    "## Release note\nCategory: Changed\nTitle: Y\nDescription: Alpha\nBeta\n### Notes\nmore prose.\n"
+  );
+  assert.deepEqual(stopsAtHeading, {
+    category: "Changed",
+    title: "Y",
+    description: "Alpha Beta"
+  });
 
   const firstEntry = appendReleaseNote(
     "# What's New in Moss\n\n## Edge channel\n\nEdge builds.\n",

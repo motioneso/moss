@@ -236,6 +236,52 @@ describe("CliStructuredAdapter cancellation (#2276)", () => {
     expect(result).toMatchObject({ rawText: "{}" });
   });
 
+  it("keeps sources on a reply rescued after a real crash unrelated to cancellation (#2374)", async () => {
+    // #2374: the rewrite of the sources test removed cover for the rescue path keeping the
+    // sources attached to a legitimately rescued reply. A genuine crash (not a cancel or a
+    // timeout) must still hand back the reply with its sources intact.
+    let readNewCalls = 0;
+    const engine: CliChatEngine = {
+      provider: "anthropic",
+      async launch() {
+        return { offset: 0 };
+      },
+      async submit() {},
+      async interrupt() {},
+      async readNew() {
+        readNewCalls += 1;
+        if (readNewCalls === 1) {
+          return { records: [{ kind: "status", text: "thinking" }], offset: 1, complete: false };
+        }
+        return {
+          records: [
+            {
+              kind: "tool",
+              text: "",
+              sources: [{ title: "A", url: "https://example.com/a" }]
+            },
+            { kind: "reply", text: "{}" }
+          ],
+          offset: 2,
+          complete: true
+        };
+      },
+      async isAlive() {
+        return readNewCalls < 1;
+      },
+      async kill() {},
+      async purgeTranscripts() {}
+    };
+    const adapter = new CliStructuredAdapter("anthropic", () => engine);
+
+    const result = await adapter.generateStructured(baseInput("module.job-fit"));
+
+    expect(result).toMatchObject({
+      rawText: "{}",
+      sources: [{ title: "A", url: "https://example.com/a" }]
+    });
+  });
+
   it("discards a late answer from the scoped path when it lands the same instant as a cancel (#2276)", async () => {
     // A real race against the internal timer would be flaky by nature (it depends on exact
     // event-loop timing), so this drives the same code path deterministically: the fake reply

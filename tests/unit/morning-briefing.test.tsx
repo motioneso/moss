@@ -848,3 +848,45 @@ describe("day-plan-review accept-all model", () => {
     ).toBe(true);
   });
 });
+
+describe("MorningBriefingReader automatic-read surface", () => {
+  function committedBlock(): DayPlanBlockDto {
+    return {
+      id: "b-auto",
+      kind: "focus",
+      taskId: "t1",
+      title: null,
+      position: 0,
+      actualPlacement: {
+        startsAt: "2026-09-10T16:00:00.000Z",
+        durationMinutes: 30,
+        calendarEventRef: "vp-existing"
+      },
+      pendingChange: null
+    };
+  }
+
+  function planWith(blocks: DayPlanBlockDto[]): GetDayPlanResponse {
+    const base = acceptPlanResponse();
+    if (!base.plan) throw new Error("plan missing for the surface case");
+    return { ...base, plan: { ...base.plan, blocks } };
+  }
+
+  it("marks the automatic-read surface when the plan carries a committed placement", async () => {
+    const run = fullRun();
+    const client = seedClient([
+      [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(run)]
+    ]);
+    const html = await renderReader(client, { dayPlan: planWith([committedBlock()]) });
+    expect(html).toContain('data-briefing-surface="automatic-read"');
+  });
+
+  it("keeps proposed-only plans off the automatic-read surface", async () => {
+    const run = fullRun();
+    const client = seedClient([
+      [queryKeys.briefings.run("def-morning", "run-full"), readyDetail(run)]
+    ]);
+    const html = await renderReader(client, { dayPlan: acceptPlanResponse() });
+    expect(html).not.toContain('data-briefing-surface="automatic-read"');
+  });
+});

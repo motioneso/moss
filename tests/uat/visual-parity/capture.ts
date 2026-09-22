@@ -672,7 +672,7 @@ export async function waitForRoutePopulated(
     await waitForWeather(page, route, matched, deadlineAt);
   } else {
     await routeVisible(page, ".cmd-wrap", "Evening content", matched);
-    await routeText(page, ".jds-brief", "Evening review", "Evening review", matched);
+    await routeText(page, ".today-hero--evening", "EVENING BRIEFING", "Evening hero", matched);
     await routeText(page, ".jds-brief", "What happened today", "Evening summary title", matched);
     await routeVisible(page, ".jds-brief__body", "Rendered evening summary", matched);
     await routeVisible(page, ".evening-prep__btn", "Prep for tomorrow action", matched);

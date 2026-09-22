@@ -362,7 +362,7 @@ test("morning and evening prose and action rows render accept dismiss view reply
     run("morning-run-empty", morningDefinition.id, "morning", "", [])
   ];
   await reloadToday(page);
-  await expect(page.getByText("Your morning briefing is not ready yet.")).toBeVisible();
+  await expect(page.getByText("Briefing not ready yet")).toBeVisible();
   await expect(page.getByText("You're caught up — nothing is waiting on you.")).toBeVisible();
 
   const staleRow = actionRow("task-stale", "Review the stale connector result", "needs_action", {
@@ -658,7 +658,7 @@ test("narrow and zoomed widths keep Today controls in view with dock-first tab o
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       `no sideways scroll at ${width}px`
     ).toBe(true);
-    for (const name of ["Meds", "Check in"]) {
+    for (const name of ["Log medication", "Check in"]) {
       const box = await page.getByRole("button", { name }).boundingBox();
       expect(box, `${name} visible at ${width}px`).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(-1);
@@ -709,13 +709,15 @@ test("narrow and zoomed widths keep Today controls in view with dock-first tab o
         };
       });
       if (!stop || "wrapped" in stop) break;
-      if (medsAt === -1 && stop.name.includes("Meds")) medsAt = i;
+      if (medsAt === -1 && stop.name.includes("Log medication")) medsAt = i;
       if (checkinAt === -1 && stop.name.includes("Check in")) checkinAt = i;
       if (firstScheduleAt === -1 && stop.inSchedule) firstScheduleAt = i;
       if (stop.inRail) lastRailAt = i;
       if (firstMainAt === -1 && stop.inMain) firstMainAt = i;
     }
-    expect(medsAt, `Meds is reachable by keyboard at ${width}px`).toBeGreaterThanOrEqual(0);
+    expect(medsAt, `Log medication is reachable by keyboard at ${width}px`).toBeGreaterThanOrEqual(
+      0
+    );
     expect(checkinAt, `Check in is reachable by keyboard at ${width}px`).toBeGreaterThanOrEqual(0);
     if (firstScheduleAt !== -1) {
       expect(medsAt, `dock tabs before schedule items at ${width}px`).toBeLessThan(firstScheduleAt);

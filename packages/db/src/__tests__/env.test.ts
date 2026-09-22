@@ -59,6 +59,15 @@ describe("resolveMossEnv", () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  it("carves out the TLS setup names read host-side by compose and the Caddyfile", () => {
+    const env = { JARVIS_TLS_HOST: "moss.lan", MOSS_TLS_HOST: "should-not-be-read" };
+
+    expect(isCarvedOutMossEnvName("JARVIS_TLS_HOST")).toBe(true);
+    expect(isCarvedOutMossEnvName("JARVIS_TLS_ISSUER")).toBe(true);
+    expect(resolveMossEnv(env, "JARVIS_TLS_HOST")).toBe("moss.lan");
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   it("passes a non-JARVIS_ name straight through unchanged", () => {
     const env = { DATABASE_URL: "postgres://x" };
 

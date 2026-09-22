@@ -481,6 +481,10 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: ghcr.io/motioneso/moss:edge-${{ matrix.arch }}
+          # #1936: bake the tested commit into the image so Settings > Host > Technical details
+          # can show it. The release tag is applied later when this edge image is promoted.
+          build-args: |
+            JARVIS_GIT_COMMIT=${{ github.sha }}
           cache-from: type=gha,scope=moss-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=moss-${{ matrix.arch }}
 

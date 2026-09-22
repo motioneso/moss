@@ -19,6 +19,7 @@ import { localDay } from "@moss/shared";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { ChatControlsProvider } from "../../apps/web/src/shell/chat-controls-context.js";
 import { TodayPage } from "../../apps/web/src/today/today-page.js";
+import { BRIEFING_NOT_READY_LABEL } from "../../apps/web/src/today/today-labels.js";
 
 const locale: LocaleSettingsDto = {
   timezone: "America/Los_Angeles",
@@ -81,7 +82,7 @@ describe("Today morning briefing prose", () => {
       definitions: [morning, evening],
       runs: []
     });
-    expect(emptyHtml).toContain("Your morning briefing is not ready yet.");
+    expect(emptyHtml).toContain(BRIEFING_NOT_READY_LABEL);
 
     const loadingHtml = renderToday({
       now: new Date("2026-06-30T01:30:00.000Z"),
@@ -112,7 +113,7 @@ describe("Today morning briefing prose", () => {
 
     expect(html).toContain("ALL CLEAR");
     expect(html).toContain("Nothing pressing right now");
-    expect(html).toContain("Your morning briefing is not ready yet.");
+    expect(html).toContain(BRIEFING_NOT_READY_LABEL);
     expect(html).toContain("today-hero");
   });
 
@@ -148,7 +149,7 @@ describe("Today morning briefing prose", () => {
       runs: [briefingRun({ id: "run-empty", definitionId: "morning-1", summaryText: "" })]
     });
 
-    expect(html).toContain("Your morning briefing is not ready yet.");
+    expect(html).toContain(BRIEFING_NOT_READY_LABEL);
     expect(html).not.toContain("Prepared at");
   });
 
@@ -309,7 +310,7 @@ describe("Today morning briefing prose", () => {
     const nav = html.indexOf('aria-label="Sections"');
     expect(nav).toBeGreaterThan(-1);
     expect(nav).toBeLessThan(startHere);
-    expect(html).toContain('href="#schedule"');
+    expect(html).not.toContain('href="#schedule"');
     expect(html).toContain('href="#start-here"');
   });
 });

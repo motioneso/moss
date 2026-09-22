@@ -1,3 +1,4 @@
+import { TODAY_SECTION_INDEX_LABEL, TODAY_SECTION_LINKS } from "./today-labels.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Flag, Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -16,7 +17,7 @@ import {
   updateTask
 } from "../api/client";
 import { findDefinition, targetTimeFor } from "../briefings/briefing-settings-model";
-import { useUserLocale } from "../locale/locale-format";
+import { formatDate, useUserLocale } from "../locale/locale-format";
 import { hasConnectedProvider } from "../onboarding/chat-availability";
 import { useChatControls } from "../shell/chat-controls-context";
 import { readColorMode } from "../theme/color-mode";
@@ -28,6 +29,7 @@ import {
   deriveTodayMode,
   effectiveEveningTimeZone,
   effectiveBriefingTimeZone,
+  EveningReviewSection,
   EveningSupportSections,
   latestBriefingRunForToday,
   latestEveningRunForToday,
@@ -57,6 +59,8 @@ import {
   datelineLabel,
   driftOf,
   dueTs,
+  eveningHeroKicker,
+  firstName,
   greeting,
   isToday,
   timeLabel
@@ -327,7 +331,12 @@ export function TodayPage(props: {
     const runId = latestMorningRun?.id;
     if (!morningDefinition || !runId) return;
     readerOpener.current = anchor;
-    setReader({ definitionId: morningDefinition.id, runId });
+    // Settle the day plan refetch first so the reader classifies the block
+    // placement it actually opens with, not a stale pending one still in
+    // cache. Still opens on refresh failure, from whatever data is cached.
+    void dayPlanQuery.refetch().finally(() => {
+      setReader({ definitionId: morningDefinition.id, runId });
+    });
   };
   const eveningTargetTime = eveningDefinition ? targetTimeFor(eveningDefinition, "evening") : "";
   const heroContent = buildTodayHeroContent({
@@ -357,14 +366,12 @@ export function TodayPage(props: {
       aria-label="Sections"
       className={todayMode === "day" ? "cmd-sections today-hero__sections" : "cmd-sections"}
     >
-      {todayMode === "day" ? (
-        <span className="today-hero__sections-label">In this briefing</span>
-      ) : null}
-      {assessmentShown ? <a href="#assessment">Assessment</a> : null}
-      <a href="#start-here">Start</a> <a href="#weather">Weather</a>
-      <a href="#schedule">Schedule</a> <a href="#needs-you">Needs you</a>
-      <a href="#widgets">Widgets</a> <a href="#goals">Goals</a>
-      {looseEnds.length > 0 ? <a href="#loose-ends">Loose ends</a> : null}
+      <span className="today-hero__sections-label">{TODAY_SECTION_INDEX_LABEL}</span>
+      {TODAY_SECTION_LINKS.map((link) => (
+        <a key={link.href} href={link.href}>
+          {link.label}
+        </a>
+      ))}
     </nav>
   );
 
@@ -375,7 +382,15 @@ export function TodayPage(props: {
     <>
       <TodayHero
         mode={todayMode}
-        eyebrow={`${greeting()} · ${datelineLabel(now, locale)}`}
+        eyebrow={
+          todayMode === "evening"
+            ? eveningHeroKicker(
+                props.me.user.name.trim()
+                  ? firstName(props.me.user.name, props.me.user.email)
+                  : null
+              )
+            : `${greeting()} · ${datelineLabel(now, locale)}`
+        }
         headline={heroContent.headline}
         summary={heroContent.summary}
         preparedAt={heroContent.preparedAt}
@@ -445,8 +460,32 @@ export function TodayPage(props: {
           <div className="cmd-main">
             {todayMode === "evening" && eveningDefinition?.enabled ? (
               <>
-                <EveningSupportSections
+                <EveningReviewSection
+                  kind="primary"
+                  run={latestEveningRun}
+                  loading={eveningRunsQuery.isPending}
+                  locale={locale}
+                  targetTime={eveningTargetTime}
+                  onFeedbackChanged={() => {
+                    if (eveningDefinition) {
+                      void queryClient.invalidateQueries({
+                        queryKey: queryKeys.briefings.runs(eveningDefinition.id)
+                      });
+                    }
+                  }}
                   completedToday={completedToday}
+                  recapProse={eveningSplit?.rest ?? ""}
+                  recapDateLabel={formatDate(now.toISOString(), locale, {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric"
+                  })}
+                  onOpenTask={(id) => setDialog({ id })}
+                />
+                <EveningSupportSections
+                  openLoopsDek={
+                    eveningSplit && eveningSplit.rest.trim() !== "" ? eveningSplit.rest : null
+                  }
                   carryingForward={looseEnds}
                   tomorrowEvents={tomorrowEvents}
                   tomorrowTasks={tomorrowTasks}
@@ -528,9 +567,11 @@ export function TodayPage(props: {
             <div id="widgets">
               <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
             </div>
-            {feed.news.length > 0 || feed.interests.length > 0 ? (
-              <NewsDesk news={feed.news} interests={feed.interests} />
-            ) : null}
+            <div id="news">
+              {feed.news.length > 0 || feed.interests.length > 0 ? (
+                <NewsDesk news={feed.news} interests={feed.interests} />
+              ) : null}
+            </div>
 
             <div id="goals">
               <GoalsSection />
@@ -573,7 +614,9 @@ export function TodayPage(props: {
 
             <ProactiveCards />
           </div>
-          <ModuleTodayWidgets slot="sports" disabledModuleIds={disabledModuleIds} />
+          <div id="sports">
+            <ModuleTodayWidgets slot="sports" disabledModuleIds={disabledModuleIds} />
+          </div>
         </div>
         {dialog ? (
           <TaskDetailsDialog

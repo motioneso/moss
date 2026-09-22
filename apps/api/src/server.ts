@@ -128,6 +128,8 @@ export interface CreateApiServerOptions {
   };
   /** TEST-ONLY. Injected fetch for weather HTTP calls. */
   readonly fetchFn?: typeof fetch;
+  /** TEST-ONLY. E2E fetch-error detail; set only via the e2e-fetch-override spread. */
+  readonly e2eErrorDetail?: boolean;
   /** TEST-ONLY. Overrides the real Herdr install executor (avoids real network/exec in tests). */
   readonly installHerdr?: HerdrInstallDependencies["install"];
   /**
@@ -674,7 +676,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
           change.userId
         );
       },
-      fetchFn: options.fetchFn
+      fetchFn: options.fetchFn,
+      e2eErrorDetail: options.e2eErrorDetail
     });
 
     const guardManifests = [

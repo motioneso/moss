@@ -8,6 +8,9 @@
  * the loopback default for dev/non-container runs when it is unset.
  */
 import { describe, expect, it } from "vitest";
+import type { FastifyBaseLogger } from "fastify";
+
+import { buildSportsBriefingSource } from "@moss/module-registry";
 
 import {
   createApiServer,
@@ -106,5 +109,64 @@ describe("resolveApiServerConfig external modules dir (#996, #860)", () => {
   it("no longer exposes enableExternalModules", () => {
     const config = resolveApiServerConfig({} as NodeJS.ProcessEnv);
     expect((config as unknown as Record<string, unknown>).enableExternalModules).toBeUndefined();
+  });
+});
+
+describe("sports route client e2e error detail ([task:uat-espn-fetch-error-log])", () => {
+  // Full-server boot needs a database, so this case exercises the exact builder
+  // the sports overview route constructs its dataset client from, with the same
+  // options the route construction passes: the flag arrives from the server
+  // options through the route dependencies.
+  function throwingFetch(): typeof fetch {
+    return (async () => {
+      throw new Error("fixture refused");
+    }) as typeof fetch;
+  }
+
+  function warnCapture() {
+    const warnings: Array<[Record<string, unknown>, string]> = [];
+    const logger = {
+      child: () => ({
+        warn: (data: Record<string, unknown>, message: string) => {
+          warnings.push([data, message]);
+        }
+      })
+    } as unknown as FastifyBaseLogger;
+    return { logger, warnings };
+  }
+
+  it("warns with errorMessage and targetHost when the flag is set, omits both without it", async () => {
+    const flagged = warnCapture();
+    const flaggedClient = buildSportsBriefingSource({
+      fetchFn: throwingFetch(),
+      logger: flagged.logger,
+      e2eErrorDetail: true
+    });
+    await flaggedClient.getDataset(
+      "scoreboard",
+      { competitionKey: "eng.1", day: "2026-09-15" },
+      { fallback: null }
+    );
+    expect(flagged.warnings).toHaveLength(1);
+    expect(flagged.warnings[0]?.[1]).toBe("dataset fetch failed: serving degraded response");
+    expect(flagged.warnings[0]?.[0]).toMatchObject({
+      sourceId: "espn",
+      errorMessage: "fixture refused"
+    });
+    expect(typeof (flagged.warnings[0]?.[0] as Record<string, unknown>).targetHost).toBe("string");
+
+    const plain = warnCapture();
+    const plainClient = buildSportsBriefingSource({
+      fetchFn: throwingFetch(),
+      logger: plain.logger
+    });
+    await plainClient.getDataset(
+      "scoreboard",
+      { competitionKey: "eng.1", day: "2026-09-15" },
+      { fallback: null }
+    );
+    expect(plain.warnings).toHaveLength(1);
+    expect(plain.warnings[0]?.[0]).not.toHaveProperty("errorMessage");
+    expect(plain.warnings[0]?.[0]).not.toHaveProperty("targetHost");
   });
 });
