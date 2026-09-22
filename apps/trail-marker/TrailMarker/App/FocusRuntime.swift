@@ -53,6 +53,9 @@ final class FocusRuntime: ObservableObject {
     @Published private(set) var visionModel: String
     /// The last "Test vision" result, shown in the Focus pane. Cleared on the next attempt.
     @Published private(set) var visionTestResult: Result<String, VisionError>?
+    /// Whether a key is stored, so the Focus pane can say so. A plain keychain read would not
+    /// republish the view on its own; this is updated everywhere the key can change.
+    @Published private(set) var hasVisionAPIKey: Bool
 
     private var machine: FocusMachine
     private let connection: ConnectionRuntime
@@ -109,6 +112,7 @@ final class FocusRuntime: ObservableObject {
         self.visionSource = preferences.focusVisionSource
         self.visionBaseURL = preferences.focusVisionBaseURL
         self.visionModel = preferences.focusVisionModel
+        self.hasVisionAPIKey = keychain.readVisionKey() != nil
         self.machine = FocusMachine(policy: ObservationPolicy(allowedBundleIds: preferences.focusAllowedBundleIds))
     }
 
@@ -185,21 +189,22 @@ final class FocusRuntime: ObservableObject {
         preferences.focusVisionModel = value
     }
 
-    /// `nil` clears the stored key without setting a new one (an empty "Test" field, say).
+    /// `nil` or empty clears the stored key without setting a new one (an empty "Test" field, say).
     func setVisionAPIKey(_ value: String?) {
         if let value, !value.isEmpty {
             try? keychain.storeVisionKey(value)
         } else {
             keychain.deleteVisionKey()
         }
+        hasVisionAPIKey = keychain.readVisionKey() != nil
     }
-
-    var hasVisionAPIKey: Bool { keychain.readVisionKey() != nil }
 
     /// Captures and describes right now, independent of any judgment, so the person can see the
     /// chosen source actually works before relying on it (rung3 spec §9's "Send a test nudge"
-    /// pattern, applied to vision).
-    func testVision() {
+    /// pattern, applied to vision). Saves `enteredAPIKey` first when one was typed but not yet
+    /// submitted, so Test never silently runs against an empty key the person can see on screen.
+    func testVision(enteredAPIKey: String = "") {
+        if !enteredAPIKey.isEmpty { setVisionAPIKey(enteredAPIKey) }
         guard let app = observer.current else {
             visionTestResult = .failure(.notConfigured)
             return

@@ -99,8 +99,12 @@ struct FocusPane: View {
                             TextField(
                                 "Model", text: Binding(get: { focus.visionModel }, set: { focus.setVisionModel($0) })
                             )
-                            SecureField("API key", text: $visionKeyEntry)
-                                .onSubmit { focus.setVisionAPIKey(visionKeyEntry); visionKeyEntry = "" }
+                            HStack {
+                                SecureField("API key", text: $visionKeyEntry)
+                                    .onSubmit(saveVisionKeyEntry)
+                                Button("Save", action: saveVisionKeyEntry)
+                                    .disabled(visionKeyEntry.isEmpty)
+                            }
                             Text(focus.hasVisionAPIKey ? "A key is stored." : "No key stored yet.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -110,7 +114,9 @@ struct FocusPane: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        Button("Test") { focus.testVision() }
+                        // A key still sitting in the field, not yet saved, is tested too — the
+                        // person should never see "no key" fail Test right after typing one in.
+                        Button("Test") { focus.testVision(enteredAPIKey: visionKeyEntry) }
                         if let visionTestResult = focus.visionTestResult {
                             switch visionTestResult {
                             case .success(let description):
@@ -171,6 +177,12 @@ struct FocusPane: View {
     }
 
     /// Checks the answer first: a nudge macOS will not show would otherwise vanish without a word.
+    private func saveVisionKeyEntry() {
+        guard !visionKeyEntry.isEmpty else { return }
+        focus.setVisionAPIKey(visionKeyEntry)
+        visionKeyEntry = ""
+    }
+
     private func sendTestNudge() async {
         await permissions.refreshNotifications()
         if permissions.notifications == .notAsked { await permissions.requestNotifications() }
