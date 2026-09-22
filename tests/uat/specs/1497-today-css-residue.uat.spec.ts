@@ -68,10 +68,10 @@ test("wellness action buttons keep their real background and rounded corners aft
   const wellCount = await wellCard.count();
   test.skip(wellCount === 0, "wellness module not enabled for this seed account");
 
-  const medsButton = page.locator(".well__btn--meds");
-  await expect(medsButton).toBeVisible();
+  const checkinButton = wellCard.getByRole("button", { name: "Check in" });
+  await expect(checkinButton).toBeVisible();
 
-  const style = await medsButton.evaluate((node) => {
+  const style = await checkinButton.evaluate((node) => {
     const computed = getComputedStyle(node);
     return { backgroundColor: computed.backgroundColor, borderRadius: computed.borderRadius };
   });
