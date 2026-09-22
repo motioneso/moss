@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { ConnectorsRepository, createConnectorSecretCipher } from "@moss/connectors";
@@ -101,11 +102,14 @@ describe("getCurrentMossBlock through a scoped connection", () => {
       scopedDb.db
         .insertInto("app.shares")
         .values({
+          id: randomUUID(),
           resource_type: "calendar_event",
           resource_id: shared.id,
           owner_user_id: ids.userB,
           grantee_user_id: ids.userA,
-          level: "view"
+          level: "view",
+          created_at: new Date(),
+          updated_at: new Date()
         })
         .execute()
     );
