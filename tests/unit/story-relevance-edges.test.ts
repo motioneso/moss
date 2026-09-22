@@ -431,8 +431,27 @@ describe("policy empty input, degradation and ties", () => {
     ];
     for (const failure of failures) {
       const { logger, lines } = silentLogger();
+      // A malformed answer comes from the evaluator, not the port: the port
+      // returns a well-formed envelope carrying a verdict nobody asked about.
+      const generateJson =
+        failure === "malformed_output"
+          ? async () => ({
+              ok: true as const,
+              object: {
+                verdicts: [
+                  {
+                    storyRef: "story:never-offered",
+                    matched: false,
+                    ruleStoryRef: null,
+                    eventEvidence: [],
+                    editorialEvidence: []
+                  }
+                ]
+              }
+            })
+          : async () => ({ ok: false as const, error: failure });
       const policy = createStoryRelevancePolicy({
-        ai: { generateJson: async () => ({ ok: false as const, error: failure }) },
+        ai: { generateJson },
         repository: { listActiveStoryRules: async () => [ruleRow()] },
         logger
       });
