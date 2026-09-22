@@ -107,6 +107,9 @@ export interface FocusJudgeInput {
   readonly blockId: string;
   readonly appName: string;
   readonly windowTitle: string;
+  /** Rung 3 (#2570 slice 2): present only when rung 1 alone answered insufficient_evidence and a
+   * capture was allowed and taken. */
+  readonly description?: string;
   readonly observedAt: Date;
 }
 
@@ -202,7 +205,8 @@ export function buildFocusJudgmentService(
             state: buildChoiceState({
               blockTitle: block.title,
               appName: input.appName,
-              windowTitle: input.windowTitle
+              windowTitle: input.windowTitle,
+              description: input.description
             }),
             questions: FOCUS_CHOICE_QUESTIONS,
             requireExplicitBinding: true,
@@ -223,7 +227,8 @@ export function buildFocusJudgmentService(
         const { prompt, schema } = buildJudgmentPrompt({
           blockTitle: block.title,
           appName: input.appName,
-          windowTitle: input.windowTitle
+          windowTitle: input.windowTitle,
+          description: input.description
         });
 
         try {

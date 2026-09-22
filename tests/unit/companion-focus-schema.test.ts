@@ -96,6 +96,37 @@ describe("focusJudgeRouteSchema request", () => {
     expect(body).toEqual(VALID_JUDGE);
     expect(body).not.toHaveProperty("ownerUserId");
   });
+
+  it("accepts an observation with no description at all (rung 1 only, unchanged)", async () => {
+    const { status, body } = await post(focusJudgeRouteSchema.body, VALID_JUDGE);
+    expect(status).toBe(200);
+    expect(body).not.toHaveProperty("description");
+  });
+
+  it("accepts a rung 3 description alongside the title", async () => {
+    const { status, body } = await post(focusJudgeRouteSchema.body, {
+      ...VALID_JUDGE,
+      description: "A code editor with a terminal open"
+    });
+    expect(status).toBe(200);
+    expect(body?.description).toBe("A code editor with a terminal open");
+  });
+
+  it("rejects a 281-character description (fails if the bound is missing)", async () => {
+    const { status } = await post(focusJudgeRouteSchema.body, {
+      ...VALID_JUDGE,
+      description: "d".repeat(281)
+    });
+    expect(status).toBe(400);
+  });
+
+  it("rejects control characters in the description, the same as the window title", async () => {
+    const { status } = await post(focusJudgeRouteSchema.body, {
+      ...VALID_JUDGE,
+      description: "line\nbreak"
+    });
+    expect(status).toBe(400);
+  });
 });
 
 describe("focusJudgeRouteSchema response", () => {

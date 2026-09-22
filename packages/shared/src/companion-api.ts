@@ -375,6 +375,12 @@ export interface FocusJudgeRequest {
   readonly appName: string;
   /** Already shortened and redacted by the Mac. May be empty. */
   readonly windowTitle: string;
+  /**
+   * Rung 3 (#2570 slice 2): a one- or two-sentence vision description of the foreground window,
+   * sent only when the title alone came back insufficient_evidence and the person allowed a
+   * capture. Absent otherwise, and absent means exactly what slice 1 always meant.
+   */
+  readonly description?: string;
   readonly observedAt: string;
 }
 
@@ -403,6 +409,13 @@ const FOCUS_WINDOW_TITLE_SCHEMA = {
   type: "string",
   minLength: 0,
   maxLength: 200,
+  pattern: "^[^\\u0000-\\u001f\\u007f]*$"
+} as const;
+
+const FOCUS_DESCRIPTION_SCHEMA = {
+  type: "string",
+  minLength: 0,
+  maxLength: 280,
   pattern: "^[^\\u0000-\\u001f\\u007f]*$"
 } as const;
 
@@ -444,6 +457,7 @@ export const focusJudgeRouteSchema = {
       blockId: UUID_SCHEMA,
       appName: FOCUS_APP_NAME_SCHEMA,
       windowTitle: FOCUS_WINDOW_TITLE_SCHEMA,
+      description: FOCUS_DESCRIPTION_SCHEMA,
       observedAt: { type: "string", minLength: 1, maxLength: 40 }
     }
   },

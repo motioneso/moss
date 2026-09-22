@@ -12,6 +12,7 @@ export const FOCUS_DISTRACTED_FLOOR = 0.6;
  */
 const FOCUS_CHOICE_APP_MAX_LENGTH = 64;
 const FOCUS_CHOICE_TITLE_MAX_LENGTH = 200;
+const FOCUS_CHOICE_DESCRIPTION_MAX_LENGTH = 280;
 
 export interface FocusChoiceQuestion {
   readonly instructions: string;
@@ -68,12 +69,18 @@ export interface FocusChoiceObservation {
   readonly blockTitle: string;
   readonly appName: string;
   readonly windowTitle: string | null;
+  /** Rung 3: a vision description of the foreground window, sent only when the title was not enough. */
+  readonly description?: string | null;
 }
 
 export type FocusChoiceState = {
   readonly goal: string;
-  readonly current: { readonly app: string; readonly title: string | null };
-  readonly evidence: "window_title" | "app_only";
+  readonly current: {
+    readonly app: string;
+    readonly title: string | null;
+    readonly screen: string | null;
+  };
+  readonly evidence: "screen_description" | "window_title" | "app_only";
 };
 
 function truncate(value: string, maxLength: number): string {
@@ -83,16 +90,23 @@ function truncate(value: string, maxLength: number): string {
 /** The provider-agnostic `state` the questions refer to. Text stays quoted, never interpreted. */
 export function buildChoiceState(observation: FocusChoiceObservation): FocusChoiceState {
   const title =
-    observation.windowTitle === null
+    observation.windowTitle === null || observation.windowTitle === ""
       ? null
       : truncate(observation.windowTitle, FOCUS_CHOICE_TITLE_MAX_LENGTH);
+  const screen =
+    observation.description === null ||
+    observation.description === undefined ||
+    observation.description === ""
+      ? null
+      : truncate(observation.description, FOCUS_CHOICE_DESCRIPTION_MAX_LENGTH);
   return {
     goal: truncate(observation.blockTitle, FOCUS_CHOICE_TITLE_MAX_LENGTH),
     current: {
       app: truncate(observation.appName, FOCUS_CHOICE_APP_MAX_LENGTH),
-      title
+      title,
+      screen
     },
-    evidence: title ? "window_title" : "app_only"
+    evidence: screen ? "screen_description" : title ? "window_title" : "app_only"
   };
 }
 
