@@ -292,4 +292,70 @@ describe("news refresh jobs", () => {
       }
     ]);
   });
+
+  // #2258: a source add's refresh request must not wait on a compile that is still running.
+  // Before the fix the compile shared one transaction with `beginRefreshRun`, so its
+  // `news_refresh_state` row lock was held for the entire run (all feed fetches and model calls),
+  // and `bumpRefreshRequest` blocked until it finished — the reported 77s "Adding..." freeze.
+  it("does not block a refresh request while a compile is still fetching (#2258)", async () => {
+    await asActor((db) => repository.bumpRefreshRequest(db));
+    await enqueueNewsRefresh(appBoss, ids.userA);
+
+    let releaseFetch: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    let markStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+
+    await registerNewsJobWorkers(workerBoss, workerContext, {
+      fetchWithOptions: async () => ({ ok: false, reason: "network" }),
+      fetch: async (url) => {
+        markStarted();
+        await gate;
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: url,
+          contentType: "application/rss+xml",
+          body: feedFor(url),
+          truncated: false
+        };
+      },
+      search: { search: async () => ({ results: [] }) },
+      ai: {
+        fingerprint: async () => "fp",
+        generateJson: async (_db, input) => ({
+          ok: true,
+          object: {
+            rankings: [...input.prompt.matchAll(/"id":"(c\d+)"/g)].map((match, index) => ({
+              id: match[1],
+              relevance: 100 - index,
+              eligible: true
+            }))
+          }
+        })
+      },
+      logger: { info: () => undefined, warn: () => undefined }
+    });
+
+    // The worker is now inside the compile, parked on the first feed fetch.
+    await started;
+
+    const bumped = await Promise.race([
+      asActor((db) => repository.bumpRefreshRequest(db)),
+      new Promise<never>((_resolve, reject) =>
+        setTimeout(
+          () => reject(new Error("bumpRefreshRequest blocked on the running compile (#2258)")),
+          3000
+        )
+      )
+    ]);
+    expect(bumped).toBeGreaterThan(1);
+
+    releaseFetch();
+    await waitForIdle();
+  });
 });
