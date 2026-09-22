@@ -107,5 +107,21 @@ RUN mkdir -p "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth /run/jarv1s 
   && chmod -R 0777 "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth \
   && chmod 0700 /run/jarv1s \
   && chmod 2770 /run/moss-sports-browser
+# #1936: build provenance for Settings > Host > Technical details. The API already reads
+# JARVIS_APP_VERSION / JARVIS_GIT_COMMIT at startup (apps/api/src/server.ts) but nothing set them,
+# so Version and Commit were blank in every deployment. Both args are optional with empty defaults,
+# so a plain `docker build` still works and no setting becomes required. CI passes the commit; the
+# release tag is chosen when the built edge image is promoted, so Compose supplies it as
+# JARVIS_APP_VERSION at deploy time.
+#
+# These MUST stay last: a changed build arg invalidates the layer cache for every RUN that follows
+# it, and CI passes a new commit hash on every build. Placed above the browser install they would
+# force a fresh Chromium download and apt install on every edge build (and a fresh ~GB layer on
+# every upgrade) even though nothing in that layer changed. tests/unit/prod-deploy-config.test.ts
+# pins the ordering.
+ARG JARVIS_APP_VERSION=""
+ARG JARVIS_GIT_COMMIT=""
+ENV JARVIS_APP_VERSION=$JARVIS_APP_VERSION
+ENV JARVIS_GIT_COMMIT=$JARVIS_GIT_COMMIT
 EXPOSE 3000
 CMD ["node_modules/.bin/tsx", "scripts/start-jarv1s.ts"]
