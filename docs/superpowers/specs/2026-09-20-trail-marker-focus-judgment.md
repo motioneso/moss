@@ -3,7 +3,9 @@
 Status: **Approved by Ben, 2026-09-20**, with the fixes from an independent review folded in.
 The screens in §9 are minimal and follow the approved board. Builds on
 `2026-09-20-trail-marker-mac-companion.md` (the linked Mac) and replaces the direct Mac-to-model
-call assumed in `docs/superpowers/plans/2026-09-19-jev-focus-mac-pilot.md`.
+call assumed in `docs/superpowers/plans/2026-09-19-jev-focus-mac-pilot.md`. **Amended 2026-09-22**
+(§6, §9): watching can be the entire desktop instead of only chosen apps; full amendment in
+`2026-09-21-trail-marker-rung3-vision.md` §7.
 
 ## 1. What this is
 
@@ -83,18 +85,21 @@ Cheapest rung that answers the question, escalating only with the person's expli
 | 2    | Selected text or page title from an allowlisted app or browser               | Accessibility    | Off            |
 | 3    | One foreground-window capture, described by the vision model, then discarded | Screen Recording | Off, on opt-in |
 
-Every rung: an allowlist of apps the person opts in, a denylist that always wins (password
-managers, banking, private windows), no clipboard, no keystrokes, hard length caps. Text from web
-pages and window titles is **untrusted input**: it is quoted as data in the prompt and told never
-to act as instructions. That makes an injected instruction unlikely to work; it does not make it
-impossible (see §13).
+Every rung: an allowlist of apps the person opts in, **or the entire desktop if they choose that
+instead** (amended 2026-09-22, Ben: distraction rarely stays inside one app, so watching everything
+is a real choice, not only a lazier version of picking apps — see the rung 3 spec §7 for the full
+amendment), a denylist that always wins either way (password managers, banking, private windows),
+no clipboard, no keystrokes, hard length caps. Text from web pages and window titles is
+**untrusted input**: it is quoted as data in the prompt and told never to act as instructions. That
+makes an injected instruction unlikely to work; it does not make it impossible (see §13).
 
 **What protects a capture, honestly.** Rungs 1 and 2 are text, so the Mac can strip anything that
 looks like a secret or a long token before sending. A screenshot cannot be redacted that way: the
-pixels would have to be read first. For rung 3 the protection is the allowlist and denylist (the
-capture happens only in an allowed app, never in a denied one) and the person's consent. Anything
-visible in that window, including text typed into a form, is sent to the image model. The consent
-sentence must say this in plain words.
+pixels would have to be read first. For rung 3 the protection is the denylist (still always
+checked first, whether the person picked specific apps or the entire desktop) plus the allowlist
+when one is in effect, and the person's consent. Anything visible in the captured window, including
+text typed into a form, is sent to the image model. The consent sentence must say this in plain
+words, including which of the two scopes is actually active.
 
 ## 7. Judging and nudging
 
@@ -154,8 +159,8 @@ The person must be able to see the chain working without waiting for a real drif
   for that one call and is never written to disk, logged, or retried from storage.
 - **The image-model key lives only in the Mac Keychain.** It is never sent to Moss, never logged,
   never put in a prompt, an export, or a crash report (same rule and test as the companion
-  credential). The allowlist and denylist decide whether a capture happens at all; they are the
-  protection for pixels, as §6 explains.
+  credential). What's being watched (specific apps or the entire desktop) and the denylist decide
+  whether a capture happens at all; they are the protection for pixels, as §6 explains.
 - The prompt is built from the summary only. Connector and AI credentials, tokens and session data
   are never included. Logs are content-free. Job payloads carry IDs only.
 - Every claim above needs a test watched failing with the protection removed before it is written
@@ -175,8 +180,9 @@ Deliberately almost no new screens. Everything uses the styling of the approved 
    than a separate window.
 2. **Focus settings (one new pane in the existing Settings sidebar):** the image model API
    (endpoint, model name, key, a Test button, and one plain sentence stating where the image will
-   be sent). That sentence is the consent: no separate consent screen. Also the app allowlist and
-   a **Send a test nudge** button.
+   be sent). That sentence is the consent: no separate consent screen. Also what to watch — specific
+   apps, chosen one at a time, or the entire desktop instead (§6 amendment) — and a **Send a test
+   nudge** button.
 
 **Moss web:** no new screen. The judgment model is bound in the existing Settings → AI, the same
 way other services are (an admin setting; see D1). There is no review screen: the person checks
