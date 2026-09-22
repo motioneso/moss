@@ -11,20 +11,24 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUN_GATE_SRC="$REPO_ROOT/scripts/run-gate.sh"
 REAL_SETSID="$(command -v setsid)"
+MAINPID=$$
 SCRATCH=""
 
 cleanup() { [ -z "$SCRATCH" ] || rm -rf $SCRATCH; }
-trap cleanup EXIT
+# BASHPID guard: subshells inherit the EXIT trap, but only the main shell may
+# clean up, or an early subshell exit would delete dirs still in use.
+trap '[ "$BASHPID" = "$MAINPID" ] && cleanup' EXIT
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 pass() { echo "ok: $1"; }
 
 # Build a throwaway repo with the script under test plus instant fake
-# docker/pnpm. Prints "<repo> <bindir> <gatedir>".
+# docker/pnpm. Prints "<repo> <bindir> <gatedir>". The caller registers them
+# in SCRATCH (appending here would be lost: this runs in a command
+# substitution subshell).
 new_env() {
   local r bin g
   r="$(mktemp -d)"; bin="$(mktemp -d)"; g="$(mktemp -d)"
-  SCRATCH="$SCRATCH $r $bin $g"
   git init -q -b main "$r"
   git -C "$r" config user.email gate-test@example.com
   git -C "$r" config user.name gate-test
@@ -48,6 +52,7 @@ EOF
 
 # --- T1: broken launcher fails loud with the launcher's own reason ---------
 read R1 B1 G1 <<<"$(new_env)"
+SCRATCH="$SCRATCH $R1 $B1 $G1"
 cat >"$B1/setsid" <<'EOF'
 #!/usr/bin/env bash
 echo "fake setsid: cannot launch" >&2
@@ -79,6 +84,7 @@ pass "broken launcher fails loud with its own reason"
 
 # --- T2: SIGKILLed start must not let wait report the previous run ---------
 read R2 B2 G2 <<<"$(new_env)"
+SCRATCH="$SCRATCH $R2 $B2 $G2"
 cat >"$B2/docker" <<'EOF'
 #!/usr/bin/env bash
 if [ "$1" = "exec" ]; then sleep 60; fi
@@ -117,6 +123,7 @@ pass "killed start makes wait report DEAD, not the previous run"
 
 # --- T3: late runner is stopped, not stranded with a permanent DEAD --------
 read R3 B3 G3 <<<"$(new_env)"
+SCRATCH="$SCRATCH $R3 $B3 $G3"
 cat >"$B3/setsid" <<EOF
 #!/usr/bin/env bash
 sleep 4
@@ -151,6 +158,7 @@ pass "sentinel wins over a stale marker"
 
 # --- T4: header-only and headerless logs ------------------------------------
 read R4 B4 G4 <<<"$(new_env)"
+SCRATCH="$SCRATCH $R4 $B4 $G4"
 export PATH="$B4:/usr/bin:/bin"
 printf '### GATE   pnpm verify:foundation\n### CWD    /tmp/old\n### START  t\n' >"$G4/fresh-header.log"
 if ( cd "$R4" && ./scripts/run-gate.sh status --log "$G4/fresh-header.log" >/dev/null 2>&1 ); then
