@@ -30,8 +30,8 @@ export interface BuildAppMapInput {
 export function buildAppMap(input: BuildAppMapInput) {
   // Core declarations are the authority for shared surfaces. A module that declares its own
   // setting or screen pointing at the same page (by id or path) is dropped, so the built map
-  // does not list the same page twice under two owners (#app map truthfulness: duplicates read
-  // as two different things to Moss).
+  // never lists the same page twice under two owners; duplicates read as two different things
+  // to Moss.
   const coreScreenIds = new Set(input.coreScreens.map((surface) => surface.id));
   const coreScreenPaths = new Set(input.coreScreens.map((surface) => surface.path));
   const coreSettingIds = new Set(input.coreSettings.map((surface) => surface.id));

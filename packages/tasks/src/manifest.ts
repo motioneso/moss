@@ -832,7 +832,7 @@ export const tasksModuleManifest = {
       id: "tasks.due_and_recurrence",
       description:
         "Set due dates, effort estimates and recurrence; recurring tasks roll forward each day, " +
-        "deferred tasks come back later, and incomplete ones show in the overdue list."
+        "and incomplete ones show in the overdue list."
     },
     {
       id: "tasks.natural_language_search",

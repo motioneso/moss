@@ -272,8 +272,8 @@ export const memoryModuleManifest: MossModuleManifest = {
       id: "memory.associative_graph",
       description:
         "Keep what Moss learns about you as a graph of people, things and facts, and recall the " +
-        "relevant parts when answering. In Memory settings you can edit, confirm, pin, correct or " +
-        "supersede each fact."
+        "relevant parts when answering. In Memory settings you can pin an important fact or " +
+        "forget it, and review the proposed memories waiting for your decision."
     },
     {
       id: "memory.candidate_review",
@@ -284,8 +284,8 @@ export const memoryModuleManifest: MossModuleManifest = {
     {
       id: "memory.notes_ingest",
       description:
-        "Learn from your linked notes by turning their content into memory candidates, using an " +
-        "embedding model to group similar passages."
+        "Read your linked notes into Moss by splitting each note into passages and keeping them " +
+        "with an embedding model, so you can search your notes by meaning."
     }
   ]
 };

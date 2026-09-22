@@ -293,20 +293,20 @@ export const connectorsModuleManifest = {
         "from Google mail.",
       errors: [
         {
-          code: "connectors.imap.connect_failed",
+          code: "connectors.imap.auth_failed",
           class: "prerequisite",
-          remediationRef: "connectors.recheck_imap_details",
+          remediationRef: "connectors.reconnect_imap",
           description:
-            "The mail server rejected the connection: wrong name, server, port, or password. " +
-            "Nothing is synced until the details work again."
+            "The mail service refused the saved sign-in, for example after the app password was " +
+            "changed or taken away. Nothing is synced until the account is connected again."
         }
       ],
       remediations: [
         {
-          id: "connectors.recheck_imap_details",
+          id: "connectors.reconnect_imap",
           description:
-            "Check the account's server, port and password under Connected accounts in Settings, " +
-            "then test the connection.",
+            "Connect the account again under Connected accounts in Settings using a fresh app " +
+            "password; the connection is tested before it is saved.",
           path: "/settings?section=connected"
         }
       ]
