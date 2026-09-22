@@ -794,9 +794,11 @@ test.describe("Chat drawer — Approve/Reject card", () => {
     await expect(result).toContainText("Switched to dark mode.");
 
     // No page.reload() anywhere above — the attribute flips purely from the generic
-    // invalidation effect resolving "settings.themes" and refetching.
+    // invalidation effect resolving "settings.themes" and refetching. The refetch round-trip is
+    // slower than the 3s used elsewhere for a direct DOM assertion, so allow the file's standard
+    // 5s wait rather than racing it (#app-shell dark-mode flake).
     await expect(page.locator("html")).toHaveAttribute("data-color-mode", "dark", {
-      timeout: 3000
+      timeout: 5000
     });
     expect(themeFetchCount).toBeGreaterThanOrEqual(2);
   });
