@@ -29,6 +29,7 @@ let providerId: string;
 let modelEconomyJsonId: string;
 let modelReasoningJsonId: string;
 let modelChatJsonId: string;
+let ollamaJsonModelId: string;
 
 function adminContext(): AccessContext {
   return { actorUserId: ids.adminUser, requestId: "request:ai-structured-test" };
@@ -46,6 +47,26 @@ async function seedProvider(displayName: string): Promise<string> {
     }
   });
   expect(response.statusCode).toBe(201);
+  return response.json().provider.id as string;
+}
+
+async function seedProviderOfKind(
+  providerKind: string,
+  displayName: string,
+  baseUrl: string
+): Promise<string> {
+  const response = await server.inject({
+    method: "POST",
+    url: "/api/ai/providers",
+    headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+    payload: {
+      providerKind,
+      displayName,
+      baseUrl,
+      credentialPayload: { apiKey: "structured-test-secret" }
+    }
+  });
+  expect(response.statusCode, response.body).toBe(201);
   return response.json().provider.id as string;
 }
 
@@ -94,6 +115,16 @@ beforeAll(async () => {
     headers: { authorization: `Bearer ${ids.sessionAdmin}` }
   });
   expect(defaultResponse.statusCode).toBe(200);
+
+  // Seed the non-qualifying ollama provider BEFORE the anthropic models: automatic module.*
+  // resolution breaks an economy-tier tie by newest created_at, so creating this provider's model
+  // last would hijack the existing "json-economy" expectations further down this file.
+  const ollamaProviderId = await seedProviderOfKind(
+    "ollama",
+    "Local Ollama",
+    "http://127.0.0.1:11434"
+  );
+  ollamaJsonModelId = await seedModel(ollamaProviderId, "ollama-json", ["json"], "economy");
 
   modelEconomyJsonId = await seedModel(providerId, "json-economy", ["json"], "economy");
   modelReasoningJsonId = await seedModel(providerId, "json-reasoning", ["json"], "reasoning");
@@ -397,6 +428,87 @@ describe("module service binding routes", () => {
       payload: { binding: { kind: "mode", tier: "economy" } }
     });
     expect(nonAdmin.statusCode).toBe(403);
+  });
+});
+
+describe("sorting binding routes", () => {
+  const auth = { authorization: `Bearer ${ids.sessionAdmin}` };
+  const put = (binding: unknown) =>
+    server.inject({
+      method: "PUT",
+      url: "/api/ai/services/sorting/binding",
+      headers: auth,
+      payload: { binding }
+    });
+  const list = async () =>
+    (await server.inject({ method: "GET", url: "/api/ai/service-bindings", headers: auth })).json()
+      .bindings as Record<string, unknown>;
+
+  it("saves, reads and deletes a sorting model binding through the real repository", async () => {
+    const saved = await put({ kind: "model", modelId: modelEconomyJsonId });
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(saved.json()).toEqual({
+      service: "sorting",
+      binding: { kind: "model", modelId: modelEconomyJsonId }
+    });
+
+    expect((await list()).sorting).toEqual({ kind: "model", modelId: modelEconomyJsonId });
+    const direct = await dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.getSortingBinding(scopedDb)
+    );
+    expect(direct).toEqual({ kind: "model", modelId: modelEconomyJsonId });
+
+    const del = await server.inject({
+      method: "DELETE",
+      url: "/api/ai/services/sorting/binding",
+      headers: auth
+    });
+    expect(del.statusCode, del.body).toBe(200);
+    expect(del.json()).toEqual({ service: "sorting" });
+    expect((await list()).sorting).toBeUndefined();
+  });
+
+  it("rejects a mode binding for sorting", async () => {
+    const response = await put({ kind: "mode", tier: "economy" });
+    expect(response.statusCode).toBe(400);
+    expect((await list()).sorting).toBeUndefined();
+  });
+
+  it("rejects a model without the json capability", async () => {
+    const chatOnly = await seedModel(providerId, "sorting-chat-only", ["chat"], "interactive");
+    const response = await put({ kind: "model", modelId: chatOnly });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("rejects a json model on a provider kind the structured path cannot run", async () => {
+    const response = await put({ kind: "model", modelId: ollamaJsonModelId });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("the repository refuses a mode binding for sorting", async () => {
+    await expect(
+      dataContext.withDataContext(adminContext(), (scopedDb) =>
+        repository.setServiceBinding(
+          scopedDb,
+          "sorting",
+          { kind: "mode", tier: "economy" },
+          ids.adminUser
+        )
+      )
+    ).rejects.toThrow(/model binding/);
+  });
+
+  it("saving sorting leaves chat and module bindings untouched", async () => {
+    const before = await list();
+    expect((await put({ kind: "model", modelId: modelEconomyJsonId })).statusCode).toBe(200);
+    const after = await list();
+    expect(after.chat).toEqual(before.chat);
+    expect(after["module.worker"]).toEqual(before["module.worker"]);
+    await server.inject({
+      method: "DELETE",
+      url: "/api/ai/services/sorting/binding",
+      headers: auth
+    });
   });
 });
 

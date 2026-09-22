@@ -22,6 +22,7 @@ import {
 } from "@moss/db";
 import {
   MODULE_WORKER_SERVICE_KEY,
+  SORTING_SERVICE_KEY,
   isModuleServiceKey,
   type ActionAuditInputSummary,
   type AiCapabilityRouteReason,
@@ -31,13 +32,18 @@ import {
   type AiServiceBinding,
   type AiServiceKey,
   type ModuleServiceBindingMap,
-  type ModuleServiceKey
+  type ModuleServiceKey,
+  type SortingServiceKey
 } from "@moss/shared";
 
 import type { EncryptedAiSecret } from "./crypto.js";
 import type { MossActionPermissionTier } from "@moss/module-sdk";
 import { parseCapabilityRouteMap } from "./capability-route-map.js";
-import { parseModuleServiceBindingMap, parseServiceBindingMap } from "./service-binding-map.js";
+import {
+  parseModuleServiceBindingMap,
+  parseServiceBinding,
+  parseServiceBindingMap
+} from "./service-binding-map.js";
 import {
   CHAT_MODEL_OVERRIDE_PREFERENCE_KEY,
   CHAT_MODEL_OVERRIDE_SETTING_KEY,
@@ -46,6 +52,14 @@ import {
 
 function jsonb(value: unknown) {
   return sql<Record<string, unknown>>`${JSON.stringify(value)}::jsonb`;
+}
+
+function readSortingBinding(
+  value: unknown
+): { readonly kind: "model"; readonly modelId: string } | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const binding = parseServiceBinding((value as Record<string, unknown>)[SORTING_SERVICE_KEY]);
+  return binding?.kind === "model" ? binding : null;
 }
 
 // #874: thrown by upsertVoiceEndpoint when a FRESH voice endpoint is created without an API key. The
@@ -798,9 +812,15 @@ export class AiRepository {
     actorUserId: string
   ): Promise<AiServiceBinding> {
     assertDataContextDb(scopedDb);
-    // #915 D6: module.* keys are admin routing knobs for module structured work and share this
-    // blob; every OTHER worker capability stays automatic-only (the #874 HIGH-2 decision).
-    if (!USER_FACING_SERVICES.has(service as AiModelCapability) && !isModuleServiceKey(service)) {
+    if (service === SORTING_SERVICE_KEY) {
+      // The sorting model has no mode: unset already means "run as today".
+      if (binding.kind !== "model") {
+        throw new Error('Service "sorting" accepts only a model binding.');
+      }
+    } else if (
+      !USER_FACING_SERVICES.has(service as AiModelCapability) &&
+      !isModuleServiceKey(service)
+    ) {
       throw new Error(`Service "${service}" is not bindable (worker capabilities stay automatic).`);
     }
 
@@ -851,13 +871,13 @@ export class AiRepository {
   }
 
   /**
-   * #915 D6: unbind a module service (returns to automatic routing). Single-statement JSONB key
-   * removal, mirroring the merge-upsert above so a concurrent write to a DIFFERENT service key
-   * can't be clobbered (no read-modify-write).
+   * #915 D6: unbind a module service (returns to automatic routing) or clear the sorting model.
+   * Single-statement JSONB key removal, mirroring the merge-upsert above so a concurrent write to
+   * a DIFFERENT service key can't be clobbered (no read-modify-write).
    */
   async deleteModuleServiceBinding(
     scopedDb: DataContextDb,
-    service: ModuleServiceKey,
+    service: ModuleServiceKey | SortingServiceKey,
     actorUserId: string
   ): Promise<void> {
     assertDataContextDb(scopedDb);
@@ -870,6 +890,19 @@ export class AiRepository {
       })
       .where("key", "=", AI_SERVICE_BINDINGS_SETTING_KEY)
       .execute();
+  }
+
+  /** The admin's sorting model binding, or null when unset or malformed. */
+  async getSortingBinding(
+    scopedDb: DataContextDb
+  ): Promise<{ readonly kind: "model"; readonly modelId: string } | null> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.instance_settings")
+      .select("value")
+      .where("key", "=", AI_SERVICE_BINDINGS_SETTING_KEY)
+      .executeTakeFirst();
+    return readSortingBinding(row?.value);
   }
 
   /**
