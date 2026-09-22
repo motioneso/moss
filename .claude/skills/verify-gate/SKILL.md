@@ -31,6 +31,10 @@ is gone). **Check the exit code, not the text.** (`status` and plain `wait` with
 still exist for a one-shot check or a bounded foreground wait, but `wait --follow` backgrounded is
 the one procedure to use here.)
 
+Every run log records which commit it tested (`### COMMIT`) and whether the tree was dirty
+(`### DIRTY`, with the changed files listed). `status` and `wait` repeat both in their output,
+so an old result can only be trusted when its commit matches and its tree was clean.
+
 ## Rules that still apply around the script
 
 - **Never pipe a gate command** (`| tail`, `| grep`, `| tee`): a pipeline returns the filter's
