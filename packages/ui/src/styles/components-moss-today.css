@@ -364,9 +364,6 @@
   color: inherit;
   flex: none;
 }
-.jds-weather-chip__day + .jds-weather-chip__day {
-  border-left: 1px solid var(--border-subtle);
-}
 .jds-weather-chip__day:hover,
 .jds-weather-chip__day:focus-visible {
   background: var(--surface-sunken);

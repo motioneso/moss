@@ -260,3 +260,60 @@ export const REVIEW_TRANSIENT_LABELS = {
   timeChange: "Time change to save",
   willRemove: "Will be removed"
 } as const;
+
+/** Section index and hero utility row labels. */
+export const BRIEFING_NOT_READY_LABEL = "Briefing not ready yet";
+export const TODAY_SECTION_INDEX_LABEL = "In this briefing";
+export const TODAY_SECTION_LINKS = [
+  { href: "#start-here", label: "Your day & preparation" },
+  { href: "#needs-you", label: "Quick actions" },
+  { href: "#news", label: "News" },
+  { href: "#sports", label: "Sports" }
+] as const;
+
+/** Evening step 1 reflection choices and note composer (VP-REFLECTION-R1). */
+export const EVENING_REFLECT_CHOICE_CAPTURES_TITLE = "That captures it";
+export const EVENING_REFLECT_CHOICE_CAPTURES_HINT = "I'm ready to look ahead.";
+export const EVENING_REFLECT_CHOICE_UNSENT_TITLE = "The follow-up isn't sent";
+export const EVENING_REFLECT_CHOICE_UNSENT_HINT = "I still need to send the message.";
+export const EVENING_REFLECT_CHOICE_TOOK_MORE_TITLE = "It took more out of me than expected";
+export const EVENING_REFLECT_CHOICE_TOOK_MORE_HINT = "Make some room in tomorrow's plan.";
+
+export const EVENING_REFLECT_CHOICES = [
+  {
+    id: "captures",
+    title: EVENING_REFLECT_CHOICE_CAPTURES_TITLE,
+    hint: EVENING_REFLECT_CHOICE_CAPTURES_HINT
+  },
+  {
+    id: "unsent",
+    title: EVENING_REFLECT_CHOICE_UNSENT_TITLE,
+    hint: EVENING_REFLECT_CHOICE_UNSENT_HINT
+  },
+  {
+    id: "took-more",
+    title: EVENING_REFLECT_CHOICE_TOOK_MORE_TITLE,
+    hint: EVENING_REFLECT_CHOICE_TOOK_MORE_HINT
+  }
+] as const;
+
+export const EVENING_REFLECT_NOTE_LABEL = "Or tell Moss in your own words";
+export const EVENING_REFLECT_NOTE_PLACEHOLDER =
+  "A correction, a constraint, or something to remember…";
+export const EVENING_REFLECT_ADD_NOTE_LABEL = "Add note";
+
+/** Evening hero, recap and open-loops copy (VP-EVENING-SUMMARY-R1). The hero
+    kicker names the signed-in user's first name; without one it stands alone. */
+export const EVENING_KICKER = "GOOD EVENING";
+export const EVENING_BRIEFING_TITLE = "EVENING BRIEFING";
+export function eveningHeroKicker(firstName: string | null): string {
+  const name = (firstName ?? "").trim();
+  return name ? `${EVENING_KICKER}, ${name.toUpperCase()}` : EVENING_KICKER;
+}
+export const EVENING_READ_FULL_LABEL = "Read the full evening briefing";
+export const EVENING_SOURCES_LABEL = "What informed this?";
+export const EVENING_RECAP_KICKER = "01";
+export const EVENING_RECAP_HEADING = "What happened today";
+export const EVENING_OPEN_LOOPS_KICKER = "02";
+export const EVENING_OPEN_LOOPS_HEADING = "Close the open loops";
+export const EVENING_OPEN_LOOPS_EMPTY = "Nothing urgent is carrying forward.";

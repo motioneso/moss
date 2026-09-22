@@ -113,6 +113,13 @@ services:
       CI: "true"
       PORT: "3000"
       HOST: 0.0.0.0
+      # #1936: Settings > Host > Technical details reads these at startup. The dev stack runs from
+      # source (no image build), so the version and commit are passed through from the caller's
+      # environment when set, and stay unset otherwise rather than being invented.
+      NODE_ENV: development
+      JARVIS_DEPLOY_MODE: dev
+      JARVIS_APP_VERSION: ${JARVIS_APP_VERSION:-}
+      JARVIS_GIT_COMMIT: ${JARVIS_GIT_COMMIT:-}
       MOSS_SPORTS_RENDERER_SOCKET: /run/moss-sports-browser/renderer.sock
       JARVIS_APP_DATABASE_URL: postgres://jarvis_app_runtime:app_password@postgres:5432/jarv1s
       JARVIS_AUTH_DATABASE_URL: postgres://jarvis_auth_runtime:auth_password@postgres:5432/jarv1s

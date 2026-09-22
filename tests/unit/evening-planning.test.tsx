@@ -895,4 +895,37 @@ describe("useEveningPlanning", () => {
     expect(rail?.textContent).toContain("Tomorrow Strategy Sync");
     expect(rail?.textContent).not.toContain("Today Retro");
   });
+
+  it("preserves reflection selection across a rerender", async () => {
+    const m = await mount(tomorrowPlan());
+    expect(m.current().reflection).toBeNull();
+    await act(async () => {
+      m.current().setReflection("unsent");
+    });
+    expect(m.current().reflection).toBe("unsent");
+    await m.rerender();
+    expect(m.current().reflection).toBe("unsent");
+  });
+
+  it("lands added notes in saved intent notes without writing tasks", async () => {
+    const m = await mount(tomorrowPlan());
+    await act(async () => {
+      m.current().addNote("First note to keep");
+      m.current().addNote("   ");
+      m.current().addNote("Second note to remember");
+    });
+    expect(m.current().activeNotes).toBe("First note to keep\nSecond note to remember");
+    expect(taskWrites().length).toBe(0);
+    let ok = false;
+    await act(async () => {
+      ok = await m.current().save();
+    });
+    expect(ok).toBe(true);
+    expect(draftSaves()).toBe(1);
+    expect(taskWrites().length).toBe(0);
+    const body = calls.find((c) => c.method === "PATCH" && c.url.endsWith("/draft"))?.body as {
+      eveningIntent?: { notes?: string | null };
+    };
+    expect(body.eveningIntent?.notes).toBe("First note to keep\nSecond note to remember");
+  });
 });

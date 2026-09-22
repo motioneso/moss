@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+
 import { createElement } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -259,5 +261,20 @@ describe("BriefingReportShell selected tab", () => {
     expect(panel.getAttribute("aria-labelledby")).toBe(review.id);
     await act(async () => briefing.click());
     expect(seen).toEqual([briefing]);
+  });
+});
+
+describe("automatic-read reader frame height", () => {
+  it("fixes the desktop automatic frame to exactly 910px instead of only capping it", () => {
+    // #2555 R8: max-height only caps a frame, it never grows one. The one-heading automatic
+    // content is naturally 896px tall, so a max-height of 910px left the frame short of the
+    // approved 1120x910 mockup. The frame must declare an exact height instead.
+    const css = readFileSync("apps/web/src/styles/kit-briefing-reader.css", "utf8");
+    const match = css.match(
+      /\.brief-reader:has\(\[data-briefing-surface="automatic-read"]\)\s*\{(?<body>[^}]*)\}/m
+    );
+    const body = match?.groups?.body ?? "";
+    expect(body).toContain("height: 910px");
+    expect(body).not.toContain("max-height: 910px");
   });
 });

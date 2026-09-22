@@ -135,20 +135,8 @@
   padding: 2px 0 12px;
 }
 
-/* ===== Wellness card (progress meds) ===== */
-.well__btn--meds {
-  justify-content: space-between;
-  padding-left: 13px;
-  padding-right: 11px;
-}
-.well__btn--meds .lead {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-.well__ct {
-  font-variant-numeric: tabular-nums;
-}
+/* P2 action rail owns the Medications row now: the wide Meds button and its
+   count badge are gone, replaced by the rail-scoped plus control. */
 
 /* Soft, dismissible med reminder (client-only; reappears on reload — no server flag). */
 .well__nudge {
@@ -204,4 +192,21 @@
 .bfresh__stale {
   margin-top: 8px;
   padding: 6px 10px;
+}
+
+/* ===== Evening recap + open-loops sections (VP-EVENING-SUMMARY-R1) =====
+   Layout-only additions over reused pieces: the kicker, title, check and
+   sub-line visuals come from jds-brief__kicker, jds-task__title with strong,
+   jds-task__check and jds-task__source, because this file is under the D2
+   layout-only gate. The numbered kicker stays the default kicker tone rather
+   than mockup amber; recorded as an Architect finding. Every .well__*, .np-*
+   and .bfresh__* rule above is untouched. */
+.ev-recap__meta {
+  margin-left: auto;
+}
+.ev-recap__row + .ev-recap__row {
+  border-top: 1px solid var(--border-subtle);
+}
+.ev-recap__sub:empty::before {
+  content: "\00a0";
 }

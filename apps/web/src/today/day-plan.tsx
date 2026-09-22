@@ -23,6 +23,8 @@ export interface DayPlanSectionProps {
   /** Today-only editorial timeline look. Off everywhere else, including the
       morning reader, the review dialog and the evening planner. */
   readonly editorial?: boolean;
+  /** The morning reader supplies the rail heading outside this section. */
+  readonly showEditorialHeading?: boolean;
   readonly dateline?: string;
   readonly targetDayKey?: string;
 }
@@ -127,8 +129,13 @@ function DayItemRow(props: {
   );
 }
 
-function SectionHead(props: { readonly editorial?: boolean; readonly dateline?: string }) {
+function SectionHead(props: {
+  readonly editorial?: boolean;
+  readonly showEditorialHeading?: boolean;
+  readonly dateline?: string;
+}) {
   if (props.editorial === true) {
+    if (props.showEditorialHeading === false) return null;
     return (
       <div className="tl-head">
         <span className="tl-number">01</span>
@@ -155,7 +162,11 @@ export function DayPlanSection(props: DayPlanSectionProps) {
     if (props.events.length === 0) {
       return (
         <section className={sectionClass} id="schedule">
-          <SectionHead editorial={editorial} dateline={props.dateline} />
+          <SectionHead
+            editorial={editorial}
+            showEditorialHeading={props.showEditorialHeading}
+            dateline={props.dateline}
+          />
           <div className="agenda-clear" role="status">
             Gathering your day plan…
           </div>
@@ -173,7 +184,11 @@ export function DayPlanSection(props: DayPlanSectionProps) {
     });
     return (
       <section className={sectionClass} id="schedule">
-        <SectionHead editorial={editorial} dateline={props.dateline} />
+        <SectionHead
+          editorial={editorial}
+          showEditorialHeading={props.showEditorialHeading}
+          dateline={props.dateline}
+        />
         <div className="agenda-clear" role="status">
           Gathering your day plan…
         </div>
@@ -196,7 +211,11 @@ export function DayPlanSection(props: DayPlanSectionProps) {
   if (props.calendarError && props.error) {
     return (
       <section className={sectionClass} id="schedule">
-        <SectionHead editorial={editorial} dateline={props.dateline} />
+        <SectionHead
+          editorial={editorial}
+          showEditorialHeading={props.showEditorialHeading}
+          dateline={props.dateline}
+        />
         <p className="cmd-empty" role="status">
           Calendar and saved plan aren&apos;t available right now.
         </p>
@@ -229,7 +248,11 @@ export function DayPlanSection(props: DayPlanSectionProps) {
   if (editorial) {
     return (
       <section className={sectionClass} id="schedule">
-        <SectionHead editorial dateline={props.dateline} />
+        <SectionHead
+          editorial
+          showEditorialHeading={props.showEditorialHeading}
+          dateline={props.dateline}
+        />
         {showReview || notice ? (
           <div className="tl-note">
             {showReview ? <ReviewButton onReview={props.onReview!} /> : null}

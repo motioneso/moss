@@ -115,6 +115,7 @@ function render(input: {
   readonly error?: boolean;
   readonly calendarError?: boolean;
   readonly editorial?: boolean;
+  readonly showEditorialHeading?: boolean;
   readonly dateline?: string;
   readonly events?: readonly CalendarEventDto[];
   readonly targetDayKey?: string;
@@ -131,6 +132,7 @@ function render(input: {
       error: input.error ?? false,
       calendarError: input.calendarError ?? false,
       editorial: input.editorial ?? false,
+      showEditorialHeading: input.showEditorialHeading,
       dateline: input.dateline,
       targetDayKey: input.targetDayKey,
       onOpenTask: () => undefined
@@ -159,6 +161,27 @@ describe("DayPlanSection", () => {
     expect(html).toContain("Write the draft");
     expect(html).toContain("On the calendar");
     expect(html).toContain('data-state="committed"');
+  });
+
+  it("can omit the editorial heading when the reader supplies the rail heading", () => {
+    const html = render({
+      plan: plan([placed("b1", "t1", null, 0)]),
+      editorial: true,
+      showEditorialHeading: false
+    });
+    expect(html).not.toContain("Your day, laid out");
+    expect(html).toContain("Write the draft");
+  });
+
+  it("keeps the editorial heading omitted when calendar and saved plan are unavailable", () => {
+    const html = render({
+      editorial: true,
+      showEditorialHeading: false,
+      error: true,
+      calendarError: true
+    });
+    expect(html).not.toContain("Your day, laid out");
+    expect(html).toContain("Calendar and saved plan aren&#x27;t available right now.");
   });
 
   it("keeps the plain variant byte-identical to the base", () => {
