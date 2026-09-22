@@ -487,8 +487,9 @@ describe("HTTP resolve endpoint", () => {
       }
     });
 
-    await new Promise((r) => setTimeout(r, 100));
-    expect(emitted).toHaveLength(1);
+    // Same fixed-sleep flake as the cross-user test below (Refs #2610): poll
+    // for the emit instead of racing it.
+    await vi.waitFor(() => expect(emitted).toHaveLength(1), { timeout: 5_000 });
     const req = emitted[0]!.record;
     if (req.kind !== "action_request") throw new Error("expected action_request");
 
@@ -537,11 +538,21 @@ describe("HTTP resolve endpoint", () => {
     const resolveRes = await appB.inject({
       method: "POST",
       url: `/api/chat/action-requests/${encodeURIComponent(req.actionRequestId)}/resolve`,
-      payload: { status: "confirmed" }
+      payload: { status: "rejected" }
     });
     // HTTP layer returns 204 (no information leak), but the call is NOT unblocked
     expect(resolveRes.statusCode).toBe(204);
     expect(exampleToolCalls).toHaveLength(0);
+
+    // The owner's call is still pending after the other user's attempt: it has
+    // not resolved on its own. (User B's round trip already completed above, so
+    // a broken guard would have unblocked it by now; the short window is only
+    // grace for the event loop, not synchronization.)
+    const pendingCheck = await Promise.race([
+      callPromise.then(() => "unblocked" as const),
+      new Promise((r) => setTimeout(r, 250)).then(() => "still-pending" as const)
+    ]);
+    expect(pendingCheck).toBe("still-pending");
 
     // Confirm the call is still waiting — deny it via the real owner to unblock
     await gateway.resolveActionRequest(ids.userA, req.actionRequestId, "rejected");
