@@ -577,8 +577,54 @@ describe("EspnDatasetAdapter", () => {
       spyFetch
     );
     await fetchDataset("schedule", { teamKey: "dal", competitionKey: "nfl" }, spyFetch);
-    expect(urls[0]).toContain("/teams/22529/schedule");
-    expect(urls[1]).toContain("/teams/dal/schedule"); // no id → abbreviation fallback
+    expect(urls.some((url) => url.includes("/teams/22529/schedule"))).toBe(true);
+    expect(urls.some((url) => url.includes("/teams/dal/schedule"))).toBe(true); // no id → abbr
+  });
+
+  // #1928: soccer's schedule endpoint answers in two disjoint slices — with no params only the
+  // last few finished games, with `fixture=true` only upcoming fixtures. Neither alone is the
+  // whole picture the card needs (form pips read the finals, the Next footer reads the fixture),
+  // so the adapter asks for both and merges them. US sports keep their single request.
+  it("merges soccer results and fixtures, and leaves other sports to a single request", async () => {
+    const urls: string[] = [];
+    const soccerEvent = (id: string, date: string, state: "post" | "pre") => ({
+      id,
+      date,
+      competitions: [
+        {
+          status: { type: { state, detail: state === "post" ? "Full Time" : "Scheduled" } },
+          competitors: [
+            { homeAway: "home", team: { id: "364", abbreviation: "LIV" } },
+            { homeAway: "away", team: { id: "349", abbreviation: "BOU" } }
+          ]
+        }
+      ]
+    });
+    const spyFetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      urls.push(url);
+      const events = url.includes("fixture=true")
+        ? [soccerEvent("next", "2026-10-17T14:00Z", "pre")]
+        : [soccerEvent("past", "2026-09-20T13:00Z", "post")];
+      return new Response(JSON.stringify({ events }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const games = (await fetchDataset(
+      "schedule",
+      { teamKey: "liv", competitionKey: "eng.1", sourceTeamId: "364" },
+      spyFetch
+    )) as { id: string; state: string }[];
+    expect(games.map((game) => `${game.id}:${game.state}`).sort()).toEqual([
+      "next:pre",
+      "past:final"
+    ]);
+    expect(urls.filter((url) => url.includes("/teams/364/schedule")).length).toBe(2);
+    expect(urls.some((url) => url.includes("/teams/364/schedule?fixture=true"))).toBe(true);
+
+    await fetchDataset("schedule", { teamKey: "dal", competitionKey: "nfl" }, spyFetch);
+    const nflUrls = urls.filter((url) => url.includes("/football/nfl/"));
+    expect(nflUrls).toHaveLength(1);
+    expect(nflUrls[0]).not.toContain("fixture=true");
   });
 
   // The same slug trap on the NEWS endpoint, which went unfixed when the schedule one was found:
