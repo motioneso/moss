@@ -200,6 +200,20 @@ cmd_start() {
   [ -n "$slug" ] || die "could not derive a slug from $root"
   gatedb="jarvis_gate_${slug}"
 
+  mkdir -p "$STATE_DIR"
+  log="$STATE_DIR/${slug}-$(date +%Y%m%d-%H%M%S).log"
+
+  # Early pointer (#2473). The pointer names the latest log before anything
+  # else that can fail — including the receipt checks, the container checks
+  # and provisioning below — so a start killed in its first moments can never
+  # leave wait/status reading the previous run's result. The EXIT trap marks
+  # the log unless the runner's PID is confirmed.
+  echo "### GATE   pnpm $gate" >"$log"
+  echo "$log" >"$(pointer_file "$slug")"
+  LAUNCH_LOG="$log"
+  LAUNCH_OK=0
+  trap start_abort EXIT
+
   # Tested-commit receipt (#2462). Captured here, before the runner launches,
   # so the log identifies exactly what code this run tested. Dirty state
   # includes untracked files (-uall); ignored files are excluded. Failures
@@ -228,19 +242,6 @@ cmd_start() {
   esac
   docker inspect "$CONTAINER" >/dev/null 2>&1 ||
     die "container '$CONTAINER' not found — is the dev stack up?"
-
-  mkdir -p "$STATE_DIR"
-  log="$STATE_DIR/${slug}-$(date +%Y%m%d-%H%M%S).log"
-
-  # Early pointer (#2473). The pointer names the latest log before anything
-  # else that can fail, so a start that dies mid-setup can never leave
-  # wait/status reading the previous run's result. The EXIT trap marks the
-  # log unless the runner's PID is confirmed.
-  echo "### GATE   pnpm $gate" >"$log"
-  echo "$log" >"$(pointer_file "$slug")"
-  LAUNCH_LOG="$log"
-  LAUNCH_OK=0
-  trap start_abort EXIT
 
   # Serialize the DROP/CREATE. These touch shared catalogs (pg_database), which
   # per-database isolation does not cover — concurrent create/drop across lanes
@@ -282,10 +283,11 @@ cmd_start() {
 
   # setsid+nohup so the run outlives this shell. The Bash tool's shell exits the
   # moment the call returns; without full detachment the gate can die with it.
-  # The launcher's stderr goes to a sidecar so a real failure becomes the DEAD
-  # reason instead of a generic message.
+  # stdin comes from nowhere so nohup never prints its "ignoring input"
+  # notice. The launcher's stderr goes to a sidecar so a real failure becomes
+  # the DEAD reason instead of a generic message.
   setsid nohup "$0" __run "$log" "$gate" "$keep_db" "$gatedb" "$exclusive" "$root" \
-    >/dev/null 2>"$log.launch-err" &
+    </dev/null >/dev/null 2>"$log.launch-err" &
   local launcher_pid=$!
   disown 2>/dev/null || true
 
@@ -303,6 +305,9 @@ cmd_start() {
     sleep 1
     waited=$((waited + 1))
   done
+  # The error sidecar is pruned when empty so healthy runs leave no clutter;
+  # a real error stays for the DEAD reason below.
+  [ -s "$log.launch-err" ] || rm -f "$log.launch-err" 2>/dev/null || true
   if ! grep -q '^### PID ' "$log" 2>/dev/null; then
     # Group-kill only when the launcher leads its own session (what real
     # setsid creates); otherwise kill just the launcher itself.
@@ -311,8 +316,11 @@ cmd_start() {
     else
       kill -TERM "$launcher_pid" 2>/dev/null || true
     fi
+    # First launcher error line, skipping nohup's own "ignoring input" notice,
+    # which would otherwise hide the real cause when stdin is a terminal.
     local launch_err=""
-    IFS= read -r launch_err <"$log.launch-err" 2>/dev/null || true
+    launch_err="$(grep -v '^nohup: ' "$log.launch-err" 2>/dev/null || true)"
+    launch_err="${launch_err%%$'\n'*}"
     launch_err="${launch_err:0:200}"
     [ -n "$launch_err" ] || launch_err="runner never recorded its PID within ${LAUNCH_WAIT_SECS}s of launch"
     echo "${LAUNCH_FAILED_PREFIX}${launch_err} ($(date -Is))" >>"$log"

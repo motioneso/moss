@@ -184,4 +184,79 @@ else
 fi
 pass "header-only and foreign logs use the right bounds"
 
+# --- T5: start killed before setup finishes still reports its own run ------
+read R5 B5 G5 <<<"$(new_env)"
+SCRATCH="$SCRATCH $R5 $B5 $G5"
+cat >"$B5/docker" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "inspect" ] && [ "${SLOW_INSPECT:-0}" = "1" ]; then sleep 60; fi
+exit 0
+EOF
+chmod +x "$B5/docker"
+export PATH="$B5:/usr/bin:/bin"
+export JARVIS_GATE_DIR="$G5" JARVIS_PG_CONTAINER="fake-postgres"
+export JARVIS_GATE_LAUNCH_GRACE_SECS=4
+# A prior green run whose result must never leak into the next wait.
+if ( cd "$R5" && ./scripts/run-gate.sh start --gate fake-fast-gate >"$G5/good.out" 2>&1 ); then
+  GOOD5="$(awk -F= '/^LOG=/ {print $2}' "$G5/good.out")"
+else
+  fail "T5: setup run did not start"
+fi
+[ -n "$GOOD5" ] || fail "T5: no LOG from setup run"
+if ( cd "$R5" && ./scripts/run-gate.sh wait --follow --log "$GOOD5" >/dev/null 2>&1 ); then
+  :
+else
+  fail "T5: setup run did not pass"
+fi
+[ ! -e "$GOOD5.launch-err" ] || fail "T5: healthy run left its error sidecar behind"
+sleep 2
+# A second start, killed while still checking setup: the pointer must already
+# name the new log, so the next wait reports this run (DEAD), not the green one.
+export SLOW_INSPECT=1
+( cd "$R5" && setsid ./scripts/run-gate.sh start --gate fake-fast-gate >"$G5/bad.out" 2>&1 & echo $! >"$G5/spid" )
+sleep 3
+kill -KILL "$(cat "$G5/spid")" 2>/dev/null || true
+unset SLOW_INSPECT
+sleep 6
+PTR5="$(cat "$G5"/*.current 2>/dev/null || true)"
+[ -n "$PTR5" ] || fail "T5: no pointer after killed start"
+[ "$PTR5" != "$GOOD5" ] || fail "T5: pointer still names the previous run"
+if ( cd "$R5" && ./scripts/run-gate.sh wait --timeout 10 >"$G5/wait.out" 2>&1 ); then
+  echo "--- wait.out:"; cat "$G5/wait.out"; fail "T5: wait exited 0, want 2"
+else
+  rc=$?
+  [ "$rc" -eq 2 ] || { echo "--- wait.out:"; cat "$G5/wait.out"; fail "T5: wait gave $rc, want 2"; }
+fi
+grep -qi 'dead' "$G5/wait.out" || fail "T5: wait output is not a DEAD verdict"
+pass "early-killed start makes wait report DEAD, not the previous run"
+
+# --- T6: nohup notice must not hide the real launch error -------------------
+read R6 B6 G6 <<<"$(new_env)"
+SCRATCH="$SCRATCH $R6 $B6 $G6"
+cat >"$B6/setsid" <<'EOF'
+#!/usr/bin/env bash
+echo "nohup: ignoring input and appending output to 'nohup.out'" >&2
+echo "fake setsid: cannot launch" >&2
+exit 127
+EOF
+chmod +x "$B6/setsid"
+export PATH="$B6:/usr/bin:/bin"
+export JARVIS_GATE_DIR="$G6" JARVIS_PG_CONTAINER="fake-postgres"
+export JARVIS_GATE_LAUNCH_WAIT_SECS=5
+if ( cd "$R6" && ./scripts/run-gate.sh start --gate fake-fast-gate >"$G6/start.out" 2>&1 ); then
+  fail "T6: start exited 0 despite the runner never launching"
+fi
+LOG6="$(ls -t "$G6"/*.log | head -1)"
+if ( cd "$R6" && ./scripts/run-gate.sh status --log "$LOG6" >"$G6/status.out" 2>&1 ); then
+  fail "T6: status exited 0, want DEAD(2)"
+else
+  rc=$?
+  [ "$rc" -eq 2 ] || fail "T6: status gave $rc, want 2"
+fi
+grep -q 'fake setsid' "$G6/status.out" || fail "T6: DEAD line missing the real error"
+if grep -q 'nohup:' "$G6/status.out"; then
+  fail "T6: DEAD line shows the nohup notice instead"
+fi
+pass "nohup notice is filtered from the dead reason"
+
 echo "run-gate failed-launch tests passed"
