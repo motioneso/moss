@@ -106,6 +106,9 @@ final class HTTPVisionDescriberTests: XCTestCase {
         XCTAssertEqual(content?.first?["text"] as? String, VisionInstruction.text)
         let imagePart = content?.last?["image_url"] as? [String: Any]
         XCTAssertTrue((imagePart?["url"] as? String ?? "").hasPrefix("data:image/jpeg;base64,"))
+        // A reasoning model (confirmed live against OpenRouter with qwen/qwen3.7-flash) spends
+        // the whole token budget thinking and returns null content unless this is off.
+        XCTAssertEqual((capturedBody?["reasoning"] as? [String: Any])?["enabled"] as? Bool, false)
     }
 
     func testAnEmptyKeyOrModelIsNotConfiguredAndNeverSends() async {

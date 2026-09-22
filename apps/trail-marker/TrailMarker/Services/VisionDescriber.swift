@@ -82,6 +82,13 @@ struct HTTPVisionDescriber: VisionDescribing {
         let body: [String: Any] = [
             "model": model,
             "max_tokens": 120,
+            // A reasoning model (the pilot's own qwen/qwen3.7-flash, confirmed live against
+            // OpenRouter) spends the whole token budget on its internal chain of thought and
+            // returns a null content with finish_reason "length" unless reasoning is turned off.
+            // Harmless extra field for a model with no such concept (OpenRouter's spec treats it
+            // as universal; a non-OpenRouter OpenAI-compatible host that rejects unknown fields
+            // is the one case this would need revisiting for).
+            "reasoning": ["enabled": false],
             "messages": [
                 [
                     "role": "user",
