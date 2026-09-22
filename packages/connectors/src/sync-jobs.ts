@@ -194,6 +194,11 @@ export interface GoogleSyncDeps {
     scopedDb: DataContextDb,
     actorUserId: string
   ) => Promise<ReadonlySet<string>>;
+  /**
+   * Test seam for the transient-retry backoff in withTokenRetry. Production leaves this unset
+   * and the small default applies; a test can set 0 to exercise a retry without waiting.
+   */
+  readonly googleRetryDelayMs?: number;
 }
 
 /** Sanitized structured logging for partial-failure observability (never secrets/body). */
@@ -572,7 +577,12 @@ export async function registerConnectorsJobWorkers(
     cipher: connectorCipher,
     oauthClient: new GoogleOAuthClient()
   });
-  const googleClient = new GoogleApiClient();
+  // The composition root owns the structured logger: inject it so a refused Google call is
+  // recorded with its operation, status and specific reason. Without it the client's silent
+  // default drops that detail and a permission error cannot be traced to a call (#2300).
+  const googleClient = new GoogleApiClient(
+    deps.logger ? { logger: { error: (data, message) => deps.logger!.warn(data, message) } } : {}
+  );
   const preferencesRepository = new PreferencesRepository();
   const suppressionRepository = new EmailActionSuppressionRepository();
 
