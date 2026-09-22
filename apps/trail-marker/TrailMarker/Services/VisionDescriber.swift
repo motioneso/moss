@@ -22,6 +22,10 @@ enum VisionError: Error, Equatable {
     case unreachable
     case rejected
     case invalidResponse
+    /// Test only: no app has been seen in front of Trail Marker yet (Focus just turned on, or
+    /// nothing is connected), so there is nothing to capture. Distinct from `notConfigured` — the
+    /// source may be set up perfectly and still have nothing to describe yet.
+    case noAppToCapture
 }
 
 /// One description of one captured window. A source is free to fail; callers treat every case the

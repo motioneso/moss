@@ -68,6 +68,12 @@ final class FocusRuntime: ObservableObject {
     private let windowCapture: WindowCapturing
     private let visionDescriberFactory: (VisionSource, String, String, String) -> VisionDescribing
 
+    /// `observer.current` reads nil whenever Trail Marker's own window is frontmost — which it
+    /// always is while the person is sitting in Focus settings pressing Test. This is the last
+    /// real app seen, kept only in memory, so Test has something to capture without asking the
+    /// person to go click into another app first.
+    private var lastKnownApp: Observation?
+
     private var tasks: [UUID: Task<Void, Never>] = [:]
     private var lastSent: (appName: String, windowTitle: String, blockTitle: String, description: String?)?
     private var cancellables = Set<AnyCancellable>()
@@ -205,8 +211,10 @@ final class FocusRuntime: ObservableObject {
     /// submitted, so Test never silently runs against an empty key the person can see on screen.
     func testVision(enteredAPIKey: String = "") {
         if !enteredAPIKey.isEmpty { setVisionAPIKey(enteredAPIKey) }
-        guard let app = observer.current else {
-            visionTestResult = .failure(.notConfigured)
+        // `observer.current` reads nil while Trail Marker's own Settings window is frontmost,
+        // which it is right now — `lastKnownApp` is the real app that was in front just before.
+        guard let app = lastKnownApp ?? observer.current else {
+            visionTestResult = .failure(.noAppToCapture)
             return
         }
         let describer = visionDescriberFactory(
@@ -287,12 +295,17 @@ final class FocusRuntime: ObservableObject {
         let shouldObserve = consent && !paused && isConnected
         if shouldObserve, !observing {
             observing = true
-            observer.start { [weak self] observation in self?.send(.appChanged(observation)) }
-            send(.appChanged(observer.current))
+            observer.start { [weak self] observation in self?.appChanged(observation) }
+            appChanged(observer.current)
         } else if !shouldObserve, observing {
             observing = false
             observer.stop()
         }
+    }
+
+    private func appChanged(_ observation: Observation?) {
+        if let observation { lastKnownApp = observation }
+        send(.appChanged(observation))
     }
 
     private var isConnected: Bool {

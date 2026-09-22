@@ -223,6 +223,8 @@ struct FocusPane: View {
             return "The vision source rejected the API key."
         case .invalidResponse:
             return "The vision source didn't answer with a usable description."
+        case .noAppToCapture:
+            return "Trail Marker hasn't seen another app in front yet. Switch to one, then come back and test."
         }
     }
 
