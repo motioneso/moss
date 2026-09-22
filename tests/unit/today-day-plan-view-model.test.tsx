@@ -194,7 +194,7 @@ describe("buildDayItems state rules", () => {
     expect(items[0]?.label).not.toContain("On the calendar");
   });
 
-  it("marks a pending change with no prior placement proposed, not pending", () => {
+  it("keeps a first-time pending change in state pending, same as any other pending change", () => {
     const items = buildDayItems({
       ...base,
       plan: plan([
@@ -211,10 +211,11 @@ describe("buildDayItems state rules", () => {
       ]),
       tasks: [summary({ id: "t1" })]
     });
-    expect(items[0]?.state).toBe("proposed");
+    expect(items[0]?.state).toBe("pending");
+    expect(items[0]?.label).toBe("Change pending");
   });
 
-  it("gives a proposed block with a time the short Proposed label", () => {
+  it("keeps the default Change pending label when proposedCaption is not set", () => {
     const items = buildDayItems({
       ...base,
       plan: plan([
@@ -231,17 +232,67 @@ describe("buildDayItems state rules", () => {
       ]),
       tasks: [summary({ id: "t1" })]
     });
+    expect(items[0]?.label).toBe("Change pending");
+  });
+
+  it("swaps in the short Proposed label only when proposedCaption is short", () => {
+    const items = buildDayItems({
+      ...base,
+      proposedCaption: "short",
+      plan: plan([
+        block({
+          id: "b1",
+          taskId: "t1",
+          position: 0,
+          pendingChange: {
+            kind: "add",
+            startsAt: "2026-06-30T19:00:00.000Z",
+            durationMinutes: 30
+          }
+        })
+      ]),
+      tasks: [summary({ id: "t1" })]
+    });
+    expect(items[0]?.state).toBe("pending");
     expect(items[0]?.label).toBe("Proposed");
   });
 
-  it("keeps the long Proposed label when a proposed block has no time yet", () => {
+  it("keeps the long label for a proposed block with no time yet, even with proposedCaption set", () => {
     const items = buildDayItems({
       ...base,
+      proposedCaption: "short",
       plan: plan([block({ id: "b1", taskId: "t1", title: "Draft", position: 0 })]),
       tasks: [summary({ id: "t1", title: "Draft" })]
     });
     expect(items[0]?.state).toBe("proposed");
     expect(items[0]?.label).toBe("Proposed, not on the calendar yet");
+  });
+
+  it("keeps the Change pending label when proposedCaption is set but the block already had a placement", () => {
+    const items = buildDayItems({
+      ...base,
+      proposedCaption: "short",
+      plan: plan([
+        block({
+          id: "b1",
+          taskId: "t1",
+          position: 0,
+          actualPlacement: {
+            startsAt: "2026-06-30T17:00:00.000Z",
+            durationMinutes: 30,
+            calendarEventRef: null
+          },
+          pendingChange: {
+            kind: "move",
+            startsAt: "2026-06-30T19:00:00.000Z",
+            durationMinutes: 30
+          }
+        })
+      ]),
+      tasks: [summary({ id: "t1" })]
+    });
+    expect(items[0]?.state).toBe("pending");
+    expect(items[0]?.label).toBe("Change pending");
   });
 
   it("marks a done task completed and never On the calendar for proposed or pending", () => {

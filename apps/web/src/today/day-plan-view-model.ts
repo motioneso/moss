@@ -26,9 +26,10 @@ export const DAY_ITEM_STATE_LABELS: Record<DayItemState, string> = {
   event: ""
 };
 
-/** A proposed block that already carries a time (Moss's own suggestion,
-    never committed) reads as the short "Proposed" beside that time; a
-    proposed block with no time yet keeps the long label above. */
+/** A block Moss is suggesting for the first time (nothing on the calendar
+    yet) reads as the short "Proposed" beside its time, instead of the
+    default "Change pending"/"Proposed, not on the calendar yet" text. Off
+    by default; only the morning reader's rail turns it on. */
 const PROPOSED_WITH_TIME_LABEL = "Proposed";
 
 const KIND_LABELS: Partial<Record<DayPlanBlockKind | "travel" | "task", string>> = {
@@ -60,22 +61,22 @@ export interface BuildDayItemsInput {
   readonly locale: LocaleSettingsDto;
   readonly now: Date;
   readonly targetDayKey?: string;
+  /** Set only by the morning reader's rail: swaps the default caption for
+      a not-yet-committed row to the short "Proposed" beside its time.
+      Never changes which state a row classifies as. */
+  readonly proposedCaption?: "short";
 }
 
 function stateForBlock(input: {
   readonly summary: DayPlanTaskSummary | undefined;
   readonly startsAt: string | null;
   readonly hasPendingChange: boolean;
-  readonly hasActualPlacement: boolean;
   readonly hasTaskId: boolean;
   readonly planHasEveningIntent: boolean;
   readonly planHasCommittedBlock: boolean;
 }): DayItemState {
   if (input.summary?.status === "done") return "completed";
-  // A pending change to a block that was already on the calendar is an
-  // edit ("pending"); a pending change with nothing on the calendar yet
-  // is Moss's own first proposal ("proposed"), not an edit.
-  if (input.hasPendingChange) return input.hasActualPlacement ? "pending" : "proposed";
+  if (input.hasPendingChange) return "pending";
   if (input.startsAt !== null) return "committed";
   if (input.hasTaskId && (input.planHasEveningIntent || input.planHasCommittedBlock))
     return "proposed";
@@ -142,14 +143,16 @@ export function buildDayItems(input: BuildDayItemsInput): DayItem[] {
         summary,
         startsAt,
         hasPendingChange: block.pendingChange !== null,
-        hasActualPlacement,
         hasTaskId: block.taskId !== null,
         planHasEveningIntent,
         planHasCommittedBlock
       });
       const title = summary !== undefined ? summary.title : (block.title ?? "Untitled block");
+      // A row Moss is suggesting for the first time (nothing on the calendar
+      // yet, but it has a time) gets the short caption only when the caller
+      // opted in; the state itself never changes.
       const label =
-        state === "proposed" && startsAt !== null
+        input.proposedCaption === "short" && !hasActualPlacement && startsAt !== null
           ? PROPOSED_WITH_TIME_LABEL
           : DAY_ITEM_STATE_LABELS[state];
       return {

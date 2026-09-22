@@ -215,6 +215,7 @@ export function MorningBriefingReader(props: MorningBriefingReaderProps) {
           onOpenTask={props.onOpenTask}
           editorial
           showEditorialHeading={false}
+          proposedCaption={briefingSurface === "proposed-read" ? "short" : undefined}
         />
       }
       footerActions={
