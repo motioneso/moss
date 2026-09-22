@@ -42,6 +42,8 @@ so an old result can only be trusted when its commit matches and its tree was cl
   a block there is the hook working, not an obstacle.
 - **Never decide liveness with `pgrep`/`ps`.** The Bash tool's wrapper shells match your pattern
   long after the real process died (the 19-hour stall). The script's sentinel is the only truth.
+- **A failed launch is loud, not a hang.** If `start` cannot get the runner going, it exits
+  non-zero and marks the log, and `status`/`wait` report dead (exit `2`) with the reason.
 - **Stagger with other sessions.** Concurrent gate runs crash the shared dev Postgres. Check
   `herdr pane list` before starting one; if another gate is running, wait for it.
 - **Green local is not green CI.** The gate does **not** include `test:e2e`; CI runs the browser
