@@ -96,9 +96,9 @@ exists) should be checked against this category before wiring it through `resolv
   `JARVIS_TOOL_PREFIX` (a hardcoded MCP tool-name prefix string, not an env var) and
   `JARVIS_VERSION_RE` (a regex variable) match the same pattern as real config knobs; and
   historical doc/plan files under `docs/` reference names that were renamed or removed long ago.
-- The verified figure, built by classifying every match per the method above: **115 real,
+- The verified figure, built by classifying every match per the method above: **117 real,
   distinct `JARVIS_*` environment variable names**, made up of:
-  - **43 carved out** (table below) — `grep -c '^  "JARVIS_' packages/db/src/env.ts`
+  - **45 carved out** (table below) — `grep -c '^  "JARVIS_' packages/db/src/env.ts`
   - **65 shimmed** (wrapped in `resolveMossEnv` at their production read site) — the 68 names
     returned by the command below, minus the three non-variables itemised under it
   - **7 in the deliberately-deferred gap** (below)
@@ -117,7 +117,7 @@ exists) should be checked against this category before wiring it through `resolv
 
 - The shimmed figure needs one correction that an earlier revision of this document got wrong. Its
   stated method — "extract every literal second argument to `resolveMossEnv(...)` across `**/*.ts`"
-  — yields **68** names, but three of those are not shimmed variables, so 43 + 68 + 7 = 118
+  — yields **68** names, but three of those are not shimmed variables, so 45 + 68 + 7 = 120
   double-counted. `resolveMossEnv` is a _passthrough_ for carved-out names, so appearing as an
   argument to it does not prove a name is shimmed. The three:
   - `JARVIS_FOO` — a placeholder inside the doc comment on `packages/db/src/env.ts`, not a variable.
@@ -135,7 +135,7 @@ exists) should be checked against this category before wiring it through `resolv
 - `__JARVIS_MODULE_RUNTIME__` is excluded entirely — it is a `window`/`globalThis` property set by
   the module runtime host, never a `process.env` name, despite matching the grep pattern.
 
-## Carve-out (43 names)
+## Carve-out (45 names)
 
 Read by Docker Compose host-side interpolation, a named shell script, a build-time config file
 outside the module graph, or some combination. `resolveMossEnv` passes these straight through with
@@ -179,6 +179,8 @@ no `MOSS_` lookup and no warning.
 | `JARVIS_SMOKE_SURFACE`           | `scripts/smoke-chat-prod.sh`                                                                                                                                                                                                                                                                                                         |
 | `JARVIS_SMOKE_TIMEOUT_MS`        | `scripts/smoke-chat-prod.sh`                                                                                                                                                                                                                                                                                                         |
 | `JARVIS_SMOKE_USER_EMAIL`        | `scripts/smoke-chat-prod.sh`                                                                                                                                                                                                                                                                                                         |
+| `JARVIS_TLS_HOST`                | host-side interpolation in `infra/docker-compose.prod.yml` and read directly in `scripts/setup-prod.ts` / the Caddyfile (`{$JARVIS_TLS_HOST}`)                                                                                                                                                                                       |
+| `JARVIS_TLS_ISSUER`              | host-side interpolation in `infra/docker-compose.prod.yml` and read directly in `scripts/setup-prod.ts` / the Caddyfile (`{$JARVIS_TLS_ISSUER:internal}`)                                                                                                                                                                           |
 | `JARVIS_UAT_BASE_URL`            | build-time config file — `tests/uat/playwright.uat.config.ts` reads it at Playwright config-load time, plain Node, outside the app module graph. (The 20 bare `process.env.JARVIS_UAT_BASE_URL` reads in `tests/uat/specs/*.uat.spec.ts` are a separate, already-documented deliberate gap — see "Also deliberately unfixed" below.) |
 | `JARVIS_UAT_REAL_CHAT_ENV_FILE`  | compose `seed` service env_file selection, host-side only                                                                                                                                                                                                                                                                            |
 | `JARVIS_UAT_SEED_CONFIRM`        | `packages/module-registry/src/index.ts` reads it directly as a second-intent confirmation gate for the UAT news-preview override (already commented there as a Tier C carve-out); also compose-interpolated in `infra/docker-compose.prod.yml`                                                                                       |
