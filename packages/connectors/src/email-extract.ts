@@ -3,6 +3,7 @@ import type { StructuredRunPriority, StructuredRunScope, StructuredTelemetry } f
 import { resolveMossEnv } from "@moss/db";
 
 import { looksLikeBulkMail } from "./email-bulk-rule.js";
+import { applyGate } from "./email-gate.js";
 import {
   looksLikeOneTimeCodeEmail,
   signInCodeDecision,
@@ -735,31 +736,12 @@ function sanitizeExtractResult(
   // of fields: setting the flag earlier would have it dropped on exactly the messages that
   // tripped the guard. It is a deterministic boolean, so no body text can ride along with it.
   const signals = looksLikeBulkMail(parsed) ? { ...result.signals, bulk: true } : result.signals;
-  return applyGate({
+  const gated = {
     ...result,
     signals: parsed.bodyTruncated ? { ...signals, truncated: true } : signals,
     escalated: false
-  });
-}
-
-/**
- * The gate decides what the single pass may store (spec §3.1): `nothing` keeps no summary and a
- * bare noise verdict, `worth_knowing` keeps the summary under an fyi verdict, `maybe_owed` keeps
- * neither and flags the message for the thread judgement. Runs after every other guard so a
- * deterministic fallback summary cannot sneak back in for mail the gate said to leave alone.
- */
-function applyGate(result: EmailExtractResult): EmailExtractResult {
-  const { gate, signals } = result;
-  if (gate === undefined) return result;
-  if (gate === "nothing") {
-    const { pendingJudgement: _pending, ...rest } = signals;
-    return { ...result, summary: null, signals: { ...rest, actionability: { category: "noise" } } };
-  }
-  if (gate === "worth_knowing") {
-    return { ...result, signals: { ...signals, actionability: { category: "fyi" } } };
-  }
-  const { actionability: _drop, ...rest } = signals;
-  return { ...result, summary: null, signals: { ...rest, pendingJudgement: true } };
+  };
+  return applyGate(gated, parsed);
 }
 
 function buildBatchPrompt(

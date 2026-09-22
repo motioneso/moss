@@ -56,6 +56,49 @@ describe("email gate", () => {
     expect(r.signals.actionability).toBeUndefined();
     expect(r.signals.pendingJudgement).toBe(true);
   });
+  it("a bulk advert the model flagged anyway never reaches the second pass (#2341)", async () => {
+    const r = await extractEmailSignals(
+      parsed({
+        subject: "UP TO 60% OFF BEST SELLERS",
+        body: "Shop the sale now. Unsubscribe any time.",
+        hasListUnsubscribe: true
+      }),
+      answer({ gate: "maybe_owed", category: "noise", confidence: 0.7, reason: "A sale." })
+    );
+    expect(r.gate).toBe("nothing");
+    expect(r.signals.pendingJudgement).toBeUndefined();
+    expect(r.signals.actionability?.category).toBe("noise");
+  });
+  it("a no-failure sign-in notice the model flagged anyway never reaches the second pass (#2341)", async () => {
+    const r = await extractEmailSignals(
+      parsed({
+        subject: "Verify Discord Login from New Location",
+        body: "If this was you, no action is needed."
+      }),
+      answer({
+        gate: "maybe_owed",
+        category: "needs_action",
+        confidence: 0.7,
+        reason: "A sign-in needs review."
+      })
+    );
+    expect(r.gate).toBe("worth_knowing");
+    expect(r.signals.pendingJudgement).toBeUndefined();
+    expect(r.signals.actionability?.category).toBe("fyi");
+  });
+  it("a real obligation still reaches the second pass (#2341)", async () => {
+    const r = await extractEmailSignals(
+      parsed({ subject: "Lease addendum" }),
+      answer({
+        gate: "maybe_owed",
+        category: "needs_action",
+        confidence: 0.8,
+        reason: "The landlord is waiting on a signature."
+      })
+    );
+    expect(r.gate).toBe("maybe_owed");
+    expect(r.signals.pendingJudgement).toBe(true);
+  });
   it("prompt carries the three outcomes and the 2271 lists", async () => {
     const deps = answer({ gate: "nothing" });
     await extractEmailSignals(parsed({}), deps);
