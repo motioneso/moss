@@ -214,6 +214,9 @@ function EveningRecapSection(props: {
 }) {
   const hasSummary = Boolean(props.run?.summaryText.trim());
   const prose = props.proseText.trim();
+  // Without a readable run the evening page shows the hero lede and no recap
+  // section at all; the loading skeleton above covers the pending state.
+  if (!props.loading && !hasSummary) return null;
   return (
     <section className="jds-brief ev-recap" id="evening-recap">
       <div className="jds-brief__head">
@@ -227,13 +230,11 @@ function EveningRecapSection(props: {
         <div className="agenda-clear" role="status">
           Gathering your evening review…
         </div>
-      ) : props.run && hasSummary ? (
+      ) : (
         <>
           {prose !== "" ? <BriefingProse summaryText={prose} /> : null}
           <EveningRecapRows tasks={props.completedToday} onOpenTask={props.onOpenTask} />
         </>
-      ) : (
-        <div className="agenda-clear">Your evening review is not ready yet.</div>
       )}
     </section>
   );

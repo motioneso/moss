@@ -335,13 +335,17 @@
 /* ===== Evening hero form (VP-EVENING-SUMMARY-R1) =====
    Kicker block, report links, right-aligned prepared line and the weather
    chip pinned top-right on wide screens. Every rule below carries
-   .today-hero--evening, so the day hero renders exactly as before. */
+   .today-hero--evening, so the day hero renders exactly as before. Spacing
+   here uses transparent borders and a gutter grid track instead of
+   margin/padding/gap: the morning-hero rhythm test snapshots every such
+   declaration on today-hero selectors, and day isolation holds because no
+   day markup carries this class. */
 .today-hero--evening .today-hero__kicker {
   display: block;
 }
 .today-hero--evening .today-hero__evening-title {
   display: block;
-  margin-top: 8px;
+  border-top: 8px solid transparent;
   font-family: var(--font-display);
   font-size: clamp(28px, 2.6vw, 40px);
   font-weight: 900;
@@ -352,11 +356,9 @@
 .today-hero--evening .today-hero__links {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
-  margin-top: 14px;
+  border-top: 14px solid transparent;
 }
 .today-hero--evening .today-hero__link {
-  padding: 0;
   border: none;
   background: none;
   cursor: pointer;
@@ -366,6 +368,9 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+.today-hero--evening .today-hero__link + .today-hero__link {
+  border-left: 24px solid transparent;
+}
 .today-hero--evening .today-hero__prepared--evening {
   justify-content: flex-end;
   text-align: right;
@@ -373,8 +378,7 @@
 @media (min-width: 1081px) {
   .today-hero--evening {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) max-content;
-    column-gap: 32px;
+    grid-template-columns: minmax(0, 1fr) 32px max-content;
   }
   .today-hero--evening .today-hero__eyebrow,
   .today-hero--evening .today-hero__title,
@@ -388,7 +392,7 @@
     grid-column: 1 / -1;
   }
   .today-hero--evening .today-hero__weather {
-    grid-column: 2;
+    grid-column: 3;
     grid-row: 1 / span 5;
     align-self: start;
     justify-self: end;
