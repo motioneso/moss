@@ -321,3 +321,8 @@ export const EVENING_RECAP_HEADING = "What happened today";
 export const EVENING_OPEN_LOOPS_KICKER = "02";
 export const EVENING_OPEN_LOOPS_HEADING = "Close the open loops";
 export const EVENING_OPEN_LOOPS_EMPTY = "Nothing urgent is carrying forward.";
+
+/** Morning reader Review rows (VP-AUTOMATIC-REVIEW-R1). */
+export const REVIEW_KEEP_ON_CALENDAR_LABEL = "Keep on calendar";
+export const REVIEW_WHAT_WILL_CHANGE_HEADING = "What will change";
+export const REVIEW_NO_CHANGES_SELECTED = "No changes selected.";

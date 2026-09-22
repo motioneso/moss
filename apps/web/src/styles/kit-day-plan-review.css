@@ -154,3 +154,68 @@
     align-items: start;
   }
 }
+
+/* VP-AUTOMATIC-REVIEW-R1: every Review state keeps the wide reader frame. */
+@media (min-width: 1081px) {
+  .brief-reader:has([data-briefing-surface="review"]) {
+    max-width: 1120px;
+    height: 910px;
+  }
+  .brief-reader:has([data-briefing-surface="review"]) .brief-reader__body {
+    flex: 1 1 auto;
+  }
+}
+
+/* VP-AUTOMATIC-REVIEW-R1: reader Review rows read as unboxed rows split by
+   rules. Scoped under .brief-reader so evening step 4 never matches. */
+.brief-reader .plan-review__lede {
+  font-size: 14px;
+  opacity: 0.75;
+  margin: 4px 0 12px;
+  overflow-wrap: anywhere;
+}
+
+.brief-reader .plan-review__rows {
+  gap: 0;
+}
+
+.brief-reader .plan-review__row {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 12px 0;
+  grid-template-columns: minmax(0, 1.2fr) minmax(max-content, 1fr);
+  align-items: start;
+}
+
+.brief-reader .plan-review__row:last-child {
+  border-bottom: 0;
+}
+
+.brief-reader .plan-review__title,
+.brief-reader .plan-review__titlelink {
+  text-decoration: none;
+}
+
+.brief-reader .plan-review__meta {
+  font-size: 13px;
+  opacity: 0.85;
+  overflow-wrap: anywhere;
+}
+
+.brief-reader .plan-review__fields {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.brief-reader .plan-review__changes {
+  margin-top: 16px;
+  border-top: 2px solid var(--line);
+  padding-top: 12px;
+}
+
+.brief-reader .plan-review__empty {
+  font-size: 13px;
+  opacity: 0.8;
+  margin: 8px 0;
+}

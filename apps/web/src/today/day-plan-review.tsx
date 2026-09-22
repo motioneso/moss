@@ -13,7 +13,12 @@ import { Button } from "@moss/ui";
 import { getCalendarBriefingSettings } from "../api/client.js";
 import { DayPlanSection } from "./day-plan.js";
 import { buildDayItems } from "./day-plan-view-model.js";
-import { ACCEPT_ALL_LABEL, timeLabel } from "./today-labels.js";
+import {
+  ACCEPT_ALL_LABEL,
+  REVIEW_NO_CHANGES_SELECTED,
+  REVIEW_WHAT_WILL_CHANGE_HEADING,
+  timeLabel
+} from "./today-labels.js";
 import type { DayPlanReviewController } from "./day-plan-review-controller.js";
 import {
   acceptAllSelectionFor,
@@ -112,9 +117,11 @@ export function DayPlanReview(props: DayPlanReviewProps) {
       onSelectBriefingTab={props.onSelectBriefingTab}
       jumpLinks={null}
       report={
-        <>
+        <div data-briefing-surface="review">
           <h3 className="brief-reader__headline">Make the plan fit.</h3>
-          <p>Meetings, lunch, and travel stay in place. Adjust the task blocks around them.</p>
+          <p className="plan-review__lede">
+            Meetings, lunch, and travel stay in place. Adjust the task blocks around them.
+          </p>
           <ul className="plan-review__rows">
             {plan.blocks.map((block) => {
               const task =
@@ -137,6 +144,7 @@ export function DayPlanReview(props: DayPlanReviewProps) {
                   plan={plan}
                   locale={props.locale}
                   onOpenTask={props.onOpenTask}
+                  calendarTimeField
                 />
               );
             })}
@@ -151,9 +159,9 @@ export function DayPlanReview(props: DayPlanReviewProps) {
               The calendar is unavailable, so nothing can be applied until it returns.
             </p>
           ) : null}
-          {changes.length > 0 ? (
-            <div className="plan-review__changes">
-              <h3 className="plan-review__changes-title">Changes</h3>
+          <div className="plan-review__changes">
+            <h3 className="plan-review__changes-title">{REVIEW_WHAT_WILL_CHANGE_HEADING}</h3>
+            {changes.length > 0 ? (
               <ul>
                 {changes.map(({ block, title: name, change }) => (
                   <li key={block.id}>
@@ -165,8 +173,10 @@ export function DayPlanReview(props: DayPlanReviewProps) {
                   </li>
                 ))}
               </ul>
-            </div>
-          ) : null}
+            ) : (
+              <p className="plan-review__empty">{REVIEW_NO_CHANGES_SELECTED}</p>
+            )}
+          </div>
           {controller.approval ? (
             <section className="plan-review__confirm" aria-labelledby="plan-review-confirm">
               <h3 id="plan-review-confirm">Confirm calendar changes</h3>
@@ -218,13 +228,14 @@ export function DayPlanReview(props: DayPlanReviewProps) {
               {controller.notice}
             </p>
           ) : null}
-        </>
+        </div>
       }
       railDateInput={props.now}
       locale={props.locale}
       railHeading="Your day, in order."
       rail={
         <DayPlanSection
+          showEditorialHeading={false}
           dayPlan={{
             plan,
             tasks: [...props.tasks],

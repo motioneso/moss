@@ -21,7 +21,7 @@ import {
   type BlockChoice,
   type ReviewPlacement
 } from "./day-plan-review-model.js";
-import { shortDate } from "./today-labels.js";
+import { REVIEW_KEEP_ON_CALENDAR_LABEL, shortDate } from "./today-labels.js";
 
 /** Row list shared with the evening planning dialog (T20). Moved verbatim
     from day-plan-review.tsx in V6; the controls gained visible labels. */
@@ -57,6 +57,7 @@ export function ReviewRow(props: {
   readonly plan: DayPlanDto;
   readonly locale: LocaleSettingsDto;
   readonly onOpenTask: (taskId: string) => void;
+  readonly calendarTimeField?: boolean;
 }) {
   const { block, controller } = props;
   if (props.unavailable) {
@@ -68,9 +69,18 @@ export function ReviewRow(props: {
     );
   }
   const onCalendar = block.actualPlacement?.startsAt != null;
+  const readerCalendar = props.calendarTimeField === true && onCalendar;
+  const readerDuration = readerCalendar ? blockDuration(block) : null;
+  const readerTimeValue =
+    props.choice.startsAt != null
+      ? isoToLocalTime(props.choice.startsAt, props.plan.timeZone)
+      : block.actualPlacement?.startsAt != null
+        ? isoToLocalTime(block.actualPlacement.startsAt, props.plan.timeZone)
+        : "";
   const effective = effectivePending(block, props.choice);
   const changed = effective !== undefined && !samePending(effective, block.pendingChange ?? null);
   const transient = transientWord(changed, effective?.kind, onCalendar);
+  const stateWord = transient ?? props.savedLabel;
   const detail = controller.preview?.blocks.find((entry) => entry.blockId === block.id) ?? null;
   const conflicts = (controller.preview?.conflicts ?? []).filter(
     (conflict) => conflict.blockId === block.id
@@ -94,7 +104,13 @@ export function ReviewRow(props: {
         ) : (
           <div className="plan-review__title">{props.title}</div>
         )}
-        <div className="plan-review__state">{transient ?? props.savedLabel}</div>
+        {readerCalendar && readerDuration !== null ? (
+          <div className="plan-review__meta">
+            {readerDuration} minutes · {stateWord}
+          </div>
+        ) : (
+          <div className="plan-review__state">{stateWord}</div>
+        )}
         {props.changed ? (
           <div className="plan-review__changed">Changed since you started</div>
         ) : null}
@@ -118,7 +134,7 @@ export function ReviewRow(props: {
         {outcome ? <div className="plan-review__hint">{outcomeWord(outcome)}</div> : null}
       </div>
       <div className="plan-review__fields">
-        {props.choice.placement === "add" || props.choice.placement === "move" ? (
+        {props.choice.placement === "add" || props.choice.placement === "move" || readerCalendar ? (
           <div className="plan-review__field">
             <label className="plan-review__label" htmlFor={`${block.id}-time`}>
               Time
@@ -129,13 +145,18 @@ export function ReviewRow(props: {
               aria-label={`${props.title}: start time`}
               className="plan-review__time"
               disabled={!schedulable || controller.busy}
-              value={timeValue}
+              value={readerCalendar ? readerTimeValue : timeValue}
               onChange={(event) => {
                 const iso = localTimeToIso(
                   props.plan.localDay,
                   event.target.value,
                   props.plan.timeZone
                 );
+                if (readerCalendar) {
+                  controller.setPlacement(block.id, "move", iso);
+                  controller.setTime(block.id, iso);
+                  return;
+                }
                 controller.setTime(block.id, iso);
               }}
             />
@@ -165,7 +186,9 @@ export function ReviewRow(props: {
                 value={option.value}
                 disabled={!schedulable && (option.value === "add" || option.value === "move")}
               >
-                {option.label}
+                {readerCalendar && option.value === "keep"
+                  ? REVIEW_KEEP_ON_CALENDAR_LABEL
+                  : option.label}
               </option>
             ))}
           </Select>
