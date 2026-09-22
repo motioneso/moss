@@ -8,6 +8,8 @@ import { Button, Select } from "@moss/ui";
 
 import {
   EVENING_COMMIT_ADD_NOTE_LABEL,
+  eveningCommitClosing,
+  eveningCommitProse,
   EVENING_COMMIT_CHOICES,
   EVENING_COMMIT_EYEBROW_SUFFIX,
   EVENING_COMMIT_MESSAGE,
@@ -265,8 +267,9 @@ export function CommitSection(props: {
       <p id="evening-commitments-heading" tabIndex={-1} className="evening-plan__lede">
         {EVENING_COMMIT_MESSAGE}
       </p>
+      <p className="evening-plan__prose">{eveningCommitProse(props.rows.length)}</p>
 
-      {actionableRows.map((row) => {
+      {actionableRows.map((row, index) => {
         const current =
           row.task.id in evening.decisions
             ? (evening.decisions[row.task.id]?.decision ?? null)
@@ -336,6 +339,9 @@ export function CommitSection(props: {
                 </Button>
               </div>
             ) : null}
+            <p className="evening-plan__prose">
+              {eveningCommitClosing(index < actionableRows.length - 1)}
+            </p>
           </div>
         );
       })}

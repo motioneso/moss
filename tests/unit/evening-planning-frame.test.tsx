@@ -562,6 +562,11 @@ describe("evening steps 2 to 4 (V8)", () => {
     expect(panel.querySelector(".evening-plan__lede")?.textContent).toContain(
       "Give this a place, or leave it open."
     );
+    const proses = [...panel.querySelectorAll(".evening-plan__prose")];
+    expect(proses[0]?.textContent).toBe(
+      "1 open task from today never got a time block. Take them one at a time."
+    );
+    expect(proses[1]?.textContent).toBe("That is the last of them.");
     const group = panel.querySelector(
       '[role="radiogroup"][aria-label="Write the launch brief: plan"]'
     ) as HTMLElement;

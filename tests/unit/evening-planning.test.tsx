@@ -25,6 +25,12 @@ import {
 } from "../../apps/web/src/today/day-plan-review-controller.js";
 import { EveningPlanningDialog } from "../../apps/web/src/today/evening-planning.js";
 import {
+  eveningCommitClosing,
+  eveningCommitProse,
+  EVENING_COMMIT_CLOSING_LAST,
+  EVENING_COMMIT_CLOSING_MORE
+} from "../../apps/web/src/today/today-labels.js";
+import {
   defaultChoiceFor,
   localTimeToIso
 } from "../../apps/web/src/today/day-plan-review-model.js";
@@ -956,5 +962,17 @@ describe("useEveningPlanning", () => {
       eveningIntent?: { commitments?: { taskId: string; decision: string }[] };
     };
     expect(body.eveningIntent?.commitments ?? []).toEqual([]);
+  });
+  it("derives step 2 open-task prose naming the count and conditional closing line", () => {
+    expect(eveningCommitProse(2)).toBe(
+      "2 open tasks from today never got a time block. Take them one at a time."
+    );
+    expect(eveningCommitProse(1)).toBe(
+      "1 open task from today never got a time block. Take them one at a time."
+    );
+    expect(eveningCommitClosing(true)).toBe(EVENING_COMMIT_CLOSING_MORE);
+    expect(eveningCommitClosing(true)).toBe("One more is waiting below.");
+    expect(eveningCommitClosing(false)).toBe(EVENING_COMMIT_CLOSING_LAST);
+    expect(eveningCommitClosing(false)).toBe("That is the last of them.");
   });
 });

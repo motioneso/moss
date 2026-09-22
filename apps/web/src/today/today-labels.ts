@@ -361,3 +361,18 @@ export const EVENING_COMMIT_NOTE_LABEL = "Or tell Moss in your own words";
 export const EVENING_COMMIT_NOTE_PLACEHOLDER =
   "A correction, a constraint, or something to remember…";
 export const EVENING_COMMIT_ADD_NOTE_LABEL = "Add note";
+
+export const EVENING_COMMIT_CLOSING_MORE = "One more is waiting below.";
+export const EVENING_COMMIT_CLOSING_LAST = "That is the last of them.";
+
+export function eveningCommitProse(count: number): string {
+  const noun = count === 1 ? "open task" : "open tasks";
+  return `${count} ${noun} from today never got a time block. Take them one at a time.`;
+}
+
+export function eveningCommitClosing(hasMore: boolean): string {
+  return hasMore ? EVENING_COMMIT_CLOSING_MORE : EVENING_COMMIT_CLOSING_LAST;
+}
+
+export const EVENING_COMMIT_PROSE = eveningCommitProse;
+export const EVENING_COMMIT_CLOSING = eveningCommitClosing;
