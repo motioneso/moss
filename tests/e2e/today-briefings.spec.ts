@@ -857,7 +857,7 @@ test("evening planning saves one draft and never applies in suggest mode", async
 
   // Commit one task for tomorrow; the due-dated one is already set.
   await dialog.getByRole("button", { name: "02 Open commitments", exact: true }).click();
-  await expect(dialog.getByRole("heading", { name: "Open commitments" })).toBeFocused();
+  await expect(dialog.locator("#evening-commitments-heading")).toBeFocused();
   await dialog
     .getByRole("radiogroup", { name: "Call the vendor: plan" })
     .getByLabel("Tomorrow")
