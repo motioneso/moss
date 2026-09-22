@@ -66,6 +66,63 @@ describe("ImapEmailReadProvider", () => {
     expect(parsed.body).toContain("Hello world");
   });
 
+  it("fills the preview from the body already fetched (#2314)", async () => {
+    // Plain mail carries no provider preview, so the closer reader used to see subject only.
+    // The preview is derived here from the body this call already parses, never re-fetched.
+    const provider = new ImapEmailReadProvider(() => makeFakeClient() as never);
+    const parsed = await provider.getMessage(SECRET, {
+      folder: "INBOX",
+      id: "imap:INBOX:1719700000:1"
+    });
+    expect(parsed.snippet).toBe("Hello world");
+  });
+
+  it("caps the preview and flattens a multi-line body to one line (#2314)", async () => {
+    const longLine = "x".repeat(800);
+    const raw = [
+      "From: Alice <alice@example.com>",
+      "To: user@proton.local",
+      "Subject: Long one",
+      "Date: Mon, 01 Jun 2026 12:00:00 +0000",
+      "",
+      "line one",
+      "line two",
+      longLine
+    ].join("\r\n");
+    const provider = new ImapEmailReadProvider(
+      () =>
+        makeFakeClient({ fetchOne: async () => ({ uid: 1, source: Buffer.from(raw) }) }) as never
+    );
+    const parsed = await provider.getMessage(SECRET, {
+      folder: "INBOX",
+      id: "imap:INBOX:1719700000:1"
+    });
+    expect(parsed.snippet).toBe(`line one line two ${longLine}`.slice(0, 500));
+  });
+
+  it("derives the preview from an HTML-only body when no plain part exists (#2314)", async () => {
+    const raw = [
+      "From: Alice <alice@example.com>",
+      "To: user@proton.local",
+      "Subject: HTML only",
+      "Date: Mon, 01 Jun 2026 12:00:00 +0000",
+      "MIME-Version: 1.0",
+      'Content-Type: text/html; charset="utf-8"',
+      "",
+      "<html><body><p>Your parcel</p><p>arrived</p></body></html>"
+    ].join("\r\n");
+    const provider = new ImapEmailReadProvider(
+      () =>
+        makeFakeClient({ fetchOne: async () => ({ uid: 1, source: Buffer.from(raw) }) }) as never
+    );
+    const parsed = await provider.getMessage(SECRET, {
+      folder: "INBOX",
+      id: "imap:INBOX:1719700000:1"
+    });
+    expect(parsed.snippet).toContain("Your parcel");
+    expect(parsed.snippet).not.toContain("<p>");
+  });
+
   it("throws on a malformed key rather than silently fetching the wrong message", async () => {
     const provider = new ImapEmailReadProvider(() => makeFakeClient() as never);
     await expect(
