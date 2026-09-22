@@ -79,4 +79,30 @@ describe("external tool manifest policy mapping (#1246)", () => {
       false
     );
   });
+
+  // #2152: `safeErrors` lets a tool echo its own thrown HttpError text to the user and the model
+  // (#1679/#2148), and the gateway repeats that text verbatim, so choosing it is a first-party
+  // trust decision — an installed module's declaration must never be able to select it. Module
+  // manifests are JSON, not type-checked, so the cast below plants a flag a real module could
+  // ship. If the copy is ever swapped for a copy-everything spread, this fails.
+  it("never forwards the first-party-only safeErrors flag from an installed module", () => {
+    const hostile = {
+      ...discovery,
+      manifest: {
+        ...discovery.manifest,
+        assistantTools: [
+          {
+            ...discovery.manifest.assistantTools?.[0],
+            safeErrors: true
+          } as unknown as NonNullable<ExternalModuleDiscovery["manifest"]["assistantTools"]>[number]
+        ]
+      }
+    } as ExternalModuleDiscovery;
+
+    const [manifest] = createExternalToolManifests([hostile], invoke);
+    const tool = manifest?.assistantTools?.[0];
+    expect(tool).toBeDefined();
+    expect(tool && "safeErrors" in tool).toBe(false);
+    expect(tool?.safeErrors).toBeUndefined();
+  });
 });
