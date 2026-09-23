@@ -20,7 +20,7 @@ final class MenuModelTests: XCTestCase {
     func testNotLinkedMenu() {
         XCTAssertEqual(
             titles(.notLinked, identity: nil),
-            ["Not linked", "Set Up Trail Marker", "Open Moss", "Settings…", "Check for Updates…", "Quit Trail Marker"]
+            ["Not linked", "Set Up Trail Marker", "Open Moss", "Settings…", "Quit Trail Marker"]
         )
     }
 
@@ -29,7 +29,7 @@ final class MenuModelTests: XCTestCase {
             titles(.connected(lastContact: now), identity: identity),
             [
                 "Connected", "moss.example.com", "ben@example.com", "Disconnect", "Open Moss",
-                "Settings…", "Check for Updates…", "Log Out…", "Quit Trail Marker"
+                "Settings…", "Log Out…", "Quit Trail Marker"
             ]
         )
     }
@@ -39,7 +39,7 @@ final class MenuModelTests: XCTestCase {
             titles(.disconnected, identity: identity),
             [
                 "Disconnected", "moss.example.com", "ben@example.com", "Connect", "Open Moss",
-                "Settings…", "Check for Updates…", "Log Out…", "Quit Trail Marker"
+                "Settings…", "Log Out…", "Quit Trail Marker"
             ]
         )
     }
@@ -49,7 +49,7 @@ final class MenuModelTests: XCTestCase {
             titles(.reconnecting(attempt: 2, lastContact: nil), identity: identity),
             [
                 "Reconnecting", "moss.example.com", "ben@example.com", "Retry Now", "Open Moss",
-                "Settings…", "Check for Updates…", "Log Out…", "Quit Trail Marker"
+                "Settings…", "Log Out…", "Quit Trail Marker"
             ]
         )
     }
@@ -59,7 +59,7 @@ final class MenuModelTests: XCTestCase {
             titles(.signInRequired(reason: .revoked), identity: identity),
             [
                 "Sign-in required", "moss.example.com", "ben@example.com", "Sign In", "Open Moss",
-                "Settings…", "Check for Updates…", "Log Out…", "Quit Trail Marker"
+                "Settings…", "Log Out…", "Quit Trail Marker"
             ]
         )
     }

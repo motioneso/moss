@@ -16,11 +16,9 @@ struct MenuItemDescriptor: Equatable {
         case instanceInfo
         case primaryAction
         case pauseResume
-        case judgeNow
         case lastJudgment
         case openMoss
         case settings
-        case checkForUpdates
         case logOut
         case quit
     }
@@ -66,11 +64,6 @@ struct FocusMenuInfo: Equatable {
         return "Trail Marker"
     }
 
-    var isWatching: Bool {
-        if case .watching = state { return true }
-        return false
-    }
-
     var isPaused: Bool { state == .paused }
 }
 
@@ -87,8 +80,8 @@ extension FocusLabel {
 }
 
 /// Menu order per the design guide (§10): status summary; connected instance and account; the
-/// state-specific primary action; Open Moss; Settings…; Check for Updates…; Log Out… (only when
-/// linked); Quit. Separators fall between the status group, the navigation/action group, the
+/// state-specific primary action; Open Moss; Settings…; Log Out… (only when linked); Quit.
+/// Checking for updates lives in Settings → Updates, not here. Separators fall between the status group, the navigation/action group, the
 /// account-action group, and Quit.
 enum MenuModel {
     static func statusTitle(for state: ConnectionState) -> String {
@@ -131,14 +124,12 @@ enum MenuModel {
         items.append(.item(primaryActionTitle(for: state), role: .primaryAction))
         if focusOn, let focus {
             items.append(.item(focus.isPaused ? "Resume Focus" : "Pause Focus", role: .pauseResume))
-            items.append(.item("Judge Now", role: .judgeNow, enabled: focus.isWatching))
             if focus.hasLastJudgment {
                 items.append(.item("Last Judgment…", role: .lastJudgment))
             }
         }
         items.append(.item("Open Moss", role: .openMoss, enabled: identity != nil))
         items.append(.item("Settings…", role: .settings))
-        items.append(.item("Check for Updates…", role: .checkForUpdates))
 
         if identity != nil {
             items.append(.separator)

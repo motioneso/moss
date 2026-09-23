@@ -297,9 +297,10 @@ Order items consistently:
 3. State-specific primary action: Connect, Disconnect, Retry, or Sign In.
 4. Open Moss.
 5. Settings…
-6. Check for Updates…
-7. Log Out… when linked.
-8. Quit Trail Marker.
+6. Log Out… when linked.
+7. Quit Trail Marker.
+
+Check for Updates lives in Settings, under Updates, not in the menu.
 
 Use separators between status, navigation/actions, account actions, and Quit. Include standard keyboard shortcuts only where they do not conflict with system conventions.
 

@@ -168,12 +168,6 @@ final class FocusRuntime: ObservableObject {
     func resume() { send(.userResume) }
     func testNudge() { send(.userTestNudge) }
 
-    func judgeNow() {
-        permissions.refresh()
-        send(.accessibilityChanged(granted: permissions.accessibility == .granted))
-        send(.userJudgeNow)
-    }
-
     func setAllowed(_ bundleId: String, allowed: Bool) {
         var updated = allowedBundleIds
         if allowed { updated.insert(bundleId) } else { updated.remove(bundleId) }

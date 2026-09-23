@@ -136,8 +136,8 @@ words, including which of the two scopes is actually active.
 
 The person must be able to see the chain working without waiting for a real drift:
 
-- **Judge now** in the menu card runs one observation and judgment immediately and shows the result.
-- **Last judgment**, shown from the Judge now result: when it ran, the calendar block, what was seen (the text
+- **Last judgment**, opened from the menu once a judgment has run (there is no manual Judge now;
+  Ben removed it, 2026-09-23, since the Mac judges on its own while a block is on): when it ran, the calendar block, what was seen (the text
   description, not the image), which two models answered, the label and the reason, and Wrong /
   Right buttons. Kept in memory on the Mac for the session only.
 - **Send a test nudge** in settings shows the banner for a few seconds, so the delivery path can
