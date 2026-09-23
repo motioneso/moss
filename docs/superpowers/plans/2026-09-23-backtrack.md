@@ -1,8 +1,8 @@
 # Backtrack build plan
 
 Spec: `docs/superpowers/specs/2026-09-23-trail-marker-screen-history.md` (approved by Ben,
-2026-09-23), mockups in `docs/superpowers/specs/mockups/backtrack.html`. Part of #2638. Revision 2
-answers the gpt-6-astra review (round 1, verdict REJECT, 14 findings); see the ledger in §9.
+2026-09-23), mockups in `docs/superpowers/specs/mockups/backtrack.html`. Part of #2638. Revision 3
+answers two gpt-6-astra review rounds (both REJECT); see §8 and the ledger in §9.
 
 Only Phases 0 and 1 are planned in detail. Phases 2 to 4 are outlined, with their seams cited and
 their constraints fixed, and they are re-planned after the Phase 1 kill gate (§7).
@@ -79,8 +79,10 @@ Open questions, each with an owner:
 - **Q4 (Phase 0 builder):** Accessibility has no public call that returns a window's `CGWindowID`
   (only the private `_AXUIElementGetWindow`). The plan uses public API only. `WindowIdentity` is
   the AX focused window's pid, frame and title, and it matches the `SCWindow` with the same owning
-  pid and frame (±1 pt), plus the same title when `SCWindow.title` is readable. Zero matches or more
-  than one means no capture. The builder records whether this matched correctly across Safari,
+  pid and frame (±1 pt) **and** the same title. If `SCWindow.title` is unreadable, or the AX title
+  read _failed_ (which is different from a title that was read and is empty), that is no capture
+  (round 2 B1). Zero matches or more than one also means no capture. After capture, the AX focused
+  window must still match. The builder records whether this matched correctly across Safari,
   Chrome, Arc, Ghostty and Messages.
 - **Q3 (Phase 3 planner):** the calendar module's public API for "events overlapping a time range".
   It is not verified; Phase 3 must cite it or add it.
@@ -128,11 +130,13 @@ Tests:
 
 ### 3.2 Pause stops every send (#2643 item 2)
 
-- `testVision`, `correct` and `rename` return early, and send nothing, while
-  `connection.state == .disconnected` or while the Focus switch is off. Settings shows "Paused:
-  resume to test" instead of running the test.
-- Between capture and describe (`FocusRuntime.swift:466-471`) and again before the judge request,
-  the runtime re-checks `!Task.isCancelled && shouldObserve`. The machine cancels in-flight work on
+- `testVision` and `correct` are Focus operations. They return early, sending nothing, while
+  `connection.state == .disconnected` **or** the Focus switch is off. Settings shows "Paused:
+  resume to test". `rename` is a connection operation: it is gated on Pause All and link state
+  only, never on the Focus switch, and its task is tracked so Pause All cancels it (round 2 B4).
+- Between capture and describe, the runtime re-checks `!Task.isCancelled && shouldObserve` on
+  **both** capture paths: the automatic one (`FocusRuntime.swift:466-471`) and Test vision's own
+  (`:292-296`). It checks again before the judge request. The machine cancels in-flight work on
   `userDisconnect`, sleep and Focus switch-off.
 - **Tests go through a transport spy, not the machine.** A `URLProtocol` stub fails the test on any
   request. Invoke each of `testVision`, `correct` and `rename` while paused: no request. Start a
@@ -144,9 +148,17 @@ Tests:
 - `ConnectionRuntime` calls `preferences.clearAll()`, then deletes the Keychain item, on every path
   that ends a link: user log out (including log out while disconnected, which
   `ConnectionMachine.swift:140-148` must now accept), server revoke, and credential invalid.
-- Test through the runtime: with focus preferences set, log out while connected and while paused.
-  `defaults` holds none of the reset-list keys. Observe it failing with the `clearAll()` call
-  removed.
+- **The running app resets too, not only the stored keys (round 2 B3).** `FocusRuntime` caches
+  consent, policy and vision configuration (`FocusRuntime.swift:120-137`). On every end-of-link path
+  it reloads them from the cleared preferences, resets its machine (`FocusMachine(policy:)` fresh),
+  drops `lastJudgment` and `lastKnownApp`, and cancels tracked tasks. From Phase 1,
+  `BacktrackRuntime` does the same via `discardAll`.
+- Tests, through the runtime:
+  - With focus preferences set, log out while connected and while paused: `defaults` holds none of
+    the reset-list keys.
+  - Log out, then relink a **different account** without restarting: consent is off, the policy is
+    empty, and nothing is observed until the new account opts in.
+  - Observe each failing with its reset removed.
 
 ### 3.4 Pause All, the Focus switch, forest accent
 
@@ -189,6 +201,15 @@ drive a status item. The test drives a stubbed connection:
 - It asserts that during Pause All the Focus switch is disabled and keeps its position.
 - It opens Settings and asserts the sidebar still has its sections.
 
+Live proof, recorded on the PR (round 2 A12). Install the build to `/Applications` on Ben's Mac,
+then:
+
+1. Put a small ordinary Safari window in front of a larger private one and run Test vision. The
+   picture is the ordinary window.
+2. Use Pause All, then run Test vision and Rename. Nothing is sent: the debug log shows no request.
+3. Log out and relink. Focus is off and the Never watch list is empty.
+4. Check the menu shows Pause All, the Focus switch and the forest accent.
+
 Release notes:
 
 - PR 3.1–3.3: `Fixed` / "Trail Marker privacy fixes" / "Trail Marker now only ever looks at the
@@ -196,8 +217,10 @@ Release notes:
 - PR 3.4: `Changed` / "Pause All and a Focus switch" / "The Trail Marker menu has Pause All plus a
   switch to pause just Focus."
 
-App map: no change. `app-map-core.ts:99` doesn't describe the menu. The builder checks this and says
-so on the PR.
+App map (round 2 B5): this is updated in the same PR, not skipped. `app-map-core.ts:99` (the Trail
+Marker group) gains the menu's Pause All and Focus switch, and the rule that captures need
+Accessibility and a verifiable focused window, with its remediation ("grant Accessibility in
+System Settings"). It also notes that Test vision is unavailable while paused.
 
 ## 4. Phase 1 (Debug builds only; nothing leaves the Mac)
 
@@ -241,7 +264,7 @@ struct BacktrackSegment: Equatable {
 }
 protocol TextRecognizing { func recognize(_ image: CGImage) async throws -> [String] }   // VisionTextRecognizer
 protocol SecureFieldLocating { func secureFieldFrames(pid: pid_t, window: WindowIdentity, budget: TimeInterval) -> [CGRect]? }  // nil = couldn't complete
-protocol BrowserAddressReading { func address(pid: pid_t, bundleId: String) -> String? }
+protocol BrowserAddressReading { func address(window: AXUIElement, bundleId: String) -> String? }   // the same AX window the capture was bound to
 enum BacktrackSanitizer { static func line(_: String) -> String; static func title(_: String) -> String; static func address(_: String) -> String? }
 struct SegmentDeduper { mutating func newLines(for: WindowIdentity, lines: [String]) -> [String] }
 // Services/PreferencesStore.swift (all in clearAll's reset list)
@@ -258,17 +281,17 @@ static let backtrackEnabled = "backtrackEnabled"; static let backtrackConsentAcc
   `cancelInFlight`. Any event carrying an older generation produces no effect.
 - **Stop conditions cancel.** An `inputsChanged` that makes recording false emits `cancelInFlight`.
   So do a `frontmostChanged` to a never-watched app or to nil, and a policy change that excludes the
-  current app. Log out, revoke, or `enabled` going false also emits `discardAll`.
+  current app. Log out, revoke, consent revoked, or `enabled` going false also emits `discardAll` (round 2 A2).
 - **Revalidation at each boundary.** `captured` and `recognized` produce `recognize` or `emit` only
   if the generation is current **and** recording is still true. Checking only for an old generation
   isn't enough on its own; the recording check is separate.
 - **One in flight.** At most one check-capture-recognize chain runs. A new trigger while one is
   running supersedes it: generation increases and `cancelInFlight` is emitted.
-- **Budget.** Let `minGap` be 10 s normally, or 60 s when reduced. A `tick` schedules the next tick
-  at `minGap`. A `frontmostChanged` may start a chain immediately only if the last recognition
-  started at least 3 s ago; otherwise it schedules one at that 3 s mark. So rapid switching never
-  runs more than one recognition per 3 s, and ticks never run faster than `minGap`. Budget changes
-  apply from the next scheduling decision.
+- **Budget (one global deadline; round 2 B6).** Let `minGap` be 10 s normally, or 60 s when
+  reduced, as spec §5 says. **No recognition starts less than `minGap` after the previous one, from
+  any trigger.** A `frontmostChanged` inside the gap is coalesced: only the latest frontmost window
+  is recognised, at the deadline, and only if it is still recording and still frontmost. Ticks use
+  the same deadline. A budget change applies to the next deadline.
 - **Thumbnail decides.** A `tick` emits `checkThumbnail`. Only `thumbnailChecked(changed: true)`
   leads to `capture`. A switch-triggered chain skips the thumbnail.
 - **Emit threshold.** Emit a segment only if the deduper returns at least 3 new lines or 80 new
@@ -278,9 +301,12 @@ static let backtrackEnabled = "backtrackEnabled"; static let backtrackConsentAcc
 
 Order of work, each chain:
 
-1. Locate secure fields with `SecureFieldLocating`, 50 ms budget. **`nil` means skip this capture
-   entirely** (a `failed` event). Otherwise capture by identity and paint every returned frame,
-   scaled to the image, solid black.
+1. Locate secure fields with `SecureFieldLocating` (50 ms budget), capture by identity, then locate
+   them **again**. If either pass returns `nil`, or the two passes differ (a field moved, appeared
+   or vanished), skip this capture (round 2 B2). Otherwise paint every frame, scaled to the image,
+   solid black. After capture, confirm the AX focused window still has the same identity (round 2
+   B1), and read the address from **that same AX window element** (`BrowserAddressReading` takes
+   the window element, not pid and bundle).
 2. Recognise.
 3. Sanitise every retained field: `line` for each line, plus `title`, `appName` (through `title`),
    and `address`.
@@ -333,18 +359,28 @@ Order of work, each chain:
 - **Sanitiser:** covers titles, URL userinfo and path, env/JSON text, a token split across two
   recognised lines, Luhn-valid versus invalid numbers, OTP phrasing, and emails kept. Observe it
   failing with the Luhn check removed, and with line-rejoining removed.
-- **Budget:** 20 switches in 10 s, with a recogniser that takes 2 s, give at most 4 recognitions.
-  Under `.reduced`, ticks are never closer than 60 s.
+- **Budget:** 20 switches in 10 s, with a recogniser that takes 2 s, start at most 1 recognition
+  (normal), and that one is for the last window switched to. Under `.reduced`, recognition starts
+  are never closer than 60 s from any mix of switches and ticks. This fails if switches bypass the
+  deadline.
 - **Dedupe versus threshold:** the deduper turns lines A B C followed by B C D into D. The machine
   emits for a 3-line change and not for a 1-line change of 10 characters.
-- **Nothing leaves the Mac, through the assembled runtime:** register a failing `URLProtocol`
-  globally, run the real `BacktrackRuntime` with a fixture capture containing the marker
-  `BT-FIXTURE-7Q`, and assert no request. Assert no file created during the test, under the app's
-  Application Support, Caches or temp folder, contains the marker. Observe it failing with a
-  deliberately added upload and with a deliberately added file write. This is scoped to Backtrack
-  data; Focus stays network-capable as today.
-- **Release contains no Backtrack:** `xcodebuild -configuration Release build` succeeds, and
-  `nm` on the Release binary has no `BacktrackRuntime` symbol.
+- **Nothing leaves the Mac (round 2 B9).** The guarantee is structural, and the tests check the
+  structure:
+  - Backtrack sources live in `TrailMarker/Backtrack/`.
+  - A source check fails the build if any file there imports `Network` or `WebKit`, or references
+    `URLSession`, `NSURLConnection`, `CompanionClient`, `FileManager`, `FileHandle`, `UserDefaults`
+    (other than `PreferencesStore`'s three keys), `write(to:` or `Data(contentsOf:`.
+  - `BacktrackRuntime`'s only outputs are its injected `BacktrackSink`, which in Phase 1 is the
+    in-memory Debug ring, plus `isRecording`.
+  - Tests: the source check itself, observed failing with a deliberately added `URLSession` call
+    and with a `FileManager` write. An assembled-runtime test runs with a spy sink and asserts
+    segments reach only the sink. This is scoped to Backtrack data; Focus stays network-capable as
+    today.
+- **Release contains no Backtrack:** every file in `TrailMarker/Backtrack/` is wrapped in
+  `#if DEBUG` at file level, and a source check enforces that. The Release build succeeds, and
+  `strings` on the Release binary finds none of the Backtrack UI strings ("Remember what's on my
+  screen", "Backtrack").
 - **Recogniser:** a bundled fixture PNG has at least 90% of its words recognised (runs on the macOS
   CI runner).
 - **UI (XCUITest, Debug):** the Backtrack Settings tab and consent sheet flow, the menu row appears
@@ -365,8 +401,8 @@ steps 1 to 4 below; step 5 is the kill-gate measurement.
 
 1. Turn it on and accept consent. Read a web page and a Messages thread. The focus log shows
    segments.
-2. With a private window behind a small ordinary one, a password form, 1Password, and an excluded
-   app, no segment appears for any of them.
+2. With a private window behind a small ordinary one, only the ordinary window's text appears. A
+   password form's field, 1Password and an excluded app produce nothing.
 3. With a fake `sk-` key and a test card number on screen, the Debug ring shows only masked forms.
 4. Pause All, the menu switch and a screen lock each stop recording, and the dot goes off.
 5. For CPU over a working day, sample for 8 hours at 60 s intervals:
@@ -409,8 +445,13 @@ change.
   (index) and `DELETE` (retention) on the table, following the worker-grant files in
   `packages/ai/sql/0037_ai_worker_read_grants.sql`. The same owner-only policies apply. Integration
   tests run as the real worker role, including cross-owner denial.
-- **Retention backstop:** a nightly purge of rows older than 37 days, runnable by the worker, and
-  tested. It exists from Phase 2, before summaries do.
+- **Retention backstop (round 2 B8):** rows older than 37 days are purged every hour, so the
+  strict maximum age is 37 days plus 1 hour. The purge also deletes their `memory_chunks` through
+  memory's public API, never memory's table directly. The index job re-reads its segment under the
+  actor's context and skips any row that is gone or older than the cutoff, so a queued job can't
+  recreate a purged embedding. Search filters out anything past the cutoff too. The purge runs
+  whether or not the feature flag is on. Tests cover a purge racing a queued index job, and the
+  cutoff boundary. It exists from Phase 2, before summaries do.
 - **Payloads:** `ALLOWED_PAYLOAD_KEYS` validates top-level keys only
   (`packages/jobs/src/pg-boss.ts:154-164`). The Phase 2 plan must also cap the length of
   `segmentIds` and validate its values as UUIDs at the send site.
@@ -420,9 +461,20 @@ change.
   do") and adds the module manifest's settings and features entries, in the same PR, describing the
   flag-off state truthfully. Each phase's PR carries its release note. Nothing advertises recall
   before the flag is on.
-- **Web e2e:** Phases 2 and 4 each carry a Playwright test on the dev instance. For Phase 2 it's
-  Settings → Backtrack shows storage and "Delete today" removes today's rows. For Phase 4 it's a
-  backdated day becoming a note.
+- **Native rollout (round 2 B7).** Phase 2 includes a native part, "2b", that brings Backtrack to
+  Release builds. It adds the batch upload through `CompanionClient`, the encrypted 24-hour offline
+  buffer (spec §6), and final consent copy.
+  - Consent is **versioned**: `backtrackConsentVersion`, where 1 is the Debug in-memory consent and
+    2 is storage in Moss.
+  - Upload requires version 2, so a Debug opt-in never authorises sending. Everyone sees the
+    version-2 sheet before anything is sent.
+  - The Phase 1 source checks are relaxed only for the one upload file, which the Phase 2 plan
+    names.
+- **Web e2e:** Phases 2, 3 and 4 each carry a Playwright test on the dev instance:
+  - Phase 2: Settings → Backtrack shows storage, and "Delete today" removes today's rows.
+  - Phase 3: a question about a seeded segment's page is answered with the Backtrack source chip,
+    and an unrelated question makes no `backtrack.search` call.
+  - Phase 4: a backdated day becomes a note.
 
 Provisional DDL (a reviewed decision):
 
@@ -472,9 +524,11 @@ Phase 2 gets its detailed plan only after Ben passes this gate.
 
 ## 8. Review
 
-Round 1 (gpt-6-astra, medium): REJECT, 14 findings, all addressed in this revision (§9). One more
-round is run on this revision. After that the plan goes to Ben, with any remaining findings listed
-and not re-looped.
+- Round 1 (gpt-6-astra, medium): REJECT, 14 findings.
+- Round 2: REJECT. It rated 5 of the round-1 findings resolved and 8 partial; 1 was still open (#6,
+  app map). It raised 9 new findings. All of them are folded into this revision 3 without a third
+  round (§9).
+- Whether to run round 3 is Ben's call.
 
 ## 9. Rulings ledger
 
@@ -497,6 +551,25 @@ of #8.
 | 12  | Per-phase e2e and verification incomplete; wrong grep path; CPU command unbounded        | **Valid** → XCUITest target (§3.5, §4.5); commands from the repo root with exits (§4.6); bounded `top -l 480`.                                                                                               |
 | 13  | DDL size is characters, not bytes; no time ordering; hash unspecified                    | **Valid** → `octet_length`, `CHECK (ended_at >= started_at)`, SHA-256 with a 32-byte check, idempotent unique key; module SQL directory named.                                                               |
 | 14  | Read-back isn't diff acceptance                                                          | **Valid as a rule gap** → §5 records a deliberate exception, because the approved design is automatic, and replaces it with a grounding validator plus a byte-for-byte read-back.                            |
+
+Round 2, gpt-6-astra (2026-09-23), on revision 2:
+
+| #   | Finding                                                                       | Ruling                                                                                                                                                   |
+| --- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1  | Window match may pass without a title; address not bound to the window        | **Valid** → Q4 requires a title match (a failed read is not the same as empty) and a post-capture re-check; the address is read from the same AX window. |
+| B2  | Secure-field frames can be stale by capture time                              | **Valid** → §4.3 locates before and after capture and skips on any difference.                                                                           |
+| B3  | Clearing defaults doesn't reset the running app                               | **Valid** → §3.3 runtime and machine reset; relink-as-a-different-account test.                                                                          |
+| B4  | Rename wrongly gated on Focus; Test vision's post-capture guard missing       | **Valid** → §3.2 rename is a connection operation, tracked; the guard is on both capture paths.                                                          |
+| B5  | "No app-map change" violates the same-PR rule                                 | **Valid** (also round-1 #6) → §3.5 updates `app-map-core.ts:99` in Phase 0.                                                                              |
+| B6  | Switch trigger bypasses the 10 s / 60 s budget                                | **Valid** → §4.2 one global deadline with coalescing; the test expects 1 start.                                                                          |
+| B7  | No phase owns the Release rollout or the consent upgrade                      | **Valid** → §6 native part 2b, versioned consent (v2 required to upload).                                                                                |
+| B8  | Backstop leaves embeddings, can race indexing, has no strict bound            | **Valid** → §6 hourly purge (at most 37 days + 1 h), memory API deletion, index re-check, search filter, runs with the flag off.                         |
+| B9  | Network/file/Release checks don't prove the property; mixed-window test wrong | **Valid** → §4.5 structural source checks with mutation, sink-only output, file-level `#if DEBUG` and `strings` check; live step 2 corrected.            |
+
+Round-1 items round 2 rated PARTIAL are covered by the rows above: #1 → B1, #2 → A2 `discardAll` on
+consent revoke, #3 → B2, #5 → B4, #8 → B3, #9 → B6, #10 → B7 and B8, #11 → B9, #12 → Phase 0 live
+proof plus the Phase 3 e2e. Round 2's request for "maintainability checks" named no specific check,
+so no action was taken.
 
 Other facts kept from earlier work:
 
