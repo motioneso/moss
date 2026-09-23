@@ -155,6 +155,16 @@ export function isSortingProviderKind(kind: string | null | undefined): boolean 
   return kind != null && (SORTING_PROVIDER_KINDS as readonly string[]).includes(kind);
 }
 
+/**
+ * Provider kinds the sorting model may be bound to (Ben, 2026-09-22): the kinds sorting jobs run,
+ * plus System One, because the sorting model is also the Trail Marker focus judge and Jev answers
+ * that as choice questions. Sorting jobs skip a System One model and run as today until the Jev
+ * slice of the sorting spec.
+ */
+export function isSortingBindableProviderKind(kind: string | null | undefined): boolean {
+  return isSortingProviderKind(kind) || kind === "system-one";
+}
+
 export type ModuleServiceBindingMap = Partial<Record<ModuleServiceKey, AiServiceBinding>>;
 
 export type AiServiceBindingMapDto = Partial<Record<AiServiceKey, AiServiceBinding>>;

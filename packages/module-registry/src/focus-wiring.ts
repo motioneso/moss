@@ -11,7 +11,6 @@ import {
 import { getCurrentMossBlock } from "@moss/calendar";
 import {
   buildFocusJudgmentService,
-  FOCUS_JUDGE_SERVICE_KEY,
   type FocusJudgmentService,
   type FocusPorts
 } from "@moss/focus-judgment";
@@ -40,9 +39,9 @@ export interface FocusWiringDeps {
  * "block that is on now" read, the notifications module's plain quiet-hours check, and the
  * structured model call.
  *
- * The judgment model is never defaulted. `hasJudgeModel` is true only when an admin has bound this
- * exact service key to a model; reading the binding first also avoids the router's "needs
- * configuration" error row that a lookup of an unbound key would write on every poll.
+ * The judge is the admin's sorting model (Ben, 2026-09-22) and is never defaulted: with no sorting
+ * model bound, `hasJudgeModel` is false and nothing is judged. Each call re-reads the binding and
+ * runs on exactly that model, so a change in Settings takes effect on the next judgment.
  */
 export function createFocusJudgmentService(deps: FocusWiringDeps): FocusJudgmentService {
   const repository = new AiRepository();
@@ -53,16 +52,10 @@ export function createFocusJudgmentService(deps: FocusWiringDeps): FocusJudgment
   const ports: FocusPorts = {
     currentBlock: (scopedDb, now) => getCurrentMossBlock(scopedDb, now),
     inQuietHours: (scopedDb, now) => isActorInQuietHours(scopedDb, quietHoursPortImpl, now),
-    hasJudgeModel: async (scopedDb) => {
-      const bindings = await repository.listModuleServiceBindings(scopedDb);
-      if (bindings[FOCUS_JUDGE_SERVICE_KEY]?.kind !== "model") return false;
-      const resolved = await repository.resolveModelForService(scopedDb, FOCUS_JUDGE_SERVICE_KEY, {
-        capability: "json",
-        requireExplicitBinding: true
-      });
-      return resolved.model !== null;
-    },
+    hasJudgeModel: async (scopedDb) => (await repository.resolveFocusJudgeModel(scopedDb)) !== null,
     generate: async (scopedDb, input) => {
+      const model = await repository.resolveFocusJudgeModel(scopedDb);
+      if (!model) return { ok: false, error: "needs_config" };
       const result = await generate(
         scopedDb,
         {
@@ -71,6 +64,7 @@ export function createFocusJudgmentService(deps: FocusWiringDeps): FocusJudgment
           prompt: input.prompt,
           requireExplicitBinding: input.requireExplicitBinding,
           maxOutputTokens: input.maxOutputTokens,
+          explicitModel: model,
           signal: input.signal
         },
         {
@@ -82,8 +76,15 @@ export function createFocusJudgmentService(deps: FocusWiringDeps): FocusJudgment
       );
       return result.ok ? { ok: true, object: result.object } : { ok: false, error: result.error };
     },
-    choose: (scopedDb, input) =>
-      choose(scopedDb, input, { repository, cipher, logger: deps.logger }),
+    choose: async (scopedDb, input) => {
+      const model = await repository.resolveFocusJudgeModel(scopedDb);
+      if (!model) return { ok: false, error: "needs_config" };
+      return choose(
+        scopedDb,
+        { ...input, explicitModel: model },
+        { repository, cipher, logger: deps.logger }
+      );
+    },
     logger: deps.logger
   };
 

@@ -24,6 +24,13 @@ export type GenerateChoicesInput = {
   readonly state: Record<string, unknown>;
   readonly questions: Readonly<Record<string, ChoiceQuestionInput>>;
   readonly requireExplicitBinding?: boolean;
+  /** Run against this exact model instead of routing by service binding. */
+  readonly explicitModel?: {
+    readonly id: string;
+    readonly provider_config_id: string;
+    readonly provider_kind: string;
+    readonly provider_model_id: string;
+  };
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
 };
@@ -70,12 +77,15 @@ export async function generateChoices(
   input: GenerateChoicesInput,
   deps: GenerateChoicesDeps
 ): Promise<GenerateChoicesResult> {
-  const resolved = await deps.repository.resolveModelForService(scopedDb, input.service, {
-    capability: "json",
-    requireExplicitBinding: input.requireExplicitBinding
-  });
-  if (!resolved.model) return { ok: false, error: "needs_config" };
-  const model = resolved.model;
+  const model =
+    input.explicitModel ??
+    (
+      await deps.repository.resolveModelForService(scopedDb, input.service, {
+        capability: "json",
+        requireExplicitBinding: input.requireExplicitBinding
+      })
+    ).model;
+  if (!model) return { ok: false, error: "needs_config" };
 
   const provider = await deps.repository.selectProviderWithCredential(
     scopedDb,

@@ -59,9 +59,7 @@ import {
   type AiProviderExecutionMode,
   type AiProviderKind,
   type AiServiceBinding,
-  type AiServiceKey,
-  isModuleServiceKey,
-  isPlatformServiceKey
+  type AiServiceKey
 } from "@moss/shared";
 
 /**
@@ -117,19 +115,6 @@ const SERVICE_ROWS: readonly {
     name: "Email extraction",
     desc: "Turns connected email into summaries and suggested actions.",
     requireExplicitBinding: true
-  },
-  {
-    k: "module.trail-marker.judge",
-    capability: "json",
-    name: "Trail Marker focus judgment",
-    desc:
-      "The model that decides whether what a Mac is doing fits the person's current calendar " +
-      "block. Only an admin can set it, and nothing is processed until you choose one. A model " +
-      "served through a command-line tool also keeps the conversation, window titles included, " +
-      "in that tool's own files on this server. A System One (TypeSafe) model sends the app name, " +
-      "window title and calendar block title to TypeSafe for every judgment.",
-    requireExplicitBinding: true,
-    modelOnly: true
   }
 ];
 
@@ -450,9 +435,8 @@ function ServiceRow(props: {
   });
 
   // Active models that can actually serve this service (a "model" binding must be capability-valid).
-  // System One models serve only the platform-owned Trail Marker judgment, as the server enforces.
-  const platformOwned =
-    isModuleServiceKey(props.service.k) && isPlatformServiceKey(props.service.k);
+  // System One models serve only the Trail Marker judgment, through the Sorting model row, as the
+  // server enforces.
   const capableModels = props.models.filter((model) => {
     const provider = props.providers.find((candidate) => candidate.id === model.providerConfigId);
     const providerReady =
@@ -462,7 +446,7 @@ function ServiceRow(props: {
       model.status === "active" &&
       model.providerStatus === "active" &&
       providerReady &&
-      (platformOwned || provider.providerKind !== "system-one") &&
+      provider.providerKind !== "system-one" &&
       model.capabilities.includes(props.service.capability)
     );
   });

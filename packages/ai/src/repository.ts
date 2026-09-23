@@ -1355,6 +1355,33 @@ export class AiRepository {
   }
 
   /**
+   * #2570: the Trail Marker focus judge is the admin's sorting model (Ben, 2026-09-22). Unlike
+   * `resolveSortingModel` this accepts a System One model, which answers the judgment as choice
+   * questions, and ignores any pin: the judge is never defaulted, so with no sorting model bound
+   * nothing is judged.
+   */
+  async resolveFocusJudgeModel(scopedDb: DataContextDb): Promise<AiConfiguredModelSafeRow | null> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.instance_settings")
+      .select("value")
+      .where("key", "=", AI_SERVICE_BINDINGS_SETTING_KEY)
+      .executeTakeFirst();
+    const binding = readSortingBinding(row?.value);
+    if (!binding) return null;
+
+    const model = await this.safeModelQuery(scopedDb)
+      .where("models.id", "=", binding.modelId)
+      .where("models.status", "=", "active")
+      .where("providers.status", "=", "active")
+      .where("providers.purpose", "=", "assistant")
+      .where("providers.provider_kind", "in", [...SORTING_PROVIDER_KINDS, "system-one"])
+      .where(sql<boolean>`${"json"} = any(${sql.ref("models.capabilities")})`)
+      .executeTakeFirst();
+    return model ?? null;
+  }
+
+  /**
    * #2594: the sorting model for a job that opted in, or null when today's path must run alone.
    * Null when the job is strict, an admin pin is set, the job has its own module binding, no
    * sorting model is bound, or the bound model no longer qualifies. A module.worker binding is the

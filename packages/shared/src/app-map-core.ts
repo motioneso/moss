@@ -206,10 +206,12 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "Add model button (type in a model by hand; such rows show a * after the id, the footer " +
       "reads '* Manually added', and they survive refreshes and re-logins). System One (TypeSafe) " +
       "is offered as a provider type; it answers fixed named questions and is used only for the " +
-      "Trail Marker focus judgment, not chat: its models are offered only in that row and its " +
-      "card has no Set as default button. The Trail Marker focus judgment row, whose description " +
-      "says a System One model sends the app name, window title and calendar block title to " +
-      "TypeSafe for every judgment, must be set by an admin before anything is judged. Each model row has " +
+      "Trail Marker focus judgment, not chat: its models are offered only in the Sorting model " +
+      "row and its card has no Set as default button. The Sorting model row also sets the model " +
+      "that judges Trail Marker focus; nothing is judged until an admin chooses one there. Once " +
+      "one is chosen it says Trail Marker sends the app name, window title and calendar block " +
+      "title to that model, and for a System One model that they go to TypeSafe and that sorting " +
+      "keeps using the main model. Each model row has " +
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
       "is struck through), " +
       "and an ACP note when the provider cannot honour a model choice, explaining that chat stays " +

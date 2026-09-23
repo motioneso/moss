@@ -9,7 +9,7 @@ import {
   deleteAiServiceBindingRouteSchema,
   isModuleServiceKey,
   isPlatformServiceKey,
-  isSortingProviderKind,
+  isSortingBindableProviderKind,
   listAiServiceBindingsRouteSchema,
   lookupAiCapabilityRouteRouteSchema,
   putAiServiceBindingRouteSchema,
@@ -152,10 +152,13 @@ export function registerAiServiceRoutes(
                   model.status === "active" &&
                   model.provider_status === "active" &&
                   model.capabilities.includes(requiredCapability) &&
-                  (service !== SORTING_SERVICE_KEY || isSortingProviderKind(model.provider_kind)) &&
-                  // System One answers only choice questions, which only the platform-owned
-                  // Trail Marker judgment asks; any other service would fail on every call.
-                  (platformOwned || model.provider_kind !== "system-one")
+                  (service !== SORTING_SERVICE_KEY ||
+                    isSortingBindableProviderKind(model.provider_kind)) &&
+                  // System One answers only choice questions, which only the Trail Marker judgment
+                  // asks (through the sorting model); any other service would fail on every call.
+                  (platformOwned ||
+                    service === SORTING_SERVICE_KEY ||
+                    model.provider_kind !== "system-one")
               );
               if (!valid) {
                 throw new HttpError(400, "modelId must reference an active compatible model");

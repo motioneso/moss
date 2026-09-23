@@ -244,120 +244,13 @@ describe("AiProvidersPane", () => {
   });
 });
 
-// #2570: the Trail Marker focus judgment gets its own row. It starts empty, offers specific models
-// only (no Mode option that would borrow the default provider's model), and is admin-set. The
+// #2570: the Trail Marker focus judge is the Sorting model (Ben, 2026-09-22), so there is no
+// separate Trail Marker row. A System One model is offered only in the Sorting model row. The
 // Services group only renders once a provider exists, so each test seeds one.
-describe("AiProvidersPane Trail Marker focus judgment row (#2570)", () => {
-  const ROW_LABEL = "Binding for Trail Marker focus judgment";
+describe("AiProvidersPane Trail Marker judge is the Sorting model (#2570)", () => {
+  const SORTING_LABEL = "Binding for Sorting model";
 
-  function seedProviderAndModel(): void {
-    vi.mocked(apiClient.listAiProviders).mockResolvedValue({
-      providers: [
-        {
-          id: "prov1",
-          providerKind: "openai-compatible",
-          displayName: "Hosted",
-          authMethod: "api_key",
-          executionMode: "interactive",
-          status: "active",
-          hasCredential: true,
-          isInstanceDefault: false
-        }
-      ]
-    } as never);
-    vi.mocked(apiClient.listAiModels).mockResolvedValue({
-      models: [
-        {
-          id: "model1",
-          providerConfigId: "prov1",
-          providerModelId: "jev-1",
-          displayName: "Jev",
-          status: "active",
-          providerStatus: "active",
-          capabilities: ["json"],
-          tier: "economy"
-        }
-      ]
-    } as never);
-  }
-
-  afterEach(() => {
-    vi.mocked(apiClient.listAiProviders).mockResolvedValue({ providers: [] } as never);
-    vi.mocked(apiClient.listAiModels).mockResolvedValue({ models: [] } as never);
-    vi.mocked(apiClient.putAiServiceBinding).mockClear();
-  });
-
-  function selects(renderer: ReactTestRenderer, label: string) {
-    return renderer.root.findAll(
-      (node) => node.type === "select" && node.props["aria-label"] === label
-    );
-  }
-
-  it("lists the row, starts empty with 'Not set', and offers no Mode option (fails if a default is pre-filled)", async () => {
-    seedProviderAndModel();
-    const renderer = await renderPane();
-
-    const [trailMarker] = selects(renderer, ROW_LABEL);
-    expect(trailMarker).toBeTruthy();
-    expect(trailMarker?.props.value).toBe("");
-
-    const optionTexts = trailMarker!
-      .findAllByType("option")
-      .map((option) => option.children.join(""));
-    expect(optionTexts).toContain("Not set: choose a model");
-    expect(optionTexts).toContain("Jev");
-    expect(trailMarker!.findAllByType("optgroup")).toHaveLength(1);
-    expect(trailMarker!.findAllByType("optgroup")[0]?.props.label).toBe("Specific model");
-
-    // The existing strict row still offers Mode, so the difference is specific to this row.
-    const [emailExtraction] = selects(renderer, "Binding for Email extraction");
-    const emailGroups = emailExtraction!
-      .findAllByType("optgroup")
-      .map((group) => group.props.label as string);
-    expect(emailGroups).toContain("Mode (uses the default provider)");
-
-    await act(async () => {
-      renderer.unmount();
-    });
-  });
-
-  it("says only an admin can set it and that nothing runs until a model is chosen", async () => {
-    seedProviderAndModel();
-    const renderer = await renderPane();
-    const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain("Trail Marker focus judgment");
-    expect(text).toContain("Only an admin can set it");
-    expect(text).toContain("nothing is processed until you choose one");
-    expect(text).toContain("command-line tool");
-    await act(async () => {
-      renderer.unmount();
-    });
-  });
-
-  it("binds the platform key to the chosen model", async () => {
-    seedProviderAndModel();
-    vi.mocked(apiClient.putAiServiceBinding).mockResolvedValue({} as never);
-
-    const renderer = await renderPane();
-    const [row] = selects(renderer, ROW_LABEL);
-    await act(async () => {
-      (row!.props.onChange as (event: { target: { value: string } }) => void)({
-        target: { value: "model:model1" }
-      });
-    });
-    await flush();
-
-    expect(apiClient.putAiServiceBinding).toHaveBeenCalledWith("module.trail-marker.judge", {
-      binding: { kind: "model", modelId: "model1" }
-    });
-
-    await act(async () => {
-      renderer.unmount();
-    });
-  });
-
-  it("offers a System One model only to this row and never as the default provider (fails without the provider-kind filter)", async () => {
-    seedProviderAndModel();
+  function seedSystemOne(): void {
     vi.mocked(apiClient.listAiProviders).mockResolvedValue({
       providers: [
         {
@@ -372,24 +265,106 @@ describe("AiProvidersPane Trail Marker focus judgment row (#2570)", () => {
         }
       ]
     } as never);
+    vi.mocked(apiClient.listAiModels).mockResolvedValue({
+      models: [
+        {
+          id: "model1",
+          providerConfigId: "prov1",
+          providerKind: "system-one",
+          providerDisplayName: "System One",
+          providerModelId: "jev-latest",
+          displayName: "Jev",
+          status: "active",
+          providerStatus: "active",
+          capabilities: ["json"],
+          tier: "economy"
+        }
+      ]
+    } as never);
+  }
+
+  afterEach(() => {
+    vi.mocked(apiClient.listAiProviders).mockResolvedValue({ providers: [] } as never);
+    vi.mocked(apiClient.listAiModels).mockResolvedValue({ models: [] } as never);
+    vi.mocked(apiClient.listAiServiceBindings).mockResolvedValue({ bindings: {} } as never);
+    vi.mocked(apiClient.putAiServiceBinding).mockClear();
+  });
+
+  function selects(renderer: ReactTestRenderer, label: string) {
+    return renderer.root.findAll(
+      (node) => node.type === "select" && node.props["aria-label"] === label
+    );
+  }
+
+  const optionTexts = (renderer: ReactTestRenderer, label: string) =>
+    selects(renderer, label)[0]!
+      .findAllByType("option")
+      .map((option) => option.children.join(""));
+
+  it("has no separate Trail Marker row, and the Sorting model row says it judges Trail Marker focus", async () => {
+    seedSystemOne();
     const renderer = await renderPane();
-
-    const optionTexts = (label: string) =>
-      selects(renderer, label)[0]!
-        .findAllByType("option")
-        .map((option) => option.children.join(""));
-    expect(optionTexts(ROW_LABEL)).toContain("Jev");
-    expect(optionTexts("Binding for Email extraction")).not.toContain("Jev");
-    const setDefault = renderer.root
-      .findAllByType("button")
-      .filter((button) => button.children.includes("Set as default"));
-    expect(setDefault).toHaveLength(0);
-
+    expect(selects(renderer, "Binding for Trail Marker focus judgment")).toHaveLength(0);
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain("It also judges");
+    expect(text).toContain("Trail Marker judges");
     await act(async () => {
       renderer.unmount();
     });
   });
 
+  it("offers a System One model only in the Sorting model row and never as the default provider (fails without the provider-kind filters)", async () => {
+    seedSystemOne();
+    const renderer = await renderPane();
+    expect(optionTexts(renderer, SORTING_LABEL)).toContain("Jev");
+    expect(optionTexts(renderer, "Binding for Email extraction")).not.toContain("Jev");
+    const setDefault = renderer.root
+      .findAllByType("button")
+      .filter((button) => button.children.includes("Set as default"));
+    expect(setDefault).toHaveLength(0);
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("binds the sorting key when Jev is chosen", async () => {
+    seedSystemOne();
+    vi.mocked(apiClient.putAiServiceBinding).mockResolvedValue({} as never);
+    const renderer = await renderPane();
+    const [row] = selects(renderer, SORTING_LABEL);
+    await act(async () => {
+      (row!.props.onChange as (event: { target: { value: string } }) => void)({
+        target: { value: "model:model1" }
+      });
+    });
+    await flush();
+    expect(apiClient.putAiServiceBinding).toHaveBeenCalledWith("sorting", {
+      binding: { kind: "model", modelId: "model1" }
+    });
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("with Jev bound, says Trail Marker data goes to TypeSafe and never claims stories go to it", async () => {
+    seedSystemOne();
+    vi.mocked(apiClient.listAiServiceBindings).mockResolvedValue({
+      bindings: { sorting: { kind: "model", modelId: "model1" } }
+    } as never);
+    const renderer = await renderPane();
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain(
+      "Trail Marker sends the app name, window title and calendar block title"
+    );
+    expect(text).toContain("TypeSafe");
+    expect(text).not.toContain("Story details and your saved story preferences");
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+describe("AiProvidersPane add provider examples (#2586)", () => {
   it("shows each provider its own example address and key, not another company's", async () => {
     const renderer = await renderPane();
     clickButtonByText(renderer, "Add provider");

@@ -22,7 +22,9 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 const { Client } = pg;
 const VERIFIER = "v".repeat(43);
 const TRUSTED_ORIGIN = "http://localhost:3000";
-const SERVICE = "module.trail-marker.judge";
+// The judge is the admin's sorting model (Ben, 2026-09-22); calls still carry the judge's key.
+const SORTING = "sorting";
+const JUDGE_SERVICE = "module.trail-marker.judge";
 const WINDOW_MARKER = "focus-route-marker-window-91d4e0";
 
 let server: ReturnType<typeof createApiServer>;
@@ -35,7 +37,12 @@ let originalSecretKey: string | undefined;
 let originalConnectorKey: string | undefined;
 
 /** Every call the fake model received, and the answer it will give next. */
-const modelCalls: { prompt: string; service: string; requireExplicitBinding: boolean }[] = [];
+const modelCalls: {
+  prompt: string;
+  service: string;
+  requireExplicitBinding: boolean;
+  modelId: string | null;
+}[] = [];
 let nextAnswer: { label: string; reason: string } = {
   label: "distracted",
   reason: "Sports site, unrelated to studying."
@@ -45,7 +52,8 @@ const fakeGenerate = (async (_scopedDb: unknown, input: Record<string, unknown>)
   modelCalls.push({
     prompt: String(input.prompt),
     service: String(input.service),
-    requireExplicitBinding: input.requireExplicitBinding === true
+    requireExplicitBinding: input.requireExplicitBinding === true,
+    modelId: (input.explicitModel as { id?: string } | undefined)?.id ?? null
   });
   return { ok: true, object: nextAnswer, usage: { inputTokens: 1, outputTokens: 1 } };
 }) as unknown as typeof generateStructured;
@@ -255,7 +263,7 @@ describe("once an admin binds the judgment model", () => {
   beforeAll(async () => {
     const bound = await server.inject({
       method: "PUT",
-      url: `/api/ai/services/${SERVICE}/binding`,
+      url: `/api/ai/services/${SORTING}/binding`,
       headers: asUser(ids.sessionAdmin),
       payload: { binding: { kind: "model", modelId } }
     });
@@ -293,7 +301,9 @@ describe("once an admin binds the judgment model", () => {
 
     expect(modelCalls).toHaveLength(3);
     expect(modelCalls.every((call) => call.requireExplicitBinding)).toBe(true);
-    expect(modelCalls.every((call) => call.service === SERVICE)).toBe(true);
+    expect(modelCalls.every((call) => call.service === JUDGE_SERVICE)).toBe(true);
+    // Runs on exactly the bound sorting model, never on whatever the router would pick.
+    expect(modelCalls.every((call) => call.modelId === modelId)).toBe(true);
   });
 
   it("counts a nudge from another Mac of the same person toward the same cap", async () => {

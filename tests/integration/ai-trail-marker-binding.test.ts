@@ -215,6 +215,40 @@ describe("Trail Marker focus judgment model binding", () => {
     expect((await bind(SERVICE, { binding: { kind: "model", modelId } })).statusCode).toBe(200);
   });
 
+  // Ben, 2026-09-22: the Trail Marker judge is the admin's sorting model.
+  it("judges with the sorting model, including a System One model, which sorting jobs then skip (fails if the judge still needs its own row or sorting jobs try Jev)", async () => {
+    const judgeModel = () =>
+      dataContext.withDataContext(
+        { actorUserId: ids.adminUser, requestId: "focus-judge-model" },
+        (scopedDb) => repository.resolveFocusJudgeModel(scopedDb)
+      );
+    const sortingJobModel = () =>
+      dataContext.withDataContext(
+        { actorUserId: ids.adminUser, requestId: "sorting-job-model" },
+        (scopedDb) => repository.resolveSortingModel(scopedDb, "module.news")
+      );
+
+    expect(await judgeModel()).toBeNull();
+
+    expect(
+      (await bind("sorting", { binding: { kind: "model", modelId: systemOneModelId } })).statusCode
+    ).toBe(200);
+    expect((await judgeModel())?.id).toBe(systemOneModelId);
+    expect(await sortingJobModel()).toBeNull();
+
+    expect((await bind("sorting", { binding: { kind: "model", modelId } })).statusCode).toBe(200);
+    expect((await judgeModel())?.id).toBe(modelId);
+    expect((await sortingJobModel())?.id).toBe(modelId);
+
+    const cleared = await server.inject({
+      method: "DELETE",
+      url: "/api/ai/services/sorting/binding",
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` }
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect(await judgeModel()).toBeNull();
+  });
+
   it("never makes a System One provider the instance default (fails without the refusal)", async () => {
     const response = await server.inject({
       method: "PUT",
