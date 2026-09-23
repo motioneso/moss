@@ -512,6 +512,103 @@ describe("sorting binding routes", () => {
   });
 });
 
+describe("resolveSortingModel precedence", () => {
+  const sortingFor = (service: `module.${string}`, requireExplicitBinding = false) =>
+    dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.resolveSortingModel(scopedDb, service, { requireExplicitBinding })
+    );
+  const setSorting = (modelId: string) =>
+    dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.setServiceBinding(scopedDb, "sorting", { kind: "model", modelId }, ids.adminUser)
+    );
+  const clear = (service: `module.${string}` | "sorting") =>
+    dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.deleteModuleServiceBinding(scopedDb, service, ids.adminUser)
+    );
+
+  it("returns null when no sorting binding exists", async () => {
+    expect(await sortingFor("module.news")).toBeNull();
+  });
+
+  it("returns the sorting model when it is bound and qualifies", async () => {
+    await setSorting(modelReasoningJsonId);
+    expect((await sortingFor("module.news"))?.id).toBe(modelReasoningJsonId);
+    await clear("sorting");
+  });
+
+  it("a strict job never reaches the sorting model", async () => {
+    await setSorting(modelReasoningJsonId);
+    expect(await sortingFor("module.news", true)).toBeNull();
+    await clear("sorting");
+  });
+
+  it("an admin pin beats the sorting model", async () => {
+    await setSorting(modelReasoningJsonId);
+    await dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.setAdminPinnedModel(scopedDb, modelChatJsonId)
+    );
+    expect(await sortingFor("module.news")).toBeNull();
+    await dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.setAdminPinnedModel(scopedDb, null)
+    );
+    await clear("sorting");
+  });
+
+  it("the job's own module binding bypasses the sorting model", async () => {
+    await setSorting(modelReasoningJsonId);
+    await dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.setServiceBinding(
+        scopedDb,
+        "module.news",
+        { kind: "model", modelId: modelEconomyJsonId },
+        ids.adminUser
+      )
+    );
+    expect(await sortingFor("module.news")).toBeNull();
+    expect((await sortingFor("module.sports"))?.id).toBe(modelReasoningJsonId);
+    await clear("module.news");
+    await clear("sorting");
+  });
+
+  it("a module.worker binding does not bypass the sorting model", async () => {
+    await setSorting(modelReasoningJsonId);
+    await dataContext.withDataContext(adminContext(), (scopedDb) =>
+      repository.setServiceBinding(
+        scopedDb,
+        "module.worker",
+        { kind: "mode", tier: "economy" },
+        ids.adminUser
+      )
+    );
+    expect((await sortingFor("module.news"))?.id).toBe(modelReasoningJsonId);
+    await clear("module.worker");
+    await clear("sorting");
+  });
+
+  it("a model that no longer qualifies is ignored", async () => {
+    // Bypass the route check to simulate a binding that went stale after saving.
+    await setSorting(ollamaJsonModelId);
+    expect(await sortingFor("module.news")).toBeNull();
+    await clear("sorting");
+  });
+
+  it("a disabled provider makes resolveSortingModel return null", async () => {
+    const spareProvider = await seedProvider("Sorting Spare Provider");
+    const spareModel = await seedModel(spareProvider, "sorting-spare", ["json"], "economy");
+    await setSorting(spareModel);
+    expect((await sortingFor("module.news"))?.id).toBe(spareModel);
+    const disabled = await server.inject({
+      method: "PATCH",
+      url: `/api/ai/providers/${spareProvider}`,
+      headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+      payload: { status: "disabled" }
+    });
+    expect(disabled.statusCode, disabled.body).toBe(200);
+    expect(await sortingFor("module.news")).toBeNull();
+    await clear("sorting");
+  });
+});
+
 describe("generateStructured end-to-end", () => {
   it("resolves the service, decrypts the real credential, calls the adapter, validates", async () => {
     const captured: { apiKey?: string; input?: GenerateStructuredProviderInput } = {};
