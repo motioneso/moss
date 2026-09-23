@@ -225,6 +225,20 @@
   }
 }
 
+/* The morning mockup is inset inside the content surface. Keep this day-only
+   so the evening guard remains byte-for-byte on its existing geometry. */
+.today-hero[data-mode="day"] {
+  margin-left: 40px;
+  margin-right: 40px;
+}
+
+@media (max-width: 560px) {
+  .today-hero[data-mode="day"] {
+    margin-left: 18px;
+    margin-right: 18px;
+  }
+}
+
 /* Narrow-screen sizing from the design study, which the wide-screen values
    above don't cover: the clamp() floor undershoots the study's own numbers
    below 680px, and the summary drops a size too. */
@@ -264,12 +278,41 @@
 }
 
 .today-hero[data-mode="day"] .today-hero__prepared {
-  margin-top: 35px;
+  margin-top: 16px;
   justify-content: space-between;
 }
 
 .today-hero[data-mode="day"] .today-hero__prepared-time {
   flex: none;
+}
+
+.today-hero[data-mode="day"] .today-hero__hairline {
+  border: none;
+  border-top: 1px solid var(--hero-fg-muted);
+  margin: 24px 0 16px;
+}
+
+.today-hero[data-mode="day"] .today-hero__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+}
+
+.today-hero[data-mode="day"] .today-hero__link {
+  border: none;
+  padding: 0;
+  background: none;
+  color: var(--hero-fg);
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.today-hero[data-mode="day"] .today-hero__rule {
+  border-top-width: 3px;
+  margin: 16px 0 0;
 }
 
 @media (max-width: 680px) {
@@ -278,11 +321,9 @@
     gap: 8px;
   }
 
-  /* The populated summary gains a line at the narrowest probe width. Keep
-     the compact weather block in the same frozen band at both phone widths;
-     the prepared row gives back that extra offset at 320px. */
+  /* Keep the compact weather block aligned with the populated phone study. */
   .today-hero[data-mode="day"] .today-hero__weather {
-    margin-top: clamp(12px, calc(100vw - 308px), 67px);
+    margin-top: 0;
   }
 
   .today-hero__sections {
@@ -306,6 +347,10 @@
     font-size: 9px;
     line-height: 1.1;
   }
+
+  .today-hero__sections-label {
+    display: none;
+  }
 }
 
 @media (max-width: 680px) {
@@ -322,11 +367,11 @@
   }
 
   .today-hero[data-mode="day"] .today-hero__prepared {
-    margin-top: 11px;
+    margin-top: 12px;
   }
 
   .today-hero[data-mode="day"] .today-hero__prepared {
-    margin-top: clamp(0px, calc(100vw - 320px), 11px);
+    margin-top: clamp(0px, calc(100vw - 320px), 12px);
   }
 }
 

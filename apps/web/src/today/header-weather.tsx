@@ -98,7 +98,7 @@ export function TodayWeatherRow(props: {
             <div>
               {props.mode === "evening"
                 ? `Overnight low ${first.low}°`
-                : `High ${first.high}° / Low ${first.low}°`}
+                : `High ${first.high}° · Low ${first.low}°`}
             </div>
           ) : null}
         </div>

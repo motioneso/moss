@@ -275,6 +275,16 @@ export const TODAY_SECTION_LINKS = [
   { href: "#sports", label: "Sports" }
 ] as const;
 
+/** Morning hero copy shared by the day-mode kicker and reader links. */
+export const MORNING_BRIEFING_TITLE = "Morning briefing";
+export const MORNING_READ_FULL_LABEL = "Read the full morning briefing";
+export function morningHeroKicker(firstName: string | null): string {
+  const name = (firstName ?? "").trim();
+  return name
+    ? `${greeting()}, ${name} / ${MORNING_BRIEFING_TITLE}`
+    : `${greeting()} / ${MORNING_BRIEFING_TITLE}`;
+}
+
 /** Evening step 1 reflection choices and note composer (VP-REFLECTION-R1). */
 export const EVENING_REFLECT_CHOICE_CAPTURES_TITLE = "That captures it";
 export const EVENING_REFLECT_CHOICE_CAPTURES_HINT = "I'm ready to look ahead.";
@@ -316,6 +326,7 @@ export function eveningHeroKicker(firstName: string | null): string {
 }
 export const EVENING_READ_FULL_LABEL = "Read the full evening briefing";
 export const EVENING_SOURCES_LABEL = "What informed this?";
+export const MORNING_SOURCES_LABEL = EVENING_SOURCES_LABEL;
 export const EVENING_RECAP_KICKER = "01";
 export const EVENING_RECAP_HEADING = "What happened today";
 export const EVENING_OPEN_LOOPS_KICKER = "02";

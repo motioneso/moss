@@ -900,7 +900,7 @@ test("evening planning saves one draft and never applies in suggest mode", async
   }
 });
 
-test("today hero band spans the content with an unclipped headline", async ({ page }) => {
+test("today morning hero is inset with an unclipped headline", async ({ page }) => {
   await page.clock.setFixedTime(new Date(NOW));
   const morningDefinition = createMockBriefingDefinition("briefing-hero", "Morning", {
     briefingType: "morning",
@@ -947,7 +947,8 @@ test("today hero band spans the content with an unclipped headline", async ({ pa
       innerW: window.innerWidth
     };
   });
-  expect(Math.abs(desktop.heroW - desktop.contentW)).toBeLessThanOrEqual(1);
+  // The surface's 24px horizontal padding combines with the 40px morning inset.
+  expect(Math.abs(desktop.heroW - (desktop.contentW - 128))).toBeLessThanOrEqual(1);
   expect(desktop.h1Clipped).toBe(false);
   expect(desktop.fontSize).toBeGreaterThanOrEqual(40);
   expect(desktop.fontSize).toBeLessThanOrEqual(48);
@@ -977,7 +978,7 @@ test("today hero band spans the content with an unclipped headline", async ({ pa
       scrollW: document.documentElement.scrollWidth
     };
   });
-  expect(Math.abs(phone.heroW - phone.innerW)).toBeLessThanOrEqual(1);
+  expect(Math.abs(phone.heroW - (phone.innerW - 60))).toBeLessThanOrEqual(1);
   expect(phone.h1Clipped).toBe(false);
   expect(phone.fontSize).toBeGreaterThanOrEqual(28);
   expect(phone.fontSize).toBeLessThanOrEqual(34);

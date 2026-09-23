@@ -85,6 +85,14 @@
   align-items: start;
   margin-top: 30px;
 }
+
+/* Morning desks sit below the shared rail row and use the full content width. */
+.cmd-grid > #widgets,
+.cmd-grid > #news,
+.cmd-grid > #sports {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
 @media (min-width: 1081px) {
   /* The rail comes first in the DOM so tab order matches the single-column
      visual order on phones; explicit placement keeps the desktop two-column

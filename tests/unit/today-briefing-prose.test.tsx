@@ -96,7 +96,7 @@ describe("Today morning briefing prose", () => {
       definitions: [{ ...morning, enabled: false }, evening],
       runs: []
     });
-    expect(disabledHtml).not.toContain("Morning briefing");
+    expect(disabledHtml).toContain("Morning briefing");
   });
 
   it("renders the hero fallback headline and not-ready line without a run", () => {
@@ -302,8 +302,8 @@ describe("Today morning briefing prose", () => {
     const needsYou = html.indexOf('id="needs-you"');
     const widgets = html.indexOf('id="widgets"');
     expect(startHere).toBeGreaterThan(-1);
-    expect(schedule).toBeGreaterThan(startHere);
-    expect(needsYou).toBeGreaterThan(schedule);
+    expect(schedule).toBeLessThan(startHere);
+    expect(needsYou).toBeGreaterThan(startHere);
     expect(widgets).toBeGreaterThan(schedule);
     expect(html.indexOf("Write the draft")).toBeGreaterThan(schedule);
 

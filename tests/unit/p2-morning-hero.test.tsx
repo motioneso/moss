@@ -85,6 +85,47 @@ describe("buildTodayHeroContent — morning (day) mode", () => {
     expect(markup.indexOf('class="today-hero__weather"')).toBeLessThan(
       markup.indexOf('class="today-hero__prepared"')
     );
+    expect(markup).toContain("Read the full morning briefing");
+    expect(markup).toContain("What informed this?");
+    expect((markup.match(/class="today-hero__link"/g) ?? []).length).toBe(2);
+  });
+
+  it("uses the morning kicker form and keeps the day hero in mockup order", () => {
+    const run = morningRun();
+    const content = buildTodayHeroContent({
+      ...baseInput,
+      morningRun: run,
+      morningSplit: splitHeadline(run.summaryText),
+      morningFreshness: null
+    });
+    const markup = renderToStaticMarkup(
+      <TodayHero
+        mode="day"
+        eyebrow="Good morning, Ben / Morning briefing"
+        headline={content.headline}
+        summary={content.summary}
+        preparedAt={content.preparedAt}
+        readerControl={content.readerControl}
+        weather={<div>weather</div>}
+      />
+    );
+
+    expect(markup).toContain("Good morning, Ben / Morning briefing");
+    expect(markup.indexOf('class="today-hero__summary"')).toBeLessThan(
+      markup.indexOf('class="today-hero__weather"')
+    );
+    expect(markup.indexOf('class="today-hero__weather"')).toBeLessThan(
+      markup.indexOf('class="today-hero__prepared"')
+    );
+    expect(markup.indexOf('class="today-hero__prepared"')).toBeLessThan(
+      markup.indexOf('class="today-hero__rule"')
+    );
+    expect(labels.morningHeroKicker("Ben")).toMatch(
+      /^(Good morning|Good afternoon|Good evening), Ben \/ Morning briefing$/
+    );
+    expect(labels.morningHeroKicker(null)).toMatch(
+      /^(Good morning|Good afternoon|Good evening) \/ Morning briefing$/
+    );
   });
 
   it("not ready: no run means the prepared line names the not-ready state and there is no reader control", () => {
@@ -174,7 +215,7 @@ describe("morning hero vertical rhythm (day mode only)", () => {
       '.today-hero[data-mode="day"] .today-hero__eyebrow { margin-bottom: 24px; }'
     );
     expect(block).toContain(
-      '.today-hero[data-mode="day"] .today-hero__prepared { margin-top: 35px; justify-content: space-between; }'
+      '.today-hero[data-mode="day"] .today-hero__prepared { margin-top: 16px; justify-content: space-between; }'
     );
   });
 
@@ -189,7 +230,7 @@ describe("morning hero vertical rhythm (day mode only)", () => {
       '.today-hero[data-mode="day"] .today-hero__summary { margin-top: 18px; }'
     );
     expect(block).toContain(
-      '.today-hero[data-mode="day"] .today-hero__prepared { margin-top: 11px; }'
+      '.today-hero[data-mode="day"] .today-hero__prepared { margin-top: 12px; }'
     );
   });
 

@@ -3,7 +3,7 @@ import { CalendarDays, CheckCircle2, Clock, Target } from "lucide-react";
 import type { BriefingRunDto, LocaleSettingsDto } from "@moss/shared";
 import { AgendaRow, Card, StatTile } from "@moss/ui";
 
-import { EveningPrepCard, EveningReviewSection } from "./evening-mode.js";
+import { EveningPrepCard, EveningReviewSection, type TodayMode } from "./evening-mode.js";
 import { TodayQuickActions } from "./today-quick-actions.js";
 import type { ColorMode } from "../theme/color-mode.js";
 import { ampm, countdownLabel, timeLabel } from "./today-labels.js";
@@ -22,6 +22,7 @@ export interface RailNextEvent {
 }
 
 export interface TodayRailProps {
+  readonly mode: TodayMode;
   readonly now: Date;
   readonly locale: LocaleSettingsDto;
   readonly nextEvent: RailNextEvent | null;
@@ -64,17 +65,35 @@ export function TodayRail(props: TodayRailProps) {
 
         {nextEvent ? (
           <div className="cmd-next">
-            <div className="rail-block__head">{props.nextStarted ? "Now" : "First meeting"}</div>
-            <div className="cmd-next__k">
-              {props.nextStarted ? "Now · ends in" : "Next event in"}
-            </div>
-            <div className="cmd-next__v">
-              {countdownLabel(props.nextStarted ? nextEvent.endsAt : nextEvent.startsAt, props.now)}
-            </div>
-            <div className="cmd-next__what">
-              {nextEvent.title} · {timeLabel(nextEvent.startsAt, props.locale)}
-              {ampm(nextEvent.startsAt, props.locale)}
-            </div>
+            {props.mode === "day" ? (
+              <>
+                <div className="rail-block__head">First meeting</div>
+                <div className="cmd-next__v">
+                  {timeLabel(nextEvent.startsAt, props.locale)}{" "}
+                  {ampm(nextEvent.startsAt, props.locale)}
+                </div>
+                <div className="cmd-next__what">{nextEvent.title}</div>
+              </>
+            ) : (
+              <>
+                <div className="rail-block__head">
+                  {props.nextStarted ? "Now" : "First meeting"}
+                </div>
+                <div className="cmd-next__k">
+                  {props.nextStarted ? "Now · ends in" : "Next event in"}
+                </div>
+                <div className="cmd-next__v">
+                  {countdownLabel(
+                    props.nextStarted ? nextEvent.endsAt : nextEvent.startsAt,
+                    props.now
+                  )}
+                </div>
+                <div className="cmd-next__what">
+                  {nextEvent.title} · {timeLabel(nextEvent.startsAt, props.locale)}
+                  {ampm(nextEvent.startsAt, props.locale)}
+                </div>
+              </>
+            )}
           </div>
         ) : null}
 

@@ -162,7 +162,7 @@ export function SportsTodayWidget(): ReactNode {
           </div>
           {followedRows.length > 0 ? (
             <>
-              <div className="sp-tksub">Your followed teams</div>
+              <div className="sp-tksub">★ Your followed teams</div>
               <ul className="sp-scores">
                 {followedRows.map((row) => (
                   <ScoreRow

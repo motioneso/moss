@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-import { Button } from "@moss/ui";
 import type { BriefingRunDto, LocaleSettingsDto, SourceFreshnessV1 } from "@moss/shared";
 
 import { BriefingProse, type TodayMode } from "./evening-mode.js";
@@ -10,6 +9,8 @@ import {
   EVENING_BRIEFING_TITLE,
   EVENING_READ_FULL_LABEL,
   EVENING_SOURCES_LABEL,
+  MORNING_READ_FULL_LABEL,
+  MORNING_SOURCES_LABEL,
   timeLabel
 } from "./today-labels.js";
 
@@ -135,12 +136,29 @@ export function buildTodayHeroContent(input: TodayHeroContentInput): TodayHeroCo
     headline: input.morningSplit ? input.morningSplit.headline : fallbackHeadline,
     summary,
     preparedAt,
-    readerControl: morningReadable ? (
-      <Button variant="secondary" onClick={(event) => input.onOpenReader(event.currentTarget)}>
-        Read the full morning briefing
-      </Button>
-    ) : null
+    readerControl: morningReadable ? <MorningHeroLinks onOpenReader={input.onOpenReader} /> : null
   };
+}
+
+function MorningHeroLinks(props: { readonly onOpenReader: (anchor: HTMLElement) => void }) {
+  return (
+    <>
+      <button
+        type="button"
+        className="today-hero__link"
+        onClick={(event) => props.onOpenReader(event.currentTarget)}
+      >
+        {MORNING_READ_FULL_LABEL}
+      </button>
+      <button
+        type="button"
+        className="today-hero__link"
+        onClick={(event) => props.onOpenReader(event.currentTarget)}
+      >
+        {MORNING_SOURCES_LABEL}
+      </button>
+    </>
+  );
 }
 
 /** Evening hero report links. No evening briefing reader or sources view exists
@@ -185,17 +203,21 @@ export function TodayHero(props: TodayHeroProps) {
         </div>
         {props.mode === "day" ? (
           <>
+            <hr className="today-hero__hairline" />
             <div className="today-hero__weather" id="weather">
               {props.weather}
             </div>
             <div className="today-hero__prepared">
-              {props.readerControl ?? (
+              {props.readerControl ? (
+                <div className="today-hero__links">{props.readerControl}</div>
+              ) : (
                 <span className="today-hero__not-ready">{BRIEFING_NOT_READY_LABEL}</span>
               )}
               {preparedTime !== null ? (
                 <span className="today-hero__prepared-time">{preparedTime}</span>
               ) : null}
             </div>
+            <hr className="today-hero__rule" />
           </>
         ) : (
           <>
@@ -205,14 +227,12 @@ export function TodayHero(props: TodayHeroProps) {
             {props.preparedAt !== null ? (
               <p className="today-hero__prepared today-hero__prepared--evening">{preparedTime}</p>
             ) : null}
+            <hr className="today-hero__rule" />
+            <div className="today-hero__weather" id="weather">
+              {props.weather}
+            </div>
           </>
         )}
-        <hr className="today-hero__rule" />
-        {props.mode === "evening" ? (
-          <div className="today-hero__weather" id="weather">
-            {props.weather}
-          </div>
-        ) : null}
       </section>
       {props.mode === "day" ? (props.sectionLinks ?? null) : null}
     </>

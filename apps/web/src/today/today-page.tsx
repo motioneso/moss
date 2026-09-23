@@ -61,8 +61,8 @@ import {
   dueTs,
   eveningHeroKicker,
   firstName,
-  greeting,
   isToday,
+  morningHeroKicker,
   timeLabel
 } from "./today-labels";
 import { isAtRisk, isDoFirst, isDoneToday } from "../tasks/focus";
@@ -374,6 +374,38 @@ export function TodayPage(props: {
       ))}
     </nav>
   );
+  const startHereSection = (
+    <section className="jds-brief" id="start-here">
+      <div className="jds-brief__head">
+        <span className="jds-brief__kicker">Start here</span>
+      </div>
+      <div className="jds-brief__title">The few things that matter most</div>
+      <div className="top3" style={{ marginTop: 4 }}>
+        {startHere.length > 0 ? (
+          startHere.map((task) => (
+            <BriefTaskRow
+              key={task.id}
+              task={task}
+              onToggle={() => toggleMutation.mutate(task)}
+              onOpen={() => setDialog({ id: task.id })}
+            />
+          ))
+        ) : (
+          <p className="cmd-empty" role="status">
+            Nothing pressing right now.
+          </p>
+        )}
+      </div>
+      {startHere.length > 0 ? (
+        <div style={{ marginTop: 12 }}>
+          <span className="jds-why">
+            <Info size={12} aria-hidden="true" />
+            Ranked by priority, then by what&apos;s due first.
+          </span>
+        </div>
+      ) : null}
+    </section>
+  );
 
   // The hero stands outside .cmd-wrap: it breaks out of the surface padding
   // to span the content region in both sidebar states, while the wrap below
@@ -389,7 +421,11 @@ export function TodayPage(props: {
                   ? firstName(props.me.user.name, props.me.user.email)
                   : null
               )
-            : `${greeting()} · ${datelineLabel(now, locale)}`
+            : morningHeroKicker(
+                props.me.user.name.trim()
+                  ? firstName(props.me.user.name, props.me.user.email)
+                  : null
+              )
         }
         headline={heroContent.headline}
         summary={heroContent.summary}
@@ -411,6 +447,7 @@ export function TodayPage(props: {
 
         <div className="cmd-grid">
           <TodayRail
+            mode={todayMode}
             now={now}
             locale={locale}
             nextEvent={
@@ -502,36 +539,7 @@ export function TodayPage(props: {
               </>
             ) : null}
 
-            <section className="jds-brief" id="start-here">
-              <div className="jds-brief__head">
-                <span className="jds-brief__kicker">Start here</span>
-              </div>
-              <div className="jds-brief__title">The few things that matter most</div>
-              <div className="top3" style={{ marginTop: 4 }}>
-                {startHere.length > 0 ? (
-                  startHere.map((task) => (
-                    <BriefTaskRow
-                      key={task.id}
-                      task={task}
-                      onToggle={() => toggleMutation.mutate(task)}
-                      onOpen={() => setDialog({ id: task.id })}
-                    />
-                  ))
-                ) : (
-                  <p className="cmd-empty" role="status">
-                    Nothing pressing right now.
-                  </p>
-                )}
-              </div>
-              {startHere.length > 0 ? (
-                <div style={{ marginTop: 12 }}>
-                  <span className="jds-why">
-                    <Info size={12} aria-hidden="true" />
-                    Ranked by priority, then by what&apos;s due first.
-                  </span>
-                </div>
-              ) : null}
-            </section>
+            {todayMode === "evening" ? startHereSection : null}
 
             <DayPlanSection
               dayPlan={dayPlanQuery.data}
@@ -551,6 +559,8 @@ export function TodayPage(props: {
               }}
             />
 
+            {todayMode === "day" ? startHereSection : null}
+
             <div id="needs-you">
               <BriefingActionRowsSection
                 run={actionRowsRun}
@@ -563,15 +573,6 @@ export function TodayPage(props: {
             </div>
 
             {feed.overnight.length > 0 ? <OvernightSection items={feed.overnight} /> : null}
-
-            <div id="widgets">
-              <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
-            </div>
-            <div id="news">
-              {feed.news.length > 0 || feed.interests.length > 0 ? (
-                <NewsDesk news={feed.news} interests={feed.interests} />
-              ) : null}
-            </div>
 
             <div id="goals">
               <GoalsSection />
@@ -613,6 +614,14 @@ export function TodayPage(props: {
             ) : null}
 
             <ProactiveCards />
+          </div>
+          <div id="widgets">
+            <ModuleTodayWidgets slot="brief" disabledModuleIds={disabledModuleIds} />
+          </div>
+          <div id="news">
+            {feed.news.length > 0 || feed.interests.length > 0 ? (
+              <NewsDesk news={feed.news} interests={feed.interests} />
+            ) : null}
           </div>
           <div id="sports">
             <ModuleTodayWidgets slot="sports" disabledModuleIds={disabledModuleIds} />

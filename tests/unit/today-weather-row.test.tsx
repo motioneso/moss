@@ -101,7 +101,7 @@ describe("TodayWeatherRow", () => {
     const html = renderRow({ weather: weather() });
     expect(html).toContain("21°F");
     expect(html).toContain("Sunny");
-    expect(html).toContain("High 24° / Low 16°");
+    expect(html).toContain("High 24° · Low 16°");
     expect(html).toContain("San Francisco");
     expect(html).not.toContain("San Francisco, CA");
     expect(tileCount(html)).toBe(6);
