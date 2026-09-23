@@ -66,7 +66,11 @@ const models = [
   model("ollama-json", "p-ollama", "ollama", "Ollama", ["json"])
 ];
 
-async function render(binding?: unknown): Promise<ReactTestRenderer> {
+async function render(
+  binding?: unknown,
+  fixtureModels: readonly unknown[] = models,
+  fixtureProviders: readonly unknown[] = providers
+): Promise<ReactTestRenderer> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let renderer!: ReactTestRenderer;
   await act(async () => {
@@ -79,8 +83,8 @@ async function render(binding?: unknown): Promise<ReactTestRenderer> {
           null,
           createElement(SortingModelRow, {
             binding: binding as never,
-            models: models as never,
-            providers: providers as never
+            models: fixtureModels as never,
+            providers: fixtureProviders as never
           })
         )
       )
@@ -135,9 +139,32 @@ describe("SortingModelRow", () => {
     expect(text(renderer)).toContain(SORTING_DISCLOSURE);
   });
 
-  it("shows the unavailable note when the bound model no longer qualifies", async () => {
+  it("keeps an unavailable saved model selected, shows the note, and clears it", async () => {
     const renderer = await render({ kind: "model", modelId: "ollama-json" });
-    expect(select(renderer).props.value).toBe("");
+    expect(select(renderer).props.value).toBe("model:ollama-json");
+    const unavailable = renderer.root
+      .findAllByType("option")
+      .find((option) => option.props.value === "model:ollama-json");
+    if (!unavailable) throw new Error("unavailable option not found");
+    expect(unavailable.props.disabled).toBe(true);
+    expect(text(renderer)).toContain("ollama-json (unavailable)");
     expect(text(renderer)).toContain("Chosen model is unavailable. Using your main model.");
+    expect(text(renderer)).toContain(SORTING_DISCLOSURE);
+    await act(async () => {
+      select(renderer).props.onChange({ target: { value: "" } });
+    });
+    expect(deleteAiServiceBinding).toHaveBeenCalledWith("sorting");
+  });
+
+  it("offers a json model even when its provider has no stored credential", async () => {
+    const noCredentialProvider = [
+      { ...provider("p-nocred", "No cred", "openai-compatible"), hasCredential: false }
+    ];
+    const noCredentialModel = [
+      model("nocred-json", "p-nocred", "openai-compatible", "No cred", ["json"])
+    ];
+    const renderer = await render(undefined, noCredentialModel, noCredentialProvider);
+    const values = renderer.root.findAllByType("option").map((option) => option.props.value);
+    expect(values).toEqual(["", "model:nocred-json"]);
   });
 });

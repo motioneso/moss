@@ -19,24 +19,17 @@ export const SORTING_DISCLOSURE =
   "Story details and your saved story preferences go to this model first, and to your main " +
   "model if it does not answer. Each may charge for the request.";
 
-// Models the sorting path can run: active, ready provider, json, structured-capable kind.
-function eligibleSortingModels(
-  models: readonly AiConfiguredModelDto[],
-  providers: readonly AiProviderConfigDto[]
-): AiConfiguredModelDto[] {
-  return models.filter((model) => {
-    const provider = providers.find((candidate) => candidate.id === model.providerConfigId);
-    const providerReady =
-      provider?.status === "active" &&
-      (provider.authMethod === "cli" ? provider.cliAvailable : provider.hasCredential);
-    return (
+// Models the sorting path can run: the model and its provider are active, it has the json
+// capability, and its provider kind is one generateStructured executes. The save route applies
+// this same rule.
+function eligibleSortingModels(models: readonly AiConfiguredModelDto[]): AiConfiguredModelDto[] {
+  return models.filter(
+    (model) =>
       model.status === "active" &&
       model.providerStatus === "active" &&
-      providerReady &&
       isSortingProviderKind(model.providerKind) &&
       model.capabilities.includes("json")
-    );
-  });
+  );
 }
 
 export function SortingModelRow(props: {
@@ -58,9 +51,13 @@ export function SortingModelRow(props: {
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
 
-  const eligible = eligibleSortingModels(props.models, props.providers);
+  const eligible = eligibleSortingModels(props.models);
   const boundId = props.binding?.kind === "model" ? props.binding.modelId : null;
   const bound = boundId ? (eligible.find((model) => model.id === boundId) ?? null) : null;
+  const unavailableName =
+    boundId && !bound
+      ? (props.models.find((model) => model.id === boundId)?.displayName ?? "Unavailable model")
+      : null;
   const groups = new Map<string, AiConfiguredModelDto[]>();
   for (const model of eligible) {
     const list = groups.get(model.providerDisplayName) ?? [];
@@ -76,11 +73,11 @@ export function SortingModelRow(props: {
           A small, fast model for sorting, filtering and picking out details. Leave empty to use
           your main model.
         </div>
-        {bound ? <div className="rt__desc">{SORTING_DISCLOSURE}</div> : null}
+        {boundId ? <div className="rt__desc">{SORTING_DISCLOSURE}</div> : null}
       </div>
       <div className="rt__pick">
         <Select
-          value={bound ? `model:${bound.id}` : ""}
+          value={boundId ? `model:${boundId}` : ""}
           aria-label="Binding for Sorting model"
           disabled={mutation.isPending}
           onChange={(event) => {
@@ -89,6 +86,11 @@ export function SortingModelRow(props: {
           }}
         >
           <option value="">Use main model</option>
+          {unavailableName ? (
+            <option value={`model:${boundId}`} disabled>
+              {`${unavailableName} (unavailable)`}
+            </option>
+          ) : null}
           {[...groups].map(([providerName, list]) => (
             <optgroup key={providerName} label={providerName}>
               {list.map((model) => (
