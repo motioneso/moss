@@ -326,3 +326,7 @@ export const EVENING_OPEN_LOOPS_EMPTY = "Nothing urgent is carrying forward.";
 export const REVIEW_KEEP_ON_CALENDAR_LABEL = "Keep on calendar";
 export const REVIEW_WHAT_WILL_CHANGE_HEADING = "What will change";
 export const REVIEW_NO_CHANGES_SELECTED = "No changes selected.";
+
+/** Morning reader Review screen (VP-SCREEN-REVIEW-R1). */
+export const REVIEW_TITLE = "Your day, prepared.";
+export const REVIEW_WITHOUT_TIME_BLOCK_HEADING = "Without a time block";

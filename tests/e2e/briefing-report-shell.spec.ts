@@ -101,10 +101,10 @@ test("report tabs move focus by keyboard and hand off to review", async ({ page 
   await expect(dialog.getByRole("tab", { name: "Review task blocks" })).toBeFocused();
 
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Your day, prepared." })).toBeFocused();
 
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("heading", { name: "Review task blocks" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Make the plan fit." })).toBeHidden();
 });
 
 test("phone disclosure toggles the schedule without sideways scroll", async ({ page }) => {

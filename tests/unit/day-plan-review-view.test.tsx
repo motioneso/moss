@@ -92,6 +92,7 @@ function stubController(overrides: Partial<DayPlanReviewController> = {}): DayPl
     dismissApproval: () => undefined,
     setTime: () => undefined,
     runPreview: async () => true,
+    saveChanges: async () => true,
     acceptAllAdditions: async () => true,
     apply: async () => true,
     confirm: async () => true,
@@ -162,7 +163,7 @@ describe("DayPlanReview in the report shell", () => {
   it("selects the review tab with the panel headline and labelled panel", async () => {
     await renderReview(stubController());
     const tabs = [...document.body.querySelectorAll('[role="tab"]')];
-    const review = tabs.find((tab) => tab.textContent === "Review task blocks") as HTMLElement;
+    const review = tabs.find((tab) => tab.textContent === "Your day, prepared.") as HTMLElement;
     const briefing = tabs.find((tab) => tab.textContent === "The briefing") as HTMLElement;
     expect(review.getAttribute("aria-selected")).toBe("true");
     expect(review.tabIndex).toBe(0);

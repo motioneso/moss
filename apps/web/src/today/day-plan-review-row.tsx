@@ -1,5 +1,7 @@
 import { Select } from "@moss/ui";
 
+import { localDay } from "@moss/shared";
+
 import type {
   DayPlanBlockDto,
   DayPlanDto,
@@ -69,18 +71,37 @@ export function ReviewRow(props: {
     );
   }
   const onCalendar = block.actualPlacement?.startsAt != null;
-  const readerCalendar = props.calendarTimeField === true && onCalendar;
-  const readerDuration = readerCalendar ? blockDuration(block) : null;
+  const readerMode = props.calendarTimeField === true;
+  const readerCalendar = readerMode && onCalendar;
+  const readerDuration = readerMode ? blockDuration(block) : null;
+  const pendingStartsAt =
+    block.pendingChange !== null &&
+    block.pendingChange.kind !== "remove" &&
+    "startsAt" in block.pendingChange
+      ? (block.pendingChange.startsAt ?? null)
+      : null;
+  const readerTimeIso =
+    props.choice.startsAt ?? pendingStartsAt ?? block.actualPlacement?.startsAt ?? null;
   const readerTimeValue =
-    props.choice.startsAt != null
-      ? isoToLocalTime(props.choice.startsAt, props.plan.timeZone)
-      : block.actualPlacement?.startsAt != null
-        ? isoToLocalTime(block.actualPlacement.startsAt, props.plan.timeZone)
-        : "";
+    readerTimeIso !== null ? isoToLocalTime(readerTimeIso, props.plan.timeZone) : "";
   const effective = effectivePending(block, props.choice);
   const changed = effective !== undefined && !samePending(effective, block.pendingChange ?? null);
   const transient = transientWord(changed, effective?.kind, onCalendar);
   const stateWord = transient ?? props.savedLabel;
+  const dueReason =
+    props.task?.dueAt !== undefined && props.task?.dueAt !== null
+      ? localDay(props.task.dueAt, props.plan.timeZone) === props.plan.localDay
+        ? "Due today"
+        : `Due ${shortDate(props.task.dueAt, props.locale)}`
+      : null;
+  const metaReason = dueReason ?? stateWord;
+  const showTime = readerMode
+    ? blockDuration(block) !== null
+    : props.choice.placement === "add" || props.choice.placement === "move";
+  const timeDisabled =
+    blockDuration(block) === null ||
+    controller.busy ||
+    (readerMode && (props.choice.placement === "leave" || props.choice.placement === "remove"));
   const detail = controller.preview?.blocks.find((entry) => entry.blockId === block.id) ?? null;
   const conflicts = (controller.preview?.conflicts ?? []).filter(
     (conflict) => conflict.blockId === block.id
@@ -104,9 +125,9 @@ export function ReviewRow(props: {
         ) : (
           <div className="plan-review__title">{props.title}</div>
         )}
-        {readerCalendar && readerDuration !== null ? (
+        {readerMode && readerDuration !== null ? (
           <div className="plan-review__meta">
-            {readerDuration} minutes · {stateWord}
+            {readerDuration} minutes · {metaReason}
           </div>
         ) : (
           <div className="plan-review__state">{stateWord}</div>
@@ -134,7 +155,7 @@ export function ReviewRow(props: {
         {outcome ? <div className="plan-review__hint">{outcomeWord(outcome)}</div> : null}
       </div>
       <div className="plan-review__fields">
-        {props.choice.placement === "add" || props.choice.placement === "move" || readerCalendar ? (
+        {showTime ? (
           <div className="plan-review__field">
             <label className="plan-review__label" htmlFor={`${block.id}-time`}>
               Time
@@ -144,16 +165,16 @@ export function ReviewRow(props: {
               id={`${block.id}-time`}
               aria-label={`${props.title}: start time`}
               className="plan-review__time"
-              disabled={!schedulable || controller.busy}
-              value={readerCalendar ? readerTimeValue : timeValue}
+              disabled={timeDisabled}
+              value={readerMode ? readerTimeValue : timeValue}
               onChange={(event) => {
                 const iso = localTimeToIso(
                   props.plan.localDay,
                   event.target.value,
                   props.plan.timeZone
                 );
-                if (readerCalendar) {
-                  controller.setPlacement(block.id, "move", iso);
+                if (readerMode) {
+                  controller.setPlacement(block.id, onCalendar ? "move" : "add", iso);
                   controller.setTime(block.id, iso);
                   return;
                 }

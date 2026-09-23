@@ -745,6 +745,7 @@ describe("DayPlanReview view", () => {
       dismissApproval: () => undefined,
       setTime: () => undefined,
       runPreview: async () => true,
+      saveChanges: async () => true,
       acceptAllAdditions: async () => true,
       apply: async () => true,
       confirm: async () => true,
@@ -804,8 +805,8 @@ describe("DayPlanReview view", () => {
     const all = names(container);
     expect(all).toContain("Accept all time blocks");
     expect(all).toContain("Write the launch brief: placement");
-    expect(all).toContain("Preview changes");
-    expect(all).toContain("Apply changes");
+    expect(all).toContain("Save changes");
+    expect(all).toContain("Back to Today");
     expect(all).toContain("Back to Today");
     expect(container.textContent).toContain("Proposed, not on the calendar yet");
     const target = [...container.querySelectorAll("button")].find(
@@ -825,8 +826,8 @@ describe("DayPlanReview view", () => {
     );
     const all = names(container);
     expect(all.some((name) => /accept all/i.test(name))).toBe(false);
-    expect(all).toContain("Preview changes");
-    expect(all).toContain("Apply changes");
+    expect(all).toContain("Save changes");
+    expect(all).toContain("Back to Today");
     expect(all).toContain("Back to Today");
   });
 
@@ -894,38 +895,22 @@ describe("DayPlanReview view", () => {
     expect(add?.disabled).toBe(true);
   });
 
-  it("applies only conflict-free eligible blocks", async () => {
-    const apply = vi.fn(async () => true);
+  it("saves through saveChanges when edits are pending", async () => {
+    const saveChanges = vi.fn(async () => true);
     const container = await renderReview(
       stubController({
-        preview: {
-          revision: 4,
-          calendarAvailability: "available",
-          calendarAsOf: null,
-          blocks: [],
-          eligibleBlockIds: ["b1", "b2"],
-          conflicts: [
-            {
-              blockId: "b2",
-              kind: "calendar_busy",
-              withBlockId: null,
-              detail: "Overlaps lunch",
-              calendarEvent: null
-            }
-          ]
-        },
-        apply
+        choices: { b2: { placement: "move", startsAt: "2026-09-10T22:00:00.000Z" } },
+        saveChanges
       })
     );
     const target = [...container.querySelectorAll("button")].find(
-      (node) => node.textContent === "Apply changes"
+      (node) => node.textContent === "Save changes"
     ) as HTMLButtonElement;
     expect(target.disabled).toBe(false);
     await act(async () => {
       target.click();
     });
-    expect(apply).toHaveBeenCalledTimes(1);
-    expect(apply).toHaveBeenCalledWith(["b1"]);
+    expect(saveChanges).toHaveBeenCalledTimes(1);
   });
 
   it("offers Retry only for failed or unknown outcomes, never pending", async () => {
@@ -990,7 +975,7 @@ describe("DayPlanReview view", () => {
     expect(container.textContent).toContain("Partially applied");
     expect(container.textContent).not.toMatch(/nothing changed/i);
     const apply = [...container.querySelectorAll("button")].find(
-      (node) => node.textContent === "Apply changes"
+      (node) => node.textContent === "Save changes"
     );
     expect(apply?.disabled).toBe(true);
     expect(container.textContent).toContain("calendar is unavailable");

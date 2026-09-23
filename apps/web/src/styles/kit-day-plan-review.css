@@ -219,3 +219,63 @@
   opacity: 0.8;
   margin: 8px 0;
 }
+
+/* VP-SCREEN-REVIEW-R1: whole Review screen. Every rule stays under the
+   review surface, so evening step 4 never matches. */
+[data-briefing-surface="review"] {
+  min-width: 0;
+}
+
+[data-briefing-surface="review"] .brief-reader__headline {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+[data-briefing-surface="review"] .plan-review__lede {
+  color: var(--text-muted);
+}
+
+[data-briefing-surface="review"] .plan-review__accept {
+  margin: 12px 0 4px;
+}
+
+[data-briefing-surface="review"] .plan-review__accept .jds-btn--primary {
+  width: 100%;
+}
+
+[data-briefing-surface="review"] .plan-review__accept-rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 12px 0 0;
+}
+
+[data-briefing-surface="review"] .plan-review__without {
+  margin-top: 16px;
+  border-top: 2px solid var(--line);
+  padding-top: 12px;
+}
+
+[data-briefing-surface="review"] .plan-review__without-title {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+[data-briefing-surface="review"] .plan-review__without ul {
+  margin: 0;
+  padding-left: 20px;
+  overflow-wrap: anywhere;
+}
+
+[data-briefing-surface="review"] .tl-legend {
+  display: none;
+}
+
+[data-briefing-surface="review"] .tl-head {
+  margin-bottom: 8px;
+}
+
+@media (max-width: 480px) {
+  [data-briefing-surface="review"] .plan-review__fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
