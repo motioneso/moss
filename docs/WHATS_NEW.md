@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-23
+
+#### Changed
+
+- **Simpler Trail Marker menu.** The Trail Marker menu no longer has Judge Now or Check for Updates; Trail Marker checks your focus on its own, and updates are in Settings. [PR #2631](https://github.com/motioneso/moss/pull/2631)
+
 ### 2026-09-22
 
 #### Fixed
