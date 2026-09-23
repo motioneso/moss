@@ -45,6 +45,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Trail Marker focus check-ins.** While a focus block you scheduled in Moss is on, Trail Marker can check which app you are in, and — when the title alone isn't enough to tell — can look at the screen once to describe it, then nudge you if you've drifted off task. [PR #2578](https://github.com/motioneso/moss/pull/2578)
 - **Sorting model.** Pick a small, fast model to sort and filter your news and sports stories. If it does not answer, Moss tries your main model instead. [PR #2623](https://github.com/motioneso/moss/pull/2623)
 
 ### 2026-09-20
