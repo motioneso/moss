@@ -51,6 +51,13 @@ export function createExternalToolManifests(
       },
       assistantTools: module.manifest.assistantTools?.map((tool) => {
         const requiresConfirmation = synthesizeRequiresConfirmation(tool);
+        // #2152: `safeErrors` is deliberately NOT copied here. It opts a tool into echoing its
+        // own thrown HttpError text to the user and the model (#1679/#2148), and the gateway
+        // repeats that text verbatim — a first-party trust decision, not something an installed
+        // module's manifest gets to select. The copy is field-by-field, so the key is absent by
+        // construction; `external-module-tool-manifest-policy.test.ts` pins that (a hostile
+        // declaration carrying `safeErrors: true` still yields a tool without it), so swapping
+        // this map for a copy-everything spread cannot start forwarding it by accident.
         return {
           name: tool.name,
           description: tool.description,

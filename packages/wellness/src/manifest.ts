@@ -78,7 +78,7 @@ export const wellnessModuleManifest = {
       label: "Wellness",
       description:
         "Allow or block your assistant from reading your mood check-ins and medication adherence counts, so it can reference them in briefings and answer questions about them.",
-      path: "/settings/modules/wellness",
+      path: "/settings?section=modules&module=wellness",
       scope: "user",
       order: 40,
       permissionId: "wellness.view",
@@ -279,5 +279,25 @@ export const wellnessModuleManifest = {
         { table: "app.wellness_therapy_notes" }
       ]
     }
-  }
+  },
+  features: [
+    {
+      id: "wellness.mood_checkins",
+      description:
+        "Log a daily mood check-in with emotion, energy and a short note; Wellness keeps the history " +
+        "and charts past check-ins. Insights summarise trends once there are enough check-ins."
+    },
+    {
+      id: "wellness.medication_tracking",
+      description:
+        "Keep a medication list with schedules and as-needed doses. The day view asks about scheduled " +
+        "doses, and 30-day adherence shows up in Wellness insights and in briefings when allowed."
+    },
+    {
+      id: "wellness.therapy_notes",
+      description:
+        "Keep therapy notes that stay private: the assistant never reads them, and the data " +
+        "export includes them with everything else."
+    }
+  ]
 } satisfies MossModuleManifest;

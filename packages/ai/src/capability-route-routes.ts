@@ -5,9 +5,11 @@ import { HttpError, handleRouteError as handleModuleRouteError } from "@moss/mod
 import {
   AI_MODEL_CAPABILITIES,
   MODULE_WORKER_SERVICE_KEY,
+  SORTING_SERVICE_KEY,
   deleteAiServiceBindingRouteSchema,
   isModuleServiceKey,
   isPlatformServiceKey,
+  isSortingProviderKind,
   listAiServiceBindingsRouteSchema,
   lookupAiCapabilityRouteRouteSchema,
   putAiServiceBindingRouteSchema,
@@ -84,6 +86,8 @@ export function registerAiServiceRoutes(
             }
             // #915 D6: patternProperties in the response schema preserves these dynamic keys.
             Object.assign(result, await repository.listModuleServiceBindings(scopedDb));
+            const sorting = await repository.getSortingBinding(scopedDb);
+            if (sorting) result[SORTING_SERVICE_KEY] = sorting;
             return result;
           }
         );
@@ -132,11 +136,15 @@ export function registerAiServiceRoutes(
               throw new HttpError(400, "this service must be bound to a specific model");
             }
 
-            // Module structured work always requires json; chat keeps its own capability.
+            if (service === SORTING_SERVICE_KEY && binding.kind !== "model") {
+              throw new HttpError(400, "the sorting model accepts only a specific model");
+            }
+
+            // Module structured work and the sorting model require json; chat keeps its own
+            // capability. The sorting model must also run on a structured-capable provider kind.
             if (binding.kind === "model") {
-              const requiredCapability: AiModelCapability = isModuleServiceKey(service)
-                ? "json"
-                : service;
+              const requiredCapability: AiModelCapability =
+                service === SORTING_SERVICE_KEY || isModuleServiceKey(service) ? "json" : service;
               const models = await repository.listModels(scopedDb);
               const valid = models.some(
                 (model) =>
@@ -144,6 +152,7 @@ export function registerAiServiceRoutes(
                   model.status === "active" &&
                   model.provider_status === "active" &&
                   model.capabilities.includes(requiredCapability) &&
+                  (service !== SORTING_SERVICE_KEY || isSortingProviderKind(model.provider_kind)) &&
                   // System One answers only choice questions, which only the platform-owned
                   // Trail Marker judgment asks; any other service would fail on every call.
                   (platformOwned || model.provider_kind !== "system-one")
@@ -169,7 +178,8 @@ export function registerAiServiceRoutes(
     }
   );
 
-  // #915 D6: unbinding a module service returns it to automatic routing. Chat has no unbind.
+  // #915 D6: unbinding a module service returns it to automatic routing; clearing sorting returns
+  // jobs to today's path. Chat has no unbind.
   server.delete<{ Params: ServiceParams }>(
     "/api/ai/services/:service/binding",
     { schema: deleteAiServiceBindingRouteSchema },
@@ -177,8 +187,8 @@ export function registerAiServiceRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const service = parseBindableService(request.params.service);
-        if (!isModuleServiceKey(service)) {
-          throw new HttpError(400, "only module service bindings can be deleted");
+        if (service !== SORTING_SERVICE_KEY && !isModuleServiceKey(service)) {
+          throw new HttpError(400, "only module and sorting bindings can be deleted");
         }
 
         await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
@@ -261,6 +271,9 @@ export function parseCapability(value: string): AiModelCapability {
 }
 
 function parseBindableService(value: string): AiServiceKey {
+  if (value === SORTING_SERVICE_KEY) {
+    return SORTING_SERVICE_KEY;
+  }
   if (BINDABLE_SERVICES.has(value as AiModelCapability)) {
     return value as AiModelCapability;
   }

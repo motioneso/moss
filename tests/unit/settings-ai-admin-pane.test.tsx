@@ -50,6 +50,7 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   testAiProvider: vi.fn(),
   putAdminChatModelOverrideEnabled: vi.fn(),
   putAiServiceBinding: vi.fn(),
+  deleteAiServiceBinding: vi.fn(),
   lookupAiCapabilityRoute: vi.fn(async () => ({ route: null })),
   getVoiceEndpoint: vi.fn(async () => ({ endpoint: null })),
   putVoiceEndpoint: vi.fn(),
@@ -196,6 +197,30 @@ describe("AiProvidersPane provider picker (#1325)", () => {
     await act(async () => {
       renderer.unmount();
     });
+  });
+});
+
+describe("AiProvidersPane services group (#2594)", () => {
+  it("shows the Sorting model row under the per-job rows", async () => {
+    const client = await import("../../apps/web/src/api/client.js");
+    vi.mocked(client.listAiProviders).mockResolvedValueOnce({
+      providers: [
+        {
+          id: "p1",
+          providerKind: "openai-compatible",
+          displayName: "Local box",
+          authMethod: "api_key",
+          executionMode: "interactive",
+          status: "active",
+          hasCredential: true,
+          isInstanceDefault: true
+        }
+      ]
+    } as never);
+    const renderer = await renderPane();
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text.indexOf("Email extraction")).toBeGreaterThan(-1);
+    expect(text.indexOf("Sorting model")).toBeGreaterThan(text.indexOf("Email extraction"));
   });
 });
 

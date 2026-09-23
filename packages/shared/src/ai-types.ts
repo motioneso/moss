@@ -108,10 +108,15 @@ export type AiServiceBinding =
 // "module.<moduleId>" pins a single module.
 export type ModuleServiceKey = `module.${string}`;
 
-// Everything the service-binding routes can address: a user-facing capability or a module key.
-export type AiServiceKey = AiModelCapability | ModuleServiceKey;
-
 export const MODULE_WORKER_SERVICE_KEY = "module.worker" as const;
+
+// The reserved admin-level sorting model binding (#2594). Model bindings only.
+export const SORTING_SERVICE_KEY = "sorting" as const;
+export type SortingServiceKey = typeof SORTING_SERVICE_KEY;
+
+// Everything the service-binding routes can address: a user-facing capability, a module key, or
+// the sorting model.
+export type AiServiceKey = AiModelCapability | ModuleServiceKey | SortingServiceKey;
 
 // "module." + id: lowercase alnum start, then alnum/underscore/dot/dash, ≤64 chars after the
 // prefix. Kept as a plain string so JSON-schema `pattern` fields can embed it verbatim
@@ -136,6 +141,18 @@ export function isPlatformServiceKey(service: ModuleServiceKey): boolean {
   return PLATFORM_SERVICE_NAMESPACES.some(
     (id) => namespace === id || namespace.startsWith(`${id}.`)
   );
+}
+
+// Provider kinds generateStructured can execute. A local model qualifies through the
+// OpenAI-compatible kind.
+export const SORTING_PROVIDER_KINDS: readonly AiProviderKind[] = [
+  "anthropic",
+  "openai-compatible",
+  "google"
+];
+
+export function isSortingProviderKind(kind: string | null | undefined): boolean {
+  return kind != null && (SORTING_PROVIDER_KINDS as readonly string[]).includes(kind);
 }
 
 export type ModuleServiceBindingMap = Partial<Record<ModuleServiceKey, AiServiceBinding>>;

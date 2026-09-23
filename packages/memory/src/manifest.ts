@@ -266,5 +266,26 @@ export const memoryModuleManifest: MossModuleManifest = {
       },
       execute: memoryForgetExecute
     }
+  ],
+  features: [
+    {
+      id: "memory.associative_graph",
+      description:
+        "Keep what Moss learns about you as a graph of people, things and facts, and recall the " +
+        "relevant parts when answering. In Memory settings you can pin an important fact or " +
+        "forget it, and review the proposed memories waiting for your decision."
+    },
+    {
+      id: "memory.candidate_review",
+      description:
+        "Moss proposes new memories as it learns; in Memory settings you review each candidate and " +
+        "accept, reject, or suppress it before it becomes a kept memory."
+    },
+    {
+      id: "memory.notes_ingest",
+      description:
+        "Read your linked notes into Moss by splitting each note into passages and keeping them " +
+        "with an embedding model, so you can search your notes by meaning."
+    }
   ]
 };

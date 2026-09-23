@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { EmailExtractNeedsConfigurationError, EmailExtractRetryableError } from "@moss/connectors";
+import {
+  EmailExtractNeedsConfigurationError,
+  EmailExtractRetryableError,
+  GoogleApiError
+} from "@moss/connectors";
 import { CliStructuredAdapter, type ChatEngineFactory } from "@moss/chat";
 import type { StructuredTelemetry } from "@moss/ai";
 import {
@@ -297,6 +301,56 @@ describe("runGoogleSync email orchestration", () => {
     });
     expect(warnings).not.toContain("google-sync email failed");
     expect(infos).toContain("google-sync email extraction unavailable; continuing metadata-only");
+  });
+
+  it("names the refused Google call and its reason in the email-phase warning (#2300)", async () => {
+    const accountId = await seedGoogleAccount(handles.dataContext, [
+      "https://www.googleapis.com/auth/gmail.modify"
+    ]);
+    const ctx = { actorUserId: ids.userA, requestId: "pgboss:google-403-named" };
+    const warnings: Array<{ data: Record<string, unknown>; message: string }> = [];
+    const refused = new GoogleApiError(
+      "Google gmail returned 403",
+      403,
+      "PERMISSION_DENIED",
+      "gmail.messages.list"
+    );
+
+    const result = await handles.workerDataContext.withDataContext(ctx, (db) =>
+      runGoogleSync(db, {
+        getFreshAccessToken: async () => "tok",
+        getActiveAccount: async () => ({ id: accountId, scopes: ["gmail"] }),
+        googleClient: {
+          listCalendarEvents: async () => [],
+          listMessageIds: async () => [],
+          listMessageIdsPage: async () => {
+            throw refused;
+          },
+          getMessage: async () => ({ id: "x" })
+        },
+        emailExtractDeps: { runChat: async () => ({ text: "" }) },
+        logger: {
+          warn: (data: Record<string, unknown>, message: string) =>
+            warnings.push({ data, message }),
+          info: () => undefined
+        },
+        googleRetryDelayMs: 0
+      })
+    );
+
+    expect(result.errors).toContain("email-error");
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: "google-sync email failed",
+          data: expect.objectContaining({
+            operation: "gmail.messages.list",
+            reason: "PERMISSION_DENIED",
+            status: 403
+          })
+        })
+      ])
+    );
   });
 
   it("ingests a representative current-day mailbox as sequential compact classifications", async () => {

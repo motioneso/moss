@@ -10,6 +10,25 @@ import type { ImapConnectionSecret } from "./imap-secret.js";
 export const IMAP_READ_WINDOW_DAYS = 30;
 export const IMAP_DEFAULT_FOLDER = "INBOX";
 
+/**
+ * Longest preview kept from a plain-protocol message body. Gmail hands the sync a short
+ * provider-built preview; plain mail has no such thing, so this stands in for it. It matches
+ * the email cache's excerpt cap (EmailRepository.MAX_BODY_EXCERPT_CHARS), so a preview can
+ * never grow the row beyond what the rest of the pipeline already bounds.
+ */
+export const IMAP_PREVIEW_CHARS = 500;
+
+/**
+ * The preview the rest of the pipeline reads when a fuller excerpt is not stored: a single
+ * bounded line taken from the plain text the mail parser already produced. Never the whole
+ * body, and never re-parsed from HTML — the parser's own text output is used as-is, so no
+ * pattern is ever run over a hostile message part. Null when the parser produced no text.
+ */
+export function imapPreviewText(mail: { readonly text?: string | null }): string | null {
+  const normalized = (mail.text ?? "").replace(/\s+/g, " ").trim();
+  return normalized.length > 0 ? normalized.slice(0, IMAP_PREVIEW_CHARS) : null;
+}
+
 /** Minimal subset of ImapFlow this provider needs — narrowed for testability (fakes in tests). */
 export interface ImapFlowLike {
   connect(): Promise<unknown>;
@@ -127,7 +146,7 @@ export class ImapEmailReadProvider implements EmailReadProvider<ImapConnectionSe
         recipients,
         receivedAt: (mail.date ?? new Date()).toISOString(),
         labelIds: [],
-        snippet: null,
+        snippet: imapPreviewText(mail),
         body: mail.text ?? (mail.html || ""),
         bodyTruncated: false,
         // Presence only: the parser already has every header, and the opt-out address in this

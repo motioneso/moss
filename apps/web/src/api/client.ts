@@ -1346,6 +1346,13 @@ export async function putAiServiceBinding(
   );
 }
 
+export async function deleteAiServiceBinding(service: AiServiceKey): Promise<{ service: string }> {
+  return requestJson<{ service: string }>(
+    `/api/ai/services/${encodeURIComponent(service)}/binding`,
+    { method: "DELETE" }
+  );
+}
+
 // #874: the dedicated Voice (STT) admin endpoint. GET returns the config DTO (never the API key —
 // only `hasKey`); PUT is an admin-only upsert. On PUT, omit `apiKey` to keep the stored key.
 export async function getVoiceEndpoint(): Promise<GetVoiceEndpointResponse> {

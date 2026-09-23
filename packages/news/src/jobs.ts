@@ -136,8 +136,18 @@ export async function registerNewsJobWorkers(
       for (;;) {
         let generation: number | undefined;
         try {
+          // #2258: `beginRefreshRun` takes the `news_refresh_state` row lock. When it shared the
+          // compile's transaction, that lock was held for the whole run — every feed fetch and
+          // model call — so a concurrent source add blocked on `bumpRefreshRequest` for over a
+          // minute (the reported 77s "Adding..." freeze). Taking it in its own short transaction
+          // releases the row before the slow work starts; `publishSnapshotIfCurrent` still does
+          // the generation check when the compile finishes, so an interleaved bump is handled
+          // exactly as before (the stale run loops and the newer one publishes).
+          const runGeneration = await dataContext.withDataContext(accessContext, (scopedDb) =>
+            repository.beginRefreshRun(scopedDb)
+          );
+          generation = runGeneration;
           const attempt = await dataContext.withDataContext(accessContext, async (scopedDb) => {
-            generation = await repository.beginRefreshRun(scopedDb);
             const result = await compilePersonalizedNews(
               scopedDb,
               {
@@ -153,7 +163,7 @@ export async function registerNewsJobWorkers(
                 ...(deps.credentialedSource ? { credentialedSource: deps.credentialedSource } : {}),
                 ...(deps.storyFeedback ? { storyFeedback: deps.storyFeedback } : {})
               },
-              { now: new Date(), generation, ownerUserId: accessContext.actorUserId }
+              { now: new Date(), generation: runGeneration, ownerUserId: accessContext.actorUserId }
             );
             if (result.outcome === "stale") return { outcome: "stale" as const };
 
@@ -179,7 +189,7 @@ export async function registerNewsJobWorkers(
 
             return {
               outcome: result.outcome,
-              generation,
+              generation: runGeneration,
               failureKind: result.failureKind ?? "internal"
             };
           });
