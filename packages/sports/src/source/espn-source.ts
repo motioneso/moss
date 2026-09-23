@@ -491,11 +491,37 @@ async function getSchedule(
   // encodes its query-string use of teamKey; this is the same rule for the path use. Catalog-clean
   // keys ("nfl", "dal", "22529") are unchanged by encoding, so this is invisible in practice.
   const pathKey = encodeURIComponent(params.sourceTeamId ?? teamKey);
-  const data = (await fetchJson(
-    fetchFn,
-    `${SITE_BASE}/${sport}/${league}/teams/${pathKey}/schedule`,
-    `${league} schedule`
-  )) as { events?: readonly EspnEvent[] };
+  const scheduleUrl = `${SITE_BASE}/${sport}/${league}/teams/${pathKey}/schedule`;
+
+  // #1928: the soccer schedule endpoint answers in two disjoint slices — with no params it
+  // returns only the last few finished games (what the form pips read), and with `fixture=true`
+  // it returns only upcoming fixtures (what the card's Next footer reads via `nextMatchAcross`).
+  // Neither slice alone carries both, unlike the US leagues whose default response already spans
+  // the season. Fetch both and merge, deduped by event id, so soccer keeps its form pips AND
+  // gains a next match (verified live 2026-09-22: Liverpool's default call returned 5 finals and
+  // no fixture; `fixture=true` returned 33 future fixtures and no results).
+  if (sport === "soccer") {
+    const [results, fixtures] = await Promise.allSettled([
+      fetchJson(fetchFn, scheduleUrl, `${league} schedule`),
+      fetchJson(fetchFn, `${scheduleUrl}?fixture=true`, `${league} schedule`)
+    ]);
+    if (results.status === "rejected" && fixtures.status === "rejected") throw results.reason;
+    const seen = new Set<string>();
+    const merged: EspnEvent[] = [];
+    for (const settled of [results, fixtures]) {
+      if (settled.status !== "fulfilled") continue;
+      for (const event of (settled.value as { events?: readonly EspnEvent[] }).events ?? []) {
+        if (event.id !== undefined && seen.has(event.id)) continue;
+        if (event.id !== undefined) seen.add(event.id);
+        merged.push(event);
+      }
+    }
+    return merged.map((event) => toGame(event, competitionKey));
+  }
+
+  const data = (await fetchJson(fetchFn, scheduleUrl, `${league} schedule`)) as {
+    events?: readonly EspnEvent[];
+  };
   return (data.events ?? []).map((event) => toGame(event, competitionKey));
 }
 
