@@ -27,7 +27,7 @@ struct DeviceSetupView: View {
                     .font(.headline)
                 Text(
                     ObservationStatement.current(
-                        focusEnabled: PreferencesStore().focusConsent, paused: PreferencesStore().focusPaused,
+                        focusEnabled: PreferencesStore().focusConsent,
                         watchEntireDesktop: PreferencesStore().focusWatchEntireDesktop
                     )
                 )
