@@ -298,6 +298,19 @@
   .brief-reader:has([data-briefing-surface="proposed-read"]) .brief-reader__footer-actions {
     grid-row: 2;
   }
+  /* When an accept status line is showing, it keeps row 1 (rule above,
+     unscoped by width), so Back and the actions both move down one row
+     instead of sharing row 1 with it. */
+  .brief-reader:has([data-briefing-surface="proposed-read"])
+    .brief-reader__footer--with-status
+    .brief-reader__footer-back {
+    grid-row: 2;
+  }
+  .brief-reader:has([data-briefing-surface="proposed-read"])
+    .brief-reader__footer--with-status
+    .brief-reader__footer-actions {
+    grid-row: 3;
+  }
 }
 @media (min-width: 1081px) {
   /* Desktop schedule starts open beside the report; the toggle stays hidden. */
