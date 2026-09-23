@@ -167,19 +167,19 @@
 }
 
 /* VP-AUTOMATIC-REVIEW-R1: reader Review rows read as unboxed rows split by
-   rules. Scoped under .brief-reader so evening step 4 never matches. */
-.brief-reader .plan-review__lede {
+   rules. Scoped under the Review-only marker so evening step 4 never matches. */
+[data-briefing-surface="review"] .plan-review__lede {
   font-size: 14px;
   opacity: 0.75;
   margin: 4px 0 12px;
   overflow-wrap: anywhere;
 }
 
-.brief-reader .plan-review__rows {
+[data-briefing-surface="review"] .plan-review__rows {
   gap: 0;
 }
 
-.brief-reader .plan-review__row {
+[data-briefing-surface="review"] .plan-review__row {
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
@@ -189,32 +189,32 @@
   align-items: start;
 }
 
-.brief-reader .plan-review__row:last-child {
+[data-briefing-surface="review"] .plan-review__row:last-child {
   border-bottom: 0;
 }
 
-.brief-reader .plan-review__title,
-.brief-reader .plan-review__titlelink {
+[data-briefing-surface="review"] .plan-review__title,
+[data-briefing-surface="review"] .plan-review__titlelink {
   text-decoration: none;
 }
 
-.brief-reader .plan-review__meta {
+[data-briefing-surface="review"] .plan-review__meta {
   font-size: 13px;
   opacity: 0.85;
   overflow-wrap: anywhere;
 }
 
-.brief-reader .plan-review__fields {
+[data-briefing-surface="review"] .plan-review__fields {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.brief-reader .plan-review__changes {
+[data-briefing-surface="review"] .plan-review__changes {
   margin-top: 16px;
   border-top: 2px solid var(--line);
   padding-top: 12px;
 }
 
-.brief-reader .plan-review__empty {
+[data-briefing-surface="review"] .plan-review__empty {
   font-size: 13px;
   opacity: 0.8;
   margin: 8px 0;
