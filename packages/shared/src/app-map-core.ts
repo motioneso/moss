@@ -81,7 +81,7 @@ export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     id: "link-trail-marker",
     label: "Link a Mac",
     description:
-      "Approve or decline a Mac asking to connect to this account. The Mac opens this screen with a request code in the address; the page names the Mac that is waiting and explains that a linked Mac can check in and rename itself but cannot read data and never receives the account password or browser session. Approving links it and it then appears under Active sessions in Account & preferences, where it can be signed out. A request expires after ten minutes, and an expired, already-answered or unknown request says so and asks the person to start again from the Mac.",
+      "Approve or decline a Mac asking to connect to this account. The Mac opens this screen with a request code in the address; the page names the Mac that is waiting and lists what a linked Mac will be able to do (check in and rename itself, read which focus block is on now, report which app is in front while one is on, and receive a nudge decision) and says it never receives the account password or browser session. Approving links it and it then appears under Active sessions in Account & preferences, where it can be signed out. A request expires after ten minutes, and an expired, already-answered or unknown request says so and asks the person to start again from the Mac.",
     path: "/link/trail-marker",
     scope: "user"
   }
@@ -96,7 +96,7 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     id: "profile",
     label: "Account & preferences",
     description:
-      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location (use the browser's location or search for a place; the hint under the location notes which of those two was used this session), quiet hours, sessions, data export and account deletion. A Trail Marker for Mac group explains the menu-bar Mac companion, says the app is not available to download yet, describes how browser approval links a Mac, and points at Active sessions as the place a linked Mac appears and can be signed out. Active sessions lists a linked Mac by the name it gave, with its app version.",
+      "Edit personal profile and account details, time zone, date format, weather unit (Fahrenheit unless changed) and weather location (use the browser's location or search for a place; the hint under the location notes which of those two was used this session), quiet hours, sessions, data export and account deletion. A Trail Marker for Mac group explains the menu-bar Mac companion, says the app is not available to download yet, says what to enter in Trail Marker to connect (this site's address), describes how browser approval links a Mac and what the linked Mac may do, and points at Active sessions as the place a linked Mac appears and can be signed out. Active sessions lists a linked Mac by the name it gave, with its app version.",
     path: "/settings?section=profile",
     scope: "user"
   },
@@ -202,9 +202,16 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "Configure instance AI providers, models, and bindings. Each provider card lists its models " +
       "with a Refresh models button (asks the provider for its current list; the line under the " +
       "list then reads 'Refreshed: N models', 'Not logged in', 'This provider cannot list its " +
-      "models yet', 'The sign-in helper is not running', or 'Could not reach the provider') and an " +
+      "models yet', 'The sign-in helper is not running', 'The provider rejected the API key', or 'Could not reach the provider') and an " +
       "Add model button (type in a model by hand; such rows show a * after the id, the footer " +
-      "reads '* Manually added', and they survive refreshes and re-logins). Each model row has " +
+      "reads '* Manually added', and they survive refreshes and re-logins). System One (TypeSafe) " +
+      "is offered as a provider type; it answers fixed named questions and is used only for the " +
+      "Trail Marker focus judgment, not chat: its models are offered only in the Sorting model " +
+      "row and its card has no Set as default button. The Sorting model row also sets the model " +
+      "that judges Trail Marker focus; nothing is judged until an admin chooses one there. Once " +
+      "one is chosen it says Trail Marker's app and window titles also go to that model, or for " +
+      "a System One model that they go to TypeSafe and sorting keeps using the main model. " +
+      "Each model row has " +
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
       "is struck through), " +
       "and an ACP note when the provider cannot honour a model choice, explaining that chat stays " +

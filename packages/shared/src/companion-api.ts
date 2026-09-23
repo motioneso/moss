@@ -104,7 +104,9 @@ export type CompanionErrorCode =
   | "account_pending_approval"
   | "account_deactivated"
   | "pair_attempt_not_pending"
-  | "invalid_origin";
+  | "invalid_origin"
+  | "focus_not_ready"
+  | "focus_no_block";
 
 const DEVICE_NAME_SCHEMA = {
   type: "string",
@@ -336,5 +338,168 @@ export const companionLogoutRouteSchema = {
     204: { type: "null" },
     401: errorResponseSchema,
     403: errorResponseSchema
+  }
+} as const;
+
+/**
+ * Focus judgment (#2570). While a Moss-created calendar block is on, the Mac reports which app is
+ * in front and a short, already-redacted window title. Moss judges it against the block and says
+ * whether to nudge. Nothing here carries an image, a person id, or a model or provider name.
+ */
+export type FocusLabel = "focused" | "necessary_detour" | "distracted" | "insufficient_evidence";
+
+export const FOCUS_LABELS = [
+  "focused",
+  "necessary_detour",
+  "distracted",
+  "insufficient_evidence"
+] as const satisfies readonly FocusLabel[];
+
+/** Longest reason Moss will store or return. The reason is the one free-text field that is kept. */
+export const FOCUS_REASON_MAX_LENGTH = 140;
+
+export interface FocusContextResponse {
+  /** The person's current Moss-created calendar block, or null when there is none. */
+  readonly block: {
+    readonly id: string;
+    readonly title: string;
+    readonly startsAt: string;
+    readonly endsAt: string;
+  } | null;
+  /** An admin has explicitly bound the Trail Marker judgment model. Never defaulted. */
+  readonly judgmentReady: boolean;
+}
+
+export interface FocusJudgeRequest {
+  readonly blockId: string;
+  readonly appName: string;
+  /** Already shortened and redacted by the Mac. May be empty. */
+  readonly windowTitle: string;
+  /**
+   * Rung 3 (#2570 slice 2): a one- or two-sentence vision description of the foreground window,
+   * sent only when the title alone came back insufficient_evidence and the person allowed a
+   * capture. Absent otherwise, and absent means exactly what slice 1 always meant.
+   */
+  readonly description?: string;
+  readonly observedAt: string;
+}
+
+export interface FocusJudgeResponse {
+  readonly judgmentId: string;
+  readonly label: FocusLabel;
+  readonly reason: string;
+  readonly nudge: boolean;
+}
+
+export interface FocusCorrectRequest {
+  readonly judgmentId: string;
+  readonly verdict: "right" | "wrong";
+}
+
+// Plain text only: a control character in an app name or window title would corrupt logs and any
+// diagnostic output that echoes it.
+const FOCUS_APP_NAME_SCHEMA = {
+  type: "string",
+  minLength: 1,
+  maxLength: 64,
+  pattern: "^[^\\u0000-\\u001f\\u007f]+$"
+} as const;
+
+const FOCUS_WINDOW_TITLE_SCHEMA = {
+  type: "string",
+  minLength: 0,
+  maxLength: 200,
+  pattern: "^[^\\u0000-\\u001f\\u007f]*$"
+} as const;
+
+const FOCUS_DESCRIPTION_SCHEMA = {
+  type: "string",
+  minLength: 0,
+  maxLength: 280,
+  pattern: "^[^\\u0000-\\u001f\\u007f]*$"
+} as const;
+
+const FOCUS_BLOCK_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "title", "startsAt", "endsAt"],
+  properties: {
+    id: { type: "string" },
+    title: { type: "string" },
+    startsAt: { type: "string" },
+    endsAt: { type: "string" }
+  }
+} as const;
+
+export const focusContextRouteSchema = {
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["block", "judgmentReady"],
+      properties: {
+        block: { ...FOCUS_BLOCK_SCHEMA, nullable: true },
+        judgmentReady: { type: "boolean" }
+      }
+    },
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    429: errorResponseSchema
+  }
+} as const;
+
+export const focusJudgeRouteSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+    required: ["blockId", "appName", "windowTitle", "observedAt"],
+    properties: {
+      blockId: UUID_SCHEMA,
+      appName: FOCUS_APP_NAME_SCHEMA,
+      windowTitle: FOCUS_WINDOW_TITLE_SCHEMA,
+      description: FOCUS_DESCRIPTION_SCHEMA,
+      observedAt: { type: "string", minLength: 1, maxLength: 40 }
+    }
+  },
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["judgmentId", "label", "reason", "nudge"],
+      properties: {
+        judgmentId: { type: "string" },
+        label: { type: "string", enum: [...FOCUS_LABELS] },
+        reason: { type: "string", maxLength: FOCUS_REASON_MAX_LENGTH },
+        nudge: { type: "boolean" }
+      }
+    },
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    // 409: focus_not_ready (no judgment model bound) or focus_no_block (not the person's
+    // current Moss block). Nothing is stored in either case.
+    409: errorResponseSchema,
+    429: errorResponseSchema
+  }
+} as const;
+
+export const focusCorrectRouteSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+    required: ["judgmentId", "verdict"],
+    properties: {
+      judgmentId: UUID_SCHEMA,
+      verdict: { type: "string", enum: ["right", "wrong"] }
+    }
+  },
+  response: {
+    204: { type: "null" },
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    // 404: no such judgment for this person. Absent and someone else's are indistinguishable.
+    404: errorResponseSchema,
+    429: errorResponseSchema
   }
 } as const;

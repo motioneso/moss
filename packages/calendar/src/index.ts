@@ -9,6 +9,7 @@ export * from "./day-plan-model.js";
 export * from "./day-plan-repository.js";
 export type { DayPlanSourceContextService } from "./day-plan-routes.js";
 export * from "./confirmation-policy.js";
+export * from "./current-block.js";
 export * from "./event-resolver.js";
 export * from "./manifest.js";
 export * from "./repository.js";

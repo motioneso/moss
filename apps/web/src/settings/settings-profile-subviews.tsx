@@ -233,6 +233,11 @@ export function DataExport() {
 
 /* ----------------------------------------------------------- Mac companion */
 
+/** The address a person types into Trail Marker: where they are reading this page. */
+function connectAddress(): string {
+  return typeof window === "undefined" ? "this site's address" : window.location.origin;
+}
+
 /**
  * Explains the Mac companion and where a linked Mac shows up. It deliberately does not
  * list linked Macs, because they already appear under Active sessions below and one list
@@ -250,8 +255,12 @@ export function MacCompanion() {
         comingIssue={2560}
       />
       <Row
+        name="How to connect"
+        desc={`Open Trail Marker, enter ${connectAddress()}, and choose Connect in Browser. Approve the request when this site asks, and the Mac appears under Active sessions below.`}
+      />
+      <Row
         name="How linking works"
-        desc="The Mac opens a page in your browser and asks for your approval. Approve it and the Mac gets a key of its own — never your password and never your browser session."
+        desc="The Mac opens a page in your browser and asks for your approval. Approve it and the Mac gets a key of its own — never your password and never your browser session. That key lets it read which focus block you have on, report which app is in front while one is on, and receive a nudge decision. Nothing else."
       />
       <Row
         name="Where a linked Mac appears"

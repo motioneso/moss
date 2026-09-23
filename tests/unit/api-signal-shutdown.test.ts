@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { shutdownOnSignal } from "../../apps/api/src/server.js";
+import { shutdownOnSignal } from "../../apps/api/src/process-lifecycle.js";
 
 describe("shutdownOnSignal (api graceful shutdown)", () => {
   it("calls server.close() then exits 0 when close resolves in time", async () => {

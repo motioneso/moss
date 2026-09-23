@@ -60,6 +60,14 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   routeKey("POST", "/api/companion/heartbeat"),
   routeKey("PATCH", "/api/companion/device"),
   routeKey("POST", "/api/companion/logout"),
+  // #2570 Trail Marker focus judgment: what block is on, judging one observation, and correcting a
+  // judgment. Platform routes for the same reason as the device ones above: they authenticate the
+  // linked Mac with its companion credential, which a guarded (module) route cannot accept, and
+  // they must answer "not set up" rather than 404 when nothing is configured. Focus is not a
+  // module; there is nothing here to gate on.
+  routeKey("POST", "/api/companion/focus/context"),
+  routeKey("POST", "/api/companion/focus/judge"),
+  routeKey("POST", "/api/companion/focus/correct"),
   // settings: pre-auth bootstrap + own profile
   routeKey("GET", "/api/bootstrap/status"),
   routeKey("GET", "/api/me"),

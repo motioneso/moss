@@ -70,7 +70,7 @@ function fail(providerKind: AiProviderKind, message: string): AiProviderTestResu
 function readApiKey(credential: unknown): string | null {
   if (!credential || typeof credential !== "object") return null;
   const value = (credential as { apiKey?: unknown }).apiKey;
-  return typeof value === "string" && value.trim() ? value : null;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function fetchModels(input: ProviderValidationInput, apiKey: string): Promise<Response> {
@@ -84,6 +84,12 @@ function fetchModels(input: ProviderValidationInput, apiKey: string): Promise<Re
       return f("https://generativelanguage.googleapis.com/v1beta/models", {
         headers: { "x-goog-api-key": apiKey }
       });
+    case "system-one": {
+      // TypeSafe's System One API serves only `GET /v1/models` and `POST /v1/systemone`; the
+      // latter takes fixed named questions, so this kind can never ride the chat-completions path.
+      const base = (input.baseUrl ?? "https://api.typesafe.ai").replace(/\/+$/, "");
+      return f(`${base}/v1/models`, { headers: { authorization: `Bearer ${apiKey}` } });
+    }
     case "openai-compatible":
     case "ollama":
     case "custom": {
@@ -119,6 +125,16 @@ function suggestModel(
   providerModelId: string,
   providerKind: AiProviderKind
 ): AiProviderDiscoveredModelDto {
+  if (providerKind === "system-one") {
+    // System One answers named questions, not chat; json is the only capability it can serve and
+    // its models are cheap economy picks for the focus judgment.
+    return {
+      providerModelId,
+      displayName: providerModelId,
+      capabilities: ["json"],
+      tier: "economy"
+    };
+  }
   const lower = providerModelId.toLowerCase();
   const capabilities: AiModelCapability[] = ["chat", "tool-use", "json", "summarization"];
   if (lower.includes("vision") || lower.includes("image") || lower.includes("gemini")) {

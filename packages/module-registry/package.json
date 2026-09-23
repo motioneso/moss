@@ -21,6 +21,7 @@
     "@moss/datasets": "workspace:*",
     "@moss/db": "workspace:*",
     "@moss/email": "workspace:*",
+    "@moss/focus-judgment": "workspace:*",
     "@moss/goals": "workspace:*",
     "@moss/host-fetch": "workspace:*",
     "@moss/integrations": "workspace:*",

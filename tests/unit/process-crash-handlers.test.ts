@@ -10,7 +10,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { createCrashHandler as createApiCrashHandler } from "../../apps/api/src/server.js";
+import { createCrashHandler as createApiCrashHandler } from "../../apps/api/src/process-lifecycle.js";
 import { createCrashHandler as createWorkerCrashHandler } from "../../apps/worker/src/worker.js";
 
 describe("createCrashHandler (api)", () => {

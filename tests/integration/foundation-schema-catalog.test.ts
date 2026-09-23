@@ -455,6 +455,16 @@ describe("MVP foundation schema catalog", () => {
         {
           version: "0239",
           name: "0239_companion_device_pair_attempt.sql"
+        },
+        // #2570 — Trail Marker focus judgments (platform table, owner-only).
+        {
+          version: "0240",
+          name: "0240_focus_judgments.sql"
+        },
+        // #2586 — System One provider kind, so Jev can judge focus.
+        {
+          version: "0241",
+          name: "0241_ai_provider_kind_system_one.sql"
         }
       ]);
     } finally {

@@ -463,6 +463,9 @@ export { createRuntimeEmbeddingProvider } from "./built-in-module-helpers.js";
 // CLI-authenticated provider. The worker reaches chat internals through this package rather than
 // taking a direct @moss/chat dependency, exactly as it does for the embedder above.
 export { createCliStructuredAdapterFactory } from "@moss/chat";
+// #2570: Trail Marker focus judgment. Platform code (not a module); composed here because the API
+// app does not import module packages itself.
+export * from "./focus-wiring.js";
 
 export * from "./external/validate.js";
 export * from "./external/types.js";

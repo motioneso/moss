@@ -1,4 +1,10 @@
-export type AiProviderKind = "openai-compatible" | "anthropic" | "google" | "ollama" | "custom";
+export type AiProviderKind =
+  | "openai-compatible"
+  | "anthropic"
+  | "google"
+  | "ollama"
+  | "custom"
+  | "system-one";
 // #874 — discriminator on app.ai_provider_configs (migration 0149). 'assistant' rows are the chat
 // LLM providers shown in the LLM Providers list and eligible for chat routing / instance-default /
 // per-user pin. 'voice' is the single instance-wide STT endpoint, kept off every assistant surface
@@ -122,6 +128,21 @@ export function isModuleServiceKey(value: string): value is ModuleServiceKey {
   return moduleServiceKeyRegex.test(value);
 }
 
+/**
+ * Namespaces a `module.<name>` service key may use when the work belongs to platform code rather
+ * than an installed module (#2570: the Trail Marker focus judgment). The model-binding check treats
+ * these as installed. Keep this list to platform-owned names only; adding a module's name here
+ * would let anyone bind a key for a module that is not installed.
+ */
+export const PLATFORM_SERVICE_NAMESPACES = ["trail-marker"] as const;
+
+export function isPlatformServiceKey(service: ModuleServiceKey): boolean {
+  const namespace = service.slice("module.".length);
+  return PLATFORM_SERVICE_NAMESPACES.some(
+    (id) => namespace === id || namespace.startsWith(`${id}.`)
+  );
+}
+
 // Provider kinds generateStructured can execute. A local model qualifies through the
 // OpenAI-compatible kind.
 export const SORTING_PROVIDER_KINDS: readonly AiProviderKind[] = [
@@ -132,6 +153,16 @@ export const SORTING_PROVIDER_KINDS: readonly AiProviderKind[] = [
 
 export function isSortingProviderKind(kind: string | null | undefined): boolean {
   return kind != null && (SORTING_PROVIDER_KINDS as readonly string[]).includes(kind);
+}
+
+/**
+ * Provider kinds the sorting model may be bound to (Ben, 2026-09-22): the kinds sorting jobs run,
+ * plus System One, because the sorting model is also the Trail Marker focus judge and Jev answers
+ * that as choice questions. Sorting jobs skip a System One model and run as today until the Jev
+ * slice of the sorting spec.
+ */
+export function isSortingBindableProviderKind(kind: string | null | undefined): boolean {
+  return isSortingProviderKind(kind) || kind === "system-one";
 }
 
 export type ModuleServiceBindingMap = Partial<Record<ModuleServiceKey, AiServiceBinding>>;
@@ -180,7 +211,7 @@ export interface RefreshAiProviderModelsResponse {
   /** The provider's stored model rows after the refresh (unchanged when `reason` is set). */
   readonly models: readonly AiConfiguredModelDto[];
   /** Present only when a CLI provider's live list could not be fetched; nothing was changed. */
-  readonly reason?: AiCliModelListFailure | "unavailable";
+  readonly reason?: AiCliModelListFailure | "unavailable" | "rejected_key";
   readonly message?: string;
 }
 
@@ -192,7 +223,7 @@ export interface AiDiscoverModelsResponse {
    * #2208: present ONLY when a CLI provider's live list could not be fetched — why there are no
    * models (`not_logged_in`, `unsupported`, `error`, or `unavailable` when no runner is wired).
    */
-  readonly reason?: AiCliModelListFailure | "unavailable";
+  readonly reason?: AiCliModelListFailure | "unavailable" | "rejected_key";
   /** Plain-English detail for `reason`; never carries a secret. */
   readonly message?: string;
 }

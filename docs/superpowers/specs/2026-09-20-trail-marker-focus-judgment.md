@@ -245,8 +245,8 @@ Deliberately almost no new screens. Everything uses the styling of the approved 
    ╰──────────────────────────────────────────────────────────────╯
    ```
 
-**Moss web:** no new screen. The judgment model is bound in the existing Settings → AI, the same
-way other services are (an admin setting; see D1). There is no review screen: the person checks
+**Moss web:** no new screen. The judgment model is the Sorting model in Settings → AI (an admin
+setting; see D1). There is no review screen: the person checks
 and corrects judgments from Last judgment on the Mac, and Moss records the correction.
 
 Not new screens, but still needed and drawn in the existing style: the empty, loading and error
@@ -264,7 +264,7 @@ Resolved:
 - **The image model is set on the Mac and called by the companion; Moss stays text-only.** No
   router image input is needed.
 - **Existing linked Macs are not re-approved; new setups show the approval info** (D8).
-- **Focus is not a module; server-side it is only Trail Marker info and one model row in Settings** (D9).
+- **Focus is not a module; server-side it is only Trail Marker info, and its model is the Sorting model in Settings** (D9, D1).
 - **Slice order:** text-only end to end first, then screenshots (§12).
 - **Nudges are an on-top banner driven by a distraction gauge on the Mac** (Ben, 2026-09-22,
   after trying the banner live): replaces the macOS notification; hidden by getting back on task,
@@ -275,10 +275,12 @@ Resolved:
 
 Open, for Ben:
 
-- **D1 Model binding.** One new service key for the judgment step. In today's code, binding a
-  model to a service key is an **admin** setting, not per person, and the admin AI pane lists its
-  bindable services by hand, so a row for this one must be added there. Fine on a one-person
-  instance; stated so nobody expects per-person choice.
+- **D1 Model binding (amended 2026-09-22).** The judge is the admin's **Sorting model**
+  (`2026-09-22-sorting-model.md`), not a row of its own (Ben, 2026-09-22). With no sorting model
+  chosen, nothing is judged. A System One model such as Jev may be chosen there; it then judges
+  Trail Marker focus only, and sorting jobs keep using the main model until the Jev slice of the
+  sorting spec. It is an **admin** setting, not per person. Fine on a one-person instance; stated
+  so nobody expects per-person choice.
 - **D8 Existing linked Macs (decided).** No re-approval. A Mac linked before this ships keeps
   working and is not asked to approve again; only **new setups** show the added capabilities on the
   browser approval page. Two things are still true and stated so nobody is surprised: the device
@@ -293,7 +295,7 @@ Open, for Ben:
   logic, a platform database migration for the judgments table (owner-only), wiring in the
   registry's composition code, and the calendar module gains the small "current block" public
   read. What a person sees on the server is only the Trail Marker information in Settings (download
-  link, how to connect) and the model choice for judgment as its own row in Settings → AI. The
+  link, how to connect) and the Sorting model in Settings → AI, which judges focus (D1). The
   image model stays in the Mac's own Focus pane.
   **Never defaulted:** the row starts empty, no model is pre-selected or inherited from any other
   setting, and nothing is processed until an admin defines the Trail Marker reasoning model.

@@ -158,7 +158,102 @@ describe("CLI model discovery (#2208)", () => {
     });
     expect(result.models).toEqual([]);
     expect(result.fromFallback).toBe(false);
-    expect(result.reason).toBeUndefined();
+    // A failed lookup says so, and never as an empty list that reads like "no models".
+    expect(result.reason).toBe("error");
+  });
+
+  describe("why an API-key provider's list could not be fetched", () => {
+    const reply = (status: number, body: unknown = {}) =>
+      (async () =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { "content-type": "application/json" }
+        })) as unknown as typeof globalThis.fetch;
+
+    it.each([401, 403])("reports a rejected key for HTTP %i", async (status) => {
+      const result = await new ModelDiscoveryService().discoverModels("k", {
+        providerKind: "system-one",
+        authMethod: "api_key",
+        baseUrl: null,
+        credential: { apiKey: "apikey_wrong" },
+        fetch: reply(status)
+      });
+      expect(result.models).toEqual([]);
+      expect(result.reason).toBe("rejected_key");
+      expect(result.message).toBe(`HTTP ${status}`);
+    });
+
+    it("reports a provider error, with only the status code, for other failures", async () => {
+      const result = await new ModelDiscoveryService().discoverModels("k", {
+        providerKind: "openai-compatible",
+        authMethod: "api_key",
+        baseUrl: null,
+        credential: { apiKey: "sk-test" },
+        fetch: reply(503, { error: "secret provider detail" })
+      });
+      expect(result.reason).toBe("error");
+      expect(result.message).toBe("HTTP 503");
+    });
+
+    it("reports an unreadable body as an error and does not throw", async () => {
+      const result = await new ModelDiscoveryService().discoverModels("k", {
+        providerKind: "openai-compatible",
+        authMethod: "api_key",
+        baseUrl: null,
+        credential: { apiKey: "sk-test" },
+        fetch: (async () => new Response("<html>", { status: 200 })) as typeof globalThis.fetch
+      });
+      expect(result.reason).toBe("error");
+    });
+
+    it("does not treat a list that came back empty as a failure", async () => {
+      const result = await new ModelDiscoveryService().discoverModels("k", {
+        providerKind: "system-one",
+        authMethod: "api_key",
+        baseUrl: null,
+        credential: { apiKey: "apikey_ok" },
+        fetch: reply(200, { models: [] })
+      });
+      expect(result.models).toEqual([]);
+      expect(result.reason).toBeUndefined();
+    });
+
+    it("does not cache a failure, so the next try asks again", async () => {
+      const service = new ModelDiscoveryService();
+      let calls = 0;
+      const flaky = (async () => {
+        calls += 1;
+        return calls === 1
+          ? new Response("{}", { status: 401 })
+          : new Response(JSON.stringify({ models: [{ name: "jev-latest" }] }), { status: 200 });
+      }) as unknown as typeof globalThis.fetch;
+      const input = {
+        providerKind: "system-one" as const,
+        authMethod: "api_key" as const,
+        baseUrl: null,
+        credential: { apiKey: "apikey_x" },
+        fetch: flaky
+      };
+      expect((await service.discoverModels("k", input)).reason).toBe("rejected_key");
+      const second = await service.discoverModels("k", input);
+      expect(second.reason).toBeUndefined();
+      expect(second.models.map((m) => m.providerModelId)).toEqual(["jev-latest"]);
+    });
+
+    it("sends the key without the spaces or line break a paste leaves on it", async () => {
+      let sent: string | null = null;
+      await new ModelDiscoveryService().discoverModels("k", {
+        providerKind: "system-one",
+        authMethod: "api_key",
+        baseUrl: null,
+        credential: { apiKey: "  apikey_abc123\n" },
+        fetch: (async (_url: unknown, init?: RequestInit) => {
+          sent = (init?.headers as Record<string, string>).authorization ?? null;
+          return new Response(JSON.stringify({ models: [] }), { status: 200 });
+        }) as unknown as typeof globalThis.fetch
+      });
+      expect(sent).toBe("Bearer apikey_abc123");
+    });
   });
 
   it("registers a Gemini default model that rides the account's own model", () => {

@@ -1,0 +1,17 @@
+{
+  "name": "@moss/focus-judgment",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@moss/db": "workspace:*",
+    "@moss/shared": "workspace:*",
+    "kysely": "^0.29.2"
+  }
+}

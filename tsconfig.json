@@ -31,6 +31,7 @@
       "@moss/db/probes": ["packages/db/src/probes/index.ts"],
       "@moss/db/*": ["packages/db/src/*"],
       "@moss/email": ["packages/email/src/index.ts"],
+      "@moss/focus-judgment": ["packages/focus-judgment/src/index.ts"],
       "@moss/jobs": ["packages/jobs/src/index.ts"],
       "@moss/jobs/*": ["packages/jobs/src/*"],
       "@moss/module-registry": ["packages/module-registry/src/index.ts"],
