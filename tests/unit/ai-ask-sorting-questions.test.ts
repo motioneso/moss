@@ -115,10 +115,47 @@ describe("askSortingQuestions", () => {
       {
         service: "module.news",
         servedBy: "sorting",
+        modelId: "jev",
+        providerKind: "system-one",
         inputTokens: 11,
         outputTokens: 3,
         requests: 1
       },
+      "ai.sorting usage"
+    );
+  });
+
+  it("labels a structured sorting answer as sorting, naming the model that answered", async () => {
+    const info = vi.fn();
+    const deps = makeDeps({
+      model: jsonModel,
+      adapter: {
+        generateStructured: vi.fn(async () => ({
+          rawObject: { answers: [{ id: "q0", answer: "yes", confidence: 0.8 }] },
+          usage: { inputTokens: 3, outputTokens: 1 }
+        }))
+      },
+      logger: { info, warn: vi.fn() }
+    });
+
+    const result = await askSortingQuestions(
+      scopedDb,
+      { service: "module.news", batches: [batch] },
+      deps
+    );
+
+    expect(result.ok).toBe(true);
+    // The structured path must not log the sorting model's answer as the main model.
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({ servedBy: "sorting", modelId: "small" }),
+      "ai.structured usage"
+    );
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        servedBy: "sorting",
+        modelId: "small",
+        providerKind: "openai-compatible"
+      }),
       "ai.sorting usage"
     );
   });

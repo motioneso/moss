@@ -238,7 +238,9 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "The Services group ends with a Sorting model row: a dropdown with Use main model and " +
       "every active JSON-capable model, grouped by provider. Once a model is chosen, a line " +
       "under the row says story details and saved story preferences go to that model first and " +
-      "to the main model if it does not answer. A " +
+      "to the main model if it does not answer. For a System One model the line instead says it " +
+      "answers the News and Sports sorting questions with a yes or no, and the main model still " +
+      "handles other sorting work. A " +
       "separate Web search group has a 'Use your model's built-in web search' switch, on by " +
       "default, with a status line reading 'On, using Brave', 'On, using each person's chat " +
       "model', or 'Off. Add a Brave key or turn on built-in search.' A Brave Search API key " +

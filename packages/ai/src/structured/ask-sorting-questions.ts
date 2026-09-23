@@ -176,6 +176,8 @@ export async function askSortingQuestions(
     {
       service: input.service,
       servedBy: "sorting",
+      modelId: model.id,
+      providerKind: model.provider_kind,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       requests: input.batches.length
@@ -253,6 +255,7 @@ async function runStructuredBatch(
       prompt: buildSortingQuestionsPrompt(batch),
       maxOutputTokens: SORTING_QUESTIONS_MAX_OUTPUT_TOKENS,
       explicitModel: model,
+      servedByLabel: "sorting",
       signal
     },
     {
