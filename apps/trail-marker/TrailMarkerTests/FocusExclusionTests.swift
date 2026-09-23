@@ -196,3 +196,17 @@ final class FocusExclusionTests: XCTestCase {
         XCTAssertEqual(preferences.focusExcludedBundleIds, [])
     }
 }
+
+extension FocusExclusionTests {
+    func testNeverWatchReasonTellsAPrivateWindowFromAnExcludedApp() {
+        var policy = ObservationPolicy(allowedBundleIds: [], watchEntireDesktop: true)
+        policy.excludedBundleIds = ["com.example.Finance"]
+        let privateWindow = Observation(appName: "Google Chrome", bundleId: "com.google.Chrome", windowTitle: "Bank - Google Chrome (Incognito)")
+        let excluded = Observation(appName: "Finance", bundleId: "com.example.Finance", windowTitle: "Accounts")
+        let builtIn = Observation(appName: "1Password", bundleId: "com.1password.1password", windowTitle: "Vault")
+        XCTAssertEqual(policy.neverWatchReason(privateWindow), .privateWindow)
+        XCTAssertEqual(policy.neverWatchReason(excluded), .excluded)
+        XCTAssertEqual(policy.neverWatchReason(builtIn), .builtIn)
+        XCTAssertNil(policy.neverWatchReason(Observation(appName: "Safari", bundleId: "com.apple.Safari", windowTitle: "Docs")))
+    }
+}

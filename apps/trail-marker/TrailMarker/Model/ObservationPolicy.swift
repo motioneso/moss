@@ -135,10 +135,16 @@ struct ObservationPolicy: Equatable {
 
     /// The denylist, the person's exclusions and private windows: never observed, whatever else
     /// is chosen. Also what Settings' "Test vision" checks, since it captures outside a judgment.
-    func neverWatches(_ observation: Observation) -> Bool {
-        if Self.deniedBundleIds.contains(observation.bundleId) { return true }
-        if excludedBundleIds.contains(observation.bundleId) { return true }
+    func neverWatches(_ observation: Observation) -> Bool { neverWatchReason(observation) != nil }
+
+    enum NeverWatchReason: Equatable { case builtIn, excluded, privateWindow }
+
+    /// Which rule refuses the observation, so the person is told the truth: a private window is
+    /// refused on its own, not because the whole app is.
+    func neverWatchReason(_ observation: Observation) -> NeverWatchReason? {
+        if Self.deniedBundleIds.contains(observation.bundleId) { return .builtIn }
+        if excludedBundleIds.contains(observation.bundleId) { return .excluded }
         let title = observation.windowTitle.lowercased()
-        return Self.deniedTitleMarkers.contains(where: { title.contains($0) })
+        return Self.deniedTitleMarkers.contains(where: { title.contains($0) }) ? .privateWindow : nil
     }
 }

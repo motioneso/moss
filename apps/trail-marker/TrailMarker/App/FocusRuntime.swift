@@ -314,10 +314,14 @@ final class FocusRuntime: ObservableObject {
         let app = remembered.refreshed(window: freshWindowIdentity(remembered.pid))
         // A test is still a picture sent to the vision source, so it obeys the same never-watch
         // rules as a judgment: an excluded app or a password manager is never captured (#2633).
-        if currentPolicy.neverWatches(app) {
-            visionTestResult = .failure(
-                .captureFailed(detail: "\(app.appName) is never watched, so Trail Marker won't take its picture")
-            )
+        if let reason = currentPolicy.neverWatchReason(app) {
+            let detail: String
+            switch reason {
+            case .privateWindow: detail = "that's a private window, and Trail Marker never looks at those"
+            case .excluded: detail = "\(app.appName) is on your Never watch list"
+            case .builtIn: detail = "Trail Marker never looks at \(app.appName)"
+            }
+            visionTestResult = .failure(.captureFailed(detail: detail))
             return
         }
         // And only of the exact window Accessibility identified (#2643).
