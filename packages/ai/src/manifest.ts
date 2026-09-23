@@ -182,6 +182,30 @@ export const aiModuleManifest = {
             "Shown as 'The provider's default entry cannot be removed; disable it instead'."
         }
       ]
+    },
+    {
+      id: "ai.sorting_model",
+      description:
+        "Sorting model: an optional row under Services on Settings > Assistant & AI. An admin " +
+        "picks a small, fast JSON-capable model for sorting and picking out details, or Use main " +
+        "model. News and Sports try it first, then use the main model.",
+      remediations: [
+        {
+          id: "ai.sorting_model.use_main_model",
+          description:
+            "Moss tries your main model instead when it can. To stop trying the sorting model, choose Use main model.",
+          path: "/settings?section=aiproviders"
+        }
+      ],
+      errors: [
+        {
+          code: "ai.sorting_model.not_answering",
+          class: "transient",
+          description:
+            "sorting model not answering: the chosen sorting model failed or gave an unusable " +
+            "answer. It is logged, not shown; the main model answers instead."
+        }
+      ]
     }
   ],
   permissions: [
