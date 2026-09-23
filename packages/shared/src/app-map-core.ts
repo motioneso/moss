@@ -209,9 +209,9 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
       "Trail Marker focus judgment, not chat: its models are offered only in the Sorting model " +
       "row and its card has no Set as default button. The Sorting model row also sets the model " +
       "that judges Trail Marker focus; nothing is judged until an admin chooses one there. Once " +
-      "one is chosen it says Trail Marker sends the app name, window title and calendar block " +
-      "title to that model, and for a System One model that they go to TypeSafe and that sorting " +
-      "keeps using the main model. Each model row has " +
+      "one is chosen it says Trail Marker's app and window titles also go to that model, or for " +
+      "a System One model that they go to TypeSafe and sorting keeps using the main model. " +
+      "Each model row has " +
       "a Chat tag that is a toggle (on: users may pick the model for chat; off: the tag dims and " +
       "is struck through), " +
       "and an ACP note when the provider cannot honour a model choice, explaining that chat stays " +

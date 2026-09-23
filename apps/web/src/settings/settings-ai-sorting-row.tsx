@@ -19,14 +19,10 @@ export const SORTING_DISCLOSURE =
   "Story details and your saved story preferences go to this model first, and to your main " +
   "model if it does not answer. Each may charge for the request.";
 
-export const TRAIL_MARKER_DISCLOSURE =
-  "Trail Marker sends the app name, window title and calendar block title to this model for " +
-  "every focus check. A model served through a command-line tool also keeps them in that " +
-  "tool's own files on this server.";
+export const TRAIL_MARKER_DISCLOSURE = "Trail Marker's app and window titles also go here.";
 
 export const SYSTEM_ONE_SORTING_NOTE =
-  "A System One (TypeSafe) model sends them to TypeSafe. It only judges Trail Marker focus; " +
-  "sorting uses your main model until System One can sort.";
+  "Trail Marker's app and window titles go to TypeSafe. Sorting keeps using your main model.";
 
 // Models the sorting model may be: the model and its provider are active, it has the json
 // capability, and its provider kind is one generateStructured executes, or System One, which only
@@ -79,16 +75,14 @@ export function SortingModelRow(props: {
       <div className="rt__main">
         <div className="rt__name">Sorting model</div>
         <div className="rt__desc">
-          A small, fast model for sorting, filtering and picking out details. It also judges Trail
-          Marker focus. Leave empty to use your main model for sorting; Trail Marker judges nothing
-          until a model is chosen here.
+          A small, fast model for sorting and filtering. It also judges Trail Marker focus.
         </div>
-        {boundId && bound?.providerKind !== "system-one" ? (
-          <div className="rt__desc">{SORTING_DISCLOSURE}</div>
-        ) : null}
-        {boundId ? <div className="rt__desc">{TRAIL_MARKER_DISCLOSURE}</div> : null}
         {bound?.providerKind === "system-one" ? (
           <div className="rt__desc">{SYSTEM_ONE_SORTING_NOTE}</div>
+        ) : boundId ? (
+          <div className="rt__desc">
+            {SORTING_DISCLOSURE} {TRAIL_MARKER_DISCLOSURE}
+          </div>
         ) : null}
       </div>
       <div className="rt__pick">

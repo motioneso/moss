@@ -306,8 +306,7 @@ describe("AiProvidersPane Trail Marker judge is the Sorting model (#2570)", () =
     const renderer = await renderPane();
     expect(selects(renderer, "Binding for Trail Marker focus judgment")).toHaveLength(0);
     const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain("It also judges");
-    expect(text).toContain("Trail Marker judges");
+    expect(text).toContain("It also judges Trail Marker focus.");
     await act(async () => {
       renderer.unmount();
     });
@@ -353,10 +352,7 @@ describe("AiProvidersPane Trail Marker judge is the Sorting model (#2570)", () =
     } as never);
     const renderer = await renderPane();
     const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain(
-      "Trail Marker sends the app name, window title and calendar block title"
-    );
-    expect(text).toContain("TypeSafe");
+    expect(text).toContain("Trail Marker's app and window titles go to TypeSafe.");
     expect(text).not.toContain("Story details and your saved story preferences");
     await act(async () => {
       renderer.unmount();
