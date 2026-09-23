@@ -10,14 +10,14 @@ final class KeychainStoreTests: XCTestCase {
     }
 
     override func tearDown() {
-        let store = KeychainStore()
+        let store = KeychainStore(service: "com.moss.trailmarker.tests")
         store.delete(for: identity())
         store.delete(for: identity(host: "other.example.com"))
         super.tearDown()
     }
 
     func testStoreReadDeleteRoundTrip() throws {
-        let store = KeychainStore()
+        let store = KeychainStore(service: "com.moss.trailmarker.tests")
         let id = identity()
 
         try store.store(credential: "tm1_test_credential", for: id)
@@ -28,7 +28,7 @@ final class KeychainStoreTests: XCTestCase {
     }
 
     func testReadingWithADifferentIdentityReturnsNil() throws {
-        let store = KeychainStore()
+        let store = KeychainStore(service: "com.moss.trailmarker.tests")
         let id = identity()
         let otherId = identity(host: "other.example.com")
 

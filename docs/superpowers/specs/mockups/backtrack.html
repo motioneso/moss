@@ -1,0 +1,1112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Backtrack mockups</title>
+    <!--
+      Spec mockups for docs/superpowers/specs/2026-09-23-trail-marker-screen-history.md §9.
+      Static; open directly in a browser. Agreed with Ben, 2026-09-23.
+
+      Screens A-C are native Trail Marker (SwiftUI). Colours come from the Trail Marker design
+      guide's tokens.json (forest, bone, gold, charcoal) and system semantics; system controls are
+      drawn approximately. Screens D-F are Moss web: token NAMES match
+      apps/web/src/styles/tokens.css (values copied only so this renders standalone), headings use
+      --font-display via jds-section-title, and the annotations name the @moss/ui components the
+      build uses (Card, Button, Badge, Switch, Dialog). No new raw colours in the build.
+    -->
+    <style>
+      :root {
+        --font-display: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        --font-sans: "Helvetica Neue", Helvetica, system-ui, -apple-system, Arial, sans-serif;
+        --paper: #f2eee4;
+        --surface: #faf8f1;
+        --surface-2: #f7f3e9;
+        --line-subtle: #e6dfd0;
+        --line: #c6cbbc;
+        --ink: #282c25;
+        --ink-2: #676c60;
+        --text-subtle: #615a48;
+        --forest: #294b39;
+        --forest-soft: #dbe2d3;
+        --forest-ink: #1e3a2a;
+        --red: #b23c2e;
+        --red-soft: #f7e2dd;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 10px;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --text-xs: 12px;
+        --text-sm: 13px;
+        --text-md: 15px;
+        --text-xl: 20px;
+        /* Trail Marker native palette (design guide tokens.json) */
+        --tm-forest: #173e2b;
+        --tm-forest-deep: #0e2d1e;
+        --tm-bone: #f3eedf;
+        --tm-bone-raised: #fbf8ef;
+        --tm-gold: #c79b45;
+        --tm-charcoal: #262a27;
+        --sys-green: #28a745;
+        --sys-secondary: #6e6e73;
+        --sys-sep: #d9d6cc;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: var(--space-6) 16px 64px;
+        background: #e9e5da;
+        color: var(--ink);
+        font: var(--text-md) / 1.5 var(--font-sans);
+      }
+      main {
+        max-width: 1040px;
+        margin: 0 auto;
+      }
+      header.doc h1 {
+        font-family: var(--font-display);
+        font-size: 28px;
+        margin: 0 0 var(--space-2);
+      }
+      header.doc p {
+        margin: 0 0 var(--space-6);
+        color: var(--ink-2);
+        max-width: 70ch;
+      }
+      section.screen {
+        margin: 0 0 48px;
+      }
+      .screen > h2 {
+        font-family: var(--font-display);
+        font-size: var(--text-xl);
+        margin: 0 0 var(--space-1);
+      }
+      .note {
+        color: var(--ink-2);
+        font-size: var(--text-sm);
+        margin: 0 0 var(--space-4);
+        max-width: 75ch;
+      }
+      .note code {
+        font-size: 12px;
+        background: rgba(0, 0, 0, 0.05);
+        padding: 1px 4px;
+        border-radius: 4px;
+      }
+      .stage {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .overflow {
+        overflow-x: auto;
+        max-width: 100%;
+      }
+
+      /* ---------- native: menu-bar popover ---------- */
+      .menubar {
+        width: 320px;
+        font-family: -apple-system, system-ui, sans-serif;
+      }
+      .menubar__bar {
+        height: 26px;
+        background: rgba(30, 30, 30, 0.82);
+        border-radius: 6px 6px 0 0;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        padding: 0 10px;
+        gap: 14px;
+        color: #fff;
+        font-size: 13px;
+      }
+      .tm-icon {
+        position: relative;
+        display: inline-flex;
+        width: 18px;
+        height: 16px;
+        flex-direction: column;
+        justify-content: center;
+        gap: 2px;
+      }
+      .tm-icon i {
+        display: block;
+        height: 3px;
+        border-radius: 2px;
+        background: #fff;
+      }
+      .tm-icon i:nth-child(1) {
+        width: 11px;
+      }
+      .tm-icon i:nth-child(2) {
+        width: 15px;
+      }
+      .tm-icon i:nth-child(3) {
+        width: 8px;
+      }
+      .tm-icon .rec {
+        position: absolute;
+        right: -3px;
+        top: -1px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--tm-gold);
+        box-shadow: 0 0 0 1.5px rgba(30, 30, 30, 0.82);
+      }
+      .menu {
+        background: rgba(246, 244, 238, 0.97);
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 0 0 10px 10px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+        padding: 6px 0;
+        font-size: 13px;
+      }
+      .menu__row {
+        padding: 3px 14px;
+      }
+      .menu__row--dim {
+        color: var(--sys-secondary);
+      }
+      .menu__row--status {
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .menu__sep {
+        height: 1px;
+        background: var(--sys-sep);
+        margin: 5px 10px;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .dot--green {
+        background: var(--sys-green);
+      }
+      .dot--gold {
+        background: var(--tm-gold);
+      }
+      .menu__row--bt {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--tm-charcoal);
+      }
+
+      /* ---------- native: settings window ---------- */
+      .window {
+        width: 780px;
+        height: 560px;
+        background: #f5f5f3;
+        border-radius: 12px;
+        border: 1px solid rgba(0, 0, 0, 0.14);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+        overflow: hidden;
+        display: grid;
+        grid-template-rows: 28px 1fr;
+        font-family: -apple-system, system-ui, sans-serif;
+        font-size: 13px;
+        flex: none;
+      }
+      .window__title {
+        background: #ece8dc;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+        gap: 7px;
+      }
+      .window__title b {
+        flex: 1;
+        text-align: center;
+        font-weight: 600;
+        color: #555;
+        margin-right: 50px;
+      }
+      .tl {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+      .window__body {
+        display: grid;
+        grid-template-columns: 196px 1fr;
+        min-height: 0;
+      }
+      .sidebar {
+        background: #ebebe8;
+        border-right: 1px solid rgba(0, 0, 0, 0.07);
+        padding: 10px 8px;
+      }
+      .sidebar div {
+        padding: 5px 10px;
+        border-radius: 6px;
+        color: #333;
+      }
+      .sidebar .on {
+        background: var(--tm-forest);
+        color: #fff;
+      }
+      .pane {
+        background: #f5f5f3;
+        padding: 18px 22px;
+        overflow: auto;
+      }
+      .pane h3 {
+        margin: 0 0 14px;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--tm-charcoal);
+      }
+      .group {
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 8px;
+        margin-bottom: 14px;
+      }
+      .group__row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+      }
+      .group__row:first-child {
+        border-top: 0;
+      }
+      .group__row .grow {
+        flex: 1;
+      }
+      .cap {
+        color: var(--sys-secondary);
+        font-size: 11.5px;
+        line-height: 1.4;
+        margin-top: 2px;
+      }
+      .toggle {
+        width: 32px;
+        height: 19px;
+        border-radius: 10px;
+        background: var(--tm-forest);
+        position: relative;
+        flex: none;
+      }
+      .toggle::after {
+        content: "";
+        position: absolute;
+        right: 2px;
+        top: 2px;
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background: #fff;
+      }
+      .nbtn {
+        border: 1px solid rgba(0, 0, 0, 0.16);
+        background: #fff;
+        border-radius: 6px;
+        padding: 3px 10px;
+        font-size: 12.5px;
+        white-space: nowrap;
+      }
+      .nbtn--primary {
+        background: var(--tm-forest);
+        border-color: var(--tm-forest);
+        color: var(--tm-bone);
+      }
+      .muted {
+        color: var(--sys-secondary);
+      }
+
+      /* ---------- native: consent sheet ---------- */
+      .sheet {
+        width: 460px;
+        background: var(--tm-bone-raised);
+        border-radius: 12px;
+        border: 1px solid rgba(0, 0, 0, 0.14);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+        padding: 22px 24px 18px;
+        font-family: -apple-system, system-ui, sans-serif;
+        font-size: 13px;
+        flex: none;
+      }
+      .sheet h4 {
+        margin: 0 0 4px;
+        font-size: 17px;
+        color: var(--tm-charcoal);
+      }
+      .sheet .lede {
+        margin: 0 0 12px;
+        color: var(--sys-secondary);
+      }
+      .sheet ul {
+        margin: 0 0 16px;
+        padding-left: 18px;
+      }
+      .sheet li {
+        margin: 4px 0;
+      }
+      .sheet .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      /* ---------- Moss web ---------- */
+      .web {
+        background: var(--paper);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--line-subtle);
+        padding: var(--space-6);
+        width: 100%;
+        max-width: 760px;
+      }
+      .jds-card {
+        background: var(--surface);
+        border: 1px solid var(--line-subtle);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5);
+        margin-bottom: var(--space-4);
+      }
+      .jds-section-title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-xl);
+        font-weight: 600;
+        line-height: 1.15;
+      }
+      .jds-eyebrow {
+        font-size: var(--text-xs);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-subtle);
+        font-variant-numeric: tabular-nums;
+      }
+      .head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        margin-bottom: var(--space-2);
+      }
+      .head .grow {
+        flex: 1;
+      }
+      .jds-badge {
+        font-size: var(--text-xs);
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--forest-soft);
+        color: var(--forest-ink);
+        font-weight: 500;
+      }
+      .lede-web {
+        color: var(--ink-2);
+        margin: 0 0 var(--space-4);
+      }
+      .rows {
+        border-top: 1px solid var(--line-subtle);
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 130px 1fr;
+        gap: var(--space-3);
+        padding: var(--space-3) 0;
+        border-bottom: 1px solid var(--line-subtle);
+        align-items: center;
+      }
+      .row .k {
+        font-size: var(--text-sm);
+        color: var(--ink-2);
+      }
+      .num {
+        font-variant-numeric: tabular-nums;
+      }
+      .btns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+      }
+      .jds-btn {
+        font: 500 var(--text-sm) / 1 var(--font-sans);
+        border-radius: var(--radius-md);
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--ink);
+      }
+      .jds-btn--primary {
+        background: var(--forest);
+        border-color: var(--forest);
+        color: #fff;
+      }
+      .jds-btn--danger {
+        background: var(--red-soft);
+        border-color: transparent;
+        color: var(--red);
+      }
+      .switch {
+        width: 34px;
+        height: 20px;
+        border-radius: 10px;
+        background: var(--forest);
+        position: relative;
+        display: inline-block;
+        vertical-align: middle;
+      }
+      .switch::after {
+        content: "";
+        position: absolute;
+        right: 2px;
+        top: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #fff;
+      }
+      .dialog {
+        max-width: 440px;
+        background: var(--surface);
+        border: 1px solid var(--line-subtle);
+        border-radius: var(--radius-lg);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+        padding: var(--space-5);
+      }
+      .dialog p {
+        color: var(--ink-2);
+        margin: var(--space-2) 0 var(--space-4);
+      }
+      .dialog .btns {
+        justify-content: flex-end;
+      }
+      .chat {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+      }
+      .bubble-you {
+        align-self: flex-end;
+        background: var(--forest-soft);
+        color: var(--forest-ink);
+        padding: 10px 14px;
+        border-radius: 14px;
+        max-width: 80%;
+      }
+      .bubble-moss {
+        max-width: 92%;
+      }
+      .bubble-moss p {
+        margin: 0 0 var(--space-2);
+      }
+      .source {
+        display: inline-flex;
+        gap: var(--space-2);
+        align-items: center;
+        font-size: var(--text-sm);
+        color: var(--ink-2);
+        border: 1px solid var(--line-subtle);
+        background: var(--surface);
+        border-radius: var(--radius-md);
+        padding: 6px 10px;
+      }
+      .ann {
+        font-size: 12px;
+        color: #8a5a00;
+        background: #fff6de;
+        border: 1px dashed #e3c67a;
+        border-radius: 6px;
+        padding: 6px 8px;
+        margin-top: 10px;
+        max-width: 320px;
+      }
+
+      /* ---------- native: real menu-bar card (StatusCardView) ---------- */
+      .mb {
+        width: 320px;
+        font-family: -apple-system, system-ui, sans-serif;
+        font-size: 13px;
+      }
+      .mb__bar {
+        height: 26px;
+        background: rgba(236, 234, 228, 0.95);
+        border-radius: 6px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 14px;
+        padding: 0 10px;
+        color: #1d1d1f;
+        margin-bottom: 10px;
+      }
+      .mb__icon {
+        position: relative;
+        display: inline-flex;
+        color: #1d1d1f;
+      }
+      .mb__rec {
+        position: absolute;
+        right: -1px;
+        top: 1px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--tm-gold);
+        box-shadow: 0 0 0 1.5px rgba(236, 234, 228, 0.95);
+      }
+      .card {
+        position: relative;
+        background: rgba(250, 250, 248, 0.98);
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+        padding: 16px;
+      }
+      .card::before {
+        content: "";
+        position: absolute;
+        top: -7px;
+        right: 150px;
+        width: 12px;
+        height: 12px;
+        background: inherit;
+        border-left: 1px solid rgba(0, 0, 0, 0.1);
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        transform: rotate(45deg);
+      }
+      .card__head {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .card__mark {
+        position: relative;
+        width: 44px;
+        height: 44px;
+        flex: none;
+      }
+      .card__badge {
+        position: absolute;
+        right: -2px;
+        bottom: 0;
+        width: 17px;
+        height: 17px;
+        border-radius: 50%;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1.5px solid #fff;
+      }
+      .card__title {
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .card__expl {
+        font-size: 12px;
+        color: var(--sys-secondary);
+      }
+      .card__focus {
+        font-size: 12px;
+        font-weight: 500;
+        margin-top: 2px;
+      }
+      .card__bt {
+        font-size: 12px;
+        margin-top: 2px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .card__bt .dot {
+        width: 7px;
+        height: 7px;
+      }
+      .card__btn {
+        margin-top: 16px;
+        background: var(--tm-forest);
+        color: #fff;
+        text-align: center;
+        border-radius: 7px;
+        padding: 6px 0;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .card__div {
+        height: 1px;
+        background: rgba(0, 0, 0, 0.1);
+        margin: 16px 0 6px;
+      }
+      .card__row {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 6px;
+        border-radius: 5px;
+      }
+      .card__row:hover {
+        background: rgba(0, 0, 0, 0.06);
+      }
+      .card__row--red {
+        color: #ff3b30;
+      }
+      .sym {
+        display: inline-block;
+        width: 18px;
+        color: var(--sys-secondary);
+      }
+      .sidebar .on .sym {
+        color: #fff;
+      }
+      .fsec {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--sys-secondary);
+        margin: 4px 4px 6px;
+      }
+      .group__row--cap {
+        padding-top: 0;
+        border-top: 0;
+      }
+
+      /* ---------- feature toggles in the card ---------- */
+      .mbfig {
+        margin: 0;
+      }
+      .mbfig figcaption {
+        font-size: 12px;
+        color: var(--ink-2);
+        margin-top: 10px;
+        text-align: center;
+      }
+      .card__row--toggle {
+        align-items: center;
+      }
+      .card__row--toggle.is-disabled {
+        color: #b0b0b5;
+      }
+      .card__row--toggle.is-disabled .mswitch {
+        opacity: 0.4;
+      }
+      .card__div--tight {
+        margin: 6px 0;
+      }
+      .mswitch {
+        width: 26px;
+        height: 15px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.16);
+        position: relative;
+        flex: none;
+      }
+      .mswitch::after {
+        content: "";
+        position: absolute;
+        left: 1.5px;
+        top: 1.5px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+      }
+      .mswitch--on {
+        background: var(--tm-forest);
+      }
+      .mswitch--on::after {
+        left: auto;
+        right: 1.5px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="doc">
+        <h1>Backtrack — screen mockups</h1>
+        <p>
+          Agreed with Ben, 2026-09-23. Backtrack is Trail Marker's text-only day memory: it reads
+          the words in the window in front of you, keeps them in your Moss for 30 days, then folds
+          each day into a note. Spec:
+          <code>2026-09-23-trail-marker-screen-history.md</code> (#2638).
+        </p>
+      </header>
+
+      <section class="screen">
+        <h2>A. Menu-bar card: Focus and Backtrack toggles</h2>
+        <p class="note">
+          Today's card (<code>StatusCardView</code>). The primary button becomes <b>Pause All</b> /
+          <b>Resume All</b>, and under it are two ordinary menu rows with a switch each,
+          <b>Focus</b> and <b>Backtrack</b>. Each switch pauses or resumes only that feature. A row
+          appears only once its feature is turned on in Settings, so someone who never enabled
+          Backtrack sees just the Focus row. Pause All also stops the connection to Moss. While it's
+          on, the switches keep their positions but are greyed and can't be changed, so Resume All
+          brings back exactly what was running. The gold dot on the menu-bar mark shows whenever
+          Backtrack is actually recording.
+        </p>
+        <div class="stage">
+          <figure class="mbfig">
+            <div class="mb">
+              <div class="mb__bar">
+                <span class="mb__icon"
+                  ><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+                    <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="currentColor" />
+                    <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" /></svg
+                  ><span class="mb__rec"></span></span
+                ><span>Wed Sep 23&nbsp; 10:14 AM</span>
+              </div>
+              <div class="card">
+                <div class="card__head">
+                  <span class="card__mark"
+                    ><svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
+                      <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="#173E2B" />
+                      <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="#C79B45" />
+                      <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="#173E2B" /></svg
+                    ><span class="card__badge" style="background: #28c840">✓</span></span
+                  >
+                  <div>
+                    <div class="card__title">Connected</div>
+                    <div class="card__expl">Linked to moss.example.com.</div>
+                    <div class="card__focus">Watching · Study AI, ends 11:00 AM</div>
+                  </div>
+                </div>
+                <div class="card__btn">Pause All</div>
+                <div class="card__div"></div>
+                <div class="card__row card__row--toggle">
+                  <span>Focus</span
+                  ><span class="mswitch mswitch--on" role="switch" aria-checked="true"></span>
+                </div>
+                <div class="card__row card__row--toggle">
+                  <span>Backtrack</span
+                  ><span class="mswitch mswitch--on" role="switch" aria-checked="true"></span>
+                </div>
+                <div class="card__div card__div--tight"></div>
+                <div class="card__row"><span>Open Moss</span><span class="muted"></span></div>
+                <div class="card__row"><span>Settings…</span><span class="muted">⌘,</span></div>
+                <div class="card__row card__row--red">
+                  <span>Log Out…</span><span class="muted"></span>
+                </div>
+                <div class="card__row">
+                  <span>Quit Trail Marker</span><span class="muted">⌘Q</span>
+                </div>
+              </div>
+            </div>
+            <figcaption>1. Both on</figcaption>
+          </figure>
+          <figure class="mbfig">
+            <div class="mb">
+              <div class="mb__bar">
+                <span class="mb__icon"
+                  ><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+                    <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="currentColor" />
+                    <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" /></svg
+                  ><span class="mb__rec"></span></span
+                ><span>Wed Sep 23&nbsp; 10:14 AM</span>
+              </div>
+              <div class="card">
+                <div class="card__head">
+                  <span class="card__mark"
+                    ><svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
+                      <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="#173E2B" />
+                      <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="#C79B45" />
+                      <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="#173E2B" /></svg
+                    ><span class="card__badge" style="background: #28c840">✓</span></span
+                  >
+                  <div>
+                    <div class="card__title">Connected</div>
+                    <div class="card__expl">Linked to moss.example.com.</div>
+                    <div class="card__focus">Focus paused</div>
+                  </div>
+                </div>
+                <div class="card__btn">Pause All</div>
+                <div class="card__div"></div>
+                <div class="card__row card__row--toggle">
+                  <span>Focus</span><span class="mswitch" role="switch" aria-checked="false"></span>
+                </div>
+                <div class="card__row card__row--toggle">
+                  <span>Backtrack</span
+                  ><span class="mswitch mswitch--on" role="switch" aria-checked="true"></span>
+                </div>
+                <div class="card__div card__div--tight"></div>
+                <div class="card__row"><span>Open Moss</span><span class="muted"></span></div>
+                <div class="card__row"><span>Settings…</span><span class="muted">⌘,</span></div>
+                <div class="card__row card__row--red">
+                  <span>Log Out…</span><span class="muted"></span>
+                </div>
+                <div class="card__row">
+                  <span>Quit Trail Marker</span><span class="muted">⌘Q</span>
+                </div>
+              </div>
+            </div>
+            <figcaption>2. Focus off, Backtrack still recording</figcaption>
+          </figure>
+          <figure class="mbfig">
+            <div class="mb">
+              <div class="mb__bar">
+                <span class="mb__icon"
+                  ><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+                    <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="currentColor" />
+                    <rect
+                      x="4"
+                      y="15.5"
+                      width="9"
+                      height="3"
+                      rx="1.5"
+                      fill="currentColor"
+                    /></svg></span
+                ><span>Wed Sep 23&nbsp; 10:14 AM</span>
+              </div>
+              <div class="card">
+                <div class="card__head">
+                  <span class="card__mark"
+                    ><svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true">
+                      <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="#173E2B" />
+                      <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="#C79B45" />
+                      <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="#173E2B" /></svg
+                    ><span class="card__badge" style="background: #8e8e93">Ⅱ</span></span
+                  >
+                  <div>
+                    <div class="card__title">Paused</div>
+                    <div class="card__expl">Paused. Nothing is being sent to Moss.</div>
+                  </div>
+                </div>
+                <div class="card__btn">Resume All</div>
+                <div class="card__div"></div>
+                <div class="card__row card__row--toggle is-disabled">
+                  <span>Focus</span
+                  ><span class="mswitch mswitch--on" role="switch" aria-checked="true"></span>
+                </div>
+                <div class="card__row card__row--toggle is-disabled">
+                  <span>Backtrack</span
+                  ><span class="mswitch mswitch--on" role="switch" aria-checked="true"></span>
+                </div>
+                <div class="card__div card__div--tight"></div>
+                <div class="card__row"><span>Open Moss</span><span class="muted"></span></div>
+                <div class="card__row"><span>Settings…</span><span class="muted">⌘,</span></div>
+                <div class="card__row card__row--red">
+                  <span>Log Out…</span><span class="muted"></span>
+                </div>
+                <div class="card__row">
+                  <span>Quit Trail Marker</span><span class="muted">⌘Q</span>
+                </div>
+              </div>
+            </div>
+            <figcaption>3. Pause All</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="screen">
+        <h2>B. Trail Marker Settings → Backtrack</h2>
+        <p class="note">
+          The existing Settings window (<code>SettingsWindow</code>): sidebar with an icon per
+          section, and a grouped <code>Form</code> on the right, like the Focus pane. Backtrack is a
+          new sidebar row between Focus and Permissions. The Never watch list is shared with Focus,
+          one list in one place, so this pane links to it instead of repeating it.
+        </p>
+        <div class="overflow">
+          <div class="window">
+            <div class="window__title">
+              <span class="tl" style="background: #ff5f57"></span
+              ><span class="tl" style="background: #febc2e"></span
+              ><span class="tl" style="background: #28c840"></span><b>Settings</b>
+            </div>
+            <div class="window__body">
+              <div class="sidebar">
+                <div><span class="sym">◍</span>Connection</div>
+                <div><span class="sym">▭</span>This Mac</div>
+                <div><span class="sym">◎</span>Focus</div>
+                <div class="on"><span class="sym">↺</span>Backtrack</div>
+                <div><span class="sym">✋</span>Permissions</div>
+                <div><span class="sym">⟳</span>Updates</div>
+              </div>
+              <div class="pane">
+                <div class="fsec">Backtrack</div>
+                <div class="group">
+                  <div class="group__row">
+                    <div class="grow">Remember what's on my screen</div>
+                    <span class="toggle" aria-label="On"></span>
+                  </div>
+                  <div class="group__row group__row--cap">
+                    <div class="cap">
+                      Reads the words in the window you're looking at and keeps them in your Moss
+                      for 30 days, so you can ask about them later. No pictures are kept. Passwords,
+                      card numbers, keys and one-time codes are removed on this Mac first. Only you
+                      can see it.
+                    </div>
+                  </div>
+                </div>
+                <div class="fsec">Status</div>
+                <div class="group">
+                  <div class="group__row">
+                    <div class="grow"><span class="dot dot--gold"></span>&nbsp; Recording</div>
+                    <span class="muted">Last sent 2 min ago</span>
+                  </div>
+                </div>
+                <div class="fsec">Never watch</div>
+                <div class="group">
+                  <div class="group__row">
+                    <div class="grow">
+                      Same list as Focus
+                      <div class="cap">
+                        1Password and 3 more apps, plus private windows and password fields.
+                      </div>
+                    </div>
+                    <span class="nbtn">Edit in Focus…</span>
+                  </div>
+                </div>
+                <div class="fsec">Stored in your Moss</div>
+                <div class="group">
+                  <div class="group__row">
+                    <div class="grow">See how much is kept, and delete any of it</div>
+                    <span class="nbtn">Open in Moss…</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen">
+        <h2>C. One-time consent (when the switch is first turned on)</h2>
+        <p class="note">
+          Shown once per Mac. "Not now" leaves the switch off. If Screen Recording isn't granted
+          yet, "Turn on" continues to the existing permission step.
+        </p>
+        <div class="stage">
+          <div class="sheet">
+            <h4>Turn on Backtrack?</h4>
+            <p class="lede">
+              Backtrack helps Moss remember your day so you can ask about it later.
+            </p>
+            <ul>
+              <li>
+                Reads the words in the window in front of you, about every 10 seconds while it
+                changes. Never pictures, sound or typing.
+              </li>
+              <li>That includes messages people send you and pages you read.</li>
+              <li>
+                Keys, card numbers and codes Trail Marker can recognise are removed on this Mac
+                first, and password fields are never read.
+              </li>
+              <li>Kept in your Moss for 30 days, then turned into a daily note.</li>
+              <li>Apps on your Never watch list and private windows are skipped.</li>
+              <li>Only you can see it. Delete any of it from Moss at any time.</li>
+            </ul>
+            <div class="actions">
+              <span class="nbtn">Not now</span><span class="nbtn nbtn--primary">Turn on</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen">
+        <h2>D. Moss → Settings → Backtrack</h2>
+        <p class="note">
+          Owned by the new <code>backtrack</code> module's settings entry. Built from
+          <code>Card</code>, <code>jds-section-title</code>, <code>Badge</code>,
+          <code>Switch</code> and <code>Button</code> (<code>secondary</code> /
+          <code>danger</code>). The switch here pauses Backtrack for every Mac; turning it on for a
+          Mac still happens on that Mac, with its consent. Shown only when a Trail Marker is linked,
+          otherwise an empty state that points to Trail Marker.
+        </p>
+        <div class="web">
+          <div class="jds-card">
+            <div class="head">
+              <h3 class="jds-section-title grow">Backtrack</h3>
+              <span class="jds-badge">On · 1 Mac</span>
+            </div>
+            <p class="lede-web">
+              Your day memory. Moss keeps the text you saw for 30 days, then summarizes each day
+              into your notes folder. It's only used when you ask about something you saw.
+            </p>
+            <div class="rows">
+              <div class="row">
+                <span class="k">Recording</span
+                ><span><span class="switch"></span>&nbsp; On for MacBook Air</span>
+              </div>
+              <div class="row">
+                <span class="k">Kept</span><span class="num">27 days · 38 MB</span>
+              </div>
+              <div class="row">
+                <span class="k">Daily notes</span
+                ><span>Written to <b>Backtrack/</b> in your notes folder · last on Aug 24</span>
+              </div>
+              <div class="row">
+                <span class="k">Delete</span>
+                <span class="btns">
+                  <span class="jds-btn">Last hour</span><span class="jds-btn">Today</span
+                  ><span class="jds-btn">Choose a day…</span
+                  ><span class="jds-btn jds-btn--danger">Everything…</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen">
+        <h2>E. Delete everything (Dialog)</h2>
+        <p class="note">
+          Danger confirmations use the existing <code>Dialog</code>. Daily notes already written to
+          your folder are yours, so they're kept unless you tick the box.
+        </p>
+        <div class="stage">
+          <div class="dialog">
+            <h3 class="jds-section-title">Delete all of Backtrack?</h3>
+            <p>
+              This removes the 27 days of text Moss has kept. It can't be undone. Backtrack keeps
+              recording from now on unless you turn it off.
+            </p>
+            <p style="margin-top: 0">
+              <label
+                ><input type="checkbox" /> Also delete the daily notes in my notes folder</label
+              >
+            </p>
+            <div class="btns">
+              <span class="jds-btn">Cancel</span
+              ><span class="jds-btn jds-btn--danger">Delete everything</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen">
+        <h2>F. Asking Moss</h2>
+        <p class="note">
+          Chat calls the Backtrack search only for questions about what you saw. The answer cites
+          the moment with app, page and time, and the source chip opens the matching snippet.
+          Nothing from Backtrack appears in answers you didn't ask about it for.
+        </p>
+        <div class="web">
+          <div class="chat">
+            <div class="bubble-you">what was that site I saw in the meeting this morning?</div>
+            <div class="bubble-moss">
+              <p>
+                In <b>Design sync</b> (10:00–10:30) you had the Figma file
+                <b>Onboarding v3</b> open, and briefly
+                <b>tailwindcss.com/docs/container-queries</b>, the page on container queries.
+              </p>
+              <span class="source">↺ Backtrack · Chrome · 10:12 and 10:21</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

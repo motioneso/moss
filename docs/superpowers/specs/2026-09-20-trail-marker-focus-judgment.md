@@ -7,7 +7,10 @@ call assumed in `docs/superpowers/plans/2026-09-19-jev-focus-mac-pilot.md`. **Am
 (§6, §9): watching can be the entire desktop instead of only chosen apps; full amendment in
 `2026-09-21-trail-marker-rung3-vision.md` §7. **Amended 2026-09-22** (§7, §7a, §9, §10, §11): a
 nudge is a banner that stays on top until the person is back on task, replacing the macOS
-notification, and a distraction gauge on the Mac decides when it appears.
+notification, and a distraction gauge on the Mac decides when it appears. **Amended 2026-09-23:** the "Not
+stored" list (§ data) still holds for focus judgment. **Backtrack**, a separate feature with its own
+consent, does store on-screen text and titles; see `2026-09-23-trail-marker-screen-history.md` §11.
+The menu's pause becomes **Pause All**, with a separate Focus switch row (that spec §4).
 
 ## 1. What this is
 
