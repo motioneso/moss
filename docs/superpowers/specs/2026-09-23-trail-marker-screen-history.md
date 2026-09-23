@@ -75,12 +75,15 @@ enough to be worth what it costs in privacy and battery?
   when the text changed materially. A segment is the new lines, plus the window's title and address,
   plus a start and end time. Scrolling a long page adds lines instead of resending the page.
 - **Never read:** Never-watch apps, private windows, Accessibility secure text fields (masked
-  password inputs are blanked before recognition runs), and any window while the screen is being
-  shared or recorded by another app (open question, §12).
+  password inputs are blanked before recognition runs). Recording continues while the person shares
+  their screen in a meeting, since what they present is the content they'll want to find later (Ben,
+  2026-09-23).
 - **Secrets are stripped on the Mac before anything leaves it.** This extends `TextRedactor` with
   the server's `redactSecrets` patterns (bearer tokens, `sk-`/`ghp_`/`AKIA` keys, secret-looking
   query and environment fields), card numbers that pass a Luhn check, and one-time codes next to
-  "code"/"verification". The server runs `redactSecrets` again on arrival.
+  "code"/"verification". The server runs `redactSecrets` again on arrival. Email addresses are
+  **kept** in screen history, because "who sent that?" is often the point (Ben, 2026-09-23); focus
+  judgment text still strips them.
 - **Budget:** at most one recognition every 10 seconds, and none while nothing changes. If the Mac
   reports low power or thermal pressure, it backs off to one every 60 seconds. The target is under
   3% average CPU on an M1 Air across a working day. The live proof measures it (§10).
@@ -122,7 +125,7 @@ enough to be worth what it costs in privacy and battery?
 - **Pulled, never pushed.** Screen history is used only when this tool is called, meaning when the
   question is about what the person saw. It is not added to passive per-turn recall, the `<memory>`
   seed or briefings. Your screen shouldn't leak into an unrelated answer or a prompt you didn't
-  expect. (Whether a later slice may let briefings use it is §12.)
+  expect. (Letting briefings use it is a tracked follow-up, #2640.)
 - **Meeting-aware ranges.** "In the meeting this morning" resolves against the person's calendar
   through the calendar module's public API, by finding the event, then searching its time window.
 - The model is whatever the person's chat is configured to use, through the provider-agnostic
@@ -240,20 +243,16 @@ Tests that assert a privacy property must be seen failing with the protection re
 
 Each spec gets a dated amendment line pointing here in the PR that approves this spec.
 
-## 12. Open questions for Ben
+## 12. Questions answered (Ben, 2026-09-23)
 
-1. **Screen sharing:** pause screen history while another app is sharing or recording the screen,
-   for example in a Zoom share? Proposed: no. When you're presenting, what you show is exactly the
-   "in the meeting" content you'd want to find later.
-2. **Emails and names on screen:** today's `TextRedactor` strips email addresses. For recall they're
-   often the useful part ("who sent that?"). Proposed: keep email addresses in screen history, but
-   still strip them from focus-judgment text.
-3. **Briefings:** may a later slice let the morning briefing use yesterday's history ("you left off
-   in …")? Proposed: not in this spec. Screen history stays ask-only.
-4. **Name:** "Screen history" in both apps? Alternatives: "Day memory", "What I saw".
-5. **Messages and other people's words:** reading your Messages means storing what other people
-   wrote to you. Proposed: allowed, because it's your screen and your private store, and the consent
-   sheet says so. Any app can be excluded.
+1. **Screen sharing:** keep recording while sharing (§5).
+2. **Email addresses:** kept in screen history; still stripped from focus-judgment text (§5).
+3. **Briefings:** not in the first version; screen history stays ask-only (§7). Follow-up #2640 so
+   it isn't forgotten.
+4. **Name:** working name **Day memory**. A product name is still to be chosen; this spec says
+   "screen history" for the mechanism until it is.
+5. **Messages:** reading other people's messages to the person is allowed; the consent sheet says
+   so, and any app can be excluded.
 
 ## 13. Slices (for the plan, once approved)
 
